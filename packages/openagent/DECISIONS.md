@@ -11,7 +11,7 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A projection of files: it shows a project's runs by reading what the runs write, and it
   runs no agent of its own. Picked over the dashboard owning the agent it shows, which is
   what made every capability a person wanted — another coding agent, a schedule, a run on
-  a device — a feature of OpenAgent.
+  another machine — a feature of OpenAgent.
 - It ships no prompt text. What a project can be asked to do is what the project's own
   skills say. Picked over the built-in presets: a prompt that lives here cannot be read,
   changed or run by the agent working the repository.
@@ -185,6 +185,24 @@ already made, and lists it in its pull request; for anything else it proposes an
   place that says what starts a run.
 - No cap on a person's runs: the click is the brake. Picked over the one-run-per-checkout
   guard, which existed because runs shared a working tree and they no longer do.
+
+## Running on another machine
+- The machines a person saved are kept in their home file, beside their projects and their
+  settings, and a machine's key is never handed to a browser. Picked over the browser's own
+  storage, where each browser had its own list and the daemon, which makes the calls, did
+  not know the machines.
+- A run sent to another machine names its project by the address its repository was cloned
+  from, and starts in that machine's own copy of it. Picked over the folder's name, where
+  two projects named alike are mixed up and a renamed folder breaks the link, and over
+  linking the two folders by hand, a step for every project on every machine.
+- A machine that does not have the project starts nothing, and the person is told which
+  project to add there. Picked over starting in the folder that machine's OpenAgent was
+  started in, which may be another project.
+- A project with no repository address runs on this machine only, and "Run on" says so.
+  Picked over sending the repository straight to the other machine, a second road for
+  code beside the git host.
+- On screen, a computer that runs agents is a machine. Device is kept for a phone or a
+  browser that gets in. Picked over device for both.
 
 ## Saying something to a run
 - What a person says reaches a run through what the run's tool reads: a line in the run's

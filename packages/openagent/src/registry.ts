@@ -8,8 +8,9 @@ import { nodeFs } from './node-fs.js'
  * The multi-project registry (#390): the list of projects the user has
  * installed OpenAgent into, kept as a single JSON file `.bashrc`-style —
  * `$HOME/.openagent.json` — so it is the user's responsibility to re-create
- * per machine. The same file also holds the user's dashboard preferences (#410),
- * so the daemon owns one user file and the UI never needs localStorage.
+ * per machine. The same file also holds the user's dashboard preferences (#410)
+ * and the machines they saved, so the daemon owns one user file and the UI never
+ * needs localStorage.
  */
 
 /** One registered project. */
@@ -21,6 +22,25 @@ export interface ProjectRecord {
   /** ISO timestamp the project was added. */
   addedAt: string
 }
+
+/**
+ * A saved machine: another computer running OpenAgent that a run can be sent to. Kept in this
+ * file, the person's own, so every browser on this computer shows the same machines and the
+ * key that reaches one never leaves the two machines.
+ */
+export interface MachineRecord {
+  /** The machine's address, which is also what names it: saving the same address again replaces it. */
+  id: string
+  /** The name the person gave it, or its host when they gave none. */
+  label: string
+  /** Where its OpenAgent answers, as an origin (`http://192.168.1.5:4200`). */
+  url: string
+  /** The key that machine asks for. Never handed to a browser. */
+  token: string
+}
+
+/** The cap on saved machines and on a name's length, so a hand-edited file cannot bloat. */
+const MACHINE_LIMITS = { count: 50, label: 60 } as const
 
 /**
  * The dashboard's Global options (#410), persisted next to the project list so they
@@ -126,6 +146,11 @@ export interface Registry {
    * browser bundle. Absent on a loopback-only machine.
    */
   daemonToken?: string
+  /**
+   * The saved machines. Top-level like {@link daemonToken}, and for the same reason: each one
+   * carries a key, so the list is never part of what the browser is handed.
+   */
+  machines?: MachineRecord[]
 }
 
 /** A read/write handle for the user preferences, wired into the dashboard's context by the daemon. */
@@ -142,7 +167,7 @@ export interface PreferencesStore {
 /** The registry file name: a single file under `$XDG_CONFIG_HOME` (dotted under `$HOME`). */
 export const REGISTRY_FILE = 'openagent.json'
 
-/** Owner read/write only: the file holds the daemon token (#1051). */
+/** Owner read/write only: the file holds the daemon token (#1051) and the saved machines' keys. */
 export const REGISTRY_FILE_MODE = 0o600
 
 /**
@@ -319,6 +344,23 @@ export function sanitizeCustomPresets(value: unknown): CustomPreset[] {
   return out
 }
 
+/** Keep well-formed machines, one per address (first wins), names and count capped. */
+function sanitizeMachines(value: unknown): MachineRecord[] {
+  if (!Array.isArray(value)) return []
+  const machines: MachineRecord[] = []
+  const seen = new Set<string>()
+  for (const raw of value) {
+    if (machines.length >= MACHINE_LIMITS.count) break
+    if (typeof raw !== 'object' || raw === null) continue
+    const { label, url, token } = raw as Record<string, unknown>
+    if (typeof label !== 'string' || typeof url !== 'string' || typeof token !== 'string') continue
+    if (!url || !token || seen.has(url)) continue
+    seen.add(url)
+    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, token })
+  }
+  return machines
+}
+
 /**
  * Read the whole registry. Forgiving: a missing / unreadable / malformed file — or one in a shape
  * this no longer writes — yields an empty registry, never throws. Projects are deduped by resolved
@@ -338,11 +380,13 @@ export async function readRegistry(
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return empty
   const obj = parsed as Record<string, unknown>
   const projects = Array.isArray(obj.projects) ? dedupeProjects(obj.projects) : []
+  const machines = sanitizeMachines(obj.machines)
   return {
     projects,
     preferences: sanitizePreferences(obj.preferences),
     // #1051: kept only as a non-empty string, so a hand-edited registry can't smuggle a junk token.
     ...(typeof obj.daemonToken === 'string' && obj.daemonToken ? { daemonToken: obj.daemonToken } : {}),
+    ...(machines.length ? { machines } : {}),
   }
 }
 
@@ -363,11 +407,12 @@ export async function readRegistry(
  */
 async function writeRegistry(registry: Registry, fs: RegistryFs, env: NodeJS.ProcessEnv): Promise<void> {
   const file = registryPath(env)
-  const { projects, preferences, daemonToken } = registry
+  const { projects, preferences, daemonToken, machines } = registry
   const contents = {
     projects,
     preferences,
     ...(daemonToken ? { daemonToken } : {}),
+    ...(machines?.length ? { machines } : {}),
   }
   const json = JSON.stringify(contents, null, 2)
   await fs.mkdir(dirname(file))
@@ -530,6 +575,61 @@ export async function readDaemonToken(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<string | undefined> {
   return (await readRegistry(fs, env)).daemonToken
+}
+
+/** The saved machines, newest first. Forgiving like every read of this file: none on a bad file. */
+export async function listMachines(
+  fs: RegistryFs = nodeRegistryFs(),
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<MachineRecord[]> {
+  return (await readRegistry(fs, env)).machines ?? []
+}
+
+/**
+ * Save a machine, newest first. One per address: saving an address again replaces its name and
+ * its key, which is how a machine whose key changed is fixed. Answers the stored record.
+ */
+export async function addMachine(
+  machine: { url: string; token: string; label?: string },
+  fs: RegistryFs = nodeRegistryFs(),
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<MachineRecord> {
+  return serialize(async () => {
+    const registry = await readRegistry(fs, env)
+    const record: MachineRecord = {
+      id: machine.url,
+      label: machine.label?.trim().slice(0, MACHINE_LIMITS.label) || hostOf(machine.url),
+      url: machine.url,
+      token: machine.token,
+    }
+    const machines = [record, ...(registry.machines ?? []).filter(saved => saved.id !== record.id)].slice(0, MACHINE_LIMITS.count)
+    await writeRegistry({ ...registry, machines }, fs, env)
+    return record
+  })
+}
+
+/** Take a saved machine off the list, by id. Answers whether one was there. */
+export async function removeMachine(
+  id: string,
+  fs: RegistryFs = nodeRegistryFs(),
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<boolean> {
+  return serialize(async () => {
+    const registry = await readRegistry(fs, env)
+    const machines = (registry.machines ?? []).filter(saved => saved.id !== id)
+    if (machines.length === (registry.machines ?? []).length) return false
+    await writeRegistry({ ...registry, machines }, fs, env)
+    return true
+  })
+}
+
+/** An address's host and port (`192.168.1.5:4200`): a machine's name when the person gave none. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host
+  } catch {
+    return url
+  }
 }
 
 /** A {@link PreferencesStore} bound to the real registry file, wired by the daemon so the

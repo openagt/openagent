@@ -68,24 +68,26 @@ export interface DashboardOptions {
    */
   token?: string
   /**
-   * The live-events source for a run this daemon is relaying from a connected device (#1067):
+   * The live-events source for a run this daemon is relaying from a saved machine (#1067):
    * a stream for such a run, else undefined so `onEvents` tails the run's diary off disk.
    */
   eventsSource: EventsSource
   /**
    * The relayed-agent lookup the read RPCs consult (#1067 slice 2). A run-scoped RPC uses it to
-   * forward a remote agent's read/steer/handoff to the device that owns it.
+   * forward a remote agent's read/steer/handoff to the machine that owns it.
    */
   remote: RemoteAgents
   /**
    * Serve a relay-started run's events back to the daemon that relayed it here (#1067): the
    * `/_relay/*` endpoints (start + events, plus the slice-2 `rpc`). All are fronted by the same
-   * `token` guard above, so a device without the cookie cannot start or read a run.
+   * `token` guard above, so a machine without the cookie cannot start or read a run.
    */
   relay?: {
-    tailEvents: (agentId: string, onEvent: (event: import('../events.js').OpenAgentEvent) => void) => () => void
+    /** This machine's own id for its project cloned from an address, which is how a relayed call names one. */
+    project: (address: string) => Promise<string | undefined>
+    tailEvents: (projectId: string, agentId: string, onEvent: (event: import('../events.js').OpenAgentEvent) => void) => () => void
     /** Run one whitelisted run-scoped RPC against this daemon's own checkout (#1067 slice 2). */
-    rpc?: (fn: string, args: unknown[]) => Promise<unknown>
+    rpc?: (projectId: string, fn: string, args: unknown[]) => Promise<unknown>
   }
   /**
    * The browser bridge (#1237): the token a Claude web extension presents to report the question
@@ -157,10 +159,10 @@ export function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
     { host },
   )
 
-  // The device-to-daemon relay endpoints (#1067): wired only when an events tail is supplied.
+  // The machine-to-daemon relay endpoints (#1067): wired only when an events tail is supplied.
   // Fronted by the same token guard as every other route below.
   const relayHandlers: RelayHandlers | undefined = opts.relay
-    ? { start: opts.onStart, tailEvents: opts.relay.tailEvents, ...(opts.relay.rpc ? { rpc: opts.relay.rpc } : {}) }
+    ? { project: opts.relay.project, start: opts.onStart, tailEvents: opts.relay.tailEvents, ...(opts.relay.rpc ? { rpc: opts.relay.rpc } : {}) }
     : undefined
 
   // The browser bridge (#1237). Off unless a token was supplied, and it carries that token itself
@@ -226,10 +228,10 @@ export function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
     }
     // #1051: one guard fronting every route on a non-loopback bind; a no-op when no token is set.
     if (token !== undefined && !authorizeDaemonRequest(req, res, token)) return
-    // The device relay (#1067): another daemon posts a start here and streams the run's events back.
+    // The machine relay (#1067): another daemon posts a start here and streams the run's events back.
     // The token guard above is a no-op on a loopback bind, so — exactly like the RPC mount below —
     // the relay carries its own CSRF + DNS-rebinding guard, or a page the user merely visited could
-    // POST /_relay/start to start a run (the real device caller sends no Origin and a loopback
+    // POST /_relay/start to start a run (the real machine caller sends no Origin and a loopback
     // Host, so both checks pass it; only a browser's cross-origin/rebound request is turned away).
     if (pathname === RELAY_PREFIX || pathname.startsWith(`${RELAY_PREFIX}/`)) {
       if (!guardBrowserOrigin(req, res, host)) return
@@ -277,7 +279,7 @@ function closeServer(server: Server): Promise<void> {
 }
 
 /**
- * The CSRF + DNS-rebinding guard the RPC mount applies, lifted to the device relay, which
+ * The CSRF + DNS-rebinding guard the RPC mount applies, lifted to the machine relay, which
  * dispatches outside it. The relay is state-changing (it starts a run on this machine) and is
  * wired unconditionally on a loopback bind, where the shared-token guard is a no-op, so without
  * this a page the user merely visited reaches it. Returns true to admit the request; on rejection
@@ -307,7 +309,7 @@ function authorizeDaemonRequest(req: IncomingMessage, res: ServerResponse, token
     url.searchParams.delete('token')
     const query = url.searchParams.toString()
     res.writeHead(302, {
-      // Lax, not Strict: the device-hop (#1052) is a cross-origin top-level nav, and a Strict cookie set on it is withheld from the redirect right after, so the clean path 401s. Lax still rides top-level GET navs; CSRF stays covered by the same-origin check on /_rpc.
+      // Lax, not Strict: opening this address from a link (#1052) is a cross-origin top-level nav, and a Strict cookie set on it is withheld from the redirect right after, so the clean path 401s. Lax still rides top-level GET navs; CSRF stays covered by the same-origin check on /_rpc.
       'set-cookie': `${DAEMON_COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/`,
       location: url.pathname + (query ? `?${query}` : ''),
     })

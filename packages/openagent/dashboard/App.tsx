@@ -119,7 +119,7 @@ export function App() {
   // with the typed prompt at once, before the run's tool writes its card. `id` is the one the
   // project's start hook answered (#761) — the URL already points there, and this is what tells
   // the main pane that a session missing from the list is starting, not gone.
-  // `runsOn` names the device a just-started remote agent executes on (#1067), so the live view can
+  // `runsOn` names the machine a just-started remote agent executes on (#1067), so the live view can
   // mark where it runs and degrade the panels that are local-only. Undefined for a local agent.
   const [agentStart, setAgentStart] = useState<{ tick: number; intent: string; id: string | null; projectId: string | null; runsOn?: string }>({ tick: 0, intent: '', id: null, projectId: null })
   // The agents of the project on screen, for its pages, or of the picked project, for the sidebar:

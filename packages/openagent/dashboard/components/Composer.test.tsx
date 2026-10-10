@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { Preferences } from '../../src/index.js'
-import { addProfile } from '../lib/profiles.js'
-import { selectRemoteDevice } from '../lib/remote-target.js'
+import { selectMachine } from '../lib/remote-target.js'
 import { hoverTooltip, openMenu } from '../test-utils.js'
 
 // Preferences are the shared daemon store; stub them so the composer reads a fixed value.
@@ -22,10 +21,10 @@ vi.mock('../lib/editors.js', () => ({ useDetectedEditors: () => [] }))
 // `/` list; stub the reads.
 const onCommands = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/projects.js', () => ({ onProjects: () => Promise.resolve([]), onCommands }))
-// The device health poll (#1072) reaches the daemon over an RPC; a hoisted stub so each test can
-// answer online/offline for the "Run on" target (#1073).
-const checkDevices = vi.hoisted(() => vi.fn())
-vi.mock('../rpc/devices.js', () => ({ checkDevices }))
+// The saved machines and their health poll (#1072) are the daemon's, reached over an RPC: a
+// pretend daemon each test seeds, and answers online/offline through, for the "Run on" target (#1073).
+vi.mock('../rpc/machines.js', async () => (await import('../test-machines.js')).machinesRpc)
+import { daemon, machinesRpc, saveMachines } from '../test-machines.js'
 
 // Stub the Tiptap editor (it needs a real DOM/ProseMirror): a plain input driving onChange, a
 // "type-submit" button firing onSubmit, and a ref exposing the same handle the composer calls.
@@ -97,20 +96,20 @@ function renderComposer(over: Partial<Parameters<typeof Composer>[0]> = {}) {
   return { onSubmit }
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   prefs = {}
   updatePreferences.mockReset()
   sessionStorage.clear()
   localStorage.clear()
-  selectRemoteDevice(null)
-  checkDevices.mockReset()
-  checkDevices.mockResolvedValue({}) // default: no devices reachable
+  selectMachine(null)
+  await saveMachines() // default: no machine saved
   onCommands.mockReset()
-  onCommands.mockResolvedValue({ commands: [{ name: 'work-queue', description: 'Work the agent queue' }], startHook: true, gitHost: true })
+  onCommands.mockResolvedValue({ commands: [{ name: 'work-queue', description: 'Work the agent queue' }], startHook: true, gitHost: true, remote: true, address: 'github.com/acme/shop' })
 })
 afterEach(cleanup)
 
 const STUDIO = 'http://192.168.1.5:4200'
+const STUDIO_MACHINE = { id: STUDIO, label: 'Studio', url: STUDIO }
 
 // The driver/model trigger names both in its own label (#1143): with no model pinned it is a logo
 // and a chevron, so the name cannot come from the rendered text the way it used to.
@@ -200,13 +199,13 @@ describe('Composer (#721)', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
-  // #1066: a draft carried across a device hop lands in sessionStorage; the launcher seeds it into
+  // #1139: a draft carried across a navigation lands in sessionStorage; the launcher seeds it into
   // the editor on mount, and takes it once.
-  test('the launcher rehydrates a draft carried from another device (#1066)', () => {
-    sessionStorage.setItem('oa.pending-draft', 'carried from the studio box')
+  test('the launcher rehydrates a carried draft (#1139)', () => {
+    sessionStorage.setItem('oa.pending-draft', 'carried from a ticket')
     const { onSubmit } = renderComposer({ submitLabel: 'Start session' })
     fireEvent.click(screen.getByRole('button', { name: /Start session/ }))
-    expect(onSubmit).toHaveBeenCalledWith('carried from the studio box')
+    expect(onSubmit).toHaveBeenCalledWith('carried from a ticket')
     expect(sessionStorage.getItem('oa.pending-draft')).toBeNull() // taken once
   })
 
@@ -228,12 +227,12 @@ describe('Composer (#721)', () => {
     expect(screen.queryByRole('button', { name: 'Send' })).toBeNull() // nothing seeded
   })
 
-  // #1073: pressing Start on an offline "Run on" device would silently attempt the ~15s relay, so
+  // #1073: pressing Start on an offline "Run on" machine would silently attempt the ~15s relay, so
   // Start is blocked with a reason pointing back to the "Run on" pick. No auto-fallback: the target stays.
-  test('an offline "Run on" device disables Start and shows the reason (#1073)', async () => {
-    checkDevices.mockResolvedValue({ [STUDIO]: false })
-    addProfile({ url: STUDIO, token: 'aaa', label: 'Studio' })
-    selectRemoteDevice(STUDIO)
+  test('an offline "Run on" machine disables Start and shows the reason (#1073)', async () => {
+    await saveMachines(STUDIO_MACHINE)
+    daemon.reachable = { [STUDIO]: false }
+    selectMachine(STUDIO)
     const { onSubmit } = renderComposer()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'ship it' } })
     await waitFor(() => expect(screen.getByText(/Studio is offline/)).toBeTruthy())
@@ -245,13 +244,13 @@ describe('Composer (#721)', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
-  test('an online "Run on" device leaves Start enabled with no offline note (#1073)', async () => {
-    checkDevices.mockResolvedValue({ [STUDIO]: true })
-    addProfile({ url: STUDIO, token: 'aaa', label: 'Studio' })
-    selectRemoteDevice(STUDIO)
+  test('an online "Run on" machine leaves Start enabled with no offline note (#1073)', async () => {
+    await saveMachines(STUDIO_MACHINE)
+    daemon.reachable = { [STUDIO]: true }
+    selectMachine(STUDIO)
     const { onSubmit } = renderComposer()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'ship it' } })
-    await waitFor(() => expect(checkDevices).toHaveBeenCalled())
+    await waitFor(() => expect(machinesRpc.onMachinesReachable).toHaveBeenCalled())
     expect(screen.queryByText(/is offline/)).toBeNull()
     const submit = screen.getByRole('button', { name: 'Send' })
     expect(submit.hasAttribute('disabled')).toBe(false)
@@ -359,8 +358,8 @@ describe('the row of chips above the box', () => {
     expect(box().contains(runOn())).toBe(false)
   })
 
-  test('the chip reads the picked device, and its menu picks a device and this machine again', async () => {
-    addProfile({ url: STUDIO, token: 'aaa', label: 'Studio' })
+  test('the chip reads the picked machine, and its menu picks a machine and this machine again', async () => {
+    await saveMachines(STUDIO_MACHINE)
     renderComposer({ aboveControls: null })
     expect(runOn().textContent).toBe('This machine')
     await openMenu(runOn())
@@ -371,10 +370,24 @@ describe('the row of chips above the box', () => {
     await waitFor(() => expect(runOn().textContent).toBe('This machine'))
   })
 
-  test('an offline picked device still reads its label on the chip, with the note under the box', async () => {
-    checkDevices.mockResolvedValue({ [STUDIO]: false })
-    addProfile({ url: STUDIO, token: 'aaa', label: 'Studio' })
-    selectRemoteDevice(STUDIO)
+  test('in a project with no repository address the chip reads "This machine" whatever was picked before, and an offline machine does not block the Start', async () => {
+    // Its origin is a folder on this disk: a remote, and still no name another machine knows it by.
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: false, remote: true })
+    await saveMachines(STUDIO_MACHINE)
+    daemon.reachable = { [STUDIO]: false }
+    selectMachine(STUDIO)
+    const { onSubmit } = renderComposer({ aboveControls: null })
+    await waitFor(() => expect(runOn().textContent).toBe('This machine'))
+    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'ship it' } })
+    expect(screen.queryByText(/is offline/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    expect(onSubmit).toHaveBeenCalledWith('ship it')
+  })
+
+  test('an offline picked machine still reads its label on the chip, with the note under the box', async () => {
+    await saveMachines(STUDIO_MACHINE)
+    daemon.reachable = { [STUDIO]: false }
+    selectMachine(STUDIO)
     renderComposer({ aboveControls: null })
     await waitFor(() => expect(screen.getByText(/Studio is offline/)).toBeTruthy())
     expect(runOn().textContent).toBe('Studio')

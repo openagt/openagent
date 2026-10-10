@@ -72,7 +72,7 @@ test('every RPC the modules export is dispatchable by its own name', () => {
   // The registry is built from the modules' exports rather than a hand-written list, which is what
   // makes "exported but never registered" impossible — the failure that shipped per-project
   // preferences broken (#866) as a 400 with nothing else to go on.
-  for (const name of ['onAgents', 'onProjects', 'sendStop', 'onPreferences', 'onQuota', 'checkDevices']) {
+  for (const name of ['onAgents', 'onProjects', 'sendStop', 'onPreferences', 'onQuota', 'onMachines']) {
     assert.equal(typeof RPC_HANDLERS[name], 'function', name)
   }
 })

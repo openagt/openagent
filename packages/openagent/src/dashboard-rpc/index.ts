@@ -19,7 +19,7 @@ export {
 export { type EditorInfo } from '../dashboard/open-in-app.js'
 export { onQuota } from './quota.js'
 export { onModels } from './models.js'
-export { checkDevices, type DeviceCheck } from './devices.js'
+export { onMachines, sendAddMachine, sendRemoveMachine, onMachinesReachable, type Machine, type AddMachineResult } from './machines.js'
 export { onModules, runModuleCommand, readModule, type DashboardModule, type ModuleCommandResult, type ModuleReadResult } from './modules.js'
 export { onProjectSkills, sendChangeSkills, sendCommitSkills, type ProjectSkills, type ProjectSkill, type ChangeSkillsResult } from './skills.js'
 
@@ -29,7 +29,7 @@ import * as projects from './projects.js'
 import * as preferences from './preferences.js'
 import * as quota from './quota.js'
 import * as models from './models.js'
-import * as devices from './devices.js'
+import * as machines from './machines.js'
 import * as modules from './modules.js'
 import * as skills from './skills.js'
 import { streamAgentEvents } from './events.js'
@@ -52,7 +52,7 @@ export type RpcHandler = (...args: never[]) => unknown
 export const RPC_HANDLERS: Record<string, RpcHandler> = Object.assign(
   Object.create(null) as Record<string, RpcHandler>,
   Object.fromEntries(
-    [reads, control, projects, preferences, quota, models, devices, modules, skills]
+    [reads, control, projects, preferences, quota, models, machines, modules, skills]
       .flatMap(module => Object.entries(module))
       .filter((entry): entry is [string, RpcHandler] => typeof entry[1] === 'function'),
   ),

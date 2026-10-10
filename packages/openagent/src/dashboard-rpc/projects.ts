@@ -4,6 +4,7 @@ import { DATA_BRANCH, branchReach, originDefaultBranch, pullFileBranch, writeSha
 import { readProjectHooks, runCheckHook, startLineTakesBase, type StartReadiness } from '../project-hooks.js'
 import { isPublishPick, publishPickIn, type PublishPick } from '../publish-levels.js'
 import { hasRemote } from '../has-remote.js'
+import { repositoryAddress } from '../repository-address.js'
 import { currentBranch } from '../dashboard/git-status.js'
 import { waitingSkills } from '../dashboard/start-branch.js'
 import { pickDirectory, type PickDirectoryResult } from '../pick-directory.js'
@@ -112,6 +113,8 @@ export interface ProjectLauncher {
   gitHost: boolean
   /** Whether the project's repository has an `origin` remote; without one nothing can be published, so the publish menu stops at the commit. */
   remote: boolean
+  /** The address the project's repository was cloned from, the name another machine knows the project by; absent, the project cannot be sent to one. */
+  address?: string
   /**
    * The two branches an agent can start from here, for the launcher's "start from" chip: `main`,
    * the name of origin's default branch, and `local`, the branch the project's folder is on now.
@@ -128,7 +131,7 @@ export interface ProjectLauncher {
 export async function onCommands(projectId: string): Promise<ProjectLauncher | null> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return null
-  const [commands, hooks, gitHost, remote, main, local] = await Promise.all([readProjectCommands(cwd), readProjectHooks(cwd), projectGitHost(cwd).catch(() => undefined), hasRemote(cwd), originDefaultBranch(cwd), currentBranch(cwd)])
+  const [commands, hooks, gitHost, remote, address, main, local] = await Promise.all([readProjectCommands(cwd), readProjectHooks(cwd), projectGitHost(cwd).catch(() => undefined), hasRemote(cwd), repositoryAddress(cwd), originDefaultBranch(cwd), currentBranch(cwd)])
   // Both read locally, never fetched. `HEAD` is a folder on no branch: there is no local branch to start from.
   const startFrom = hooks.start !== undefined && startLineTakesBase(hooks.start) && remote && main !== undefined && local !== undefined && local !== 'HEAD' ? { main: main.slice('origin/'.length), local } : undefined
   // A skill written into the folder reaches agents once it is on the branch they start from: until then its command is said to be waiting.
@@ -137,7 +140,7 @@ export async function onCommands(projectId: string): Promise<ProjectLauncher | n
     const waits = waiting.get(command.name)
     return waits ? { ...command, waiting: waits.branch, ...(waits.here ? { here: true as const } : {}) } : command
   })
-  return { commands: listed, startHook: hooks.start !== undefined, gitHost: gitHost !== undefined, remote, ...(startFrom ? { startFrom } : {}) }
+  return { commands: listed, startHook: hooks.start !== undefined, gitHost: gitHost !== undefined, remote, ...(address ? { address } : {}), ...(startFrom ? { startFrom } : {}) }
 }
 
 /**

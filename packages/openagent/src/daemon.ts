@@ -109,7 +109,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   // very first command in a fresh workspace, before any run has made the directory.
   await mkdir(daemonDir(cwd), { recursive: true })
 
-  // Everything the dashboard drives per project (a run's start, project install, the device
+  // Everything the dashboard drives per project (a run's start, project install, the machine
   // relay) lives in the runtime, so this body stays about the daemon's own lifecycle.
   const runtime = createProjectRuntime({ cwd, env })
   // Known only once the dashboard listens; the bridge browser is told it (#1332).
@@ -150,12 +150,12 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     onStart: runtime.onStart,
     onAddProject: runtime.onAddProject,
     onRemoveProject: runtime.onRemoveProject,
-    // Relay an agent to/from a connected device (#1067): the events source streams an agent this daemon
-    // is relaying, `remote` lets the read RPCs forward a remote agent's reads/steer/push to its device
+    // Relay an agent to/from a saved machine (#1067): the events source streams an agent this daemon
+    // is relaying, `remote` lets the read RPCs forward a remote agent's reads/steer/push to its machine
     // (slice 2), and the `/_relay/*` endpoints let another daemon run + read + steer a session here.
     eventsSource: runtime.remoteEventsSource,
     remote: runtime.remoteAgents,
-    relay: { tailEvents: runtime.tailRelayEvents, rpc: runtime.onRelayRpc },
+    relay: { project: runtime.projectAt, tailEvents: runtime.tailRelayEvents, rpc: runtime.onRelayRpc },
     // The browser bridge (#1237): absent unless the preference is on, which 404s every route.
     ...(bridgeToken ? { bridgeToken, bridgeSessions: () => listBridgeSessions(env) } : {}),
     // The bridge browser follows its switch (#1332): on launches it, off closes it, without a restart.

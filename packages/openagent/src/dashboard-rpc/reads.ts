@@ -72,7 +72,7 @@ async function withProjects<T>(build: (projects: Awaited<ReturnType<ReturnType<t
  * may have just self-healed a dead agent to `stopped` (#716), and that freshly-archived row can
  * lag `listAgents` by a poll — keeping it regardless leaves the row visible with no flicker.
  *
- * An agent relayed to a connected device (#1067) lives only in the daemon's memory, never on disk, so
+ * An agent relayed to a saved machine (#1067) lives only in the daemon's memory, never on disk, so
  * its in-memory stub is merged in too (#1077): that is what re-opens it after a dashboard reload
  * instead of losing it.
  */

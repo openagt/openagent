@@ -15,9 +15,9 @@ const updatePreferences = vi.hoisted(() => vi.fn())
 // Whether the saved preferences have been read: a test turns it off to see what waits for them.
 const prefsLoaded = vi.hoisted(() => ({ current: true }))
 vi.mock('../lib/preferences.js', () => ({ usePreferences: () => prefs.current, usePreferencesLoaded: () => prefsLoaded.current, updatePreferences }))
-const device = vi.hoisted(() => ({ current: null as null | { id: string; url: string; token: string; label: string } }))
-vi.mock('../lib/profiles.js', () => ({ useConnectionProfiles: () => (device.current ? [device.current] : []) }))
-vi.mock('../lib/remote-target.js', () => ({ useSelectedRemoteDeviceId: () => device.current?.id ?? null }))
+const machine = vi.hoisted(() => ({ current: null as null | { id: string; url: string; label: string } }))
+vi.mock('../lib/machines.js', () => ({ useMachines: () => (machine.current ? [machine.current] : []) }))
+vi.mock('../lib/remote-target.js', () => ({ useSelectedMachineId: () => machine.current?.id ?? null }))
 
 const start = vi.hoisted(() => vi.fn())
 vi.mock('../lib/use-start-agent.js', async () => ({
@@ -64,7 +64,7 @@ afterEach(() => {
   updatePreferences.mockReset()
   prefs.current = {}
   prefsLoaded.current = true
-  device.current = null
+  machine.current = null
 })
 
 const COMMANDS = [{ name: 'work-queue', description: 'Work the agent queue' }]
@@ -77,7 +77,7 @@ const publishOptions = () => screen.getAllByRole('menuitem').map(item => item.qu
 /** The launcher's "start from" chip, when there is one. */
 const startFromChip = () => screen.queryByRole('button', { name: 'The agent starts from' })
 /** A project whose start line passes the branch on, whose folder is on `my/work`. */
-const WITH_BRANCHES = { commands: [], startHook: true, gitHost: true, remote: true, startFrom: { main: 'main', local: 'my/work' } }
+const WITH_BRANCHES = { commands: [], startHook: true, gitHost: true, remote: true, address: 'github.com/acme/shop', startFrom: { main: 'main', local: 'my/work' } }
 const props = { projectId: 'p1', files: [], context: new Set<string>(), addContext: noop, removeContext: noop, toggleContext: noop }
 
 describe('StartAgentForm (#1774)', () => {
@@ -259,9 +259,9 @@ describe('StartAgentForm (#1774)', () => {
     expect((screen.getByText('submit-typed') as HTMLButtonElement).disabled).toBe(false)
   })
 
-  test('a picked device runs its own start hook: the start carries it, and this project\'s missing hook does not block', async () => {
-    onCommands.mockResolvedValue({ commands: [], startHook: false, gitHost: true })
-    device.current = { id: 'd1', url: 'http://box:4200', token: 't', label: 'box' }
+  test('a picked machine runs its own start hook: the start names it by its id and carries no key, and this project\'s missing hook does not block', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: false, gitHost: true, remote: true, address: 'github.com/acme/shop' })
+    machine.current = { id: 'd1', url: 'http://box:4200', label: 'box' }
     start.mockResolvedValue({ agentId: 'r2' })
     const onAgentStarted = vi.fn()
     render(<StartAgentForm {...props} onAgentStarted={onAgentStarted} />)
@@ -269,8 +269,21 @@ describe('StartAgentForm (#1774)', () => {
     expect(screen.queryByRole('alert')).toBeNull()
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r2', 'box'))
-    expect(start).toHaveBeenCalledWith('p1', 'do the thing', { remote: { url: 'http://box:4200', token: 't', label: 'box' } })
+    expect(start).toHaveBeenCalledWith('p1', 'do the thing', { machine: 'd1' })
     expect(onStartCheck).not.toHaveBeenCalled()
+  })
+
+  test('a project with no repository address runs here only: a machine picked on another project is not its target', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: false, remote: true })
+    machine.current = { id: 'd1', url: 'http://box:4200', label: 'box' }
+    start.mockResolvedValue({ agentId: 'r3' })
+    const onAgentStarted = vi.fn()
+    render(<StartAgentForm {...props} onAgentStarted={onAgentStarted} />)
+    await waitFor(() => expect(onCommands).toHaveBeenCalled())
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(start).toHaveBeenCalled())
+    expect(start.mock.calls[0]![2]).not.toHaveProperty('machine')
+    expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r3', undefined)
   })
 
   test('what would stop the run is said before the Start, for the coding agent picked; a warning is said too, and neither turns Start off', async () => {
@@ -356,15 +369,15 @@ describe('StartAgentForm (#1774)', () => {
     expect(screen.getByTestId('above').textContent).toBe('gemstack')
   })
 
-  test('with a device picked there is no "start from" chip, and the Start names no branch of this machine', async () => {
+  test('with a machine picked there is no "start from" chip, and the Start names no branch of this machine', async () => {
     onCommands.mockResolvedValue(WITH_BRANCHES)
-    device.current = { id: 'd1', url: 'http://box:4200', token: 't', label: 'box' }
+    machine.current = { id: 'd1', url: 'http://box:4200', label: 'box' }
     start.mockResolvedValue({ agentId: 'r2' })
     prefs.current = { startFrom: { p1: 'local' } }
     render(<StartAgentForm {...props} projectName="gemstack" />)
     await waitFor(() => expect(onCommands).toHaveBeenCalled())
     fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', { remote: { url: 'http://box:4200', token: 't', label: 'box' } }))
+    await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', { machine: 'd1' }))
     expect(startFromChip()).toBeNull()
   })
 

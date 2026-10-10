@@ -2,10 +2,10 @@ import { contextRemote } from './context.js'
 import { relayRpc } from '../dashboard/remote-run.js'
 
 /**
- * Run a run-scoped RPC locally, or relay it to the device when `agentId` names an agent this daemon is
- * relaying to a connected one (#1067 slice 2). For an ordinary local agent the remote lookup is empty and
+ * Run a run-scoped RPC locally, or relay it to the machine when `agentId` names an agent this daemon is
+ * relaying to a saved one (#1067 slice 2). For an ordinary local agent the remote lookup is empty and
  * `local()` runs unchanged. For a remote agent there is no local checkout, so the call is forwarded to the
- * device over the token; if the device is unreachable, `unreachable` is returned - the same empty/error
+ * machine over the token; if the machine is unreachable, `unreachable` is returned - the same empty/error
  * shape `local()` gives on a failed read - so the caller never special-cases a remote agent.
  */
 export async function relayOr<T>(

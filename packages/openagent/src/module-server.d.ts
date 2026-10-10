@@ -43,7 +43,7 @@ export interface ModuleServerHost {
 
 /**
  * What a module's browser part sent with a read: JSON, bounded in size. `agentId`, when present,
- * names the run the read is about; a run relayed to a connected device is read over there.
+ * names the run the read is about; a run relayed to a saved machine is read over there.
  */
 export type ModuleReadInput = { agentId?: string } & Record<string, unknown>
 

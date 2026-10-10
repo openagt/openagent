@@ -5,41 +5,54 @@ import type { StartAgentOptions, StartAgentResult } from './types.js'
 import { errorMessage } from '../error-message.js'
 
 /**
- * The server-side half of "run on a connected device" (#1067). The local daemon holds the saved
- * device's token, so it - not the browser - drives the remote daemon: it POSTs the agent to the
+ * The server-side half of "run on a saved machine" (#1067). The local daemon holds the saved
+ * machine's token, so it - not the browser - drives the remote daemon: it POSTs the agent to the
  * remote's `/_relay/start` and then fetch-streams the remote's `/_relay/events` back into a local
  * {@link EventStream}, which the dashboard reads over its normal same-origin `onEvents` channel. So
  * the browser never talks cross-origin and the token never leaves the two daemons (issue #1067 (b)).
+ *
+ * Every call but the ping names its project, by its repository's address
+ * (repository-address.ts): a project's folder, and so its id, is another one on each machine.
  *
  * Authentication is the shared-token cookie (#1051), sent daemon-to-daemon: `Cookie: oa_daemon=<token>` with no
  * `Origin` header. The remote's guard admits a matching cookie without the browser-only `?token=`
  * 302, and its `/_rpc` CSRF check (absent Origin passes) is not even on these raw routes.
  */
 
-/** Where a relayed agent executes: the remote daemon's origin and its #1051 token. Memory-only. */
-export interface RemoteTarget {
+/** How a machine is reached: its daemon's origin and its #1051 token. */
+export interface MachineAccess {
   url: string
   token: string
 }
 
-/** The body a relay start forwards to the remote's `/_relay/start`. */
+/** Where a relayed agent works: a machine, and the project there, by its repository's address. */
+export interface RemoteTarget extends MachineAccess {
+  project: string
+}
+
+/** What a relay start forwards to the remote's `/_relay/start`, beside the project. */
 export interface RelayStartBody {
   prompt: string
   options: StartAgentOptions
 }
 
+/**
+ * What a machine answers a relayed start with: a Start's own outcome, or `noProject` when it has
+ * no project cloned from the address the start named.
+ */
+export type RelayStartResult = StartAgentResult | { ok: false; error: string; noProject: true }
+
 const START_TIMEOUT_MS = 15_000
 
-/** How long a status ping waits before calling a device offline (#1072): short, since it polls. */
+/** How long a status ping waits before calling a machine offline (#1072): short, since it polls. */
 const PING_TIMEOUT_MS = 3_000
 
 /**
- * Health-check a saved device (#1072): a cookie'd `GET /_relay/ping`, true on any 2xx, false on a
- * non-2xx, an unreachable host, or the timeout. The token stays in memory for the check only, never
- * persisted, same as {@link startRemoteAgent}. This is how the browser's status dots learn reachable
- * from not: it has the tokens, the daemon does the cross-origin request.
+ * Health-check a saved machine (#1072): a cookie'd `GET /_relay/ping`, true on any 2xx, false on a
+ * non-2xx, an unreachable host, or the timeout. This is how the browser's status dots learn
+ * reachable from not.
  */
-export async function pingRemote(target: RemoteTarget): Promise<boolean> {
+export async function pingRemote(target: MachineAccess): Promise<boolean> {
   try {
     const res = await fetch(`${trimSlashes(target.url)}/_relay/ping`, {
       headers: { cookie: `oa_daemon=${target.token}` },
@@ -57,42 +70,43 @@ function relayHeaders(token: string): Record<string, string> {
 }
 
 /**
- * Start an agent on the remote daemon and return its {@link StartAgentResult} (with the remote's own run
- * id). A non-2xx or a transport failure surfaces as an `ok: false` result the dashboard shows, the
- * same shape a local refusal has, so the caller does not special-case remote errors.
+ * Start an agent on the remote daemon, in its project cloned from `target.project`, and return
+ * what it answered (with the remote's own run id). A non-2xx or a transport failure surfaces as an
+ * `ok: false` result the dashboard shows, the same shape a local refusal has, so the caller does
+ * not special-case remote errors.
  */
-export async function startRemoteAgent(target: RemoteTarget, body: RelayStartBody): Promise<StartAgentResult> {
+export async function startRemoteAgent(target: RemoteTarget, body: RelayStartBody): Promise<RelayStartResult> {
   try {
     const res = await fetch(`${trimSlashes(target.url)}/_relay/start`, {
       method: 'POST',
       headers: relayHeaders(target.token),
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, project: target.project }),
       signal: AbortSignal.timeout(START_TIMEOUT_MS),
     })
-    if (!res.ok) return { ok: false, error: `the device refused the run (${res.status})` }
-    return (await res.json()) as StartAgentResult
+    if (!res.ok) return { ok: false, error: `the machine refused the run (${res.status})` }
+    return (await res.json()) as RelayStartResult
   } catch (err) {
-    return { ok: false, error: `could not reach the device: ${errorMessage(err)}` }
+    return { ok: false, error: `could not reach the machine: ${errorMessage(err)}` }
   }
 }
 
-const RPC_TIMEOUT_MS = 60_000 // a relayed git push/PR runs over the network on the device
+const RPC_TIMEOUT_MS = 60_000 // a relayed git push/PR runs over the network on the machine
 
 /**
- * Relay one run-scoped RPC to the device that owns a remote agent (#1067 slice 2). The local daemon
- * holds the device token, so a read/diff/handoff/push/PR for a relayed agent runs ON the device: POST
- * {fn, args} to the remote's /_relay/rpc over the shared-token cookie (#1051) (no Origin), returning the device's
- * result. Throws on an unreachable device or a non-2xx so the caller falls back to its own empty/error
+ * Relay one run-scoped RPC to the machine that owns a remote agent (#1067 slice 2). The local daemon
+ * holds the machine token, so a read/diff/handoff/push/PR for a relayed agent runs ON the machine: POST
+ * {fn, args} to the remote's /_relay/rpc over the shared-token cookie (#1051) (no Origin), returning the machine's
+ * result. Throws on an unreachable machine or a non-2xx so the caller falls back to its own empty/error
  * shape, the same way a failed local read does.
  */
 export async function relayRpc(target: RemoteTarget, fn: string, args: unknown[]): Promise<unknown> {
   const res = await fetch(`${trimSlashes(target.url)}/_relay/rpc`, {
     method: 'POST',
     headers: relayHeaders(target.token),
-    body: JSON.stringify({ fn, args }),
+    body: JSON.stringify({ fn, args, project: target.project }),
     signal: AbortSignal.timeout(RPC_TIMEOUT_MS),
   })
-  if (!res.ok) throw new Error(`the device refused the request (${res.status})`)
+  if (!res.ok) throw new Error(`the machine refused the request (${res.status})`)
   const body = (await res.json()) as { result?: unknown }
   return body.result
 }
@@ -118,9 +132,9 @@ export function streamRemoteEvents(
   }
   void (async () => {
     try {
-      const url = `${trimSlashes(target.url)}/_relay/events?run=${encodeURIComponent(agentId)}`
+      const url = `${trimSlashes(target.url)}/_relay/events?run=${encodeURIComponent(agentId)}&project=${encodeURIComponent(target.project)}`
       const res = await fetch(url, { headers: relayHeaders(target.token), signal: controller.signal })
-      // 401 = the device rotated its token. Nothing more will stream; end cleanly (a done, not a loss).
+      // 401 = the machine rotated its token. Nothing more will stream; end cleanly (a done, not a loss).
       if (!res.ok || !res.body) return end()
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
@@ -170,11 +184,11 @@ interface RelayedAgent {
 /**
  * The local daemon's live relayed runs (#1067), keyed by the remote agent id. Registering an agent opens
  * an {@link EventStream} the dashboard reads through `onEvents`, fed by {@link streamRemoteEvents}
- * from the remote. This map is where a saved device's token lives daemon-side: in memory, for the
- * run's lifetime.
+ * from the remote. The target is the saved machine as it was at the Start, so a machine removed
+ * since still answers for the runs it has.
  *
  * The `targets` map outlives the event pump (#1067 slice 2): a finished remote agent's post-run reads,
- * open-PR and merge still have to reach the device after its event stream has ended, so the device
+ * open-PR and merge still have to reach the machine after its event stream has ended, so the machine
  * target is kept until {@link dispose} clears it, not dropped when the stream closes.
  *
  * The `metas` map (#1077) holds a local {@link AgentMeta} stub per relayed agent so `onAgents` can show a
@@ -196,7 +210,7 @@ export class RelayedAgents {
     const stream = new EventStream<OpenAgentEvent>()
     const cancel = streamRemoteEvents(target, agentId, event => {
       stream.push(event)
-      this.apply(agentId, event) // fold the event into the run's list row, mirroring the device
+      this.apply(agentId, event) // fold the event into the run's list row, mirroring the machine
     }, () => this.endStream(agentId))
     this.agents.set(agentId, { target, stream, cancel })
   }
@@ -206,7 +220,7 @@ export class RelayedAgents {
     return agentId ? this.agents.get(agentId)?.stream : undefined
   }
 
-  /** The device a relayed agent runs on, kept past the event stream so post-run push/PR still reach it. */
+  /** The machine a relayed agent runs on, kept past the event stream so post-run push/PR still reach it. */
   target(agentId: string | undefined): RemoteTarget | undefined {
     return agentId ? this.targets.get(agentId) : undefined
   }
@@ -220,7 +234,7 @@ export class RelayedAgents {
   }
 
   /** Fold each relayed event into the agent's list row via the store's own reducer (#1077), so the
-   *  local stub mirrors the device: the terminal status on `end`, the waiting flag while it is parked
+   *  local stub mirrors the machine: the terminal status on `end`, the waiting flag while it is parked
    *  (#785), the driver once its session starts. Events carry no write time, so this stamps its own. */
   private apply(agentId: string, event: OpenAgentEvent): void {
     const entry = this.metas.get(agentId)
@@ -239,7 +253,7 @@ export class RelayedAgents {
     if (entry && entry.meta.status === 'running') entry.meta.status = 'stopped'
   }
 
-  /** Stop every pump, close every stream, and forget every device target + list stub, on daemon shutdown. */
+  /** Stop every pump, close every stream, and forget every machine target + list stub, on daemon shutdown. */
   dispose(): void {
     for (const [agentId, agent] of this.agents) {
       agent.cancel()
@@ -257,8 +271,8 @@ function trimSlashes(url: string): string {
 }
 
 /**
- * Fold one relayed event into the memory-only row of a run on a device: what the device's own
- * card would say, kept here because that card is on the device. The events are the ones a run's
+ * Fold one relayed event into the memory-only row of a run on a machine: what the machine's own
+ * card would say, kept here because that card is on the machine. The events are the ones a run's
  * diary yields: the agent's session id, its cost, its end.
  */
 export function foldRelayedEvent(meta: AgentMeta, event: OpenAgentEvent, at: string): AgentMeta {

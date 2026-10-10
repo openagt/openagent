@@ -640,7 +640,7 @@ describe('an ended agent whose subagents still work', () => {
 })
 
 describe('where the agent runs, for the chip beside its name', () => {
-  test('this machine by itself; a device by the name it was given; the cloud and GitHub Actions by theirs', () => {
+  test('this machine by itself; another machine by the name it was given; the cloud and GitHub Actions by theirs', () => {
     const runsOn = () => screen.getByTestId('bar-runs-on').textContent
     const { rerender } = render(view({ live: true }))
     expect(runsOn()).toBe('This machine')
@@ -649,7 +649,7 @@ describe('where the agent runs, for the chip beside its name', () => {
     rerender(view({ live: true, target: 'remote', remoteLabel: 'Studio' }))
     expect(runsOn()).toBe('Studio')
     rerender(view({ live: true, target: 'remote' }))
-    expect(runsOn()).toBe('A device')
+    expect(runsOn()).toBe('Another machine')
     rerender(view({ live: true, target: 'web' }))
     expect(runsOn()).toBe('Cloud')
     rerender(view({ live: true, target: 'actions' }))
@@ -680,7 +680,7 @@ describe('a run just started', () => {
     expect(screen.getByText('Working…')).toBeTruthy()
   })
 
-  test('an agent just started on a device says nothing of a set-up before its card is listed: no checkout is made for it here', () => {
+  test('an agent just started on a machine says nothing of a set-up before its card is listed: no checkout is made for it here', () => {
     const events = [{ kind: 'driver', event: { type: 'start', prompt: 'Say hi' } }, { kind: 'driver', event: { type: 'text', text: 'Hi.' } }] as OpenAgentEvent[]
     render(view({ live: true, events, remoteLabel: 'laptop' }))
     expect(screen.queryByText('Session set up')).toBeNull()

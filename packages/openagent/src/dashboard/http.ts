@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 
 /**
  * The plumbing every one of the daemon's non-RPC HTTP surfaces shares: the browser bridge
- * (`/_bridge`), the web-start queue (`/_web-start`) and the device relay (`/_relay`).
+ * (`/_bridge`), the web-start queue (`/_web-start`) and the machine relay (`/_relay`).
  *
  * All three answer plain-text statuses, JSON payloads, and read capped JSON request bodies, and
  * each carried its own copy — two body readers that differed only in which message they rejected
