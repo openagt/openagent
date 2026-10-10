@@ -7,7 +7,10 @@ import { join } from 'node:path'
 import { createProjectRuntime } from './daemon-runtime.js'
 import { PROJECT_HOOKS_FILE } from './project-hooks.js'
 import { OPENAGENT_DIR } from './openagent-dir.js'
-import { addProject, listProjects } from './registry.js'
+import { addProject, listProjects, projectId, removeProject } from './registry.js'
+import type { OpenAgentEvent } from './events.js'
+import { nodeGitRunner } from '@openagt/agent-data'
+import { addWorktree, agentBranchName, worktreePath } from '@openagt/skill-branches'
 import { DATA_BRANCH, excludeFromGit, readSharing, withFileBranch } from '@openagt/agent-data'
 
 // A Start, as the daemon does it (#1774): the project's own start hook line, nothing else. The
@@ -383,6 +386,85 @@ test('removing a project with its files while a run of this machine is still ali
       if (value === undefined) delete process.env[key]
       else process.env[key] = value
     }
+    await rm(base, { recursive: true, force: true })
+  }
+})
+
+/** A repository in a folder of its own under `base`, with `origin` set to `origin` when one is given. */
+async function clone(base: string, name: string, origin?: string): Promise<string> {
+  const dir = join(base, name)
+  await mkdir(dir, { recursive: true })
+  execFileSync('git', ['init', '-q'], { cwd: dir })
+  if (origin) execFileSync('git', ['remote', 'add', 'origin', origin], { cwd: dir })
+  return dir
+}
+
+test('a relayed call\'s project is this machine\'s own, found by its repository\'s address: the first on the list, every time', async () => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'openagent-address-')))
+  const env = { XDG_CONFIG_HOME: join(base, 'cfg') }
+  await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
+  const at = new Date().toISOString()
+  const other = await clone(base, 'other', 'https://github.com/acme/other.git')
+  const local = await clone(base, 'notes')
+  const first = await clone(base, 'shop', 'https://github.com/Acme/Shop.git')
+  const second = await clone(base, 'shop-again', 'git@github.com:acme/shop.git')
+  for (const dir of [other, local, first, second]) await addProject(dir, at, undefined, env)
+  const runtime = createProjectRuntime({ cwd: other, env })
+  try {
+    // Two folders cloned from one repository: the one added first, and the same one on every call,
+    // so a run's later calls reach the project it started in.
+    for (let i = 0; i < 3; i++) assert.equal(await runtime.projectAt('github.com/acme/shop'), projectId(first))
+    assert.equal(await runtime.projectAt('github.com/acme/other'), projectId(other))
+    // No project cloned from it, and no project at all for a folder with no remote: nothing is fallen back to.
+    assert.equal(await runtime.projectAt('github.com/acme/nowhere'), undefined)
+    assert.equal(await runtime.projectAt(''), undefined)
+    // Off the list, the first is no longer this machine's project, and the second answers.
+    await removeProject(projectId(first), undefined, env)
+    assert.equal(await runtime.projectAt('github.com/acme/shop'), projectId(second))
+  } finally {
+    await runtime.dispose()
+    await rm(base, { recursive: true, force: true })
+  }
+})
+
+test('a relayed run\'s events are read from the project the call names, not from the folder the daemon was started in', async () => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'openagent-tail-')))
+  const env = { XDG_CONFIG_HOME: join(base, 'cfg') }
+  await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
+  const home = await clone(base, 'home')
+  // The project with the run: a real repository with the run's own checkout, its card and its diary.
+  const shop = await clone(base, 'shop')
+  const git = nodeGitRunner()
+  const agentId = '2026-07-19T10-00-00-000Z'
+  await git(['config', 'user.email', 't@t'], shop)
+  await git(['config', 'user.name', 't'], shop)
+  await writeFile(join(shop, 'index.html'), '<h1>Hello</h1>\n')
+  await git(['add', '-A'], shop)
+  await git(['commit', '-q', '-m', 'init'], shop)
+  await addWorktree(shop, { agentId, branch: agentBranchName(agentId) }, git)
+  const worktree = worktreePath(shop, agentId)
+  await mkdir(join(worktree, OPENAGENT_DIR), { recursive: true })
+  await writeFile(join(worktree, OPENAGENT_DIR, `${agentId}.json`), JSON.stringify({ id: agentId, startedAt: '2026-07-19T10:00:00.000Z', status: 'running', caller: { pid: process.pid, host: hostname() } }))
+  await writeFile(join(worktree, OPENAGENT_DIR, `${agentId}.jsonl`), JSON.stringify({ kind: 'said', text: 'from the shop' }) + '\n')
+  await addProject(shop, new Date().toISOString(), undefined, env)
+  const runtime = createProjectRuntime({ cwd: home, env })
+  const read = (project: string): Promise<OpenAgentEvent[]> =>
+    new Promise(resolvePromise => {
+      const events: OpenAgentEvent[] = []
+      const stop = runtime.tailRelayEvents(project, agentId, event => events.push(event))
+      setTimeout(() => {
+        stop()
+        resolvePromise(events)
+      }, 600)
+    })
+  try {
+    const events = await read(projectId(shop))
+    assert.equal(JSON.stringify(events).includes('from the shop'), true, JSON.stringify(events))
+    // The same run asked for in the daemon's own folder, or in no project of this machine: nothing.
+    assert.deepEqual(await read(projectId(home)), [])
+    assert.deepEqual(await read('no-such-project'), [])
+  } finally {
+    await runtime.dispose()
     await rm(base, { recursive: true, force: true })
   }
 })

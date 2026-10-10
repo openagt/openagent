@@ -36,7 +36,7 @@ function retryDelay(attempt: number): number {
 /**
  * How long a reconnect waits for the server's end-of-replay marker before swapping anyway
  * (#1383). The on-disk tail sends `stream-sync` the moment its replay is delivered, so this
- * deadline only fires for the in-memory sources (relay #426, relayed device runs #1067),
+ * deadline only fires for the in-memory sources (relay #426, relayed machine runs #1067),
  * which have no replay boundary to report — their buffered history streams in well under it.
  */
 const SYNC_GRACE_MS = 1500

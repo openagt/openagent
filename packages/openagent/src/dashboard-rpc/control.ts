@@ -74,7 +74,7 @@ export async function sendChoice(projectId: string, id: string, pick: string | s
     if (labels.length !== picked.length) return { ok: false, error: 'every pick must be one of the question\'s options' }
     if (!question.multi && labels.length !== 1) return { ok: false, error: 'pick exactly one option' }
     return sayToRun(cwd, agentId, { kind: 'answer', question: question.title, answer: labels.length ? labels.join(', ') : '(none)' })
-  }, { ok: false, error: 'could not reach the device' })
+  }, { ok: false, error: 'could not reach the machine' })
 }
 
 /**
@@ -112,7 +112,7 @@ export async function sendMessage(projectId: string, text: string, agentId?: str
     const cwd = await resolveProjectPath(projectId)
     if (!cwd || !agentId || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
     return sayToRun(cwd, agentId, { kind: 'message', text: message })
-  }, { ok: false, error: 'could not reach the device' })
+  }, { ok: false, error: 'could not reach the machine' })
 }
 
 /**
@@ -151,7 +151,7 @@ export async function sendDeleteAgent(projectId: string, agentId: string): Promi
 
 /**
  * Start a run in the project (#405, #1774): the project's own `start` hook line, reached through
- * the daemon's wired `startAgent` (which relays to a connected device when the options name
+ * the daemon's wired `startAgent` (which relays to a saved machine when the options name
  * one). Answers the id of the run the hook began, or why there is none: a project without the
  * line cannot start a run from here.
  */
@@ -221,7 +221,7 @@ export async function sendOpenPullRequest(projectId: string, agentId: string, op
       await (await projectRuns(target.cwd).catch(() => undefined))?.patch(agentId, { pr: { number: opened.number, url: opened.url } })
     }
     return opened
-  }, { ok: false, error: 'could not reach the device' })
+  }, { ok: false, error: 'could not reach the machine' })
 }
 
 /**
@@ -234,7 +234,7 @@ export async function sendPush(projectId: string, agentId: string): Promise<Hand
     if (!target) return { ok: false, error: 'unknown session' }
     if (target.agent.status === 'running') return { ok: false, error: 'that session is still going' }
     return withAgentLock(agentLockKey(target.cwd, agentId), () => pushAgentBranch(target.cwd, target.agent))
-  }, { ok: false, error: 'could not reach the device' })
+  }, { ok: false, error: 'could not reach the machine' })
 }
 
 /**
@@ -261,7 +261,7 @@ export async function sendMergeBranch(projectId: string, agentId: string): Promi
     if (!target) return { ok: false, error: 'unknown session' }
     if (target.agent.status === 'running') return { ok: false, error: 'that session is still going' }
     return withAgentLock(agentLockKey(target.cwd, agentId), () => mergeAgentBranch(target.cwd, target.agent))
-  }, { ok: false, error: 'could not reach the device' })
+  }, { ok: false, error: 'could not reach the machine' })
 }
 
 /**
@@ -275,7 +275,7 @@ export async function sendMerge(projectId: string, agentId: string): Promise<Han
     if (!target) return { ok: false, error: 'unknown session' }
     if (target.agent.status === 'running') return { ok: false, error: 'that session is still going' }
     return mergeAgentPr(target.cwd, target.agent)
-  }, { ok: false, error: 'could not reach the device' })
+  }, { ok: false, error: 'could not reach the machine' })
 }
 
 /**

@@ -4,8 +4,8 @@ import { onProjects, onStartCheck } from '../rpc/projects.js'
 import type { ProjectSummary } from '../../src/index.js'
 import { usePreferences, usePreferencesLoaded, updatePreferences } from '../lib/preferences.js'
 import { offeredPublishPicks, publishPickIn } from '../../src/client.js'
-import { useConnectionProfiles } from '../lib/profiles.js'
-import { useSelectedRemoteDeviceId } from '../lib/remote-target.js'
+import { useMachines } from '../lib/machines.js'
+import { useSelectedMachineId } from '../lib/remote-target.js'
 import { cleanupPick, offersPostMergeCleanup, startPicks, useStartAgent } from '../lib/use-start-agent.js'
 import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.js'
 import { useLoaded } from '../lib/use-async.js'
@@ -35,8 +35,8 @@ const STARTING = 'Starting session'
 // "My local branch", the branch the project's folder is on, as committed on this machine. The pick
 // is saved per project. The local pick hands the start hook the branch's name as `BASE`; the main
 // branch hands it none. The chip is drawn only where the pick is obeyed: the daemon names the two
-// branches only when the project's start line passes `BASE` on, and a device has its own branches,
-// so with a device picked there is no chip and the Start names no branch.
+// branches only when the project's start line passes `BASE` on, and a machine has its own branches,
+// so with a machine picked there is no chip and the Start names no branch.
 // The "Auto" menu, under the box at the left (the model menu is at the right): what the agent
 // does by itself when it finishes. Its button reads the picks, so nothing is hidden.
 // In it, how far the run takes its work: Nothing, Commit, Publish branch, Open PR, Merge on green.
@@ -60,7 +60,7 @@ export function StartAgentForm({
   projectId: string
   /** The project's name, for its chip above the box; absent until the projects are read. */
   projectName?: string | null | undefined
-  /** `runsOn` names the device a remote agent executes on (#1067), for the "runs on <device>" marker. */
+  /** `runsOn` names the machine a remote agent executes on (#1067), for the "runs on <machine>" marker. */
   onAgentStarted?: ((intent: string, agentId: string, runsOn?: string) => void) | undefined
   /** The project's files for the `#` picker (#504), owned by the shell. */
   files: string[]
@@ -79,26 +79,29 @@ export function StartAgentForm({
   const preferences = usePreferences()
   const launcher = useProjectLauncher(projectId)
 
-  // The device this run targets (#1067), if one is picked in "Run on". Its token is a per-browser
-  // secret, so it rides the start as memory-only `options.remote` and is never persisted. A device
-  // runs its own project's start hook, so this project's lack of one does not block it.
-  const profiles = useConnectionProfiles()
-  const selectedDeviceId = useSelectedRemoteDeviceId()
-  const remoteDevice = selectedDeviceId ? profiles.find(p => p.id === selectedDeviceId) : undefined
-  const noStartHook = launcher !== null && !launcher.startHook && !remoteDevice
-  // A device starts the run in its own project, whose commands this launcher does not read. A command
+  // The machine this run targets (#1067), if one is picked in "Run on": the start names it by its
+  // id, and the daemon, which holds its key, sends the run there. A project with no repository
+  // address has no name another machine knows it by, so a pick made on another project's launcher
+  // does not hold here; until the launcher is read that is not known, and the pick holds. A
+  // machine runs the start hook of its own copy of the project, so this copy's lack of one does
+  // not block it.
+  const machines = useMachines()
+  const selectedMachineId = useSelectedMachineId()
+  const machine = selectedMachineId && (launcher === null || launcher.address !== undefined) ? machines.find(m => m.id === selectedMachineId) : undefined
+  const noStartHook = launcher !== null && !launcher.startHook && !machine
+  // A machine starts the run in its own project, whose commands this launcher does not read. A command
   // whose skill has yet to reach the branch the agent starts from is not one the run can follow with.
-  const commands = remoteDevice ? [] : readyCommands(launcher?.commands ?? [])
+  const commands = machine ? [] : readyCommands(launcher?.commands ?? [])
   const offersCleanup = offersPostMergeCleanup(commands)
-  // Whether a pull request can be opened here: unknown until the launcher is read, and a device's
+  // Whether a pull request can be opened here: unknown until the launcher is read, and a machine's
   // own project is not read at all, so both are offered every pick; the daemon that starts the run
   // holds a pull request pick to the branch where its project has no git host.
-  const gitHost = remoteDevice ? true : (launcher?.gitHost ?? true)
+  const gitHost = machine ? true : (launcher?.gitHost ?? true)
   // A project with no remote can publish nothing: its picks stop at the commit.
-  const remote = remoteDevice ? true : (launcher?.remote ?? true)
+  const remote = machine ? true : (launcher?.remote ?? true)
   const publishPick = publishPickIn(preferences.publish, gitHost, remote)
   // The two branches the agent can start from, where the pick is offered at all.
-  const startFrom = remoteDevice ? undefined : launcher?.startFrom
+  const startFrom = machine ? undefined : launcher?.startFrom
   const startFromPick: StartFrom = preferences.startFrom?.[projectId] ?? 'main'
   const preferencesLoaded = usePreferencesLoaded()
   // The whole map is written: a save names keys, and this is one key. The main branch is the
@@ -108,10 +111,10 @@ export function StartAgentForm({
     updatePreferences({ startFrom: pick === 'local' ? { ...others, [projectId]: 'local' } : others })
   }
 
-  // Re-read when the pick changes: `claude` being logged in says nothing about `codex`. A device
-  // runs on its own machine, so this one's CLIs say nothing about it.
+  // Re-read when the pick changes: `claude` being logged in says nothing about `codex`. A run on
+  // another machine uses that machine's CLIs, so this one's say nothing about it.
   const driver = preferences.driver
-  const readiness = useLoaded(remoteDevice ? null : () => onStartCheck(projectId, driver), null, [projectId, driver, remoteDevice === undefined])
+  const readiness = useLoaded(machine ? null : () => onStartCheck(projectId, driver), null, [projectId, driver, machine === undefined])
 
   // The Context mixes whole projects (registered paths) and single files (relative paths): the
   // files are listed to be removed, and each kind is counted in the picker's summary. The current
@@ -135,14 +138,14 @@ export function StartAgentForm({
       ...startPicks(preferences),
       ...cleanupPick(preferences, commands),
       ...(startFrom && startFromPick === 'local' ? { base: startFrom.local } : {}),
-      ...(remoteDevice ? { remote: { url: remoteDevice.url, token: remoteDevice.token, label: remoteDevice.label } } : {}),
+      ...(machine ? { machine: machine.id } : {}),
     })
     setNote(null)
     if (result) {
       // Show the run in the Runs rail immediately (#405): its tool writes the run's card a beat
       // later, so seed an optimistic row with the typed prompt until the real one takes over.
-      // A remote agent (#1067) carries the device label so the view can mark where it executes.
-      onAgentStarted?.(text, result.agentId, remoteDevice?.label) // select the run we just started (#761)
+      // A remote agent (#1067) carries the machine label so the view can mark where it executes.
+      onAgentStarted?.(text, result.agentId, machine?.label) // select the run we just started (#761)
       composerRef.current?.clear()
     }
   }

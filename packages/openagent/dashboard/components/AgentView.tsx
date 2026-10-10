@@ -81,11 +81,11 @@ export function AgentView({
   label?: string | undefined
   /** The session's project, said in the chip beside the session's name in the top bar. */
   projectName?: string | null | undefined
-  /** Where the agent executes (#1053/#610): `actions` swaps the live feed for a burst-mode affordance; `remote` is relayed to a device (#1067); `web` is handed to a Claude Code cloud session. */
+  /** Where the agent executes (#1053/#610): `actions` swaps the live feed for a burst-mode affordance; `remote` is relayed to a machine (#1067); `web` is handed to a Claude Code cloud session. */
   target?: 'local' | 'actions' | 'remote' | 'web' | undefined
-  /** The device this agent executes on (#1067), when it is relayed to a connected one. Set only for a
-   *  just-started remote run: its diff, handoff, and push/PR now relay to the device (slice 2), so the
-   *  panels are shown, and a "runs on <device>" notice only flags that the browser preview stays local. */
+  /** The machine this agent executes on (#1067), when it is relayed to another one. Set only for a
+   *  just-started remote run: its diff, handoff, and push/PR now relay to the machine (slice 2), so the
+   *  panels are shown, and a "runs on <machine>" notice only flags that the browser preview stays local. */
   remoteLabel?: string | undefined
   files: string[]
   /** The live channel's health (#948) — surfaced as a banner over the feed. */
@@ -155,15 +155,15 @@ export function AgentView({
   const subagent = card?.parent !== undefined
   // What was set up for the agent before it began, off its card: the chat's "Session set up" line.
   const { workspace, branch, base, driver, model } = card ?? {}
-  // An agent just started on a device has no card listed yet: the device's name says where it runs.
+  // An agent just started on a machine has no card listed yet: the machine's name says where it runs.
   const elsewhere = (target !== undefined && target !== 'local') || remoteLabel !== undefined
   const setup = useMemo(() => ({ workspace, branch, base, driver, model, elsewhere }), [workspace, branch, base, driver, model, elsewhere])
   // The model by the name its coding agent gives it, for the row under the message box.
   const picked = driverFromImpl(driver)
   const models = useModels()
   const modelLabel = model ? modelName(picked ? models?.[picked] : undefined, model) : undefined
-  // Where the agent runs, for the chip beside its name: a device by the name it was given.
-  const runsOn = remoteLabel ?? (target === 'web' ? 'Cloud' : target === 'actions' ? 'GitHub Actions' : target === 'remote' ? 'A device' : 'This machine')
+  // Where the agent runs, for the chip beside its name: a machine by the name it was given.
+  const runsOn = remoteLabel ?? (target === 'web' ? 'Cloud' : target === 'actions' ? 'GitHub Actions' : target === 'remote' ? 'Another machine' : 'This machine')
   const [open, setOpen] = useState(false)
   // What the installed modules add to this run's page: a summary in the bar above the message box.
   const { runSlots: mountedSlots, panels: mountedPanels } = useMountedModules()
@@ -344,9 +344,9 @@ export function AgentView({
       {/* A run handed to Claude Code on the web (#610): the work is happening in a cloud session
           this machine cannot stream, so point at where it is rather than show an empty feed. */}
       <CloudAgentNotice target={target} events={shown} projectId={projectId} agentId={agentId} />
-      {/* A run relayed to a connected device (#1067): its diff, handoff, and push/PR now relay to the
-          device (slice 2), so this notice only flags that the browser preview stays local-only for now. */}
-      <RemoteAgentNotice device={remoteLabel} />
+      {/* A run relayed to a saved machine (#1067): its diff, handoff, and push/PR now relay to the
+          machine (slice 2), so this notice only flags that the browser preview stays local-only for now. */}
+      <RemoteAgentNotice machine={remoteLabel} />
       {/* Nothing to show yet is not the same thing in both states: a live run is waiting for its
           first event, a finished one is still reading its log. */}
       {!feedSettled ? (

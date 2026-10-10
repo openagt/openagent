@@ -65,7 +65,7 @@ export async function resolveAgentPath(projectId: string, agentId?: string): Pro
 
 /**
  * The in-memory {@link EventsSource} (#426). It answers only for a run this daemon is relaying
- * from a connected device (#1067) — such a run has no diary on this machine, since it works in a
+ * from a saved machine (#1067) — such a run has no diary on this machine, since it works in a
  * checkout over there — and returns undefined for an ordinary local run, whose diary `onEvents`
  * tails off disk.
  */
@@ -75,11 +75,11 @@ export function contextEventsSource(): EventsSource {
 
 /**
  * The relayed-agent lookup (#1067 slice 2). A run-scoped RPC uses it to tell an ordinary local agent
- * (resolve a local checkout) from one running on a connected device (forward the call there).
+ * (resolve a local checkout) from one running on a saved machine (forward the call there).
  *
  * The one accessor with a default rather than a throw, because "unwired" has a real meaning here:
- * a call arriving over `/_relay/rpc` is the *device* side of the relay, and the agent it names is
- * local to that device. Forwarding it onward would be a loop, so the honest answer there is that
+ * a call arriving over `/_relay/rpc` is the *machine* side of the relay, and the agent it names is
+ * local to that machine. Forwarding it onward would be a loop, so the honest answer there is that
  * nothing is relayed from here.
  */
 export function contextRemote(): RemoteAgents {

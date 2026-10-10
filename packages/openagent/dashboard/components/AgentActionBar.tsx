@@ -34,7 +34,7 @@ export function AgentActionBar({
   label?: string | undefined
   /** The session's project, said in the chip beside the name. */
   projectName?: string | null | undefined
-  /** Where the session runs, in a few words: this machine, a device by its name, the cloud. */
+  /** Where the session runs, in a few words: this machine, another machine by its name, the cloud. */
   runsOn?: string
   /** True when this finished agent still has a worktree on disk, so it can be removed (#737). */
   retainedWorktree?: boolean

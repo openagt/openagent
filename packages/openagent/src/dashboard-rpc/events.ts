@@ -41,7 +41,7 @@ export type LiveFeedEvent = OpenAgentEvent | StreamSync | PartialMessage
  * The `agentId` names the run whose diary is followed; without one there is nothing to stream.
  *
  * Two sources, chosen by what is wired. An in-memory stream wins: an agent the daemon is relaying
- * from a device (#1067). Otherwise the on-disk log. The daemon's source answers only for relayed
+ * from a machine (#1067). Otherwise the on-disk log. The daemon's source answers only for relayed
  * runs, so an ordinary local agent falls through to tailing the log.
  *
  * Only the on-disk tail sends the {@link StreamSync} marker: the in-memory sources have no replay

@@ -75,6 +75,7 @@ test('onCommands names the two branches an agent can start from only when the st
     git('checkout', '-q', '-b', 'my/work')
     await hooks(TAKES)
     assert.equal(await startFrom(), undefined, 'no remote: one place to start from, nothing to pick')
+    assert.equal((await onCommands(id))?.address, undefined, 'no remote: no name another machine knows the project by')
 
     git('remote', 'add', 'origin', 'https://example.com/x.git')
     git('update-ref', 'refs/remotes/origin/main', 'main')
@@ -96,7 +97,7 @@ test('onCommands names the two branches an agent can start from only when the st
 
     await rm(join(dir, PROJECT_HOOKS_FILE))
     git('checkout', '-q', 'main')
-    assert.deepEqual(await onCommands(id), { commands: [], startHook: false, gitHost: false, remote: true })
+    assert.deepEqual(await onCommands(id), { commands: [], startHook: false, gitHost: false, remote: true, address: 'example.com/x' })
     assert.equal(await onCommands('no-such-project'), null)
   } finally {
     await restore()

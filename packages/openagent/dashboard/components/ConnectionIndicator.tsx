@@ -1,31 +1,16 @@
-import { useEffect } from 'react'
 import { Laptop, MonitorSmartphone } from 'lucide-react'
-import { useConnectionProfiles, currentConnection, rememberLocalOrigin } from '../lib/profiles.js'
-import { useDeviceStatus } from '../lib/use-device-status.js'
-import { stashDraftFromUrl } from '../lib/draft-handoff.js'
-import { cn } from '../lib/utils.js'
+import { currentConnection } from '../lib/connection.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 
 // The "connected to <label>" indicator (#1052): which daemon the dashboard is talking to. Every
 // transport is same-origin, so the browser's origin IS the connection — loopback is this machine's
-// own daemon ("Local"), any other origin is a device you hopped to. It reads accented off Local so
-// a remote box (where the agent runs on someone else's hardware) is never mistaken for your own.
+// own daemon ("Local"), any other origin is another machine's, named by its address. It reads
+// accented off Local so a remote box (where the agent runs on someone else's hardware) is never
+// mistaken for your own.
 export function ConnectionIndicator() {
-  const profiles = useConnectionProfiles()
-  const deviceStatus = useDeviceStatus(profiles) // #1072: reachability of the saved devices
-  // Remember the loopback origin we launched from, so "Local" can return to the right port later.
-  // Also move any carried draft (#1066) out of the URL at SPA boot, before it reaches the address bar.
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    stashDraftFromUrl()
-    rememberLocalOrigin(window.location.origin, window.location.hostname)
-  }, [])
   if (typeof window === 'undefined') return null
-  const origin = window.location.origin
-  const { label, isLocal } = currentConnection(profiles, origin, window.location.hostname)
+  const { label, isLocal } = currentConnection(window.location.host, window.location.hostname)
   const Icon = isLocal ? Laptop : MonitorSmartphone
-  // On this machine the dot is trivially online; on a remote device it follows the poll (#1072).
-  const online = isLocal || deviceStatus[profiles.find(p => p.url === origin)?.id ?? ''] === 'online'
   return (
     <Tooltip>
       <TooltipTrigger
@@ -40,15 +25,12 @@ export function ConnectionIndicator() {
           />
         }
       >
-        <span
-          aria-hidden
-          className={cn('h-2 w-2 shrink-0 rounded-full', online ? 'bg-success' : 'bg-muted-foreground/40')}
-        />
+        <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-success" />
         <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
         <span className="max-w-[10rem] truncate">{label}</span>
       </TooltipTrigger>
       <TooltipContent>
-        {isLocal ? 'Connected to this machine' : `Connected to ${label} — the agent runs on that device`}
+        {isLocal ? 'Connected to this machine' : `Connected to ${label} — the agent runs on that machine`}
       </TooltipContent>
     </Tooltip>
   )

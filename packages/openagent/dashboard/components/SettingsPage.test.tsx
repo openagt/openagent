@@ -3,16 +3,15 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { refreshPreferences } from '../lib/preferences.js'
 import { ModulesContext, byMountOrder, type MountedModules } from '../lib/use-modules.js'
 
-// The reads this page makes, answered as an empty machine: no devices, no editors detected, no
+// The reads this page makes, answered as an empty machine: no saved machines, no editors detected, no
 // stored preferences. The rest of the module is kept, since the onboarding checklist inside the
 // page reads far more than the settings rows do.
-const checkDevices = vi.hoisted(() => vi.fn(async () => ({})))
 const prefsRead = vi.hoisted(() => vi.fn(async (): Promise<Record<string, unknown>> => ({})))
 vi.mock('../rpc/preferences.js', async importOriginal => ({
   ...(await importOriginal<typeof import('../rpc/preferences.js')>()),
   onPreferences: prefsRead,
 }))
-vi.mock('../rpc/devices.js', () => ({ checkDevices }))
+vi.mock('../rpc/machines.js', async () => (await import('../test-machines.js')).machinesRpc)
 // The coding agents' own lists, as the daemon asked them: Claude Code answered, Codex could not.
 const onModels = vi.hoisted(() =>
   vi.fn(async () => ({

@@ -533,13 +533,13 @@ function AgentHistoryRow({
   /** Ended clean, its process still saving its record and cleaning up its checkout (#1455): the row must
    *  not say "done" while the session's own pill says "saving…". */
   saving?: boolean
-  /** Runs on a connected device (#1067): the row gets a device glyph next to the agent logo. */
+  /** Runs on a saved machine (#1067): the row gets a machine glyph next to the agent logo. */
   remote?: boolean
   /** A Claude Code cloud session (#1263): the row gets a cloud glyph beside the agent logo. */
   cloud?: boolean
   /** What that session is doing (#1668), once the local half is over; undefined = the status is the word. */
   cloudState?: CloudRunState | undefined
-  /** The device's label, for the glyph's tooltip. */
+  /** The machine's label, for the glyph's tooltip. */
   remoteLabel?: string | undefined
   /** The machine whose daemon started the run, when that is another machine (#1648): a glyph names it. */
   startedOn?: string | undefined
@@ -598,7 +598,7 @@ function AgentHistoryRow({
           {parked ? 'waiting' : inCloud ? 'in cloud' : cloudWord ? cloudWord : savingNow ? 'saving…' : status}
         </Badge>
         <span className="truncate text-xs font-normal text-muted-foreground">{subtitle}</span>
-        {/* Right cluster: a device glyph when the run is relayed to a connected device (#1067),
+        {/* Right cluster: a machine glyph when the run is relayed to a saved machine (#1067),
             a cloud glyph for a Claude Code cloud session (#1263), then the driver logo. The logo
             is the only thing naming the driver on this row, so it carries a title rather than
             being decorative. */}
@@ -645,9 +645,9 @@ function AgentHistoryRow({
             {remote && (
               <Tooltip>
                 <TooltipTrigger render={<span className="flex items-center" />}>
-                  <MonitorSmartphone className="h-3 w-3 text-muted-foreground" aria-label={remoteLabel ? `Runs on ${remoteLabel}` : 'Runs on a connected device'} />
+                  <MonitorSmartphone className="h-3 w-3 text-muted-foreground" aria-label={remoteLabel ? `Runs on ${remoteLabel}` : 'Runs on another machine'} />
                 </TooltipTrigger>
-                <TooltipContent>{remoteLabel ? `Runs on ${remoteLabel}` : 'Runs on a connected device'}</TooltipContent>
+                <TooltipContent>{remoteLabel ? `Runs on ${remoteLabel}` : 'Runs on another machine'}</TooltipContent>
               </Tooltip>
             )}
             {cloud && (

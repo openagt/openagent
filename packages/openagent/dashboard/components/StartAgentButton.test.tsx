@@ -50,7 +50,7 @@ describe('StartAgentButton (#1507)', () => {
     await configureFirst(MENU)
     expect(onConfigure).toHaveBeenCalledTimes(1)
     expect(onStart).not.toHaveBeenCalled()
-    // Carried through the draft stash the device hop and the modules' "Configure first" use (#1066/#1139), so the
+    // Carried through the draft stash the modules' "Configure first" uses (#1139), so the
     // launcher rehydrates with this prompt verbatim rather than an empty composer.
     expect(takePendingDraft()).toBe(PROMPT)
   })

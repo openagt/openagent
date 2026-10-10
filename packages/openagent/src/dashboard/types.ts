@@ -62,7 +62,7 @@ export interface StartAgentOptions {
   /**
    * The branch the agent's own branch starts from, as this machine has it, commits that are not
    * pushed included: the launcher's "My local branch" pick. Absent, origin's default branch. A
-   * word that is no branch name refuses the Start. Not sent to a device: its branches are its own.
+   * word that is no branch name refuses the Start. Not sent to another machine: its branches are its own.
    */
   base?: string
   /**
@@ -71,16 +71,12 @@ export interface StartAgentOptions {
    */
   then?: string
   /**
-   * Run this session on a connected device (#1067): the local daemon relays the start to the remote
-   * daemon at `url` (authenticating with `token` as the `oa_daemon` cookie) and streams its events
-   * back into the local agent view. The device `label` rides along (memory-only, like `url`/`token`) so
-   * the local session list + notice can show which device the agent is on after a reload (#1077).
-   * Memory-only relay config the dashboard sets at submit time from a saved device. NEVER persisted to
-   * Preferences or the registry: a device token is a per-browser secret. Absent = run locally.
-   * Stripped before the start is forwarded, so the remote starts an ordinary local run and does not
-   * relay onward.
+   * Run this session on a saved machine (#1067), named by its id: the local daemon relays the
+   * start to that machine's daemon, which starts it in its own copy of the project, and streams
+   * its events back into the local agent view. Absent = run on this machine. Stripped before the
+   * start is forwarded, so the machine starts an ordinary local run and does not relay onward.
    */
-  remote?: { url: string; token: string; label?: string }
+  machine?: string
 }
 
 /** The outcome of a Start attempt (#345): the id of the run the project's start hook began, or why there is none. */

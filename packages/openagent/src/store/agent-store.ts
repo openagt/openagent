@@ -154,12 +154,12 @@ export interface AgentMeta {
   browserStreamPort?: number
   /**
    * Where this run executes (#1050/#1053/#610): `actions` for a GitHub Actions run, `web` for a
-   * Claude Code cloud session, `remote` when relayed to a connected device (#1067), absent for a
+   * Claude Code cloud session, `remote` when relayed to a saved machine (#1067), absent for a
    * local run. Persisted so the agent view can tell a burst-mode Actions run from a stalled live
    * feed, show a cloud agent's session link after a reload, and gate the browser pane off (#1053).
    */
   target?: 'local' | 'actions' | 'remote' | 'web'
-  /** The connected device a remote agent (#1067) executes on, for the session list + notice after a reload. */
+  /** The saved machine a remote agent (#1067) executes on, for the session list + notice after a reload. */
   remoteLabel?: string
   /**
    * The flow this agent started under (#1467): `build` for the scope→build orchestration, `prompt`

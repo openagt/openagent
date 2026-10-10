@@ -2,12 +2,15 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { join } from 'node:path'
 import {
+  addMachine,
   addProject,
   ensureDaemonToken,
+  listMachines,
   listProjects,
   projectId,
   readDaemonToken,
   readPreferences,
+  removeMachine,
   removeProject,
   readRegistry,
   registryPreferencesStore,
@@ -540,4 +543,70 @@ test('a filesystem with no chmod still writes the registry (#1095)', async () =>
   const token = await ensureDaemonToken(noChmod, ENV)
 
   assert.equal(await readDaemonToken(noChmod, ENV), token)
+})
+
+const STUDIO = 'http://192.168.1.5:4200'
+
+test('addMachine saves a machine with its key, newest first, named by its host when no name is given', async () => {
+  const fs = memFs()
+  const saved = await addMachine({ url: STUDIO, token: 'aaa' }, fs, ENV)
+  assert.deepEqual(saved, { id: STUDIO, label: '192.168.1.5:4200', url: STUDIO, token: 'aaa' })
+  await addMachine({ url: 'http://10.0.0.2:4200', token: 'bbb', label: '  Office  ' }, fs, ENV)
+  assert.deepEqual((await listMachines(fs, ENV)).map(machine => machine.label), ['Office', '192.168.1.5:4200'])
+  // The file itself holds the list, top-level, beside the projects and the preferences.
+  const stored = JSON.parse(fs.files.get(FILE)!)
+  assert.equal(stored.machines.length, 2)
+  assert.equal(stored.preferences.machines, undefined)
+})
+
+test('saving an address again replaces its name and its key and keeps one entry', async () => {
+  const fs = memFs()
+  await addMachine({ url: STUDIO, token: 'old', label: 'Studio' }, fs, ENV)
+  await addMachine({ url: STUDIO, token: 'new', label: 'Studio 2' }, fs, ENV)
+  assert.deepEqual(await listMachines(fs, ENV), [{ id: STUDIO, label: 'Studio 2', url: STUDIO, token: 'new' }])
+})
+
+test('removeMachine takes one machine off the list and says whether it was there', async () => {
+  const fs = memFs()
+  await addMachine({ url: STUDIO, token: 'aaa' }, fs, ENV)
+  await addMachine({ url: 'http://10.0.0.2:4200', token: 'bbb' }, fs, ENV)
+  assert.equal(await removeMachine(STUDIO, fs, ENV), true)
+  assert.deepEqual((await listMachines(fs, ENV)).map(machine => machine.id), ['http://10.0.0.2:4200'])
+  assert.equal(await removeMachine(STUDIO, fs, ENV), false)
+})
+
+test('a hand-edited machines list keeps only well-formed entries, one per address', async () => {
+  const machines = [
+    { label: 'Studio', url: STUDIO, token: 'aaa' },
+    { label: 'Twice', url: STUDIO, token: 'zzz' },
+    { label: 'No key', url: 'http://10.0.0.2:4200', token: '' },
+    { label: 7, url: 'http://10.0.0.3:4200', token: 'ccc' },
+    'junk',
+  ]
+  const fs = memFs({ [FILE]: JSON.stringify({ projects: [], preferences: {}, machines }) })
+  assert.deepEqual(await listMachines(fs, ENV), [{ id: STUDIO, label: 'Studio', url: STUDIO, token: 'aaa' }])
+  assert.deepEqual(await listMachines(memFs({ [FILE]: JSON.stringify({ projects: [], preferences: {}, machines: 'x' }) }), ENV), [])
+})
+
+test('the saved machines survive the other registry mutators, and an emptied list is not written', async () => {
+  const fs = memFs()
+  await addProject('/repos/alpha', '2026-10-11T00:00:00.000Z', fs, ENV)
+  await writePreferences({ model: 'opus' }, fs, ENV)
+  const token = await ensureDaemonToken(fs, ENV)
+  await addMachine({ url: STUDIO, token: 'aaa' }, fs, ENV)
+  await addProject('/repos/beta', '2026-10-11T00:00:00.000Z', fs, ENV)
+  await patchPreferences({ theme: 'dark' }, fs, ENV)
+  const registry = await readRegistry(fs, ENV)
+  assert.equal(registry.machines?.length, 1)
+  assert.equal(registry.projects.length, 2)
+  assert.deepEqual(registry.preferences, { model: 'opus', theme: 'dark' })
+  assert.equal(registry.daemonToken, token)
+  await removeMachine(STUDIO, fs, ENV)
+  assert.equal(fs.files.get(FILE)!.includes('machines'), false) // an empty list is not written
+})
+
+test('the preferences the browser is handed never carry the saved machines', async () => {
+  const fs = memFs()
+  await addMachine({ url: STUDIO, token: 'aaa' }, fs, ENV)
+  assert.equal(JSON.stringify(await readPreferences(fs, ENV)).includes('aaa'), false)
 })

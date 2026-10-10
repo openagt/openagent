@@ -16,11 +16,12 @@ import { PresetCreatePanel } from './PresetCreatePanel.js'
 import { CommandsMenu } from './CommandsMenu.js'
 import { DriverModelMenu, type DriverOption } from './DriverModelMenu.js'
 import { RunOnMenu } from './RunOnMenu.js'
-import { AddDeviceDialog } from './AddDeviceDialog.js'
-import { useConnectionProfiles, connectLocal, removeProfile, type ConnectionProfile } from '../lib/profiles.js'
-import { useSelectedRemoteDeviceId, selectRemoteDevice } from '../lib/remote-target.js'
-import { useDeviceStatus } from '../lib/use-device-status.js'
-import { stashDraftFromUrl, takePendingDraft } from '../lib/draft-handoff.js'
+import { AddMachineDialog } from './AddMachineDialog.js'
+import { useMachines, removeMachine, type Machine } from '../lib/machines.js'
+import { connectLocal } from '../lib/connection.js'
+import { useSelectedMachineId, selectMachine } from '../lib/remote-target.js'
+import { useMachineStatus } from '../lib/use-machine-status.js'
+import { takePendingDraft } from '../lib/draft-handoff.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.js'
 import { ClaudeLogo, CodexLogo } from './driver-logos.js'
@@ -106,17 +107,13 @@ export const Composer = forwardRef<ComposerHandle, {
 ) {
   const [prompt, setPrompt] = useState('')
   const [addingPreset, setAddingPreset] = useState(false)
-  const [addingDevice, setAddingDevice] = useState(false) // #1052: the "Add a device" modal
+  const [addingMachine, setAddingMachine] = useState(false) // #1052: the "Add a machine" modal
   const editorRef = useRef<PromptEditorHandle>(null)
-  // The saved daemons this browser can hop to (#1052). Which one we are on now comes from the URL,
-  // fixed for the page's life (a device switch reloads), so it is read once rather than as state.
-  const profiles = useConnectionProfiles()
-  const deviceStatus = useDeviceStatus(profiles) // #1072: online/offline per saved device
-  const selectedDeviceId = useSelectedRemoteDeviceId() // #1067: the device this run targets, if any
-  const selectedDevice = selectedDeviceId ? profiles.find(p => p.id === selectedDeviceId) : undefined
-  // #1073: block Start when the target device is known-offline; an absent/unknown status must not block.
-  const targetOffline = !!selectedDeviceId && deviceStatus[selectedDeviceId] === 'offline'
-  const currentUrl = typeof window === 'undefined' ? null : window.location.origin
+  // The machines saved on the daemon this dashboard is on (#1052). Which daemon that is comes from
+  // the URL, fixed for the page's life, so it is read once rather than as state.
+  const machines = useMachines()
+  const machineStatus = useMachineStatus(machines) // #1072: online/offline per saved machine
+  const currentHost = typeof window === 'undefined' ? null : window.location.host
   const isLocalConnection = typeof window === 'undefined' ? true : isLoopbackHost(window.location.hostname)
   // The registered projects for the `@` picker — the same list the launcher reads.
   const projects = useLoaded<ProjectSummary[]>(onProjects, [], [])
@@ -128,7 +125,15 @@ export const Composer = forwardRef<ComposerHandle, {
   const customPresets = preferences.customPresets ?? [] // #626: the user's own saved prompts
   const projectPresets = useProjectPresets() // #1025: saved prompts committed in the open project's repo
   const activeProjectId = useActiveProjectId() // the project whose commands the `/` list offers
-  const commands = useProjectLauncher(activeProjectId)?.commands ?? []
+  const launcher = useProjectLauncher(activeProjectId)
+  const commands = launcher?.commands ?? []
+  // A project with no repository address has no name another machine knows it by, so it runs here
+  // only and a machine picked on another project's launcher is not its target.
+  const onlyHere = launcher !== null && launcher.address === undefined
+  const selectedMachineId = useSelectedMachineId() // #1067: the machine this run targets, if any
+  const selectedMachine = selectedMachineId && !onlyHere ? machines.find(m => m.id === selectedMachineId) : undefined
+  // #1073: block Start when the target machine is known-offline; an absent/unknown status must not block.
+  const targetOffline = !!selectedMachine && machineStatus[selectedMachine.id] === 'offline'
 
   useImperativeHandle(ref, () => ({
     clear: () => {
@@ -138,9 +143,7 @@ export const Composer = forwardRef<ComposerHandle, {
     focus: () => editorRef.current?.focus(),
   }))
 
-  // Rehydrate a draft carried in — from another device (#1066) or from the click that navigated
-  // here (#1139) — launcher-only. stashDraftFromUrl is idempotent, so calling it here is race-safe
-  // even if the SPA-entry call has not run yet.
+  // Rehydrate a draft carried in from the click that navigated here (#1139), launcher-only.
   //
   // Handed to the editor as `initialText` rather than pushed through the handle: the draft is taken
   // once and cleared, while `loadTemplate` silently does nothing until Tiptap has resolved
@@ -149,7 +152,6 @@ export const Composer = forwardRef<ComposerHandle, {
   const [carriedDraft, setCarriedDraft] = useState<string | undefined>(undefined)
   useEffect(() => {
     if (compact || inAgent) return
-    stashDraftFromUrl()
     const carried = takePendingDraft()
     if (carried) setCarriedDraft(carried)
   }, [compact, inAgent])
@@ -161,7 +163,7 @@ export const Composer = forwardRef<ComposerHandle, {
   const submit = (e?: FormEvent) => {
     e?.preventDefault()
     const text = prompt.trim()
-    // #1073: a keyboard submit must be blocked too when the target device is offline.
+    // #1073: a keyboard submit must be blocked too when the target machine is offline.
     if (!text || busy || submittingRef.current || targetOffline || !canSubmit) return
     submittingRef.current = true
     void Promise.resolve(onSubmit(text)).finally(() => {
@@ -232,28 +234,30 @@ export const Composer = forwardRef<ComposerHandle, {
       onDeleteProject={id => saveProjectPresetList(projectPresets.filter(p => p.id !== id))}
     />
   )
-  // Where the next run starts (#1052/#1067): this machine or a saved device. Launcher-only: a
+  // Where the next run starts (#1052/#1067): this machine or a saved machine. Launcher-only: a
   // session already runs where it was started.
   const runOnEl = inAgent ? null : (
     <RunOnMenu
       busy={busy}
       chip={!compact}
       connection={{
-        profiles,
-        currentUrl,
+        machines,
+        currentHost,
         isLocal: isLocalConnection,
-        selectedDeviceId,
-        // #1067: selecting a device makes it the run target in place, no navigation.
-        onSelect: (p: ConnectionProfile) => selectRemoteDevice(p.id),
-        onSelectLocal: () => selectRemoteDevice(null),
+        selectedMachineId,
+        onlyHere,
+        // #1067: selecting a machine makes it the run target in place, no navigation.
+        onSelect: (m: Machine) => selectMachine(m.id),
+        onSelectLocal: () => selectMachine(null),
         onConnectLocal: connectLocal,
-        onAddDevice: () => setAddingDevice(true),
-        // #1072: drop a saved device; clear the selection if it was the run target.
-        onRemove: (p: ConnectionProfile) => {
-          if (selectedDeviceId === p.id) selectRemoteDevice(null)
-          removeProfile(p.id)
+        onAddMachine: () => setAddingMachine(true),
+        // #1072: drop a saved machine; clear the selection if it was the run target.
+        onRemove: (m: Machine) => {
+          void removeMachine(m.id).then(removed => {
+            if (removed && selectedMachineId === m.id) selectMachine(null)
+          })
         },
-        status: deviceStatus,
+        status: machineStatus,
       }}
     />
   )
@@ -303,13 +307,13 @@ export const Composer = forwardRef<ComposerHandle, {
   // #1073: an offline target blocks Start; say so and point back to the pick of where it runs. No auto-fallback.
   const offlineNote = targetOffline && (
     <p role="alert" className="mt-2 text-xs text-danger">
-      {`${selectedDevice?.label ?? 'The selected device'} is offline. Pick another place to run, then start.`}
+      {`${selectedMachine?.label ?? 'The selected machine'} is offline. Pick another place to run, then start.`}
     </p>
   )
 
-  // The "Add a device" modal (#1052), rendered by both forms since the "Run on" pick is in both. A portal, so
+  // The "Add a machine" modal (#1052), rendered by both forms since the "Run on" pick is in both. A portal, so
   // its place in the tree does not matter.
-  const deviceDialog = addingDevice && <AddDeviceDialog onClose={() => setAddingDevice(false)} onAdded={() => editorRef.current?.focus()} />
+  const machineDialog = addingMachine && <AddMachineDialog onClose={() => setAddingMachine(false)} onAdded={() => editorRef.current?.focus()} />
 
   // Compact (#723): a single row for the navbar — editor, then the same controls and submit. It
   // stays one row on purpose (#755): the header must not grow taller to gain them.
@@ -320,7 +324,7 @@ export const Composer = forwardRef<ComposerHandle, {
         {driverModelEl}
         {runOnEl}
         {slotEl}
-        {deviceDialog}
+        {machineDialog}
       </div>
     )
   }
@@ -377,7 +381,7 @@ export const Composer = forwardRef<ComposerHandle, {
           }}
         />
       )}
-      {deviceDialog}
+      {machineDialog}
     </>
   )
 })

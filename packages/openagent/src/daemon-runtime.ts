@@ -1,4 +1,4 @@
-import { resolve } from 'node:path'
+import { basename, resolve } from 'node:path'
 import { hostname } from 'node:os'
 import { stat } from 'node:fs/promises'
 import { fromDiaryLine, isPidAlive, projectBranches, readLiveMetas, resolveAgentDiary, type AgentMeta, type AnyDiaryLine } from './store/index.js'
@@ -8,7 +8,8 @@ import type { EventsSource, RemoteAgents } from './dashboard/rpc-serve.js'
 import { RelayedAgents, startRemoteAgent } from './dashboard/remote-run.js'
 import { dispatchRelayRpc } from './dashboard-rpc/relay-dispatch.js'
 import { tailAgentEvents } from './dashboard-rpc/events-tail.js'
-import { addProject, listProjects, projectId, removeProject } from './registry.js'
+import { addProject, listMachines, listProjects, projectId, removeProject } from './registry.js'
+import { repositoryAddress } from './repository-address.js'
 import { writeHookLines } from './built-in.js'
 import { fileBranchRepo, installProject, writeSharing } from '@openagt/agent-data'
 import { removeProjectFiles } from './remove-files.js'
@@ -21,10 +22,13 @@ import { providedDataChanged } from './store/provided.js'
 
 /**
  * What the daemon does for a project (#393): start a run, add a project, and relay a run to and
- * from a connected device. Split from daemon.ts so that file reads as the daemon's lifecycle
+ * from a saved machine. Split from daemon.ts so that file reads as the daemon's lifecycle
  * (state file, ports, boot, shutdown). The daemon runs no agent itself (#1774): a Start is the
  * project's own `start` hook line, and the run it begins belongs to whatever tool that line names.
  */
+
+/** How long a project folder's repository address is trusted before git is asked again. */
+const ADDRESS_KEPT_MS = 10_000
 
 /** Inputs to {@link createProjectRuntime}. */
 export interface ProjectRuntimeOptions {
@@ -39,18 +43,21 @@ export interface ProjectRuntime {
   onStart: (prompt: string, options?: StartAgentOptions, targetProjectId?: string) => Promise<StartAgentResult>
   onAddProject: (path: string, share: boolean) => Promise<AddProjectResult>
   onRemoveProject: (projectId: string, files?: boolean) => Promise<RemoveProjectResult>
-  /** The live event stream for an agent this daemon is relaying from a device (#1067), else undefined
+  /** The live event stream for an agent this daemon is relaying from a machine (#1067), else undefined
    *  so `onEvents` falls back to tailing the on-disk log. Wired as the dashboard's events source. */
   remoteEventsSource: EventsSource
+  /** This machine's own id for its project cloned from `address`, the name a relayed call gives a
+   *  project; undefined when no project here is cloned from it. */
+  projectAt: (address: string) => Promise<string | undefined>
   /** Tail a relay-started agent's on-disk events (#1067): the daemon's `/_relay/events` endpoint uses
    *  it to stream one agent back to whichever daemon relayed it here. */
-  tailRelayEvents: (agentId: string, onEvent: (event: OpenAgentEvent) => void) => () => void
-  /** The relayed-agent lookup the dashboard's read RPCs consult (#1067 slice 2): which device a remote
+  tailRelayEvents: (projectId: string, agentId: string, onEvent: (event: OpenAgentEvent) => void) => () => void
+  /** The relayed-agent lookup the dashboard's read RPCs consult (#1067 slice 2): which machine a remote
    *  run runs on, so a run-scoped RPC forwards there instead of resolving a local checkout. */
   remoteAgents: RemoteAgents
-  /** The device side of the relay (#1067 slice 2): run one whitelisted read/steer/handoff RPC against
-   *  this daemon's own home checkout, for a daemon that relayed an agent here. */
-  onRelayRpc: (fn: string, args: unknown[]) => Promise<unknown>
+  /** The machine side of the relay (#1067 slice 2): run one whitelisted read/steer/handoff RPC against
+   *  this daemon's own copy of the project, for a daemon that relayed an agent here. */
+  onRelayRpc: (projectId: string, fn: string, args: unknown[]) => Promise<unknown>
   /** Let go of the relayed streams. */
   dispose: () => Promise<void>
 }
@@ -61,17 +68,17 @@ export interface ProjectRuntime {
  */
 export function createProjectRuntime({ cwd, env }: ProjectRuntimeOptions): ProjectRuntime {
   const homeId = projectId(resolve(cwd))
-  // Runs this daemon is relaying to/from a connected device (#1067): the local half of a remote agent.
+  // Runs this daemon is relaying to/from a saved machine (#1067): the local half of a remote agent.
   const relayedAgents = new RelayedAgents()
   // The relayed-agent lookup the dashboard's read RPCs consult (#1067 slice 2): is this agentId remote, and
-  // which device owns it. Outlives the event stream so a finished remote agent's push/PR still reaches it.
+  // which machine owns it. Outlives the event stream so a finished remote agent's push/PR still reaches it.
   const remoteAgents: RemoteAgents = {
     target: agentId => relayedAgents.target(agentId),
     list: projectId => relayedAgents.list(projectId),
   }
-  // The device side of the relay (#1067 slice 2): run one whitelisted read/steer/handoff RPC against this
-  // daemon's own home checkout, for a daemon that relayed an agent here. Home id forces the addressed project.
-  const onRelayRpc = (fn: string, args: unknown[]): Promise<unknown> => dispatchRelayRpc(homeId, fn, args)
+  // The machine side of the relay (#1067 slice 2): run one whitelisted read/steer/handoff RPC against this
+  // daemon's own copy of the project the call named, for a daemon that relayed an agent here.
+  const onRelayRpc = (project: string, fn: string, args: unknown[]): Promise<unknown> => dispatchRelayRpc(project, fn, args)
 
   // A project id resolves to its repo path via the registry; the home id (or none)
   // resolves to the daemon's own `cwd` without a lookup.
@@ -81,36 +88,63 @@ export function createProjectRuntime({ cwd, env }: ProjectRuntimeOptions): Proje
     return records.find(record => record.id === id)?.path
   }
 
+  // The project here that a relayed call names by its repository's address: the first on the list
+  // cloned from it, every time, so a run's later calls reach the project it started in. A folder's
+  // address is kept for a few seconds, so a run's reads, which poll, do not ask git about every
+  // project each time. Only an address is kept: a folder that had none is asked again.
+  const addresses = new Map<string, { address: string; until: number }>()
+  const addressOf = async (path: string): Promise<string | undefined> => {
+    const kept = addresses.get(path)
+    if (kept && kept.until > Date.now()) return kept.address
+    const address = await repositoryAddress(path)
+    if (address === undefined) addresses.delete(path)
+    else addresses.set(path, { address, until: Date.now() + ADDRESS_KEPT_MS })
+    return address
+  }
+  const projectAt = async (address: string): Promise<string | undefined> => {
+    for (const record of await listProjects(undefined, env).catch(() => [])) {
+      if ((await addressOf(record.path)) === address) return record.id
+    }
+    return undefined
+  }
+
   // Start (#1774): the project's own `start` hook line, which answers the id of the run it began.
   // The daemon names no tool and holds nothing about the run: no slot, no cap (a person's click is
   // the brake), no process to stop at shutdown. A project without the line cannot start a run here.
   const onStart = async (prompt: string, options: StartAgentOptions = {}, targetProjectId?: string): Promise<StartAgentResult> => {
-    // Run on a connected device (#1067): forward the start to the remote daemon, which runs its own
-    // project's hook, and relay the run's events back. `remote` is stripped so the device does not
-    // relay onward, and `base` because a branch of this machine names nothing on the device (the device drops it too). The
-    // device starts it in its own home project.
-    if (options.remote) {
-      const { remote, base: _thisMachines, ...forwarded } = options
-      const result = await startRemoteAgent(remote, { prompt, options: forwarded })
-      if (result.ok) {
-        // A relayed agent has no local checkout or pid, so its list row is a memory-only stub (#1077):
-        // registered here so onAgents can show it and a dashboard reload re-opens it. Never written to disk.
-        const now = new Date().toISOString()
-        const meta: AgentMeta = {
-          status: 'running',
-          id: result.agentId,
-          startedAt: now,
-          updatedAt: now,
-          target: 'remote',
-          intent: prompt,
-          ...(remote.label ? { remoteLabel: remote.label } : {}),
-        }
-        relayedAgents.register(result.agentId, remote, meta, targetProjectId ?? homeId)
-      }
-      return result
-    }
     const projectCwd = await resolveProject(targetProjectId)
     if (!projectCwd) return { ok: false, error: `unknown project: ${targetProjectId}` }
+    // Run on a saved machine (#1067): forward the start to its daemon, which runs the hook of its
+    // own copy of this project, and relay the run's events back. The project is named by its
+    // repository's address, the one name both machines have for it. `machine` is stripped so the
+    // other side does not relay onward, and `base` because a branch of this machine names nothing
+    // there (it drops both too).
+    if (options.machine !== undefined) {
+      const { machine: id, base: _thisMachines, ...forwarded } = options
+      const machine = (await listMachines(undefined, env)).find(saved => saved.id === id)
+      if (!machine) return { ok: false, error: 'That machine is no longer saved. Pick another place to run.' }
+      const project = await repositoryAddress(projectCwd)
+      if (!project) return { ok: false, error: 'This project has no repository address, so it cannot be sent to another machine.' }
+      const target = { url: machine.url, token: machine.token, project }
+      const result = await startRemoteAgent(target, { prompt, options: forwarded })
+      if (!result.ok) {
+        return 'noProject' in result ? { ok: false, error: `${basename(projectCwd)} is not on ${machine.label}. Add it there first.` } : result
+      }
+      // A relayed agent has no local checkout or pid, so its list row is a memory-only stub (#1077):
+      // registered here so onAgents can show it and a dashboard reload re-opens it. Never written to disk.
+      const now = new Date().toISOString()
+      const meta: AgentMeta = {
+        status: 'running',
+        id: result.agentId,
+        startedAt: now,
+        updatedAt: now,
+        target: 'remote',
+        intent: prompt,
+        remoteLabel: machine.label,
+      }
+      relayedAgents.register(result.agentId, target, meta, targetProjectId ?? homeId)
+      return result
+    }
     // The branch to start from ends up on the line's command line: only a branch name goes there.
     // Refused, not dropped: a run started from the main branch instead would be a silent swap.
     if (options.base !== undefined && !isBranchName(options.base)) return { ok: false, error: `not a branch name: ${String(options.base)}` }
@@ -198,22 +232,28 @@ export function createProjectRuntime({ cwd, env }: ProjectRuntimeOptions): Proje
     return { ok: true, cleanup }
   }
 
-  // The dashboard's events source (#1067): a stream for an agent this daemon is relaying from a device,
+  // The dashboard's events source (#1067): a stream for an agent this daemon is relaying from a machine,
   // else undefined so `onEvents` tails the on-disk log as usual for an ordinary local agent.
   const remoteEventsSource: EventsSource = (_projectId, agentId) => relayedAgents.get(agentId)
 
   // Tail a relay-started run's own log (#1067) for the `/_relay/events` endpoint: the diary the
   // run's tool keeps, its lines turned into events. The relocating tail, for the same reason as
   // the dashboard's onEvents: the diary becomes the finished run's when the run ends.
-  const tailRelayEvents = (agentId: string, onEvent: (event: OpenAgentEvent) => void): (() => void) =>
-    tailAgentEvents<AnyDiaryLine>(() => resolveAgentDiary(cwd, agentId), line => {
-      const event = fromDiaryLine(line)
-      if (event) onEvent(event)
-    })
+  const tailRelayEvents = (project: string, agentId: string, onEvent: (event: OpenAgentEvent) => void): (() => void) =>
+    tailAgentEvents<AnyDiaryLine>(
+      async () => {
+        const projectCwd = await resolveProject(project)
+        return projectCwd ? resolveAgentDiary(projectCwd, agentId) : undefined
+      },
+      line => {
+        const event = fromDiaryLine(line)
+        if (event) onEvent(event)
+      },
+    )
 
   const dispose = async (): Promise<void> => {
     relayedAgents.dispose()
   }
 
-  return { onStart, onAddProject, onRemoveProject, remoteEventsSource, tailRelayEvents, remoteAgents, onRelayRpc, dispose }
+  return { onStart, onAddProject, onRemoveProject, remoteEventsSource, projectAt, tailRelayEvents, remoteAgents, onRelayRpc, dispose }
 }

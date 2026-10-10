@@ -17,7 +17,7 @@ const onAgent = vi.hoisted(() => vi.fn((_projectId: string, _agentId: string) =>
 vi.mock('../rpc/reads.js', () => ({ onAgent }))
 
 // The rail now also carries the app chrome moved off the top navbar (#772 follow-up). Three of
-// those pull the preferences/devices RPC stubs into jsdom, which this suite deliberately
+// those pull the preferences/machines RPC stubs into jsdom, which this suite deliberately
 // avoids. It is about the agents list, not the chrome (each has its own suite), so stub them out.
 vi.mock('./ThemeToggle.js', () => ({ ThemeToggle: () => null }))
 vi.mock('./NotificationsMenu.js', () => ({ NotificationsMenu: () => null }))
@@ -196,7 +196,7 @@ describe('AgentHistory (#785)', () => {
 // bespoke collapsing <aside> of #862 — the shadcn Sidebar owns collapse, and the shell never drove
 // the old prop, so those strip/float tests are retired with it.
 describe('AgentHistory rows', () => {
-  test('a run on a connected device shows a device glyph naming the device (#1067)', () => {
+  test('a run on a saved machine shows a machine glyph naming the machine (#1067)', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ target: 'remote', remoteLabel: 'my-laptop' })]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getByLabelText('Runs on my-laptop')).toBeTruthy()
   })
@@ -211,7 +211,7 @@ describe('AgentHistory rows', () => {
     expect(screen.queryByLabelText('Started on this-mac')).toBeNull()
   })
 
-  test('a local run has no device glyph (#1067)', () => {
+  test('a local run has no machine glyph (#1067)', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent()]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.queryByLabelText(/Runs on/)).toBeNull()
   })
