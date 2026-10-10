@@ -15,11 +15,23 @@ Stop babysitting your coding agents. Make the important decisions, let AI do the
 
 ## Quickstart
 
-```bash
-# Install
-npm i -g @openagt/dashboard
-openagent # Spins up the dashboard
+In your project's root folder:
 
-# Or one-shot (no install):
-npx @openagt/dashboard # Spins up the dashboard
+```bash
+npx @openagt/init
+```
+
+It shows the skills as a list with ticks, writes the ones you pick as files of your project, and offers to open the dashboard.
+
+To open the dashboard alone:
+
+```bash
+npx @openagt/dashboard
+```
+
+Or install it:
+
+```bash
+npm i -g @openagt/dashboard
+openagent
 ```
