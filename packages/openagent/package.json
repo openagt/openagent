@@ -62,6 +62,7 @@
     "@base-ui-components/react": "1.0.0-rc.0",
     "@openagt/agent-data": "workspace:*",
     "@openagt/files": "workspace:*",
+    "@openagt/remote-access": "workspace:*",
     "@openagt/init": "workspace:*",
     "@openagt/skill-branches": "workspace:*",
     "@openagt/skill-github": "workspace:*",

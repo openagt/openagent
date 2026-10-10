@@ -14,6 +14,8 @@ import { bridgeSessionsFrom } from './dashboard/bridge-sessions.js'
 import { bridgeQuestions } from './dashboard/bridge-store.js'
 import { bridgeBrowserDir, bridgeBrowserOwner, startBridgeBrowser, type BridgeBrowser, type BridgeBrowserOptions } from './bridge-browser.js'
 import { runProjectHooks } from './project-hooks.js'
+import { builtInServices } from './built-in.js'
+import { startPackageServices, type PackageServices, type PackageServicesOptions } from './package-services.js'
 import { readAllAgents } from './store/index.js'
 import type { BridgeSession } from './dashboard/index.js'
 
@@ -82,6 +84,8 @@ export interface RunDaemonOptions {
   onListening?: (state: DaemonState) => void
   /** How the bridge browser is launched (#1332); default the real Chrome for Testing. For tests. */
   bridgeBrowser?: (opts: BridgeBrowserOptions) => Promise<BridgeBrowser>
+  /** How the services of OpenAgent's own packages are started; default each as its own process. For tests. */
+  packageServices?: (opts: PackageServicesOptions) => PackageServices
 }
 
 /**
@@ -192,6 +196,12 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     await runProjectHooks(record.path, 'open', { log: console.log })
   }
 
+  // The services of OpenAgent's own packages: each runs for as long as the daemon does, and is
+  // told the daemon's address. Only beside a loopback bind: a service asks the daemon as this
+  // machine's own browser does, and a daemon opened to the network by `--host` answers only
+  // to its shared token.
+  const packageServices = (opts.packageServices ?? startPackageServices)({ commands: isLoopbackHost(host) ? await builtInServices().catch(() => []) : [], url: dashboard.url, env, log: console.log })
+
   // Everything that runs in the background beside serving the dashboard: the data sync and the
   // cloud sweeps.
   const services = startBackgroundServices({
@@ -202,6 +212,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
 
   await waitForShutdown(opts.signal)
 
+  await packageServices.stop()
   await services.quiesce()
   // Each project's close hooks (#1774), the counterpart of the open hooks above. A run in flight
   // is not the daemon's process: it goes on to its end, and the next dashboard shows it.

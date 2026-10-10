@@ -16,8 +16,8 @@ import { declaring, lineRuns, lookupProvidedCommand, packageBins, projectPackage
  * project has it, are the only ones.
  */
 
-/** The packages every project has: an agent cannot start, be shown or be put on a git host without them. */
-export const BUILT_IN_PACKAGES: readonly string[] = ['@openagt/files', '@openagt/skill-branches', '@openagt/skill-github', '@openagt/skill-logs', '@openagt/agent-runner']
+/** The packages every project has: an agent cannot start, be shown or be put on a git host without them, and the door to this computer is no project's to pick. */
+export const BUILT_IN_PACKAGES: readonly string[] = ['@openagt/files', '@openagt/remote-access', '@openagt/skill-branches', '@openagt/skill-github', '@openagt/skill-logs', '@openagt/agent-runner']
 
 /**
  * The packages a project has once it picked them (#2023). A skill's package is the project's
@@ -105,6 +105,16 @@ function runsOneOf(lines: readonly string[], pkg: ProjectPackage): boolean {
 /** The project's own installed packages, less the names OpenAgent brings itself. */
 export async function ownPackages(root: string): Promise<ProjectPackage[]> {
   return (await projectPackages(root)).filter(pkg => !OWN_PACKAGE_NAMES.includes(pkg.name))
+}
+
+/**
+ * The services of the packages every project has: a package declares
+ * `"openagent": { "service": "<command>" }`, and `<command> serve` runs for as long as OpenAgent
+ * runs (`package-services.ts`). Only those packages: a service is this computer's, and a package
+ * a project picked is that project's.
+ */
+export async function builtInServices(): Promise<ProvidedCommand[]> {
+  return declaring((await (resolved ??= resolveOwn())).filter(pkg => !pkg.picked), 'service')
 }
 
 /** The directories the commands of OpenAgent's packages sit in: what a hook line's PATH gains after the project's own installed tools. */

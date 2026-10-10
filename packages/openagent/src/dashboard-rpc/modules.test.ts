@@ -54,9 +54,10 @@ test('the dashboard\'s modules are every registered project\'s, one per package,
     await addProject(a, '2026-09-19T00:00:00.000Z')
     await addProject(b, '2026-09-19T00:00:01.000Z')
 
-    // The built-in modules (Files, the logs package's) are every project's, from the first; then the projects' own.
+    // The built-in modules (Files, the Devices section, the logs package's) are every project's, from the first; then the projects' own.
     assert.deepEqual(await onModules(), [
       { package: '@openagt/files', url: `/_modules/${projectId(a)}/%40openagt%2Ffiles/dashboard.js`, projects: [projectId(a), projectId(b)] },
+      { package: '@openagt/remote-access', url: `/_modules/${projectId(a)}/%40openagt%2Fremote-access/dashboard.js`, projects: [projectId(a), projectId(b)] },
       { package: '@openagt/skill-logs', url: `/_modules/${projectId(a)}/%40openagt%2Fskill-logs/dashboard.js`, projects: [projectId(a), projectId(b)] },
       { package: 'logs', url: `/_modules/${projectId(a)}/logs/w.js`, projects: [projectId(a), projectId(b)] },
       { package: 'queue', url: `/_modules/${projectId(b)}/queue/w.js`, projects: [projectId(b)] },

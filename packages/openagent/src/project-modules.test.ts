@@ -53,7 +53,7 @@ test('a project\'s modules are the dependencies whose package exports ./dashboar
     assert.equal(modules[2]!.dir, join(elsewhere, 'w'), 'the link is followed to the package itself')
 
     // A project with no package.json brings none of its own: it has the built-in packages that are modules, only.
-    assert.deepEqual((await readProjectModules(join(root, 'node_modules'))).map(module => module.package), ['@openagt/files', '@openagt/skill-logs'])
+    assert.deepEqual((await readProjectModules(join(root, 'node_modules'))).map(module => module.package), ['@openagt/files', '@openagt/remote-access', '@openagt/skill-logs'])
   } finally {
     await rm(root, { recursive: true, force: true })
     await rm(elsewhere, { recursive: true, force: true })

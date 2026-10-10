@@ -23,7 +23,7 @@ test('a project with nothing installed gets its runs, its branches and a reposit
     assert.deepEqual(await lookupProvided(root, 'tickets'), {})
     assert.equal((await providedCommand(root, 'repository'))?.package, '@openagt/skill-github', 'the built-in package that can create its repository')
     assert.deepEqual((await builtInPackagesOf(root)).map(pkg => pkg.name), [...BUILT_IN_PACKAGES], 'none of the packages a project picks')
-    assert.deepEqual((await readProjectModules(root)).map(module => module.package), ['@openagt/files', '@openagt/skill-logs'])
+    assert.deepEqual((await readProjectModules(root)).map(module => module.package), ['@openagt/files', '@openagt/remote-access', '@openagt/skill-logs'])
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -43,19 +43,19 @@ test('a project has a skill\'s package, its data and its page once it holds the 
     await skillText(root, '.agents/skills', 'tickets')
     assert.equal((await providedCommand(root, 'tickets'))?.package, '@openagt/skill-tickets')
     assert.deepEqual(await lookupProvided(root, 'queue'), {}, 'a skill the project does not hold stays out')
-    assert.deepEqual(await modules(), ['@openagt/files', '@openagt/skill-logs', '@openagt/skill-tickets'])
+    assert.deepEqual(await modules(), ['@openagt/files', '@openagt/remote-access', '@openagt/skill-logs', '@openagt/skill-tickets'])
 
     await skillText(root, '.claude/skills', 'queue')
     await skillText(root, '.claude/skills', 'orchestration')
     assert.equal((await providedCommand(root, 'queue'))?.package, '@openagt/skill-queue')
-    assert.deepEqual(await modules(), ['@openagt/files', '@openagt/skill-logs', '@openagt/skill-orchestration', '@openagt/skill-queue', '@openagt/skill-tickets'])
+    assert.deepEqual(await modules(), ['@openagt/files', '@openagt/remote-access', '@openagt/skill-logs', '@openagt/skill-orchestration', '@openagt/skill-queue', '@openagt/skill-tickets'])
 
     // A folder with no text in it, and a text under another name, are no skill of ours.
     await rm(join(root, '.agents/skills/tickets/SKILL.md'))
     await skillText(root, '.claude/skills', 'my-tickets')
     assert.deepEqual(await lookupProvided(root, 'tickets'), {})
     await rm(join(root, '.claude/skills/queue'), { recursive: true })
-    assert.deepEqual(await modules(), ['@openagt/files', '@openagt/skill-logs', '@openagt/skill-orchestration'])
+    assert.deepEqual(await modules(), ['@openagt/files', '@openagt/remote-access', '@openagt/skill-logs', '@openagt/skill-orchestration'])
   } finally {
     await rm(root, { recursive: true, force: true })
   }
