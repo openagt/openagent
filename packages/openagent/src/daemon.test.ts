@@ -106,6 +106,40 @@ test('runDaemon serves the dashboard, and shuts down when the signal aborts', as
   }
 })
 
+test("the services of OpenAgent's own packages run while the daemon does: told its address and its env, and ended while it still answers", async () => {
+  const cwd = await tmpWorkspace()
+  const env = await configEnv(cwd)
+  const ac = new AbortController()
+  const started: { packages: string[]; url: string; home: string | undefined }[] = []
+  let answeredAtStop: number | undefined
+  let url = ''
+  try {
+    const { done, state } = await startDaemon(cwd, {
+      port: 0,
+      signal: ac.signal,
+      env,
+      packageServices: opts => {
+        started.push({ packages: opts.commands.map(command => command.package), url: opts.url, home: opts.env.XDG_CONFIG_HOME })
+        return {
+          stop: async () => {
+            answeredAtStop = (await fetch(url)).status
+          },
+        }
+      },
+    })
+    url = state.url
+    // Started once the dashboard listens, like the open hooks: never a reason the address came late.
+    for (let i = 0; i < 250 && started.length === 0; i++) await new Promise(resolve => setTimeout(resolve, 20))
+    assert.deepEqual(started, [{ packages: ['@openagt/remote-access'], url: state.url, home: env.XDG_CONFIG_HOME }])
+    ac.abort()
+    await done
+    assert.equal(answeredAtStop, 200, 'the services end first, before the dashboard closes')
+  } finally {
+    ac.abort()
+    await rm(cwd, { recursive: true, force: true })
+  }
+})
+
 test('runDaemon comes up on a fresh workspace with no .openagent yet', async () => {
   const cwd = await mkdtemp(join(tmpdir(), 'openagent-daemon-')) // deliberately no mkdir
   const env = await configEnv(cwd)

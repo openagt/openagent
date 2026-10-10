@@ -138,6 +138,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   given the project's folder and the facts about a run, never a verdict about them. Picked
   over reading only through the package's command, a new process for every read of a tree
   that polls every 8 seconds and a preview on every hover.
+- A package OpenAgent brings to every project may bring a service: a command of its own
+  that OpenAgent runs for as long as it runs itself, and tells its own address. Picked
+  over a line in each project's hooks file, which is a project's and shared with its team,
+  where a service is one computer's; and over running it inside OpenAgent's own process,
+  where a fault in it is a fault in OpenAgent.
 - The chat shows a `screen` line as the live page it names, on this machine's loopback
   only, and knows nothing of what the page is. Picked over a `browser` kind the dashboard
   renders itself, which the next package showing something would have had to repeat.
