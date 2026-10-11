@@ -66,6 +66,31 @@ export const exec: Exec = (bin, args, stdin, { timeoutMs, signal }) =>
     child.stdin.end(stdin)
   })
 
+/** How many of a command's last lines are kept for the page. */
+const SAID_LINES = 15
+
+/** The end of what a command said, its errors last: where the reason of a failure is. */
+export function lastLines(said: Pick<Said, 'out' | 'err'>): string {
+  const lines = [said.out, said.err].flatMap(text => text.split('\n').map(line => line.trimEnd()).filter(Boolean))
+  return lines.slice(-SAID_LINES).join('\n')
+}
+
+/**
+ * What to do about a failure to log in to the server, which `ssh` and `sudo` word their own way,
+ * after those words. Only for the first thing asked of a server: later a server's own words
+ * could read like one of these.
+ */
+export function withAdvice(server: { address: string; user: string }, said: string): string {
+  const advice = /REMOTE HOST IDENTIFICATION HAS CHANGED|Host key verification failed/.test(said)
+    ? 'This server shows another key than the one this computer remembers for it. Nothing was sent to it.'
+    : /Permission denied/.test(said)
+      ? `OpenAgent logs in with this computer's own SSH keys. Check that "ssh ${server.user}@${server.address}" works in a terminal without asking for anything.`
+      : /sudo: a password is required|sudo: a terminal is required|sudo: command not found|sudo: not found/.test(said)
+        ? `The user ${server.user} cannot become root without a password. Use root, or a user whose sudo asks for none.`
+        : undefined
+  return [said, advice].filter(Boolean).join('\n')
+}
+
 export interface Session {
   /**
    * Meet the server: log in, and answer what its key is known by. `undefined` when `ssh` did not

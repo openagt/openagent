@@ -1,12 +1,15 @@
-import { openSession, type Exec, type Said, type Session } from './ssh.js'
+import { giveGithub, noteGithub } from './logins.js'
+import { lastLines, openSession, withAdvice, type Exec, type Session } from './ssh.js'
 import { SERVER_USER, STEPS, linkScript, type StepId } from './steps.js'
-import { BEAT_MS, doorUrl, readStore, update, working, type Server, type StepState } from './store.js'
+import { BEAT_MS, changeServer, doorUrl, working, type Server, type StepState } from './store.js'
 
 /**
  * The install itself: the steps, one after the other, on one server, each written to the file
  * as it starts and as it ends, so the page shows where the install is. It stops at the first
  * step that fails, with what the server said. Run as a process of its own: an install takes
  * minutes, and a command a page runs has seconds.
+ *
+ * Once the steps are done, the GitHub login is copied when the person asked for that.
  */
 
 export interface InstallOptions {
@@ -21,30 +24,6 @@ export interface InstallOptions {
   beatMs?: number
 }
 
-/** How many of a command's last lines are kept for the page. */
-const SAID_LINES = 15
-
-/** The end of what a command said, its errors last: where the reason of a failure is. */
-export function lastLines(said: Pick<Said, 'out' | 'err'>): string {
-  const lines = [said.out, said.err].flatMap(text => text.split('\n').map(line => line.trimEnd()).filter(Boolean))
-  return lines.slice(-SAID_LINES).join('\n')
-}
-
-/**
- * What to do about a failure to log in, which `ssh` and `sudo` word their own way, after those
- * words. Only for a login: later a server's own words could read like one of these.
- */
-export function withAdvice(server: Pick<Server, 'address' | 'user'>, said: string): string {
-  const advice = /REMOTE HOST IDENTIFICATION HAS CHANGED|Host key verification failed/.test(said)
-    ? 'This server shows another key than the one this computer remembers for it. Nothing was sent to it.'
-    : /Permission denied/.test(said)
-      ? `OpenAgent logs in with this computer's own SSH keys. Check that "ssh ${server.user}@${server.address}" works in a terminal without asking for anything.`
-      : /sudo: a password is required|sudo: a terminal is required|sudo: command not found|sudo: not found/.test(said)
-        ? `The user ${server.user} cannot become root without a password. Use root, or a user whose sudo asks for none.`
-        : undefined
-  return [said, advice].filter(Boolean).join('\n')
-}
-
 /** Refused: the server's install already runs, in another process. */
 export class AlreadyWorking extends Error {
   constructor(address: string) {
@@ -54,11 +33,7 @@ export class AlreadyWorking extends Error {
 
 export async function install(opts: InstallOptions): Promise<void> {
   const { env, address, version } = opts
-  const change = <T>(apply: (server: Server) => T): Promise<T | undefined> =>
-    update(env, store => {
-      const kept = store.servers.find(candidate => candidate.address === address)
-      return kept ? apply(kept) : undefined
-    })
+  const change = <T>(apply: (server: Server) => T): Promise<T | undefined> => changeServer(env, address, apply)
   const mine = (kept: Server): boolean => kept.worker?.pid === process.pid
   const beat = (): Promise<unknown> => change(kept => void (mine(kept) && (kept.worker = { pid: process.pid, seen: new Date().toISOString() })))
   const set = (id: StepId, state: StepState, said?: string): Promise<unknown> =>
@@ -94,6 +69,11 @@ export async function install(opts: InstallOptions): Promise<void> {
         return void (await set(step.id, 'failed', login ? withAdvice(server, words) : words))
       }
       await set(step.id, 'done')
+    }
+    // The person's tick. A copy that fails is told on the login's own line: the server is installed all the same.
+    if (await change(kept => kept.github?.wanted === true)) {
+      const given = await giveGithub(session, opts.exec)
+      await change(kept => noteGithub(kept, given, true))
     }
   } finally {
     clearInterval(beating)
