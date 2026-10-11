@@ -2,23 +2,29 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ModuleHostContext, type MachineAdded, type ModuleCommandResult, type ModuleHost, type ModuleMachines, type ModuleProject } from '@openagt/dashboard/module'
 import { ServersSettings, olderThan } from './ServersSettings.js'
-import type { ServerRow, StepState } from './servers.js'
+import type { LoginRow, ServerRow, StepState } from './servers.js'
 
 const PROJECT = { id: 'p1', name: 'gemstack', gitHost: true }
 const OTHER = { id: 'p2', name: 'other', gitHost: false }
-const LABELS = { login: 'Log in', user: 'The user openagent', tools: 'git, Node and Chrome', openagent: 'OpenAgent', agent: 'Claude Code', service: 'The service', door: 'The door' }
+const LABELS = { login: 'Log in', user: 'The user openagent', tools: 'git, gh, Node and Chrome', openagent: 'OpenAgent', agent: 'Claude Code', service: 'The service', door: 'The door' }
 const LINK = { url: 'https://203.0.113.5/_remote-access/enter#code.pin', expires: new Date(Date.now() + 5 * 60_000).toISOString() }
+const NONE: LoginRow = { there: false, working: false }
 
-/** A server whose steps are in these states, in the install's order; the rest have not started. */
+/** A server whose steps are in these states, in the install's order; the rest have not started. It has no login unless said. */
 function server(states: StepState[], over: Partial<ServerRow> = {}): ServerRow {
   const steps = Object.entries(LABELS).map(([id, label], index) => ({ id, label, state: states[index] ?? ('waiting' as const) }))
-  return { address: '203.0.113.5', url: 'https://203.0.113.5', user: 'root', working: false, adding: true, steps, ...over }
+  return { address: '203.0.113.5', url: 'https://203.0.113.5', user: 'root', working: false, adding: true, steps, logins: { github: NONE, claude: NONE }, ...over }
 }
 const ALL_DONE: StepState[] = ['done', 'done', 'done', 'done', 'done', 'done', 'done']
+const NO_GH: ModuleCommandResult = { ok: true, output: { problem: 'There is no GitHub login to copy from this computer. `gh` is not on this computer.' } }
+const OCTOCAT: ModuleCommandResult = { ok: true, output: { account: 'octocat' } }
 
-/** A host whose `servers` command answers what `answer` says for its arguments, with these machines saved. */
-function dashboard(answer: (args: string[]) => ModuleCommandResult, saved: ModuleMachines = { version: '1.2.3', machines: [] }, added: MachineAdded = { ok: true }) {
-  const runCommand = vi.fn(async (_projectId: string, args: string[]) => answer(args))
+/**
+ * A host whose `servers` command answers what `answer` says for its arguments, with these machines saved.
+ * This computer's own `gh` answers `own` when asked whose login it holds: nobody's, unless said.
+ */
+function dashboard(answer: (args: string[]) => ModuleCommandResult, saved: ModuleMachines = { version: '1.2.3', machines: [] }, added: MachineAdded = { ok: true }, own: ModuleCommandResult = NO_GH) {
+  const runCommand = vi.fn(async (_projectId: string, args: string[]) => (args[0] === 'github' ? own : answer(args)))
   const machines = vi.fn(async () => saved)
   const addMachine = vi.fn(async (_link: string, _label?: string) => added)
   const host: ModuleHost = {
@@ -90,7 +96,7 @@ describe('Settings → Servers', () => {
     const { host } = dashboard(() => ok({ servers: [server(['done', 'done', 'running'], { working: true, fingerprint: 'SHA256:abc' })] }))
     show(host)
     expect(await screen.findByText('OpenAgent is being installed.')).toBeTruthy()
-    expect(stepNames()).toEqual(['Log in: done', 'The user openagent: done', 'git, Node and Chrome: running', 'OpenAgent: not started', 'Claude Code: not started', 'The service: not started', 'The door: not started'])
+    expect(stepNames()).toEqual(['Log in: done', 'The user openagent: done', 'git, gh, Node and Chrome: running', 'OpenAgent: not started', 'Claude Code: not started', 'The service: not started', 'The door: not started'])
     expect(screen.getByText("The server's key: SHA256:abc")).toBeTruthy()
     // Nothing to press on a server that is being installed.
     for (const name of ['Try 203.0.113.5 again', 'Update 203.0.113.5', 'Remove 203.0.113.5']) expect(screen.queryByRole('button', { name })).toBeNull()
@@ -209,6 +215,131 @@ describe('Settings → Servers', () => {
     const unread = dashboard(() => ({ ok: false, error: 'servers printed no JSON' }))
     show(unread.host)
     expect(await screen.findByText('The servers could not be read: servers printed no JSON')).toBeTruthy()
+  })
+
+  test('the tick names whose GitHub login would be copied, and Connect then asks for the copy; with no login on this computer there is nothing to tick', async () => {
+    const { host, ran } = dashboard(() => ok({ servers: [] }), undefined, undefined, OCTOCAT)
+    show(host)
+    expect(await screen.findByText('Copy my GitHub login (octocat) to the server.')).toBeTruthy()
+    const tick = screen.getByRole('checkbox', { name: 'Copy my GitHub login to the server' })
+    // Set by the person, never for them.
+    expect(tick.getAttribute('aria-checked')).toBe('false')
+    fireEvent.change(screen.getByLabelText("The server's address"), { target: { value: '203.0.113.5' } })
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.click(tick)
+    await waitFor(() => expect(tick.getAttribute('aria-checked')).toBe('true'))
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
+    await waitFor(() => expect(ran()).toContain('connect 203.0.113.5 root 1.2.3 github'))
+    cleanup()
+
+    const none = dashboard(() => ok({ servers: [] }))
+    show(none.host)
+    expect(await screen.findByText('There is no GitHub login to copy from this computer. `gh` is not on this computer.')).toBeTruthy()
+    expect(screen.getByRole('checkbox', { name: 'Copy my GitHub login to the server' }).hasAttribute('data-disabled')).toBe(true)
+    fireEvent.change(screen.getByLabelText("The server's address"), { target: { value: '203.0.113.5' } })
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
+    await waitFor(() => expect(none.ran()).toContain('connect 203.0.113.5 root 1.2.3'))
+  })
+
+  test('a server that is being installed has no logins to press yet; a GitHub login that was ticked waits in the list', async () => {
+    const { host } = dashboard(() => ok({ servers: [server(['done', 'running'], { working: true, logins: { github: { there: false, working: true }, claude: NONE } })] }))
+    show(host)
+    expect(await screen.findByText('OpenAgent is being installed.')).toBeTruthy()
+    expect(stepNames().at(-1)).toBe('Your GitHub login: not copied yet')
+    expect(screen.queryByRole('list', { name: 'The logins on 203.0.113.5' })).toBeNull()
+  })
+
+  test('an installed server lists its two logins: the GitHub one is copied on a press and removed on a press', async () => {
+    let github: LoginRow = NONE
+    const { host, ran } = dashboard(
+      args => {
+        if (args[0] === 'login') github = { there: true, working: false, account: 'octocat', since: '2026-10-11T12:00:00.000Z' }
+        if (args[0] === 'logout') github = NONE
+        return ok({ servers: [server(ALL_DONE, { adding: false, logins: { github, claude: NONE } })] })
+      },
+      undefined,
+      undefined,
+      OCTOCAT,
+    )
+    show(host)
+    const logins = within(await screen.findByRole('list', { name: 'The logins on 203.0.113.5' }))
+    expect(logins.getByText('GitHub: no login on the server.')).toBeTruthy()
+    expect(logins.getByText('Claude: not logged in on the server.')).toBeTruthy()
+    expect(logins.queryByRole('button', { name: 'Remove the GitHub login from 203.0.113.5' })).toBeNull()
+    const copy = logins.getByRole('button', { name: 'Copy my GitHub login to 203.0.113.5' }) as HTMLButtonElement
+    await waitFor(() => expect(copy.disabled).toBe(false))
+    fireEvent.click(copy)
+    await waitFor(() => expect(ran()).toContain('login 203.0.113.5 github'))
+    expect(await logins.findByText(/^GitHub: logged in as octocat since .*2026\.$/)).toBeTruthy()
+    expect(copy.textContent).toBe('Copy again')
+    fireEvent.click(logins.getByRole('button', { name: 'Remove the GitHub login from 203.0.113.5' }))
+    await waitFor(() => expect(ran()).toContain('logout 203.0.113.5 github'))
+    expect(await logins.findByText('GitHub: no login on the server.')).toBeTruthy()
+  })
+
+  test('with no GitHub login on this computer there is none to copy; a copy that failed at the install\'s end says why', async () => {
+    const failed: LoginRow = { there: false, working: false, said: 'error validating token: HTTP 401: Bad credentials' }
+    const { host } = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false, logins: { github: failed, claude: NONE } })] }))
+    show(host)
+    const logins = within(await screen.findByRole('list', { name: 'The logins on 203.0.113.5' }))
+    expect(logins.getByRole('alert').textContent).toBe('error validating token: HTTP 401: Bad credentials')
+    expect(logins.getByText('GitHub: the last try did not go through.')).toBeTruthy()
+    expect((logins.getByRole('button', { name: 'Copy my GitHub login to 203.0.113.5' }) as HTMLButtonElement).disabled).toBe(true)
+    // What a failed try left on the server is not always known here: it can be taken off all the same.
+    expect(logins.getByRole('button', { name: 'Remove the GitHub login from 203.0.113.5' })).toBeTruthy()
+    expect(logins.queryByRole('button', { name: 'Remove the Claude login from 203.0.113.5' })).toBeNull()
+  })
+
+  test('while the server is being told there is nothing to press, and an older failure is not shown', async () => {
+    const told: LoginRow = { there: true, working: true, account: 'octocat', since: '2026-10-11T12:00:00.000Z', said: 'an older failure' }
+    const { host } = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false, logins: { github: told, claude: { there: false, working: true } } })] }), undefined, undefined, OCTOCAT)
+    show(host)
+    const logins = within(await screen.findByRole('list', { name: 'The logins on 203.0.113.5' }))
+    expect(logins.getByText('GitHub: one moment, the server is being told.')).toBeTruthy()
+    expect(logins.getByText('Claude: one moment, the server is being told.')).toBeTruthy()
+    expect(logins.queryByRole('alert')).toBeNull()
+    await waitFor(() => expect(host.runCommand).toHaveBeenCalledWith('p1', ['github']))
+    expect((logins.getByRole('button', { name: 'Copy my GitHub login to 203.0.113.5' }) as HTMLButtonElement).disabled).toBe(true)
+    // Only a login that still waits for the person is started over; one on its way to the server arrives.
+    expect((logins.getByRole('button', { name: 'Log in to Claude for 203.0.113.5' }) as HTMLButtonElement).disabled).toBe(true)
+    for (const name of ['Remove the GitHub login from 203.0.113.5', 'Remove the Claude login from 203.0.113.5']) expect(logins.queryByRole('button', { name })).toBeNull()
+  })
+
+  test('a press makes a Claude login for the server: the page says where to say yes, then until when it is good; it is removed on a press', async () => {
+    let claude: LoginRow = NONE
+    const { host, ran } = dashboard(args => {
+      if (args[0] === 'login') claude = { there: false, working: true, asking: true }
+      if (args[0] === 'logout') claude = NONE
+      return ok({ servers: [server(ALL_DONE, { adding: false, logins: { github: NONE, claude } })] })
+    })
+    show(host)
+    const logins = within(await screen.findByRole('list', { name: 'The logins on 203.0.113.5' }))
+    const press = logins.getByRole('button', { name: 'Log in to Claude for 203.0.113.5' })
+    expect(press.textContent).toBe('Log in to Claude')
+    fireEvent.click(press)
+    await waitFor(() => expect(ran()).toContain('login 203.0.113.5 claude'))
+    expect(await logins.findByText("Claude: say yes in the page this computer's browser opened.")).toBeTruthy()
+    // A page that was closed is no dead end.
+    expect(press.textContent).toBe('Start over')
+    expect(logins.queryByRole('button', { name: 'Remove the Claude login from 203.0.113.5' })).toBeNull()
+
+    claude = { there: true, working: false, since: '2026-10-11T12:00:00.000Z', ends: '2027-10-11T12:00:00.000Z' }
+    expect(await logins.findByText(/^Claude: logged in since .*2026, good until about .*2027\.$/)).toBeTruthy()
+    expect(press.textContent).toBe('Log in again')
+    fireEvent.click(logins.getByRole('button', { name: 'Remove the Claude login from 203.0.113.5' }))
+    await waitFor(() => expect(ran()).toContain('logout 203.0.113.5 claude'))
+    expect(await logins.findByText('Claude: not logged in on the server.')).toBeTruthy()
+  })
+
+  test('a Claude login that was not made says why, and a login that could not be removed says why', async () => {
+    const failed: LoginRow = { there: false, working: false, said: 'No yes came from the browser in 10 minutes.' }
+    const { host } = dashboard(args => (args[0] === 'logout' ? { ok: false, error: 'The server did not answer.' } : ok({ servers: [server(ALL_DONE, { adding: false, logins: { github: { there: true, working: false, account: 'octocat', since: '2026-10-11T12:00:00.000Z' }, claude: failed } })] })))
+    show(host)
+    const logins = within(await screen.findByRole('list', { name: 'The logins on 203.0.113.5' }))
+    expect(logins.getByRole('alert').textContent).toBe('No yes came from the browser in 10 minutes.')
+    fireEvent.click(logins.getByRole('button', { name: 'Remove the GitHub login from 203.0.113.5' }))
+    expect(await screen.findByText('The server did not answer.')).toBeTruthy()
   })
 
   test('older is by the three numbers of a version', () => {

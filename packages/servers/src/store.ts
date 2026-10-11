@@ -9,8 +9,9 @@ import { STEP_IDS, type StepId } from './steps.js'
  * who logs in there, and how far its install got. The command and the install's own process both
  * write it, so every change goes through {@link update}.
  *
- * It holds no key and no password: the login is this computer's own SSH keys, and the key the
- * server's door gives is OpenAgent's, kept with its machines.
+ * It holds no key, no password and no login: the way in is this computer's own SSH keys, the key
+ * the server's door gives is OpenAgent's, kept with its machines, and a GitHub or Claude login
+ * goes to the server and is not kept here.
  */
 
 export type StepState = 'waiting' | 'running' | 'done' | 'failed'
@@ -29,6 +30,29 @@ export interface Worker {
   seen: string
 }
 
+/** The two logins a server works with. */
+export const LOGIN_KINDS = ['github', 'claude'] as const
+export type LoginKind = (typeof LOGIN_KINDS)[number]
+
+/**
+ * One login of a server, as this computer left it. The login itself is never kept here: only
+ * that it was put there, when, and for GitHub whose it is.
+ */
+export interface Login {
+  /** ISO 8601: when this computer put the login on the server. Absent while the server has none from here. */
+  since?: string
+  /** GitHub: the account, as the server's own `gh` answered. */
+  account?: string
+  /** GitHub: to be copied once the install's steps are done. */
+  wanted?: boolean
+  /** Why the last try ended without a login. */
+  failed?: string
+  /** The process that changes the login right now, and when it last said it still does. */
+  worker?: Worker
+  /** Claude: that process waits for the person's yes in the browser, and has sent nothing yet. */
+  asking?: boolean
+}
+
 export interface Server {
   /** The server's number or name: what a person typed, and what its certificate is for. */
   address: string
@@ -41,6 +65,10 @@ export interface Server {
   worker?: Worker
   /** The install was asked for and the server is not among the machines yet: the page adds it once the steps are done. */
   adding: boolean
+  /** The GitHub login this computer copied to the server. */
+  github?: Login
+  /** The Claude login this computer made for the server. */
+  claude?: Login
 }
 
 export interface Store {
@@ -90,8 +118,16 @@ export const SILENT_MS = 45_000
  * switched off) leaves its number in the file, and the system gives it to another program later.
  */
 export function working(server: Server, now = Date.now()): boolean {
-  return server.worker !== undefined && pidAlive(server.worker.pid) && now - Date.parse(server.worker.seen) < SILENT_MS
+  return atWork(server.worker, now)
 }
+
+/** Whether a process that wrote itself to the file is still at work: it is there, and said so a moment ago. */
+export function atWork(worker: Worker | undefined, now = Date.now()): boolean {
+  return worker !== undefined && pidAlive(worker.pid) && now - Date.parse(worker.seen) < SILENT_MS
+}
+
+/** Whether `said` is a GitHub account's name. */
+export const isAccount = (said: unknown): said is string => typeof said === 'string' && /^[A-Za-z\d](?:[A-Za-z\d-]{0,38})$/.test(said)
 
 /** Where the door of the server at `address` answers: what OpenAgent's machines know it by. */
 export function doorUrl(address: string): string {
@@ -109,6 +145,20 @@ function readWorker(value: unknown): { worker: Worker } | undefined {
   return Number.isInteger(pid) && (pid as number) > 0 && typeof seen === 'string' && !Number.isNaN(Date.parse(seen)) ? { worker: { pid: pid as number, seen } } : undefined
 }
 
+function readLogin(value: unknown): Login | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const { since, account, wanted, failed, worker, asking } = value as Record<string, unknown>
+  const login: Login = {
+    ...(typeof since === 'string' && !Number.isNaN(Date.parse(since)) ? { since } : {}),
+    ...(isAccount(account) ? { account } : {}),
+    ...(wanted === true ? { wanted } : {}),
+    ...(typeof failed === 'string' && failed ? { failed: failed.slice(-MAX_SAID) } : {}),
+    ...(readWorker(worker) ?? {}),
+    ...(asking === true ? { asking } : {}),
+  }
+  return Object.keys(login).length ? login : undefined
+}
+
 /** Read what a file holds, forgivingly: anything malformed is left out, never a reason to fail. */
 export function sanitize(value: unknown): Store {
   const obj = value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
@@ -116,7 +166,8 @@ export function sanitize(value: unknown): Store {
   for (const entry of Array.isArray(obj.servers) ? obj.servers : []) {
     if (servers.length >= MAX_SERVERS) break
     if (!entry || typeof entry !== 'object') continue
-    const { address, user, fingerprint, steps, worker, adding } = entry as Record<string, unknown>
+    const { address, user, fingerprint, steps, worker, adding, github, claude } = entry as Record<string, unknown>
+    const [githubLogin, claudeLogin] = [readLogin(github), readLogin(claude)]
     if (typeof address !== 'string' || addressOf(address) !== address || !isUser(user)) continue
     if (servers.some(server => server.address === address)) continue
     // Every step, in the install's own order: a step the file does not know has not started.
@@ -134,6 +185,8 @@ export function sanitize(value: unknown): Store {
       steps: STEP_IDS.map(id => known.get(id) ?? { id, state: 'waiting' }),
       ...(readWorker(worker) ?? {}),
       adding: adding === true,
+      ...(githubLogin ? { github: githubLogin } : {}),
+      ...(claudeLogin ? { claude: claudeLogin } : {}),
     })
   }
   return { servers }
@@ -217,6 +270,14 @@ export async function update<T>(env: NodeJS.ProcessEnv, change: (store: Store) =
     await writeFile(tmp, JSON.stringify(sanitize(store), null, 2) + '\n', { mode: 0o600 })
     await rename(tmp, path)
     return answer
+  })
+}
+
+/** Change the one server at `address`, when the file still holds it; answers what `apply` did, or `undefined` for a server that is gone. */
+export function changeServer<T>(env: NodeJS.ProcessEnv, address: string, apply: (server: Server) => T): Promise<T | undefined> {
+  return update(env, store => {
+    const kept = store.servers.find(candidate => candidate.address === address)
+    return kept ? apply(kept) : undefined
   })
 }
 

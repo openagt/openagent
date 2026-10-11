@@ -18,13 +18,25 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The first time this computer meets a server, the server's key is taken as it is, shown,
   and remembered. A server that later shows another key is refused. Picked over showing the
   key and waiting for a click, and over taking only servers this computer already met.
-- SSH is only for the install and an update. Afterwards this computer reaches the server
-  through the server's door, with a key of its own.
+- SSH is only for the install, an update and the server's logins. For everything else this
+  computer reaches the server through the server's door, with a key of its own.
 
 ## On the server
 - Everything runs as a user of its own, `openagent`. `root`, or a user that becomes root,
-  is only for the install and an update.
-- The install brings git, Node, Chrome and the coding agent.
+  is only for the install, an update and the logins.
+- The install brings git, gh, Node, Chrome and the coding agent.
+
+## The server's logins
+- The GitHub login is this computer's own, copied to the server when the person ticks it.
+  Picked over a login of the server's own.
+- A ticked login is copied at the install's end, to a server met for the first time too.
+  Picked over waiting until the person has looked at the server's key.
+- The Claude login is made new for the server by one press on this computer, with
+  `claude setup-token`, and lasts a year. This computer's own Claude login is never copied:
+  used on two computers, it logs one of them out.
+- A login goes to the server over SSH, as the install does. Picked over the server's door,
+  which is open to the internet: every device that is let in could then change the
+  server's logins.
 
 ## An update
 - When the server falls behind this computer, its row says so and has an "Update" button.

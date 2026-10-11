@@ -17,13 +17,24 @@ export interface Call {
   script: string
 }
 
+/** A GitHub login as `gh` hands one out, made up. */
+export const GH_LOGIN = `gho_${'a1B2'.repeat(9)}`
+
 /**
  * A server that is not there: every `ssh` is answered by `answer`, or goes well with nothing said.
  * The first meeting shows the key `ssh -v` would.
+ *
+ * This computer's own `gh` is not there either: it is logged in as octocat and holds
+ * {@link GH_LOGIN}, unless `gh` answers otherwise for what it is asked.
  */
-export function pretendServer(answer: (call: Call) => Partial<Said> | undefined = () => undefined): { exec: Exec; calls: Call[] } {
+export function pretendServer(answer: (call: Call) => Partial<Said> | undefined = () => undefined, gh: (args: readonly string[]) => Partial<Said> | undefined = () => undefined): { exec: Exec; calls: Call[]; asked: string[] } {
   const calls: Call[] = []
+  const asked: string[] = []
   const exec: Exec = async (bin, args, script) => {
+    if (bin === 'gh') {
+      asked.push(args.join(' '))
+      return { code: 0, out: `${args[0] === 'auth' ? GH_LOGIN : 'octocat'}\n`, err: '', ...gh(args) }
+    }
     if (bin !== 'ssh') throw new Error(`not ssh: ${bin}`)
     // Hanging up is no script.
     if (args.includes('-O')) return { code: 0, out: '', err: '' }
@@ -32,5 +43,5 @@ export function pretendServer(answer: (call: Call) => Partial<Said> | undefined 
     const met = call.remote === 'true' ? 'OpenSSH_9.9p2, LibreSSL 3.3.6\ndebug1: Server host key: ssh-ed25519 SHA256:0123456789abcdefghijklmnopqrstuvwxyzABCDEFG\nAuthenticated to 203.0.113.5 ([203.0.113.5]:22) using "publickey".' : ''
     return { code: 0, out: '', err: met, ...answer(call) }
   }
-  return { exec, calls }
+  return { exec, calls, asked }
 }
