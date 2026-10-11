@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { AlreadyWorking, askLink, install } from './install.js'
-import { AlreadyAsking, copyGithub, makeClaude, ownGithubAccount, removeLogin, type Mint } from './logins.js'
+import { AlreadyAtWork, changeLogin, ownGithubAccount, type Mint } from './logins.js'
 import type { Exec } from './ssh.js'
 import { STEPS } from './steps.js'
 import { LOGIN_KINDS, Unreadable, addressOf, atWork, doorUrl, freshSteps, isUser, isVersion, readStore, update, working, type Login, type LoginKind, type Server, type StepState, type Store } from './store.js'
@@ -28,11 +28,12 @@ export const USAGE = `usage: servers <command>
   login <address> github               copy this computer's GitHub login to the server, over SSH
   login <address> claude               make a Claude login for the server: this computer's browser asks you once, the
                                        login lasts a year and goes to the server over SSH; this computer's own Claude
-                                       login is never read
-  logout <address> github|claude       take that login off the server
+                                       login is never read; run again while the browser waits, it asks anew
+  logout <address> github|claude       delete that login on the server; the login itself is not ended by this
   forget <address>                     take the server off this list; nothing is changed on the server
   work <address> <version>             the install's own process, started by connect
-  login-work <address>                 the Claude login's own process, started by login`
+  login-work <address> github|claude   the process that gives the server a login, started by login
+  logout-work <address> github|claude  the process that takes a login off the server, started by logout`
 
 export interface CliIO {
   env: NodeJS.ProcessEnv
@@ -54,8 +55,10 @@ class Refused extends Error {}
 export interface LoginStatus {
   /** This computer put it on the server, and did not take it off since. */
   there: boolean
-  /** It is on its way: the install copies it at its end, or this computer's browser waits for the person. */
+  /** It is being changed right now, or the install copies it at its end. */
   working: boolean
+  /** Claude: this computer's browser waits for the person's yes, and nothing was sent yet. */
+  asking?: boolean
   /** GitHub: the person asked for a copy, and it was not made yet. */
   wanted?: boolean
   /** GitHub: the account, as the server's own gh answered. */
@@ -95,7 +98,8 @@ function loginOf(kind: LoginKind, login: Login | undefined, installing: boolean)
   const there = login?.since !== undefined
   return {
     there,
-    working: kind === 'github' ? login?.wanted === true && installing : atWork(login?.worker),
+    working: atWork(login?.worker) || (login?.wanted === true && installing),
+    ...(login?.asking && atWork(login.worker) ? { asking: true } : {}),
     ...(login?.wanted ? { wanted: true } : {}),
     ...(login?.account ? { account: login.account } : {}),
     ...(there ? { since: login!.since! } : {}),
@@ -147,6 +151,7 @@ async function connect(io: CliIO, said: { address: string; user: string; version
   await update(io.env, store => {
     const known = store.servers.find(server => server.address === address)
     if (known && working(known)) throw new Refused(`OpenAgent is being installed on ${address} right now`)
+    if (known && changing(known)) throw new Refused(`A login of ${address} is being changed right now: wait until it ends`)
     const fresh: Server = { address, user: said.user, ...(known?.fingerprint ? { fingerprint: known.fingerprint } : {}), steps: freshSteps(), worker: { pid: process.pid, seen: new Date().toISOString() }, adding: true }
     if (known) Object.assign(known, fresh)
     else store.servers.unshift(fresh)
@@ -187,17 +192,24 @@ async function still(io: CliIO, said: string): Promise<Server> {
 
 const isKind = (said: string | undefined): said is LoginKind => (LOGIN_KINDS as readonly string[]).includes(said ?? '')
 
+/** Whether one of the server's logins is being changed right now. */
+const changing = (server: Server): boolean => LOGIN_KINDS.some(kind => atWork(server[kind]?.worker))
+
 /**
- * Start the Claude login's own process. One that still waits for the person is ended first: a
- * second press is the person starting over, with a browser page that was closed.
+ * Start the process that changes one login of a server: gives it one, or takes it off. A login
+ * that is being changed is not changed a second time, with one exception: a Claude login that
+ * still waits for the person is ended and asked for anew, since a second press is the person
+ * starting over, with a browser page that was closed.
  */
-async function askClaude(io: CliIO, said: string): Promise<Status> {
+async function changeLoginOf(io: CliIO, said: string, kind: LoginKind, remove: boolean): Promise<Status> {
   const { address } = await still(io, said)
   const before = await update(io.env, store => {
     const server = store.servers.find(candidate => candidate.address === address)!
-    const old = atWork(server.claude?.worker) ? server.claude!.worker!.pid : undefined
-    server.claude = { ...(server.claude?.since ? { since: server.claude.since } : {}), worker: { pid: process.pid, seen: new Date().toISOString() } }
-    return old
+    const login = server[kind]
+    const busy = atWork(login?.worker)
+    if (busy && (remove || login!.asking !== true)) throw new Refused(new AlreadyAtWork(address, kind).message)
+    server[kind] = { ...(login?.since ? { since: login.since } : {}), ...(login?.account ? { account: login.account } : {}), worker: { pid: process.pid, seen: new Date().toISOString() } }
+    return busy ? login!.worker!.pid : undefined
   })
   if (before !== undefined) {
     try {
@@ -208,13 +220,13 @@ async function askClaude(io: CliIO, said: string): Promise<Status> {
   }
   let worker: number | undefined
   try {
-    worker = (io.startWork ?? (words => startWork(words, io.env)))(['login-work', address])
+    worker = (io.startWork ?? (words => startWork(words, io.env)))([remove ? 'logout-work' : 'login-work', address, kind])
   } finally {
     await update(io.env, store => {
-      const claude = store.servers.find(candidate => candidate.address === address)?.claude
-      if (!claude || claude.worker?.pid !== process.pid) return
-      if (worker !== undefined) claude.worker = { pid: worker, seen: new Date().toISOString() }
-      else delete claude.worker
+      const login = store.servers.find(candidate => candidate.address === address)?.[kind]
+      if (!login || login.worker?.pid !== process.pid) return
+      if (worker !== undefined) login.worker = { pid: worker, seen: new Date().toISOString() }
+      else delete login.worker
     })
   }
   return statusOf(await readStore(io.env))
@@ -278,22 +290,11 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         const own = await ownGithubAccount(io.exec)
         return print(own.ok ? { account: own.account } : { problem: own.error })
       }
-      case 'login': {
-        const [address, kind] = rest
-        if (rest.length !== 2 || !address || !isKind(kind)) break
-        if (kind === 'claude') return print(await askClaude(io, address))
-        const copied = await copyGithub({ ...over, address: (await still(io, address)).address })
-        if (!copied.ok) throw new Refused(copied.error)
-        return print(statusOf(await readStore(io.env)))
-      }
+      case 'login':
       case 'logout': {
         const [address, kind] = rest
         if (rest.length !== 2 || !address || !isKind(kind)) break
-        const server = await still(io, address)
-        if (kind === 'claude' && atWork(server.claude?.worker)) throw new Refused(`A Claude login is being made for ${server.address} right now`)
-        const gone = await removeLogin({ ...over, address: server.address, kind })
-        if (!gone.ok) throw new Refused(gone.error)
-        return print(statusOf(await readStore(io.env)))
+        return print(await changeLoginOf(io, address, kind, command === 'logout'))
       }
       case 'forget': {
         const [address] = rest
@@ -302,7 +303,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         await update(io.env, store => {
           const server = store.servers.find(candidate => candidate.address === at)
           if (server && working(server)) throw new Refused(`OpenAgent is being installed on ${at} right now: wait until it ends`)
-          if (server && atWork(server.claude?.worker)) throw new Refused(`A Claude login is being made for ${at} right now: wait until it ends`)
+          if (server && changing(server)) throw new Refused(`A login of ${at} is being changed right now: wait until it ends`)
           store.servers = store.servers.filter(candidate => candidate.address !== at)
         })
         return print(statusOf(await readStore(io.env)))
@@ -315,17 +316,18 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         await untilStopped(io, signal => install({ ...over, address: at, version, signal }))
         return 0
       }
-      case 'login-work': {
-        const [address] = rest
-        if (rest.length !== 1 || !address) break
+      case 'login-work':
+      case 'logout-work': {
+        const [address, kind] = rest
+        if (rest.length !== 2 || !address || !isKind(kind)) break
         const { address: at } = await saved(io, address)
-        await untilStopped(io, signal => makeClaude({ ...over, address: at, signal, ...(io.mint ? { mint: io.mint } : {}) }))
+        await untilStopped(io, signal => changeLogin({ ...over, address: at, kind, remove: command === 'logout-work', signal, ...(io.mint ? { mint: io.mint } : {}) }))
         return 0
       }
       default:
     }
   } catch (err) {
-    if (!(err instanceof Refused || err instanceof Unreadable || err instanceof AlreadyWorking || err instanceof AlreadyAsking)) throw err
+    if (!(err instanceof Refused || err instanceof Unreadable || err instanceof AlreadyWorking || err instanceof AlreadyAtWork)) throw err
     io.stderr(err.message)
     return 1
   }

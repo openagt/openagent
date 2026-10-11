@@ -47,8 +47,10 @@ export interface Login {
   wanted?: boolean
   /** Why the last try ended without a login. */
   failed?: string
-  /** Claude: the process that makes the login right now, and when it last said it still does. */
+  /** The process that changes the login right now, and when it last said it still does. */
   worker?: Worker
+  /** Claude: that process waits for the person's yes in the browser, and has sent nothing yet. */
+  asking?: boolean
 }
 
 export interface Server {
@@ -145,13 +147,14 @@ function readWorker(value: unknown): { worker: Worker } | undefined {
 
 function readLogin(value: unknown): Login | undefined {
   if (!value || typeof value !== 'object') return undefined
-  const { since, account, wanted, failed, worker } = value as Record<string, unknown>
+  const { since, account, wanted, failed, worker, asking } = value as Record<string, unknown>
   const login: Login = {
     ...(typeof since === 'string' && !Number.isNaN(Date.parse(since)) ? { since } : {}),
     ...(isAccount(account) ? { account } : {}),
     ...(wanted === true ? { wanted } : {}),
     ...(typeof failed === 'string' && failed ? { failed: failed.slice(-MAX_SAID) } : {}),
     ...(readWorker(worker) ?? {}),
+    ...(asking === true ? { asking } : {}),
   }
   return Object.keys(login).length ? login : undefined
 }

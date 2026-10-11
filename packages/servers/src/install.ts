@@ -73,7 +73,7 @@ export async function install(opts: InstallOptions): Promise<void> {
     // The person's tick. A copy that fails is told on the login's own line: the server is installed all the same.
     if (await change(kept => kept.github?.wanted === true)) {
       const given = await giveGithub(session, opts.exec)
-      await change(kept => noteGithub(kept, given, true))
+      await change(kept => noteGithub(kept, given))
     }
   } finally {
     clearInterval(beating)

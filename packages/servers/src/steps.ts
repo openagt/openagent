@@ -36,7 +36,7 @@ const ROOT = '/opt/openagent'
 /** The Node the server gets: the newest of this line, read off nodejs.org with its checksum. */
 const NODE_LINE = 24
 
-/** Where the server keeps the Claude login: root's file, which the service reads as it starts. An agent on the server uses the login and cannot change it. */
+/** Where the server keeps the Claude login: root's file, which the service reads as it starts. An agent on the server works with the login, and so can read it; it cannot change the file. */
 export const CLAUDE_FILE = '/etc/openagent/claude.env'
 /** The name Claude Code reads a login under that was made for a computer nobody sits at. */
 const CLAUDE_NAME = 'CLAUDE_CODE_OAUTH_TOKEN'
@@ -49,8 +49,11 @@ export function quoted(value: string): string {
   return `'${value.replaceAll("'", `'\\''`)}'`
 }
 
-/** Held by every script root runs, for as long as it runs: a script still at work after this computer stopped waiting for it is not joined by a second one. */
-const LOCK = '/run/lock/openagent-install.lock'
+/**
+ * Held by every script root runs, for as long as it runs: a script still at work after this computer stopped waiting for it is not joined by a second one.
+ * In a folder only root writes: the server's user cannot put a file of its own there first.
+ */
+const LOCK = '/run/openagent-install.lock'
 
 /**
  * A whole script around `body`. The body is a function called once the shell has read all of
@@ -80,7 +83,7 @@ function script(as: StepDef['as'], vars: Record<string, string>, body: string): 
 
 const MINUTE = 60_000
 
-/** Defines `started`, which waits until OpenAgent answers on the server, and fails in words when it does not. */
+/** Defines `started`, which waits until OpenAgent answers on the server; when it does not, it shows what the service last said and answers no. */
 const STARTED = `
   started() {
     for _ in $(seq 30); do
@@ -88,8 +91,9 @@ const STARTED = `
       sleep 1
     done
     journalctl -u openagent -n 20 --no-pager >&2 || true
-    fail "OpenAgent did not start on this server."
+    return 1
   }`
+const NOT_STARTED = 'fail "OpenAgent did not start on this server."'
 
 /** What the service file holds. `KillMode=process`: a run is a process of its own and goes on when OpenAgent starts again, as on a laptop. */
 export const SERVICE_UNIT = `[Unit]
@@ -281,7 +285,7 @@ export const STEPS: readonly StepDef[] = [
     systemctl restart openagent
     rm -f ${ROOT}/restart
   fi
-  started
+  started || ${NOT_STARTED}
 `,
       ),
   },
@@ -330,7 +334,7 @@ const GH_FILE = '"$HOME/.config/gh/hosts.yml"'
 
 /**
  * Give the server a GitHub login: `gh` keeps it in its own file, and git asks `gh` for it. The
- * server then holds this one login, and answers whose it is.
+ * server then holds this one login, and answers whose it is; when any of that fails, it holds none.
  *
  * The login is a word of the script, which the server's shell reads where a program would read:
  * it is on no command line, and no program the script starts finds it among what it was given.
@@ -344,9 +348,13 @@ export function githubLoginScript(login: string): LoginScript {
       `
   ${GH_OWN}
   rm -f ${GH_FILE}
-  printf '%s\\n' "$LOGIN" | gh auth login --hostname github.com --git-protocol https --with-token
-  gh auth setup-git --hostname github.com
-  gh api user --jq .login
+  given() {
+    printf '%s\\n' "$LOGIN" | gh auth login --hostname github.com --git-protocol https --with-token &&
+      gh auth setup-git --hostname github.com &&
+      gh api --hostname github.com user --jq .login
+  }
+  # All of it or none: a login that is on the server and not known of on this computer could not be taken off from there.
+  given || { rm -f ${GH_FILE}; exit 1; }
 `,
     ),
   }
@@ -370,7 +378,11 @@ export function githubLogoutScript(): LoginScript {
 /**
  * Give the server a Claude login: Claude Code is first asked, as the server's own user, whether
  * it reads the login; then the login is written to root's file and OpenAgent is started again
- * with it. A run that is at work goes on with the login it started with.
+ * with it. A run that is at work goes on with the login it started with. When OpenAgent does not
+ * start with it, the file is put back as it was.
+ *
+ * Claude Code is the server user's own program: root asks it as that user, for half a minute at
+ * most, and without the lock root holds, which a program that never ended would hold with it.
  */
 export function claudeLoginScript(login: string): LoginScript {
   return {
@@ -379,14 +391,26 @@ export function claudeLoginScript(login: string): LoginScript {
       'root',
       { LOGIN: login },
       `${STARTED}
-  said=$(${CLAUDE_NAME}="$LOGIN" runuser -u ${SERVER_USER} -- env HOME=/home/${SERVER_USER} /home/${SERVER_USER}/.local/bin/claude auth status 2>&1 || true)
+  # What is written where the service reads its settings is a login's letters and nothing else.
+  case "$LOGIN" in '' | *[!A-Za-z0-9_-]*) fail "What was sent is no Claude login." ;; esac
+  said=$(${CLAUDE_NAME}="$LOGIN" timeout 30 runuser -u ${SERVER_USER} -- env HOME=/home/${SERVER_USER} /home/${SERVER_USER}/.local/bin/claude auth status 2>&1 9>&- || true)
   printf '%s' "$said" | grep -Eq '"loggedIn": *true' || fail "Claude Code on this server does not take the login."
   install -d -m 755 "$(dirname ${CLAUDE_FILE})"
+  rm -f ${CLAUDE_FILE}.old
+  [ ! -e ${CLAUDE_FILE} ] || cp -p ${CLAUDE_FILE} ${CLAUDE_FILE}.old
   (umask 077 && printf '${CLAUDE_NAME}=%s\\n' "$LOGIN" > ${CLAUDE_FILE}.new)
   mv ${CLAUDE_FILE}.new ${CLAUDE_FILE}
-  systemctl restart openagent
-  started
-  tr '\\0' '\\n' < "/proc/$(systemctl show -p MainPID --value openagent)/environ" | grep -q '^${CLAUDE_NAME}=' || fail "OpenAgent started without the login."
+  with_it() {
+    systemctl restart openagent && started &&
+      tr '\\0' '\\n' < "/proc/$(systemctl show -p MainPID --value openagent)/environ" | grep -q '^${CLAUDE_NAME}='
+  }
+  if ! with_it; then
+    # As it was: a login that is on the server and not known of on this computer could not be taken off from there.
+    if [ -e ${CLAUDE_FILE}.old ]; then mv ${CLAUDE_FILE}.old ${CLAUDE_FILE}; else rm -f ${CLAUDE_FILE}; fi
+    systemctl restart openagent || true
+    fail "OpenAgent did not start with the login. The server's Claude login is as it was before."
+  fi
+  rm -f ${CLAUDE_FILE}.old
 `,
     ),
   }
@@ -401,9 +425,9 @@ export function claudeLogoutScript(): LoginScript {
       {},
       `${STARTED}
   [ -e ${CLAUDE_FILE} ] || exit 0
-  rm -f ${CLAUDE_FILE}
+  rm -f ${CLAUDE_FILE} ${CLAUDE_FILE}.old
   systemctl restart openagent
-  started
+  started || ${NOT_STARTED}
 `,
     ),
   }

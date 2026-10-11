@@ -125,6 +125,7 @@ export async function openSession(server: { address: string; user: string }, opt
     ['ControlPersist', '120'],
     // Whatever this computer's own settings say for every server: a server met a moment ago gets no way back into this computer.
     ['ForwardAgent', 'no'],
+    ['ForwardX11', 'no'],
     ['ClearAllForwardings', 'yes'],
     ['PermitLocalCommand', 'no'],
     ['RequestTTY', 'no'],

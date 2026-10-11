@@ -284,13 +284,32 @@ describe('Settings → Servers', () => {
     show(host)
     const logins = within(await screen.findByRole('list', { name: 'The logins on 203.0.113.5' }))
     expect(logins.getByRole('alert').textContent).toBe('error validating token: HTTP 401: Bad credentials')
+    expect(logins.getByText('GitHub: the last try did not go through.')).toBeTruthy()
     expect((logins.getByRole('button', { name: 'Copy my GitHub login to 203.0.113.5' }) as HTMLButtonElement).disabled).toBe(true)
+    // What a failed try left on the server is not always known here: it can be taken off all the same.
+    expect(logins.getByRole('button', { name: 'Remove the GitHub login from 203.0.113.5' })).toBeTruthy()
+    expect(logins.queryByRole('button', { name: 'Remove the Claude login from 203.0.113.5' })).toBeNull()
+  })
+
+  test('while the server is being told there is nothing to press, and an older failure is not shown', async () => {
+    const told: LoginRow = { there: true, working: true, account: 'octocat', since: '2026-10-11T12:00:00.000Z', said: 'an older failure' }
+    const { host } = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false, logins: { github: told, claude: { there: false, working: true } } })] }), undefined, undefined, OCTOCAT)
+    show(host)
+    const logins = within(await screen.findByRole('list', { name: 'The logins on 203.0.113.5' }))
+    expect(logins.getByText('GitHub: one moment, the server is being told.')).toBeTruthy()
+    expect(logins.getByText('Claude: one moment, the server is being told.')).toBeTruthy()
+    expect(logins.queryByRole('alert')).toBeNull()
+    await waitFor(() => expect(host.runCommand).toHaveBeenCalledWith('p1', ['github']))
+    expect((logins.getByRole('button', { name: 'Copy my GitHub login to 203.0.113.5' }) as HTMLButtonElement).disabled).toBe(true)
+    // Only a login that still waits for the person is started over; one on its way to the server arrives.
+    expect((logins.getByRole('button', { name: 'Log in to Claude for 203.0.113.5' }) as HTMLButtonElement).disabled).toBe(true)
+    for (const name of ['Remove the GitHub login from 203.0.113.5', 'Remove the Claude login from 203.0.113.5']) expect(logins.queryByRole('button', { name })).toBeNull()
   })
 
   test('a press makes a Claude login for the server: the page says where to say yes, then until when it is good; it is removed on a press', async () => {
     let claude: LoginRow = NONE
     const { host, ran } = dashboard(args => {
-      if (args[0] === 'login') claude = { there: false, working: true }
+      if (args[0] === 'login') claude = { there: false, working: true, asking: true }
       if (args[0] === 'logout') claude = NONE
       return ok({ servers: [server(ALL_DONE, { adding: false, logins: { github: NONE, claude } })] })
     })

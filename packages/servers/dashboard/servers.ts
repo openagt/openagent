@@ -22,8 +22,10 @@ export type LoginKind = 'github' | 'claude'
 export interface LoginRow {
   /** This computer put it on the server, and did not take it off since. */
   there: boolean
-  /** It is on its way: the install copies it at its end, or this computer's browser waits for the person. */
+  /** It is being changed right now, or the install copies it at its end. */
   working: boolean
+  /** Claude: this computer's browser waits for the person's yes, and nothing was sent yet. */
+  asking?: boolean
   /** GitHub: the person asked for a copy, and it was not made yet. */
   wanted?: boolean
   /** GitHub: whose it is. */
@@ -61,9 +63,9 @@ const text = (value: unknown): string | undefined => (typeof value === 'string' 
 const STATES: readonly string[] = ['waiting', 'running', 'done', 'failed']
 
 function readLogin(value: unknown): LoginRow {
-  const { there, working, wanted, account, since, ends, said } = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
+  const { there, working, asking, wanted, account, since, ends, said } = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
   const [who, from, until, words] = [text(account), text(since), text(ends), text(said)]
-  return { there: there === true, working: working === true, ...(wanted === true ? { wanted: true } : {}), ...(who ? { account: who } : {}), ...(from ? { since: from } : {}), ...(until ? { ends: until } : {}), ...(words ? { said: words } : {}) }
+  return { there: there === true, working: working === true, ...(asking === true ? { asking: true } : {}), ...(wanted === true ? { wanted: true } : {}), ...(who ? { account: who } : {}), ...(from ? { since: from } : {}), ...(until ? { ends: until } : {}), ...(words ? { said: words } : {}) }
 }
 
 export function readServers(output: unknown): ServerRow[] | undefined {

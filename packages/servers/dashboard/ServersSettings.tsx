@@ -158,18 +158,20 @@ export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsPro
           Connect
         </Button>
       </form>
-      <label className="flex items-start gap-2 pb-2 text-xs">
-        <Checkbox checked={copy && account !== undefined} onCheckedChange={checked => setCopy(checked === true)} disabled={busy || account === undefined} className="mt-0.5" aria-label="Copy my GitHub login to the server" />
-        <span>
-          {account !== undefined ? `Copy my GitHub login (${account}) to the server.` : 'Copy my GitHub login to the server.'}{' '}
-          <span className="text-muted-foreground">
-            {noLogin ?? 'It can do there all it can do here, and every agent that runs on the server works with it.'}
+      <div className="space-y-2 pb-3">
+        <label className="flex items-start gap-2 text-xs">
+          <Checkbox checked={copy && account !== undefined} onCheckedChange={checked => setCopy(checked === true)} disabled={busy || account === undefined} className="mt-0.5" aria-label="Copy my GitHub login to the server" />
+          <span>
+            {account !== undefined ? `Copy my GitHub login (${account}) to the server.` : 'Copy my GitHub login to the server.'}{' '}
+            <span className="text-muted-foreground">
+              {noLogin ?? 'It can do there all it can do here, and every agent that runs on the server works with it.'}
+            </span>
           </span>
-        </span>
-      </label>
-      <p className="pb-3 text-xs text-muted-foreground">
-        The user is root, or one that becomes root without a password. It is only used to install, to update and to give the server its logins: what runs on the server afterwards runs as a user of its own, openagent.
-      </p>
+        </label>
+        <p className="text-xs text-muted-foreground">
+          The user is root, or one that becomes root without a password. It is only used to install, to update and to give the server its logins: what runs on the server afterwards runs as a user of its own, openagent.
+        </p>
+      </div>
       {servers.length > 0 && (
         <ul aria-label="Servers" className="divide-y divide-border">
           {servers.map(server => {
@@ -274,21 +276,37 @@ export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsPro
                   <ul aria-label={`The logins on ${server.address}`} className="space-y-2 border-t border-border pt-2 text-xs">
                     <LoginLine
                       label="GitHub"
-                      words={github.there ? `GitHub: logged in as ${github.account ?? 'you'} since ${day(github.since)}.` : 'GitHub: no login on the server.'}
-                      said={github.said}
+                      words={
+                        github.working
+                          ? 'GitHub: one moment, the server is being told.'
+                          : github.there
+                            ? `GitHub: logged in as ${github.account ?? 'you'} since ${day(github.since)}.`
+                            : github.said !== undefined
+                              ? 'GitHub: the last try did not go through.'
+                              : 'GitHub: no login on the server.'
+                      }
+                      said={github.working ? undefined : github.said}
                     >
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={busy || account === undefined}
+                        disabled={busy || github.working || account === undefined}
                         aria-label={`Copy my GitHub login to ${server.address}`}
                         title={account !== undefined ? `Copies the login of ${account} from this computer to the server, over SSH.` : noLogin}
                         onClick={() => void act(() => login(host, projects, server.address, 'github'))}
                       >
                         {github.there ? 'Copy again' : 'Copy my login'}
                       </Button>
-                      {github.there && (
-                        <Button size="sm" variant="outline" disabled={busy} aria-label={`Remove the GitHub login from ${server.address}`} onClick={() => void act(() => logout(host, projects, server.address, 'github'))}>
+                      {/* After a try that failed too: what it left on the server is not always known here. */}
+                      {(github.there || github.said !== undefined) && !github.working && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          aria-label={`Remove the GitHub login from ${server.address}`}
+                          title="Deletes the login on the server. The login itself stays good: it is this computer's own. To end it everywhere, take it back on github.com and log this computer's gh in again."
+                          onClick={() => void act(() => logout(host, projects, server.address, 'github'))}
+                        >
                           Remove
                         </Button>
                       )}
@@ -296,26 +314,37 @@ export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsPro
                     <LoginLine
                       label="Claude"
                       words={
-                        claude.working
+                        claude.asking
                           ? "Claude: say yes in the page this computer's browser opened."
-                          : claude.there
-                            ? `Claude: logged in since ${day(claude.since)}, good until about ${day(claude.ends)}.`
-                            : 'Claude: not logged in on the server.'
+                          : claude.working
+                            ? 'Claude: one moment, the server is being told.'
+                            : claude.there
+                              ? `Claude: logged in since ${day(claude.since)}, good until about ${day(claude.ends)}.`
+                              : claude.said !== undefined
+                                ? 'Claude: the last try did not go through.'
+                                : 'Claude: not logged in on the server.'
                       }
                       said={claude.working ? undefined : claude.said}
                     >
                       <Button
                         size="sm"
                         variant={claude.there || claude.working ? 'outline' : 'default'}
-                        disabled={busy}
+                        disabled={busy || (claude.working && claude.asking !== true)}
                         aria-label={`Log in to Claude for ${server.address}`}
                         title="Opens this computer's browser, where you say yes once. The login is made for this server alone and lasts a year; this computer's own Claude login is not touched."
                         onClick={() => void act(() => login(host, projects, server.address, 'claude'))}
                       >
-                        {claude.working ? 'Start over' : claude.there ? 'Log in again' : 'Log in to Claude'}
+                        {claude.asking ? 'Start over' : claude.there ? 'Log in again' : 'Log in to Claude'}
                       </Button>
-                      {claude.there && !claude.working && (
-                        <Button size="sm" variant="outline" disabled={busy} aria-label={`Remove the Claude login from ${server.address}`} onClick={() => void act(() => logout(host, projects, server.address, 'claude'))}>
+                      {(claude.there || claude.said !== undefined) && !claude.working && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          aria-label={`Remove the Claude login from ${server.address}`}
+                          title="Deletes the login on the server and starts OpenAgent there again without it. An agent at work there keeps it until it ends. The login itself stays good until its year is over."
+                          onClick={() => void act(() => logout(host, projects, server.address, 'claude'))}
+                        >
                           Remove
                         </Button>
                       )}
