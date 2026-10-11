@@ -1,12 +1,11 @@
 import type { AgentMeta, ChoiceRequest, OpenAgentEvent } from '../../src/index.js'
-import { formatOpenAgentEvent } from '../../src/client.js'
+import { foldScreenRows, formatOpenAgentEvent } from '../../src/client.js'
 import { Fragment, useMemo, useState, type ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { pendingChoices } from '../lib/live-state.js'
 import { startedBefore, subagentEnd, subagentStartedAt, type SubagentEnd } from '../lib/subagents.js'
 import { answeredQuestion } from '../lib/answered-question.js'
 import { AnsweredChoice } from './AnsweredChoice.js'
-import { InlineScreen, isLoopbackScreen } from './InlineScreen.js'
 import { Markdown } from './Markdown.js'
 import { SessionLine, type SessionSetup } from './SessionLine.js'
 import { ChangedFiles } from './ChangedFiles.js'
@@ -34,8 +33,9 @@ import {
 //   - Choice gates, when the log knows its project: an open gate is one "Asking" line (the agent's page
 //     asks it above the message box); a resolved one collapses to the AnsweredChoice ✓ card and hides
 //     its "✓ chose" line.
-//   - Screens: the newest open `screen` line at an address, before the run's end, is the live
-//     screen itself (InlineScreen); an earlier one stays its one line, and an `ended` one is hidden.
+//   - Screens: the newest open `screen` line at an address, before the run's end, is live: its
+//     line opens the side panel on the tab that shows the screen. An earlier one stays its one
+//     line of text, and an `ended` one is hidden.
 //   - A turn's end and the spend so far are not rows, and neither is a clean end or an end waiting
 //     on an answer: the agent's last message, or its question, is how such a turn ends. A stopped
 //     or failed end is a row.
@@ -174,30 +174,6 @@ function foldChoiceRows(events: OpenAgentEvent[]): {
     }
   }
   return { rows, hidden }
-}
-
-/**
- * Which `screen` rows are live and which are hidden. Live: the newest line at its address with no
- * `ended` line for it after, no run `end` after it other than one waiting on an answer, and a
- * loopback address. Every `ended` line is hidden: the live row going back to its one line says
- * the screen has gone.
- */
-export function foldScreenRows(events: readonly OpenAgentEvent[]): { live: Set<OpenAgentEvent>; hidden: Set<OpenAgentEvent> } {
-  const hidden = new Set<OpenAgentEvent>()
-  const newest = new Map<string, number>()
-  let lastEnd = -1
-  events.forEach((e, at) => {
-    // A run waiting on an answer keeps its screens: the page is what its question is about.
-    if (e.kind === 'end' && !e.waiting) lastEnd = at
-    if (e.kind !== 'screen') return
-    if (e.ended) {
-      hidden.add(e)
-      newest.delete(e.url)
-    } else newest.set(e.url, at)
-  })
-  const live = new Set<OpenAgentEvent>()
-  for (const [url, at] of newest) if (at > lastEnd && isLoopbackScreen(url)) live.add(events[at]!)
-  return { live, hidden }
 }
 
 /**
@@ -473,6 +449,7 @@ export function EventList({
   setup,
   onOpenAgent,
   onOpenChange,
+  onOpenScreen,
 }: {
   events: OpenAgentEvent[]
   /** The message the agent is writing, as far as it has got: an AGENT row after the last, drawn
@@ -512,6 +489,9 @@ export function EventList({
   /** Show a changed file's change: what the row of a file at the end of a turn does on a click.
    *  Without it, the rows are no buttons. */
   onOpenChange?: ((path: string) => void) | undefined
+  /** Show the run's live screen: what the row of a live screen does on a click. Without it, the
+   *  row is a line of text. */
+  onOpenScreen?: (() => void) | undefined
 }) {
   const choiceRows = useMemo(() => (projectId ? foldChoiceRows(events) : undefined), [projectId, events])
   const screenRows = useMemo(() => foldScreenRows(events), [events])
@@ -655,10 +635,11 @@ export function EventList({
                     <div className="min-w-0 flex-1 font-sans">
                       <AnsweredChoice choice={choiceRow.choice} pick={choiceRow.pick} />
                     </div>
-                  ) : e.kind === 'screen' && screenRows.live.has(e) ? (
-                    <div className="min-w-0 flex-1 font-sans">
-                      <InlineScreen url={e.url} label={e.label} />
-                    </div>
+                  ) : e.kind === 'screen' && onOpenScreen && screenRows.live.has(e) ? (
+                    <button type="button" onClick={onOpenScreen} className="group/screen flex min-w-0 flex-1 items-center gap-1 text-left text-foreground">
+                      <span className="min-w-0 truncate group-hover/screen:underline">{(formatOpenAgentEvent(e) ?? '').trim()}</span>
+                      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                    </button>
                   ) : (
                     <span className={`min-w-0 flex-1 whitespace-pre-wrap break-words ${rowTone(e) || 'text-foreground'}`}>
                       {(formatOpenAgentEvent(e) ?? '').trim()}

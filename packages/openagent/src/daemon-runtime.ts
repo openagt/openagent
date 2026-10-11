@@ -1,11 +1,13 @@
-import { basename, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { hostname } from 'node:os'
 import { stat } from 'node:fs/promises'
-import { fromDiaryLine, isPidAlive, projectBranches, readLiveMetas, resolveAgentDiary, type AgentMeta, type AnyDiaryLine } from './store/index.js'
+import { findCheckout, fromDiaryLine, isPidAlive, isRunId, projectBranches, readLiveMetas, resolveAgentDiary, type AgentMeta, type AnyDiaryLine } from './store/index.js'
+import { OPENAGENT_DIR } from './openagent-dir.js'
 import type { OpenAgentEvent } from './events.js'
 import type { StartAgentOptions, StartAgentResult, AddProjectResult, RemoveProjectResult } from './dashboard/index.js'
 import type { EventsSource, RemoteAgents } from './dashboard/rpc-serve.js'
 import { RelayedAgents, startRemoteAgent } from './dashboard/remote-run.js'
+import { screenInDiary } from './dashboard/screen.js'
 import { dispatchRelayRpc } from './dashboard-rpc/relay-dispatch.js'
 import { tailAgentEvents } from './dashboard-rpc/events-tail.js'
 import { addProject, listMachines, listProjects, projectId, removeProject } from './registry.js'
@@ -58,6 +60,9 @@ export interface ProjectRuntime {
   /** The machine side of the relay (#1067 slice 2): run one whitelisted read/steer/handoff RPC against
    *  this daemon's own copy of the project, for a daemon that relayed an agent here. */
   onRelayRpc: (projectId: string, fn: string, args: unknown[]) => Promise<unknown>
+  /** Where the live screen of a run on this computer answers, as its diary names it; nothing when
+   *  the run has none: it opened no screen, closed it, or ended. */
+  screenOf: (projectId: string, agentId: string) => Promise<string | undefined>
   /** Let go of the relayed streams. */
   dispose: () => Promise<void>
 }
@@ -131,6 +136,12 @@ export function createProjectRuntime({ cwd, env }: ProjectRuntimeOptions): Proje
       const result = await startRemoteAgent(target, { prompt, options: forwarded })
       if (!result.ok) {
         return 'noProject' in result ? { ok: false, error: `${basename(projectCwd)} is not on ${machine.label}. Add it there first.` } : result
+      }
+      // The run's id is the machine's word, and from here on every call about that id goes to the
+      // machine: what the person reads of the run, and what they click and type in its browser.
+      // An id that is no run's, or that is a run of this computer's own, is not taken.
+      if (!isRunId(result.agentId) || (await findCheckout(projectCwd, result.agentId, projectBranches))) {
+        return { ok: false, error: `${machine.label} answered with a run this computer cannot follow.` }
       }
       // A relayed agent has no local checkout or pid, so its list row is a memory-only stub (#1077):
       // registered here so onAgents can show it and a dashboard reload re-opens it. Never written to disk.
@@ -253,9 +264,17 @@ export function createProjectRuntime({ cwd, env }: ProjectRuntimeOptions): Proje
       },
     )
 
+  // A screen lives while its run has a checkout: a finished run's diary names none that answers,
+  // so it is not read. Asked of the shared list only: a tab open on a run asks every few seconds.
+  const screenOf = async (project: string, agentId: string): Promise<string | undefined> => {
+    const projectCwd = await resolveProject(project)
+    const checkout = projectCwd ? await findCheckout(projectCwd, agentId, projectBranches, { cached: true }) : undefined
+    return checkout ? screenInDiary(join(checkout.path, OPENAGENT_DIR, `${agentId}.jsonl`)) : undefined
+  }
+
   const dispose = async (): Promise<void> => {
     relayedAgents.dispose()
   }
 
-  return { onStart, onAddProject, onRemoveProject, remoteEventsSource, projectAt, tailRelayEvents, remoteAgents, onRelayRpc, dispose }
+  return { onStart, onAddProject, onRemoveProject, remoteEventsSource, projectAt, tailRelayEvents, remoteAgents, onRelayRpc, screenOf, dispose }
 }

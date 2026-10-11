@@ -3,6 +3,8 @@ import type { OpenAgentEvent } from '../events.js'
 import type { StartAgentOptions, StartAgentResult } from './types.js'
 import type { RelayStartResult } from './remote-run.js'
 import { end, readJsonBody, requireGet, sendJson } from './http.js'
+import { passToScreen, screenCallOf, type ScreenCall } from './screen.js'
+import { isRunId } from '../store/index.js'
 import { openagentVersion } from '../version.js'
 
 /**
@@ -20,8 +22,10 @@ import { openagentVersion } from '../version.js'
  *   machine with its key there.
  * - `POST /_relay/rpc` (#1067 slice 2) runs one whitelisted run-scoped RPC (a read/diff/steer/handoff/
  *   push/PR) against this machine's own checkout for the daemon relaying an agent here, answering {result}.
+ * - `GET /_relay/screen/stream?run=<id>&project=<address>` and `POST /_relay/screen/input?…` pass
+ *   one call on to the live screen of a run here (screen.ts), for the daemon whose person watches it.
  *
- * The three name their project by its repository's address, and work in this machine's own
+ * All but the ping name their project by its repository's address, and work in this machine's own
  * project cloned from it. A call that names none, or one this machine does not have, starts and
  * reads nothing: there is no project a call falls back to.
  */
@@ -36,6 +40,8 @@ export interface RelayHandlers {
   /** Run one whitelisted read/steer/handoff RPC against THIS machine's own checkout, for the daemon
    *  relaying an agent here (#1067 slice 2); the caller wraps the result as {result}. */
   rpc?: (projectId: string, fn: string, args: unknown[]) => Promise<unknown>
+  /** Where the live screen of a run here answers; nothing when the run has none. */
+  screen?: (projectId: string, agentId: string) => Promise<string | undefined>
 }
 
 /** The body `POST /_relay/start` accepts: what a local Start needs, and the project's address. */
@@ -66,7 +72,20 @@ export async function handleRelayRequest(
   if (pathname === `${RELAY_PREFIX}/start`) return handleStart(req, res, handlers)
   if (pathname === `${RELAY_PREFIX}/events`) return handleEvents(req, res, handlers)
   if (pathname === `${RELAY_PREFIX}/rpc`) return handleRpc(req, res, handlers)
+  const screenCall = screenCallOf(pathname, `${RELAY_PREFIX}/screen`)
+  if (screenCall) return handleScreen(req, res, handlers, screenCall)
   end(res, 404, 'not found')
+}
+
+/** `/_relay/screen/<call>?run=<id>&project=<address>`: pass the call on to the run's live screen here. */
+async function handleScreen(req: IncomingMessage, res: ServerResponse, handlers: RelayHandlers, call: ScreenCall): Promise<void> {
+  if (!handlers.screen) return end(res, 404, 'relay screen not enabled')
+  const query = new URL(req.url ?? '/', 'http://localhost').searchParams
+  const agentId = query.get('run')
+  if (!agentId || !isRunId(agentId)) return end(res, 400, 'missing run id')
+  const projectId = await projectNamed(handlers, query.get('project')).catch(() => undefined)
+  if (projectId === undefined) return end(res, 404, 'no such project on this machine')
+  await passToScreen(req, res, call, await handlers.screen(projectId, agentId).catch(() => undefined))
 }
 
 /** `GET /_relay/ping` (#1072): answer 200 with this OpenAgent's version. Starts nothing; it proves this

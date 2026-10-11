@@ -365,6 +365,37 @@ describe('RightRail, a changed file asked for from the chat', () => {
   })
 })
 
+// The row of a live screen in the chat asks for the screen (`lib/reveal-change.ts`).
+describe('RightRail, a live screen asked for from the chat', () => {
+  const BROWSER: MountedPanel = {
+    id: 'browser',
+    label: 'Browser',
+    help: 'The agent\'s browser',
+    screen: true,
+    Panel: () => <div>the live screen</div>,
+    package: '@openagt/skill-browser',
+    projects: ['p1'],
+  }
+
+  test('the ask opens a closed panel on the tab that shows the screen, and a tab picked by hand after it stays', async () => {
+    const { revealScreen, forgetRevealedChanges } = await import('../lib/reveal-change.js')
+    forgetRevealedChanges()
+    localStorage.removeItem('oa.side-panel')
+    render(<RightRail {...baseProps} />, [FILES, BROWSER])
+    expect(screen.queryByRole('tablist')).toBeNull()
+    act(() => revealScreen('p1/r1'))
+    await waitFor(() => expect(screen.getByText('the live screen')).toBeTruthy())
+    expect(screen.getByRole('tab', { name: 'Browser' }).getAttribute('aria-selected')).toBe('true')
+    fireEvent.click(screen.getByRole('tab', { name: /Files/ }))
+    expect(screen.getByText('files')).toBeTruthy()
+    act(() => revealScreen('p1/other'))
+    await act(async () => {})
+    expect(screen.getByText('files')).toBeTruthy()
+    act(() => revealScreen('p1/r1'))
+    await waitFor(() => expect(screen.getByText('the live screen')).toBeTruthy())
+  })
+})
+
 // A phone has no width for a column beside the page (#1824).
 describe('RightRail on a phone', () => {
   let wide: () => void

@@ -1,5 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
@@ -7,7 +9,7 @@ import { join } from 'node:path'
 import { createProjectRuntime } from './daemon-runtime.js'
 import { PROJECT_HOOKS_FILE } from './project-hooks.js'
 import { OPENAGENT_DIR } from './openagent-dir.js'
-import { addProject, listProjects, projectId, removeProject } from './registry.js'
+import { addMachine, addProject, listProjects, projectId, removeProject } from './registry.js'
 import type { OpenAgentEvent } from './events.js'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { addWorktree, agentBranchName, worktreePath } from '@openagt/skill-branches'
@@ -465,6 +467,47 @@ test('a relayed run\'s events are read from the project the call names, not from
     assert.deepEqual(await read('no-such-project'), [])
   } finally {
     await runtime.dispose()
+    await rm(base, { recursive: true, force: true })
+  }
+})
+
+test('a run started on another machine is followed only under an id that is a run\'s, and not one of this computer\'s own', async () => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'openagent-relayed-id-')))
+  const env = { XDG_CONFIG_HOME: join(base, 'cfg') }
+  await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
+  const shop = await clone(base, 'shop', 'https://github.com/acme/shop.git')
+  await addProject(shop, new Date().toISOString(), undefined, env)
+  // A run of this computer's own: a checkout the project's branches list names.
+  execFileSync('git', ['commit', '-q', '--allow-empty', '-m', 'seed'], { cwd: shop, env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } })
+  await addWorktree(shop, { agentId: 'mine-1', branch: agentBranchName('mine-1') }, nodeGitRunner())
+
+  // The machine: whatever id it is told to answer a start with.
+  let answers = 'run-on-the-machine'
+  const machine = createServer((req, res) => {
+    req.resume()
+    if (req.url?.startsWith('/_relay/start')) return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true, agentId: answers }))
+    res.writeHead(200, { 'content-type': 'application/x-ndjson' }).end()
+  })
+  await new Promise<void>(resolve => machine.listen(0, '127.0.0.1', resolve))
+  const url = `http://127.0.0.1:${(machine.address() as AddressInfo).port}`
+  await addMachine({ url, key: 'id.key', door: `${url}/_remote-access/enter`, label: 'Server' }, undefined, env)
+  const runtime = createProjectRuntime({ cwd: shop, env })
+  try {
+    const start = () => runtime.onStart('go', { machine: url })
+    assert.deepEqual(await start(), { ok: true, agentId: 'run-on-the-machine' })
+    assert.ok(runtime.remoteAgents.target('run-on-the-machine'))
+
+    const refused = { ok: false, error: 'Server answered with a run this computer cannot follow.' }
+    answers = 'mine-1'
+    assert.deepEqual(await start(), refused)
+    assert.equal(runtime.remoteAgents.target('mine-1'), undefined, 'this computer\'s own run stays its own')
+    answers = '../../etc'
+    assert.deepEqual(await start(), refused)
+    assert.equal(runtime.remoteAgents.target('../../etc'), undefined)
+  } finally {
+    await runtime.dispose()
+    machine.closeAllConnections()
+    machine.close()
     await rm(base, { recursive: true, force: true })
   }
 })

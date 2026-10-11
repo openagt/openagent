@@ -27,7 +27,7 @@ export const BUILT_IN_PACKAGES: readonly string[] = ['@openagt/files', '@openagt
  * tool with no skill text (the scheduler) is the project's when one of the project's hook lines
  * runs it.
  */
-export const PICKED_PACKAGES: readonly string[] = ['@openagt/skill-tickets', '@openagt/skill-queue', '@openagt/skill-orchestration', '@openagt/agent-scheduler']
+export const PICKED_PACKAGES: readonly string[] = ['@openagt/skill-tickets', '@openagt/skill-queue', '@openagt/skill-orchestration', '@openagt/skill-browser', '@openagt/agent-scheduler']
 
 /** Every name OpenAgent brings itself. */
 export const OWN_PACKAGE_NAMES: readonly string[] = [...BUILT_IN_PACKAGES, ...PICKED_PACKAGES]

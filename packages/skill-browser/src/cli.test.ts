@@ -9,6 +9,7 @@ import { resolveChromePath } from './chrome.js'
 import { runCli, stateFile } from './cli.js'
 import { absoluteUrl } from './page.js'
 import { inputCalls } from './screen.js'
+import { FRAME, jpegSize, readState, STATE, streamReader } from './stream.js'
 
 const chrome = resolveChromePath()
 const needsChrome = chrome ? {} : { skip: 'no Chrome on this machine' }
@@ -91,8 +92,33 @@ test('the agent opens a page, reads it, types, picks, clicks and presses; the ch
     assert.equal(screen?.['kind'], 'screen')
     assert.equal(screen?.['label'], `browser · ${url}/`)
     const view = String(screen?.['url'])
-    assert.match(await (await fetch(view)).text(), /<title>browser<\/title>/)
-    assert.equal((await fetch(view.replace(/\?t=.*/, ''))).status, 403, 'no token, no screen')
+    const screenAt = (path: string, token = new URL(view).searchParams.get('t')) => `${new URL(view).origin}${path}?t=${token}`
+
+    // Someone watching gets what the address bar says and a picture of the page, and can click in it.
+    const watching = new AbortController()
+    const stream = await fetch(screenAt('/stream'), { signal: watching.signal })
+    assert.equal(stream.status, 200)
+    const read = streamReader()
+    const seen = new Map<number, Uint8Array>()
+    for await (const chunk of stream.body!) {
+      for (const part of read(chunk)) seen.set(part.kind, part.bytes)
+      if (seen.has(FRAME) && seen.has(STATE)) break
+    }
+    watching.abort()
+    assert.deepEqual([...seen.get(FRAME)!.subarray(0, 3)], [0xff, 0xd8, 0xff], 'the picture is a JPEG')
+    const size = jpegSize(seen.get(FRAME)!)
+    assert.ok(size && size.width > 0 && size.width <= 1280 && size.height > 0 && size.height <= 800, `the picture says its size: ${JSON.stringify(size)}`)
+    assert.deepEqual(readState(seen.get(STATE)!), { url: `${url}/two`, title: 'Two' })
+    assert.equal((await fetch(screenAt('/input'), { method: 'POST', body: JSON.stringify({ type: 'back' }) })).status, 204)
+    assert.ok(await until(async () => /^Title: Form$/m.test((await cli('read')).out)), 'the person went back a page')
+
+    // The screen's address opens the screen and nothing else; the command's token opens no screen.
+    assert.equal((await fetch(screenAt('/stream', ''))).status, 403, 'no token, no screen')
+    assert.equal((await fetch(screenAt('/command'), { method: 'POST', body: JSON.stringify({ name: 'eval', args: ['1'] }) })).status, 403, 'who watches runs no command')
+    assert.equal((await fetch(screenAt('/alive'))).status, 403)
+    const state = JSON.parse(await readFile(stateFile(cwd), 'utf8')) as { token: string }
+    assert.equal((await fetch(screenAt('/stream', state.token))).status, 403, 'the command\'s token watches nothing')
+    assert.equal((await fetch(view)).status, 403, 'the browser serves no page of its own')
 
     assert.equal((await cli('close')).code, 0)
     assert.ok(await until(() => gone(stateFile(cwd))), 'the state file goes with the browser')

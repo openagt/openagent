@@ -472,3 +472,31 @@ test('a web run\'s model reaches the extension through the start-queue (#1697)',
     resetBridgeQuestions()
   }
 })
+
+// A run's live screen (screen.ts): watching is a plain GET, so the routes also read what a browser
+// says of where a request comes from.
+test('a screen is watched from this dashboard\'s own page only: another site\'s page, and the address bar, are turned away', async () => {
+  const bundle = await fakeBundle()
+  const dash = await dashboard({ clientBundleDir: bundle, screen: async () => undefined })
+  const ask = (headers: Record<string, string>, path = '/_screen/stream?project=p&run=r'): Promise<number> =>
+    new Promise((resolvePromise, rejectPromise) => {
+      get(dash.url + path, { headers }, res => {
+        res.resume()
+        resolvePromise(res.statusCode ?? 0)
+      }).on('error', rejectPromise)
+    })
+  try {
+    // Let by, and answered that the run has no screen: this page's own fetch, and a caller that is no browser.
+    assert.equal(await ask({}), 404)
+    assert.equal(await ask({ 'sec-fetch-site': 'same-origin', 'sec-fetch-mode': 'cors' }), 404)
+    assert.equal(await ask({ 'sec-fetch-site': 'cross-site', 'sec-fetch-mode': 'no-cors' }), 403)
+    assert.equal(await ask({ 'sec-fetch-site': 'same-site', 'sec-fetch-mode': 'no-cors' }), 403)
+    assert.equal(await ask({ 'sec-fetch-site': 'none', 'sec-fetch-mode': 'navigate' }), 403)
+    assert.equal(await ask({ 'sec-fetch-site': 'same-origin', 'sec-fetch-mode': 'navigate' }), 403)
+    assert.equal(await ask({ origin: 'http://evil.com' }), 403)
+    assert.equal(await ask({}, '/_screen/command?project=p&run=r'), 404)
+  } finally {
+    await dash.close()
+    await rm(bundle, { recursive: true, force: true })
+  }
+})

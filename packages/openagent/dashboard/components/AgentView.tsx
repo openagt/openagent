@@ -20,7 +20,7 @@ import { QuestionPanel } from './QuestionPanel.js'
 import { SubagentsBar } from './SubagentLine.js'
 import { holdsMainAgent } from '../lib/subagents.js'
 import { agentLogKey } from '../lib/agent-log.js'
-import { revealChange } from '../lib/reveal-change.js'
+import { revealChange, revealScreen } from '../lib/reveal-change.js'
 import { sidePanelName } from '../lib/side-panel.js'
 import { modelName, useModels } from '../lib/models.js'
 import { driverFromImpl } from '../../src/client.js'
@@ -85,7 +85,7 @@ export function AgentView({
   target?: 'local' | 'actions' | 'remote' | 'web' | undefined
   /** The machine this agent executes on (#1067), when it is relayed to another one. Set only for a
    *  just-started remote run: its diff, handoff, and push/PR now relay to the machine (slice 2), so the
-   *  panels are shown, and a "runs on <machine>" notice only flags that the browser preview stays local. */
+   *  panels are shown, and a "runs on <machine>" notice says where the agent executes. */
   remoteLabel?: string | undefined
   files: string[]
   /** The live channel's health (#948) — surfaced as a banner over the feed. */
@@ -171,6 +171,9 @@ export function AgentView({
   // module of this project has one.
   const listsChanges = mountedPanels.some(panel => panel.changes && panel.projects.includes(projectId))
   const onOpenChange = useMemo(() => (listsChanges ? (path: string) => revealChange(sidePanelName(projectId, agentId), path) : undefined), [listsChanges, projectId, agentId])
+  // A live screen's row in the chat opens the side panel on the tab that shows it, the same way.
+  const showsScreen = mountedPanels.some(panel => panel.screen && panel.projects.includes(projectId))
+  const onOpenScreen = useMemo(() => (showsScreen ? () => revealScreen(sidePanelName(projectId, agentId)) : undefined), [showsScreen, projectId, agentId])
   const runSlots = mountedSlots.filter(slots => slots.projects.includes(projectId))
   const toggle = useCallback(() => setOpen(o => !o), [])
 
@@ -345,7 +348,7 @@ export function AgentView({
           this machine cannot stream, so point at where it is rather than show an empty feed. */}
       <CloudAgentNotice target={target} events={shown} projectId={projectId} agentId={agentId} />
       {/* A run relayed to a saved machine (#1067): its diff, handoff, and push/PR now relay to the
-          machine (slice 2), so this notice only flags that the browser preview stays local-only for now. */}
+          machine (slice 2), so this notice only says where the agent executes. */}
       <RemoteAgentNotice machine={remoteLabel} />
       {/* Nothing to show yet is not the same thing in both states: a live run is waiting for its
           first event, a finished one is still reading its log. */}
@@ -378,6 +381,7 @@ export function AgentView({
           setup={setup}
           onOpenAgent={onOpenAgent}
           onOpenChange={onOpenChange}
+          onOpenScreen={onOpenScreen}
         />
       )}
       {/* Keyed by the run: a list opened for one main agent is not open for the next. */}

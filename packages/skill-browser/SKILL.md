@@ -30,6 +30,6 @@ The browser belongs to the project the command runs in (its git root): run every
 
 A refusal exits 1 with the reason on stderr (no browser open, no such element, an address the server did not answer, a page that did not answer within 30 seconds; an error page such as a 404 prints like any page); a wrong command line exits 2 with the usage.
 
-A person watching your run sees this browser live where you opened it, and can click and type in it too: if the page is not what your last print showed, read it again.
+A person watching your run sees this browser live, and can click and type in it too: if the page is not what your last print showed, read it again.
 
 Close it when you are done (with none open, `close` says so and succeeds). It also closes after 30 minutes unused, and when your run ends if the tool running you keeps a diary of the run; stopping to ask a question does not close it.

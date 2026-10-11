@@ -93,7 +93,7 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A project has a skill when the skill's text is in the project, where the coding agents
   read it (`.claude/skills/<name>/SKILL.md`, `.agents/skills/<name>/SKILL.md`).
   OpenAgent brings the packages of the skills that have pages itself (tickets, queue,
-  orchestration) and gives each to the projects that hold its text, with its page, its
+  orchestration, browser) and gives each to the projects that hold its text, with its page, its
   cards and its data; deleting the skill's folder takes them away. The scheduler, a tool
   with no text, is a project's when one of the project's hook lines runs it. Picked over
   a project's pages coming from its own `package.json`, which needed an install in every
@@ -143,9 +143,12 @@ already made, and lists it in its pull request; for anything else it proposes an
   over a line in each project's hooks file, which is a project's and shared with its team,
   where a service is one computer's; and over running it inside OpenAgent's own process,
   where a fault in it is a fault in OpenAgent.
-- The chat shows a `screen` line as the live page it names, on this machine's loopback
-  only, and knows nothing of what the page is. Picked over a `browser` kind the dashboard
-  renders itself, which the next package showing something would have had to repeat.
+- The chat shows a `screen` line as one line, which opens the tab its package brings, and
+  knows nothing of what the screen is. What the screen shows is streamed from the computer
+  the run is on, through OpenAgent, as pictures: to this computer, to a phone, to another
+  computer. Picked over framing the page that computer serves, which showed on that
+  computer only; and over a `browser` kind the dashboard renders itself, which the next
+  package showing something would have had to repeat.
 
 ## Starting a run
 - A Start runs the project's own `start` line, in the project's hooks file, and the line

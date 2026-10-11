@@ -589,58 +589,61 @@ describe('EventList row wash (#1508)', () => {
   })
 })
 
-// A screen line (a command the agent ran showing a page, e.g. its browser): the newest open one is
-// the live page framed in the chat, where the agent used it; an older one, or one after the run
-// ended, is its one line; an `ended` line is hidden.
+// A screen line (a command the agent ran showing something, e.g. its browser): the newest open one
+// is live, and its line opens the side panel on the tab that shows the screen; an older one, or
+// one after the run ended, is a line of text; an `ended` line is hidden. No screen is in the chat.
 describe('EventList screen rows', () => {
   const at = (n: number) => `http://127.0.0.1:${n}/?t=x`
-  const frames = () => [...document.querySelectorAll('iframe')].map(f => f.getAttribute('src'))
+  const opens = () => screen.queryAllByRole('button', { name: /^◆ browser/ }).map(row => row.textContent)
+  const show = (events: OpenAgentEvent[]) => {
+    const onOpenScreen = vi.fn()
+    render(<EventList events={events} stick={false} onOpenScreen={onOpenScreen} />)
+    return onOpenScreen
+  }
 
-  test('the newest screen at an address is live; the one before it is its line', () => {
-    const events: OpenAgentEvent[] = [
+  test('the newest screen at an address is live: its line opens the screen; the one before it is text', () => {
+    const onOpenScreen = show([
       { kind: 'screen', url: at(1), label: 'browser · http://localhost:3000/' },
       { kind: 'driver', event: { type: 'text', text: 'looking' } },
       { kind: 'screen', url: at(1), label: 'browser · http://localhost:3000/b' },
-    ]
-    render(<EventList events={events} stick={false} />)
-    expect(frames()).toEqual([at(1)])
+    ])
+    expect(opens()).toEqual(['◆ browser · http://localhost:3000/b'])
     expect(screen.getByText('◆ browser · http://localhost:3000/')).toBeTruthy()
-    expect(document.querySelector('iframe')?.getAttribute('title')).toBe('browser · http://localhost:3000/b')
+    fireEvent.click(screen.getByRole('button', { name: '◆ browser · http://localhost:3000/b' }))
+    expect(onOpenScreen).toHaveBeenCalledTimes(1)
+    expect(document.querySelector('iframe')).toBeNull()
   })
 
-  test('an ended screen is gone: no frame, and its ended line is hidden', () => {
-    const events: OpenAgentEvent[] = [
+  test('an ended screen is gone: its line opens nothing, and its ended line is hidden', () => {
+    show([
       { kind: 'screen', url: at(1), label: 'browser · http://localhost:3000/' },
       { kind: 'screen', url: at(1), label: 'browser · closed', ended: true },
-    ]
-    render(<EventList events={events} stick={false} />)
-    expect(frames()).toEqual([])
+    ])
+    expect(opens()).toEqual([])
     expect(screen.queryByText('◆ browser · closed')).toBeNull()
     expect(screen.getByText('◆ browser · http://localhost:3000/')).toBeTruthy()
   })
 
   test('the run ending ends every screen', () => {
-    const events: OpenAgentEvent[] = [
+    show([
       { kind: 'screen', url: at(1), label: 'browser · http://localhost:3000/' },
       { kind: 'end', ok: true },
-    ]
-    render(<EventList events={events} stick={false} />)
-    expect(frames()).toEqual([])
+    ])
+    expect(opens()).toEqual([])
   })
 
   test('a run waiting on an answer keeps its screen live', () => {
-    const events: OpenAgentEvent[] = [
+    show([
       { kind: 'screen', url: at(1), label: 'browser · http://localhost:3000/' },
       { kind: 'end', ok: true, waiting: true },
-    ]
-    render(<EventList events={events} stick={false} />)
-    expect(frames()).toEqual([at(1)])
+    ])
+    expect(opens()).toEqual(['◆ browser · http://localhost:3000/'])
   })
 
-  test('only a loopback address is framed', () => {
-    render(<EventList events={[{ kind: 'screen', url: 'https://example.com/', label: 'somewhere' }]} stick={false} />)
-    expect(frames()).toEqual([])
-    expect(screen.getByText('◆ somewhere')).toBeTruthy()
+  test('with no tab that shows a screen, a live screen is a line of text', () => {
+    render(<EventList events={[{ kind: 'screen', url: at(1), label: 'browser · http://localhost:3000/' }]} stick={false} />)
+    expect(opens()).toEqual([])
+    expect(screen.getByText('◆ browser · http://localhost:3000/')).toBeTruthy()
   })
 })
 

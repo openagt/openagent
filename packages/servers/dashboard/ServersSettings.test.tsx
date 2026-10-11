@@ -39,6 +39,8 @@ function dashboard(answer: (args: string[]) => ModuleCommandResult, saved: Modul
     agents: vi.fn(async () => []),
     machines,
     addMachine,
+    watchScreen: vi.fn(async () => undefined),
+    sendToScreen: vi.fn(async () => false),
   }
   const ran = (): string[] => runCommand.mock.calls.map(([, args]) => args.join(' '))
   return { host, runCommand, machines, addMachine, ran }
