@@ -18,6 +18,8 @@ export interface DoorStatus {
   on: boolean
   listening: boolean
   problem?: string
+  /** On a server: the address its door is open at, over HTTPS, to every network. */
+  https?: { address: string }
   devices: DeviceRow[]
 }
 
@@ -35,7 +37,7 @@ const text = (value: unknown): string | undefined => (typeof value === 'string' 
 
 export function readStatus(output: unknown): DoorStatus | undefined {
   if (!output || typeof output !== 'object') return undefined
-  const { on, listening, problem, devices } = output as Record<string, unknown>
+  const { on, listening, problem, https, devices } = output as Record<string, unknown>
   if (typeof on !== 'boolean' || !Array.isArray(devices)) return undefined
   const rows: DeviceRow[] = []
   for (const entry of devices) {
@@ -45,7 +47,8 @@ export function readStatus(output: unknown): DoorStatus | undefined {
     if (deviceId && deviceName && addedAt) rows.push({ id: deviceId, name: deviceName, added: addedAt, ...(seenAt ? { seen: seenAt } : {}) })
   }
   const why = text(problem)
-  return { on, listening: listening === true, ...(why ? { problem: why } : {}), devices: rows }
+  const address = https && typeof https === 'object' ? text((https as Record<string, unknown>).address) : undefined
+  return { on, listening: listening === true, ...(why ? { problem: why } : {}), ...(address ? { https: { address } } : {}), devices: rows }
 }
 
 function readLink(output: unknown): AddLink | undefined {

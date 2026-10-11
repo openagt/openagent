@@ -1,5 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { isIP } from 'node:net'
 import { dirname, join } from 'node:path'
 
 /**
@@ -38,13 +39,21 @@ export interface Listening {
   port: number
 }
 
+/** The door on a server: open to every network, over HTTPS, at the address the server is reached at. */
+export interface Https {
+  /** The server's number or name, as a browser types it. */
+  address: string
+}
+
 export interface Store {
   /** The "Phone on Wi-Fi" switch. */
   on: boolean
+  /** Set on a server: the door is always open there, and the switch is not looked at. */
+  https?: Https
   devices: Device[]
   codes: Code[]
   listening?: Listening
-  /** Why the door is not listening although the switch is on, in words. */
+  /** Why the door is not listening although it should, in words; on a server also why its certificate could not be renewed. */
   problem?: string
 }
 
@@ -79,6 +88,24 @@ export function sameDigest(a: string, b: string): boolean {
   return ab.length === bb.length && timingSafeEqual(ab, bb)
 }
 
+/**
+ * A server's number or name as the file keeps it: what a certificate can be for, written the one
+ * way a certificate office and a link both read it. A name in small letters; an IPv6 number in
+ * its short form, with no zone and no IPv4 tail.
+ */
+export const isAddress = (value: unknown): value is string => typeof value === 'string' && addressOf(value) === value
+
+/** `said` as the file keeps an address, or `undefined` for what is no server's number or name. */
+export function addressOf(said: string): string | undefined {
+  if (said.length > 253) return undefined
+  if (isIP(said) === 4) return said
+  if (isIP(said) === 6) {
+    if (said.includes('%') || said.includes('.')) return undefined
+    return new URL(`http://[${said}]`).hostname.slice(1, -1)
+  }
+  return /^(?=.*[a-z])[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(said) ? said.toLowerCase() : undefined
+}
+
 const isIso = (value: unknown): value is string => typeof value === 'string' && !Number.isNaN(Date.parse(value))
 const isDigest = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value)
 
@@ -101,8 +128,10 @@ export function sanitize(value: unknown): Store {
     if (isDigest(code) && isIso(expires)) codes.push({ code, expires })
   }
   const listening = obj.listening && typeof obj.listening === 'object' ? (obj.listening as Record<string, unknown>) : undefined
+  const https = obj.https && typeof obj.https === 'object' ? (obj.https as Record<string, unknown>).address : undefined
   return {
     on: obj.on === true,
+    ...(isAddress(https) ? { https: { address: https } } : {}),
     devices,
     codes: codes.slice(-MAX_CODES),
     ...(listening && Number.isInteger(listening.pid) && Number.isInteger(listening.port) ? { listening: { pid: listening.pid as number, port: listening.port as number } } : {}),

@@ -42,12 +42,13 @@ export function notInPage(): string {
 /**
  * What a scanned code opens. The code rides the address after the `#`, which a browser keeps to
  * itself, so the page sends it in a request of its own: opening the address alone (a link
- * preview does that) spends nothing.
+ * preview does that) spends nothing. What follows the code after a dot is for a computer that
+ * pastes the link, not for a browser.
  */
 export function enterPage(path: string, nonce: string): string {
   const script = `
     const say = (title, text) => { document.getElementById('title').textContent = title; document.getElementById('text').textContent = text }
-    const code = location.hash.slice(1)
+    const code = location.hash.slice(1).split('.')[0]
     history.replaceState(null, '', location.pathname)
     fetch(${JSON.stringify(path)}, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) })
       .then(answer => {

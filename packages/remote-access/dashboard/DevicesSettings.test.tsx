@@ -123,7 +123,8 @@ describe('Settings → Devices', () => {
     expect(screen.getByRole('img', { name: 'The code a new device scans' })).toBeTruthy()
     devices = [{ id: 'new000new000', name: 'Android phone, Chrome', added: new Date().toISOString() }]
     expect(await screen.findByText('Android phone, Chrome', undefined)).toBeTruthy()
-    expect(screen.queryByRole('img', { name: 'The code a new device scans' })).toBeNull()
+    // The code leaves in the render after the one that shows the new device.
+    await waitFor(() => expect(screen.queryByRole('img', { name: 'The code a new device scans' })).toBeNull())
     expect(screen.getByRole('button', { name: 'Add device' })).toBeTruthy()
   })
 
@@ -150,6 +151,27 @@ describe('Settings → Devices', () => {
     await waitFor(() => expect(screen.queryByText('iPhone, Safari')).toBeNull())
     await new Promise(resolve => setTimeout(resolve, 150))
     expect(screen.queryByText('iPhone, Safari')).toBeNull()
+  })
+
+  test('on a server there is no switch: the section says where the door is open, gives one link, and says why a certificate is missing', async () => {
+    const SERVER = { on: false, listening: true, https: { address: '203.0.113.5' }, devices: [] }
+    const link = { url: 'https://203.0.113.5/_remote-access/enter#code.pin', expires: LINK.expires }
+    const { host } = door(args => (args[0] === 'add' ? ok(link) : ok(SERVER)))
+    const { unmount } = show(host)
+    expect(await screen.findByText('Open on the internet')).toBeTruthy()
+    expect(screen.getByText(/opens OpenAgent at https:\/\/203\.0\.113\.5 from anywhere/)).toBeTruthy()
+    expect(screen.queryByRole('switch')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Add device' }))
+    await screen.findByRole('img', { name: 'The code a new device scans' })
+    expect(screen.getByText(/^Scan it with the device's camera\. The code works once/)).toBeTruthy()
+    expect((screen.getByRole('textbox', { name: 'The link another computer pastes' }) as HTMLInputElement).value).toBe(link.url)
+    expect(screen.queryByRole('button', { name: 'Phone does not open it? Use the number.' })).toBeNull()
+    unmount()
+
+    const waiting = { on: false, listening: false, problem: 'No certificate for 203.0.113.5 yet: port 80 cannot be reached', https: { address: '203.0.113.5' }, devices: [] }
+    show(door(() => ok(waiting)).host)
+    expect((await screen.findByRole('alert')).textContent).toBe('No certificate for 203.0.113.5 yet: port 80 cannot be reached')
+    expect(screen.queryByRole('button', { name: 'Add device' })).toBeNull()
   })
 
   test('a project whose folder is gone does not block the section: the next project is asked', async () => {

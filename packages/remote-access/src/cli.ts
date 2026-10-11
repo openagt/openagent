@@ -1,7 +1,8 @@
 import { nameAddress, numberAddress, urlHost, type AddressDeps } from './address.js'
+import { doorFingerprint } from './certificate.js'
 import { ENTER_PATH } from './door.js'
-import { serve } from './serve.js'
-import { Unreadable, addCode, pidAlive, readStore, removeDevice, update, type Store } from './store.js'
+import { HTTPS_PORT, serve } from './serve.js'
+import { Unreadable, addCode, addressOf, pidAlive, readStore, removeDevice, update, type Store } from './store.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -16,6 +17,9 @@ export const USAGE = `usage: remote-access <command>
   off            Phone on Wi-Fi off: nothing listens on the network; the devices stay in the list
   add            a link a new device gets in with, once, for five minutes: the address a QR code holds
   remove <id>    take one device out, by its id as status names it; it is out at once
+  https <at>     this computer is a server, reached at this number or name: the door is open to every network,
+                 over HTTPS, with a certificate it asks for and renews itself (ports 80 and 443 must be reachable)
+  https off      no longer a server: Phone on Wi-Fi decides again
   serve          the door's own process, run by OpenAgent for as long as it runs itself (OPENAGENT_URL says where OpenAgent is)`
 
 export interface CliIO {
@@ -39,23 +43,27 @@ export interface Status {
   on: boolean
   /** The door's process holds the door open right now. */
   listening: boolean
-  /** Why it does not, when the switch is on, in words. */
+  /** Why it does not, when it should, in words; on a server also why its certificate could not be renewed. */
   problem?: string
+  /** On a server: the address the door is open at. */
+  https?: { address: string }
   devices: { id: string; name: string; added: string; seen?: string }[]
 }
 
-const isListening = (store: Store): boolean => store.on && store.listening !== undefined && pidAlive(store.listening.pid)
+const isListening = (store: Store): boolean => (store.on || store.https !== undefined) && store.listening !== undefined && pidAlive(store.listening.pid)
 
-/** Why a door that is switched on does not listen, when its own process said nothing: that process is not running. */
+/** Why a door that should be open does not listen, when its own process said nothing: that process is not running. */
 const NOT_RUNNING = 'The door opens once OpenAgent runs on this computer.'
 
 function statusOf(store: Store): Status {
   const listening = isListening(store)
-  const problem = !store.on || listening ? undefined : (store.problem ?? NOT_RUNNING)
+  const wanted = store.on || store.https !== undefined
+  const problem = !wanted ? undefined : listening ? (store.https ? store.problem : undefined) : (store.problem ?? NOT_RUNNING)
   return {
     on: store.on,
     listening,
     ...(problem ? { problem } : {}),
+    ...(store.https ? { https: { address: store.https.address } } : {}),
     devices: store.devices.map(({ id, name, added, seen }) => ({ id, name, added, ...(seen ? { seen } : {}) })),
   }
 }
@@ -74,9 +82,37 @@ async function setSwitch(io: CliIO, on: boolean): Promise<Status> {
   }
 }
 
+/** On a server or off it: the file says which, and the answer waits a moment for the door's process to follow. */
+async function setHttps(io: CliIO, address: string | undefined): Promise<Status> {
+  await update(io.env, store => {
+    if (address === undefined) delete store.https
+    else store.https = { address }
+    delete store.problem
+    // Where the door listened until now is not where it will: its process says so anew.
+    delete store.listening
+  })
+  const deadline = Date.now() + (io.followMs ?? 3_000)
+  for (;;) {
+    const store = await readStore(io.env)
+    // A certificate takes longer than this waits for: the answer then says it is being asked for.
+    const settled = address === undefined ? !isListening(store) || store.on : isListening(store) || store.problem !== undefined
+    if (settled || Date.now() > deadline) return statusOf(store)
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
+}
+
 async function addDevice(io: CliIO): Promise<{ url: string; numberUrl?: string; expires: string }> {
   const store = await readStore(io.env)
   const status = statusOf(store)
+  if (store.https) {
+    if (!status.listening) throw new Refused(status.problem ?? 'the door is not open')
+    const fingerprint = await doorFingerprint(io.env)
+    if (!fingerprint) throw new Refused('the door has no key yet')
+    const { code, expires } = await addCode(io.env)
+    const port = store.listening!.port
+    // After the code, what the door's key is known by: a computer that pastes the link knows the door again by it.
+    return { url: `https://${urlHost(store.https.address)}${port === HTTPS_PORT ? '' : `:${port}`}${ENTER_PATH}#${code}.${fingerprint}`, expires }
+  }
   if (!status.on) throw new Refused('Phone on Wi-Fi is off: turn it on first')
   if (!status.listening) throw new Refused(status.problem ?? 'the door is not open')
   const port = store.listening!.port
@@ -93,8 +129,15 @@ async function addDevice(io: CliIO): Promise<{ url: string; numberUrl?: string; 
 async function runServe(io: CliIO): Promise<void> {
   const target = io.env.OPENAGENT_URL
   if (!target) throw new Refused('serve is run by OpenAgent: OPENAGENT_URL says where OpenAgent is, and it is not set')
-  const port = io.env.OPENAGENT_REMOTE_ACCESS_PORT ? Number(io.env.OPENAGENT_REMOTE_ACCESS_PORT) : undefined
-  if (port !== undefined && !(Number.isInteger(port) && port >= 0 && port < 65536)) throw new Refused('OPENAGENT_REMOTE_ACCESS_PORT is not a port')
+  const portIn = (name: string): number | undefined => {
+    const port = io.env[name] ? Number(io.env[name]) : undefined
+    if (port !== undefined && !(Number.isInteger(port) && port >= 0 && port < 65536)) throw new Refused(`${name} is not a port`)
+    return port
+  }
+  const port = portIn('OPENAGENT_REMOTE_ACCESS_PORT')
+  // For a try on a computer that is no real server: another port for the proof, another certificate office.
+  const proofPort = portIn('OPENAGENT_REMOTE_ACCESS_PROOF_PORT')
+  const directory = io.env.OPENAGENT_REMOTE_ACCESS_ACME || undefined
   const controller = new AbortController()
   const stop = (): void => controller.abort()
   let watch: NodeJS.Timeout | undefined
@@ -110,7 +153,7 @@ async function runServe(io: CliIO): Promise<void> {
   }
   try {
     if (io.signal?.aborted) stop()
-    await serve({ env: io.env, target, signal: controller.signal, log: io.stderr, ...(port !== undefined ? { port } : {}), ...(io.host !== undefined ? { host: io.host } : {}), ...(io.address ? { address: io.address } : {}) })
+    await serve({ env: io.env, target, signal: controller.signal, log: io.stderr, ...(port !== undefined ? { port } : {}), ...(proofPort !== undefined ? { proofPort } : {}), ...(directory ? { directory } : {}), ...(io.host !== undefined ? { host: io.host } : {}), ...(io.address ? { address: io.address } : {}) })
   } finally {
     // Whatever ended it, nothing of it is left to keep the process alive.
     clearInterval(watch)
@@ -142,6 +185,13 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         if (rest.length !== 1 || !id) break
         if (!(await removeDevice(io.env, id))) throw new Refused(`no device has the id ${id}`)
         return print(statusOf(await readStore(io.env)))
+      }
+      case 'https': {
+        const [address] = rest
+        if (rest.length !== 1 || !address) break
+        const at = address === 'off' ? undefined : addressOf(address)
+        if (address !== 'off' && at === undefined) throw new Refused(`${address} is not a server's number or name`)
+        return print(await setHttps(io, at))
       }
       case 'serve':
         if (rest.length) break

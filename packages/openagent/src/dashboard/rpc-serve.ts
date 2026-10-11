@@ -40,8 +40,8 @@ export interface RemoteAgents {
   list(projectId: string): AgentMeta[]
   /** Whether a run relayed from here is still at work on the machine at `url`. */
   working(url: string): boolean
-  /** This computer's new key on the machine at `url`, for the runs kept from before it was added again. */
-  rekey(url: string, key: string): void
+  /** How the machine at `url` is reached since it was added again, for the runs kept from before. */
+  rekey(url: string, key: string, pin?: string): void
 }
 
 /**
