@@ -73,6 +73,19 @@ describe('Settings → Servers', () => {
     await waitFor(() => expect((screen.getByLabelText("The server's address") as HTMLInputElement).value).toBe(''))
   })
 
+  test('Connect waits until this computer has said which OpenAgent it runs: that is the one the server gets', async () => {
+    const { host, machines, ran } = dashboard(() => ok({ servers: [] }))
+    let say: (saved: ModuleMachines) => void = () => {}
+    machines.mockImplementation(() => new Promise<ModuleMachines>(resolve => (say = resolve)))
+    show(host)
+    fireEvent.change(screen.getByLabelText("The server's address"), { target: { value: '203.0.113.5' } })
+    await waitFor(() => expect(ran()).toContain('status'))
+    const connect = screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement
+    expect(connect.disabled).toBe(true)
+    say({ version: '1.2.3', machines: [] })
+    await waitFor(() => expect(connect.disabled).toBe(false))
+  })
+
   test('an install at work lists its steps with their state, and shows the key the server was first met with', async () => {
     const { host } = dashboard(() => ok({ servers: [server(['done', 'done', 'running'], { working: true, fingerprint: 'SHA256:abc' })] }))
     show(host)
