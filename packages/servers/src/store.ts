@@ -22,6 +22,13 @@ export interface Step {
   said?: string
 }
 
+/** The install's own process. */
+export interface Worker {
+  pid: number
+  /** ISO 8601: written again every few seconds for as long as the process works. */
+  seen: string
+}
+
 export interface Server {
   /** The server's number or name: what a person typed, and what its certificate is for. */
   address: string
@@ -30,8 +37,8 @@ export interface Server {
   /** What the server's key is known by, as SSH showed it when this computer first met it. */
   fingerprint?: string
   steps: Step[]
-  /** The process that installs right now. */
-  worker?: number
+  /** The process that installs right now, and when it last said it still does. */
+  worker?: Worker
   /** The install was asked for and the server is not among the machines yet: the page adds it once the steps are done. */
   adding: boolean
 }
@@ -73,10 +80,34 @@ export const isUser = (said: unknown): said is string => typeof said === 'string
 /** Whether `said` is a version npm keeps a package under. */
 export const isVersion = (said: unknown): said is string => typeof said === 'string' && said.length <= 64 && /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(said)
 
+/** How often the install's process says it still works, and after how long of silence it is taken for gone. */
+export const BEAT_MS = 10_000
+export const SILENT_MS = 45_000
+
+/**
+ * Whether the server's install runs right now: its process is there, and said so a moment ago.
+ * The process's number alone is no proof: one that died without a word (a laptop that was
+ * switched off) leaves its number in the file, and the system gives it to another program later.
+ */
+export function working(server: Server, now = Date.now()): boolean {
+  return server.worker !== undefined && pidAlive(server.worker.pid) && now - Date.parse(server.worker.seen) < SILENT_MS
+}
+
+/** Where the door of the server at `address` answers: what OpenAgent's machines know it by. */
+export function doorUrl(address: string): string {
+  return `https://${address.includes(':') ? `[${address}]` : address}`
+}
+
 /** Every step, not started. */
 export const freshSteps = (): Step[] => STEP_IDS.map(id => ({ id, state: 'waiting' }))
 
 const STATES: readonly StepState[] = ['waiting', 'running', 'done', 'failed']
+
+function readWorker(value: unknown): { worker: Worker } | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const { pid, seen } = value as Record<string, unknown>
+  return Number.isInteger(pid) && (pid as number) > 0 && typeof seen === 'string' && !Number.isNaN(Date.parse(seen)) ? { worker: { pid: pid as number, seen } } : undefined
+}
 
 /** Read what a file holds, forgivingly: anything malformed is left out, never a reason to fail. */
 export function sanitize(value: unknown): Store {
@@ -101,7 +132,7 @@ export function sanitize(value: unknown): Store {
       user,
       ...(typeof fingerprint === 'string' && /^SHA256:[A-Za-z0-9+/=]{20,64}$/.test(fingerprint) ? { fingerprint } : {}),
       steps: STEP_IDS.map(id => known.get(id) ?? { id, state: 'waiting' }),
-      ...(Number.isInteger(worker) && (worker as number) > 0 ? { worker: worker as number } : {}),
+      ...(readWorker(worker) ?? {}),
       adding: adding === true,
     })
   }

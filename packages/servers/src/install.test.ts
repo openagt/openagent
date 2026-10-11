@@ -1,6 +1,8 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { askLink, install, lastLines, withAdvice } from './install.js'
+import { spawn } from 'node:child_process'
+import { AlreadyWorking, askLink, install, lastLines, withAdvice } from './install.js'
+import type { Exec } from './ssh.js'
 import { STEPS } from './steps.js'
 import { freshSteps, readStore, update } from './store.js'
 import { pretendServer, testHome } from './test-home.js'
@@ -36,10 +38,11 @@ test('the install stops at the step that fails, with the last of what the server
   try {
     await saved(home.env)
     const tools = STEPS.find(step => step.id === 'tools')!.script({ address: SERVER.address, version: '1.2.3' })
-    const { exec, calls } = pretendServer(call => (call.script === tools ? { code: 100, out: 'Reading package lists...', err: 'E: Unable to locate package git' } : undefined))
+    // Words that would read as a failed login at the first step are only the server's own here.
+    const { exec, calls } = pretendServer(call => (call.script === tools ? { code: 100, out: 'Reading package lists...', err: 'E: Permission denied' } : undefined))
     await install({ env: home.env, address: SERVER.address, version: '1.2.3', exec })
     assert.deepEqual(await stepsOf(home.env), ['login:done', 'user:done', 'tools:failed', 'openagent:waiting', 'agent:waiting', 'service:waiting', 'door:waiting'])
-    assert.equal((await readStore(home.env)).servers[0]!.steps[2]!.said, 'Reading package lists...\nE: Unable to locate package git')
+    assert.equal((await readStore(home.env)).servers[0]!.steps[2]!.said, 'Reading package lists...\nE: Permission denied')
     assert.equal(calls.length, 4)
     assert.equal((await readStore(home.env)).servers[0]!.worker, undefined)
   } finally {
@@ -90,6 +93,35 @@ test('an install that is stopped says so on the step it was at', async () => {
   }
 })
 
+test('while it runs the install says so again and again, and one that runs in another process is not joined', async () => {
+  const home = await testHome()
+  const other = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'])
+  try {
+    await saved(home.env)
+    const seen: string[] = []
+    const fake = pretendServer()
+    // A step that takes a while: the file is looked at before it and after it.
+    const slow: Exec = async (bin, args, script, opts) => {
+      const worker = (await readStore(home.env)).servers[0]!.worker
+      if (worker) seen.push(worker.seen)
+      if (args.at(-1) !== 'true' && seen.length < 4) await new Promise(resolve => setTimeout(resolve, 60))
+      return fake.exec(bin, args, script, opts)
+    }
+    await install({ env: home.env, address: SERVER.address, version: '1.2.3', exec: slow, beatMs: 10 })
+    assert.ok(new Set(seen).size > 1, `said once only: ${seen.join(', ')}`)
+    assert.equal((await readStore(home.env)).servers[0]!.worker, undefined)
+
+    await update(home.env, store => void (store.servers[0]!.worker = { pid: other.pid!, seen: new Date().toISOString() }))
+    const second = pretendServer()
+    await assert.rejects(install({ env: home.env, address: SERVER.address, version: '1.2.3', exec: second.exec }), AlreadyWorking)
+    assert.deepEqual(second.calls, [])
+    assert.equal((await readStore(home.env)).servers[0]!.worker!.pid, other.pid)
+  } finally {
+    other.kill()
+    await home.remove()
+  }
+})
+
 test('only the end of what a command said is kept, its errors last', () => {
   const out = Array.from({ length: 30 }, (_, index) => `line ${index + 1}`).join('\n')
   const kept = lastLines({ out, err: 'the reason\n\n' }).split('\n')
@@ -98,13 +130,18 @@ test('only the end of what a command said is kept, its errors last', () => {
   assert.equal(kept[0], 'line 17')
 })
 
-test('the server\'s door is asked for a link as the server\'s own user; an answer that is no link is not taken for one', async () => {
+test('the server\'s door is asked for a link as the server\'s own user; only a link to that server\'s own door is taken for one', async () => {
   const link = { url: 'https://203.0.113.5/_remote-access/enter#code.pin', expires: '2026-10-11T12:00:00.000Z' }
   const good = pretendServer(() => ({ out: JSON.stringify(link) + '\n' }))
   assert.deepEqual(await askLink(SERVER, { exec: good.exec }), { ok: true, ...link })
   assert.deepEqual(good.calls.map(call => call.remote), ["runuser -l openagent -c 'bash -s'"])
   assert.match(good.calls[0]!.script, /remote-access\/bin\/remote-access add\n/)
 
-  assert.deepEqual(await askLink(SERVER, { exec: pretendServer(() => ({ out: 'Welcome to Debian\n' })).exec }), { ok: false, error: 'The server answered something else than a link.' })
+  const NOT_ITS_OWN = { ok: false, error: 'The server answered something else than a link to its own door at https://203.0.113.5.' }
+  assert.deepEqual(await askLink(SERVER, { exec: pretendServer(() => ({ out: 'Welcome to Debian\n' })).exec }), NOT_ITS_OWN)
+  // A server does not say where this computer goes to be let in: a link to anywhere else is none.
+  for (const url of ['https://evil.example/_remote-access/enter#code.pin', 'http://203.0.113.5/_remote-access/enter#code', 'https://203.0.113.5:8443/_remote-access/enter#code.pin', 'https://203.0.113.5.evil.example/x#code.pin', 'http://127.0.0.1:4200/_rpc/x#code']) {
+    assert.deepEqual(await askLink(SERVER, { exec: pretendServer(() => ({ out: JSON.stringify({ url, expires: link.expires }) })).exec }), NOT_ITS_OWN, url)
+  }
   assert.deepEqual(await askLink(SERVER, { exec: pretendServer(() => ({ code: 1, err: 'the door is not open' })).exec }), { ok: false, error: 'the door is not open' })
 })

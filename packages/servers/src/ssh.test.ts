@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { exec, openSession } from './ssh.js'
 import { pretendServer } from './test-home.js'
 
-test('ssh asks nothing, takes a new server\'s key and refuses a changed one, and never reads an address as an option', async () => {
+test('ssh is told to ask nothing, to take a new server\'s key and no changed one, to give the server no way back, and never reads an address as an option', async () => {
   const { exec: fake, calls } = pretendServer()
   const session = await openSession({ address: '203.0.113.5', user: 'root' }, { exec: fake })
   try {
@@ -15,6 +15,8 @@ test('ssh asks nothing, takes a new server\'s key and refuses a changed one, and
       const options = call.args.filter((_, index) => call.args[index - 1] === '-o')
       assert.ok(options.includes('BatchMode=yes'))
       assert.ok(options.includes('StrictHostKeyChecking=accept-new'))
+      // Whatever this computer's own settings say for every server.
+      for (const option of ['ForwardAgent=no', 'ClearAllForwardings=yes', 'PermitLocalCommand=no', 'RequestTTY=no']) assert.ok(options.includes(option), option)
       // The user, the end of the options, the address, then the one command.
       assert.deepEqual(call.args.slice(-5, -1), ['-l', 'root', '--', '203.0.113.5'])
     }

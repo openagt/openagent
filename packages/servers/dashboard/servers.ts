@@ -19,6 +19,8 @@ export interface StepRow {
 /** A server this computer installed OpenAgent on, or is installing it on. */
 export interface ServerRow {
   address: string
+  /** Where the server's door answers: what OpenAgent's machines know it by. */
+  url: string
   user: string
   fingerprint?: string
   working: boolean
@@ -44,9 +46,9 @@ export function readServers(output: unknown): ServerRow[] | undefined {
   const rows: ServerRow[] = []
   for (const entry of servers) {
     if (!entry || typeof entry !== 'object') continue
-    const { address, user, fingerprint, working, adding, steps } = entry as Record<string, unknown>
-    const [at, who, known] = [text(address), text(user), text(fingerprint)]
-    if (!at || !who || !Array.isArray(steps)) continue
+    const { address, url, user, fingerprint, working, adding, steps } = entry as Record<string, unknown>
+    const [at, door, who, known] = [text(address), text(url), text(user), text(fingerprint)]
+    if (!at || !door || !who || !Array.isArray(steps)) continue
     const list: StepRow[] = []
     for (const step of steps) {
       if (!step || typeof step !== 'object') continue
@@ -54,7 +56,7 @@ export function readServers(output: unknown): ServerRow[] | undefined {
       const [stepId, name, words] = [text(id), text(label), text(said)]
       if (stepId && name && STATES.includes(state as string)) list.push({ id: stepId, label: name, state: state as StepState, ...(words ? { said: words } : {}) })
     }
-    rows.push({ address: at, user: who, ...(known ? { fingerprint: known } : {}), working: working === true, adding: adding === true, steps: list })
+    rows.push({ address: at, url: door, user: who, ...(known ? { fingerprint: known } : {}), working: working === true, adding: adding === true, steps: list })
   }
   return rows
 }
@@ -87,8 +89,3 @@ export const connect = (host: ModuleHost, projects: ModuleProject[], address: st
 export const askLink = (host: ModuleHost, projects: ModuleProject[], address: string): Promise<Answer<DoorLink>> => run(host, projects, ['link', address], readLink)
 export const markAdded = (host: ModuleHost, projects: ModuleProject[], address: string): Promise<Answer<ServerRow[]>> => run(host, projects, ['added', address], readServers)
 export const forget = (host: ModuleHost, projects: ModuleProject[], address: string): Promise<Answer<ServerRow[]>> => run(host, projects, ['forget', address], readServers)
-
-/** Where a server's door answers, as OpenAgent's machines know it. */
-export function machineUrl(address: string): string {
-  return `https://${address.includes(':') ? `[${address}]` : address}`
-}

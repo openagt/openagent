@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process'
-import { askLink, install } from './install.js'
+import { AlreadyWorking, askLink, install } from './install.js'
 import type { Exec } from './ssh.js'
 import { STEPS } from './steps.js'
-import { Unreadable, addressOf, freshSteps, isUser, isVersion, pidAlive, readStore, update, type Server, type StepState, type Store } from './store.js'
+import { Unreadable, addressOf, doorUrl, freshSteps, isUser, isVersion, readStore, update, working, type Server, type StepState, type Store } from './store.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -39,6 +39,8 @@ class Refused extends Error {}
 /** A server as `status` tells it. */
 export interface ServerStatus {
   address: string
+  /** Where the server's door answers: what OpenAgent's machines know it by. */
+  url: string
   user: string
   /** What the server's key is known by, as SSH showed it when this computer first met it. */
   fingerprint?: string
@@ -53,14 +55,13 @@ export interface Status {
   servers: ServerStatus[]
 }
 
-const working = (server: Server): boolean => server.worker !== undefined && pidAlive(server.worker)
-
 function statusOf(store: Store): Status {
   return {
     servers: store.servers.map(server => {
       const busy = working(server)
       return {
         address: server.address,
+        url: doorUrl(server.address),
         user: server.user,
         ...(server.fingerprint ? { fingerprint: server.fingerprint } : {}),
         working: busy,
@@ -79,6 +80,8 @@ function statusOf(store: Store): Status {
 /** The install's own process: this command again, apart from the one that started it, so it goes on when that one has answered. */
 function startWork(address: string, version: string, env: NodeJS.ProcessEnv): number {
   const child = spawn(process.execPath, [process.argv[1]!, 'work', address, version], { env, stdio: 'ignore', detached: true })
+  // A process that could not start has no number: told below, not thrown from here later.
+  child.once('error', () => {})
   child.unref()
   if (child.pid === undefined) throw new Refused('the install could not be started')
   return child.pid
@@ -94,7 +97,7 @@ async function connect(io: CliIO, said: { address: string; user: string; version
   await update(io.env, store => {
     const known = store.servers.find(server => server.address === address)
     if (known && working(known)) throw new Refused(`OpenAgent is being installed on ${address} right now`)
-    const fresh: Server = { address, user: said.user, ...(known?.fingerprint ? { fingerprint: known.fingerprint } : {}), steps: freshSteps(), worker: process.pid, adding: true }
+    const fresh: Server = { address, user: said.user, ...(known?.fingerprint ? { fingerprint: known.fingerprint } : {}), steps: freshSteps(), worker: { pid: process.pid, seen: new Date().toISOString() }, adding: true }
     if (known) Object.assign(known, fresh)
     else store.servers.unshift(fresh)
   })
@@ -105,8 +108,8 @@ async function connect(io: CliIO, said: { address: string; user: string; version
     await update(io.env, store => {
       const server = store.servers.find(candidate => candidate.address === address)
       // The install's process puts its own name there as it starts: it may have, and may have ended already.
-      if (!server || server.worker !== process.pid) return
-      if (worker !== undefined && pidAlive(worker)) server.worker = worker
+      if (!server || server.worker?.pid !== process.pid) return
+      if (worker !== undefined) server.worker = { pid: worker, seen: new Date().toISOString() }
       else delete server.worker
     })
   }
@@ -193,8 +196,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
       default:
     }
   } catch (err) {
-    if (!(err instanceof Refused || err instanceof Unreadable)) throw err
-    // The last line is the one a dashboard shows: a refusal of several lines ends with what to do.
+    if (!(err instanceof Refused || err instanceof Unreadable || err instanceof AlreadyWorking)) throw err
     io.stderr(err.message)
     return 1
   }

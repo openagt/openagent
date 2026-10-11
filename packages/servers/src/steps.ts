@@ -44,18 +44,27 @@ export function quoted(value: string): string {
   return `'${value.replaceAll("'", `'\\''`)}'`
 }
 
+/** Held by every script root runs, for as long as it runs: a script still at work after this computer stopped waiting for it is not joined by a second one. */
+const LOCK = '/run/lock/openagent-install.lock'
+
 /**
  * A whole script around `body`. The body is a function called once the shell has read all of
  * it, with nothing to read from: the script itself comes in where a program it starts would
  * otherwise read, and would be eaten by the first one that does.
+ *
+ * Root finds its programs in the system's own folders only, and nothing the server's user can
+ * write is ever on its way to one.
  */
-function script(vars: Record<string, string>, body: string): string {
+function script(as: StepDef['as'], vars: Record<string, string>, body: string): string {
+  const system = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
   return [
     'set -euo pipefail',
+    'umask 022',
     'export DEBIAN_FRONTEND=noninteractive',
-    `export PATH="$HOME/.local/bin:${ROOT}/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"`,
+    `export PATH="${as === 'root' ? system : `$HOME/.local/bin:${ROOT}/node/bin:${system}`}"`,
     ...Object.entries(vars).map(([name, value]) => `${name}=${quoted(value)}`),
     'fail() { echo "$1" >&2; exit 1; }',
+    ...(as === 'root' ? [`exec 9>${LOCK}`, 'flock -n 9 || fail "Another install is still at work on this server. Try again in a moment."'] : []),
     'main() {',
     body.trim(),
     '}',
@@ -93,6 +102,7 @@ export const STEPS: readonly StepDef[] = [
     timeoutMs: 2 * MINUTE,
     script: () =>
       script(
+        'root',
         {},
         `
   . /etc/os-release 2>/dev/null || true
@@ -120,6 +130,7 @@ export const STEPS: readonly StepDef[] = [
     timeoutMs: 2 * MINUTE,
     script: () =>
       script(
+        'root',
         {},
         `
   id ${SERVER_USER} >/dev/null 2>&1 || useradd --create-home --shell /bin/bash ${SERVER_USER}
@@ -133,6 +144,7 @@ export const STEPS: readonly StepDef[] = [
     timeoutMs: 20 * MINUTE,
     script: () =>
       script(
+        'root',
         {},
         `
   . /etc/os-release
@@ -149,13 +161,14 @@ export const STEPS: readonly StepDef[] = [
     [ "$(uname -m)" = aarch64 ] && arch=arm64
     from=https://nodejs.org/dist/latest-v${NODE_LINE}.x
     curl -fsSL "$from/SHASUMS256.txt" -o "$dir/SHASUMS256.txt"
-    file=$(grep -o "node-v[0-9.]*-linux-$arch\\.tar\\.xz" "$dir/SHASUMS256.txt" | head -n 1)
+    file=$(grep -o "node-v[0-9.]*-linux-$arch\\.tar\\.xz" "$dir/SHASUMS256.txt" | head -n 1 || true)
     [ -n "$file" ] || fail "nodejs.org lists no Node ${NODE_LINE} for this server's chip."
     curl -fsSL "$from/$file" -o "$dir/$file"
     (cd "$dir" && grep " $file\\$" SHASUMS256.txt | sha256sum -c - >/dev/null) || fail "The Node that was downloaded is not the one nodejs.org lists."
     rm -rf ${ROOT}/node.new
     mkdir -p ${ROOT}/node.new
-    tar -xJf "$dir/$file" -C ${ROOT}/node.new --strip-components=1
+    # Root's, whoever the download names as the files' owner: on a server that owner could be the user the agents run as.
+    tar -xJf "$dir/$file" -C ${ROOT}/node.new --strip-components=1 --no-same-owner
     rm -rf ${ROOT}/node
     mv ${ROOT}/node.new ${ROOT}/node
     touch ${ROOT}/restart
@@ -186,12 +199,13 @@ export const STEPS: readonly StepDef[] = [
     timeoutMs: 20 * MINUTE,
     script: ({ version }) =>
       script(
+        'root',
         { VERSION: version },
         `
-  have=$(${ROOT}/node/bin/openagent --version 2>/dev/null || true)
+  # Read off its file, not asked of OpenAgent itself: nothing a package brought runs as root, neither here nor at the install.
+  have=$(${ROOT}/node/bin/node -p 'require("${ROOT}/node/lib/node_modules/@openagt/dashboard/package.json").version' 2>/dev/null || true)
   if [ "$have" != "$VERSION" ]; then
-    # No script of a package runs as root: OpenAgent needs none.
-    npm install --global --ignore-scripts --no-fund --no-audit --loglevel=error "@openagt/dashboard@$VERSION"
+    ${ROOT}/node/bin/npm install --global --ignore-scripts --no-fund --no-audit --loglevel=error "@openagt/dashboard@$VERSION"
     touch ${ROOT}/restart
   fi
   ln -sf ${ROOT}/node/bin/openagent /usr/local/bin/openagent
@@ -205,6 +219,7 @@ export const STEPS: readonly StepDef[] = [
     timeoutMs: 10 * MINUTE,
     script: () =>
       script(
+        'openagent',
         {},
         `
   # Claude Code's own installer, into this user's home: it keeps itself up to date there, as on a laptop.
@@ -220,6 +235,7 @@ export const STEPS: readonly StepDef[] = [
     timeoutMs: 3 * MINUTE,
     script: () =>
       script(
+        'root',
         { UNIT: SERVICE_UNIT },
         `
   file=/etc/systemd/system/openagent.service
@@ -229,7 +245,7 @@ export const STEPS: readonly StepDef[] = [
     touch ${ROOT}/restart
   fi
   # A firewall that is on lets the door's two ports through; one that is off is left off.
-  if command -v ufw >/dev/null && ufw status | grep -q '^Status: active'; then
+  if command -v ufw >/dev/null && ufw status | grep '^Status: active' >/dev/null; then
     ufw allow 80/tcp >/dev/null
     ufw allow 443/tcp >/dev/null
   fi
@@ -254,6 +270,7 @@ export const STEPS: readonly StepDef[] = [
     timeoutMs: 6 * MINUTE,
     script: ({ address }) =>
       script(
+        'openagent',
         { ADDRESS: address },
         `
   open() { case "$(${DOOR} status)" in *'"listening":true'*'"address":"'"$ADDRESS"'"'*) return 0 ;; *) return 1 ;; esac; }
@@ -273,5 +290,5 @@ export const STEPS: readonly StepDef[] = [
 
 /** The script that asks the server's door for a link a new machine gets in with. Run as the server's own user. */
 export function linkScript(): string {
-  return script({}, `\n  ${DOOR} add\n`)
+  return script(SERVER_USER, {}, `\n  ${DOOR} add\n`)
 }

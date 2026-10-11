@@ -98,6 +98,11 @@ export async function openSession(server: { address: string; user: string }, opt
     ['ControlMaster', 'auto'],
     ['ControlPath', join(dir, 's')],
     ['ControlPersist', '120'],
+    // Whatever this computer's own settings say for every server: a server met a moment ago gets no way back into this computer.
+    ['ForwardAgent', 'no'],
+    ['ClearAllForwardings', 'yes'],
+    ['PermitLocalCommand', 'no'],
+    ['RequestTTY', 'no'],
   ].flatMap(([name, value]) => ['-o', `${name}=${value}`])
   // `--` ends the options: an address is never read as one.
   const args = (remote: string, more: string[] = []): string[] => [...options, ...more, '-l', server.user, '--', server.address, remote]
@@ -112,7 +117,7 @@ export async function openSession(server: { address: string; user: string }, opt
     },
     run: (as, script, timeoutMs) => run('ssh', args(as === 'root' ? `${root}bash -s` : `${root}runuser -l ${SERVER_USER} -c 'bash -s'`), script, { timeoutMs, ...signal }),
     async close() {
-      await run('ssh', ['-o', `ControlPath=${join(dir, 's')}`, '-O', 'exit', '--', server.address], '', { timeoutMs: 10_000 }).catch(() => {})
+      await run('ssh', ['-o', `ControlPath=${join(dir, 's')}`, '-O', 'exit', '--', server.address], '', { timeoutMs: 5_000 }).catch(() => {})
       await rm(dir, { recursive: true, force: true })
     },
   }

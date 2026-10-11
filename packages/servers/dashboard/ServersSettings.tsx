@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Button, Input, SettingsSection, useModuleHost, usePolled, type ModuleMachines, type ModuleSettingsProps } from '@openagt/dashboard/module'
-import { askLink, connect, forget, loadServers, machineUrl, markAdded, type Answer, type ServerRow, type StepState } from './servers.js'
+import { askLink, connect, forget, loadServers, markAdded, type Answer, type ServerRow, type StepState } from './servers.js'
 
 // Settings → Servers: "Connect your VPS". A person gives a server's address and a user name, and
 // OpenAgent installs itself there over SSH. The install is the `servers` command's own process;
@@ -42,7 +42,7 @@ export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsPro
   const adding = useRef(new Set<string>())
 
   const servers = read?.ok ? read.value : []
-  const inMachines = (server: ServerRow) => known?.machines.find(machine => machine.url === machineUrl(server.address))
+  const inMachines = (server: ServerRow, among = known) => among?.machines.find(machine => machine.url === server.url)
   const installed = (server: ServerRow): boolean => !server.working && server.steps.every(step => step.state === 'done')
 
   const act = async (change: () => Promise<Answer<unknown>>): Promise<boolean> => {
@@ -64,20 +64,30 @@ export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsPro
     return act(() => connect(host, projects, at, as, known.version))
   }
 
-  /** The last step, which is this computer's: the server's door gives a link, and OpenAgent saves the server with it. */
+  /**
+   * The last step, which is this computer's: the server's door gives a link, and OpenAgent saves
+   * the server with it. A server that is among the machines and answers is left as it is; one
+   * that is there and does not answer was made anew since, and gets in again with a new link.
+   */
   const addToMachines = async (server: ServerRow): Promise<void> => {
     // One at a time for a server: every look at the page would otherwise ask for a link of its own.
     if (adding.current.has(server.address)) return
     adding.current.add(server.address)
     setNotAdded(reasons => without(reasons, server.address))
+    const stopped = (why: string): void => setNotAdded(reasons => ({ ...reasons, [server.address]: why }))
     try {
-      if (!inMachines(server)) {
+      // Read now, not as the page last saw them: the machines change under Machines, too.
+      if (inMachines(server, await host.machines())?.version === undefined) {
         const link = await askLink(host, projects, server.address)
         const added = link.ok ? await host.addMachine(link.value.url, server.address) : link
-        if (!added.ok) return setNotAdded(reasons => ({ ...reasons, [server.address]: added.error }))
+        if (!added.ok) return stopped(added.error)
       }
-      await markAdded(host, projects, server.address)
+      const told = await markAdded(host, projects, server.address)
+      if (!told.ok) return stopped(told.error)
       await Promise.all([reload(), reloadMachines()]).catch(() => {})
+    } catch (err) {
+      // Told, so the page does not try by itself again at its next look.
+      stopped(err instanceof Error ? err.message : String(err))
     } finally {
       adding.current.delete(server.address)
     }
@@ -111,7 +121,8 @@ export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsPro
           <span>User name</span>
           <Input aria-label="User name" value={user} onChange={event => setUser(event.target.value)} />
         </label>
-        <Button size="sm" type="submit" disabled={busy || !address.trim() || !user.trim()}>
+        {/* Not before this computer has said which OpenAgent it runs: that is the one the server gets. */}
+        <Button size="sm" type="submit" disabled={busy || !known || !address.trim() || !user.trim()}>
           Connect
         </Button>
       </form>
@@ -145,7 +156,7 @@ export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsPro
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    {behind && !server.working && (
+                    {behind && !server.working && !failed && (
                       <Button size="sm" disabled={busy} aria-label={`Update ${server.address}`} onClick={() => void install(server.address, server.user)}>
                         Update
                       </Button>
@@ -155,9 +166,9 @@ export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsPro
                         Try again
                       </Button>
                     )}
-                    {installed(server) && !machine && (reason !== undefined || !server.adding) && (
+                    {installed(server) && machine?.version === undefined && (reason !== undefined || !server.adding) && (
                       <Button size="sm" variant="outline" disabled={busy} aria-label={`Add ${server.address} to Machines`} onClick={() => void addToMachines(server)}>
-                        Add to Machines
+                        {machine ? 'Add again' : 'Add to Machines'}
                       </Button>
                     )}
                     {!server.working && (

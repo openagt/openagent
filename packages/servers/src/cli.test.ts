@@ -58,7 +58,7 @@ test('connect saves the server and starts its install; a second press is the sam
     const connected = await run(home.env, ['connect', '203.0.113.5', 'root', '1.2.3'], { startWork })
     assert.equal(connected.code, 0)
     assert.deepEqual(started, [['203.0.113.5', '1.2.3']])
-    assert.deepEqual(serversOf(connected), [{ address: '203.0.113.5', user: 'root', working: true, adding: true, steps: STEPS.map(({ id, label }) => ({ id, label, state: 'waiting' })) }])
+    assert.deepEqual(serversOf(connected), [{ address: '203.0.113.5', url: 'https://203.0.113.5', user: 'root', working: true, adding: true, steps: STEPS.map(({ id, label }) => ({ id, label, state: 'waiting' })) }])
 
     const again = await run(home.env, ['connect', '203.0.113.5', 'root', '1.2.3'], { startWork })
     assert.equal(again.code, 1)
@@ -91,7 +91,7 @@ test('an install whose process is gone reads as failed at the step it was at, an
     await run(home.env, ['connect', '203.0.113.5', 'ubuntu', '1.2.3'], { startWork: () => gone })
     await update(home.env, store => {
       const [server] = store.servers
-      server!.worker = gone
+      server!.worker = { pid: gone, seen: new Date().toISOString() }
       server!.fingerprint = 'SHA256:0123456789abcdefghijklmnopqrstuvwxyzABCDEFG'
       server!.steps[0]!.state = 'done'
       server!.steps[1]!.state = 'running'
@@ -103,6 +103,10 @@ test('an install whose process is gone reads as failed at the step it was at, an
       { id: 'user', label: 'The user openagent', state: 'failed', said: 'The install stopped before this step ended.' },
       { id: 'tools', label: 'git, Node and Chrome', state: 'waiting' },
     ])
+
+    // The same for a number that is some other program's by now: it was not heard of for too long.
+    await update(home.env, store => void (store.servers[0]!.worker = { pid: process.pid, seen: new Date(Date.now() - 10 * 60_000).toISOString() }))
+    assert.equal(serversOf(await run(home.env, ['status']))[0]!.working, false)
 
     const [over] = serversOf(await run(home.env, ['connect', '203.0.113.5', 'ubuntu', '1.2.4']))
     assert.equal(over!.working, true)
@@ -122,6 +126,10 @@ test('link asks the server\'s door; added says nothing is left to add; forget ta
     // A name is found again however it was typed.
     assert.deepEqual((await run(home.env, ['link', 'BOX.example.com'], { exec })).out, link)
     assert.deepEqual(calls[0]!.args.slice(-5, -1), ['-l', 'root', '--', 'box.example.com'])
+
+    const elsewhere = await run(home.env, ['link', 'box.example.com'], { exec: pretendServer(() => ({ out: JSON.stringify({ ...link, url: 'https://evil.example/_remote-access/enter#code.pin' }) })).exec })
+    assert.equal(elsewhere.code, 1)
+    assert.deepEqual(elsewhere.err, ['The server answered something else than a link to its own door at https://box.example.com.'])
 
     const refused = await run(home.env, ['link', 'box.example.com'], { exec: pretendServer(() => ({ code: 1, err: 'the door is not open' })).exec })
     assert.equal(refused.code, 1)

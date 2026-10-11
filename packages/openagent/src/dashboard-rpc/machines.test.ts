@@ -5,7 +5,8 @@ import type { AddressInfo } from 'node:net'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { onMachines, onMachinesReachable, sendAddMachine, sendRemoveMachine } from './machines.js'
+import { onMachineVersions, onMachines, onMachinesReachable, sendAddMachine, sendRemoveMachine } from './machines.js'
+import { openagentVersion } from '../version.js'
 import { setDashboardContext } from './context.js'
 import { testDashboardContext } from './test-context.js'
 import { REGISTRY_FILE } from '../registry.js'
@@ -35,15 +36,15 @@ const ENTER = '/_remote-access/enter'
 /**
  * What another machine opened to the network, as far as this computer meets it: a code lets a
  * computer in once and answers a key, a key takes its computer out again, and a ping is answered
- * only to a key that is in.
+ * only to a key that is in, with the OpenAgent the machine runs when it says.
  */
-async function machine(codes: string[] = []): Promise<{ url: string; link: (code: string) => string; in: Map<string, string>; close: () => Promise<void> }> {
+async function machine(codes: string[] = [], version?: string): Promise<{ url: string; link: (code: string) => string; in: Map<string, string>; close: () => Promise<void> }> {
   const good = new Set(codes)
   const inside = new Map<string, string>()
   let made = 0
   const srv: Server = createServer((req, res) => {
     const key = /^Bearer (.+)$/.exec(req.headers.authorization ?? '')?.[1]
-    if (req.url === '/_relay/ping') return void res.writeHead(key && inside.has(key) ? 200 : 401).end()
+    if (req.url === '/_relay/ping') return void res.writeHead(key && inside.has(key) ? 200 : 401).end(version === undefined ? '' : JSON.stringify({ version }))
     if (req.url !== ENTER) return void res.writeHead(404).end()
     if (req.method === 'DELETE') {
       const was = key !== undefined && inside.delete(key)
@@ -189,6 +190,34 @@ test('each saved machine is asked with this computer\'s own key there, and the a
     } finally {
       await up.close()
       await removedThere.close()
+    }
+  })
+})
+
+test('the saved machines are told with the OpenAgent each runs, beside this computer\'s own; one that does not answer, or does not say, has none', async () => {
+  await withHome(async () => {
+    const behind = await machine(['a'], '0.0.1')
+    const silent = await machine(['b'])
+    const gone = await machine(['c'], '9.9.9')
+    try {
+      await sendAddMachine(behind.link('a'), 'Behind')
+      await sendAddMachine(silent.link('b'), 'Silent')
+      await sendAddMachine(gone.link('c'), 'Gone')
+      await gone.close()
+      const told = await onMachineVersions()
+      assert.equal(told.version, openagentVersion())
+      // Never this computer's key there: a page reads this.
+      assert.deepEqual(
+        [...told.machines].sort((a, b) => a.label.localeCompare(b.label)),
+        [
+          { id: behind.url, label: 'Behind', url: behind.url, version: '0.0.1' },
+          { id: gone.url, label: 'Gone', url: gone.url },
+          { id: silent.url, label: 'Silent', url: silent.url },
+        ],
+      )
+    } finally {
+      await behind.close()
+      await silent.close()
     }
   })
 })

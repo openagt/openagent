@@ -76,7 +76,8 @@ export async function pingRemote(target: MachineAccess): Promise<boolean> {
 export async function remoteVersion(target: MachineAccess): Promise<string | undefined> {
   const said: unknown = await (await ping(target))?.json().catch(() => undefined)
   const version = said && typeof said === 'object' ? (said as { version?: unknown }).version : undefined
-  return typeof version === 'string' && version ? version : undefined
+  // What a machine says is shown on a page: only what reads as a version is one.
+  return typeof version === 'string' && /^[0-9A-Za-z.+-]{1,64}$/.test(version) ? version : undefined
 }
 
 /** The two headers every relay request carries: JSON, and this computer's key there. No Origin on purpose. */

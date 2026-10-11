@@ -12,7 +12,7 @@ const LINK = { url: 'https://203.0.113.5/_remote-access/enter#code.pin', expires
 /** A server whose steps are in these states, in the install's order; the rest have not started. */
 function server(states: StepState[], over: Partial<ServerRow> = {}): ServerRow {
   const steps = Object.entries(LABELS).map(([id, label], index) => ({ id, label, state: states[index] ?? ('waiting' as const) }))
-  return { address: '203.0.113.5', user: 'root', working: false, adding: true, steps, ...over }
+  return { address: '203.0.113.5', url: 'https://203.0.113.5', user: 'root', working: false, adding: true, steps, ...over }
 }
 const ALL_DONE: StepState[] = ['done', 'done', 'done', 'done', 'done', 'done', 'done']
 
@@ -63,9 +63,8 @@ describe('Settings → Servers', () => {
     const connect = screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement
     expect(connect.disabled).toBe(true)
     expect((screen.getByLabelText('User name') as HTMLInputElement).value).toBe('root')
-    fireEvent.change(screen.getByLabelText("The server's address"), { target: { value: ' 203.0.113.5 ' } })
-    // The version is this computer's: the button waits for it.
     await waitFor(() => expect(host.machines).toHaveBeenCalled())
+    fireEvent.change(screen.getByLabelText("The server's address"), { target: { value: ' 203.0.113.5 ' } })
     await waitFor(() => expect(connect.disabled).toBe(false))
     fireEvent.click(connect)
     await waitFor(() => expect(ran()).toContain('connect 203.0.113.5 root 1.2.3'))
@@ -121,6 +120,32 @@ describe('Settings → Servers', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add 203.0.113.5 to Machines' }))
     await waitFor(() => expect(addMachine).toHaveBeenCalledTimes(2))
     expect(ran()).not.toContain('added 203.0.113.5')
+  })
+
+  test('a failure that is thrown, not answered, is told too, and is not tried again at every look', async () => {
+    const { host, addMachine } = dashboard(args => (args[0] === 'link' ? ok(LINK) : ok({ servers: [server(ALL_DONE)] })))
+    addMachine.mockRejectedValue(new Error('the dashboard did not answer'))
+    show(host)
+    expect((await screen.findByRole('alert')).textContent).toBe('the dashboard did not answer')
+    await new Promise(resolve => setTimeout(resolve, 150))
+    expect(addMachine).toHaveBeenCalledTimes(1)
+  })
+
+  test('a server made anew at the same address is among the machines and does not answer: it gets in again, with a new link', async () => {
+    const stale: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5' }] }
+    let adding = true
+    const { host, ran, addMachine } = dashboard(args => {
+      if (args[0] === 'link') return ok(LINK)
+      if (args[0] === 'added') adding = false
+      return ok({ servers: [server(ALL_DONE, { adding })] })
+    }, stale)
+    show(host)
+    await waitFor(() => expect(addMachine).toHaveBeenCalledWith(LINK.url, '203.0.113.5'))
+    await waitFor(() => expect(ran()).toContain('added 203.0.113.5'))
+    // Afterwards it is a press: the page does not ask a server that is down for a link at every look.
+    await new Promise(resolve => setTimeout(resolve, 150))
+    expect(addMachine).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: 'Add 203.0.113.5 to Machines' }).textContent).toBe('Add again')
   })
 
   test('a server that is among the machines shows its OpenAgent; one that fell behind this computer says so and has Update', async () => {
