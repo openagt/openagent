@@ -77,7 +77,8 @@ test('the same account asks again, and an office that cannot be reached is said 
     // An office that is gone: nothing listens where it was.
     const gone = office.directory
     await office.close()
-    await assert.rejects(ask(gone), (err: unknown) => err instanceof AcmeError && /could not be reached: .*(ECONNREFUSED|ECONNRESET)/.test(err.message))
+    // The reason is the computer's own word for it, another on each kind of computer: here only that there is one.
+    await assert.rejects(ask(gone), (err: unknown) => err instanceof AcmeError && /^the certificate office could not be reached: \S/.test(err.message))
   } finally {
     await office.close()
     await shows.close()
