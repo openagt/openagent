@@ -25,12 +25,15 @@ export function MachinesSettings() {
   const status = useMachineStatus(machines)
   const selectedMachineId = useSelectedMachineId()
   const [adding, setAdding] = useState(false)
+  const [refusal, setRefusal] = useState<string | null>(null)
 
   // The same guard the composer applies (#1072): a machine that is removed must not stay the agent
   // target, or the next agent points at something that is no longer in the list.
   const remove = (machine: Machine) => {
-    void removeMachine(machine.id).then(removed => {
-      if (removed && selectedMachineId === machine.id) selectMachine(null)
+    setRefusal(null)
+    void removeMachine(machine.id).then(result => {
+      if (!result.ok) return setRefusal(result.error)
+      if (selectedMachineId === machine.id) selectMachine(null)
     })
   }
 
@@ -51,7 +54,7 @@ export function MachinesSettings() {
       <CardContent>
         {!loaded ? null : machines.length === 0 ? (
           <p className="py-2 text-sm text-muted-foreground">
-            No machines saved. Add one with the URL another machine prints when it is opened to the network.
+            No machines saved. Add one with the link the other machine gives: its Settings, Devices, Add device.
           </p>
         ) : (
           <ul className="divide-y divide-border">
@@ -82,6 +85,11 @@ export function MachinesSettings() {
               </li>
             ))}
           </ul>
+        )}
+        {refusal && (
+          <p role="alert" className="pt-3 text-xs text-danger">
+            {refusal}
+          </p>
         )}
       </CardContent>
 

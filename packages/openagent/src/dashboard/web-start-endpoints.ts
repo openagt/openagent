@@ -9,7 +9,7 @@ import type { BridgeStartInput, BridgeStartRequest } from './bridge-starts.js'
  *
  * A run is a separate process the daemon never started, so it cannot touch the daemon's queue
  * directly; it reaches these routes at the URL it finds in its environment
- * ({@link DAEMON_URL_ENV}), presenting the daemon token it reads from the registry. The
+ * ({@link DAEMON_URL_ENV}), presenting the bridge token it reads from the registry. The
  * extension's own side of the same queue lives on `/_bridge/start` and `/_bridge/started`.
  *
  * Nothing sets {@link DAEMON_URL_ENV} today (#1774): web runs left the launcher when the daemon
@@ -25,7 +25,7 @@ export const DAEMON_URL_ENV = 'OPENAGENT_DAEMON_URL'
 
 /** What the daemon wires behind the routes. Absent when the bridge is off, which 404s them. */
 export interface WebStartHandlers {
-  /** The daemon token every call must present — the same one the extension holds. */
+  /** The bridge token every call must present — the same one the extension holds. */
   token: string
   /** Whether an extension has spoken to this daemon recently enough to be trusted with a request. */
   extensionAlive: () => boolean

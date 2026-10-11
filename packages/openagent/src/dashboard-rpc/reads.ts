@@ -21,7 +21,7 @@ import type { OpenAgentEvent } from '../events.js'
 import { bridgeQuestions } from '../dashboard/bridge-store.js'
 import type { BridgeEvent, BridgeHello, BridgeQuestion } from '../dashboard/bridge-endpoints.js'
 import type { BridgeAnswer, BridgeContact, BridgeVersion } from '../dashboard/bridge-store.js'
-import { readDaemonToken, readPreferences, type Preferences } from '../registry.js'
+import { readBridgeToken, readPreferences, type Preferences } from '../registry.js'
 import { hostname } from 'node:os'
 
 // The read model behind the dashboard (#405): the agent history, an agent's replay, and the
@@ -365,14 +365,13 @@ export async function onBridgeStatus(): Promise<{
  *
  * Only while the bridge is on, so a daemon with the feature off never hands the secret to a
  * page. Revealing it here is not a new exposure: anyone who can load this dashboard can already
- * start runs on this machine, and on a non-loopback bind their browser is holding the same token
- * as a cookie. What it replaces is the alternative, which was telling people to open
- * `~/.openagent.json` and copy a field out of it.
+ * start runs on this machine. What it replaces is the alternative, which was telling people to
+ * open `~/.openagent.json` and copy a field out of it.
  */
 export async function onBridgeToken(): Promise<string | null> {
   const preferences = await readPreferences().catch((): Preferences => ({}))
   if (preferences.bridge !== true) return null
-  return (await readDaemonToken().catch(() => undefined)) ?? null
+  return (await readBridgeToken().catch(() => undefined)) ?? null
 }
 
 /**

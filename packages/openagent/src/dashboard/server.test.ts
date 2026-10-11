@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { get, request } from 'node:http'
 import { connect } from 'node:net'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { networkInterfaces, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { startDashboard, type Dashboard, type DashboardOptions } from './server.js'
 import { isExpectedHost, isSameOriginRequest } from './rpc-serve.js'
@@ -27,27 +27,6 @@ function fetchText(url: string): Promise<{ status: number; body: string; type: s
       res.on('data', c => (body += c))
       res.on('end', () =>
         resolvePromise({ status: res.statusCode ?? 0, body, type: String(res.headers['content-type'] ?? '') }),
-      )
-    }).on('error', rejectPromise)
-  })
-}
-
-// Like fetchText, but with an optional Cookie header and the response's Set-Cookie / Location back.
-function fetchAuth(
-  url: string,
-  cookie?: string,
-): Promise<{ status: number; body: string; setCookie?: string | undefined; location?: string | undefined }> {
-  return new Promise((resolvePromise, rejectPromise) => {
-    get(url, { headers: cookie ? { cookie } : {} }, res => {
-      let body = ''
-      res.on('data', c => (body += c))
-      res.on('end', () =>
-        resolvePromise({
-          status: res.statusCode ?? 0,
-          body,
-          setCookie: res.headers['set-cookie']?.[0],
-          location: res.headers.location,
-        }),
       )
     }).on('error', rejectPromise)
   })
@@ -208,99 +187,10 @@ test('the RPC mount rejects a rebound Host, which the Origin check alone lets th
   }
 })
 
-// The shared token (#1051): a real base64url token, matching what the registry generates.
-const TOKEN = 'zX2p8Q0hqk3m9tR7vN1cW4bY6sJ5aL0dFgHiKlMnOp'
-
-// The guard triggers on the token being configured, not on the bind host (a non-loopback bind is
-// exactly what configures one). Binding loopback with the token set exercises every guard path
-// without an external bind that could trip the OS firewall in an automated agent; the true two-daemon
-// non-loopback drive is noted as a follow-up in the PR.
-async function guardedDashboard(): Promise<{ base: string; close: () => Promise<void> }> {
-  const bundle = await fakeBundle()
-  const dash = await dashboard({ clientBundleDir: bundle, token: TOKEN })
-  return {
-    base: dash.url,
-    close: async () => {
-      await dash.close()
-      await rm(bundle, { recursive: true, force: true })
-    },
-  }
-}
-
-test('with a token set, every route is 401 without a cookie or ?token= (#1051)', async () => {
-  const { base, close } = await guardedDashboard()
-  try {
-    // The static bundle and the RPC mount are fronted uniformly.
-    for (const path of ['/', '/assets/app.js', '/_rpc/onProjects']) {
-      const res = await fetchAuth(base + path)
-      assert.equal(res.status, 401, `${path} should be 401`)
-      assert.match(res.body, /unauthorized/)
-    }
-  } finally {
-    await close()
-  }
-})
-
-test('a valid ?token= sets the HttpOnly oa_daemon cookie and 302s to the clean path (#1051)', async () => {
-  const { base, close } = await guardedDashboard()
-  try {
-    const res = await fetchAuth(`${base}/?token=${TOKEN}`)
-    assert.equal(res.status, 302)
-    assert.equal(res.location, '/') // the token is stripped from the redirect target
-    assert.match(res.setCookie ?? '', /^oa_daemon=/)
-    assert.match(res.setCookie ?? '', /HttpOnly/)
-    // Lax, not Strict, so the cookie survives the redirect when the address is opened from a link elsewhere (#1052).
-    assert.match(res.setCookie ?? '', /SameSite=Lax/)
-    assert.match(res.setCookie ?? '', /Path=\//)
-  } finally {
-    await close()
-  }
-})
-
-test('a wrong ?token= is 401, not admitted (timing-safe compare) (#1051)', async () => {
-  const { base, close } = await guardedDashboard()
-  try {
-    const sameLength = await fetchAuth(`${base}/?token=${'a'.repeat(TOKEN.length)}`)
-    assert.equal(sameLength.status, 401)
-    const shorter = await fetchAuth(`${base}/?token=nope`)
-    assert.equal(shorter.status, 401)
-  } finally {
-    await close()
-  }
-})
-
-test('the oa_daemon cookie admits the bundle and /_rpc (#1051)', async () => {
-  const { base, close } = await guardedDashboard()
-  try {
-    const cookie = `oa_daemon=${TOKEN}`
-    const root = await fetchAuth(`${base}/`, cookie)
-    assert.equal(root.status, 200)
-    assert.match(root.body, /<div id="root">/)
-    // Not 401 is the guard passing; the mount then answers on its own terms.
-    const rpc = await fetchAuth(`${base}/_rpc/onProjects`, cookie)
-    assert.notEqual(rpc.status, 401)
-  } finally {
-    await close()
-  }
-})
-
-test('a loopback bind sets no token, so the gate is a no-op (byte-identical) (#1051)', async () => {
-  const bundle = await fakeBundle()
-  const dash = await dashboard({ clientBundleDir: bundle }) // no token
-  try {
-    const res = await fetchAuth(dash.url + '/') // no cookie, no ?token=
-    assert.equal(res.status, 200)
-    assert.match(res.body, /<div id="root">/)
-  } finally {
-    await dash.close()
-    await rm(bundle, { recursive: true, force: true })
-  }
-})
-
-// A POST with an optional Cookie header, returning the status + body.
-function postAuth(url: string, body: string, cookie?: string): Promise<{ status: number; body: string }> {
+// A POST of JSON, returning the status + body.
+function postJson(url: string, body: string): Promise<{ status: number; body: string }> {
   return new Promise((resolvePromise, rejectPromise) => {
-    const req = request(url, { method: 'POST', headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) } }, res => {
+    const req = request(url, { method: 'POST', headers: { 'content-type': 'application/json' } }, res => {
       let b = ''
       res.on('data', c => (b += c))
       res.on('end', () => resolvePromise({ status: res.statusCode ?? 0, body: b }))
@@ -312,9 +202,9 @@ function postAuth(url: string, body: string, cookie?: string): Promise<{ status:
 
 // GET a newline-delimited event stream, collecting the first `count` lines then tearing the
 // socket down (the endpoint follows forever, so it never ends on its own).
-function readNdjson(url: string, cookie: string, count: number): Promise<{ status: number; lines: unknown[] }> {
+function readNdjson(url: string, count: number): Promise<{ status: number; lines: unknown[] }> {
   return new Promise((resolvePromise, rejectPromise) => {
-    const req = get(url, { headers: { cookie } }, res => {
+    const req = get(url, res => {
       if (res.statusCode !== 200) {
         res.resume()
         resolvePromise({ status: res.statusCode ?? 0, lines: [] })
@@ -350,10 +240,11 @@ function readNdjson(url: string, cookie: string, count: number): Promise<{ statu
 const SHOP = 'github.com/acme/shop'
 const SHOP_ID = 'shop-here'
 
-// A guarded dashboard wired for the machine relay (#1067): a stub start that records its calls, and
-// an events tail backed by a fixed list. Mirrors what the daemon wires, minus a real spawn. It has
-// one project, cloned from {@link SHOP}.
-async function relayDashboard(opts: { token?: string | undefined } = { token: TOKEN }): Promise<{
+// A dashboard wired for the machine relay (#1067): a stub start that records its calls, and an
+// events tail backed by a fixed list. Mirrors what the daemon wires, minus a real spawn. It has
+// one project, cloned from {@link SHOP}. A machine's call reaches it as this computer's own
+// would: what lets a machine in is not the dashboard's, and has passed the call on already.
+async function relayDashboard(): Promise<{
   base: string
   starts: Array<{ prompt: string; options: StartAgentOptions; projectId?: string }>
   close: () => Promise<void>
@@ -374,7 +265,7 @@ async function relayDashboard(opts: { token?: string | undefined } = { token: TO
   }
   const project = async (address: string): Promise<string | undefined> => (address === SHOP ? SHOP_ID : undefined)
   const rpc = async (projectId: string, fn: string, args: unknown[]): Promise<unknown> => ({ projectId, fn, args })
-  const dash = await dashboard({ clientBundleDir: bundle, ...(opts.token ? { token: opts.token } : {}), onStart, relay: { project, tailEvents, rpc } })
+  const dash = await dashboard({ clientBundleDir: bundle, onStart, relay: { project, tailEvents, rpc } })
   return {
     base: dash.url,
     starts,
@@ -385,15 +276,11 @@ async function relayDashboard(opts: { token?: string | undefined } = { token: TO
   }
 }
 
-test('/_relay/start needs the cookie: 401 without it, starts the run with it (#1067)', async () => {
+test('/_relay/start starts the run in the project the call names (#1067)', async () => {
   const { base, starts, close } = await relayDashboard()
   try {
     const body = JSON.stringify({ prompt: 'do it', options: { model: 'opus' }, project: SHOP })
-    const unauth = await postAuth(`${base}/_relay/start`, body)
-    assert.equal(unauth.status, 401) // the shared-token guard (#1051) fronts the relay too
-    assert.equal(starts.length, 0)
-
-    const ok = await postAuth(`${base}/_relay/start`, body, `oa_daemon=${TOKEN}`)
+    const ok = await postJson(`${base}/_relay/start`, body)
     assert.equal(ok.status, 200)
     assert.deepEqual(JSON.parse(ok.body), { ok: true, agentId: 'srv-run' })
     assert.equal(starts.length, 1)
@@ -408,7 +295,7 @@ test('/_relay/start starts nothing for a project this machine does not have, or 
   const { base, starts, close } = await relayDashboard()
   try {
     for (const project of ['github.com/acme/other', undefined, 7]) {
-      const res = await postAuth(`${base}/_relay/start`, JSON.stringify({ prompt: 'do it', options: {}, project }), `oa_daemon=${TOKEN}`)
+      const res = await postJson(`${base}/_relay/start`, JSON.stringify({ prompt: 'do it', options: {}, project }))
       assert.equal(res.status, 200)
       const answer = JSON.parse(res.body) as { ok: boolean; noProject?: boolean }
       assert.equal(answer.ok, false)
@@ -423,12 +310,12 @@ test('/_relay/start starts nothing for a project this machine does not have, or 
 test('/_relay/rpc runs the call in the project it names, and answers 404 for one this machine does not have', async () => {
   const { base, close } = await relayDashboard()
   try {
-    const ok = await postAuth(`${base}/_relay/rpc`, JSON.stringify({ fn: 'onGitStatus', args: ['callers-id', 'r1'], project: SHOP }), `oa_daemon=${TOKEN}`)
+    const ok = await postJson(`${base}/_relay/rpc`, JSON.stringify({ fn: 'onGitStatus', args: ['callers-id', 'r1'], project: SHOP }))
     assert.equal(ok.status, 200)
     assert.deepEqual(JSON.parse(ok.body), { result: { projectId: SHOP_ID, fn: 'onGitStatus', args: ['callers-id', 'r1'] } })
-    const other = await postAuth(`${base}/_relay/rpc`, JSON.stringify({ fn: 'onGitStatus', args: [], project: 'github.com/acme/other' }), `oa_daemon=${TOKEN}`)
+    const other = await postJson(`${base}/_relay/rpc`, JSON.stringify({ fn: 'onGitStatus', args: [], project: 'github.com/acme/other' }))
     assert.equal(other.status, 404)
-    const none = await postAuth(`${base}/_relay/rpc`, JSON.stringify({ fn: 'onGitStatus', args: [] }), `oa_daemon=${TOKEN}`)
+    const none = await postJson(`${base}/_relay/rpc`, JSON.stringify({ fn: 'onGitStatus', args: [] }))
     assert.equal(none.status, 404)
   } finally {
     await close()
@@ -439,7 +326,7 @@ test('/_relay/start strips a nested machine so a relayed run never relays onward
   const { base, starts, close } = await relayDashboard()
   try {
     const body = JSON.stringify({ prompt: 'x', options: { machine: 'http://evil', model: 'opus' }, project: SHOP })
-    const ok = await postAuth(`${base}/_relay/start`, body, `oa_daemon=${TOKEN}`)
+    const ok = await postJson(`${base}/_relay/start`, body)
     assert.equal(ok.status, 200)
     assert.equal(starts[0]!.options.machine, undefined) // the onward target was dropped
     assert.equal(starts[0]!.options.model, 'opus') // the rest of the options survive
@@ -452,7 +339,7 @@ test('/_relay/start drops the branch to start from: a start relayed to a machine
   const { base, starts, close } = await relayDashboard()
   try {
     const body = JSON.stringify({ prompt: 'x', options: { base: 'a-branch-of-the-caller', model: 'opus' }, project: SHOP })
-    const ok = await postAuth(`${base}/_relay/start`, body, `oa_daemon=${TOKEN}`)
+    const ok = await postJson(`${base}/_relay/start`, body)
     assert.equal(ok.status, 200)
     assert.equal(starts.length, 1)
     assert.equal('base' in starts[0]!.options, false) // the caller's branch was dropped
@@ -462,32 +349,26 @@ test('/_relay/start drops the branch to start from: a start relayed to a machine
   }
 })
 
-test('/_relay/events needs the cookie and streams the run\'s events as ndjson (#1067)', async () => {
+test('/_relay/events streams the run\'s events as ndjson (#1067)', async () => {
   const { base, close } = await relayDashboard()
   try {
     const events = `${base}/_relay/events?run=srv-run&project=${encodeURIComponent(SHOP)}`
-    const unauth = await fetchAuth(events)
-    assert.equal(unauth.status, 401)
-
-    const streamed = await readNdjson(events, `oa_daemon=${TOKEN}`, 2)
+    const streamed = await readNdjson(events, 2)
     assert.equal(streamed.status, 200)
     assert.deepEqual(streamed.lines.map(l => (l as { sessionId?: string }).sessionId), ['e1', 'e2'])
 
     // A project this machine does not have, or none named, has no run to stream.
-    assert.equal((await fetchAuth(`${base}/_relay/events?run=srv-run&project=github.com%2Facme%2Fother`, `oa_daemon=${TOKEN}`)).status, 404)
-    assert.equal((await fetchAuth(`${base}/_relay/events?run=srv-run`, `oa_daemon=${TOKEN}`)).status, 404)
+    assert.equal((await fetchText(`${base}/_relay/events?run=srv-run&project=github.com%2Facme%2Fother`)).status, 404)
+    assert.equal((await fetchText(`${base}/_relay/events?run=srv-run`)).status, 404)
   } finally {
     await close()
   }
 })
 
-test('/_relay/ping is 401 without the cookie, 200 with it, and starts nothing (#1072)', async () => {
+test('/_relay/ping answers 200 and starts nothing (#1072)', async () => {
   const { base, starts, close } = await relayDashboard()
   try {
-    const unauth = await fetchAuth(`${base}/_relay/ping`)
-    assert.equal(unauth.status, 401) // the shared-token guard (#1051) fronts the ping too
-
-    const ok = await fetchAuth(`${base}/_relay/ping`, `oa_daemon=${TOKEN}`)
+    const ok = await fetchText(`${base}/_relay/ping`)
     assert.equal(ok.status, 200)
     assert.equal(ok.body, '') // an empty body: it only proves reachability
     assert.equal(starts.length, 0) // a health check must never spawn a run
@@ -496,10 +377,25 @@ test('/_relay/ping is 401 without the cookie, 200 with it, and starts nothing (#
   }
 })
 
-// On a loopback bind the shared-token guard is off (#1051), so the relay carries the RPC mount's
-// own CSRF + DNS-rebinding guard — without it a page the user merely visits could POST /_relay/start.
-test('a loopback relay rejects a cross-origin POST and a rebound Host, and starts nothing', async () => {
-  const { base, starts, close } = await relayDashboard({ token: undefined })
+test('the dashboard listens on this computer\'s own address only: nothing answers at its address on a network', async () => {
+  const bundle = await fakeBundle()
+  const dash = await dashboard({ clientBundleDir: bundle })
+  try {
+    assert.match(dash.url, /^http:\/\/127\.0\.0\.1:\d+$/)
+    const port = new URL(dash.url).port
+    const onNetwork = Object.values(networkInterfaces()).flatMap(list => list ?? []).find(info => info.family === 'IPv4' && !info.internal)
+    // A computer on no network has no such address to try.
+    if (onNetwork) await assert.rejects(fetchText(`http://${onNetwork.address}:${port}/`))
+  } finally {
+    await dash.close()
+    await rm(bundle, { recursive: true, force: true })
+  }
+})
+
+// The relay carries the RPC mount's own CSRF + DNS-rebinding guard — without it a page the user
+// merely visits could POST /_relay/start.
+test('the relay rejects a cross-origin POST and a rebound Host, and starts nothing', async () => {
+  const { base, starts, close } = await relayDashboard()
   try {
     const body = JSON.stringify({ prompt: 'do it', options: { model: 'opus' }, project: SHOP })
 
@@ -509,8 +405,8 @@ test('a loopback relay rejects a cross-origin POST and a rebound Host, and start
     assert.equal(rebound.status, 403) // same-origin to the browser, but the Host names evil.com
     assert.equal(starts.length, 0) // neither reached the spawn
 
-    // The real machine caller sends no Origin and a loopback Host, so it still passes.
-    const ok = await postAuth(`${base}/_relay/start`, body)
+    // A machine's call arrives with no Origin and a loopback Host, so it still passes.
+    const ok = await postJson(`${base}/_relay/start`, body)
     assert.equal(ok.status, 200)
     assert.equal(starts.length, 1)
   } finally {
@@ -529,27 +425,20 @@ test('isSameOriginRequest: absent Origin passes; same host + loopback pass; evil
   assert.equal(isSameOriginRequest(req({ origin: 'not-a-url' })), false)
 })
 
-test('isExpectedHost: on a loopback bind only a loopback Host passes (DNS rebinding)', () => {
+test('isExpectedHost: only a loopback Host passes (DNS rebinding)', () => {
   const req = (headers: Record<string, string>): IncomingMessage => ({ headers } as IncomingMessage)
-  const bound = '127.0.0.1'
-  assert.equal(isExpectedHost(req({ host: '127.0.0.1:4200' }), bound), true)
-  assert.equal(isExpectedHost(req({ host: 'localhost:4200' }), bound), true)
-  assert.equal(isExpectedHost(req({ host: '[::1]:4200' }), bound), true) // the port split must not eat the IPv6 colons
-  assert.equal(isExpectedHost(req({ host: 'evil.com' }), bound), false) // rebound: resolves here, names someone else
-  assert.equal(isExpectedHost(req({ host: 'evil.com:4200' }), bound), false)
+  assert.equal(isExpectedHost(req({ host: '127.0.0.1:4200' })), true)
+  assert.equal(isExpectedHost(req({ host: 'localhost:4200' })), true)
+  assert.equal(isExpectedHost(req({ host: '[::1]:4200' })), true) // the port split must not eat the IPv6 colons
+  assert.equal(isExpectedHost(req({ host: 'evil.com' })), false) // rebound: resolves here, names someone else
+  assert.equal(isExpectedHost(req({ host: 'evil.com:4200' })), false)
   // A registrable name that merely starts with `127.` is a rebound name, not a loopback address:
   // it can resolve to 127.0.0.1, so it must be rejected like any other rebound Host.
-  assert.equal(isExpectedHost(req({ host: '127.evil.com' }), bound), false)
-  assert.equal(isExpectedHost(req({ host: '127.0.0.1.evil.com:4200' }), bound), false)
-  assert.equal(isExpectedHost(req({}), bound), false) // HTTP/1.1 requires Host; every browser sends it
-
-  // A non-loopback bind is reached by a name we cannot predict, so there is nothing to check
-  // against — that case gates behind the shared token (#1051) instead. The relay passes no host.
-  assert.equal(isExpectedHost(req({ host: 'evil.com' }), '0.0.0.0'), true)
-  assert.equal(isExpectedHost(req({ host: 'dash.example.com' }), undefined), true)
-
-  // The bound address itself passes even when it is not one of the loopback spellings.
-  assert.equal(isExpectedHost(req({ host: 'localhost:4200' }), 'localhost'), true)
+  assert.equal(isExpectedHost(req({ host: '127.evil.com' })), false)
+  assert.equal(isExpectedHost(req({ host: '127.0.0.1.evil.com:4200' })), false)
+  // The computer's own address on a network is no loopback one: the dashboard does not listen there.
+  assert.equal(isExpectedHost(req({ host: '192.168.1.5:4200' })), false)
+  assert.equal(isExpectedHost(req({})), false) // HTTP/1.1 requires Host; every browser sends it
 })
 
 // The session start-queue end to end (#1328/#1697): what a web run posts on the run-facing route is

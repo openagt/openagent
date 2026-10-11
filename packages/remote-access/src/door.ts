@@ -5,13 +5,17 @@ import type { AddressInfo, Socket } from 'node:net'
 import { onOwnNetwork } from './address.js'
 import { deviceName } from './device-name.js'
 import { enterPage, notInPage } from './pages.js'
-import { enter, isIn, readStore, storePath, update, type Entry, type Store } from './store.js'
+import { enter, isIn, readStore, removeDevice, storePath, update, type Entry, type Store } from './store.js'
 
 /**
  * The door: the one thing that listens on the network. A request from a device that is in is
  * passed to OpenAgent on this computer as it came, and answered with what OpenAgent answered; so
  * a device that is in sees and does what this computer's own browser does. Anything else gets
  * one of the door's two pages, or a refusal.
+ *
+ * Another computer's OpenAgent gets in as a device does, with the same code and a key of its
+ * own. It has no browser to keep a cookie in, so it says its name with the code, is answered its
+ * key, and sends it with each call as `Authorization: Bearer`.
  */
 
 /** Every path of the door's own; never passed on. */
@@ -26,8 +30,10 @@ const COOKIE_MAX_AGE_S = 400 * 24 * 60 * 60
 const COOKIE_RESEND_MS = 24 * 60 * 60 * 1000
 /** How often the times the devices were last seen are written to the file. */
 const SEEN_FLUSH_MS = 60_000
-/** A code and its wrapping, generously. */
+/** A code, a computer's name and their wrapping, generously. */
 const MAX_ENTER_BODY = 4 * 1024
+/** How another computer's OpenAgent sends its key: the scheme of its `Authorization` header. */
+const BEARER = /^Bearer +(\S+)$/i
 
 export interface DoorOptions {
   env: NodeJS.ProcessEnv
@@ -49,7 +55,17 @@ export interface Door {
 }
 
 function cookieHeader(entry: Entry): string {
-  return `${DEVICE_COOKIE}=${entry.id}.${entry.key}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${COOKIE_MAX_AGE_S}`
+  return `${DEVICE_COOKIE}=${keyWord(entry)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${COOKIE_MAX_AGE_S}`
+}
+
+/** A device's id and key as one word, the way a cookie and a computer's header carry them. */
+function keyWord(entry: Entry): string {
+  return `${entry.id}.${entry.key}`
+}
+
+function readKeyWord(word: string): Entry | undefined {
+  const dot = word.indexOf('.')
+  return dot > 0 && dot < word.length - 1 ? { id: word.slice(0, dot), key: word.slice(dot + 1) } : undefined
 }
 
 /** The device a request says it is, by its cookie. */
@@ -57,11 +73,21 @@ export function readEntry(header: string | undefined): Entry | undefined {
   for (const part of (header ?? '').split(';')) {
     const eq = part.indexOf('=')
     if (eq === -1 || part.slice(0, eq).trim() !== DEVICE_COOKIE) continue
-    const value = part.slice(eq + 1).trim()
-    const dot = value.indexOf('.')
-    if (dot > 0 && dot < value.length - 1) return { id: value.slice(0, dot), key: value.slice(dot + 1) }
+    const entry = readKeyWord(part.slice(eq + 1).trim())
+    if (entry) return entry
   }
   return undefined
+}
+
+/** The computer a request says it is, by its `Authorization` header. */
+export function readBearer(header: string | undefined): Entry | undefined {
+  const word = BEARER.exec(header ?? '')?.[1]
+  return word ? readKeyWord(word) : undefined
+}
+
+/** A computer's name as the list of devices shows it. */
+function computerName(said: string): string {
+  return `OpenAgent on ${said.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 60)}`
 }
 
 /** A `Cookie` header without the door's own cookie: OpenAgent never sees a device's key. */
@@ -152,20 +178,50 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     if (!fromOwnPage(req)) return refuse(res, 403, 'forbidden')
     const body = await readBody(req, MAX_ENTER_BODY)
     let code: unknown
+    let computer: unknown
     try {
-      code = (JSON.parse(body ?? '') as { code?: unknown }).code
+      ;({ code, computer } = JSON.parse(body ?? '') as { code?: unknown; computer?: unknown })
     } catch {
       code = undefined
     }
-    const entry = typeof code === 'string' && code ? await enter(env, code, deviceName(req.headers['user-agent']), now()) : undefined
+    // A computer says its own name; a browser is named by what it says it is.
+    const byComputer = typeof computer === 'string' && computer.trim() !== ''
+    const name = byComputer ? computerName(computer as string) : deviceName(req.headers['user-agent'])
+    const entry = typeof code === 'string' && code ? await enter(env, code, name, now()) : undefined
     if (!entry) return refuse(res, 403, 'this code no longer works')
+    const headers = { 'content-type': 'application/json', 'cache-control': 'no-store' }
+    // A computer is answered its key; a browser gets it as a cookie its pages cannot read.
+    if (byComputer) return void res.writeHead(200, headers).end(JSON.stringify({ ok: true, key: keyWord(entry) }))
     cookieSent.set(entry.id, now())
-    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store', 'set-cookie': cookieHeader(entry) }).end('{"ok":true}')
+    res.writeHead(200, { ...headers, 'set-cookie': cookieHeader(entry) }).end('{"ok":true}')
   }
 
-  const passOn = (req: IncomingMessage, res: ServerResponse, entry: Entry): void => {
+  /**
+   * Who a request comes from, when it is in: a computer by the key its header carries, a device
+   * by its cookie. A header that is no key of the door's is the page's own, to pass on.
+   */
+  const whoIsIn = async (req: IncomingMessage): Promise<{ entry: Entry; byBearer: boolean } | undefined> => {
+    const store = await currentStore()
+    const bearer = readBearer(req.headers.authorization)
+    if (bearer && isIn(store, bearer)) return { entry: bearer, byBearer: true }
+    const cookie = readEntry(req.headers.cookie)
+    return cookie && isIn(store, cookie) ? { entry: cookie, byBearer: false } : undefined
+  }
+
+  /** A device that is in takes itself out: what a computer does when it is removed from the other's list of machines. */
+  const leave = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    if (!fromOwnPage(req)) return refuse(res, 403, 'forbidden')
+    const who = await whoIsIn(req)
+    if (!who) return refuse(res, 401, 'this device is not in')
+    await removeDevice(env, who.entry.id)
+    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end('{"ok":true}')
+  }
+
+  const passOn = (req: IncomingMessage, res: ServerResponse, entry: Entry, byBearer: boolean): void => {
     const headers: OutgoingHttpHeaders = { ...req.headers }
     for (const name of HOP_HEADERS) delete headers[name]
+    // OpenAgent never sees a key, a computer's no more than a device's.
+    if (byBearer) delete headers.authorization
     // OpenAgent is asked as its own browser asks it: at its own address, from its own page.
     headers.host = target.host
     if (headers.origin) headers.origin = target.origin
@@ -177,7 +233,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     const upstream = httpRequest({ hostname: target.hostname, port: target.port, method: req.method, path: req.url, headers }, answer => {
       const answered: OutgoingHttpHeaders = { ...answer.headers }
       for (const name of HOP_HEADERS) delete answered[name]
-      if (now() - (cookieSent.get(entry.id) ?? 0) > COOKIE_RESEND_MS) {
+      if (!byBearer && now() - (cookieSent.get(entry.id) ?? 0) > COOKIE_RESEND_MS) {
         cookieSent.set(entry.id, now())
         const own = answered['set-cookie']
         answered['set-cookie'] = [...(Array.isArray(own) ? own : own ? [String(own)] : []), cookieHeader(entry)]
@@ -204,16 +260,17 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     void (async () => {
       if (!knocks(req.socket.remoteAddress)) return refuse(res, 403, 'only a device on the same network as this computer gets in')
       const path = (req.url ?? '/').split('?')[0] ?? '/'
-      if (path === ENTER_PATH) return letIn(req, res)
+      if (path === ENTER_PATH) return req.method === 'DELETE' ? leave(req, res) : letIn(req, res)
       if (path === DOOR_PREFIX || path.startsWith(`${DOOR_PREFIX}/`)) return refuse(res, 404, 'not found')
 
-      const entry = readEntry(req.headers.cookie)
-      if (!entry || !isIn(await currentStore(), entry)) {
+      const who = await whoIsIn(req)
+      if (!who) {
         const wantsPage = req.method === 'GET' && (req.headers.accept ?? '').includes('text/html')
         return wantsPage ? sendPage(res, 401, notInPage()) : refuse(res, 401, 'this device is not in')
       }
       if (!fromOwnPage(req)) return refuse(res, 403, 'forbidden')
 
+      const { entry, byBearer } = who
       seen.set(entry.id, now())
       let held = sockets.get(entry.id)
       if (!held) sockets.set(entry.id, (held = new Set()))
@@ -222,7 +279,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
         held.add(socket)
         socket.once('close', () => held.delete(socket))
       }
-      passOn(req, res, entry)
+      passOn(req, res, entry, byBearer)
     })().catch(() => {
       if (!res.headersSent) refuse(res, 500, 'the door failed')
       else res.destroy()

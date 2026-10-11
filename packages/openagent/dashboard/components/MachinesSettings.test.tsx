@@ -69,6 +69,21 @@ describe('MachinesSettings (#1052/#1072)', () => {
     await waitFor(() => expect(machinesRpc.onMachines).toHaveBeenCalled()) // the list was read again
     expect(screen.getByText('Studio')).toBeTruthy()
     expect(getSelectedMachineId()).toBe(STUDIO.id)
+    expect((await screen.findByRole('alert')).textContent).toBe('The machine could not be removed.')
+  })
+
+  test('a machine an agent is working on stays, and the section says why; the next remove clears what was said', async () => {
+    await saveMachines(STUDIO)
+    machinesRpc.sendRemoveMachine.mockResolvedValueOnce({ ok: false, error: 'An agent is working on Studio. Stop it, or wait until it ends, then remove the machine.' })
+    render(<MachinesSettings />)
+
+    fireEvent.click(await screen.findByLabelText('Remove Studio'))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/^An agent is working on Studio\./)
+    expect(screen.getByText('Studio')).toBeTruthy()
+
+    fireEvent.click(screen.getByLabelText('Remove Studio'))
+    await waitFor(() => expect(screen.queryByText('Studio')).toBeNull())
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   test('removing some other machine leaves the run target alone', async () => {

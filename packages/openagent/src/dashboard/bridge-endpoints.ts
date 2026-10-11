@@ -9,11 +9,11 @@ export type { BridgeOption, BridgeQuestion } from './bridge-question.js'
  * The browser bridge (#1237): the one endpoint an extension running in the user's own Claude
  * session posts to, so a question a cloud agent is parked on becomes visible in the dashboard.
  *
- * **Why this route carries its own token, unlike every other one.** The #1051 guard in
- * `startDashboard` only exists on a non-loopback bind, and what protects a loopback daemon is
- * the same-origin check on `/_rpc`: a page on another origin is refused outright. This
- * route is the first that is *meant* to be reached from another origin, so neither of those
- * protects it, and it demands `Authorization: Bearer <daemonToken>` unconditionally instead.
+ * **Why this route carries its own token, unlike every other one.** What protects the daemon,
+ * which listens on its own computer only, is the same-origin check on `/_rpc`: a page on another
+ * origin is refused outright. This route is the first that is *meant* to be reached from another
+ * origin, so that check does not protect it, and it demands `Authorization: Bearer <bridgeToken>`
+ * unconditionally instead.
  *
  * **No CORS headers, on purpose.** An extension's service worker holding `host_permissions`
  * fetches without a preflight, so the bridge does not need `Access-Control-Allow-Origin` and

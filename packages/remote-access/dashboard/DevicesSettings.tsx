@@ -69,7 +69,7 @@ export function DevicesSettings({ projects, everyMs = 5_000 }: ModuleSettingsPro
 
   if (projects.length === 0) return null
   return (
-    <SettingsSection title="Devices" description="Open OpenAgent on a phone or in another browser. A device gets in by scanning a code once, and stays in until it is removed here.">
+    <SettingsSection title="Devices" description="Open OpenAgent on a phone or in another browser, or let another computer's OpenAgent send its runs here. A device gets in with a code once, and stays in until it is removed here.">
       <SettingsRow
         label="Phone on Wi-Fi"
         description="Lets a device on the same Wi-Fi as this computer open OpenAgent. A device that is in sees and does what this computer's own browser does."
@@ -115,6 +115,16 @@ export function DevicesSettings({ projects, everyMs = 5_000 }: ModuleSettingsPro
                   Phone does not open it? Use the number.
                 </button>
               )}
+              <label className="block space-y-1 text-xs text-muted-foreground">
+                <span>Another computer that runs OpenAgent? Paste this link there, in Settings, Machines, Add machine.</span>
+                <input
+                  readOnly
+                  aria-label="The link another computer pastes"
+                  value={byNumber && link.numberUrl ? link.numberUrl : link.url}
+                  onFocus={event => event.currentTarget.select()}
+                  className="w-full rounded-md border border-border bg-background px-2 py-1 font-mono text-xs text-foreground"
+                />
+              </label>
               <div>
                 <Button size="sm" variant="outline" onClick={() => setLink(undefined)}>
                   Done

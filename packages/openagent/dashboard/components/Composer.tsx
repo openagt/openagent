@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { ArrowUp, Loader2 } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
-import { type DriverName, isLoopbackHost } from '../../src/client.js'
+import { type DriverName } from '../../src/client.js'
 import {
   usePreferences,
   updatePreferences,
@@ -18,7 +18,6 @@ import { DriverModelMenu, type DriverOption } from './DriverModelMenu.js'
 import { RunOnMenu } from './RunOnMenu.js'
 import { AddMachineDialog } from './AddMachineDialog.js'
 import { useMachines, removeMachine, type Machine } from '../lib/machines.js'
-import { connectLocal } from '../lib/connection.js'
 import { useSelectedMachineId, selectMachine } from '../lib/remote-target.js'
 import { useMachineStatus } from '../lib/use-machine-status.js'
 import { takePendingDraft } from '../lib/draft-handoff.js'
@@ -108,13 +107,11 @@ export const Composer = forwardRef<ComposerHandle, {
   const [prompt, setPrompt] = useState('')
   const [addingPreset, setAddingPreset] = useState(false)
   const [addingMachine, setAddingMachine] = useState(false) // #1052: the "Add a machine" modal
+  const [machineRefusal, setMachineRefusal] = useState<string | null>(null) // why a machine was not removed
   const editorRef = useRef<PromptEditorHandle>(null)
-  // The machines saved on the daemon this dashboard is on (#1052). Which daemon that is comes from
-  // the URL, fixed for the page's life, so it is read once rather than as state.
+  // The machines saved on this dashboard's own machine (#1052).
   const machines = useMachines()
   const machineStatus = useMachineStatus(machines) // #1072: online/offline per saved machine
-  const currentHost = typeof window === 'undefined' ? null : window.location.host
-  const isLocalConnection = typeof window === 'undefined' ? true : isLoopbackHost(window.location.hostname)
   // The registered projects for the `@` picker — the same list the launcher reads.
   const projects = useLoaded<ProjectSummary[]>(onProjects, [], [])
 
@@ -242,19 +239,18 @@ export const Composer = forwardRef<ComposerHandle, {
       chip={!compact}
       connection={{
         machines,
-        currentHost,
-        isLocal: isLocalConnection,
         selectedMachineId,
         onlyHere,
         // #1067: selecting a machine makes it the run target in place, no navigation.
         onSelect: (m: Machine) => selectMachine(m.id),
         onSelectLocal: () => selectMachine(null),
-        onConnectLocal: connectLocal,
         onAddMachine: () => setAddingMachine(true),
         // #1072: drop a saved machine; clear the selection if it was the run target.
         onRemove: (m: Machine) => {
-          void removeMachine(m.id).then(removed => {
-            if (removed && selectedMachineId === m.id) selectMachine(null)
+          setMachineRefusal(null)
+          void removeMachine(m.id).then(result => {
+            if (!result.ok) return setMachineRefusal(result.error)
+            if (selectedMachineId === m.id) selectMachine(null)
           })
         },
         status: machineStatus,
@@ -310,6 +306,11 @@ export const Composer = forwardRef<ComposerHandle, {
       {`${selectedMachine?.label ?? 'The selected machine'} is offline. Pick another place to run, then start.`}
     </p>
   )
+  const machineRefusalNote = machineRefusal && (
+    <p role="alert" className="mt-2 text-xs text-danger">
+      {machineRefusal}
+    </p>
+  )
 
   // The "Add a machine" modal (#1052), rendered by both forms since the "Run on" pick is in both. A portal, so
   // its place in the tree does not matter.
@@ -363,6 +364,7 @@ export const Composer = forwardRef<ComposerHandle, {
       </div>
 
       {offlineNote}
+      {machineRefusalNote}
 
       {addingPreset && (
         <PresetCreatePanel

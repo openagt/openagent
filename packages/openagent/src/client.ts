@@ -25,12 +25,8 @@ export { interventionKey, activityKey } from './dashboard/keys.js'
 export { SeenTracker } from './dashboard/keyed-watcher.js'
 export type { ProjectionRead } from './dashboard/projects.js'
 export { NOTIFICATION_DEFAULTS, MAX_SPEND_OFFSET, notifies, browserNotifyEnabled, notifyCategoryEnabled, type NotifyCategory } from './preference-defaults.js'
-// Whether an address is truly local (#1051). The daemon decides the token gate with it and the
-// dashboard labels the connection with it, so they must agree on what "local" means — the browser
-// kept its own looser copy, which answered `false` for every 127.0.0.0/8 address but the first.
-export { isLoopbackHost } from './loopback-host.js'
-// How a pasted machine address is read, so the dialog and the daemon read a paste the same way.
-export { parseMachineUrl } from './machine-url.js'
+// How a pasted machine link is read, so the dialog and the daemon read a paste the same way.
+export { parseMachineLink } from './machine-link.js'
 // A bridged question as the gate panel renders it (#1554): pure, so the client projects it itself.
 export { bridgeChoiceRequest } from './dashboard/bridge-question.js'
 // What a web run's cloud side is doing, from its record (#1668): pure, so every surface derives the same word.

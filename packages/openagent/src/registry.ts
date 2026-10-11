@@ -33,10 +33,12 @@ export interface MachineRecord {
   id: string
   /** The name the person gave it, or its host when they gave none. */
   label: string
-  /** Where its OpenAgent answers, as an origin (`http://192.168.1.5:4200`). */
+  /** Where its OpenAgent answers, as an origin (`http://studio.local:4201`). */
   url: string
-  /** The key that machine asks for. Never handed to a browser. */
-  token: string
+  /** This computer's own key on that machine. Never handed to a browser. */
+  key: string
+  /** Where this computer was let in there, and where it takes itself out when the machine is removed. */
+  door: string
 }
 
 /** The cap on saved machines and on a name's length, so a hand-edited file cannot bloat. */
@@ -141,13 +143,13 @@ export interface Registry {
   projects: ProjectRecord[]
   preferences: Preferences
   /**
-   * The shared daemon token (#1051): generated on the first non-loopback bind and reused after.
-   * A top-level field, deliberately not a {@link Preferences} one, so it is never shipped to the
-   * browser bundle. Absent on a loopback-only machine.
+   * The browser bridge's key (#1237): generated when the bridge is first switched on and reused
+   * after. A top-level field, deliberately not a {@link Preferences} one, so it is never shipped
+   * to the browser bundle. Absent on a machine that never had the bridge on.
    */
-  daemonToken?: string
+  bridgeToken?: string
   /**
-   * The saved machines. Top-level like {@link daemonToken}, and for the same reason: each one
+   * The saved machines. Top-level like {@link bridgeToken}, and for the same reason: each one
    * carries a key, so the list is never part of what the browser is handed.
    */
   machines?: MachineRecord[]
@@ -167,7 +169,7 @@ export interface PreferencesStore {
 /** The registry file name: a single file under `$XDG_CONFIG_HOME` (dotted under `$HOME`). */
 export const REGISTRY_FILE = 'openagent.json'
 
-/** Owner read/write only: the file holds the daemon token (#1051) and the saved machines' keys. */
+/** Owner read/write only: the file holds the bridge's key and the saved machines' keys. */
 export const REGISTRY_FILE_MODE = 0o600
 
 /**
@@ -212,7 +214,7 @@ export interface RegistryFs {
   rename?(from: string, to: string): Promise<void>
   /**
    * Narrow a file's permissions. Optional, and best-effort at the call site: this file holds the
-   * daemon token (#1051), so it is written owner-only — but a
+   * bridge's key and the saved machines' keys, so it is written owner-only — but a
    * filesystem that cannot express that (Windows, a FAT volume) must not fail the write.
    */
   chmod?(path: string, mode: number): Promise<void>
@@ -352,11 +354,11 @@ function sanitizeMachines(value: unknown): MachineRecord[] {
   for (const raw of value) {
     if (machines.length >= MACHINE_LIMITS.count) break
     if (typeof raw !== 'object' || raw === null) continue
-    const { label, url, token } = raw as Record<string, unknown>
-    if (typeof label !== 'string' || typeof url !== 'string' || typeof token !== 'string') continue
-    if (!url || !token || seen.has(url)) continue
+    const { label, url, key, door } = raw as Record<string, unknown>
+    if (typeof label !== 'string' || typeof url !== 'string' || typeof key !== 'string' || typeof door !== 'string') continue
+    if (!url || !key || !door || seen.has(url)) continue
     seen.add(url)
-    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, token })
+    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, key, door })
   }
   return machines
 }
@@ -384,8 +386,8 @@ export async function readRegistry(
   return {
     projects,
     preferences: sanitizePreferences(obj.preferences),
-    // #1051: kept only as a non-empty string, so a hand-edited registry can't smuggle a junk token.
-    ...(typeof obj.daemonToken === 'string' && obj.daemonToken ? { daemonToken: obj.daemonToken } : {}),
+    // Kept only as a non-empty string, so a hand-edited registry can't smuggle a junk key.
+    ...(typeof obj.bridgeToken === 'string' && obj.bridgeToken ? { bridgeToken: obj.bridgeToken } : {}),
     ...(machines.length ? { machines } : {}),
   }
 }
@@ -400,18 +402,18 @@ export async function readRegistry(
  * now only ever damages the temp file. The temp is left behind on failure rather than swept up:
  * one stray file is the cheaper half of that trade.
  *
- * Written owner-only (#1095): the file carries the daemon token, so a default-umask 0644 in a
+ * Written owner-only (#1095): the file carries the bridge's key and the saved machines' keys, so a default-umask 0644 in a
  * shared home would hand it to every other account on the machine.
  * The mode is set on the temp file, before the rename — narrowing after it would leave a window
  * where the real path is readable. Best-effort: a filesystem with no permission bits still writes.
  */
 async function writeRegistry(registry: Registry, fs: RegistryFs, env: NodeJS.ProcessEnv): Promise<void> {
   const file = registryPath(env)
-  const { projects, preferences, daemonToken, machines } = registry
+  const { projects, preferences, bridgeToken, machines } = registry
   const contents = {
     projects,
     preferences,
-    ...(daemonToken ? { daemonToken } : {}),
+    ...(bridgeToken ? { bridgeToken } : {}),
     ...(machines?.length ? { machines } : {}),
   }
   const json = JSON.stringify(contents, null, 2)
@@ -550,31 +552,29 @@ export async function patchPreferences(
 }
 
 /**
- * The shared daemon token (#1051): read the persisted one, or generate + persist it now. Called
- * only on a non-loopback bind, so a loopback-only machine never grows one. Serialized with the
- * other mutators so two concurrent binds can't each write a different token. `base64url` of 32
- * random bytes: URL-safe, so it drops straight into a `?token=` without encoding.
+ * The browser bridge's key (#1237): read the persisted one, or generate + persist it now. Called
+ * only with the bridge switched on, so a machine that never had it on never grows one. Serialized
+ * with the other mutators so two concurrent starts can't each write a different key.
  */
-export async function ensureDaemonToken(
+export async function ensureBridgeToken(
   fs: RegistryFs = nodeRegistryFs(),
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<string> {
   return serialize(async () => {
     const registry = await readRegistry(fs, env)
-    if (registry.daemonToken) return registry.daemonToken
-    const daemonToken = randomBytes(32).toString('base64url')
-    await writeRegistry({ ...registry, daemonToken }, fs, env)
-    return daemonToken
+    if (registry.bridgeToken) return registry.bridgeToken
+    const bridgeToken = randomBytes(32).toString('base64url')
+    await writeRegistry({ ...registry, bridgeToken }, fs, env)
+    return bridgeToken
   })
 }
 
-/** The persisted daemon token (#1051), or `undefined` when none exists. A pure read, so a process
- * that only prints the reachable URL never generates one. */
-export async function readDaemonToken(
+/** The persisted bridge key, or `undefined` when none exists. A pure read: it never generates one. */
+export async function readBridgeToken(
   fs: RegistryFs = nodeRegistryFs(),
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<string | undefined> {
-  return (await readRegistry(fs, env)).daemonToken
+  return (await readRegistry(fs, env)).bridgeToken
 }
 
 /** The saved machines, newest first. Forgiving like every read of this file: none on a bad file. */
@@ -587,39 +587,43 @@ export async function listMachines(
 
 /**
  * Save a machine, newest first. One per address: saving an address again replaces its name and
- * its key, which is how a machine whose key changed is fixed. Answers the stored record.
+ * its key, which is how a machine whose key changed is fixed. Answers the stored record, and the
+ * records it took the place of (the one saved at that address before, the oldest past the cap):
+ * each still holds a key the caller takes out of its machine.
  */
 export async function addMachine(
-  machine: { url: string; token: string; label?: string },
+  machine: { url: string; key: string; door: string; label?: string },
   fs: RegistryFs = nodeRegistryFs(),
   env: NodeJS.ProcessEnv = process.env,
-): Promise<MachineRecord> {
+): Promise<{ record: MachineRecord; displaced: MachineRecord[] }> {
   return serialize(async () => {
     const registry = await readRegistry(fs, env)
     const record: MachineRecord = {
       id: machine.url,
       label: machine.label?.trim().slice(0, MACHINE_LIMITS.label) || hostOf(machine.url),
       url: machine.url,
-      token: machine.token,
+      key: machine.key,
+      door: machine.door,
     }
-    const machines = [record, ...(registry.machines ?? []).filter(saved => saved.id !== record.id)].slice(0, MACHINE_LIMITS.count)
+    const before = registry.machines ?? []
+    const machines = [record, ...before.filter(saved => saved.id !== record.id)].slice(0, MACHINE_LIMITS.count)
     await writeRegistry({ ...registry, machines }, fs, env)
-    return record
+    return { record, displaced: before.filter(saved => !machines.includes(saved)) }
   })
 }
 
-/** Take a saved machine off the list, by id. Answers whether one was there. */
+/** Take a saved machine off the list, by id. Answers the one that was there. */
 export async function removeMachine(
   id: string,
   fs: RegistryFs = nodeRegistryFs(),
   env: NodeJS.ProcessEnv = process.env,
-): Promise<boolean> {
+): Promise<MachineRecord | undefined> {
   return serialize(async () => {
     const registry = await readRegistry(fs, env)
-    const machines = (registry.machines ?? []).filter(saved => saved.id !== id)
-    if (machines.length === (registry.machines ?? []).length) return false
-    await writeRegistry({ ...registry, machines }, fs, env)
-    return true
+    const removed = (registry.machines ?? []).find(saved => saved.id === id)
+    if (!removed) return undefined
+    await writeRegistry({ ...registry, machines: (registry.machines ?? []).filter(saved => saved.id !== id) }, fs, env)
+    return removed
   })
 }
 

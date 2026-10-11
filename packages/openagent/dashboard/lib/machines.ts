@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react'
-import { onMachines, sendAddMachine, sendRemoveMachine, type AddMachineResult, type Machine } from '../rpc/machines.js'
+import { onMachines, sendAddMachine, sendRemoveMachine, type AddMachineResult, type Machine, type RemoveMachineResult } from '../rpc/machines.js'
 
 // The saved machines: the other computers running OpenAgent that a run can be sent to. The list
 // is the daemon's, kept in the person's home file, so every browser on this computer shows the
@@ -47,7 +47,7 @@ function ensureLoaded(): void {
   window.addEventListener('focus', () => void refreshMachines())
 }
 
-/** Save the machine a pasted address names; the list is read again once the daemon has it. */
+/** Save the machine a pasted link names; the list is read again once the daemon has it. */
 export async function addMachine(pasted: string, label?: string): Promise<AddMachineResult> {
   const result = await sendAddMachine(pasted, label)
   if (result.ok) await refreshMachines()
@@ -55,13 +55,13 @@ export async function addMachine(pasted: string, label?: string): Promise<AddMac
 }
 
 /**
- * Take a saved machine off the list, and answer whether the daemon did. The list is read again
- * either way, so a machine the daemon could not remove is still shown.
+ * Take a saved machine off the list, and answer whether the daemon did, with its reason when it
+ * did not. The list is read again either way, so a machine the daemon did not remove is still shown.
  */
-export async function removeMachine(id: string): Promise<boolean> {
-  const removed = await sendRemoveMachine(id).then(() => true, () => false)
+export async function removeMachine(id: string): Promise<RemoveMachineResult> {
+  const result = await sendRemoveMachine(id).catch((): RemoveMachineResult => ({ ok: false, error: 'The machine could not be removed.' }))
   await refreshMachines()
-  return removed
+  return result
 }
 
 /** The saved machines as reactive state: empty until the daemon has answered. */

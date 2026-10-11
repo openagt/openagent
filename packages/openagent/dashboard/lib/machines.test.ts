@@ -43,10 +43,10 @@ describe('the saved machines', () => {
     render(createElement(List))
     let result: Awaited<ReturnType<typeof addMachine>> | undefined
     await act(async () => {
-      result = await addMachine('http://box.tail.ts:4200/?token=bbb', 'Box')
+      result = await addMachine('http://box.local:4201/_remote-access/enter#bbb', 'Box')
     })
-    expect(result).toEqual({ ok: true, machine: { id: 'http://box.tail.ts:4200', label: 'Box', url: 'http://box.tail.ts:4200' } })
-    expect(machinesRpc.sendAddMachine).toHaveBeenCalledWith('http://box.tail.ts:4200/?token=bbb', 'Box')
+    expect(result).toEqual({ ok: true, machine: { id: 'http://box.local:4201', label: 'Box', url: 'http://box.local:4201' } })
+    expect(machinesRpc.sendAddMachine).toHaveBeenCalledWith('http://box.local:4201/_remote-access/enter#bbb', 'Box')
     expect(screen.getByText('Box')).toBeTruthy()
     expect(localStorage.length).toBe(0)
     expect(JSON.stringify(result)).not.toContain('bbb')
@@ -66,7 +66,7 @@ describe('the saved machines', () => {
     render(createElement(List))
     expect(screen.getByText('Studio')).toBeTruthy()
     await act(async () => {
-      expect(await removeMachine(STUDIO.id)).toBe(true)
+      expect(await removeMachine(STUDIO.id)).toEqual({ ok: true })
     })
     expect(screen.getByText('none')).toBeTruthy()
   })
@@ -76,7 +76,7 @@ describe('the saved machines', () => {
     render(createElement(List))
     machinesRpc.sendRemoveMachine.mockRejectedValueOnce(new Error('the daemon is gone'))
     await act(async () => {
-      expect(await removeMachine(STUDIO.id)).toBe(false)
+      expect(await removeMachine(STUDIO.id)).toEqual({ ok: false, error: 'The machine could not be removed.' })
     })
     expect(screen.getByText('Studio')).toBeTruthy()
   })

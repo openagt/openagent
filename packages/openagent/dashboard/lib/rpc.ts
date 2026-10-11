@@ -1,8 +1,7 @@
 import type { LiveFeedEvent } from '../../src/dashboard-rpc/index.js'
 
 // The dashboard's whole transport (F3): `POST /_rpc/<name>` for calls, `GET /_rpc/events` for the
-// live feed. Same-origin, so the browser attaches the daemon's cookie by itself and there is
-// nothing to configure.
+// live feed. Same-origin, so there is nothing to configure.
 //
 // This replaced Telefunc. What Telefunc gave was type-safety across a package boundary, which A7
 // removed — the signatures are now imported directly from the implementations, one package away

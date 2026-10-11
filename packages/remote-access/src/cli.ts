@@ -47,7 +47,7 @@ export interface Status {
 const isListening = (store: Store): boolean => store.on && store.listening !== undefined && pidAlive(store.listening.pid)
 
 /** Why a door that is switched on does not listen, when its own process said nothing: that process is not running. */
-const NOT_RUNNING = 'The door opens once OpenAgent runs on this computer. An OpenAgent started with --host does not open it.'
+const NOT_RUNNING = 'The door opens once OpenAgent runs on this computer.'
 
 function statusOf(store: Store): Status {
   const listening = isListening(store)
