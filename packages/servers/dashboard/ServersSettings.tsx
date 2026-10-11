@@ -164,7 +164,7 @@ export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsPro
           <span>
             {account !== undefined ? `Copy my GitHub login (${account}) to the server.` : 'Copy my GitHub login to the server.'}{' '}
             <span className="text-muted-foreground">
-              {noLogin ?? 'It can do there all it can do here, and every agent that runs on the server works with it.'}
+              {noLogin ?? "It can do there all it can do here, and every agent that runs on the server works with it. It goes there at the install's end, to a server met for the first time too, whose key is taken as it is."}
             </span>
           </span>
         </label>

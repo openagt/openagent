@@ -29,6 +29,8 @@ already made, and lists it in its pull request; for anything else it proposes an
 ## The server's logins
 - The GitHub login is this computer's own, copied to the server when the person ticks it.
   Picked over a login of the server's own.
+- A ticked login is copied at the install's end, to a server met for the first time too.
+  Picked over waiting until the person has looked at the server's key.
 - The Claude login is made new for the server by one press on this computer, with
   `claude setup-token`, and lasts a year. This computer's own Claude login is never copied:
   used on two computers, it logs one of them out.
