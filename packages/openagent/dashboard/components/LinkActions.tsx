@@ -92,18 +92,19 @@ export function LinkActions({
         const rested = done.has(actionKey(action))
         const content = rested ? (
           <>
-            <Check className="h-3.5 w-3.5" aria-hidden /> {action.doneLabel ?? action.label}
+            <Check className="h-3.5 w-3.5" aria-hidden /> <span className="max-md:min-w-0 max-md:truncate">{action.doneLabel ?? action.label}</span>
           </>
         ) : (
           <>
             {Icon && <Icon className="h-3.5 w-3.5" aria-hidden />}
-            {label ? label(action) : action.label}
+            <span className="max-md:min-w-0 max-md:truncate">{label ? label(action) : action.label}</span>
           </>
         )
         const props: ButtonProps = {
           variant,
           size,
-          className: 'shrink-0 gap-1.5',
+          // On a phone the button gives up width, and its words are cut with an ellipsis.
+          className: 'gap-1.5 md:shrink-0 max-md:min-w-0',
           disabled: disabled || running !== null || rested,
           onClick: () => void run(action),
         }

@@ -201,7 +201,8 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                         const says = said?.id === id ? said : undefined
                         return (
                           <li key={id} aria-label={title} className={cn('p-4', saving && 'opacity-60')}>
-                            <div className="flex items-start justify-between gap-4">
+                            {/* On a phone the buttons go under the words, which need the whole width. */}
+                            <div className="flex items-start justify-between gap-4 max-md:flex-col">
                               <div className="min-w-0">
                                 <p className="flex flex-wrap items-baseline gap-x-2 text-sm">
                                   <span className="font-mono font-medium">{title}</span>

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react'
-import { hoverTooltip } from '../test-utils.js'
+import { hoverTooltip, phoneScreen } from '../test-utils.js'
 import type { ReactElement, ReactNode } from 'react'
 import type { AgentView } from '../lib/live-state.js'
 import { ModulesContext, type MountedModules, type MountedPanel } from '../lib/use-modules.js'
@@ -362,5 +362,66 @@ describe('RightRail, a changed file asked for from the chat', () => {
     rerender(<RightRail {...baseProps} />)
     await act(async () => {})
     expect(screen.getByRole('tab', { name: /Files/ }).getAttribute('aria-selected')).toBe('true')
+  })
+})
+
+// A phone has no width for a column beside the page (#1824).
+describe('RightRail on a phone', () => {
+  let wide: () => void
+  beforeEach(() => {
+    wide = phoneScreen()
+  })
+  afterEach(() => wide())
+  const rail = (container: HTMLElement) => container.querySelector('aside')!
+
+  test('open, it covers the page instead of taking half of it', () => {
+    const { container } = render(<RightRail {...baseProps} />)
+    const classes = rail(container).className.split(' ')
+    for (const cls of ['absolute', 'inset-0', 'bg-background']) expect(classes).toContain(cls)
+    for (const cls of ['w-1/2', 'min-w-[22rem]', 'shrink-0']) expect(classes).not.toContain(cls)
+    // Over the menu's button, which lies over the page's top left corner.
+    expect(classes).toContain('z-20')
+    // The way back to the page is in it.
+    expect(screen.getByRole('button', { name: 'Close the side panel' })).toBeTruthy()
+  })
+
+  test('closed, it is its button over the page\'s top right corner, and takes no column', () => {
+    localStorage.removeItem('oa.side-panel')
+    const { container } = render(<RightRail {...baseProps} />)
+    const classes = rail(container).className.split(' ')
+    for (const cls of ['absolute', 'top-0', 'right-0']) expect(classes).toContain(cls)
+    fireEvent.click(screen.getByRole('button', { name: 'Open the side panel' }))
+    expect(rail(container).className.split(' ')).toContain('inset-0')
+  })
+
+  test('leaving the page closes it: no page is found covered on coming back', () => {
+    const { rerender } = render(<RightRail {...baseProps} />)
+    expect(screen.getByRole('button', { name: 'Close the side panel' })).toBeTruthy()
+    rerender(<RightRail {...baseProps} agentId="r2" />)
+    rerender(<RightRail {...baseProps} />)
+    expect(screen.getByRole('button', { name: 'Open the side panel' })).toBeTruthy()
+  })
+
+  test('going to a page with no panel closes it too', () => {
+    const { unmount } = render(<RightRail {...baseProps} />)
+    unmount()
+    expect(JSON.parse(localStorage.getItem('oa.side-panel') ?? '[]')).not.toContain('p1/r1')
+  })
+
+  test('a phone turned on its side, wide now, keeps its panel open', () => {
+    const { container } = render(<RightRail {...baseProps} />)
+    expect(rail(container).className.split(' ')).toContain('inset-0')
+    act(() => wide())
+    expect(rail(container).className.split(' ')).toContain('w-1/2')
+    expect(screen.getByRole('button', { name: 'Close the side panel' })).toBeTruthy()
+    expect(JSON.parse(localStorage.getItem('oa.side-panel') ?? '[]')).toContain('p1/r1')
+  })
+
+  test('on a wide screen leaving the page keeps it open, as the person left it', () => {
+    wide()
+    const { rerender } = render(<RightRail {...baseProps} />)
+    rerender(<RightRail {...baseProps} agentId="r2" />)
+    rerender(<RightRail {...baseProps} />)
+    expect(screen.getByRole('button', { name: 'Close the side panel' })).toBeTruthy()
   })
 })

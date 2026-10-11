@@ -44,7 +44,7 @@ export function OpenQuestions({
                 type="button"
                 aria-label={`Open ${label}: needs input, ${question.choice.title}`}
                 onClick={() => onOpenAgent(question.projectId, question.agentId)}
-                className="flex w-full items-center gap-3 overflow-hidden whitespace-nowrap rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent/40"
+                className="flex w-full items-center overflow-hidden whitespace-nowrap rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent/40 md:gap-3 max-md:flex-wrap max-md:gap-x-3 max-md:gap-y-0.5"
               >
                 <span className="flex shrink-0 items-center gap-1.5 text-xs text-warning">
                   <span className="h-2 w-2 rounded-full bg-warning" aria-hidden />
@@ -52,8 +52,8 @@ export function OpenQuestions({
                 </span>
                 {/* The title and the question are the two parts that give up width, each cut with an
                     ellipsis: in a narrow column the row still fits, and nothing scrolls sideways. */}
-                <span className="min-w-0 max-w-[50%] shrink truncate text-foreground">{label}</span>
-                <span className="min-w-0 flex-auto truncate text-muted-foreground">{question.choice.title}</span>
+                <span className="min-w-0 shrink truncate text-foreground md:max-w-[50%] max-md:flex-1">{label}</span>
+                <span className="min-w-0 truncate text-muted-foreground md:flex-auto max-md:order-last max-md:basis-full">{question.choice.title}</span>
                 <span className="shrink-0 text-xs text-muted-foreground">{question.projectName}</span>
                 {waiting && <span className="shrink-0 text-xs text-muted-foreground">{waiting}</span>}
                 <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />

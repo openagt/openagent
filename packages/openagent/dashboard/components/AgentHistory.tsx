@@ -26,6 +26,7 @@ import {
   SidebarFooter,
   SidebarMenu,
   SidebarMenuItem,
+  useSidebar,
 } from './ui/sidebar.js'
 import { ScrollArea } from './ui/scroll-area.js'
 // Global chrome relocated off the removed top navbar (#772 follow-up): the sidebar is the app's
@@ -128,6 +129,15 @@ export function AgentHistory({
    *  put the highlight on the running/optimistic row rather than the New row until the shell adopts
    *  the agent's real id. An agent that did report one is selected by URL instead (#784). */
 }) {
+  // On a phone the rail is a sheet over the page, opened from the page's top left corner
+  // (MenuButton): going somewhere from it closes it.
+  const { isMobile, setOpenMobile } = useSidebar()
+  const leave =
+    <A extends unknown[]>(go: (...args: A) => void) =>
+    (...args: A) => {
+      setOpenMobile(false)
+      go(...args)
+    }
   // The coding agent picked for the next start: the stand-in row's logo.
   const preferences = usePreferences()
   // The optimistic row, and the id of the run it stands in for.
@@ -231,7 +241,7 @@ export function AgentHistory({
       {...(row.agent.otherHost && row.agent.host ? { startedOn: row.agent.host } : {})}
       cloudState={cloudRunState(row.agent, Date.now())}
       {...(row.agent.remoteLabel ? { remoteLabel: row.agent.remoteLabel } : {})}
-      onClick={row.onClick}
+      onClick={leave(row.onClick)}
       onNear={row.onNear}
     />
   )
@@ -239,14 +249,15 @@ export function AgentHistory({
   return (
     // A fixed-width, in-flow column (`collapsible="none"`): with the top navbar gone (#772
     // follow-up), the sidebar carries the app's chrome — brand, global nav, and the utility
-    // controls in the footer — so the workspace and right rail get the full height.
-    <Sidebar collapsible="none" className="w-(--sidebar-width) border-r border-sidebar-border">
+    // controls in the footer — so the workspace and right rail get the full height. A phone has no
+    // width for a column: there it is a sheet over the page, closed until asked for.
+    <Sidebar collapsible={isMobile ? 'offcanvas' : 'none'} className="w-(--sidebar-width) border-r border-sidebar-border">
       {/* The brand and the project select, set apart from everything below by a rule (#1513): the
           project picked here is the one every page under it shows. */}
       <SidebarHeader className="gap-3 border-b border-sidebar-border pb-3">
         {/* The mark + wordmark, the way home (#909), now that there is no navbar to hold them. */}
         <div className="px-1 pt-1">
-          <BrandLink working={working} href={homeHref} onNavigate={onDashboard} />
+          <BrandLink working={working} href={homeHref} onNavigate={leave(onDashboard)} />
         </div>
         <ProjectSelect projects={projects} scope={scope} onScope={onScope} onProjectAdded={onProjectAdded} />
       </SidebarHeader>
@@ -260,18 +271,18 @@ export function AgentHistory({
           scope={scope}
           projects={projects}
           active={atProjectLauncher}
-          onNewAgentInProject={onNewAgentInProject}
-          onSelect={onSelect}
+          onNewAgentInProject={onNewAgentInProject && leave(onNewAgentInProject)}
+          onSelect={leave(onSelect)}
           onProjectAdded={onProjectAdded}
         />
         {/* Overview: the way home, its own nav item directly under New and above the session list,
             more prominent than a menu row. Only this — the current view — carries the active fill. */}
-        <OverviewButton active={projectId === null && activePage === null} count={interventionCount} onClick={onDashboard} />
+        <OverviewButton active={projectId === null && activePage === null} count={interventionCount} onClick={leave(onDashboard)} />
         {/* The modules' pages the shell hands over (#1774), the picked project's only when one is
             picked: destinations with no project selected, like the Overview, named by the module,
             never by the dashboard — the tickets' page among them, when a package brings one. */}
         {pages.map(page => (
-          <NavRow key={page.segment} icon={page.icon ?? Blocks} label={page.label} active={activePage === page.segment} onClick={() => onPage(page.segment)} />
+          <NavRow key={page.segment} icon={page.icon ?? Blocks} label={page.label} active={activePage === page.segment} onClick={leave(() => onPage(page.segment))} />
         ))}
       </SidebarHeader>
       {/* The themed ScrollArea (#913) instead of the sidebar's native overflow bar, matching the
@@ -298,7 +309,7 @@ export function AgentHistory({
                   <SidebarMenuItem>
                     {/* Drawn as the run's own row will be a few seconds on (the same words, the same
                         logo, not dimmed), so that row taking its place changes nothing on screen. */}
-                    <AgentHistoryRow status="running" intent={optimistic?.intent ?? undefined} subtitle={crossProject && startProjectName ? `${startProjectName} · just now` : 'just now'} driver={preferences.driver} active={starting} standIn onClick={() => onSelect(null)} />
+                    <AgentHistoryRow status="running" intent={optimistic?.intent ?? undefined} subtitle={crossProject && startProjectName ? `${startProjectName} · just now` : 'just now'} driver={preferences.driver} active={starting} standIn onClick={leave(() => onSelect(null))} />
                   </SidebarMenuItem>
                 )}
                 {tree.map(({ row, subagents }) => {
@@ -345,7 +356,7 @@ export function AgentHistory({
           <ThemeToggle />
           <NotificationsMenu />
           <Tooltip>
-            <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={onSettings} aria-label="Settings" />}>
+            <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={leave(onSettings)} aria-label="Settings" />}>
               <Settings className="h-4 w-4" aria-hidden />
             </TooltipTrigger>
             <TooltipContent>Settings</TooltipContent>

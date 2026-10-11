@@ -59,7 +59,11 @@ export function AgentActionBar({
   // Only once nothing is writing to the worktree is there a size to say (#798).
   const size = ready ? formatBytes(checkout?.checkout?.sizeBytes, '') : ''
   return (
-    <div className="@container flex items-center gap-2 overflow-hidden px-4 py-2">
+    // On a phone the row's two ends are kept free: the shell lays the menu's button over the left
+    // one (MenuButton) and the side panel's over the right one (RightRail). Each padding is under
+    // its own screen size, never a plain one with a phone's over it: a module's stylesheet carries
+    // its own copy of the plain class, which comes later and would win.
+    <div className="@container flex items-center gap-2 overflow-hidden py-2 md:px-4 max-md:px-11">
       {/* Which session this is, as Claude Code on the web says it: its name, which is the button of
           its menu, and a grey chip with where it runs and its project. The name is the one part
           that gives up width; the chip is cut at a cap and drops out of a bar too narrow for it. It is

@@ -1,21 +1,23 @@
-import { useEffect, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 
-// Below this the sidebar switches to an off-canvas Sheet (shadcn's default). matchMedia only runs
-// in the effect, so the first paint resolves to `false` and it flips once mounted.
-const MOBILE_BREAKPOINT = 768
+// Below this the screen is a phone's: the sidebar is a sheet over the page (shadcn's default), and
+// the side panel covers the page. Word for word the question Tailwind's `max-md` asks, so the
+// classes and this never disagree: a rem here follows the browser's own font size, as it does there.
+const PHONE = '(width < 48rem)'
 
+// jsdom has no matchMedia; not-mobile there rather than throwing.
+const query = () => (typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia(PHONE) : undefined)
+
+/** Whether the screen is a phone's, now. */
+export const isMobileScreen = () => query()?.matches ?? false
+
+function subscribe(listener: () => void) {
+  const mql = query()
+  mql?.addEventListener('change', listener)
+  return () => mql?.removeEventListener('change', listener)
+}
+
+/** Whether the screen is a phone's, read at the first paint: the app has no server render to agree with. */
 export function useIsMobile() {
-  const [isMobile, setIsMobile] = useState<boolean | undefined>(undefined)
-
-  useEffect(() => {
-    // jsdom has no matchMedia; default to not-mobile there rather than throwing.
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
-    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
-    const onChange = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-    mql.addEventListener('change', onChange)
-    setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-    return () => mql.removeEventListener('change', onChange)
-  }, [])
-
-  return !!isMobile
+  return useSyncExternalStore(subscribe, isMobileScreen, () => false)
 }

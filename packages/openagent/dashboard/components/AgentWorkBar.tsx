@@ -28,7 +28,8 @@ export function AgentWorkBar({
   if (branch === undefined || !show) return null
   return (
     <div className="mx-auto w-full max-w-3xl px-2 pt-2">
-      <div role="group" aria-label="This agent's work" className="flex h-9 items-center gap-2 overflow-hidden rounded-lg border border-border px-3 text-xs">
+      {/* One line; on a phone it is as many as its parts need, the next step on a line of its own. */}
+      <div role="group" aria-label="This agent's work" className="flex items-center overflow-hidden rounded-lg border border-border px-3 text-xs md:h-9 md:gap-2 max-md:min-h-9 max-md:flex-wrap max-md:gap-x-2 max-md:gap-y-1 max-md:py-1.5">
         {projectName && (
           <span className="max-w-32 shrink-0 truncate text-muted-foreground" title={projectName}>
             {projectName}
@@ -53,7 +54,7 @@ export function AgentWorkBar({
           </Tooltip>
         )}
         <div className="grow" />
-        <div className="flex shrink-0 items-center gap-2">{actions}</div>
+        <div className="flex items-center gap-2 md:shrink-0 max-md:min-w-0 max-md:flex-wrap">{actions}</div>
       </div>
     </div>
   )

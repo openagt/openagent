@@ -53,3 +53,24 @@ export async function configureFirst(menuAriaLabel: string | RegExp): Promise<vo
   await openMenu(await screen.findByRole('button', { name: menuAriaLabel }))
   fireEvent.click(await screen.findByText('Configure first, then run'))
 }
+
+/**
+ * Make the test's screen a phone's until the returned undo is called. jsdom has no `matchMedia`, so
+ * the dashboard reads a wide screen there; this answers the one question it asks of it, whether the
+ * screen is narrower than a width. The undo tells whoever watches the screen that it grew wide.
+ */
+export function phoneScreen(): () => void {
+  const had = window.matchMedia
+  const listeners = new Set<() => void>()
+  window.matchMedia = ((media: string) => ({
+    matches: media.includes('width <'),
+    media,
+    addEventListener: (_: string, listener: () => void) => listeners.add(listener),
+    removeEventListener: (_: string, listener: () => void) => listeners.delete(listener),
+  })) as unknown as typeof window.matchMedia
+  // The undo is the screen growing wide: whoever watches it is told.
+  return () => {
+    window.matchMedia = had
+    for (const listener of [...listeners]) listener()
+  }
+}

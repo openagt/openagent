@@ -14,6 +14,7 @@ import { usePolled } from '../lib/use-async.js'
 import { onDocs } from '../rpc/reads.js'
 import { setSidePanelOpen, sidePanelName, useSidePanelOpen } from '../lib/side-panel.js'
 import { useRevealedChange } from '../lib/reveal-change.js'
+import { isMobileScreen, useIsMobile } from '../lib/use-mobile.js'
 import { PanelRightClose, PanelRightOpen } from 'lucide-react'
 
 /** The rail's own tabs, and a module's tab by its package and id. */
@@ -95,6 +96,16 @@ export function RightRail({
 
   const panelName = sidePanelName(projectId ?? '', agentId)
   const open = useSidePanelOpen(panelName)
+  // On a phone the open panel covers the page, so leaving the page closes it: no page is found
+  // covered on coming back. Leaving only: a phone turned on its side, wide now, keeps its panel.
+  const isMobile = useIsMobile()
+  useEffect(
+    () => () => {
+      if (isMobileScreen()) setSidePanelOpen(panelName, false)
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [projectId, agentId],
+  )
   const [tab, setTab] = useState<Tab>('docs')
   // Once the user picks a tab, stop auto-defaulting (#695/U22) — only a genuinely new choice
   // gate or the first view may still pull focus after that.
@@ -150,7 +161,9 @@ export function RightRail({
       <TooltipContent>{open ? 'Close the side panel' : `Open the side panel: ${tabs.map(t => panels.find(panel => panelTab(panel) === t)?.label ?? TABS[t as 'views' | 'docs'].label).join(', ')}`}</TooltipContent>
     </Tooltip>
   )
-  if (!open) return <aside className="flex shrink-0 flex-col p-2">{toggle}</aside>
+  // Closed, the panel is its button, in a column of its own; a phone has no width for a column, so
+  // there the button lies over the top right corner of the page, which the page's top row keeps free.
+  if (!open) return <aside className={cn('flex shrink-0 flex-col p-2', isMobile && 'absolute top-0 right-0 z-10')}>{toggle}</aside>
   // The remembered tab may have just lost its content (the last doc deleted, a gate resolved), so
   // fall back to the first one that still exists rather than rendering an empty panel.
   const active: Tab = tabs.includes(tab) ? tab : tabs[0]!
@@ -167,8 +180,9 @@ export function RightRail({
   const activeProps: ModulePanelProps = activePanel?.changes && reveal ? { ...panelProps, reveal } : panelProps
 
   return (
-    // Open, the panel takes half the page, as Claude Code's does: a diff needs the room.
-    <aside className="flex w-1/2 min-w-[22rem] shrink-0 flex-col border-l border-border">
+    // Open, the panel takes half the page, as Claude Code's does: a diff needs the room. On a phone
+    // half a page is no room: it covers the page, the menu's button included, until it is closed.
+    <aside className={isMobile ? 'absolute inset-0 z-20 flex flex-col bg-background' : 'flex w-1/2 min-w-[22rem] shrink-0 flex-col border-l border-border'}>
       {/* flex-wrap: without it the tail of a long row of tabs clipped (#948).
           Announced as the tabset it visually is. */}
       <div className="flex items-start gap-1 p-2">
