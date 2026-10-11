@@ -27,6 +27,7 @@ export function AgentFeed({
   setup,
   onOpenAgent,
   onOpenChange,
+  onOpenScreen,
 }: {
   events: OpenAgentEvent[]
   /** The feed's own project: with it, an answered question is its ✓ card and an open one is no
@@ -58,6 +59,8 @@ export function AgentFeed({
   onOpenAgent?: ((agentId: string) => void) | undefined
   /** Show a changed file's change: a click on a file's row at the end of a turn. */
   onOpenChange?: ((path: string) => void) | undefined
+  /** Show the run's live screen: what the row of a live screen does on a click. */
+  onOpenScreen?: (() => void) | undefined
 }) {
   const lostBanner = lost && (
     <div role="status" className="flex items-center gap-2 border-b border-border bg-warning/10 px-4 py-2 text-xs text-warning">
@@ -93,6 +96,7 @@ export function AgentFeed({
         setup={setup}
         onOpenAgent={onOpenAgent}
         onOpenChange={onOpenChange}
+        onOpenScreen={onOpenScreen}
       />
     </>
   )

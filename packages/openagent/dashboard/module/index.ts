@@ -200,6 +200,11 @@ export interface ModulePanel {
    * on it, and hands it the file as `reveal`. Without such a tab, those rows open nothing.
    */
   changes?: true
+  /**
+   * This tab shows a run's live screen ({@link ModuleHost.watchScreen}). The chat's row of a live
+   * screen then opens the side panel on it. Without such a tab, that row is a line of text.
+   */
+  screen?: true
   /** The tab's contents. */
   Panel: ComponentType<ModulePanelProps>
 }
@@ -310,6 +315,14 @@ export interface ModuleHost {
    * pastes it under Machines. This computer is let in there with it, once, and keeps its key.
    */
   addMachine(link: string, label?: string): Promise<MachineAdded>
+  /**
+   * What the live screen of a run shows, as the screen's own stream of bytes, until `signal` ends
+   * it; nothing when the run has no live screen. OpenAgent asks the computer the run is on, which
+   * may be another machine: the bytes are that computer's, to read as data and never to run.
+   */
+  watchScreen(projectId: string, agentId: string, signal: AbortSignal): Promise<ReadableStream<Uint8Array> | undefined>
+  /** Send the live screen of a run what the person did on it, as JSON; whether the screen took it. */
+  sendToScreen(projectId: string, agentId: string, input: unknown): Promise<boolean>
 }
 
 /** A saved machine, as a module sees it: never this computer's key there. */

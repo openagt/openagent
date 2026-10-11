@@ -28,6 +28,12 @@ export const INERT_HOST_SERVICES: HostServices = {
   async addMachine() {
     return { ok: false, error: 'no dashboard to save a machine in' }
   },
+  async watchScreen() {
+    return undefined
+  },
+  async sendToScreen() {
+    return false
+  },
 }
 
 /** Set by the shell around the whole dashboard: the services every module's host is built from. */

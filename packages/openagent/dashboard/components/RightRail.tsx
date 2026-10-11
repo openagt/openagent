@@ -13,7 +13,7 @@ import { cn } from '../lib/utils.js'
 import { usePolled } from '../lib/use-async.js'
 import { onDocs } from '../rpc/reads.js'
 import { setSidePanelOpen, sidePanelName, useSidePanelOpen } from '../lib/side-panel.js'
-import { useRevealedChange } from '../lib/reveal-change.js'
+import { useRevealedChange, useRevealedScreen } from '../lib/reveal-change.js'
 import { isMobileScreen, useIsMobile } from '../lib/use-mobile.js'
 import { PanelRightClose, PanelRightOpen } from 'lucide-react'
 
@@ -126,6 +126,16 @@ export function RightRail({
     touched.current = true
     setTab(changesTab)
   }, [revealedAt, changesTab])
+  // A live screen asked for from the chat: the tab that shows it is shown.
+  const screenAsked = useRevealedScreen(panelName)
+  const screenPanel = panels.find(panel => panel.screen)
+  const screenTab = screenPanel ? panelTab(screenPanel) : undefined
+  useEffect(() => {
+    if (screenAsked === undefined || screenTab === undefined || screenAsked <= revealShown) return
+    revealShown = screenAsked
+    touched.current = true
+    setTab(screenTab)
+  }, [screenAsked, screenTab])
   const hasViews = views.length > 0
   const firstPanel = panels[0] ? panelTab(panels[0]) : undefined
 

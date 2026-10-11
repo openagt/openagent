@@ -12,6 +12,7 @@ import { MODULES_PREFIX, serveModuleFile } from './module-serve.js'
 import type { AddProjectResult, RemoveProjectResult, StartAgentOptions, StartAgentResult } from './types.js'
 import type { EventsSource, RemoteAgents } from './rpc-serve.js'
 import { handleRelayRequest, RELAY_PREFIX, type RelayHandlers } from './relay-endpoints.js'
+import { handleScreenRequest, kept, SCREEN_PREFIX, type ScreenHandlers } from './screen.js'
 import { BRIDGE_PREFIX, EXPECTED_EXTENSION_VERSION, handleBridgeRequest, type BridgeHandlers } from './bridge-endpoints.js'
 import { bridgeQuestions } from './bridge-store.js'
 import { bridgeStarts } from './bridge-starts.js'
@@ -81,6 +82,12 @@ export interface DashboardOptions {
     rpc?: (projectId: string, fn: string, args: unknown[]) => Promise<unknown>
   }
   /**
+   * Where the live screen of a run on this computer answers (screen.ts): what the `/_screen/*`
+   * routes, and the relay's for another machine, pass a watcher's calls on to. Absent leaves
+   * every screen route 404.
+   */
+  screen?: (projectId: string, agentId: string) => Promise<string | undefined>
+  /**
    * The browser bridge (#1237): the token a Claude web extension presents to report the question
    * its cloud session is parked on. Absent leaves every `/_bridge/*` route 404, which is default.
    *
@@ -144,9 +151,11 @@ export function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
   })
 
   // The machine-to-daemon relay endpoints (#1067): wired only when an events tail is supplied.
+  const localScreen = opts.screen ? kept(opts.screen) : undefined
   const relayHandlers: RelayHandlers | undefined = opts.relay
-    ? { project: opts.relay.project, start: opts.onStart, tailEvents: opts.relay.tailEvents, ...(opts.relay.rpc ? { rpc: opts.relay.rpc } : {}) }
+    ? { project: opts.relay.project, start: opts.onStart, tailEvents: opts.relay.tailEvents, ...(opts.relay.rpc ? { rpc: opts.relay.rpc } : {}), ...(localScreen ? { screen: localScreen } : {}) }
     : undefined
+  const screenHandlers: ScreenHandlers | undefined = localScreen ? { local: localScreen, remote: agentId => opts.remote.target(agentId) } : undefined
 
   // The browser bridge (#1237). Off unless a token was supplied, and it carries that token itself.
   const bridgeHandlers: BridgeHandlers | undefined = opts.bridgeToken
@@ -214,6 +223,16 @@ export function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
       void handleRelayRequest(req, res, pathname, relayHandlers)
       return
     }
+    // A run's live screen (screen.ts): a click on it acts in the agent's browser, so it carries
+    // the same guard as the RPC mount.
+    if (pathname === SCREEN_PREFIX || pathname.startsWith(`${SCREEN_PREFIX}/`)) {
+      if (!guardBrowserOrigin(req, res) || !guardOwnPageFetch(req, res)) return
+      void handleScreenRequest(req, res, pathname, screenHandlers).catch(() => {
+        if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain' }).end('the screen failed')
+        else res.destroy()
+      })
+      return
+    }
     if (pathname === RPC_PREFIX || pathname.startsWith(`${RPC_PREFIX}/`)) {
       void rpcMount(req, res)
       return
@@ -258,6 +277,20 @@ function closeServer(server: Server): Promise<void> {
   // Force-close keep-alive + streaming sockets (e.g. an open /_relay/events body, #1067) so close() resolves instead of waiting on them.
   server.closeAllConnections()
   return new Promise(resolvePromise => server.close(() => resolvePromise()))
+}
+
+/**
+ * A watched screen makes the run's computer draw pictures, and watching is a plain GET, which a
+ * browser sends with no `Origin`. So a screen's routes also read what a browser says of where a
+ * request comes from: one another site's page made, and one that is the address bar's own (a
+ * download with no end), is turned away. A browser that says nothing (a page reached over plain
+ * HTTP on the Wi-Fi) is let by, as before. Returns true to admit; on rejection it has answered 403.
+ */
+function guardOwnPageFetch(req: IncomingMessage, res: ServerResponse): boolean {
+  const site = req.headers['sec-fetch-site']
+  if ((site === undefined || site === 'same-origin') && req.headers['sec-fetch-mode'] !== 'navigate') return true
+  res.writeHead(403, { 'content-type': 'text/plain' }).end('forbidden')
+  return false
 }
 
 /**

@@ -20,6 +20,7 @@ import { NotFound } from './components/NotFound.js'
 import { ModulePageView } from './components/ModulePageView.js'
 import { useModules, ModulesContext } from './lib/use-modules.js'
 import { HostServicesContext, type HostServices } from './lib/host-services.js'
+import { sendToScreen, watchScreen } from './lib/screen.js'
 import { startPicks } from './lib/use-start-agent.js'
 import { stashPendingDraft } from './lib/draft-handoff.js'
 import { useLiveEvents } from './lib/use-live-events.js'
@@ -286,6 +287,8 @@ export function App() {
         const added = await addMachine(link, label)
         return added.ok ? { ok: true } : added
       },
+      watchScreen,
+      sendToScreen,
   }
 
   // The live agent feed is owned here so both the main view and the right rail's views tab read

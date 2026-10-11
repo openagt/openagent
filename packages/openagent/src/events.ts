@@ -91,11 +91,12 @@ export type OpenAgentEvent = { at?: string } & (
   /** The wrapped agent's own progress, forwarded verbatim (never gated on). */
   | { kind: 'driver'; event: DriverEvent }
   /**
-   * A live screen something the agent ran is showing: a page on this machine's loopback, shown in
-   * the chat where the line is, while it is the newest open screen at that address and the run
+   * A live screen something the agent ran is showing: where it answers, on the loopback of the
+   * computer the run is on, live while it is the newest open screen at that address and the run
    * has not ended. `label` names what it showed then. The same address with `ended` says the
    * screen has gone. A diary line a command appends itself (agent-driver's `DIARY_ENV`);
-   * OpenAgent knows nothing of what the page is.
+   * OpenAgent passes a watcher's calls on to the address (dashboard/screen.ts) and knows nothing
+   * of what the screen is.
    */
   | { kind: 'screen'; url: string; label: string; ended?: true }
   /** An OpenAgent-level log line. */

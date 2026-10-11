@@ -66,6 +66,7 @@
     "@openagt/servers": "workspace:*",
     "@openagt/init": "workspace:*",
     "@openagt/skill-branches": "workspace:*",
+    "@openagt/skill-browser": "workspace:*",
     "@openagt/skill-github": "workspace:*",
     "@openagt/skill-logs": "workspace:*",
     "@openagt/skill-orchestration": "workspace:*",

@@ -119,7 +119,7 @@ async function liveState(file: string): Promise<HostState | undefined> {
     await rm(file, { force: true })
     return undefined
   }
-  const alive = await fetch(`http://127.0.0.1:${state.port}/state?t=${state.token}`).then(res => res.ok, () => false)
+  const alive = await fetch(`http://127.0.0.1:${state.port}/alive`, { headers: { 'x-browser-token': state.token } }).then(res => res.ok, () => false)
   if (alive) return state
   await rm(file, { force: true })
   return undefined

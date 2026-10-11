@@ -136,6 +136,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     eventsSource: runtime.remoteEventsSource,
     remote: runtime.remoteAgents,
     relay: { project: runtime.projectAt, tailEvents: runtime.tailRelayEvents, rpc: runtime.onRelayRpc },
+    screen: runtime.screenOf,
     // The browser bridge (#1237): absent unless the preference is on, which 404s every route.
     ...(bridgeToken ? { bridgeToken, bridgeSessions: () => listBridgeSessions(env) } : {}),
     // The bridge browser follows its switch (#1332): on launches it, off closes it, without a restart.

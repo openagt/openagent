@@ -12,8 +12,13 @@ already made, and lists it in its pull request; for anything else it proposes an
   `type`, …), which work with any coding agent and outside any scheduler. Picked over the
   scheduler starting a Chrome beside every run and plugging its browser tools into the
   agent, which works with one coding agent and only under the scheduler.
-- A person watching a run sees the browser live in the run's chat, as a message where the
-  agent opened it, and can click and type in it. Picked over a Browser tab on the run page.
+- A person watching a run sees the browser live in a Browser tab beside the run's chat: the
+  browser's toolbar over the live picture, and can click and type in it. The chat keeps one
+  line where the agent opened it, which opens the tab. Picked over the browser as a message
+  in the chat where the agent opened it, and over a frame above the message box: a tab has
+  room for the browser's console under the picture, which comes next.
+- The picture is streamed from the computer the agent runs on, so the tab shows the same
+  on that computer, on a phone and on another computer.
 - A run that stops to ask a question keeps its browser, and its live screen, for the
   answer. Picked over closing the browser at every end of a run.
 - The skill calls the command by its full name and a version range,
