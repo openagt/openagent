@@ -100,8 +100,12 @@ describe('Settings → Devices', () => {
     await screen.findByRole('img', { name: 'The code a new device scans' })
     const byName = qrPath()
     expect(screen.getByText(/The code works once, for five minutes\./)).toBeTruthy()
+    // The same link as text, for another computer to paste where a phone scans.
+    const pasted = (): string => (screen.getByRole('textbox', { name: 'The link another computer pastes' }) as HTMLInputElement).value
+    expect(pasted()).toBe(LINK.url)
     fireEvent.click(screen.getByRole('button', { name: 'Phone does not open it? Use the number.' }))
     expect(qrPath()).not.toBe(byName)
+    expect(pasted()).toBe(LINK.numberUrl)
     expect(screen.queryByRole('button', { name: 'Phone does not open it? Use the number.' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
     expect(screen.queryByRole('img', { name: 'The code a new device scans' })).toBeNull()

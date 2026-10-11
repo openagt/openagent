@@ -1,22 +1,22 @@
 import { useState, type KeyboardEvent } from 'react'
-import { parseMachineUrl } from '../../src/client.js'
+import { parseMachineLink } from '../../src/client.js'
 import { addMachine } from '../lib/machines.js'
 import { Button } from './ui/button.js'
 import { Dialog } from './ui/dialog.js'
 
-// The "Add a machine" modal (#1052). A machine is any reachable daemon — a LAN IP, a tailnet name,
-// a tunnel URL — so the input is not a LAN-IP model but the full `?token=` URL the other machine
-// prints when it is opened to the network (cli.ts). The address and the key are read out of one
-// paste and handed to the daemon, which keeps them: the key is not kept in the browser.
+// The "Add a machine" modal (#1052). The other machine's OpenAgent listens on its own computer
+// only, so this one gets in as a phone does: with the link the other machine gives for a new
+// device, pasted here where a phone scans it. The daemon is let in with it and keeps the key it is
+// answered: no key is kept in the browser.
 
 export function AddMachineDialog({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
   const [url, setUrl] = useState('')
   const [label, setLabel] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const parsed = parseMachineUrl(url)
-  // A pasted URL with no `?token=` cannot authenticate against a guarded machine, so it is not savable.
-  const valid = parsed !== null && parsed.token !== ''
+  // A paste that is no link with a code in it cannot let this computer in, so it is not savable.
+  const parsed = parseMachineLink(url)
+  const valid = parsed !== null
 
   const save = async () => {
     if (!valid || saving) return
@@ -40,12 +40,13 @@ export function AddMachineDialog({ onClose, onAdded }: { onClose: () => void; on
     <Dialog open onOpenChange={next => { if (!next) onClose() }} title="Add a machine">
       <div className="flex w-full flex-col gap-2" onKeyDown={onKeyDown}>
         <p className="text-xs text-muted-foreground">
-          Paste the URL the other machine printed when it was opened to the network (it looks like <code>http://host:port/?token=…</code>).
+          On the other machine, open Settings, find Devices, and press Add device. Copy the link under the code and paste it
+          here. It works once, and for a short time.
         </p>
         <input
           type="text"
           value={url}
-          placeholder="http://host:port/?token=…"
+          placeholder="http://studio.local:4201/…"
           autoFocus
           onChange={e => setUrl(e.target.value)}
           className="w-full rounded-md border border-border bg-background px-2 py-1 font-mono text-xs text-foreground"
@@ -60,7 +61,7 @@ export function AddMachineDialog({ onClose, onAdded }: { onClose: () => void; on
         />
         {url.trim() !== '' && !valid && (
           <p className="text-xs text-warning">
-            {parsed === null ? 'That is not a valid URL.' : 'This URL has no token, so the machine would refuse every call.'}
+            That is not the link another machine gives for a new device.
           </p>
         )}
         {error && (
@@ -73,7 +74,7 @@ export function AddMachineDialog({ onClose, onAdded }: { onClose: () => void; on
             Cancel
           </Button>
           <Button type="button" size="sm" disabled={!valid || saving} onClick={() => void save()}>
-            Add machine
+            {saving ? 'Adding…' : 'Add machine'}
           </Button>
         </div>
       </div>

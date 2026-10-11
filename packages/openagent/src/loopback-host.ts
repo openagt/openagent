@@ -1,15 +1,13 @@
 /**
- * Loopback-address helpers, shared by the daemon (deciding whether a bind gates behind the
- * token, #1051) and the RPC mount (rejecting a rebound `Host`). A leaf module on purpose:
- * `daemon.ts` imports the dashboard, so the mount cannot import these back out of it.
+ * Loopback-address helpers, for the RPC mount (rejecting a cross-origin page and a rebound `Host`).
  */
 
 /** The `127.0.0.0/8` loopback range, in dotted-quad form. */
 const LOOPBACK_V4 = /^127(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/
 
 /**
- * True when `host` is a loopback address the browser reaches without leaving the machine (#1051).
- * A bind-all (`0.0.0.0`, `::`) or a routable address is not, and gates behind the shared token.
+ * True when `host` is a loopback address the browser reaches without leaving the machine.
+ * A bind-all (`0.0.0.0`, `::`) or a routable address is not.
  *
  * The IPv4 check matches the whole `127.0.0.0/8` range but only as an address: a bare
  * `startsWith('127.')` also accepts a *registrable name* like `127.evil.com`, which is exactly the

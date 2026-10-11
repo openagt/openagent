@@ -5,18 +5,18 @@ import type { RelayStartResult } from './remote-run.js'
 import { end, readJsonBody, requireGet, sendJson } from './http.js'
 
 /**
- * The machine-side of the remote-agent relay (#1067): the two endpoints a daemon exposes so another
- * daemon (holding this machine's token) can run a session here and watch it. They live under
- * `/_relay`, behind the shared-token guard (#1051) in {@link startDashboard}. The guard admits a matching
- * `oa_daemon` cookie without the browser-only `?token=` 302, so a daemon-to-daemon call passes with
- * a cookie and a token-less caller is already 401'd before it reaches here.
+ * The machine-side of the remote-agent relay (#1067): the endpoints through which another
+ * machine's daemon runs a session here and watches it. They live under `/_relay`. This daemon
+ * listens on its own computer only: a call from another machine reaches them through whatever
+ * this computer opened to the network, which lets in only a machine that holds a key of its own
+ * and passes its call on as this computer's own would arrive.
  *
  * - `POST /_relay/start`  starts an ordinary local agent and returns its {@link StartAgentResult}.
  * - `GET  /_relay/events?run=<id>&project=<address>` streams that agent's events as
  *   newline-delimited JSON until it ends or the caller disconnects.
- * - `GET  /_relay/ping` (#1072) a cookie-guarded reachability probe: 200 and an empty body, starts
- *   nothing. The online/offline status the dashboard shows is the local daemon calling this on each
- *   saved machine with its token; a token-less caller is already 401'd by the shared-token guard (#1051) above.
+ * - `GET  /_relay/ping` (#1072) a reachability probe: 200 and an empty body, starts nothing. The
+ *   online/offline status the dashboard shows is the local daemon calling this on each saved
+ *   machine with its key there.
  * - `POST /_relay/rpc` (#1067 slice 2) runs one whitelisted run-scoped RPC (a read/diff/steer/handoff/
  *   push/PR) against this machine's own checkout for the daemon relaying an agent here, answering {result}.
  *
@@ -58,8 +58,8 @@ export async function handleRelayRequest(
   pathname: string,
   handlers: RelayHandlers | undefined,
 ): Promise<void> {
-  // Ping is a pure reachability + auth probe (#1072): it needs no wired handlers and starts nothing,
-  // so it answers even on a host that enabled no relay. Reaching here means the cookie already passed.
+  // Ping is a pure reachability probe (#1072): it needs no wired handlers and starts nothing,
+  // so it answers even on a host that enabled no relay.
   if (pathname === `${RELAY_PREFIX}/ping`) return handlePing(req, res)
   if (!handlers) return end(res, 404, 'relay not enabled')
   if (pathname === `${RELAY_PREFIX}/start`) return handleStart(req, res, handlers)
@@ -69,7 +69,7 @@ export async function handleRelayRequest(
 }
 
 /** `GET /_relay/ping` (#1072): answer 200 with an empty body. Starts nothing; only proves this
- * daemon is reachable and the caller's cookie is valid (the shared-token guard (#1051) already enforced that). */
+ * daemon is reachable, and to another machine that its key still lets it in. */
 function handlePing(req: IncomingMessage, res: ServerResponse): void {
   if (!requireGet(req, res)) return
   end(res, 200, '')

@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { startRemoteAgent, streamRemoteEvents, pingRemote, relayRpc, RelayedAgents, type RemoteTarget } from './remote-run.js'
+import { enterRemote, leaveRemote, startRemoteAgent, streamRemoteEvents, pingRemote, relayRpc, RelayedAgents, type RemoteTarget } from './remote-run.js'
 import { type AgentMeta } from '../store/index.js'
 import type { OpenAgentEvent } from '../events.js'
 
@@ -42,23 +42,23 @@ function drain(target: RemoteTarget, agentId: string, timeoutMs = 4000): Promise
   })
 }
 
-test('startRemoteAgent posts to /_relay/start with the oa_daemon cookie, no Origin, and the run body (#1067)', async () => {
-  let captured: { method?: string | undefined; url?: string | undefined; cookie?: string | undefined; origin?: string | undefined; body: unknown } = { body: null }
+test('startRemoteAgent posts to /_relay/start with this computer\'s key, no Origin, and the run body (#1067)', async () => {
+  let captured: { method?: string | undefined; url?: string | undefined; authorization?: string | undefined; origin?: string | undefined; body: unknown } = { body: null }
   const srv = await server((req, res) => {
     let raw = ''
     req.on('data', c => (raw += c))
     req.on('end', () => {
-      captured = { method: req.method, url: req.url, cookie: req.headers.cookie, origin: req.headers.origin, body: JSON.parse(raw) }
+      captured = { method: req.method, url: req.url, authorization: req.headers.authorization, origin: req.headers.origin, body: JSON.parse(raw) }
       res.writeHead(200, { 'content-type': 'application/json' })
       res.end(JSON.stringify({ ok: true, agentId: 'r1' }))
     })
   })
   try {
-    const result = await startRemoteAgent({ url: srv.url, token: 'sekret', project: PROJECT }, { prompt: 'do it', options: { model: 'opus' } })
+    const result = await startRemoteAgent({ url: srv.url, key: 'd1.sekret', project: PROJECT }, { prompt: 'do it', options: { model: 'opus' } })
     assert.deepEqual(result, { ok: true, agentId: 'r1' })
     assert.equal(captured.method, 'POST')
     assert.equal(captured.url, '/_relay/start')
-    assert.equal(captured.cookie, 'oa_daemon=sekret') // the shared-token cookie (#1051), daemon to daemon
+    assert.equal(captured.authorization, 'Bearer d1.sekret') // this computer's own key there
     assert.equal(captured.origin, undefined) // NO Origin header, so it passes the remote CSRF guard
     assert.deepEqual(captured.body, { prompt: 'do it', options: { model: 'opus' }, project: PROJECT }) // the project rides every start
   } finally {
@@ -72,7 +72,7 @@ test('startRemoteAgent surfaces a non-2xx from the machine as an ok:false result
     res.end('unauthorized')
   })
   try {
-    const result = await startRemoteAgent({ url: srv.url, token: 'wrong', project: PROJECT }, { prompt: 'x', options: {} })
+    const result = await startRemoteAgent({ url: srv.url, key: 'd1.wrong', project: PROJECT }, { prompt: 'x', options: {} })
     assert.equal(result.ok, false)
     if (!result.ok) assert.match(result.error, /403|machine/)
   } finally {
@@ -80,18 +80,18 @@ test('startRemoteAgent surfaces a non-2xx from the machine as an ok:false result
   }
 })
 
-test('pingRemote GETs /_relay/ping with the oa_daemon cookie and is true on a 2xx (#1072)', async () => {
-  let captured: { method?: string | undefined; url?: string | undefined; cookie?: string | undefined } = {}
+test('pingRemote GETs /_relay/ping with this computer\'s key and is true on a 2xx (#1072)', async () => {
+  let captured: { method?: string | undefined; url?: string | undefined; authorization?: string | undefined } = {}
   const srv = await server((req, res) => {
-    captured = { method: req.method, url: req.url, cookie: req.headers.cookie }
+    captured = { method: req.method, url: req.url, authorization: req.headers.authorization }
     res.writeHead(200, { 'content-type': 'text/plain' })
     res.end()
   })
   try {
-    assert.equal(await pingRemote({ url: srv.url, token: 'sekret' }), true)
+    assert.equal(await pingRemote({ url: srv.url, key: 'd1.sekret' }), true)
     assert.equal(captured.method, 'GET')
     assert.equal(captured.url, '/_relay/ping')
-    assert.equal(captured.cookie, 'oa_daemon=sekret') // the shared-token cookie (#1051), daemon to daemon
+    assert.equal(captured.authorization, 'Bearer d1.sekret') // this computer's own key there
   } finally {
     await srv.close()
   }
@@ -103,7 +103,7 @@ test('pingRemote is false on a non-2xx from the machine (#1072)', async () => {
     res.end('unauthorized')
   })
   try {
-    assert.equal(await pingRemote({ url: srv.url, token: 'wrong' }), false)
+    assert.equal(await pingRemote({ url: srv.url, key: 'd1.wrong' }), false)
   } finally {
     await srv.close()
   }
@@ -111,7 +111,7 @@ test('pingRemote is false on a non-2xx from the machine (#1072)', async () => {
 
 test('pingRemote is false when the machine is unreachable (#1072)', async () => {
   // A port nothing is listening on: the fetch rejects, which pingRemote swallows as offline.
-  assert.equal(await pingRemote({ url: 'http://127.0.0.1:1', token: 't' }), false)
+  assert.equal(await pingRemote({ url: 'http://127.0.0.1:1', key: 'd1.t' }), false)
 })
 
 test('streamRemoteEvents parses ndjson lines in order and ends when the body closes (#1067)', async () => {
@@ -124,7 +124,7 @@ test('streamRemoteEvents parses ndjson lines in order and ends when the body clo
     res.end()
   })
   try {
-    const { events, ended } = await drain({ url: srv.url, token: 't', project: PROJECT }, 'r1')
+    const { events, ended } = await drain({ url: srv.url, key: 'd1.t', project: PROJECT }, 'r1')
     assert.deepEqual(events.map(e => (e as { sessionId?: string }).sessionId), ['a', 'b'])
     assert.equal(ended, true)
     // The run and its project, by the repository's address: the machine has no other way to find the run's folder.
@@ -144,20 +144,20 @@ test('a line split across two chunks is reassembled, not dropped (#1067)', async
     res.end()
   })
   try {
-    const { events } = await drain({ url: srv.url, token: 't', project: PROJECT }, 'r1')
+    const { events } = await drain({ url: srv.url, key: 'd1.t', project: PROJECT }, 'r1')
     assert.deepEqual(events.map(e => (e as { sessionId?: string }).sessionId), ['split'])
   } finally {
     await srv.close()
   }
 })
 
-test('a 401 from the remote (rotated token) surfaces as a clean stream-end, no events (#1067)', async () => {
+test('a 401 from the remote (this computer was removed there) surfaces as a clean stream-end, no events (#1067)', async () => {
   const srv = await server((_req, res) => {
     res.writeHead(401, { 'content-type': 'text/plain' })
     res.end('unauthorized')
   })
   try {
-    const { events, ended } = await drain({ url: srv.url, token: 'stale', project: PROJECT }, 'r1')
+    const { events, ended } = await drain({ url: srv.url, key: 'd1.stale', project: PROJECT }, 'r1')
     assert.equal(events.length, 0)
     assert.equal(ended, true) // ended cleanly (a done), not an error the caller has to retry
   } finally {
@@ -165,7 +165,7 @@ test('a 401 from the remote (rotated token) surfaces as a clean stream-end, no e
   }
 })
 
-test('RelayedAgents feeds a run stream from the machine and drops its token when the stream ends (#1067)', async () => {
+test('RelayedAgents feeds a run stream from the machine and drops its stream when the stream ends (#1067)', async () => {
   const srv = await server((_req, res) => {
     res.writeHead(200, { 'content-type': 'application/x-ndjson' })
     res.write(`${JSON.stringify({ kind: 'session-update', sessionId: 'hi' })}\n`)
@@ -173,13 +173,13 @@ test('RelayedAgents feeds a run stream from the machine and drops its token when
   })
   try {
     const agents = new RelayedAgents()
-    agents.register('r1', { url: srv.url, token: 't', project: PROJECT }, stubMeta('r1'), 'proj-1')
+    agents.register('r1', { url: srv.url, key: 'd1.t', project: PROJECT }, stubMeta('r1'), 'proj-1')
     const stream = agents.get('r1') // grabbed synchronously, before the remote stream ends
     assert.ok(stream)
     const got: OpenAgentEvent[] = []
     for await (const e of stream!) got.push(e) // replays, then ends when the machine closes the body
     assert.deepEqual(got.map(e => (e as { sessionId?: string }).sessionId), ['hi'])
-    assert.equal(agents.get('r1'), undefined) // dropped: the token no longer lives here
+    assert.equal(agents.get('r1'), undefined) // dropped: nothing more will come
   } finally {
     await srv.close()
   }
@@ -192,7 +192,7 @@ test('RelayedAgents closes cleanly on a 401 with no events (#1067)', async () =>
   })
   try {
     const agents = new RelayedAgents()
-    agents.register('r1', { url: srv.url, token: 'stale', project: PROJECT }, stubMeta('r1'), 'proj-1')
+    agents.register('r1', { url: srv.url, key: 'd1.stale', project: PROJECT }, stubMeta('r1'), 'proj-1')
     const stream = agents.get('r1')
     assert.ok(stream)
     const got: OpenAgentEvent[] = []
@@ -203,23 +203,23 @@ test('RelayedAgents closes cleanly on a 401 with no events (#1067)', async () =>
   }
 })
 
-test('relayRpc posts to /_relay/rpc with the oa_daemon cookie, no Origin, and returns the machine result (#1067 slice 2)', async () => {
-  let captured: { method?: string | undefined; url?: string | undefined; cookie?: string | undefined; origin?: string | undefined; body: unknown } = { body: null }
+test('relayRpc posts to /_relay/rpc with this computer\'s key, no Origin, and returns the machine result (#1067 slice 2)', async () => {
+  let captured: { method?: string | undefined; url?: string | undefined; authorization?: string | undefined; origin?: string | undefined; body: unknown } = { body: null }
   const srv = await server((req, res) => {
     let raw = ''
     req.on('data', c => (raw += c))
     req.on('end', () => {
-      captured = { method: req.method, url: req.url, cookie: req.headers.cookie, origin: req.headers.origin, body: JSON.parse(raw) }
+      captured = { method: req.method, url: req.url, authorization: req.headers.authorization, origin: req.headers.origin, body: JSON.parse(raw) }
       res.writeHead(200, { 'content-type': 'application/json' })
       res.end(JSON.stringify({ result: { dirty: true, branch: 'main' } }))
     })
   })
   try {
-    const result = await relayRpc({ url: srv.url, token: 'sekret', project: PROJECT }, 'onGitStatus', ['pid', 'r1'])
+    const result = await relayRpc({ url: srv.url, key: 'd1.sekret', project: PROJECT }, 'onGitStatus', ['pid', 'r1'])
     assert.deepEqual(result, { dirty: true, branch: 'main' }) // the machine's own result, unwrapped from {result}
     assert.equal(captured.method, 'POST')
     assert.equal(captured.url, '/_relay/rpc')
-    assert.equal(captured.cookie, 'oa_daemon=sekret') // the shared-token cookie (#1051), daemon to daemon
+    assert.equal(captured.authorization, 'Bearer d1.sekret') // this computer's own key there
     assert.equal(captured.origin, undefined) // NO Origin header, so it passes the remote CSRF guard
     assert.deepEqual(captured.body, { fn: 'onGitStatus', args: ['pid', 'r1'], project: PROJECT })
   } finally {
@@ -233,7 +233,7 @@ test('relayRpc throws on a non-2xx from the machine (#1067 slice 2)', async () =
     res.end('rpc failed')
   })
   try {
-    await assert.rejects(relayRpc({ url: srv.url, token: 't', project: PROJECT }, 'onGitStatus', []), /500|machine/)
+    await assert.rejects(relayRpc({ url: srv.url, key: 'd1.t', project: PROJECT }, 'onGitStatus', []), /500|machine/)
   } finally {
     await srv.close()
   }
@@ -245,7 +245,7 @@ test('RelayedAgents.list surfaces a relayed run as a remote row, scoped to its p
   const srv = await server((_req, res) => res.writeHead(200, { 'content-type': 'application/x-ndjson' }))
   try {
     const agents = new RelayedAgents()
-    agents.register('r1', { url: srv.url, token: 't', project: PROJECT }, stubMeta('r1', { intent: 'do it' }), 'proj-1')
+    agents.register('r1', { url: srv.url, key: 'd1.t', project: PROJECT }, stubMeta('r1', { intent: 'do it' }), 'proj-1')
     const rows = agents.list('proj-1') // read before the fetch does anything: the stub is set synchronously
     assert.equal(rows.length, 1)
     assert.equal(rows[0]?.id, 'r1')
@@ -270,7 +270,7 @@ async function relayEndStatus(endEvent: OpenAgentEvent | null): Promise<string |
   })
   try {
     const agents = new RelayedAgents()
-    agents.register('r1', { url: srv.url, token: 't', project: PROJECT }, stubMeta('r1'), 'proj-1')
+    agents.register('r1', { url: srv.url, key: 'd1.t', project: PROJECT }, stubMeta('r1'), 'proj-1')
     await drainAgent(agents, 'r1')
     return agents.list('proj-1')[0]?.status
   } finally {
@@ -294,7 +294,7 @@ test('dispose clears the relayed run list and its machine target (#1077)', async
   })
   try {
     const agents = new RelayedAgents()
-    agents.register('r1', { url: srv.url, token: 't', project: PROJECT }, stubMeta('r1'), 'proj-1')
+    agents.register('r1', { url: srv.url, key: 'd1.t', project: PROJECT }, stubMeta('r1'), 'proj-1')
     assert.equal(agents.list('proj-1').length, 1) // present before shutdown
     agents.dispose()
     assert.deepEqual(agents.list('proj-1'), []) // and gone after
@@ -312,7 +312,7 @@ test('RelayedAgents.target outlives the event stream and dispose clears it (#106
   })
   try {
     const agents = new RelayedAgents()
-    const target = { url: srv.url, token: 't', project: PROJECT }
+    const target = { url: srv.url, key: 'd1.t', project: PROJECT }
     agents.register('r1', target, stubMeta('r1'), 'proj-1')
     const stream = agents.get('r1')
     assert.ok(stream)
@@ -322,6 +322,125 @@ test('RelayedAgents.target outlives the event stream and dispose clears it (#106
     agents.dispose()
     assert.equal(agents.target('r1'), undefined) // cleared on shutdown
   } finally {
+    await srv.close()
+  }
+})
+
+test('a start on a machine that no longer lets this computer in says so', async () => {
+  const srv = await server((_req, res) => {
+    res.writeHead(401, { 'content-type': 'text/plain' })
+    res.end('this device is not in')
+  })
+  try {
+    const target = { url: srv.url, key: 'd1.removed', project: PROJECT }
+    const started = await startRemoteAgent(target, { prompt: 'x', options: {} })
+    assert.deepEqual(started, { ok: false, error: 'this computer is no longer in on the machine: add the machine again, with a new link' })
+  } finally {
+    await srv.close()
+  }
+})
+
+test('enterRemote sends the link\'s code and this computer\'s name where the link points, and answers the key', async () => {
+  let captured: { method?: string | undefined; url?: string | undefined; origin?: string | undefined; body: unknown } = { body: null }
+  const srv = await server((req, res) => {
+    let raw = ''
+    req.on('data', c => (raw += c))
+    req.on('end', () => {
+      captured = { method: req.method, url: req.url, origin: req.headers.origin, body: JSON.parse(raw) }
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ ok: true, key: 'd7.fresh' }))
+    })
+  })
+  try {
+    assert.deepEqual(await enterRemote(`${srv.url}/_remote-access/enter`, 'c0de', 'studio'), { ok: true, key: 'd7.fresh' })
+    assert.equal(captured.method, 'POST')
+    assert.equal(captured.url, '/_remote-access/enter')
+    assert.equal(captured.origin, undefined) // no page made this call
+    assert.deepEqual(captured.body, { code: 'c0de', computer: 'studio' })
+  } finally {
+    await srv.close()
+  }
+})
+
+test('enterRemote says in words why this computer was not let in', async () => {
+  const answers: Array<[number, string]> = [
+    [403, 'this code no longer works'],
+    [403, 'only a device on the same network as this computer gets in'],
+    [403, ''],
+    [500, '<html>boom</html>'],
+    [200, '{"ok":true}'],
+    [200, '<!doctype html>'],
+  ]
+  let next = 0
+  const srv = await server((_req, res) => {
+    const [status, body] = answers[next++]!
+    res.writeHead(status).end(body)
+  })
+  try {
+    const door = `${srv.url}/_remote-access/enter`
+    const spent = await enterRemote(door, 'c', 'studio')
+    assert.equal(spent.ok, false)
+    assert.match(spent.ok ? '' : spent.error, /no longer works.*make a new one/)
+    // Another refusal is told in the machine's own words, not as a link that was used.
+    const elsewhere = await enterRemote(door, 'c', 'studio')
+    assert.deepEqual(elsewhere, { ok: false, error: 'The machine refused: only a device on the same network as this computer gets in.' })
+    assert.deepEqual(await enterRemote(door, 'c', 'studio'), { ok: false, error: 'The machine refused.' })
+    const failed = await enterRemote(door, 'c', 'studio')
+    assert.deepEqual(failed, { ok: false, error: 'The machine refused (500).' })
+    // An answer with no key, or one that is no JSON: not an OpenAgent that lets a machine in.
+    for (let i = 0; i < 2; i++) {
+      const other = await enterRemote(door, 'c', 'studio')
+      assert.match(other.ok ? '' : other.error, /not an OpenAgent that lets a machine in/)
+    }
+    const nobody = await enterRemote('http://127.0.0.1:1/_remote-access/enter', 'c', 'studio')
+    assert.match(nobody.ok ? '' : nobody.error, /did not answer/)
+  } finally {
+    await srv.close()
+  }
+})
+
+test('leaveRemote takes this computer out where it was let in, with its key, and says whether the machine did', async () => {
+  let captured: { method?: string | undefined; url?: string | undefined; authorization?: string | undefined } = {}
+  let status = 200
+  const srv = await server((req, res) => {
+    captured = { method: req.method, url: req.url, authorization: req.headers.authorization }
+    res.writeHead(status).end()
+  })
+  try {
+    const machine = { url: srv.url, key: 'd1.sekret', door: `${srv.url}/_remote-access/enter` }
+    assert.equal(await leaveRemote(machine), true)
+    assert.deepEqual(captured, { method: 'DELETE', url: '/_remote-access/enter', authorization: 'Bearer d1.sekret' })
+    status = 401
+    assert.equal(await leaveRemote(machine), false)
+    assert.equal(await leaveRemote({ url: 'http://127.0.0.1:1', key: 'k', door: 'http://127.0.0.1:1/_remote-access/enter' }), false)
+  } finally {
+    await srv.close()
+  }
+})
+
+test('RelayedAgents says whether a run is still at work on a machine, and reads the kept runs with a new key', async () => {
+  let release: (() => void) | undefined
+  const srv = await server((_req, res) => {
+    res.writeHead(200, { 'content-type': 'application/x-ndjson' })
+    res.write(`${JSON.stringify({ kind: 'session-update', sessionId: 's' })}\n`)
+    release = () => res.end()
+  })
+  const agents = new RelayedAgents()
+  try {
+    assert.equal(agents.working(srv.url), false)
+    agents.register('r1', { url: srv.url, key: 'd1.old', project: PROJECT }, stubMeta('r1'), 'proj-1')
+    assert.equal(agents.working(srv.url), true)
+    assert.equal(agents.working('http://127.0.0.1:1'), false) // another machine
+    for (let i = 0; i < 100 && !release; i++) await new Promise(r => setTimeout(r, 10))
+    release!()
+    await drainAgent(agents, 'r1')
+    assert.equal(agents.working(srv.url), false) // its events ended: nothing is at work there
+    // The run is kept for its reads; a machine added again answers for it with the new key.
+    agents.rekey(srv.url, 'd2.new')
+    agents.rekey('http://127.0.0.1:1', 'other')
+    assert.deepEqual(agents.target('r1'), { url: srv.url, key: 'd2.new', project: PROJECT })
+  } finally {
+    agents.dispose()
     await srv.close()
   }
 })

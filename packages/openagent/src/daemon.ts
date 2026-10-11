@@ -8,8 +8,7 @@ import { defaultModelsSource } from './dashboard/models.js'
 import { startBackgroundServices } from './daemon-services.js'
 import { projectErrorStore } from './project-errors.js'
 import { resolveDashboardBundle } from './dashboard/bundle.js'
-import { ensureDaemonToken, listProjects, nodeRegistryFs, readPreferences, registryPreferencesStore, type Preferences } from './registry.js'
-import { isLoopbackHost } from './loopback-host.js'
+import { ensureBridgeToken, listProjects, nodeRegistryFs, readPreferences, registryPreferencesStore, type Preferences } from './registry.js'
 import { bridgeSessionsFrom } from './dashboard/bridge-sessions.js'
 import { bridgeQuestions } from './dashboard/bridge-store.js'
 import { bridgeBrowserDir, bridgeBrowserOwner, startBridgeBrowser, type BridgeBrowser, type BridgeBrowserOptions } from './bridge-browser.js'
@@ -36,16 +35,6 @@ import type { BridgeSession } from './dashboard/index.js'
 /** The default dashboard port the daemon binds. */
 export const DEFAULT_DAEMON_PORT = 4200
 
-/** The default bind host (#1051): localhost only, so the daemon is unreachable off the machine. */
-export const DEFAULT_DAEMON_HOST = '127.0.0.1'
-
-/**
- * True when `host` is a loopback address the browser reaches without leaving the machine (#1051).
- * Defined in its own leaf module so the dashboard's RPC mount can share the one definition without
- * importing this one back (a cycle); re-exported here for the callers that already had it.
- */
-export { isLoopbackHost }
-
 /** Where the dashboard came up, reported to {@link RunDaemonOptions.onListening}. */
 export interface DaemonState {
   /** The daemon process id. */
@@ -56,8 +45,6 @@ export interface DaemonState {
   url: string
   /** ISO timestamp the daemon started. */
   startedAt: string
-  /** The host the dashboard is bound to (#1051). */
-  host?: string
 }
 
 /** The `.openagent/` directory for a workspace. */
@@ -73,9 +60,6 @@ export { isPidAlive as isProcessAlive } from './store/index.js'
 export interface RunDaemonOptions {
   /** Port to bind. Default {@link DEFAULT_DAEMON_PORT}; pass `0` for an ephemeral port. */
   port?: number
-  /** Host to bind (#1051). Default {@link DEFAULT_DAEMON_HOST}; a non-loopback address generates and
-   * requires the shared token, and every route is then gated behind it. */
-  host?: string
   /** Shut the daemon down when this aborts (in addition to SIGINT/SIGTERM). For tests. */
   signal?: AbortSignal
   /** Env the registry is read from. Default `process.env`; injectable for tests. */
@@ -96,18 +80,11 @@ export interface RunDaemonOptions {
  */
 export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promise<void> {
   const port = opts.port ?? DEFAULT_DAEMON_PORT
-  const host = opts.host ?? DEFAULT_DAEMON_HOST
   const env = opts.env ?? process.env
-  // #1051: a non-loopback bind reaches the network, where a daemon that spawns processes is RCE for
-  // anyone who finds the port, so generate + persist the shared token the request guard requires. A
-  // loopback bind needs none, so the local zero-config path stays byte-identical.
-  const token = isLoopbackHost(host) ? undefined : await ensureDaemonToken(undefined, env)
   // The browser bridge (#1237). Opt-in, because it opens the daemon's one route reachable from
-  // another origin. It reuses the same shared token (#1051) rather than minting a second one: the two
-  // guard the same daemon, so a second secret would be another thing to rotate and leak without
-  // narrowing anything. On a loopback bind that secret may not exist yet, hence ensure, not read.
+  // another origin, behind a key of its own. The key may not exist yet, hence ensure, not read.
   const bridgeOn = (await readPreferences(undefined, env).catch((): Preferences => ({}))).bridge === true
-  const bridgeToken = bridgeOn ? await ensureDaemonToken(undefined, env) : undefined
+  const bridgeToken = bridgeOn ? await ensureBridgeToken(undefined, env) : undefined
   // The project's own `.openagent/` — where its hooks file sits, and where a run's tool keeps
   // the run's card and diary inside the run's checkout. Created up front so the daemon works as the
   // very first command in a fresh workspace, before any run has made the directory.
@@ -146,7 +123,6 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     return (opts.bridgeBrowser ?? (o => startBridgeBrowser(o)))({ daemonUrl, token: bridgeToken, dir: bridgeBrowserDir(env), report })
   }, console.log)
   const dashboard: Dashboard = await startDashboard({
-    host,
     port,
     quota,
     // Which models each coding agent offers: asked on the menu's first read, then kept.
@@ -169,14 +145,13 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     }),
     projectErrors: projectErrors.read,
     bridgeBrowser,
-    ...(token ? { token } : {}),
     ...(clientBundleDir ? { clientBundleDir } : {}),
   })
 
   daemonUrl = dashboard.url
   try {
     const actualPort = Number(new URL(dashboard.url).port) || port
-    opts.onListening?.({ pid: process.pid, port: actualPort, host, url: dashboard.url, startedAt: new Date().toISOString() })
+    opts.onListening?.({ pid: process.pid, port: actualPort, url: dashboard.url, startedAt: new Date().toISOString() })
   } catch (err) {
     // Startup failed after the port was bound. Tear the server down, or it keeps the event loop
     // alive: a zombie process squatting the port.
@@ -197,10 +172,8 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   }
 
   // The services of OpenAgent's own packages: each runs for as long as the daemon does, and is
-  // told the daemon's address. Only beside a loopback bind: a service asks the daemon as this
-  // machine's own browser does, and a daemon opened to the network by `--host` answers only
-  // to its shared token.
-  const packageServices = (opts.packageServices ?? startPackageServices)({ commands: isLoopbackHost(host) ? await builtInServices().catch(() => []) : [], url: dashboard.url, env, log: console.log })
+  // told the daemon's address.
+  const packageServices = (opts.packageServices ?? startPackageServices)({ commands: await builtInServices().catch(() => []), url: dashboard.url, env, log: console.log })
 
   // Everything that runs in the background beside serving the dashboard: the data sync and the
   // cloud sweeps.

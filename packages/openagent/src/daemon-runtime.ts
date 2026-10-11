@@ -75,6 +75,8 @@ export function createProjectRuntime({ cwd, env }: ProjectRuntimeOptions): Proje
   const remoteAgents: RemoteAgents = {
     target: agentId => relayedAgents.target(agentId),
     list: projectId => relayedAgents.list(projectId),
+    working: url => relayedAgents.working(url),
+    rekey: (url, key) => relayedAgents.rekey(url, key),
   }
   // The machine side of the relay (#1067 slice 2): run one whitelisted read/steer/handoff RPC against this
   // daemon's own copy of the project the call named, for a daemon that relayed an agent here.
@@ -125,7 +127,7 @@ export function createProjectRuntime({ cwd, env }: ProjectRuntimeOptions): Proje
       if (!machine) return { ok: false, error: 'That machine is no longer saved. Pick another place to run.' }
       const project = await repositoryAddress(projectCwd)
       if (!project) return { ok: false, error: 'This project has no repository address, so it cannot be sent to another machine.' }
-      const target = { url: machine.url, token: machine.token, project }
+      const target = { url: machine.url, key: machine.key, project }
       const result = await startRemoteAgent(target, { prompt, options: forwarded })
       if (!result.ok) {
         return 'noProject' in result ? { ok: false, error: `${basename(projectCwd)} is not on ${machine.label}. Add it there first.` } : result

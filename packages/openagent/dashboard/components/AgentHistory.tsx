@@ -32,7 +32,6 @@ import { ScrollArea } from './ui/scroll-area.js'
 // Global chrome relocated off the removed top navbar (#772 follow-up): the sidebar is the app's
 // chrome now, so the workspace keeps the full width.
 import { BrandLink } from './BrandLink.js'
-import { ConnectionIndicator } from './ConnectionIndicator.js'
 import { ThemeToggle } from './ThemeToggle.js'
 import { NotificationsMenu } from './NotificationsMenu.js'
 import { readAgentLogAhead } from '../lib/agent-log.js'
@@ -348,10 +347,9 @@ export function AgentHistory({
         </ScrollArea>
       </SidebarContent>
       {/* The navbar's utility controls, relocated to the foot of the sidebar (#772 follow-up):
-          which daemon this is (Local/remote), theme, notifications, and Settings. */}
+          theme, notifications, and Settings. */}
       <SidebarFooter className="border-t border-sidebar-border">
         <div className="flex items-center gap-1">
-          <ConnectionIndicator />
           <div className="min-w-0 flex-1" />
           <ThemeToggle />
           <NotificationsMenu />

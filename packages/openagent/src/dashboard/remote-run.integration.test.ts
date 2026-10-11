@@ -21,9 +21,11 @@ import type { HandoffResult } from './agent-handoff.js'
 // have the same repository in a different folder, cloned a different way, and B has a second
 // project besides. We assert the run is created in B's copy of THAT project, that A ran no hook
 // of its own, and that B's events stream back through A's relayed-run source in order. That is
-// the whole path minus the final same-origin RPC hop on A, which server.test.ts covers on its own.
+// the whole path minus the final same-origin RPC hop on A, which server.test.ts covers on its own,
+// and minus what B opened to the network, which is another package's: A calls B's OpenAgent as
+// that would, once it has let A in.
 
-const TOKEN = 'zX2p8Q0hqk3m9tR7vN1cW4bY6sJ5aL0dFgHiKlMnOp'
+const KEY = 'd1.zX2p8Q0hqk3m9tR7vN1cW4bY6sJ5aL0dFgHiKlMnOp'
 
 async function fakeBundle(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'relay-int-'))
@@ -111,7 +113,6 @@ async function twoMachines(opts: { shopOnB?: boolean } = {}): Promise<TwoMachine
   const b = await startDashboard(
     testDashboardOptions({
       clientBundleDir: bundle,
-      token: TOKEN,
       onStart: bStart,
       relay: { project: runtimeB.projectAt, tailEvents: bTail, rpc: runtimeB.onRelayRpc },
     }),
@@ -122,7 +123,7 @@ async function twoMachines(opts: { shopOnB?: boolean } = {}): Promise<TwoMachine
   const localOnlyA = await repository(join(root, 'a'), 'notes')
   await addProject(shopA, at, undefined, envA)
   await addProject(localOnlyA, at, undefined, envA)
-  const machineB = (await addMachine({ url: b.url, token: TOKEN, label: 'Studio' }, undefined, envA)).id
+  const machineB = (await addMachine({ url: b.url, key: KEY, door: `${b.url}/_remote-access/enter`, label: 'Studio' }, undefined, envA)).record.id
   const a = createProjectRuntime({ cwd: shopA, env: envA })
 
   return {
@@ -192,7 +193,7 @@ test('a run started on a saved machine lands in that machine\'s own copy of the 
     // with its own. B_RUN is not a real session on B, so the publish comes back refused: proof the
     // call ran on B's side (its checkout, its remote) and came back.
     const target = m.a.remoteAgents.target(B_RUN)
-    assert.deepEqual(target, { url: m.b.url, token: TOKEN, project: 'github.com/acme/shop' })
+    assert.deepEqual(target, { url: m.b.url, key: KEY, project: 'github.com/acme/shop' })
     const push = (await relayRpc(target!, 'sendOpenPullRequest', [shopIdA, B_RUN])) as HandoffResult
     assert.equal(push.ok, false)
     // The same call for a project B does not have reaches no project at all.

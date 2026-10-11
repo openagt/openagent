@@ -196,6 +196,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   settings, and a machine's key is never handed to a browser. Picked over the browser's own
   storage, where each browser had its own list and the daemon, which makes the calls, did
   not know the machines.
+- A machine is added with the link it gives for a new device, pasted. This computer gets a
+  key of its own there, and removing the machine takes that key out. Picked over starting
+  the other machine open to the network with one key every caller shared, and over removing
+  the list of machines until a server can be connected.
 - A run sent to another machine names its project by the address its repository was cloned
   from, and starts in that machine's own copy of it. Picked over the folder's name, where
   two projects named alike are mixed up and a renamed folder breaks the link, and over

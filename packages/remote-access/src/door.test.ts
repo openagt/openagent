@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { DEVICE_COOKIE, ENTER_PATH, openDoor, readEntry, type Door } from './door.js'
+import { DEVICE_COOKIE, ENTER_PATH, openDoor, readBearer, readEntry, type Door } from './door.js'
 import { addCode, enter, readStore, removeDevice, type Entry } from './store.js'
 import { testHome } from './test-home.js'
 
@@ -278,4 +278,106 @@ test('an OpenAgent that does not answer is said so', async () => {
     await door.close()
     await home.remove()
   }
+})
+
+test('another computer\'s OpenAgent gets in with the same code: it says its name and is answered a key of its own, once', async () => {
+  const r = await rig()
+  try {
+    const { code } = await addCode(r.env)
+    const send = (): Promise<Response> => fetch(`${r.at}${ENTER_PATH}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code, computer: '  Adas-MacBook  ' }) })
+    const first = await send()
+    assert.equal(first.status, 200)
+    // The key comes in the answer, for a caller with no browser to keep a cookie in.
+    assert.equal(first.headers.get('set-cookie'), null)
+    const { ok, key } = (await first.json()) as { ok: boolean; key: string }
+    assert.equal(ok, true)
+    const entry = readBearer(`Bearer ${key}`)!
+    const store = await readStore(r.env)
+    assert.deepEqual(store.devices.map(device => [device.id, device.name]), [[entry.id, 'OpenAgent on Adas-MacBook']])
+    assert.equal(JSON.stringify(store).includes(entry.key), false) // the file keeps no key
+    assert.equal((await send()).status, 403) // the code is spent
+
+    // A name is cleaned and cut: what the list shows is one short line.
+    const long = await fetch(`${r.at}${ENTER_PATH}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: (await addCode(r.env)).code, computer: `tab\there\n${'x'.repeat(200)}` }) })
+    assert.equal(long.status, 200)
+    const named = (await readStore(r.env)).devices[1]!.name
+    assert.match(named, /^OpenAgent on tab here x+$/)
+    assert.equal(named.length, 'OpenAgent on '.length + 60)
+  } finally {
+    await r.close()
+  }
+})
+
+test('a computer\'s call is passed on with its key taken off, and gets no cookie', async () => {
+  const r = await rig()
+  try {
+    const { entry } = await r.letIn('OpenAgent on a laptop')
+    const authorization = `Bearer ${entry.id}.${entry.key}`
+    r.clock.now += 3 * 24 * 60 * 60 * 1000 // long past the day after which a browser's cookie is sent again
+    const answer = await fetch(`${r.at}/_relay/start`, { method: 'POST', headers: { authorization, 'content-type': 'application/json' }, body: '{"prompt":"x"}' })
+    assert.equal(answer.status, 200)
+    assert.equal(answer.headers.get('set-cookie'), null)
+    assert.equal(r.asked.length, 1)
+    assert.equal(r.asked[0]!.url, '/_relay/start')
+    assert.equal(r.asked[0]!.body, '{"prompt":"x"}')
+    assert.equal(r.asked[0]!.headers.authorization, undefined) // OpenAgent never sees a key
+    assert.equal(r.asked[0]!.headers.host, new URL(r.target).host)
+    assert.equal(r.asked[0]!.headers.origin, undefined)
+
+    // A key that is not in, and a header that is no key, let nothing through.
+    for (const wrong of [`Bearer ${entry.id}.nope`, 'Bearer nonsense', `Basic ${entry.id}.${entry.key}`]) {
+      assert.equal((await fetch(`${r.at}/_relay/ping`, { headers: { authorization: wrong } })).status, 401)
+    }
+    assert.equal(r.asked.length, 1)
+  } finally {
+    await r.close()
+  }
+})
+
+test('a device\'s own Authorization header is OpenAgent\'s to read: only a computer\'s key is taken off', async () => {
+  const r = await rig()
+  try {
+    const { cookie } = await r.letIn()
+    // Also one shaped like a key of the door's, with a dot in it: it is no key that is in.
+    for (const own of ['Bearer something-of-the-pages', 'Bearer eyJhbGciOi.eyJzdWIiOi.c2lnbmF0dXJl']) {
+      const answer = await fetch(`${r.at}/_rpc/onProjects`, { method: 'POST', headers: { cookie, authorization: own }, body: '[]' })
+      assert.equal(answer.status, 200)
+      assert.equal(r.asked.at(-1)!.headers.authorization, own)
+    }
+    assert.equal(r.asked.length, 2)
+  } finally {
+    await r.close()
+  }
+})
+
+test('a computer takes itself out with its key, and is out at once; nobody takes another out', async () => {
+  const r = await rig()
+  try {
+    const laptop = await r.letIn('OpenAgent on a laptop')
+    const phone = await r.letIn('a phone')
+    const authorization = `Bearer ${laptop.entry.id}.${laptop.entry.key}`
+
+    assert.equal((await fetch(`${r.at}${ENTER_PATH}`, { method: 'DELETE' })).status, 401)
+    assert.equal((await fetch(`${r.at}${ENTER_PATH}`, { method: 'DELETE', headers: { authorization: `Bearer ${laptop.entry.id}.wrong` } })).status, 401)
+    // A page of another site cannot make a device leave.
+    assert.equal((await fetch(`${r.at}${ENTER_PATH}`, { method: 'DELETE', headers: { cookie: phone.cookie, origin: 'http://evil.example' } })).status, 403)
+    assert.equal((await readStore(r.env)).devices.length, 2)
+
+    assert.equal((await fetch(`${r.at}${ENTER_PATH}`, { method: 'DELETE', headers: { authorization } })).status, 200)
+    assert.deepEqual((await readStore(r.env)).devices.map(device => device.name), ['a phone'])
+    assert.equal((await fetch(`${r.at}/_relay/ping`, { headers: { authorization } })).status, 401)
+    assert.equal((await fetch(`${r.at}${ENTER_PATH}`, { method: 'DELETE', headers: { authorization } })).status, 401)
+    // A device takes itself out by its cookie the same way.
+    assert.equal((await fetch(`${r.at}${ENTER_PATH}`, { method: 'DELETE', headers: { cookie: phone.cookie } })).status, 200)
+    assert.deepEqual((await readStore(r.env)).devices, [])
+    assert.equal(r.asked.length, 0) // none of it reached OpenAgent
+  } finally {
+    await r.close()
+  }
+})
+
+test('readBearer reads a computer\'s key off its header, and nothing else', () => {
+  assert.deepEqual(readBearer('Bearer ab12cd.s3cret'), { id: 'ab12cd', key: 's3cret' })
+  assert.deepEqual(readBearer('bearer   ab12cd.s3.cret'), { id: 'ab12cd', key: 's3.cret' })
+  for (const not of [undefined, '', 'Bearer', 'Bearer nodot', 'Bearer .key', 'Bearer id.', 'Basic ab12cd.s3cret', 'Bearer a.b c']) assert.equal(readBearer(not), undefined, String(not))
 })

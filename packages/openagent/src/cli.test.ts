@@ -9,12 +9,11 @@ function capture(): { io: CliIO; out: string[]; err: string[] } {
   return { io: { out: l => out.push(l), err: l => err.push(l) }, out, err }
 }
 
-test('parseArgs keeps four options and no verbs (D4)', () => {
+test('parseArgs keeps three options and no verbs (D4)', () => {
   assert.deepEqual(parseArgs([]), { help: false, version: false })
   assert.equal(parseArgs(['--help']).help, true)
   assert.equal(parseArgs(['-v']).version, true)
   assert.equal(parseArgs(['--port', '0']).port, 0)
-  assert.equal(parseArgs(['--host', '0.0.0.0']).host, '0.0.0.0')
   // The command runs no agent (#1774): the old process API is a usage error like any other
   // unknown option, and so is a bare word, what used to be an intent or a verb.
   assert.match(parseArgs(['--agent', '/tmp/s.json']).error!, /unknown/)
@@ -44,7 +43,7 @@ test('parseArgs flags unknown options and bad values', () => {
   assert.match(parseArgs(['--nope']).error!, /unknown option/)
   assert.match(parseArgs(['--port', '-1']).error!, /--port/)
   assert.match(parseArgs(['--port']).error!, /--port/)
-  assert.match(parseArgs(['--host']).error!, /--host/)
+  assert.match(parseArgs(['--host', '0.0.0.0']).error!, /unknown option: --host/) // the first unreadable thing is the one told
   // Every flag that configured a run is gone: the command runs no agent, and what a run needs
   // is the project's start hook's business (#1774).
   for (const gone of ['--agent', '--scope', '--max-passes', '--max-cost', '--permission-mode', '--driver', '--run-on']) {

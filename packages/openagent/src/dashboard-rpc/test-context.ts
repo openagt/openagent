@@ -17,7 +17,7 @@ export function testDashboardContext(over: Partial<DashboardContext> = {}): Dash
     addProject: () => ({ ok: false, error: 'not wired in this test' }),
     removeProject: () => ({ ok: false, error: 'not wired in this test' }),
     eventsSource: () => undefined,
-    remote: { target: () => undefined, list: () => [] },
+    remote: { target: () => undefined, list: () => [], working: () => false, rekey: () => {} },
     preferences: registryPreferencesStore(),
     quota: defaultQuotaSource(),
     models: { read: async () => ({ 'claude-code': { models: [] }, codex: { models: [] } }) },

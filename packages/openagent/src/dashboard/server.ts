@@ -1,5 +1,4 @@
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http'
-import { timingSafeEqual } from 'node:crypto'
 import type { AddressInfo } from 'node:net'
 import type { PreferencesStore } from '../registry.js'
 import type { QuotaSource } from './quota.js'
@@ -22,8 +21,6 @@ import { WEB_START_PREFIX, handleWebStartRequest, type WebStartHandlers } from '
 export interface DashboardOptions {
   /** Port to bind. Default `4200`; pass `0` for an ephemeral port. */
   port?: number
-  /** Host to bind. Default `127.0.0.1` (localhost only). */
-  host?: string
   /**
    * Called when the browser starts a run (#345): the `sendStart` RPC reaches this through the
    * wired dashboard context. Wire it to the project's start hook.
@@ -61,13 +58,6 @@ export interface DashboardOptions {
    */
   clientBundleDir?: string
   /**
-   * The shared token that guards a non-loopback bind (#1051): with it set, every route (static
-   * bundle, `/_rpc`, `/_relay`) needs a valid `oa_daemon` cookie or a matching
-   * `?token=`, else 401. Omit for a loopback bind, where the guard is a no-op and local UX is
-   * byte-identical. A separate concern from the CSRF origin check in rpc-serve.ts.
-   */
-  token?: string
-  /**
    * The live-events source for a run this daemon is relaying from a saved machine (#1067):
    * a stream for such a run, else undefined so `onEvents` tails the run's diary off disk.
    */
@@ -79,8 +69,9 @@ export interface DashboardOptions {
   remote: RemoteAgents
   /**
    * Serve a relay-started run's events back to the daemon that relayed it here (#1067): the
-   * `/_relay/*` endpoints (start + events, plus the slice-2 `rpc`). All are fronted by the same
-   * `token` guard above, so a machine without the cookie cannot start or read a run.
+   * `/_relay/*` endpoints (start + events, plus the slice-2 `rpc`). The daemon listens on its
+   * own computer only, so a call from another machine reaches them through whatever this
+   * computer opened to the network, which lets in only a machine that holds a key of its own.
    */
   relay?: {
     /** This machine's own id for its project cloned from an address, which is how a relayed call names one. */
@@ -93,10 +84,9 @@ export interface DashboardOptions {
    * The browser bridge (#1237): the token a Claude web extension presents to report the question
    * its cloud session is parked on. Absent leaves every `/_bridge/*` route 404, which is default.
    *
-   * Deliberately not {@link token}. That one guards a non-loopback bind and is absent on a normal
-   * loopback daemon, where what keeps other origins out of `/_rpc` is the same-origin check.
-   * The bridge is the one route meant to be reached from another origin, so neither protects it
-   * and it authenticates on its own.
+   * What keeps other origins out of `/_rpc` is the same-origin check. The bridge is the one
+   * route meant to be reached from another origin, so that check does not protect it and it
+   * authenticates on its own.
    */
   bridgeToken?: string
   /**
@@ -123,7 +113,6 @@ export interface Dashboard {
  * {@link DashboardOptions.onStart} / {@link DashboardOptions.onAddProject}.
  */
 export function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
-  const host = opts.host ?? '127.0.0.1'
   const port = opts.port ?? 4200
   const clientBundleDir = opts.clientBundleDir
 
@@ -135,38 +124,31 @@ export function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
       res.writeHead(503, { 'content-type': 'text/plain' })
       res.end('the dashboard bundle is not installed')
     })
-    return listenDashboard(server, host, port, () => closeServer(server))
+    return listenDashboard(server, port, () => closeServer(server))
   }
 
   // The usage panel polls for the dashboard's whole life, not just during an agent:
   // it has to show where the account stands while nothing is running (#533).
   const quota = opts.quota
-  const rpcMount = makeRpcMount(
-    {
-      startAgent: opts.onStart,
-      addProject: opts.onAddProject,
-      removeProject: opts.onRemoveProject,
-      eventsSource: opts.eventsSource,
-      remote: opts.remote,
-      preferences: opts.preferences,
-      projectErrors: opts.projectErrors,
-      bridgeBrowser: opts.bridgeBrowser,
-      quota,
-      models: opts.models,
-    },
-    // The bound host, so the mount can reject a rebound `Host`: a page on evil.com whose DNS
-    // answers 127.0.0.1 is same-origin to the browser, so the Origin check alone lets it in.
-    { host },
-  )
+  const rpcMount = makeRpcMount({
+    startAgent: opts.onStart,
+    addProject: opts.onAddProject,
+    removeProject: opts.onRemoveProject,
+    eventsSource: opts.eventsSource,
+    remote: opts.remote,
+    preferences: opts.preferences,
+    projectErrors: opts.projectErrors,
+    bridgeBrowser: opts.bridgeBrowser,
+    quota,
+    models: opts.models,
+  })
 
   // The machine-to-daemon relay endpoints (#1067): wired only when an events tail is supplied.
-  // Fronted by the same token guard as every other route below.
   const relayHandlers: RelayHandlers | undefined = opts.relay
     ? { project: opts.relay.project, start: opts.onStart, tailEvents: opts.relay.tailEvents, ...(opts.relay.rpc ? { rpc: opts.relay.rpc } : {}) }
     : undefined
 
-  // The browser bridge (#1237). Off unless a token was supplied, and it carries that token itself
-  // rather than riding the shared-token guard (#1051), which a loopback daemon does not have.
+  // The browser bridge (#1237). Off unless a token was supplied, and it carries that token itself.
   const bridgeHandlers: BridgeHandlers | undefined = opts.bridgeToken
     ? {
         token: opts.bridgeToken,
@@ -207,17 +189,13 @@ export function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
       }
     : undefined
 
-  const token = opts.token
   const server = createServer((req, res) => {
     const pathname = requestPathname(req)
     if (pathname === undefined) {
       res.writeHead(400, { 'content-type': 'text/plain' }).end('bad request')
       return
     }
-    // The browser bridge (#1237) is checked BEFORE the shared-token guard (#1051), and is the only route that is.
-    // That guard's browser affordance is a `?token=` redirect meant for a human following a link,
-    // which is meaningless to an extension posting JSON; the bridge presents its own bearer token
-    // instead, so letting it past here costs nothing and skips a 302 it could not follow.
+    // The browser bridge (#1237) presents its own bearer token.
     if (pathname === BRIDGE_PREFIX || pathname.startsWith(`${BRIDGE_PREFIX}/`)) {
       void handleBridgeRequest(req, res, pathname, bridgeHandlers)
       return
@@ -226,15 +204,13 @@ export function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
       void handleWebStartRequest(req, res, pathname, webStartHandlers)
       return
     }
-    // #1051: one guard fronting every route on a non-loopback bind; a no-op when no token is set.
-    if (token !== undefined && !authorizeDaemonRequest(req, res, token)) return
     // The machine relay (#1067): another daemon posts a start here and streams the run's events back.
-    // The token guard above is a no-op on a loopback bind, so — exactly like the RPC mount below —
-    // the relay carries its own CSRF + DNS-rebinding guard, or a page the user merely visited could
-    // POST /_relay/start to start a run (the real machine caller sends no Origin and a loopback
-    // Host, so both checks pass it; only a browser's cross-origin/rebound request is turned away).
+    // Exactly like the RPC mount below, the relay carries its own CSRF + DNS-rebinding guard, or a
+    // page the user merely visited could POST /_relay/start to start a run (a machine's call
+    // arrives with no Origin and a loopback Host, so both checks pass it; only a browser's
+    // cross-origin/rebound request is turned away).
     if (pathname === RELAY_PREFIX || pathname.startsWith(`${RELAY_PREFIX}/`)) {
-      if (!guardBrowserOrigin(req, res, host)) return
+      if (!guardBrowserOrigin(req, res)) return
       void handleRelayRequest(req, res, pathname, relayHandlers)
       return
     }
@@ -252,7 +228,7 @@ export function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
     }
     void serveClientBundle(req, res, clientBundleDir)
   })
-  return listenDashboard(server, host, port, async () => {
+  return listenDashboard(server, port, async () => {
     // Stop polling with the server: the poller outlives every agent by design,
     // so nothing else would ever end it.
     quota.stop()
@@ -260,14 +236,20 @@ export function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
   })
 }
 
+/**
+ * The one address the dashboard listens on: this computer's own. Whatever opens OpenAgent to a
+ * network is a package of its own, which listens there and passes what it lets in on to here.
+ */
+const DASHBOARD_HOST = '127.0.0.1'
+
 /** Bind the server and resolve a {@link Dashboard} handle; rejects if the port is already taken. */
-function listenDashboard(server: Server, host: string, port: number, close: () => Promise<void>): Promise<Dashboard> {
+function listenDashboard(server: Server, port: number, close: () => Promise<void>): Promise<Dashboard> {
   return new Promise<Dashboard>((resolvePromise, rejectPromise) => {
     server.once('error', rejectPromise)
-    server.listen(port, host, () => {
+    server.listen(port, DASHBOARD_HOST, () => {
       server.removeListener('error', rejectPromise)
       const address = server.address() as AddressInfo
-      resolvePromise({ url: `http://${host}:${address.port}`, close })
+      resolvePromise({ url: `http://${DASHBOARD_HOST}:${address.port}`, close })
     })
   })
 }
@@ -280,63 +262,12 @@ function closeServer(server: Server): Promise<void> {
 
 /**
  * The CSRF + DNS-rebinding guard the RPC mount applies, lifted to the machine relay, which
- * dispatches outside it. The relay is state-changing (it starts a run on this machine) and is
- * wired unconditionally on a loopback bind, where the shared-token guard is a no-op, so without
- * this a page the user merely visited reaches it. Returns true to admit the request; on rejection
+ * dispatches outside it. The relay is state-changing (it starts a run on this machine), so
+ * without this a page the user merely visited reaches it. Returns true to admit the request; on rejection
  * it has already answered 403.
  */
-function guardBrowserOrigin(req: IncomingMessage, res: ServerResponse, host: string): boolean {
-  if (isSameOriginRequest(req) && isExpectedHost(req, host)) return true
+function guardBrowserOrigin(req: IncomingMessage, res: ServerResponse): boolean {
+  if (isSameOriginRequest(req) && isExpectedHost(req)) return true
   res.writeHead(403, { 'content-type': 'text/plain' }).end('forbidden')
   return false
-}
-
-/** The cookie a bootstrapped browser carries on every same-origin request (#1051). */
-const DAEMON_COOKIE = 'oa_daemon'
-
-/**
- * The non-loopback bind guard (#1051): a request needs a valid `oa_daemon` cookie or a matching
- * `?token=`, else 401. A valid `?token=` sets the cookie and 302s to the clean path so the token
- * leaves the URL bar, history, and Referer after one hop; the cookie then rides RPC, the events
- * Channel, and the MJPEG `<img>` screencast alike (all same-origin), which a bearer header cannot
- * reach. Returns true to admit the request, false once it has answered (401 or the redirect).
- */
-function authorizeDaemonRequest(req: IncomingMessage, res: ServerResponse, token: string): boolean {
-  // Safe to re-parse: requestPathname already parsed this same url without throwing (#938).
-  const url = new URL(req.url ?? '/', 'http://localhost')
-  const queryToken = url.searchParams.get('token')
-  if (queryToken !== null && tokensMatch(queryToken, token)) {
-    url.searchParams.delete('token')
-    const query = url.searchParams.toString()
-    res.writeHead(302, {
-      // Lax, not Strict: opening this address from a link (#1052) is a cross-origin top-level nav, and a Strict cookie set on it is withheld from the redirect right after, so the clean path 401s. Lax still rides top-level GET navs; CSRF stays covered by the same-origin check on /_rpc.
-      'set-cookie': `${DAEMON_COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/`,
-      location: url.pathname + (query ? `?${query}` : ''),
-    })
-    res.end()
-    return false
-  }
-  const cookieToken = readCookie(req.headers.cookie, DAEMON_COOKIE)
-  if (cookieToken !== undefined && tokensMatch(cookieToken, token)) return true
-  res.writeHead(401, { 'content-type': 'text/plain' })
-  res.end('unauthorized')
-  return false
-}
-
-/** Constant-time token compare (#1051). The length check first, since `timingSafeEqual` throws on
- * unequal-length buffers and a length mismatch cannot be a match anyway. */
-function tokensMatch(a: string, b: string): boolean {
-  const ab = Buffer.from(a)
-  const bb = Buffer.from(b)
-  return ab.length === bb.length && timingSafeEqual(ab, bb)
-}
-
-/** One cookie's value out of a `Cookie` header, or `undefined`. */
-function readCookie(header: string | undefined, name: string): string | undefined {
-  if (!header) return undefined
-  for (const part of header.split(';')) {
-    const eq = part.indexOf('=')
-    if (eq !== -1 && part.slice(0, eq).trim() === name) return part.slice(eq + 1).trim()
-  }
-  return undefined
 }

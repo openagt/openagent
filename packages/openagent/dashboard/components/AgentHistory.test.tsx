@@ -22,7 +22,6 @@ vi.mock('../rpc/reads.js', () => ({ onAgent }))
 // avoids. It is about the agents list, not the chrome (each has its own suite), so stub them out.
 vi.mock('./ThemeToggle.js', () => ({ ThemeToggle: () => null }))
 vi.mock('./NotificationsMenu.js', () => ({ NotificationsMenu: () => null }))
-vi.mock('./ConnectionIndicator.js', () => ({ ConnectionIndicator: () => null }))
 
 const { AgentHistory } = await import('./AgentHistory.js')
 const { forgetRemembered } = await import('../lib/use-async.js')

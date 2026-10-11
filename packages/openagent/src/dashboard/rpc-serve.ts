@@ -38,6 +38,10 @@ export interface RemoteAgents {
   target(agentId: string | undefined): RemoteTarget | undefined
   /** A project's relayed run stubs (#1077), so `onAgents` can show a remote agent in the list and re-open it after a reload. */
   list(projectId: string): AgentMeta[]
+  /** Whether a run relayed from here is still at work on the machine at `url`. */
+  working(url: string): boolean
+  /** This computer's new key on the machine at `url`, for the runs kept from before it was added again. */
+  rekey(url: string, key: string): void
 }
 
 /**
@@ -98,21 +102,14 @@ export function isSameOriginRequest(req: IncomingMessage): boolean {
  * the mount, `sendStart` included, is reachable from a page the user merely visited.
  *
  * The `Host` header is what still gives the attacker away: it carries the name the browser was
- * asked for (`evil.com`), not the address it resolved to. So when we are bound to loopback, the
- * only `Host` a real user's browser can send is a loopback one (or the bound address itself) —
- * anything else is a rebound name and is rejected. An absent `Host` is rejected too when we are
- * enforcing: HTTP/1.1 requires it, and every browser sends it.
- *
- * A non-loopback bind (`--host`, #1051) is reached by a hostname we cannot predict, so there is
- * no allowlist to check against; that case gates behind the shared daemon token instead. Hosts
- * that never pass a bind host at all (the relay, which serves a public domain) are unaffected.
+ * asked for (`evil.com`), not the address it resolved to. The dashboard listens on this
+ * computer's own address only, so the only `Host` a real user's browser can send is a loopback
+ * one — anything else is a rebound name and is rejected. An absent `Host` is rejected too:
+ * HTTP/1.1 requires it, and every browser sends it.
  */
-export function isExpectedHost(req: IncomingMessage, boundHost: string | undefined): boolean {
-  if (boundHost === undefined || !isLoopbackHost(boundHost)) return true
+export function isExpectedHost(req: IncomingMessage): boolean {
   const header = req.headers.host
-  if (!header) return false
-  const hostname = hostnameFromHostHeader(header)
-  return isLoopbackHost(hostname) || hostname === boundHost
+  return header !== undefined && header !== '' && isLoopbackHost(hostnameFromHostHeader(header))
 }
 
 /** Where the dashboard's RPCs live. One prefix, so the static handler can decline it by path. */
@@ -153,7 +150,7 @@ async function serveEventStream(req: IncomingMessage, res: ServerResponse, url: 
     'content-type': 'text/event-stream',
     'cache-control': 'no-store',
     connection: 'keep-alive',
-    // The daemon is behind nothing, but a proxy in front of a `--host` bind would otherwise buffer.
+    // What passes a device's request on to the daemon must not hold the lines back.
     'x-accel-buffering': 'no',
   })
   let finished = false
@@ -189,20 +186,15 @@ async function serveEventStream(req: IncomingMessage, res: ServerResponse, url: 
  * `sendStart` reaches the daemon's own `startAgent` through the wired {@link DashboardContext}.
  *
  * Cross-origin POSTs are rejected (CSRF: a page on evil.com must not steer or start a session), as
- * are requests carrying someone else's `Host` when we are bound to loopback (DNS rebinding: the
- * same page must not reach us by pointing its own name at `127.0.0.1`). Pass `opts.host` — the
- * address the server is bound to — to enable that second check. Returns whether the request was
- * the RPC surface's.
+ * are requests carrying someone else's `Host` (DNS rebinding: the same page must not reach us by
+ * pointing its own name at `127.0.0.1`). Returns whether the request was the RPC surface's.
  *
  * This replaced Telefunc (F3), which required a build-time transform over every `.telefunc.ts`
  * file, a registration table pinning each RPC to the client-baked key of the *dashboard* source
  * path it was re-exported from, and a request-context indirection for wiring that never varied
  * per request. What it bought over this was type-safety across a package boundary that A7 removed.
  */
-export function makeRpcMount(
-  context: DashboardContext,
-  opts: { host?: string } = {},
-): (req: IncomingMessage, res: ServerResponse) => Promise<boolean> {
+export function makeRpcMount(context: DashboardContext): (req: IncomingMessage, res: ServerResponse) => Promise<boolean> {
   setDashboardContext(context)
   return async (req, res) => {
     // A fixed base, like every other request parse here: only the path and the query are read,
@@ -215,7 +207,7 @@ export function makeRpcMount(
       res.end('cross-origin request forbidden')
       return true
     }
-    if (!isExpectedHost(req, opts.host)) {
+    if (!isExpectedHost(req)) {
       res.writeHead(403, { 'content-type': 'text/plain' })
       res.end('unexpected Host header')
       return true

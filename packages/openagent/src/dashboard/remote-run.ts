@@ -5,24 +5,26 @@ import type { StartAgentOptions, StartAgentResult } from './types.js'
 import { errorMessage } from '../error-message.js'
 
 /**
- * The server-side half of "run on a saved machine" (#1067). The local daemon holds the saved
- * machine's token, so it - not the browser - drives the remote daemon: it POSTs the agent to the
+ * The server-side half of "run on a saved machine" (#1067). The local daemon holds this computer's
+ * key on the saved machine, so it - not the browser - drives the remote daemon: it POSTs the agent to the
  * remote's `/_relay/start` and then fetch-streams the remote's `/_relay/events` back into a local
  * {@link EventStream}, which the dashboard reads over its normal same-origin `onEvents` channel. So
- * the browser never talks cross-origin and the token never leaves the two daemons (issue #1067 (b)).
+ * the browser never talks cross-origin and the key never leaves the two daemons (issue #1067 (b)).
  *
  * Every call but the ping names its project, by its repository's address
  * (repository-address.ts): a project's folder, and so its id, is another one on each machine.
  *
- * Authentication is the shared-token cookie (#1051), sent daemon-to-daemon: `Cookie: oa_daemon=<token>` with no
- * `Origin` header. The remote's guard admits a matching cookie without the browser-only `?token=`
- * 302, and its `/_rpc` CSRF check (absent Origin passes) is not even on these raw routes.
+ * The other OpenAgent listens on its own computer only. What answers at a machine's address is
+ * whatever that computer opened to the network, which lets this computer in once, with the code
+ * a machine's link carries ({@link enterRemote}), answers a key of this computer's own, and from
+ * then on passes each call that carries the key (`Authorization: Bearer`, no `Origin`) to its
+ * OpenAgent as that computer's own browser would have made it.
  */
 
-/** How a machine is reached: its daemon's origin and its #1051 token. */
+/** How a machine is reached: where its OpenAgent answers, and this computer's key there. */
 export interface MachineAccess {
   url: string
-  token: string
+  key: string
 }
 
 /** Where a relayed agent works: a machine, and the project there, by its repository's address. */
@@ -48,14 +50,15 @@ const START_TIMEOUT_MS = 15_000
 const PING_TIMEOUT_MS = 3_000
 
 /**
- * Health-check a saved machine (#1072): a cookie'd `GET /_relay/ping`, true on any 2xx, false on a
- * non-2xx, an unreachable host, or the timeout. This is how the browser's status dots learn
- * reachable from not.
+ * Health-check a saved machine (#1072): a `GET /_relay/ping` with this computer's key, true on
+ * any 2xx, false on a non-2xx (the key no longer lets in), an unreachable host, or the timeout.
+ * This is how the browser's status dots learn reachable from not.
  */
 export async function pingRemote(target: MachineAccess): Promise<boolean> {
   try {
     const res = await fetch(`${trimSlashes(target.url)}/_relay/ping`, {
-      headers: { cookie: `oa_daemon=${target.token}` },
+      headers: { authorization: `Bearer ${target.key}` },
+      redirect: 'error',
       signal: AbortSignal.timeout(PING_TIMEOUT_MS),
     })
     return res.ok
@@ -64,9 +67,63 @@ export async function pingRemote(target: MachineAccess): Promise<boolean> {
   }
 }
 
-/** The two headers every relay request carries: JSON, and the shared-token cookie (#1051). No Origin on purpose. */
-function relayHeaders(token: string): Record<string, string> {
-  return { 'content-type': 'application/json', cookie: `oa_daemon=${token}` }
+/** The two headers every relay request carries: JSON, and this computer's key there. No Origin on purpose. */
+function relayHeaders(key: string): Record<string, string> {
+  return { 'content-type': 'application/json', authorization: `Bearer ${key}` }
+}
+
+/** What a machine says when this computer's key no longer lets it in: it was removed there. */
+const NOT_IN = 'this computer is no longer in on the machine: add the machine again, with a new link'
+
+const ENTER_TIMEOUT_MS = 10_000
+/** How long a machine gets to take this computer out: it is not waited for by a person. */
+const LEAVE_TIMEOUT_MS = 5_000
+/** What a machine answers to a code that was used before or is too old. */
+const CODE_SPENT = 'this code no longer works'
+
+/** What asking to be let in came to: this computer's key there, or why not, in words. */
+export type EnterResult = { ok: true; key: string } | { ok: false; error: string }
+
+/**
+ * Ask a machine to let this computer in, with the code its link carries, under `name`. The code
+ * is good once: a link used before, or older than a few minutes, is refused.
+ */
+export async function enterRemote(door: string, code: string, name: string): Promise<EnterResult> {
+  let res: Response
+  try {
+    res = await fetch(door, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code, computer: name }),
+      redirect: 'error',
+      signal: AbortSignal.timeout(ENTER_TIMEOUT_MS),
+    })
+  } catch (err) {
+    return { ok: false, error: `The machine did not answer: ${errorMessage(err)}` }
+  }
+  if (res.status === 403) {
+    // The machine says why in words: a link that was used is one reason among others (this
+    // computer is on another network than the machine, the machine's list is full).
+    const why = (await res.text().catch(() => '')).trim().slice(0, 200)
+    if (why === CODE_SPENT) return { ok: false, error: 'This link no longer works. A link works once, and for a short time: make a new one on the other machine.' }
+    return { ok: false, error: why ? `The machine refused: ${why}.` : 'The machine refused.' }
+  }
+  if (!res.ok) return { ok: false, error: `The machine refused (${res.status}).` }
+  const key = await res.json().then(body => (body as { key?: unknown } | null)?.key, () => undefined)
+  return typeof key === 'string' && key ? { ok: true, key } : { ok: false, error: 'What answered at this link is not an OpenAgent that lets a machine in.' }
+}
+
+/**
+ * Take this computer out of a machine: its key there stops working. Whether the machine did;
+ * one that cannot be reached keeps the key until this computer is removed there by hand.
+ */
+export async function leaveRemote(machine: MachineAccess & { door: string }): Promise<boolean> {
+  try {
+    const res = await fetch(machine.door, { method: 'DELETE', headers: { authorization: `Bearer ${machine.key}` }, redirect: 'error', signal: AbortSignal.timeout(LEAVE_TIMEOUT_MS) })
+    return res.ok
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -79,10 +136,13 @@ export async function startRemoteAgent(target: RemoteTarget, body: RelayStartBod
   try {
     const res = await fetch(`${trimSlashes(target.url)}/_relay/start`, {
       method: 'POST',
-      headers: relayHeaders(target.token),
+      headers: relayHeaders(target.key),
       body: JSON.stringify({ ...body, project: target.project }),
+      // A key and a prompt go to the machine that was saved, never on to where it points.
+      redirect: 'error',
       signal: AbortSignal.timeout(START_TIMEOUT_MS),
     })
+    if (res.status === 401) return { ok: false, error: NOT_IN }
     if (!res.ok) return { ok: false, error: `the machine refused the run (${res.status})` }
     return (await res.json()) as RelayStartResult
   } catch (err) {
@@ -94,16 +154,17 @@ const RPC_TIMEOUT_MS = 60_000 // a relayed git push/PR runs over the network on 
 
 /**
  * Relay one run-scoped RPC to the machine that owns a remote agent (#1067 slice 2). The local daemon
- * holds the machine token, so a read/diff/handoff/push/PR for a relayed agent runs ON the machine: POST
- * {fn, args} to the remote's /_relay/rpc over the shared-token cookie (#1051) (no Origin), returning the machine's
+ * holds this computer's key there, so a read/diff/handoff/push/PR for a relayed agent runs ON the machine: POST
+ * {fn, args} to the remote's /_relay/rpc with the key (no Origin), returning the machine's
  * result. Throws on an unreachable machine or a non-2xx so the caller falls back to its own empty/error
  * shape, the same way a failed local read does.
  */
 export async function relayRpc(target: RemoteTarget, fn: string, args: unknown[]): Promise<unknown> {
   const res = await fetch(`${trimSlashes(target.url)}/_relay/rpc`, {
     method: 'POST',
-    headers: relayHeaders(target.token),
+    headers: relayHeaders(target.key),
     body: JSON.stringify({ fn, args, project: target.project }),
+    redirect: 'error',
     signal: AbortSignal.timeout(RPC_TIMEOUT_MS),
   })
   if (!res.ok) throw new Error(`the machine refused the request (${res.status})`)
@@ -113,7 +174,7 @@ export async function relayRpc(target: RemoteTarget, fn: string, args: unknown[]
 
 /**
  * Fetch-stream a remote agent's newline-delimited events into `onEvent` until the remote closes the
- * body, the agent ends, or `cancel()` is called. A 401 (the token was rotated) ends the stream
+ * body, the agent ends, or `cancel()` is called. A 401 (this computer was removed there) ends the stream
  * cleanly rather than as an error, so the dashboard sees a normal `done`, not a lost connection.
  * Returns a cancel function; calling it aborts the fetch and releases the reader.
  */
@@ -133,8 +194,8 @@ export function streamRemoteEvents(
   void (async () => {
     try {
       const url = `${trimSlashes(target.url)}/_relay/events?run=${encodeURIComponent(agentId)}&project=${encodeURIComponent(target.project)}`
-      const res = await fetch(url, { headers: relayHeaders(target.token), signal: controller.signal })
-      // 401 = the machine rotated its token. Nothing more will stream; end cleanly (a done, not a loss).
+      const res = await fetch(url, { headers: relayHeaders(target.key), redirect: 'error', signal: controller.signal })
+      // 401 = this computer was removed on the machine. Nothing more will stream; end cleanly (a done, not a loss).
       if (!res.ok || !res.body) return end()
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
@@ -184,8 +245,9 @@ interface RelayedAgent {
 /**
  * The local daemon's live relayed runs (#1067), keyed by the remote agent id. Registering an agent opens
  * an {@link EventStream} the dashboard reads through `onEvents`, fed by {@link streamRemoteEvents}
- * from the remote. The target is the saved machine as it was at the Start, so a machine removed
- * since still answers for the runs it has.
+ * from the remote. The target is the saved machine as it was at the Start. A machine is not
+ * removed while a run is at work on it ({@link working}); the runs that ended there before it
+ * was removed read as unreachable, and one added again answers for them with its new key ({@link rekey}).
  *
  * The `targets` map outlives the event pump (#1067 slice 2): a finished remote agent's post-run reads,
  * open-PR and merge still have to reach the machine after its event stream has ended, so the machine
@@ -223,6 +285,17 @@ export class RelayedAgents {
   /** The machine a relayed agent runs on, kept past the event stream so post-run push/PR still reach it. */
   target(agentId: string | undefined): RemoteTarget | undefined {
     return agentId ? this.targets.get(agentId) : undefined
+  }
+
+  /** Whether a run this daemon follows is still at work on the machine at `url`: its events still stream. */
+  working(url: string): boolean {
+    for (const agent of this.agents.values()) if (agent.target.url === url) return true
+    return false
+  }
+
+  /** This computer's new key on the machine at `url`, for the runs kept from before the machine was added again. */
+  rekey(url: string, key: string): void {
+    for (const [agentId, target] of this.targets) if (target.url === url) this.targets.set(agentId, { ...target, key })
   }
 
   /** A project's relayed run stubs (#1077), newest-first, so `onAgents` can surface them in the list. */

@@ -4,11 +4,11 @@ import { join } from 'node:path'
 import {
   addMachine,
   addProject,
-  ensureDaemonToken,
+  ensureBridgeToken,
   listMachines,
   listProjects,
   projectId,
-  readDaemonToken,
+  readBridgeToken,
   readPreferences,
   removeMachine,
   removeProject,
@@ -486,51 +486,51 @@ test('a rejected mutation does not wedge the queue for the next caller (#991)', 
 })
 
 
-test('ensureDaemonToken generates a base64url token, persists it, and reuses it (#1051)', async () => {
+test('ensureBridgeToken generates a base64url token, persists it, and reuses it (#1237)', async () => {
   const fs = memFs()
-  const first = await ensureDaemonToken(fs, ENV)
-  assert.match(first, /^[A-Za-z0-9_-]+$/) // base64url: URL-safe, so it drops into ?token= unencoded
+  const first = await ensureBridgeToken(fs, ENV)
+  assert.match(first, /^[A-Za-z0-9_-]+$/) // base64url
   assert.ok(first.length >= 43) // 32 random bytes as base64url
   // Persisted as a top-level field, never under preferences (never shipped to the browser bundle).
   const stored = JSON.parse(fs.files.get(FILE)!)
-  assert.equal(stored.daemonToken, first)
-  assert.equal(stored.preferences.daemonToken, undefined)
+  assert.equal(stored.bridgeToken, first)
+  assert.equal(stored.preferences.bridgeToken, undefined)
   // A second call reuses the persisted one rather than rotating it.
-  assert.equal(await ensureDaemonToken(fs, ENV), first)
+  assert.equal(await ensureBridgeToken(fs, ENV), first)
 })
 
-test('readDaemonToken returns undefined until one is generated, then the persisted token (#1051)', async () => {
+test('readBridgeToken returns undefined until one is generated, then the persisted token (#1237)', async () => {
   const fs = memFs()
-  assert.equal(await readDaemonToken(fs, ENV), undefined)
-  const token = await ensureDaemonToken(fs, ENV)
-  assert.equal(await readDaemonToken(fs, ENV), token)
+  assert.equal(await readBridgeToken(fs, ENV), undefined)
+  const token = await ensureBridgeToken(fs, ENV)
+  assert.equal(await readBridgeToken(fs, ENV), token)
 })
 
-test('a non-string / empty daemonToken in a hand-edited file is dropped (#1051)', async () => {
+test('a non-string / empty bridgeToken in a hand-edited file is dropped (#1237)', async () => {
   for (const bad of [42, '', null, {}]) {
-    const fs = memFs({ [FILE]: JSON.stringify({ projects: [], preferences: {}, daemonToken: bad }) })
-    assert.equal(await readDaemonToken(fs, ENV), undefined)
+    const fs = memFs({ [FILE]: JSON.stringify({ projects: [], preferences: {}, bridgeToken: bad }) })
+    assert.equal(await readBridgeToken(fs, ENV), undefined)
   }
 })
 
-test('the daemon token survives the other registry mutators (#1051)', async () => {
+test('the bridge token survives the other registry mutators (#1237)', async () => {
   const fs = memFs()
-  const token = await ensureDaemonToken(fs, ENV)
+  const token = await ensureBridgeToken(fs, ENV)
   await addProject('/repos/app-a', APP_A.addedAt, fs, ENV)
   await writePreferences({ bridge: true }, fs, ENV)
   await patchPreferences({ theme: 'dark' }, fs, ENV)
-  assert.equal(await readDaemonToken(fs, ENV), token)
+  assert.equal(await readBridgeToken(fs, ENV), token)
 })
 
-test('two concurrent first-binds settle on one shared token, not two (#1051)', async () => {
+test('two concurrent first starts settle on one bridge token, not two (#1237)', async () => {
   const fs = memFs({ [FILE]: JSON.stringify({ projects: [], preferences: {} }) }, { slow: true })
-  const [a, b] = await Promise.all([ensureDaemonToken(fs, ENV), ensureDaemonToken(fs, ENV)])
+  const [a, b] = await Promise.all([ensureBridgeToken(fs, ENV), ensureBridgeToken(fs, ENV)])
   assert.equal(a, b)
 })
 
 test('the registry file is written owner-only, and the mode is set before the rename (#1095)', async () => {
   const fs = memFs()
-  await ensureDaemonToken(fs, ENV)
+  await ensureBridgeToken(fs, ENV)
 
   assert.equal(fs.modes.get(FILE), REGISTRY_FILE_MODE)
   // The temp file carried the mode across the rename, so the real path was never world-readable.
@@ -540,19 +540,21 @@ test('the registry file is written owner-only, and the mode is set before the re
 test('a filesystem with no chmod still writes the registry (#1095)', async () => {
   const fs = memFs()
   const { chmod: _dropped, ...noChmod } = fs
-  const token = await ensureDaemonToken(noChmod, ENV)
+  const token = await ensureBridgeToken(noChmod, ENV)
 
-  assert.equal(await readDaemonToken(noChmod, ENV), token)
+  assert.equal(await readBridgeToken(noChmod, ENV), token)
 })
 
-const STUDIO = 'http://192.168.1.5:4200'
+const STUDIO = 'http://192.168.1.5:4201'
+const DOOR = `${STUDIO}/_remote-access/enter`
+const OFFICE = 'http://10.0.0.2:4201'
 
 test('addMachine saves a machine with its key, newest first, named by its host when no name is given', async () => {
   const fs = memFs()
-  const saved = await addMachine({ url: STUDIO, token: 'aaa' }, fs, ENV)
-  assert.deepEqual(saved, { id: STUDIO, label: '192.168.1.5:4200', url: STUDIO, token: 'aaa' })
-  await addMachine({ url: 'http://10.0.0.2:4200', token: 'bbb', label: '  Office  ' }, fs, ENV)
-  assert.deepEqual((await listMachines(fs, ENV)).map(machine => machine.label), ['Office', '192.168.1.5:4200'])
+  const saved = await addMachine({ url: STUDIO, key: 'aaa', door: DOOR }, fs, ENV)
+  assert.deepEqual(saved, { record: { id: STUDIO, label: '192.168.1.5:4201', url: STUDIO, key: 'aaa', door: DOOR }, displaced: [] })
+  await addMachine({ url: OFFICE, key: 'bbb', door: `${OFFICE}/_remote-access/enter`, label: '  Office  ' }, fs, ENV)
+  assert.deepEqual((await listMachines(fs, ENV)).map(machine => machine.label), ['Office', '192.168.1.5:4201'])
   // The file itself holds the list, top-level, beside the projects and the preferences.
   const stored = JSON.parse(fs.files.get(FILE)!)
   assert.equal(stored.machines.length, 2)
@@ -561,30 +563,43 @@ test('addMachine saves a machine with its key, newest first, named by its host w
 
 test('saving an address again replaces its name and its key and keeps one entry', async () => {
   const fs = memFs()
-  await addMachine({ url: STUDIO, token: 'old', label: 'Studio' }, fs, ENV)
-  await addMachine({ url: STUDIO, token: 'new', label: 'Studio 2' }, fs, ENV)
-  assert.deepEqual(await listMachines(fs, ENV), [{ id: STUDIO, label: 'Studio 2', url: STUDIO, token: 'new' }])
+  await addMachine({ url: STUDIO, key: 'old', door: DOOR, label: 'Studio' }, fs, ENV)
+  const again = await addMachine({ url: STUDIO, key: 'new', door: DOOR, label: 'Studio 2' }, fs, ENV)
+  assert.deepEqual(await listMachines(fs, ENV), [{ id: STUDIO, label: 'Studio 2', url: STUDIO, key: 'new', door: DOOR }])
+  // The record it took the place of is answered: its key is the caller's to take out of the machine.
+  assert.deepEqual(again.displaced, [{ id: STUDIO, label: 'Studio', url: STUDIO, key: 'old', door: DOOR }])
 })
 
-test('removeMachine takes one machine off the list and says whether it was there', async () => {
+test('a machine saved past the cap takes the place of the oldest, which is answered too', async () => {
   const fs = memFs()
-  await addMachine({ url: STUDIO, token: 'aaa' }, fs, ENV)
-  await addMachine({ url: 'http://10.0.0.2:4200', token: 'bbb' }, fs, ENV)
-  assert.equal(await removeMachine(STUDIO, fs, ENV), true)
-  assert.deepEqual((await listMachines(fs, ENV)).map(machine => machine.id), ['http://10.0.0.2:4200'])
-  assert.equal(await removeMachine(STUDIO, fs, ENV), false)
+  for (let i = 0; i < 50; i++) await addMachine({ url: `http://10.1.0.${i}:4201`, key: `k${i}`, door: `http://10.1.0.${i}:4201/_remote-access/enter` }, fs, ENV)
+  const over = await addMachine({ url: STUDIO, key: 'aaa', door: DOOR }, fs, ENV)
+  assert.deepEqual(over.displaced.map(machine => machine.key), ['k0'])
+  assert.equal((await listMachines(fs, ENV)).length, 50)
+})
+
+test('removeMachine takes one machine off the list and answers the one that was there', async () => {
+  const fs = memFs()
+  await addMachine({ url: STUDIO, key: 'aaa', door: DOOR }, fs, ENV)
+  await addMachine({ url: OFFICE, key: 'bbb', door: `${OFFICE}/_remote-access/enter` }, fs, ENV)
+  assert.deepEqual(await removeMachine(STUDIO, fs, ENV), { id: STUDIO, label: '192.168.1.5:4201', url: STUDIO, key: 'aaa', door: DOOR })
+  assert.deepEqual((await listMachines(fs, ENV)).map(machine => machine.id), [OFFICE])
+  assert.equal(await removeMachine(STUDIO, fs, ENV), undefined)
 })
 
 test('a hand-edited machines list keeps only well-formed entries, one per address', async () => {
   const machines = [
-    { label: 'Studio', url: STUDIO, token: 'aaa' },
-    { label: 'Twice', url: STUDIO, token: 'zzz' },
-    { label: 'No key', url: 'http://10.0.0.2:4200', token: '' },
-    { label: 7, url: 'http://10.0.0.3:4200', token: 'ccc' },
+    { label: 'Studio', url: STUDIO, key: 'aaa', door: DOOR },
+    { label: 'Twice', url: STUDIO, key: 'zzz', door: DOOR },
+    { label: 'No key', url: OFFICE, key: '', door: DOOR },
+    { label: 'No door', url: 'http://10.0.0.4:4201', key: 'ddd' },
+    // What an OpenAgent that was opened with a shared key saved: it lets nobody in any more.
+    { label: 'Shared key', url: 'http://10.0.0.5:4200', token: 'eee' },
+    { label: 7, url: 'http://10.0.0.3:4201', key: 'ccc', door: DOOR },
     'junk',
   ]
   const fs = memFs({ [FILE]: JSON.stringify({ projects: [], preferences: {}, machines }) })
-  assert.deepEqual(await listMachines(fs, ENV), [{ id: STUDIO, label: 'Studio', url: STUDIO, token: 'aaa' }])
+  assert.deepEqual(await listMachines(fs, ENV), [{ id: STUDIO, label: 'Studio', url: STUDIO, key: 'aaa', door: DOOR }])
   assert.deepEqual(await listMachines(memFs({ [FILE]: JSON.stringify({ projects: [], preferences: {}, machines: 'x' }) }), ENV), [])
 })
 
@@ -592,21 +607,21 @@ test('the saved machines survive the other registry mutators, and an emptied lis
   const fs = memFs()
   await addProject('/repos/alpha', '2026-10-11T00:00:00.000Z', fs, ENV)
   await writePreferences({ model: 'opus' }, fs, ENV)
-  const token = await ensureDaemonToken(fs, ENV)
-  await addMachine({ url: STUDIO, token: 'aaa' }, fs, ENV)
+  const token = await ensureBridgeToken(fs, ENV)
+  await addMachine({ url: STUDIO, key: 'aaa', door: DOOR }, fs, ENV)
   await addProject('/repos/beta', '2026-10-11T00:00:00.000Z', fs, ENV)
   await patchPreferences({ theme: 'dark' }, fs, ENV)
   const registry = await readRegistry(fs, ENV)
   assert.equal(registry.machines?.length, 1)
   assert.equal(registry.projects.length, 2)
   assert.deepEqual(registry.preferences, { model: 'opus', theme: 'dark' })
-  assert.equal(registry.daemonToken, token)
+  assert.equal(registry.bridgeToken, token)
   await removeMachine(STUDIO, fs, ENV)
   assert.equal(fs.files.get(FILE)!.includes('machines'), false) // an empty list is not written
 })
 
 test('the preferences the browser is handed never carry the saved machines', async () => {
   const fs = memFs()
-  await addMachine({ url: STUDIO, token: 'aaa' }, fs, ENV)
+  await addMachine({ url: STUDIO, key: 'aaa', door: DOOR }, fs, ENV)
   assert.equal(JSON.stringify(await readPreferences(fs, ENV)).includes('aaa'), false)
 })

@@ -14,18 +14,13 @@ cd ~/code/my-repo
 openagent          # serves the dashboard at http://127.0.0.1:4200
 ```
 
-## The CLI is four options and no verbs
+## The CLI is three options and no verbs
 
 ```
 openagent              Serve the dashboard in the foreground. Ctrl+C closes it; the
                        agents it started go on to their own end.
 
   --port <n>           Dashboard port (default: 4200).
-  --host <addr>        Bind address (default: 127.0.0.1). A non-loopback address
-                       exposes the dashboard to your network and generates a shared
-                       token; the printed URL carries it, and any request without it
-                       gets 401. Exposing the daemon to the network is a security
-                       decision.
   -h, --help           Show this help.
   -v, --version        Print the version.
 ```

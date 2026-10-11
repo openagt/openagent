@@ -20,6 +20,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   device, where taking one phone out meant a new key for all.
 - A device that is in sees and does what the computer's own browser does. Picked over a
   device that only watches.
+- Another computer's OpenAgent gets in as a device does: with the same code, pasted as a
+  link where a phone scans it, and a key of its own that is removed alone. Picked over a
+  second kind of key that opens less: a key that starts an agent already runs anything on
+  the computer.
 
 ## Phone on Wi-Fi
 - The link on the Wi-Fi is plain HTTP, behind a switch that is off until a person turns it

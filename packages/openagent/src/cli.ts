@@ -2,8 +2,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { checkForUpdate, formatUpdateStatus, nodeVersionFetcher, type VersionFetcher } from './update-check.js'
-import { isLoopbackHost, runDaemon, DEFAULT_DAEMON_HOST, DEFAULT_DAEMON_PORT } from './daemon.js'
-import { ensureDaemonToken } from './registry.js'
+import { runDaemon, DEFAULT_DAEMON_PORT } from './daemon.js'
 import { errorMessage } from './error-message.js'
 
 /** Where the CLI writes. Injectable so tests capture output. */
@@ -46,37 +45,30 @@ Usage:
 
 Options:
   --port <n>             Dashboard port (default: 4200).
-  --host <addr>          Bind address (default: 127.0.0.1, localhost only). A non-loopback
-                         address (e.g. 0.0.0.0) exposes the dashboard to your network and
-                         generates a shared token; the printed URL carries it, and any request
-                         without it gets 401. Exposing a process spawner to the network is a
-                         security decision (#806).
   -h, --help             Show this help.
   -v, --version          Print the version.
+
+The dashboard listens on this computer only. A phone, or another computer's OpenAgent, gets in
+from its Settings page: Devices.
 
 Everything else is the dashboard: it shows a project's runs from their files, and starts one
 through the project's own start hook (.openagent/hooks.yml), which names the tool that runs it.`
 
-/** What the CLI itself accepts: four options, no verbs (D4). */
+/** What the CLI itself accepts: three options, no verbs (D4). */
 export interface CliArgs {
   help: boolean
   version: boolean
   /** `--port <n>`: the port the dashboard binds. Default {@link DEFAULT_DAEMON_PORT}; `0` is ephemeral. */
   port?: number
-  /**
-   * `--host <addr>` (#1051): the dashboard's bind address. Default loopback; a non-loopback
-   * address exposes it to the network and gates every route behind the generated shared token.
-   */
-  host?: string
   error?: string
 }
 
 /**
  * Parse argv (without the node/script prefix). Pure and testable.
  *
- * Four options and nothing else: `--host` and `--port` because they are the two things a browser
- * cannot be asked and a dashboard cannot serve about itself; `--help` and `--version` because a
- * command with options owes the user both. The command runs no agent (#1774): a run is started
+ * Three options and nothing else: `--port` because it is the one thing a browser cannot be asked
+ * and a dashboard cannot serve about itself; `--help` and `--version` because a command with
+ * options owes the user both. The command runs no agent (#1774): a run is started
  * from the dashboard, by the project's own start hook.
  */
 export function parseArgs(argv: string[]): CliArgs {
@@ -95,17 +87,12 @@ export function parseArgs(argv: string[]): CliArgs {
       case '--port': {
         const n = Number(argv[++i])
         if (Number.isInteger(n) && n >= 0) opts.port = n
-        else opts.error = 'invalid --port: must be a non-negative integer'
-        break
-      }
-      case '--host': {
-        const value = argv[++i]
-        if (value === undefined) opts.error = 'invalid --host: missing address'
-        else opts.host = value
+        else opts.error ??= 'invalid --port: must be a non-negative integer'
         break
       }
       default:
-        opts.error = arg.startsWith('-') ? `unknown option: ${arg}` : `unknown command: ${arg}`
+        // The first thing that could not be read is the one told: what follows an unknown option is its value, not a command.
+        opts.error ??= arg.startsWith('-') ? `unknown option: ${arg}` : `unknown command: ${arg}`
     }
   }
   return opts
@@ -138,19 +125,11 @@ export async function runCli(argv: string[], io: CliIO = defaultIO): Promise<num
 async function runForegroundDaemonCmd(args: CliArgs, io: CliIO): Promise<number> {
   const cwd = process.cwd()
   const port = args.port ?? DEFAULT_DAEMON_PORT
-  const host = args.host
-  // #1051: pre-generate the shared token for a non-loopback bind so onListening (sync) can print
-  // the reachable URL; runDaemon reuses the same persisted token.
-  const token = host !== undefined && !isLoopbackHost(host) ? await ensureDaemonToken() : undefined
   try {
     await runDaemon(cwd, {
       port,
-      ...(host !== undefined ? { host } : {}),
       onListening: state => {
         io.out(`◆ dashboard running: ${state.url}`)
-        if (!isLoopbackHost(state.host ?? DEFAULT_DAEMON_HOST)) {
-          printNonLoopbackAccess(io, state.host ?? DEFAULT_DAEMON_HOST, state.url, token)
-        }
         io.out('  Ctrl+C to stop the dashboard. Server logs stream below.')
         // #312 asks bare `openagent` to print the commands + version too. onListening is sync and
         // runDaemon then blocks until signalled, so this is fire-and-forget by necessity: the
@@ -163,20 +142,6 @@ async function runForegroundDaemonCmd(args: CliArgs, io: CliIO): Promise<number>
     return 1
   }
   return 0
-}
-
-/**
- * The loud one-line warning and the token-bearing URL printed on any non-loopback daemon bind
- * (#1051). A daemon that spawns processes is code execution for anyone who reaches the port, and
- * the shared token is the only guard, so this says so before the daemon is left running. The bound
- * host is a bind-all like `0.0.0.0`, so the user swaps it for the machine's actual reachable
- * address (a Tailscale/LAN hostname); the token rides the URL for the first hop, then the cookie.
- */
-function printNonLoopbackAccess(io: CliIO, host: string, url: string, token: string | undefined): void {
-  io.err(`⚠ SECURITY: bound to ${host} (non-loopback). This exposes code execution to your network; the shared token is the only guard (#1051).`)
-  if (!token) return
-  io.out(`  Open with the token (swap ${host} for this machine's reachable address, e.g. a Tailscale hostname):`)
-  io.out(`    ${url}/?token=${token}`)
 }
 
 /**

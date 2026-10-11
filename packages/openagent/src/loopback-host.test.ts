@@ -8,7 +8,7 @@ test('the names and addresses that reach this machine without leaving it are loc
   }
 })
 
-test('the whole 127.0.0.0/8 range is local, not just the first address (#1051)', () => {
+test('the whole 127.0.0.0/8 range is local, not just the first address', () => {
   // A daemon bound anywhere in the range is still only reachable from this machine. The dashboard
   // kept a copy that compared against `127.0.0.1` alone, so it called these remote.
   for (const host of ['127.0.0.2', '127.1.2.3', '127.255.255.255']) {
@@ -18,7 +18,7 @@ test('the whole 127.0.0.0/8 range is local, not just the first address (#1051)',
 
 test('a name that merely starts with 127. is not local — that is the rebound host', () => {
   // The DNS-rebinding case the guard exists for: `127.evil.com` resolves to 127.0.0.1, so a
-  // prefix test would hand it the token gate. Bind-all and routable addresses are not local either.
+  // prefix test would let it through. Bind-all and routable addresses are not local either.
   for (const host of ['127.evil.com', '127.0.0.1.evil.com', '0.0.0.0', '::', '10.0.0.5', '']) {
     assert.equal(isLoopbackHost(host), false, host)
   }

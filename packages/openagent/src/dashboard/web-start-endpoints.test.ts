@@ -107,7 +107,7 @@ test('no extension around answers 409 at once, not after a timeout (#1328)', asy
   }
 })
 
-test('the routes demand the daemon token, validate the request, and 404 when the bridge is off (#1328)', async () => {
+test('the routes demand the bridge token, validate the request, and 404 when the bridge is off (#1328)', async () => {
   const starts = new BridgeStarts()
   const s = await serve(wired(starts))
   const off = await serve(undefined)
