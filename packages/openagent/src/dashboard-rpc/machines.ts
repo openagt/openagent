@@ -1,9 +1,10 @@
 import { hostname } from 'node:os'
-import { enterRemote, leaveRemote, pingRemote } from '../dashboard/remote-run.js'
+import { enterRemote, leaveRemote, pingRemote, remoteVersion } from '../dashboard/remote-run.js'
 import { errorMessage } from '../error-message.js'
 import { contextRemote } from './context.js'
 import { addMachine, listMachines, removeMachine } from '../registry.js'
 import { parseMachineLink } from '../machine-link.js'
+import { openagentVersion } from '../version.js'
 
 // The saved machines, for the dashboard: the other computers a run can be sent to. The list is
 // the daemon's, in the person's home file, so every browser on this computer shows the same
@@ -80,4 +81,26 @@ export async function onMachinesReachable(): Promise<Record<string, boolean>> {
   const machines = await listMachines()
   const entries = await Promise.all(machines.map(async machine => [machine.id, await pingRemote(machine)] as const))
   return Object.fromEntries(entries)
+}
+
+/** This computer's OpenAgent, and the one each saved machine runs. */
+export interface MachineVersions {
+  /** This computer's own. */
+  version: string
+  /** Each saved machine, with its version when it answers and says. */
+  machines: (Machine & { version?: string })[]
+}
+
+/**
+ * The saved machines with the OpenAgent each runs, beside this computer's own: how a page tells
+ * that a machine fell behind this computer. One short call to each, with this computer's key.
+ */
+export async function onMachineVersions(): Promise<MachineVersions> {
+  const machines = await Promise.all(
+    (await listMachines()).map(async machine => {
+      const version = await remoteVersion(machine)
+      return { id: machine.id, label: machine.label, url: machine.url, ...(version !== undefined ? { version } : {}) }
+    }),
+  )
+  return { version: openagentVersion(), machines }
 }

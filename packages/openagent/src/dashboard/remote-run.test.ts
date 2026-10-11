@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { enterRemote, leaveRemote, startRemoteAgent, streamRemoteEvents, pingRemote, relayRpc, RelayedAgents, type RemoteTarget } from './remote-run.js'
+import { enterRemote, leaveRemote, startRemoteAgent, streamRemoteEvents, pingRemote, relayRpc, remoteVersion, RelayedAgents, type RemoteTarget } from './remote-run.js'
 import { type AgentMeta } from '../store/index.js'
 import type { OpenAgentEvent } from '../events.js'
 
@@ -112,6 +112,30 @@ test('pingRemote is false on a non-2xx from the machine (#1072)', async () => {
 test('pingRemote is false when the machine is unreachable (#1072)', async () => {
   // A port nothing is listening on: the fetch rejects, which pingRemote swallows as offline.
   assert.equal(await pingRemote({ url: 'http://127.0.0.1:1', key: 'd1.t' }), false)
+})
+
+test('a machine\'s ping tells the OpenAgent it runs; what does not read as a version, and a machine that does not answer, tell none', async () => {
+  let answer: unknown = { version: '0.10.1' }
+  let status = 200
+  const srv = await server((_req, res) => {
+    res.writeHead(status, { 'content-type': 'application/json' })
+    res.end(typeof answer === 'string' ? answer : JSON.stringify(answer))
+  })
+  try {
+    const target = { url: srv.url, key: 'd1.sekret' }
+    assert.equal(await remoteVersion(target), '0.10.1')
+    // What a machine says is shown on a page: only a version is one.
+    for (const odd of [{}, { version: 7 }, { version: '' }, { version: '<img src=x onerror=alert(1)>' }, { version: 'a'.repeat(65) }, 'not json', '']) {
+      answer = odd
+      assert.equal(await remoteVersion(target), undefined, JSON.stringify(odd))
+    }
+    answer = { version: '0.10.1' }
+    status = 401 // this computer was taken out there
+    assert.equal(await remoteVersion(target), undefined)
+  } finally {
+    await srv.close()
+  }
+  assert.equal(await remoteVersion({ url: 'http://127.0.0.1:1', key: 'd1.t' }), undefined)
 })
 
 test('streamRemoteEvents parses ndjson lines in order and ends when the body closes (#1067)', async () => {

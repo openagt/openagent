@@ -63,6 +63,7 @@
     "@openagt/agent-data": "workspace:*",
     "@openagt/files": "workspace:*",
     "@openagt/remote-access": "workspace:*",
+    "@openagt/servers": "workspace:*",
     "@openagt/init": "workspace:*",
     "@openagt/skill-branches": "workspace:*",
     "@openagt/skill-github": "workspace:*",

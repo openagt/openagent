@@ -51,21 +51,33 @@ const START_TIMEOUT_MS = 15_000
 /** How long a status ping waits before calling a machine offline (#1072): short, since it polls. */
 const PING_TIMEOUT_MS = 3_000
 
-/**
- * Health-check a saved machine (#1072): a `GET /_relay/ping` with this computer's key, true on
- * any 2xx, false on a non-2xx (the key no longer lets in), an unreachable host, or the timeout.
- * This is how the browser's status dots learn reachable from not.
- */
-export async function pingRemote(target: MachineAccess): Promise<boolean> {
+/** One `GET /_relay/ping` with this computer's key: the answer when it is a 2xx, else nothing (the key no longer lets in, the host is unreachable, the time is up). */
+async function ping(target: MachineAccess): Promise<Response | undefined> {
   try {
     const res = await machineFetch(`${trimSlashes(target.url)}/_relay/ping`, target.pin, {
       headers: { authorization: `Bearer ${target.key}` },
       signal: AbortSignal.timeout(PING_TIMEOUT_MS),
     })
-    return res.ok
+    return res.ok ? res : undefined
   } catch {
-    return false
+    return undefined
   }
+}
+
+/**
+ * Health-check a saved machine (#1072): true when it answers this computer's key. This is how
+ * the browser's status dots learn reachable from not.
+ */
+export async function pingRemote(target: MachineAccess): Promise<boolean> {
+  return (await ping(target)) !== undefined
+}
+
+/** The OpenAgent a saved machine runs, as its ping tells it; nothing for a machine that does not answer, or does not say. */
+export async function remoteVersion(target: MachineAccess): Promise<string | undefined> {
+  const said: unknown = await (await ping(target))?.json().catch(() => undefined)
+  const version = said && typeof said === 'object' ? (said as { version?: unknown }).version : undefined
+  // What a machine says is shown on a page: only what reads as a version is one.
+  return typeof version === 'string' && /^[0-9A-Za-z.+-]{1,64}$/.test(version) ? version : undefined
 }
 
 /** The two headers every relay request carries: JSON, and this computer's key there. No Origin on purpose. */

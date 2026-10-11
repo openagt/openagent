@@ -3,6 +3,8 @@ import type { Intervention, Activity, ProjectionRead, ProjectSummary, RecentAgen
 import { onProjectFiles, onInterventions, onActivity, onRecentAgents, onAgents } from './rpc/reads.js'
 import { sendStart } from './rpc/control.js'
 import { onProjects } from './rpc/projects.js'
+import { onMachineVersions } from './rpc/machines.js'
+import { addMachine } from './lib/machines.js'
 import { AgentHistory } from './components/AgentHistory.js'
 import { SidebarProvider } from './components/ui/sidebar.js'
 import { ProjectHome } from './components/ProjectHome.js'
@@ -278,6 +280,12 @@ export function App() {
       },
       agents: async inProject =>
         (await onAgents(inProject)).map(agent => ({ id: agent.id, status: agent.status, startedAt: agent.startedAt, ...(agent.branch ? { name: agent.branch } : {}), ...(agent.intent ? { ask: agent.intent } : {}) })),
+      machines: onMachineVersions,
+      // Through the dashboard's own list, so the Machines section shows the new machine at once.
+      addMachine: async (link, label) => {
+        const added = await addMachine(link, label)
+        return added.ok ? { ok: true } : added
+      },
   }
 
   // The live agent feed is owned here so both the main view and the right rail's views tab read

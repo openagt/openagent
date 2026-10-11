@@ -1,9 +1,7 @@
-import { readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { checkForUpdate, formatUpdateStatus, nodeVersionFetcher, type VersionFetcher } from './update-check.js'
 import { runDaemon, DEFAULT_DAEMON_PORT } from './daemon.js'
 import { errorMessage } from './error-message.js'
+import { openagentVersion } from './version.js'
 
 /** Where the CLI writes. Injectable so tests capture output. */
 export interface CliIO {
@@ -14,27 +12,6 @@ export interface CliIO {
 const defaultIO: CliIO = {
   out: line => process.stdout.write(line + '\n'),
   err: line => process.stderr.write(line + '\n'),
-}
-
-/**
- * The CLI version, read from the package's own `package.json` at runtime (#312).
- * The compiled entry lives one level under the package root (`dist/` or
- * `dist-test/`), so its `package.json` is always `../package.json`. Cached after
- * the first read; falls back to `unknown` if the file is somehow unreadable.
- */
-let cachedVersion: string | undefined
-export function openagentVersion(): string {
-  if (cachedVersion !== undefined) return cachedVersion
-  try {
-    const pkgPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json')
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version?: string }
-    // `unknown`, not `0.0.0`: the packages are unreleased and legitimately versioned `0.0.0`, so a
-    // numeric fallback would make a failed read indistinguishable from a correct one (#312).
-    cachedVersion = pkg.version ?? 'unknown'
-  } catch {
-    cachedVersion = 'unknown'
-  }
-  return cachedVersion
 }
 
 const HELP = `OpenAgent — turnkey AI orchestration that wraps a coding agent (Claude Code or Codex).

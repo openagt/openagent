@@ -22,6 +22,12 @@ export const INERT_HOST_SERVICES: HostServices = {
   async agents() {
     return []
   },
+  async machines() {
+    return { version: 'unknown', machines: [] }
+  },
+  async addMachine() {
+    return { ok: false, error: 'no dashboard to save a machine in' }
+  },
 }
 
 /** Set by the shell around the whole dashboard: the services every module's host is built from. */

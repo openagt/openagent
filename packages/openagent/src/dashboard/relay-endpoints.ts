@@ -3,6 +3,7 @@ import type { OpenAgentEvent } from '../events.js'
 import type { StartAgentOptions, StartAgentResult } from './types.js'
 import type { RelayStartResult } from './remote-run.js'
 import { end, readJsonBody, requireGet, sendJson } from './http.js'
+import { openagentVersion } from '../version.js'
 
 /**
  * The machine-side of the remote-agent relay (#1067): the endpoints through which another
@@ -14,7 +15,7 @@ import { end, readJsonBody, requireGet, sendJson } from './http.js'
  * - `POST /_relay/start`  starts an ordinary local agent and returns its {@link StartAgentResult}.
  * - `GET  /_relay/events?run=<id>&project=<address>` streams that agent's events as
  *   newline-delimited JSON until it ends or the caller disconnects.
- * - `GET  /_relay/ping` (#1072) a reachability probe: 200 and an empty body, starts nothing. The
+ * - `GET  /_relay/ping` (#1072) a reachability probe: 200 and this OpenAgent's version, starts nothing. The
  *   online/offline status the dashboard shows is the local daemon calling this on each saved
  *   machine with its key there.
  * - `POST /_relay/rpc` (#1067 slice 2) runs one whitelisted run-scoped RPC (a read/diff/steer/handoff/
@@ -68,11 +69,12 @@ export async function handleRelayRequest(
   end(res, 404, 'not found')
 }
 
-/** `GET /_relay/ping` (#1072): answer 200 with an empty body. Starts nothing; only proves this
- * daemon is reachable, and to another machine that its key still lets it in. */
+/** `GET /_relay/ping` (#1072): answer 200 with this OpenAgent's version. Starts nothing; it proves this
+ * daemon is reachable, and to another machine that its key still lets it in, and tells that
+ * machine whether this one fell behind it. */
 function handlePing(req: IncomingMessage, res: ServerResponse): void {
   if (!requireGet(req, res)) return
-  end(res, 200, '')
+  sendJson(res, { version: openagentVersion() })
 }
 
 /** `POST /_relay/start`: read the agent request, start it locally, and answer with the result JSON. */
