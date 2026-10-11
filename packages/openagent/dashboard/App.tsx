@@ -12,6 +12,8 @@ import { AgentView } from './components/AgentView.js'
 import { agentLabel } from './lib/agent-label.js'
 import { subagentsOf, taskLabel } from './lib/subagents.js'
 import { RightRail } from './components/RightRail.js'
+import { MenuButton, PhoneBar } from './components/PhoneBar.js'
+import { useIsMobile } from './lib/use-mobile.js'
 import { NotFound } from './components/NotFound.js'
 import { ModulePageView } from './components/ModulePageView.js'
 import { useModules, ModulesContext } from './lib/use-modules.js'
@@ -436,6 +438,10 @@ export function App() {
     )
   }
 
+  const isMobile = useIsMobile()
+  // The name a phone's top bar gives the page; null on a project's own pages, which have a top row.
+  const phoneTitle = view === 'settings' ? 'Settings' : pageSegment ? (modulePage?.label ?? '') : projectId === null ? 'Overview' : null
+
   return (
     // The whole shell lives inside the SidebarProvider so the sidebar's context (state + Cmd/Ctrl+B,
     // the `--sidebar-width` var) is available on every route, home and session alike. Its wrapper is
@@ -489,7 +495,14 @@ export function App() {
           onPage={showPage}
           interventionCount={interventions.length}
         />
-        <main className="flex min-w-0 flex-1 flex-col">{renderMain()}</main>
+        {/* On a phone the sidebar is a sheet, and this button, over the page's top left corner,
+            opens it. An agent's page and the "New agent" page keep that corner of their top row
+            free; a page with no top row of its own gets a bar that names it. */}
+        {isMobile && <MenuButton />}
+        <main className="flex min-w-0 flex-1 flex-col">
+          {isMobile && phoneTitle !== null && <PhoneBar title={phoneTitle} />}
+          {renderMain()}
+        </main>
         {/* A module's page takes the full width itself (#1774): no rail beside it, the way Settings
             takes the whole main pane with none either. */}
         {!pageSegment && (

@@ -9,7 +9,8 @@ const NO_EVENTS: OpenAgentEvent[] = []
 // the same place on both pages. It names no project and says nothing of the project's checkout.
 export function ProjectActions({ projectId, onProjectRemoved }: { projectId: string; onProjectRemoved?: (() => void) | undefined }) {
   return (
-    <div className="flex items-center gap-2 overflow-hidden px-4 py-2">
+    // As an agent's top bar does, the row keeps its two ends free on a phone, for the shell's two buttons.
+    <div className="flex items-center gap-2 overflow-hidden py-2 md:px-4 max-md:px-11">
       <div className="grow shrink-0" />
       <AgentActionsMenu projectId={projectId} events={NO_EVENTS} onProjectRemoved={onProjectRemoved} />
     </div>

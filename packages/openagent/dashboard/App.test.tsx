@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createElement } from 'react'
+import { phoneScreen } from './test-utils.js'
 import type { ModuleCardProps, ModuleDefinition, ModulePageProps } from './module/index.js'
 
 // The whole transport, stubbed at its one seam: every RPC stub is `rpc(name)`, so a map by name
@@ -397,5 +398,50 @@ describe('the project select (#1513)', () => {
     // Long enough for the modules to be imported and mounted.
     await new Promise(resolve => setTimeout(resolve, 300))
     expect(screen.queryByText('No such page')).toBeNull()
+  })
+})
+
+// A phone has no width for the sidebar beside the page (#1824).
+describe('the shell on a phone', () => {
+  test('the sidebar is closed, and a bar names the page beside the button that opens it; a project\'s own pages get the button alone', async () => {
+    const wide = phoneScreen()
+    try {
+      answerShell([])
+      // What the launcher's own page reads.
+      answers.set('onDocs', () => [])
+      answers.set('onProjectFiles', () => [])
+      render(<App />)
+      const open = await screen.findByRole('button', { name: 'Open the menu' })
+      // The bar's word, not the sidebar's row: the sidebar is closed.
+      expect(screen.getByText('Overview').tagName).toBe('SPAN')
+      expect(screen.queryByRole('button', { name: 'Overview' })).toBeNull()
+
+      expect(open.getAttribute('aria-expanded')).toBe('false')
+      fireEvent.click(open)
+      expect(open.getAttribute('aria-expanded')).toBe('true')
+      fireEvent.click(await screen.findByRole('button', { name: 'Settings' }))
+      expect(await screen.findByText('the settings page')).toBeTruthy()
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Overview' })).toBeNull())
+      expect(screen.getByText('Settings').tagName).toBe('SPAN')
+
+      // The launcher has a top row of its own, which keeps its corner free for the button.
+      fireEvent.click(screen.getByRole('button', { name: 'Open the menu' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'New agent' }))
+      expect(await screen.findByText('the launcher of app')).toBeTruthy()
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'New agent' })).toBeNull())
+      expect(screen.getByRole('button', { name: 'Open the menu' })).toBeTruthy()
+      expect(screen.queryByText('Overview')).toBeNull()
+      expect(screen.queryByText('Settings')).toBeNull()
+    } finally {
+      wide()
+    }
+  })
+
+  test('on a wide screen there is no bar and no button: the sidebar is beside the page', async () => {
+    answerShell([])
+    render(<App />)
+    expect(await screen.findByRole('button', { name: 'Overview' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Open the menu' })).toBeNull()
+    expect(screen.getAllByText('Overview')).toHaveLength(1)
   })
 })

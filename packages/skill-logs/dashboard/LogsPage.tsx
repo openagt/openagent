@@ -64,7 +64,7 @@ export function LogsPage({ projects }: ModulePageProps) {
       ))}
       {loaded && read.rows.length === 0 && read.failed.length === 0 && <p className="mt-6 text-sm text-muted-foreground">No runs recorded yet.</p>}
       {read.rows.length > 0 && (
-        <table className="mt-4 w-full text-left text-sm">
+        <table className="mt-4 w-full text-left text-sm max-md:hidden">
           <thead className="text-xs text-muted-foreground">
             <tr className="border-b border-border">
               <th className="py-2 pr-3 font-normal">Status</th>
@@ -106,6 +106,30 @@ export function LogsPage({ projects }: ModulePageProps) {
             ))}
           </tbody>
         </table>
+      )}
+      {/* A phone has no width for the table's columns: there a run is two lines, what was asked and
+          then the rest, and its branch is left to its own page. */}
+      {read.rows.length > 0 && (
+        <ul className="mt-4 text-sm md:hidden">
+          {read.rows.map(({ project, card }) => (
+            <li key={`${project.id}/${card.id}`} onClick={() => host.openAgent(project.id, card.id)} className="cursor-pointer border-b border-border py-2 hover:bg-accent">
+              <p className="truncate" title={card.intent}>
+                {card.intent?.trim() || card.id}
+              </p>
+              <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+                <span className={STATUS_CLASS[card.status]}>{card.status}</span>
+                {projects.length > 1 && <span>{project.name}</span>}
+                {card.pr && (
+                  <a href={card.pr.url} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()} className="text-info hover:underline">
+                    #{card.pr.number}
+                  </a>
+                )}
+                {card.cost !== undefined && <span className="tabular-nums">${card.cost.toFixed(2)}</span>}
+                <span title={card.startedAt}>{formatRelative(card.startedAt)}</span>
+              </p>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   )

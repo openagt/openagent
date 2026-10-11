@@ -198,7 +198,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="space-y-2 border-b border-border px-6 py-3">
+      <div className="space-y-2 border-b border-border py-3 md:px-6 max-md:px-4">
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
           <div>
             <h1 className="text-base font-semibold">
@@ -222,7 +222,8 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
               to add — "all 0 tickets" is not an offer, the list below already explains an empty
               set, and an all-claimed (or, for plans, all-planned) one has nothing left to ask
               for. */}
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {/* On a phone a button's words are longer than the screen: the buttons give up width, and their words are cut. */}
+          <div className="flex flex-wrap items-center justify-end gap-2 md:shrink-0 max-md:min-w-0">
             {/* The selection's own readout and exit: while any row is ticked the buttons stop
                 speaking for the shown set, so the count says what took over and the clear hands
                 the page back without hunting down every ticked box. */}
@@ -287,7 +288,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
         {/* The full page width, no columns and no max-width (#1144/#1265): each project's table
             spans the whole pane, so a row has room for its title and every piece of meta at once.
             Columns looked tidy but split the one dimension the rows actually need. */}
-        <div className="w-full p-6">
+        <div className="w-full md:p-6 max-md:p-4">
           {!loaded ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : groups.length === 0 ? (

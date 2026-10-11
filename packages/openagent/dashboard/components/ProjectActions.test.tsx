@@ -39,7 +39,11 @@ describe('ProjectActions', () => {
     const row = container.firstElementChild!
     // No layout in the test DOM, so the row is read off its classes.
     expect(row.className).not.toMatch(/border/)
-    for (const cls of ['flex', 'items-center', 'gap-2', 'overflow-hidden', 'px-4', 'py-2']) expect(row.className.split(' ')).toContain(cls)
+    for (const cls of ['flex', 'items-center', 'gap-2', 'overflow-hidden', 'md:px-4', 'py-2']) expect(row.className.split(' ')).toContain(cls)
+    // On a phone its two ends are free, for the menu's button and the side panel's. Never over a plain
+    // padding: a module's stylesheet has its own copy of that class, which comes later and would win.
+    expect(row.className.split(' ')).toContain('max-md:px-11')
+    expect(row.className.split(' ')).not.toContain('px-4')
     // A spacer that takes the row's width, then the menu, last.
     expect(row.children).toHaveLength(2)
     expect(row.children[0]!.className).toContain('grow')

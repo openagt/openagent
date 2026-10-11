@@ -67,7 +67,10 @@ export function TicketRow({
   // In review or waiting: no agent is started on it nor on its plan, the tickets skill's own rule.
   const held = heldBack(ticket)
   return (
-    <li className="flex items-stretch transition-colors hover:bg-accent/60">
+    // On a phone the title is the row's first line, across the whole width, and every control and
+    // fact is under it. A class that holds on a phone only is never laid over a plain one
+    // of the same kind: the `.flex-1` of a stylesheet loaded later would win over it.
+    <li className="flex items-stretch transition-colors hover:bg-accent/60 max-md:flex-wrap max-md:pb-1">
       {/* The selection checkbox, the row's left edge — the list idiom of issue trackers: pick some rows and the
           page's bulk actions narrow to them. Never disabled: selecting is page state, not an
           action, so it costs nothing and can be changed any time. A sibling of the open button
@@ -102,7 +105,7 @@ export function TicketRow({
           />
         )}
       </div>
-      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-2 py-2 pl-0 pr-3 text-left text-sm">
+      <button type="button" onClick={onOpen} className="flex min-w-0 items-center gap-2 py-2 pr-3 text-left text-sm md:flex-1 md:pl-0 max-md:order-first max-md:basis-full max-md:pl-3">
         {/* The title is the row's one flexible column: it truncates when long and stretches
             when short, so the whole of a row's slack lands here — the way a table's wide
             first column carries the blank — instead of pooling mid-row between columns. */}
@@ -194,11 +197,11 @@ export function TicketRow({
       </span>
       {/* Priority and date: snug fixed widths — barely wider than their content, kept fixed (and
           rendered even when empty) so the columns still line up down the table row to row. */}
-      <span className={cn('flex w-16 shrink-0 items-center justify-end text-[10px]', priorityTone(ticket.priority))}>
+      <span className={cn('flex shrink-0 items-center justify-end text-[10px] md:w-16 max-md:px-1', priorityTone(ticket.priority))}>
         {ticket.priority ? `Priority: ${ticket.priority}` : ''}
       </span>
       <span
-        className="flex w-14 shrink-0 items-center justify-end text-[10px] text-muted-foreground/70"
+        className="flex w-14 shrink-0 items-center justify-end text-[10px] text-muted-foreground/70 max-md:ml-auto"
         title={formatDateTime(ticket.date)}
       >
         {formatAge(ticket.date)}
@@ -258,7 +261,7 @@ export function TicketRow({
           href={ticket.issue.url}
           target="_blank"
           rel="noreferrer"
-          className="flex w-20 shrink-0 items-center justify-end gap-1 px-3 text-xs text-muted-foreground hover:text-foreground hover:underline"
+          className="flex shrink-0 items-center justify-end gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline md:w-20 md:px-3 max-md:px-2"
         >
           <ExternalLink className="h-4 w-4" aria-hidden />
           {ticket.issue.label}
@@ -266,7 +269,7 @@ export function TicketRow({
       ) : (
         // Same width as the link so the row's right edge — and with it the priority and date
         // columns inside — stays put on a row with no issue to link.
-        <span className="w-20 shrink-0" aria-hidden />
+        <span className="w-20 shrink-0 max-md:hidden" aria-hidden />
       )}
     </li>
   )

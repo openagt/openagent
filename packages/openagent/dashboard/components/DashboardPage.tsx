@@ -68,7 +68,7 @@ export function DashboardPage({
         {/* The two queues side by side (#1139), with the agents working now sitting to the Human
             Queue's right on top of the packages' cards: what needs you, who is on it, and what the
             packages say comes next. */}
-        <div className="grid items-start gap-4 lg:grid-cols-2">
+        <div className="grid items-start gap-4 max-md:grid-cols-[minmax(0,1fr)] lg:grid-cols-2">
           <HumanQueue items={interventions} onSelectProject={onSelectProject} onSelectAgent={onSelectAgent} />
           <div className="space-y-4">
             <Agents working={working} loading={loading} onSelectAgent={onSelectAgent} />

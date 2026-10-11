@@ -162,7 +162,8 @@ export function PaceFields({
   return (
     <fieldset disabled={disabled} className="space-y-2">
       {asSaid && (
-        <label className="flex items-center gap-2 text-sm">
+        // On a phone what the skill says goes under the label, which otherwise breaks at every word.
+        <label className="flex items-center gap-2 text-sm max-md:flex-wrap">
           <input type="radio" name={name} autoFocus={autoFocus && draft.kind === 'skill'} checked={draft.kind === 'skill'} onChange={() => onChange({ kind: 'skill' })} />
           {asSaid.label}
           <span className="text-xs text-muted-foreground">{asSaid.says}</span>

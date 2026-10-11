@@ -1,9 +1,10 @@
 import type { ReactElement } from 'react'
 import type { AgentMeta, ProjectSummary } from '../../src/index.js'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { SidebarProvider } from './ui/sidebar.js'
-import { hoverTooltip, openMenu } from '../test-utils.js'
+import { hoverTooltip, openMenu, phoneScreen } from '../test-utils.js'
+import { MenuButton } from './PhoneBar.js'
 
 // AgentHistory pulls in AddProjectPanel, which imports the projects RPC stubs; stub them so
 // nothing fetches a daemon that is not there. Import AgentHistory after the mock is in place.
@@ -625,5 +626,42 @@ describe('AgentHistory reads a log ahead', () => {
     renderRail(<AgentHistory projectId={null} scope={null} agents={[]} recentAgents={[recent]} selectedAgentId={null} onSelect={() => {}} />)
     fireEvent.pointerEnter(screen.getByText("replace 'Hello, world!' with 'Welcome!'").closest('button')!)
     expect(onAgent.mock.calls).toEqual([['p2', 'run-1']])
+  })
+})
+
+// A phone has no width for the rail beside the page (#1824): it is a sheet over the page.
+describe('AgentHistory on a phone', () => {
+  test('the rail is closed until the menu\'s button is pressed, and going somewhere from it closes it', async () => {
+    const wide = phoneScreen()
+    try {
+      const onPage = vi.fn()
+      const onSelect = vi.fn()
+      const ui = (
+        <SidebarProvider>
+          <MenuButton />
+          <AgentHistory projectId={null} scope="p1" agents={[agent({ status: 'done' })]} selectedAgentId={null} onSelect={onSelect} pages={[{ segment: 'logs', label: 'Logs' }]} onPage={onPage} />
+        </SidebarProvider>
+      )
+      render(ui)
+      expect(screen.queryByRole('button', { name: 'Logs' })).toBeNull()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Open the menu' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'Logs' }))
+      expect(onPage).toHaveBeenCalledWith('logs')
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Logs' })).toBeNull())
+
+      // An agent's row closes it too.
+      fireEvent.click(screen.getByRole('button', { name: 'Open the menu' }))
+      fireEvent.click(await screen.findByText("replace 'Hello, world!' with 'Welcome!'"))
+      expect(onSelect).toHaveBeenCalledWith('run-1')
+      await waitFor(() => expect(screen.queryByText("replace 'Hello, world!' with 'Welcome!'")).toBeNull())
+    } finally {
+      wide()
+    }
+  })
+
+  test('on a wide screen the rail is a column, always there', () => {
+    renderRail(<AgentHistory projectId={null} scope="p1" agents={[]} selectedAgentId={null} onSelect={() => {}} pages={[{ segment: 'logs', label: 'Logs' }]} />)
+    expect(screen.getByRole('button', { name: 'Logs' })).toBeTruthy()
   })
 })
