@@ -39,6 +39,8 @@ export interface MachineRecord {
   key: string
   /** Where this computer was let in there, and where it takes itself out when the machine is removed. */
   door: string
+  /** What the machine's key is known by, when its link said: every call goes only to a machine that shows that key. */
+  pin?: string
 }
 
 /** The cap on saved machines and on a name's length, so a hand-edited file cannot bloat. */
@@ -354,11 +356,11 @@ function sanitizeMachines(value: unknown): MachineRecord[] {
   for (const raw of value) {
     if (machines.length >= MACHINE_LIMITS.count) break
     if (typeof raw !== 'object' || raw === null) continue
-    const { label, url, key, door } = raw as Record<string, unknown>
+    const { label, url, key, door, pin } = raw as Record<string, unknown>
     if (typeof label !== 'string' || typeof url !== 'string' || typeof key !== 'string' || typeof door !== 'string') continue
     if (!url || !key || !door || seen.has(url)) continue
     seen.add(url)
-    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, key, door })
+    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, key, door, ...(typeof pin === 'string' && pin ? { pin } : {}) })
   }
   return machines
 }
@@ -592,7 +594,7 @@ export async function listMachines(
  * each still holds a key the caller takes out of its machine.
  */
 export async function addMachine(
-  machine: { url: string; key: string; door: string; label?: string },
+  machine: { url: string; key: string; door: string; pin?: string; label?: string },
   fs: RegistryFs = nodeRegistryFs(),
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<{ record: MachineRecord; displaced: MachineRecord[] }> {
@@ -604,6 +606,7 @@ export async function addMachine(
       url: machine.url,
       key: machine.key,
       door: machine.door,
+      ...(machine.pin ? { pin: machine.pin } : {}),
     }
     const before = registry.machines ?? []
     const machines = [record, ...before.filter(saved => saved.id !== record.id)].slice(0, MACHINE_LIMITS.count)

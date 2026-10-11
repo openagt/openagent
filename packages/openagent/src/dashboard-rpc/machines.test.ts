@@ -151,7 +151,7 @@ test('a machine a run is at work on is not removed and not added again: the key 
     const studio = await machine(['first', 'second'])
     const rekeyed: string[][] = []
     let working = true
-    setDashboardContext(testDashboardContext({ remote: { target: () => undefined, list: () => [], working: url => working && url === studio.url, rekey: (url, key) => void rekeyed.push([url, key]) } }))
+    setDashboardContext(testDashboardContext({ remote: { target: () => undefined, list: () => [], working: url => working && url === studio.url, rekey: (url, key, pin) => void rekeyed.push([url, key, ...(pin ? [pin] : [])]) } }))
     try {
       await sendAddMachine(studio.link('first'), 'Studio')
       assert.deepEqual(rekeyed, [[studio.url, 'd1.key-first']])

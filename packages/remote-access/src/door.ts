@@ -1,14 +1,16 @@
 import { randomBytes } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import { createServer, request as httpRequest, type IncomingMessage, type OutgoingHttpHeaders, type Server, type ServerResponse } from 'node:http'
+import { createServer as createSecureServer, type Server as SecureServer } from 'node:https'
 import type { AddressInfo, Socket } from 'node:net'
 import { onOwnNetwork } from './address.js'
+import type { Secured } from './certificate.js'
 import { deviceName } from './device-name.js'
 import { enterPage, notInPage } from './pages.js'
 import { enter, isIn, readStore, removeDevice, storePath, update, type Entry, type Store } from './store.js'
 
 /**
- * The door: the one thing that listens on the network. A request from a device that is in is
+ * The door: the one thing that lets anything in from the network. A request from a device that is in is
  * passed to OpenAgent on this computer as it came, and answered with what OpenAgent answered; so
  * a device that is in sees and does what this computer's own browser does. Anything else gets
  * one of the door's two pages, or a refusal.
@@ -44,6 +46,8 @@ export interface DoorOptions {
   host?: string
   /** Who may knock, by the address a request comes from; an address on one of this computer's own networks when unsaid. */
   knocks?: (peer: string | undefined) => boolean
+  /** The key and certificate the door speaks HTTPS with; plain HTTP when unsaid. */
+  secured?: Secured
   now?: () => number
 }
 
@@ -51,11 +55,14 @@ export interface Door {
   readonly port: number
   /** Cut what a device that is no longer in still holds open (a live feed). */
   dropRemoved(store: Store): void
+  /** Speak with a renewed certificate from the next connection on. Only for a door that speaks HTTPS. */
+  renew(secured: Secured): void
   close(): Promise<void>
 }
 
-function cookieHeader(entry: Entry): string {
-  return `${DEVICE_COOKIE}=${keyWord(entry)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${COOKIE_MAX_AGE_S}`
+/** The cookie as it is set: on a door that speaks HTTPS, one a browser never sends over plain HTTP. */
+function cookieHeader(entry: Entry, secure: boolean): string {
+  return `${DEVICE_COOKIE}=${keyWord(entry)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${COOKIE_MAX_AGE_S}${secure ? '; Secure' : ''}`
 }
 
 /** A device's id and key as one word, the way a cookie and a computer's header carry them. */
@@ -104,9 +111,9 @@ function withoutDeviceCookie(header: string | undefined): string | undefined {
  * plain read) or with the door's own address as the browser knows it. A page on another site
  * that makes this device's browser call the door is turned away here.
  */
-function fromOwnPage(req: IncomingMessage): boolean {
+function fromOwnPage(req: IncomingMessage, secure: boolean): boolean {
   const origin = req.headers.origin
-  return !origin || origin === `http://${req.headers.host ?? ''}`
+  return !origin || origin === `${secure ? 'https' : 'http'}://${req.headers.host ?? ''}`
 }
 
 function refuse(res: ServerResponse, status: number, text: string): void {
@@ -143,6 +150,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
   const { env } = opts
   const now = opts.now ?? Date.now
   const knocks = opts.knocks ?? (peer => onOwnNetwork(peer))
+  const secure = opts.secured !== undefined
   const target = new URL(opts.target)
 
   // The file as last read, read again only once it has changed: a device removed a moment ago is
@@ -175,7 +183,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       return sendPage(res, 200, enterPage(ENTER_PATH, nonce), nonce)
     }
     if (req.method !== 'POST') return refuse(res, 405, 'method not allowed')
-    if (!fromOwnPage(req)) return refuse(res, 403, 'forbidden')
+    if (!fromOwnPage(req, secure)) return refuse(res, 403, 'forbidden')
     const body = await readBody(req, MAX_ENTER_BODY)
     let code: unknown
     let computer: unknown
@@ -193,7 +201,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     // A computer is answered its key; a browser gets it as a cookie its pages cannot read.
     if (byComputer) return void res.writeHead(200, headers).end(JSON.stringify({ ok: true, key: keyWord(entry) }))
     cookieSent.set(entry.id, now())
-    res.writeHead(200, { ...headers, 'set-cookie': cookieHeader(entry) }).end('{"ok":true}')
+    res.writeHead(200, { ...headers, 'set-cookie': cookieHeader(entry, secure) }).end('{"ok":true}')
   }
 
   /**
@@ -210,7 +218,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
 
   /** A device that is in takes itself out: what a computer does when it is removed from the other's list of machines. */
   const leave = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-    if (!fromOwnPage(req)) return refuse(res, 403, 'forbidden')
+    if (!fromOwnPage(req, secure)) return refuse(res, 403, 'forbidden')
     const who = await whoIsIn(req)
     if (!who) return refuse(res, 401, 'this device is not in')
     await removeDevice(env, who.entry.id)
@@ -236,7 +244,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       if (!byBearer && now() - (cookieSent.get(entry.id) ?? 0) > COOKIE_RESEND_MS) {
         cookieSent.set(entry.id, now())
         const own = answered['set-cookie']
-        answered['set-cookie'] = [...(Array.isArray(own) ? own : own ? [String(own)] : []), cookieHeader(entry)]
+        answered['set-cookie'] = [...(Array.isArray(own) ? own : own ? [String(own)] : []), cookieHeader(entry, secure)]
       }
       res.writeHead(answer.statusCode ?? 502, answered)
       // A live feed's first line may be a while away: the headers go now.
@@ -256,7 +264,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     req.pipe(upstream)
   }
 
-  const server: Server = createServer((req, res) => {
+  const handle = (req: IncomingMessage, res: ServerResponse): void => {
     void (async () => {
       if (!knocks(req.socket.remoteAddress)) return refuse(res, 403, 'only a device on the same network as this computer gets in')
       const path = (req.url ?? '/').split('?')[0] ?? '/'
@@ -268,7 +276,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
         const wantsPage = req.method === 'GET' && (req.headers.accept ?? '').includes('text/html')
         return wantsPage ? sendPage(res, 401, notInPage()) : refuse(res, 401, 'this device is not in')
       }
-      if (!fromOwnPage(req)) return refuse(res, 403, 'forbidden')
+      if (!fromOwnPage(req, secure)) return refuse(res, 403, 'forbidden')
 
       const { entry, byBearer } = who
       seen.set(entry.id, now())
@@ -284,7 +292,12 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       if (!res.headersSent) refuse(res, 500, 'the door failed')
       else res.destroy()
     })
-  })
+  }
+  // A caller that takes a connection and says nothing is not waited for long.
+  const server: Server | SecureServer = opts.secured ? createSecureServer({ ...opts.secured, handshakeTimeout: 15_000 }, handle) : createServer(handle)
+  server.headersTimeout = 15_000
+  // Open to every network, the door takes a bounded number of callers at once.
+  if (opts.secured) server.maxConnections = 1024
 
   const listen = (host: string): Promise<void> =>
     new Promise((resolve, reject) => {
@@ -304,6 +317,9 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
 
   return {
     port: (server.address() as AddressInfo).port,
+    renew(secured) {
+      if (secure) (server as SecureServer).setSecureContext(secured)
+    },
     dropRemoved(store) {
       const stillIn = new Set(store.devices.map(device => device.id))
       for (const [id, held] of sockets) {

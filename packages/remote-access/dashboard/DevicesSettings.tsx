@@ -5,7 +5,8 @@ import { QrCode } from './QrCode.js'
 
 // Settings → Devices: the phones and browsers that are in, and the one switch that lets them
 // reach this computer on the Wi-Fi it is on. Read with `remote-access status`; the switch, a new
-// device's code and a removal are the same command's `on`, `off`, `add` and `remove`.
+// device's code and a removal are the same command's `on`, `off`, `add` and `remove`. On a server
+// there is no switch: its door is open to every network, over HTTPS, and the section says where.
 
 /** What turning the switch on says first: the link is not locked, and what that means. */
 export const WARNING =
@@ -70,21 +71,29 @@ export function DevicesSettings({ projects, everyMs = 5_000 }: ModuleSettingsPro
   if (projects.length === 0) return null
   return (
     <SettingsSection title="Devices" description="Open OpenAgent on a phone or in another browser, or let another computer's OpenAgent send its runs here. A device gets in with a code once, and stays in until it is removed here.">
-      <SettingsRow
-        label="Phone on Wi-Fi"
-        description="Lets a device on the same Wi-Fi as this computer open OpenAgent. A device that is in sees and does what this computer's own browser does."
-        control={
-          <Switch
-            aria-label="Phone on Wi-Fi"
-            checked={status?.on ?? false}
-            disabled={busy || !status}
-            onCheckedChange={on => {
-              if (on) setConfirming(true)
-              else turn(false)
-            }}
-          />
-        }
-      />
+      {status?.https ? (
+        <SettingsRow
+          label="Open on the internet"
+          description={`This computer is a server. A device that is in opens OpenAgent at https://${status.https.address.includes(':') ? `[${status.https.address}]` : status.https.address} from anywhere, and sees and does what this computer's own browser does.`}
+          control={null}
+        />
+      ) : (
+        <SettingsRow
+          label="Phone on Wi-Fi"
+          description="Lets a device on the same Wi-Fi as this computer open OpenAgent. A device that is in sees and does what this computer's own browser does."
+          control={
+            <Switch
+              aria-label="Phone on Wi-Fi"
+              checked={status?.on ?? false}
+              disabled={busy || !status}
+              onCheckedChange={on => {
+                if (on) setConfirming(true)
+                else turn(false)
+              }}
+            />
+          }
+        />
+      )}
       {confirming && (
         <div role="alertdialog" aria-label="Turn on Phone on Wi-Fi" className="space-y-3 py-3">
           <p className="text-sm">{WARNING}</p>
@@ -99,7 +108,7 @@ export function DevicesSettings({ projects, everyMs = 5_000 }: ModuleSettingsPro
         </div>
       )}
       {/* Not while a change is on its way: the door's process has not followed the switch yet. */}
-      {status?.on && status.problem !== undefined && !busy && (
+      {(status?.on || status?.https) && status.problem !== undefined && !busy && (
         <p role="alert" className="py-3 text-xs text-danger">
           {status.problem}
         </p>
@@ -109,7 +118,9 @@ export function DevicesSettings({ projects, everyMs = 5_000 }: ModuleSettingsPro
           {link ? (
             <div className="space-y-2">
               <QrCode text={byNumber && link.numberUrl ? link.numberUrl : link.url} label="The code a new device scans" />
-              <p className="text-xs text-muted-foreground">Scan it with the device's camera, on the same Wi-Fi as this computer. The code works once, for five minutes.</p>
+              <p className="text-xs text-muted-foreground">
+                {status.https ? "Scan it with the device's camera." : "Scan it with the device's camera, on the same Wi-Fi as this computer."} The code works once, for five minutes.
+              </p>
               {link.numberUrl !== undefined && !byNumber && (
                 <button type="button" className="text-xs underline" onClick={() => setByNumber(true)}>
                   Phone does not open it? Use the number.

@@ -1,12 +1,17 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import type { NetworkInterfaceInfo } from 'node:os'
 import type { AddressDeps } from './address.js'
+import { doorFingerprint } from './certificate.js'
 import { USAGE, runCli, type CliIO } from './cli.js'
+import { keyFingerprint } from './der.js'
 import { ENTER_PATH } from './door.js'
 import { readFile, writeFile } from 'node:fs/promises'
 import { readStore, storePath } from './store.js'
 import { testHome } from './test-home.js'
+import { testOffice } from './test-office.js'
 
 /** A laptop on a Wi-Fi that answers to its name. */
 const NAMED: AddressDeps = {
@@ -133,6 +138,63 @@ test('serve is refused without OpenAgent\'s address or with a port that is none,
       assert.deepEqual(unread.err, [USAGE])
     }
   } finally {
+    await home.remove()
+  }
+})
+
+test('https <address> makes this computer a server and https off undoes it; what is no number or name is refused', async () => {
+  const home = await testHome()
+  try {
+    const set = await run(home.env, ['https', '203.0.113.5'])
+    assert.deepEqual(set.out, { on: false, listening: false, problem: 'The door opens once OpenAgent runs on this computer.', https: { address: '203.0.113.5' }, devices: [] })
+    assert.deepEqual((await readStore(home.env)).https, { address: '203.0.113.5' })
+    assert.equal(((await run(home.env, ['https', 'agents.example.com'])).out as { https: { address: string } }).https.address, 'agents.example.com')
+    // An address is kept the one way a certificate office and a link read it.
+    assert.equal(((await run(home.env, ['https', 'Agents.Example.COM'])).out as { https: { address: string } }).https.address, 'agents.example.com')
+    assert.equal(((await run(home.env, ['https', '2001:DB8:0:0:0:0:0:1'])).out as { https: { address: string } }).https.address, '2001:db8::1')
+    for (const not of ['http://203.0.113.5', '203.0.113.5:443', 'a b', 'localhost/x', '-x', 'fe80::1%en0', '::ffff:1.2.3.4', 'localhost']) {
+      const refused = await run(home.env, ['https', not])
+      assert.equal(refused.code, 1, not)
+      assert.deepEqual(refused.err, [`${not} is not a server's number or name`])
+    }
+    assert.deepEqual((await run(home.env, ['https', 'off'])).out, { on: false, listening: false, devices: [] })
+    assert.equal((await run(home.env, ['https'])).code, 2)
+  } finally {
+    await home.remove()
+  }
+})
+
+test('on a server, add answers one HTTPS link at the server\'s address, with what the door\'s key is known by after the code', async () => {
+  const home = await testHome()
+  const proof = createServer()
+  await new Promise<void>(resolve => proof.listen(0, '127.0.0.1', resolve))
+  const proofPort = (proof.address() as AddressInfo).port
+  await new Promise<void>(resolve => proof.close(() => resolve()))
+  const office = await testOffice({ proofPort: () => proofPort })
+  const stop = new AbortController()
+  const env = { ...home.env, OPENAGENT_URL: 'http://127.0.0.1:1', OPENAGENT_REMOTE_ACCESS_PORT: '0', OPENAGENT_REMOTE_ACCESS_PROOF_PORT: String(proofPort), OPENAGENT_REMOTE_ACCESS_ACME: office.directory }
+  const serving = run(env, ['serve'], { signal: stop.signal })
+  try {
+    const refused = await run(home.env, ['https', '127.0.0.1'], { followMs: 0 })
+    assert.equal(refused.code, 0)
+    // The certificate is asked for; a link is refused until the door is open.
+    for (let i = 0; i < 250 && (await readStore(home.env)).listening === undefined; i++) await new Promise(resolve => setTimeout(resolve, 20))
+    const status = (await run(home.env, ['status'])).out as { listening: boolean; problem?: string; https: { address: string } }
+    assert.deepEqual([status.listening, status.problem, status.https.address], [true, undefined, '127.0.0.1'])
+    const port = (await readStore(home.env)).listening!.port
+
+    const link = (await run(home.env, ['add'])).out as { url: string; numberUrl?: string }
+    assert.equal(link.numberUrl, undefined)
+    const [at, after] = link.url.split('#') as [string, string]
+    assert.equal(at, `https://127.0.0.1:${port}${ENTER_PATH}`)
+    const [code, pin] = after.split('.')
+    assert.match(code!, /^[A-Za-z0-9_-]{20,}$/)
+    assert.equal(pin, await doorFingerprint(home.env))
+    assert.equal(pin, keyFingerprint(office.issued[0]!.publicKey))
+  } finally {
+    stop.abort()
+    await serving
+    await office.close()
     await home.remove()
   }
 })

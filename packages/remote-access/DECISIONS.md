@@ -32,3 +32,8 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The code holds the computer's name on the network when it has one, and its number
   otherwise, with a link under the code to use the number. Picked over the number alone,
   which the network changes, and then every device has to scan again.
+
+## On a server
+- On a server the door speaks HTTPS, with a certificate for the server's number that it
+  asks Let's Encrypt for and renews itself. Picked over a name the person buys and points
+  at the server, one more thing to set up; a field for a name can come later.

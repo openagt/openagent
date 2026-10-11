@@ -200,6 +200,12 @@ already made, and lists it in its pull request; for anything else it proposes an
   key of its own there, and removing the machine takes that key out. Picked over starting
   the other machine open to the network with one key every caller shared, and over removing
   the list of machines until a server can be connected.
+- A server is reached through what it opened to the network, as a phone reaches a laptop,
+  with a key of this computer's own. Picked over a line held open over SSH, a second way in
+  to keep safe, which has to be opened again after every sleep.
+- This computer remembers what a server's key is known by, from the server's link, and
+  calls only what shows that key. Picked over trusting any certificate for the server's
+  number, which the number's next owner can get.
 - A run sent to another machine names its project by the address its repository was cloned
   from, and starts in that machine's own copy of it. Picked over the folder's name, where
   two projects named alike are mixed up and a renamed folder breaks the link, and over

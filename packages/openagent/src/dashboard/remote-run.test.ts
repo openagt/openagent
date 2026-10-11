@@ -439,6 +439,9 @@ test('RelayedAgents says whether a run is still at work on a machine, and reads 
     agents.rekey(srv.url, 'd2.new')
     agents.rekey('http://127.0.0.1:1', 'other')
     assert.deepEqual(agents.target('r1'), { url: srv.url, key: 'd2.new', project: PROJECT })
+    // And with the key the machine is known by since then, when its new link named one.
+    agents.rekey(srv.url, 'd3.newer', 'a-pin')
+    assert.deepEqual(agents.target('r1'), { url: srv.url, key: 'd3.newer', pin: 'a-pin', project: PROJECT })
   } finally {
     agents.dispose()
     await srv.close()

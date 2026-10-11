@@ -41,9 +41,9 @@ export async function sendAddMachine(pasted: string, label?: string): Promise<Ad
   // Asked before the link is spent: the key a run at work is read with is not replaced under it.
   const saved = (await listMachines()).find(machine => machine.id === link.url)
   if (saved && contextRemote().working(saved.url)) return { ok: false, error: `An agent is working on ${saved.label}. Stop it, or wait until it ends, then add the machine again.` }
-  const entered = await enterRemote(link.door, link.code, ownName())
+  const entered = await enterRemote(link.door, link.code, ownName(), link.pin)
   if (!entered.ok) return entered
-  const access = { url: link.url, key: entered.key, door: link.door }
+  const access = { url: link.url, key: entered.key, door: link.door, ...(link.pin ? { pin: link.pin } : {}) }
   let added: Awaited<ReturnType<typeof addMachine>>
   try {
     added = await addMachine({ ...access, ...(typeof label === 'string' ? { label } : {}) })
@@ -53,7 +53,7 @@ export async function sendAddMachine(pasted: string, label?: string): Promise<Ad
     return { ok: false, error: `The machine could not be saved: ${errorMessage(err)}` }
   }
   // The runs that ended there before go on being read, with the new key; the old keys are of no use any more.
-  contextRemote().rekey(link.url, entered.key)
+  contextRemote().rekey(link.url, entered.key, link.pin)
   for (const old of added.displaced) void leaveRemote(old)
   const { id, url, label: name } = added.record
   return { ok: true, machine: { id, label: name, url } }

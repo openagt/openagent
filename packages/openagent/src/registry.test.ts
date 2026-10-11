@@ -587,6 +587,16 @@ test('removeMachine takes one machine off the list and answers the one that was 
   assert.equal(await removeMachine(STUDIO, fs, ENV), undefined)
 })
 
+test('what a server\'s key is known by is kept with the machine, and left out for a machine whose link named none', async () => {
+  const fs = memFs()
+  const server = { url: 'https://203.0.113.5', key: 'kkk', door: 'https://203.0.113.5/_remote-access/enter', pin: 'Zm9v' }
+  assert.deepEqual((await addMachine(server, fs, ENV)).record, { id: server.url, label: '203.0.113.5', ...server })
+  await addMachine({ url: STUDIO, key: 'aaa', door: DOOR }, fs, ENV)
+  const [studio, saved] = await listMachines(fs, ENV)
+  assert.equal(saved!.pin, 'Zm9v')
+  assert.equal('pin' in studio!, false)
+})
+
 test('a hand-edited machines list keeps only well-formed entries, one per address', async () => {
   const machines = [
     { label: 'Studio', url: STUDIO, key: 'aaa', door: DOOR },

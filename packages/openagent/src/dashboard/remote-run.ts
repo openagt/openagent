@@ -3,6 +3,7 @@ import type { OpenAgentEvent } from '../events.js'
 import type { AgentMeta } from '../store/index.js'
 import type { StartAgentOptions, StartAgentResult } from './types.js'
 import { errorMessage } from '../error-message.js'
+import { machineFetch } from './machine-call.js'
 
 /**
  * The server-side half of "run on a saved machine" (#1067). The local daemon holds this computer's
@@ -21,10 +22,11 @@ import { errorMessage } from '../error-message.js'
  * OpenAgent as that computer's own browser would have made it.
  */
 
-/** How a machine is reached: where its OpenAgent answers, and this computer's key there. */
+/** How a machine is reached: where its OpenAgent answers, this computer's key there, and what the machine's own key is known by when its link said. */
 export interface MachineAccess {
   url: string
   key: string
+  pin?: string
 }
 
 /** Where a relayed agent works: a machine, and the project there, by its repository's address. */
@@ -56,9 +58,8 @@ const PING_TIMEOUT_MS = 3_000
  */
 export async function pingRemote(target: MachineAccess): Promise<boolean> {
   try {
-    const res = await fetch(`${trimSlashes(target.url)}/_relay/ping`, {
+    const res = await machineFetch(`${trimSlashes(target.url)}/_relay/ping`, target.pin, {
       headers: { authorization: `Bearer ${target.key}` },
-      redirect: 'error',
       signal: AbortSignal.timeout(PING_TIMEOUT_MS),
     })
     return res.ok
@@ -88,14 +89,13 @@ export type EnterResult = { ok: true; key: string } | { ok: false; error: string
  * Ask a machine to let this computer in, with the code its link carries, under `name`. The code
  * is good once: a link used before, or older than a few minutes, is refused.
  */
-export async function enterRemote(door: string, code: string, name: string): Promise<EnterResult> {
+export async function enterRemote(door: string, code: string, name: string, pin?: string): Promise<EnterResult> {
   let res: Response
   try {
-    res = await fetch(door, {
+    res = await machineFetch(door, pin, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ code, computer: name }),
-      redirect: 'error',
       signal: AbortSignal.timeout(ENTER_TIMEOUT_MS),
     })
   } catch (err) {
@@ -119,7 +119,7 @@ export async function enterRemote(door: string, code: string, name: string): Pro
  */
 export async function leaveRemote(machine: MachineAccess & { door: string }): Promise<boolean> {
   try {
-    const res = await fetch(machine.door, { method: 'DELETE', headers: { authorization: `Bearer ${machine.key}` }, redirect: 'error', signal: AbortSignal.timeout(LEAVE_TIMEOUT_MS) })
+    const res = await machineFetch(machine.door, machine.pin, { method: 'DELETE', headers: { authorization: `Bearer ${machine.key}` }, signal: AbortSignal.timeout(LEAVE_TIMEOUT_MS) })
     return res.ok
   } catch {
     return false
@@ -134,12 +134,10 @@ export async function leaveRemote(machine: MachineAccess & { door: string }): Pr
  */
 export async function startRemoteAgent(target: RemoteTarget, body: RelayStartBody): Promise<RelayStartResult> {
   try {
-    const res = await fetch(`${trimSlashes(target.url)}/_relay/start`, {
+    const res = await machineFetch(`${trimSlashes(target.url)}/_relay/start`, target.pin, {
       method: 'POST',
       headers: relayHeaders(target.key),
       body: JSON.stringify({ ...body, project: target.project }),
-      // A key and a prompt go to the machine that was saved, never on to where it points.
-      redirect: 'error',
       signal: AbortSignal.timeout(START_TIMEOUT_MS),
     })
     if (res.status === 401) return { ok: false, error: NOT_IN }
@@ -160,11 +158,10 @@ const RPC_TIMEOUT_MS = 60_000 // a relayed git push/PR runs over the network on 
  * shape, the same way a failed local read does.
  */
 export async function relayRpc(target: RemoteTarget, fn: string, args: unknown[]): Promise<unknown> {
-  const res = await fetch(`${trimSlashes(target.url)}/_relay/rpc`, {
+  const res = await machineFetch(`${trimSlashes(target.url)}/_relay/rpc`, target.pin, {
     method: 'POST',
     headers: relayHeaders(target.key),
     body: JSON.stringify({ fn, args, project: target.project }),
-    redirect: 'error',
     signal: AbortSignal.timeout(RPC_TIMEOUT_MS),
   })
   if (!res.ok) throw new Error(`the machine refused the request (${res.status})`)
@@ -194,7 +191,7 @@ export function streamRemoteEvents(
   void (async () => {
     try {
       const url = `${trimSlashes(target.url)}/_relay/events?run=${encodeURIComponent(agentId)}&project=${encodeURIComponent(target.project)}`
-      const res = await fetch(url, { headers: relayHeaders(target.key), redirect: 'error', signal: controller.signal })
+      const res = await machineFetch(url, target.pin, { headers: relayHeaders(target.key), signal: controller.signal })
       // 401 = this computer was removed on the machine. Nothing more will stream; end cleanly (a done, not a loss).
       if (!res.ok || !res.body) return end()
       const reader = res.body.getReader()
@@ -293,9 +290,11 @@ export class RelayedAgents {
     return false
   }
 
-  /** This computer's new key on the machine at `url`, for the runs kept from before the machine was added again. */
-  rekey(url: string, key: string): void {
-    for (const [agentId, target] of this.targets) if (target.url === url) this.targets.set(agentId, { ...target, key })
+  /** How the machine at `url` is reached since it was added again, for the runs kept from before: this computer's new key there, and the key the machine is known by. */
+  rekey(url: string, key: string, pin?: string): void {
+    for (const [agentId, target] of this.targets) {
+      if (target.url === url) this.targets.set(agentId, { url, key, ...(pin ? { pin } : {}), project: target.project })
+    }
   }
 
   /** A project's relayed run stubs (#1077), newest-first, so `onAgents` can surface them in the list. */
