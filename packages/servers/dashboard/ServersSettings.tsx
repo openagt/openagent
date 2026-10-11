@@ -45,19 +45,23 @@ export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsPro
   const inMachines = (server: ServerRow) => known?.machines.find(machine => machine.url === machineUrl(server.address))
   const installed = (server: ServerRow): boolean => !server.working && server.steps.every(step => step.state === 'done')
 
-  const act = async (change: () => Promise<Answer<unknown>>): Promise<void> => {
+  const act = async (change: () => Promise<Answer<unknown>>): Promise<boolean> => {
     setBusy(true)
     setError(undefined)
     const answer = await change()
     if (!answer.ok) setError(answer.error)
     await reload().catch(() => {})
     setBusy(false)
+    return answer.ok
   }
 
-  const install = (at: string, as: string): void => {
-    if (!known || known.version === 'unknown') return setError('This computer could not say which OpenAgent it runs.')
+  const install = async (at: string, as: string): Promise<boolean> => {
+    if (!known || known.version === 'unknown') {
+      setError('This computer could not say which OpenAgent it runs.')
+      return false
+    }
     setNotAdded(reasons => without(reasons, at))
-    void act(() => connect(host, projects, at, as, known.version))
+    return act(() => connect(host, projects, at, as, known.version))
   }
 
   /** The last step, which is this computer's: the server's door gives a link, and OpenAgent saves the server with it. */
@@ -87,7 +91,9 @@ export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsPro
 
   const submit = (event: FormEvent): void => {
     event.preventDefault()
-    if (address.trim() && user.trim()) install(address.trim(), user.trim())
+    if (!address.trim() || !user.trim()) return
+    // The server is in the list below from here on: the field is free for the next one.
+    void install(address.trim(), user.trim()).then(started => started && setAddress(''))
   }
 
   if (projects.length === 0) return null
@@ -140,12 +146,12 @@ export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsPro
                   </div>
                   <div className="flex gap-2">
                     {behind && !server.working && (
-                      <Button size="sm" disabled={busy} aria-label={`Update ${server.address}`} onClick={() => install(server.address, server.user)}>
+                      <Button size="sm" disabled={busy} aria-label={`Update ${server.address}`} onClick={() => void install(server.address, server.user)}>
                         Update
                       </Button>
                     )}
                     {failed && (
-                      <Button size="sm" disabled={busy} aria-label={`Try ${server.address} again`} onClick={() => install(server.address, server.user)}>
+                      <Button size="sm" disabled={busy} aria-label={`Try ${server.address} again`} onClick={() => void install(server.address, server.user)}>
                         Try again
                       </Button>
                     )}

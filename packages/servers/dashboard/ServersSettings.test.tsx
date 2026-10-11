@@ -70,6 +70,8 @@ describe('Settings → Servers', () => {
     fireEvent.click(connect)
     await waitFor(() => expect(ran()).toContain('connect 203.0.113.5 root 1.2.3'))
     expect(runCommand.mock.calls.every(([projectId]) => projectId === 'p1')).toBe(true)
+    // The server is in the list from here on: the field is free for the next one.
+    await waitFor(() => expect((screen.getByLabelText("The server's address") as HTMLInputElement).value).toBe(''))
   })
 
   test('an install at work lists its steps with their state, and shows the key the server was first met with', async () => {
@@ -162,6 +164,8 @@ describe('Settings → Servers', () => {
     await waitFor(() => expect(refusing.machines).toHaveBeenCalled())
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
     expect(await screen.findByText("nope is not a server's number or name")).toBeTruthy()
+    // What was refused stays in the field, to be corrected.
+    expect((screen.getByLabelText("The server's address") as HTMLInputElement).value).toBe('nope')
     cleanup()
 
     const unread = dashboard(() => ({ ok: false, error: 'servers printed no JSON' }))

@@ -136,8 +136,10 @@ export const STEPS: readonly StepDef[] = [
         {},
         `
   . /etc/os-release
-  apt-get update -q
-  apt-get install -y -q git curl ca-certificates xz-utils procps
+  # A server that was just made often installs its own updates in its first minutes: the install waits its turn.
+  apt() { apt-get -y -q -o DPkg::Lock::Timeout=600 "$@"; }
+  apt update
+  apt install git curl ca-certificates xz-utils procps
   dir=$(mktemp -d)
   trap 'rm -rf "$dir"' EXIT
 
@@ -160,16 +162,19 @@ export const STEPS: readonly StepDef[] = [
   fi
   for bin in node npm npx; do ln -sf ${ROOT}/node/bin/$bin /usr/local/bin/$bin; done
 
-  if ! command -v google-chrome >/dev/null && ! command -v chromium >/dev/null && ! command -v chromium-browser >/dev/null; then
+  # A browser that is there and does not start is none: Ubuntu's own package is only a pointer to its snap store.
+  browser() { for name in google-chrome chromium chromium-browser; do "$name" --version >/dev/null 2>&1 && return 0; done; return 1; }
+  if ! browser; then
     if [ "$(uname -m)" = x86_64 ]; then
       curl -fsSL https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -o "$dir/chrome.deb"
-      apt-get install -y -q "$dir/chrome.deb"
+      apt install "$dir/chrome.deb"
     elif [ "$ID" = debian ]; then
       # Google ships no Chrome for this chip: Chromium is the same browser without its name.
-      apt-get install -y -q chromium
+      apt install chromium
     else
-      apt-get install -y -q chromium-browser
+      apt install chromium-browser
     fi
+    browser || fail "Chrome was installed, and it does not start on this server."
   fi
 `,
       ),
