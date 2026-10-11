@@ -36,6 +36,8 @@ function fakeHost(saved: Record<string, unknown> = {}, refuse?: (projectId: stri
     startRun: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     configureRun: vi.fn(),
     agents: vi.fn(async () => []),
+    machines: vi.fn(async () => ({ version: '0.0.0', machines: [] })),
+    addMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
   }
   return { host, runCommand, files }
 }

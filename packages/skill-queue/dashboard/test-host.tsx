@@ -35,6 +35,8 @@ export function fakeHost(answers: Answers = {}): FakeHost {
     startRun: vi.fn(async () => ({ ok: true as const, agentId: `run-${++runs}` })),
     configureRun: vi.fn(),
     agents: vi.fn(async () => []),
+    machines: vi.fn(async () => ({ version: '0.0.0', machines: [] })),
+    addMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
   }
 }
 

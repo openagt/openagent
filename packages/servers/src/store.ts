@@ -1,0 +1,200 @@
+import { randomBytes } from 'node:crypto'
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { isIP } from 'node:net'
+import { dirname, join } from 'node:path'
+import { STEP_IDS, type StepId } from './steps.js'
+
+/**
+ * The servers this computer installed OpenAgent on, in the person's home folder: where each is,
+ * who logs in there, and how far its install got. The command and the install's own process both
+ * write it, so every change goes through {@link update}.
+ *
+ * It holds no key and no password: the login is this computer's own SSH keys, and the key the
+ * server's door gives is OpenAgent's, kept with its machines.
+ */
+
+export type StepState = 'waiting' | 'running' | 'done' | 'failed'
+
+export interface Step {
+  id: StepId
+  state: StepState
+  /** For a step that failed: what the server said, its last lines. */
+  said?: string
+}
+
+export interface Server {
+  /** The server's number or name: what a person typed, and what its certificate is for. */
+  address: string
+  /** Who logs in over SSH: `root`, or a user that becomes root without a password. */
+  user: string
+  /** What the server's key is known by, as SSH showed it when this computer first met it. */
+  fingerprint?: string
+  steps: Step[]
+  /** The process that installs right now. */
+  worker?: number
+  /** The install was asked for and the server is not among the machines yet: the page adds it once the steps are done. */
+  adding: boolean
+}
+
+export interface Store {
+  servers: Server[]
+}
+
+/** A cap, so a file edited by hand cannot bloat it. */
+export const MAX_SERVERS = 50
+const MAX_SAID = 4_000
+
+const FILE = 'openagent-servers.json'
+
+/** The file's path: beside OpenAgent's own home file, by the same rule. */
+export function storePath(env: NodeJS.ProcessEnv): string {
+  if (env.XDG_CONFIG_HOME) return join(env.XDG_CONFIG_HOME, FILE)
+  return join(env.HOME ?? '', '.' + FILE)
+}
+
+/**
+ * `said` as a server's address is kept, or `undefined` for what is none: a number, or a name, in
+ * the one form the server's door keeps it in too, so the two always read the same. Nothing that
+ * could be read as an option of a command passes.
+ */
+export function addressOf(said: string): string | undefined {
+  if (said.length > 253) return undefined
+  if (isIP(said) === 4) return said
+  if (isIP(said) === 6) {
+    if (said.includes('%') || said.includes('.')) return undefined
+    return new URL(`http://[${said}]`).hostname.slice(1, -1)
+  }
+  return /^(?=.*[a-z])[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(said) ? said.toLowerCase() : undefined
+}
+
+/** Whether `said` is a user name a Linux server has. */
+export const isUser = (said: unknown): said is string => typeof said === 'string' && /^[a-z_][a-z0-9_-]{0,31}$/.test(said)
+
+/** Whether `said` is a version npm keeps a package under. */
+export const isVersion = (said: unknown): said is string => typeof said === 'string' && said.length <= 64 && /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(said)
+
+/** Every step, not started. */
+export const freshSteps = (): Step[] => STEP_IDS.map(id => ({ id, state: 'waiting' }))
+
+const STATES: readonly StepState[] = ['waiting', 'running', 'done', 'failed']
+
+/** Read what a file holds, forgivingly: anything malformed is left out, never a reason to fail. */
+export function sanitize(value: unknown): Store {
+  const obj = value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
+  const servers: Server[] = []
+  for (const entry of Array.isArray(obj.servers) ? obj.servers : []) {
+    if (servers.length >= MAX_SERVERS) break
+    if (!entry || typeof entry !== 'object') continue
+    const { address, user, fingerprint, steps, worker, adding } = entry as Record<string, unknown>
+    if (typeof address !== 'string' || addressOf(address) !== address || !isUser(user)) continue
+    if (servers.some(server => server.address === address)) continue
+    // Every step, in the install's own order: a step the file does not know has not started.
+    const known = new Map<string, Step>()
+    for (const step of Array.isArray(steps) ? steps : []) {
+      if (!step || typeof step !== 'object') continue
+      const { id, state, said } = step as Record<string, unknown>
+      if (typeof id !== 'string' || !STATES.includes(state as StepState)) continue
+      known.set(id, { id: id as StepId, state: state as StepState, ...(typeof said === 'string' && said ? { said: said.slice(-MAX_SAID) } : {}) })
+    }
+    servers.push({
+      address,
+      user,
+      ...(typeof fingerprint === 'string' && /^SHA256:[A-Za-z0-9+/=]{20,64}$/.test(fingerprint) ? { fingerprint } : {}),
+      steps: STEP_IDS.map(id => known.get(id) ?? { id, state: 'waiting' }),
+      ...(Number.isInteger(worker) && (worker as number) > 0 ? { worker: worker as number } : {}),
+      adding: adding === true,
+    })
+  }
+  return { servers }
+}
+
+/** The file is there and cannot be read as what it should hold: a typo made by hand, a disk that failed. */
+export class Unreadable extends Error {
+  constructor(path: string) {
+    super(`${path} cannot be read: correct it, or delete it to start with no server`)
+  }
+}
+
+/** The file as it stands; no file reads as no server. Throws {@link Unreadable} for a file that is there and cannot be read. */
+export async function readStore(env: NodeJS.ProcessEnv): Promise<Store> {
+  const path = storePath(env)
+  let text: string
+  try {
+    text = await readFile(path, 'utf8')
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return sanitize(undefined)
+    throw new Unreadable(path)
+  }
+  try {
+    const value: unknown = JSON.parse(text)
+    if (value && typeof value === 'object' && !Array.isArray(value)) return sanitize(value)
+  } catch {
+    // Told below, as any file that holds something else.
+  }
+  throw new Unreadable(path)
+}
+
+/** How long a writer waits for the lock, and how old a lock is taken over whoever holds it: a change takes milliseconds. */
+const LOCK_WAIT_MS = 5_000
+const LOCK_OLD_MS = 30_000
+
+/** Whether the lock is one left behind: its writer is gone, or it is far older than any change takes. */
+async function leftBehind(lock: string): Promise<boolean> {
+  const [held, age] = await Promise.all([readFile(lock, 'utf8').catch(() => undefined), stat(lock).then(s => Date.now() - s.mtimeMs, () => 0)])
+  if (held === undefined) return false
+  const pid = Number(held.split(':')[0])
+  return age > LOCK_OLD_MS || !Number.isInteger(pid) || !pidAlive(pid)
+}
+
+async function withLock<T>(path: string, run: () => Promise<T>): Promise<T> {
+  const lock = `${path}.lock`
+  // The writer's name on the lock: a writer never removes a lock that is not its own.
+  const mine = `${process.pid}:${randomBytes(8).toString('hex')}`
+  await mkdir(dirname(path), { recursive: true })
+  const deadline = Date.now() + LOCK_WAIT_MS
+  for (;;) {
+    try {
+      await writeFile(lock, mine, { flag: 'wx', mode: 0o600 })
+      break
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err
+      // A writer that died holding the lock must not shut every later one out. Looked at twice,
+      // so a lock another waiter just took over is not taken from it.
+      if ((await leftBehind(lock)) && (await leftBehind(lock))) await rm(lock, { force: true })
+      else if (Date.now() > deadline) throw new Error('the servers file is held by another writer')
+      else await new Promise(resolve => setTimeout(resolve, 20))
+    }
+  }
+  try {
+    return await run()
+  } finally {
+    if ((await readFile(lock, 'utf8').catch(() => undefined)) === mine) await rm(lock, { force: true })
+  }
+}
+
+/**
+ * Change the file: read it, apply `change`, write it back, with no other writer in between.
+ * Written to a temporary file and renamed, so a reader never sees half a file, owner-only.
+ * `change` answers what the caller wants to know of the change.
+ */
+export async function update<T>(env: NodeJS.ProcessEnv, change: (store: Store) => T): Promise<T> {
+  const path = storePath(env)
+  return withLock(path, async () => {
+    const store = await readStore(env)
+    const answer = change(store)
+    const tmp = `${path}.${process.pid}.tmp`
+    await writeFile(tmp, JSON.stringify(sanitize(store), null, 2) + '\n', { mode: 0o600 })
+    await rename(tmp, path)
+    return answer
+  })
+}
+
+/** Whether a process with this id is running. */
+export function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}

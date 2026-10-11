@@ -16,8 +16,8 @@ import { declaring, lineRuns, lookupProvidedCommand, packageBins, projectPackage
  * project has it, are the only ones.
  */
 
-/** The packages every project has: an agent cannot start, be shown or be put on a git host without them, and the door to this computer is no project's to pick. */
-export const BUILT_IN_PACKAGES: readonly string[] = ['@openagt/files', '@openagt/remote-access', '@openagt/skill-branches', '@openagt/skill-github', '@openagt/skill-logs', '@openagt/agent-runner']
+/** The packages every project has: an agent cannot start, be shown or be put on a git host without them, and the door to this computer and the servers it installed OpenAgent on are no project's to pick. */
+export const BUILT_IN_PACKAGES: readonly string[] = ['@openagt/files', '@openagt/remote-access', '@openagt/servers', '@openagt/skill-branches', '@openagt/skill-github', '@openagt/skill-logs', '@openagt/agent-runner']
 
 /**
  * The packages a project has once it picked them (#2023). A skill's package is the project's

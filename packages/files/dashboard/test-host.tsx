@@ -18,6 +18,8 @@ export function fakeHost(): ModuleHost {
     startRun: vi.fn(async () => ({ ok: false as const, error: 'no runs' })),
     configureRun: vi.fn(),
     agents: vi.fn(async () => []),
+    machines: vi.fn(async () => ({ version: '0.0.0', machines: [] })),
+    addMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
   }
 }
 

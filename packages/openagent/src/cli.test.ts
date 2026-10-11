@@ -1,7 +1,8 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { readFile } from 'node:fs/promises'
-import { openagentVersion, parseArgs, printStartupFooter, runCli, type CliIO } from './cli.js'
+import { parseArgs, printStartupFooter, runCli, type CliIO } from './cli.js'
+import { openagentVersion } from './version.js'
 
 function capture(): { io: CliIO; out: string[]; err: string[] } {
   const out: string[] = []

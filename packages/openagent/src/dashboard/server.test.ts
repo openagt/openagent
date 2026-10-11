@@ -9,6 +9,7 @@ import { startDashboard, type Dashboard, type DashboardOptions } from './server.
 import { isExpectedHost, isSameOriginRequest } from './rpc-serve.js'
 import { testDashboardOptions } from '../dashboard-rpc/test-context.js'
 import type { OpenAgentEvent } from '../events.js'
+import { openagentVersion } from '../version.js'
 import type { StartAgentOptions, StartAgentResult } from './types.js'
 import type { IncomingMessage } from 'node:http'
 import { EXPECTED_EXTENSION_VERSION, EXTENSION_VERSION_HEADER } from './bridge-endpoints.js'
@@ -365,12 +366,12 @@ test('/_relay/events streams the run\'s events as ndjson (#1067)', async () => {
   }
 })
 
-test('/_relay/ping answers 200 and starts nothing (#1072)', async () => {
+test('/_relay/ping answers 200 with this OpenAgent\'s version and starts nothing (#1072)', async () => {
   const { base, starts, close } = await relayDashboard()
   try {
     const ok = await fetchText(`${base}/_relay/ping`)
     assert.equal(ok.status, 200)
-    assert.equal(ok.body, '') // an empty body: it only proves reachability
+    assert.deepEqual(JSON.parse(ok.body), { version: openagentVersion() }) // what a machine that added this one reads whether it fell behind by
     assert.equal(starts.length, 0) // a health check must never spawn a run
   } finally {
     await close()

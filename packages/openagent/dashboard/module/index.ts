@@ -300,7 +300,37 @@ export interface ModuleHost {
   configureRun(projectId: string, prompt: string): void
   /** The project's runs the dashboard knows: the ones running, and the recorded ones when the project records them. */
   agents(projectId: string): Promise<ModuleAgent[]>
+  /**
+   * The other computers a run can be sent to, as saved on this one, each with the OpenAgent it
+   * runs, beside this computer's own: how a page tells that a machine fell behind this computer.
+   */
+  machines(): Promise<ModuleMachines>
+  /**
+   * Save the machine a link names: the link another OpenAgent gives for a new device, as a person
+   * pastes it under Machines. This computer is let in there with it, once, and keeps its key.
+   */
+  addMachine(link: string, label?: string): Promise<MachineAdded>
 }
+
+/** A saved machine, as a module sees it: never this computer's key there. */
+export interface ModuleMachine {
+  /** Where the machine answers, as an origin (`https://203.0.113.5`): what it is known by. */
+  id: string
+  label: string
+  url: string
+  /** The OpenAgent it runs; absent for a machine that does not answer right now. */
+  version?: string
+}
+
+/** What {@link ModuleHost.machines} answers. */
+export interface ModuleMachines {
+  /** This computer's own OpenAgent. */
+  version: string
+  machines: ModuleMachine[]
+}
+
+/** How saving a machine went: done, or stopped, with the reason. */
+export type MachineAdded = { ok: true } | { ok: false; error: string }
 
 /** What the dashboard knows about the module it is serving: every service but the commands and the reads, which it binds to the package. */
 export type ModuleHostBase = Omit<ModuleHost, 'runCommand' | 'act' | 'read'>
