@@ -108,7 +108,8 @@ export function OnboardingChecklist({
       action: (
         <div className="flex flex-wrap justify-end gap-2">
           {here && (
-            <Button size="sm" onClick={() => setAddingProject({ folder: here })}>
+            // A folder's path can be longer than the card: the button then takes more lines, not more width.
+            <Button size="sm" className="h-auto min-h-8 max-w-full whitespace-normal py-1 text-left [overflow-wrap:anywhere]" onClick={() => setAddingProject({ folder: here })}>
               {`Add ${here} as project…`}
             </Button>
           )}
@@ -210,6 +211,7 @@ export function OnboardingChecklist({
           {steps.map(step => (
             // The action drops under the text when the row cannot hold both at a readable width:
             // a long folder name on the first step's button would squeeze its text to a strip.
+            // It is never wider than the row, so on a phone its buttons go one under the other.
             <li key={step.key} className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0">
               <div className="flex min-w-0 grow basis-96 items-start gap-3">
                 {/* A checkbox, not a circle: an outlined circle reads as a radio button, i.e. as
@@ -231,7 +233,7 @@ export function OnboardingChecklist({
                   {typeof step.description === 'string' ? <p className="text-xs text-muted-foreground">{step.description}</p> : <div className="mt-1">{step.description}</div>}
                 </div>
               </div>
-              {!step.done && step.action && <div className="shrink-0">{step.action}</div>}
+              {!step.done && step.action && <div className="max-w-full shrink-0">{step.action}</div>}
             </li>
           ))}
         </ul>

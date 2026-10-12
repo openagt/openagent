@@ -5,7 +5,7 @@ import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/pr
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { install } from './install.js'
-import { AlreadyAtWork, changeLogin, mintClaude, mintedIn, notMinted, scrubbed, type LoginOptions, type Mint } from './logins.js'
+import { AlreadyAtWork, changeLogin, mintClaude, mintedIn, notMinted, scrubbed, startedAs, type LoginOptions, type Mint } from './logins.js'
 import { CLAUDE_FILE, SERVICE_UNIT, STEPS, claudeLoginScript, claudeLogoutScript, githubLoginScript, githubLogoutScript } from './steps.js'
 import { freshSteps, readStore, storePath, update, type LoginKind } from './store.js'
 import { GH_LOGIN, pretendServer, testHome } from './test-home.js'
@@ -336,26 +336,56 @@ test('taking a login off the server runs as who keeps it, and forgets it here on
   }
 })
 
-/** What Claude Code draws once the person said yes, as a terminal gets it. */
+/**
+ * What Claude Code draws once the person said yes, as a terminal gets it: recorded from the real
+ * `claude setup-token` (2.1.296) in the terminal lent to it, with a made-up login in the real
+ * one's place. Its last two lines hold no space: each word is put at its column.
+ */
 const screen = (login: string): string =>
-  `\x1b[?25l\x1b[2K\x1b[1A\x1b[2K\x1b[G\x1b[32m✓ Long-lived authentication token created successfully!\x1b[39m\r\n\r\nYour OAuth token (valid for 1 year):\r\n\r\n\x1b[33m${login}\x1b[39m\r\n\r\n\x1b[2mStore this token securely. You won't be able to see it again.\x1b[22m\r\n\x1b[2mUse this token by setting: export CLAUDE_CODE_OAUTH_TOKEN=<token>\x1b[22m\r\n`
+  [
+    '\x1b[2GPaste\x1b[8Gcode\x1b[13Ghere\x1b[18Gif\x1b[21Gprompted\x1b[30G>\r\r\n',
+    '\x1b[?2026l\x1b[?2026h\r\x1b[1C\x1b[7A\x1b[K\r\x1b[1C\x1b[1B\x1b[38;2;78;186;101m✓ Long-lived authentication token created successfully!\r\x1b[1B\x1b[39m\x1b[K',
+    '\r\x1b[1B Your OAuth token (valid for 1 year):\x1b[K',
+    `\r\x1b[1C\x1b[2B\x1b[38;2;255;193;7m${login}\r\x1b[1C\x1b[1B\x1b[39m\x1b[K\r\r\n`,
+    "\x1b[2G\x1b[38;2;153;153;153mStore\x1b[8Gthis\x1b[13Gtoken\x1b[19Gsecurely.\x1b[29GYou\x1b[33Gwon't\x1b[39Gbe\x1b[42Gable\x1b[47Gto\x1b[50Gsee\x1b[54Git\x1b[57Gagain.\x1b[39m\r\r\n\r\r\n",
+    '\x1b[2G\x1b[38;2;153;153;153mUse\x1b[6Gthis\x1b[11Gtoken\x1b[17Gby\x1b[20Gsetting:\x1b[29Gexport\x1b[36GCLAUDE_CODE_OAUTH_TOKEN=<token>\x1b[39m\r\r\n\r\r\n',
+  ].join('')
 
 test('the Claude login is read off what Claude Code shows once all of it is there, and only what reads as one; what is told of a failure never holds a part of one', () => {
   assert.equal(mintedIn(screen(CLAUDE_LOGIN)), CLAUDE_LOGIN)
   // Drawn again, as a terminal's screen is: still the one login.
   assert.equal(mintedIn(screen(CLAUDE_LOGIN) + screen(CLAUDE_LOGIN)), CLAUDE_LOGIN)
+  // The same words with plain spaces between them, as a screen that puts no word at a column would hold them.
+  assert.equal(mintedIn(`Your OAuth token (valid for 1 year):\r\n\r\n${CLAUDE_LOGIN}\r\n\r\nStore this token securely. You won't be able to see it again.\r\n`), CLAUDE_LOGIN)
   // Half a screen is no login: the rest of it may still come.
   const whole = screen(CLAUDE_LOGIN)
   assert.equal(mintedIn(whole.slice(0, whole.indexOf(CLAUDE_LOGIN) + 40)), undefined)
-  assert.equal(mintedIn(whole.slice(0, whole.indexOf('Store this'))), undefined)
+  assert.equal(mintedIn(whole.slice(0, whole.indexOf('Store'))), undefined)
   assert.equal(mintedIn("Browser didn't open? Use the url below to sign in\r\nhttps://claude.ai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e\r\n"), undefined)
   // Other letters in the login's place are not one, and neither is a login with something drawn into it.
   assert.equal(mintedIn(screen('a'.repeat(80))), undefined)
   assert.equal(mintedIn(screen(`${CLAUDE_LOGIN.slice(0, 50)} ${CLAUDE_LOGIN.slice(50)}`)), undefined)
+  // Whatever moves the cursor inside a login: two pieces put side by side are not the login that was made.
+  for (const moved of ['\x1b[60G', '\x1b[1C', '\x1b[5D', '\x1b[2;60H', '\x1b[K', '\x1b[1B', '\x1bM']) {
+    assert.equal(mintedIn(screen(`${CLAUDE_LOGIN.slice(0, 50)}${moved}${CLAUDE_LOGIN.slice(50)}`)), undefined, JSON.stringify(moved))
+  }
+  // A colour inside it is only a colour.
+  assert.equal(mintedIn(screen(`${CLAUDE_LOGIN.slice(0, 50)}\x1b[33m${CLAUDE_LOGIN.slice(50)}`)), CLAUDE_LOGIN)
+  // The words around the login, put at their place another way: a space beside a column, or a row and a column.
+  assert.equal(mintedIn(` Your \x1b[7GOAuth token (valid for 1 year):\r\n${CLAUDE_LOGIN}\r\nStore \x1b[8Gthis\x1b[13Gtoken\x1b[19Gsecurely.`), CLAUDE_LOGIN)
+  assert.equal(mintedIn(`\x1b[3;2HYour\x1b[3;7HOAuth\x1b[3;13Htoken:\x1b[5;2H${CLAUDE_LOGIN}\x1b[7;2HStore\x1b[7;8Hthis\x1b[7;13Htoken\x1b[7;19Hsecurely.`), CLAUDE_LOGIN)
 
   assert.equal(notMinted('started as 4242\r\n\x1b[31mThis command requires a Claude subscription.\x1b[39m\r\n\r\nGoodbye\r\nGoodbye\r\n'), 'Claude Code ended without a login.\nThis command requires a Claude subscription.\nGoodbye')
-  const cut = notMinted(whole.slice(0, whole.indexOf(CLAUDE_LOGIN) + 40))
-  assert.equal(cut, 'Claude Code made a login, and this OpenAgent could not read it off what Claude Code showed.')
+  const unread = 'Claude Code made a login, and this OpenAgent could not read it off what Claude Code showed.'
+  assert.equal(notMinted(whole.slice(0, whole.indexOf(CLAUDE_LOGIN) + 40)), unread)
+  // A screen that holds a login this OpenAgent does not read, however its heading is drawn or cut: none of the screen is told.
+  for (const odd of [`Your OAuth t\x1b[1Cken:\r\n${CLAUDE_LOGIN}\r\n`, `${CLAUDE_LOGIN}\r\nGoodbye\r\n`, `Your\x1b[7GOAuth\x1b[13Gtoken:\r\n${CLAUDE_LOGIN.slice(0, 50)}\x1b[5D${CLAUDE_LOGIN.slice(50)}\r\n`]) {
+    assert.equal(mintedIn(odd), undefined)
+    assert.equal(notMinted(odd), unread)
+  }
+  // The lent terminal's first line names a process only once the whole line is there.
+  assert.equal(startedAs('started as 42'), undefined)
+  assert.equal(startedAs('started as 4242\r\nOpening the browser'), 4242)
   assert.equal(scrubbed(`a ${CLAUDE_LOGIN} b ${CLAUDE_LOGIN}`, CLAUDE_LOGIN), 'a ••• b •••')
   assert.equal(scrubbed('nothing to hide', ''), 'nothing to hide')
 })
