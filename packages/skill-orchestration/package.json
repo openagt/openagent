@@ -1,6 +1,6 @@
 {
   "name": "@openagt/skill-orchestration",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Orchestration as a skill: a main agent plans its task, starts subagents on the parts once the person approved the plan, each a run of its own on a branch started from the main agent's, and lists them, reads their results, stops them and lands their work with the orchestration command, and brings the Subagents section of the dashboard's Settings page.",
   "license": "MIT",
   "repository": {
