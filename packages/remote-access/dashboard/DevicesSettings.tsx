@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Button, SettingsRow, SettingsSection, Switch, formatDateTime, formatRelative, useModuleHost, usePolled, type ModuleSettingsProps } from '@openagt/dashboard/module'
+import { Button, QrCode, SettingsRow, SettingsSection, Switch, formatDateTime, formatRelative, useModuleHost, usePolled } from '@openagt/dashboard/module'
 import { addDevice, loadStatus, removeDevice, setSwitch, type AddLink, type Answer, type DoorStatus } from './devices.js'
-import { QrCode } from './QrCode.js'
 
 // Settings → Devices: the phones and browsers that are in, and the one switch that lets them
 // reach this computer on the Wi-Fi it is on. Read with `remote-access status`; the switch, a new
@@ -14,10 +13,9 @@ export const WARNING =
 
 const NOT_READ: Answer<DoorStatus> | undefined = undefined
 
-export function DevicesSettings({ projects, everyMs = 5_000 }: ModuleSettingsProps & { /** How often the status is read again. */ everyMs?: number }) {
+export function DevicesSettings({ everyMs = 5_000 }: { /** How often the status is read again. */ everyMs?: number }) {
   const host = useModuleHost()
-  const key = projects.map(p => p.id).join(',')
-  const { value: read, reload } = usePolled<Answer<DoorStatus> | undefined>(() => loadStatus(host, projects), NOT_READ, everyMs, [key])
+  const { value: read, reload } = usePolled<Answer<DoorStatus> | undefined>(() => loadStatus(host), NOT_READ, everyMs, [])
   // The answer of the last change, shown until the read made after it has landed: a read that was
   // already on its way when the change was made tells the state before it.
   const [changed, setChanged] = useState<DoorStatus | undefined>()
@@ -54,13 +52,13 @@ export function DevicesSettings({ projects, everyMs = 5_000 }: ModuleSettingsPro
   const turn = (on: boolean): void => {
     setConfirming(false)
     setLink(undefined)
-    void act(() => setSwitch(host, projects, on))
+    void act(() => setSwitch(host, on))
   }
 
   const add = async (): Promise<void> => {
     setBusy(true)
     setError(undefined)
-    const answer = await addDevice(host, projects)
+    const answer = await addDevice(host)
     if (answer.ok) {
       setLink({ ...answer.value, before: status?.devices.map(device => device.id) ?? [] })
       setByNumber(false)
@@ -68,7 +66,6 @@ export function DevicesSettings({ projects, everyMs = 5_000 }: ModuleSettingsPro
     setBusy(false)
   }
 
-  if (projects.length === 0) return null
   return (
     <SettingsSection title="Devices" description="Open OpenAgent on a phone or in another browser, or let another computer's OpenAgent send its runs here. A device gets in with a code once, and stays in until it is removed here.">
       {status?.https ? (
@@ -160,7 +157,7 @@ export function DevicesSettings({ projects, everyMs = 5_000 }: ModuleSettingsPro
                   {device.seen !== undefined ? `, last seen ${formatRelative(device.seen)}` : ''}
                 </p>
               </div>
-              <Button size="sm" variant="outline" disabled={busy} aria-label={`Remove ${device.name}`} onClick={() => void act(() => removeDevice(host, projects, device.id))}>
+              <Button size="sm" variant="outline" disabled={busy} aria-label={`Remove ${device.name}`} onClick={() => void act(() => removeDevice(host, device.id))}>
                 Remove
               </Button>
             </li>

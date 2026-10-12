@@ -11,13 +11,20 @@ import { declaring, lineRuns, lookupProvidedCommand, packageBins, projectPackage
  * own install, so a project installs nothing for them and an empty folder starts an agent and
  * shows it. Each comes through the same contract as any package: a module by its `./dashboard`
  * export, a provider of a kind of data and the writer of its hook lines by its `openagent` key.
- * These two lists are the one place OpenAgent names a package. One of these names among a
+ * These three lists are the one place OpenAgent names a package. One of these names among a
  * project's own dependencies is not read: OpenAgent's copy, and the rules below for which
  * project has it, are the only ones.
  */
 
-/** The packages every project has: an agent cannot start, be shown or be put on a git host without them, and the door to this computer and the servers it installed OpenAgent on are no project's to pick. */
-export const BUILT_IN_PACKAGES: readonly string[] = ['@openagt/files', '@openagt/remote-access', '@openagt/servers', '@openagt/skill-branches', '@openagt/skill-github', '@openagt/skill-logs', '@openagt/agent-runner']
+/** The packages every project has: an agent cannot start, be shown or be put on a git host without them. */
+export const BUILT_IN_PACKAGES: readonly string[] = ['@openagt/files', '@openagt/skill-branches', '@openagt/skill-github', '@openagt/skill-logs', '@openagt/agent-runner']
+
+/**
+ * The packages that are this computer's and no project's: the door to it, and the servers it
+ * installed OpenAgent on. Their pages show and their commands run with no project added, and
+ * what one keeps is in the person's home folder.
+ */
+export const COMPUTER_PACKAGES: readonly string[] = ['@openagt/remote-access', '@openagt/servers']
 
 /**
  * The packages a project has once it picked them (#2023). A skill's package is the project's
@@ -30,14 +37,14 @@ export const BUILT_IN_PACKAGES: readonly string[] = ['@openagt/files', '@openagt
 export const PICKED_PACKAGES: readonly string[] = ['@openagt/skill-tickets', '@openagt/skill-queue', '@openagt/skill-orchestration', '@openagt/skill-browser', '@openagt/agent-scheduler']
 
 /** Every name OpenAgent brings itself. */
-export const OWN_PACKAGE_NAMES: readonly string[] = [...BUILT_IN_PACKAGES, ...PICKED_PACKAGES]
+export const OWN_PACKAGE_NAMES: readonly string[] = [...BUILT_IN_PACKAGES, ...COMPUTER_PACKAGES, ...PICKED_PACKAGES]
 
 /** One of OpenAgent's packages, resolved, with the skill it is when it is one. */
 interface OwnPackage extends ProjectPackage {
   /** The `name` in the front matter of the package's `SKILL.md`; absent for a package that is no skill. */
   skill?: string
-  /** Whether a project has it only once it picked it. */
-  picked: boolean
+  /** Whose it is: every project's, a project's once it picked it, or this computer's. */
+  of: 'every project' | 'a pick' | 'the computer'
 }
 
 let resolved: Promise<OwnPackage[]> | undefined
@@ -61,7 +68,8 @@ async function resolveOwn(): Promise<OwnPackage[]> {
     const manifest = dir ? await readManifest(join(dir, 'package.json')) : undefined
     if (!dir || !manifest) continue
     const skill = /^name:[ \t]*([a-z0-9][a-z0-9-]*)[ \t]*$/m.exec(/^---\r?\n([\s\S]*?)\r?\n---/.exec(await readFile(join(dir, 'SKILL.md'), 'utf8').catch(() => ''))?.[1] ?? '')?.[1]
-    packages.push({ name, dir, manifest, picked: PICKED_PACKAGES.includes(name), ...(skill !== undefined ? { skill } : {}) })
+    const of = PICKED_PACKAGES.includes(name) ? 'a pick' : COMPUTER_PACKAGES.includes(name) ? 'the computer' : 'every project'
+    packages.push({ name, dir, manifest, of, ...(skill !== undefined ? { skill } : {}) })
   }
   return packages
 }
@@ -69,13 +77,15 @@ async function resolveOwn(): Promise<OwnPackage[]> {
 /**
  * The packages OpenAgent brings to the project at `root`: the ones every project has, and
  * each picked one the project has by its rule (see {@link PICKED_PACKAGES}). Read off the
- * project's files each time, so a skill written or deleted a moment ago counts at once.
+ * project's files each time, so a skill written or deleted a moment ago counts at once. None of
+ * the computer's: no project has those.
  */
 export async function builtInPackagesOf(root: string): Promise<ProjectPackage[]> {
   const packages: ProjectPackage[] = []
   let lines: string[] | undefined
   for (const pkg of await (resolved ??= resolveOwn())) {
-    if (pkg.picked) {
+    if (pkg.of === 'the computer') continue
+    if (pkg.of === 'a pick') {
       if (pkg.skill !== undefined ? !(await holdsSkill(root, pkg.skill)) : !runsOneOf((lines ??= await hookLines(root)), pkg)) continue
     }
     packages.push(pkg)
@@ -107,14 +117,19 @@ export async function ownPackages(root: string): Promise<ProjectPackage[]> {
   return (await projectPackages(root)).filter(pkg => !OWN_PACKAGE_NAMES.includes(pkg.name))
 }
 
+/** The packages that are this computer's: see {@link COMPUTER_PACKAGES}. */
+export async function computerPackages(): Promise<ProjectPackage[]> {
+  return (await (resolved ??= resolveOwn())).filter(pkg => pkg.of === 'the computer')
+}
+
 /**
- * The services of the packages every project has: a package declares
+ * The services of the computer's packages: a package declares
  * `"openagent": { "service": "<command>" }`, and `<command> serve` runs for as long as OpenAgent
- * runs (`package-services.ts`). Only those packages: a service is this computer's, and a package
- * a project picked is that project's.
+ * runs (`package-services.ts`). Only those packages: a service is this computer's, and any
+ * other package is a project's.
  */
 export async function builtInServices(): Promise<ProvidedCommand[]> {
-  return declaring((await (resolved ??= resolveOwn())).filter(pkg => !pkg.picked), 'service')
+  return declaring(await computerPackages(), 'service')
 }
 
 /** The directories the commands of OpenAgent's packages sit in: what a hook line's PATH gains after the project's own installed tools. */

@@ -18,8 +18,9 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The first time this computer meets a server, the server's key is taken as it is, shown,
   and remembered. A server that later shows another key is refused. Picked over showing the
   key and waiting for a click, and over taking only servers this computer already met.
-- SSH is only for the install, an update and the server's logins. For everything else this
-  computer reaches the server through the server's door, with a key of its own.
+- SSH is only for the install, an update, the server's logins and a device's code. For
+  everything else this computer reaches the server through the server's door, with a key
+  of its own.
 
 ## On the server
 - Everything runs as a user of its own, `openagent`. `root`, or a user that becomes root,
@@ -37,6 +38,13 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A login goes to the server over SSH, as the install does. Picked over the server's door,
   which is open to the internet: every device that is let in could then change the
   server's logins.
+
+## A device gets in
+- A phone or a browser gets into a server with a code this computer asks the server for,
+  over SSH: the server's row has an "Add device" button, which shows the code as a QR code
+  and a link. Picked over letting this computer's browser in by itself at the end of the
+  install and adding the phone from the server's own Settings, one more step for the
+  phone.
 
 ## An update
 - When the server falls behind this computer, its row says so and has an "Update" button.

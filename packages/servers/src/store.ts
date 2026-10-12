@@ -113,6 +113,27 @@ export const BEAT_MS = 10_000
 export const SILENT_MS = 45_000
 
 /**
+ * Say again and again that a work is alive: `beat` every `everyMs`, one at a time, a failed one
+ * left at that. `stop` ends it and waits for the one on its way: a beat changes the file, and
+ * one that landed after the work's own last word would write when the work has ended.
+ */
+export function heartbeat(beat: () => Promise<unknown>, everyMs: number): { stop(): Promise<void> } {
+  let onItsWay: Promise<void> | undefined
+  const timer = setInterval(() => {
+    onItsWay ??= Promise.resolve()
+      .then(beat)
+      .catch(() => {})
+      .then(() => void (onItsWay = undefined))
+  }, everyMs)
+  return {
+    stop: async () => {
+      clearInterval(timer)
+      await onItsWay
+    },
+  }
+}
+
+/**
  * Whether the server's install runs right now: its process is there, and said so a moment ago.
  * The process's number alone is no proof: one that died without a word (a laptop that was
  * switched off) leaves its number in the file, and the system gives it to another program later.

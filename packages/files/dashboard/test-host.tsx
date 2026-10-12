@@ -12,6 +12,7 @@ export function fakeHost(): ModuleHost {
     package: '@openagt/files',
     runCommand: vi.fn(async () => ({ ok: false as const, error: 'no commands' })),
     act: vi.fn(async () => ({ ok: false as const, error: 'no commands' })),
+    runComputerCommand: vi.fn(async () => ({ ok: false as const, error: 'not the computer\'s' })),
     read: vi.fn(async () => ({ ok: false as const, error: 'reads are mocked' })),
     openAgent: vi.fn(),
     openPage: vi.fn(),

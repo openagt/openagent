@@ -1,14 +1,15 @@
 import { realpath, stat } from 'node:fs/promises'
 import { dirname, join, normalize, sep } from 'node:path'
 import { packageBins, runPackageCommand, type PackageCommandResult, type ProjectPackage } from '@openagt/agent-data'
-import { builtInPackagesOf, ownPackages } from './built-in.js'
+import { builtInPackagesOf, computerPackages, ownPackages } from './built-in.js'
 
 /**
  * A package that adds to the dashboard (#1774): its browser part, named by its
  * `exports["./dashboard"]`, and optionally its server part, named by `exports["./server"]`.
  * Any dependency of the project that exports `./dashboard` is a module, whoever wrote it, and the
  * packages OpenAgent brings itself come the same way, for the projects that have them
- * (`built-in.ts`).
+ * (`built-in.ts`). A package that is this computer's is a module of no project: see
+ * {@link readComputerModules}.
  */
 export interface ProjectModule {
   /** The package's name. */
@@ -19,7 +20,7 @@ export interface ProjectModule {
   dir: string
   /** The module's browser part's file name inside {@link dir}. */
   entry: string
-  /** The package's commands, by name, as absolute paths: what the module may run in this project. */
+  /** The package's commands, by name, as absolute paths: what the module may run, in this project or, for one of the computer's, in none. */
   bins: Record<string, string>
   /** The module's server part, an absolute path inside the package, when it has one. */
   server?: string
@@ -86,6 +87,24 @@ export async function findProjectModule(root: string, name: string): Promise<Pro
 }
 
 /**
+ * The modules that are this computer's and no project's: the ones among the packages OpenAgent
+ * brings for the computer (`built-in.ts`). They are there with no project added. Sorted by name.
+ */
+export async function readComputerModules(): Promise<ProjectModule[]> {
+  const modules: ProjectModule[] = []
+  for (const pkg of await computerPackages()) {
+    const module = await readModule(pkg)
+    if (module) modules.push(module)
+  }
+  return modules.sort((a, b) => a.package.localeCompare(b.package))
+}
+
+/** The one module of this computer's that `name` names, or undefined. */
+export async function findComputerModule(name: string): Promise<ProjectModule | undefined> {
+  return (await readComputerModules()).find(module => module.package === name)
+}
+
+/**
  * The file a module serves at `rel`, a path relative to its module's directory: its module, its
  * stylesheet, a chunk. `undefined` for a path that leaves that directory (symlinks resolved) or
  * names no file, so nothing else of the package, and nothing of the project, is ever served.
@@ -110,7 +129,8 @@ const MAX_ARG_LENGTH = 4096
  * (`npx @openagt/skill-logs@0.1`), so the module and the agent see the same thing and OpenAgent knows neither.
  *
  * `command` picks one of the package's commands; a package with exactly one needs none. The
- * command runs with Node (a package's commands are Node scripts), in the project root, never
+ * command runs with Node (a package's commands are Node scripts), in `root` (the project's, or
+ * the person's home folder for a module of the computer's), never
  * through a shell, bounded in time and output. Refused: a command the package does not have, too
  * many or too long arguments. A command that exits non-zero answers its last stderr line; one that
  * prints no JSON says so.

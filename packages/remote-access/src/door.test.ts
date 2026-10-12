@@ -75,7 +75,7 @@ test('a device that is not in gets the page that says how to get in, and nothing
   try {
     const page = await fetch(`${r.at}/settings`, { headers: { accept: 'text/html' } })
     assert.equal(page.status, 401)
-    assert.match(await page.text(), /This device is not in[\s\S]*press Add device/)
+    assert.match(await page.text(), /This device is not in[\s\S]*On the computer that runs OpenAgent, open Settings, find Devices, press Add device/)
     const call = await fetch(`${r.at}/_rpc/onProjects`, { method: 'POST', body: '[]' })
     assert.equal(call.status, 401)
     const wrongKey = await fetch(`${r.at}/`, { headers: { cookie: `${DEVICE_COOKIE}=nobody.nothing` } })

@@ -8,7 +8,7 @@ import type { BridgeBrowserOwner } from '../bridge-browser.js'
 import { serveClientBundle } from './static.js'
 import { makeRpcMount, RPC_PREFIX, isSameOriginRequest, isExpectedHost } from './rpc-serve.js'
 import { requestPathname } from '../request-path.js'
-import { MODULES_PREFIX, serveModuleFile } from './module-serve.js'
+import { COMPUTER_MODULES_PREFIX, MODULES_PREFIX, serveComputerModuleFile, serveModuleFile } from './module-serve.js'
 import type { AddProjectResult, RemoveProjectResult, StartAgentOptions, StartAgentResult } from './types.js'
 import type { EventsSource, RemoteAgents } from './rpc-serve.js'
 import { handleRelayRequest, RELAY_PREFIX, type RelayHandlers } from './relay-endpoints.js'
@@ -238,9 +238,11 @@ export function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
       return
     }
     // A project's dashboard modules (#1774): only the files of a package the project brings as a module.
-    if (pathname.startsWith(`${MODULES_PREFIX}/`)) {
+    // The computer's modules are no project's, and are served by their package alone.
+    const ofComputer = pathname.startsWith(`${COMPUTER_MODULES_PREFIX}/`)
+    if (ofComputer || pathname.startsWith(`${MODULES_PREFIX}/`)) {
       // Void-dispatched like the bundle: a throw here must answer, not take the daemon down (#938).
-      void serveModuleFile(req, res, pathname).catch(() => {
+      void (ofComputer ? serveComputerModuleFile : serveModuleFile)(req, res, pathname).catch(() => {
         if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain' }).end('module file unreadable')
       })
       return

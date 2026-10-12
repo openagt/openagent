@@ -29,6 +29,7 @@ export function fakeHost(answers: Answers = {}): FakeHost {
     package: '@openagt/skill-queue',
     runCommand: vi.fn(answer),
     act: vi.fn(answer),
+    runComputerCommand: vi.fn(async () => ({ ok: false as const, error: 'not the computer\'s' })),
     read: vi.fn(async () => ({ ok: false as const, error: 'this module has no server part' })),
     openAgent: vi.fn(),
     openPage: vi.fn(),

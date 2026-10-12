@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { ModuleHostContext, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
+import { ModuleHostContext, type ModuleCommandResult, type ModuleHost } from '@openagt/dashboard/module'
 import { DevicesSettings, WARNING } from './DevicesSettings.js'
-
-const PROJECT = { id: 'p1', name: 'gemstack', gitHost: true }
-const OTHER = { id: 'p2', name: 'other', gitHost: false }
 
 const OFF = { on: false, listening: false, devices: [] }
 const OPEN = { on: true, listening: true, addresses: { name: 'http://adas-macbook.local:4201', number: 'http://192.168.1.23:4201' }, devices: [] }
@@ -13,11 +10,13 @@ const LINK = { url: 'http://adas-macbook.local:4201/_remote-access/enter#code', 
 
 /** A host whose `remote-access` command answers what `answer` says for its arguments. */
 function door(answer: (args: string[]) => ModuleCommandResult) {
-  const runCommand = vi.fn(async (_projectId: string, args: string[]) => answer(args))
+  const runComputerCommand = vi.fn(async (args: string[]) => answer(args))
+  const inProject = vi.fn(async () => ({ ok: false as const, error: 'the door is no project\'s' }))
   const host: ModuleHost = {
     package: '@openagt/remote-access',
-    runCommand,
-    act: runCommand,
+    runCommand: inProject,
+    act: inProject,
+    runComputerCommand,
     read: vi.fn(async () => ({ ok: false as const, error: 'no server part' })),
     openAgent: vi.fn(),
     openPage: vi.fn(),
@@ -29,13 +28,13 @@ function door(answer: (args: string[]) => ModuleCommandResult) {
     watchScreen: vi.fn(async () => undefined),
     sendToScreen: vi.fn(async () => false),
   }
-  return { host, runCommand }
+  return { host, runComputerCommand }
 }
 
-function show(host: ModuleHost, projects: ModuleProject[] = [PROJECT, OTHER]) {
+function show(host: ModuleHost) {
   return render(
     <ModuleHostContext.Provider value={host}>
-      <DevicesSettings projects={projects} everyMs={40} />
+      <DevicesSettings everyMs={40} />
     </ModuleHostContext.Provider>,
   )
 }
@@ -47,23 +46,19 @@ const qrPath = (): string => screen.getByRole('img', { name: 'The code a new dev
 afterEach(cleanup)
 
 describe('Settings → Devices', () => {
-  test('no project, no section', () => {
-    const { host } = door(() => ok(OFF))
-    expect(show(host, []).container.textContent).toBe('')
-  })
-
-  test('off: the switch alone, no Add device, and the command is asked in one project', async () => {
-    const { host, runCommand } = door(() => ok(OFF))
+  test('off: the switch alone, no Add device, and the command is asked in no project', async () => {
+    const { host, runComputerCommand } = door(() => ok(OFF))
     show(host)
     await waitFor(async () => expect((await theSwitch()).getAttribute('aria-checked')).toBe('false'))
     await waitFor(() => expect((screen.getByRole('switch', { name: 'Phone on Wi-Fi' }) as HTMLButtonElement).hasAttribute('data-disabled')).toBe(false))
     expect(screen.queryByRole('button', { name: 'Add device' })).toBeNull()
-    expect(runCommand.mock.calls.every(([projectId]) => projectId === 'p1')).toBe(true)
+    expect(runComputerCommand).toHaveBeenCalledWith(['status'])
+    expect(host.runCommand).not.toHaveBeenCalled()
   })
 
   test('turning it on says first that the link is not locked; Cancel changes nothing, Turn on opens the door', async () => {
     let state: object = OFF
-    const { host, runCommand } = door(args => {
+    const { host, runComputerCommand } = door(args => {
       if (args[0] === 'on') state = OPEN
       return ok(state)
     })
@@ -71,28 +66,28 @@ describe('Settings → Devices', () => {
     await waitFor(async () => expect((await theSwitch()).hasAttribute('data-disabled')).toBe(false))
     fireEvent.click(await theSwitch())
     expect(screen.getByText(WARNING)).toBeTruthy()
-    expect(runCommand).not.toHaveBeenCalledWith('p1', ['on'])
+    expect(runComputerCommand).not.toHaveBeenCalledWith(['on'])
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(screen.queryByText(WARNING)).toBeNull()
-    expect(runCommand).not.toHaveBeenCalledWith('p1', ['on'])
+    expect(runComputerCommand).not.toHaveBeenCalledWith(['on'])
 
     fireEvent.click(await theSwitch())
     fireEvent.click(screen.getByRole('button', { name: 'Turn on' }))
-    await waitFor(() => expect(runCommand).toHaveBeenCalledWith('p1', ['on']))
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['on']))
     expect(await screen.findByRole('button', { name: 'Add device' })).toBeTruthy()
     expect((await theSwitch()).getAttribute('aria-checked')).toBe('true')
   })
 
   test('turning it off asks nothing first', async () => {
     let state: object = OPEN
-    const { host, runCommand } = door(args => {
+    const { host, runComputerCommand } = door(args => {
       if (args[0] === 'off') state = OFF
       return ok(state)
     })
     show(host)
     await screen.findByRole('button', { name: 'Add device' })
     fireEvent.click(await theSwitch())
-    await waitFor(() => expect(runCommand).toHaveBeenCalledWith('p1', ['off']))
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['off']))
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Add device' })).toBeNull())
     expect(screen.queryByText(WARNING)).toBeNull()
   })
@@ -135,7 +130,7 @@ describe('Settings → Devices', () => {
   test('a removed device does not come back from a read that was on its way before the removal', async () => {
     let late: ((result: ModuleCommandResult) => void) | undefined
     let removed = false
-    const runCommand = vi.fn(async (_projectId: string, args: string[]): Promise<ModuleCommandResult> => {
+    const runComputerCommand = vi.fn(async (args: string[]): Promise<ModuleCommandResult> => {
       if (args[0] === 'remove') {
         removed = true
         // The read that was on its way lands now, telling the list from before.
@@ -144,11 +139,11 @@ describe('Settings → Devices', () => {
       }
       // Every read made after the removal is still on its way when the page is looked at.
       if (removed) return new Promise(() => {})
-      if (late === undefined && runCommand.mock.calls.length > 1) return new Promise(resolve => (late = resolve))
+      if (late === undefined && runComputerCommand.mock.calls.length > 1) return new Promise(resolve => (late = resolve))
       return ok({ ...OPEN, devices: [PHONE] })
     })
     const { host } = door(() => ok(OPEN))
-    show({ ...host, runCommand })
+    show({ ...host, runComputerCommand })
     const remove = await screen.findByRole('button', { name: 'Remove iPhone, Safari' })
     await waitFor(() => expect(late).toBeDefined())
     fireEvent.click(remove)
@@ -178,14 +173,6 @@ describe('Settings → Devices', () => {
     expect(screen.queryByRole('button', { name: 'Add device' })).toBeNull()
   })
 
-  test('a project whose folder is gone does not block the section: the next project is asked', async () => {
-    const runCommand = vi.fn(async (projectId: string): Promise<ModuleCommandResult> => (projectId === 'p1' ? { ok: false, error: 'remote-access failed: spawn node ENOENT' } : ok(OPEN)))
-    const { host } = door(() => ok(OPEN))
-    show({ ...host, runCommand })
-    expect(await screen.findByRole('button', { name: 'Add device' })).toBeTruthy()
-    expect(screen.queryByRole('alert')).toBeNull()
-  })
-
   test('a computer with no name offers no second code', async () => {
     const { host } = door(args => (args[0] === 'add' ? ok({ url: LINK.numberUrl, expires: LINK.expires }) : ok(OPEN)))
     show(host)
@@ -196,7 +183,7 @@ describe('Settings → Devices', () => {
 
   test('the devices that are in are listed, and each is removed alone', async () => {
     let state: object = { ...OPEN, devices: [PHONE, { id: 'fff000fff000', name: 'Mac, Chrome', added: PHONE.added }] }
-    const { host, runCommand } = door(args => {
+    const { host, runComputerCommand } = door(args => {
       if (args[0] === 'remove') state = { ...OPEN, devices: [PHONE] }
       return ok(state)
     })
@@ -205,7 +192,7 @@ describe('Settings → Devices', () => {
     expect(screen.getByText('Added 3m ago, last seen 1m ago')).toBeTruthy()
     expect(screen.getByText('Added 3m ago')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Remove Mac, Chrome' }))
-    await waitFor(() => expect(runCommand).toHaveBeenCalledWith('p1', ['remove', 'fff000fff000']))
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['remove', 'fff000fff000']))
     await waitFor(() => expect(screen.queryByText('Mac, Chrome')).toBeNull())
     expect(screen.getByText('iPhone, Safari')).toBeTruthy()
   })

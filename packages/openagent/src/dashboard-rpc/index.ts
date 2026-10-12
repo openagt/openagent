@@ -20,7 +20,7 @@ export { type EditorInfo } from '../dashboard/open-in-app.js'
 export { onQuota } from './quota.js'
 export { onModels } from './models.js'
 export { onMachines, sendAddMachine, sendRemoveMachine, onMachinesReachable, onMachineVersions, type Machine, type AddMachineResult, type MachineVersions } from './machines.js'
-export { onModules, runModuleCommand, readModule, type DashboardModule, type ModuleCommandResult, type ModuleReadResult } from './modules.js'
+export { onModules, runModuleCommand, runComputerCommand, readModule, type DashboardModule, type ModuleCommandResult, type ModuleReadResult } from './modules.js'
 export { onProjectSkills, sendChangeSkills, sendCommitSkills, type ProjectSkills, type ProjectSkill, type ChangeSkillsResult } from './skills.js'
 
 import * as reads from './reads.js'

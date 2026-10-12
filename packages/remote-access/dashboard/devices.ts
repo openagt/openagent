@@ -1,9 +1,8 @@
-import type { ModuleHost, ModuleProject } from '@openagt/dashboard/module'
+import type { ModuleHost } from '@openagt/dashboard/module'
 
 // What the section shows: the answer of `remote-access status`, read forgivingly, and the three
 // things a person does, each one of the package's own commands. The devices are this computer's,
-// not a project's: the dashboard runs a package's command in a project, so each is run in the
-// first project that answers, and reads the same in any.
+// not a project's: each command runs in no project, so the section is there with no project added.
 
 /** A phone or a browser that is in. */
 export interface DeviceRow {
@@ -58,21 +57,14 @@ function readLink(output: unknown): AddLink | undefined {
   return link && until ? { url: link, ...(byNumber ? { numberUrl: byNumber } : {}), expires: until } : undefined
 }
 
-async function run<T>(host: ModuleHost, projects: ModuleProject[], args: string[], read: (output: unknown) => T | undefined): Promise<Answer<T>> {
-  let first: Answer<T> = { ok: false, error: 'no project to run the command in' }
-  // A project whose folder is gone cannot run anything: the next one is asked, and the first failure is the one told.
-  for (const [index, project] of projects.entries()) {
-    const result = await host.runCommand(project.id, args).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
-    if (result.ok) {
-      const value = read(result.output)
-      return value !== undefined ? { ok: true, value } : { ok: false, error: 'the command answered something else than expected' }
-    }
-    if (index === 0) first = result
-  }
-  return first
+async function run<T>(host: ModuleHost, args: string[], read: (output: unknown) => T | undefined): Promise<Answer<T>> {
+  const result = await host.runComputerCommand(args).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
+  if (!result.ok) return result
+  const value = read(result.output)
+  return value !== undefined ? { ok: true, value } : { ok: false, error: 'the command answered something else than expected' }
 }
 
-export const loadStatus = (host: ModuleHost, projects: ModuleProject[]): Promise<Answer<DoorStatus>> => run(host, projects, ['status'], readStatus)
-export const setSwitch = (host: ModuleHost, projects: ModuleProject[], on: boolean): Promise<Answer<DoorStatus>> => run(host, projects, [on ? 'on' : 'off'], readStatus)
-export const addDevice = (host: ModuleHost, projects: ModuleProject[]): Promise<Answer<AddLink>> => run(host, projects, ['add'], readLink)
-export const removeDevice = (host: ModuleHost, projects: ModuleProject[], id: string): Promise<Answer<DoorStatus>> => run(host, projects, ['remove', id], readStatus)
+export const loadStatus = (host: ModuleHost): Promise<Answer<DoorStatus>> => run(host, ['status'], readStatus)
+export const setSwitch = (host: ModuleHost, on: boolean): Promise<Answer<DoorStatus>> => run(host, [on ? 'on' : 'off'], readStatus)
+export const addDevice = (host: ModuleHost): Promise<Answer<AddLink>> => run(host, ['add'], readLink)
+export const removeDevice = (host: ModuleHost, id: string): Promise<Answer<DoorStatus>> => run(host, ['remove', id], readStatus)

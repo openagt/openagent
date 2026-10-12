@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { Button, Checkbox, Input, SettingsSection, useModuleHost, usePolled, type ModuleMachines, type ModuleSettingsProps } from '@openagt/dashboard/module'
-import { askLink, connect, forget, loadServers, login, logout, markAdded, ownGithub, type Answer, type OwnGithub, type ServerRow, type StepState } from './servers.js'
+import { Button, Checkbox, Input, QrCode, SettingsSection, useModuleHost, usePolled, type ModuleMachines } from '@openagt/dashboard/module'
+import { askLink, connect, forget, loadServers, login, logout, markAdded, ownGithub, type Answer, type DoorLink, type OwnGithub, type ServerRow, type StepState } from './servers.js'
 
 // Settings → Servers: "Connect your VPS". A person gives a server's address and a user name, and
 // OpenAgent installs itself there over SSH. The install is the `servers` command's own process;
@@ -12,8 +12,14 @@ import { askLink, connect, forget, loadServers, login, logout, markAdded, ownGit
 // person ticks it or presses for it. Claude's is made new for the server: a press opens this
 // computer's browser, and the person says yes there. Both go to the server over SSH, from the
 // command's own process: no login ever comes to this page.
+//
+// An installed server also gives a code for a phone or a browser: a server has no screen to press
+// "Add device" on, so this computer asks the server's door for the link over SSH, and the row
+// shows it as the Devices section does, as a QR code and a link.
 
 const NOT_READ: Answer<ServerRow[]> | undefined = undefined
+/** How long a door's code is good for. */
+const CODE_MS = 5 * 60_000
 const NO_MACHINES: ModuleMachines | undefined = undefined
 const NOT_ASKED: Answer<OwnGithub> | undefined = undefined
 
@@ -54,13 +60,12 @@ export function olderThan(a: string, b: string): boolean {
   return false
 }
 
-export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsProps & { /** How often the installs are read again. */ everyMs?: number }) {
+export function ServersSettings({ everyMs = 3_000 }: { /** How often the installs are read again. */ everyMs?: number }) {
   const host = useModuleHost()
-  const key = projects.map(p => p.id).join(',')
-  const { value: read, reload } = usePolled<Answer<ServerRow[]> | undefined>(() => loadServers(host, projects), NOT_READ, everyMs, [key])
+  const { value: read, reload } = usePolled<Answer<ServerRow[]> | undefined>(() => loadServers(host), NOT_READ, everyMs, [])
   const { value: known, reload: reloadMachines } = usePolled<ModuleMachines | undefined>(() => host.machines(), NO_MACHINES, Math.max(everyMs, 10_000), [])
   // Whose GitHub login a copy would be: asked of this computer's own gh, which asks GitHub, so not often.
-  const { value: own } = usePolled<Answer<OwnGithub> | undefined>(() => ownGithub(host, projects), NOT_ASKED, Math.max(everyMs, 5 * 60_000), [key])
+  const { value: own } = usePolled<Answer<OwnGithub> | undefined>(() => ownGithub(host), NOT_ASKED, Math.max(everyMs, 5 * 60_000), [])
   const account = own?.ok && 'account' in own.value ? own.value.account : undefined
   /** Why there is no GitHub login to copy, once this computer said so. */
   const noLogin = own === undefined || account !== undefined ? undefined : own.ok ? ('problem' in own.value ? own.value.problem : undefined) : own.error
@@ -72,6 +77,8 @@ export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsPro
   // Why a server whose install ended is not among the machines, by its address.
   const [notAdded, setNotAdded] = useState<Record<string, string>>({})
   const adding = useRef(new Set<string>())
+  // The code on the page, and the server whose door made it.
+  const [code, setCode] = useState<(DoorLink & { address: string }) | undefined>()
 
   const servers = read?.ok ? read.value : []
   const inMachines = (server: ServerRow, among = known) => among?.machines.find(machine => machine.url === server.url)
@@ -93,7 +100,7 @@ export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsPro
       return false
     }
     setNotAdded(reasons => without(reasons, at))
-    return act(() => connect(host, projects, at, as, known.version, github))
+    return act(() => connect(host, at, as, known.version, github))
   }
 
   /**
@@ -110,11 +117,11 @@ export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsPro
     try {
       // Read now, not as the page last saw them: the machines change under Machines, too.
       if (inMachines(server, await host.machines())?.version === undefined) {
-        const link = await askLink(host, projects, server.address)
+        const link = await askLink(host, server.address)
         const added = link.ok ? await host.addMachine(link.value.url, server.address) : link
         if (!added.ok) return stopped(added.error)
       }
-      const told = await markAdded(host, projects, server.address)
+      const told = await markAdded(host, server.address)
       if (!told.ok) return stopped(told.error)
       await Promise.all([reload(), reloadMachines()]).catch(() => {})
     } catch (err) {
@@ -131,6 +138,25 @@ export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsPro
     for (const server of servers) if (server.adding && installed(server) && notAdded[server.address] === undefined) void addToMachines(server)
   })
 
+  // A code is good for five minutes: it leaves the page when its time is up.
+  useEffect(() => {
+    if (!code) return
+    // Never longer than a code lives, whatever the server said its time is.
+    const timer = setTimeout(() => setCode(undefined), Math.min(CODE_MS, Math.max(0, Date.parse(code.expires) - Date.now())))
+    return () => clearTimeout(timer)
+  }, [code])
+
+  /** Ask the server's door for a code a phone or a browser gets in with, and show it. */
+  const addDevice = async (server: ServerRow): Promise<void> => {
+    setBusy(true)
+    setError(undefined)
+    setCode(undefined)
+    const link = await askLink(host, server.address)
+    if (link.ok) setCode({ ...link.value, address: server.address })
+    else setError(link.error)
+    setBusy(false)
+  }
+
   const submit = (event: FormEvent): void => {
     event.preventDefault()
     if (!address.trim() || !user.trim()) return
@@ -138,7 +164,6 @@ export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsPro
     void install(address.trim(), user.trim(), copy && account !== undefined).then(started => started && setAddress(''))
   }
 
-  if (projects.length === 0) return null
   return (
     <SettingsSection
       title="Servers"
@@ -215,6 +240,11 @@ export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsPro
                         {machine ? 'Add again' : 'Add to Machines'}
                       </Button>
                     )}
+                    {installed(server) && (
+                      <Button size="sm" variant="outline" disabled={busy} aria-label={`Add a device to ${server.address}`} onClick={() => void addDevice(server)}>
+                        Add device
+                      </Button>
+                    )}
                     {!server.working && (
                       <Button
                         size="sm"
@@ -222,13 +252,30 @@ export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsPro
                         disabled={busy}
                         aria-label={`Remove ${server.address}`}
                         title="Takes the server off this list. Nothing is changed on the server: its logins stay there until you remove them."
-                        onClick={() => void act(() => forget(host, projects, server.address))}
+                        onClick={() => void act(() => forget(host, server.address))}
                       >
                         Remove
                       </Button>
                     )}
                   </div>
                 </div>
+                {code?.address === server.address && (
+                  <div className="space-y-2">
+                    <QrCode text={code.url} label={`The code a new device scans to get into ${server.address}`} />
+                    <p className="text-xs text-muted-foreground">
+                      Scan it with the device's camera: it opens OpenAgent on the server, from anywhere. The code works once, for five minutes.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      {/* The code is spent by the tab it opens: it leaves the page with the press. */}
+                      <a href={code.url} target="_blank" rel="noreferrer" className="text-xs underline" onClick={() => setCode(undefined)}>
+                        Let this browser in instead
+                      </a>
+                      <Button size="sm" variant="outline" onClick={() => setCode(undefined)}>
+                        Done
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 <ol aria-label={`The install on ${server.address}`} className="space-y-1 text-xs">
                   {server.steps.map(step => (
                     <li key={step.id} aria-label={`${step.label}: ${STATE_WORD[step.state]}`}>
@@ -293,7 +340,7 @@ export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsPro
                         disabled={busy || github.working || account === undefined}
                         aria-label={`Copy my GitHub login to ${server.address}`}
                         title={account !== undefined ? `Copies the login of ${account} from this computer to the server, over SSH.` : noLogin}
-                        onClick={() => void act(() => login(host, projects, server.address, 'github'))}
+                        onClick={() => void act(() => login(host, server.address, 'github'))}
                       >
                         {github.there ? 'Copy again' : 'Copy my login'}
                       </Button>
@@ -305,7 +352,7 @@ export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsPro
                           disabled={busy}
                           aria-label={`Remove the GitHub login from ${server.address}`}
                           title="Deletes the login on the server. The login itself stays good: it is this computer's own. To end it everywhere, take it back on github.com and log this computer's gh in again."
-                          onClick={() => void act(() => logout(host, projects, server.address, 'github'))}
+                          onClick={() => void act(() => logout(host, server.address, 'github'))}
                         >
                           Remove
                         </Button>
@@ -332,7 +379,7 @@ export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsPro
                         disabled={busy || (claude.working && claude.asking !== true)}
                         aria-label={`Log in to Claude for ${server.address}`}
                         title="Opens this computer's browser, where you say yes once. The login is made for this server alone and lasts a year; this computer's own Claude login is not touched."
-                        onClick={() => void act(() => login(host, projects, server.address, 'claude'))}
+                        onClick={() => void act(() => login(host, server.address, 'claude'))}
                       >
                         {claude.asking ? 'Start over' : claude.there ? 'Log in again' : 'Log in to Claude'}
                       </Button>
@@ -343,7 +390,7 @@ export function ServersSettings({ projects, everyMs = 3_000 }: ModuleSettingsPro
                           disabled={busy}
                           aria-label={`Remove the Claude login from ${server.address}`}
                           title="Deletes the login on the server and starts OpenAgent there again without it. An agent at work there keeps it until it ends. The login itself stays good until its year is over."
-                          onClick={() => void act(() => logout(host, projects, server.address, 'claude'))}
+                          onClick={() => void act(() => logout(host, server.address, 'claude'))}
                         >
                           Remove
                         </Button>

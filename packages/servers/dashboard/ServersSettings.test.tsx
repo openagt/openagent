@@ -1,11 +1,9 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { ModuleHostContext, type MachineAdded, type ModuleCommandResult, type ModuleHost, type ModuleMachines, type ModuleProject } from '@openagt/dashboard/module'
+import { ModuleHostContext, type MachineAdded, type ModuleCommandResult, type ModuleHost, type ModuleMachines } from '@openagt/dashboard/module'
 import { ServersSettings, olderThan } from './ServersSettings.js'
 import type { LoginRow, ServerRow, StepState } from './servers.js'
 
-const PROJECT = { id: 'p1', name: 'gemstack', gitHost: true }
-const OTHER = { id: 'p2', name: 'other', gitHost: false }
 const LABELS = { login: 'Log in', user: 'The user openagent', tools: 'git, gh, Node and Chrome', openagent: 'OpenAgent', agent: 'Claude Code', service: 'The service', door: 'The door' }
 const LINK = { url: 'https://203.0.113.5/_remote-access/enter#code.pin', expires: new Date(Date.now() + 5 * 60_000).toISOString() }
 const NONE: LoginRow = { there: false, working: false }
@@ -24,13 +22,15 @@ const OCTOCAT: ModuleCommandResult = { ok: true, output: { account: 'octocat' } 
  * This computer's own `gh` answers `own` when asked whose login it holds: nobody's, unless said.
  */
 function dashboard(answer: (args: string[]) => ModuleCommandResult, saved: ModuleMachines = { version: '1.2.3', machines: [] }, added: MachineAdded = { ok: true }, own: ModuleCommandResult = NO_GH) {
-  const runCommand = vi.fn(async (_projectId: string, args: string[]) => (args[0] === 'github' ? own : answer(args)))
+  const runComputerCommand = vi.fn(async (args: string[]) => (args[0] === 'github' ? own : answer(args)))
+  const inProject = vi.fn(async () => ({ ok: false as const, error: 'the servers are no project\'s' }))
   const machines = vi.fn(async () => saved)
   const addMachine = vi.fn(async (_link: string, _label?: string) => added)
   const host: ModuleHost = {
     package: '@openagt/servers',
-    runCommand,
-    act: runCommand,
+    runCommand: inProject,
+    act: inProject,
+    runComputerCommand,
     read: vi.fn(async () => ({ ok: false as const, error: 'no server part' })),
     openAgent: vi.fn(),
     openPage: vi.fn(),
@@ -42,14 +42,14 @@ function dashboard(answer: (args: string[]) => ModuleCommandResult, saved: Modul
     watchScreen: vi.fn(async () => undefined),
     sendToScreen: vi.fn(async () => false),
   }
-  const ran = (): string[] => runCommand.mock.calls.map(([, args]) => args.join(' '))
-  return { host, runCommand, machines, addMachine, ran }
+  const ran = (): string[] => runComputerCommand.mock.calls.map(([args]) => args.join(' '))
+  return { host, runComputerCommand, machines, addMachine, ran }
 }
 
-function show(host: ModuleHost, projects: ModuleProject[] = [PROJECT, OTHER]) {
+function show(host: ModuleHost) {
   return render(
     <ModuleHostContext.Provider value={host}>
-      <ServersSettings projects={projects} everyMs={40} />
+      <ServersSettings everyMs={40} />
     </ModuleHostContext.Provider>,
   )
 }
@@ -60,13 +60,8 @@ const stepNames = (): string[] => within(screen.getByRole('list', { name: 'The i
 afterEach(cleanup)
 
 describe('Settings → Servers', () => {
-  test('no project, no section', () => {
-    const { host } = dashboard(() => ok({ servers: [] }))
-    expect(show(host, []).container.textContent).toBe('')
-  })
-
-  test('an address and a user name, root unless said: Connect installs this computer\'s own OpenAgent there, in one project', async () => {
-    const { host, runCommand, ran } = dashboard(() => ok({ servers: [] }))
+  test('an address and a user name, root unless said: Connect installs this computer\'s own OpenAgent there, in no project', async () => {
+    const { host, ran } = dashboard(() => ok({ servers: [] }))
     show(host)
     const connect = screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement
     expect(connect.disabled).toBe(true)
@@ -76,7 +71,7 @@ describe('Settings → Servers', () => {
     await waitFor(() => expect(connect.disabled).toBe(false))
     fireEvent.click(connect)
     await waitFor(() => expect(ran()).toContain('connect 203.0.113.5 root 1.2.3'))
-    expect(runCommand.mock.calls.every(([projectId]) => projectId === 'p1')).toBe(true)
+    expect(host.runCommand).not.toHaveBeenCalled()
     // The server is in the list from here on: the field is free for the next one.
     await waitFor(() => expect((screen.getByLabelText("The server's address") as HTMLInputElement).value).toBe(''))
   })
@@ -129,6 +124,40 @@ describe('Settings → Servers', () => {
     await new Promise(resolve => setTimeout(resolve, 150))
     expect(ran().filter(line => line === 'link 203.0.113.5')).toHaveLength(1)
     expect(addMachine).toHaveBeenCalledTimes(1)
+  })
+
+  test('an installed server gives a code for a phone or a browser, asked of its door; the code leaves with Done and with its time, and a door that does not answer is told', async () => {
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5', version: '1.2.3' }] }
+    let link: ModuleCommandResult = ok(LINK)
+    const { host, ran } = dashboard(args => (args[0] === 'link' ? link : ok({ servers: [server(ALL_DONE, { adding: false })] })), saved)
+    show(host)
+    const code = () => screen.queryByRole('img', { name: 'The code a new device scans to get into 203.0.113.5' })
+    fireEvent.click(await screen.findByRole('button', { name: 'Add a device to 203.0.113.5' }))
+    await waitFor(() => expect(code()).toBeTruthy())
+    expect(ran().filter(line => line === 'link 203.0.113.5')).toHaveLength(1)
+    expect(screen.getByText(/it opens OpenAgent on the server, from anywhere\. The code works once, for five minutes\./)).toBeTruthy()
+    // A new tab that knows nothing of this page: the code is the server's to take, not this page's to hand on.
+    const opens = screen.getByRole('link', { name: 'Let this browser in instead' }) as HTMLAnchorElement
+    expect([opens.href, opens.target, opens.rel]).toEqual([LINK.url, '_blank', 'noreferrer'])
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    expect(code()).toBeNull()
+
+    link = ok({ ...LINK, expires: new Date(Date.now() + 80).toISOString() })
+    fireEvent.click(screen.getByRole('button', { name: 'Add a device to 203.0.113.5' }))
+    await waitFor(() => expect(code()).toBeTruthy())
+    await waitFor(() => expect(code()).toBeNull())
+
+    link = { ok: false, error: 'The server did not answer.' }
+    fireEvent.click(screen.getByRole('button', { name: 'Add a device to 203.0.113.5' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('The server did not answer.')
+    expect(code()).toBeNull()
+  })
+
+  test('a server that is not installed yet gives no code', async () => {
+    const { host } = dashboard(() => ok({ servers: [server(['done', 'done', 'failed'])] }))
+    show(host)
+    await screen.findByRole('button', { name: 'Try 203.0.113.5 again' })
+    expect(screen.queryByRole('button', { name: 'Add a device to 203.0.113.5' })).toBeNull()
   })
 
   test('a server that could not be saved says why, and is tried again on a press, not by itself', async () => {
@@ -301,7 +330,7 @@ describe('Settings → Servers', () => {
     expect(logins.getByText('GitHub: one moment, the server is being told.')).toBeTruthy()
     expect(logins.getByText('Claude: one moment, the server is being told.')).toBeTruthy()
     expect(logins.queryByRole('alert')).toBeNull()
-    await waitFor(() => expect(host.runCommand).toHaveBeenCalledWith('p1', ['github']))
+    await waitFor(() => expect(host.runComputerCommand).toHaveBeenCalledWith(['github']))
     expect((logins.getByRole('button', { name: 'Copy my GitHub login to 203.0.113.5' }) as HTMLButtonElement).disabled).toBe(true)
     // Only a login that still waits for the person is started over; one on its way to the server arrives.
     expect((logins.getByRole('button', { name: 'Log in to Claude for 203.0.113.5' }) as HTMLButtonElement).disabled).toBe(true)

@@ -134,6 +134,12 @@ test('on a server the door gets a certificate for its address and opens over HTT
     assert.equal(closed.shown.subjectAltName, 'IP Address:127.0.0.1')
     assert.equal(keyFingerprint(closed.shown.publicKey), await doorFingerprint(r.env))
     assert.equal(r.office.issued.length, 1)
+    // A server has no screen to press on: its page says where the code comes from.
+    const notIn = await ask(`${at}/settings`, r.office.authority, { headers: { accept: 'text/html' } })
+    assert.match(notIn.body, /This device is not in[\s\S]*This computer is a server\. On the computer it was connected from[\s\S]*find Servers, press Add device/)
+    const entering = await ask(`${at}/_remote-access/enter`, r.office.authority, { headers: { accept: 'text/html' } })
+    assert.match(entering.body, /on the internet/)
+    assert.doesNotMatch(notIn.body + entering.body, /Wi-Fi/)
 
     // A device gets in with a code; its cookie is one a browser never sends over plain HTTP.
     const { code } = await addCode(r.env)

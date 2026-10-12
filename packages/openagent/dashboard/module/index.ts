@@ -11,7 +11,7 @@
 // sharing every chunk with the dashboard itself. Nothing here names a skill.
 import { createContext, useContext, type ComponentType } from 'react'
 import type { AgentStatus } from '../../src/index.js'
-import { readModule, runModuleCommand } from '../rpc/modules.js'
+import { readModule, runComputerCommand, runModuleCommand } from '../rpc/modules.js'
 import type { ModuleCommandResult, ModuleReadResult } from '../rpc/modules.js'
 
 export type { ModuleCommandResult, ModuleReadResult, AgentStatus }
@@ -115,14 +115,14 @@ export interface ModuleCard {
 
 /** What a Settings section is rendered with: the projects that have its package. */
 export interface ModuleSettingsProps {
-  /** The registered projects whose dependencies include the module's package, in the registry's order. */
+  /** The registered projects whose dependencies include the module's package, in the registry's order; none for a package that is the computer's. */
   projects: ModuleProject[]
 }
 
 /**
  * A section a module adds to the Settings page: the package's own settings, read and written
- * through its own command, drawn after the dashboard's own sections. A package with no projects
- * registered shows none.
+ * through its own command, drawn after the dashboard's own sections. A project's package with no
+ * project registered shows none; a package that is the computer's shows its own with no project.
  */
 export interface ModuleSettings {
   /** Which section this is, for the shell's key and its error line; the section draws its own title. */
@@ -286,6 +286,12 @@ export interface ModuleHost {
    */
   act(projectId: string, args: string[], command?: string): Promise<ModuleCommandResult>
   /**
+   * Run one of the module package's own commands in no project, for a package that is this
+   * computer's (the door to it, its servers): what such a package keeps is the computer's, so
+   * its page reads and changes it with no project added. Refused for any other package.
+   */
+  runComputerCommand(args: string[], command?: string): Promise<ModuleCommandResult>
+  /**
    * Call one of the module's own server reads (its package's `./server`) in one project, with
    * `input`, a JSON object; `input.agentId` names the run the read is about, when it is about one.
    * Answered in the daemon's own process, so it suits a read made every few seconds.
@@ -346,7 +352,7 @@ export interface ModuleMachines {
 export type MachineAdded = { ok: true } | { ok: false; error: string }
 
 /** What the dashboard knows about the module it is serving: every service but the commands and the reads, which it binds to the package. */
-export type ModuleHostBase = Omit<ModuleHost, 'runCommand' | 'act' | 'read'>
+export type ModuleHostBase = Omit<ModuleHost, 'runCommand' | 'act' | 'runComputerCommand' | 'read'>
 
 /**
  * The host for one module: the dashboard's services, and its commands bound to the module's own
@@ -358,6 +364,7 @@ export function moduleHost(base: ModuleHostBase, opts: { acts?: boolean } = {}):
     ...base,
     runCommand: (projectId, args, command) => runModuleCommand(projectId, base.package, args, command, opts.acts ?? false),
     act: (projectId, args, command) => runModuleCommand(projectId, base.package, args, command, true),
+    runComputerCommand: (args, command) => runComputerCommand(base.package, args, command),
     read: (projectId, name, input = {}) => readModule(projectId, base.package, name, input),
   }
 }
@@ -397,6 +404,7 @@ export { StartAgentButton } from '../components/StartAgentButton.js'
 export { LinkActions, type ProjectLinks, type LinkTargets } from '../components/LinkActions.js'
 export { cn } from '../lib/utils.js'
 export { SettingsSection, SettingsRow, SettingsSelectRow, type SettingsOption } from '../components/SettingsRows.js'
+export { QrCode } from '../components/QrCode.js'
 export { useCodingAgents, type CodingAgent } from '../lib/models.js'
 export { MAX_SPEND_OFFSET } from '../../src/preference-defaults.js'
 export { formatRelative, formatDateTime, formatDuration, formatAge } from '../lib/format-date.js'

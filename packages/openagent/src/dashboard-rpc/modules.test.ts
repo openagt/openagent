@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { addProject, projectId } from '../registry.js'
 import { projectQueue } from '../store/queue.js'
-import { onModules, readModule, runModuleCommand } from './modules.js'
+import { onModules, readModule, runComputerCommand, runModuleCommand } from './modules.js'
 
 /** A project with a package.json and installed packages, each `{ exports, bin }` plus files. */
 async function project(dir: string, packages: Record<string, { manifest: Record<string, unknown>; files?: Record<string, string> }>): Promise<void> {
@@ -54,11 +54,11 @@ test('the dashboard\'s modules are every registered project\'s, one per package,
     await addProject(a, '2026-09-19T00:00:00.000Z')
     await addProject(b, '2026-09-19T00:00:01.000Z')
 
-    // The built-in modules (Files, the Devices section, the Servers section, the logs package's) are every project's, from the first; then the projects' own.
+    // The computer's modules (the Devices section, the Servers section) come first, and are no project's. Then the built-in modules (Files, the logs package's), which are every project's, from the first; then the projects' own.
     assert.deepEqual(await onModules(), [
+      { package: '@openagt/remote-access', url: '/_computer-modules/%40openagt%2Fremote-access/dashboard.js', projects: [] },
+      { package: '@openagt/servers', url: '/_computer-modules/%40openagt%2Fservers/dashboard.js', projects: [] },
       { package: '@openagt/files', url: `/_modules/${projectId(a)}/%40openagt%2Ffiles/dashboard.js`, projects: [projectId(a), projectId(b)] },
-      { package: '@openagt/remote-access', url: `/_modules/${projectId(a)}/%40openagt%2Fremote-access/dashboard.js`, projects: [projectId(a), projectId(b)] },
-      { package: '@openagt/servers', url: `/_modules/${projectId(a)}/%40openagt%2Fservers/dashboard.js`, projects: [projectId(a), projectId(b)] },
       { package: '@openagt/skill-logs', url: `/_modules/${projectId(a)}/%40openagt%2Fskill-logs/dashboard.js`, projects: [projectId(a), projectId(b)] },
       { package: 'logs', url: `/_modules/${projectId(a)}/logs/w.js`, projects: [projectId(a), projectId(b)] },
       { package: 'queue', url: `/_modules/${projectId(b)}/queue/w.js`, projects: [projectId(b)] },
@@ -69,6 +69,35 @@ test('the dashboard\'s modules are every registered project\'s, one per package,
     assert.deepEqual(await runModuleCommand(projectId(a), 'plain', []), { ok: false, error: 'plain brings no module to this project' })
     assert.deepEqual(await runModuleCommand(projectId(a), 'queue', []), { ok: false, error: 'queue brings no module to this project' })
     assert.deepEqual(await runModuleCommand('nowhere-1', 'logs', []), { ok: false, error: 'unknown project' })
+  } finally {
+    if (previous === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = previous
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('with no project added, the computer\'s modules are there and run their own commands; no other package runs so, and none of them runs in a project', async () => {
+  const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-modules-rpc-')))
+  const previous = process.env.XDG_CONFIG_HOME
+  process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
+  try {
+    await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
+    assert.deepEqual(await onModules(), [
+      { package: '@openagt/remote-access', url: '/_computer-modules/%40openagt%2Fremote-access/dashboard.js', projects: [] },
+      { package: '@openagt/servers', url: '/_computer-modules/%40openagt%2Fservers/dashboard.js', projects: [] },
+    ])
+    // The door's own command, answering what it keeps for this computer: nobody is in, and it is shut.
+    assert.deepEqual(await runComputerCommand('@openagt/remote-access', ['status']), { ok: true, output: { on: false, listening: false, devices: [] } })
+    assert.deepEqual(await runComputerCommand('@openagt/servers', ['status']), { ok: true, output: { servers: [] } })
+    assert.deepEqual(await runComputerCommand('@openagt/remote-access', ['status'], 'servers'), { ok: false, error: '@openagt/remote-access has no command servers' })
+    assert.deepEqual(await runComputerCommand('@openagt/files', []), { ok: false, error: "@openagt/files is not this computer's" })
+    assert.deepEqual(await runComputerCommand('queue', []), { ok: false, error: "queue is not this computer's" })
+
+    const a = join(dir, 'a')
+    await project(a, { queue: module('queue') })
+    await addProject(a, '2026-09-19T00:00:00.000Z')
+    assert.deepEqual(await runComputerCommand('queue', []), { ok: false, error: "queue is not this computer's" })
+    assert.deepEqual(await runModuleCommand(projectId(a), '@openagt/remote-access', ['status']), { ok: false, error: '@openagt/remote-access brings no module to this project' })
   } finally {
     if (previous === undefined) delete process.env.XDG_CONFIG_HOME
     else process.env.XDG_CONFIG_HOME = previous

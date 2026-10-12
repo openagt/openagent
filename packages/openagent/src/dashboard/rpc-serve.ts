@@ -96,6 +96,18 @@ export function isSameOriginRequest(req: IncomingMessage): boolean {
 }
 
 /**
+ * The third guard: a call says its body is JSON. {@link isSameOriginRequest} lets every loopback
+ * origin pass, whatever its port, so a page another program serves on this computer (an app an
+ * agent previews, a dev server) is let through it. A browser sends such a page's POST without
+ * asking only while its content type is one a plain form can have, and JSON is none of them:
+ * with JSON it asks first, this server never says yes, and the call is not sent. So a call that
+ * is not JSON is refused, and no page of another origin can make one, not even blind.
+ */
+export function isJsonRequest(req: IncomingMessage): boolean {
+  return /^application\/json\s*(;|$)/i.test(req.headers['content-type'] ?? '')
+}
+
+/**
  * DNS-rebinding guard, the other half of the CSRF check above. A page on `evil.com` whose DNS
  * re-answers as `127.0.0.1` is *same-origin* with this server as far as the browser is concerned,
  * so its `fetch()` takes the passing branch of {@link isSameOriginRequest} — and every RPC behind
@@ -222,6 +234,10 @@ export function makeRpcMount(context: DashboardContext): (req: IncomingMessage, 
       const handler = RPC_HANDLERS[name]
       if (req.method !== 'POST' || !handler) {
         sendJson(res, 404, { error: `no such RPC: ${name}` })
+        return true
+      }
+      if (!isJsonRequest(req)) {
+        sendJson(res, 415, { error: 'a call is sent as application/json' })
         return true
       }
       const raw = await readBody(req)
