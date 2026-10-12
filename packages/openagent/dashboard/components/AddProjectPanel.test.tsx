@@ -3,7 +3,9 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 
 const sendAddProject = vi.hoisted(() => vi.fn())
 const sendPickProjectDirectory = vi.hoisted(() => vi.fn())
-vi.mock('../rpc/projects.js', () => ({ sendAddProject, sendPickProjectDirectory }))
+const onCloneTarget = vi.hoisted(() => vi.fn())
+const sendAddProjectFromAddress = vi.hoisted(() => vi.fn())
+vi.mock('../rpc/projects.js', () => ({ sendAddProject, sendPickProjectDirectory, onCloneTarget, sendAddProjectFromAddress }))
 
 const { AddProjectPanel } = await import('./AddProjectPanel.js')
 
@@ -11,6 +13,8 @@ afterEach(() => {
   cleanup()
   sendAddProject.mockReset()
   sendPickProjectDirectory.mockReset()
+  onCloneTarget.mockReset()
+  sendAddProjectFromAddress.mockReset()
 })
 
 describe('AddProjectPanel (#1150)', () => {
@@ -116,5 +120,61 @@ describe('AddProjectPanel (#1150)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Choose again' }))
     await screen.findByText('/Users/dev/second')
     expect(sendPickProjectDirectory).toHaveBeenCalledTimes(2)
+  })
+
+  test('by address: no folder dialog; the address is read, where it will be cloned is shown, and nothing is cloned before the trust confirmation', async () => {
+    onCloneTarget.mockResolvedValue({ ok: true, address: 'github.com/ada/shop', path: '/home/openagent/projects/shop' })
+    sendAddProjectFromAddress.mockResolvedValue({ ok: true, alreadyActivated: false, path: '/home/openagent/projects/shop' })
+    const onAdded = vi.fn()
+    render(<AddProjectPanel fromAddress onAdded={onAdded} onClose={() => {}} />)
+    expect(sendPickProjectDirectory).not.toHaveBeenCalled()
+    const next = screen.getByRole('button', { name: 'Next' }) as HTMLButtonElement
+    expect(next.disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText(/The repository\u2019s address/), { target: { value: '  https://github.com/Ada/shop  ' } })
+    fireEvent.click(next)
+    await screen.findByText('Do you trust this repository?')
+    expect(onCloneTarget).toHaveBeenCalledWith('https://github.com/Ada/shop')
+    const dialog = screen.getByRole('dialog', { name: 'Add project' })
+    expect(dialog.textContent).toContain('github.com/ada/shop')
+    expect(dialog.textContent).toContain('It will be cloned to /home/openagent/projects/shop.')
+    expect(sendAddProjectFromAddress).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('radio', { name: /Share them to the repository\u2019s remote/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'I trust it, clone and add it' }))
+    await screen.findByText('Project added')
+    expect(sendAddProjectFromAddress).toHaveBeenCalledWith('https://github.com/Ada/shop', true)
+    expect(sendAddProject).not.toHaveBeenCalled()
+    expect(dialog.textContent).toContain('It is in /home/openagent/projects/shop.')
+    expect(onAdded).toHaveBeenCalledTimes(1)
+  })
+
+  test('by address: what is no address is said and the field stays; a clone that fails is said and the address can be changed', async () => {
+    onCloneTarget.mockResolvedValueOnce({ ok: false, error: '"shop" is not a repository\u2019s address. One looks like github.com/you/project.' })
+    render(<AddProjectPanel fromAddress onAdded={() => {}} onClose={() => {}} />)
+    const field = screen.getByLabelText(/The repository\u2019s address/) as HTMLInputElement
+    fireEvent.change(field, { target: { value: 'shop' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    await screen.findByText(/is not a repository\u2019s address/)
+    expect(screen.queryByText('Do you trust this repository?')).toBeNull()
+
+    onCloneTarget.mockResolvedValue({ ok: true, address: 'github.com/ada/private', path: '/home/openagent/projects/private' })
+    sendAddProjectFromAddress.mockResolvedValue({ ok: false, error: 'This computer has no login that can read github.com/ada/private.' })
+    fireEvent.change(field, { target: { value: 'github.com/ada/private' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'I trust it, clone and add it' }))
+    await screen.findByText('This computer has no login that can read github.com/ada/private.')
+    expect(screen.queryByText('Project added')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Change the address' }))
+    expect((screen.getByLabelText(/The repository\u2019s address/) as HTMLInputElement).value).toBe('github.com/ada/private')
+    expect(screen.queryByText(/no login that can read/)).toBeNull()
+  })
+
+  test('a computer whose folder dialog cannot open says why, and offers the address in its place', async () => {
+    sendPickProjectDirectory.mockResolvedValue({ ok: false, error: 'The machine running OpenAgent has no desktop session, so no folder dialog can open there.' })
+    render(<AddProjectPanel onAdded={() => {}} onClose={() => {}} />)
+    await screen.findByText(/has no desktop session/)
+    fireEvent.click(screen.getByRole('button', { name: 'Add from a GitHub address' }))
+    expect(screen.getByLabelText(/The repository\u2019s address/)).toBeTruthy()
+    // Still said: why the person is asked for an address when they asked for a folder.
+    expect(screen.getByText(/has no desktop session/)).toBeTruthy()
   })
 })

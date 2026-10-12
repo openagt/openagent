@@ -7,7 +7,9 @@ import { hasRemote } from '../has-remote.js'
 import { repositoryAddress } from '../repository-address.js'
 import { currentBranch } from '../dashboard/git-status.js'
 import { waitingSkills } from '../dashboard/start-branch.js'
-import { pickDirectory, type PickDirectoryResult } from '../pick-directory.js'
+import { homedir } from 'node:os'
+import { cloneProject, cloneTargetOf } from '../clone-project.js'
+import { canPickDirectory, pickDirectory, type PickDirectoryResult } from '../pick-directory.js'
 import { projectGitHost } from '../store/git-host.js'
 import type { ProjectSummary } from '../dashboard/projects.js'
 import type { AddProjectResult, OnboardingSuggestion, RemoveProjectResult } from '../dashboard/types.js'
@@ -45,6 +47,25 @@ export async function sendAddProject(path: string, share: boolean): Promise<AddP
   const trimmed = path.trim()
   if (!trimmed) return { ok: false, error: 'a project path is required' }
   return addProject(trimmed, share === true)
+}
+
+/** Where the repository a person typed the address of would be cloned to on this computer, or why what was typed is no address: asked before anything is cloned. */
+export async function onCloneTarget(address: string): Promise<{ ok: true; address: string; path: string } | { ok: false; error: string }> {
+  return cloneTargetOf(typeof address === 'string' ? address : '')
+}
+
+/**
+ * Add a project by its repository's address, for a computer that does not have its folder: the
+ * repository is cloned into `~/projects/<its name>` with the logins this computer has, and the
+ * folder is then added as {@link sendAddProject} adds one. A folder already there with this
+ * repository in it is added as it is. The answer says where the project is.
+ */
+export async function sendAddProjectFromAddress(address: string, share: boolean): Promise<AddProjectResult> {
+  const addProject = contextAddProject()
+  const cloned = await cloneProject(typeof address === 'string' ? address : '')
+  if (!cloned.ok) return cloned
+  const added = await addProject(cloned.path, share === true)
+  return added.ok ? { ...added, path: cloned.path } : added
 }
 
 /**
@@ -99,9 +120,10 @@ export async function sendPickProjectDirectory(): Promise<PickDirectoryResult> {
  * so the first step can offer "Add {cwd} as project" without the user typing a path.
  */
 export async function onOnboarding(): Promise<OnboardingSuggestion> {
-  const cwd = process.cwd()
+  // A service runs in its user's home folder, as OpenAgent does on a server: no project to offer.
+  const cwd = process.cwd() === homedir() ? null : process.cwd()
   const registered = await contextProjects().list()
-  return { cwd, cwdProjectId: registered.find(p => p.path === cwd)?.id ?? null }
+  return { cwd, cwdProjectId: (cwd !== null && registered.find(p => p.path === cwd)?.id) || null, canPickFolder: canPickDirectory() }
 }
 
 /** What the launcher offers for a project: its commands, and whether a run can be started here at all. */

@@ -90,6 +90,12 @@ const nodeDialogRunner: DialogRunner = (command, args) =>
     })
   })
 
+/** Whether this computer has a screen a folder dialog can open on: asked before one is offered. */
+export function canPickDirectory(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env): boolean {
+  if (platform === 'darwin' || platform === 'win32') return true
+  return platform === 'linux' && Boolean(env.DISPLAY || env.WAYLAND_DISPLAY)
+}
+
 /**
  * Open the OS folder picker and wait for the user's choice.
  *
@@ -107,7 +113,7 @@ export async function pickDirectory(
   if (platform === 'linux') {
     // A dialog needs a screen to appear on, and a daemon started over SSH or inside a container has
     // none — saying so beats spawning a helper that can only fail.
-    if (!env.DISPLAY && !env.WAYLAND_DISPLAY)
+    if (!canPickDirectory(platform, env))
       return { ok: false, error: 'The machine running OpenAgent has no desktop session, so no folder dialog can open there.' }
     return openDialog(linuxDialogs(env.HOME ?? '.'), run)
   }

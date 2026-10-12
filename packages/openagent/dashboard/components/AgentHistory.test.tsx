@@ -12,7 +12,7 @@ import { MenuButton } from './PhoneBar.js'
 const onProjects = vi.hoisted(() => vi.fn(() => Promise.resolve([])))
 const sendAddProject = vi.hoisted(() => vi.fn())
 const sendPickProjectDirectory = vi.hoisted(() => vi.fn())
-vi.mock('../rpc/projects.js', () => ({ onProjects, sendAddProject, sendPickProjectDirectory }))
+vi.mock('../rpc/projects.js', () => ({ onProjects, sendAddProject, sendPickProjectDirectory, onCloneTarget: vi.fn(), sendAddProjectFromAddress: vi.fn() }))
 // An ended agent's log, read as the pointer reaches its row.
 const onAgent = vi.hoisted(() => vi.fn((_projectId: string, _agentId: string) => Promise.resolve([])))
 vi.mock('../rpc/reads.js', () => ({ onAgent }))

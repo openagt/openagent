@@ -17,7 +17,7 @@ export type DeleteAgentResult = { ok: true } | { ok: false; error: string }
  * to share with: they are kept on this machine.
  */
 export type AddProjectResult =
-  | { ok: true; alreadyActivated: boolean; noRemote?: true }
+  | { ok: true; alreadyActivated: boolean; noRemote?: true; /** For a project added by its repository's address: the folder it is in. */ path?: string }
   | { ok: false; error: string }
 
 /**
@@ -42,10 +42,12 @@ export type RemoveProjectResult = { ok: true; cleanup?: CleanupReport } | { ok: 
  * never discloses its filesystem layout.
  */
 export interface OnboardingSuggestion {
-  /** The server's working directory, or null when it cannot be offered. */
+  /** The server's working directory, or null when it cannot be offered: the home folder is where a service runs, not a project. */
   cwd: string | null
   /** The project id for {@link cwd} when it is already registered, else null. */
   cwdProjectId: string | null
+  /** Whether this computer can show a window to pick a folder in: one with no screen, as a server, cannot. */
+  canPickFolder: boolean
 }
 
 /**

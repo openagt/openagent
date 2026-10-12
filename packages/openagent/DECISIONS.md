@@ -115,6 +115,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   package's own code, so the two cannot drift apart. Picked over "Add project" writing
   the skills itself, which put files into every project a person adds, and over only
   pointing to the terminal.
+- A project is also added by its repository's address, for a computer that does not have
+  its folder, as a server: OpenAgent clones it into `~/projects/<its name>` and says where
+  it went. Picked over asking for the folder at every add, one more thing to read.
 - When a skill in a project has a newer text, the project's page says so in one line ("3
   skills have a newer text") with an "Update" button; the texts are written only on that
   press, and the person reads the change in git. Picked over saying nothing until asked,

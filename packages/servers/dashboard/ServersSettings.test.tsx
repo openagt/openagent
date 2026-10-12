@@ -153,6 +153,32 @@ describe('Settings → Servers', () => {
     expect(code()).toBeNull()
   })
 
+  test('Log in to GitHub has the server get a login of its own: the row shows the code to type at GitHub, with a way there and a way to start over', async () => {
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5', version: '1.2.3' }] }
+    let github: LoginRow = NONE
+    const { host, ran } = dashboard(args => {
+      if (args[0] === 'login') github = { there: false, working: true, asking: true, code: 'ABCD-1234' }
+      return ok({ servers: [server(ALL_DONE, { adding: false, logins: { github, claude: NONE } })] })
+    }, saved)
+    show(host)
+    // No GitHub login on this computer: nothing to copy, and the server can still get one of its own.
+    expect(((await screen.findByRole('button', { name: 'Copy my GitHub login to 203.0.113.5' })) as HTMLButtonElement).disabled).toBe(true)
+    const own = screen.getByRole('button', { name: 'Log in to GitHub for 203.0.113.5' }) as HTMLButtonElement
+    expect([own.disabled, own.textContent]).toEqual([false, 'Log in to GitHub'])
+    fireEvent.click(own)
+    await waitFor(() => expect(ran()).toContain('login 203.0.113.5 github own'))
+    expect(await screen.findByText('GitHub: type the code ABCD-1234 at github.com/login/device, and say yes there.')).toBeTruthy()
+    const there = screen.getByRole('link', { name: 'Open GitHub' }) as HTMLAnchorElement
+    expect([there.href, there.target, there.rel]).toEqual(['https://github.com/login/device', '_blank', 'noreferrer'])
+    // While the server waits for the person a second press is the person starting over.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Log in to GitHub for 203.0.113.5' }).textContent).toBe('Start over'))
+    expect((screen.getByRole('button', { name: 'Log in to GitHub for 203.0.113.5' }) as HTMLButtonElement).disabled).toBe(false)
+
+    github = { there: true, working: false, account: 'octocat', since: '2026-10-12T10:00:00.000Z' }
+    expect(await screen.findByText(/^GitHub: logged in as octocat since /)).toBeTruthy()
+    expect(screen.queryByRole('link', { name: 'Open GitHub' })).toBeNull()
+  })
+
   test('a server that is not installed yet gives no code', async () => {
     const { host } = dashboard(() => ok({ servers: [server(['done', 'done', 'failed'])] }))
     show(host)

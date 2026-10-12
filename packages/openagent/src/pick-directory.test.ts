@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { pickDirectory, type DialogRunner } from './pick-directory.js'
+import { canPickDirectory, pickDirectory, type DialogRunner } from './pick-directory.js'
 
 type Exit = { code: number; stdout?: string; stderr?: string }
 
@@ -93,4 +93,13 @@ test('a platform without a wired picker says so instead of trying', async () => 
   const picked = await pickDirectory('freebsd', nothingSpawns)
   assert.equal(picked.ok, false)
   assert.match(error(picked), /not available on freebsd/)
+})
+
+test('a computer can show a folder dialog when it has a screen: a Mac and Windows always, Linux with a desktop session', () => {
+  assert.equal(canPickDirectory('darwin', {}), true)
+  assert.equal(canPickDirectory('win32', {}), true)
+  assert.equal(canPickDirectory('linux', {}), false)
+  assert.equal(canPickDirectory('linux', { DISPLAY: ':0' }), true)
+  assert.equal(canPickDirectory('linux', { WAYLAND_DISPLAY: 'wayland-0' }), true)
+  assert.equal(canPickDirectory('freebsd', { DISPLAY: ':0' }), false)
 })

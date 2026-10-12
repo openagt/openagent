@@ -347,6 +347,7 @@ export function githubLoginScript(login: string): LoginScript {
       { LOGIN: login },
       `
   ${GH_OWN}
+  ${GH_STOP_ASKING}
   rm -f ${GH_FILE}
   given() {
     printf '%s\\n' "$LOGIN" | gh auth login --hostname github.com --git-protocol https --with-token &&
@@ -355,6 +356,105 @@ export function githubLoginScript(login: string): LoginScript {
   }
   # All of it or none: a login that is on the server and not known of on this computer could not be taken off from there.
   given || { rm -f ${GH_FILE}; exit 1; }
+`,
+    ),
+  }
+}
+
+/** How long a person has to type the code at GitHub: GitHub's own limit is fifteen minutes. */
+export const GITHUB_CODE_TIMEOUT_MS = 16 * MINUTE
+
+/** Where the server's `gh` writes while it waits for the code to be typed, and the one that waits right now. */
+const GH_ASKING = '"$HOME/.cache/openagent-github-login"'
+
+/** Whether the process `$1` is a `gh` that asks GitHub for a login: a number kept in a file may be another process's by now. */
+const GH_IS_ASKING = `asking() { ps -o args= -p "$1" 2>/dev/null | grep -q 'gh auth login'; }`
+
+/**
+ * End the server's `gh` that still waits for a code, when one does, and forget it: every script
+ * that changes the server's GitHub login starts with this, so a code from an earlier press brings
+ * nothing once the login was asked for anew, copied or taken off, and its wait changes nothing.
+ */
+const GH_STOP_ASKING = `${GH_IS_ASKING}
+  waiting=$(cat ${GH_ASKING}.pid 2>/dev/null || true)
+  case "$waiting" in
+    '' | *[!0-9]*) ;;
+    *) if asking "$waiting"; then kill "$waiting" 2>/dev/null || true; fi ;;
+  esac
+  rm -f ${GH_ASKING}.pid`
+
+/**
+ * Have the server ask GitHub for a login of its own: its `gh` is started and left waiting, and
+ * GitHub answers with a short code that a person types at github.com/login/device. The script
+ * prints `<process> <file> <code>` and ends; {@link githubWaitScript} sees the rest. One that
+ * still waits from an earlier press is ended first. The login the server had goes, as with a
+ * copy: the server has one GitHub login, the last one asked for.
+ */
+export function githubCodeScript(): LoginScript {
+  return {
+    as: SERVER_USER,
+    script: script(
+      SERVER_USER,
+      {},
+      `
+  ${GH_OWN}
+  command -v gh >/dev/null || fail "gh is not on this server yet. Press Update on its row first."
+  mkdir -p "$HOME/.cache"
+  ${GH_STOP_ASKING}
+  rm -f ${GH_FILE}
+  log=$(umask 077; mktemp ${GH_ASKING}.XXXXXX)
+  nohup setsid gh auth login --hostname github.com --git-protocol https --web >"$log" 2>&1 &
+  pid=$!
+  echo "$pid" > ${GH_ASKING}.pid
+  for _ in $(seq 1 150); do
+    grep -q 'one-time code' "$log" && break
+    asking "$pid" || break
+    sleep 0.2
+  done
+  code=$(grep -oE 'one-time code: [A-Z0-9]{4}-[A-Z0-9]{4}' "$log" | head -n 1 | awk '{print $NF}' || true)
+  if [ -z "$code" ]; then
+    kill "$pid" 2>/dev/null || true
+    tail -n 5 "$log" >&2
+    rm -f "$log" ${GH_ASKING}.pid
+    fail "GitHub gave the server no code."
+  fi
+  echo "$pid $log $code"
+`,
+    ),
+  }
+}
+
+/**
+ * Wait until the server's `gh` has its answer from GitHub, for the code {@link githubCodeScript}
+ * printed, and say whose login it is. All of it or none, as with a copy.
+ */
+export function githubWaitScript(pid: string, log: string): LoginScript {
+  return {
+    as: SERVER_USER,
+    script: script(
+      SERVER_USER,
+      { PID: pid, LOG: log },
+      `
+  ${GH_OWN}
+  ${GH_IS_ASKING}
+  while asking "$PID"; do sleep 1; done
+  # Asked for anew, copied or taken off in the meantime: the server's login is that change's to say, and none of it is this wait's.
+  if [ "$(cat ${GH_ASKING}.pid 2>/dev/null || true)" != "$PID" ]; then
+    rm -f "$LOG"
+    fail "The login was asked for anew, or changed another way, before the code was typed."
+  fi
+  rm -f ${GH_ASKING}.pid
+  # The login the server had was taken off before GitHub was asked: one that is there now came from GitHub.
+  given() {
+    gh auth setup-git --hostname github.com &&
+      gh api --hostname github.com user --jq .login
+  }
+  if ! given; then
+    grep -v 'one-time code' "$LOG" | tail -n 3 >&2 || true
+    rm -f "$LOG" ${GH_FILE}
+    fail "No login came from GitHub: the code was not typed in time, or it was refused."
+  fi
+  rm -f "$LOG"
 `,
     ),
   }
@@ -369,6 +469,7 @@ export function githubLogoutScript(): LoginScript {
       {},
       `
   ${GH_OWN}
+  ${GH_STOP_ASKING}
   rm -f ${GH_FILE}
 `,
     ),

@@ -9,9 +9,10 @@ import { askLink, connect, forget, loadServers, login, logout, markAdded, ownGit
 // machines with it, as a person would by pasting the link under Machines.
 //
 // An installed server lists its two logins. GitHub's is this computer's own, copied when the
-// person ticks it or presses for it. Claude's is made new for the server: a press opens this
-// computer's browser, and the person says yes there. Both go to the server over SSH, from the
-// command's own process: no login ever comes to this page.
+// person ticks it or presses for it, or one the server gets for itself: GitHub gives the server a
+// short code, the row shows it, and the person types it at GitHub. Claude's is made new for the
+// server: a press opens this computer's browser, and the person says yes there. Whatever goes to
+// the server goes over SSH, from the command's own process: no login ever comes to this page.
 //
 // An installed server also gives a code for a phone or a browser: a server has no screen to press
 // "Add device" on, so this computer asks the server's door for the link over SSH, and the row
@@ -324,7 +325,9 @@ export function ServersSettings({ everyMs = 3_000 }: { /** How often the install
                     <LoginLine
                       label="GitHub"
                       words={
-                        github.working
+                        github.asking && github.code !== undefined
+                          ? `GitHub: type the code ${github.code} at github.com/login/device, and say yes there.`
+                          : github.working
                           ? 'GitHub: one moment, the server is being told.'
                           : github.there
                             ? `GitHub: logged in as ${github.account ?? 'you'} since ${day(github.since)}.`
@@ -344,6 +347,21 @@ export function ServersSettings({ everyMs = 3_000 }: { /** How often the install
                       >
                         {github.there ? 'Copy again' : 'Copy my login'}
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy || (github.working && github.asking !== true)}
+                        aria-label={`Log in to GitHub for ${server.address}`}
+                        title="The server asks GitHub for a login of its own. GitHub gives a short code: you type it at github.com/login/device and say yes there. This computer's own GitHub login is not touched, and the login the server had is replaced."
+                        onClick={() => void act(() => login(host, server.address, 'github', true))}
+                      >
+                        {github.asking ? 'Start over' : 'Log in to GitHub'}
+                      </Button>
+                      {github.asking && github.code !== undefined && (
+                        <a href="https://github.com/login/device" target="_blank" rel="noreferrer" className="self-center underline">
+                          Open GitHub
+                        </a>
+                      )}
                       {/* After a try that failed too: what it left on the server is not always known here. */}
                       {(github.there || github.said !== undefined) && !github.working && (
                         <Button
@@ -351,7 +369,7 @@ export function ServersSettings({ everyMs = 3_000 }: { /** How often the install
                           variant="outline"
                           disabled={busy}
                           aria-label={`Remove the GitHub login from ${server.address}`}
-                          title="Deletes the login on the server. The login itself stays good: it is this computer's own. To end it everywhere, take it back on github.com and log this computer's gh in again."
+                          title="Deletes the login on the server. The login itself is not ended by this: a copied one is this computer's own and stays good. To end one everywhere, take it back on github.com."
                           onClick={() => void act(() => logout(host, server.address, 'github'))}
                         >
                           Remove
