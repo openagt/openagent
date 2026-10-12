@@ -1,8 +1,9 @@
 /**
  * What the screen's stream carries, and how: one message after the other, each its kind (one
  * byte), its length (four bytes, big-endian) and its bytes. A picture is a whole JPEG; what the
- * address bar says is JSON. Nothing here is the machine's own: the browser's process writes the
- * stream, and the page that shows it, on whatever computer, reads it.
+ * address bar says, and a line of the page's console, are JSON. Nothing here is the machine's
+ * own: the browser's process writes the stream, and the page that shows it, on whatever computer,
+ * reads it.
  */
 
 /** Nothing: sent now and then on a stream that would else stand still, so no hop between takes it for dead. */
@@ -12,12 +13,22 @@ export const FRAME = 1
 /** What the address bar says: `{ url, title }` as JSON. */
 export const STATE = 2
 
+/** A line of the page's console: a {@link ConsoleLine} as JSON. */
+export const CONSOLE = 3
+
 /** The longest message a reader takes: a picture of the page is a few hundred kilobytes. */
 export const MAX_PART = 2 * 1024 * 1024
 /** The longest `STATE` a reader takes, and the longest address and title a writer sends. */
 export const MAX_STATE = 16 * 1024
 export const MAX_URL = 2048
 export const MAX_TITLE = 256
+/**
+ * The longest `CONSOLE` a reader takes, and the longest text and place a writer sends: a line
+ * of that length is under it however its characters are written as JSON.
+ */
+export const MAX_CONSOLE = 16 * 1024
+export const MAX_CONSOLE_TEXT = 2000
+export const MAX_CONSOLE_WHERE = 300
 
 const HEAD = 5
 
@@ -30,6 +41,25 @@ export interface StreamPart {
 export interface ScreenState {
   url: string
   title: string
+}
+
+/** What kind of line: the console's own levels, and `went` for the page going to another address. */
+export const CONSOLE_LEVELS = ['error', 'warning', 'info', 'log', 'debug', 'went'] as const
+export type ConsoleLevel = (typeof CONSOLE_LEVELS)[number]
+
+/** One line of the page's console. */
+export interface ConsoleLine {
+  /** Its number among the lines of this browser, from 1: lines come in this order, each once. */
+  n: number
+  /** When it was said, in milliseconds since 1970. */
+  at: number
+  level: ConsoleLevel
+  /** What was said; for `went`, the address. */
+  text: string
+  /** Where in the page's code it was said, or what could not be loaded: an address, with a line number when there is one. */
+  where?: string
+  /** On a `went` line, how many errors the page it went to had said already: a tab the agent came back to. */
+  errors?: number
 }
 
 /** One message, as it goes on the stream. */
@@ -103,6 +133,27 @@ export function readState(bytes: Uint8Array): ScreenState | undefined {
   try {
     const said = JSON.parse(new TextDecoder().decode(bytes)) as { url?: unknown; title?: unknown } | null
     return said && typeof said.url === 'string' && typeof said.title === 'string' ? { url: said.url.slice(0, MAX_URL), title: said.title.slice(0, MAX_TITLE) } : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** What a `CONSOLE` message says; nothing when it is no line of a console, or longer than one. */
+export function readConsoleLine(bytes: Uint8Array): ConsoleLine | undefined {
+  if (bytes.length > MAX_CONSOLE) return undefined
+  try {
+    const said = JSON.parse(new TextDecoder().decode(bytes)) as { n?: unknown; at?: unknown; level?: unknown; text?: unknown; where?: unknown; errors?: unknown } | null
+    if (!said || !Number.isSafeInteger(said.n) || (said.n as number) < 1 || !Number.isFinite(said.at) || typeof said.text !== 'string') return undefined
+    const level = CONSOLE_LEVELS.find(known => known === said.level)
+    if (!level) return undefined
+    return {
+      n: said.n as number,
+      at: said.at as number,
+      level,
+      text: said.text.slice(0, MAX_CONSOLE_TEXT),
+      ...(typeof said.where === 'string' && said.where ? { where: said.where.slice(0, MAX_CONSOLE_WHERE) } : {}),
+      ...(level === 'went' && Number.isSafeInteger(said.errors) && (said.errors as number) > 0 ? { errors: said.errors as number } : {}),
+    }
   } catch {
     return undefined
   }

@@ -14,7 +14,8 @@ export interface PageTarget {
 
 export interface CdpSession {
   send<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T>
-  on(method: string, handler: (params: Record<string, unknown>) => void): void
+  /** `size`: how long the message was as it came, in characters. */
+  on(method: string, handler: (params: Record<string, unknown>, size: number) => void): void
   close(): void
   /** Whether the socket is still open. */
   readonly open: boolean
@@ -44,7 +45,7 @@ export async function connectCdp(webSocketDebuggerUrl: string): Promise<CdpSessi
   let open = true
   let nextId = 1
   const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>()
-  const handlers = new Map<string, ((params: Record<string, unknown>) => void)[]>()
+  const handlers = new Map<string, ((params: Record<string, unknown>, size: number) => void)[]>()
   ws.addEventListener('close', () => {
     open = false
     for (const p of pending.values()) p.reject(new Error('the page closed'))
@@ -65,7 +66,7 @@ export async function connectCdp(webSocketDebuggerUrl: string): Promise<CdpSessi
       else p.resolve(msg.result)
       return
     }
-    if (msg.method) for (const handler of handlers.get(msg.method) ?? []) handler(msg.params ?? {})
+    if (msg.method) for (const handler of handlers.get(msg.method) ?? []) handler(msg.params ?? {}, String(ev.data).length)
   })
   return {
     get open() {

@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
-import { ArrowLeft, ArrowRight, RotateCw } from 'lucide-react'
+import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
+import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp, CornerDownRight, RotateCw } from 'lucide-react'
 import { Button, Input, useModuleHost, type ModulePanelProps } from '@openagt/dashboard/module'
+import { KEPT_LINES } from '../src/console.js'
 import type { ScreenInput } from '../src/screen.js'
-import { FRAME, jpegSize, readState, STATE, streamReader } from '../src/stream.js'
+import { CONSOLE, FRAME, jpegSize, readConsoleLine, readState, STATE, streamReader, type ConsoleLevel, type ConsoleLine } from '../src/stream.js'
 
 /** How long until a session with no browser is asked again whether it has one. */
 const ASK_AGAIN_MS = 3_000
@@ -10,11 +11,14 @@ const ASK_AGAIN_MS = 3_000
 const MAX_SIDE = 4096
 /** The keys passed on by name; any other key that is one character is passed on as text. */
 const NAMED_KEYS = new Set(['Enter', 'Tab', 'Escape', 'Backspace', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'])
+/** localStorage key that is there while this person keeps the console open. */
+const CONSOLE_OPEN_KEY = 'oa.browser-console'
 
 /**
  * The Browser tab: the browser the session's agent opened, live. The address bar (back, forward,
  * reload, the address) over the picture; a click, a scroll and typing on the picture go to the
- * page. The stream is held only while the tab is on screen: a closed tab, another tab picked, or
+ * page. Under the picture, the page's console, behind a bar that says how many errors the page
+ * has. The stream is held only while the tab is on screen: a closed tab, another tab picked, or
  * a page in the background asks the session's computer for nothing.
  */
 export function BrowserPanel({ projectId, agentId, activity }: ModulePanelProps) {
@@ -26,6 +30,7 @@ export function BrowserPanel({ projectId, agentId, activity }: ModulePanelProps)
   const canvas = useRef<HTMLCanvasElement>(null)
   const [live, setLive] = useState(false)
   const [address, setAddress] = useState('')
+  const [lines, setLines] = useState<ConsoleLine[]>([])
   const editing = useRef(false)
   const visible = usePageVisible()
   /** Ask again now whether the session has a browser, when it had none. */
@@ -51,18 +56,34 @@ export function BrowserPanel({ projectId, agentId, activity }: ModulePanelProps)
       if (!stream) return later()
       const parts = streamReader()
       const reader = stream.getReader()
+      // A stream begins with the console's kept lines: what an earlier stream brought is let go.
+      setLines([])
+      let newest = 0
       try {
         for (;;) {
           const { value, done } = await reader.read()
           if (done || stopped) break
+          const fresh: ConsoleLine[] = []
           for (const part of parts(value)) {
             if (part.kind === FRAME) {
-              if (await draw(canvas.current, part.bytes)) setLive(true)
+              const drawn = await draw(canvas.current, part.bytes)
+              // The picture took a moment: the tab may show another session's browser by now.
+              if (stopped) break
+              if (drawn) setLive(true)
             } else if (part.kind === STATE) {
               const said = readState(part.bytes)
               if (said && !editing.current) setAddress(said.url)
+            } else if (part.kind === CONSOLE) {
+              const said = readConsoleLine(part.bytes)
+              // Each line once, in its order: its number says so, whatever the stream repeats.
+              if (said && said.n > newest) {
+                newest = said.n
+                fresh.push(said)
+              }
             }
           }
+          if (stopped) break
+          if (fresh.length) setLines(held => [...held, ...fresh].slice(-KEPT_LINES))
         }
       } catch {
         // The stream broke, or was not a screen's: it is dropped, and asked for again.
@@ -150,8 +171,107 @@ export function BrowserPanel({ projectId, agentId, activity }: ModulePanelProps)
         </Scroll>
         {!live && <Nothing>No browser is open in this session. When the agent opens one, it shows here, live.</Nothing>}
       </div>
+      {live && <Console lines={lines} />}
     </div>
   )
+}
+
+const TONE: Record<ConsoleLevel, string> = { error: 'text-danger', warning: 'text-warning', info: '', log: '', debug: 'text-muted-foreground', went: 'text-muted-foreground' }
+
+/**
+ * The page's console, under the picture: a bar that is closed until the person opens it, and
+ * says how many errors the page has, the one the browser is on now. Open, it takes the lower
+ * third and follows the newest line, unless the person scrolled up to read. Where the page went
+ * to another address is a row no line of the page can pass for: it has a band and a mark of
+ * its own.
+ */
+function Console({ lines }: { lines: ConsoleLine[] }) {
+  const [open, setOpen] = useState(keptOpen)
+  const listId = useId()
+  const list = useRef<HTMLDivElement>(null)
+  const atEnd = useRef(true)
+  useEffect(() => {
+    const el = list.current
+    if (el && atEnd.current) el.scrollTop = el.scrollHeight
+  }, [lines, open])
+
+  const errors = lines.reduce((count, said) => (said.level === 'went' ? (said.errors ?? 0) : said.level === 'error' ? count + 1 : count), 0)
+  const said = errors === 1 ? '1 error' : `${errors} errors`
+  const toggle = (): void => {
+    setOpen(!open)
+    keepOpen(!open)
+    atEnd.current = true
+  }
+  const Arrow = open ? ChevronDown : ChevronUp
+  return (
+    <div className={`shrink-0 border-t border-border ${open ? 'flex min-h-0 basis-1/3 flex-col' : ''}`}>
+      <button type="button" aria-expanded={open} aria-controls={open ? listId : undefined} aria-label={errors > 0 ? `Console, ${said}` : 'Console'} onClick={toggle} className="flex w-full shrink-0 items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted">
+        <Arrow className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <span className="font-medium">Console</span>
+        {errors > 0 && <span className="text-danger">{said}</span>}
+      </button>
+      {open && (
+        <div
+          ref={list}
+          id={listId}
+          role="log"
+          // A page may say a line a second: it is read when the person looks, not read out as it comes.
+          aria-live="off"
+          aria-label="The page's console"
+          tabIndex={0}
+          className="min-h-0 flex-1 overflow-y-auto border-t border-border font-mono text-[11px] leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          onScroll={e => {
+            const el = e.currentTarget
+            atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 8
+          }}
+        >
+          {lines.length === 0 && <p className="px-3 py-2 font-sans text-xs text-muted-foreground">The page has said nothing.</p>}
+          {lines.map(said =>
+            said.level === 'went' ? (
+              <div key={said.n} data-went className="flex gap-2 border-b border-border/50 bg-muted px-3 py-0.5 text-muted-foreground">
+                <time className="shrink-0">{clock(said.at)}</time>
+                <CornerDownRight aria-label="Went to" className="mt-0.5 h-3 w-3 shrink-0" />
+                <span className="min-w-0 flex-1 wrap-anywhere">{said.text}</span>
+              </div>
+            ) : (
+              <div key={said.n} className={`flex gap-2 border-b border-border/50 px-3 py-0.5 ${TONE[said.level]}`}>
+                <time className="shrink-0 text-muted-foreground">{clock(said.at)}</time>
+                <span className="min-w-0 flex-1 whitespace-pre-wrap wrap-anywhere">
+                  {(said.level === 'error' || said.level === 'warning') && <span className="sr-only">{said.level}: </span>}
+                  {said.text}
+                  {said.where && <span className="text-muted-foreground"> {said.where}</span>}
+                </span>
+              </div>
+            ),
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** The time of day, on this person's clock: `09:05:07`. */
+function clock(at: number): string {
+  const time = new Date(at)
+  return [time.getHours(), time.getMinutes(), time.getSeconds()].map(part => String(part).padStart(2, '0')).join(':')
+}
+
+/** Whether this person left the console open, in this browser. */
+function keptOpen(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(CONSOLE_OPEN_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function keepOpen(open: boolean): void {
+  try {
+    if (open) globalThis.localStorage?.setItem(CONSOLE_OPEN_KEY, '1')
+    else globalThis.localStorage?.removeItem(CONSOLE_OPEN_KEY)
+  } catch {
+    // A browser that keeps nothing: the console is closed at the next visit.
+  }
 }
 
 function Nothing({ children }: { children: string }) {

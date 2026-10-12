@@ -19,17 +19,19 @@ npx @openagt/skill-browser@0.1 screenshot [file]    save what the page shows as 
 npx @openagt/skill-browser@0.1 eval <script>        run a JavaScript expression in the page and print its value, as JSON
                                                     (`document.title`, not `return document.title`; `await` works; an
                                                     element prints as `{}`, so ask for its properties)
+npx @openagt/skill-browser@0.1 console              print the browser's console since it opened: what the pages' code logged,
+                                                    their uncaught errors and the files that did not load
 npx @openagt/skill-browser@0.1 close                close the browser
 ```
 
 Quote a `<text>` or `<script>` with spaces as one argument: `npx @openagt/skill-browser@0.1 type 2 'Ada Lovelace'`.
 
-`open`, `read`, `click`, `type` and `press` print the page once it has loaded (or after 10 seconds, as it stands): its title, its address, its text (the first 10,000 characters), then its elements (links, buttons, fields; the first 300) numbered `[n]`. What is inside an iframe or a shadow root is not printed; reach it with `eval`. `click` and `type` take that number, from the last print: when the page changes, the numbers do too. The numbers are written on the page's elements as `data-browser-ref` attributes. An address without `http://` or `https://` gets `http://`; no other kind opens. A dialog the page opens (alert, confirm, prompt) is accepted at once, and the next print begins with a `Dialog, accepted:` line naming it.
+`open`, `read`, `click`, `type` and `press` print the page once it has loaded (or after 10 seconds, as it stands): its title, its address, its text (the first 10,000 characters), then its elements (links, buttons, fields; the first 300) numbered `[n]`. What is inside an iframe or a shadow root is not printed; reach it with `eval`. `click` and `type` take that number, from the last print: when the page changes, the numbers do too. The numbers are written on the page's elements as `data-browser-ref` attributes. An address without `http://` or `https://` gets `http://`; no other kind opens. A dialog the page opens (alert, confirm, prompt) is accepted at once, and the next print begins with a `Dialog, accepted:` line naming it. When the page logged errors since you were last told, the print begins with a `Console: 2 new errors.` line: read them with `console`. Each of its lines has its time, and a `→ <address>` line marks where the page went to another address, so what is under the last one is the page you are on. When not everything fits, the errors are printed first, then the newest lines. What a worker, or a frame from another site, logs is not in it.
 
 The browser belongs to the project the command runs in (its git root): run every command from inside the same project.
 
 A refusal exits 1 with the reason on stderr (no browser open, no such element, an address the server did not answer, a page that did not answer within 30 seconds; an error page such as a 404 prints like any page); a wrong command line exits 2 with the usage.
 
-A person watching your run sees this browser live, and can click and type in it too: if the page is not what your last print showed, read it again.
+A person watching your run sees this browser live, with its console, and can click and type in it too: if the page is not what your last print showed, read it again.
 
 Close it when you are done (with none open, `close` says so and succeeds). It also closes after 30 minutes unused, and when your run ends if the tool running you keeps a diary of the run; stopping to ask a question does not close it.

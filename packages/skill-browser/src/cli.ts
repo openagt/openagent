@@ -26,6 +26,7 @@ export const USAGE = `usage: browser <command>
                           or ArrowRight, then print the page
   screenshot [file]       save what the page shows as a PNG, and print the file's path
   eval <script>           run JavaScript in the page and print what it returns, as JSON
+  console                 print the page's console: what it logged, and its errors
   close                   close the browser
 
 Exit code 1 for a refusal (the reason on stderr), 2 for a usage error.`
@@ -49,6 +50,7 @@ const ARITY: Record<HostCommand['name'], [number, number]> = {
   press: [1, 1],
   screenshot: [0, 1],
   eval: [1, 1],
+  console: [0, 0],
   close: [0, 0],
 }
 

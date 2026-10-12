@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { ModuleHostContext, type ModuleHost } from '@openagt/dashboard/module'
-import { FRAME, PULSE, STATE, streamPart } from '../src/stream.js'
+import { CONSOLE, FRAME, PULSE, STATE, streamPart, type ConsoleLine } from '../src/stream.js'
 import { BrowserPanel } from './BrowserPanel.js'
 
 // The Browser tab inside a faked dashboard: `watchScreen` answers a stream the test writes to,
@@ -67,6 +67,7 @@ function dashboard() {
 /** The start of a JPEG that says it is a picture of this size. */
 const jpeg = (width = 1280, height = 800) => new Uint8Array([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, height >> 8, height & 0xff, width >> 8, width & 0xff, 0x03])
 const state = (url: string) => new TextEncoder().encode(JSON.stringify({ url, title: 'A page' }))
+const line = (n: number, level: ConsoleLine['level'], text: string, where?: string, errors?: number) => new TextEncoder().encode(JSON.stringify({ n, at: 1_767_322_245_000, level, text, where, errors }))
 const show = (host: ModuleHost, props: { agentId?: string; activity?: number } = { agentId: 'run-1' }) => (
   <ModuleHostContext.Provider value={host}>
     <BrowserPanel projectId="p" context={context} {...props} />
@@ -81,6 +82,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  localStorage.clear()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
   vi.useRealTimers()
@@ -216,4 +218,97 @@ test('where the pointer is a finger, a field takes the typing and a drag scrolls
   fireEvent.pointerUp(view, { pointerId: 1, pointerType: 'touch', clientX: 140, clientY: 250 })
   fireEvent.pointerMove(view, { pointerId: 1, pointerType: 'touch', clientX: 140, clientY: 100 })
   expect(world.sent.slice(3)).toEqual([{ type: 'scroll', x: 200, y: 300, deltaY: 100 }])
+})
+
+test('the console is under the picture, behind a bar that is closed at first and counts the page\'s errors', async () => {
+  const world = dashboard()
+  const { unmount } = render(show(world.host))
+  await waitFor(() => expect(world.host.watchScreen).toHaveBeenCalled())
+  expect(screen.queryByRole('button', { name: /Console/ })).toBeNull()
+
+  await world.says(FRAME, jpeg())
+  const bar = await screen.findByRole('button', { name: 'Console' })
+  expect(bar.getAttribute('aria-expanded')).toBe('false')
+  expect(screen.queryByRole('log')).toBeNull()
+
+  await world.says(CONSOLE, line(1, 'went', 'http://a.test/'))
+  await world.says(CONSOLE, line(2, 'log', 'hello'))
+  await world.says(CONSOLE, line(3, 'error', 'Uncaught TypeError: boom\n    at run', 'http://a.test/app.js:3'))
+  expect(screen.getByRole('button', { name: 'Console, 1 error' })).toBe(bar)
+  await world.says(CONSOLE, line(4, 'error', 'Failed to load resource'))
+  expect(screen.getByRole('button', { name: 'Console, 2 errors' })).toBe(bar)
+
+  fireEvent.click(bar)
+  expect(bar.getAttribute('aria-expanded')).toBe('true')
+  const log = screen.getByRole('log', { name: "The page's console" })
+  expect([...log.children].map(row => row.textContent!.replace(/^\d\d:\d\d:\d\d/, ''))).toEqual([
+    'http://a.test/',
+    'hello',
+    'error: Uncaught TypeError: boom\n    at run http://a.test/app.js:3',
+    'error: Failed to load resource',
+  ])
+  expect(log.children[2]!.className).toContain('text-danger')
+  // Where the page went is a row of its own kind: a line the page says, whatever its text, is not one.
+  expect([...log.children].map(row => row.hasAttribute('data-went'))).toEqual([true, false, false, false])
+  expect(log.children[0]!.querySelector('[aria-label="Went to"]')).toBeTruthy()
+
+  // The count is the page's the browser is on: going to another address starts it again, and empties nothing.
+  await world.says(CONSOLE, line(5, 'went', 'http://a.test/two'))
+  expect(screen.getByRole('button', { name: 'Console' })).toBe(bar)
+  expect(log.children).toHaveLength(5)
+  await world.says(CONSOLE, line(6, 'warning', 'careful'))
+  expect(log.lastElementChild!.className).toContain('text-warning')
+  expect(screen.getByRole('button', { name: 'Console' })).toBe(bar)
+  // A tab the agent came back to had errors already: they are the page's, and are counted.
+  await world.says(CONSOLE, line(7, 'went', 'http://a.test/', undefined, 2))
+  expect(screen.getByRole('button', { name: 'Console, 2 errors' })).toBe(bar)
+  await world.says(CONSOLE, line(8, 'error', 'one more'))
+  expect(screen.getByRole('button', { name: 'Console, 3 errors' })).toBe(bar)
+
+  // Left open, it is open the next time the tab is; closed again, it is closed.
+  unmount()
+  const again = dashboard()
+  const second = render(show(again.host))
+  await waitFor(() => expect(again.host.watchScreen).toHaveBeenCalled())
+  await again.says(FRAME, jpeg())
+  expect(await screen.findByText('The page has said nothing.')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Console' }))
+  second.unmount()
+  const third = dashboard()
+  render(show(third.host))
+  await waitFor(() => expect(third.host.watchScreen).toHaveBeenCalled())
+  await third.says(FRAME, jpeg())
+  expect((await screen.findByRole('button', { name: 'Console' })).getAttribute('aria-expanded')).toBe('false')
+})
+
+test('a console line is shown once, in its order; what is no line is not shown; a new stream begins the console again', async () => {
+  localStorage.setItem('oa.browser-console', '1')
+  const world = dashboard()
+  const { rerender } = render(show(world.host))
+  await waitFor(() => expect(world.host.watchScreen).toHaveBeenCalled())
+  await world.says(FRAME, jpeg())
+  const rows = () => [...screen.getByRole('log').children].map(row => row.textContent!.replace(/^\d\d:\d\d:\d\d/, ''))
+
+  await world.says(CONSOLE, line(7, 'log', 'seventh'))
+  await world.says(CONSOLE, line(7, 'log', 'seventh, again'))
+  await world.says(CONSOLE, line(3, 'log', 'an old one'))
+  await world.says(CONSOLE, new TextEncoder().encode('{"n":8,"at":1,"level":"loud","text":"no level of a console"}'))
+  await world.says(CONSOLE, new TextEncoder().encode('<script>alert(1)</script>'))
+  await world.says(CONSOLE, line(9, 'info', '<b>not markup</b>'))
+  expect(rows()).toEqual(['seventh', '<b>not markup</b>'])
+  expect(screen.getByRole('log').querySelector('b')).toBeNull()
+
+  // More lines than a browser keeps: the oldest go.
+  const many = Array.from({ length: 600 }, (_, i) => streamPart(CONSOLE, line(10 + i, 'log', `line ${10 + i}`)))
+  await world.raw(new Uint8Array(many.flatMap(part => [...part])))
+  expect(rows()).toHaveLength(500)
+  expect(rows().at(-1)).toBe('line 609')
+
+  // The stream ends and another begins, the browser's kept lines first: numbers start where that browser's do.
+  await world.ends()
+  rerender(show(world.host, { agentId: 'run-1', activity: 5 }))
+  await waitFor(() => expect(world.host.watchScreen).toHaveBeenCalledTimes(2))
+  await world.says(FRAME, jpeg())
+  await world.says(CONSOLE, line(1, 'log', 'a new browser'))
+  expect(rows()).toEqual(['a new browser'])
 })

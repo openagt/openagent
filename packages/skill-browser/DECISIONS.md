@@ -16,7 +16,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   browser's toolbar over the live picture, and can click and type in it. The chat keeps one
   line where the agent opened it, which opens the tab. Picked over the browser as a message
   in the chat where the agent opened it, and over a frame above the message box: a tab has
-  room for the browser's console under the picture, which comes next.
+  room for the browser's console under the picture.
+- The page's console is under the picture, behind a thin bar that is closed at first and
+  says how many errors the page has; a click opens it. The agent reads the same lines
+  with `browser console`. Picked over a console that is always open, which takes the room
+  of the picture, most of all on a phone.
 - The picture is streamed from the computer the agent runs on, so the tab shows the same
   on that computer, on a phone and on another computer.
 - A run that stops to ask a question keeps its browser, and its live screen, for the
