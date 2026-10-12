@@ -204,6 +204,19 @@ test('the RPC mount rejects a rebound Host, which the Origin check alone lets th
 })
 
 // A POST of JSON, returning the status + body.
+/** A POST with headers of the caller's own. */
+function postAs(url: string, body: string, headers: Record<string, string>): Promise<{ status: number; body: string }> {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const req = request(url, { method: 'POST', headers }, res => {
+      let b = ''
+      res.on('data', c => (b += c))
+      res.on('end', () => resolvePromise({ status: res.statusCode ?? 0, body: b }))
+    })
+    req.on('error', rejectPromise)
+    req.end(body)
+  })
+}
+
 function postJson(url: string, body: string): Promise<{ status: number; body: string }> {
   return new Promise((resolvePromise, rejectPromise) => {
     const req = request(url, { method: 'POST', headers: { 'content-type': 'application/json' } }, res => {
@@ -263,6 +276,7 @@ const SHOP_ID = 'shop-here'
 async function relayDashboard(): Promise<{
   base: string
   starts: Array<{ prompt: string; options: StartAgentOptions; projectId?: string }>
+  brought: Array<{ address: string; bring?: unknown }>
   close: () => Promise<void>
 }> {
   const bundle = await fakeBundle()
@@ -281,10 +295,16 @@ async function relayDashboard(): Promise<{
   }
   const project = async (address: string): Promise<string | undefined> => (address === SHOP ? SHOP_ID : undefined)
   const rpc = async (projectId: string, fn: string, args: unknown[]): Promise<unknown> => ({ projectId, fn, args })
-  const dash = await dashboard({ clientBundleDir: bundle, onStart, relay: { project, tailEvents, rpc } })
+  const brought: Array<{ address: string; bring?: unknown }> = []
+  const bring = async (address: string, how?: { share: boolean; from?: string }): Promise<{ state: 'there' | 'coming' | 'missing' }> => {
+    brought.push({ address, ...(how ? { bring: how } : {}) })
+    return { state: address === SHOP ? 'there' : how ? 'coming' : 'missing' }
+  }
+  const dash = await dashboard({ clientBundleDir: bundle, onStart, relay: { project, tailEvents, rpc, bring } })
   return {
     base: dash.url,
     starts,
+    brought,
     close: async () => {
       await dash.close()
       await rm(bundle, { recursive: true, force: true })
@@ -318,6 +338,32 @@ test('/_relay/start starts nothing for a project this machine does not have, or 
       assert.equal(answer.noProject, true) // said apart from any other refusal, so the caller can name the project
     }
     assert.equal(starts.length, 0) // and never in some other project of this machine
+  } finally {
+    await close()
+  }
+})
+
+test('/_relay/project says where a project stands with a GET, and has it cloned with a POST; a call that names none is refused', async () => {
+  const { base, brought, starts, close } = await relayDashboard()
+  try {
+    const other = 'github.com/acme/other'
+    const read = await fetchText(`${base}/_relay/project?project=${encodeURIComponent(other)}`)
+    assert.equal(read.status, 200)
+    assert.deepEqual(JSON.parse(read.body), { state: 'missing' })
+    const asked = await postJson(`${base}/_relay/project`, JSON.stringify({ project: other, share: true, from: 'github.com/Acme/Other', more: 'dropped' }))
+    assert.equal(asked.status, 200)
+    assert.deepEqual(JSON.parse(asked.body), { state: 'coming' })
+    // Anything but a plain yes on the records is a no, and a spelling that is no text is not passed on.
+    await postJson(`${base}/_relay/project`, JSON.stringify({ project: other, share: 'yes', from: 7 }))
+    assert.deepEqual(brought, [{ address: other }, { address: other, bring: { share: true, from: 'github.com/Acme/Other' } }, { address: other, bring: { share: false } }])
+    assert.deepEqual(JSON.parse((await fetchText(`${base}/_relay/project?project=${encodeURIComponent(SHOP)}`)).body), { state: 'there' })
+
+    assert.equal((await fetchText(`${base}/_relay/project`)).status, 400)
+    assert.equal((await postJson(`${base}/_relay/project`, JSON.stringify({ share: true }))).status, 400)
+    assert.equal((await postJson(`${base}/_relay/project`, JSON.stringify({ project: 'x'.repeat(600) }))).status, 400)
+    assert.equal((await postJson(`${base}/_relay/project`, 'null')).status, 400)
+    assert.equal(brought.length, 4)
+    assert.equal(starts.length, 0) // asking for a project starts no run
   } finally {
     await close()
   }
@@ -410,8 +456,8 @@ test('the dashboard listens on this computer\'s own address only: nothing answer
 
 // The relay carries the RPC mount's own CSRF + DNS-rebinding guard — without it a page the user
 // merely visits could POST /_relay/start.
-test('the relay rejects a cross-origin POST and a rebound Host, and starts nothing', async () => {
-  const { base, starts, close } = await relayDashboard()
+test('the relay rejects a cross-origin POST, a rebound Host and a changing call that is not JSON, and starts and clones nothing', async () => {
+  const { base, starts, brought, close } = await relayDashboard()
   try {
     const body = JSON.stringify({ prompt: 'do it', options: { model: 'opus' }, project: SHOP })
 
@@ -420,6 +466,15 @@ test('the relay rejects a cross-origin POST and a rebound Host, and starts nothi
     const rebound = await postRebound(`${base}/_relay/start`)
     assert.equal(rebound.status, 403) // same-origin to the browser, but the Host names evil.com
     assert.equal(starts.length, 0) // neither reached the spawn
+
+    // A page another program serves on this computer passes the origin check, and a browser sends
+    // its POST unasked while the body is not said to be JSON: such a call is refused, whatever it holds.
+    for (const path of ['/_relay/start', '/_relay/project', '/_relay/rpc']) {
+      const plain = await postAs(`${base}${path}`, JSON.stringify({ prompt: 'x', options: {}, project: 'github.com/evil/x', share: true }), { origin: 'http://localhost:5173', 'content-type': 'text/plain' })
+      assert.equal(plain.status, 403, path)
+    }
+    assert.equal(starts.length, 0)
+    assert.deepEqual(brought, [])
 
     // A machine's call arrives with no Origin and a loopback Host, so it still passes.
     const ok = await postJson(`${base}/_relay/start`, body)

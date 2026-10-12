@@ -222,9 +222,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   from, and starts in that machine's own copy of it. Picked over the folder's name, where
   two projects named alike are mixed up and a renamed folder breaks the link, and over
   linking the two folders by hand, a step for every project on every machine.
-- A machine that does not have the project starts nothing, and the person is told which
-  project to add there. Picked over starting in the folder that machine's OpenAgent was
-  started in, which may be another project.
+- A machine that does not have the project clones it first, by itself, from the project's
+  repository address and with its own logins, into `~/projects/<its name>`, and the launcher
+  says so while it waits; the run then starts. Picked over starting nothing and telling the person to add the project
+  there, a step on another computer for every project, and over starting in the folder that
+  machine's OpenAgent was started in, which may be another project.
 - A project with no repository address runs on this machine only, and "Run on" says so.
   Picked over sending the repository straight to the other machine, a second road for
   code beside the git host.

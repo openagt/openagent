@@ -1,7 +1,10 @@
 import { hostname } from 'node:os'
-import { enterRemote, leaveRemote, pingRemote, remoteVersion } from '../dashboard/remote-run.js'
+import { basename } from 'node:path'
+import { readSharing } from '@openagt/agent-data'
+import { enterRemote, leaveRemote, pingRemote, remoteProject, remoteVersion } from '../dashboard/remote-run.js'
 import { errorMessage } from '../error-message.js'
-import { contextRemote } from './context.js'
+import { repositoryAddress, repositorySpelling } from '../repository-address.js'
+import { contextRemote, resolveProjectPath } from './context.js'
 import { addMachine, listMachines, removeMachine } from '../registry.js'
 import { parseMachineLink } from '../machine-link.js'
 import { openagentVersion } from '../version.js'
@@ -103,4 +106,49 @@ export async function onMachineVersions(): Promise<MachineVersions> {
     }),
   )
   return { version: openagentVersion(), machines }
+}
+
+/** Whether a saved machine has a project of this computer's: `there` is false while the machine clones it. */
+export type ProjectOnMachine = { ok: true; there: boolean } | { ok: false; error: string }
+
+/**
+ * Have a saved machine clone a project of this computer's that it does not have, from the
+ * project's repository address and with the machine's own logins: what a run sent there waits
+ * for, the first time. The machine clones on its own; {@link onProjectOnMachine} says when the
+ * project is there. Nothing happens on a machine that has it, or is cloning it already.
+ */
+export async function sendProjectToMachine(projectId: string, machineId: string): Promise<ProjectOnMachine> {
+  return projectOnMachine(projectId, machineId, true)
+}
+
+/** Whether a saved machine has the project by now, or why it will not: asked while the machine clones it. */
+export async function onProjectOnMachine(projectId: string, machineId: string): Promise<ProjectOnMachine> {
+  return projectOnMachine(projectId, machineId, false)
+}
+
+async function projectOnMachine(projectId: string, machineId: string, bring: boolean): Promise<ProjectOnMachine> {
+  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  if (!machine) return { ok: false, error: 'That machine is no longer saved. Pick another place to run.' }
+  const cwd = typeof projectId === 'string' ? await resolveProjectPath(projectId) : undefined
+  if (!cwd) return { ok: false, error: `unknown project: ${String(projectId)}` }
+  const project = await repositoryAddress(cwd)
+  if (!project) return { ok: false, error: 'This project has no repository address, so it cannot be sent to another machine.' }
+  const target = { url: machine.url, key: machine.key, ...(machine.pin ? { pin: machine.pin } : {}), project }
+  const from = bring ? await repositorySpelling(cwd) : undefined
+  const said = await remoteProject(target, bring ? { share: await readSharing(cwd), ...(from !== undefined ? { from } : {}) } : undefined)
+  const name = basename(cwd)
+  switch (said.state) {
+    case 'there':
+      return { ok: true, there: true }
+    case 'coming':
+      return { ok: true, there: false }
+    case 'missing':
+      // The machine was restarted while it cloned: what it had made is gone, and a new send starts over.
+      return { ok: false, error: `${machine.label} is no longer cloning ${name}. Send again.` }
+    case 'failed':
+      // The machine's own words: "this computer" in them is the machine.
+      return { ok: false, error: `${name} could not be cloned on ${machine.label}. ${machine.label} says: ${said.error}` }
+    case 'unasked':
+      return { ok: false, error: `${machine.label} could not be asked for ${name}: ${said.error}` }
+  }
 }

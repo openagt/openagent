@@ -160,6 +160,53 @@ export async function startRemoteAgent(target: RemoteTarget, body: RelayStartBod
   }
 }
 
+/**
+ * Where a project a machine was asked for stands there: `there` once it is among its projects,
+ * `coming` while the machine clones it, `failed` with the machine's words when the clone or the
+ * add did not go through, and `missing` when the machine has no such project and is not at work
+ * on one.
+ */
+export type RelayProject = { state: 'there' | 'coming' | 'missing' } | { state: 'failed'; error: string }
+
+const PROJECT_TIMEOUT_MS = 15_000
+
+/**
+ * Ask a machine about its copy of the project `target` names, and with `bring` have it clone the
+ * project when it has none: the machine answers at once and clones on its own, so this is asked
+ * again until it says `there`. `share` is this computer's own answer on the agents' records for
+ * the project, which the machine's copy takes, and `from` the address in the letters this
+ * computer's copy was cloned with. A machine that could not be asked is `unasked`, in this
+ * computer's words; `failed` carries the machine's own.
+ */
+export async function remoteProject(target: RemoteTarget, bring?: BringProject): Promise<RelayProject | { state: 'unasked'; error: string }> {
+  try {
+    const url = `${trimSlashes(target.url)}/_relay/project`
+    const res = bring
+      ? await machineFetch(url, target.pin, { method: 'POST', headers: relayHeaders(target.key), body: JSON.stringify({ project: target.project, ...bring }), signal: AbortSignal.timeout(PROJECT_TIMEOUT_MS) })
+      : await machineFetch(`${url}?project=${encodeURIComponent(target.project)}`, target.pin, { headers: relayHeaders(target.key), signal: AbortSignal.timeout(PROJECT_TIMEOUT_MS) })
+    if (res.status === 401) return { state: 'unasked', error: NOT_IN }
+    // An OpenAgent from before a machine cloned a project by itself has no such call.
+    if (res.status === 404) return { state: 'unasked', error: 'it runs an older OpenAgent, which cannot clone a project by itself. Update it, or add the project there.' }
+    if (!res.ok) return { state: 'unasked', error: `the machine refused (${res.status})` }
+    const said = (await res.json()) as { state?: unknown; error?: unknown }
+    if (said.state === 'there' || said.state === 'coming' || said.state === 'missing') return { state: said.state }
+    return { state: 'failed', error: typeof said.error === 'string' && said.error ? said.error.slice(0, MAX_SAID) : 'the machine did not say why' }
+  } catch (err) {
+    return { state: 'unasked', error: `could not reach the machine: ${errorMessage(err)}` }
+  }
+}
+
+/** What a machine is given to clone a project it does not have. */
+export interface BringProject {
+  /** This computer's answer on the agents' records for the project: whether they may go to the repository's remote. */
+  share: boolean
+  /** The address in the letters this computer's copy was cloned with; the machine clones from it when it reads as the project's. */
+  from?: string
+}
+
+/** How much of a machine's own words about a failure is shown. */
+const MAX_SAID = 600
+
 const RPC_TIMEOUT_MS = 60_000 // a relayed git push/PR runs over the network on the machine
 
 /**

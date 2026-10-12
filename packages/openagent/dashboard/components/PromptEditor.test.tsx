@@ -22,6 +22,19 @@ async function renderEditor() {
 }
 
 describe('Enter sends the prompt (#1510)', () => {
+  test('switching the editor off and on again is no edit: no change is told', async () => {
+    const onChange = vi.fn()
+    const editor = (disabled: boolean) => <PromptEditor onChange={onChange} onSubmit={vi.fn()} projects={[]} commands={[]} disabled={disabled} />
+    const { rerender } = render(editor(false))
+    await waitFor(() => expect(document.querySelector('[role="textbox"]')).toBeTruthy())
+    onChange.mockClear()
+    rerender(editor(true))
+    rerender(editor(false))
+    await act(async () => {})
+    expect(document.querySelector('[role="textbox"]')!.getAttribute('contenteditable')).toBe('true')
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
   test('plain Enter submits; Shift+Enter and Alt+Enter do not', async () => {
     const { box, onSubmit } = await renderEditor()
     fireEvent.keyDown(box, { key: 'Enter' })

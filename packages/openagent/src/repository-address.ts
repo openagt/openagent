@@ -15,6 +15,15 @@ import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
  * does not have it.
  */
 export function addressOfRemote(remote: string): string | undefined {
+  return spellingOfRemote(remote)?.toLowerCase()
+}
+
+/**
+ * A remote's `host/path` in the letters it was written with: what another machine is given to
+ * clone the repository from, since not every host matches names without regard to case. Undefined
+ * wherever {@link addressOfRemote} is.
+ */
+export function spellingOfRemote(remote: string): string | undefined {
   const url = remote.trim().replace(/[?#].*$/, '')
   // `git@host:path`, the scp-like form: no scheme, a colon before the path.
   const scp = /^(?:[^/\s]*@)?([^:/\s@]+):(?!\/\/)(.+)$/.exec(url)
@@ -23,8 +32,8 @@ export function addressOfRemote(remote: string): string | undefined {
   const [host, rest] = scp ? [scp[1]!, scp[2]!] : web ? [web[2]!, web[3]!] : []
   // One letter before a colon is a drive (`C:\repo`), a folder on this disk.
   if (host === undefined || rest === undefined || host.length < 2) return undefined
-  const path = rest.replace(/\/+$/, '').replace(/\.git$/i, '').replace(/^\/+|\/+$/g, '').toLowerCase()
-  return path ? `${host.toLowerCase()}/${path}` : undefined
+  const path = rest.replace(/\/+$/, '').replace(/\.git$/i, '').replace(/^\/+|\/+$/g, '')
+  return path ? `${host}/${path}` : undefined
 }
 
 /**
@@ -34,4 +43,9 @@ export function addressOfRemote(remote: string): string | undefined {
  */
 export async function repositoryAddress(cwd: string, git: GitRunner = nodeGitRunner()): Promise<string | undefined> {
   return git(['remote', 'get-url', 'origin'], cwd).then(addressOfRemote, () => undefined)
+}
+
+/** The same address in the letters the `origin` remote is written with: see {@link spellingOfRemote}. */
+export async function repositorySpelling(cwd: string, git: GitRunner = nodeGitRunner()): Promise<string | undefined> {
+  return git(['remote', 'get-url', 'origin'], cwd).then(spellingOfRemote, () => undefined)
 }

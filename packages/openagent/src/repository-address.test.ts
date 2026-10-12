@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { addressOfRemote, repositoryAddress } from './repository-address.js'
+import { addressOfRemote, spellingOfRemote, repositoryAddress } from './repository-address.js'
 
 test('one repository reads the same however it was cloned', () => {
   for (const remote of [
@@ -50,4 +50,12 @@ test('repositoryAddress reads origin, and a repository with none has no address'
     throw new Error("error: No such remote 'origin'")
   }
   assert.equal(await repositoryAddress('/repo', none), undefined)
+})
+
+test('a remote\'s spelling keeps the letters it was written with: what another machine is given to clone from', () => {
+  assert.equal(spellingOfRemote('git@github.com:Acme/Shop.git'), 'github.com/Acme/Shop')
+  assert.equal(spellingOfRemote('https://GitHub.com/Acme/Shop/'), 'GitHub.com/Acme/Shop')
+  assert.equal(addressOfRemote('https://GitHub.com/Acme/Shop/'), 'github.com/acme/shop')
+  assert.equal(spellingOfRemote('/home/ada/shop'), undefined)
+  assert.equal(spellingOfRemote('file:///home/ada/shop'), undefined)
 })

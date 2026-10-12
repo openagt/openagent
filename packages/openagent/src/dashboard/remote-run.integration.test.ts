@@ -7,7 +7,9 @@ import { basename, join } from 'node:path'
 import { EventStream } from '../event-stream.js'
 import { startDashboard, type Dashboard } from './server.js'
 import { testDashboardOptions } from '../dashboard-rpc/test-context.js'
-import { relayRpc } from './remote-run.js'
+import { relayRpc, remoteProject } from './remote-run.js'
+import type { Cloned } from '../clone-project.js'
+import { readSharing } from '@openagt/agent-data'
 import { createProjectRuntime, type ProjectRuntime } from '../daemon-runtime.js'
 import { forwardStream } from '../dashboard-rpc/stream-forward.js'
 import { addMachine, addProject, projectId } from '../registry.js'
@@ -71,6 +73,8 @@ interface TwoMachines {
   b: Dashboard
   shopB: string
   bStarts: Array<{ prompt: string; options: StartAgentOptions; projectId: string }>
+  /** What B was asked to clone, and the door each clone waits behind: a test lets it land, or fail. */
+  bClones: Array<{ from: string; land: (how: Cloned) => void }>
   close: () => Promise<void>
 }
 
@@ -91,7 +95,8 @@ async function twoMachines(opts: { shopOnB?: boolean } = {}): Promise<TwoMachine
   const shopB = await repository(join(root, 'b'), 'work-shop', 'https://github.com/Acme/Shop.git')
   await addProject(otherB, at, undefined, envB)
   if (opts.shopOnB !== false) await addProject(shopB, at, undefined, envB)
-  const runtimeB = createProjectRuntime({ cwd: otherB, env: envB })
+  const bClones: TwoMachines['bClones'] = []
+  const runtimeB = createProjectRuntime({ cwd: otherB, env: envB, clone: from => new Promise<Cloned>(land => bClones.push({ from, land })) })
 
   // B's Start is stubbed to record the call and emit a short event stream, so the relay path is
   // exercised without spawning a real agent.
@@ -114,7 +119,7 @@ async function twoMachines(opts: { shopOnB?: boolean } = {}): Promise<TwoMachine
     testDashboardOptions({
       clientBundleDir: bundle,
       onStart: bStart,
-      relay: { project: runtimeB.projectAt, tailEvents: bTail, rpc: runtimeB.onRelayRpc },
+      relay: { project: runtimeB.projectAt, tailEvents: bTail, rpc: runtimeB.onRelayRpc, bring: runtimeB.bringProject },
     }),
   )
 
@@ -135,6 +140,7 @@ async function twoMachines(opts: { shopOnB?: boolean } = {}): Promise<TwoMachine
     b,
     shopB,
     bStarts,
+    bClones,
     close: async () => {
       await a.dispose()
       await runtimeB.dispose()
@@ -203,14 +209,102 @@ test('a run started on a saved machine lands in that machine\'s own copy of the 
   }
 })
 
-test('a project the other machine does not have is refused by name, and starts nothing there', async () => {
+test('a project the other machine does not have starts nothing there, and the refusal is marked as one a clone mends', async () => {
   const m = await twoMachines({ shopOnB: false })
   try {
     const shopIdA = projectId(m.shopA)
     const result = await m.a.onStart('build the thing', { machine: m.machineB }, shopIdA)
-    assert.deepEqual(result, { ok: false, error: `${basename(m.shopA)} is not on Studio. Add it there first.` })
+    assert.deepEqual(result, { ok: false, error: `${basename(m.shopA)} is not on Studio yet.`, notThere: true })
     assert.equal(m.bStarts.length, 0) // never in B's other project
     assert.deepEqual(m.a.remoteAgents.list(shopIdA), [])
+    assert.equal(m.bClones.length, 0) // and a start alone clones nothing
+  } finally {
+    await m.close()
+  }
+})
+
+/** Until `check` holds. */
+async function until(check: () => Promise<boolean>): Promise<void> {
+  for (let i = 0; i < 200 && !(await check()); i++) await new Promise(r => setTimeout(r, 20))
+}
+
+test('the other machine clones a project it is asked for, by itself: asked again it says coming, then there, and the run starts in the clone', async () => {
+  const m = await twoMachines({ shopOnB: false })
+  try {
+    const shopIdA = projectId(m.shopA)
+    const target = { url: m.b.url, key: KEY, project: 'github.com/acme/shop' }
+    assert.deepEqual(await remoteProject(target), { state: 'missing' }) // a read brings nothing
+    assert.equal(m.bClones.length, 0)
+
+    // A's own answer on the records and its spelling of the address ride the ask; B answers at once.
+    assert.deepEqual(await remoteProject(target, { share: true, from: 'github.com/Acme/Shop' }), { state: 'coming' })
+    assert.deepEqual(await remoteProject(target, { share: true }), { state: 'coming' })
+    assert.deepEqual(await remoteProject(target), { state: 'coming' })
+    assert.deepEqual(m.bClones.map(clone => clone.from), ['github.com/Acme/Shop']) // one clone, however often it is asked for
+    assert.equal((await m.a.onStart('too early', { machine: m.machineB }, shopIdA)).ok, false)
+
+    // The clone lands: B adds the folder like any project, with the sharing answer it was given.
+    // Asked all the while it lands, B says coming and then there, and never that it has no such project.
+    m.bClones[0]!.land({ ok: true, path: m.shopB, cloned: true })
+    const seen = new Set<string>()
+    await until(async () => {
+      const [one, two] = await Promise.all([remoteProject(target), remoteProject(target)])
+      seen.add(one.state).add(two.state)
+      return one.state === 'there' && two.state === 'there'
+    })
+    assert.deepEqual([...seen].filter(state => state !== 'coming' && state !== 'there'), [])
+    assert.deepEqual(await remoteProject(target), { state: 'there' })
+    assert.equal(await readSharing(m.shopB), true)
+    assert.deepEqual(await remoteProject(target, { share: false }), { state: 'there' }) // asked for again: nothing to do
+    assert.equal(m.bClones.length, 1)
+
+    assert.deepEqual(await m.a.onStart('build the thing', { machine: m.machineB }, shopIdA), { ok: true, agentId: B_RUN })
+    assert.equal(m.bStarts.length, 1)
+    assert.equal(m.bStarts[0]!.projectId, projectId(m.shopB))
+  } finally {
+    await m.close()
+  }
+})
+
+test('a clone that fails is told in the machine\'s words until it is asked for again; what is no address, or another project\'s spelling, is not cloned', async () => {
+  const m = await twoMachines({ shopOnB: false })
+  try {
+    const target = { url: m.b.url, key: KEY, project: 'github.com/acme/shop' }
+    // A spelling that names another repository is not what is cloned: the address is.
+    assert.deepEqual(await remoteProject(target, { share: false, from: 'github.com/mallory/shop' }), { state: 'coming' })
+    assert.equal(m.bClones[0]!.from, 'github.com/acme/shop')
+    m.bClones[0]!.land({ ok: false, error: 'This computer has no login that can read github.com/acme/shop.' })
+    await until(async () => (await remoteProject(target)).state === 'failed')
+    const failed = { state: 'failed', error: 'This computer has no login that can read github.com/acme/shop.' }
+    assert.deepEqual(await remoteProject(target), failed)
+    assert.deepEqual(await remoteProject(target), failed) // kept: every page that asks reads it
+
+    // Asked for again, it is cloned again. A spelling is the same host and path in other letters,
+    // and nothing more: one that names a way in, a user or a port reads as the same address, and is not taken.
+    for (const from of ['ssh://mallory@github.com:2222/acme/shop', 'mallory@github.com:acme/shop', 'ssh://github.com:65535/Acme/Shop.git', 'https://github.com/acme/shop']) {
+      assert.deepEqual(await remoteProject(target, { share: false, from }), { state: 'coming' })
+      assert.equal(m.bClones.at(-1)!.from, 'github.com/acme/shop', from)
+      // What the other side made git say is kept and told only up to a length.
+      m.bClones.at(-1)!.land({ ok: false, error: 'remote: '.padEnd(5000, 'x') })
+      await until(async () => (await remoteProject(target)).state === 'failed')
+      assert.equal(((await remoteProject(target)) as { error: string }).error.length, 600)
+    }
+    assert.equal(m.bClones.length, 5)
+
+    // Asked for twice at once: one clone. A clone that throws is a failure told, not one lost.
+    assert.deepEqual(await Promise.all([remoteProject(target, { share: false }), remoteProject(target, { share: false }), remoteProject(target)]), [{ state: 'coming' }, { state: 'coming' }, { state: 'coming' }])
+    assert.equal(m.bClones.length, 6)
+
+    for (const project of ['/etc', '../x', 'github.com/Acme/Shop', 'file:///tmp/x', '-x/y.z/q']) {
+      const said = await remoteProject({ ...target, project }, { share: false })
+      assert.equal(said.state, 'failed', project)
+    }
+    assert.equal(m.bClones.length, 6)
+
+    // No more than a few at once: one more is told to ask again, and nothing of it is kept.
+    for (const name of ['two', 'three']) assert.deepEqual(await remoteProject({ ...target, project: `github.com/acme/${name}` }, { share: false }), { state: 'coming' })
+    assert.deepEqual(await remoteProject({ ...target, project: 'github.com/acme/four' }, { share: false }), { state: 'failed', error: 'This machine is cloning other projects. Send again in a few minutes.' })
+    assert.deepEqual(await remoteProject({ ...target, project: 'github.com/acme/four' }), { state: 'missing' })
   } finally {
     await m.close()
   }

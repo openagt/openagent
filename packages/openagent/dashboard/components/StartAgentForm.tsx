@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { Folder } from 'lucide-react'
+import { useRef, useState, type ReactNode } from 'react'
+import { CircleAlert, Folder } from 'lucide-react'
 import { onProjects, onStartCheck } from '../rpc/projects.js'
 import type { ProjectSummary } from '../../src/index.js'
 import { usePreferences, usePreferencesLoaded, updatePreferences } from '../lib/preferences.js'
@@ -74,7 +74,9 @@ export function StartAgentForm({
   toggleContext: (path: string) => void
 }) {
   const [note, setNote] = useState<string | null>(null)
-  const { busy, error, reset, start } = useStartAgent()
+  // The machine the last start was sent to, by its name: what the form says it is cloning on.
+  const [sentTo, setSentTo] = useState<string | null>(null)
+  const { busy, cloning, error, reset, start } = useStartAgent(projectId)
   const composerRef = useRef<ComposerHandle>(null)
   const preferences = usePreferences()
   const launcher = useProjectLauncher(projectId)
@@ -134,6 +136,7 @@ export function StartAgentForm({
   const submit = async (text: string) => {
     if (busy) return
     setNote(STARTING)
+    setSentTo(machine?.label ?? null)
     const result = await start(projectId, promptWithContext(text, context), {
       ...startPicks(preferences),
       ...cleanupPick(preferences, commands),
@@ -211,21 +214,20 @@ export function StartAgentForm({
       />
 
       {/* Feedback right where the action is (#948). */}
-      {error && <p role="alert" className="mt-2 text-xs text-danger">{error}</p>}
+      {error && <Refusal>{error}</Refusal>}
       {note === STARTING && !error ? (
         // The chat's own first line (`SessionLine.tsx`), in its words and its look: the page that
-        // opens a moment later goes on saying it.
+        // opens a moment later goes on saying it. A machine that does not have the project yet
+        // clones it first, which can take minutes: the line says so for as long as it does.
         <p role="status" className="mt-2 flex items-center gap-2 px-1.5 text-sm text-muted-foreground">
           <Dots />
-          <span className="text-shimmer">{note}</span>
+          <span className="text-shimmer">{cloning && sentTo ? `Cloning ${projectName ?? 'this project'} on ${sentTo}, the first time only` : note}</span>
         </p>
       ) : (
         note && !error && <p role="status" className="mt-2 text-xs text-muted-foreground">{note}</p>
       )}
       {readiness?.problems.map(problem => (
-        <p key={problem} role="alert" className="mt-2 text-xs text-danger">
-          {problem}
-        </p>
+        <Refusal key={problem}>{problem}</Refusal>
       ))}
       {readiness?.warnings.map(warning => (
         <p key={warning} role="alert" className="mt-2 text-xs text-warning">
@@ -233,11 +235,21 @@ export function StartAgentForm({
         </p>
       ))}
       {noStartHook && (
-        <p role="alert" className="mt-2 text-xs text-danger">
+        <Refusal>
           This project has no start hook. Add a <code className="font-mono">start:</code> line to{' '}
           <code className="font-mono">.openagent/hooks.yml</code>.
-        </p>
+        </Refusal>
       )}
     </form>
+  )
+}
+
+/** Why no run starts, or would not: a box in the page's own text size, so it is not missed under the message box. */
+function Refusal({ children }: { children: ReactNode }) {
+  return (
+    <p role="alert" className="mt-2 flex items-start gap-2 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
+      <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+      <span className="min-w-0 [overflow-wrap:anywhere]">{children}</span>
+    </p>
   )
 }

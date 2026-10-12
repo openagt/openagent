@@ -321,8 +321,10 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     loadTemplate: (text: string) => (editor ? loadTemplateInto(editor, text) : false),
   }))
 
+  // Switched off while a start is asked for, and on again after. That is no edit, so no change is
+  // told: a form that drops its error at the next edit would drop the refusal the moment it landed.
   useEffect(() => {
-    editor?.setEditable(!disabled)
+    editor?.setEditable(!disabled, false)
   }, [editor, disabled])
 
   // Seed {@link PromptEditorProps.initialText} the moment the editor exists, and only ever once:

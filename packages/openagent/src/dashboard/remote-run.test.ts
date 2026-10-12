@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { enterRemote, leaveRemote, startRemoteAgent, streamRemoteEvents, pingRemote, relayRpc, remoteVersion, RelayedAgents, type RemoteTarget } from './remote-run.js'
+import { enterRemote, leaveRemote, remoteProject, startRemoteAgent, streamRemoteEvents, pingRemote, relayRpc, remoteVersion, RelayedAgents, type RemoteTarget } from './remote-run.js'
 import { type AgentMeta } from '../store/index.js'
 import type { OpenAgentEvent } from '../events.js'
 
@@ -470,4 +470,56 @@ test('RelayedAgents says whether a run is still at work on a machine, and reads 
     agents.dispose()
     await srv.close()
   }
+})
+
+test('a machine is asked about a project with a GET, and asked to clone it with a POST that carries the sharing answer and the address as written', async () => {
+  const calls: { method?: string | undefined; url?: string | undefined; authorization?: string | undefined; origin?: string | undefined; body: unknown }[] = []
+  let answer: unknown = { state: 'coming' }
+  const srv = await server((req, res) => {
+    let raw = ''
+    req.on('data', c => (raw += c))
+    req.on('end', () => {
+      calls.push({ method: req.method, url: req.url, authorization: req.headers.authorization, origin: req.headers.origin, body: raw ? JSON.parse(raw) : null })
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify(answer))
+    })
+  })
+  try {
+    const target = { url: srv.url, key: 'd1.sekret', project: PROJECT }
+    assert.deepEqual(await remoteProject(target, { share: true, from: 'github.com/Acme/Shop' }), { state: 'coming' })
+    assert.deepEqual(calls[0], { method: 'POST', url: '/_relay/project', authorization: 'Bearer d1.sekret', origin: undefined, body: { project: PROJECT, share: true, from: 'github.com/Acme/Shop' } })
+    answer = { state: 'there' }
+    assert.deepEqual(await remoteProject(target), { state: 'there' })
+    assert.deepEqual(calls[1], { method: 'GET', url: `/_relay/project?project=${encodeURIComponent(PROJECT)}`, authorization: 'Bearer d1.sekret', origin: undefined, body: null })
+    // The machine's own words about a failure are passed on, cut to a length; an answer that says nothing readable is a failure too.
+    answer = { state: 'failed', error: 'x'.repeat(5000) }
+    const failed = await remoteProject(target)
+    assert.equal(failed.state, 'failed')
+    assert.equal((failed as { error: string }).error.length, 600)
+    answer = { state: 'elsewhere' }
+    assert.deepEqual(await remoteProject(target), { state: 'failed', error: 'the machine did not say why' })
+  } finally {
+    await srv.close()
+  }
+})
+
+test('a machine that could not be asked about a project is told apart from one that failed: removed there, an older OpenAgent, unreachable', async () => {
+  let status = 401
+  const srv = await server((req, res) => {
+    req.resume()
+    res.writeHead(status).end()
+  })
+  const target = { url: srv.url, key: 'd1.gone', project: PROJECT }
+  try {
+    assert.deepEqual(await remoteProject(target, { share: false }), { state: 'unasked', error: 'this computer is no longer in on the machine: add the machine again, with a new link' })
+    status = 404
+    assert.deepEqual(await remoteProject(target), { state: 'unasked', error: 'it runs an older OpenAgent, which cannot clone a project by itself. Update it, or add the project there.' })
+    status = 500
+    assert.deepEqual(await remoteProject(target), { state: 'unasked', error: 'the machine refused (500)' })
+  } finally {
+    await srv.close()
+  }
+  const gone = await remoteProject(target)
+  assert.equal(gone.state, 'unasked')
+  assert.match((gone as { error: string }).error, /^could not reach the machine: /)
 })

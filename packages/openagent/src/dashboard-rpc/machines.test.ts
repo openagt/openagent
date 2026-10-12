@@ -2,14 +2,15 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { execFileSync } from 'node:child_process'
+import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { onMachineVersions, onMachines, onMachinesReachable, sendAddMachine, sendRemoveMachine } from './machines.js'
+import { onMachineVersions, onMachines, onMachinesReachable, onProjectOnMachine, sendAddMachine, sendProjectToMachine, sendRemoveMachine } from './machines.js'
 import { openagentVersion } from '../version.js'
 import { setDashboardContext } from './context.js'
 import { testDashboardContext } from './test-context.js'
-import { REGISTRY_FILE } from '../registry.js'
+import { REGISTRY_FILE, addMachine, addProject, projectId } from '../registry.js'
 
 /** Until `check` holds: what is not waited for (a key taken out of a machine) lands a moment later. */
 async function until(check: () => boolean): Promise<void> {
@@ -225,5 +226,62 @@ test('the saved machines are told with the OpenAgent each runs, beside this comp
 test('with no saved machine nothing is asked', async () => {
   await withHome(async () => {
     assert.deepEqual(await onMachinesReachable(), {})
+  })
+})
+
+test('a saved machine is asked to clone a project of this computer\'s, by the project\'s address, and what it answers is told in words that name the machine', async () => {
+  await withHome(async () => {
+    const shop = await realpath(await mkdtemp(join(tmpdir(), 'oa-machines-shop-')))
+    const notes = await realpath(await mkdtemp(join(tmpdir(), 'oa-machines-notes-')))
+    execFileSync('git', ['init', '-q'], { cwd: shop })
+    execFileSync('git', ['remote', 'add', 'origin', 'git@github.com:Acme/Shop.git'], { cwd: shop })
+    execFileSync('git', ['config', '--local', 'agent-data.share', 'true'], { cwd: shop })
+    execFileSync('git', ['init', '-q'], { cwd: notes })
+    const calls: { method?: string | undefined; url?: string | undefined; body: unknown }[] = []
+    let answer: { status?: number; said?: unknown } = { said: { state: 'coming' } }
+    const srv: Server = createServer((req, res) => {
+      let raw = ''
+      req.on('data', chunk => (raw += chunk))
+      req.on('end', () => {
+        calls.push({ method: req.method, url: req.url, body: raw ? JSON.parse(raw) : null })
+        res.writeHead(answer.status ?? 200, { 'content-type': 'application/json' }).end(JSON.stringify(answer.said ?? {}))
+      })
+    })
+    await new Promise<void>(r => srv.listen(0, '127.0.0.1', () => r()))
+    const url = `http://127.0.0.1:${(srv.address() as AddressInfo).port}`
+    try {
+      const at = new Date().toISOString()
+      await addProject(shop, at)
+      await addProject(notes, at)
+      await addMachine({ url, key: 'd1.key', door: `${url}${ENTER}`, label: 'Studio' })
+      const name = shop.split('/').at(-1)!
+
+      assert.deepEqual(await sendProjectToMachine(projectId(shop), url), { ok: true, there: false })
+      // This computer's own answer on the records, and its spelling of the address, ride the ask.
+      assert.deepEqual(calls[0], { method: 'POST', url: '/_relay/project', body: { project: 'github.com/acme/shop', share: true, from: 'github.com/Acme/Shop' } })
+      assert.deepEqual(await onProjectOnMachine(projectId(shop), url), { ok: true, there: false })
+      assert.deepEqual(calls[1], { method: 'GET', url: '/_relay/project?project=github.com%2Facme%2Fshop', body: null })
+      answer = { said: { state: 'there' } }
+      assert.deepEqual(await onProjectOnMachine(projectId(shop), url), { ok: true, there: true })
+
+      // The machine's own words say "this computer" of itself: the page says whose words they are.
+      answer = { said: { state: 'failed', error: 'This computer has no login that can read github.com/acme/shop.' } }
+      assert.deepEqual(await onProjectOnMachine(projectId(shop), url), { ok: false, error: `${name} could not be cloned on Studio. Studio says: This computer has no login that can read github.com/acme/shop.` })
+      answer = { said: { state: 'missing' } }
+      assert.deepEqual(await onProjectOnMachine(projectId(shop), url), { ok: false, error: `Studio is no longer cloning ${name}. Send again.` })
+      answer = { status: 404 }
+      assert.deepEqual(await sendProjectToMachine(projectId(shop), url), { ok: false, error: `Studio could not be asked for ${name}: it runs an older OpenAgent, which cannot clone a project by itself. Update it, or add the project there.` })
+
+      // Nothing is asked for a project with no address, an unknown project, or a machine that is not saved.
+      const asked = calls.length
+      assert.deepEqual(await sendProjectToMachine(projectId(notes), url), { ok: false, error: 'This project has no repository address, so it cannot be sent to another machine.' })
+      assert.deepEqual(await sendProjectToMachine('nope', url), { ok: false, error: 'unknown project: nope' })
+      assert.deepEqual(await sendProjectToMachine(projectId(shop), 'http://127.0.0.1:1'), { ok: false, error: 'That machine is no longer saved. Pick another place to run.' })
+      assert.equal(calls.length, asked)
+    } finally {
+      await new Promise<void>(r => srv.close(() => r()))
+      await rm(shop, { recursive: true, force: true })
+      await rm(notes, { recursive: true, force: true })
+    }
   })
 })

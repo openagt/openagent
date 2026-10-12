@@ -135,7 +135,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     // (slice 2), and the `/_relay/*` endpoints let another daemon run + read + steer a session here.
     eventsSource: runtime.remoteEventsSource,
     remote: runtime.remoteAgents,
-    relay: { project: runtime.projectAt, tailEvents: runtime.tailRelayEvents, rpc: runtime.onRelayRpc },
+    relay: { project: runtime.projectAt, tailEvents: runtime.tailRelayEvents, rpc: runtime.onRelayRpc, bring: runtime.bringProject },
     screen: runtime.screenOf,
     // The browser bridge (#1237): absent unless the preference is on, which 404s every route.
     ...(bridgeToken ? { bridgeToken, bridgeSessions: () => listBridgeSessions(env) } : {}),

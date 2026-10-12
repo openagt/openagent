@@ -20,9 +20,11 @@ vi.mock('../lib/machines.js', () => ({ useMachines: () => (machine.current ? [ma
 vi.mock('../lib/remote-target.js', () => ({ useSelectedMachineId: () => machine.current?.id ?? null }))
 
 const start = vi.hoisted(() => vi.fn())
+// What the start says of itself beside its answer: that the machine is cloning the project, or why there is no run.
+const startSays = vi.hoisted(() => ({ cloning: false, error: null as string | null }))
 vi.mock('../lib/use-start-agent.js', async () => ({
   ...(await vi.importActual<typeof import('../lib/use-start-agent.js')>('../lib/use-start-agent.js')),
-  useStartAgent: () => ({ busy: false, error: null, reset: vi.fn(), start }),
+  useStartAgent: () => ({ busy: false, cloning: startSays.cloning, error: startSays.error, reset: vi.fn(), start }),
 }))
 
 // The Composer is exercised by its own tests; here it hands back a typed submit, shows whether
@@ -59,6 +61,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   start.mockReset()
+  startSays.cloning = false
+  startSays.error = null
   onCommands.mockReset()
   onStartCheck.mockReset()
   updatePreferences.mockReset()
@@ -109,6 +113,32 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Starting session'))
     answer({ agentId: 'r1' })
     await waitFor(() => expect(screen.queryByRole('status')).toBeNull())
+  })
+
+  test('while the machine the run was sent to clones the project, the form says so, with the project and the machine by name', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true, address: 'github.com/acme/shop' })
+    machine.current = { id: 'm1', label: 'Studio', url: 'https://studio.example' }
+    start.mockReturnValue(new Promise(() => {}))
+    const { rerender } = render(<StartAgentForm {...props} projectName="shop" />)
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Starting session'))
+    startSays.cloning = true
+    rerender(<StartAgentForm {...props} projectName="shop" />)
+    expect(screen.getByRole('status').textContent).toBe('Cloning shop on Studio, the first time only')
+    // The machine it was sent to, also when another is picked meanwhile.
+    machine.current = { id: 'm2', label: 'Other', url: 'https://other.example' }
+    rerender(<StartAgentForm {...props} projectName="shop" />)
+    expect(screen.getByRole('status').textContent).toBe('Cloning shop on Studio, the first time only')
+  })
+
+  test('why no run started is a box in the page\'s own text size under the message box, not a small line', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    startSays.error = 'shop could not be cloned on Studio. Studio says: This computer has no login that can read github.com/acme/shop.'
+    render(<StartAgentForm {...props} />)
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toBe(startSays.error)
+    for (const part of ['border-danger/40', 'bg-danger/10', 'text-sm', 'text-danger']) expect(alert.className).toContain(part)
+    expect(alert.className).not.toContain('text-xs')
   })
 
   test('under the box: the Context picker, then the "Auto" menu', async () => {
