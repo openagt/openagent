@@ -5,9 +5,10 @@ import type { AddressInfo } from 'node:net'
 import { dirname } from 'node:path'
 import { activePage, connectCdp, listPages, type CdpSession, type PageTarget } from './cdp.js'
 import { launchChrome, type Chrome } from './chrome.js'
+import { consoleCall, consoleLog, errorsNote, FLOOD_BYTES, FLOOD_LINES, flooded, heardOnce, logEntry, printConsole, thrown, went, type Said } from './console.js'
 import { click, navigate, PageError, press, readPage, run, screenshot, type } from './page.js'
 import { inputCalls, stepHistory, type ScreenInput } from './screen.js'
-import { FRAME, MAX_TITLE, MAX_URL, PULSE, STATE, streamPart } from './stream.js'
+import { CONSOLE, FRAME, MAX_TITLE, MAX_URL, PULSE, STATE, streamPart } from './stream.js'
 
 /**
  * The browser's own process: started by the first `open`, it keeps Chrome, the page connection
@@ -21,6 +22,13 @@ import { FRAME, MAX_TITLE, MAX_URL, PULSE, STATE, streamPart } from './stream.js
  * while someone watches: Chrome draws no picture for nobody, and a page that stands still sends
  * none. A watcher too slow for the pictures gets the newest one when it is ready for it, never a
  * queue of old ones.
+ *
+ * The page's console (console.ts) is kept from the browser's start, watched or not: the newest
+ * lines, for the agent's `console` command and for the stream, where a watcher gets the kept
+ * lines as it joins and each new one as it is said. So who watches also reads what the pages
+ * logged before they came: they can click and type in the browser, which is more. A page that
+ * logs more in a second than a page has to say is no longer listened to, until it goes to
+ * another address.
  *
  * It ends, closing Chrome, on the first of: `browser close`; the run it belongs to ending (an
  * `ended` line reaching the diary after it started); the diary's file going away (the run's
@@ -44,7 +52,7 @@ export interface HostOptions {
 
 /** A command the agent sent, as the CLI forwards it. */
 export interface HostCommand {
-  name: 'open' | 'read' | 'click' | 'type' | 'press' | 'screenshot' | 'eval' | 'close'
+  name: 'open' | 'read' | 'click' | 'type' | 'press' | 'screenshot' | 'eval' | 'console' | 'close'
   args: string[]
 }
 
@@ -66,12 +74,16 @@ const MAX_VIEWERS = 8
 /** How often a stream that says nothing else says it is still there. */
 const PULSE_EVERY_S = 20
 
-/** One person watching: the answer their stream is written to, the picture kept for when it can take one, and what it was last told the address bar says. */
+/** One person watching: the answer their stream is written to, the picture kept for when it can take one, what it was last told the address bar says, and the number of the console line it gets next. */
 interface Viewer {
   res: ServerResponse
   waiting?: Buffer
   said?: string
+  next: number
 }
+
+/** The commands whose answer is the page, printed: where the agent is told of errors the page logged. */
+const PRINTS_THE_PAGE = new Set<HostCommand['name']>(['open', 'read', 'click', 'type', 'press'])
 
 /** How long a command may take before the agent is told the page did not answer. */
 export const COMMAND_MS = 30_000
@@ -108,6 +120,26 @@ export async function runHost(opts: HostOptions): Promise<void> {
 
   /** Dialogs the page opened since the last command answered, each accepted as it opened. */
   let dialogs: string[] = []
+
+  /** The console's lines, and the number of the newest one the agent was told the errors up to. */
+  const log = consoleLog()
+  let toldUpTo = 0
+  /** Which of a page's lines are new: a page listened to again says its kept lines again. */
+  const once = heardOnce()
+  /** Per page, how many errors it said since it last went to an address. */
+  const pageErrors = new Map<string, number>()
+
+  /** The console lines a watcher has not got, as far as its stream takes them; the rest at a later turn. */
+  const pour = (viewer: Viewer): void => {
+    for (let line = log.from(viewer.next); line && !viewer.res.writableNeedDrain; line = log.from(viewer.next)) {
+      viewer.res.write(streamPart(CONSOLE, Buffer.from(JSON.stringify(line))))
+      viewer.next = line.n + 1
+    }
+  }
+  const note = (said: Said): void => {
+    log.add(said)
+    for (const viewer of viewers) pour(viewer)
+  }
   /** The last attach, so two callers never attach to a new tab at once. */
   let attaching: Promise<CdpSession> | undefined
 
@@ -138,11 +170,80 @@ export async function runHost(opts: HostOptions): Promise<void> {
       dialogs.push(`${String(params['type'])} ${JSON.stringify(String(params['message'] ?? ''))}`)
       void next.send('Page.handleJavaScriptDialog', { accept: true, ...(params['type'] === 'prompt' ? { promptText: String(params['defaultPrompt'] ?? '') } : {}) }).catch(() => {})
     })
+    // The page's console. While the listening settles, the page's kept lines are said again:
+    // that is not the page saying much, and the lines heard before are not heard twice.
+    const id = target.id
+    let heard = once(id)
+    let settling = true
+    let deaf = false
+    let second = 0
+    let saidLines = 0
+    let saidBytes = 0
+    const listen = async (): Promise<void> => {
+      heard = once(id)
+      settling = true
+      second = 0
+      await Promise.all([next.send('Runtime.enable'), next.send('Log.enable')]).catch(() => {})
+      heard.settled()
+      settling = false
+    }
+    // The values a console call names are kept alive in the page for whoever asks for them:
+    // nobody here does, so they are let go, at most once a second.
+    let releasing = false
+    const release = (): void => {
+      if (releasing) return
+      releasing = true
+      setTimeout(() => {
+        releasing = false
+        if (next.open) void next.send('Runtime.releaseObjectGroup', { objectGroup: 'console' }).catch(() => {})
+      }, 1000).unref()
+    }
+    const hear = (said: Said | undefined, size: number): void => {
+      if (deaf) return
+      if (!settling) {
+        const now = Date.now()
+        if (now - second >= 1000) {
+          second = now
+          saidLines = 0
+          saidBytes = 0
+        }
+        saidBytes += size
+        if (++saidLines > FLOOD_LINES || saidBytes > FLOOD_BYTES) {
+          deaf = true
+          void Promise.all([next.send('Runtime.disable'), next.send('Log.disable')]).catch(() => {})
+          return note(flooded())
+        }
+      }
+      if (!said || !heard.fresh(said.at)) return
+      if (said.level === 'error') pageErrors.set(id, (pageErrors.get(id) ?? 0) + 1)
+      note(said)
+    }
+    next.on('Runtime.consoleAPICalled', (params, size) => {
+      hear(consoleCall(params), size)
+      release()
+    })
+    next.on('Runtime.exceptionThrown', (params, size) => hear(thrown(params), size))
+    next.on('Log.entryAdded', (params, size) => hear(logEntry(params), size))
+    next.on('Page.frameNavigated', params => {
+      const frame = params['frame'] as { parentId?: string; url?: string } | undefined
+      if (!frame || frame.parentId || typeof frame.url !== 'string') return
+      pageErrors.set(id, 0)
+      note(went(frame.url))
+      // Another address is another page: it is listened to, whatever the one before it said.
+      if (deaf) {
+        deaf = false
+        void listen()
+      }
+    })
     await next.send('Page.enable')
     const previous = page
     page = next
-    pageId = target.id
+    pageId = id
     previous?.close()
+    // The agent is on another tab now: the console says so, with the errors that tab had
+    // said already when it is one the agent comes back to, then what the tab said meanwhile.
+    if (previous) note(went(target.url, Date.now(), pageErrors.get(id)))
+    await listen()
     await cast()
     return next
   }
@@ -222,6 +323,11 @@ export async function runHost(opts: HostOptions): Promise<void> {
     })())
 
   const command = async (cmd: HostCommand): Promise<HostAnswer> => {
+    // The console is what the browser kept: it is read whatever became of the page.
+    if (cmd.name === 'console') {
+      toldUpTo = log.newest
+      return { ok: true, output: printConsole(log.lines) }
+    }
     const [first = '', second = ''] = cmd.args
     const ref = (): number => {
       const n = Number(first)
@@ -277,12 +383,13 @@ export async function runHost(opts: HostOptions): Promise<void> {
       if (viewers.size >= MAX_VIEWERS) return void res.writeHead(503).end()
       res.writeHead(200, { 'content-type': 'application/octet-stream', 'x-content-type-options': 'nosniff', 'cache-control': 'no-store', connection: 'close' })
       res.flushHeaders()
-      const viewer: Viewer = { res }
+      const viewer: Viewer = { res, next: 0 }
       viewers.add(viewer)
       res.on('drain', () => {
         const kept = viewer.waiting
         delete viewer.waiting
         if (kept) show(viewer, kept)
+        pour(viewer)
       })
       req.on('close', () => {
         viewers.delete(viewer)
@@ -291,6 +398,7 @@ export async function runHost(opts: HostOptions): Promise<void> {
       // Someone who joins a screen others watch sees what they see; the first one waits for
       // the picture Chrome draws as it starts.
       if (latest) show(viewer, latest)
+      pour(viewer)
       void cast()
       void tell().catch(() => {})
       return
@@ -320,11 +428,16 @@ export async function runHost(opts: HostOptions): Promise<void> {
       } catch (err) {
         answer = { ok: false, reason: err instanceof Error ? err.message : String(err) }
       }
-      if (dialogs.length) {
-        const named = dialogs.map(d => `Dialog, accepted: ${d}`)
-        answer = answer.ok ? { ...answer, output: [...named, '', answer.output].join('\n') } : { ok: false, reason: [...named, answer.reason].join('\n') }
-      }
+      const named = dialogs.map(d => `Dialog, accepted: ${d}`)
       dialogs = []
+      // The page as printed says nothing of its console: an error it logged since the agent was
+      // last told is named before the print, so the agent knows to read the console.
+      const fresh = answer.ok && PRINTS_THE_PAGE.has((body as HostCommand | undefined)?.name as HostCommand['name']) ? log.errorsAfter(toldUpTo) : 0
+      if (fresh > 0) {
+        named.push(errorsNote(fresh))
+        toldUpTo = log.newest
+      }
+      if (named.length) answer = answer.ok ? { ...answer, output: [...named, '', answer.output].join('\n') } : { ok: false, reason: [...named, answer.reason].join('\n') }
       return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(answer))
     }
     res.writeHead(404).end()

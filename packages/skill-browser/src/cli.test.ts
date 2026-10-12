@@ -9,7 +9,7 @@ import { resolveChromePath } from './chrome.js'
 import { runCli, stateFile } from './cli.js'
 import { absoluteUrl } from './page.js'
 import { inputCalls } from './screen.js'
-import { FRAME, jpegSize, readState, STATE, streamReader } from './stream.js'
+import { CONSOLE, FRAME, jpegSize, readConsoleLine, readState, STATE, streamReader, type ConsoleLine } from './stream.js'
 
 const chrome = resolveChromePath()
 const needsChrome = chrome ? {} : { skip: 'no Chrome on this machine' }
@@ -26,10 +26,21 @@ const PAGES: Record<string, string> = {
   '/dialog': `<!doctype html><title>Dialog</title><p id="out">waiting</p>
     <button onclick="alert('hello'); document.getElementById('out').textContent = confirm('sure?') ? 'confirmed' : 'refused'">Ask</button>
     <input type="date" aria-label="Day">`,
+  '/noisy': `<!doctype html><title>Noisy</title><p>noisy</p>
+    <script src="/missing.js"></script>
+    <script>console.log('hello %s', 'Ada', { a: 1, b: 'x' }, [1, 2]); console.warn('careful'); console.error(new Error('logged'))</script>
+    <script>setTimeout(() => { throw new TypeError('boom') }, 0)</script>
+    <button onclick="console.error('clicked wrong')">Break</button>
+    <a href="/two">Page two</a>`,
+  '/opener': `<!doctype html><title>Opener</title><p>first tab</p>
+    <a href="/two" target="_blank">In a new tab</a>
+    <button onclick="console.error('in the first tab')">Log</button>`,
 }
 
 async function site(): Promise<{ url: string; server: Server }> {
   const server = createServer((req, res) => {
+    // Chrome asks every site for its icon: this one has none to miss, so a console holds only what a test's page said.
+    if (req.url === '/favicon.ico') return void res.writeHead(204).end()
     const page = PAGES[req.url ?? '']
     res.writeHead(page ? 200 : 404, { 'content-type': 'text/html' }).end(page ?? 'not found')
   })
@@ -177,6 +188,128 @@ test('a dialog never blocks the page: it is accepted and named; wrong input is r
     const shot = await cli('screenshot', '/nonexistent-dir/shot.png')
     assert.equal(shot.code, 1)
     assert.match(shot.err, /could not be saved/)
+  } finally {
+    await cli('close')
+    server.close()
+  }
+})
+
+test('the page\'s console is kept: the agent is told of new errors and reads them, and who watches gets every line', needsChrome, async () => {
+  const { url, server } = await site()
+  const { diary, cli } = await project()
+  try {
+    assert.equal((await cli('open', url)).code, 0)
+    assert.equal((await cli('console')).out, 'The console is empty.')
+
+    const opened = await cli('open', `${url}/noisy`)
+    assert.equal(opened.code, 0, opened.err)
+    assert.match(opened.out, /^Console: \d new errors\. Read them with the `console` command\.\n\nTitle: Noisy$/m)
+
+    // Every kind of line, each with where it was said; a line that breaks is set in under its time.
+    let said = ''
+    assert.ok(await until(async () => /TypeError: boom/.test((said = (await cli('console')).out))), said)
+    assert.match(said, /^Console: \d+ messages, 3 errors\.$/m)
+    assert.match(said, new RegExp(`^\\d\\d:\\d\\d:\\d\\d → ${url}/noisy$`, 'm'))
+    assert.match(said, new RegExp(`^\\S+ error: Failed to load resource: the server responded with a status of 404 \\(Not Found\\) \\(${url}/missing\\.js\\)$`, 'm'))
+    assert.match(said, new RegExp(`^\\S+ log: hello Ada \\{a: 1, b: "x"\\} \\[1, 2\\] \\(${url}/noisy:3\\)$`, 'm'))
+    assert.match(said, new RegExp(`^\\S+ warning: careful \\(${url}/noisy:3\\)$`, 'm'))
+    assert.match(said, /^\S+ error: Error: logged\n {8}at /m)
+    assert.match(said, new RegExp(`^\\S+ error: Uncaught TypeError: boom\\n {8}at .*\\(${url}/noisy:4\\)$`, 'm'))
+
+    // Told once: a print after the console was read names no error, until the page logs a new one.
+    assert.doesNotMatch((await cli('read')).out, /^Console:/m)
+    assert.match((await cli('click', '1')).out, /^Console: 1 new error\. Read it with the `console` command\.\n\nTitle: Noisy$/m)
+    assert.doesNotMatch((await cli('read')).out, /^Console:/m)
+    assert.equal((await cli('eval', 'console.info("from eval"), 1')).out, '1')
+
+    // Going to another address empties nothing: a line says where the page went.
+    await cli('click', '2')
+    const after = (await cli('console')).out
+    assert.match(after, /error: clicked wrong/)
+    assert.match(after, /info: from eval/)
+    assert.match(after, new RegExp(`→ ${url}/two$`))
+
+    // Someone who starts watching gets the lines so far, in order, each once; then each new one.
+    const [screen] = await lines(diary)
+    const view = new URL(String(screen?.['url']))
+    const watching = new AbortController()
+    const stream = await fetch(`${view.origin}/stream?t=${view.searchParams.get('t')}`, { signal: watching.signal })
+    const read = streamReader()
+    const got: ConsoleLine[] = []
+    let asked = false
+    for await (const chunk of stream.body!) {
+      for (const part of read(chunk)) if (part.kind === CONSOLE) got.push(readConsoleLine(part.bytes)!)
+      if (!asked && got.some(line => line.text === `${url}/two`)) {
+        asked = true
+        void cli('eval', 'console.debug("while watched")')
+      }
+      if (got.some(line => line.text === 'while watched')) break
+    }
+    watching.abort()
+    assert.deepEqual(got.map(line => line.n), got.map((_, i) => i + 1), 'numbered from 1, none twice, none left out')
+    assert.deepEqual(got.filter(line => line.level === 'went').map(line => line.text), [`${url}/`, `${url}/noisy`, `${url}/two`])
+    assert.deepEqual(got.at(-1) && { level: got.at(-1)!.level, text: got.at(-1)!.text }, { level: 'debug', text: 'while watched' })
+    assert.ok(got.every(line => Math.abs(line.at - Date.now()) < 120_000), 'each line says when it was said')
+  } finally {
+    await cli('close')
+    server.close()
+  }
+})
+
+test('a tab the agent comes back to says nothing twice, and its errors are still counted', needsChrome, async () => {
+  const { url, server } = await site()
+  const { diary, cli } = await project()
+  try {
+    await cli('open', `${url}/opener`)
+    assert.match((await cli('click', '2')).out, /^Console: 1 new error\./)
+    assert.match((await cli('click', '1')).out, /^Title: Two$/m, 'the agent is on the new tab')
+    await cli('eval', 'console.log("in the second tab")')
+    // The new tab closes itself: the agent is on the first one again.
+    await cli('eval', 'setTimeout(() => window.close(), 0)')
+    assert.ok(await until(async () => /^Title: Opener$/m.test((await cli('read')).out)), 'back on the first tab')
+    await cli('eval', 'console.log("back in the first tab")')
+
+    const said = (await cli('console')).out
+    assert.equal(said.match(/error: in the first tab/g)?.length, 1, said)
+    assert.match(said, /^Console: 3 messages, 1 error\.$/m)
+    assert.match(said, /log: back in the first tab$/)
+    assert.deepEqual(said.match(/^\S+ → .*$/gm)?.map(line => line.split(' → ')[1]), [`${url}/opener`, `${url}/two`, `${url}/opener`])
+
+    // Who watches is told the first tab had an error already, where the console says the agent came back to it.
+    const [screen] = await lines(diary)
+    const view = new URL(String(screen?.['url']))
+    const watching = new AbortController()
+    const stream = await fetch(`${view.origin}/stream?t=${view.searchParams.get('t')}`, { signal: watching.signal })
+    const read = streamReader()
+    const got: ConsoleLine[] = []
+    for await (const chunk of stream.body!) {
+      for (const part of read(chunk)) if (part.kind === CONSOLE) got.push(readConsoleLine(part.bytes)!)
+      if (got.some(line => line.text === 'back in the first tab')) break
+    }
+    watching.abort()
+    assert.deepEqual(got.filter(line => line.level === 'went').map(line => line.errors ?? 0), [0, 0, 1])
+  } finally {
+    await cli('close')
+    server.close()
+  }
+})
+
+test('a page that logs without end is no longer listened to, until it goes to another address', needsChrome, async () => {
+  const { url, server } = await site()
+  const { cli } = await project()
+  try {
+    await cli('open', url)
+    await cli('eval', 'for (let i = 0; i < 5000; i++) console.log("again and again " + i)')
+    let said = ''
+    assert.ok(await until(async () => /The page logs too much/.test((said = (await cli('console')).out))), said.slice(0, 300))
+    const heard = Number(/Console: (\d+) messages/.exec(said)?.[1])
+    assert.ok(heard <= 500, `${heard} lines kept`)
+    await cli('eval', 'console.log("said to nobody")')
+    assert.doesNotMatch((await cli('console')).out, /said to nobody/)
+
+    assert.match((await cli('open', `${url}/two`)).out, /^Title: Two$/m)
+    await cli('eval', 'console.log("heard again")')
+    assert.ok(await until(async () => /log: heard again/.test((said = (await cli('console')).out))), said.slice(-300))
   } finally {
     await cli('close')
     server.close()
