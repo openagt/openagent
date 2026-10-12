@@ -1,5 +1,5 @@
 import { giveGithub, noteGithub } from './logins.js'
-import { lastLines, openSession, withAdvice, type Exec, type Session } from './ssh.js'
+import { exec as realExec, lastLines, openSession, withAdvice, type Exec, type Session } from './ssh.js'
 import { SERVER_USER, STEPS, linkScript, type StepId } from './steps.js'
 import { BEAT_MS, changeServer, doorUrl, heartbeat, working, type Server, type StepState } from './store.js'
 
@@ -31,6 +31,23 @@ export class AlreadyWorking extends Error {
   }
 }
 
+/** How long this computer's git gets to say a name. */
+const GIT_TIMEOUT_MS = 10_000
+
+/**
+ * This computer's own name and email in git, each when it has one: what the person commits as
+ * in a folder that says nothing else, so git is asked outside every folder. A server's git
+ * that has none gets them.
+ */
+export async function ownGitIdentity(exec: Exec = realExec): Promise<{ name?: string; email?: string }> {
+  const own = async (key: string): Promise<string | undefined> => {
+    const said = await exec('git', ['-C', '/', 'config', '--get', key], '', { timeoutMs: GIT_TIMEOUT_MS })
+    return said.code === 0 && said.out.trim() ? said.out.trim() : undefined
+  }
+  const [name, email] = [await own('user.name'), await own('user.email')]
+  return { ...(name !== undefined ? { name } : {}), ...(email !== undefined ? { email } : {}) }
+}
+
 export async function install(opts: InstallOptions): Promise<void> {
   const { env, address, version } = opts
   const change = <T>(apply: (server: Server) => T): Promise<T | undefined> => changeServer(env, address, apply)
@@ -55,6 +72,7 @@ export async function install(opts: InstallOptions): Promise<void> {
   let session: Session | undefined
   try {
     session = await openSession(server, { ...(opts.exec ? { exec: opts.exec } : {}), ...(opts.signal ? { signal: opts.signal } : {}) })
+    const facts = { address, version, ...(await ownGitIdentity(opts.exec)) }
     for (const step of STEPS) {
       await set(step.id, 'running')
       const login = step.id === 'login'
@@ -63,7 +81,7 @@ export async function install(opts: InstallOptions): Promise<void> {
         if (!met.ok) return void (await set(step.id, 'failed', withAdvice(server, met.said || 'The server did not answer.')))
         if (met.fingerprint) await change(kept => void (kept.fingerprint = met.fingerprint!))
       }
-      const said = await session.run(step.as, step.script({ address, version }), step.timeoutMs)
+      const said = await session.run(step.as, step.script(facts), step.timeoutMs)
       if (said.code !== 0) {
         const words = lastLines(said) || 'The step ended without a word.'
         return void (await set(step.id, 'failed', login ? withAdvice(server, words) : words))

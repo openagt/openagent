@@ -4,7 +4,7 @@ import { ModuleHostContext, type MachineAdded, type ModuleCommandResult, type Mo
 import { ServersSettings, olderThan } from './ServersSettings.js'
 import type { LoginRow, ServerRow, StepState } from './servers.js'
 
-const LABELS = { login: 'Log in', user: 'The user openagent', tools: 'git, gh, Node and Chrome', openagent: 'OpenAgent', agent: 'Claude Code', service: 'The service', door: 'The door' }
+const LABELS = { login: 'Log in', user: 'The user openagent', tools: 'git, gh, Node and Chrome', name: 'Your name and email for git', openagent: 'OpenAgent', agent: 'Claude Code', service: 'The service', door: 'The door' }
 const LINK = { url: 'https://203.0.113.5/_remote-access/enter#code.pin', expires: new Date(Date.now() + 5 * 60_000).toISOString() }
 const NONE: LoginRow = { there: false, working: false }
 
@@ -13,7 +13,7 @@ function server(states: StepState[], over: Partial<ServerRow> = {}): ServerRow {
   const steps = Object.entries(LABELS).map(([id, label], index) => ({ id, label, state: states[index] ?? ('waiting' as const) }))
   return { address: '203.0.113.5', url: 'https://203.0.113.5', user: 'root', working: false, adding: true, steps, logins: { github: NONE, claude: NONE }, ...over }
 }
-const ALL_DONE: StepState[] = ['done', 'done', 'done', 'done', 'done', 'done', 'done']
+const ALL_DONE: StepState[] = ['done', 'done', 'done', 'done', 'done', 'done', 'done', 'done']
 const NO_GH: ModuleCommandResult = { ok: true, output: { problem: 'There is no GitHub login to copy from this computer. `gh` is not on this computer.' } }
 const OCTOCAT: ModuleCommandResult = { ok: true, output: { account: 'octocat' } }
 
@@ -93,7 +93,7 @@ describe('Settings → Servers', () => {
     const { host } = dashboard(() => ok({ servers: [server(['done', 'done', 'running'], { working: true, fingerprint: 'SHA256:abc' })] }))
     show(host)
     expect(await screen.findByText('OpenAgent is being installed.')).toBeTruthy()
-    expect(stepNames()).toEqual(['Log in: done', 'The user openagent: done', 'git, gh, Node and Chrome: running', 'OpenAgent: not started', 'Claude Code: not started', 'The service: not started', 'The door: not started'])
+    expect(stepNames()).toEqual(['Log in: done', 'The user openagent: done', 'git, gh, Node and Chrome: running', 'Your name and email for git: not started', 'OpenAgent: not started', 'Claude Code: not started', 'The service: not started', 'The door: not started'])
     expect(screen.getByText("The server's key: SHA256:abc")).toBeTruthy()
     // Nothing to press on a server that is being installed.
     for (const name of ['Try 203.0.113.5 again', 'Update 203.0.113.5', 'Remove 203.0.113.5']) expect(screen.queryByRole('button', { name })).toBeNull()
@@ -244,6 +244,16 @@ describe('Settings → Servers', () => {
     const silent = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false })] }), saved())
     show(silent.host)
     expect(await screen.findByText('Does not answer right now.')).toBeTruthy()
+  })
+
+  test('a server installed before this computer\'s OpenAgent got a new step shows it as not started, and has Update to run it, behind or not', async () => {
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5', version: '1.2.3' }] }
+    const { host, ran } = dashboard(() => ok({ servers: [server(['done', 'done', 'done', 'waiting', 'done', 'done', 'done', 'done'], { adding: false, user: 'ubuntu' })] }), saved)
+    show(host)
+    expect(await screen.findByText('OpenAgent 1.2.3.')).toBeTruthy()
+    expect(stepNames()).toContain('Your name and email for git: not started')
+    fireEvent.click(screen.getByRole('button', { name: 'Update 203.0.113.5' }))
+    await waitFor(() => expect(ran()).toContain('connect 203.0.113.5 ubuntu 1.2.3'))
   })
 
   test('a server taken out of the machines is not put back by itself; Remove takes it off this list', async () => {

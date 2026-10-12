@@ -17,6 +17,9 @@ export interface Call {
   script: string
 }
 
+/** The name and email this computer's git has in a test, made up. */
+export const GIT_IDENTITY = { name: 'Mona Octocat', email: 'mona@example.com' }
+
 /** A GitHub login as `gh` hands one out, made up. */
 export const GH_LOGIN = `gho_${'a1B2'.repeat(9)}`
 
@@ -25,12 +28,22 @@ export const GH_LOGIN = `gho_${'a1B2'.repeat(9)}`
  * The first meeting shows the key `ssh -v` would.
  *
  * This computer's own `gh` is not there either: it is logged in as octocat and holds
- * {@link GH_LOGIN}, unless `gh` answers otherwise for what it is asked.
+ * {@link GH_LOGIN}, unless `gh` answers otherwise for what it is asked. Nor is its `git`,
+ * which commits as {@link GIT_IDENTITY} unless `git` says otherwise.
  */
-export function pretendServer(answer: (call: Call) => Partial<Said> | undefined = () => undefined, gh: (args: readonly string[]) => Partial<Said> | undefined = () => undefined): { exec: Exec; calls: Call[]; asked: string[] } {
+export function pretendServer(
+  answer: (call: Call) => Partial<Said> | undefined = () => undefined,
+  gh: (args: readonly string[]) => Partial<Said> | undefined = () => undefined,
+  git: { name?: string; email?: string } = GIT_IDENTITY,
+): { exec: Exec; calls: Call[]; asked: string[] } {
   const calls: Call[] = []
   const asked: string[] = []
   const exec: Exec = async (bin, args, script) => {
+    if (bin === 'git') {
+      // As `git config --get` answers: the value, or nothing and a 1 for a key that is not set.
+      const value = args.at(-1) === 'user.name' ? git.name : args.at(-1) === 'user.email' ? git.email : undefined
+      return value === undefined ? { code: 1, out: '', err: '' } : { code: 0, out: `${value}\n`, err: '' }
+    }
     if (bin === 'gh') {
       asked.push(args.join(' '))
       return { code: 0, out: `${args[0] === 'auth' ? GH_LOGIN : 'octocat'}\n`, err: '', ...gh(args) }

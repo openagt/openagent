@@ -1,11 +1,11 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { spawn } from 'node:child_process'
-import { AlreadyWorking, askLink, install } from './install.js'
+import { AlreadyWorking, askLink, install, ownGitIdentity } from './install.js'
 import { lastLines, withAdvice, type Exec } from './ssh.js'
 import { STEPS } from './steps.js'
 import { freshSteps, readStore, update } from './store.js'
-import { pretendServer, testHome } from './test-home.js'
+import { GIT_IDENTITY, pretendServer, testHome } from './test-home.js'
 
 const SERVER = { address: '203.0.113.5', user: 'root' }
 
@@ -27,7 +27,8 @@ test('every step runs in order as its own user, the server\'s key is kept as it 
     assert.equal(server!.worker, undefined)
     // The first meeting, then one script a step.
     assert.deepEqual(calls.map(call => call.remote), ['true', ...STEPS.map(step => (step.as === 'root' ? 'bash -s' : "runuser -l openagent -c 'bash -s'"))])
-    assert.deepEqual(calls.slice(1).map(call => call.script), STEPS.map(step => step.script({ address: SERVER.address, version: '1.2.3' })))
+    // Each is written for this server, this version, and the name and email this computer's git has.
+    assert.deepEqual(calls.slice(1).map(call => call.script), STEPS.map(step => step.script({ address: SERVER.address, version: '1.2.3', ...GIT_IDENTITY })))
   } finally {
     await home.remove()
   }
@@ -41,7 +42,7 @@ test('the install stops at the step that fails, with the last of what the server
     // Words that would read as a failed login at the first step are only the server's own here.
     const { exec, calls } = pretendServer(call => (call.script === tools ? { code: 100, out: 'Reading package lists...', err: 'E: Permission denied' } : undefined))
     await install({ env: home.env, address: SERVER.address, version: '1.2.3', exec })
-    assert.deepEqual(await stepsOf(home.env), ['login:done', 'user:done', 'tools:failed', 'openagent:waiting', 'agent:waiting', 'service:waiting', 'door:waiting'])
+    assert.deepEqual(await stepsOf(home.env), ['login:done', 'user:done', 'tools:failed', 'name:waiting', 'openagent:waiting', 'agent:waiting', 'service:waiting', 'door:waiting'])
     assert.equal((await readStore(home.env)).servers[0]!.steps[2]!.said, 'Reading package lists...\nE: Permission denied')
     assert.equal(calls.length, 4)
     assert.equal((await readStore(home.env)).servers[0]!.worker, undefined)
@@ -148,4 +149,35 @@ test('the server\'s door is asked for a link as the server\'s own user; only a l
     assert.deepEqual(await askLink(SERVER, { exec: pretendServer(() => ({ out: JSON.stringify(answer) })).exec }), NOT_ITS_OWN, answer.expires)
   }
   assert.deepEqual(await askLink(SERVER, { exec: pretendServer(() => ({ code: 1, err: 'the door is not open' })).exec }), { ok: false, error: 'the door is not open' })
+})
+
+test('this computer\'s git is asked for the name and the email the person commits as, and says only what it has', async () => {
+  const asked: string[] = []
+  const git = (has: Record<string, string>): Exec => async (bin, args) => {
+    asked.push([bin, ...args].join(' '))
+    const value = has[args.at(-1)!]
+    return value === undefined ? { code: 1, out: '', err: '' } : { code: 0, out: `${value}\n`, err: '' }
+  }
+  assert.deepEqual(await ownGitIdentity(git({ 'user.name': 'Mona Octocat', 'user.email': ' mona@example.com ' })), { name: 'Mona Octocat', email: 'mona@example.com' })
+  // Asked outside every folder: the person's own settings, not those of a project this happens to run in.
+  assert.deepEqual(asked, ['git -C / config --get user.name', 'git -C / config --get user.email'])
+  assert.deepEqual(await ownGitIdentity(git({ 'user.email': 'mona@example.com' })), { email: 'mona@example.com' })
+  assert.deepEqual(await ownGitIdentity(git({ 'user.name': '' })), {})
+  // A computer with no git at all has none to give.
+  assert.deepEqual(await ownGitIdentity(async () => ({ code: null, out: '', err: 'git could not start' })), {})
+})
+
+test('a computer whose git has no name leaves the step to say so: the install stops there', async () => {
+  const home = await testHome()
+  try {
+    await saved(home.env)
+    const step = STEPS.find(candidate => candidate.id === 'name')!
+    const { exec, calls } = pretendServer(call => (call.script === step.script({ address: SERVER.address, version: '1.2.3' }) ? { code: 1, err: 'The server\'s git has no name and email' } : undefined), undefined, {})
+    await install({ env: home.env, address: SERVER.address, version: '1.2.3', exec })
+    assert.deepEqual(await stepsOf(home.env), ['login:done', 'user:done', 'tools:done', 'name:failed', 'openagent:waiting', 'agent:waiting', 'service:waiting', 'door:waiting'])
+    // Written with nothing to give.
+    assert.match(calls.at(-1)!.script, /^NAME=''\nEMAIL=''$/m)
+  } finally {
+    await home.remove()
+  }
 })

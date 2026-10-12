@@ -26,6 +26,10 @@ already made, and lists it in its pull request; for anything else it proposes an
 - Everything runs as a user of its own, `openagent`. `root`, or a user that becomes root,
   is only for the install, an update and the logins.
 - The install brings git, gh, Node, Chrome and the coding agent.
+- The server's git gets this computer's name and email, when it has none: a commit made on
+  the server reads like one made on this computer. Picked over the name of the GitHub login
+  the server holds, which a server with no login lacks; and over a name of the server's
+  own, which ties its commits to nobody on GitHub.
 
 ## The server's logins
 - The GitHub login is this computer's own, copied to the server when the person ticks it,

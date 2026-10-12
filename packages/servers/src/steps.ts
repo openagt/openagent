@@ -7,7 +7,7 @@
  * the programs are root's, so an agent that works there cannot change OpenAgent itself.
  */
 
-export const STEP_IDS = ['login', 'user', 'tools', 'openagent', 'agent', 'service', 'door'] as const
+export const STEP_IDS = ['login', 'user', 'tools', 'name', 'openagent', 'agent', 'service', 'door'] as const
 export type StepId = (typeof STEP_IDS)[number]
 
 /** What a script is written for. */
@@ -16,6 +16,10 @@ export interface Facts {
   address: string
   /** The OpenAgent the server gets: the one that runs on this computer. */
   version: string
+  /** This computer's own name in git, when it has one. */
+  name?: string
+  /** This computer's own email in git, when it has one. */
+  email?: string
 }
 
 export interface StepDef {
@@ -220,6 +224,32 @@ export const STEPS: readonly StepDef[] = [
     fi
     browser || fail "Chrome was installed, and it does not start on this server."
   fi
+`,
+      ),
+  },
+  {
+    id: 'name',
+    label: 'Your name and email for git',
+    as: 'openagent',
+    timeoutMs: 2 * MINUTE,
+    script: ({ name = '', email = '' }) =>
+      script(
+        'openagent',
+        { NAME: name, EMAIL: email },
+        `
+  # A run's record and an agent's work are commits, and git makes none without a name and an email.
+  # Only what the server's git lacks is given: what someone set there stays. Nothing is written until both are sure.
+  # Asked outside every folder: what a project's own git says is that project's alone.
+  has() { [ -n "$(cd / && git config --get "$1" || true)" ]; }
+  none() {
+    fail "The server's git has no $1, and this computer's git has none to give: nothing an agent does there could be saved. Give this computer both, then try again:
+  git config --global user.name 'Your Name'
+  git config --global user.email 'you@example.com'"
+  }
+  has user.name || [ -n "$NAME" ] || none name
+  has user.email || [ -n "$EMAIL" ] || none email
+  has user.name || git config --global -- user.name "$NAME"
+  has user.email || git config --global -- user.email "$EMAIL"
 `,
       ),
   },
