@@ -6,7 +6,8 @@ import { OPENAGENT_DIR } from './openagent-dir.js'
 import type { OpenAgentEvent } from './events.js'
 import type { StartAgentOptions, StartAgentResult, AddProjectResult, RemoveProjectResult } from './dashboard/index.js'
 import type { EventsSource, RemoteAgents } from './dashboard/rpc-serve.js'
-import { RelayedAgents, startRemoteAgent } from './dashboard/remote-run.js'
+import { RelayedAgents, startRemoteAgent, type BringProject, type RelayProject } from './dashboard/remote-run.js'
+import { cloneProject, cloneTarget } from './clone-project.js'
 import { screenInDiary } from './dashboard/screen.js'
 import { dispatchRelayRpc } from './dashboard-rpc/relay-dispatch.js'
 import { tailAgentEvents } from './dashboard-rpc/events-tail.js'
@@ -32,12 +33,21 @@ import { providedDataChanged } from './store/provided.js'
 /** How long a project folder's repository address is trusted before git is asked again. */
 const ADDRESS_KEPT_MS = 10_000
 
+/** How many projects this computer clones at once for other machines; one more is told to ask again. */
+const MAX_COMING = 3
+/** How many clones are remembered at once, on their way or failed. */
+const MAX_KEPT = 32
+/** How much of a failed clone's reason is kept and told: git passes on what the other side said. */
+const MAX_REASON = 600
+
 /** Inputs to {@link createProjectRuntime}. */
 export interface ProjectRuntimeOptions {
   /** The daemon's home workspace; a run with no project id targets it. */
   cwd: string
   /** Env for the registry lookups (#393). */
   env: NodeJS.ProcessEnv
+  /** How a project another machine asks for is cloned; `cloneProject` when unsaid. */
+  clone?: (address: string) => ReturnType<typeof cloneProject>
 }
 
 /** The per-project surface the dashboard drives, plus its teardown. */
@@ -51,6 +61,12 @@ export interface ProjectRuntime {
   /** This machine's own id for its project cloned from `address`, the name a relayed call gives a
    *  project; undefined when no project here is cloned from it. */
   projectAt: (address: string) => Promise<string | undefined>
+  /**
+   * Where this computer's copy of the project at `address` stands, for a machine that sends a run
+   * here. With `bring`, a project this computer does not have is cloned and added, on its own:
+   * the answer comes at once, and says `coming` until the project is there.
+   */
+  bringProject: (address: string, bring?: BringProject) => Promise<RelayProject>
   /** Tail a relay-started agent's on-disk events (#1067): the daemon's `/_relay/events` endpoint uses
    *  it to stream one agent back to whichever daemon relayed it here. */
   tailRelayEvents: (projectId: string, agentId: string, onEvent: (event: OpenAgentEvent) => void) => () => void
@@ -71,7 +87,7 @@ export interface ProjectRuntime {
  * The daemon's per-project runtime (#393). The home `cwd` is the default target: a request with
  * no project id (or the home id) resolves to it without a registry lookup.
  */
-export function createProjectRuntime({ cwd, env }: ProjectRuntimeOptions): ProjectRuntime {
+export function createProjectRuntime({ cwd, env, clone = cloneProject }: ProjectRuntimeOptions): ProjectRuntime {
   const homeId = projectId(resolve(cwd))
   // Runs this daemon is relaying to/from a saved machine (#1067): the local half of a remote agent.
   const relayedAgents = new RelayedAgents()
@@ -135,7 +151,8 @@ export function createProjectRuntime({ cwd, env }: ProjectRuntimeOptions): Proje
       const target = { url: machine.url, key: machine.key, ...(machine.pin ? { pin: machine.pin } : {}), project }
       const result = await startRemoteAgent(target, { prompt, options: forwarded })
       if (!result.ok) {
-        return 'noProject' in result ? { ok: false, error: `${basename(projectCwd)} is not on ${machine.label}. Add it there first.` } : result
+        // The one refusal the page can do something about: it has the machine clone the project, and starts again.
+        return 'noProject' in result ? { ok: false, error: `${basename(projectCwd)} is not on ${machine.label} yet.`, notThere: true } : result
       }
       // The run's id is the machine's word, and from here on every call about that id goes to the
       // machine: what the person reads of the run, and what they click and type in its browser.
@@ -209,6 +226,42 @@ export function createProjectRuntime({ cwd, env }: ProjectRuntimeOptions): Proje
     return { ok: true, alreadyActivated: result.alreadyActivated === true, ...(share && !shared ? { noRemote: true as const } : {}) }
   }
 
+  // A project another machine asks for, to send a run here (the machine side of "Run on"): cloned
+  // from its address with this computer's own logins and added like any other, once, by itself.
+  // The asking machine is answered at once and asks again: a clone can take minutes, and no call
+  // is held open that long. What is kept is only what is on its way and how the last try failed,
+  // by address; a project that is there is read off the list.
+  const coming = new Map<string, { error?: string }>()
+  const bringProject = async (address: string, bring?: BringProject): Promise<RelayProject> => {
+    const onItsWay = coming.get(address)?.error === undefined && coming.has(address)
+    if ((await projectAt(address)) !== undefined) return { state: 'there' }
+    // It landed while the list was read: the list is read once more, not taken for missing.
+    if (onItsWay && !coming.has(address) && (await projectAt(address)) !== undefined) return { state: 'there' }
+    const now = coming.get(address)
+    if (now && now.error === undefined) return { state: 'coming' }
+    if (!bring) return now?.error !== undefined ? { state: 'failed', error: now.error } : { state: 'missing' }
+    // Only what reads as an address, and as this very one: the project is found again by it. The
+    // asking machine's own spelling of it is what is cloned when it is the same `host/path` in
+    // other letters, and nothing more: no way in, user or port of the caller's choosing.
+    if (cloneTarget(address)?.address !== address) return { state: 'failed', error: `${address.slice(0, 80)} is not a repository's address.` }
+    const from = bring.from !== undefined && bring.from.toLowerCase() === address ? bring.from : address
+    const atWork = [...coming.values()].filter(entry => entry.error === undefined).length
+    if (atWork >= MAX_COMING) return { state: 'failed', error: 'This machine is cloning other projects. Send again in a few minutes.' }
+    // The failures kept are the last few: one per address a machine ever asked for would grow for ever.
+    for (const [failed, entry] of coming) if (coming.size >= MAX_KEPT && entry.error !== undefined) coming.delete(failed)
+    const entry: { error?: string } = {}
+    coming.set(address, entry)
+    void (async () => {
+      const cloned = await clone(from)
+      const added = cloned.ok ? await onAddProject(cloned.path, bring.share) : cloned
+      if (added.ok) coming.delete(address)
+      else entry.error = added.error.slice(0, MAX_REASON)
+    })().catch((err: unknown) => {
+      entry.error = (err instanceof Error ? err.message : String(err)).slice(0, MAX_REASON)
+    })
+    return { state: 'coming' }
+  }
+
   // Remove a project: it leaves the Projects list and nothing in its folder is deleted. Found in
   // the list by its id and not through its folder, so a project whose folder is gone goes too.
   const onRemoveProject = async (id: string, files = false): Promise<RemoveProjectResult> => {
@@ -276,5 +329,5 @@ export function createProjectRuntime({ cwd, env }: ProjectRuntimeOptions): Proje
     relayedAgents.dispose()
   }
 
-  return { onStart, onAddProject, onRemoveProject, remoteEventsSource, projectAt, tailRelayEvents, remoteAgents, onRelayRpc, screenOf, dispose }
+  return { onStart, onAddProject, onRemoveProject, remoteEventsSource, projectAt, bringProject, tailRelayEvents, remoteAgents, onRelayRpc, screenOf, dispose }
 }

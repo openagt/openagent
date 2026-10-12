@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { OpenAgentEvent } from '../events.js'
 import type { StartAgentOptions, StartAgentResult } from './types.js'
-import type { RelayStartResult } from './remote-run.js'
+import type { BringProject, RelayProject, RelayStartResult } from './remote-run.js'
 import { end, readJsonBody, requireGet, sendJson } from './http.js'
 import { passToScreen, screenCallOf, type ScreenCall } from './screen.js'
 import { isRunId } from '../store/index.js'
@@ -22,12 +22,16 @@ import { openagentVersion } from '../version.js'
  *   machine with its key there.
  * - `POST /_relay/rpc` (#1067 slice 2) runs one whitelisted run-scoped RPC (a read/diff/steer/handoff/
  *   push/PR) against this machine's own checkout for the daemon relaying an agent here, answering {result}.
+ * - `GET /_relay/project?project=<address>` says where this machine's copy of a project stands, and
+ *   `POST /_relay/project` has this machine clone the project when it has none: the answer comes at
+ *   once and the clone goes on by itself, so the caller asks again until the project is there.
  * - `GET /_relay/screen/stream?run=<id>&project=<address>` and `POST /_relay/screen/input?…` pass
  *   one call on to the live screen of a run here (screen.ts), for the daemon whose person watches it.
  *
  * All but the ping name their project by its repository's address, and work in this machine's own
  * project cloned from it. A call that names none, or one this machine does not have, starts and
- * reads nothing: there is no project a call falls back to.
+ * reads nothing: there is no project a call falls back to. Only the call that asks for a project
+ * brings one here.
  */
 export const RELAY_PREFIX = '/_relay'
 
@@ -42,6 +46,8 @@ export interface RelayHandlers {
   rpc?: (projectId: string, fn: string, args: unknown[]) => Promise<unknown>
   /** Where the live screen of a run here answers; nothing when the run has none. */
   screen?: (projectId: string, agentId: string) => Promise<string | undefined>
+  /** Where this machine's copy of the project at `address` stands; with `bring`, clone and add it when there is none. */
+  bring?: (address: string, bring?: BringProject) => Promise<RelayProject>
 }
 
 /** The body `POST /_relay/start` accepts: what a local Start needs, and the project's address. */
@@ -72,6 +78,7 @@ export async function handleRelayRequest(
   if (pathname === `${RELAY_PREFIX}/start`) return handleStart(req, res, handlers)
   if (pathname === `${RELAY_PREFIX}/events`) return handleEvents(req, res, handlers)
   if (pathname === `${RELAY_PREFIX}/rpc`) return handleRpc(req, res, handlers)
+  if (pathname === `${RELAY_PREFIX}/project`) return handleProject(req, res, handlers)
   const screenCall = screenCallOf(pathname, `${RELAY_PREFIX}/screen`)
   if (screenCall) return handleScreen(req, res, handlers, screenCall)
   end(res, 404, 'not found')
@@ -145,6 +152,43 @@ async function handleEvents(req: IncomingMessage, res: ServerResponse, handlers:
   const close = (): void => stop()
   res.on('close', close)
   req.on('close', close)
+}
+
+const MAX_PROJECT_BODY = 4 * 1024
+/** How long a repository's address may be. */
+const MAX_ADDRESS = 512
+
+/**
+ * `GET /_relay/project?project=<address>` and `POST /_relay/project` `{project, share, from}`: where this
+ * machine's copy of the project stands. The POST also starts cloning it when there is none:
+ * `share` is the caller's answer on the agents' records, which the copy here takes, and `from`
+ * the address in the letters the caller's copy was cloned with.
+ */
+async function handleProject(req: IncomingMessage, res: ServerResponse, handlers: RelayHandlers): Promise<void> {
+  if (req.method !== 'GET' && req.method !== 'POST') return end(res, 405, 'method not allowed', { allow: 'GET, POST' })
+  if (!handlers.bring) return end(res, 404, 'relay project not enabled')
+  let address: unknown
+  let bring: BringProject | undefined
+  if (req.method === 'POST') {
+    let body: { project?: unknown; share?: unknown; from?: unknown } | null
+    try {
+      body = (await readJsonBody(req, MAX_PROJECT_BODY)) as typeof body
+    } catch {
+      return end(res, 400, 'invalid request body')
+    }
+    address = body?.project
+    bring = { share: body?.share === true, ...(typeof body?.from === 'string' && body.from.length <= MAX_ADDRESS ? { from: body.from } : {}) }
+  } else {
+    address = new URL(req.url ?? '/', 'http://localhost').searchParams.get('project')
+  }
+  if (typeof address !== 'string' || !address || address.length > MAX_ADDRESS) return end(res, 400, 'missing project')
+  let said: RelayProject
+  try {
+    said = await handlers.bring(address, bring)
+  } catch (err) {
+    said = { state: 'failed', error: err instanceof Error ? err.message : String(err) }
+  }
+  sendJson(res, said)
 }
 
 const MAX_RPC_BODY = 256 * 1024

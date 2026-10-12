@@ -19,7 +19,7 @@ export {
 export { type EditorInfo } from '../dashboard/open-in-app.js'
 export { onQuota } from './quota.js'
 export { onModels } from './models.js'
-export { onMachines, sendAddMachine, sendRemoveMachine, onMachinesReachable, onMachineVersions, type Machine, type AddMachineResult, type MachineVersions } from './machines.js'
+export { onMachines, sendAddMachine, sendRemoveMachine, onMachinesReachable, onMachineVersions, sendProjectToMachine, onProjectOnMachine, type Machine, type AddMachineResult, type MachineVersions, type ProjectOnMachine } from './machines.js'
 export { onModules, runModuleCommand, runComputerCommand, readModule, type DashboardModule, type ModuleCommandResult, type ModuleReadResult } from './modules.js'
 export { onProjectSkills, sendChangeSkills, sendCommitSkills, type ProjectSkills, type ProjectSkill, type ChangeSkillsResult } from './skills.js'
 
