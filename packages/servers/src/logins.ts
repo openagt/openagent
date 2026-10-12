@@ -82,13 +82,19 @@ export function noteGithub(kept: Server, given: GithubGiven): void {
   else kept.github = { ...(given.reached ? {} : known(kept.github)), failed: given.error }
 }
 
-/** What Claude Code writes before and after the login it made, and what such a login reads as. */
-const MINTED = /Your OAuth token[^\n]*:\s*(sk-ant-[A-Za-z0-9_-]{40,400})\s+Store this token securely/
+/** What Claude Code writes before and after the login it made, and what such a login reads as. The gap between two words is of any width. */
+const MINTED = /Your\s+OAuth\s+token[^\n]*:\s*(sk-ant-[A-Za-z0-9_-]{40,400})\s+Store\s+this\s+token\s+securely/
 /** What a terminal is told beside words: colours, where the cursor goes, a link's address. */
 const TERMINAL = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]/g
+/** A colour: the one thing a terminal is told that leaves the words on its two sides together. */
+const COLOUR = /\x1b\[[0-9;:]*m/g
 
-/** The words Claude Code showed, without what only a terminal reads. */
-const words = (shown: string): string => shown.replace(TERMINAL, '').replaceAll('\r', '\n')
+/**
+ * The words Claude Code showed, without what only a terminal reads. A colour goes; anything else
+ * a terminal is told is a gap: Claude Code's screen puts a word at its column where a plain line
+ * holds a space, and a login the cursor moved in is not one login.
+ */
+const words = (shown: string): string => shown.replace(COLOUR, '').replace(TERMINAL, ' ').replaceAll('\r', '\n')
 
 /** The login among what Claude Code showed, once all of it is there. */
 export function mintedIn(shown: string): string | undefined {
@@ -98,9 +104,15 @@ export function mintedIn(shown: string): string | undefined {
 /** Why Claude Code ended without a login, from what it showed: its last lines, never a part of a login. */
 export function notMinted(shown: string): string {
   const text = words(shown)
-  if (/Your OAuth token/.test(text)) return 'Claude Code made a login, and this OpenAgent could not read it off what Claude Code showed.'
-  const lines = [...new Set(text.split('\n').map(line => line.trim()).filter(line => line && !STARTED_AS.test(line)))]
+  // However the screen was drawn: where a login or its heading shows, none of the screen is told.
+  if (/YourOAuthtoken|sk-ant-/.test(text.replace(/\s/g, ''))) return 'Claude Code made a login, and this OpenAgent could not read it off what Claude Code showed.'
+  const lines = [...new Set(text.split('\n').map(line => line.trim().replace(/\s+/g, ' ')).filter(line => line && !STARTED_AS.test(line)))]
   return ['Claude Code ended without a login.', ...lines.slice(-5)].join('\n')
+}
+
+/** Which process the lent terminal's first program said it is, once its whole line is there: half a number names another process. */
+export function startedAs(shown: string): number | undefined {
+  return Number(/^started as (\d+)\n/m.exec(words(shown))?.[1]) || undefined
 }
 
 export interface MintOptions {
@@ -118,7 +130,7 @@ const MINT_TIMEOUT_MS = 10 * 60_000
 /** How much of what Claude Code showed is kept: its end, where the login is. */
 const SHOWN = 256 * 1024
 /** The line the lent terminal's first program writes of itself, before it becomes Claude Code. */
-const STARTED_AS = /^started as (\d+)$/m
+const STARTED_AS = /^started as \d+$/
 
 /**
  * Make a Claude login that lasts a year, with Claude Code's own `claude setup-token`: it opens
@@ -164,7 +176,7 @@ export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command 
     const read = (said: string): void => {
       shown = (shown + said).slice(-SHOWN)
       // Read once, as it comes: it is the first thing written, and a long wait scrolls it out of what is kept.
-      lentTo ??= Number(STARTED_AS.exec(words(shown))?.[1]) || undefined
+      lentTo ??= startedAs(shown)
       const login = mintedIn(shown)
       if (login) end({ ok: true, login })
     }
