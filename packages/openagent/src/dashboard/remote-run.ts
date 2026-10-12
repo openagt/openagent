@@ -366,7 +366,7 @@ export class RelayedAgents {
 
   /** Fold each relayed event into the agent's list row via the store's own reducer (#1077), so the
    *  local stub mirrors the machine: the terminal status on `end`, the waiting flag while it is parked
-   *  (#785), the driver once its session starts. Events carry no write time, so this stamps its own. */
+   *  (#785). Events carry no write time, so this stamps its own. */
   private apply(agentId: string, event: OpenAgentEvent): void {
     const entry = this.metas.get(agentId)
     if (!entry) return

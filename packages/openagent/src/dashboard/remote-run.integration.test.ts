@@ -114,7 +114,7 @@ async function twoMachines(opts: { shopOnB?: boolean } = {}): Promise<TwoMachine
     stream.push({ kind: 'end', ok: true } as OpenAgentEvent)
     stream.close()
     bStreams.set(`${pid} ${B_RUN}`, stream)
-    return { ok: true, agentId: B_RUN }
+    return { ok: true, agentId: B_RUN, driver: 'claude-code' }
   }
   const bTail = (pid: string, agentId: string, onEvent: (event: OpenAgentEvent) => void): (() => void) => forwardStream(bStreams.get(`${pid} ${agentId}`), onEvent)
   const bundle = await fakeBundle()
@@ -169,7 +169,8 @@ test('a run started on a saved machine lands in that machine\'s own copy of the 
     const result = await m.a.onStart('build the thing', { base: 'a-branch-of-this-machine', model: 'opus', machine: m.machineB }, shopIdA)
 
     // The agent was created on B, and A returned B's own agent id (not a locally allocated one).
-    assert.deepEqual(result, { ok: true, agentId: B_RUN })
+    // The machine's word on the coding agent comes over with the run's id.
+    assert.deepEqual(result, { ok: true, agentId: B_RUN, driver: 'claude-code' })
     assert.equal(m.bStarts.length, 1)
     assert.equal(m.bStarts[0]!.prompt, 'build the thing')
     // In B's copy of the shop: not the folder B's daemon was started in, and not A's id for the project.
@@ -185,6 +186,7 @@ test('a run started on a saved machine lands in that machine\'s own copy of the 
     const listed = m.a.remoteAgents.list(shopIdA)
     assert.equal(listed.length, 1)
     assert.equal(listed[0]!.id, B_RUN)
+    assert.equal(listed[0]!.driver, 'claude-code')
     assert.equal(listed[0]!.target, 'remote')
     assert.equal(listed[0]!.status, 'running')
     assert.equal(listed[0]!.remoteLabel, 'Studio')
@@ -267,7 +269,7 @@ test('the other machine clones a project it is asked for, by itself: asked again
     assert.deepEqual(await remoteProject(target, { share: false }), { state: 'there' }) // asked for again: nothing to do
     assert.equal(m.bClones.length, 1)
 
-    assert.deepEqual(await m.a.onStart('build the thing', { machine: m.machineB }, shopIdA), { ok: true, agentId: B_RUN })
+    assert.deepEqual(await m.a.onStart('build the thing', { machine: m.machineB }, shopIdA), { ok: true, agentId: B_RUN, driver: 'claude-code' })
     assert.equal(m.bStarts.length, 1)
     assert.equal(m.bStarts[0]!.projectId, projectId(m.shopB))
   } finally {

@@ -40,6 +40,9 @@ test('onStart runs the start hook of the project addressed, home or registered, 
     // No picks made: the line's own defaults apply, so neither variable is set.
     assert.deepEqual(await runtime.onStart('Read the docs', {}, record.id), { ok: true, agentId: 'run-7' })
     assert.equal(await readFile(join(other, 'started.txt'), 'utf8'), 'Read the docs|unset|unset')
+    // A line that says which coding agent runs its run: the answer passes it on.
+    await writeFile(join(other, PROJECT_HOOKS_FILE), `start: 'echo "{\\"id\\":\\"run-8\\",\\"driver\\":\\"claude-code\\"}"'\n`)
+    assert.deepEqual(await runtime.onStart('Read the docs', {}, record.id), { ok: true, agentId: 'run-8', driver: 'claude-code' })
   } finally {
     await runtime.dispose()
     await rm(home, { recursive: true, force: true })
@@ -481,11 +484,12 @@ test('a run started on another machine is followed only under an id that is a ru
   execFileSync('git', ['commit', '-q', '--allow-empty', '-m', 'seed'], { cwd: shop, env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } })
   await addWorktree(shop, { agentId: 'mine-1', branch: agentBranchName('mine-1') }, nodeGitRunner())
 
-  // The machine: whatever id it is told to answer a start with.
+  // The machine: whatever id it is told to answer a start with, and whatever coding agent.
   let answers = 'run-on-the-machine'
+  let driver: unknown
   const machine = createServer((req, res) => {
     req.resume()
-    if (req.url?.startsWith('/_relay/start')) return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true, agentId: answers }))
+    if (req.url?.startsWith('/_relay/start')) return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true, agentId: answers, ...(driver !== undefined ? { driver } : {}) }))
     res.writeHead(200, { 'content-type': 'application/x-ndjson' }).end()
   })
   await new Promise<void>(resolve => machine.listen(0, '127.0.0.1', resolve))
@@ -496,6 +500,17 @@ test('a run started on another machine is followed only under an id that is a ru
     const start = () => runtime.onStart('go', { machine: url })
     assert.deepEqual(await start(), { ok: true, agentId: 'run-on-the-machine' })
     assert.ok(runtime.remoteAgents.target('run-on-the-machine'))
+    // The run's row here says which coding agent runs it only when the machine said so, in a word a row can show.
+    const row = (id: string) => runtime.remoteAgents.list(projectId(shop)).find(agent => agent.id === id)
+    assert.equal(row('run-on-the-machine')!.driver, undefined)
+    for (const [said, kept] of [['claude-code', 'claude-code'], [{ name: 'x' }, undefined], ['x'.repeat(64), 'x'.repeat(64)], ['x'.repeat(65), undefined]] as const) {
+      driver = said
+      answers = `run-${typeof said === 'string' ? said.length : 'odd'}`
+      // The page is answered what was checked, and nothing else the machine said.
+      assert.deepEqual(await start(), { ok: true, agentId: answers, ...(kept !== undefined ? { driver: kept } : {}) })
+      assert.equal(row(answers)!.driver, kept)
+    }
+    driver = undefined
 
     const refused = { ok: false, error: 'Server answered with a run this computer cannot follow.' }
     answers = 'mine-1'

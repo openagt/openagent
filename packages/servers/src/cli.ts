@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { AlreadyWorking, askLink, install } from './install.js'
 import { AlreadyAtWork, changeLogin, ownGithubAccount, type Mint } from './logins.js'
 import type { Exec } from './ssh.js'
-import { STEPS } from './steps.js'
+import { SERVER_MARK, STEPS } from './steps.js'
 import { LOGIN_KINDS, Unreadable, addressOf, atWork, doorUrl, freshSteps, isUser, isVersion, readStore, update, working, type Login, type LoginKind, type Server, type StepState, type Store } from './store.js'
 
 /**
@@ -14,7 +14,7 @@ import { LOGIN_KINDS, Unreadable, addressOf, atWork, doorUrl, freshSteps, isUser
 export const USAGE = `usage: servers <command>
 
   status                               the servers this computer installed OpenAgent on, how far each install is, and
-                                       which logins each was given
+                                       which logins each was given; and whether this computer is itself such a server
   connect <address> <user> <version> [github]
                                        install OpenAgent at this version on the server at this number or name, logging in
                                        over SSH as this user (root, or one that becomes root without a password) with this
@@ -95,6 +95,8 @@ export interface ServerStatus {
 
 export interface Status {
   servers: ServerStatus[]
+  /** This computer is itself a server OpenAgent was installed on. */
+  server?: true
 }
 
 /** How long a Claude login lasts that was made for a server. */
@@ -114,8 +116,9 @@ function loginOf(kind: LoginKind, login: Login | undefined, installing: boolean)
   }
 }
 
-function statusOf(store: Store): Status {
+function statusOf(store: Store, env: NodeJS.ProcessEnv): Status {
   return {
+    ...(env[SERVER_MARK] === '1' ? { server: true as const } : {}),
     servers: store.servers.map(server => {
       const busy = working(server)
       return {
@@ -179,7 +182,7 @@ async function connect(io: CliIO, said: { address: string; user: string; version
       else delete server.worker
     })
   }
-  return statusOf(await readStore(io.env))
+  return statusOf(await readStore(io.env), io.env)
 }
 
 /** The saved server at what a person typed, or a refusal. */
@@ -235,7 +238,7 @@ async function changeLoginOf(io: CliIO, said: string, kind: LoginKind, remove: b
       else delete login.worker
     })
   }
-  return statusOf(await readStore(io.env))
+  return statusOf(await readStore(io.env), io.env)
 }
 
 /** Run `work` until it ends, or until this process is told to stop. */
@@ -267,7 +270,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
     switch (command) {
       case 'status':
         if (rest.length) break
-        return print(statusOf(await readStore(io.env)))
+        return print(statusOf(await readStore(io.env), io.env))
       case 'connect': {
         const [address, user, version, github] = rest
         if (rest.length < 3 || rest.length > 4 || !address || !user || !version || (rest.length === 4 && github !== 'github')) break
@@ -288,7 +291,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
           const server = store.servers.find(candidate => candidate.address === at)
           if (server) server.adding = false
         })
-        return print(statusOf(await readStore(io.env)))
+        return print(statusOf(await readStore(io.env), io.env))
       }
       case 'github': {
         if (rest.length) break
@@ -314,7 +317,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
           if (server && changing(server)) throw new Refused(`A login of ${at} is being changed right now: wait until it ends`)
           store.servers = store.servers.filter(candidate => candidate.address !== at)
         })
-        return print(statusOf(await readStore(io.env)))
+        return print(statusOf(await readStore(io.env), io.env))
       }
       case 'work': {
         const [address, version] = rest

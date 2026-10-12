@@ -42,7 +42,8 @@ check: agent-runner check ${DRIVER:+--driver "$DRIVER"}
 ```
 
 The line is given the prompt and the user's picks in its environment, and answers one JSON
-document whose `id` names the agent it began. From there the agent belongs to whatever that
+document whose `id` names the agent it began, and whose `driver` may name the coding agent that
+runs it. From there the agent belongs to whatever that
 line started. Adding a project writes these three lines into the file, so a new project, an
 empty folder included, starts an agent with nothing typed by hand. They are a default: a line
 already there is kept, and any of them can be changed or deleted. A line finds its tools in the

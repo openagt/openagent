@@ -106,7 +106,18 @@ async function run<T>(host: ModuleHost, args: string[], read: (output: unknown) 
   return value !== undefined ? { ok: true, value } : { ok: false, error: 'the command answered something else than expected' }
 }
 
-export const loadServers = (host: ModuleHost): Promise<Answer<ServerRow[]>> => run(host, ['status'], readServers)
+/** What this computer says of its servers: the list, and whether it is itself a server OpenAgent was installed on. */
+export interface ServersRead {
+  servers: ServerRow[]
+  isServer: boolean
+}
+
+export function readStatus(output: unknown): ServersRead | undefined {
+  const servers = readServers(output)
+  return servers && { servers, isServer: (output as Record<string, unknown>)['server'] === true }
+}
+
+export const loadServers = (host: ModuleHost): Promise<Answer<ServersRead>> => run(host, ['status'], readStatus)
 /**
  * Install OpenAgent at `version` on the server, or go on where the install failed, or bring a server that fell behind to it.
  * With `github`, this computer's GitHub login is copied to the server once it is installed.

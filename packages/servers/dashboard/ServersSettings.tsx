@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Button, Checkbox, Input, QrCode, SettingsSection, useModuleHost, usePolled, type ModuleMachines } from '@openagt/dashboard/module'
-import { askLink, connect, forget, loadServers, login, logout, markAdded, ownGithub, type Answer, type DoorLink, type OwnGithub, type ServerRow, type StepState } from './servers.js'
+import { askLink, connect, forget, loadServers, login, logout, markAdded, ownGithub, type Answer, type DoorLink, type OwnGithub, type ServerRow, type ServersRead, type StepState } from './servers.js'
 
 // Settings → Servers: "Connect your VPS". A person gives a server's address and a user name, and
 // OpenAgent installs itself there over SSH. The install is the `servers` command's own process;
@@ -18,7 +18,7 @@ import { askLink, connect, forget, loadServers, login, logout, markAdded, ownGit
 // "Add device" on, so this computer asks the server's door for the link over SSH, and the row
 // shows it as the Devices section does, as a QR code and a link.
 
-const NOT_READ: Answer<ServerRow[]> | undefined = undefined
+const NOT_READ: Answer<ServersRead> | undefined = undefined
 /** How long a door's code is good for. */
 const CODE_MS = 5 * 60_000
 const NO_MACHINES: ModuleMachines | undefined = undefined
@@ -63,7 +63,19 @@ export function olderThan(a: string, b: string): boolean {
 
 export function ServersSettings({ everyMs = 3_000 }: { /** How often the installs are read again. */ everyMs?: number }) {
   const host = useModuleHost()
-  const { value: read, reload } = usePolled<Answer<ServerRow[]> | undefined>(() => loadServers(host), NOT_READ, everyMs, [])
+  const { value: read, reload } = usePolled<Answer<ServersRead> | undefined>(() => loadServers(host), NOT_READ, everyMs, [])
+  // What this computer last said it is. A server is connected from a person's own computer: on a
+  // server's own page there is no such section, and a read that fails later does not bring it back.
+  const isServer = useRef<boolean | undefined>(undefined)
+  if (read?.ok) isServer.current = read.value.isServer
+  // Nothing shows until this computer said which it is, so the section never shows on a server for a moment.
+  if (read === undefined || isServer.current === true) return null
+  return <Servers read={read} reload={reload} everyMs={everyMs} />
+}
+
+/** The section itself, on a person's own computer: nothing of it runs on a server. */
+function Servers({ read, reload, everyMs }: { read: Answer<ServersRead>; reload: () => Promise<unknown>; everyMs: number }) {
+  const host = useModuleHost()
   const { value: known, reload: reloadMachines } = usePolled<ModuleMachines | undefined>(() => host.machines(), NO_MACHINES, Math.max(everyMs, 10_000), [])
   // Whose GitHub login a copy would be: asked of this computer's own gh, which asks GitHub, so not often.
   const { value: own } = usePolled<Answer<OwnGithub> | undefined>(() => ownGithub(host), NOT_ASKED, Math.max(everyMs, 5 * 60_000), [])
@@ -81,7 +93,7 @@ export function ServersSettings({ everyMs = 3_000 }: { /** How often the install
   // The code on the page, and the server whose door made it.
   const [code, setCode] = useState<(DoorLink & { address: string }) | undefined>()
 
-  const servers = read?.ok ? read.value : []
+  const servers = read.ok ? read.value.servers : []
   const inMachines = (server: ServerRow, among = known) => among?.machines.find(machine => machine.url === server.url)
   const installed = (server: ServerRow): boolean => !server.working && server.steps.every(step => step.state === 'done')
 
@@ -229,12 +241,13 @@ export function ServersSettings({ everyMs = 3_000 }: { /** How often the install
                   </div>
                   <div className="flex gap-2">
                     {(behind || unfinished) && !server.working && !failed && (
-                      <Button size="sm" disabled={busy} aria-label={`Update ${server.address}`} onClick={() => void install(server.address, server.user)}>
+                      <Button size="sm" disabled={busy || !known} aria-label={`Update ${server.address}`} onClick={() => void install(server.address, server.user)}>
                         Update
                       </Button>
                     )}
                     {failed && (
-                      <Button size="sm" disabled={busy} aria-label={`Try ${server.address} again`} onClick={() => void install(server.address, server.user, github.wanted === true)}>
+                      // As Connect: not before this computer said which OpenAgent it runs, the one the server gets.
+                      <Button size="sm" disabled={busy || !known} aria-label={`Try ${server.address} again`} onClick={() => void install(server.address, server.user, github.wanted === true)}>
                         Try again
                       </Button>
                     )}
@@ -423,7 +436,7 @@ export function ServersSettings({ everyMs = 3_000 }: { /** How often the install
           })}
         </ul>
       )}
-      {read !== undefined && !read.ok && (
+      {!read.ok && (
         <p role="alert" className="py-3 text-xs text-danger">{`The servers could not be read: ${read.error}`}</p>
       )}
       {error !== undefined && (

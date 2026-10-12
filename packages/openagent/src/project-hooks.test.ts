@@ -101,6 +101,20 @@ test('no file runs nothing and logs nothing; a broken file logs why it was ignor
   }
 })
 
+test('a start line that names the coding agent of its run is taken at its word; a name that is no word is none', async () => {
+  const answering = (answer: string): Promise<string> => project(`start: 'echo ${JSON.stringify(answer).replaceAll("'", "''")}'\n`)
+  const named = await answering('{"id":"run-2","driver":"codex"}')
+  const odd = await answering('{"id":"run-3","driver":7}')
+  const empty = await answering('{"id":"run-4","driver":""}')
+  try {
+    assert.deepEqual(await runStartHook(named, { prompt: 'x' }), { ok: true, id: 'run-2', driver: 'codex' })
+    assert.deepEqual(await runStartHook(odd, { prompt: 'x' }), { ok: true, id: 'run-3' })
+    assert.deepEqual(await runStartHook(empty, { prompt: 'x' }), { ok: true, id: 'run-4' })
+  } finally {
+    for (const cwd of [named, odd, empty]) await rm(cwd, { recursive: true, force: true })
+  }
+})
+
 test('the start line gets the prompt and the picks in its environment, and the id it answers on stdout comes back', async () => {
   const cwd = await project(`start: 'printf "%s|%s|%s|%s|%s|%s\\n" "$PROMPT" "$DRIVER" "\${MODEL-unset}" "\${THEN-unset}" "\${PUBLISH-unset}" "\${BASE-unset}" >> started.txt; echo "{\\"ok\\":true,\\"id\\":\\"run-1\\"}"'\n`)
   try {

@@ -25,6 +25,9 @@ test('no server until one is connected; what is no address, user or version is r
   const home = await testHome()
   try {
     assert.deepEqual((await run(home.env, ['status'])).out, { servers: [] })
+    // Started by a server's own service, OpenAgent says it is a server: its page then offers no servers to connect.
+    assert.deepEqual((await run({ ...home.env, OPENAGENT_SERVER: '1' }, ['status'])).out, { server: true, servers: [] })
+    assert.deepEqual((await run({ ...home.env, OPENAGENT_SERVER: '' }, ['status'])).out, { servers: [] })
     const started: string[] = []
     const startWork = (words: string[]): number => (started.push(words.join(" ")), process.pid)
     for (const [args, why] of [

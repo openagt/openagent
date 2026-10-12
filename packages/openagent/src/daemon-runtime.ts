@@ -33,6 +33,9 @@ import { providedDataChanged } from './store/provided.js'
 /** How long a project folder's repository address is trusted before git is asked again. */
 const ADDRESS_KEPT_MS = 10_000
 
+/** How long a coding agent's name may be that another machine answers: a row shows it. */
+const MAX_DRIVER_NAME = 64
+
 /** How many projects this computer clones at once for other machines; one more is told to ask again. */
 const MAX_COMING = 3
 /** How many clones are remembered at once, on their way or failed. */
@@ -171,9 +174,12 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject }: Project
         target: 'remote',
         intent: prompt,
         remoteLabel: machine.label,
+        // The machine's word, as the run is: its record, which names the coding agent, never comes here.
+        ...(typeof result.driver === 'string' && result.driver.length <= MAX_DRIVER_NAME ? { driver: result.driver } : {}),
       }
       relayedAgents.register(result.agentId, target, meta, targetProjectId ?? homeId)
-      return result
+      // Only what was checked goes on to the page, not whatever else the machine answered.
+      return { ok: true, agentId: result.agentId, ...(meta.driver !== undefined ? { driver: meta.driver } : {}) }
     }
     // The branch to start from ends up on the line's command line: only a branch name goes there.
     // Refused, not dropped: a run started from the main branch instead would be a silent swap.
@@ -194,7 +200,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject }: Project
     // The line made a checkout (or is about to): the project's checkouts are read again on the
     // next look rather than a few seconds from now, so the new run's page finds its own.
     if (started.ok) projectBranches.changed(projectCwd)
-    return started.ok ? { ok: true, agentId: started.id } : { ok: false, error: started.error }
+    return started.ok ? { ok: true, agentId: started.id, ...(started.driver !== undefined ? { driver: started.driver } : {}) } : { ok: false, error: started.error }
   }
 
   // Add a project (#396): install the repo, then register it so it appears in the Projects

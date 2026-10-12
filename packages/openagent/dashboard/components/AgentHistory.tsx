@@ -648,7 +648,7 @@ function AgentHistoryRow({
                 <TooltipTrigger render={<span className="flex items-center" />}>
                   <Laptop className="h-3 w-3 text-muted-foreground" aria-label={`Started on ${startedOn}`} />
                 </TooltipTrigger>
-                <TooltipContent>Started on {startedOn}, by that machine's daemon.</TooltipContent>
+                <TooltipContent>Started on {startedOn}.</TooltipContent>
               </Tooltip>
             )}
             {remote && (
