@@ -88,6 +88,11 @@ async function twoMachines(opts: { shopOnB?: boolean } = {}): Promise<TwoMachine
   const envB = { ...process.env, XDG_CONFIG_HOME: join(root, 'home-b') }
   const previous = process.env.XDG_CONFIG_HOME
   process.env.XDG_CONFIG_HOME = envB.XDG_CONFIG_HOME
+  // B adds a project it cloned, which commits: git is told who commits, since a computer with no
+  // git settings (a test runner) has no name to guess.
+  const WHO = { GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' }
+  const who = Object.fromEntries(Object.keys(WHO).map(key => [key, process.env[key]]))
+  Object.assign(process.env, WHO)
   const at = new Date().toISOString()
 
   // B: another project first on its list, then (unless the test says not) the shop, cloned over HTTPS.
@@ -147,6 +152,10 @@ async function twoMachines(opts: { shopOnB?: boolean } = {}): Promise<TwoMachine
       await b.close()
       if (previous === undefined) delete process.env.XDG_CONFIG_HOME
       else process.env.XDG_CONFIG_HOME = previous
+      for (const [key, value] of Object.entries(who)) {
+        if (value === undefined) delete process.env[key]
+        else process.env[key] = value
+      }
       await rm(bundle, { recursive: true, force: true })
       await rm(root, { recursive: true, force: true })
     },
@@ -252,7 +261,7 @@ test('the other machine clones a project it is asked for, by itself: asked again
       seen.add(one.state).add(two.state)
       return one.state === 'there' && two.state === 'there'
     })
-    assert.deepEqual([...seen].filter(state => state !== 'coming' && state !== 'there'), [])
+    assert.deepEqual([...seen].filter(state => state !== 'coming' && state !== 'there'), [], JSON.stringify(await remoteProject(target)))
     assert.deepEqual(await remoteProject(target), { state: 'there' })
     assert.equal(await readSharing(m.shopB), true)
     assert.deepEqual(await remoteProject(target, { share: false }), { state: 'there' }) // asked for again: nothing to do
