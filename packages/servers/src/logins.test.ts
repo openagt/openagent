@@ -649,11 +649,9 @@ exit 0
     assert.match(none.stderr, /error connecting to github\.com\nGitHub gave the server no code\.\n$/)
     assert.deepEqual((await readdir(join(home, '.cache'))).filter(name => name.startsWith('openagent-github-login')), [])
 
-    // A server installed before gh was one of its tools.
-    await rm(join(home, '.local', 'bin', 'gh'))
-    const without = await sh(githubCodeScript().script, { HOME: home, PATH: '/usr/bin:/bin' })
-    assert.equal(without.code, 1)
-    assert.match(without.stderr, /gh is not on this server yet\. Press Update on its row first\./)
+    // A server installed before gh was one of its tools is told so before anything else is done. Read off the script, not run:
+    // the script looks where a system keeps its programs, and the computer the tests run on may have a real gh there.
+    assert.match(githubCodeScript().script, /\n  command -v gh >\/dev\/null \|\| fail "gh is not on this server yet\. Press Update on its row first\."\n  mkdir -p/)
   } finally {
     await rm(home, { recursive: true, force: true })
   }
