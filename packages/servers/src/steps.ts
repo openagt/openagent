@@ -99,6 +99,12 @@ const STARTED = `
   }`
 const NOT_STARTED = 'fail "OpenAgent did not start on this server."'
 
+/**
+ * What the service says to the OpenAgent it starts: this computer is a server one was installed
+ * on. Servers are connected from a person's own computer, so a server's own page offers none.
+ */
+export const SERVER_MARK = 'OPENAGENT_SERVER'
+
 /** What the service file holds. `KillMode=process`: a run is a process of its own and goes on when OpenAgent starts again, as on a laptop. */
 export const SERVICE_UNIT = `[Unit]
 Description=OpenAgent
@@ -109,6 +115,7 @@ Wants=network-online.target
 User=${SERVER_USER}
 WorkingDirectory=/home/${SERVER_USER}
 Environment=PATH=/home/${SERVER_USER}/.local/bin:${ROOT}/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=${SERVER_MARK}=1
 EnvironmentFile=-${CLAUDE_FILE}
 ExecStart=${ROOT}/node/bin/openagent
 Restart=always

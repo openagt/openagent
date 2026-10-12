@@ -80,6 +80,9 @@ test('with no project added, the computer\'s modules are there and run their own
   const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-modules-rpc-')))
   const previous = process.env.XDG_CONFIG_HOME
   process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
+  // A run of these tests on a server: the commands answer as on a person's own computer.
+  const onServer = process.env.OPENAGENT_SERVER
+  delete process.env.OPENAGENT_SERVER
   try {
     await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
     assert.deepEqual(await onModules(), [
@@ -101,6 +104,7 @@ test('with no project added, the computer\'s modules are there and run their own
   } finally {
     if (previous === undefined) delete process.env.XDG_CONFIG_HOME
     else process.env.XDG_CONFIG_HOME = previous
+    if (onServer !== undefined) process.env.OPENAGENT_SERVER = onServer
     await rm(dir, { recursive: true, force: true })
   }
 })

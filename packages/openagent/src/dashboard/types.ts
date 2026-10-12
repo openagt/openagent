@@ -83,10 +83,12 @@ export interface StartAgentOptions {
 
 /**
  * The outcome of a Start attempt (#345): the id of the run the project's start hook began, or why
- * there is none. `notThere` marks the one refusal a page can do something about: the machine the
- * run was sent to does not have the project yet, and can clone it.
+ * there is none. `driver` is the coding agent the hook said runs it: what another computer that
+ * follows the run shows, since the run's record stays on this one. `notThere` marks the one
+ * refusal a page can do something about: the machine the run was sent to does not have the
+ * project yet, and can clone it.
  */
-export type StartAgentResult = { ok: true; agentId: string } | { ok: false; error: string; notThere?: true }
+export type StartAgentResult = { ok: true; agentId: string; driver?: string } | { ok: false; error: string; notThere?: true }
 
 /**
  * Where a session is working (#798): its checkout, its branch, and what it is holding. Read by

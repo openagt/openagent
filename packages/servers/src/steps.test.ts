@@ -48,6 +48,8 @@ test('root installs, and what runs afterwards runs as the server\'s own user', (
     [['login', 'root'], ['user', 'root'], ['tools', 'root'], ['name', 'openagent'], ['openagent', 'root'], ['agent', 'openagent'], ['service', 'root'], ['door', 'openagent']],
   )
   assert.match(SERVICE_UNIT, /^User=openagent$/m)
+  // The OpenAgent the service starts is told it runs on a server: its own page offers no servers to connect.
+  assert.match(SERVICE_UNIT, /^Environment=OPENAGENT_SERVER=1$/m)
   // The one right the service has beyond its user's: ports 80 and 443, which the door listens on.
   assert.match(SERVICE_UNIT, /^AmbientCapabilities=CAP_NET_BIND_SERVICE$/m)
   assert.match(SERVICE_UNIT, /^Restart=always$/m)

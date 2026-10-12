@@ -156,12 +156,14 @@ export function startLineTakesBase(line: string): boolean {
 /** What a `resume` line is given: the run, and the person's text or their answer to the question it ended on. */
 export type ResumeHookInput = { runId: string } & ({ text: string } | { answer: string })
 
-export type RunHookResult = { ok: true; id: string } | { ok: false; error: string }
+/** How a `start` or `resume` line went: the run it named, and the coding agent it said runs it, when it said one. */
+export type RunHookResult = { ok: true; id: string; driver?: string } | { ok: false; error: string }
 
 /**
  * Run the project's `start` line: the prompt in `PROMPT`, the picks in `DRIVER`, `MODEL`,
  * `PUBLISH` and `BASE` when made, the follow-up in `THEN` when there is one. The line answers one JSON
- * document on stdout whose `id` names the run it started.
+ * document on stdout whose `id` names the run it started, and whose `driver` may name the coding
+ * agent that runs it.
  */
 export function runStartHook(cwd: string, input: StartHookInput, opts: Omit<RunHooksOptions, 'log'> = {}): Promise<RunHookResult> {
   return runRunHook(cwd, 'start', {
@@ -196,8 +198,8 @@ async function runRunHook(cwd: string, kind: RunHookKind, vars: Record<string, s
   } catch {
     said = undefined
   }
-  const id = said && typeof said === 'object' ? (said as Record<string, unknown>)['id'] : undefined
-  if (outcome.summary === 'exit 0' && typeof id === 'string' && id !== '') return { ok: true, id }
+  const { id, driver } = (said && typeof said === 'object' ? said : {}) as Record<string, unknown>
+  if (outcome.summary === 'exit 0' && typeof id === 'string' && id !== '') return { ok: true, id, ...(typeof driver === 'string' && driver !== '' ? { driver } : {}) }
   // The tool's one line for a person is its last on stderr; without one, how the line ended.
   const lastSaid = outcome.stderr.split('\n').map(s => s.trim()).filter(Boolean).at(-1)
   return { ok: false, error: `the ${kind} hook: ${lastSaid ?? (outcome.summary === 'exit 0' ? 'it answered no run id' : outcome.summary)}` }

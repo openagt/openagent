@@ -63,7 +63,8 @@ describe('Settings → Servers', () => {
   test('an address and a user name, root unless said: Connect installs this computer\'s own OpenAgent there, in no project', async () => {
     const { host, ran } = dashboard(() => ok({ servers: [] }))
     show(host)
-    const connect = screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement
+    // The section is there once this computer said it is no server itself.
+    const connect = (await screen.findByRole('button', { name: 'Connect' })) as HTMLButtonElement
     expect(connect.disabled).toBe(true)
     expect((screen.getByLabelText('User name') as HTMLInputElement).value).toBe('root')
     await waitFor(() => expect(host.machines).toHaveBeenCalled())
@@ -81,7 +82,7 @@ describe('Settings → Servers', () => {
     let say: (saved: ModuleMachines) => void = () => {}
     machines.mockImplementation(() => new Promise<ModuleMachines>(resolve => (say = resolve)))
     show(host)
-    fireEvent.change(screen.getByLabelText("The server's address"), { target: { value: '203.0.113.5' } })
+    fireEvent.change(await screen.findByLabelText("The server's address"), { target: { value: '203.0.113.5' } })
     await waitFor(() => expect(ran()).toContain('status'))
     const connect = screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement
     expect(connect.disabled).toBe(true)
@@ -246,6 +247,34 @@ describe('Settings → Servers', () => {
     expect(await screen.findByText('Does not answer right now.')).toBeTruthy()
   })
 
+  test('on a computer that is itself a server the section is not there, and nothing of it runs: servers are connected from a person\'s own computer', async () => {
+    let fails = false
+    const { host, ran, machines, addMachine } = dashboard(() => (fails ? { ok: false, error: 'the command could not be run' } : { ok: true, output: { server: true, servers: [server(ALL_DONE)] } }))
+    const { container } = show(host)
+    // Nothing before this computer said which it is: the section never shows on a server for a moment.
+    expect(container.textContent).toBe('')
+    await waitFor(() => expect(ran()).toContain('status'))
+    await new Promise(resolve => setTimeout(resolve, 100))
+    expect(container.textContent).toBe('')
+    // A read that fails later does not bring it back.
+    fails = true
+    const before = ran().length
+    await waitFor(() => expect(ran().length).toBeGreaterThan(before + 1))
+    expect(container.textContent).toBe('')
+    // Only the question itself was asked: no GitHub login, no machines, and a server it holds is not added to anything.
+    expect(new Set(ran())).toEqual(new Set(['status']))
+    expect(host.runComputerCommand).not.toHaveBeenCalledWith(['github'])
+    expect(machines).not.toHaveBeenCalled()
+    expect(addMachine).not.toHaveBeenCalled()
+  })
+
+  test('a person\'s own computer that cannot be read shows the section, with why', async () => {
+    const { host } = dashboard(() => ({ ok: false, error: 'the command could not be run' }))
+    show(host)
+    expect(await screen.findByText('Servers')).toBeTruthy()
+    expect((await screen.findByRole('alert')).textContent).toContain('the command could not be run')
+  })
+
   test('a server installed before this computer\'s OpenAgent got a new step shows it as not started, and has Update to run it, behind or not', async () => {
     const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5', version: '1.2.3' }] }
     const { host, ran } = dashboard(() => ok({ servers: [server(['done', 'done', 'done', 'waiting', 'done', 'done', 'done', 'done'], { adding: false, user: 'ubuntu' })] }), saved)
@@ -270,7 +299,7 @@ describe('Settings → Servers', () => {
   test('a command that refuses says why; servers that cannot be read say so', async () => {
     const refusing = dashboard(args => (args[0] === 'connect' ? { ok: false, error: 'nope is not a server\'s number or name' } : ok({ servers: [] })))
     show(refusing.host)
-    fireEvent.change(screen.getByLabelText("The server's address"), { target: { value: 'nope' } })
+    fireEvent.change(await screen.findByLabelText("The server's address"), { target: { value: 'nope' } })
     await waitFor(() => expect((screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement).disabled).toBe(false))
     await waitFor(() => expect(refusing.machines).toHaveBeenCalled())
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }))

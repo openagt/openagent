@@ -30,6 +30,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   the server reads like one made on this computer. Picked over the name of the GitHub login
   the server holds, which a server with no login lacks; and over a name of the server's
   own, which ties its commits to nobody on GitHub.
+- A server's own Settings has no Servers section: servers are connected from the person's
+  own computer. Picked over a server that connects other servers.
 
 ## The server's logins
 - The GitHub login is this computer's own, copied to the server when the person ticks it,
