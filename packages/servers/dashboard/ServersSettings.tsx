@@ -204,6 +204,8 @@ export function ServersSettings({ everyMs = 3_000 }: { /** How often the install
             const machine = inMachines(server)
             const failed = !server.working && server.steps.some(step => step.state === 'failed')
             const behind = machine?.version !== undefined && known !== undefined && olderThan(machine.version, known.version)
+            // A step this computer's OpenAgent brings and the server's install never ran: the same press as an update runs it.
+            const unfinished = !server.working && !failed && server.steps.some(step => step.state === 'waiting')
             const reason = notAdded[server.address]
             const { github, claude } = server.logins
             return (
@@ -226,7 +228,7 @@ export function ServersSettings({ everyMs = 3_000 }: { /** How often the install
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    {behind && !server.working && !failed && (
+                    {(behind || unfinished) && !server.working && !failed && (
                       <Button size="sm" disabled={busy} aria-label={`Update ${server.address}`} onClick={() => void install(server.address, server.user)}>
                         Update
                       </Button>
