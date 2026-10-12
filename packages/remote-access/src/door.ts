@@ -180,7 +180,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
   const letIn = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (req.method === 'GET' || req.method === 'HEAD') {
       const nonce = randomBytes(16).toString('base64')
-      return sendPage(res, 200, enterPage(ENTER_PATH, nonce), nonce)
+      return sendPage(res, 200, enterPage(ENTER_PATH, nonce, secure), nonce)
     }
     if (req.method !== 'POST') return refuse(res, 405, 'method not allowed')
     if (!fromOwnPage(req, secure)) return refuse(res, 403, 'forbidden')
@@ -274,7 +274,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       const who = await whoIsIn(req)
       if (!who) {
         const wantsPage = req.method === 'GET' && (req.headers.accept ?? '').includes('text/html')
-        return wantsPage ? sendPage(res, 401, notInPage()) : refuse(res, 401, 'this device is not in')
+        return wantsPage ? sendPage(res, 401, notInPage(secure)) : refuse(res, 401, 'this device is not in')
       }
       if (!fromOwnPage(req, secure)) return refuse(res, 403, 'forbidden')
 

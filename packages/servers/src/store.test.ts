@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { readFile, stat, writeFile } from 'node:fs/promises'
 import { STEP_IDS } from './steps.js'
-import { SILENT_MS, Unreadable, addressOf, doorUrl, freshSteps, isUser, isVersion, readStore, sanitize, storePath, update, working } from './store.js'
+import { SILENT_MS, Unreadable, addressOf, doorUrl, freshSteps, heartbeat, isUser, isVersion, readStore, sanitize, storePath, update, working } from './store.js'
 import { testHome } from './test-home.js'
 
 test('the file is beside OpenAgent\'s own home file', () => {
@@ -81,4 +81,32 @@ test('a change is written whole, for the owner alone; no file reads as no server
   } finally {
     await home.remove()
   }
+})
+
+test('a heartbeat beats one at a time, and stopping it waits for the beat on its way', async () => {
+  let started = 0
+  let ended = 0
+  const beating = heartbeat(async () => {
+    started++
+    await new Promise(resolve => setTimeout(resolve, 60))
+    ended++
+    throw new Error('a beat that failed is left at that')
+  }, 5)
+  await new Promise(resolve => setTimeout(resolve, 30))
+  assert.equal(started, 1, 'no second beat while the first is on its way')
+  await beating.stop()
+  assert.deepEqual([started, ended], [1, 1], 'the beat on its way has landed')
+  await new Promise(resolve => setTimeout(resolve, 30))
+  assert.equal(started, 1, 'none after the stop')
+
+  const never = heartbeat(async () => void started++, 10_000)
+  await never.stop()
+  assert.equal(started, 1)
+
+  // A beat that throws before it has anything to wait for is a failed beat like any other.
+  const throwing = heartbeat(() => {
+    throw new Error('thrown at once')
+  }, 5)
+  await new Promise(resolve => setTimeout(resolve, 30))
+  await throwing.stop()
 })

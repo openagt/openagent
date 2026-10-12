@@ -98,11 +98,17 @@ already made, and lists it in its pull request; for anything else it proposes an
   with no text, is a project's when one of the project's hook lines runs it. Picked over
   a project's pages coming from its own `package.json`, which needed an install in every
   project, and which a project without Node could not have.
-- Two lists name the packages OpenAgent brings, the ones every project has and the ones
-  a project picks, and nothing else in OpenAgent names a package. One of those names
-  among a project's own dependencies is not read: OpenAgent's copy and its rule are the
-  only ones. Picked over a project's own copy winning, which gave one package two ways
-  into a project.
+- Three lists name the packages OpenAgent brings, the ones every project has, the ones
+  a project picks and the ones that are the computer's, and nothing else in OpenAgent
+  names a package. One of those names among a project's own dependencies is not read:
+  OpenAgent's copy and its rule are the only ones. Picked over a project's own copy
+  winning, which gave one package two ways into a project.
+- The door to this computer and the servers it installed OpenAgent on are the
+  computer's, not a project's: their sections in Settings are there with no project
+  added, and their commands run in no project. Picked over giving them to every project
+  and running their commands in the first one, which left a computer with no project, as
+  a server is when it was just connected, with no way to let a phone in; and over a
+  starter project made on every server, one nobody asked for.
 - "Add project" stays small: it writes no skill. The project's page then says how many
   skills it has ("This project has 4 of 25 skills"), with an "Add skills" button that
   opens the same list with ticks `npx @openagt/init` shows in a terminal, through that
@@ -138,7 +144,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   given the project's folder and the facts about a run, never a verdict about them. Picked
   over reading only through the package's command, a new process for every read of a tree
   that polls every 8 seconds and a preview on every hover.
-- A package OpenAgent brings to every project may bring a service: a command of its own
+- A package that is the computer's may bring a service: a command of its own
   that OpenAgent runs for as long as it runs itself, and tells its own address. Picked
   over a line in each project's hooks file, which is a project's and shared with its team,
   where a service is one computer's; and over running it inside OpenAgent's own process,

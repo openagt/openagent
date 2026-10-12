@@ -20,6 +20,7 @@ function dashboard() {
     package: '@openagt/skill-browser',
     runCommand: vi.fn(async () => ({ ok: false as const, error: 'no commands' })),
     act: vi.fn(async () => ({ ok: false as const, error: 'no commands' })),
+    runComputerCommand: vi.fn(async () => ({ ok: false as const, error: 'not the computer\'s' })),
     read: vi.fn(async () => ({ ok: false as const, error: 'no reads' })),
     openAgent: vi.fn(),
     openPage: vi.fn(),

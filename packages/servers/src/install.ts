@@ -1,7 +1,7 @@
 import { giveGithub, noteGithub } from './logins.js'
 import { lastLines, openSession, withAdvice, type Exec, type Session } from './ssh.js'
 import { SERVER_USER, STEPS, linkScript, type StepId } from './steps.js'
-import { BEAT_MS, changeServer, doorUrl, working, type Server, type StepState } from './store.js'
+import { BEAT_MS, changeServer, doorUrl, heartbeat, working, type Server, type StepState } from './store.js'
 
 /**
  * The install itself: the steps, one after the other, on one server, each written to the file
@@ -51,7 +51,7 @@ export async function install(opts: InstallOptions): Promise<void> {
     return { address: kept.address, user: kept.user }
   })
   if (!server) throw new Error(`no server at ${address}`)
-  const beating = setInterval(() => void beat().catch(() => {}), opts.beatMs ?? BEAT_MS)
+  const beating = heartbeat(beat, opts.beatMs ?? BEAT_MS)
   let session: Session | undefined
   try {
     session = await openSession(server, { ...(opts.exec ? { exec: opts.exec } : {}), ...(opts.signal ? { signal: opts.signal } : {}) })
@@ -76,7 +76,7 @@ export async function install(opts: InstallOptions): Promise<void> {
       await change(kept => noteGithub(kept, given))
     }
   } finally {
-    clearInterval(beating)
+    await beating.stop()
     await change(kept => {
       if (!mine(kept)) return
       // A step still running here is one this process did not see the end of.
@@ -88,6 +88,9 @@ export async function install(opts: InstallOptions): Promise<void> {
 }
 
 export type Link = { ok: true; url: string; expires: string } | { ok: false; error: string }
+
+/** How long a link may be: a door's link is its address, a code and a key's mark, and a page draws it as a QR code. */
+const LINK_MAX = 512
 
 /** How long the server gets to answer with a link: less than a page's command has, so the line is always hung up. */
 const LINK_TIMEOUT_MS = 20_000
@@ -104,7 +107,7 @@ export async function askLink(server: Pick<Server, 'address' | 'user'>, opts: { 
     if (said.code !== 0) return { ok: false, error: withAdvice(server, lastLines(said) || 'The server did not answer.') }
     try {
       const { url, expires } = JSON.parse(said.out.trim().split('\n').at(-1) ?? '') as Record<string, unknown>
-      if (typeof url === 'string' && typeof expires === 'string' && new URL(url).origin === doorUrl(server.address)) return { ok: true, url, expires }
+      if (typeof url === 'string' && url.length <= LINK_MAX && typeof expires === 'string' && Number.isFinite(Date.parse(expires)) && new URL(url).origin === doorUrl(server.address)) return { ok: true, url, expires }
     } catch {
       // Told below, as any answer that is no link.
     }

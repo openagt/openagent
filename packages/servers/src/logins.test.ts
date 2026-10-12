@@ -1,11 +1,12 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { execFile, spawn } from 'node:child_process'
-import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { install } from './install.js'
 import { AlreadyAtWork, changeLogin, mintClaude, mintedIn, notMinted, scrubbed, startedAs, type LoginOptions, type Mint } from './logins.js'
+import type { Exec } from './ssh.js'
 import { CLAUDE_FILE, SERVICE_UNIT, STEPS, claudeLoginScript, claudeLogoutScript, githubLoginScript, githubLogoutScript } from './steps.js'
 import { freshSteps, readStore, storePath, update, type LoginKind } from './store.js'
 import { GH_LOGIN, pretendServer, testHome } from './test-home.js'
@@ -520,6 +521,34 @@ test('once the server is being told it is told to the end: stopping only ends th
     await give(home.env, 'claude', { exec, mint: async () => ({ ok: true, login: CLAUDE_LOGIN }), signal: stop.signal })
     assert.equal(stop.signal.aborted, true)
     assert.deepEqual(Object.keys((await serverOf(home.env)).claude!), ['since'])
+  } finally {
+    await home.remove()
+  }
+})
+
+test('once a change of a login has ended, nothing of it writes the file any more: no heartbeat is still on its way', async () => {
+  const home = await testHome()
+  try {
+    await saved(home.env, { github: { since: '2026-10-01T00:00:00.000Z', account: 'octocat' } })
+    const file = storePath(home.env)
+    const server = pretendServer()
+    // The file is held by another writer while the server hangs up, the last thing before the
+    // change ends: every heartbeat of that time waits for it, and is still waiting when it is let go.
+    const exec: Exec = async (bin, args, script, opts) => {
+      if (args.includes('-O')) {
+        await writeFile(`${file}.lock`, `${process.pid}:another-writer`, { flag: 'wx' })
+        await new Promise(resolve => setTimeout(resolve, 80))
+        await rm(`${file}.lock`)
+      }
+      return server.exec(bin, args, script, opts)
+    }
+    await take(home.env, 'github', { exec, beatMs: 5 })
+    const ended = await stat(file)
+    assert.equal((await serverOf(home.env)).github, undefined)
+    await new Promise(resolve => setTimeout(resolve, 150))
+    const later = await stat(file)
+    assert.deepEqual([later.ino, later.mtimeMs], [ended.ino, ended.mtimeMs], 'the file was written after the change had ended')
+    assert.deepEqual((await readdir(dirname(file))).filter(name => name.startsWith(basename(file))), [basename(file)])
   } finally {
     await home.remove()
   }

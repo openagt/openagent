@@ -156,6 +156,21 @@ test('an unparseable absolute-form request target gets a 400 and the server surv
   }
 })
 
+test('the files of the computer\'s modules are served with no project added, and the SPA shell is not what answers for one that is none', async () => {
+  const bundle = await fakeBundle()
+  const dash = await dashboard({ clientBundleDir: bundle })
+  try {
+    const module = await fetch(dash.url + '/_computer-modules/%40openagt%2Fremote-access/dashboard.js')
+    assert.equal(module.status, 200)
+    assert.match(module.headers.get('content-type') ?? '', /javascript/)
+    assert.match(await module.text(), /export/)
+    assert.equal((await fetch(dash.url + '/_computer-modules/%40openagt%2Ffiles/dashboard.js')).status, 404)
+  } finally {
+    await dash.close()
+    await rm(bundle, { recursive: true, force: true })
+  }
+})
+
 test('the RPC mount rejects a cross-origin POST (CSRF guard)', async () => {
   const bundle = await fakeBundle()
   const dash = await dashboard({ clientBundleDir: bundle })

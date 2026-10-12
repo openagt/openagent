@@ -30,6 +30,7 @@ function fakeHost(saved: Record<string, unknown> = {}, refuse?: (projectId: stri
     package: '@openagt/skill-orchestration',
     runCommand,
     act: runCommand,
+    runComputerCommand: vi.fn(async () => ({ ok: false as const, error: 'not the computer\'s' })),
     read: vi.fn(async () => ({ ok: false as const, error: 'no server part' })),
     openAgent: vi.fn(),
     openPage: vi.fn(),

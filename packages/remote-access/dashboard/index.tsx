@@ -6,6 +6,6 @@ import { DevicesSettings } from './DevicesSettings.js'
 import './dashboard.css'
 
 export default defineModule({
-  settings: [{ id: 'devices', order: 10, Section: DevicesSettings }],
+  settings: [{ id: 'devices', order: 10, Section: () => <DevicesSettings /> }],
   stylesheet: 'dashboard.css',
 })

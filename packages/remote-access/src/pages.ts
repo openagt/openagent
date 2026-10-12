@@ -31,12 +31,19 @@ ${script ? `<script nonce="${nonce}">${script}</script>` : ''}
 `
 }
 
-/** How to get in, in the words both pages use. */
-export const HOW_TO_GET_IN = 'On the computer that runs OpenAgent, open Settings, find Devices, press Add device, and scan the code with this device.'
+/**
+ * How to get in, in the words both pages use. A server has no screen of its own to press on:
+ * the code comes from the computer the server was connected from, or from a device that is in.
+ */
+export function howToGetIn(server: boolean): string {
+  return server
+    ? "This computer is a server. On the computer it was connected from, open OpenAgent's Settings, find Servers, press Add device on this server's row, and scan the code with this device. A device that is already in can also make a code: its Settings, Devices, Add device."
+    : 'On the computer that runs OpenAgent, open Settings, find Devices, press Add device, and scan the code with this device.'
+}
 
-/** What a device that is not in sees when it opens the door's address. */
-export function notInPage(): string {
-  return page('This device is not in', HOW_TO_GET_IN)
+/** What a device that is not in sees when it opens the door's address; `server` says the door is a server's. */
+export function notInPage(server: boolean): string {
+  return page('This device is not in', howToGetIn(server))
 }
 
 /**
@@ -45,7 +52,8 @@ export function notInPage(): string {
  * preview does that) spends nothing. What follows the code after a dot is for a computer that
  * pastes the link, not for a browser.
  */
-export function enterPage(path: string, nonce: string): string {
+export function enterPage(path: string, nonce: string, server: boolean): string {
+  const unreachable = server ? 'Check that this device is on the internet, then scan the code again.' : 'Check that this device is on the same Wi-Fi as the computer, then scan the code again.'
   const script = `
     const say = (title, text) => { document.getElementById('title').textContent = title; document.getElementById('text').textContent = text }
     const code = location.hash.slice(1).split('.')[0]
@@ -53,9 +61,9 @@ export function enterPage(path: string, nonce: string): string {
     fetch(${JSON.stringify(path)}, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) })
       .then(answer => {
         if (answer.ok) location.replace('/')
-        else say('This code no longer works', 'A code works once, for five minutes. ' + ${JSON.stringify(HOW_TO_GET_IN)})
+        else say('This code no longer works', 'A code works once, for five minutes. ' + ${JSON.stringify(howToGetIn(server))})
       })
-      .catch(() => say('The computer did not answer', 'Check that this device is on the same Wi-Fi as the computer, then scan the code again.'))
+      .catch(() => say('The computer did not answer', ${JSON.stringify(unreachable)}))
   `
   return page('Letting this device in…', 'One moment.', script, nonce)
 }

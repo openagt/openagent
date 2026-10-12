@@ -143,5 +143,9 @@ test('the server\'s door is asked for a link as the server\'s own user; only a l
   for (const url of ['https://evil.example/_remote-access/enter#code.pin', 'http://203.0.113.5/_remote-access/enter#code', 'https://203.0.113.5:8443/_remote-access/enter#code.pin', 'https://203.0.113.5.evil.example/x#code.pin', 'http://127.0.0.1:4200/_rpc/x#code']) {
     assert.deepEqual(await askLink(SERVER, { exec: pretendServer(() => ({ out: JSON.stringify({ url, expires: link.expires }) })).exec }), NOT_ITS_OWN, url)
   }
+  // Nor how long its link is or lasts: one too long to draw, or with a time that is none, is no link.
+  for (const answer of [{ url: `${link.url}${'x'.repeat(600)}`, expires: link.expires }, { url: link.url, expires: 'soon' }]) {
+    assert.deepEqual(await askLink(SERVER, { exec: pretendServer(() => ({ out: JSON.stringify(answer) })).exec }), NOT_ITS_OWN, answer.expires)
+  }
   assert.deepEqual(await askLink(SERVER, { exec: pretendServer(() => ({ code: 1, err: 'the door is not open' })).exec }), { ok: false, error: 'the door is not open' })
 })

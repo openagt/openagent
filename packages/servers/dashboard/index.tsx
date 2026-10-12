@@ -6,6 +6,6 @@ import { ServersSettings } from './ServersSettings.js'
 import './dashboard.css'
 
 export default defineModule({
-  settings: [{ id: 'servers', order: 20, Section: ServersSettings }],
+  settings: [{ id: 'servers', order: 20, Section: () => <ServersSettings /> }],
   stylesheet: 'dashboard.css',
 })

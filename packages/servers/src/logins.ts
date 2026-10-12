@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { exec as ownExec, lastLines, openSession, withAdvice, type Exec, type Said, type Session } from './ssh.js'
 import { LOGIN_TIMEOUT_MS, claudeLoginScript, claudeLogoutScript, githubLoginScript, githubLogoutScript, type LoginScript } from './steps.js'
-import { BEAT_MS, atWork, changeServer, isAccount, type Login, type LoginKind, type Server } from './store.js'
+import { BEAT_MS, atWork, changeServer, heartbeat, isAccount, type Login, type LoginKind, type Server } from './store.js'
 
 /**
  * The two logins a server works with, and how each gets there: over SSH, as the install's own
@@ -245,7 +245,7 @@ export async function changeLogin(opts: LoginOptions): Promise<void> {
     return { address: kept.address, user: kept.user }
   })
   if (!server) throw new Error(`no server at ${address}`)
-  const beating = setInterval(() => void changeServer(env, address, kept => void (mine(kept) && (kept[kind]!.worker = beat()))).catch(() => {}), opts.beatMs ?? BEAT_MS)
+  const beating = heartbeat(() => changeServer(env, address, kept => void (mine(kept) && (kept[kind]!.worker = beat()))), opts.beatMs ?? BEAT_MS)
   const failed = (error: string) => (kept: Server): void => void (kept[kind] = { ...known(kept[kind]), failed: error })
   let after: (kept: Server) => void = failed('The work stopped before it ended.')
   try {
@@ -264,7 +264,7 @@ export async function changeLogin(opts: LoginOptions): Promise<void> {
       after = given.ok ? kept => void (kept.claude = { since: new Date().toISOString() }) : failed(given.error)
     }
   } finally {
-    clearInterval(beating)
+    await beating.stop()
     // One that was started over is another process's by now: nothing of it is this one's to write.
     await changeServer(env, address, kept => void (mine(kept) && after(kept))).catch(() => {})
   }

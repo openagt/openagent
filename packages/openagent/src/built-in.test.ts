@@ -4,13 +4,13 @@ import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { BUILT_IN_PACKAGES, OWN_PACKAGE_NAMES, PICKED_PACKAGES, builtInBinDirs, builtInPackages, builtInPackagesOf, lookupProvided, providedCommand, runCleanups } from './built-in.js'
-import { readProjectModules } from './project-modules.js'
+import { BUILT_IN_PACKAGES, COMPUTER_PACKAGES, OWN_PACKAGE_NAMES, PICKED_PACKAGES, builtInBinDirs, builtInPackages, builtInPackagesOf, computerPackages, lookupProvided, providedCommand, runCleanups } from './built-in.js'
+import { readComputerModules, readProjectModules } from './project-modules.js'
 import { providedGitHost } from './store/git-host.js'
 
 test('every package OpenAgent brings is installed with it, and their commands have a directory each', async () => {
   assert.deepEqual((await builtInPackages()).map(pkg => pkg.name), [...OWN_PACKAGE_NAMES])
-  assert.deepEqual([...OWN_PACKAGE_NAMES], [...BUILT_IN_PACKAGES, ...PICKED_PACKAGES])
+  assert.deepEqual([...OWN_PACKAGE_NAMES], [...BUILT_IN_PACKAGES, ...COMPUTER_PACKAGES, ...PICKED_PACKAGES])
   const dirs = await builtInBinDirs()
   assert.ok(dirs.length > 0 && dirs.every(dir => basename(dir) === 'bin'), JSON.stringify(dirs))
 })
@@ -22,11 +22,17 @@ test('a project with nothing installed gets its runs, its branches and a reposit
     assert.equal((await providedCommand(root, 'branches'))?.package, '@openagt/skill-branches')
     assert.deepEqual(await lookupProvided(root, 'tickets'), {})
     assert.equal((await providedCommand(root, 'repository'))?.package, '@openagt/skill-github', 'the built-in package that can create its repository')
-    assert.deepEqual((await builtInPackagesOf(root)).map(pkg => pkg.name), [...BUILT_IN_PACKAGES], 'none of the packages a project picks')
-    assert.deepEqual((await readProjectModules(root)).map(module => module.package), ['@openagt/files', '@openagt/remote-access', '@openagt/servers', '@openagt/skill-logs'])
+    assert.deepEqual((await builtInPackagesOf(root)).map(pkg => pkg.name), [...BUILT_IN_PACKAGES], 'none of the packages a project picks, none of the computer\'s')
+    assert.deepEqual((await readProjectModules(root)).map(module => module.package), ['@openagt/files', '@openagt/skill-logs'])
   } finally {
     await rm(root, { recursive: true, force: true })
   }
+})
+
+test('the door and the servers are the computer\'s: their pages are there with no project, and no project has them', async () => {
+  assert.deepEqual((await computerPackages()).map(pkg => pkg.name), [...COMPUTER_PACKAGES])
+  assert.deepEqual((await readComputerModules()).map(module => module.package), ['@openagt/remote-access', '@openagt/servers'])
+  assert.deepEqual((await readComputerModules()).map(module => Object.keys(module.bins)), [['remote-access'], ['servers']])
 })
 
 /** A skill's text in a project, as init writes it: the folder named after the skill, with its `SKILL.md`. */
@@ -43,19 +49,19 @@ test('a project has a skill\'s package, its data and its page once it holds the 
     await skillText(root, '.agents/skills', 'tickets')
     assert.equal((await providedCommand(root, 'tickets'))?.package, '@openagt/skill-tickets')
     assert.deepEqual(await lookupProvided(root, 'queue'), {}, 'a skill the project does not hold stays out')
-    assert.deepEqual(await modules(), ['@openagt/files', '@openagt/remote-access', '@openagt/servers', '@openagt/skill-logs', '@openagt/skill-tickets'])
+    assert.deepEqual(await modules(), ['@openagt/files', '@openagt/skill-logs', '@openagt/skill-tickets'])
 
     await skillText(root, '.claude/skills', 'queue')
     await skillText(root, '.claude/skills', 'orchestration')
     assert.equal((await providedCommand(root, 'queue'))?.package, '@openagt/skill-queue')
-    assert.deepEqual(await modules(), ['@openagt/files', '@openagt/remote-access', '@openagt/servers', '@openagt/skill-logs', '@openagt/skill-orchestration', '@openagt/skill-queue', '@openagt/skill-tickets'])
+    assert.deepEqual(await modules(), ['@openagt/files', '@openagt/skill-logs', '@openagt/skill-orchestration', '@openagt/skill-queue', '@openagt/skill-tickets'])
 
     // A folder with no text in it, and a text under another name, are no skill of ours.
     await rm(join(root, '.agents/skills/tickets/SKILL.md'))
     await skillText(root, '.claude/skills', 'my-tickets')
     assert.deepEqual(await lookupProvided(root, 'tickets'), {})
     await rm(join(root, '.claude/skills/queue'), { recursive: true })
-    assert.deepEqual(await modules(), ['@openagt/files', '@openagt/remote-access', '@openagt/servers', '@openagt/skill-logs', '@openagt/skill-orchestration'])
+    assert.deepEqual(await modules(), ['@openagt/files', '@openagt/skill-logs', '@openagt/skill-orchestration'])
   } finally {
     await rm(root, { recursive: true, force: true })
   }

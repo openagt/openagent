@@ -43,7 +43,7 @@ const call = async (url: string, name: string, args: unknown[] = []): Promise<{ 
 const rawRequest = (url: string, hostHeader: string): Promise<string> =>
   new Promise((resolve, reject) => {
     const socket = connect(Number(new URL(url).port), '127.0.0.1', () => {
-      socket.write(`POST /_rpc/onProjects HTTP/1.1\r\n${hostHeader}\r\nContent-Length: 2\r\nConnection: close\r\n\r\n[]`)
+      socket.write(`POST /_rpc/onProjects HTTP/1.1\r\n${hostHeader}\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n[]`)
     })
     let seen = ''
     socket.setEncoding('utf8')
@@ -84,6 +84,33 @@ test('a call reaches its handler and comes back as JSON', async () => {
     assert.equal(status, 200)
     // The stub context refuses the start, which is the handler's own answer travelling back.
     assert.deepEqual(JSON.parse(body), { ret: { ok: false, error: 'not wired in this test' } })
+  } finally {
+    await server.close()
+  }
+})
+
+test('a call that is not sent as JSON is refused before its handler runs: what a page of another origin can send without asking', async () => {
+  let started = 0
+  const server = await mounted({ startAgent: async () => (started++, { ok: false, error: 'not wired in this test' }) })
+  try {
+    // The three kinds a browser sends across origins with no question asked, and no kind at all.
+    for (const type of ['text/plain', 'application/x-www-form-urlencoded', 'multipart/form-data; boundary=x', 'application/jsonp', undefined]) {
+      const res = await fetch(`${server.url}/_rpc/sendStart`, {
+        method: 'POST',
+        headers: { origin: 'http://localhost:3000', ...(type !== undefined ? { 'content-type': type } : {}) },
+        body: JSON.stringify(['p1', 'do a thing', 'build']),
+      })
+      assert.equal(res.status, 415, String(type))
+      assert.deepEqual(await res.json(), { error: 'a call is sent as application/json' })
+    }
+    assert.equal(started, 0)
+    const json = await fetch(`${server.url}/_rpc/sendStart`, { method: 'POST', headers: { 'content-type': 'Application/JSON; charset=utf-8' }, body: JSON.stringify(['p1', 'do a thing', 'build']) })
+    assert.equal(json.status, 200)
+    assert.equal(started, 1)
+    // The question a browser asks first is never answered with a yes.
+    const asked = await fetch(`${server.url}/_rpc/sendStart`, { method: 'OPTIONS', headers: { origin: 'http://localhost:3000', 'access-control-request-method': 'POST', 'access-control-request-headers': 'content-type' } })
+    assert.equal(asked.headers.get('access-control-allow-origin'), null)
+    assert.notEqual(asked.status, 200)
   } finally {
     await server.close()
   }

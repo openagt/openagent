@@ -10,6 +10,7 @@ export function hostAnswering(answer: (projectId: string, args: string[]) => Mod
     package: '@openagt/agent-scheduler',
     runCommand,
     act: runCommand,
+    runComputerCommand: vi.fn(async () => ({ ok: false as const, error: 'not the computer\'s' })),
     read: vi.fn(async () => ({ ok: false as const, error: 'no server part' })),
     openAgent: vi.fn(),
     openPage: vi.fn(),
