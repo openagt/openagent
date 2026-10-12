@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { exec as ownExec, lastLines, openSession, withAdvice, type Exec, type Said, type Session } from './ssh.js'
-import { LOGIN_TIMEOUT_MS, claudeLoginScript, claudeLogoutScript, githubLoginScript, githubLogoutScript, type LoginScript } from './steps.js'
-import { BEAT_MS, atWork, changeServer, heartbeat, isAccount, type Login, type LoginKind, type Server } from './store.js'
+import { GITHUB_CODE_TIMEOUT_MS, LOGIN_TIMEOUT_MS, claudeLoginScript, claudeLogoutScript, githubCodeScript, githubLoginScript, githubLogoutScript, githubWaitScript, type LoginScript } from './steps.js'
+import { BEAT_MS, atWork, changeServer, heartbeat, isAccount, isGithubCode, type Login, type LoginKind, type Server } from './store.js'
 
 /**
  * The two logins a server works with, and how each gets there: over SSH, as the install's own
@@ -49,8 +49,8 @@ export function scrubbed(text: string, login: string): string {
 type Sent = { ok: true; out: string } | Failed
 
 /** Run a login's script on the server. What comes back never holds the login. */
-async function send(session: Session, { as, script }: LoginScript, login = ''): Promise<Sent> {
-  const said = await session.run(as, script, LOGIN_TIMEOUT_MS)
+async function send(session: Session, { as, script }: LoginScript, login = '', timeoutMs = LOGIN_TIMEOUT_MS): Promise<Sent> {
+  const said = await session.run(as, script, timeoutMs)
   const clean = { out: scrubbed(said.out, login), err: scrubbed(said.err, login) }
   return said.code === 0 ? { ok: true, out: clean.out } : { ok: false, error: lastLines(clean) || 'The server did not answer.' }
 }
@@ -70,6 +70,27 @@ export async function giveGithub(session: Session, run: Exec = ownExec): Promise
   if (!sent.ok) return { ...sent, reached: true }
   const account = sent.out.trim().split('\n').at(-1)?.trim()
   return isAccount(account) ? { ok: true, account } : { ok: false, error: 'The server took the login and did not say whose it is.', reached: true }
+}
+
+/** What the server answers once its `gh` waits for a code: the process, the file it writes to, and the code. */
+const ASKING = /^(\d{1,10}) (\/[A-Za-z0-9._/-]{1,200}) (\S+)$/
+
+/**
+ * Have the server get a GitHub login of its own, on a line that is already open: the server asks
+ * GitHub, GitHub answers with a code, `show` puts the code before the person, and the server
+ * waits until the person has typed it at GitHub and said yes there. No login passes through this
+ * computer.
+ */
+export async function askGithub(session: Session, show: (code: string) => Promise<unknown>): Promise<GithubGiven> {
+  const asked = await send(session, githubCodeScript())
+  if (!asked.ok) return { ...asked, reached: true }
+  const [, pid, log, code] = ASKING.exec(asked.out.trim().split('\n').at(-1) ?? '') ?? []
+  if (pid === undefined || log === undefined || !isGithubCode(code)) return { ok: false, error: 'The server answered something else than a code from GitHub.', reached: true }
+  await show(code)
+  const sent = await send(session, githubWaitScript(pid, log), '', GITHUB_CODE_TIMEOUT_MS)
+  if (!sent.ok) return { ...sent, reached: true }
+  const account = sent.out.trim().split('\n').at(-1)?.trim()
+  return isAccount(account) ? { ok: true, account } : { ok: false, error: 'The server has a login and did not say whose it is.', reached: true }
 }
 
 /** What is known of a login beyond a try: since when it is there, and whose it is. */
@@ -191,6 +212,8 @@ export interface Job {
   kind: LoginKind
   /** Take the login off the server, where otherwise the server is given one. */
   remove: boolean
+  /** GitHub: the server gets a login of its own, with a code a person types at GitHub, where otherwise this computer's is copied. */
+  own?: boolean
 }
 
 export interface LoginOptions extends Job {
@@ -214,8 +237,8 @@ export class AlreadyAtWork extends Error {
 }
 
 /** Open a line to the server, meet it, and do `work` on it; a server that cannot be met is told with what to do about it. */
-async function onServer<T>(server: Pick<Server, 'address' | 'user'>, run: Exec | undefined, work: (session: Session) => Promise<T>): Promise<T | (Failed & { reached: false })> {
-  const session = await openSession(server, run ? { exec: run } : {})
+async function onServer<T>(server: Pick<Server, 'address' | 'user'>, run: Exec | undefined, work: (session: Session) => Promise<T>, signal?: AbortSignal): Promise<T | (Failed & { reached: false })> {
+  const session = await openSession(server, { ...(run ? { exec: run } : {}), ...(signal ? { signal } : {}) })
   try {
     const met = await session.meet()
     if (!met.ok) return { ok: false, error: withAdvice(server, met.said || 'The server did not answer.'), reached: false }
@@ -252,6 +275,11 @@ export async function changeLogin(opts: LoginOptions): Promise<void> {
     if (remove) {
       const gone = await onServer(server, opts.exec, session => send(session, kind === 'github' ? githubLogoutScript() : claudeLogoutScript()))
       after = gone.ok ? kept => void delete kept[kind] : failed(gone.error)
+    } else if (kind === 'github' && opts.own) {
+      // The wait for the person is cut when this process is told to stop: a second press asks the server anew.
+      const shown = (code: string) => changeServer(env, address, kept => void (mine(kept) && Object.assign(kept.github!, { asking: true, code })))
+      const given = await onServer(server, opts.exec, session => askGithub(session, shown), opts.signal)
+      after = kept => noteGithub(kept, given)
     } else if (kind === 'github') {
       const given = await onServer(server, opts.exec, session => giveGithub(session, opts.exec))
       after = kept => noteGithub(kept, given)

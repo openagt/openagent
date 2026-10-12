@@ -154,7 +154,7 @@ test('connect with "github" keeps the person\'s tick until the install copies th
     assert.deepEqual(ticked.logins, { github: { there: false, working: true, wanted: true }, claude: NONE })
     assert.deepEqual((await readStore(home.env)).servers[0]!.github, { wanted: true })
 
-    const { exec } = pretendServer(call => (call.script.includes('gh auth login') ? { out: 'octocat\n' } : undefined))
+    const { exec } = pretendServer(call => (call.script.includes('--with-token') ? { out: 'octocat\n' } : undefined))
     assert.equal((await run(home.env, ['work', '203.0.113.5', '1.2.3'], { exec, signal: new AbortController().signal })).code, 0)
     const [copied] = serversOf(await run(home.env, ['status']))
     assert.equal(copied!.logins.github.there, true)
@@ -234,7 +234,7 @@ test('login and logout start a process of their own, which tells the server; not
 
     // The process itself: this one stands in for it, as the command that started it left it.
     await update(home.env, store => void (store.servers[0]!.github!.worker = { pid: process.pid, seen: new Date().toISOString() }))
-    const { exec, calls } = pretendServer(call => (call.script.includes('gh auth login') ? { out: 'octocat\n' } : undefined))
+    const { exec, calls } = pretendServer(call => (call.script.includes('--with-token') ? { out: 'octocat\n' } : undefined))
     assert.equal((await run(home.env, ['login-work', '203.0.113.5', 'github'], { exec, signal: new AbortController().signal })).code, 0)
     assert.equal(calls.length, 2)
     const copied = serversOf(await run(home.env, ['status']))[0]!.logins.github
@@ -254,6 +254,46 @@ test('login and logout start a process of their own, which tells the server; not
     assert.deepEqual(serversOf(await run(home.env, ['status']))[0]!.logins.github, NONE)
   } finally {
     other.kill()
+    await home.remove()
+  }
+})
+
+test('login github own has the server get a login of its own: status tells the code while the server waits, and a second press starts over; own is for a GitHub login alone', async () => {
+  const home = await testHome()
+  const { spawn } = await import('node:child_process')
+  const first = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'])
+  try {
+    await run(home.env, ['connect', '203.0.113.5', 'root', '1.2.3'])
+    await update(home.env, store => void delete store.servers[0]!.worker)
+    for (const args of [['login', '203.0.113.5', 'claude', 'own'], ['logout', '203.0.113.5', 'github', 'own'], ['login', '203.0.113.5', 'github', 'mine'], ['login-work', '203.0.113.5', 'claude', 'own'], ['logout-work', '203.0.113.5', 'github', 'own']]) {
+      assert.equal((await run(home.env, args)).code, 2, args.join(' '))
+    }
+
+    const started: string[][] = []
+    const asked = serversOf(await run(home.env, ['login', '203.0.113.5', 'github', 'own'], { startWork: words => (started.push(words), first.pid!) }))[0]!
+    assert.deepEqual(started, [['login-work', '203.0.113.5', 'github', 'own']])
+    assert.deepEqual(asked.logins.github, { there: false, working: true })
+    // Not yet waiting for the person: a second press is refused, as for a copy.
+    assert.deepEqual((await run(home.env, ['login', '203.0.113.5', 'github', 'own'])).err, ['The GitHub login of 203.0.113.5 is being changed right now'])
+
+    // The server waits for the code to be typed: status tells it, and a second press ends the first and asks anew.
+    await update(home.env, store => void Object.assign(store.servers[0]!.github!, { asking: true, code: 'ABCD-1234' }))
+    assert.deepEqual(serversOf(await run(home.env, ['status']))[0]!.logins.github, { there: false, working: true, asking: true, code: 'ABCD-1234' })
+    const ended = new Promise(resolve => first.once('exit', resolve))
+    const again = serversOf(await run(home.env, ['login', '203.0.113.5', 'github', 'own'], { startWork: words => (started.push(words), process.pid) }))[0]!
+    await ended
+    assert.equal(started.length, 2)
+    // The old code is no longer told: it is the first press's.
+    assert.deepEqual(again.logins.github, { there: false, working: true })
+
+    // The process itself, as the command that started it left it.
+    const { exec, calls } = pretendServer(call => (call.script.includes('nohup setsid gh') ? { out: '4242 /home/openagent/.cache/openagent-github-login.aB3dE9 WXYZ-9876\n' } : call.script.includes('while asking "$PID"') ? { out: 'octocat\n' } : undefined))
+    assert.equal((await run(home.env, ['login-work', '203.0.113.5', 'github', 'own'], { exec, signal: new AbortController().signal })).code, 0)
+    assert.equal(calls.filter(call => call.remote !== 'true').length, 2)
+    const given = serversOf(await run(home.env, ['status']))[0]!.logins.github
+    assert.deepEqual([given.there, given.working, given.account, given.asking, given.code], [true, false, 'octocat', undefined, undefined])
+  } finally {
+    first.kill()
     await home.remove()
   }
 })

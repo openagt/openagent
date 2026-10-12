@@ -31,7 +31,7 @@ export function ProjectSelect({
   onScope: (projectId: string | null) => void
   onProjectAdded?: (() => void) | undefined
 }) {
-  const [adding, setAdding] = useState(false)
+  const [adding, setAdding] = useState<'folder' | 'address' | null>(null)
   const selected = scope === null ? undefined : projects.find(p => p.id === scope)
   return (
     <>
@@ -73,13 +73,17 @@ export function ProjectSelect({
             </DropdownMenuItem>
           ))}
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => setAdding(true)} className="text-muted-foreground">
+          <DropdownMenuItem onClick={() => setAdding('folder')} className="text-muted-foreground">
             <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
             <span>Add project</span>
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setAdding('address')} className="text-muted-foreground">
+            <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span>Add from a GitHub address</span>
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      {adding && <AddProjectPanel onAdded={() => onProjectAdded?.()} onClose={() => setAdding(false)} />}
+      {adding && <AddProjectPanel fromAddress={adding === 'address'} onAdded={() => onProjectAdded?.()} onClose={() => setAdding(null)} />}
     </>
   )
 }

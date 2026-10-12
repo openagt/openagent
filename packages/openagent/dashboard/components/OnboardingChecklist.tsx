@@ -68,8 +68,8 @@ export function OnboardingChecklist({
   const permission = useNotificationPermission()
   const { start, busy: starting, error: startError } = useStartAgent()
 
-  // The Add dialog: open with the folder the dashboard runs in, open to pick one, or closed.
-  const [addingProject, setAddingProject] = useState<{ folder?: string } | null>(null)
+  // The Add dialog: open with the folder the dashboard runs in, open to pick one, open to take a repository's address, or closed.
+  const [addingProject, setAddingProject] = useState<{ folder?: string; fromAddress?: boolean } | null>(null)
 
   // The project onboarding acts on: the one this server runs in when it is registered, else the
   // only/most recent one. Onboarding is a first-agent flow, so there is rarely a second candidate.
@@ -113,8 +113,14 @@ export function OnboardingChecklist({
               {`Add ${here} as project…`}
             </Button>
           )}
-          <Button size="sm" variant="outline" onClick={() => setAddingProject({})}>
-            Select &amp; add project directory
+          {/* Not on a computer with no screen: the folder dialog has nowhere to open. */}
+          {suggestion?.canPickFolder !== false && (
+            <Button size="sm" variant="outline" onClick={() => setAddingProject({})}>
+              Select &amp; add project directory
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={() => setAddingProject({ fromAddress: true })}>
+            Add from a GitHub address
           </Button>
         </div>
       ),
@@ -242,6 +248,7 @@ export function OnboardingChecklist({
       {addingProject && (
         <AddProjectPanel
           folder={addingProject.folder}
+          fromAddress={addingProject.fromAddress === true}
           onAdded={() => {
             void reload()
             reloadSuggestion()

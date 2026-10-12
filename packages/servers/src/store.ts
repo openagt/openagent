@@ -49,8 +49,10 @@ export interface Login {
   failed?: string
   /** The process that changes the login right now, and when it last said it still does. */
   worker?: Worker
-  /** Claude: that process waits for the person's yes in the browser, and has sent nothing yet. */
+  /** That process waits for the person: for a yes in this computer's browser (Claude), or for a code typed at GitHub. */
   asking?: boolean
+  /** GitHub: the code the person types at github.com/login/device while the server waits for it. It is no login: it says which waiting server a person's yes is for. */
+  code?: string
 }
 
 export interface Server {
@@ -107,6 +109,9 @@ export const isUser = (said: unknown): said is string => typeof said === 'string
 
 /** Whether `said` is a version npm keeps a package under. */
 export const isVersion = (said: unknown): said is string => typeof said === 'string' && said.length <= 64 && /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(said)
+
+/** Whether `said` reads as the code GitHub gives a device to show: two groups of four. */
+export const isGithubCode = (said: unknown): said is string => typeof said === 'string' && /^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(said)
 
 /** How often the install's process says it still works, and after how long of silence it is taken for gone. */
 export const BEAT_MS = 10_000
@@ -168,7 +173,7 @@ function readWorker(value: unknown): { worker: Worker } | undefined {
 
 function readLogin(value: unknown): Login | undefined {
   if (!value || typeof value !== 'object') return undefined
-  const { since, account, wanted, failed, worker, asking } = value as Record<string, unknown>
+  const { since, account, wanted, failed, worker, asking, code } = value as Record<string, unknown>
   const login: Login = {
     ...(typeof since === 'string' && !Number.isNaN(Date.parse(since)) ? { since } : {}),
     ...(isAccount(account) ? { account } : {}),
@@ -176,6 +181,7 @@ function readLogin(value: unknown): Login | undefined {
     ...(typeof failed === 'string' && failed ? { failed: failed.slice(-MAX_SAID) } : {}),
     ...(readWorker(worker) ?? {}),
     ...(asking === true ? { asking } : {}),
+    ...(isGithubCode(code) ? { code } : {}),
   }
   return Object.keys(login).length ? login : undefined
 }

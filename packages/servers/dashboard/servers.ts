@@ -23,8 +23,10 @@ export interface LoginRow {
   there: boolean
   /** It is being changed right now, or the install copies it at its end. */
   working: boolean
-  /** Claude: this computer's browser waits for the person's yes, and nothing was sent yet. */
+  /** The change waits for the person: for a yes in this computer's browser (Claude), or for a code typed at GitHub. */
   asking?: boolean
+  /** GitHub: the code the person types at github.com/login/device while the server waits for it. */
+  code?: string
   /** GitHub: the person asked for a copy, and it was not made yet. */
   wanted?: boolean
   /** GitHub: whose it is. */
@@ -62,9 +64,9 @@ const text = (value: unknown): string | undefined => (typeof value === 'string' 
 const STATES: readonly string[] = ['waiting', 'running', 'done', 'failed']
 
 function readLogin(value: unknown): LoginRow {
-  const { there, working, asking, wanted, account, since, ends, said } = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
-  const [who, from, until, words] = [text(account), text(since), text(ends), text(said)]
-  return { there: there === true, working: working === true, ...(asking === true ? { asking: true } : {}), ...(wanted === true ? { wanted: true } : {}), ...(who ? { account: who } : {}), ...(from ? { since: from } : {}), ...(until ? { ends: until } : {}), ...(words ? { said: words } : {}) }
+  const { there, working, asking, code, wanted, account, since, ends, said } = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
+  const [who, from, until, words, typedAtGithub] = [text(account), text(since), text(ends), text(said), text(code)]
+  return { there: there === true, working: working === true, ...(asking === true ? { asking: true, ...(typedAtGithub ? { code: typedAtGithub } : {}) } : {}), ...(wanted === true ? { wanted: true } : {}), ...(who ? { account: who } : {}), ...(from ? { since: from } : {}), ...(until ? { ends: until } : {}), ...(words ? { said: words } : {}) }
 }
 
 export function readServers(output: unknown): ServerRow[] | undefined {
@@ -122,8 +124,12 @@ function readOwn(output: unknown): OwnGithub | undefined {
 }
 
 export const ownGithub = (host: ModuleHost): Promise<Answer<OwnGithub>> => run(host, ['github'], readOwn)
-/** Give the server a login: GitHub's is this computer's own, copied; Claude's is made new, once the person said yes in this computer's browser. */
-export const login = (host: ModuleHost, address: string, kind: LoginKind): Promise<Answer<ServerRow[]>> => run(host, ['login', address, kind], readServers)
+/**
+ * Give the server a login: GitHub's is this computer's own, copied, or with `own` one the server
+ * gets for itself, with a code the person types at GitHub; Claude's is made new, once the person
+ * said yes in this computer's browser.
+ */
+export const login = (host: ModuleHost, address: string, kind: LoginKind, own = false): Promise<Answer<ServerRow[]>> => run(host, ['login', address, kind, ...(own ? ['own'] : [])], readServers)
 /** Take a login off the server. */
 export const logout = (host: ModuleHost, address: string, kind: LoginKind): Promise<Answer<ServerRow[]>> => run(host, ['logout', address, kind], readServers)
 export const askLink = (host: ModuleHost, address: string): Promise<Answer<DoorLink>> => run(host, ['link', address], readLink)

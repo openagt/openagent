@@ -28,8 +28,10 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The install brings git, gh, Node, Chrome and the coding agent.
 
 ## The server's logins
-- The GitHub login is this computer's own, copied to the server when the person ticks it.
-  Picked over a login of the server's own.
+- The GitHub login is this computer's own, copied to the server when the person ticks it,
+  or one the server gets for itself with a "Log in to GitHub" button. Picked over the copy
+  alone, which gave a server no login when this computer has none; and over the button
+  alone, one more step at every install.
 - A ticked login is copied at the install's end, to a server met for the first time too.
   Picked over waiting until the person has looked at the server's key.
 - The Claude login is made new for the server by one press on this computer, with

@@ -10,7 +10,7 @@ const onOnboarding = vi.hoisted(() => vi.fn())
 const sendAddProject = vi.hoisted(() => vi.fn())
 const sendPickProjectDirectory = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/reads.js', () => ({ onDashboard }))
-vi.mock('../rpc/projects.js', () => ({ onOnboarding, sendAddProject, sendPickProjectDirectory }))
+vi.mock('../rpc/projects.js', () => ({ onOnboarding, sendAddProject, sendPickProjectDirectory, onCloneTarget: vi.fn(), sendAddProjectFromAddress: vi.fn() }))
 vi.mock('../lib/preferences.js', () => ({
   usePreferences: () => ({}),
   updatePreferences: vi.fn(),
@@ -201,5 +201,24 @@ describe('the tickets import lands on the session it starts (#1169)', () => {
     render(<OnboardingChecklist onAgentStarted={vi.fn()} onSelectProject={vi.fn()} />)
     await waitFor(() => expect(screen.getByText('Add a project')).toBeTruthy())
     expect(screen.queryByRole('button', { name: 'Update tickets' })).toBeNull()
+  })
+
+  test('the project step offers the folder dialog only on a computer that has a screen, and a repository\u2019s address on every one', async () => {
+    onDashboard.mockResolvedValue(EMPTY)
+    onOnboarding.mockResolvedValue({ cwd: null, cwdProjectId: null, canPickFolder: false })
+    const { unmount } = render(<OnboardingChecklist onAgentStarted={vi.fn()} onSelectProject={() => {}} />)
+    const byAddress = await screen.findByRole('button', { name: 'Add from a GitHub address' })
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Select & add project directory' })).toBeNull())
+    expect(screen.queryByRole('button', { name: /as project…$/ })).toBeNull()
+    fireEvent.click(byAddress)
+    expect(screen.getByRole('dialog', { name: 'Add project' }).textContent).toContain('Add project from a GitHub address')
+    expect(sendPickProjectDirectory).not.toHaveBeenCalled()
+    unmount()
+
+    onOnboarding.mockResolvedValue({ cwd: '/Users/dev/app', cwdProjectId: null, canPickFolder: true })
+    render(<OnboardingChecklist onAgentStarted={vi.fn()} onSelectProject={() => {}} />)
+    expect(await screen.findByRole('button', { name: 'Add /Users/dev/app as project…' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Select & add project directory' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add from a GitHub address' })).toBeTruthy()
   })
 })

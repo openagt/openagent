@@ -26,13 +26,17 @@ export const USAGE = `usage: servers <command>
   github                               the GitHub account gh is logged in to on this computer: whose login a copy would be,
                                        or why there is none to copy
   login <address> github               copy this computer's GitHub login to the server, over SSH
+  login <address> github own           have the server get a GitHub login of its own: GitHub gives a code, status tells
+                                       it, and you type it at github.com/login/device; run again while it waits, it
+                                       asks anew
   login <address> claude               make a Claude login for the server: this computer's browser asks you once, the
                                        login lasts a year and goes to the server over SSH; this computer's own Claude
                                        login is never read; run again while the browser waits, it asks anew
   logout <address> github|claude       delete that login on the server; the login itself is not ended by this
   forget <address>                     take the server off this list; nothing is changed on the server
   work <address> <version>             the install's own process, started by connect
-  login-work <address> github|claude   the process that gives the server a login, started by login
+  login-work <address> github|claude [own]
+                                       the process that gives the server a login, started by login
   logout-work <address> github|claude  the process that takes a login off the server, started by logout`
 
 export interface CliIO {
@@ -57,8 +61,10 @@ export interface LoginStatus {
   there: boolean
   /** It is being changed right now, or the install copies it at its end. */
   working: boolean
-  /** Claude: this computer's browser waits for the person's yes, and nothing was sent yet. */
+  /** The change waits for the person: for a yes in this computer's browser (Claude), or for a code typed at GitHub. */
   asking?: boolean
+  /** GitHub: the code the person types at github.com/login/device. */
+  code?: string
   /** GitHub: the person asked for a copy, and it was not made yet. */
   wanted?: boolean
   /** GitHub: the account, as the server's own gh answered. */
@@ -99,7 +105,7 @@ function loginOf(kind: LoginKind, login: Login | undefined, installing: boolean)
   return {
     there,
     working: atWork(login?.worker) || (login?.wanted === true && installing),
-    ...(login?.asking && atWork(login.worker) ? { asking: true } : {}),
+    ...(login?.asking && atWork(login.worker) ? { asking: true, ...(login.code ? { code: login.code } : {}) } : {}),
     ...(login?.wanted ? { wanted: true } : {}),
     ...(login?.account ? { account: login.account } : {}),
     ...(there ? { since: login!.since! } : {}),
@@ -197,11 +203,11 @@ const changing = (server: Server): boolean => LOGIN_KINDS.some(kind => atWork(se
 
 /**
  * Start the process that changes one login of a server: gives it one, or takes it off. A login
- * that is being changed is not changed a second time, with one exception: a Claude login that
+ * that is being changed is not changed a second time, with one exception: a login that
  * still waits for the person is ended and asked for anew, since a second press is the person
- * starting over, with a browser page that was closed.
+ * starting over, with a browser page that was closed or a code that ran out.
  */
-async function changeLoginOf(io: CliIO, said: string, kind: LoginKind, remove: boolean): Promise<Status> {
+async function changeLoginOf(io: CliIO, said: string, kind: LoginKind, remove: boolean, own = false): Promise<Status> {
   const { address } = await still(io, said)
   const before = await update(io.env, store => {
     const server = store.servers.find(candidate => candidate.address === address)!
@@ -220,7 +226,7 @@ async function changeLoginOf(io: CliIO, said: string, kind: LoginKind, remove: b
   }
   let worker: number | undefined
   try {
-    worker = (io.startWork ?? (words => startWork(words, io.env)))([remove ? 'logout-work' : 'login-work', address, kind])
+    worker = (io.startWork ?? (words => startWork(words, io.env)))([remove ? 'logout-work' : 'login-work', address, kind, ...(own ? ['own'] : [])])
   } finally {
     await update(io.env, store => {
       const login = store.servers.find(candidate => candidate.address === address)?.[kind]
@@ -292,9 +298,11 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
       }
       case 'login':
       case 'logout': {
-        const [address, kind] = rest
-        if (rest.length !== 2 || !address || !isKind(kind)) break
-        return print(await changeLoginOf(io, address, kind, command === 'logout'))
+        const [address, kind, own] = rest
+        // `own` is for a GitHub login alone, and only when one is given.
+        const ownLogin = command === 'login' && kind === 'github' && own === 'own'
+        if (rest.length !== (ownLogin ? 3 : 2) || !address || !isKind(kind)) break
+        return print(await changeLoginOf(io, address, kind, command === 'logout', ownLogin))
       }
       case 'forget': {
         const [address] = rest
@@ -318,10 +326,11 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
       }
       case 'login-work':
       case 'logout-work': {
-        const [address, kind] = rest
-        if (rest.length !== 2 || !address || !isKind(kind)) break
+        const [address, kind, own] = rest
+        const ownLogin = command === 'login-work' && kind === 'github' && own === 'own'
+        if (rest.length !== (ownLogin ? 3 : 2) || !address || !isKind(kind)) break
         const { address: at } = await saved(io, address)
-        await untilStopped(io, signal => changeLogin({ ...over, address: at, kind, remove: command === 'logout-work', signal, ...(io.mint ? { mint: io.mint } : {}) }))
+        await untilStopped(io, signal => changeLogin({ ...over, address: at, kind, remove: command === 'logout-work', own: ownLogin, signal, ...(io.mint ? { mint: io.mint } : {}) }))
         return 0
       }
       default:

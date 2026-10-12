@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { sendAddProject, sendPickProjectDirectory } from '../rpc/projects.js'
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { onCloneTarget, sendAddProject, sendAddProjectFromAddress, sendPickProjectDirectory } from '../rpc/projects.js'
 import { useAction } from '../lib/use-action.js'
 import { AddProjectEffects } from './AddProjectEffects.js'
 import { Button } from './ui/button.js'
@@ -14,14 +14,35 @@ import { Button } from './ui/button.js'
 // is what is picked until they pick the other, or shared to the repository's remote. Nothing is
 // pushed for a project added with the first.
 //
+// The second way in is the repository's address, for a computer that does not have the folder: a
+// server has no screen for a folder dialog and no folder to pick. The person types the address,
+// sees where the project will be cloned to, confirms the same trust question, and only then is
+// anything cloned. A computer whose folder dialog cannot open offers this way in its place.
+//
 // It behaves like the dialog it claims to be (#948): Esc closes, Tab stays inside, focus
 // returns to the opener on close.
-export function AddProjectPanel({ folder, onAdded, onClose }: { folder?: string | undefined; onAdded: () => void; onClose: () => void }) {
+export function AddProjectPanel({
+  folder,
+  fromAddress = false,
+  onAdded,
+  onClose,
+}: {
+  folder?: string | undefined
+  /** Opened to add a project by its repository's address: no folder dialog. */
+  fromAddress?: boolean
+  onAdded: () => void
+  onClose: () => void
+}) {
   // The picked path, once the system dialog answered; the phases are picking (no path yet),
   // confirming trust (path, not added), and done (added set).
   const [path, setPath] = useState<string | null>(folder ?? null)
+  // The other way: by address. `typed` is what the field holds; `target` is that address once
+  // OpenAgent has said where it would clone it to, which is what the trust question shows.
+  const [byAddress, setByAddress] = useState(fromAddress)
+  const [typed, setTyped] = useState('')
+  const [target, setTarget] = useState<{ typed: string; address: string; path: string } | null>(null)
   const [share, setShare] = useState(false)
-  const [added, setAdded] = useState<{ alreadyActivated: boolean; noRemote: boolean } | null>(null)
+  const [added, setAdded] = useState<{ alreadyActivated: boolean; noRemote: boolean; path?: string } | null>(null)
   const [pickError, setPickError] = useState<string | null>(null)
   const { busy, error, reset, run } = useAction()
   const panelRef = useRef<HTMLDivElement>(null)
@@ -50,24 +71,34 @@ export function AddProjectPanel({ folder, onAdded, onClose }: { folder?: string 
     setPath(picked.path)
   }
   useEffect(() => {
-    if (!folder) void pick()
+    if (!folder && !fromAddress) void pick()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Auto-close a beat after success; Done closes sooner.
   useEffect(() => {
     if (!added) return
-    const timer = setTimeout(onClose, added.noRemote ? 6000 : 2500)
+    // Longer when there is something to read: where a cloned project went.
+    const timer = setTimeout(onClose, added.noRemote || added.path ? 6000 : 2500)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [added])
 
-  // Trust confirmed (#439) -> install + register.
+  // The address as typed -> where it would be cloned to, or why it is no address. Nothing is cloned yet.
+  const readAddress = async (event: FormEvent) => {
+    event.preventDefault()
+    const address = typed.trim()
+    if (busy || !address) return
+    const outcome = await run(() => onCloneTarget(address), 'Could not reach the daemon.')
+    if (outcome.ok) setTarget({ typed: address, address: outcome.value.address, path: outcome.value.path })
+  }
+
+  // Trust confirmed (#439) -> install + register; by address, clone first.
   const confirmAdd = async () => {
-    if (busy || !path) return
-    const outcome = await run(() => sendAddProject(path, share), 'Failed to add the project.')
+    if (busy || (!path && !target)) return
+    const outcome = await run(() => (target ? sendAddProjectFromAddress(target.typed, share) : sendAddProject(path!, share)), 'Failed to add the project.')
     if (outcome.ok) {
-      setAdded({ alreadyActivated: outcome.value.alreadyActivated, noRemote: outcome.value.noRemote === true })
+      setAdded({ alreadyActivated: outcome.value.alreadyActivated, noRemote: outcome.value.noRemote === true, ...(outcome.value.path ? { path: outcome.value.path } : {}) })
       onAdded()
     }
   }
@@ -113,32 +144,76 @@ export function AddProjectPanel({ folder, onAdded, onClose }: { folder?: string 
             </p>
             {/* Sharing was picked and there is nothing to share with: said, not dropped. */}
             {added.noRemote && <p className="mb-3 text-xs text-muted-foreground">This repository has no remote, so the agents&rsquo; records stay on this machine.</p>}
+            {added.path && (
+              <p className="mb-3 break-all text-xs text-muted-foreground">
+                It is in <code className="rounded bg-muted px-1">{added.path}</code>.
+              </p>
+            )}
             <div className="flex justify-end">
               <Button type="button" size="sm" autoFocus onClick={onClose}>
                 Done
               </Button>
             </div>
           </>
+        ) : byAddress && !target ? (
+          <form onSubmit={event => void readAddress(event)}>
+            <p className="mb-2 text-sm font-medium">Add project from a GitHub address</p>
+            {/* Why the person is here when they asked for the folder dialog. */}
+            {pickError && <p className="mb-2 text-xs text-muted-foreground">{pickError}</p>}
+            <label className="mb-1 block text-xs text-muted-foreground" htmlFor="add-project-address">
+              The repository&rsquo;s address. Any git host works.
+            </label>
+            <input
+              id="add-project-address"
+              autoFocus
+              value={typed}
+              disabled={busy}
+              onChange={event => setTyped(event.target.value)}
+              placeholder="github.com/you/project"
+              spellCheck={false}
+              autoCapitalize="none"
+              autoCorrect="off"
+              className="mb-2 w-full rounded-md border border-border bg-background px-2 py-1 font-mono text-xs"
+            />
+            <p className="mb-3 text-xs text-muted-foreground">It is cloned into the projects folder of this computer, with the logins this computer has.</p>
+            {error && <p className="mb-2 text-xs text-danger">{error}</p>}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="submit" size="sm" disabled={busy || !typed.trim()}>
+                Next
+              </Button>
+            </div>
+          </form>
         ) : pickError ? (
           <>
             <p className="mb-2 text-sm font-medium">Add project</p>
             <p className="mb-3 text-xs text-danger">{pickError}</p>
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               <Button type="button" variant="ghost" size="sm" onClick={onClose}>
                 Cancel
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setByAddress(true)}>
+                Add from a GitHub address
               </Button>
               <Button type="button" size="sm" onClick={() => void pick()}>
                 Try again
               </Button>
             </div>
           </>
-        ) : path ? (
+        ) : path || target ? (
           // The trust confirmation (#439): a plain-language prompt-injection warning before adding.
           <>
             <p className="mb-2 text-sm font-medium">Do you trust this repository?</p>
             <p className="mb-2 break-all text-xs text-muted-foreground">
-              <code className="rounded bg-muted px-1">{path}</code>
+              <code className="rounded bg-muted px-1">{target ? target.address : path}</code>
             </p>
+            {target && (
+              <p className="mb-2 break-all text-xs text-muted-foreground">
+                It will be cloned to <code className="rounded bg-muted px-1">{target.path}</code>.
+              </p>
+            )}
             <p className="mb-3 text-xs text-muted-foreground">
               Adding it lets the agent read its files. Hidden instructions in an untrusted repo can hijack the agent
               (prompt injection), so only add repos you trust.
@@ -168,11 +243,22 @@ export function AddProjectPanel({ folder, onAdded, onClose }: { folder?: string 
             </fieldset>
             {error && <p className="mb-2 text-xs text-danger">{error}</p>}
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => (folder ? onClose() : void pick())}>
-                {folder ? 'Cancel' : 'Choose again'}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() => {
+                  reset()
+                  if (target) setTarget(null)
+                  else if (folder) onClose()
+                  else void pick()
+                }}
+              >
+                {target ? 'Change the address' : folder ? 'Cancel' : 'Choose again'}
               </Button>
               <Button type="button" size="sm" autoFocus disabled={busy} onClick={() => void confirmAdd()}>
-                {busy ? 'Adding…' : 'I trust it, add it'}
+                {busy ? (target ? 'Cloning…' : 'Adding…') : target ? 'I trust it, clone and add it' : 'I trust it, add it'}
               </Button>
             </div>
           </>

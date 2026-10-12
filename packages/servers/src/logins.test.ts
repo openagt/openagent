@@ -7,7 +7,7 @@ import { basename, dirname, join } from 'node:path'
 import { install } from './install.js'
 import { AlreadyAtWork, changeLogin, mintClaude, mintedIn, notMinted, scrubbed, startedAs, type LoginOptions, type Mint } from './logins.js'
 import type { Exec } from './ssh.js'
-import { CLAUDE_FILE, SERVICE_UNIT, STEPS, claudeLoginScript, claudeLogoutScript, githubLoginScript, githubLogoutScript } from './steps.js'
+import { CLAUDE_FILE, SERVICE_UNIT, STEPS, claudeLoginScript, claudeLogoutScript, githubCodeScript, githubLoginScript, githubLogoutScript, githubWaitScript } from './steps.js'
 import { freshSteps, readStore, storePath, update, type LoginKind } from './store.js'
 import { GH_LOGIN, pretendServer, testHome } from './test-home.js'
 
@@ -41,12 +41,12 @@ async function program(path: string, text: string): Promise<void> {
 }
 
 test('every login script is one a shell reads, runs as who it should, and holds the login as one word of its own', async () => {
-  const scripts = [githubLoginScript(GH_LOGIN), githubLogoutScript(), claudeLoginScript(CLAUDE_LOGIN), claudeLogoutScript()]
+  const scripts = [githubLoginScript(GH_LOGIN), githubLogoutScript(), claudeLoginScript(CLAUDE_LOGIN), claudeLogoutScript(), githubCodeScript(), githubWaitScript('4242', '/home/openagent/.cache/openagent-github-login.aB3dE9')]
   for (const { script } of scripts) {
     await new Promise<void>((resolve, reject) => execFile('bash', ['-n', '-c', script], error => (error ? reject(error) : resolve())))
     assert.match(script, /\nmain <\/dev\/null\n$/)
   }
-  assert.deepEqual(scripts.map(({ as }) => as), ['openagent', 'openagent', 'root', 'root'])
+  assert.deepEqual(scripts.map(({ as }) => as), ['openagent', 'openagent', 'root', 'root', 'openagent', 'openagent'])
   // A word of the script, not one given on to the programs the script starts.
   assert.match(scripts[0]!.script, new RegExp(`^LOGIN='${GH_LOGIN}'$`, 'm'))
   assert.match(scripts[2]!.script, new RegExp(`^LOGIN='${CLAUDE_LOGIN}'$`, 'm'))
@@ -521,6 +521,205 @@ test('once the server is being told it is told to the end: stopping only ends th
     await give(home.env, 'claude', { exec, mint: async () => ({ ok: true, login: CLAUDE_LOGIN }), signal: stop.signal })
     assert.equal(stop.signal.aborted, true)
     assert.deepEqual(Object.keys((await serverOf(home.env)).claude!), ['since'])
+  } finally {
+    await home.remove()
+  }
+})
+
+test('a GitHub login of the server\'s own: the server\'s gh asks GitHub and is left waiting, the code is answered, and the wait ends with whose login it is; no yes, no login', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'servers-gh-own-'))
+  try {
+    await mkdir(join(home, '.local', 'bin'), { recursive: true })
+    await mkdir(join(home, '.config', 'gh'), { recursive: true })
+    const kept = join(home, '.config', 'gh', 'hosts.yml')
+    await writeFile(kept, 'a login copied before\n')
+    // A gh that says what the real one says with no terminal (2.93, read off its own output), then waits for the yes.
+    await program(
+      join(home, '.local', 'bin', 'gh'),
+      `#!/bin/bash
+echo "args: $*" >> "$HOME/gh.log"
+if [ "$1 $2" = "auth login" ] && [ "$7" = "--with-token" ]; then cat > /dev/null; echo "copied" > "$HOME/.config/gh/hosts.yml"; exit 0; fi
+if [ "$1 $2" = "auth login" ]; then
+  [ -e "$HOME/.config/gh/hosts.yml" ] && echo "old login still there" >> "$HOME/gh.log"
+  [ -e "$HOME/no-code" ] && { echo "error connecting to github.com" >&2; exit 1; }
+  printf '\\n! First copy your one-time code: %s\\nOpen this URL to continue in your web browser: https://github.com/login/device\\n' "$(cat "$HOME/code")" >&2
+  for _ in $(seq 1 100); do
+    [ -e "$HOME/yes" ] && { echo "kept by gh" > "$HOME/.config/gh/hosts.yml"; exit 0; }
+    [ -e "$HOME/no" ] && { echo "error: the code was refused" >&2; exit 1; }
+    sleep 0.1
+  done
+  exit 1
+fi
+[ "$1" = api ] && { [ -e "$HOME/.config/gh/hosts.yml" ] || exit 1; echo octocat; }
+exit 0
+`,
+    )
+    // A Mac has no setsid: the server's does what this one does, in a session of its own.
+    await program(join(home, '.local', 'bin', 'setsid'), '#!/bin/bash\nexec "$@"\n')
+    const env = { HOME: home, PATH: process.env.PATH, GH_TOKEN: 'ghp_someoneElses' }
+    const alive = (pid: string): boolean => {
+      try {
+        return process.kill(Number(pid), 0)
+      } catch {
+        return false
+      }
+    }
+    const ask = async (): Promise<[pid: string, log: string, code: string]> => {
+      const asked = await sh(githubCodeScript().script, env)
+      assert.equal(asked.code, 0, asked.stderr)
+      return asked.stdout.trim().split('\n').at(-1)!.split(' ') as [string, string, string]
+    }
+
+    await writeFile(join(home, 'code'), 'ABCD-1234')
+    const [pid, log, code] = await ask()
+    assert.equal(code, 'ABCD-1234')
+    assert.match(log, new RegExp(`^${home}/\\.cache/openagent-github-login\\.[A-Za-z0-9]{6}$`))
+    assert.equal(alive(pid), true, 'gh is left waiting')
+    // The login the server had went before GitHub was asked, and gh was started for github.com with nothing to ask a person.
+    const started = await readFile(join(home, 'gh.log'), 'utf8')
+    assert.deepEqual(started.trim().split('\n'), ['args: auth login --hostname github.com --git-protocol https --web'])
+    await assert.rejects(readFile(kept), { code: 'ENOENT' })
+
+    // The person says yes at GitHub: the wait ends with whose login it is.
+    await writeFile(join(home, 'yes'), '')
+    const given = await sh(githubWaitScript(pid, log).script, env)
+    assert.equal(given.code, 0, given.stderr)
+    assert.equal(given.stdout.trim().split('\n').at(-1), 'octocat')
+    assert.equal(await readFile(kept, 'utf8'), 'kept by gh\n')
+    assert.deepEqual((await readdir(join(home, '.cache'))).filter(name => name.startsWith('openagent-github-login')), [])
+
+    // A second press while the first still waits: the first gh is ended, and its wait leaves the second's alone.
+    await rm(join(home, 'yes'))
+    await writeFile(join(home, 'code'), 'WXYZ-0001')
+    const first = await ask()
+    await writeFile(join(home, 'code'), 'WXYZ-0002')
+    const second = await ask()
+    assert.equal(second[2], 'WXYZ-0002')
+    assert.equal(alive(first[0]), false)
+    assert.equal(alive(second[0]), true)
+    const cut = await sh(githubWaitScript(first[0], first[1]).script, env)
+    assert.equal(cut.code, 1)
+    assert.match(cut.stderr, /The login was asked for anew, or changed another way, before the code was typed\.\n$/)
+    assert.equal(alive(second[0]), true)
+
+    // A copy while a code still waits: the waiting gh is ended, and its wait, cut loose on the server, does not take the copied login off.
+    const copied = await sh(githubLoginScript(GH_LOGIN).script, env)
+    assert.equal(copied.code, 0, copied.stderr)
+    assert.equal(alive(second[0]), false)
+    assert.equal(await readFile(kept, 'utf8'), 'copied\n')
+    const orphan = await sh(githubWaitScript(second[0], second[1]).script, env)
+    assert.equal(orphan.code, 1)
+    assert.equal(await readFile(kept, 'utf8'), 'copied\n', 'the copied login is still there')
+    assert.deepEqual((await readdir(join(home, '.cache'))).filter(name => name.startsWith('openagent-github-login')), [])
+
+    // Taking the login off ends a waiting gh too: a code typed afterwards brings nothing.
+    const third = await ask()
+    assert.equal((await sh(githubLogoutScript().script, env)).code, 0)
+    assert.equal(alive(third[0]), false)
+    await assert.rejects(readFile(kept), { code: 'ENOENT' })
+    assert.equal((await sh(githubWaitScript(third[0], third[1]).script, env)).code, 1)
+
+    // A number left in the file that is another process's by now: that process is not ended.
+    const { spawn } = await import('node:child_process')
+    const bystander = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'])
+    try {
+      await writeFile(join(home, '.cache', 'openagent-github-login.pid'), `${bystander.pid}\n`)
+      const fourth = await ask()
+      assert.equal(alive(String(bystander.pid)), true)
+      assert.equal(alive(fourth[0]), true)
+      second[0] = fourth[0]
+      second[1] = fourth[1]
+    } finally {
+      bystander.kill()
+    }
+
+    // GitHub refuses, or the code runs out: no login, in words, and the code is not told again.
+    await writeFile(join(home, 'no'), '')
+    const refused = await sh(githubWaitScript(second[0], second[1]).script, env)
+    assert.equal(refused.code, 1)
+    assert.match(refused.stderr, /the code was refused\nNo login came from GitHub: the code was not typed in time, or it was refused\.\n$/)
+    assert.doesNotMatch(refused.stderr, /WXYZ/)
+    await assert.rejects(readFile(kept), { code: 'ENOENT' })
+    assert.deepEqual((await readdir(join(home, '.cache'))).filter(name => name.startsWith('openagent-github-login')), [])
+
+    // GitHub gives no code: said, and nothing is left waiting.
+    await writeFile(join(home, 'no-code'), '')
+    const none = await sh(githubCodeScript().script, env)
+    assert.equal(none.code, 1)
+    assert.match(none.stderr, /error connecting to github\.com\nGitHub gave the server no code\.\n$/)
+    assert.deepEqual((await readdir(join(home, '.cache'))).filter(name => name.startsWith('openagent-github-login')), [])
+
+    // A server installed before gh was one of its tools is told so before anything else is done. Read off the script, not run:
+    // the script looks where a system keeps its programs, and the computer the tests run on may have a real gh there.
+    assert.match(githubCodeScript().script, /\n  command -v gh >\/dev\/null \|\| fail "gh is not on this server yet\. Press Update on its row first\."\n  mkdir -p/)
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('a login of the server\'s own is asked of the server, the code is in the file while the person types it, and how it ended is written down; no login passes through this computer', async () => {
+  const home = await testHome()
+  try {
+    await saved(home.env, { github: { since: '2026-10-01T00:00:00.000Z', account: 'someone' } })
+    const ASKED = '4242 /home/openagent/.cache/openagent-github-login.aB3dE9 ABCD-1234\n'
+    let during: unknown
+    const server = pretendServer(call => {
+      if (call.script.includes('nohup setsid gh')) return { out: ASKED }
+      if (call.script.includes('while asking "$PID"')) return { out: 'octocat\n' }
+      return undefined
+    })
+    const exec: Exec = async (bin, args, script, opts) => {
+      // While the server waits for the person: the file says so, with the code.
+      if (script.includes('while asking "$PID"')) during = (await serverOf(home.env)).github
+      return server.exec(bin, args, script, opts)
+    }
+    await give(home.env, 'github', { exec, own: true })
+    const { worker: _worker, ...waiting } = during as Record<string, unknown>
+    assert.deepEqual(waiting, { since: '2026-10-01T00:00:00.000Z', account: 'someone', asking: true, code: 'ABCD-1234' })
+    const done = (await serverOf(home.env)).github!
+    assert.deepEqual(Object.keys(done).sort(), ['account', 'since'])
+    assert.equal(done.account, 'octocat')
+    // The server's own user ran both scripts, the second with what the first answered; this computer's gh was never asked for its login.
+    assert.deepEqual(server.calls.filter(call => call.remote !== 'true').map(call => call.remote), [AS_SERVER_USER, AS_SERVER_USER])
+    assert.match(server.calls.at(-1)!.script, /^PID='4242'$/m)
+    assert.match(server.calls.at(-1)!.script, /^LOG='\/home\/openagent\/\.cache\/openagent-github-login\.aB3dE9'$/m)
+    assert.deepEqual(server.asked, [])
+
+    // What is no code is not shown as one, and the server is not asked to wait for it.
+    for (const out of ['Welcome to Debian\n', '4242 /tmp/x; rm -rf / ABCD-1234\n', "4242 /home/openagent/.cache/x $(reboot)\n", '4242 /home/openagent/.cache/x abcd-1234\n']) {
+      const odd = pretendServer(call => (call.remote === 'true' ? undefined : { out }))
+      await give(home.env, 'github', { exec: odd.exec, own: true })
+      assert.deepEqual((await serverOf(home.env)).github, { failed: 'The server answered something else than a code from GitHub.' }, out)
+      assert.equal(odd.calls.filter(call => call.remote !== 'true').length, 1)
+    }
+
+    // No yes came: said in the server's words, and this computer counts on no login there.
+    const late = pretendServer(call => (call.script.includes('nohup setsid gh') ? { out: ASKED } : call.script.includes('while asking "$PID"') ? { code: 1, err: 'No login came from GitHub: the code was not typed in time, or it was refused.' } : undefined))
+    await give(home.env, 'github', { exec: late.exec, own: true })
+    assert.deepEqual((await serverOf(home.env)).github, { failed: 'No login came from GitHub: the code was not typed in time, or it was refused.' })
+  } finally {
+    await home.remove()
+  }
+})
+
+test('the wait for the person is cut short when this process is told to stop: the line to the server is told so', async () => {
+  const home = await testHome()
+  try {
+    await saved(home.env)
+    const stop = new AbortController()
+    const server = pretendServer(call => (call.script.includes('nohup setsid gh') ? { out: '4242 /home/openagent/.cache/openagent-github-login.aB3dE9 ABCD-1234\n' } : undefined))
+    let cut = false
+    const exec: Exec = (bin, args, script, opts) => {
+      if (!script.includes('while asking "$PID"')) return server.exec(bin, args, script, opts)
+      // The server waits for a quarter of an hour; the line ends when it is told to, not before.
+      return new Promise(resolve => {
+        opts.signal?.addEventListener('abort', () => ((cut = true), resolve({ code: 255, out: '', err: 'the line was cut' })), { once: true })
+        setTimeout(() => stop.abort(), 30)
+      })
+    }
+    await give(home.env, 'github', { exec, own: true, signal: stop.signal })
+    assert.equal(cut, true)
+    assert.equal((await serverOf(home.env)).github!.worker, undefined)
   } finally {
     await home.remove()
   }

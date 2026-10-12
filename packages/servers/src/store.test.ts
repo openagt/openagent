@@ -110,3 +110,9 @@ test('a heartbeat beats one at a time, and stopping it waits for the beat on its
   await new Promise(resolve => setTimeout(resolve, 30))
   await throwing.stop()
 })
+
+test('a code from GitHub is kept only when it reads as one', async () => {
+  const keptOf = (code: unknown) => sanitize({ servers: [{ address: '203.0.113.5', user: 'root', github: { asking: true, code } }] }).servers[0]!.github
+  assert.deepEqual(keptOf('ABCD-1234'), { asking: true, code: 'ABCD-1234' })
+  for (const code of ['abcd-1234', 'ABCD1234', 'ABCD-12345', '<b>AB-12</b>', 12345678, undefined]) assert.deepEqual(keptOf(code), { asking: true }, String(code))
+})
