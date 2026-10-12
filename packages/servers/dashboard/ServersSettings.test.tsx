@@ -106,7 +106,10 @@ describe('Settings → Servers', () => {
     const { host, ran, addMachine } = dashboard(() => ok({ servers: [failed] }))
     show(host)
     expect((await screen.findByRole('alert')).textContent).toBe('E: Unable to locate package git')
-    fireEvent.click(screen.getByRole('button', { name: 'Try 203.0.113.5 again' }))
+    // The press waits, as Connect does, until this computer said which OpenAgent it runs.
+    const again = screen.getByRole('button', { name: 'Try 203.0.113.5 again' }) as HTMLButtonElement
+    await waitFor(() => expect(again.disabled).toBe(false))
+    fireEvent.click(again)
     await waitFor(() => expect(ran()).toContain('connect 203.0.113.5 ubuntu 1.2.3'))
     expect(addMachine).not.toHaveBeenCalled()
   })

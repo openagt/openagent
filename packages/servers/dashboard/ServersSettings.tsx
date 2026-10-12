@@ -241,12 +241,13 @@ function Servers({ read, reload, everyMs }: { read: Answer<ServersRead>; reload:
                   </div>
                   <div className="flex gap-2">
                     {(behind || unfinished) && !server.working && !failed && (
-                      <Button size="sm" disabled={busy} aria-label={`Update ${server.address}`} onClick={() => void install(server.address, server.user)}>
+                      <Button size="sm" disabled={busy || !known} aria-label={`Update ${server.address}`} onClick={() => void install(server.address, server.user)}>
                         Update
                       </Button>
                     )}
                     {failed && (
-                      <Button size="sm" disabled={busy} aria-label={`Try ${server.address} again`} onClick={() => void install(server.address, server.user, github.wanted === true)}>
+                      // As Connect: not before this computer said which OpenAgent it runs, the one the server gets.
+                      <Button size="sm" disabled={busy || !known} aria-label={`Try ${server.address} again`} onClick={() => void install(server.address, server.user, github.wanted === true)}>
                         Try again
                       </Button>
                     )}
