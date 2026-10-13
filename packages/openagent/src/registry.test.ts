@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import { join } from 'node:path'
 import {
   addMachine,
+  nameMachine,
   addProject,
   ensureBridgeToken,
   listMachines,
@@ -634,4 +635,22 @@ test('the preferences the browser is handed never carry the saved machines', asy
   const fs = memFs()
   await addMachine({ url: STUDIO, key: 'aaa', door: DOOR }, fs, ENV)
   assert.equal(JSON.stringify(await readPreferences(fs, ENV)).includes('aaa'), false)
+})
+
+test('a machine\'s own computer name is kept as it first said it: a later name is not taken, a new link starts without one, and a name that is none is not kept', async () => {
+  const fs = memFs()
+  await addMachine({ url: STUDIO, key: 'aaa', door: DOOR, label: 'Studio' }, fs, ENV)
+  const asked = { id: STUDIO, key: 'aaa' }
+  for (const none of ['', 'a'.repeat(254), 'This machine', '<b>x</b>']) assert.equal(await nameMachine(asked, none, fs, ENV), false, none.slice(0, 20))
+  assert.equal(await nameMachine({ id: 'http://nowhere.local:1', key: 'aaa' }, 'studio-box', fs, ENV), false)
+  assert.equal(await nameMachine(asked, 'studio-box', fs, ENV), true)
+  assert.equal((await listMachines(fs, ENV))[0]!.host, 'studio-box')
+  // A machine that says another name later does not get another computer's runs by it.
+  assert.equal(await nameMachine(asked, 'someone-elses-laptop', fs, ENV), false)
+  assert.equal((await listMachines(fs, ENV))[0]!.host, 'studio-box')
+  // Added again with a new link: it is asked its name anew, and an answer to the old key does not name it.
+  await addMachine({ url: STUDIO, key: 'bbb', door: DOOR, label: 'Studio' }, fs, ENV)
+  assert.equal((await listMachines(fs, ENV))[0]!.host, undefined)
+  assert.equal(await nameMachine(asked, 'studio-box', fs, ENV), false)
+  assert.equal(await nameMachine({ id: STUDIO, key: 'bbb' }, 'studio-box', fs, ENV), true)
 })

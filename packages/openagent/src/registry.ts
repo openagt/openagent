@@ -41,6 +41,12 @@ export interface MachineRecord {
   door: string
   /** What the machine's key is known by, when its link said: every call goes only to a machine that shows that key. */
   pin?: string
+  /**
+   * The computer's own name, as the machine first said it: what the records of its runs carry,
+   * so a run in a project's shared records is known as this machine's. Kept as first said: a
+   * machine that later says another name does not get another computer's runs by it.
+   */
+  host?: string
 }
 
 /** The cap on saved machines and on a name's length, so a hand-edited file cannot bloat. */
@@ -348,6 +354,11 @@ export function sanitizeCustomPresets(value: unknown): CustomPreset[] {
   return out
 }
 
+/** Whether a value reads as a computer's own name: the letters a host name has, at a host name's length. A page shows it. */
+export function isHostName(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Za-z0-9._-]{1,253}$/.test(value)
+}
+
 /** Keep well-formed machines, one per address (first wins), names and count capped. */
 function sanitizeMachines(value: unknown): MachineRecord[] {
   if (!Array.isArray(value)) return []
@@ -356,11 +367,11 @@ function sanitizeMachines(value: unknown): MachineRecord[] {
   for (const raw of value) {
     if (machines.length >= MACHINE_LIMITS.count) break
     if (typeof raw !== 'object' || raw === null) continue
-    const { label, url, key, door, pin } = raw as Record<string, unknown>
+    const { label, url, key, door, pin, host } = raw as Record<string, unknown>
     if (typeof label !== 'string' || typeof url !== 'string' || typeof key !== 'string' || typeof door !== 'string') continue
     if (!url || !key || !door || seen.has(url)) continue
     seen.add(url)
-    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, key, door, ...(typeof pin === 'string' && pin ? { pin } : {}) })
+    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, key, door, ...(typeof pin === 'string' && pin ? { pin } : {}), ...(isHostName(host) ? { host } : {}) })
   }
   return machines
 }
@@ -612,6 +623,24 @@ export async function addMachine(
     const machines = [record, ...before.filter(saved => saved.id !== record.id)].slice(0, MACHINE_LIMITS.count)
     await writeRegistry({ ...registry, machines }, fs, env)
     return { record, displaced: before.filter(saved => !machines.includes(saved)) }
+  })
+}
+
+/**
+ * Keep the computer's own name a saved machine said, the first time it says one. A machine that
+ * already has a name keeps it, and one saved again (a new link) starts without one: `key` is
+ * the key the machine was asked with, and a machine saved anew since is not named by an answer
+ * to the old one. Answers whether the name was written.
+ */
+export async function nameMachine(machine: { id: string; key: string }, host: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<boolean> {
+  const { id, key } = machine
+  if (!isHostName(host)) return false
+  return serialize(async () => {
+    const registry = await readRegistry(fs, env)
+    const saved = (registry.machines ?? []).find(candidate => candidate.id === id)
+    if (!saved || saved.key !== key || saved.host !== undefined) return false
+    await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(machine => (machine.id === id ? { ...machine, host } : machine)) }, fs, env)
+    return true
   })
 }
 

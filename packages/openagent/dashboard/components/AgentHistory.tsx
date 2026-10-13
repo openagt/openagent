@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Plus, ChevronDown, Bot, Cloud, Laptop, MonitorSmartphone, Settings, LayoutDashboard, Blocks } from 'lucide-react'
+import { Plus, ChevronDown, Bot, Cloud, Laptop, Server, Settings, LayoutDashboard, Blocks } from 'lucide-react'
 import type { ComponentType } from 'react'
 import type { AgentMeta, AgentStatus, RecentAgent, ProjectSummary } from '../../src/index.js'
 import { DRIVER_LABELS, driverFromImpl, cloudRunState, type CloudRunState } from '../../src/client.js'
@@ -654,7 +654,7 @@ function AgentHistoryRow({
             {remote && (
               <Tooltip>
                 <TooltipTrigger render={<span className="flex items-center" />}>
-                  <MonitorSmartphone className="h-3 w-3 text-muted-foreground" aria-label={remoteLabel ? `Runs on ${remoteLabel}` : 'Runs on another machine'} />
+                  <Server className="h-3 w-3 text-muted-foreground" aria-label={remoteLabel ? `Runs on ${remoteLabel}` : 'Runs on another machine'} />
                 </TooltipTrigger>
                 <TooltipContent>{remoteLabel ? `Runs on ${remoteLabel}` : 'Runs on another machine'}</TooltipContent>
               </Tooltip>

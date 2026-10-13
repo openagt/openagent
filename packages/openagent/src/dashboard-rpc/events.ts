@@ -1,5 +1,5 @@
 import { fromDiaryLine, resolveAgentDiary, type AgentDiarySource, type AnyDiaryLine } from '../store/index.js'
-import { contextEventsSource, resolveProjectPath } from './context.js'
+import { contextEventsSource, contextRemote, resolveProjectPath } from './context.js'
 import type { OpenAgentEvent } from '../events.js'
 import { partialReader, tailAgentEvents } from './events-tail.js'
 import { forwardStream } from './stream-forward.js'
@@ -54,6 +54,8 @@ export async function streamAgentEvents(
   send: (value: LiveFeedEvent) => void,
   onDone?: () => void,
 ): Promise<(() => void) | undefined> {
+  // A run on a saved machine that this daemon does not follow yet, one started on the machine's own page: followed from here on.
+  if (agentId !== undefined) await contextRemote().follow(projectId, agentId).catch(() => {})
   const stream = contextEventsSource()(projectId, agentId)
   // An in-memory agent: replay + follow it, and end when it ends — a relayed agent that finished has
   // nothing more to say, and leaving the response open would read as a live feed gone quiet.

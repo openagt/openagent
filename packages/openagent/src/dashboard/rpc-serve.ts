@@ -35,13 +35,30 @@ export type EventsSource = (projectId: string, agentId?: string) => AsyncIterabl
  *  daemon wires this from its live relayed-agent map; a run-scoped RPC uses it to forward a remote agent's
  *  read/steer/handoff to that machine instead of resolving a (nonexistent) local checkout. */
 export interface RemoteAgents {
-  target(agentId: string | undefined): RemoteTarget | undefined
+  /** The machine of a run this daemon follows, in the project when one is named: a run's id alone says nothing of its project. */
+  target(agentId: string | undefined, projectId?: string): RemoteTarget | undefined
   /** A project's relayed run stubs (#1077), so `onAgents` can show a remote agent in the list and re-open it after a reload. */
   list(projectId: string): AgentMeta[]
+  /** Whether a followed run is one this computer sent to its machine. Any other is followed by its record, and is listed only while that record is there. */
+  sent(agentId: string): boolean
   /** Whether a run relayed from here is still at work on the machine at `url`. */
   working(url: string): boolean
   /** How the machine at `url` is reached since it was added again, for the runs kept from before. */
   rekey(url: string, key: string, pin?: string): void
+  /**
+   * The saved machine a run of the project runs on, whoever started it there: one this computer
+   * sent, or one whose record, come through the project's shared records, names that machine's
+   * computer. Undefined for a run of this computer's own, and for one of a computer that is
+   * no saved machine.
+   */
+  home(projectId: string, agentId: string): Promise<RemoteTarget | undefined>
+  /** Follow a run that runs on a saved machine, when it is not followed yet: its events then stream here, as for a run this computer sent. */
+  follow(projectId: string, agentId: string): Promise<void>
+  /**
+   * The name a saved machine was given, by its computer's own name, as the records of its runs
+   * carry it: asked of the machines first, when one has not said its name yet.
+   */
+  machineNames(): Promise<(host: string) => string | undefined>
 }
 
 /**

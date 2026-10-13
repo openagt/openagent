@@ -33,8 +33,8 @@ export type ScreenCall = 'stream' | 'input'
 export interface ScreenHandlers {
   /** Where the live screen of a run on this computer answers; nothing when the run has none. */
   local: (projectId: string, agentId: string) => Promise<string | undefined>
-  /** The machine a run this computer follows is on; nothing for a run of this computer's own. */
-  remote: (agentId: string) => RemoteTarget | undefined
+  /** The machine a run of the project that this computer follows is on; nothing for a run of this computer's own. */
+  remote: (projectId: string, agentId: string) => RemoteTarget | undefined
 }
 
 /** A person's click or a few typed letters, generously. */
@@ -127,7 +127,7 @@ export async function handleScreenRequest(req: IncomingMessage, res: ServerRespo
   const agentId = query.get('run')
   if (!projectId || !agentId) return end(res, 400, 'missing project or run')
   if (!isRunId(agentId)) return end(res, 400, 'not a run')
-  const remote = handlers.remote(agentId)
+  const remote = handlers.remote(projectId, agentId)
   if (!remote) return passToScreen(req, res, call, await handlers.local(projectId, agentId).catch(() => undefined))
   const at = `${remote.url.replace(/\/+$/, '')}/_relay/screen/${call}?run=${encodeURIComponent(agentId)}&project=${encodeURIComponent(remote.project)}`
   await pass(req, res, call, init => machineFetch(at, remote.pin, { ...init, headers: { ...init.headers, authorization: `Bearer ${remote.key}` } }))

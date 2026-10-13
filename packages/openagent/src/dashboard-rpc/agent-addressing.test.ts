@@ -1,10 +1,14 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import { mkdtemp, rm, mkdir, writeFile, readFile, realpath, stat } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { sendStop, sendMessage, sendChoice, sendRemoveWorktree, sendOpenPullRequest } from './control.js'
-import { onRetainedWorktrees, onAgents } from './reads.js'
+import { onRetainedWorktrees, onAgents, onRecentAgents, onAgent } from './reads.js'
+import { asArrived } from './relay-agent.js'
+import { dispatchRelayRpc } from './relay-dispatch.js'
 import { addProject, projectId as idFor } from '../registry.js'
 import { DATA_BRANCH, fileBranchPath, nodeGitRunner } from '@openagt/agent-data'
 import { worktreePath, addWorktree, agentBranchName } from '@openagt/skill-branches'
@@ -410,6 +414,106 @@ test('sendOpenPullRequest opens the pull request as a draft when asked to, and a
     assert.deepEqual(await sendOpenPullRequest(ctx.projectId, ctx.agentId), { ok: true, url: 'https://x/pull/9', number: 9 })
     assert.equal((await opens()).length, 2)
     assert.doesNotMatch((await opens())[1]!, /--draft/)
+  } finally {
+    ctx.restore()
+    await rm(ctx.dir, { recursive: true, force: true })
+  }
+})
+
+test('a run on a saved machine reads the same in the project\'s list and in every project\'s, by the machine\'s name; and a message typed on it goes to the machine, not to this computer\'s resume line', async () => {
+  // Its record came through the project's shared records: started on the machine's own page, this computer never sent it.
+  const ctx = await projectWithWorktreeAgent({ pid: 0, host: 'server-box' }, { status: 'waiting', hooks: RESUME_HOOK })
+  // The machine: it takes the calls about its run.
+  const got: { fn: string; args: unknown[]; project: string }[] = []
+  const machine = createServer((req, res) => {
+    let body = ''
+    req.on('data', chunk => (body += chunk)).on('end', () => {
+      got.push(JSON.parse(body) as { fn: string; args: unknown[]; project: string })
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ result: { ok: true } }))
+    })
+  })
+  await new Promise<void>(resolve => machine.listen(0, '127.0.0.1', resolve))
+  const target = { url: `http://127.0.0.1:${(machine.address() as AddressInfo).port}`, key: 'id.key', project: 'github.com/acme/shop' }
+  // A run this computer sent there, which lives in its memory only.
+  const sent = { status: 'running' as const, id: '2026-07-19T11-00-00-000Z', startedAt: '2026-07-19T11:00:00.000Z', updatedAt: '2026-07-19T11:00:00.000Z', target: 'remote' as const, remoteLabel: 'Server' }
+  const asked: string[] = []
+  provideTestContext({
+    remote: {
+      target: () => undefined,
+      // And one followed by a record that was deleted since: it is listed no longer.
+      list: projectId => (projectId === ctx.projectId ? [sent, { ...sent, id: 'followed-by-a-record-that-is-gone' }] : []),
+      working: () => false,
+      rekey: () => {},
+      sent: agentId => agentId !== 'followed-by-a-record-that-is-gone',
+      home: async (projectId, agentId) => {
+        asked.push(`${projectId} ${agentId}`)
+        return projectId === ctx.projectId && agentId === ctx.agentId ? target : undefined
+      },
+      follow: async () => {},
+      machineNames: async () => host => (host === 'server-box' ? 'Server' : undefined),
+    },
+  })
+  try {
+    const where = (rows: { id: string; target?: string; remoteLabel?: string; otherHost?: boolean }[]) => rows.map(row => [row.id, row.target, row.remoteLabel, row.otherHost])
+    const both = [[sent.id, 'remote', 'Server', undefined], [ctx.agentId, 'remote', 'Server', undefined]]
+    assert.deepEqual(where(await onAgents(ctx.projectId)), both)
+    assert.deepEqual(where((await onRecentAgents()).filter(row => row.projectId === ctx.projectId).map(row => row.agent)), both)
+
+    assert.deepEqual(await sendMessage(ctx.projectId, 'go on', ctx.agentId), { ok: true })
+    assert.deepEqual(asked, [`${ctx.projectId} ${ctx.agentId}`])
+    assert.deepEqual(got, [{ fn: 'sendMessage', args: [ctx.projectId, 'go on', ctx.agentId], project: 'github.com/acme/shop' }])
+    // This computer's own resume line was not run, and nothing was put in an inbox here.
+    await assert.rejects(stat(join(ctx.dir, 'resumed.txt')), { code: 'ENOENT' })
+    await assert.rejects(stat(ctx.agentInbox), { code: 'ENOENT' })
+  } finally {
+    ctx.restore()
+    machine.closeAllConnections()
+    machine.close()
+    await rm(ctx.dir, { recursive: true, force: true })
+  }
+})
+
+test('a call that arrived from another computer is run here whatever the run\'s record says; with the machine down a read is answered from the record, and a message is not delivered here in its place', async () => {
+  const ctx = await projectWithWorktreeAgent({ pid: 0, host: 'server-box' }, { status: 'waiting', hooks: RESUME_HOOK, diary: [{ kind: 'said', text: 'kept in the record' }] })
+  // A machine nobody answers at.
+  const down = { url: 'http://127.0.0.1:1', key: 'id.key', project: 'github.com/acme/shop' }
+  let asked = 0
+  provideTestContext({
+    remote: {
+      target: () => undefined,
+      list: () => [],
+      working: () => false,
+      rekey: () => {},
+      sent: agentId => agentId !== 'followed-by-a-record-that-is-gone',
+      home: async () => (asked++, down),
+      follow: async () => {},
+      machineNames: async () => () => 'Server',
+    },
+  })
+  try {
+    // The machine cannot be asked: what this computer holds of the run is read, and nothing is done to the run here.
+    const events = await onAgent(ctx.projectId, ctx.agentId)
+    assert.equal(JSON.stringify(events).includes('kept in the record'), true)
+    assert.deepEqual(await sendMessage(ctx.projectId, 'go on', ctx.agentId), { ok: false, error: 'could not reach the machine' })
+    await assert.rejects(stat(join(ctx.dir, 'resumed.txt')), { code: 'ENOENT' })
+    assert.equal(asked, 2)
+
+    // The same message, come in from another computer: this one is the run's, and no machine is asked.
+    assert.deepEqual(await asArrived(() => sendMessage(ctx.projectId, 'go on', ctx.agentId)), { ok: true })
+    assert.deepEqual(await dispatchRelayRpc(ctx.projectId, 'sendMessage', ['their-id-for-the-project', 'and on', ctx.agentId]), { ok: true })
+    assert.equal(asked, 2)
+    assert.equal(await readFile(join(ctx.dir, 'resumed.txt'), 'utf8'), `${ctx.agentId}|go on|\n${ctx.agentId}|and on|\n`)
+  } finally {
+    ctx.restore()
+    await rm(ctx.dir, { recursive: true, force: true })
+  }
+})
+
+test('a record that calls its own run a saved machine\'s is not believed: the row says whose computer it is', async () => {
+  const ctx = await projectWithWorktreeAgent({ pid: 0, host: 'their-laptop', target: 'remote', remoteLabel: 'Server' } as unknown as { pid: number; host: string }, { status: 'waiting' })
+  try {
+    const [row] = (await onAgents(ctx.projectId)) as { target?: string; remoteLabel?: string; otherHost?: boolean; host?: string }[]
+    assert.deepEqual([row!.target, row!.remoteLabel, row!.otherHost, row!.host], [undefined, undefined, true, 'their-laptop'])
   } finally {
     ctx.restore()
     await rm(ctx.dir, { recursive: true, force: true })

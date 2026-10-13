@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { enterRemote, leaveRemote, remoteProject, startRemoteAgent, streamRemoteEvents, pingRemote, relayRpc, remoteVersion, RelayedAgents, type RemoteTarget } from './remote-run.js'
+import { enterRemote, leaveRemote, remoteFacts, remoteProject, startRemoteAgent, streamRemoteEvents, pingRemote, relayRpc, remoteVersion, RelayedAgents, foldRelayedEvent, type RemoteTarget } from './remote-run.js'
 import { type AgentMeta } from '../store/index.js'
 import type { OpenAgentEvent } from '../events.js'
 
@@ -129,9 +129,17 @@ test('a machine\'s ping tells the OpenAgent it runs; what does not read as a ver
       answer = odd
       assert.equal(await remoteVersion(target), undefined, JSON.stringify(odd))
     }
+    // Its computer's own name comes with it, as the records of its runs carry it; a name that is no name is none.
+    answer = { version: '0.10.1', host: 'ubuntu-fra1' }
+    assert.deepEqual(await remoteFacts(target), { version: '0.10.1', host: 'ubuntu-fra1' })
+    for (const odd of [7, '', 'a'.repeat(254), { name: 'x' }]) {
+      answer = { version: '0.10.1', host: odd }
+      assert.deepEqual(await remoteFacts(target), { version: '0.10.1' }, JSON.stringify(odd).slice(0, 40))
+    }
     answer = { version: '0.10.1' }
     status = 401 // this computer was taken out there
     assert.equal(await remoteVersion(target), undefined)
+    assert.deepEqual(await remoteFacts(target), {})
   } finally {
     await srv.close()
   }
@@ -522,4 +530,74 @@ test('a machine that could not be asked about a project is told apart from one t
   const gone = await remoteProject(target)
   assert.equal(gone.state, 'unasked')
   assert.match((gone as { error: string }).error, /^could not reach the machine: /)
+})
+
+test('a machine\'s stream stays open after its run ended: the run\'s own state says whether it works, and a run that was continued works again', () => {
+  const at = '2026-10-13T00:00:00.000Z'
+  let row = stubMeta('r1')
+  row = foldRelayedEvent(row, { kind: 'end', ok: false, waiting: true } as OpenAgentEvent, at)
+  assert.deepEqual([row.status, row.endedAt], ['waiting', at])
+  // The person answered: the run's next leg starts as its first did.
+  row = foldRelayedEvent(row, { kind: 'driver', event: { type: 'start', prompt: 'go on' } } as unknown as OpenAgentEvent, at)
+  assert.deepEqual([row.status, row.endedAt], ['running', undefined])
+  row = foldRelayedEvent(row, { kind: 'end', ok: true } as OpenAgentEvent, at)
+  assert.equal(row.status, 'done')
+})
+
+test('a run followed by its record is kept by its project, does not hold its machine, and only so many are followed at once', async () => {
+  const open: ServerResponse[] = []
+  const srv = await server((_req, res) => {
+    res.writeHead(200, { 'content-type': 'application/x-ndjson' })
+    open.push(res)
+  })
+  const agents = new RelayedAgents()
+  const target = { url: srv.url, key: 'd1.key', project: PROJECT }
+  try {
+    // Its record says it works. A record is a file anyone with the project can write: the machine can still be removed.
+    agents.register('f0', target, stubMeta('f0'), 'proj-1', false)
+    assert.equal(agents.working(srv.url), false)
+    // A run this computer sent there does hold it, while it works.
+    agents.register('sent', target, stubMeta('sent'), 'proj-1')
+    assert.equal(agents.working(srv.url), true)
+
+    // Kept as a run of its project: under another project's name it is no run this daemon follows.
+    assert.deepEqual(agents.target('f0', 'proj-1'), target)
+    assert.equal(agents.target('f0', 'proj-2'), undefined)
+    assert.equal(agents.get('f0', 'proj-2'), undefined)
+    assert.equal(agents.follows('f0', 'proj-2'), false)
+    assert.equal(agents.follows('f0', 'proj-1'), true)
+
+    // A run this computer sent stays one it sent when it is followed again by its record: it still holds its machine.
+    agents.register('sent', target, stubMeta('sent'), 'proj-1', false)
+    assert.equal(agents.isSent('sent'), true)
+    assert.equal(agents.isSent('f0'), false)
+    assert.equal(agents.working(srv.url), true)
+
+    // Twenty at once: the oldest makes room, and is read by its record again. A run this computer sent is never dropped.
+    for (let i = 1; i <= 20; i++) agents.register(`f${i}`, target, stubMeta(`f${i}`), 'proj-1', false)
+    assert.equal(agents.follows('f0'), false)
+    assert.equal(agents.target('f0'), undefined)
+    assert.equal(agents.follows('f1'), true)
+    assert.equal(agents.follows('sent'), true)
+    assert.equal(agents.list('proj-1').length, 21)
+
+    // A line that drops says nothing of a run followed by its record: it is forgotten, and its record says how it stands.
+    // A run this computer sent has no record to fall back on: it is kept, and reads as stopped.
+    for (let i = 0; i < 200 && open.length < 23; i++) await new Promise(r => setTimeout(r, 10))
+    for (const res of open.splice(0)) res.end()
+    for (let i = 0; i < 200 && agents.follows('sent'); i++) await new Promise(r => setTimeout(r, 10))
+    for (let i = 0; i < 200 && agents.target('f20') !== undefined; i++) await new Promise(r => setTimeout(r, 10))
+    assert.deepEqual(agents.list('proj-1').map(row => [row.id, row.status]), [['sent', 'stopped']])
+    assert.deepEqual(agents.target('sent', 'proj-1'), target)
+
+    // A machine added again has not said its name yet: the runs followed by their records are let go, the sent ones get the new key.
+    agents.register('again', target, stubMeta('again'), 'proj-1', false)
+    agents.rekey(srv.url, 'd2.new')
+    assert.equal(agents.target('again'), undefined)
+    assert.deepEqual(agents.target('sent'), { ...target, key: 'd2.new' })
+  } finally {
+    agents.dispose()
+    for (const res of open) res.end()
+    await srv.close()
+  }
 })
