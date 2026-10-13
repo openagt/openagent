@@ -1,13 +1,13 @@
 // The scheduler's module for the dashboard: the package's `./dashboard` export. It adds the
-// Automations page, the Scheduler section of the Settings page, the Scheduler card of the Overview,
-// and the stop line on the usage bar. Its data is the `agent-scheduler` command's own, run in each
+// Automations page, the Scheduler section of the Settings page, the Automations card of the Overview,
+// the stop line on the usage bar, and, for the pages of other packages, which commands start by themselves. Its data is the `agent-scheduler` command's own, run in each
 // project by the dashboard: `status` to read, `offset`, `switch`, `pace`, `agents` and `publish` to save.
 import { CalendarClock } from 'lucide-react'
 import { defineModule } from '@openagt/dashboard/module'
 import { AutomationsPage } from './AutomationsPage.js'
 import { SchedulerCard } from './SchedulerCard.js'
 import { SchedulerSettings } from './SchedulerSettings.js'
-import { loosestSpendOffset, readSchedulers, saveSpendOffset } from './schedulers.js'
+import { cannotRun, loosestSpendOffset, readSchedulers, saveSpendOffset, schedulerStopped, startsNext } from './schedulers.js'
 import './dashboard.css'
 
 export default defineModule({
@@ -17,6 +17,17 @@ export default defineModule({
   usageLimit: {
     read: async (host, projects) => loosestSpendOffset(await readSchedulers(host, projects)),
     save: saveSpendOffset,
+  },
+  // What starts by itself, for the pages of other packages: a queue says whether anything takes from it.
+  schedule: {
+    page: 'automations',
+    read: async (host, project) => {
+      const [row] = await readSchedulers(host, [project])
+      // A status that cannot be read says nothing of what starts: the asking page is told so, not "nothing".
+      if (!row || row.error !== undefined) throw new Error(row?.error ?? 'the scheduler did not answer')
+      const stopped = schedulerStopped(row)
+      return row.commands.map(command => ({ command: command.command, on: command.on && stopped === undefined && cannotRun(command) === undefined, ...(command.on ? { note: stopped ?? startsNext(command) } : {}) }))
+    },
   },
   stylesheet: 'dashboard.css',
 })

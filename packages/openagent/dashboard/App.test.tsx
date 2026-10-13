@@ -236,8 +236,13 @@ describe('the project select (#1513)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Logs' }))
     expect(url()).toBe(`/logs?project=${OTHER.id}`)
     expect(await screen.findByText('runs of site')).toBeTruthy()
+    // The sidebar marks the page that is open: the module's row, then the Settings gear, never both.
+    // The Overview row's name carries its Human Queue count here, hence the pattern.
+    const marked = () => ['Overview', 'Logs', 'Settings'].filter(name => screen.getByRole('button', { name: new RegExp(`^${name}`) }).getAttribute('aria-current') === 'page')
+    expect(marked()).toEqual(['Logs'])
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
     expect(url()).toBe(`/settings?project=${OTHER.id}`)
+    expect(marked()).toEqual(['Settings'])
     fireEvent.click(await screen.findByText('site ran'))
     expect(url()).toBe(`/${OTHER.id}/s3?project=${OTHER.id}`)
   })

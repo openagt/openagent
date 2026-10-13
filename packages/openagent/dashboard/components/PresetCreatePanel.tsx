@@ -1,6 +1,8 @@
 import { useState, type KeyboardEvent } from 'react'
 import type { CustomPreset } from '../../src/index.js'
 import { Button } from './ui/button.js'
+import { Input } from './ui/input.js'
+import { Textarea } from './ui/textarea.js'
 import { Dialog } from './ui/dialog.js'
 
 // The "Save prompt" dialog (#649/#626): a modal over the composer rather than a panel that
@@ -54,7 +56,7 @@ export function PresetCreatePanel({
   return (
     <Dialog open onOpenChange={next => { if (!next) onCancel() }} title="Save prompt">
       <div className="flex w-full flex-col gap-2" onKeyDown={onKeyDown}>
-      <input
+      <Input
         type="text"
         value={label}
         maxLength={LABEL_MAX}
@@ -62,15 +64,15 @@ export function PresetCreatePanel({
         disabled={busy}
         autoFocus
         onChange={e => setLabel(e.target.value)}
-        className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+        className="h-8 bg-background px-2"
       />
-      <textarea
+      <Textarea
         value={prompt}
         placeholder="The prompt to save…"
         disabled={busy}
         rows={5}
         onChange={e => setPrompt(e.target.value)}
-        className="w-full resize-y rounded-md border border-border bg-background px-2 py-1 font-mono text-xs text-foreground"
+        className="resize-y px-2 py-1 font-mono text-xs"
       />
       {canSaveToProject && (
         <div className="flex items-center gap-2 text-xs text-[var(--color-muted-foreground)]">

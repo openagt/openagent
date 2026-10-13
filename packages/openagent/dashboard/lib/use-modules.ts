@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { onModules, type DashboardModule } from '../rpc/modules.js'
-import type { LinkAction, ModuleCard, ModuleDefinition, ModulePage, ModulePanel, ModuleRunSlots, ModuleSettings, ModuleUsageLimit } from '../module/index.js'
+import type { LinkAction, ModuleCard, ModuleDefinition, ModulePage, ModulePanel, ModuleRunSlots, ModuleSchedule, ModuleSettings, ModuleUsageLimit } from '../module/index.js'
 import { usePolled } from './use-async.js'
 import { isPageSegment } from './route.js'
 
@@ -46,6 +46,12 @@ export interface MountedUsageLimit extends ModuleUsageLimit {
   projects: string[]
 }
 
+/** The commands a module starts by itself, as the shell mounts them: the read, plus the package it came from and the projects that have it. */
+export interface MountedSchedule extends ModuleSchedule {
+  package: string
+  projects: string[]
+}
+
 /** The place of a card that names none. */
 const DEFAULT_CARD_ORDER = 50
 
@@ -63,6 +69,8 @@ export interface MountedModules {
   settings: MountedSettings[]
   /** The usage bar's stop line: the first module's that declares one, in package order; absent when none does. */
   usageLimit?: MountedUsageLimit
+  /** What starts by itself: the first module's that declares it, in package order; absent when none does. */
+  schedule?: MountedSchedule
   /** True once the module list was read and every module in it imported or skipped. */
   loaded: boolean
 }
@@ -128,6 +136,7 @@ export function useModules(reloadKey = 0): MountedModules {
       const runSlots: MountedRunSlots[] = []
       const settings: MountedSettings[] = []
       let usageLimit: MountedUsageLimit | undefined
+      let schedule: MountedSchedule | undefined
       for (const { module, definition } of loadedModules) {
         for (const page of definition?.pages ?? []) {
           if (!isPageSegment(page.segment) || pages.some(p => p.segment === page.segment)) continue
@@ -146,13 +155,14 @@ export function useModules(reloadKey = 0): MountedModules {
           settings.push({ ...section, package: module.package, projects: module.projects })
         }
         if (definition?.usageLimit) usageLimit ??= { ...definition.usageLimit, package: module.package, projects: module.projects }
+        if (definition?.schedule) schedule ??= { ...definition.schedule, package: module.package, projects: module.projects }
         const run = definition?.run
         if (run?.summary) runSlots.push({ ...run, package: module.package, projects: module.projects })
       }
       // Numbers, not a list the shell keeps: a third package sits between two others without the shell knowing it exists.
       cards.sort(byMountOrder)
       settings.sort(byMountOrder)
-      setState({ pages, cards, linkActions, panels, runSlots, settings, ...(usageLimit ? { usageLimit } : {}), loaded: true })
+      setState({ pages, cards, linkActions, panels, runSlots, settings, ...(usageLimit ? { usageLimit } : {}), ...(schedule ? { schedule } : {}), loaded: true })
     })
     return () => {
       live = false

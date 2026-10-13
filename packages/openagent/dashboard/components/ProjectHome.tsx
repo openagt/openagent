@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { OpenAgentEvent, ProjectError } from '../../src/index.js'
 import { StartAgentForm } from './StartAgentForm.js'
 import { ProjectActions } from './ProjectActions.js'
@@ -54,14 +55,18 @@ export function ProjectHome({
   /** Told once the project's skills were written, deleted or committed: its pages may have changed. */
   onSkillsChanged?: (() => void) | undefined
 }) {
+  // The project's skills are opened from its ⋮ menu; the list itself is the skills line's, which reads them.
+  // Held with the project it was opened for: the page stays mounted when another project is picked, and a list asked for here is not that project's.
+  const [skillsFor, setSkillsFor] = useState<string | null>(null)
   return (
     <>
-      <ProjectActions projectId={projectId} onProjectRemoved={onProjectRemoved} />
+      <ProjectActions projectId={projectId} onProjectRemoved={onProjectRemoved} onOpenSkills={() => setSkillsFor(projectId)} />
       {/* Above everything, because an agent started on a project whose agent-data branch cannot
           reach origin (#1599) works from stale tickets and a queue nobody else will see. */}
       <ProjectErrorBanner errors={errors} />
-      {/* The project's skills, and the door to add some: a new project has almost none (#2023). */}
-      <ProjectSkillsLine key={projectId} projectId={projectId} onChanged={onSkillsChanged} />
+      {/* What the project's skills need from the person, when they need something (#2023); with
+          nothing to say there is no line, and the list opens from the menu above. */}
+      <ProjectSkillsLine key={projectId} projectId={projectId} onChanged={onSkillsChanged} door={{ open: skillsFor === projectId, onClose: () => setSkillsFor(null) }} />
       {/* Laid out as an agent's page is: what waits for the person fills the page from the top, in
           the chat's column, and scrolls there; the box to start an agent stays at the bottom, in
           the place and at the width of an agent's message box. */}

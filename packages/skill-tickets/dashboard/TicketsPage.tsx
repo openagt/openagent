@@ -198,22 +198,25 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="space-y-2 border-b border-border py-3 md:px-6 max-md:px-4">
+      {/* The same header as the other pages (Automations, Logs, Queue): the same title, the same
+          line under it, the same edge, and no bar of its own. Its count and its filter bar are the
+          page's own, and stay above the list while the list scrolls. */}
+      <div className="space-y-3 px-6 pt-6 pb-3 max-md:px-4 max-md:pt-4">
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
           <div>
-            <h1 className="text-base font-semibold">
+            <h1 className="text-lg font-semibold">
               Tickets
               {/* Shown/total beside the name it counts (#1144 follow-up) — it describes the page's
                   content, not the toolbar's controls. Unfiltered it reads n/n, doubling as the
                   backlog's total, which the page otherwise says nowhere. */}
               {loaded && rows.length > 0 && (
-                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                <span className="ml-2 text-sm font-normal tabular-nums text-muted-foreground">
                   {visible.length}/{rows.length}
                 </span>
               )}
             </h1>
-            <p className="text-xs text-muted-foreground">
-              Every project&apos;s <code className="rounded bg-muted px-1">tickets/</code> backlog — what the agent plans from.
+            <p className="mt-1 text-sm text-muted-foreground">
+              {projects.length === 1 ? 'This project\u2019s' : 'Every project\u2019s'} <code className="rounded bg-muted px-1">tickets/</code> backlog: what agents plan from.
             </p>
           </div>
           {/* The whole shown set onto the queue — or, with rows ticked, just the selected ones:
@@ -288,7 +291,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
         {/* The full page width, no columns and no max-width (#1144/#1265): each project's table
             spans the whole pane, so a row has room for its title and every piece of meta at once.
             Columns looked tidy but split the one dimension the rows actually need. */}
-        <div className="w-full md:p-6 max-md:p-4">
+        <div className="w-full px-6 pb-6 pt-1 max-md:px-4 max-md:pb-4">
           {!loaded ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : groups.length === 0 ? (

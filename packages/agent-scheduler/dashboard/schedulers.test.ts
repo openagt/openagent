@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { STATUS, hostAnswering } from './fixtures.js'
-import { agentOf, modelLabel, modelOf, runsOnWords, agentsArgs, agentsDraftOf, atOnce, atOnceWords, saysAtOnce, cannotRun, decided, draftOf, isOwn, outcomeWords, loosestSpendOffset, nextWords, offsetsThatDiffer, ownPace, pace, paceArgs, paceProblem, publishChoices, publishLabel, publishes, readSchedulers, saveSpendOffset, schedulerRow, schedulerStatus, spelled, typedOffset, withAgentsDraft, withDraft, rowTitle, unlistedWords } from './schedulers.js'
+import { agentOf, modelLabel, modelOf, runsOnWords, agentsArgs, agentsDraftOf, atOnce, atOnceWords, saysAtOnce, cannotRun, decided, draftOf, isOwn, outcomeWords, loosestSpendOffset, nextWords, offsetsThatDiffer, ownPace, pace, paceArgs, paceProblem, publishChoices, publishLabel, publishes, readSchedulers, saveSpendOffset, schedulerRow, schedulerStatus, schedulerStopped, nextStart, startsNext, spelled, typedOffset, withAgentsDraft, withDraft, rowTitle, unlistedWords } from './schedulers.js'
 
 const GEMSTACK = { id: 'p1', name: 'gemstack', gitHost: true }
 const OTHER = { id: 'p2', name: 'other', gitHost: false }
@@ -274,7 +274,9 @@ describe('in words', () => {
     expect(nextWords(new Date(2026, 9, 8, 10, 0), now)).toBe('as soon as the scheduler looks')
     expect(nextWords(new Date(2026, 9, 3, 10, 0), now)).toBe('as soon as the scheduler looks')
     const waiting = { command: 'a', on: true, publish: 'commit' as const, ...MADE, decision: { command: 'a', outcome: 'not due (next start from 2026-10-10 10:00, every 2d at 10:00)' } }
-    expect(decided(waiting, now)).toBe('Next: Saturday 10:00')
+    expect(decided(waiting, now)).toBe('Next start Saturday 10:00')
+    // Beside a shell line the time is where the wait ends, not the start: it still needs work.
+    expect(decided({ ...waiting, when: 'npx x' }, now)).toBe('Next start Saturday 10:00, if there is work')
     expect(decided({ ...waiting, on: false }, now)).toBeUndefined()
   })
 
@@ -372,12 +374,15 @@ describe('in words', () => {
     expect(publishes({ ...base, publish: 'merge' })).toBe('May open a pull request that merges on green')
   })
 
-  test("what the scheduler last decided for a command, for a person: No work, Not due yet, how many are running, else the tool's own words; nothing where the row says it in another place, switched off or just started", () => {
+  test("what the scheduler last decided for a command, for a person: No work, when it starts next while its wait is not over, how many are running, else the tool's own words; nothing where the row says it in another place, switched off or just started", () => {
     const on = { command: 'a', on: true, publish: 'commit' as const, ...MADE }
     const said = (outcome: string, over: object = {}) => decided({ ...on, ...over, decision: { command: 'a', outcome } })
     expect(said('not due')).toBe('No work')
-    expect(said('not due (last start 2h ago, every 6h)')).toBe('Not due yet')
-    expect(said('not due (last start less than a minute ago, every 15m)')).toBe('Not due yet')
+    // A wait that is not over is said as the time left, counted from the row's last start as of now.
+    const twoHoursAgo = { id: 'r', at: new Date(Date.now() - 2 * 3_600_000).toISOString() }
+    expect(said('not due (last start 2h ago, every 6h)', { every: '6h', lastRun: twoHoursAgo })).toBe('Next start in 4h')
+    expect(said('not due (last start 2h ago, every 6h)', { every: '6h', when: 'npx x', lastRun: twoHoursAgo })).toBe('Next start in 4h, if there is work')
+    expect(said('not due (last start less than a minute ago, every 15m)', { every: '15m', lastRun: { id: 'r', at: new Date().toISOString() } })).toBe('Next start in 15 min')
     expect(said('cap reached (1 in flight: 2026-10-03T10-00-00-000Z on other-box)')).toBe('One is already running')
     expect(said('cap reached (3 in flight: a on x, b on y, c on z)')).toBe('3 are already running')
     // A reason only the tool knows stays in the tool's words.
@@ -417,5 +422,63 @@ describe('in words', () => {
     expect(publishChoices(true, 'pr')).toEqual(['nothing', 'commit', 'branch', 'pr', 'merge'])
     expect(publishChoices(false, 'commit')).toEqual(['nothing', 'commit', 'branch'])
     expect(publishChoices(false, 'pr')).toEqual(['nothing', 'commit', 'branch', 'pr'])
+  })
+})
+
+describe('when a row that is on starts next', () => {
+  const now = new Date(2026, 9, 8, 12, 0)
+  const ago = (ms: number): { id: string; at: string } => ({ id: 'r', at: new Date(now.getTime() - ms).toISOString() })
+  const HOUR = 3_600_000
+  const work = { command: 'plan', on: true, publish: 'commit', ...MADE, every: '6h', when: 'npx x', waitsFor: 'when a ticket has no plan' } as const
+  const timed = { command: 'report', on: true, publish: 'commit', ...MADE, every: '1d' } as const
+
+  test('a row with a shell line, its wait not over: how long is left, and that it still needs work', () => {
+    expect(nextStart({ ...work, lastRun: ago(3 * HOUR) }, now)).toBe('Next start in 3h, if there is work')
+    expect(nextStart({ ...work, lastRun: ago(5 * HOUR + 48 * 60_000) }, now)).toBe('Next start in 12 min, if there is work')
+    expect(nextStart({ ...work, every: '7d', lastRun: ago(24 * HOUR) }, now)).toBe('Next start in 6 days, if there is work')
+  })
+
+  test('a row with a shell line, its wait over or never started: it starts when there is work, which the scheduler asks every minute', () => {
+    expect(nextStart({ ...work, lastRun: ago(7 * HOUR) }, now)).toBe('Starts when there is work')
+    expect(nextStart(work, now)).toBe('Starts when there is work')
+  })
+
+  test('"No wait" picked here, or a skill that names no interval: it starts when there is work, whenever it last started', () => {
+    expect(nextStart({ ...work, pace: { work: true }, lastRun: ago(60_000) }, now)).toBe('Starts when there is work')
+    const { every: _every, ...unpaced } = work
+    expect(nextStart({ ...unpaced, lastRun: ago(60_000) }, now)).toBe('Starts when there is work')
+  })
+
+  test('a row that runs by time alone says no "if there is work": the time left, then the scheduler\'s next look', () => {
+    expect(nextStart({ ...timed, lastRun: ago(HOUR) }, now)).toBe('Next start in 23h')
+    expect(nextStart({ ...timed, lastRun: ago(25 * HOUR) }, now)).toBe("Starts at the scheduler's next look")
+    expect(nextStart(timed, now)).toBe("Starts at the scheduler's next look")
+  })
+
+  test('a pace set on this machine stands in for the skill\'s; with a time of day the next start is that time, as a day and an hour', () => {
+    expect(nextStart({ ...work, pace: { every: '1h', since: '' }, lastRun: ago(3 * HOUR) }, now)).toBe('Starts when there is work')
+    const since = new Date(2026, 9, 1, 9, 0).toISOString()
+    expect(nextStart({ ...work, pace: { every: '1d', at: '10:00', since }, lastRun: { id: 'r', at: new Date(2026, 9, 8, 10, 5).toISOString() } }, now)).toBe('Next start tomorrow 10:00, if there is work')
+    expect(nextStart({ ...timed, pace: { every: '2d', at: '10:00', since }, lastRun: { id: 'r', at: new Date(2026, 9, 8, 10, 5).toISOString() } }, now)).toBe('Next start Saturday 10:00')
+  })
+
+  test("the line a row says: what the last look said of its pace or its work is said by the pace as of now; a reason only the tool knows is said in its place", () => {
+    const row = { ...work, lastRun: ago(3 * HOUR) }
+    const said = (outcome?: string): string => startsNext({ ...row, ...(outcome !== undefined ? { decision: { command: 'plan', outcome } } : {}) }, now)
+    expect(said()).toBe('Next start in 3h, if there is work')
+    expect(said('not due (last start 3h ago, every 6h)')).toBe('Next start in 3h, if there is work')
+    expect(said('not due')).toBe('Next start in 3h, if there is work')
+    expect(said('started 2026-10-08T09-00-00-000Z')).toBe('Next start in 3h, if there is work')
+    expect(said('cap reached (1 in flight, cap 1)')).toBe('One is already running')
+    expect(said('quota: 96% of the week used')).toBe('Quota: 96% of the week used')
+    expect(said('check failed: jq: not found')).toBe('Check failed: jq: not found')
+    // A row its coding agent cannot run says so whatever the pace says.
+    expect(startsNext({ ...row, runsOn: 'codex', able: ['claude-code'] }, now)).toBe('Cannot start on Codex: its skill is not in .agents/skills')
+  })
+
+  test('why nothing starts by itself in a project: its scheduler off, or on with no process; nothing while it runs', () => {
+    expect(schedulerStopped({ on: true, running: true })).toBeUndefined()
+    expect(schedulerStopped({ on: false, running: false })).toBe('The scheduler is off')
+    expect(schedulerStopped({ on: true, running: false })).toBe('The scheduler is on, but not running')
   })
 })

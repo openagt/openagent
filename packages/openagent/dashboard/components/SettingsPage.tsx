@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import { DRIVERS } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import { NO_MODEL_PINNED } from '../lib/agent-settings.js'
@@ -15,7 +15,8 @@ import { BridgeSettings } from './BridgeSettings.js'
 import { BridgeBrowserSettings } from './BridgeBrowserSettings.js'
 import { MachinesSettings } from './MachinesSettings.js'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
-import { Checkbox } from './ui/checkbox.js'
+import { Switch } from './ui/switch.js'
+import { RadioGroup, RadioGroupItem } from './ui/radio-group.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { cn } from '../lib/utils.js'
 import { SettingsRow as Row, SettingsSection as Section, SettingsSelectRow as SelectRow, type SettingsOption as SelectOption } from './SettingsRows.js'
@@ -58,10 +59,11 @@ export function SettingsPage({
 
   return (
     <ScrollArea className="min-h-0 flex-1">
-      <div className="mx-auto max-w-4xl space-y-6 p-6">
+      <div className="mx-auto max-w-4xl space-y-6 p-6 max-md:p-4">
         <div>
-          <h1 className="text-xl font-semibold">Settings</h1>
-          <p className="text-sm text-muted-foreground">
+          {/* The title and the line under it as on every other page. */}
+          <h1 className="text-lg font-semibold">Settings</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Your defaults, everywhere.
           </p>
         </div>
@@ -181,16 +183,10 @@ export function SettingsPage({
  * (answers are claimed on read), but a person decides one, so it is presented as one.
  */
 function BridgeBrowserChoice({ daemonBrowser, onChange }: { daemonBrowser: boolean; onChange: (daemonBrowser: boolean) => void }) {
+  const question = useId()
   const option = (value: boolean, label: string, description: string, body: ReactNode) => (
     <label className={cn('flex cursor-pointer gap-3 rounded-md border p-3', daemonBrowser === value ? 'border-primary/60 bg-muted/20' : 'border-border')}>
-      <input
-        type="radio"
-        name="bridge-browser"
-        className="mt-1 shrink-0"
-        checked={daemonBrowser === value}
-        onChange={() => onChange(value)}
-        aria-label={label}
-      />
+      <RadioGroupItem value={value ? 'daemon' : 'own'} aria-label={label} className="mt-1" />
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-medium">{label}</span>
         <span className="block text-xs text-muted-foreground">{description}</span>
@@ -199,24 +195,30 @@ function BridgeBrowserChoice({ daemonBrowser, onChange }: { daemonBrowser: boole
     </label>
   )
   return (
-    <fieldset className="mt-3 space-y-2">
-      <legend className="text-sm font-medium">Which browser does the work?</legend>
-      {option(
-        true,
-        'A browser the daemon runs — recommended',
-        'Chrome for Testing, downloaded once, signed in once, kept minimized. Web runs work with your own Chrome closed.',
-        <BridgeBrowserSettings enabled />,
-      )}
-      {option(
-        false,
-        'Your own Chrome',
-        'Install the extension, open its options and paste the token. Web runs need your Chrome open.',
-        <BridgeSettings enabled onChange={() => {}} />,
-      )}
-    </fieldset>
+    // One group with one name: the radio group is named by the question above it.
+    <div className="mt-3">
+      <p id={question} className="mb-2 text-sm font-medium">
+        Which browser does the work?
+      </p>
+      <RadioGroup aria-labelledby={question} value={daemonBrowser ? 'daemon' : 'own'} onValueChange={next => onChange(next === 'daemon')}>
+        {option(
+          true,
+          'A browser the daemon runs — recommended',
+          'Chrome for Testing, downloaded once, signed in once, kept minimized. Web runs work with your own Chrome closed.',
+          <BridgeBrowserSettings enabled />,
+        )}
+        {option(
+          false,
+          'Your own Chrome',
+          'Install the extension, open its options and paste the token. Web runs need your Chrome open.',
+          <BridgeSettings enabled onChange={() => {}} />,
+        )}
+      </RadioGroup>
+    </div>
   )
 }
 
+/** A setting that is on or off and takes effect at once: a switch, not a box to tick in a form still to be sent. */
 function ToggleRow({
   label,
   description,
@@ -237,7 +239,7 @@ function ToggleRow({
       description={description}
       dimmed={disabled}
       control={
-        <Checkbox
+        <Switch
           checked={checked}
           disabled={disabled}
           onCheckedChange={next => onChange(next === true)}

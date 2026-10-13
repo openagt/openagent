@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { ModuleHostContext, type ModuleCommandResult, type ModuleHost } from '@openagt/dashboard/module'
 import { SubagentsSettings } from './SubagentsSettings.js'
 import { runnerChoices, runnerOf, runnerValue } from './choices.js'
+import { choices, pick, showing } from '../../openagent/dashboard/test-controls.js'
 
 // The coding agents' own lists, as the dashboard asked them: Claude Code answered, Codex listed one.
 vi.mock('../../openagent/dashboard/rpc/models.js', () => ({
@@ -53,7 +54,10 @@ function show(host: ModuleHost, projects = PROJECTS) {
   )
 }
 
-const options = (menu: HTMLSelectElement): string[] => [...menu.options].map(o => o.textContent ?? '')
+/** A row's menu, by its label: the button that shows its pick, in the words the list has for it, and opens the list. */
+const menu = (label: string) => screen.getByRole('combobox', { name: label })
+/** Wait until the coding agents answered with their models: a list holds a model's line only from then on. */
+const modelsListed = () => waitFor(async () => expect(await choices(menu('Hard tasks'))).toContain('Claude Code · Opus 5.5'))
 
 afterEach(cleanup)
 
@@ -61,41 +65,48 @@ describe('Subagents settings', () => {
   test('each level offers the main agent\'s own, then every coding agent by its default and its models; a pick is saved whole in every project', async () => {
     const { host, runCommand, files } = fakeHost({ hard: { driver: 'claude-code', model: 'opus' }, atOnce: 3 })
     show(host)
-    await waitFor(() => expect((screen.getByLabelText('Hard tasks') as HTMLSelectElement).value).toBe('claude-code opus'))
-    const simple = screen.getByLabelText('Simple tasks') as HTMLSelectElement
-    await waitFor(() => expect(options(simple)).toEqual(['Same as the main agent', 'Claude Code · its own default', 'Claude Code · Opus 5.5', 'Codex · its own default', 'Codex · GPT-5.6-Luna']))
-    expect(simple.value).toBe('')
-    expect((screen.getByLabelText('At once') as HTMLSelectElement).value).toBe('3')
+    await waitFor(() => expect(showing(menu('Hard tasks'))).toBe('Claude Code · Opus 5.5'))
+    const simple = menu('Simple tasks')
+    await waitFor(async () => expect(await choices(simple)).toEqual(['Same as the main agent', 'Claude Code · its own default', 'Claude Code · Opus 5.5', 'Codex · its own default', 'Codex · GPT-5.6-Luna']))
+    expect(showing(simple)).toBe('Same as the main agent')
+    expect(showing(menu('At once'))).toBe('3')
+    expect(await choices(menu('At once'))).toEqual(['1', '2', '3', '4', '5', '6', '7', '8'])
 
-    fireEvent.change(simple, { target: { value: 'codex gpt-5.6-luna' } })
+    await pick(simple, 'Codex · GPT-5.6-Luna')
     const whole = { hard: { driver: 'claude-code', model: 'opus' }, atOnce: 3, simple: { driver: 'codex', model: 'gpt-5.6-luna' } }
     await waitFor(() => expect(files).toEqual({ p1: whole, p2: whole }))
     expect(runCommand).toHaveBeenCalledWith('p2', ['settings', JSON.stringify(whole)])
-    fireEvent.change(screen.getByLabelText('Hard tasks'), { target: { value: '' } })
+    expect(showing(simple)).toBe('Codex · GPT-5.6-Luna')
+    // The main agent's own is a choice with no value: picked, the level is saved as not set.
+    await pick(menu('Hard tasks'), 'Same as the main agent')
     await waitFor(() => expect(files['p1']).toEqual({ atOnce: 3, simple: { driver: 'codex', model: 'gpt-5.6-luna' } }))
-    fireEvent.change(screen.getByLabelText('At once'), { target: { value: '6' } })
+    expect(showing(menu('Hard tasks'))).toBe('Same as the main agent')
+    await pick(menu('At once'), '6')
     await waitFor(() => expect(files['p1']).toEqual({ atOnce: 6, simple: { driver: 'codex', model: 'gpt-5.6-luna' } }))
+    expect(showing(menu('At once'))).toBe('6')
   })
 
   test('nothing saved reads as the main agent\'s own and 4 at once; the first project that answers is the one shown', async () => {
     const { host } = fakeHost({}, projectId => (projectId === 'p1' ? 'orchestration: command not found' : undefined))
     show(host)
-    await waitFor(() => expect((screen.getByLabelText('At once') as HTMLSelectElement).value).toBe('4'))
-    expect((screen.getByLabelText('Simple tasks') as HTMLSelectElement).value).toBe('')
+    await waitFor(() => expect(host.runCommand).toHaveBeenCalledWith('p2', ['settings']))
+    await waitFor(() => expect(showing(menu('At once'))).toBe('4'))
+    expect(showing(menu('Simple tasks'))).toBe('Same as the main agent')
+    expect(showing(menu('Hard tasks'))).toBe('Same as the main agent')
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
   test('a second pick made before the first is saved keeps the first; saves go one at a time, the latest waiting pick sent next', async () => {
     const { host, runCommand } = fakeHost()
     show(host)
-    await screen.findByLabelText('Simple tasks')
+    await modelsListed()
     const finish: Array<(value: ModuleCommandResult) => void> = []
     runCommand.mockImplementation((_projectId: string, args: string[]) => (args.length === 2 ? new Promise(resolve => finish.push(resolve)) : Promise.resolve({ ok: true, output: { ok: true } })))
     const saves = () => runCommand.mock.calls.filter(([, args]) => args.length === 2).map(([projectId, args]) => [projectId, JSON.parse(args[1]!)])
-    fireEvent.change(screen.getByLabelText('Simple tasks'), { target: { value: 'codex' } })
-    expect((screen.getByLabelText('Simple tasks') as HTMLSelectElement).value).toBe('codex')
-    fireEvent.change(screen.getByLabelText('Hard tasks'), { target: { value: 'claude-code opus' } })
-    fireEvent.change(screen.getByLabelText('At once'), { target: { value: '2' } })
+    await pick(menu('Simple tasks'), 'Codex · its own default')
+    expect(showing(menu('Simple tasks'))).toBe('Codex · its own default')
+    await pick(menu('Hard tasks'), 'Claude Code · Opus 5.5')
+    await pick(menu('At once'), '2')
     // Only the first save is on its way, to both projects.
     expect(saves()).toEqual([
       ['p1', { simple: { driver: 'codex' } }],
@@ -113,11 +124,11 @@ describe('Subagents settings', () => {
   test('a refused save overtaken by a later one that is saved says nothing', async () => {
     const { host, runCommand } = fakeHost()
     show(host)
-    await screen.findByLabelText('Simple tasks')
+    await modelsListed()
     const finish: Array<(value: ModuleCommandResult) => void> = []
     runCommand.mockImplementation((_projectId: string, args: string[]) => (args.length === 2 ? new Promise(resolve => finish.push(resolve)) : Promise.resolve({ ok: true, output: { ok: true } })))
-    fireEvent.change(screen.getByLabelText('Simple tasks'), { target: { value: 'codex' } })
-    fireEvent.change(screen.getByLabelText('Hard tasks'), { target: { value: 'claude-code opus' } })
+    await pick(menu('Simple tasks'), 'Codex · its own default')
+    await pick(menu('Hard tasks'), 'Claude Code · Opus 5.5')
     for (const done of finish.splice(0)) done({ ok: false, error: 'busy' })
     await waitFor(() => expect(finish).toHaveLength(2))
     for (const done of finish.splice(0)) done({ ok: true, output: { ok: true } })
@@ -135,9 +146,9 @@ describe('Subagents settings', () => {
       if (args.length === 1) throw new Error('the dashboard is not answering')
       return projectId === 'p2' ? { ok: false, error: 'atOnce is not a whole number' } : { ok: true, output: { ok: true } }
     })
-    fireEvent.change(screen.getByLabelText('Simple tasks'), { target: { value: 'codex' } })
+    await pick(menu('Simple tasks'), 'Codex · its own default')
     expect((await screen.findByRole('alert')).textContent).toBe('The subagent settings were not saved: other: atOnce is not a whole number')
-    await waitFor(() => expect((screen.getByLabelText('Simple tasks') as HTMLSelectElement).value).toBe(''))
+    await waitFor(() => expect(showing(menu('Simple tasks'))).toBe('Same as the main agent'))
     cleanup()
 
     const { host: broken } = fakeHost({}, () => 'orchestration: command not found')

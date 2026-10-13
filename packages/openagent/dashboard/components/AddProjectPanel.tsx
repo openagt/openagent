@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { onCloneTarget, sendAddProject, sendAddProjectFromAddress, sendPickProjectDirectory } from '../rpc/projects.js'
 import { useAction } from '../lib/use-action.js'
 import { AddProjectEffects } from './AddProjectEffects.js'
 import { Button } from './ui/button.js'
+import { Input } from './ui/input.js'
+import { RadioGroup, RadioGroupOption } from './ui/radio-group.js'
 
 // Add a project (#396/#1150): the OS's own folder picker instead of a typed path — the daemon
 // opens the dialog (a browser page cannot learn an absolute path from a picker of its own) and
@@ -42,6 +44,7 @@ export function AddProjectPanel({
   const [typed, setTyped] = useState('')
   const [target, setTarget] = useState<{ typed: string; address: string; path: string } | null>(null)
   const [share, setShare] = useState(false)
+  const recordsLabel = useId()
   const [added, setAdded] = useState<{ alreadyActivated: boolean; noRemote: boolean; path?: string } | null>(null)
   const [pickError, setPickError] = useState<string | null>(null)
   const { busy, error, reset, run } = useAction()
@@ -163,7 +166,7 @@ export function AddProjectPanel({
             <label className="mb-1 block text-xs text-muted-foreground" htmlFor="add-project-address">
               The repository&rsquo;s address. Any git host works.
             </label>
-            <input
+            <Input
               id="add-project-address"
               autoFocus
               value={typed}
@@ -173,7 +176,7 @@ export function AddProjectPanel({
               spellCheck={false}
               autoCapitalize="none"
               autoCorrect="off"
-              className="mb-2 w-full rounded-md border border-border bg-background px-2 py-1 font-mono text-xs"
+              className="mb-2 h-8 bg-background px-2 font-mono text-xs"
             />
             <p className="mb-3 text-xs text-muted-foreground">It is cloned into the projects folder of this computer, with the logins this computer has.</p>
             {error && <p className="mb-2 text-xs text-danger">{error}</p>}
@@ -221,26 +224,29 @@ export function AddProjectPanel({
             <div className="mb-3">
               <AddProjectEffects />
             </div>
-            <fieldset className="mb-3 text-xs">
-              <legend className="mb-1 font-medium text-foreground">The agents&rsquo; records (what you ask, what each agent answers)</legend>
-              <label className="flex items-start gap-2 py-0.5">
-                <input type="radio" name="records" className="mt-0.5" checked={!share} disabled={busy} onChange={() => setShare(false)} />
-                <span>
-                  Keep them on this machine
-                  <span className="block text-muted-foreground">Nothing is pushed.</span>
-                </span>
-              </label>
-              <label className="flex items-start gap-2 py-0.5">
-                <input type="radio" name="records" className="mt-0.5" checked={share} disabled={busy} onChange={() => setShare(true)} />
-                <span>
-                  Share them to the repository&rsquo;s remote
-                  <span className="block text-muted-foreground">
-                    Pushes a branch <code className="rounded bg-muted px-1">agent-data</code> to origin, and keeps pushing as agents work.
+            {/* One group with one name: the radio group is named by the line above it. */}
+            <div className="mb-3 text-xs">
+              <p id={recordsLabel} className="mb-1 font-medium text-foreground">
+                The agents&rsquo; records (what you ask, what each agent answers)
+              </p>
+              <RadioGroup aria-labelledby={recordsLabel} value={share ? 'share' : 'keep'} disabled={busy} onValueChange={next => setShare(next === 'share')} className="gap-1.5">
+                <RadioGroupOption value="keep" className="flex-nowrap items-start text-xs [&>[data-slot=radio-group-item]]:mt-0.5">
+                  <span>
+                    Keep them on this machine
+                    <span className="block text-muted-foreground">Nothing is pushed.</span>
                   </span>
-                </span>
-              </label>
+                </RadioGroupOption>
+                <RadioGroupOption value="share" className="flex-nowrap items-start text-xs [&>[data-slot=radio-group-item]]:mt-0.5">
+                  <span>
+                    Share them to the repository&rsquo;s remote
+                    <span className="block text-muted-foreground">
+                      Pushes a branch <code className="rounded bg-muted px-1">agent-data</code> to origin, and keeps pushing as agents work.
+                    </span>
+                  </span>
+                </RadioGroupOption>
+              </RadioGroup>
               <p className="mt-1 text-muted-foreground">You can change this later in the project&rsquo;s menu.</p>
-            </fieldset>
+            </div>
             {error && <p className="mb-2 text-xs text-danger">{error}</p>}
             <div className="flex justify-end gap-2">
               <Button

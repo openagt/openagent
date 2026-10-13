@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Button, cn, type ModuleCommandResult, type ModuleProject } from '@openagt/dashboard/module'
-import { EMPTY_DRAFT, addArgs, draftProblem, draftSentence, isUntouched, ownPaceArgs, paceHint, savedFile, savedWords, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
+import { Button, Input, RadioGroup, RadioGroupOption, type ModuleCommandResult, type ModuleProject } from '@openagt/dashboard/module'
+import { EMPTY_DRAFT, addArgs, draftProblem, draftSentence, isUntouched, ownPaceArgs, savedFile, savedWords, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
 import { PaceFields, SaidFields, Section } from './fields.js'
 
 // The "New automation" form of the Automations page: a person's own prompt, saved as a command of
@@ -13,8 +13,6 @@ import { PaceFields, SaidFields, Section } from './fields.js'
 // or only on this machine, where nothing is to commit and the row can start at once. A time of day
 // is this machine's, kept with a second command (`pace`). Once saved the form says where the file
 // is and what is left for the person to do.
-
-const field = 'rounded-md border border-border bg-background px-2 py-1 text-sm disabled:opacity-50'
 
 export function AutomationForm({
   project,
@@ -102,7 +100,7 @@ export function AutomationForm({
           <div className="flex items-center gap-1 text-sm">
             {/* A shared one is a command a person can type; one kept on this machine is no command, so it has no slash. */}
             {!draft.onThisMachine && <span className="font-mono text-muted-foreground">/</span>}
-            <input type="text" autoFocus value={draft.name} onChange={e => set({ name: e.target.value })} placeholder="answer-comments" aria-label="Name" className={cn(field, 'w-64 font-mono')} />
+            <Input type="text" autoFocus value={draft.name} onChange={e => set({ name: e.target.value })} placeholder="answer-comments" aria-label="Name" className="h-8 w-64 max-w-full bg-background px-2 font-mono" />
           </div>
         </Section>
         <Section title="What it does">
@@ -110,10 +108,10 @@ export function AutomationForm({
         </Section>
         <Section title="When it runs">
           <PaceFields
-            name="when the new automation runs"
+            name="How long the new automation waits after a start"
             draft={draft.pace}
-            work={{ label: 'Whenever the shell line prints something', disabled: draft.when.trim() === '' }}
-            everyHint={paceHint(draft)}
+            work={draft.when.trim() !== '' ? { waitsFor: draft.waitsFor.trim() || undefined } : undefined}
+            noWait={draft.when.trim() !== ''}
             start={{ count: 1, unit: 'd' }}
             counted="Counted from its last start."
             disabled={saving}
@@ -122,16 +120,16 @@ export function AutomationForm({
           />
         </Section>
         <Section title="Who gets it">
-          <label className="flex items-center gap-2 text-sm">
-            <input type="radio" name="who gets the automation" checked={!draft.onThisMachine} onChange={() => set({ onThisMachine: false })} />
-            Shared with the project
-            <span className="text-xs text-muted-foreground">a file you commit; everyone who has the project gets the row, switched off</span>
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="radio" name="who gets the automation" checked={draft.onThisMachine} onChange={() => set({ onThisMachine: true })} />
-            Only on this machine
-            <span className="text-xs text-muted-foreground">nothing to commit; nobody else gets the row</span>
-          </label>
+          <RadioGroup aria-label="Who gets the automation" value={draft.onThisMachine ? 'machine' : 'project'} onValueChange={who => set({ onThisMachine: who === 'machine' })} disabled={saving}>
+            <RadioGroupOption value="project">
+              Shared with the project
+              <span className="text-xs text-muted-foreground">a file you commit; everyone who has the project gets the row, switched off</span>
+            </RadioGroupOption>
+            <RadioGroupOption value="machine">
+              Only on this machine
+              <span className="text-xs text-muted-foreground">nothing to commit; nobody else gets the row</span>
+            </RadioGroupOption>
+          </RadioGroup>
         </Section>
       </fieldset>
       <p className="rounded-md border border-border bg-background px-3 py-2 text-sm">{problem ?? `${sentence}.`}</p>

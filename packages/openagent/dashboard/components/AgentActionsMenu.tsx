@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { GitHostHome, OpenAgentEvent, RepositoryOffer, RecordsReach } from '../../src/index.js'
 import { sessionInfo } from '../../src/client.js'
-import { MoreVertical, ChevronDown, FolderOpen, Code, Check, ExternalLink, Square, FolderX, Trash2, Copy, CloudUpload, CloudOff, Info } from 'lucide-react'
+import { MoreVertical, ChevronDown, FolderOpen, Code, Check, ExternalLink, Square, FolderX, Trash2, Copy, CloudUpload, CloudOff, Info, Puzzle } from 'lucide-react'
 import { onGitHostHome, onRepositoryOffer } from '../rpc/reads.js'
 import { onRecordsReach, sendShareRecords } from '../rpc/projects.js'
 import {
@@ -42,7 +42,7 @@ import {
 // when the answer lands.
 //
 // On the "New agent" page there is no session, and one ⋮ holds all of the project's (no `part`):
-// its git host page, the offer of a repository, where the agents' records go, its folder, its editor.
+// its git host page, its skills, the offer of a repository, where the agents' records go, its folder, its editor.
 //
 // The handoff's Push / Open PR are not here: they move the work forward, and sit in the bar above
 // the message box. The editor keeps its preferred-editor submenu; Delete opens its confirm dialog
@@ -56,6 +56,7 @@ export function AgentActionsMenu({
   onWorktreeRemoved,
   onDeleted,
   onProjectRemoved,
+  onOpenSkills,
   part,
   details,
   size,
@@ -70,6 +71,8 @@ export function AgentActionsMenu({
   onDeleted?: (() => void) | undefined
   /** Told once the project is off the list; given, the project's menu offers "Remove project". */
   onProjectRemoved?: (() => void) | undefined
+  /** Open the list of the project's skills; given, the project's menu offers "Skills…". */
+  onOpenSkills?: (() => void) | undefined
   /** Which of an agent's page's two menus this is; absent, the one menu of a page with no session. */
   part?: 'session' | 'project' | undefined
   /** The session's details strip under the bar (its coding agent, its spend): the session's menu shows and hides it. */
@@ -203,6 +206,12 @@ export function AgentActionsMenu({
           {home && (
             <DropdownMenuItem render={<a href={home.url} target="_blank" rel="noreferrer" />}>
               <ExternalLink className="h-3.5 w-3.5 shrink-0" /> Open on {home.name}
+            </DropdownMenuItem>
+          )}
+          {/* The door to the project's skills: which it has, and the list to add or remove some. */}
+          {onOpenSkills && ofProject && !agentId && (
+            <DropdownMenuItem onClick={onOpenSkills}>
+              <Puzzle className="h-3.5 w-3.5 shrink-0" /> Skills…
             </DropdownMenuItem>
           )}
           {offer && (

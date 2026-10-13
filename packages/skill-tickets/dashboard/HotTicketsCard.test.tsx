@@ -109,4 +109,20 @@ describe('HotTicketsCard', () => {
     expect((await screen.findByRole('alert')).textContent).toBe('Could not read the tickets of beta: no answer for p2: tickets list --local')
     expect(screen.getByText('urgent')).toBeTruthy()
   })
+
+  test('a lane with nothing in it is not drawn: no "Claimed 0" beside the lanes that have tickets', async () => {
+    render({ p1: { 'list --local': [ticket('urgent.md', { priority: '9' })] }, p2: { 'list --local': [] } })
+    expect(await screen.findByText('urgent')).toBeTruthy()
+    expect(screen.getByText('High priority')).toBeTruthy()
+    expect(screen.queryByText('Claimed')).toBeNull()
+    expect(screen.queryByText('Waiting')).toBeNull()
+  })
+
+  test('the card\'s title opens the Tickets page', async () => {
+    render({ p1: { 'list --local': [] }, p2: { 'list --local': [] } })
+    const title = await screen.findByRole('link', { name: 'Hot tickets' })
+    expect(title.getAttribute('href')).toBe('/tickets')
+    fireEvent.click(title)
+    expect(host.openPage).toHaveBeenCalledWith('tickets')
+  })
 })

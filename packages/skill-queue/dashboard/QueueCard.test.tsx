@@ -1,7 +1,9 @@
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { QueueCard } from './QueueCard.js'
-import { fakeHost, renderWithHost, type FakeHost } from './test-host.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../../openagent/dashboard/lib/host-services.js'
+import type { MountedModules } from '../../openagent/dashboard/lib/use-modules.js'
+import { NO_MODULES, fakeHost, renderWithHost, type FakeHost } from './test-host.js'
 import { workOnEntryPrompt } from '../src/module.js'
 import { configureFirst } from '../../openagent/dashboard/test-utils.js'
 
@@ -89,5 +91,32 @@ describe('QueueCard', () => {
     await configureFirst('Other ways to run Login page')
     expect(host.configureRun).toHaveBeenCalledWith('p1', workOnEntryPrompt(LOGIN))
     expect(started()).toEqual([])
+  })
+
+  test('the entries are numbered in the order agents take them, and the card\'s title opens the Queue page', async () => {
+    render({ p1: [LOGIN, 'Tidy the loader'] })
+    await screen.findByText('Login page')
+    expect([...document.querySelectorAll('ul ul > li')].map(row => row.querySelector('span')?.textContent)).toEqual(['1.', '2.'])
+    const title = screen.getByRole('link', { name: 'AI Queue' })
+    expect(title.getAttribute('href')).toBe('/queue')
+    fireEvent.click(title)
+    expect(host.openPage).toHaveBeenCalledWith('queue')
+  })
+
+  test('with a page installed that names the file an entry points at, the entry reads as that name and opens that page', async () => {
+    const openPage = vi.fn()
+    host = fakeHost({ p1: { '--local': ['Create tickets/2026-08-01_login-page.plan.md'] }, p2: { '--local': [] } })
+    const modules: MountedModules = { ...NO_MODULES, pages: [{ segment: 'tickets', label: 'Tickets', Page: () => null, package: 'a-tickets', projects: ['p1'], names: async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page', href: 'tickets/2026-08-01_login-page.md' } }) }] }
+    renderWithHost(
+      <HostServicesContext.Provider value={{ ...INERT_HOST_SERVICES, openPage }}>
+        <QueueCard projects={[alpha, beta]} />
+      </HostServicesContext.Provider>,
+      host,
+      modules,
+    )
+    const entry = await screen.findByRole('button', { name: 'Plan: Login page' })
+    expect(entry.getAttribute('title')).toBe('Create tickets/2026-08-01_login-page.plan.md')
+    fireEvent.click(entry)
+    expect(openPage).toHaveBeenCalledWith('tickets', ['p1', '2026-08-01_login-page.md'])
   })
 })

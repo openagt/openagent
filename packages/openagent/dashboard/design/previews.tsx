@@ -1,7 +1,15 @@
 import type { ReactNode } from 'react'
 import { Button } from '../components/ui/button.js'
 import { Badge } from '../components/ui/badge.js'
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.js'
+import { Card, CardContent, CardHeader, CardTitle, CardTitleLink } from '../components/ui/card.js'
+import { Checkbox } from '../components/ui/checkbox.js'
+import { Input } from '../components/ui/input.js'
+import { Label } from '../components/ui/label.js'
+import { RadioGroup, RadioGroupItem, RadioGroupOption } from '../components/ui/radio-group.js'
+import { Select, SelectTrigger, SelectValue } from '../components/ui/select.js'
+import { Switch } from '../components/ui/switch.js'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table.js'
+import { Textarea } from '../components/ui/textarea.js'
 import { OptionLabel } from '../components/ui/option-label.js'
 import { DisclosureToggle } from '../components/DisclosureToggle.js'
 
@@ -250,6 +258,117 @@ function StatTiles() {
   )
 }
 
+const UNITS = [
+  { value: 'h', label: 'hours' },
+  { value: 'd', label: 'days' },
+]
+
+/** The fields a form is made of. Every one is the shipped component; the select's list is portalled at runtime, so only its trigger shows here. */
+function FormControls() {
+  return (
+    <div className="space-y-5">
+      <Row label="Radio group: one pick among a few that stay in view">
+        <RadioGroup aria-label="Wait after a start" defaultValue="skill">
+          <RadioGroupOption value="skill">
+            As the skill says <span className="text-xs text-muted-foreground">(6 hours)</span>
+          </RadioGroupOption>
+          <div className="flex items-center gap-2">
+            <RadioGroupItem value="every" aria-label="A wait you set" />
+            <Input type="number" defaultValue={6} aria-label="How long" className="h-8 w-20 px-2" />
+            <span className="text-sm">hours</span>
+          </div>
+          <RadioGroupOption value="work">No wait</RadioGroupOption>
+        </RadioGroup>
+      </Row>
+      <Row label="Radio group, disabled">
+        <RadioGroup aria-label="Disabled" defaultValue="a" disabled>
+          <RadioGroupOption value="a">Picked</RadioGroupOption>
+          <RadioGroupOption value="b">Not picked</RadioGroupOption>
+        </RadioGroup>
+      </Row>
+      <Row label="Select: one pick from a list that opens (trigger shown; the list is a menu popup)">
+        <Select items={UNITS} defaultValue="h">
+          <SelectTrigger aria-label="Unit" className="w-36">
+            <SelectValue />
+          </SelectTrigger>
+        </Select>
+        <Select items={UNITS} defaultValue="d">
+          <SelectTrigger size="sm" aria-label="Unit, small" className="w-28">
+            <SelectValue />
+          </SelectTrigger>
+        </Select>
+        <Select items={UNITS} defaultValue="h" disabled>
+          <SelectTrigger size="sm" aria-label="Unit, disabled" className="w-28">
+            <SelectValue />
+          </SelectTrigger>
+        </Select>
+      </Row>
+      <Row label="Switch: on or off, at once. Checkbox: one line of a form or a list">
+        <Switch aria-label="On" defaultChecked />
+        <Switch aria-label="Off" />
+        <Switch aria-label="Disabled" disabled />
+        <Checkbox aria-label="Ticked" defaultChecked />
+        <Checkbox aria-label="Not ticked" />
+        <Checkbox aria-label="Disabled" disabled />
+      </Row>
+      <Row label="Label, input, textarea">
+        <div className="w-full max-w-md space-y-2">
+          <Label htmlFor="ds-name">
+            A name <span className="text-xs text-muted-foreground">optional</span>
+          </Label>
+          <Input id="ds-name" placeholder="answer-comments" />
+          <Label htmlFor="ds-prompt">What the agent is told</Label>
+          <Textarea id="ds-prompt" rows={3} placeholder="Answer each new comment below." />
+          <Input disabled placeholder="Disabled" />
+        </div>
+      </Row>
+    </div>
+  )
+}
+
+/** A list with columns, and a card whose title opens the card's page. */
+function Tables() {
+  return (
+    <div className="space-y-5">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Status</TableHead>
+            <TableHead>Asked</TableHead>
+            <TableHead className="text-right">Cost</TableHead>
+            <TableHead>Started</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow>
+            <TableCell className="text-success">done</TableCell>
+            <TableCell>/plan-tickets</TableCell>
+            <TableCell className="text-right tabular-nums">$0.15</TableCell>
+            <TableCell className="text-muted-foreground">4h ago</TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell className="text-danger">failed</TableCell>
+            <TableCell>/triage quick</TableCell>
+            <TableCell className="text-right tabular-nums">$0.15</TableCell>
+            <TableCell className="text-muted-foreground">1d ago</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+      <Card className="max-w-sm">
+        <CardHeader>
+          <CardTitleLink segment="queue" onOpen={() => {}}>
+            A card whose title opens its page
+          </CardTitleLink>
+          <p className="text-xs text-muted-foreground">The arrow shows on hover and focus, and always on a phone.</p>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">A summary; the whole is on the page.</p>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 function Disclosures() {
   return (
     <div className="space-y-3">
@@ -378,6 +497,22 @@ export const PREVIEWS: Preview[] = [
     subtitle: 'The Overview KPI row, accent on active',
     width: 900,
     node: <StatTiles />,
+  },
+  {
+    path: 'components/form-controls.html',
+    group: 'Components',
+    name: 'Form controls',
+    subtitle: 'Radio group, select, switch, checkbox, label, input, textarea',
+    width: 900,
+    node: <FormControls />,
+  },
+  {
+    path: 'components/table.html',
+    group: 'Components',
+    name: 'Table + card title link',
+    subtitle: 'A list with columns, and a card that opens its page',
+    width: 900,
+    node: <Tables />,
   },
   {
     path: 'components/disclosure.html',

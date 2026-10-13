@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { DEFAULT_FAN_OUT_COUNT, addArgs, addToQueue, alreadyQueued, entryLabel, fanOut, fanOutLabel, queueLine, topEntries, workOnEntryPrompt, type CommandResult } from './module.js'
+import { DEFAULT_FAN_OUT_COUNT, DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addArgs, addTextArgs, doneArgs, isWorkingOn, priorityMeaning, addToQueue, alreadyQueued, entryLabel, fanOut, fanOutLabel, queueLine, topEntries, workOnEntryPrompt, type CommandResult } from './module.js'
 
 test('entryLabel shows a leading link\'s text, opens only an absolute http(s) target, and keeps anything else whole', () => {
   assert.deepEqual(entryLabel('[Login page](tickets/2026-08-01_login-page.md) — needs the cookie first'), { text: 'Login page' })
@@ -108,4 +108,34 @@ test('fanOut starts one run per entry in order, each on its own entry, and stops
   assert.deepEqual(stopped, { started: ['run-1'], error: 'the daemon refused' })
   assert.equal(seen.length, 2, 'the third entry is never tried')
   assert.deepEqual(await fanOut(async () => ({ ok: true, agentId: 'x' }), []), { started: [] })
+})
+
+test('the page adds a typed task with `queue add` at the priority picked, trimmed', () => {
+  assert.deepEqual(addTextArgs('  Tidy the loader  ', 8), ['add', '--priority', '8', '--', 'Tidy the loader'])
+  // A task that opens with a dash is still the task: it comes after `--`, where nothing is a flag.
+  assert.deepEqual(addTextArgs('--help', 0), ['add', '--priority', '0', '--', '--help'])
+  assert.deepEqual(doneArgs('--help'), ['done', '--', '--help'])
+})
+
+test('the priorities run from the most urgent down, the page starts in the middle, and only the two ends have words', () => {
+  assert.deepEqual(PRIORITIES, [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0])
+  assert.equal(DEFAULT_PRIORITY, 5)
+  assert.equal(priorityMeaning(10), 'most urgent')
+  assert.equal(priorityMeaning(0), 'only if there is capacity')
+  assert.equal(priorityMeaning(5), undefined)
+})
+
+test('an agent is on an entry when it was asked exactly what the page asks for that entry', () => {
+  assert.equal(QUEUE_COMMAND, 'work-queue')
+  assert.equal(isWorkingOn(workOnEntryPrompt('Tidy the loader'), 'Tidy the loader'), true)
+  assert.equal(isWorkingOn(workOnEntryPrompt('Tidy the loader'), '  Tidy the loader '), true)
+  assert.equal(isWorkingOn(workOnEntryPrompt('Tidy the loader'), 'Fix the login'), false)
+  // An entry that is a part of another one, or a word of the prompt itself, is not being worked on.
+  assert.equal(isWorkingOn(workOnEntryPrompt('Fix login page layout'), 'Fix login'), false)
+  assert.equal(isWorkingOn(workOnEntryPrompt('Fix login page layout'), 'queue'), false)
+  // The command that works the queue is asked the command alone: which entry it took is not known here.
+  assert.equal(isWorkingOn('/work-queue', 'Tidy the loader'), false)
+  assert.equal(isWorkingOn(undefined, 'Tidy the loader'), false)
+  // An empty line is in every prompt, and is no entry.
+  assert.equal(isWorkingOn('/work-queue', '  '), false)
 })

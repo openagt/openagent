@@ -1,5 +1,5 @@
 import { Flame } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, LinkActions, Tooltip, TooltipContent, TooltipTrigger, cn, usePolled, useModuleHost, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
+import { Card, CardContent, CardHeader, CardTitleLink, LinkActions, Tooltip, TooltipContent, TooltipTrigger, cn, usePolled, useModuleHost, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
 import { heldBack, holderAgent, hotLane, readListed, ticketLink, type HotLane } from '../src/module.js'
 import type { WorkspaceTicket } from './lib/types.js'
 
@@ -65,10 +65,9 @@ export function HotTicketsCard({ projects }: ModuleCardProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Flame className="h-4 w-4 text-muted-foreground" />
+        <CardTitleLink icon={<Flame className="h-4 w-4 text-muted-foreground" aria-hidden />} segment="tickets" onOpen={() => host.openPage('tickets')}>
           Hot tickets
-        </CardTitle>
+        </CardTitleLink>
       </CardHeader>
       <CardContent>
         {read.errors.map(({ project, error }) => (
@@ -86,9 +85,12 @@ export function HotTicketsCard({ projects }: ModuleCardProps) {
           // The lanes stacked, not side by side: the card shares the Overview's narrow column with
           // the other packages' cards, and a row needs its width for the title.
           <div className="flex flex-col gap-5">
-            {LANES.map(lane => (
-              <Lane key={lane.key} lane={lane} tickets={read.hot.filter(t => t.lane === lane.key)} showProject={projects.length > 1} />
-            ))}
+            {/* A lane with nothing in it is not drawn: "Claimed 0" says nothing the missing lane does not. */}
+            {LANES.map(lane => ({ lane, tickets: read.hot.filter(t => t.lane === lane.key) }))
+              .filter(({ tickets }) => tickets.length > 0)
+              .map(({ lane, tickets }) => (
+                <Lane key={lane.key} lane={lane} tickets={tickets} showProject={projects.length > 1} />
+              ))}
           </div>
         )}
       </CardContent>
@@ -98,16 +100,14 @@ export function HotTicketsCard({ projects }: ModuleCardProps) {
 
 function Lane({ lane, tickets, showProject }: { lane: (typeof LANES)[number]; tickets: HotTicket[]; showProject: boolean }) {
   const host = useModuleHost()
-  const empty = tickets.length === 0
   return (
     <div>
       <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
-        {/* An empty lane dims to a single header line, so the populated lane carries the card. */}
-        <span aria-hidden className={cn('h-2 w-2 shrink-0 rounded-full', lane.dot, empty && 'opacity-40')} />
-        <span className={empty ? 'text-muted-foreground' : 'text-foreground/80'}>{lane.label}</span>
+        <span aria-hidden className={cn('h-2 w-2 shrink-0 rounded-full', lane.dot)} />
+        <span className="text-foreground/80">{lane.label}</span>
         <span className="tabular-nums text-muted-foreground/70">{tickets.length}</span>
       </div>
-      {!empty && (
+      {
         // Every ticket in the lane, never a "+N more": the card is the shortlist.
         <ul className="mt-1.5">
           {tickets.map(({ project, ticket }) => {
@@ -152,7 +152,7 @@ function Lane({ lane, tickets, showProject }: { lane: (typeof LANES)[number]; ti
             )
           })}
         </ul>
-      )}
+      }
     </div>
   )
 }

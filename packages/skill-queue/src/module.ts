@@ -3,6 +3,48 @@
 // "Add to queue" action runs for the links a dashboard page hands it, and how the Overview card
 // starts agents on entries.
 
+/**
+ * The command that works the queue by itself, as a person types it without its slash: the
+ * `work-queue` skill's. The Queue page looks for it among the commands a project starts by
+ * itself, to say whether anything takes from the queue.
+ */
+export const QUEUE_COMMAND = 'work-queue'
+
+/** The priorities an entry can be queued at, most urgent first: the sections of the queue file. */
+export const PRIORITIES: readonly number[] = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+
+/** The priority the page's "Add to queue" starts at: the middle of the scale. */
+export const DEFAULT_PRIORITY = 5
+
+/** What the two ends of the scale mean, in the queue file's own words; nothing for a priority between them. */
+export function priorityMeaning(priority: number): string | undefined {
+  return priority === 10 ? 'most urgent' : priority === 0 ? 'only if there is capacity' : undefined
+}
+
+/**
+ * The `queue add` command line for a text typed on the page, at the priority picked. The text
+ * comes after `--`: a person may type a task that opens with a dash, and it is still the task,
+ * never a flag.
+ */
+export function addTextArgs(text: string, priority: number): string[] {
+  return ['add', '--priority', String(priority), '--', text.trim()]
+}
+
+/** The `queue done` command line that removes one entry, as the queue printed it; after `--`, since an entry may open with a dash. */
+export function doneArgs(entry: string): string[] {
+  return ['done', '--', entry]
+}
+
+/**
+ * Whether an agent that was asked `ask` is on `entry`: it was asked exactly what the start
+ * buttons of the page and of the card ask for that entry. An entry that is only a part of what
+ * another agent was asked is not being worked on. An agent the command that works the queue
+ * started is not known here: it is asked the command alone, and picks its entry itself.
+ */
+export function isWorkingOn(ask: string | undefined, entry: string): boolean {
+  return ask !== undefined && entry.trim() !== '' && ask.trim() === workOnEntryPrompt(entry.trim()).trim()
+}
+
 /** How one queue entry reads on a dashboard: what to show, and where it points, if anywhere. */
 export interface EntryLabel {
   /** The text to show: a leading markdown link's text, else the whole entry. */

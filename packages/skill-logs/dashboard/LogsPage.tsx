@@ -1,4 +1,4 @@
-import { useModuleHost, usePolled, formatRelative, cn, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, useModuleHost, usePolled, formatRelative, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -54,7 +54,7 @@ export function LogsPage({ projects }: ModulePageProps) {
   )
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6 max-md:p-4">
       <h1 className="text-lg font-semibold">Logs</h1>
       <p className="mt-1 text-sm text-muted-foreground">Every run recorded in {projects.length === 1 ? 'this project' : 'these projects'}, newest first.</p>
       {read.failed.map(({ project, error }) => (
@@ -64,48 +64,46 @@ export function LogsPage({ projects }: ModulePageProps) {
       ))}
       {loaded && read.rows.length === 0 && read.failed.length === 0 && <p className="mt-6 text-sm text-muted-foreground">No runs recorded yet.</p>}
       {read.rows.length > 0 && (
-        <table className="mt-4 w-full text-left text-sm max-md:hidden">
-          <thead className="text-xs text-muted-foreground">
-            <tr className="border-b border-border">
-              <th className="py-2 pr-3 font-normal">Status</th>
-              <th className="py-2 pr-3 font-normal">Asked</th>
-              {projects.length > 1 && <th className="py-2 pr-3 font-normal">Project</th>}
-              <th className="py-2 pr-3 font-normal">Branch</th>
-              <th className="py-2 pr-3 font-normal">Pull request</th>
-              <th className="py-2 pr-3 text-right font-normal">Cost</th>
-              <th className="py-2 font-normal">Started</th>
-            </tr>
-          </thead>
-          <tbody>
-            {read.rows.map(({ project, card }) => (
-              <tr
-                key={`${project.id}/${card.id}`}
-                onClick={() => host.openAgent(project.id, card.id)}
-                className="cursor-pointer border-b border-border hover:bg-accent"
-              >
-                <td className={cn('py-2 pr-3', STATUS_CLASS[card.status] ?? 'text-muted-foreground')}>{card.status}</td>
-                <td className="max-w-md truncate py-2 pr-3" title={card.intent}>
-                  {card.intent?.trim() || card.id}
-                </td>
-                {projects.length > 1 && <td className="py-2 pr-3 text-muted-foreground">{project.name}</td>}
-                <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">{card.branch ?? '—'}</td>
-                <td className="py-2 pr-3">
-                  {card.pr ? (
-                    <a href={card.pr.url} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()} className="text-info hover:underline">
-                      #{card.pr.number}
-                    </a>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                </td>
-                <td className="py-2 pr-3 text-right tabular-nums">{card.cost !== undefined ? `$${card.cost.toFixed(2)}` : '—'}</td>
-                <td className="py-2 text-muted-foreground" title={card.startedAt}>
-                  {formatRelative(card.startedAt)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="mt-4 max-md:hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Status</TableHead>
+                <TableHead>Asked</TableHead>
+                {projects.length > 1 && <TableHead>Project</TableHead>}
+                <TableHead>Branch</TableHead>
+                <TableHead>Pull request</TableHead>
+                <TableHead className="text-right">Cost</TableHead>
+                <TableHead>Started</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {read.rows.map(({ project, card }) => (
+                <TableRow key={`${project.id}/${card.id}`} onClick={() => host.openAgent(project.id, card.id)} className="cursor-pointer">
+                  <TableCell className={STATUS_CLASS[card.status] ?? 'text-muted-foreground'}>{card.status}</TableCell>
+                  <TableCell className="max-w-md truncate" title={card.intent}>
+                    {card.intent?.trim() || card.id}
+                  </TableCell>
+                  {projects.length > 1 && <TableCell className="text-muted-foreground">{project.name}</TableCell>}
+                  <TableCell className="font-mono text-xs text-muted-foreground">{card.branch ?? '—'}</TableCell>
+                  <TableCell>
+                    {card.pr ? (
+                      <a href={card.pr.url} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()} className="text-info hover:underline">
+                        #{card.pr.number}
+                      </a>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{card.cost !== undefined ? `$${card.cost.toFixed(2)}` : '—'}</TableCell>
+                  <TableCell className="whitespace-nowrap text-muted-foreground" title={card.startedAt}>
+                    {formatRelative(card.startedAt)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
       {/* A phone has no width for the table's columns: there a run is two lines, what was asked and
           then the rest, and its branch is left to its own page. */}

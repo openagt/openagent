@@ -16,11 +16,10 @@ import { formatAge, formatDateTime } from '../lib/format-date.js'
 
 export function Agents({
   working,
-  loading,
   onSelectAgent,
 }: {
+  /** The agents at work: never none, since the Overview draws the card only while one works. */
   working: ActiveAgent[]
-  loading: boolean
   onSelectAgent: (projectId: string, agentId: string) => void
 }) {
   return (
@@ -36,11 +35,7 @@ export function Agents({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {loading ? (
-          <p className="py-2 text-sm text-muted-foreground">Loading…</p>
-        ) : working.length === 0 ? (
-          <p className="py-2 text-sm text-muted-foreground">No agents working right now.</p>
-        ) : (
+        {
           <ul className="space-y-0.5">
             {working.map(a => (
               <AgentRow
@@ -54,7 +49,7 @@ export function Agents({
               />
             ))}
           </ul>
-        )}
+        }
       </CardContent>
     </Card>
   )

@@ -1,7 +1,7 @@
 import type { ModuleHost, ModuleProject } from '@openagt/dashboard/module'
 import type { PublishPick, TickDecision } from '../src/state.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, DEFAULT_PUBLISH, isAgent, isAgents, isTime, type AgentName } from '../src/names.js'
-import { MAX_COUNT, paceInForce, parseInterval, parseTimeOfDay, takesTimeOfDay, type PacePick, type PaceUnit } from '../src/pace.js'
+import { MAX_COUNT, dueFrom, paceInForce, parseInterval, parseTimeOfDay, takesTimeOfDay, type PacePick, type PaceUnit } from '../src/pace.js'
 
 // What the module shows of each project's scheduler: the answer of `agent-scheduler status`, the
 // state file as it stands, whether the scheduler's process is alive, and the schedule as the
@@ -317,6 +317,9 @@ export function spelled(every: string): string {
 
 const sentence = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)
 
+/** What a row with a shell line waits for, when its words do not say: the line itself. */
+export const PRINTS_SOMETHING = 'when its shell line prints something'
+
 /**
  * How often a scheduled command runs, as a sentence, by the pace in force: this machine's, else
  * its skill's. An interval is "Every 6 hours", with "at most" before what its check waits for
@@ -326,7 +329,7 @@ const sentence = (text: string): string => text.charAt(0).toUpperCase() + text.s
  * work, which may be later that day.
  */
 export function pace(command: SchedulerCommand): string {
-  const waits = command.waitsFor ?? 'when its shell line prints something'
+  const waits = command.waitsFor ?? PRINTS_SOMETHING
   const skills = command.every === undefined ? undefined : parseInterval(command.every)
   const inForce = paceInForce(command.pace, { ...(skills ? { every: skills } : {}), ...(command.when !== undefined ? { when: command.when } : {}) })
   // An interval of the skill's the tool would not have read is shown as written.
@@ -450,17 +453,32 @@ export function publishes(command: SchedulerCommand): string {
  * agent cannot run says so whatever its switch: switching it on would start nothing. Then nothing
  * for a command switched off here, whose row says "Off", for one switched on that no tick has
  * decided yet, and for one the tick started, whose row says when it last ran. A decision is said in
- * plain words where the tool's own are a rule's shorthand ("No work", "Not due yet", "One is
- * already running"), and in the tool's words with a capital where they carry a reason only the tool
- * knows (`Quota: …`, `Check failed: …`). A command waiting for its time of day says when it is
- * next due: "Next: Saturday 10:00".
+ * plain words where the tool's own are a rule's shorthand ("No work", "One is already running"),
+ * and in the tool's words with a capital where they carry a reason only the tool knows
+ * (`Quota: …`, `Check failed: …`). A command whose wait is not over says when it starts next:
+ * "Next start in 3h, if there is work", "Next start Saturday 10:00".
  */
 export function decided(command: SchedulerCommand, now: Date = new Date()): string | undefined {
   const elsewhere = cannotRun(command)
   if (elsewhere) return elsewhere
   // Whether the row's agent can read its skill is said off the files, as of now: the last look's word on it may be about another agent, picked away since.
   if (!command.on || command.decision?.outcome.startsWith('not a command of ')) return undefined
-  return outcomeWords(command.decision?.outcome, now)
+  return waitingWords(command, now) ?? outcomeWords(command.decision?.outcome)
+}
+
+/**
+ * What a command whose last look found its wait not over says: when it starts next, in the words
+ * its Edit panel uses. A look that named the time it is due from (a pace with a time of day) is
+ * taken at its word; else the time left is counted from the row's last start, as of now. Nothing
+ * for any other decision.
+ */
+function waitingWords(command: SchedulerCommand, now: Date): string | undefined {
+  const outcome = command.decision?.outcome
+  if (outcome === undefined || !/^not due \((last start|next start from) /.test(outcome)) return undefined
+  const named = /^not due \(next start from (\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d),/.exec(outcome)
+  const from = named && new Date(Number(named[1]), Number(named[2]) - 1, Number(named[3]), Number(named[4]), Number(named[5]))
+  if (from && from.getTime() > now.getTime()) return `Next start ${nextWords(from, now)}${command.when !== undefined ? ', if there is work' : ''}`
+  return nextStart(command, now)
 }
 
 /** That the coding agent a row's runs are on cannot run it at all, for a person: its skill is not in that agent's own skills folder. Nothing for a row it can run. */
@@ -471,20 +489,70 @@ export function cannotRun(command: Pick<SchedulerCommand, 'home' | 'runsOn' | 'a
 
 const notThere = (agent: string, dir: string): string => `Cannot start on ${agent}: its skill is not in ${dir}`
 
-/** One decision of the scheduler, a tick's or the answer to "Run now", for a person; nothing for one the row already says in another place: that it is switched off, that it started. */
-export function outcomeWords(outcome: string | undefined, now: Date = new Date()): string | undefined {
+/** One decision of the scheduler, a tick's or the answer to "Run now", for a person; nothing for one the row already says in another place: that it is switched off, that it started. A wait that is not over is said by {@link decided}, which knows the row. */
+export function outcomeWords(outcome: string | undefined): string | undefined {
   if (outcome === undefined || outcome === 'switched off on this machine' || outcome.startsWith('started ')) return undefined
   const elsewhere = /^not a command of (.+?): its skill is only under .+, not (\S+)$/.exec(outcome)
   if (elsewhere) return notThere(elsewhere[1]!, elsewhere[2]!)
   if (outcome === 'not due') return 'No work'
   const unpublished = /^not on (\S+?)( as this clone last saw it)?: /.exec(outcome)
   if (unpublished) return unpublished[1] === 'HEAD' ? 'Cannot start yet: its skill is not committed' : `Cannot start yet: its skill is not on ${unpublished[1]}${unpublished[2] ? ', as this machine last saw it' : ''}`
-  if (/^not due \(last start /.test(outcome)) return 'Not due yet'
-  const next = /^not due \(next start from (\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d),/.exec(outcome)
-  if (next) return `Next: ${nextWords(new Date(Number(next[1]), Number(next[2]) - 1, Number(next[3]), Number(next[4]), Number(next[5])), now)}`
   const capped = /^cap reached \((\d+) in flight/.exec(outcome)
   if (capped) return capped[1] === '1' ? 'One is already running' : `${capped[1]} are already running`
   return sentence(outcome)
+}
+
+/** A stretch of time still to wait, for a person: "12 min", "3h", "2 days". */
+function waitWords(ms: number): string {
+  const minutes = Math.max(1, Math.ceil(ms / 60_000))
+  if (minutes < 60) return `${minutes} min`
+  const hours = Math.round(minutes / 60)
+  if (hours < 48) return `${hours}h`
+  return `${Math.round(hours / 24)} days`
+}
+
+/**
+ * When a command that is switched on starts next, for a person, by the same two things the
+ * Edit panel says a row runs by: what it waits for, and how long it waits after a start. While
+ * the wait is not over: "Next start in 3h", or the time it is due from when its pace has a time of
+ * day ("Next start tomorrow 10:00"), with ", if there is work" for a row with a shell line. Once
+ * the wait is over, or with no wait: "Starts when there is work" for a row with a shell line,
+ * which the scheduler asks every minute; a row that runs by time alone starts at the scheduler's
+ * next look. Counted from the row's last start as the scheduler lists it, like the scheduler's own.
+ */
+export function nextStart(command: SchedulerCommand, now: Date = new Date()): string {
+  const work = command.when !== undefined
+  const soon = work ? 'Starts when there is work' : "Starts at the scheduler's next look"
+  const skills = command.every === undefined ? undefined : parseInterval(command.every)
+  const inForce = paceInForce(command.pace, { ...(skills ? { every: skills } : {}), ...(command.when !== undefined ? { when: command.when } : {}) })
+  if (!inForce) return soon
+  const last = command.lastRun === undefined ? undefined : new Date(command.lastRun.at)
+  const from = dueFrom(inForce, last, now)
+  if (from.getTime() <= now.getTime()) return soon
+  const when = inForce.at ? nextWords(from, now) : `in ${waitWords(from.getTime() - now.getTime())}`
+  return `Next start ${when}${work ? ', if there is work' : ''}`
+}
+
+/**
+ * What a command that is switched on says of its next start, in one line. Why it cannot start,
+ * where the scheduler's last look gave a reason only the tool knows (the quota, a check that
+ * failed, enough of it running already, a skill that is not where a run starts); else when it
+ * starts next, by its pace ({@link nextStart}).
+ */
+export function startsNext(command: SchedulerCommand, now: Date = new Date()): string {
+  const elsewhere = cannotRun(command)
+  if (elsewhere) return elsewhere
+  const outcome = command.decision?.outcome
+  // What the last look said of the pace or of the work is said better by the pace itself, as of now.
+  const paced = outcome === undefined || outcome === 'not due' || outcome.startsWith('not due (') || outcome.startsWith('started ') || outcome === 'switched off on this machine'
+  return (paced ? undefined : decided(command, now)) ?? nextStart(command, now)
+}
+
+/** Why nothing starts by itself in a project though rows are switched on, in a sentence; nothing while its scheduler is on and running. */
+export function schedulerStopped(row: Pick<SchedulerRow, 'on' | 'running'>): string | undefined {
+  if (!row.on) return 'The scheduler is off'
+  if (!row.running) return 'The scheduler is on, but not running'
+  return undefined
 }
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']

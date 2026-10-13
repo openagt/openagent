@@ -6,6 +6,7 @@ import { Quota } from './Quota.js'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { usePolled } from '../lib/use-async.js'
+import { cn } from '../lib/utils.js'
 import { usePreferences } from '../lib/preferences.js'
 import { OnboardingChecklist } from './OnboardingChecklist.js'
 import { Agents } from './Agents.js'
@@ -14,9 +15,9 @@ import type { ProjectSummary } from '../../src/index.js'
 import { ScrollArea } from './ui/scroll-area.js'
 
 // The Overview landing page (#1139): a focused at-a-glance board — usage first, then what needs a
-// human (Human Queue) beside the agents working now stacked on the cards the installed packages
-// declare (#1818: the queue package's AI Queue, the tickets package's hot tickets, the scheduler
-// package's Scheduler). OpenAgent's own cards are projections of the same .openagent files
+// human (Human Queue) beside the agents working now, then the cards the installed packages
+// declare, in two columns (#1818: the queue package's AI Queue, the tickets package's hot tickets,
+// the scheduler package's Automations). What is empty is not drawn: no card for no agent at work. OpenAgent's own cards are projections of the same .openagent files
 // over the `onDashboard` RPC, polled so they stay live; selecting a row jumps into its project or
 // straight into a session. With one project picked in the sidebar's project select (#1513), every
 // part but the usage bar shows that project's only, and the cards of packages it does not have are
@@ -51,7 +52,6 @@ export function DashboardPage({
   // Dismissing only hides it here (#958); the settings page keeps it, which is what the
   // dismiss control says.
   const onboardingDismissed = usePreferences().onboardingDismissed ?? false
-  const loading = data === null
   const working = (data?.active ?? []).filter(agent => scope === null || agent.projectId === scope)
   const shownProjects = scope === null ? projects : projects.filter(project => project.id === scope)
 
@@ -65,18 +65,19 @@ export function DashboardPage({
         {/* Usage first (#1139): the one figure that governs everything the agent may do next. */}
         <Quota projects={projects} />
 
-        {/* The two queues side by side (#1139), with the agents working now sitting to the Human
-            Queue's right on top of the packages' cards: what needs you, who is on it, and what the
-            packages say comes next. */}
-        <div className="grid items-start gap-4 max-md:grid-cols-[minmax(0,1fr)] lg:grid-cols-2">
+        {/* What needs a person, beside who is working now. The agents' card is drawn only while
+            one works: with none, what needs you takes the whole row. */}
+        {/* One column that may shrink below its content: without it a long row pushes the cards past a phone's edge. */}
+        <div className={cn('grid grid-cols-[minmax(0,1fr)] items-start gap-4', working.length > 0 && 'lg:grid-cols-2')}>
           <HumanQueue items={interventions} onSelectProject={onSelectProject} onSelectAgent={onSelectAgent} />
-          <div className="space-y-4">
-            <Agents working={working} loading={loading} onSelectAgent={onSelectAgent} />
-            {/* The cards the installed packages declare (#1818), under the agents at work: a package's own
-                summary of its data, only when one of the projects shown (every registered one, or the picked
-                one alone) has the package. */}
-            <ModuleCards projects={shownProjects} />
-          </div>
+          {working.length > 0 && <Agents working={working} onSelectAgent={onSelectAgent} />}
+        </div>
+
+        {/* The cards the installed packages declare (#1818), in two columns that fill evenly whatever
+            each card's height: a package's own summary of its data, only when one of the projects
+            shown (every registered one, or the picked one alone) has the package. */}
+        <div className="gap-4 lg:columns-2 [&>*]:mb-4 [&>*]:break-inside-avoid">
+          <ModuleCards projects={shownProjects} />
         </div>
       </div>
     </ScrollArea>

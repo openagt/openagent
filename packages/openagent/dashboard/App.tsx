@@ -503,6 +503,7 @@ export function App() {
           onSettings={showSettings}
           pages={shownPages}
           activePage={pageSegment}
+          atSettings={view === 'settings'}
           onPage={showPage}
           interventionCount={interventions.length}
         />

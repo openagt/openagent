@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { checked } from '../test-controls.js'
 
 const sendAddProject = vi.hoisted(() => vi.fn())
 const sendPickProjectDirectory = vi.hoisted(() => vi.fn())
@@ -41,13 +42,14 @@ describe('AddProjectPanel (#1150)', () => {
     sendPickProjectDirectory.mockResolvedValue({ ok: true, path: '/Users/dev/my-repo' })
     sendAddProject.mockResolvedValue({ ok: true, alreadyActivated: false })
     render(<AddProjectPanel onAdded={() => {}} onClose={() => {}} />)
-    const keep = (await screen.findByRole('radio', { name: /Keep them on this machine/ })) as HTMLInputElement
-    const share = screen.getByRole('radio', { name: /Share them to the repository\u2019s remote/ }) as HTMLInputElement
-    expect([keep.checked, share.checked]).toEqual([true, false])
+    const keep = await screen.findByRole('radio', { name: /Keep them on this machine/ })
+    const share = screen.getByRole('radio', { name: /Share them to the repository\u2019s remote/ })
+    expect([checked(keep), checked(share)]).toEqual([true, false])
     // What sharing does is said beside the choice, before anything happens.
     expect(screen.getByText('Nothing is pushed.')).toBeTruthy()
     expect(screen.getByText(/keeps pushing as agents work/)).toBeTruthy()
     fireEvent.click(share)
+    expect([checked(keep), checked(share)]).toEqual([false, true])
     fireEvent.click(screen.getByRole('button', { name: 'I trust it, add it' }))
     await screen.findByText('Project added')
     expect(sendAddProject).toHaveBeenCalledWith('/Users/dev/my-repo', true)

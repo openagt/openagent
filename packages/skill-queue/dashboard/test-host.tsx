@@ -15,6 +15,10 @@ export interface FakeHost extends ModuleHost {
   runCommand: ReturnType<typeof vi.fn<ModuleHost['runCommand']>>
   startRun: ReturnType<typeof vi.fn<ModuleHost['startRun']>>
   configureRun: ReturnType<typeof vi.fn<ModuleHost['configureRun']>>
+  act: ReturnType<typeof vi.fn<ModuleHost['act']>>
+  agents: ReturnType<typeof vi.fn<ModuleHost['agents']>>
+  openAgent: ReturnType<typeof vi.fn<ModuleHost['openAgent']>>
+  openPage: ReturnType<typeof vi.fn<ModuleHost['openPage']>>
 }
 
 /** A host whose commands answer from `answers`; a command line with no answer fails, naming itself. */
@@ -28,14 +32,14 @@ export function fakeHost(answers: Answers = {}): FakeHost {
   return {
     package: '@openagt/skill-queue',
     runCommand: vi.fn(answer),
-    act: vi.fn(answer),
+    act: vi.fn<ModuleHost['act']>(answer),
     runComputerCommand: vi.fn(async () => ({ ok: false as const, error: 'not the computer\'s' })),
     read: vi.fn(async () => ({ ok: false as const, error: 'this module has no server part' })),
-    openAgent: vi.fn(),
-    openPage: vi.fn(),
+    openAgent: vi.fn<ModuleHost['openAgent']>(),
+    openPage: vi.fn<ModuleHost['openPage']>(),
     startRun: vi.fn(async () => ({ ok: true as const, agentId: `run-${++runs}` })),
     configureRun: vi.fn(),
-    agents: vi.fn(async () => []),
+    agents: vi.fn<ModuleHost['agents']>(async () => []),
     machines: vi.fn(async () => ({ version: '0.0.0', machines: [] })),
     addMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     watchScreen: vi.fn(async () => undefined),
@@ -46,10 +50,10 @@ export function fakeHost(answers: Answers = {}): FakeHost {
 /** No other module is installed: the card is rendered with nothing but its own package. */
 export const NO_MODULES: MountedModules = { pages: [], cards: [], linkActions: [], panels: [], runSlots: [], settings: [], loaded: true }
 
-/** Render the card inside the fake host, with no other module mounted. */
-export function renderWithHost(ui: ReactElement, host: ModuleHost): RenderResult {
+/** Render the card or the page inside the fake host, with no other module mounted unless `modules` says which are. */
+export function renderWithHost(ui: ReactElement, host: ModuleHost, modules: MountedModules = NO_MODULES): RenderResult {
   return rtlRender(
-    <ModulesContext.Provider value={NO_MODULES}>
+    <ModulesContext.Provider value={modules}>
       <ModuleHostContext.Provider value={host}>{ui}</ModuleHostContext.Provider>
     </ModulesContext.Provider>,
   )

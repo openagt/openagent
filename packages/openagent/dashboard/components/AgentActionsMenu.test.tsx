@@ -158,6 +158,25 @@ describe('the menu with no session: the project home (#809)', () => {
     await waitFor(() => expect(sendOpenInApp).toHaveBeenCalledWith('p1', 'files', undefined))
   })
 
+  test('"Skills…" is the door to the project\'s skills: offered where the page gives it one, and only in the project\'s own menu', async () => {
+    const onOpenSkills = vi.fn()
+    const { unmount } = render(<AgentActionsMenu projectId="p1" events={[]} onOpenSkills={onOpenSkills} />)
+    openProjectMenu()
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Skills…' }))
+    expect(onOpenSkills).toHaveBeenCalledTimes(1)
+    unmount()
+    // A page that gives no door has no item, and neither has a session's menu.
+    render(<AgentActionsMenu projectId="p1" events={[]} />)
+    openProjectMenu()
+    await screen.findByText('Open folder')
+    expect(screen.queryByRole('menuitem', { name: 'Skills…' })).toBeNull()
+    cleanup()
+    render(<AgentActionsMenu projectId="p1" agentId="a1" events={[]} part="session" onOpenSkills={onOpenSkills} />)
+    openMenu()
+    await screen.findByRole('menu')
+    expect(screen.queryByRole('menuitem', { name: 'Skills…' })).toBeNull()
+  })
+
   test('its editor item opens the project in the editor', async () => {
     render(<AgentActionsMenu projectId="p1" events={[]} />)
     openProjectMenu()

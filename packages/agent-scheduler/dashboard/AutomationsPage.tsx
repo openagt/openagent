@@ -122,7 +122,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6 max-md:p-4">
       <h1 className="text-lg font-semibold">Automations</h1>
       <p className="mt-1 text-sm text-muted-foreground">What starts by itself while nobody is at the keyboard. Every row starts switched off: it runs on this machine only once you switch it on here.</p>
       {!loaded && <p className="mt-6 text-sm text-muted-foreground">Loading…</p>}

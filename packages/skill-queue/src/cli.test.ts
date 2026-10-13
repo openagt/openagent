@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { nodeGitRunner, withFileBranch, writeSharing, DATA_BRANCH } from '@openagt/agent-data'
 import { runCli, USAGE } from './cli.js'
 import { QUEUE_FILE } from './names.js'
+import { addTextArgs, doneArgs } from './module.js'
 
 const git = nodeGitRunner()
 const RETRIED_RM = { recursive: true, force: true, maxRetries: 10 } as const
@@ -56,6 +57,21 @@ async function run(cwd: string, argv: string[]) {
   const code = await runCli(argv, { cwd, stdout: line => out.push(line), stderr: line => err.push(line) })
   return { code, json: out.length ? JSON.parse(out.join('\n')) : undefined, stderr: err.join('\n') }
 }
+
+test('the page\'s own command lines: a task that opens with a dash is added and removed after `--`, where it is the task and no flag', async () => {
+  const { agents, cleanup } = await rig(1, '## Priority 5\n\n- Tidy the loader\n')
+  const [a] = agents
+  try {
+    // Without `--` the command reads the text as a flag, and says so.
+    assert.equal((await run(a!, ['add', '--force the cache', '--priority', '5'])).code, 2)
+    assert.deepEqual((await run(a!, addTextArgs('--force the cache', 5))).json, { ok: true, entry: '--force the cache', priority: 5 })
+    assert.deepEqual((await run(a!, [])).json, ['Tidy the loader', '--force the cache'])
+    assert.deepEqual((await run(a!, doneArgs('--force the cache'))).json, { ok: true, entry: '--force the cache' })
+    assert.deepEqual((await run(a!, [])).json, ['Tidy the loader'])
+  } finally {
+    await cleanup()
+  }
+})
 
 test('the bare command reads the queue off origin; add places an entry by priority as one pushed commit; done deletes the line', async () => {
   const { bare, agents, cleanup } = await rig(2, '## Priority 5\n\n- [Do B](tickets/2026-08-29_b.md)\n')
