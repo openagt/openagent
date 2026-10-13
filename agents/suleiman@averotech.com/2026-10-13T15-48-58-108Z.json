@@ -6,7 +6,6 @@
   "intent": "Tell me “hi”, nothing else",
   "driver": "claude-code",
   "model": "claude-sonnet-5-5",
-  "branch": "agent-2026-10-13T15-48-58-108Z",
   "cost": 0.0281939,
   "caller": {
     "runner": {
