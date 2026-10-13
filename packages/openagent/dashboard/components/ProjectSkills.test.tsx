@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { useState } from 'react'
 import type { ProjectSkills } from '../rpc/skills.js'
 
 const onProjectSkills = vi.hoisted(() => vi.fn())
@@ -37,19 +38,53 @@ function skills(over: Partial<ProjectSkills> = {}): ProjectSkills {
   }
 }
 
+/** The line with the door the project's ⋮ menu holds: a button here stands in for the menu's "Skills…". */
+function WithDoor(props: { projectId: string; onChanged?: () => void }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <button onClick={() => setOpen(true)}>Skills…</button>
+      <ProjectSkillsLine {...props} door={{ open, onClose: () => setOpen(false) }} />
+    </>
+  )
+}
+
 const box = (name: string): HTMLElement => screen.getByRole('checkbox', { name })
 const isTicked = (name: string): boolean => box(name).getAttribute('aria-checked') === 'true'
 
 describe('ProjectSkillsLine', () => {
-  test('says how many skills the project has, and nothing more when there is nothing to do', async () => {
+  test('a project with its skills in order has no line: nothing to say, and the list opens from the project\'s menu', async () => {
     onProjectSkills.mockResolvedValue(skills())
+    const { container } = render(<ProjectSkillsLine projectId="p1" />)
+    await waitFor(() => expect(onProjectSkills).toHaveBeenCalledWith('p1'))
+    await waitFor(() => expect(onProjectSkills.mock.results[0]?.type).toBe('return'))
+    expect(container.textContent).toBe('')
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  test('a project with no skill yet says so, with the door to the list in plain sight', async () => {
+    onProjectSkills.mockResolvedValue(skills({ has: 0 }))
     render(<ProjectSkillsLine projectId="p1" />)
-    expect(await screen.findByText(/This project has 3 of 25 skills\./)).toBeTruthy()
-    expect(onProjectSkills).toHaveBeenCalledWith('p1')
-    expect(screen.getByRole('button', { name: 'Add skills' })).toBeTruthy()
+    expect(await screen.findByText(/This project has no skills yet\./)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Add skills' }))
+    expect(await screen.findByRole('dialog')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Update' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Commit' })).toBeNull()
     expect(screen.queryByText(/waiting to reach/)).toBeNull()
+  })
+
+  test('"Skills…" in the project\'s menu opens the list, also when the line has nothing to say; closing the list tells the menu\'s side', async () => {
+    onProjectSkills.mockResolvedValue(skills())
+    render(<WithDoor projectId="p1" />)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Skills…' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(screen.queryByRole('status')).toBeNull()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    // Closed for the menu's side too: the same pick opens it again.
+    fireEvent.click(screen.getByRole('button', { name: 'Skills…' }))
+    expect(await screen.findByRole('dialog')).toBeTruthy()
   })
 
   test('a project that is unknown here shows no line', async () => {
@@ -96,14 +131,16 @@ describe('ProjectSkillsLine', () => {
   test('skills in the folder that are not yet on the branch agents start from are named as waiting', async () => {
     onProjectSkills.mockResolvedValue(skills({ has: 5, groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current', true), skill('queue', 'current', true), skill('plan', 'current')] }] }))
     const { container } = render(<ProjectSkillsLine projectId="p1" />)
-    await screen.findByText(/This project has 5 of 25 skills\./)
+    await screen.findByText(/waiting to reach/)
+    // What it holds is not counted on the line any more: only what is to know of them.
+    expect(container.textContent).not.toContain('This project has')
     expect(container.textContent).toContain('tickets, queue: waiting to reach main. An agent started from main does not have them.')
   })
 
   test('many waiting skills are counted, not named', async () => {
     onProjectSkills.mockResolvedValue(skills({ has: 8, groups: [{ title: 'Tickets and queue', ticked: true, skills: ['tickets', 'queue', 'plan', 'triage', 'ux'].map(name => skill(name, 'current', true)) }] }))
     const { container } = render(<ProjectSkillsLine projectId="p1" />)
-    await screen.findByText(/This project has 8 of 25 skills\./)
+    await screen.findByText(/waiting to reach/)
     expect(container.textContent).toContain('5 skills: waiting to reach main. An agent started from main does not have them.')
   })
 })
@@ -113,8 +150,8 @@ describe('Add skills', () => {
     onProjectSkills.mockResolvedValue(skills())
     sendChangeSkills.mockResolvedValue({ ok: true, written: ['tickets', 'queue'], removed: [], left: [], scheduler: 'on' })
     const onChanged = vi.fn()
-    render(<ProjectSkillsLine projectId="p1" onChanged={onChanged} />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Add skills' }))
+    render(<WithDoor projectId="p1" onChanged={onChanged} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Skills…' }))
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText('Tickets and queue')).toBeTruthy()
     expect(within(dialog).getByText('What tickets does.')).toBeTruthy()
@@ -135,8 +172,8 @@ describe('Add skills', () => {
       skills({ has: 5, groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current'), skill('queue', 'changed'), skill('plan')] }, { title: 'Needs its own setup', ticked: false, skills: [skill('browser')] }] }),
     )
     sendChangeSkills.mockResolvedValue({ ok: true, written: ['browser'], removed: ['tickets'], left: [{ path: '.agents/skills/tickets', reason: 'it holds other files' }] })
-    render(<ProjectSkillsLine projectId="p1" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Add skills' }))
+    render(<WithDoor projectId="p1" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Skills…' }))
     const dialog = await screen.findByRole('dialog')
     expect([isTicked('tickets'), isTicked('queue'), isTicked('plan'), isTicked('browser'), isTicked('scheduler')]).toEqual([true, true, false, false, false])
     expect(dialog.textContent).toContain('queue (changed by hand)')
@@ -156,8 +193,8 @@ describe('Add skills', () => {
     onProjectSkills.mockResolvedValue(skills())
     sendChangeSkills.mockResolvedValue({ ok: true, written: ['tickets', 'queue'], removed: [], left: [] })
     sendCommitSkills.mockResolvedValue({ ok: true, committed: true, commit: 'abc1234' })
-    render(<ProjectSkillsLine projectId="p1" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Add skills' }))
+    render(<WithDoor projectId="p1" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Skills…' }))
     const dialog = await screen.findByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     expect(await within(dialog).findByText(/not committed\. A commit holds these files alone/)).toBeTruthy()
@@ -175,8 +212,8 @@ describe('Add skills', () => {
     const { startBranch: _none, ...noRepository } = skills({ git: false })
     onProjectSkills.mockResolvedValue(noRepository)
     sendChangeSkills.mockResolvedValueOnce({ ok: false, error: 'EACCES: permission denied' }).mockResolvedValue({ ok: true, written: ['tickets', 'queue'], removed: [], left: [], schedulerError: 'hooks.yml: unreadable' })
-    render(<ProjectSkillsLine projectId="p1" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Add skills' }))
+    render(<WithDoor projectId="p1" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Skills…' }))
     let dialog = await screen.findByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     expect(await within(dialog).findByText('EACCES: permission denied')).toBeTruthy()
@@ -185,7 +222,7 @@ describe('Add skills', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(sendChangeSkills).toHaveBeenCalledTimes(1)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add skills' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Skills…' }))
     dialog = await screen.findByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     expect(await within(dialog).findByText('This folder is not a git repository, so there is nothing to commit.')).toBeTruthy()
@@ -200,8 +237,8 @@ describe('the skills line, over time', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
       onProjectSkills.mockResolvedValueOnce(skills()).mockResolvedValue(skills({ has: 4, groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current'), skill('queue')] }] }))
-      render(<ProjectSkillsLine projectId="p1" />)
-      fireEvent.click(await screen.findByRole('button', { name: 'Add skills' }))
+      render(<WithDoor projectId="p1" />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Skills…' }))
       const dialog = await screen.findByRole('dialog')
       expect(within(dialog).getByText('2 skills to write, the scheduler on.')).toBeTruthy()
       // The next read lands while the list is open: the project now holds tickets (written in a terminal, say).
@@ -218,8 +255,8 @@ describe('the skills line, over time', () => {
     onProjectSkills.mockResolvedValue(skills({ remote: false }))
     sendChangeSkills.mockResolvedValue({ ok: true, written: ['tickets', 'queue'], removed: [], left: [] })
     sendCommitSkills.mockResolvedValue({ ok: true, committed: true, commit: 'abc1234' })
-    render(<ProjectSkillsLine projectId="p1" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Add skills' }))
+    render(<WithDoor projectId="p1" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Skills…' }))
     const dialog = await screen.findByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     fireEvent.click(await within(dialog).findByRole('button', { name: 'Commit these files' }))

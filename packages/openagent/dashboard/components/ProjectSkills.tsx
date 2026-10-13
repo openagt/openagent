@@ -6,10 +6,11 @@ import { Button } from './ui/button.js'
 import { Checkbox } from './ui/checkbox.js'
 import { Dialog } from './ui/dialog.js'
 
-// A project's skills, on its own page (#2023): one line saying how many it has, with "Add skills",
-// which opens the same list with ticks `npx @openagt/init` shows in a terminal. Beside it, what a
-// person has to know or do about them: a newer text to take, files not committed yet, and the
-// skills that are in the folder but not yet on the branch agents start from.
+// A project's skills, on its own page (#2023). The door to them is "Skills…" in the project's ⋮
+// menu: it opens the same list with ticks `npx @openagt/init` shows in a terminal. This line shows
+// only while it has something to say: a project with no skill yet, which needs the door in plain
+// sight; a newer text to take; files not committed yet; and the skills that are in the folder but
+// not yet on the branch agents start from. A project with its skills in order has no line.
 
 const held = (skill: ProjectSkill): boolean => skill.standing !== 'absent'
 const all = (skills: ProjectSkills): ProjectSkill[] => skills.groups.flatMap(group => group.skills)
@@ -24,7 +25,16 @@ const NOTES: Partial<Record<ProjectSkill['standing'], string>> = {
 
 export const SCHEDULER_LINE = 'Starts the automations you switch on, while the dashboard is open. This machine only, nothing to commit.'
 
-export function ProjectSkillsLine({ projectId, onChanged }: { projectId: string; onChanged?: (() => void) | undefined }) {
+export function ProjectSkillsLine({
+  projectId,
+  onChanged,
+  door,
+}: {
+  projectId: string
+  onChanged?: (() => void) | undefined
+  /** The list as the project's menu opens it: `open` once "Skills…" was picked, `onClose` when the list is closed again. */
+  door?: { open: boolean; onClose: () => void } | undefined
+}) {
   const { value: skills, reload } = usePolled<ProjectSkills | null>(() => onProjectSkills(projectId), null, 15_000, [projectId], 'previous')
   // The list opens on the project as it stands at that moment: a later read must not change it under the person's ticks.
   const [adding, setAdding] = useState<ProjectSkills | null>(null)
@@ -35,6 +45,11 @@ export function ProjectSkillsLine({ projectId, onChanged }: { projectId: string;
   useEffect(() => {
     if (uncommitted > 0) setCommitted(null)
   }, [uncommitted])
+  // "Skills…" in the menu opens the list on the project as it stands then; picked before the skills were read, it opens once they are.
+  const asked = door?.open ?? false
+  useEffect(() => {
+    if (asked && skills) setAdding(current => current ?? skills)
+  }, [asked, skills])
   if (!skills) return null
 
   const changed = async (): Promise<void> => {
@@ -53,14 +68,33 @@ export function ProjectSkillsLine({ projectId, onChanged }: { projectId: string;
     await changed()
   }
 
+  const list = adding && (
+    <AddSkillsDialog
+      projectId={projectId}
+      skills={adding}
+      onClose={() => {
+        setAdding(null)
+        door?.onClose()
+      }}
+      onSaved={() => void changed()}
+    />
+  )
+  const none = skills.has === 0
+  const note = skills.uncommitted === 0 && committed !== null
+  const late = waiting.length > 0 && skills.startBranch !== undefined
+  // Nothing to say: the list alone, when the menu opened it.
+  if (!none && newer.length === 0 && skills.uncommitted === 0 && !note && !late && !error) return list || null
+
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border px-4 py-2 text-xs text-muted-foreground">
-      <span className="flex items-center gap-2">
-        This project has {skills.has} of {skills.of} skills.
-        <Button type="button" variant="outline" size="xs" onClick={() => setAdding(skills)}>
-          Add skills
-        </Button>
-      </span>
+    <div role="status" aria-label="This project's skills" className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border px-4 py-2 text-xs text-muted-foreground">
+      {none && (
+        <span className="flex items-center gap-2">
+          This project has no skills yet.
+          <Button type="button" variant="outline" size="xs" onClick={() => setAdding(skills)}>
+            Add skills
+          </Button>
+        </span>
+      )}
       {newer.length > 0 && (
         <span className="flex items-center gap-2">
           {count(newer.length, 'skill has', 'skills have')} a newer text.
@@ -77,21 +111,14 @@ export function ProjectSkillsLine({ projectId, onChanged }: { projectId: string;
           </Button>
         </span>
       )}
-      {skills.uncommitted === 0 && committed !== null && <span>Committed as {committed}. Nothing was pushed.</span>}
-      {waiting.length > 0 && skills.startBranch !== undefined && (
+      {note && <span>Committed as {committed}. Nothing was pushed.</span>}
+      {late && (
         <span>
           <span className="text-foreground">{waiting.length > 4 ? `${waiting.length} skills` : waiting.join(', ')}</span>: waiting to reach {skills.startBranch}. An agent started from {skills.startBranch} does not have {waiting.length === 1 ? 'it' : 'them'}.
         </span>
       )}
       {error && <span className="text-danger">{error}</span>}
-      {adding && (
-        <AddSkillsDialog
-          projectId={projectId}
-          skills={adding}
-          onClose={() => setAdding(null)}
-          onSaved={() => void changed()}
-        />
-      )}
+      {list}
     </div>
   )
 }

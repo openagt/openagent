@@ -109,12 +109,13 @@ already made, and lists it in its pull request; for anything else it proposes an
   and running their commands in the first one, which left a computer with no project, as
   a server is when it was just connected, with no way to let a phone in; and over a
   starter project made on every server, one nobody asked for.
-- "Add project" stays small: it writes no skill. The project's page then says how many
-  skills it has ("This project has 4 of 25 skills"), with an "Add skills" button that
-  opens the same list with ticks `npx @openagt/init` shows in a terminal, through that
-  package's own code, so the two cannot drift apart. Picked over "Add project" writing
-  the skills itself, which put files into every project a person adds, and over only
-  pointing to the terminal.
+- "Add project" stays small: it writes no skill. The project's ⋮ menu then has
+  "Skills…", which opens the same list with ticks `npx @openagt/init` shows in a
+  terminal, through that package's own code, so the two cannot drift apart. Picked over
+  "Add project" writing the skills itself, which put files into every project a person
+  adds, and over only pointing to the terminal. The menu was picked over a line of its
+  own on the project's page ("This project has 4 of 25 skills", with an "Add skills"
+  button), which stood there also when it had nothing to offer.
 - A project is also added by its repository's address, for a computer that does not have
   its folder, as a server: OpenAgent clones it into `~/projects/<its name>` and says where
   it went. Picked over asking for the folder at every add, one more thing to read.
