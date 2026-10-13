@@ -51,6 +51,21 @@ export interface ModulePage {
   icon?: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>
   /** The page itself. */
   Page: ComponentType<ModulePageProps>
+  /**
+   * What the paths into a project's files that this page opens are called: asked by other pages
+   * that show such a path (a queue entry that names `tickets/2026-01-01_x.md`), so they can show
+   * a name a person reads in place of a file path. Given the paths whose first segment is the
+   * page's own; answers the ones it can name, by path. Read through {@link useFileNames}.
+   */
+  names?(host: ModuleHost, projectId: string, paths: string[]): Promise<Record<string, ModuleFileName>>
+}
+
+/** What a path into a project's files is called, as the page that opens it says. */
+export interface ModuleFileName {
+  /** The name a person reads: a ticket's title. */
+  title: string
+  /** The path that is opened for it, when it is not the path asked about: a plan still to be written opens its ticket. */
+  href?: string
 }
 
 /**
@@ -150,6 +165,29 @@ export interface ModuleUsageLimit {
   save(host: ModuleHost, projects: ModuleProject[], points: number): Promise<UsageLimitSaved>
 }
 
+/** A command that starts by itself in a project, as the module that schedules it says it. */
+export interface ModuleScheduledCommand {
+  /** The command as a person types it, without its slash: `work-queue`. */
+  command: string
+  /** Whether it starts by itself on this computer right now. */
+  on: boolean
+  /** One line on it, for a person: when it starts next while it is on ("Next start in 3h, if there is work"), or why it does not start though its own switch is on ("The scheduler is off"). */
+  note?: string
+}
+
+/**
+ * What a module that starts commands by itself tells the other pages: which commands, and whether
+ * each is on. A page whose work such a command takes (a queue) says so with it, and links to the
+ * module's own page, where a person switches a command on. The first module that declares one
+ * (in package order) is asked. Read through {@link useSchedule}.
+ */
+export interface ModuleSchedule {
+  /** The module's own page where a person switches a command on, by its segment. */
+  page: string
+  /** One project's commands that can start by themselves. */
+  read(host: ModuleHost, project: ModuleProject): Promise<ModuleScheduledCommand[]>
+}
+
 /**
  * The Context as a side-rail tab sees it (#504): the files the next run is pointed at. A tab may
  * show which files are in it and add or remove one.
@@ -242,6 +280,8 @@ export interface ModuleDefinition {
   settings?: ModuleSettings[]
   /** The stop line the module puts on the usage bar. */
   usageLimit?: ModuleUsageLimit
+  /** The commands the module starts by itself, for the other pages to say. */
+  schedule?: ModuleSchedule
   /** A stylesheet to load with the module, relative to the module's browser part's own URL. */
   stylesheet?: string
 }
@@ -386,14 +426,14 @@ export function useModuleHost(): ModuleHost {
 // The dashboard's own building blocks, so a module looks like the rest of the page.
 export { Button, buttonVariants, type ButtonProps } from '../components/ui/button.js'
 export { Badge } from '../components/ui/badge.js'
-export { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card.js'
+export { Card, CardHeader, CardTitle, CardTitleLink, CardContent } from '../components/ui/card.js'
 export { Skeleton } from '../components/ui/skeleton.js'
 export { Checkbox } from '../components/ui/checkbox.js'
 export { Switch } from '../components/ui/switch.js'
 export { Input } from '../components/ui/input.js'
 export { Textarea } from '../components/ui/textarea.js'
 export { Label } from '../components/ui/label.js'
-export { RadioGroup, RadioGroupItem } from '../components/ui/radio-group.js'
+export { RadioGroup, RadioGroupItem, RadioGroupOption } from '../components/ui/radio-group.js'
 export { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select.js'
 export { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover.js'
 export { RangeSlider } from '../components/ui/slider.js'
@@ -414,3 +454,6 @@ export { MAX_SPEND_OFFSET } from '../../src/preference-defaults.js'
 export { formatRelative, formatDateTime, formatDuration, formatAge } from '../lib/format-date.js'
 export { usePolled, useLoaded, forgetRemembered } from '../lib/use-async.js'
 export { useAction } from '../lib/use-action.js'
+export { useSchedule, type Schedule } from '../lib/use-schedule.js'
+export { useFileNames, pathsIn, type FileNames, type NamedFile } from '../lib/use-file-names.js'
+export { ConfirmDialog } from '../components/ui/confirm-dialog.js'

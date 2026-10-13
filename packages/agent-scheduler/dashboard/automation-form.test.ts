@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { EMPTY_DRAFT, TEXT_MAX, addArgs, atRowsPace, draftProblem, draftRow, draftSentence, editArgs, editedWords, isUntouched, keptWhereHint, openedAutomation, ownPaceArgs, paceHint, removeWarning, removedWords, savedFile, savedWords, saysTheSame, startsWhen, triedLine, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
+import { EMPTY_DRAFT, TEXT_MAX, addArgs, atRowsPace, draftProblem, draftRow, draftSentence, editArgs, editedWords, isUntouched, keptWhereHint, openedAutomation, ownPaceArgs, removeWarning, removedWords, savedFile, savedWords, saysTheSame, startsWhen, triedLine, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
 
 // The automation form as data: what keeps a draft from being saved, the command that saves it, the sentence its row would say, what a try answered, an automation opened from its row to be saved again, and what is said of one removed.
 
@@ -38,14 +38,11 @@ describe('a new automation', () => {
     expect(addArgs(draft({ prompt: 'p'.repeat(TEXT_MAX) }))!.every(arg => arg.length <= 4096)).toBe(true)
   })
 
-  test('a form nothing was typed into, which Escape may close; and the words beside the pace, which say how the pace and the shell line decide together', () => {
+  test('a form nothing was typed into, which Escape may close', () => {
     expect(isUntouched(EMPTY_DRAFT)).toBe(true)
     expect(isUntouched({ ...EMPTY_DRAFT, pace: every('15', 'm') })).toBe(true)
     for (const typed of [{ name: 'a' }, { prompt: 'p' }, { when: 'w' }, { waitsFor: 'x' }]) expect(isUntouched({ ...EMPTY_DRAFT, ...typed })).toBe(false)
     expect(isUntouched({ ...EMPTY_DRAFT, onThisMachine: true })).toBe(true)
-    expect(paceHint(draft())).toBe('by time alone')
-    expect(paceHint(draft({ when: CHECK }))).toBe('at most, and only when the shell line prints something')
-    expect(paceHint(draft({ when: '  ' }))).toBe('by time alone')
   })
 
   test('the command that saves it: each text one argument with its flag, a pace only when ticked, the plain words only with a shell line; none while something is missing', () => {

@@ -9,7 +9,7 @@ import { hoverTooltip } from '../test-utils.js'
 /** The main figure's own trigger — its text is split across nodes (a coloured span for the
  * duration), so an exact string match on `getByText` can't find it as one element. */
 function mainFigureTrigger(): HTMLElement {
-  return screen.getByText(/^resets /).closest('p')!.querySelector('.cursor-default')!
+  return screen.getByText(/^Resets /).closest('p')!.querySelector('.cursor-default')!
 }
 
 // The stop line a module puts on the bar: what its read answers, and its save, as the tests set them.
@@ -141,7 +141,7 @@ describe('Quota (#960)', () => {
     await show()
     // One bar, and it is the account's week.
     expect(screen.getAllByRole('img')).toHaveLength(1)
-    await hoverTooltip(screen.getByText('show all limits'))
+    await hoverTooltip(screen.getByText('Show all limits'))
     expect(screen.getByText('Current session')).toBeTruthy()
   })
 
@@ -416,7 +416,7 @@ describe('Quota (#960)', () => {
   test('names the reset as a weekday and a time, not a date the bar already implies (#960 Edit)', async () => {
     view = reading(20)
     await show()
-    expect(screen.getByText(/^resets /)).toBeTruthy()
+    expect(screen.getByText(/^Resets /)).toBeTruthy()
     expect(screen.queryByText('Under the line, with room to spend.')).toBeNull()
   })
 
@@ -424,7 +424,7 @@ describe('Quota (#960)', () => {
     // 20% of the week used against a 57% (day 4/7) pace: 2.6 days behind, floored to 2d.
     view = reading(20)
     await show()
-    expect(mainFigureTrigger().textContent).toBe('Under-consuming: 2d')
+    expect(mainFigureTrigger().textContent).toBe("You are 2d under the week's pace")
     expect(screen.queryByText('20% used')).toBeNull()
     expect(screen.queryByText(/^-?\d+% used$/)).toBeNull()
   })
@@ -443,14 +443,14 @@ describe('Quota (#960)', () => {
   test('reads over-consuming (zero duration) exactly on the boundary\'s own pace', async () => {
     view = reading((4 / 7) * 100)
     await show()
-    expect(mainFigureTrigger().textContent).toBe('Over-consuming: 0s')
+    expect(mainFigureTrigger().textContent).toBe("You are 0s over the week's pace")
   })
 
   test('reads over-consuming with a duration when ahead of pace', async () => {
     // Boundary at day 1 of 7 (~14.3%), 60% used: well over three sevenths of the week ahead.
     view = readingAt(1, 60, 0)
     await show()
-    expect(mainFigureTrigger().textContent).toMatch(/^Over-consuming: \d+d$/)
+    expect(mainFigureTrigger().textContent).toMatch(/^You are \d+d over the week's pace$/)
   })
 
   test('the footer also says what was spent, as quota time (#1367)', async () => {
@@ -458,20 +458,20 @@ describe('Quota (#960)', () => {
     // beside it, rather than a percentage a reader has to convert.
     view = reading(50)
     await show()
-    expect(screen.getByText(/^resets /).closest('p')!.textContent).toMatch(/3d spent/)
+    expect(screen.getByText(/^Resets /).closest('p')!.textContent).toMatch(/3d spent/)
   })
 
   test('the footer says consumption as a share of the pace, not of the week (#1367)', async () => {
     // Boundary at day 4 of 7 (~57%), 60% used: a little over pace, so a little over 100%.
     view = reading(60)
     await show()
-    expect(screen.getByText(/^resets /).closest('p')!.textContent).toMatch(/105% of pace/)
+    expect(screen.getByText(/^Resets /).closest('p')!.textContent).toMatch(/105% of pace/)
   })
 
   test('the pace share is coloured to match the bar, since it is the same comparison (#1367)', async () => {
     view = reading(20) // well under pace: the bar reads green, and so does this
     await show()
-    const share = [...screen.getByText(/^resets /).closest('p')!.querySelectorAll('span')].find(s =>
+    const share = [...screen.getByText(/^Resets /).closest('p')!.querySelectorAll('span')].find(s =>
       /^\d+%$/.test(s.textContent ?? ''),
     )!
     expect(share.className).toMatch(/text-success/)
@@ -481,7 +481,7 @@ describe('Quota (#960)', () => {
     // Day zero: nothing is allowed yet, so every amount is infinitely above the allowance.
     view = readingAt(0, 3, 0)
     await show()
-    expect(screen.getByText(/^resets /).closest('p')!.textContent).not.toMatch(/of pace/)
+    expect(screen.getByText(/^Resets /).closest('p')!.textContent).not.toMatch(/of pace/)
   })
 
   test('the main figure has its own tooltip naming the deviation against the quota boundary (#960 Edit)', async () => {
@@ -514,7 +514,7 @@ describe('Quota (#960)', () => {
   test('the reset tooltip trigger carries no underline (#960 Edit)', async () => {
     view = reading(20)
     await show()
-    const trigger = screen.getByText(/^resets /)
+    const trigger = screen.getByText(/^Resets /)
     expect(trigger.className).not.toMatch(/underline/)
   })
 
@@ -522,7 +522,7 @@ describe('Quota (#960)', () => {
     view = reading(20)
     view.windows.push({ label: 'Current week (Fable)', kind: 'week-model', percentUsed: 12, resetsAtText: 'Jul 28 at 7pm' })
     await show()
-    await hoverTooltip(screen.getByText('show all limits'))
+    await hoverTooltip(screen.getByText('Show all limits'))
     const rows = screen.getAllByText(/Current (session|week)/).map(el => el.textContent)
     expect(rows).toEqual(['Current week (all models)', 'Current session', 'Current week (Fable)'])
   })
@@ -531,7 +531,7 @@ describe('Quota (#960)', () => {
     view = reading(20)
     view.windows.push({ label: 'Current week (Fable)', kind: 'week-model', percentUsed: 12, resetsAtText: 'Jul 28 at 7pm' })
     await show()
-    await hoverTooltip(screen.getByText('show all limits'))
+    await hoverTooltip(screen.getByText('Show all limits'))
     const tooltip = screen.getByRole('tooltip')
     const table = tooltip.querySelector('table')!
     expect(table).toBeTruthy()
@@ -558,7 +558,7 @@ describe('Quota (#960)', () => {
   test('"show all limits" is absent when there is nothing else to show', async () => {
     view = { ...reading(20), windows: reading(20).windows.filter(w => w.kind === 'week') }
     await show()
-    expect(screen.queryByText('show all limits')).toBeNull()
+    expect(screen.queryByText('Show all limits')).toBeNull()
   })
 
   test('the roadmap-spend toggle is gone from this panel (#960 Edit)', async () => {

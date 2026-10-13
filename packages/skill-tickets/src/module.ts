@@ -77,6 +77,37 @@ export function routeOf(path: readonly string[]): ModuleRoute {
   return plan === 'plan' ? { view: 'plan', projectId, file } : { view: 'unknown' }
 }
 
+/** What a path under the tickets directory is called, for a page that shows the path: OpenAgent's `ModuleFileName`, by structure. */
+export interface NamedPath {
+  title: string
+  /** The path opened for it, when it is not the path itself. */
+  href?: string
+}
+
+/**
+ * What each of `paths` is called, by the tickets as listed: a ticket's file is its title; a
+ * ticket's plan file (`tickets/<stem>.plan.md`) is "Plan: " and the ticket's title, and opens the
+ * ticket, since an entry that names a plan is often the ask to write it. A path that is no
+ * ticket's, or whose ticket is not listed (closed, deleted), has no name.
+ */
+export function namesOf(paths: readonly string[], tickets: readonly { file: string; title: string }[]): Record<string, NamedPath> {
+  const titles = new Map(tickets.map(ticket => [ticket.file, ticket.title]))
+  const named: Record<string, NamedPath> = {}
+  for (const path of paths) {
+    if (!path.startsWith(`${TICKETS_DIR}/`)) continue
+    const file = path.slice(TICKETS_DIR.length + 1)
+    const title = titles.get(file)
+    if (title !== undefined) {
+      named[path] = { title }
+      continue
+    }
+    const ticket = file.endsWith('.plan.md') ? `${file.slice(0, -'.plan.md'.length)}.md` : undefined
+    const planned = ticket === undefined ? undefined : titles.get(ticket)
+    if (ticket !== undefined && planned !== undefined) named[path] = { title: `Plan: ${planned}`, href: `${TICKETS_DIR}/${ticket}` }
+  }
+  return named
+}
+
 /** A link as the module hands it to the dashboard's link actions: OpenAgent's `ModuleLink`, by structure. */
 export interface TicketAsLink {
   text: string

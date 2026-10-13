@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Input, Label, RadioGroup, RadioGroupItem, type ModuleCommandResult, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, Input, RadioGroup, RadioGroupOption, type ModuleCommandResult, type ModuleProject } from '@openagt/dashboard/module'
 import { EMPTY_DRAFT, addArgs, draftProblem, draftSentence, isUntouched, ownPaceArgs, savedFile, savedWords, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
 import { PaceFields, SaidFields, Section } from './fields.js'
 
@@ -121,16 +121,14 @@ export function AutomationForm({
         </Section>
         <Section title="Who gets it">
           <RadioGroup aria-label="Who gets the automation" value={draft.onThisMachine ? 'machine' : 'project'} onValueChange={who => set({ onThisMachine: who === 'machine' })} disabled={saving}>
-            <Label className="max-md:flex-wrap">
-              <RadioGroupItem value="project" />
+            <RadioGroupOption value="project">
               Shared with the project
               <span className="text-xs text-muted-foreground">a file you commit; everyone who has the project gets the row, switched off</span>
-            </Label>
-            <Label className="max-md:flex-wrap">
-              <RadioGroupItem value="machine" />
+            </RadioGroupOption>
+            <RadioGroupOption value="machine">
               Only on this machine
               <span className="text-xs text-muted-foreground">nothing to commit; nobody else gets the row</span>
-            </Label>
+            </RadioGroupOption>
           </RadioGroup>
         </Section>
       </fieldset>

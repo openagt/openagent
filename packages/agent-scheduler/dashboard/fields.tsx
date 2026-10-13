@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Button, Input, Label, RadioGroup, RadioGroupItem, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea, cn, useModuleHost, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, Input, Label, RadioGroup, RadioGroupItem, RadioGroupOption, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea, cn, useModuleHost, type ModuleProject } from '@openagt/dashboard/module'
 import type { PublishPick } from '../src/state.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, MAX_AGENTS, type AgentName } from '../src/names.js'
 import { MAX_COUNT, PACE_UNITS, takesTimeOfDay, type PaceUnit } from '../src/pace.js'
@@ -231,22 +231,20 @@ export function PaceFields({
           <RadioGroup ref={group} aria-label={name} value={draft.kind} onValueChange={pick} disabled={disabled}>
             {asSaid && (
               // On a phone what the skill says goes under the label, which otherwise breaks at every word.
-              <Label className="max-md:flex-wrap">
-                <RadioGroupItem value="skill" />
+              <RadioGroupOption value="skill">
                 {asSaid.label}
                 <span className={hint}>({asSaid.says})</span>
-              </Label>
+              </RadioGroupOption>
             )}
             <div className="flex items-start gap-2">
               <RadioGroupItem value="every" aria-label="A wait you set" className="mt-2" />
               {interval}
             </div>
             {offersNoWait && (
-              <Label className="max-md:flex-wrap">
-                <RadioGroupItem value="work" disabled={!noWait && draft.kind !== 'work'} />
+              <RadioGroupOption value="work">
                 No wait
                 <span className={hint}>{noWait ? 'it starts as soon as there is work' : 'needs a shell line: without one nothing says when'}</span>
-              </Label>
+              </RadioGroupOption>
             )}
           </RadioGroup>
         ) : (
@@ -281,11 +279,10 @@ export function AgentsFields({ name, draft, asSaid, start, where, disabled, onCh
     <fieldset disabled={disabled} className="space-y-2">
       {asSaid ? (
         <RadioGroup aria-label={name} value={draft.kind} onValueChange={kind => onChange(kind === 'own' ? typed : { kind: 'skill' })} disabled={disabled}>
-          <Label className="max-md:flex-wrap">
-            <RadioGroupItem value="skill" />
+          <RadioGroupOption value="skill">
             {asSaid.label}
             <span className={hint}>({asSaid.says})</span>
-          </Label>
+          </RadioGroupOption>
           <div className="flex items-start gap-2">
             <RadioGroupItem value="own" aria-label="A number you set" className="mt-2" />
             {count}

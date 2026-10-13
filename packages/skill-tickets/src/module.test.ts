@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { heldBack, holderAgent, hotLane, isHighPriority, planAgentFor, planLink, planPath, planTicketPrompt, readListed, readMeta, readShown, routeOf, ticketLink, workOnTicketPrompt } from './module.js'
+import { heldBack, holderAgent, hotLane, isHighPriority, namesOf, planAgentFor, planLink, planPath, planTicketPrompt, readListed, readMeta, readShown, routeOf, ticketLink, workOnTicketPrompt } from './module.js'
 
 const FILE = '2026-08-30_login-page.md'
 
@@ -86,4 +86,14 @@ test('hotLane: a claimed ticket is in the claimed lane whatever its priority, an
   assert.equal(hotLane({ priority: 'high' }), null)
   assert.equal(isHighPriority(' 8 '), true)
   assert.equal(isHighPriority(undefined), false)
+})
+
+test('a path under tickets/ is called what its ticket is called: a ticket by its title, a plan as the plan of its ticket, which it opens', () => {
+  const tickets = [{ file: FILE, title: 'Login page' }]
+  assert.deepEqual(namesOf([`tickets/${FILE}`, 'tickets/2026-08-30_login-page.plan.md'], tickets), {
+    [`tickets/${FILE}`]: { title: 'Login page' },
+    'tickets/2026-08-30_login-page.plan.md': { title: 'Plan: Login page', href: `tickets/${FILE}` },
+  })
+  // A ticket that is not listed (closed, deleted), its plan, and a path that is no ticket's have no name.
+  assert.deepEqual(namesOf(['tickets/2026-01-01_gone.md', 'tickets/2026-01-01_gone.plan.md', 'docs/readme.md', 'tickets/'], tickets), {})
 })

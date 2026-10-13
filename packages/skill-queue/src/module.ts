@@ -3,6 +3,38 @@
 // "Add to queue" action runs for the links a dashboard page hands it, and how the Overview card
 // starts agents on entries.
 
+/**
+ * The command that works the queue by itself, as a person types it without its slash: the
+ * `work-queue` skill's. The Queue page looks for it among the commands a project starts by
+ * itself, to say whether anything takes from the queue.
+ */
+export const QUEUE_COMMAND = 'work-queue'
+
+/** The priorities an entry can be queued at, most urgent first: the sections of the queue file. */
+export const PRIORITIES: readonly number[] = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+
+/** The priority the page's "Add to queue" starts at: the middle of the scale. */
+export const DEFAULT_PRIORITY = 5
+
+/** What the two ends of the scale mean, in the queue file's own words; nothing for a priority between them. */
+export function priorityMeaning(priority: number): string | undefined {
+  return priority === 10 ? 'most urgent' : priority === 0 ? 'only if there is capacity' : undefined
+}
+
+/** The `queue add` command line for a text typed on the page, at the priority picked. */
+export function addTextArgs(text: string, priority: number): string[] {
+  return ['add', text.trim(), '--priority', String(priority)]
+}
+
+/**
+ * Whether an agent that was asked `ask` is on `entry`: its prompt holds the entry as the queue
+ * prints it, which is how the page's own start buttons, and the command that works the queue,
+ * name the entry they take.
+ */
+export function isWorkingOn(ask: string | undefined, entry: string): boolean {
+  return ask !== undefined && entry.trim() !== '' && ask.includes(entry.trim())
+}
+
 /** How one queue entry reads on a dashboard: what to show, and where it points, if anywhere. */
 export interface EntryLabel {
   /** The text to show: a leading markdown link's text, else the whole entry. */

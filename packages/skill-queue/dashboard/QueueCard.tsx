@@ -1,11 +1,14 @@
-import { useState } from 'react'
 import { FastForward, ListTodo, Play } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, StartAgentButton, Tooltip, TooltipContent, TooltipTrigger, usePolled, useModuleHost, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
-import { DEFAULT_FAN_OUT_COUNT, entryLabel, fanOut, fanOutLabel, topEntries, workOnEntryPrompt } from '../src/module.js'
+import { Card, CardContent, CardHeader, CardTitleLink, StartAgentButton, Tooltip, TooltipContent, TooltipTrigger, pathsIn, useFileNames, usePolled, useModuleHost, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
+import { fanOutLabel, workOnEntryPrompt } from '../src/module.js'
+import { EntryTitle, entryView } from './entry.js'
+import { useQueueStarts } from './starts.js'
 
 // The Overview's AI Queue card: every project's open entries, the work agents pick up on their own,
 // grouped by project and shown in full. No "+N more": this is the plan, and a collapsed plan is one
-// you cannot read. Its data is `queue --local` in each project, the very list an agent reads.
+// you cannot read. Its data is `queue --local` in each project, the very list an agent reads. An
+// entry that names a file another page opens reads as that page's name for it (a ticket's title),
+// and the card's title opens the Queue page, where an entry is also removed and added.
 //
 // Two ways to act, and they are different acts. The play button beside an entry STARTS it: one
 // agent, on that entry alone, and the dashboard lands on the run. The project header carries the
@@ -41,47 +44,17 @@ export function QueueCard({ projects }: ModuleCardProps) {
     10_000,
     [key],
   )
-  // Which entry is in flight, keyed by content rather than index: the list is polled and can
-  // shift under a click, and only the clicked row's button should spin.
-  const [starting, setStarting] = useState<string | null>(null)
-  // Which project's fan-out is in flight: a sequence of starts, held as one so a second click
-  // cannot slip between two of them.
-  const [fanningOut, setFanningOut] = useState<string | null>(null)
-  // The count beside each project's fan-out button: per project, since queues differ in depth.
-  const [counts, setCounts] = useState<Record<string, number>>({})
-  const [error, setError] = useState<string | null>(null)
-  const inFlight = starting !== null || fanningOut !== null
-
-  const countOf = (projectId: string) => counts[projectId] ?? DEFAULT_FAN_OUT_COUNT
-
-  const startEntry = async (projectId: string, entry: string) => {
-    if (inFlight) return
-    setStarting(`${projectId}\n${entry}`)
-    setError(null)
-    // One run on one named entry is a session to watch: the dashboard lands on it.
-    const result = await host.startRun(projectId, workOnEntryPrompt(entry))
-    setStarting(null)
-    if (!result.ok) setError(result.error)
-  }
-
-  const fanOutProject = async (read: ProjectRead) => {
-    if (inFlight) return
-    setFanningOut(read.project.id)
-    setError(null)
-    // A batch lands nowhere: the runs show in the Agents card above, and the Overview stays.
-    const outcome = await fanOut(prompt => host.startRun(read.project.id, prompt, { land: false }), topEntries(read.entries, countOf(read.project.id)))
-    setFanningOut(null)
-    if (outcome.error !== undefined) setError(outcome.error)
-  }
+  const starts = useQueueStarts(host)
+  const names = useFileNames(reads.map(read => ({ projectId: read.project.id, paths: read.entries.flatMap(pathsIn) })))
+  const { inFlight, error } = starts
 
   const shown = reads.filter(read => read.entries.length > 0 || read.error !== undefined)
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <ListTodo className="h-4 w-4 text-muted-foreground" />
+        <CardTitleLink icon={<ListTodo className="h-4 w-4 text-muted-foreground" aria-hidden />} href="/queue" onOpen={() => host.openPage('queue')}>
           AI Queue
-        </CardTitle>
+        </CardTitleLink>
         <p className="text-xs text-muted-foreground">Tasks AI will work on next</p>
       </CardHeader>
       <CardContent>
@@ -93,7 +66,7 @@ export function QueueCard({ projects }: ModuleCardProps) {
           <ul className="space-y-4">
             {shown.map(read => {
               const { project, entries } = read
-              const count = Math.min(countOf(project.id), Math.max(entries.length, 1))
+              const count = Math.min(starts.countOf(project.id), Math.max(entries.length, 1))
               return (
                 <li key={project.id}>
                   <div className="flex w-full items-center gap-2">
@@ -109,15 +82,14 @@ export function QueueCard({ projects }: ModuleCardProps) {
                                 type="number"
                                 min={1}
                                 step={1}
-                                value={countOf(project.id)}
+                                value={starts.countOf(project.id)}
                                 aria-label="How many agents to spin up"
                                 onChange={event => {
                                   // An emptied box is mid-edit rather than a count: `Number('')` is 0.
                                   const typed = event.target.value.trim()
                                   if (!typed) return
                                   const next = Math.round(Number(typed))
-                                  if (!Number.isFinite(next)) return
-                                  setCounts(prev => ({ ...prev, [project.id]: Math.max(next, 1) }))
+                                  if (Number.isFinite(next)) starts.setCount(project.id, next)
                                 }}
                                 className="h-7 w-11 shrink-0 rounded border border-border bg-background px-1 text-center text-xs tabular-nums text-foreground"
                               />
@@ -134,8 +106,8 @@ export function QueueCard({ projects }: ModuleCardProps) {
                           menuAriaLabel={`Other ways to spin up agents on ${project.name}'s queue`}
                           tooltip={fanOutLabel(count)}
                           busy={inFlight}
-                          starting={fanningOut === project.id}
-                          onStart={() => void fanOutProject(read)}
+                          starting={starts.fanningOut(project.id)}
+                          onStart={() => void starts.fanOutProject(project.id, entries)}
                           onConfigure={() => host.configureRun(project.id, workOnEntryPrompt(entries[0]!))}
                           prompt={workOnEntryPrompt(entries[0]!)}
                           configureDescription="Opens the launcher with the top entry's prompt — one agent, not the batch."
@@ -151,30 +123,24 @@ export function QueueCard({ projects }: ModuleCardProps) {
                   )}
                   <ul className="mt-1.5 space-y-1 pl-0.5">
                     {entries.map((entry, i) => {
-                      // A queued link reads as its text; the whole line stays in the tooltip.
-                      const label = entryLabel(entry)
+                      // A queued link reads as its text, a named file as its name; the whole line stays in the tooltip.
+                      const view = entryView(project.id, entry, names)
                       return (
                         <li key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span aria-hidden className="text-muted-foreground/50">•</span>
-                          {label.url !== undefined ? (
-                            <a href={label.url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate hover:text-foreground hover:underline" title={entry}>
-                              {label.text}
-                            </a>
-                          ) : (
-                            <span className="min-w-0 flex-1 truncate" title={entry}>
-                              {label.text}
-                            </span>
-                          )}
+                          <span aria-hidden className="w-4 shrink-0 text-right text-xs tabular-nums text-muted-foreground/70">
+                            {i + 1}.
+                          </span>
+                          <EntryTitle view={view} entry={entry} className={`min-w-0 flex-1 truncate text-left${(view.open ?? view.url) !== undefined ? ' hover:text-foreground hover:underline' : ''}`} />
                           <StartAgentButton
                             variant="ghost"
                             size="icon-sm"
                             icon={<Play className="h-3.5 w-3.5" aria-hidden />}
                             ariaLabel="Spin up an agent working on this entry"
-                            menuAriaLabel={`Other ways to run ${label.text}`}
+                            menuAriaLabel={`Other ways to run ${view.title}`}
                             tooltip="Spin up an agent working on this entry"
                             busy={inFlight}
-                            starting={starting === `${project.id}\n${entry}`}
-                            onStart={() => void startEntry(project.id, entry)}
+                            starting={starts.starting(project.id, entry)}
+                            onStart={() => void starts.startEntry(project.id, entry)}
                             onConfigure={() => host.configureRun(project.id, workOnEntryPrompt(entry))}
                             prompt={workOnEntryPrompt(entry)}
                             configureDescription="Opens the launcher with this entry's prompt, so you can set the model and where it runs."

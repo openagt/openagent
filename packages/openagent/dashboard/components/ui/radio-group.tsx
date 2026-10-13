@@ -1,5 +1,5 @@
 'use client'
-import type { ComponentProps } from 'react'
+import { useId, type ComponentProps, type ReactNode } from 'react'
 import { RadioGroup as RadioGroupPrimitive } from '@base-ui-components/react/radio-group'
 import { Radio } from '@base-ui-components/react/radio'
 import { cn } from '../../lib/utils.js'
@@ -37,5 +37,20 @@ export function RadioGroupItem({ className, disabled, ...props }: RadioGroupItem
     >
       <Radio.Indicator className="h-2 w-2 rounded-full bg-primary" />
     </Radio.Root>
+  )
+}
+
+/**
+ * A radio with its words: the dot inside a `<label>`, so a click on the words picks it. The label
+ * also names the dot for a screen reader, by `aria-labelledby`: Base UI's radio is no form control,
+ * so a `<label>` around it alone gives it no name.
+ */
+export function RadioGroupOption({ value, disabled, className, children }: { value: string; disabled?: boolean | undefined; className?: string; children: ReactNode }) {
+  const id = useId()
+  return (
+    <label id={id} data-slot="radio-group-option" className={cn('flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm leading-snug has-[[data-disabled]]:opacity-50', className)}>
+      <RadioGroupItem value={value} disabled={disabled} aria-labelledby={id} />
+      {children}
+    </label>
   )
 }

@@ -230,23 +230,25 @@ function WeekBar({
           }}
         />}
       </div>
-      <p className="text-xs text-muted-foreground">
+      {/* One sentence a person reads, each figure still explained on hover: how far from the week's
+          pace, how much is spent, what share of the pace that is, and when the week resets. */}
+      <p className="text-sm text-muted-foreground">
         <Tooltip>
           <TooltipTrigger render={<span className="cursor-default" />}>
-            {consuming}: <span className={cn('font-medium', TONE_TEXT[tone])}>{formatDuration(Math.abs(deviationMs))}</span>
+            You are <span className={cn('font-medium', TONE_TEXT[tone])}>{formatDuration(Math.abs(deviationMs))}</span> {over ? 'over' : 'under'} the week&apos;s pace
           </TooltipTrigger>
           <TooltipContent className="max-w-64">
-            You are {formatDurationLong(Math.abs(deviationMs))} {over ? 'above' : 'below'} the quota boundary.<br/><br/>You're{' '}
-            {over ? 'over-consuming' : 'under-consuming'}: you spend {over ? 'faster' : 'slower'} than the week's pace allows.
+            You are {formatDurationLong(Math.abs(deviationMs))} {over ? 'above' : 'below'} the quota boundary.<br/><br/>You&apos;re{' '}
+            {over ? 'over-consuming' : 'under-consuming'}: you spend {over ? 'faster' : 'slower'} than the week&apos;s pace allows.
           </TooltipContent>
         </Tooltip>
-        {SEP}
+        :{' '}
         <Tooltip>
           <TooltipTrigger render={<span className="cursor-default" />}>
-            <span className="font-medium">{formatDuration(consumedMs)}</span> spent
+            <span className="font-medium text-foreground">{formatDuration(consumedMs)}</span> spent
           </TooltipTrigger>
           <TooltipContent className="max-w-64">
-            {formatDurationLong(consumedMs)} of the week's allowance has been consumed — {Math.round(percentUsed)}% of it, said
+            {formatDurationLong(consumedMs)} of the week&apos;s allowance has been consumed — {Math.round(percentUsed)}% of it, said
             in the same unit as the pace figure beside it.
           </TooltipContent>
         </Tooltip>
@@ -254,30 +256,31 @@ function WeekBar({
             amount is infinitely above it. */}
         {paceShare !== undefined && (
           <>
-            {SEP}
+            ,{' '}
             <Tooltip>
               <TooltipTrigger render={<span className="cursor-default" />}>
                 <span className={cn('font-medium', TONE_TEXT[tone])}>{Math.round(paceShare)}%</span> of pace
               </TooltipTrigger>
               <TooltipContent className="max-w-64">
                 Against the {Math.round(boundary.percent)}% of the week allowed by day {boundary.day} of 7 — 100% is exactly on
-                pace. This is the line that parks unattended work, not the week's total.
+                pace. This is the line that parks unattended work, not the week&apos;s total.
               </TooltipContent>
             </Tooltip>
           </>
         )}
-        {SEP}
+        .{' '}
         <Tooltip>
-          <TooltipTrigger render={<span className="cursor-default" />}>resets {formatResetDay(boundary.resetsAt)}</TooltipTrigger>
+          <TooltipTrigger render={<span className="cursor-default" />}>Resets {formatResetDay(boundary.resetsAt)}</TooltipTrigger>
           <TooltipContent>{formatResetTooltip(boundary.resetsAt)}</TooltipContent>
         </Tooltip>
+        .
         {/* Only where there's something beyond the week this bar already is — a lone account week
             has nothing left for the tooltip to add. */}
         {others.length > 1 ? (
           <>
-            {SEP}
+            {' '}
             <Tooltip>
-              <TooltipTrigger render={<span className="cursor-default" />}>show all limits</TooltipTrigger>
+              <TooltipTrigger render={<span className="cursor-default" />}>Show all limits</TooltipTrigger>
               <TooltipContent>
                 {/* A table, not stacked flex rows — each column has to line up across every window,
                     which only a real table (rather than each row sizing its own two flex items)

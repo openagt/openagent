@@ -1,7 +1,7 @@
 import type { ModuleHost, ModuleProject } from '@openagt/dashboard/module'
 import type { PublishPick, TickDecision } from '../src/state.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, DEFAULT_PUBLISH, isAgent, isAgents, isTime, type AgentName } from '../src/names.js'
-import { MAX_COUNT, paceInForce, parseInterval, parseTimeOfDay, takesTimeOfDay, type PacePick, type PaceUnit } from '../src/pace.js'
+import { MAX_COUNT, dueFrom, paceInForce, parseInterval, parseTimeOfDay, takesTimeOfDay, type PacePick, type PaceUnit } from '../src/pace.js'
 
 // What the module shows of each project's scheduler: the answer of `agent-scheduler status`, the
 // state file as it stands, whether the scheduler's process is alive, and the schedule as the
@@ -485,6 +485,60 @@ export function outcomeWords(outcome: string | undefined, now: Date = new Date()
   const capped = /^cap reached \((\d+) in flight/.exec(outcome)
   if (capped) return capped[1] === '1' ? 'One is already running' : `${capped[1]} are already running`
   return sentence(outcome)
+}
+
+/** A stretch of time still to wait, for a person: "12 min", "3h", "2 days". */
+function waitWords(ms: number): string {
+  const minutes = Math.max(1, Math.ceil(ms / 60_000))
+  if (minutes < 60) return `${minutes} min`
+  const hours = Math.round(minutes / 60)
+  if (hours < 48) return `${hours}h`
+  return `${Math.round(hours / 24)} days`
+}
+
+/**
+ * When a command that is switched on starts next, for a person, by the same two things the
+ * Edit panel says a row runs by: what it waits for, and how long it waits after a start. While
+ * the wait is not over: "Next start in 3h", or the time it is due from when its pace has a time of
+ * day ("Next start tomorrow 10:00"), with ", if there is work" for a row with a shell line. Once
+ * the wait is over, or with no wait: "Starts when there is work" for a row with a shell line,
+ * which the scheduler asks every minute; a row that runs by time alone starts at the scheduler's
+ * next look. Counted from the row's last start as the scheduler lists it, like the scheduler's own.
+ */
+export function nextStart(command: SchedulerCommand, now: Date = new Date()): string {
+  const work = command.when !== undefined
+  const soon = work ? 'Starts when there is work' : "Starts at the scheduler's next look"
+  const skills = command.every === undefined ? undefined : parseInterval(command.every)
+  const inForce = paceInForce(command.pace, { ...(skills ? { every: skills } : {}), ...(command.when !== undefined ? { when: command.when } : {}) })
+  if (!inForce) return soon
+  const last = command.lastRun === undefined ? undefined : new Date(command.lastRun.at)
+  const from = dueFrom(inForce, last, now)
+  if (from.getTime() <= now.getTime()) return soon
+  const when = inForce.at ? nextWords(from, now) : `in ${waitWords(from.getTime() - now.getTime())}`
+  return `Next start ${when}${work ? ', if there is work' : ''}`
+}
+
+/**
+ * What a command that is switched on says of its next start, in one line. Why it cannot start,
+ * where the scheduler's last look gave a reason only the tool knows (the quota, a check that
+ * failed, enough of it running already, a skill that is not where a run starts); else when it
+ * starts next, by its pace ({@link nextStart}).
+ */
+export function startsNext(command: SchedulerCommand, now: Date = new Date()): string {
+  const elsewhere = cannotRun(command)
+  if (elsewhere) return elsewhere
+  const outcome = command.decision?.outcome
+  // What the last look said of the pace or of the work is said better by the pace itself, as of now.
+  const paced = outcome === undefined || outcome === 'not due' || outcome.startsWith('not due (') || outcome.startsWith('started ') || outcome === 'switched off on this machine'
+  return (paced ? undefined : decided(command, now)) ?? nextStart(command, now)
+}
+
+/** Why nothing starts by itself in a project though rows are switched on, in a sentence; nothing while its scheduler is on and running. */
+export function schedulerStopped(row: Pick<SchedulerRow, 'error' | 'on' | 'running'>): string | undefined {
+  if (row.error !== undefined) return 'The scheduler cannot be read'
+  if (!row.on) return 'The scheduler is off'
+  if (!row.running) return 'The scheduler is on, but not running'
+  return undefined
 }
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
