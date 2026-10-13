@@ -6,7 +6,6 @@
   "intent": "ask me some question with choices",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-10-13T00-25-00-999Z",
   "cost": 0.12345880000000001,
   "caller": {
     "runner": {
