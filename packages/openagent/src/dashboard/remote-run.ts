@@ -4,6 +4,7 @@ import type { AgentMeta } from '../store/index.js'
 import type { StartAgentOptions, StartAgentResult } from './types.js'
 import { errorMessage } from '../error-message.js'
 import { machineFetch } from './machine-call.js'
+import { isHostName } from '../registry.js'
 
 /**
  * The server-side half of "run on a saved machine" (#1067). The local daemon holds this computer's
@@ -72,12 +73,24 @@ export async function pingRemote(target: MachineAccess): Promise<boolean> {
   return (await ping(target)) !== undefined
 }
 
+/**
+ * What a saved machine says of itself in its ping: the OpenAgent it runs, and the computer's own
+ * name, which the records of its runs carry. Nothing for a machine that does not answer, or
+ * does not say.
+ */
+export async function remoteFacts(target: MachineAccess): Promise<{ version?: string; host?: string }> {
+  const said: unknown = await (await ping(target))?.json().catch(() => undefined)
+  const { version, host } = (said && typeof said === 'object' ? said : {}) as Record<string, unknown>
+  return {
+    // What a machine says is shown on a page: only what reads as a version is one.
+    ...(typeof version === 'string' && /^[0-9A-Za-z.+-]{1,64}$/.test(version) ? { version } : {}),
+    ...(isHostName(host) ? { host } : {}),
+  }
+}
+
 /** The OpenAgent a saved machine runs, as its ping tells it; nothing for a machine that does not answer, or does not say. */
 export async function remoteVersion(target: MachineAccess): Promise<string | undefined> {
-  const said: unknown = await (await ping(target))?.json().catch(() => undefined)
-  const version = said && typeof said === 'object' ? (said as { version?: unknown }).version : undefined
-  // What a machine says is shown on a page: only what reads as a version is one.
-  return typeof version === 'string' && /^[0-9A-Za-z.+-]{1,64}$/.test(version) ? version : undefined
+  return (await remoteFacts(target)).version
 }
 
 /** The two headers every relay request carries: JSON, and this computer's key there. No Origin on purpose. */
@@ -298,6 +311,9 @@ interface RelayedAgent {
   cancel: () => void
 }
 
+/** How many runs are followed by their record at once: each holds a line to its machine open. */
+const MAX_FOLLOWED = 20
+
 /**
  * The local daemon's live relayed runs (#1067), keyed by the remote agent id. Registering an agent opens
  * an {@link EventStream} the dashboard reads through `onEvents`, fed by {@link streamRemoteEvents}
@@ -319,12 +335,29 @@ export class RelayedAgents {
   // The local AgentMeta stub for each relayed agent, so onAgents can show a remote agent in the session list
   // and re-open it after a reload; outlives the event stream, cleared on dispose (same lifetime as targets).
   private readonly metas = new Map<string, { meta: AgentMeta; projectId: string }>()
+  // The runs followed by their record, oldest first: started on the machine, not sent from here.
+  private readonly followed: string[] = []
 
-  /** Open a local stream for a remote agent and start pumping the remote's events into it. */
-  register(agentId: string, target: RemoteTarget, meta: AgentMeta, projectId: string): void {
+  /**
+   * Open a local stream for a remote agent and start pumping the remote's events into it. `sent`
+   * is a run this computer started there. Any other is followed by its record, which someone
+   * else may have written: it never stands for a run that is at work ({@link working}), and only
+   * so many are followed at once.
+   */
+  register(agentId: string, target: RemoteTarget, meta: AgentMeta, projectId: string, sent = true): void {
+    // A run this computer sent stays one it sent, also when it is followed again by its record.
+    if (this.isSent(agentId)) sent = true
+    // A re-register (same id) replaces the old pump. Hung up first: its end is the old row's, not the new one's.
+    this.agents.get(agentId)?.cancel()
+    const at = this.followed.indexOf(agentId)
+    if (at !== -1) this.followed.splice(at, 1)
+    if (!sent) {
+      this.followed.push(agentId)
+      // A machine's stream stays open until it is hung up here: the oldest make room, and are read by their records again.
+      while (this.followed.length > MAX_FOLLOWED) this.forget(this.followed[0]!)
+    }
     this.targets.set(agentId, target) // kept past the stream, for post-run reads/push/PR (slice 2)
     this.metas.set(agentId, { meta, projectId }) // the local list row, so a reload re-opens the run (#1077)
-    this.agents.get(agentId)?.cancel() // a re-register (same id) replaces the old pump
     const stream = new EventStream<OpenAgentEvent>()
     const cancel = streamRemoteEvents(target, agentId, event => {
       stream.push(event)
@@ -333,24 +366,63 @@ export class RelayedAgents {
     this.agents.set(agentId, { target, stream, cancel })
   }
 
-  /** The live event stream for a relayed agent, or undefined when this daemon is not relaying it. */
-  get(agentId: string | undefined): EventStream<OpenAgentEvent> | undefined {
-    return agentId ? this.agents.get(agentId)?.stream : undefined
+  /**
+   * Whether the run is kept here as a run of that project. A run's id says nothing of its
+   * project, and a run of one project is never taken for one of another by its id alone.
+   */
+  private of(agentId: string | undefined, projectId: string | undefined): agentId is string {
+    return agentId !== undefined && (projectId === undefined || this.metas.get(agentId)?.projectId === projectId)
   }
 
-  /** The machine a relayed agent runs on, kept past the event stream so post-run push/PR still reach it. */
-  target(agentId: string | undefined): RemoteTarget | undefined {
-    return agentId ? this.targets.get(agentId) : undefined
+  /** The live event stream for a relayed agent of the project, or undefined when this daemon is not relaying it. */
+  get(agentId: string | undefined, projectId?: string): EventStream<OpenAgentEvent> | undefined {
+    return this.of(agentId, projectId) ? this.agents.get(agentId)?.stream : undefined
   }
 
-  /** Whether a run this daemon follows is still at work on the machine at `url`: its events still stream. */
+  /** The machine a relayed agent of the project runs on, kept past the event stream so post-run push/PR still reach it. */
+  target(agentId: string | undefined, projectId?: string): RemoteTarget | undefined {
+    return this.of(agentId, projectId) ? this.targets.get(agentId) : undefined
+  }
+
+  /** Whether this daemon follows the project's run now: its events stream. */
+  follows(agentId: string, projectId?: string): boolean {
+    return this.of(agentId, projectId) && this.agents.has(agentId)
+  }
+
+  /**
+   * Whether a run this computer sent is still at work on the machine at `url`. A machine's
+   * stream stays open after its run ended, for the next message to it, so the run's own state
+   * says it and not the stream. A run followed by its record does not count: its state is what
+   * a record said, and a machine is not held by a record anyone with the project can write.
+   */
   working(url: string): boolean {
-    for (const agent of this.agents.values()) if (agent.target.url === url) return true
+    for (const [agentId, agent] of this.agents) {
+      if (agent.target.url === url && !this.followed.includes(agentId) && this.metas.get(agentId)?.meta.status === 'running') return true
+    }
     return false
+  }
+
+  /** Whether the run is one this computer sent to its machine, not one followed by its record. */
+  isSent(agentId: string): boolean {
+    return this.metas.has(agentId) && !this.followed.includes(agentId)
+  }
+
+  /** Stop following a run and forget it: it is read by its record again. */
+  private forget(agentId: string): void {
+    const at = this.followed.indexOf(agentId)
+    if (at !== -1) this.followed.splice(at, 1)
+    const agent = this.agents.get(agentId)
+    this.agents.delete(agentId)
+    this.targets.delete(agentId)
+    this.metas.delete(agentId)
+    agent?.cancel()
+    agent?.stream.close()
   }
 
   /** How the machine at `url` is reached since it was added again, for the runs kept from before: this computer's new key there, and the key the machine is known by. */
   rekey(url: string, key: string, pin?: string): void {
+    // A run followed by its record is the machine's by the machine's own name, and a machine added again has not said its name yet.
+    for (const agentId of [...this.followed]) if (this.targets.get(agentId)?.url === url) this.forget(agentId)
     for (const [agentId, target] of this.targets) {
       if (target.url === url) this.targets.set(agentId, { url, key, ...(pin ? { pin } : {}), project: target.project })
     }
@@ -377,6 +449,8 @@ export class RelayedAgents {
   private endStream(agentId: string): void {
     const agent = this.agents.get(agentId)
     if (!agent) return
+    // A run followed by its record has that record to say how it stands: a line that dropped says nothing of the run.
+    if (this.followed.includes(agentId)) return this.forget(agentId)
     this.agents.delete(agentId)
     agent.stream.close() // a clean close surfaces as `done` in the browser, not a lost stream
     // The stream dropped with no terminal event: the agent is no longer live, so stop showing it as such.
@@ -393,6 +467,7 @@ export class RelayedAgents {
     }
     this.targets.clear()
     this.metas.clear()
+    this.followed.length = 0
   }
 }
 
@@ -408,7 +483,11 @@ function trimSlashes(url: string): string {
  */
 export function foldRelayedEvent(meta: AgentMeta, event: OpenAgentEvent, at: string): AgentMeta {
   const next: AgentMeta = { ...meta, updatedAt: at }
-  if (event.kind === 'session-update') next.sessionId = event.sessionId
+  // A run that ended and was continued is at work again: its next leg starts as its first did.
+  if (event.kind === 'driver' && event.event.type === 'start') {
+    next.status = 'running'
+    delete next.endedAt
+  } else if (event.kind === 'session-update') next.sessionId = event.sessionId
   else if (event.kind === 'usage') next.cost = (next.cost ?? 0) + event.costUsd
   else if (event.kind === 'end') {
     next.status = event.ok ? 'done' : event.stopped ? 'stopped' : event.waiting ? 'waiting' : 'failed'

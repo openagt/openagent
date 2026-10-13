@@ -21,7 +21,7 @@ import type { OpenAgentEvent } from '../events.js'
 import { bridgeQuestions } from '../dashboard/bridge-store.js'
 import type { BridgeEvent, BridgeHello, BridgeQuestion } from '../dashboard/bridge-endpoints.js'
 import type { BridgeAnswer, BridgeContact, BridgeVersion } from '../dashboard/bridge-store.js'
-import { readBridgeToken, readPreferences, type Preferences } from '../registry.js'
+import { isHostName, readBridgeToken, readPreferences, type Preferences } from '../registry.js'
 import { hostname } from 'node:os'
 
 // The read model behind the dashboard (#405): the agent history, an agent's replay, and the
@@ -83,11 +83,30 @@ export async function onAgents(projectId: string): Promise<AgentMeta[]> {
   // no longer costs anything — nothing here depends on this staying above one.
   const remote = contextRemote()?.list(projectId) ?? []
   const cwd = await resolveProjectPath(projectId)
-  const local = cwd ? (await readAllAgents(cwd)).map(forDashboard) : []
-  if (remote.length === 0) return local
-  // A relayed agent (#1067) lives only in the daemon's memory, not on disk; surface it in the list so
-  // a reload re-opens it instead of losing it. Remote wins an id tie (it is the live authority).
-  return [...remote, ...local.filter(agent => !remote.some(r => r.id === agent.id))]
+  const machineOf = await contextRemote().machineNames()
+  const local = cwd ? (await readAllAgents(cwd)).map(agent => forDashboard(agent, machineOf)) : []
+  return withFollowed(remote, local, agentId => contextRemote().sent(agentId))
+}
+
+/**
+ * A project's runs with the ones this daemon follows on a machine (#1067), which live in its
+ * memory. A run this computer sent that has no record here is listed first, as followed, so a
+ * reload re-opens it instead of losing it. One that has a record keeps the record's row, in
+ * its place, which holds more (its branch, its pull request, its parent), and takes from the
+ * followed one what the machine said since: whether it works, and its session. A run followed
+ * by its record is listed only while that record is there: deleted, it is gone from the list.
+ */
+export function withFollowed(followed: AgentMeta[], local: AgentMeta[], sent: (agentId: string) => boolean): AgentMeta[] {
+  if (followed.length === 0) return local
+  const live = new Map(followed.map(run => [run.id, run]))
+  const recorded = new Set(local.map(agent => agent.id))
+  const rows = local.map(record => {
+    const run = live.get(record.id)
+    if (!run) return record
+    const { remoteLabel } = run
+    return { ...record, status: run.status, updatedAt: run.updatedAt, target: 'remote' as const, ...(remoteLabel !== undefined ? { remoteLabel } : {}), ...(run.sessionId !== undefined ? { sessionId: run.sessionId } : {}) }
+  })
+  return [...followed.filter(run => !recorded.has(run.id) && sent(run.id)), ...rows]
 }
 
 /**
@@ -108,8 +127,22 @@ export function markCloudWaiting(agent: AgentMeta): AgentMeta {
  * with no recorded host predates the field and passes through untouched.
  */
 export function markOtherHost(agent: AgentMeta, thisHost: string = hostname()): AgentMeta {
-  if (agent.host === undefined || agent.host === thisHost) return agent
+  // A run on a saved machine says where it runs by the machine's name, not as someone else's.
+  if (agent.host === undefined || agent.host === thisHost || agent.remoteLabel !== undefined) return agent
   return { ...agent, otherHost: true }
+}
+
+/**
+ * A run whose record names the computer of a saved machine runs on that machine, whoever started
+ * it there, and reads like one this computer sent: by the name the machine was given. The record
+ * comes through the project's shared records, so it is here for a run started on the machine's
+ * own page too, and after this daemon forgot the runs it sent. A run of this computer, and one of
+ * a computer that is no saved machine, pass through untouched.
+ */
+export function markMachine(agent: AgentMeta, machineOf: (host: string) => string | undefined, thisHost: string = hostname()): AgentMeta {
+  if (agent.host === undefined || agent.host === thisHost || agent.remoteLabel !== undefined) return agent
+  const label = machineOf(agent.host)
+  return label === undefined ? agent : { ...agent, target: 'remote', remoteLabel: label }
 }
 
 /**
@@ -124,8 +157,21 @@ export function markSaving(agent: AgentMeta, thisHost: string = hostname(), aliv
 }
 
 /** Every annotation a run's record gets on its way to the dashboard: what the daemon knows and the disk cannot. */
-function forDashboard(agent: AgentMeta): AgentMeta {
-  return markSaving(markOtherHost(markCloudWaiting(agent)))
+function forDashboard(agent: AgentMeta, machineOf: (host: string) => string | undefined): AgentMeta {
+  return markSaving(markOtherHost(markMachine(markCloudWaiting(asRecorded(agent)), machineOf)))
+}
+
+/**
+ * A run as its record may say it. A record is a file anyone with the project can write, and its
+ * tool's own words are read into the row as they are, so the words only this daemon gives a row
+ * are taken off it first: that it runs on a saved machine and which, that it is another
+ * computer's, that it is being saved. A computer's name that is no name is none.
+ */
+export function asRecorded(agent: AgentMeta): AgentMeta {
+  const { remoteLabel: _label, otherHost: _other, saving: _saving, cloudWaiting: _waiting, ...said } = agent
+  if (said.target === 'remote') delete said.target
+  if (said.host !== undefined && !isHostName(said.host)) delete said.host
+  return said
 }
 
 /**
@@ -226,8 +272,17 @@ export async function onOverview(): Promise<Overview> {
 
 /** Recent sessions pooled across every project (#shared-shell), newest first, for the home rail. */
 export async function onRecentAgents(): Promise<RecentAgent[]> {
-  const recent = await withProjects(projects => buildRecentAgents(projects))
-  return recent.map(row => ({ ...row, agent: forDashboard(row.agent) }))
+  // The runs this daemon follows on a machine live in its memory only: listed with each project's own, as in the project's list.
+  const remote = contextRemote()
+  const machineOf = await remote.machineNames()
+  return withProjects(projects =>
+    buildRecentAgents(projects, {
+      agents: async path => {
+        const followed = projects.filter(project => project.path === path).flatMap(project => remote.list(project.id))
+        return withFollowed(followed, (await readAllAgents(path)).map(agent => forDashboard(agent, machineOf)), agentId => remote.sent(agentId))
+      },
+    }),
+  )
 }
 
 

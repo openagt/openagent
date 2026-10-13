@@ -158,7 +158,7 @@ export function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
   const relayHandlers: RelayHandlers | undefined = opts.relay
     ? { project: opts.relay.project, start: opts.onStart, tailEvents: opts.relay.tailEvents, ...(opts.relay.rpc ? { rpc: opts.relay.rpc } : {}), ...(opts.relay.bring ? { bring: opts.relay.bring } : {}), ...(localScreen ? { screen: localScreen } : {}) }
     : undefined
-  const screenHandlers: ScreenHandlers | undefined = localScreen ? { local: localScreen, remote: agentId => opts.remote.target(agentId) } : undefined
+  const screenHandlers: ScreenHandlers | undefined = localScreen ? { local: localScreen, remote: (projectId, agentId) => opts.remote.target(agentId, projectId) } : undefined
 
   // The browser bridge (#1237). Off unless a token was supplied, and it carries that token itself.
   const bridgeHandlers: BridgeHandlers | undefined = opts.bridgeToken

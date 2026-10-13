@@ -161,7 +161,7 @@ test('a run on another machine: its screen is asked of that machine, with this c
     })
   })
   const target = { url: `${machine.url}/`, key: 'id.key', project: 'github.com/acme/app' }
-  const { url } = await openAgent(t, { local: async () => assert.fail('the run is not on this computer'), remote: agentId => (agentId === 'r' ? target : undefined) })
+  const { url } = await openAgent(t, { local: async () => assert.fail('the run is not on this computer'), remote: (_projectId, agentId) => (agentId === 'r' ? target : undefined) })
 
   const watching = new AbortController()
   const answer = await fetch(`${url}${SCREEN_PREFIX}/stream?project=mine&run=r`, { signal: watching.signal })

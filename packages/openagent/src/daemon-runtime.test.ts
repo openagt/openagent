@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { createServer } from 'node:http'
+import { createServer, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { createProjectRuntime } from './daemon-runtime.js'
 import { PROJECT_HOOKS_FILE } from './project-hooks.js'
 import { OPENAGENT_DIR } from './openagent-dir.js'
-import { addMachine, addProject, listProjects, projectId, removeProject } from './registry.js'
+import { addMachine, addProject, listMachines, listProjects, projectId, removeProject } from './registry.js'
 import type { OpenAgentEvent } from './events.js'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { addWorktree, agentBranchName, worktreePath } from '@openagt/skill-branches'
@@ -523,6 +523,137 @@ test('a run started on another machine is followed only under an id that is a ru
     await runtime.dispose()
     machine.closeAllConnections()
     machine.close()
+    await rm(base, { recursive: true, force: true })
+  }
+})
+
+test('a run whose record names a saved machine\'s computer is that machine\'s, whoever started it there: asked of the machine, followed from here, and no other computer\'s run is', async () => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'openagent-home-')))
+  const env = { XDG_CONFIG_HOME: join(base, 'cfg') }
+  await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
+  const git = nodeGitRunner()
+  // A project whose records name the computer that ran each run.
+  const project = async (name: string, runs: readonly (readonly [string, string])[]): Promise<string> => {
+    const dir = await clone(base, name, `https://github.com/acme/${name}.git`)
+    await git(['config', 'user.email', 't@t'], dir)
+    await git(['config', 'user.name', 't'], dir)
+    await git(['commit', '-q', '--allow-empty', '-m', 'init'], dir)
+    for (const [agentId, host] of runs) {
+      await addWorktree(dir, { agentId, branch: agentBranchName(agentId) }, git)
+      const card = join(worktreePath(dir, agentId), OPENAGENT_DIR)
+      await mkdir(card, { recursive: true })
+      await writeFile(join(card, `${agentId}.json`), JSON.stringify({ id: agentId, startedAt: '2026-07-19T10:00:00.000Z', status: 'waiting', driver: 'claude-code', branch: agentBranchName(agentId), caller: { pid: 1, host } }))
+    }
+    await addProject(dir, new Date().toISOString(), undefined, env)
+    return projectId(dir)
+  }
+  // Three runs: a saved machine's, this computer's, a teammate's.
+  const [ON_SERVER, MINE, ELSEWHERE] = ['2026-07-19T10-00-00-000Z', '2026-07-19T10-00-01-000Z', '2026-07-19T10-00-02-000Z'] as const
+  const shop = await project('shop', [[ON_SERVER, 'server-box'], [MINE, hostname()], [ELSEWHERE, 'rom-thinkpad-x280']])
+  // Another project, where someone wrote a record under the id of this computer's run in the shop, naming the machine.
+  // And one under the id of the machine's run in the shop.
+  const other = await project('other', [[MINE, 'server-box'], [ON_SERVER, 'server-box']])
+  // A machine is asked its name behind a list's back when it is slow: asked again until the name is as expected.
+  const named = async (from: { machineNames: () => Promise<(host: string) => string | undefined> }, host: string, expected: string | undefined): Promise<string | undefined> => {
+    for (let i = 0; i < 100; i++) {
+      if ((await from.machineNames())(host) === expected) return expected
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
+    return (await from.machineNames())(host)
+  }
+
+  // A machine: its ping says its computer's own name, and its events stream stays open, as a real one's does.
+  const asked: string[] = []
+  const open: ServerResponse[] = []
+  const machineAt = async (says: () => string | undefined): Promise<{ url: string; close: () => void }> => {
+    const server = createServer((req, res) => {
+      req.resume()
+      asked.push(`${req.headers.authorization} ${req.url}`)
+      if (req.url === '/_relay/ping') return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ version: '9.9.9', ...(says() !== undefined ? { host: says() } : {}) }))
+      res.writeHead(200, { 'content-type': 'application/x-ndjson' })
+      res.write(`${JSON.stringify({ kind: 'session-update', sessionId: 'from the machine' })}\n`)
+      open.push(res)
+    })
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    return { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, close: () => (server.closeAllConnections(), server.close()) }
+  }
+  let said: string | undefined = 'server-box'
+  const machine = await machineAt(() => said)
+  const { url } = machine
+  await addMachine({ url, key: 'id.key', door: `${url}/_remote-access/enter`, label: 'Server' }, undefined, env)
+  let runtime = createProjectRuntime({ cwd: join(base, 'shop'), env })
+  const closing = [machine.close]
+  try {
+    const { home, follow, list, machineNames, working } = runtime.remoteAgents
+    // The machine is asked its name once, and known by the name it was given here.
+    assert.equal(await named(runtime.remoteAgents, 'server-box', 'Server'), 'Server')
+    assert.equal((await machineNames())('rom-thinkpad-x280'), undefined)
+    assert.deepEqual(asked, ['Bearer id.key /_relay/ping'])
+
+    // Where each run runs: the machine's is the machine's to be asked about, with this computer's key there.
+    const atMachine = { url, key: 'id.key', project: 'github.com/acme/shop' }
+    assert.deepEqual(await home(shop, ON_SERVER), atMachine)
+    assert.equal(await home(shop, MINE), undefined)
+    assert.equal(await home(shop, ELSEWHERE), undefined)
+    assert.equal(await home(shop, '2026-07-19T10-00-09-000Z'), undefined)
+    assert.equal(await home('no-such-project', ON_SERVER), undefined)
+
+    // Followed from here on, as a run this computer sent: its events the machine's own, its row the record's.
+    assert.deepEqual(list(shop), [])
+    for (const agentId of [ON_SERVER, MINE, ELSEWHERE, ON_SERVER]) await follow(shop, agentId)
+    for await (const event of runtime.remoteEventsSource(shop, ON_SERVER)!) {
+      assert.deepEqual(event, { kind: 'session-update', sessionId: 'from the machine' })
+      break
+    }
+    assert.deepEqual(list(shop).map(row => [row.id, row.target, row.remoteLabel, row.status, row.driver, row.branch]), [[ON_SERVER, 'remote', 'Server', 'waiting', 'claude-code', agentBranchName(ON_SERVER)]])
+    assert.deepEqual(asked.filter(line => line.includes('/_relay/events')), ['Bearer id.key /_relay/events?run=2026-07-19T10-00-00-000Z&project=github.com%2Facme%2Fshop'], 'followed once')
+    // A record does not hold a machine: one that says its run works still lets the machine be removed.
+    assert.equal(working(url), false)
+
+    // A record in another project under the id of this computer's own run: followed there, and the shop's run stays this computer's.
+    // One under the id of the run followed in the shop does not take that run over.
+    await follow(other, MINE)
+    await follow(other, ON_SERVER)
+    assert.deepEqual(list(other).map(row => row.id), [MINE])
+    assert.deepEqual(runtime.remoteAgents.target(ON_SERVER, shop), atMachine)
+    assert.equal(runtime.remoteAgents.sent(ON_SERVER), false)
+    assert.equal(await home(shop, MINE), undefined)
+    assert.equal(runtime.remoteEventsSource(shop, MINE), undefined)
+    assert.equal(runtime.remoteAgents.target(MINE, shop), undefined)
+
+    // The name was kept with the machine: a machine that later says another, or says none, is still this one.
+    said = 'rom-thinkpad-x280'
+    for (const res of open.splice(0)) res.end()
+    await runtime.dispose()
+    runtime = createProjectRuntime({ cwd: join(base, 'shop'), env })
+    assert.equal((await runtime.remoteAgents.machineNames())('server-box'), 'Server')
+    assert.equal((await runtime.remoteAgents.machineNames())('rom-thinkpad-x280'), undefined)
+    assert.deepEqual(await runtime.remoteAgents.home(shop, ON_SERVER), atMachine)
+    assert.equal(asked.filter(line => line.endsWith('/_relay/ping')).length, 1, 'not asked again')
+
+    // A second machine that says the same name: the name is neither's, and the run is asked of no machine.
+    const twin = await machineAt(() => 'server-box')
+    closing.push(twin.close)
+    await addMachine({ url: twin.url, key: 'id.twin', door: `${twin.url}/_remote-access/enter`, label: 'Twin' }, undefined, env)
+    await runtime.dispose()
+    runtime = createProjectRuntime({ cwd: join(base, 'shop'), env })
+    assert.equal(await named(runtime.remoteAgents, 'server-box', undefined), undefined)
+    assert.equal(await runtime.remoteAgents.home(shop, ON_SERVER), undefined)
+
+    // A machine that does not say its name, an older one, is asked and keeps none.
+    const quiet = await machineAt(() => undefined)
+    closing.push(quiet.close)
+    await addMachine({ url: quiet.url, key: 'id.quiet', door: `${quiet.url}/_remote-access/enter`, label: 'Quiet' }, undefined, env)
+    for (let i = 0; i < 100 && !asked.includes('Bearer id.quiet /_relay/ping'); i++) {
+      await runtime.remoteAgents.machineNames()
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
+    assert.ok(asked.includes('Bearer id.quiet /_relay/ping'))
+    assert.equal((await listMachines(undefined, env)).find(saved => saved.url === quiet.url)!.host, undefined)
+  } finally {
+    for (const res of open) res.end()
+    await runtime.dispose()
+    for (const close of closing) close()
     await rm(base, { recursive: true, force: true })
   }
 })

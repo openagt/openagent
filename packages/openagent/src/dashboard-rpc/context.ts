@@ -38,7 +38,7 @@ function fromContext<K extends keyof DashboardContext>(key: K): DashboardContext
 }
 
 /** No run is relayed from here — see {@link contextRemote}. */
-const NO_RELAYED_RUNS: RemoteAgents = { target: () => undefined, list: () => [], working: () => false, rekey: () => {} }
+const NO_RELAYED_RUNS: RemoteAgents = { target: () => undefined, list: () => [], working: () => false, rekey: () => {}, sent: () => true, home: async () => undefined, follow: async () => {}, machineNames: async () => () => undefined }
 
 /** The projects every RPC resolves a project id against: the global registry. */
 export function contextProjects(): ProjectsProvider {

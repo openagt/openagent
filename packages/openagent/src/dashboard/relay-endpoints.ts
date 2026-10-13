@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { hostname } from 'node:os'
 import type { OpenAgentEvent } from '../events.js'
 import type { StartAgentOptions, StartAgentResult } from './types.js'
 import type { BringProject, RelayProject, RelayStartResult } from './remote-run.js'
@@ -95,12 +96,13 @@ async function handleScreen(req: IncomingMessage, res: ServerResponse, handlers:
   await passToScreen(req, res, call, await handlers.screen(projectId, agentId).catch(() => undefined))
 }
 
-/** `GET /_relay/ping` (#1072): answer 200 with this OpenAgent's version. Starts nothing; it proves this
- * daemon is reachable, and to another machine that its key still lets it in, and tells that
- * machine whether this one fell behind it. */
+/** `GET /_relay/ping` (#1072): answer 200 with this OpenAgent's version and this computer's own name. Starts
+ * nothing; it proves this daemon is reachable, and to another machine that its key still lets it in, tells that
+ * machine whether this one fell behind it, and which runs in a project's shared records are this computer's:
+ * a run's record carries the name of the computer that ran it. */
 function handlePing(req: IncomingMessage, res: ServerResponse): void {
   if (!requireGet(req, res)) return
-  sendJson(res, { version: openagentVersion() })
+  sendJson(res, { version: openagentVersion(), host: hostname() })
 }
 
 /** `POST /_relay/start`: read the agent request, start it locally, and answer with the result JSON. */

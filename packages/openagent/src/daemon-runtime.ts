@@ -1,17 +1,18 @@
 import { basename, join, resolve } from 'node:path'
 import { hostname } from 'node:os'
 import { stat } from 'node:fs/promises'
-import { findCheckout, fromDiaryLine, isPidAlive, isRunId, projectBranches, readLiveMetas, resolveAgentDiary, type AgentMeta, type AnyDiaryLine } from './store/index.js'
+import { findAgent, findCheckout, fromDiaryLine, isPidAlive, isRunId, projectBranches, readLiveMetas, resolveAgentDiary, type AgentMeta, type AnyDiaryLine } from './store/index.js'
 import { OPENAGENT_DIR } from './openagent-dir.js'
 import type { OpenAgentEvent } from './events.js'
 import type { StartAgentOptions, StartAgentResult, AddProjectResult, RemoveProjectResult } from './dashboard/index.js'
 import type { EventsSource, RemoteAgents } from './dashboard/rpc-serve.js'
-import { RelayedAgents, startRemoteAgent, type BringProject, type RelayProject } from './dashboard/remote-run.js'
+import { RelayedAgents, remoteFacts, startRemoteAgent, type BringProject, type RelayProject, type RemoteTarget } from './dashboard/remote-run.js'
 import { cloneProject, cloneTarget } from './clone-project.js'
 import { screenInDiary } from './dashboard/screen.js'
 import { dispatchRelayRpc } from './dashboard-rpc/relay-dispatch.js'
+import { asRecorded } from './dashboard-rpc/reads.js'
 import { tailAgentEvents } from './dashboard-rpc/events-tail.js'
-import { addProject, listMachines, listProjects, projectId, removeProject } from './registry.js'
+import { addProject, isHostName, listMachines, listProjects, nameMachine, projectId, removeProject, type MachineRecord } from './registry.js'
 import { repositoryAddress } from './repository-address.js'
 import { writeHookLines } from './built-in.js'
 import { fileBranchRepo, installProject, writeSharing } from '@openagt/agent-data'
@@ -35,6 +36,17 @@ const ADDRESS_KEPT_MS = 10_000
 
 /** How long a coding agent's name may be that another machine answers: a row shows it. */
 const MAX_DRIVER_NAME = 64
+
+/** How soon a machine that did not say its own name is asked again. */
+const HOST_ASKED_AGAIN_MS = 30_000
+/** How long a list waits for a machine that never said its name: a machine that is down does not hold a page. */
+const HOST_WAIT_MS = 1_500
+/** How long the machine a run runs on is kept: a run's reads ask every few seconds. */
+const HOME_KEPT_MS = 10_000
+/** How long a run is kept as this computer's own: its record never names another computer later, and a day is long enough not to ask again. */
+const OWN_KEPT_MS = 24 * 60 * 60_000
+/** How many runs' machines are kept before the memory starts over. */
+const MAX_HOMES = 5_000
 
 /** How many projects this computer clones at once for other machines; one more is told to ask again. */
 const MAX_COMING = 3
@@ -94,13 +106,102 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject }: Project
   const homeId = projectId(resolve(cwd))
   // Runs this daemon is relaying to/from a saved machine (#1067): the local half of a remote agent.
   const relayedAgents = new RelayedAgents()
+  // Each saved machine's own computer name: what the records of its runs carry, so a run that came
+  // through a project's shared records is known as that machine's. A machine says it in its ping,
+  // and it is kept with the machine as first said. One that has not said it yet is asked, not
+  // more often than every half minute, and a list waits for it only the first time, and not long.
+  let machines: MachineRecord[] = []
+  const asked = new Map<string, number>()
+  let asking: Promise<void> | undefined
+  const askNames = (unnamed: MachineRecord[]): Promise<void> =>
+    (asking ??= Promise.all(
+      unnamed.map(async machine => {
+        asked.set(machine.url, Date.now())
+        const { host } = await remoteFacts(machine).catch((): { host?: string } => ({}))
+        if (host !== undefined) await nameMachine(machine, host, undefined, env).catch(() => false)
+      }),
+    ).then(
+      () => void (asking = undefined),
+      () => void (asking = undefined),
+    ))
+  const machineNames = async (): Promise<(host: string) => string | undefined> => {
+    // A list that could not be read keeps the last one: a read that fails once does not hand a machine's runs back to this computer.
+    const read = async (): Promise<void> => void (machines = await listMachines(undefined, env).catch(() => machines))
+    await read()
+    for (const url of asked.keys()) if (!machines.some(machine => machine.url === url)) asked.delete(url)
+    const now = Date.now()
+    const unnamed = machines.filter(machine => machine.host === undefined && now - (asked.get(machine.url) ?? 0) > HOST_ASKED_AGAIN_MS)
+    if (unnamed.length > 0) {
+      const first = unnamed.some(machine => !asked.has(machine.url))
+      const said = askNames(unnamed)
+      if (first) {
+        await Promise.race([said, new Promise(resolvePromise => setTimeout(resolvePromise, HOST_WAIT_MS).unref())])
+        await read()
+      }
+    }
+    return host => machineOf(host)?.label
+  }
+  // A name two saved machines say is no machine's: neither gets the other's runs by saying it.
+  const machineOf = (host: string): MachineRecord | undefined => {
+    const named = machines.filter(machine => machine.host === host)
+    return named.length === 1 ? named[0] : undefined
+  }
+
+  // The machine a run runs on. A run this computer sent is known by what was kept at its start.
+  // Any other is known by its record: the computer it names is this one, a saved machine, or
+  // someone else's, and only a saved machine's run is that machine's to be asked about. A run is
+  // looked up in its own project, and what is kept is kept by project and run: an id alone says
+  // nothing of the project, and a record in one project does not speak for a run of another.
+  const homes = new Map<string, { home?: { target: RemoteTarget; label: string }; until: number }>()
+  const homeOf = async (project: string, agentId: string): Promise<{ target: RemoteTarget; label: string } | undefined> => {
+    if (!isRunId(agentId)) return undefined
+    const key = `${project} ${agentId}`
+    const kept = homes.get(key)
+    if (kept && kept.until > Date.now()) return kept.home
+    const keep = (home: { target: RemoteTarget; label: string } | undefined, forMs: number): typeof home => {
+      if (homes.size >= MAX_HOMES) homes.clear()
+      homes.set(key, { ...(home ? { home } : {}), until: Date.now() + forMs })
+      return home
+    }
+    const projectCwd = await resolveProject(project)
+    const agent = projectCwd ? await findAgent(projectCwd, agentId).catch(() => undefined) : undefined
+    // No record yet: nothing is known, and it is asked again.
+    if (!projectCwd || !agent) return undefined
+    // A run's computer never changes: this one's own, and one whose record names none, is not looked up again.
+    if (!isHostName(agent.host) || agent.host === hostname()) return keep(undefined, OWN_KEPT_MS)
+    await machineNames()
+    const machine = machineOf(agent.host)
+    const address = machine ? await addressOf(projectCwd) : undefined
+    if (!machine || address === undefined) return keep(undefined, HOME_KEPT_MS)
+    return keep({ target: { url: machine.url, key: machine.key, ...(machine.pin ? { pin: machine.pin } : {}), project: address }, label: machine.label }, HOME_KEPT_MS)
+  }
+
   // The relayed-agent lookup the dashboard's read RPCs consult (#1067 slice 2): is this agentId remote, and
   // which machine owns it. Outlives the event stream so a finished remote agent's push/PR still reaches it.
   const remoteAgents: RemoteAgents = {
-    target: agentId => relayedAgents.target(agentId),
+    target: (agentId, project) => relayedAgents.target(agentId, project),
     list: projectId => relayedAgents.list(projectId),
     working: url => relayedAgents.working(url),
-    rekey: (url, key, pin) => relayedAgents.rekey(url, key, pin),
+    rekey: (url, key, pin) => {
+      relayedAgents.rekey(url, key, pin)
+      homes.clear()
+    },
+    home: async (project, agentId) => relayedAgents.target(agentId, project) ?? (await homeOf(project, agentId))?.target,
+    follow: async (project, agentId) => {
+      // An id kept as a run of another project, followed now or not, is not taken over by a record in this one.
+      const elsewhere = (): boolean => relayedAgents.target(agentId) !== undefined && relayedAgents.target(agentId, project) === undefined
+      if (relayedAgents.follows(agentId) || elsewhere()) return
+      const home = await homeOf(project, agentId)
+      const projectCwd = home ? await resolveProject(project) : undefined
+      const agent = projectCwd ? await findAgent(projectCwd, agentId).catch(() => undefined) : undefined
+      if (!home || !agent || relayedAgents.follows(agentId) || elsewhere()) return
+      // The row starts as the record may say the run is, and the machine's own events take it from there.
+      // Its cost is counted again from what the machine says, from the run's first line on.
+      const { cost: _counted, ...said } = asRecorded(agent)
+      relayedAgents.register(agentId, home.target, { ...said, target: 'remote', remoteLabel: home.label }, project, false)
+    },
+    sent: agentId => relayedAgents.isSent(agentId),
+    machineNames,
   }
   // The machine side of the relay (#1067 slice 2): run one whitelisted read/steer/handoff RPC against this
   // daemon's own copy of the project the call named, for a daemon that relayed an agent here.
@@ -306,7 +407,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject }: Project
 
   // The dashboard's events source (#1067): a stream for an agent this daemon is relaying from a machine,
   // else undefined so `onEvents` tails the on-disk log as usual for an ordinary local agent.
-  const remoteEventsSource: EventsSource = (_projectId, agentId) => relayedAgents.get(agentId)
+  const remoteEventsSource: EventsSource = (projectId, agentId) => relayedAgents.get(agentId, projectId)
 
   // Tail a relay-started run's own log (#1067) for the `/_relay/events` endpoint: the diary the
   // run's tool keeps, its lines turned into events. The relocating tail, for the same reason as

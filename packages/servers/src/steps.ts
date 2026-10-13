@@ -445,7 +445,8 @@ export function githubCodeScript(): LoginScript {
   echo "$pid" > ${GH_ASKING}.pid
   for _ in $(seq 1 150); do
     grep -q 'one-time code' "$log" && break
-    asking "$pid" || break
+    # Asked whether it lives, not what it is called: it is this script's own, and in its first moment it has no name of its own yet.
+    kill -0 "$pid" 2>/dev/null || break
     sleep 0.2
   done
   code=$(grep -oE 'one-time code: [A-Z0-9]{4}-[A-Z0-9]{4}' "$log" | head -n 1 | awk '{print $NF}' || true)

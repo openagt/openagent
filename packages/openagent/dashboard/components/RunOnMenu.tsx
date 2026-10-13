@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Laptop, MonitorSmartphone, Plus, X } from 'lucide-react'
+import { Check, ChevronDown, Laptop, Server, Plus, X } from 'lucide-react'
 import type { Machine } from '../lib/machines.js'
 import type { MachineStatus } from '../lib/use-machine-status.js'
 import { cn } from '../lib/utils.js'
@@ -49,7 +49,7 @@ export function RunOnMenu({ connection, busy, chip = false }: { connection: Conn
     connection.selectedMachineId && !connection.onlyHere ? connection.machines.find(m => m.id === connection.selectedMachineId) : undefined
   const summary = selectedMachine?.label ?? 'This machine'
   const onThisMachine = !selectedMachine
-  const Icon = onThisMachine ? Laptop : MonitorSmartphone
+  const Icon = onThisMachine ? Laptop : Server
   return (
     <DropdownMenu>
       <Tooltip>
@@ -107,7 +107,7 @@ export function RunOnMenu({ connection, busy, chip = false }: { connection: Conn
               onClick={() => connection.onSelect(machine)}
             >
               <Check className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', selectedMachine?.id === machine.id ? 'opacity-100' : 'opacity-0')} />
-              <MonitorSmartphone className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+              <Server className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
               <StatusDot status={status} />
               <OptionLabel label={machine.label} description={offline ? `${machine.url} (offline)` : machine.url} />
               <Tooltip>

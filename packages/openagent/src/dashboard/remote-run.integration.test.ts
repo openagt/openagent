@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { execFileSync } from 'node:child_process'
 import { mkdtemp, mkdir, writeFile, rm, realpath } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { tmpdir, hostname } from 'node:os'
 import { basename, join } from 'node:path'
 import { EventStream } from '../event-stream.js'
 import { startDashboard, type Dashboard } from './server.js'
@@ -191,6 +191,16 @@ test('a run started on a saved machine lands in that machine\'s own copy of the 
     assert.equal(listed[0]!.status, 'running')
     assert.equal(listed[0]!.remoteLabel, 'Studio')
     assert.equal(listed[0]!.intent, 'build the thing')
+
+    // B says its computer's own name in its ping, so A knows which runs in a project's shared records are B's.
+    // Both run on this computer here, so the name is this computer's, and the machine's own is the one A gave it.
+    let studio: string | undefined
+    for (let i = 0; i < 100 && studio === undefined; i++) {
+      studio = (await m.a.remoteAgents.machineNames())(hostname())
+      if (studio === undefined) await new Promise(resolve => setTimeout(resolve, 50))
+    }
+    assert.equal(studio, 'Studio')
+    assert.equal((await m.a.remoteAgents.machineNames())('some-other-computer'), undefined)
 
     // The events stream back through A's relayed-run source, in order.
     const stream = m.a.remoteEventsSource(shopIdA, B_RUN)

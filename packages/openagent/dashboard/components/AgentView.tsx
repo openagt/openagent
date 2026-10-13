@@ -74,7 +74,7 @@ export function AgentView({
   /** Whether the agent is still running; `null` while the daemon's list of agents has not been read, so it is not known yet. */
   live: boolean | null
   /** What the run's card says, off the runs poll: what the feed cannot carry (the details strip's facts, how the agent was set up, whether it is a subagent, whether its record is being saved). Absent until the card is listed. */
-  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'saving' | 'parent' | 'workspace' | 'branch' | 'base'>) | undefined
+  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'saving' | 'parent' | 'workspace' | 'branch' | 'base' | 'host' | 'otherHost'>) | undefined
   /** The session's own name — the same label the rail shows (#1030). It leads the action bar as
    * the stable identity, so the branch renaming itself near the end of an agent (#736) reads as a
    * detail changing rather than the whole view changing. */
@@ -163,7 +163,8 @@ export function AgentView({
   const models = useModels()
   const modelLabel = model ? modelName(picked ? models?.[picked] : undefined, model) : undefined
   // Where the agent runs, for the chip beside its name: a machine by the name it was given.
-  const runsOn = remoteLabel ?? (target === 'web' ? 'Cloud' : target === 'actions' ? 'GitHub Actions' : target === 'remote' ? 'Another machine' : 'This machine')
+  // A run another computer started, which is no saved machine, is named by that computer: it did not run here.
+  const runsOn = remoteLabel ?? (target === 'web' ? 'Cloud' : target === 'actions' ? 'GitHub Actions' : target === 'remote' ? 'Another machine' : card?.otherHost && card.host ? card.host : 'This machine')
   const [open, setOpen] = useState(false)
   // What the installed modules add to this run's page: a summary in the bar above the message box.
   const { runSlots: mountedSlots, panels: mountedPanels } = useMountedModules()

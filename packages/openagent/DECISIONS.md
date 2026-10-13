@@ -233,6 +233,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   code beside the git host.
 - On screen, a computer that runs agents is a machine. Device is kept for a phone or a
   browser that gets in. Picked over device for both.
+- A run shows where it runs, on this computer or on a saved machine, as one icon with its
+  words on hover, and the same wherever it is listed and however it was started. Picked over
+  showing where it was started from, and over more words in the run's header.
 
 ## Saying something to a run
 - What a person says reaches a run through what the run's tool reads: a line in the run's

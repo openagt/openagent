@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { get, request } from 'node:http'
 import { connect } from 'node:net'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
-import { networkInterfaces, tmpdir } from 'node:os'
+import { networkInterfaces, tmpdir, hostname } from 'node:os'
 import { join } from 'node:path'
 import { startDashboard, type Dashboard, type DashboardOptions } from './server.js'
 import { isExpectedHost, isSameOriginRequest } from './rpc-serve.js'
@@ -432,7 +432,8 @@ test('/_relay/ping answers 200 with this OpenAgent\'s version and starts nothing
   try {
     const ok = await fetchText(`${base}/_relay/ping`)
     assert.equal(ok.status, 200)
-    assert.deepEqual(JSON.parse(ok.body), { version: openagentVersion() }) // what a machine that added this one reads whether it fell behind by
+    // What a computer that added this one reads: whether this one fell behind it, and which runs in a project's shared records are this computer's.
+    assert.deepEqual(JSON.parse(ok.body), { version: openagentVersion(), host: hostname() })
     assert.equal(starts.length, 0) // a health check must never spawn a run
   } finally {
     await close()

@@ -655,6 +655,12 @@ describe('where the agent runs, for the chip beside its name', () => {
     rerender(view({ live: true, target: 'actions' }))
     expect(runsOn()).toBe('GitHub Actions')
   })
+
+  test('a run of a computer that is no saved machine is named by that computer: it did not run on this one', () => {
+    const card = { status: 'done' as const, host: 'rom-thinkpad-x280', otherHost: true }
+    render(view({ card }))
+    expect(screen.getByTestId('bar-runs-on').textContent).toBe('rom-thinkpad-x280')
+  })
 })
 
 describe('the model under the message box', () => {
