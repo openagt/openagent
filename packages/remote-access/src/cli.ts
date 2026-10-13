@@ -1,8 +1,10 @@
 import { nameAddress, numberAddress, urlHost, type AddressDeps } from './address.js'
 import { doorFingerprint } from './certificate.js'
+import { hostname } from 'node:os'
 import { ENTER_PATH } from './door.js'
+import { enterForLine, leaveLine, readLineLink } from './line-out.js'
 import { HTTPS_PORT, serve } from './serve.js'
-import { Unreadable, addCode, addressOf, pidAlive, readStore, removeDevice, update, type Store } from './store.js'
+import { MAX_LINES, Unreadable, addCode, addressOf, pidAlive, readStore, removeDevice, update, type Line, type Store } from './store.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -20,6 +22,15 @@ export const USAGE = `usage: remote-access <command>
   https <at>     this computer is a server, reached at this number or name: the door is open to every network,
                  over HTTPS, with a certificate it asks for and renews itself (ports 80 and 443 must be reachable)
   https off      no longer a server: Phone on Wi-Fi decides again
+  line add <link> [watch]
+                 keep a line open to a server, so a run can be started on this computer from the server's page;
+                 the link is the one the server gives for a new device, or - to read it from standard input;
+                 with watch the server only reads
+  line full <at> the server at this number or name may do through its line everything a machine is asked
+  line watch <at>
+                 it may only read: this computer's runs are seen from the server's page, and none is started or told anything
+  line remove <at>
+                 no line to that server any more, and this computer's key for it there is taken out
   serve          the door's own process, run by OpenAgent for as long as it runs itself (OPENAGENT_URL says where OpenAgent is)`
 
 export interface CliIO {
@@ -34,6 +45,11 @@ export interface CliIO {
   followMs?: number
   /** The address `serve` binds the door to; every network of this computer when unsaid. */
   host?: string
+  /** What was handed to the command on standard input; the process's own when unsaid. */
+  stdin?: () => Promise<string>
+  /** How this computer gets in at a server for a line, and takes itself out; the real ones when unsaid. */
+  enterForLine?: typeof enterForLine
+  leaveLine?: typeof leaveLine
 }
 
 class Refused extends Error {}
@@ -47,7 +63,10 @@ export interface Status {
   problem?: string
   /** On a server: the address the door is open at. */
   https?: { address: string }
-  devices: { id: string; name: string; added: string; seen?: string }[]
+  /** A device with `line` is a computer that keeps a line open here. */
+  devices: { id: string; name: string; added: string; seen?: string; line?: true }[]
+  /** The servers this computer keeps a line open to, and what each may do through it. */
+  lines: { url: string; mode: Line['mode'] }[]
 }
 
 const isListening = (store: Store): boolean => (store.on || store.https !== undefined) && store.listening !== undefined && pidAlive(store.listening.pid)
@@ -64,7 +83,8 @@ function statusOf(store: Store): Status {
     listening,
     ...(problem ? { problem } : {}),
     ...(store.https ? { https: { address: store.https.address } } : {}),
-    devices: store.devices.map(({ id, name, added, seen }) => ({ id, name, added, ...(seen ? { seen } : {}) })),
+    devices: store.devices.map(({ id, name, added, seen, line }) => ({ id, name, added, ...(seen ? { seen } : {}), ...(line ? { line: true as const } : {}) })),
+    lines: store.lines.map(({ url, mode }) => ({ url, mode })),
   }
 }
 
@@ -124,6 +144,68 @@ async function addDevice(io: CliIO): Promise<{ url: string; numberUrl?: string; 
   const link = (host: string): string => `http://${urlHost(host)}:${port}${ENTER_PATH}#${code}`
   // The number beside the name, for the phone that cannot open a name on the network.
   return { url: link(first), ...(name && number ? { numberUrl: link(number) } : {}), expires }
+}
+
+/** All of the process's standard input, as text. */
+async function ownStdin(): Promise<string> {
+  let said = ''
+  for await (const chunk of process.stdin.setEncoding('utf8')) said += chunk
+  return said
+}
+
+/** This computer's name as a server lists it. */
+function ownName(): string {
+  return hostname().replace(/\.local$/i, '') || 'A computer'
+}
+
+/** The line to the server a person names, by its number or name or its whole address. */
+function lineAt(store: Store, at: string): Line | undefined {
+  return store.lines.find(line => line.url === at || new URL(line.url).hostname.replace(/^\[|\]$/g, '') === at)
+}
+
+/**
+ * Keep a line open to the server whose link this is. This computer gets in there with a key of
+ * its own for the line, apart from the key OpenAgent has there. A line this computer already had
+ * to that server is replaced, and the key it was asked for with is taken out there.
+ */
+async function addLine(io: CliIO, pasted: string, mode: Line['mode']): Promise<Status> {
+  const link = readLineLink(pasted)
+  if (!link) throw new Refused('That is not a link a server gives: on the server, Devices, Add device.')
+  const before = await readStore(io.env)
+  if (!lineAt(before, link.url) && before.lines.length >= MAX_LINES) throw new Refused('This computer keeps as many lines as it can: remove one first.')
+  const entered = await (io.enterForLine ?? enterForLine)(link, ownName())
+  if (!entered.ok) throw new Refused(`The server did not give a line: ${entered.error}`)
+  const line: Line = { url: link.url, pin: link.pin, key: entered.key, mode }
+  const old = await update(io.env, store => {
+    const had = lineAt(store, link.url)
+    store.lines = [...store.lines.filter(kept => kept !== had), line]
+    return had
+  })
+  // Waited for: the command ends with its answer, and the key the old line was asked for with must not stay on the server.
+  if (old) await (io.leaveLine ?? leaveLine)(old, link.door)
+  return statusOf(await readStore(io.env))
+}
+
+async function setLineMode(io: CliIO, at: string, mode: Line['mode']): Promise<Status> {
+  const found = await update(io.env, store => {
+    const line = lineAt(store, at)
+    if (line) line.mode = mode
+    return line !== undefined
+  })
+  if (!found) throw new Refused(`This computer keeps no line to ${at}.`)
+  return statusOf(await readStore(io.env))
+}
+
+async function removeLine(io: CliIO, at: string): Promise<Status> {
+  const removed = await update(io.env, store => {
+    const line = lineAt(store, at)
+    store.lines = store.lines.filter(kept => kept !== line)
+    return line
+  })
+  if (!removed) throw new Refused(`This computer keeps no line to ${at}.`)
+  // A server that cannot be reached right now keeps the key until this computer is removed there, among its devices.
+  await (io.leaveLine ?? leaveLine)(removed, `${removed.url}${ENTER_PATH}`)
+  return statusOf(await readStore(io.env))
 }
 
 async function runServe(io: CliIO): Promise<void> {
@@ -192,6 +274,14 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         const at = address === 'off' ? undefined : addressOf(address)
         if (address !== 'off' && at === undefined) throw new Refused(`${address} is not a server's number or name`)
         return print(await setHttps(io, at))
+      }
+      case 'line': {
+        const [what, at, how] = rest
+        // A link holds a code that works once: a program hands it over on standard input, where no other program sees it.
+        if (what === 'add' && at && (rest.length === 2 || (rest.length === 3 && how === 'watch'))) return print(await addLine(io, at === '-' ? await (io.stdin ?? ownStdin)() : at, how === 'watch' ? 'watch' : 'full'))
+        if ((what === 'full' || what === 'watch') && at && rest.length === 2) return print(await setLineMode(io, at, what))
+        if (what === 'remove' && at && rest.length === 2) return print(await removeLine(io, at))
+        break
       }
       case 'serve':
         if (rest.length) break

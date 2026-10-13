@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { provideTestContext } from './test-context.js'
-import { dispatchRelayRpc, RELAY_RPC_NAMES } from './relay-dispatch.js'
+import { dispatchRelayRpc, isRelayRead, RELAY_RPC_NAMES } from './relay-dispatch.js'
 
 // The machine-side whitelist dispatcher (#1067 slice 2): a daemon that relayed an agent here calls one of a
 // fixed set of run-scoped RPCs against this machine's own copy of the project the call named. These assert the whitelist is
@@ -22,6 +22,28 @@ test('RELAY_RPC_NAMES is the run-scoped read/steer/handoff surface and excludes 
   for (const off of ['sendStart', 'sendDeleteAgent', 'sendRemoveWorktree', 'sendPreview', 'runModuleCommand']) {
     assert.ok(!RELAY_RPC_NAMES.includes(off), `${off} must not be relayable`)
   }
+})
+
+test('every relayed rpc is classed as a read or an act, by name: a computer that only lets its server watch answers the reads alone', () => {
+  // Pinned one by one: a function added to the whitelist fails here until its class is written down.
+  const classes: Record<string, 'read' | 'act'> = {
+    onProjectFiles: 'read',
+    readModule: 'read',
+    onGitStatus: 'read',
+    onAgentWorktree: 'read',
+    onAgentHandoff: 'read',
+    onAgent: 'read',
+    sendStop: 'act',
+    sendChoice: 'act',
+    sendMessage: 'act',
+    sendOpenPullRequest: 'act',
+    sendPush: 'act',
+    sendMerge: 'act',
+  }
+  assert.deepEqual([...RELAY_RPC_NAMES].sort(), Object.keys(classes).sort())
+  for (const [name, said] of Object.entries(classes)) assert.equal(isRelayRead(name) ? 'read' : 'act', said, name)
+  // A name that is not relayed is no read, whatever it is called, and neither is anything a plain object would answer.
+  for (const off of ['onAgents', 'onMachines', 'sendStart', 'constructor', 'toString', '__proto__', '']) assert.equal(isRelayRead(off), false, off)
 })
 
 test('dispatchRelayRpc rejects an unknown rpc name (#1067 slice 2)', async () => {

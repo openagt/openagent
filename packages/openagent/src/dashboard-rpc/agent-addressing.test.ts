@@ -450,7 +450,7 @@ test('a run on a saved machine reads the same in the project\'s list and in ever
         return projectId === ctx.projectId && agentId === ctx.agentId ? target : undefined
       },
       follow: async () => {},
-      machineNames: async () => host => (host === 'server-box' ? 'Server' : undefined),
+      machineNames: async () => host => (host === 'server-box' ? { label: 'Server', url: 'https://server.example' } : undefined),
     },
   })
   try {
@@ -487,7 +487,7 @@ test('a call that arrived from another computer is run here whatever the run\'s 
       sent: agentId => agentId !== 'followed-by-a-record-that-is-gone',
       home: async () => (asked++, down),
       follow: async () => {},
-      machineNames: async () => () => 'Server',
+      machineNames: async () => () => ({ label: 'Server', url: 'https://server.example' }),
     },
   })
   try {
@@ -505,6 +505,34 @@ test('a call that arrived from another computer is run here whatever the run\'s 
     assert.equal(await readFile(join(ctx.dir, 'resumed.txt'), 'utf8'), `${ctx.agentId}|go on|\n${ctx.agentId}|and on|\n`)
   } finally {
     ctx.restore()
+    await rm(ctx.dir, { recursive: true, force: true })
+  }
+})
+
+test('a machine that refuses what would change a run, and says why, is answered in its own words; nothing is done here in its place', async () => {
+  const ctx = await projectWithWorktreeAgent({ pid: 0, host: 'server-box' }, { status: 'waiting', hooks: RESUME_HOOK, diary: [{ kind: 'said', text: 'kept in the record' }] })
+  // A computer that only lets its server watch: it refuses a call that acts, in words for the person.
+  const WHY = 'This computer only lets its server watch. Turn on "Start runs on this computer from the phone" in its Settings, under Servers.'
+  const machine = createServer((req, res) => {
+    req.resume()
+    res.writeHead(403, { 'content-type': 'text/plain' }).end(WHY)
+  })
+  await new Promise<void>(resolve => machine.listen(0, '127.0.0.1', resolve))
+  const target = { url: `http://127.0.0.1:${(machine.address() as AddressInfo).port}`, key: 'id.key', project: 'github.com/acme/shop' }
+  provideTestContext({
+    remote: { target: () => undefined, list: () => [], working: () => false, rekey: () => {}, sent: () => true, home: async () => target, follow: async () => {}, machineNames: async () => () => undefined },
+  })
+  try {
+    assert.deepEqual(await sendMessage(ctx.projectId, 'go on', ctx.agentId), { ok: false, error: WHY })
+    assert.deepEqual(await sendOpenPullRequest(ctx.projectId, ctx.agentId), { ok: false, error: WHY })
+    // A stop has no words to answer with: it is not done, and says nothing.
+    assert.equal(await sendStop(ctx.projectId, ctx.agentId), undefined)
+    await assert.rejects(stat(join(ctx.dir, 'resumed.txt')), { code: 'ENOENT' })
+    await assert.rejects(stat(ctx.agentInbox), { code: 'ENOENT' })
+  } finally {
+    ctx.restore()
+    machine.closeAllConnections()
+    machine.close()
     await rm(ctx.dir, { recursive: true, force: true })
   }
 })

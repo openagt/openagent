@@ -9,6 +9,8 @@ import { selectMachine, getSelectedMachineId } from '../lib/remote-target.js'
 
 const STUDIO = { id: 'http://192.168.1.5:4200', label: 'Studio', url: 'http://192.168.1.5:4200' }
 const BOX = { id: 'http://box.tail.ts:4200', label: 'Box', url: 'http://box.tail.ts:4200' }
+// A person's own computer, reached by the line it keeps open to this server: saved by the address that stands for it here.
+const MACBOOK = { id: 'http://127.0.0.1:4210', label: 'MacBook', url: 'http://127.0.0.1:4210' }
 
 afterEach(async () => {
   cleanup()
@@ -34,6 +36,21 @@ describe('MachinesSettings (#1052/#1072)', () => {
     expect(screen.getByText('Studio')).toBeTruthy()
     expect(screen.getByText(STUDIO.url)).toBeTruthy()
     expect(screen.getByText(/every\s+browser that opens it shows the same list/)).toBeTruthy()
+  })
+
+  test('a machine that is a person\'s own computer, reached by its line, is listed by what it is and not by its address, and can be taken off the list like any other', async () => {
+    await saveMachines(MACBOOK, STUDIO)
+    daemon.reachable = { [MACBOOK.id]: true }
+    render(<MachinesSettings />)
+    expect(screen.getByText('MacBook')).toBeTruthy()
+    expect(screen.getByText('Your computer. It keeps a line open to this server. Removed here, it is back when it calls again: to take it out, remove it under Devices.')).toBeTruthy()
+    expect(screen.queryByText(MACBOOK.url)).toBeNull()
+    // Never a row that cannot be removed: a machine saved at such an address by hand is no computer on a line.
+    expect(screen.getByLabelText('Remove MacBook')).toBeTruthy()
+    // Whether it is connected is still said, and a server's row is as it was.
+    await waitFor(() => expect(screen.getByText('Online')).toBeTruthy())
+    expect(screen.getByText(STUDIO.url)).toBeTruthy()
+    expect(screen.getByLabelText('Remove Studio')).toBeTruthy()
   })
 
   test('removing a machine takes it off the daemon\'s list and off the page', async () => {

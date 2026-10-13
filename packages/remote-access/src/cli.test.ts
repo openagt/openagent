@@ -36,18 +36,18 @@ async function run(env: NodeJS.ProcessEnv, args: string[], over: Partial<CliIO> 
 test('off until switched on; on without OpenAgent running says what is missing; a code is refused until the door is open', async () => {
   const home = await testHome()
   try {
-    assert.deepEqual((await run(home.env, ['status'])).out, { on: false, listening: false, devices: [] })
+    assert.deepEqual((await run(home.env, ['status'])).out, { on: false, listening: false, devices: [], lines: [] })
     const refused = await run(home.env, ['add'])
     assert.equal(refused.code, 1)
     assert.deepEqual(refused.err, ['Phone on Wi-Fi is off: turn it on first'])
 
-    assert.deepEqual((await run(home.env, ['on'])).out, { on: true, listening: false, problem: 'The door opens once OpenAgent runs on this computer.', devices: [] })
+    assert.deepEqual((await run(home.env, ['on'])).out, { on: true, listening: false, problem: 'The door opens once OpenAgent runs on this computer.', devices: [], lines: [] })
     const notOpen = await run(home.env, ['add'])
     assert.equal(notOpen.code, 1)
     assert.deepEqual(notOpen.err, ['The door opens once OpenAgent runs on this computer.'])
     assert.deepEqual((await readStore(home.env)).codes, [], 'no code is made for a door that is not open')
 
-    assert.deepEqual((await run(home.env, ['off'])).out, { on: false, listening: false, devices: [] })
+    assert.deepEqual((await run(home.env, ['off'])).out, { on: false, listening: false, devices: [], lines: [] })
   } finally {
     await home.remove()
   }
@@ -59,7 +59,7 @@ test('with the door\'s process running: on opens it, add answers a link by the n
   const env = { ...home.env, OPENAGENT_URL: 'http://127.0.0.1:1', OPENAGENT_REMOTE_ACCESS_PORT: '0' }
   const serving = run(env, ['serve'], { signal: stop.signal })
   try {
-    assert.deepEqual((await run(home.env, ['on'], { followMs: 5_000 })).out, { on: true, listening: true, devices: [] })
+    assert.deepEqual((await run(home.env, ['on'], { followMs: 5_000 })).out, { on: true, listening: true, devices: [], lines: [] })
     const port = (await readStore(home.env)).listening!.port
 
     const link = (await run(home.env, ['add'])).out as { url: string; numberUrl: string; expires: string }
@@ -108,7 +108,7 @@ test('a file that cannot be read is said in one line, by every command that woul
   const home = await testHome()
   try {
     await writeFile(storePath(home.env), '{ "on": true,, }')
-    assert.deepEqual((await run(home.env, ['status'])).out, { on: false, listening: false, devices: [] })
+    assert.deepEqual((await run(home.env, ['status'])).out, { on: false, listening: false, devices: [], lines: [] })
     for (const args of [['on'], ['off'], ['remove', 'abcdef123456']]) {
       const refused = await run(home.env, args)
       assert.equal(refused.code, 1)
@@ -146,7 +146,7 @@ test('https <address> makes this computer a server and https off undoes it; what
   const home = await testHome()
   try {
     const set = await run(home.env, ['https', '203.0.113.5'])
-    assert.deepEqual(set.out, { on: false, listening: false, problem: 'The door opens once OpenAgent runs on this computer.', https: { address: '203.0.113.5' }, devices: [] })
+    assert.deepEqual(set.out, { on: false, listening: false, problem: 'The door opens once OpenAgent runs on this computer.', https: { address: '203.0.113.5' }, devices: [], lines: [] })
     assert.deepEqual((await readStore(home.env)).https, { address: '203.0.113.5' })
     assert.equal(((await run(home.env, ['https', 'agents.example.com'])).out as { https: { address: string } }).https.address, 'agents.example.com')
     // An address is kept the one way a certificate office and a link read it.
@@ -157,7 +157,7 @@ test('https <address> makes this computer a server and https off undoes it; what
       assert.equal(refused.code, 1, not)
       assert.deepEqual(refused.err, [`${not} is not a server's number or name`])
     }
-    assert.deepEqual((await run(home.env, ['https', 'off'])).out, { on: false, listening: false, devices: [] })
+    assert.deepEqual((await run(home.env, ['https', 'off'])).out, { on: false, listening: false, devices: [], lines: [] })
     assert.equal((await run(home.env, ['https'])).code, 2)
   } finally {
     await home.remove()

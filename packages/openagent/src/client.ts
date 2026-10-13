@@ -28,6 +28,10 @@ export type { ProjectionRead } from './dashboard/projects.js'
 export { NOTIFICATION_DEFAULTS, MAX_SPEND_OFFSET, notifies, browserNotifyEnabled, notifyCategoryEnabled, type NotifyCategory } from './preference-defaults.js'
 // How a pasted machine link is read, so the dialog and the daemon read a paste the same way.
 export { parseMachineLink } from './machine-link.js'
+// Which saved machine is a person's own computer that keeps a line open here, so the daemon and the pages say it by one rule.
+export { reachedByLine } from './reached-by-line.js'
+// Which names are this computer's own, so a page knows whether it was opened on the computer it is served from.
+export { isLoopbackHost } from './loopback-host.js'
 // A bridged question as the gate panel renders it (#1554): pure, so the client projects it itself.
 export { bridgeChoiceRequest } from './dashboard/bridge-question.js'
 // What a web run's cloud side is doing, from its record (#1668): pure, so every surface derives the same word.

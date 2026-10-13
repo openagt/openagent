@@ -10,6 +10,8 @@ export interface DeviceRow {
   name: string
   added: string
   seen?: string
+  /** A computer that keeps a line open here: this server starts runs on it. */
+  line?: true
 }
 
 /** The door as `status` tells it. */
@@ -41,9 +43,9 @@ export function readStatus(output: unknown): DoorStatus | undefined {
   const rows: DeviceRow[] = []
   for (const entry of devices) {
     if (!entry || typeof entry !== 'object') continue
-    const { id, name, added, seen } = entry as Record<string, unknown>
+    const { id, name, added, seen, line } = entry as Record<string, unknown>
     const [deviceId, deviceName, addedAt, seenAt] = [text(id), text(name), text(added), text(seen)]
-    if (deviceId && deviceName && addedAt) rows.push({ id: deviceId, name: deviceName, added: addedAt, ...(seenAt ? { seen: seenAt } : {}) })
+    if (deviceId && deviceName && addedAt) rows.push({ id: deviceId, name: deviceName, added: addedAt, ...(seenAt ? { seen: seenAt } : {}), ...(line === true ? { line: true } : {}) })
   }
   const why = text(problem)
   const address = https && typeof https === 'object' ? text((https as Record<string, unknown>).address) : undefined

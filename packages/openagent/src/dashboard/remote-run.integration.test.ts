@@ -196,7 +196,7 @@ test('a run started on a saved machine lands in that machine\'s own copy of the 
     // Both run on this computer here, so the name is this computer's, and the machine's own is the one A gave it.
     let studio: string | undefined
     for (let i = 0; i < 100 && studio === undefined; i++) {
-      studio = (await m.a.remoteAgents.machineNames())(hostname())
+      studio = (await m.a.remoteAgents.machineNames())(hostname())?.label
       if (studio === undefined) await new Promise(resolve => setTimeout(resolve, 50))
     }
     assert.equal(studio, 'Studio')

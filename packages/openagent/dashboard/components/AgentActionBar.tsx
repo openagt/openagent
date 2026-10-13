@@ -2,6 +2,7 @@ import type { AgentWorktree, OpenAgentEvent } from '../../src/index.js'
 import { formatBytes } from '../../src/client.js'
 import { AgentActionsMenu } from './AgentActionsMenu.js'
 import { AgentErrorCount } from './AgentErrorCount.js'
+import { thisMachineName } from '../lib/this-machine.js'
 
 // One agent's top bar, as Claude Code on the web lays it out: its name with a small ⌄, which is
 // the menu of what belongs to the session; beside it a grey chip with where it runs and its
@@ -20,7 +21,7 @@ export function AgentActionBar({
   onDeleted,
   label,
   projectName,
-  runsOn = 'This machine',
+  runsOn = thisMachineName(),
   expanded = false,
   onToggle,
   ready = true,

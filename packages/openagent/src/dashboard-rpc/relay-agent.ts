@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { contextRemote } from './context.js'
-import { relayRpc } from '../dashboard/remote-run.js'
+import { MachineRefusal, relayRpc } from '../dashboard/remote-run.js'
 
 /**
  * Set around a call that came in from another computer: it is run here, whatever a run's record
@@ -28,7 +28,8 @@ const isNothing = (said: unknown): boolean => said === null || said === undefine
  * knows nothing of the run, a read
  * is answered from what this computer holds of the run, its record when it has one, and
  * anything that would change the run answers `unreachable`: it is never done here in the
- * machine's place.
+ * machine's place. A machine that refused and said why (one that only lets its server watch) is
+ * answered in its own words, where `unreachable` has words of its own to replace.
  */
 export async function relayOr<T>(
   agentId: string | undefined,
@@ -51,7 +52,8 @@ export async function relayOr<T>(
       return isNothing(kept) ? said : kept
     }
     return said
-  } catch {
-    return isRead(fn) ? mine() : unreachable
+  } catch (err) {
+    if (isRead(fn)) return mine()
+    return err instanceof MachineRefusal && unreachable !== null && typeof unreachable === 'object' && 'error' in unreachable ? { ...unreachable, error: err.message } : unreachable
   }
 }

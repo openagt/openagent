@@ -8,6 +8,7 @@ import { Button } from './ui/button.js'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { cn } from '../lib/utils.js'
+import { reachedByLine } from '../../src/client.js'
 
 // Saved machines, as a settings section (#1052/#1072).
 //
@@ -18,6 +19,11 @@ import { cn } from '../lib/utils.js'
 //
 // The list is the daemon's, in the person's home file beside their settings, so it is the same in
 // every browser on this computer.
+//
+// A machine that is a person's own computer, reached by the line it keeps open to this server
+// (reached-by-line.ts), is listed by what it is, not by the address that stands for it here. It
+// can be taken off this list like any machine, and is back once the computer calls again: it
+// goes for good when the computer is taken out, under Devices.
 
 export function MachinesSettings() {
   const machines = useMachines()
@@ -58,32 +64,39 @@ export function MachinesSettings() {
           </p>
         ) : (
           <ul className="divide-y divide-border">
-            {machines.map(machine => (
-              <li key={machine.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-                <div className="min-w-0">
-                  <p className="truncate text-sm">{machine.label}</p>
-                  <p className="truncate text-xs text-muted-foreground">{machine.url}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-3">
-                  <MachineStatusBadge state={status[machine.id]} />
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => remove(machine)}
-                          aria-label={`Remove ${machine.label}`}
-                        />
-                      }
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden />
-                    </TooltipTrigger>
-                    <TooltipContent>Remove {machine.label}</TooltipContent>
-                  </Tooltip>
-                </div>
-              </li>
-            ))}
+            {machines.map(machine => {
+              const computer = reachedByLine(machine.url)
+              return (
+                <li key={machine.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm">{machine.label}</p>
+                    {computer ? (
+                      <p className="text-xs text-muted-foreground">Your computer. It keeps a line open to this server. Removed here, it is back when it calls again: to take it out, remove it under Devices.</p>
+                    ) : (
+                      <p className="truncate text-xs text-muted-foreground">{machine.url}</p>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <MachineStatusBadge state={status[machine.id]} />
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => remove(machine)}
+                            aria-label={`Remove ${machine.label}`}
+                          />
+                        }
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden />
+                      </TooltipTrigger>
+                      <TooltipContent>Remove {machine.label}</TooltipContent>
+                    </Tooltip>
+                  </div>
+                </li>
+              )
+            })}
           </ul>
         )}
         {refusal && (

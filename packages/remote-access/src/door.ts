@@ -3,9 +3,11 @@ import { stat } from 'node:fs/promises'
 import { createServer, request as httpRequest, type IncomingMessage, type OutgoingHttpHeaders, type Server, type ServerResponse } from 'node:http'
 import { createServer as createSecureServer, type Server as SecureServer } from 'node:https'
 import type { AddressInfo, Socket } from 'node:net'
+import type { Duplex } from 'node:stream'
 import { onOwnNetwork } from './address.js'
 import type { Secured } from './certificate.js'
 import { deviceName } from './device-name.js'
+import { LINE_PATH, LINE_PROTOCOL } from './line-out.js'
 import { enterPage, notInPage } from './pages.js'
 import { enter, isIn, readStore, removeDevice, storePath, update, type Entry, type Store } from './store.js'
 
@@ -18,6 +20,10 @@ import { enter, isIn, readStore, removeDevice, storePath, update, type Entry, ty
  * Another computer's OpenAgent gets in as a device does, with the same code and a key of its
  * own. It has no browser to keep a cookie in, so it says its name with the code, is answered its
  * key, and sends it with each call as `Authorization: Bearer`.
+ *
+ * On a server, a computer may also get in to keep a line open: one connection it holds from its
+ * side, down which this server asks its OpenAgent things (line-in.ts). It says so as it gets in,
+ * and only a computer that did is given a line.
  */
 
 /** Every path of the door's own; never passed on. */
@@ -48,6 +54,8 @@ export interface DoorOptions {
   knocks?: (peer: string | undefined) => boolean
   /** The key and certificate the door speaks HTTPS with; plain HTTP when unsaid. */
   secured?: Secured
+  /** What takes a computer's line, and the ports such computers are given; a door with none gives no line. */
+  lines?: { take(id: string, socket: Duplex, head: Buffer): void; ports: { from: number; count: number } }
   now?: () => number
 }
 
@@ -92,9 +100,14 @@ export function readBearer(header: string | undefined): Entry | undefined {
   return word ? readKeyWord(word) : undefined
 }
 
+/** A computer's name as it said it, safe to show. */
+function saidName(said: string): string {
+  return said.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 60)
+}
+
 /** A computer's name as the list of devices shows it. */
 function computerName(said: string): string {
-  return `OpenAgent on ${said.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 60)}`
+  return `OpenAgent on ${saidName(said)}`
 }
 
 /** A `Cookie` header without the door's own cookie: OpenAgent never sees a device's key. */
@@ -187,15 +200,19 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     const body = await readBody(req, MAX_ENTER_BODY)
     let code: unknown
     let computer: unknown
+    let line: unknown
     try {
-      ;({ code, computer } = JSON.parse(body ?? '') as { code?: unknown; computer?: unknown })
+      ;({ code, computer, line } = JSON.parse(body ?? '') as { code?: unknown; computer?: unknown; line?: unknown })
     } catch {
       code = undefined
     }
     // A computer says its own name; a browser is named by what it says it is.
     const byComputer = typeof computer === 'string' && computer.trim() !== ''
-    const name = byComputer ? computerName(computer as string) : deviceName(req.headers['user-agent'])
-    const entry = typeof code === 'string' && code ? await enter(env, code, name, now()) : undefined
+    // A computer that gets in to keep a line open is listed by its own name: it is what this server starts runs on.
+    const forLine = byComputer && line === true
+    if (forLine && !opts.lines) return refuse(res, 403, 'this door gives no line: only a server does')
+    const name = forLine ? saidName(computer as string) : byComputer ? computerName(computer as string) : deviceName(req.headers['user-agent'])
+    const entry = typeof code === 'string' && code ? await enter(env, code, name, now(), forLine ? opts.lines!.ports : undefined) : undefined
     if (!entry) return refuse(res, 403, 'this code no longer works')
     const headers = { 'content-type': 'application/json', 'cache-control': 'no-store' }
     // A computer is answered its key; a browser gets it as a cookie its pages cannot read.
@@ -293,8 +310,40 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       else res.destroy()
     })
   }
+  /**
+   * A computer asks for its line: it is given one when its key lets it in and it got in for a
+   * line. The connection is then the line's, and nothing of the door's is said on it again.
+   */
+  const giveLine = (req: IncomingMessage, socket: Duplex, head: Buffer): void => {
+    // The connection is this function's from here on, its errors too: a caller that leaves midway ends only itself.
+    socket.on('error', () => socket.destroy())
+    const no = (status: number, text: string): void => void socket.end(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`)
+    void (async () => {
+      const path = (req.url ?? '/').split('?')[0]
+      if (!opts.lines || path !== LINE_PATH || req.method !== 'GET' || req.headers.upgrade?.toLowerCase() !== LINE_PROTOCOL) return no(404, 'Not Found')
+      if (!knocks(req.socket.remoteAddress)) return no(403, 'Forbidden')
+      // A browser has no business here: a page cannot hold a line, and is not let try.
+      if (req.headers.origin !== undefined || req.headers.cookie !== undefined) return no(403, 'Forbidden')
+      const store = await currentStore()
+      const bearer = readBearer(req.headers.authorization)
+      const device = bearer && isIn(store, bearer) ? store.devices.find(candidate => candidate.id === bearer.id) : undefined
+      if (!device) return no(401, 'Unauthorized')
+      if (!device.line) return no(403, 'Forbidden')
+      // Gone while the file was read: there is no line to give.
+      if (socket.destroyed) return
+      seen.set(device.id, now())
+      let held = sockets.get(device.id)
+      if (!held) sockets.set(device.id, (held = new Set()))
+      held.add(socket as Socket)
+      socket.once('close', () => held.delete(socket as Socket))
+      socket.write(`HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: ${LINE_PROTOCOL}\r\n\r\n`)
+      opts.lines.take(device.id, socket, head)
+    })().catch(() => socket.destroy())
+  }
   // A caller that takes a connection and says nothing is not waited for long.
   const server: Server | SecureServer = opts.secured ? createSecureServer({ ...opts.secured, handshakeTimeout: 15_000 }, handle) : createServer(handle)
+  // Only a door that gives lines takes a connection over: any other answers such a request as it answers every request.
+  if (opts.lines) server.on('upgrade', giveLine)
   server.headersTimeout = 15_000
   // Open to every network, the door takes a bounded number of callers at once.
   if (opts.secured) server.maxConnections = 1024

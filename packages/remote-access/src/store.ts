@@ -9,7 +9,8 @@ import { dirname, join } from 'node:path'
  * and the door's process both write it, so every change goes through {@link update}.
  *
  * A device's key and a code are kept as their SHA-256 only: the file never holds what would let
- * someone in.
+ * someone in here. It does hold the key this computer has at a server it keeps a line open to,
+ * as it is: the line is asked for with it. So the file is the person's alone to read.
  */
 
 /** A phone or a browser that is in. */
@@ -23,6 +24,23 @@ export interface Device {
   added: string
   /** ISO 8601; absent until the device made a request after getting in. */
   seen?: string
+  /**
+   * Set for a computer that got in to keep a line open here: the port on this server where its
+   * OpenAgent is asked through that line. Its own from the day it got in, so the address
+   * OpenAgent saved it under stays good.
+   */
+  line?: { port: number }
+}
+/** A server this computer keeps a line open to, so the server can ask this computer's OpenAgent things. */
+export interface Line {
+  /** The server's door, as an origin: `https://203.0.113.7`. */
+  url: string
+  /** What the server's key is known by: the line is asked for only of a server that shows that key. */
+  pin: string
+  /** This computer's id and key there, as one word. */
+  key: string
+  /** What the server may do through the line: everything a machine is asked, or only what reads. */
+  mode: 'full' | 'watch'
 }
 
 /** A code a new device gets in with, once. */
@@ -52,6 +70,8 @@ export interface Store {
   https?: Https
   devices: Device[]
   codes: Code[]
+  /** The servers this computer keeps a line open to. */
+  lines: Line[]
   listening?: Listening
   /** Why the door is not listening although it should, in words; on a server also why its certificate could not be renewed. */
   problem?: string
@@ -62,6 +82,7 @@ export const CODE_LIFETIME_MS = 5 * 60 * 1000
 /** Caps, so a file edited by hand or a flood of scans cannot bloat it. */
 export const MAX_DEVICES = 50
 export const MAX_CODES = 20
+export const MAX_LINES = 20
 const MAX_NAME = 80
 
 const FILE = 'openagent-remote-access.json'
@@ -108,6 +129,17 @@ export function addressOf(said: string): string | undefined {
 
 const isIso = (value: unknown): value is string => typeof value === 'string' && !Number.isNaN(Date.parse(value))
 const isDigest = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value)
+const isPort = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value > 0 && value < 65536
+/** A server's door as a line is kept under: an HTTPS origin, written the one way. */
+export function isLineUrl(value: unknown): value is string {
+  if (typeof value !== 'string') return false
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' && url.origin === value
+  } catch {
+    return false
+  }
+}
 
 /** Read what a file holds, forgivingly: anything malformed is left out, never a reason to fail. */
 export function sanitize(value: unknown): Store {
@@ -116,10 +148,22 @@ export function sanitize(value: unknown): Store {
   for (const entry of Array.isArray(obj.devices) ? obj.devices : []) {
     if (devices.length >= MAX_DEVICES) break
     if (!entry || typeof entry !== 'object') continue
-    const { id, name, key, added, seen } = entry as Record<string, unknown>
+    const { id, name, key, added, seen, line } = entry as Record<string, unknown>
     if (typeof id !== 'string' || !/^[a-z0-9]{6,32}$/.test(id) || !isDigest(key) || !isIso(added)) continue
     if (devices.some(device => device.id === id)) continue
-    devices.push({ id, name: typeof name === 'string' && name.trim() ? name.trim().slice(0, MAX_NAME) : 'A device', key, added, ...(isIso(seen) ? { seen } : {}) })
+    const port = line && typeof line === 'object' ? (line as Record<string, unknown>).port : undefined
+    // One port for one computer: a second entry that names a port already given is in without a line.
+    const own = isPort(port) && !devices.some(device => device.line?.port === port)
+    devices.push({ id, name: typeof name === 'string' && name.trim() ? name.trim().slice(0, MAX_NAME) : 'A device', key, added, ...(isIso(seen) ? { seen } : {}), ...(own ? { line: { port } } : {}) })
+  }
+  const lines: Line[] = []
+  for (const entry of Array.isArray(obj.lines) ? obj.lines : []) {
+    if (lines.length >= MAX_LINES) break
+    if (!entry || typeof entry !== 'object') continue
+    const { url, pin, key, mode } = entry as Record<string, unknown>
+    if (!isLineUrl(url) || typeof pin !== 'string' || !pin || typeof key !== 'string' || !key) continue
+    if (lines.some(line => line.url === url)) continue
+    lines.push({ url, pin, key, mode: mode === 'watch' ? 'watch' : 'full' })
   }
   const codes: Code[] = []
   for (const entry of Array.isArray(obj.codes) ? obj.codes : []) {
@@ -134,6 +178,7 @@ export function sanitize(value: unknown): Store {
     ...(isAddress(https) ? { https: { address: https } } : {}),
     devices,
     codes: codes.slice(-MAX_CODES),
+    lines,
     ...(listening && Number.isInteger(listening.pid) && Number.isInteger(listening.port) ? { listening: { pid: listening.pid as number, port: listening.port as number } } : {}),
     ...(typeof obj.problem === 'string' && obj.problem ? { problem: obj.problem } : {}),
   }
@@ -262,7 +307,7 @@ export interface Entry {
  * Let a new device in with `code`: the code is spent, the device is saved, and its key is
  * answered once. `undefined` for a code that is unknown, spent or too old, and when the list is full.
  */
-export async function enter(env: NodeJS.ProcessEnv, code: string, name: string, now = Date.now()): Promise<Entry | undefined> {
+export async function enter(env: NodeJS.ProcessEnv, code: string, name: string, now = Date.now(), line?: { from: number; count: number }): Promise<Entry | undefined> {
   const digest = sha256(code)
   // Looked up before the file is locked: a flood of wrong codes from the network changes nothing and holds no writer up.
   if (!liveCodes((await readStore(env)).codes, now).some(candidate => sameDigest(candidate.code, digest))) return undefined
@@ -271,8 +316,12 @@ export async function enter(env: NodeJS.ProcessEnv, code: string, name: string, 
     const match = live.find(candidate => sameDigest(candidate.code, digest))
     store.codes = live.filter(candidate => candidate !== match)
     if (!match || store.devices.length >= MAX_DEVICES) return undefined
+    // A computer that got in for a line gets the first of the lines' ports no other computer has.
+    const taken = new Set(store.devices.map(device => device.line?.port))
+    const port = line && Array.from({ length: line.count }, (_, at) => line.from + at).find(candidate => !taken.has(candidate))
+    if (line && port === undefined) return undefined
     const entry: Entry = { id: randomBytes(6).toString('hex'), key: newSecret() }
-    store.devices.push({ id: entry.id, name, key: sha256(entry.key), added: new Date(now).toISOString() })
+    store.devices.push({ id: entry.id, name, key: sha256(entry.key), added: new Date(now).toISOString(), ...(port !== undefined ? { line: { port } } : {}) })
     return entry
   })
 }

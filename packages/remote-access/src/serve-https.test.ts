@@ -76,6 +76,8 @@ async function rig(): Promise<Rig> {
   const office = await testOffice({ proofPort: () => proofPort })
   const asked: string[] = []
   const upstream = createServer((req, res) => {
+    // The door's own question on a server, which machines OpenAgent has saved, is none a device asked.
+    if (req.url === '/_rpc/onMachines') return void res.writeHead(200, { 'content-type': 'application/json' }).end('{"ret":[]}')
     asked.push(`${req.method} ${req.url}`)
     res.writeHead(200, { 'content-type': 'text/html' }).end('<p>the dashboard</p>')
   })

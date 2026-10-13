@@ -1,6 +1,8 @@
 import { Check, ChevronDown, Laptop, Server, Plus, X } from 'lucide-react'
 import type { Machine } from '../lib/machines.js'
 import type { MachineStatus } from '../lib/use-machine-status.js'
+import { thisMachineName } from '../lib/this-machine.js'
+import { reachedByLine } from '../../src/client.js'
 import { cn } from '../lib/utils.js'
 import { buttonVariants } from './ui/button.js'
 import { chipClass } from './ui/chip.js'
@@ -13,7 +15,13 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
  * machines saved on it. A machine is a run TARGET, selected in place: picking one does not
  * navigate the browser. The daemon relays the start to it, and that machine runs the start hook
  * of its own copy of the project. The dashboard is always its own machine's, also when a phone
- * shows it: "This machine" is the computer that runs this OpenAgent.
+ * shows it: the first row is the computer that runs this OpenAgent, "This machine" on that
+ * computer's own screen and its name anywhere else (this-machine.ts).
+ *
+ * A saved machine can be a person's own computer, reached by the line it keeps open to this
+ * server (reached-by-line.ts). It is drawn as a computer and described as one, not by the
+ * address that stands for it here, and it has no remove: it goes when the computer is taken out,
+ * under Devices.
  */
 export type ConnectionControl = {
   /** The saved machines a run can be sent to. */
@@ -47,9 +55,10 @@ export function RunOnMenu({ connection, busy, chip = false }: { connection: Conn
   // any pick on a project that runs here only.
   const selectedMachine =
     connection.selectedMachineId && !connection.onlyHere ? connection.machines.find(m => m.id === connection.selectedMachineId) : undefined
-  const summary = selectedMachine?.label ?? 'This machine'
+  const here = thisMachineName()
+  const summary = selectedMachine?.label ?? here
   const onThisMachine = !selectedMachine
-  const Icon = onThisMachine ? Laptop : Server
+  const Icon = onThisMachine || reachedByLine(selectedMachine.url) ? Laptop : Server
   return (
     <DropdownMenu>
       <Tooltip>
@@ -92,13 +101,22 @@ export function RunOnMenu({ connection, busy, chip = false }: { connection: Conn
       <DropdownMenuContent align={chip ? 'start' : 'end'} className="min-w-[19rem] max-w-[22rem]">
         <DropdownMenuItem className="items-start" onClick={() => connection.onSelectLocal()}>
           <Check className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', onThisMachine ? 'opacity-100' : 'opacity-0')} />
-          <OptionLabel label="This machine" description="Start the run here, through this project's start hook." />
+          <OptionLabel label={here} description="Start the run here, through this project's start hook." />
         </DropdownMenuItem>
         {/* Saved machines: a click SELECTS the machine as the run target (no navigation). The dot
             shows reachability (#1072) and the X removes the saved machine. */}
         {connection.machines.map(machine => {
           const status = connection.status[machine.id]
           const offline = status === 'offline'
+          const computer = reachedByLine(machine.url)
+          const MachineIcon = computer ? Laptop : Server
+          const description = computer
+            ? offline
+              ? 'Not connected. It must be on, with OpenAgent running.'
+              : 'Your computer. The run starts there.'
+            : offline
+              ? `${machine.url} (offline)`
+              : machine.url
           return (
             <DropdownMenuItem
               key={machine.id}
@@ -107,28 +125,30 @@ export function RunOnMenu({ connection, busy, chip = false }: { connection: Conn
               onClick={() => connection.onSelect(machine)}
             >
               <Check className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', selectedMachine?.id === machine.id ? 'opacity-100' : 'opacity-0')} />
-              <Server className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+              <MachineIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
               <StatusDot status={status} />
-              <OptionLabel label={machine.label} description={offline ? `${machine.url} (offline)` : machine.url} />
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button
-                      type="button"
-                      onClick={e => {
-                        // Remove, not select: keep the row's own click out of it (#1072).
-                        e.stopPropagation()
-                        connection.onRemove(machine)
-                      }}
-                      aria-label={`Remove machine ${machine.label}`}
-                      className="mt-0.5 rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-danger"
-                    />
-                  }
-                >
-                  <X className="h-3.5 w-3.5" aria-hidden />
-                </TooltipTrigger>
-                <TooltipContent>Remove {machine.label}</TooltipContent>
-              </Tooltip>
+              <OptionLabel label={machine.label} description={description} />
+              {!computer && (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button
+                        type="button"
+                        onClick={e => {
+                          // Remove, not select: keep the row's own click out of it (#1072).
+                          e.stopPropagation()
+                          connection.onRemove(machine)
+                        }}
+                        aria-label={`Remove machine ${machine.label}`}
+                        className="mt-0.5 rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-danger"
+                      />
+                    }
+                  >
+                    <X className="h-3.5 w-3.5" aria-hidden />
+                  </TooltipTrigger>
+                  <TooltipContent>Remove {machine.label}</TooltipContent>
+                </Tooltip>
+              )}
             </DropdownMenuItem>
           )
         })}

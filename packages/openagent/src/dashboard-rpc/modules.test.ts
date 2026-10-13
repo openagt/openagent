@@ -90,7 +90,7 @@ test('with no project added, the computer\'s modules are there and run their own
       { package: '@openagt/servers', url: '/_computer-modules/%40openagt%2Fservers/dashboard.js', projects: [] },
     ])
     // The door's own command, answering what it keeps for this computer: nobody is in, and it is shut.
-    assert.deepEqual(await runComputerCommand('@openagt/remote-access', ['status']), { ok: true, output: { on: false, listening: false, devices: [] } })
+    assert.deepEqual(await runComputerCommand('@openagt/remote-access', ['status']), { ok: true, output: { on: false, listening: false, devices: [], lines: [] } })
     assert.deepEqual(await runComputerCommand('@openagt/servers', ['status']), { ok: true, output: { servers: [] } })
     assert.deepEqual(await runComputerCommand('@openagt/remote-access', ['status'], 'servers'), { ok: false, error: '@openagt/remote-access has no command servers' })
     assert.deepEqual(await runComputerCommand('@openagt/files', []), { ok: false, error: "@openagt/files is not this computer's" })

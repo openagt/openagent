@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { enterRemote, leaveRemote, remoteFacts, remoteProject, startRemoteAgent, streamRemoteEvents, pingRemote, relayRpc, remoteVersion, RelayedAgents, foldRelayedEvent, type RemoteTarget } from './remote-run.js'
+import { enterRemote, leaveRemote, remoteFacts, remoteProject, startRemoteAgent, streamRemoteEvents, pingRemote, relayRpc, remoteVersion, MachineRefusal, RelayedAgents, foldRelayedEvent, type RemoteTarget } from './remote-run.js'
 import { type AgentMeta } from '../store/index.js'
 import type { OpenAgentEvent } from '../events.js'
 
@@ -68,13 +68,36 @@ test('startRemoteAgent posts to /_relay/start with this computer\'s key, no Orig
 
 test('startRemoteAgent surfaces a non-2xx from the machine as an ok:false result (#1067)', async () => {
   const srv = await server((_req, res) => {
-    res.writeHead(403, { 'content-type': 'text/plain' })
-    res.end('unauthorized')
+    res.writeHead(500, { 'content-type': 'text/plain' })
+    res.end('it broke')
   })
   try {
     const result = await startRemoteAgent({ url: srv.url, key: 'd1.wrong', project: PROJECT }, { prompt: 'x', options: {} })
-    assert.equal(result.ok, false)
-    if (!result.ok) assert.match(result.error, /403|machine/)
+    assert.deepEqual(result, { ok: false, error: 'the machine refused the run (500)' })
+  } finally {
+    await srv.close()
+  }
+})
+
+test('a machine that refuses a call and says why (403) is answered in its own words: a start, a project asked for, a relayed call', async () => {
+  const WHY = 'This computer only lets its server watch. Turn on "Start runs on this computer from the phone" in its Settings, under Servers.'
+  let why = WHY
+  const srv = await server((req, res) => {
+    req.resume()
+    res.writeHead(403, { 'content-type': 'text/plain' }).end(why)
+  })
+  const target = { url: srv.url, key: 'd1.sekret', project: PROJECT }
+  try {
+    assert.deepEqual(await startRemoteAgent(target, { prompt: 'x', options: {} }), { ok: false, error: WHY })
+    assert.deepEqual(await remoteProject(target, { share: true }), { state: 'unasked', error: WHY })
+    await assert.rejects(relayRpc(target, 'sendMessage', ['pid', 'go on', 'r1']), err => err instanceof MachineRefusal && err.message === WHY)
+    // Its words are cut to a length, and a refusal that gives no reason reads as any other.
+    why = 'x'.repeat(5000)
+    assert.equal(((await startRemoteAgent(target, { prompt: 'x', options: {} })) as { error: string }).error.length, 600)
+    why = '  '
+    assert.deepEqual(await startRemoteAgent(target, { prompt: 'x', options: {} }), { ok: false, error: 'the machine refused the run (403)' })
+    assert.deepEqual(await remoteProject(target), { state: 'unasked', error: 'the machine refused (403)' })
+    await assert.rejects(relayRpc(target, 'sendMessage', []), err => !(err instanceof MachineRefusal) && /403/.test((err as Error).message))
   } finally {
     await srv.close()
   }

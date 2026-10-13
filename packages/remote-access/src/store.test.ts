@@ -7,7 +7,7 @@ import { testHome } from './test-home.js'
 test('no file reads as a closed door with nobody in', async () => {
   const home = await testHome()
   try {
-    assert.deepEqual(await readStore(home.env), { on: false, devices: [], codes: [] })
+    assert.deepEqual(await readStore(home.env), { on: false, devices: [], codes: [], lines: [] })
   } finally {
     await home.remove()
   }
@@ -111,7 +111,7 @@ test('a file edited by hand is read forgivingly', async () => {
       storePath(home.env),
       JSON.stringify({ on: 'yes', devices: [good, { ...good }, { id: 'x', key: 'short', added: 'never' }, null], codes: [{ code: 'nope', expires: 'never' }], listening: { pid: 'a' }, extra: 1 }),
     )
-    assert.deepEqual(await readStore(home.env), { on: false, devices: [{ ...good, name: 'My phone' }], codes: [] })
+    assert.deepEqual(await readStore(home.env), { on: false, devices: [{ ...good, name: 'My phone' }], codes: [], lines: [] })
   } finally {
     await home.remove()
   }

@@ -161,6 +161,8 @@ export interface AgentMeta {
   target?: 'local' | 'actions' | 'remote' | 'web'
   /** The saved machine a remote agent (#1067) executes on, for the session list + notice after a reload. */
   remoteLabel?: string
+  /** That saved machine is a person's own computer, reached by the line it keeps open here (reached-by-line.ts): the run is drawn with a computer, not a server. */
+  remoteByLine?: true
   /**
    * The flow this agent started under (#1467): `build` for the scope→build orchestration, `prompt`
    * for the direct-prompt path (research and transparent runs record `prompt` too). Persisted so a

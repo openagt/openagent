@@ -559,6 +559,10 @@ importers:
         version: 4.1.10(@types/node@20.19.43)(jsdom@29.1.1)(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
   packages/servers:
+    dependencies:
+      '@openagt/remote-access':
+        specifier: workspace:*
+        version: link:../remote-access
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.0.0

@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process'
 import { AlreadyWorking, askLink, install } from './install.js'
 import { AlreadyAtWork, changeLogin, ownGithubAccount, type Mint } from './logins.js'
+import { ownDoor, type OwnDoor } from './own-door.js'
 import type { Exec } from './ssh.js'
 import { SERVER_MARK, STEPS } from './steps.js'
-import { LOGIN_KINDS, Unreadable, addressOf, atWork, doorUrl, freshSteps, isUser, isVersion, readStore, update, working, type Login, type LoginKind, type Server, type StepState, type Store } from './store.js'
+import { LOGIN_KINDS, Unreadable, addressOf, atWork, doorUrl, freshSteps, isUser, isVersion, readStore, update, working, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -33,7 +34,10 @@ export const USAGE = `usage: servers <command>
                                        login lasts a year and goes to the server over SSH; this computer's own Claude
                                        login is never read; run again while the browser waits, it asks anew
   logout <address> github|claude       delete that login on the server; the login itself is not ended by this
-  forget <address>                     take the server off this list; nothing is changed on the server
+  reach <address> full|watch           keep a line open from this computer to the server, so the server's page can start a
+                                       run here (full), or can only see this computer's runs (watch)
+  forget <address>                     take the server off this list, and the line this computer keeps to it; nothing else
+                                       is changed on the server
   work <address> <version>             the install's own process, started by connect
   login-work <address> github|claude [own]
                                        the process that gives the server a login, started by login
@@ -47,6 +51,8 @@ export interface CliIO {
   exec?: Exec
   /** How a Claude login is made; Claude Code's own `setup-token` when unsaid. */
   mint?: Mint
+  /** How this computer's own door is asked; its command when unsaid. */
+  door?: OwnDoor
   /** Starts this command again with these words, as a process of its own, and answers its id; a process apart from this one when unsaid. */
   startWork?: (words: string[]) => number
   /** Ends `work` and `login-work`; SIGINT and SIGTERM when unsaid. */
@@ -89,6 +95,8 @@ export interface ServerStatus {
   working: boolean
   /** The steps are to end with the server among the machines, and it has not been added yet. */
   adding: boolean
+  /** Set once this computer keeps a line open to the server: what the server may do through it. */
+  reach?: Reach
   steps: { id: string; label: string; state: StepState; said?: string }[]
   logins: Record<LoginKind, LoginStatus>
 }
@@ -128,6 +136,7 @@ function statusOf(store: Store, env: NodeJS.ProcessEnv): Status {
         ...(server.fingerprint ? { fingerprint: server.fingerprint } : {}),
         working: busy,
         adding: server.adding,
+        ...(server.reach ? { reach: server.reach } : {}),
         steps: STEPS.map(({ id, label }) => {
           const step = server.steps.find(candidate => candidate.id === id)!
           // A step that still reads as running with no process behind it: the install died there.
@@ -197,6 +206,29 @@ async function still(io: CliIO, said: string): Promise<Server> {
   const server = await saved(io, said)
   if (working(server)) throw new Refused(`OpenAgent is being installed on ${server.address} right now`)
   return server
+}
+
+/**
+ * Keep a line open from this computer to the server, and say what the server may do through it.
+ * The first time, the server's door gives a link over SSH and this computer's own door gets in
+ * with it; from then on only what the server may do is changed.
+ */
+async function setReach(io: CliIO, said: string, mode: Reach): Promise<Status> {
+  const server = await still(io, said)
+  const door = io.door ?? ownDoor
+  // A line this computer already keeps is told what the server may do. One it lost since is asked for anew.
+  const kept = server.reach !== undefined && (await door(['line', mode, server.address], io.env)).ok
+  if (!kept) {
+    const link = await askLink(server, io.exec ? { exec: io.exec } : {})
+    if (!link.ok) throw new Refused(link.error)
+    const asked = await door(['line', 'add', '-', ...(mode === 'watch' ? ['watch'] : [])], io.env, link.url)
+    if (!asked.ok) throw new Refused(asked.error)
+  }
+  await update(io.env, store => {
+    const saved = store.servers.find(candidate => candidate.address === server.address)
+    if (saved) saved.reach = mode
+  })
+  return statusOf(await readStore(io.env), io.env)
 }
 
 const isKind = (said: string | undefined): said is LoginKind => (LOGIN_KINDS as readonly string[]).includes(said ?? '')
@@ -307,16 +339,24 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         if (rest.length !== (ownLogin ? 3 : 2) || !address || !isKind(kind)) break
         return print(await changeLoginOf(io, address, kind, command === 'logout', ownLogin))
       }
+      case 'reach': {
+        const [address, mode] = rest
+        if (rest.length !== 2 || !address || (mode !== 'full' && mode !== 'watch')) break
+        return print(await setReach(io, address, mode))
+      }
       case 'forget': {
         const [address] = rest
         if (rest.length !== 1 || !address) break
         const { address: at } = await saved(io, address)
-        await update(io.env, store => {
+        const reached = await update(io.env, store => {
           const server = store.servers.find(candidate => candidate.address === at)
           if (server && working(server)) throw new Refused(`OpenAgent is being installed on ${at} right now: wait until it ends`)
           if (server && changing(server)) throw new Refused(`A login of ${at} is being changed right now: wait until it ends`)
           store.servers = store.servers.filter(candidate => candidate.address !== at)
+          return server?.reach !== undefined
         })
+        // A server this computer no longer lists is not left a way to it. One that cannot be told keeps a key that opens nothing here.
+        if (reached) await (io.door ?? ownDoor)(['line', 'remove', at], io.env)
         return print(statusOf(await readStore(io.env), io.env))
       }
       case 'work': {
