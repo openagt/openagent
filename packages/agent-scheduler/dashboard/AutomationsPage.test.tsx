@@ -645,8 +645,10 @@ describe("the Edit panel of a skill's row", () => {
     const when = part(editor, 'When it runs')
     expect(waitsFor(editor)).toBe('Only when there is work: when an issue changed. The scheduler looks every minute.')
     // The choice comes after, under its own name: the line above it is not one of the things to pick.
-    const wait = within(when).getByRole('group', { name: 'Wait after a start' })
+    const wait = within(when).getByText('Wait after a start').parentElement!
     expect(within(wait).queryByText(/Only when there is work/)).toBeNull()
+    // One group with one name: the radio group's, and no second group around it.
+    expect(within(when).queryByRole('group')).toBeNull()
     expect(within(wait).getByRole('radiogroup', { name: 'How long /update-tickets waits after a start' })).toBeTruthy()
     expect(radioNames(when).map(name => [name, checked(radio(when, name))])).toEqual([['As the skill says', true], ['A wait you set', false], ['No wait', false]])
     expect(within(wait).getByText('(15 minutes)')).toBeTruthy()
@@ -671,7 +673,7 @@ describe("the Edit panel of a skill's row", () => {
     const when = part(editor, 'When it runs')
     expect(waitsFor(editor)).toBe('By time alone. It starts again once the wait is over.')
     expect(within(when).queryByText(/Only when there is work|The scheduler looks every minute/)).toBeNull()
-    expect(within(when).getByRole('group', { name: 'Wait after a start' })).toBeTruthy()
+    expect(within(when).getByText('Wait after a start')).toBeTruthy()
     expect(radioNames(when).map(name => [name, checked(radio(when, name))])).toEqual([['As the skill says', true], ['A wait you set', false]])
     expect(queryRadio(when, 'No wait')).toBeNull()
     expect(within(when).queryByText(/it starts as soon as there is work|needs a shell line/)).toBeNull()
@@ -888,9 +890,8 @@ describe("the Edit panel of a skill's row", () => {
     expect(disabled(within(editor).getByRole('button', { name: 'Save' }))).toBe(true)
     expect(disabled(within(editor).getByRole('button', { name: 'Cancel' }))).toBe(true)
     expect(disabled(publish(editor))).toBe(true)
-    expect((radio(editor, 'A wait you set').closest('fieldset') as HTMLFieldSetElement).disabled).toBe(true)
-    expect((radio(editor, 'A number you set').closest('fieldset') as HTMLFieldSetElement).disabled).toBe(true)
-    // A fieldset does not hold a Base UI radio or select: each says so itself.
+    // Every control says so itself: a Base UI radio or select is not held by a fieldset around it.
+    expect(disabled(within(editor).getByLabelText('How many agents'))).toBe(true)
     expect(within(editor).getAllByRole('radio').map(disabled)).toEqual([true, true, true, true])
     expect(within(editor).getAllByRole('combobox').map(disabled)).toEqual([true, true, true, true])
     expect(disabled(within(editor).getByLabelText('How long'))).toBe(true)

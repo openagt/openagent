@@ -65,4 +65,14 @@ describe('ProjectHome', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Skills…' }))
     expect(screen.getByRole('button', { name: 'close the skills list' })).toBeTruthy()
   })
+
+  test('a skills list asked for in one project does not open in the next project picked', async () => {
+    const home = (projectId: string) => <ProjectHome projectId={projectId} events={[]} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} />
+    const { rerender } = render(home('p1'))
+    fireEvent.click(screen.getByRole('button', { name: 'Skills…' }))
+    expect(screen.getByRole('button', { name: 'close the skills list' })).toBeTruthy()
+    rerender(home('p2'))
+    expect(screen.getByText('skills line')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'close the skills list' })).toBeNull()
+  })
 })

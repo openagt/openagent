@@ -88,6 +88,19 @@ describe('ProjectSkillsLine', () => {
     expect(await screen.findByRole('dialog')).toBeTruthy()
   })
 
+  test('"Skills…" picked for a project whose skills cannot be read says so, in place of doing nothing; unasked, such a project shows no line', async () => {
+    onProjectSkills.mockRejectedValue(new Error('EACCES'))
+    const { container } = render(<ProjectSkillsLine projectId="p1" />)
+    await waitFor(() => expect(onProjectSkills).toHaveBeenCalled())
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(container.textContent).toBe('')
+    cleanup()
+    render(<WithDoor projectId="p1" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Skills…' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('This project\u2019s skills could not be read.')
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
   test('a project that is unknown here shows no line', async () => {
     onProjectSkills.mockResolvedValue(null)
     const { container } = render(<ProjectSkillsLine projectId="gone" />)

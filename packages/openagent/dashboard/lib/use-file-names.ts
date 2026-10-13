@@ -63,6 +63,8 @@ export function useFileNames(asked: readonly { projectId: string; paths: readonl
     NOTHING,
     60_000,
     [key, naming.map(page => page.package).join(',')],
+    // The names read before stay while the next read is asked: an entry added or removed does not turn every title back into a path for a moment.
+    'previous',
   )
   return (projectId, path) => {
     const name = names[`${projectId}\n${path}`]

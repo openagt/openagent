@@ -151,7 +151,6 @@ function WeekBar({
   const weekMs = boundary.resetsAt - boundary.startsAt
   const deviationMs = paceDeviationMs(percentUsed, boundary.percent, weekMs)
   const over = deviationMs >= 0
-  const consuming = over ? 'Over-consuming' : 'Under-consuming'
   // The two readings #1367 asked for, beside the deviation rather than instead of it: what has
   // been spent as quota *time*, and what it is as a share of the allowance elapsed so far. The
   // dollar figure alone says nothing about whether today's rate is sustainable, and a share of the

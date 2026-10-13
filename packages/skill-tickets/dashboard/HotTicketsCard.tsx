@@ -65,7 +65,7 @@ export function HotTicketsCard({ projects }: ModuleCardProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitleLink icon={<Flame className="h-4 w-4 text-muted-foreground" aria-hidden />} href="/tickets" onOpen={() => host.openPage('tickets')}>
+        <CardTitleLink icon={<Flame className="h-4 w-4 text-muted-foreground" aria-hidden />} segment="tickets" onOpen={() => host.openPage('tickets')}>
           Hot tickets
         </CardTitleLink>
       </CardHeader>

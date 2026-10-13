@@ -52,7 +52,7 @@ export function QueueCard({ projects }: ModuleCardProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitleLink icon={<ListTodo className="h-4 w-4 text-muted-foreground" aria-hidden />} href="/queue" onOpen={() => host.openPage('queue')}>
+        <CardTitleLink icon={<ListTodo className="h-4 w-4 text-muted-foreground" aria-hidden />} segment="queue" onOpen={() => host.openPage('queue')}>
           AI Queue
         </CardTitleLink>
         <p className="text-xs text-muted-foreground">Tasks AI will work on next</p>

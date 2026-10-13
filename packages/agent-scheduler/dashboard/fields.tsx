@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Button, Input, Label, RadioGroup, RadioGroupItem, RadioGroupOption, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea, cn, useModuleHost, type ModuleProject } from '@openagt/dashboard/module'
 import type { PublishPick } from '../src/state.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, MAX_AGENTS, type AgentName } from '../src/names.js'
 import { MAX_COUNT, PACE_UNITS, takesTimeOfDay, type PaceUnit } from '../src/pace.js'
 import { triedLine, type TriedLine } from './automation-form.js'
-import { UNIT_WORDS, modelLabel, publishChoices, publishLabel, type AgentModels, type AgentsDraft, type PaceDraft, type SchedulerCommand } from './schedulers.js'
+import { PRINTS_SOMETHING, UNIT_WORDS, modelLabel, publishChoices, publishLabel, type AgentModels, type AgentsDraft, type PaceDraft, type SchedulerCommand } from './schedulers.js'
 
 // The fields of the Automations page, shared by the Edit panel of a row and the "New automation"
 // form, so a thing is picked the same way wherever it is picked: what the agent is told and the
@@ -125,9 +125,6 @@ export function SaidShown({ description, when, waitsFor, where }: { description?
   )
 }
 
-/** What a row with a shell line waits for, when its words do not say: the line itself. */
-export const PRINTS_SOMETHING = 'when its shell line prints something'
-
 /**
  * "When it runs": the one place a row's pace is picked, in two parts that are not the same kind
  * of thing. First what the row waits for, which is no choice: a row with a shell line (`work`)
@@ -174,6 +171,7 @@ export function PaceFields({
   const offersNoWait = noWait || draft.kind === 'work'
   const choice = asSaid !== undefined || offersNoWait
   const own = draft.kind === 'every'
+  const heading = useId()
   const group = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (autoFocus) group.current?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')?.focus()
@@ -225,8 +223,12 @@ export function PaceFields({
           </>
         )}
       </p>
-      <fieldset disabled={disabled} className="space-y-2">
-        <legend className="mb-2 text-sm font-medium">Wait after a start</legend>
+      {/* One group with one name. With choices it is the radio group, named for the row; with the
+          number alone, the fields are a group named by the heading over them. */}
+      <div {...(choice ? {} : { role: 'group', 'aria-labelledby': heading })} className="space-y-2">
+        <p id={heading} className="text-sm font-medium">
+          Wait after a start
+        </p>
         {choice ? (
           <RadioGroup ref={group} aria-label={name} value={draft.kind} onValueChange={pick} disabled={disabled}>
             {asSaid && (
@@ -251,7 +253,7 @@ export function PaceFields({
           interval
         )}
         <p className={hint}>{counted}</p>
-      </fieldset>
+      </div>
     </div>
   )
 }

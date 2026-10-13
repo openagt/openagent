@@ -98,6 +98,16 @@ function formatPath({ view, projectId, agentId, page, pagePath }: Route): string
   return agentId ? `/${project}/${encodeURIComponent(agentId)}` : `/${project}`
 }
 
+/**
+ * The address of a module's page as a link holds it, for a link that must also open in a new
+ * tab: the page's segment, with the one project the dashboard is showing when one is picked, so
+ * the new tab shows that project too.
+ */
+export function pageHref(segment: string, search: string = typeof window === 'undefined' ? '' : window.location.search): string {
+  const scope = new URLSearchParams(search).get(SCOPE_PARAM)
+  return formatRoute({ projectId: null, agentId: null, page: segment, ...(scope ? { scope } : {}) })
+}
+
 /** A percent-encoded segment, or the raw one when it is malformed (a hand-typed URL is input). */
 function decodeSegment(segment: string): string {
   try {

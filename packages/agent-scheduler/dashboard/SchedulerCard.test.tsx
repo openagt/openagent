@@ -84,7 +84,7 @@ describe('the Automations card of the Overview', () => {
   test('a look that decided nothing says why', async () => {
     const { host } = hostAnswering(() => ({ ok: true, output: { ...STATUS, schedule: [], lastTick: { at: STATUS.lastTick.at, decisions: [], note: 'no skill of this project schedules a command' } } }))
     show(host, [GEMSTACK])
-    expect(await screen.findByText('no skill of this project schedules a command')).toBeTruthy()
+    expect(await screen.findByText('Its last look: no skill of this project schedules a command')).toBeTruthy()
   })
 
   test('a project whose status cannot be read says why', async () => {
@@ -121,7 +121,20 @@ describe('what the module tells the other pages starts by itself', () => {
     ])
   })
 
-  test('a project whose status cannot be read has no command to say', async () => {
-    expect(await defineScheduler.schedule!.read(hostAnswering(() => ({ ok: false, error: 'no' })).host, GEMSTACK)).toEqual([])
+  test('a project whose status cannot be read is not said to have nothing: the read fails, with why', async () => {
+    await expect(defineScheduler.schedule!.read(hostAnswering(() => ({ ok: false, error: 'not inside a git repository' })).host, GEMSTACK)).rejects.toThrow('not inside a git repository')
+  })
+
+  test('a command whose coding agent cannot run it does not start by itself, whatever its switch, and the note says why', async () => {
+    const answer = await read({ ...RAN, runsOn: { 'post-merge-cleanup': 'codex' } })
+    expect(answer[0]).toEqual({ command: 'post-merge-cleanup', on: false, note: 'Cannot start on Codex: its skill is not in .agents/skills' })
+  })
+
+  test('a scheduler that is off says so once, and not again as its last look\'s word', async () => {
+    const { host } = hostAnswering(() => ({ ok: true, output: { ...RAN, on: false, running: false, lastTick: { at: STATUS.lastTick.at, decisions: [], note: 'off' } } }))
+    show(host, [GEMSTACK])
+    expect(await screen.findByText('Scheduler off')).toBeTruthy()
+    expect(screen.getByText('The scheduler is off: nothing starts by itself.')).toBeTruthy()
+    expect(screen.queryByText(/last look/)).toBeNull()
   })
 })

@@ -21,18 +21,28 @@ export function priorityMeaning(priority: number): string | undefined {
   return priority === 10 ? 'most urgent' : priority === 0 ? 'only if there is capacity' : undefined
 }
 
-/** The `queue add` command line for a text typed on the page, at the priority picked. */
+/**
+ * The `queue add` command line for a text typed on the page, at the priority picked. The text
+ * comes after `--`: a person may type a task that opens with a dash, and it is still the task,
+ * never a flag.
+ */
 export function addTextArgs(text: string, priority: number): string[] {
-  return ['add', text.trim(), '--priority', String(priority)]
+  return ['add', '--priority', String(priority), '--', text.trim()]
+}
+
+/** The `queue done` command line that removes one entry, as the queue printed it; after `--`, since an entry may open with a dash. */
+export function doneArgs(entry: string): string[] {
+  return ['done', '--', entry]
 }
 
 /**
- * Whether an agent that was asked `ask` is on `entry`: its prompt holds the entry as the queue
- * prints it, which is how the page's own start buttons, and the command that works the queue,
- * name the entry they take.
+ * Whether an agent that was asked `ask` is on `entry`: it was asked exactly what the start
+ * buttons of the page and of the card ask for that entry. An entry that is only a part of what
+ * another agent was asked is not being worked on. An agent the command that works the queue
+ * started is not known here: it is asked the command alone, and picks its entry itself.
  */
 export function isWorkingOn(ask: string | undefined, entry: string): boolean {
-  return ask !== undefined && entry.trim() !== '' && ask.includes(entry.trim())
+  return ask !== undefined && entry.trim() !== '' && ask.trim() === workOnEntryPrompt(entry.trim()).trim()
 }
 
 /** How one queue entry reads on a dashboard: what to show, and where it points, if anywhere. */

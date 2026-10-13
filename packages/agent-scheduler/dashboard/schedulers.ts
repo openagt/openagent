@@ -317,6 +317,9 @@ export function spelled(every: string): string {
 
 const sentence = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)
 
+/** What a row with a shell line waits for, when its words do not say: the line itself. */
+export const PRINTS_SOMETHING = 'when its shell line prints something'
+
 /**
  * How often a scheduled command runs, as a sentence, by the pace in force: this machine's, else
  * its skill's. An interval is "Every 6 hours", with "at most" before what its check waits for
@@ -326,7 +329,7 @@ const sentence = (text: string): string => text.charAt(0).toUpperCase() + text.s
  * work, which may be later that day.
  */
 export function pace(command: SchedulerCommand): string {
-  const waits = command.waitsFor ?? 'when its shell line prints something'
+  const waits = command.waitsFor ?? PRINTS_SOMETHING
   const skills = command.every === undefined ? undefined : parseInterval(command.every)
   const inForce = paceInForce(command.pace, { ...(skills ? { every: skills } : {}), ...(command.when !== undefined ? { when: command.when } : {}) })
   // An interval of the skill's the tool would not have read is shown as written.
@@ -460,7 +463,7 @@ export function decided(command: SchedulerCommand, now: Date = new Date()): stri
   if (elsewhere) return elsewhere
   // Whether the row's agent can read its skill is said off the files, as of now: the last look's word on it may be about another agent, picked away since.
   if (!command.on || command.decision?.outcome.startsWith('not a command of ')) return undefined
-  return waitingWords(command, now) ?? outcomeWords(command.decision?.outcome, now)
+  return waitingWords(command, now) ?? outcomeWords(command.decision?.outcome)
 }
 
 /**
@@ -486,17 +489,14 @@ export function cannotRun(command: Pick<SchedulerCommand, 'home' | 'runsOn' | 'a
 
 const notThere = (agent: string, dir: string): string => `Cannot start on ${agent}: its skill is not in ${dir}`
 
-/** One decision of the scheduler, a tick's or the answer to "Run now", for a person; nothing for one the row already says in another place: that it is switched off, that it started. */
-export function outcomeWords(outcome: string | undefined, now: Date = new Date()): string | undefined {
+/** One decision of the scheduler, a tick's or the answer to "Run now", for a person; nothing for one the row already says in another place: that it is switched off, that it started. A wait that is not over is said by {@link decided}, which knows the row. */
+export function outcomeWords(outcome: string | undefined): string | undefined {
   if (outcome === undefined || outcome === 'switched off on this machine' || outcome.startsWith('started ')) return undefined
   const elsewhere = /^not a command of (.+?): its skill is only under .+, not (\S+)$/.exec(outcome)
   if (elsewhere) return notThere(elsewhere[1]!, elsewhere[2]!)
   if (outcome === 'not due') return 'No work'
   const unpublished = /^not on (\S+?)( as this clone last saw it)?: /.exec(outcome)
   if (unpublished) return unpublished[1] === 'HEAD' ? 'Cannot start yet: its skill is not committed' : `Cannot start yet: its skill is not on ${unpublished[1]}${unpublished[2] ? ', as this machine last saw it' : ''}`
-  if (/^not due \(last start /.test(outcome)) return 'Not due yet'
-  const next = /^not due \(next start from (\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d),/.exec(outcome)
-  if (next) return `Next: ${nextWords(new Date(Number(next[1]), Number(next[2]) - 1, Number(next[3]), Number(next[4]), Number(next[5])), now)}`
   const capped = /^cap reached \((\d+) in flight/.exec(outcome)
   if (capped) return capped[1] === '1' ? 'One is already running' : `${capped[1]} are already running`
   return sentence(outcome)
@@ -549,8 +549,7 @@ export function startsNext(command: SchedulerCommand, now: Date = new Date()): s
 }
 
 /** Why nothing starts by itself in a project though rows are switched on, in a sentence; nothing while its scheduler is on and running. */
-export function schedulerStopped(row: Pick<SchedulerRow, 'error' | 'on' | 'running'>): string | undefined {
-  if (row.error !== undefined) return 'The scheduler cannot be read'
+export function schedulerStopped(row: Pick<SchedulerRow, 'on' | 'running'>): string | undefined {
   if (!row.on) return 'The scheduler is off'
   if (!row.running) return 'The scheduler is on, but not running'
   return undefined

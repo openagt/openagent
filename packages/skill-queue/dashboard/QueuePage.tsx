@@ -26,7 +26,7 @@ import {
   type Schedule,
 } from '@openagt/dashboard/module'
 import type { PlacedEntry } from '../src/queue.js'
-import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, fanOutLabel, isWorkingOn, priorityMeaning, workOnEntryPrompt } from '../src/module.js'
+import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, doneArgs, fanOutLabel, isWorkingOn, priorityMeaning, workOnEntryPrompt } from '../src/module.js'
 import { EntryTitle, entryView } from './entry.js'
 import { useQueueStarts, type QueueStarts } from './starts.js'
 
@@ -120,7 +120,7 @@ export function QueuePage({ projects }: ModulePageProps) {
 }
 
 /** One project's queue: who takes from it, its batch start, its entries, and the field that adds one. */
-function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read: ProjectRead; titled: boolean; schedule: Schedule | undefined; names: FileNames; starts: QueueStarts; reload: () => Promise<void> }) {
+function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read: ProjectRead; titled: boolean; schedule: Schedule; names: FileNames; starts: QueueStarts; reload: () => Promise<void> }) {
   const host = useModuleHost()
   const { project, entries, error, working } = read
   const raw = (entries ?? []).map(placed => placed.entry)
@@ -187,7 +187,8 @@ function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read:
               {section.priority !== undefined && priorityMeaning(section.priority) !== undefined && ' '}
               {section.priority !== undefined && priorityMeaning(section.priority) !== undefined && <span className="ml-1 font-normal normal-case tracking-normal">{priorityMeaning(section.priority)}</span>}
             </h3>
-            <ol className="mt-1.5 divide-y divide-border rounded-md border border-border">
+            {/* Counted on from the section before, so the number a screen reader says is the one shown. */}
+            <ol start={section.entries[0]!.place} className="mt-1.5 list-none divide-y divide-border rounded-md border border-border">
               {section.entries.map(placed => (
                 <EntryRow key={`${placed.place}\n${placed.entry}`} project={project} placed={placed} agent={working.find(agent => isWorkingOn(agent.ask, placed.entry))} names={names} starts={starts} reload={reload} />
               ))}
@@ -205,20 +206,12 @@ function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read:
  * among the commands the project starts by itself, as whichever installed package schedules them
  * says. On: when it starts next. Off, or not there: entries wait until a person starts them.
  */
-function TakerLine({ schedule, projectId }: { schedule: Schedule | undefined; projectId: string }) {
-  const taker = schedule?.commands[projectId]?.find(command => command.command === QUEUE_COMMAND)
-  const where = schedule && (
-    <a
-      href={`/${schedule.page.segment}`}
-      onClick={event => {
-        event.preventDefault()
-        schedule.open()
-      }}
-      className="underline hover:text-foreground"
-    >
-      {schedule.page.label}
-    </a>
-  )
+function TakerLine({ schedule, projectId }: { schedule: Schedule; projectId: string }) {
+  const known = schedule.commands[projectId]
+  // Not read yet, or a read that failed: no line, since "nothing takes from it" would be a guess.
+  if (known === undefined) return null
+  const taker = known.find(command => command.command === QUEUE_COMMAND)
+  const page = schedule.page
   return (
     <p role="status" aria-label="Who takes from the queue" className="mt-3 flex items-baseline gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
       <span aria-hidden className={cn('h-1.5 w-1.5 shrink-0 -translate-y-0.5 rounded-full', taker?.on ? 'bg-success' : 'bg-muted-foreground/50')} />
@@ -231,7 +224,22 @@ function TakerLine({ schedule, projectId }: { schedule: Schedule | undefined; pr
             {taker.note !== undefined && ` ${taker.note}.`}
           </>
         )}
-        {taker !== undefined && where && <span className="ml-2 whitespace-nowrap text-xs text-muted-foreground">Change it in {where}</span>}
+        {taker !== undefined && page && (
+          <span className="ml-2 whitespace-nowrap text-xs text-muted-foreground">
+            Change it in{' '}
+            <a
+              href={page.href}
+              onClick={event => {
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+                event.preventDefault()
+                schedule.open()
+              }}
+              className="underline hover:text-foreground"
+            >
+              {page.label}
+            </a>
+          </span>
+        )}
       </span>
     </p>
   )
@@ -243,13 +251,15 @@ function EntryRow({ project, placed, agent, names, starts, reload }: { project: 
   const { entry, place } = placed
   const view = entryView(project.id, entry, names)
   const remove = async (): Promise<void> => {
-    const answer = await host.act(project.id, ['done', entry])
+    const answer = await host.act(project.id, doneArgs(entry))
     if (!answer.ok) throw new Error(answer.error)
     await reload()
   }
   return (
     <li className="flex items-center gap-3 px-3 py-2 text-sm max-md:gap-1.5 max-md:px-2">
-      <span className="w-5 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{place}.</span>
+      <span aria-hidden className="w-5 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+        {place}.
+      </span>
       <div className="min-w-0 flex-1">
         <EntryTitle view={view} entry={entry} className={cn('block max-w-full truncate text-left max-md:line-clamp-2 max-md:whitespace-normal', (view.open ?? view.url) !== undefined && 'hover:underline')} />
         {/* The line as written, under a name that stands in for it: it is what an agent is handed. */}

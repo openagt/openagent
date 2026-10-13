@@ -1,5 +1,5 @@
 import { CalendarClock } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitleLink, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, useModuleHost, usePolled, type ModuleCardProps } from '@openagt/dashboard/module'
+import { Card, CardContent, CardHeader, CardTitleLink, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, pageHref, useModuleHost, usePolled, type ModuleCardProps } from '@openagt/dashboard/module'
 import { readSchedulers, rowTitle, schedulerStatus, schedulerStopped, startsNext, unlistedWords, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
 // The Overview's Automations card: what starts by itself in every project that has this package,
@@ -29,7 +29,7 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitleLink icon={<CalendarClock className="h-4 w-4 text-muted-foreground" aria-hidden />} href="/automations" onOpen={open}>
+        <CardTitleLink icon={<CalendarClock className="h-4 w-4 text-muted-foreground" aria-hidden />} segment="automations" onOpen={open}>
           Automations
         </CardTitleLink>
         <p className="text-xs text-muted-foreground">What starts by itself while nobody is at the keyboard</p>
@@ -61,8 +61,9 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
                     )}
                   </div>
                   {row.error !== undefined && <p className="mt-1 text-xs text-muted-foreground">{row.error}</p>}
-                  {row.lastTick?.note && <p className="mt-1 text-xs text-muted-foreground">{row.lastTick.note}</p>}
-                  {stopped !== undefined && on.length > 0 && <p className="mt-1 text-xs text-warning">{stopped}: nothing starts by itself.</p>}
+                  {/* Why the last look decided nothing; a scheduler that is stopped says that itself, above. */}
+                  {row.lastTick?.note && stopped === undefined && <p className="mt-1 text-xs text-muted-foreground">Its last look: {row.lastTick.note}</p>}
+                  {stopped !== undefined && row.error === undefined && on.length > 0 && <p className="mt-1 text-xs text-warning">{stopped}: nothing starts by itself.</p>}
                   {on.length > 0 && (
                     <ul className="mt-2 space-y-1.5">
                       {on.map(command => (
@@ -80,8 +81,9 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
                       {off}.{' '}
                       {on.length === 0 && (
                         <a
-                          href="/automations"
+                          href={pageHref('automations')}
                           onClick={event => {
+                            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
                             event.preventDefault()
                             open()
                           }}

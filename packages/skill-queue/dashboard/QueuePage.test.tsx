@@ -80,6 +80,19 @@ describe('QueuePage', () => {
       await waitFor(() => expect(taker()).toContain('/work-queue is off: entries wait until you start them. The scheduler is off.'))
     })
 
+    test('while what starts by itself is not known, the page says nothing of it: not read yet, or a read that failed', async () => {
+      // The installed modules are not known yet.
+      show(FULL, { ...NO_MODULES, loaded: false })
+      await screen.findByText('Urgent')
+      expect(screen.queryByRole('status', { name: 'Who takes from the queue' })).toBeNull()
+      cleanup()
+      // The scheduling package could not read this project.
+      show(FULL, { ...NO_MODULES, schedule: { page: 'automations', read: async () => Promise.reject(new Error('no')), package: 'a-scheduler', projects: ['p1'] } })
+      await screen.findByText('Urgent')
+      await new Promise(resolve => setTimeout(resolve, 20))
+      expect(screen.queryByRole('status', { name: 'Who takes from the queue' })).toBeNull()
+    })
+
     test('a project whose scheduled commands hold none that works the queue has nothing taking from it', async () => {
       show(FULL, scheduling([{ command: 'plan-tickets', on: true }]))
       await screen.findByText('Urgent')
@@ -143,7 +156,7 @@ describe('QueuePage', () => {
       expect(host.act).not.toHaveBeenCalled()
       const reads = host.runCommand.mock.calls.length
       fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
-      await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['done', 'Urgent']))
+      await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['done', '--', 'Urgent']))
       await waitFor(() => expect(host.runCommand.mock.calls.length).toBeGreaterThan(reads))
     })
 
@@ -178,7 +191,7 @@ describe('QueuePage', () => {
       expect(add().disabled).toBe(true)
       fireEvent.change(field(), { target: { value: '  Tidy the loader  ' } })
       fireEvent.click(add())
-      await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['add', 'Tidy the loader', '--priority', '5']))
+      await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['add', '--priority', '5', '--', 'Tidy the loader']))
       await waitFor(() => expect(field().value).toBe(''))
     })
 
@@ -192,7 +205,7 @@ describe('QueuePage', () => {
       fireEvent.click(urgent)
       fireEvent.change(field(), { target: { value: 'Fix the outage' } })
       fireEvent.submit(screen.getByRole('form', { name: 'Add to the queue of alpha' }))
-      await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['add', 'Fix the outage', '--priority', '10']))
+      await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['add', '--priority', '10', '--', 'Fix the outage']))
     })
 
     test('a task the queue did not take stays typed, with why', async () => {
@@ -237,7 +250,7 @@ describe('QueuePage', () => {
       // And what is removed is the line as written: the queue knows no other name for it.
       fireEvent.click(screen.getByRole('button', { name: 'Remove entry 1 from the queue' }))
       fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Remove' }))
-      await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['done', PLAN]))
+      await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['done', '--', PLAN]))
     })
 
     test('a queued link reads as its text; to a web address it opens there, into the project it opens the page that names its target', async () => {

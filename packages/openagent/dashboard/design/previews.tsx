@@ -356,7 +356,7 @@ function Tables() {
       </Table>
       <Card className="max-w-sm">
         <CardHeader>
-          <CardTitleLink href="#" onOpen={() => {}}>
+          <CardTitleLink segment="queue" onOpen={() => {}}>
             A card whose title opens its page
           </CardTitleLink>
           <p className="text-xs text-muted-foreground">The arrow shows on hover and focus, and always on a phone.</p>

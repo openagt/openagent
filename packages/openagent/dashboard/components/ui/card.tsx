@@ -1,6 +1,7 @@
 import type { HTMLAttributes, ReactNode } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { cn } from '../../lib/utils.js'
+import { pageHref } from '../../lib/route.js'
 
 // Minimal shadcn-style Card for the dashboard page (#471): a bordered surface with an
 // optional header. Just enough structure to keep the page's panels consistent.
@@ -17,16 +18,17 @@ export function CardTitle({ className, ...props }: HTMLAttributes<HTMLHeadingEle
 }
 
 /**
- * A card's title that opens the card's own page. A card on the Overview is a summary: its title is
- * the way to the whole. A real link, so it also opens in a new tab; a plain click goes through
- * `onOpen`, the dashboard's own navigation. The arrow shows on hover and focus, and always on a
+ * A card's title that opens the card's own page, named by its `segment`. A card on the Overview
+ * is a summary: its title is the way to the whole. A real link, so it also opens in a new tab,
+ * with the project the dashboard is showing; a plain click goes through `onOpen`, the dashboard's
+ * own navigation. The arrow shows on hover and focus, and always on a
  * phone, where nothing hovers.
  */
-export function CardTitleLink({ icon, children, href, onOpen, className }: { icon?: ReactNode; children: ReactNode; href: string; onOpen: () => void; className?: string }) {
+export function CardTitleLink({ icon, children, segment, onOpen, className }: { icon?: ReactNode; children: ReactNode; /** The page the title opens, by its segment. */ segment: string; onOpen: () => void; className?: string }) {
   return (
     <CardTitle className={cn('text-base', className)}>
       <a
-        href={href}
+        href={pageHref(segment)}
         onClick={event => {
           if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
           event.preventDefault()

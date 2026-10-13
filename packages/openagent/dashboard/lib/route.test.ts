@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseRoute, formatRoute, keepPageQuery } from './route.js'
+import { parseRoute, formatRoute, keepPageQuery, pageHref } from './route.js'
 
 describe('parseRoute', () => {
   it('reads the Overview from the root', () => {
@@ -133,5 +133,14 @@ describe('the picked project (#1513)', () => {
     expect(keepPageQuery('/tickets?project=app-a1', '?q=races&project=old-b2')).toBe('/tickets?q=races&project=app-a1')
     expect(keepPageQuery('/tickets', '?q=races&project=old-b2')).toBe('/tickets?q=races')
     expect(keepPageQuery('/', '?project=old-b2')).toBe('/')
+  })
+})
+
+describe('pageHref', () => {
+  it("a module page's address for a link, with the one project the dashboard shows when one is picked", () => {
+    expect(pageHref('queue', '')).toBe('/queue')
+    expect(pageHref('queue', '?project=shop-1abc')).toBe('/queue?project=shop-1abc')
+    // What else the page mirrored in its address is that page's own, and is not carried to another.
+    expect(pageHref('automations', '?q=login&project=shop-1abc')).toBe('/automations?project=shop-1abc')
   })
 })

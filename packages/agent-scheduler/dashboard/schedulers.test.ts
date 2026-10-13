@@ -476,10 +476,9 @@ describe('when a row that is on starts next', () => {
     expect(startsNext({ ...row, runsOn: 'codex', able: ['claude-code'] }, now)).toBe('Cannot start on Codex: its skill is not in .agents/skills')
   })
 
-  test('why nothing starts by itself in a project: its scheduler off, on with no process, or unreadable; nothing while it runs', () => {
+  test('why nothing starts by itself in a project: its scheduler off, or on with no process; nothing while it runs', () => {
     expect(schedulerStopped({ on: true, running: true })).toBeUndefined()
     expect(schedulerStopped({ on: false, running: false })).toBe('The scheduler is off')
     expect(schedulerStopped({ on: true, running: false })).toBe('The scheduler is on, but not running')
-    expect(schedulerStopped({ error: 'no', on: false, running: false })).toBe('The scheduler cannot be read')
   })
 })

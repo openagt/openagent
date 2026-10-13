@@ -86,31 +86,13 @@ describe('useSchedule', () => {
   const beta = { id: 'p2', name: 'beta', gitHost: true }
   function Shown() {
     const schedule = useSchedule([alpha, beta])
-    if (!schedule) return <span>no schedule</span>
     return (
       <button onClick={schedule.open}>
-        {schedule.page.label}: {JSON.stringify(schedule.commands)}
+        {schedule.page ? `${schedule.page.label} at ${schedule.page.href}` : 'no page'}: {JSON.stringify(schedule.commands)}
       </button>
     )
   }
-
-  test('with no module that schedules anything there is no schedule', () => {
-    render(
-      <ModulesContext.Provider value={NOTHING}>
-        <Shown />
-      </ModulesContext.Provider>,
-    )
-    expect(screen.getByText('no schedule')).toBeTruthy()
-  })
-
-  test('the scheduling module is asked per project that has it, through its own package; its page is named by its sidebar label and opened', async () => {
-    const openPage = vi.fn()
-    const read = vi.fn(async () => [{ command: 'work-queue', on: true, note: 'Starts when there is work' }])
-    const modules: MountedModules = {
-      ...NOTHING,
-      pages: [{ segment: 'automations', label: 'Automations', Page: () => null, package: 'a-scheduler', projects: ['p1'] }],
-      schedule: { page: 'automations', read, package: 'a-scheduler', projects: ['p1'] },
-    }
+  const show = (modules: MountedModules, openPage = vi.fn()) =>
     render(
       <HostServicesContext.Provider value={{ ...INERT_HOST_SERVICES, openPage }}>
         <ModulesContext.Provider value={modules}>
@@ -118,11 +100,43 @@ describe('useSchedule', () => {
         </ModulesContext.Provider>
       </HostServicesContext.Provider>,
     )
-    const shown = await screen.findByRole('button')
-    expect(shown.textContent).toBe('Automations: {"p1":[{"command":"work-queue","on":true,"note":"Starts when there is work"}]}')
+
+  test('until the installed modules are known, nothing is known of any project: no project is said to have nothing starting', async () => {
+    show({ ...NOTHING, loaded: false })
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(screen.getByRole('button').textContent).toBe('no page: {}')
+  })
+
+  test('with no module that schedules anything, every project is known to have nothing that starts by itself, and there is no page to send a person to', async () => {
+    show(NOTHING)
+    await waitFor(() => expect(screen.getByRole('button').textContent).toBe('no page: {"p1":[],"p2":[]}'))
+  })
+
+  test('the scheduling module is asked per project that has it, through its own package; a project it is not in has nothing; its page is named by its sidebar label and opened', async () => {
+    const openPage = vi.fn()
+    const read = vi.fn(async () => [{ command: 'work-queue', on: true, note: 'Starts when there is work' }])
+    show(
+      {
+        ...NOTHING,
+        pages: [{ segment: 'automations', label: 'Automations', Page: () => null, package: 'a-scheduler', projects: ['p1'] }],
+        schedule: { page: 'automations', read, package: 'a-scheduler', projects: ['p1'] },
+      },
+      openPage,
+    )
+    const shown = screen.getByRole('button')
+    await waitFor(() => expect(shown.textContent).toBe('Automations at /automations: {"p1":[{"command":"work-queue","on":true,"note":"Starts when there is work"}],"p2":[]}'))
     expect(read).toHaveBeenCalledTimes(1)
     expect(read).toHaveBeenCalledWith(expect.objectContaining({ package: 'a-scheduler' }), alpha)
     shown.click()
     await waitFor(() => expect(openPage).toHaveBeenCalledWith('automations'))
+  })
+
+  test('a project whose read fails stays unknown, while the others are answered', async () => {
+    const read = vi.fn(async (_host: unknown, project: { id: string }) => {
+      if (project.id === 'p1') throw new Error('not inside a git repository')
+      return [{ command: 'work-queue', on: false }]
+    })
+    show({ ...NOTHING, schedule: { page: 'automations', read, package: 'a-scheduler', projects: ['p1', 'p2'] } })
+    await waitFor(() => expect(screen.getByRole('button').textContent).toBe('automations at /automations: {"p2":[{"command":"work-queue","on":false}]}'))
   })
 })

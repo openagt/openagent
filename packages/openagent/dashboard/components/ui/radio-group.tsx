@@ -8,13 +8,27 @@ import { cn } from '../../lib/utils.js'
 // few that all stay in view. Replaces the bare `<input type="radio">` the forms drew by hand,
 // which took its look from the browser and ignored the theme. An item is the dot alone: put it in
 // a `<label>` with its words, so a click on the words picks it. `disabled` is widened as on the
-// Checkbox; a `<fieldset disabled>` around the group does not reach it, so pass it here.
+// Checkbox; a `<fieldset disabled>` around the group does not reach it, so pass it here. A field
+// may sit inside the group beside a radio (a number to type): it keeps its own keys.
 type RadioGroupProps = Omit<ComponentProps<typeof RadioGroupPrimitive>, 'disabled'> & {
   disabled?: boolean | undefined
 }
 
-export function RadioGroup({ className, disabled = false, ...props }: RadioGroupProps) {
-  return <RadioGroupPrimitive data-slot="radio-group" disabled={disabled} className={cn('grid gap-2', className)} {...props} />
+export function RadioGroup({ className, disabled = false, onKeyDown, ...props }: RadioGroupProps) {
+  return (
+    <RadioGroupPrimitive
+      data-slot="radio-group"
+      disabled={disabled}
+      className={cn('grid gap-2', className)}
+      // The group moves the pick with the arrow keys. A field or a button drawn inside it, beside
+      // a radio, keeps its own keys: an arrow in a number field steps the number, and picks nothing.
+      onKeyDown={event => {
+        if (!(event.target as HTMLElement).closest('[role="radio"]')) event.preventBaseUIHandler()
+        onKeyDown?.(event)
+      }}
+      {...props}
+    />
+  )
 }
 
 type RadioGroupItemProps = Omit<ComponentProps<typeof Radio.Root>, 'disabled'> & {

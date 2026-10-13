@@ -35,7 +35,8 @@ export function ProjectSkillsLine({
   /** The list as the project's menu opens it: `open` once "Skills…" was picked, `onClose` when the list is closed again. */
   door?: { open: boolean; onClose: () => void } | undefined
 }) {
-  const { value: skills, reload } = usePolled<ProjectSkills | null>(() => onProjectSkills(projectId), null, 15_000, [projectId], 'previous')
+  // A read that fails answers like a project unknown here: no skills to show. `loaded` then tells "not read yet" from "nothing to read".
+  const { value: skills, reload, loaded } = usePolled<ProjectSkills | null>(() => onProjectSkills(projectId).catch(() => null), null, 15_000, [projectId], 'previous')
   // The list opens on the project as it stands at that moment: a later read must not change it under the person's ticks.
   const [adding, setAdding] = useState<ProjectSkills | null>(null)
   const [committed, setCommitted] = useState<string | null>(null)
@@ -50,7 +51,14 @@ export function ProjectSkillsLine({
   useEffect(() => {
     if (asked && skills) setAdding(current => current ?? skills)
   }, [asked, skills])
-  if (!skills) return null
+  if (!skills) {
+    // Asked for from the menu, and there is nothing to open: said, since a menu item that does nothing reads as broken.
+    return asked && loaded ? (
+      <p role="alert" className="border-b border-border px-4 py-2 text-xs text-danger">
+        This project&rsquo;s skills could not be read.
+      </p>
+    ) : null
+  }
 
   const changed = async (): Promise<void> => {
     await reload()

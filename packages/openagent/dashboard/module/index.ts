@@ -171,7 +171,7 @@ export interface ModuleScheduledCommand {
   command: string
   /** Whether it starts by itself on this computer right now. */
   on: boolean
-  /** One line on it, for a person: when it starts next while it is on ("Next start in 3h, if there is work"), or why it does not start though its own switch is on ("The scheduler is off"). */
+  /** One line on it, for a person: when it starts next while it is on ("Next start in 3h, if there is work"), or why it does not start though its own switch is on ("The scheduler is off", "Cannot start on Codex: …"). */
   note?: string
 }
 
@@ -184,7 +184,7 @@ export interface ModuleScheduledCommand {
 export interface ModuleSchedule {
   /** The module's own page where a person switches a command on, by its segment. */
   page: string
-  /** One project's commands that can start by themselves. */
+  /** One project's commands that can start by themselves. Rejects when they cannot be read: the page then says nothing of that project. */
   read(host: ModuleHost, project: ModuleProject): Promise<ModuleScheduledCommand[]>
 }
 
@@ -456,5 +456,6 @@ export { formatRelative, formatDateTime, formatDuration, formatAge } from '../li
 export { usePolled, useLoaded, forgetRemembered } from '../lib/use-async.js'
 export { useAction } from '../lib/use-action.js'
 export { useSchedule, type Schedule } from '../lib/use-schedule.js'
+export { pageHref } from '../lib/route.js'
 export { useFileNames, pathsIn, type FileNames, type NamedFile } from '../lib/use-file-names.js'
 export { ConfirmDialog } from '../components/ui/confirm-dialog.js'

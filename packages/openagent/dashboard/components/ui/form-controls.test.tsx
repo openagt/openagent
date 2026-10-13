@@ -21,6 +21,8 @@ describe('RadioGroup', () => {
         </RadioGroupOption>
         <RadioGroupOption value="work">No wait</RadioGroupOption>
         <RadioGroupItem value="every" aria-label="A wait you set" />
+        <input type="number" aria-label="How long" defaultValue={6} />
+        <button type="button">Show the window</button>
       </RadioGroup>
     )
   }
@@ -41,6 +43,22 @@ describe('RadioGroup', () => {
     expect(screen.getAllByRole('radio').map(radio => radio.getAttribute('aria-checked'))).toEqual(['false', 'true', 'false'])
   })
 
+  test('the arrow keys move the pick from a radio, and only from a radio: in a field or on a button inside the group they stay that control\'s own', () => {
+    const onPick = vi.fn()
+    render(<Paces onPick={onPick} />)
+    // In the number field an arrow steps the number: the group neither takes the key nor changes the pick.
+    for (const key of ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End']) {
+      expect(fireEvent.keyDown(screen.getByRole('spinbutton', { name: 'How long' }), { key })).toBe(true)
+      expect(fireEvent.keyDown(screen.getByRole('button', { name: 'Show the window' }), { key })).toBe(true)
+    }
+    expect(onPick).not.toHaveBeenCalled()
+    expect(screen.getAllByRole('radio').map(radio => radio.getAttribute('aria-checked'))).toEqual(['true', 'false', 'false'])
+    // On a radio the arrow is still the group's: it takes the key. (Where it lands needs a real layout: tried in a real browser.)
+    const first = screen.getByRole('radio', { name: 'As the skill says (6 hours)' })
+    first.focus()
+    expect(fireEvent.keyDown(first, { key: 'ArrowDown' })).toBe(false)
+  })
+
   test('a disabled group takes no pick', () => {
     const onPick = vi.fn()
     render(<Paces disabled onPick={onPick} />)
@@ -54,6 +72,7 @@ describe('Select', () => {
   const UNITS = [
     { value: 'h', label: 'hours' },
     { value: 'd', label: 'days' },
+    { value: 'w', label: 'weeks' },
   ]
   function Units({ onPick = () => {} }: { onPick?: (value: unknown) => void }) {
     const [value, setValue] = useState('h')
@@ -64,7 +83,7 @@ describe('Select', () => {
         </SelectTrigger>
         <SelectContent>
           {UNITS.map(unit => (
-            <SelectItem key={unit.value} value={unit.value} disabled={unit.value === 'x'}>
+            <SelectItem key={unit.value} value={unit.value} disabled={unit.value === 'w'}>
               {unit.label}
             </SelectItem>
           ))}
@@ -85,7 +104,13 @@ describe('Select', () => {
     render(<Units onPick={onPick} />)
     const trigger = screen.getByRole('combobox', { name: 'Unit' })
     await openMenu(trigger)
-    expect(screen.getAllByRole('option').map(option => option.textContent)).toEqual(['hours', 'days'])
+    expect(screen.getAllByRole('option').map(option => option.textContent)).toEqual(['hours', 'days', 'weeks'])
+    // A greyed item is no pick: a click on it tells the page nothing.
+    const weeks = screen.getByRole('option', { name: 'weeks' })
+    expect(weeks.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.mouseMove(weeks)
+    fireEvent.click(weeks)
+    expect(onPick).not.toHaveBeenCalled()
     const days = screen.getByRole('option', { name: 'days' })
     // Base UI takes a click only on the item the pointer is on.
     fireEvent.mouseMove(days)
@@ -100,7 +125,7 @@ describe('CardTitleLink', () => {
   test('a real link to the card\'s page: a plain click goes through the dashboard\'s own navigation, a click with a modifier is left to the browser', () => {
     const onOpen = vi.fn()
     render(
-      <CardTitleLink href="/queue" onOpen={onOpen}>
+      <CardTitleLink segment="queue" onOpen={onOpen}>
         AI Queue
       </CardTitleLink>,
     )
@@ -112,5 +137,19 @@ describe('CardTitleLink', () => {
     // Opening it in a new tab is the browser's to do.
     expect(fireEvent.click(link, { metaKey: true })).toBe(true)
     expect(onOpen).toHaveBeenCalledTimes(1)
+  })
+
+  test('with one project picked in the dashboard, the link keeps it: a new tab shows that project too', () => {
+    window.history.replaceState(null, '', '/?project=shop-1abc')
+    try {
+      render(
+        <CardTitleLink segment="queue" onOpen={() => {}}>
+          AI Queue
+        </CardTitleLink>,
+      )
+      expect(screen.getByRole('link', { name: 'AI Queue' }).getAttribute('href')).toBe('/queue?project=shop-1abc')
+    } finally {
+      window.history.replaceState(null, '', '/')
+    }
   })
 })

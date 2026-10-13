@@ -52,7 +52,6 @@ export function DashboardPage({
   // Dismissing only hides it here (#958); the settings page keeps it, which is what the
   // dismiss control says.
   const onboardingDismissed = usePreferences().onboardingDismissed ?? false
-  const loading = data === null
   const working = (data?.active ?? []).filter(agent => scope === null || agent.projectId === scope)
   const shownProjects = scope === null ? projects : projects.filter(project => project.id === scope)
 
@@ -71,7 +70,7 @@ export function DashboardPage({
         {/* One column that may shrink below its content: without it a long row pushes the cards past a phone's edge. */}
         <div className={cn('grid grid-cols-[minmax(0,1fr)] items-start gap-4', working.length > 0 && 'lg:grid-cols-2')}>
           <HumanQueue items={interventions} onSelectProject={onSelectProject} onSelectAgent={onSelectAgent} />
-          {working.length > 0 && <Agents working={working} loading={loading} onSelectAgent={onSelectAgent} />}
+          {working.length > 0 && <Agents working={working} onSelectAgent={onSelectAgent} />}
         </div>
 
         {/* The cards the installed packages declare (#1818), in two columns that fill evenly whatever

@@ -7,7 +7,7 @@ import { defineModule } from '@openagt/dashboard/module'
 import { AutomationsPage } from './AutomationsPage.js'
 import { SchedulerCard } from './SchedulerCard.js'
 import { SchedulerSettings } from './SchedulerSettings.js'
-import { loosestSpendOffset, readSchedulers, saveSpendOffset, schedulerStopped, startsNext } from './schedulers.js'
+import { cannotRun, loosestSpendOffset, readSchedulers, saveSpendOffset, schedulerStopped, startsNext } from './schedulers.js'
 import './dashboard.css'
 
 export default defineModule({
@@ -23,9 +23,10 @@ export default defineModule({
     page: 'automations',
     read: async (host, project) => {
       const [row] = await readSchedulers(host, [project])
-      if (!row) return []
+      // A status that cannot be read says nothing of what starts: the asking page is told so, not "nothing".
+      if (!row || row.error !== undefined) throw new Error(row?.error ?? 'the scheduler did not answer')
       const stopped = schedulerStopped(row)
-      return row.commands.map(command => ({ command: command.command, on: command.on && stopped === undefined, ...(command.on ? { note: stopped ?? startsNext(command) } : {}) }))
+      return row.commands.map(command => ({ command: command.command, on: command.on && stopped === undefined && cannotRun(command) === undefined, ...(command.on ? { note: stopped ?? startsNext(command) } : {}) }))
     },
   },
   stylesheet: 'dashboard.css',
