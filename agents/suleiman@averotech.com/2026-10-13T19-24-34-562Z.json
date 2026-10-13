@@ -1,11 +1,13 @@
 {
   "id": "2026-10-13T19-24-34-562Z",
   "startedAt": "2026-10-13T19:24:34.623Z",
-  "status": "running",
+  "endedAt": "2026-10-13T19:27:52.333Z",
+  "status": "waiting",
   "intent": "Tell me “hi” nothing else",
   "driver": "claude-code",
   "model": "claude-sonnet-5-5",
-  "cost": 0.0707942,
+  "branch": "agent-2026-10-13T19-24-34-562Z",
+  "cost": 0.1235675,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
