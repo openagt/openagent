@@ -593,6 +593,38 @@ describe('the project select (#1513)', () => {
   })
 })
 
+describe('the rail marks the page that is open', () => {
+  const PAGES = [{ segment: 'logs', label: 'Logs' }]
+  /** Which of the rail's ways somewhere say they are the page open now: the rows at its top, and the Settings gear at its foot. */
+  const current = () => ['Overview', 'Logs', 'Settings'].filter(name => screen.getByRole('button', { name }).getAttribute('aria-current') === 'page')
+
+  test('with no project, no page and no Settings open, the Overview row is the one marked', () => {
+    renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} pages={PAGES} />)
+    expect(current()).toEqual(['Overview'])
+    // Not marked is no attribute at all, on a row as on the gear.
+    expect(screen.getByRole('button', { name: 'Logs' }).hasAttribute('aria-current')).toBe(false)
+    expect(screen.getByRole('button', { name: 'Settings' }).hasAttribute('aria-current')).toBe(false)
+  })
+
+  test('on a module\'s page its row is the one marked, and inside a project none is', () => {
+    const { unmount } = renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} pages={PAGES} activePage="logs" />)
+    expect(current()).toEqual(['Logs'])
+    unmount()
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId={null} onSelect={() => {}} pages={PAGES} />)
+    expect(current()).toEqual([])
+  })
+
+  test('with Settings open its gear is the one marked, and the Overview row is not: Settings has no project and no page either', () => {
+    const onSettings = vi.fn()
+    renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} pages={PAGES} atSettings onSettings={onSettings} />)
+    expect(current()).toEqual(['Settings'])
+    expect(screen.getByRole('button', { name: 'Overview' }).hasAttribute('aria-current')).toBe(false)
+    // The gear still goes there, and the Overview row still goes home.
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    expect(onSettings).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('AgentHistory reads a log ahead', () => {
   afterEach(() => {
     onAgent.mockClear()

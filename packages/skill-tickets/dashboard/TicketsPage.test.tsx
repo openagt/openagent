@@ -69,6 +69,29 @@ afterEach(cleanup)
 // onAllTickets itself and handing each project's list to its own TicketsPanel, which already
 // knows how to render a one-liner row.
 describe('TicketsPage (#1144)', () => {
+  test('its header is the other pages\' header: the same title and line under it, with its count beside the title; the line says whose backlog shows', async () => {
+    onAllTickets.mockResolvedValue([
+      { projectId: 'p1', projectName: 'Alpha', tickets: [ticket({ title: 'Do the thing' })] },
+      { projectId: 'p2', projectName: 'Beta', tickets: [ticket({ file: 'b.md', title: 'Do the other thing' })] },
+    ])
+    render()
+    await screen.findByText('Do the thing')
+    const title = screen.getByRole('heading', { level: 1 })
+    expect(title.textContent).toBe('Tickets2/2')
+    expect(title.className).toBe('text-lg font-semibold')
+    const line = title.nextElementSibling!
+    expect(line.textContent).toBe('Every project\u2019s tickets/ backlog: what agents plan from.')
+    expect(line.className).toBe('mt-1 text-sm text-muted-foreground')
+    // No bar of its own under the header.
+    expect(title.closest('.border-b')).toBeNull()
+    cleanup()
+    // With one project shown, the line does not say "every".
+    onAllTickets.mockResolvedValue([{ projectId: 'p1', projectName: 'Alpha', tickets: [ticket({ title: 'Do the thing' })] }])
+    render()
+    await screen.findByText('Do the thing')
+    expect(screen.getByRole('heading', { level: 1 }).nextElementSibling!.textContent).toBe('This project\u2019s tickets/ backlog: what agents plan from.')
+  })
+
   test('reads every project\'s tickets and lists each under its own project heading', async () => {
     onAllTickets.mockResolvedValue([
       { projectId: 'p1', projectName: 'Alpha', tickets: [ticket({ title: 'Do the thing' })] },

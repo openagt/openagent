@@ -54,7 +54,7 @@ export interface SettingsOption {
 }
 
 /** What stands in for the empty value in the list: a choice whose value is no text ("Auto-detect", an agent's own default) is still a choice to pick. */
-const NO_VALUE = '\u0000none'
+const NO_VALUE = '(no value)'
 
 /**
  * One setting picked from a list.
@@ -79,7 +79,9 @@ export function SettingsSelectRow({
   onChange: (next: string) => void
 }) {
   if (options.length === 0) return null
-  const items = options.map(o => ({ value: o.value === '' ? NO_VALUE : o.value, label: o.label, disabled: o.disabled === true }))
+  // A saved value the list does not hold (an editor that is no longer found, a list not read yet) is still what is saved: it gets a line of its own, by its text.
+  const listed = options.some(o => o.value === value) ? options : [...options, { value, label: value }]
+  const items = listed.map(o => ({ value: o.value === '' ? NO_VALUE : o.value, label: o.label, disabled: o.disabled === true }))
   return (
     <SettingsRow
       label={label}

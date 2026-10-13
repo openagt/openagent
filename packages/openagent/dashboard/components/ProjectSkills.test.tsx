@@ -78,7 +78,8 @@ describe('ProjectSkillsLine', () => {
     render(<WithDoor projectId="p1" />)
     expect(screen.queryByRole('dialog')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Skills…' }))
-    const dialog = await screen.findByRole('dialog')
+    // Named as the menu names it: the list is where skills are added, updated and removed.
+    const dialog = await screen.findByRole('dialog', { name: 'Skills' })
     expect(screen.queryByRole('status')).toBeNull()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())

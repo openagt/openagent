@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import { DRIVERS } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import { NO_MODEL_PINNED } from '../lib/agent-settings.js'
@@ -183,6 +183,7 @@ export function SettingsPage({
  * (answers are claimed on read), but a person decides one, so it is presented as one.
  */
 function BridgeBrowserChoice({ daemonBrowser, onChange }: { daemonBrowser: boolean; onChange: (daemonBrowser: boolean) => void }) {
+  const question = useId()
   const option = (value: boolean, label: string, description: string, body: ReactNode) => (
     <label className={cn('flex cursor-pointer gap-3 rounded-md border p-3', daemonBrowser === value ? 'border-primary/60 bg-muted/20' : 'border-border')}>
       <RadioGroupItem value={value ? 'daemon' : 'own'} aria-label={label} className="mt-1" />
@@ -194,9 +195,12 @@ function BridgeBrowserChoice({ daemonBrowser, onChange }: { daemonBrowser: boole
     </label>
   )
   return (
-    <fieldset className="mt-3">
-      <legend className="mb-2 text-sm font-medium">Which browser does the work?</legend>
-      <RadioGroup aria-label="Which browser does the work?" value={daemonBrowser ? 'daemon' : 'own'} onValueChange={next => onChange(next === 'daemon')}>
+    // One group with one name: the radio group is named by the question above it.
+    <div className="mt-3">
+      <p id={question} className="mb-2 text-sm font-medium">
+        Which browser does the work?
+      </p>
+      <RadioGroup aria-labelledby={question} value={daemonBrowser ? 'daemon' : 'own'} onValueChange={next => onChange(next === 'daemon')}>
         {option(
           true,
           'A browser the daemon runs — recommended',
@@ -210,7 +214,7 @@ function BridgeBrowserChoice({ daemonBrowser, onChange }: { daemonBrowser: boole
           <BridgeSettings enabled onChange={() => {}} />,
         )}
       </RadioGroup>
-    </fieldset>
+    </div>
   )
 }
 

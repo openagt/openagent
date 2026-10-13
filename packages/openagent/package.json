@@ -49,7 +49,7 @@
     "dev": "tsc -p tsconfig.build.json --watch",
     "dev:dashboard": "cd dashboard && vite",
     "dev:daemon": "cd dashboard && OPENAGENT_DEV_DAEMON=1 vite",
-    "design:build": "tsx dashboard/design/build.mts",
+    "design:build": "tsx --tsconfig dashboard/tsconfig.json dashboard/design/build.mts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p dashboard/tsconfig.json",
     "test": "pnpm test:node && pnpm test:dashboard",
     "test:node": "tsc -p tsconfig.test.json && node scripts/run-tests.mjs",

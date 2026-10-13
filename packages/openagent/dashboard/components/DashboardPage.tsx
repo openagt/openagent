@@ -68,7 +68,8 @@ export function DashboardPage({
 
         {/* What needs a person, beside who is working now. The agents' card is drawn only while
             one works: with none, what needs you takes the whole row. */}
-        <div className={cn('grid items-start gap-4', working.length > 0 && 'lg:grid-cols-2')}>
+        {/* One column that may shrink below its content: without it a long row pushes the cards past a phone's edge. */}
+        <div className={cn('grid grid-cols-[minmax(0,1fr)] items-start gap-4', working.length > 0 && 'lg:grid-cols-2')}>
           <HumanQueue items={interventions} onSelectProject={onSelectProject} onSelectAgent={onSelectAgent} />
           {working.length > 0 && <Agents working={working} loading={loading} onSelectAgent={onSelectAgent} />}
         </div>

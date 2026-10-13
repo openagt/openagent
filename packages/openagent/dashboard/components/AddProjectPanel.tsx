@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { onCloneTarget, sendAddProject, sendAddProjectFromAddress, sendPickProjectDirectory } from '../rpc/projects.js'
 import { useAction } from '../lib/use-action.js'
 import { AddProjectEffects } from './AddProjectEffects.js'
@@ -44,6 +44,7 @@ export function AddProjectPanel({
   const [typed, setTyped] = useState('')
   const [target, setTarget] = useState<{ typed: string; address: string; path: string } | null>(null)
   const [share, setShare] = useState(false)
+  const recordsLabel = useId()
   const [added, setAdded] = useState<{ alreadyActivated: boolean; noRemote: boolean; path?: string } | null>(null)
   const [pickError, setPickError] = useState<string | null>(null)
   const { busy, error, reset, run } = useAction()
@@ -223,9 +224,12 @@ export function AddProjectPanel({
             <div className="mb-3">
               <AddProjectEffects />
             </div>
-            <fieldset className="mb-3 text-xs">
-              <legend className="mb-1 font-medium text-foreground">The agents&rsquo; records (what you ask, what each agent answers)</legend>
-              <RadioGroup aria-label="The agents' records" value={share ? 'share' : 'keep'} disabled={busy} onValueChange={next => setShare(next === 'share')} className="gap-1.5">
+            {/* One group with one name: the radio group is named by the line above it. */}
+            <div className="mb-3 text-xs">
+              <p id={recordsLabel} className="mb-1 font-medium text-foreground">
+                The agents&rsquo; records (what you ask, what each agent answers)
+              </p>
+              <RadioGroup aria-labelledby={recordsLabel} value={share ? 'share' : 'keep'} disabled={busy} onValueChange={next => setShare(next === 'share')} className="gap-1.5">
                 <RadioGroupOption value="keep" className="flex-nowrap items-start text-xs [&>[data-slot=radio-group-item]]:mt-0.5">
                   <span>
                     Keep them on this machine
@@ -242,7 +246,7 @@ export function AddProjectPanel({
                 </RadioGroupOption>
               </RadioGroup>
               <p className="mt-1 text-muted-foreground">You can change this later in the project&rsquo;s menu.</p>
-            </fieldset>
+            </div>
             {error && <p className="mb-2 text-xs text-danger">{error}</p>}
             <div className="flex justify-end gap-2">
               <Button
