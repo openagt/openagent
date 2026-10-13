@@ -542,6 +542,7 @@ if [ "$1 $2" = "auth login" ] && [ "$7" = "--with-token" ]; then cat > /dev/null
 if [ "$1 $2" = "auth login" ]; then
   [ -e "$HOME/.config/gh/hosts.yml" ] && echo "old login still there" >> "$HOME/gh.log"
   [ -e "$HOME/no-code" ] && { echo "error connecting to github.com" >&2; exit 1; }
+  [ -e "$HOME/slow" ] && sleep 0.6
   printf '\\n! First copy your one-time code: %s\\nOpen this URL to continue in your web browser: https://github.com/login/device\\n' "$(cat "$HOME/code")" >&2
   for _ in $(seq 1 100); do
     [ -e "$HOME/yes" ] && { echo "kept by gh" > "$HOME/.config/gh/hosts.yml"; exit 0; }
@@ -641,6 +642,23 @@ exit 0
     assert.doesNotMatch(refused.stderr, /WXYZ/)
     await assert.rejects(readFile(kept), { code: 'ENOENT' })
     assert.deepEqual((await readdir(join(home, '.cache'))).filter(name => name.startsWith('openagent-github-login')), [])
+
+    // A gh that was just started is, for a moment, not yet called gh, and has not said its code: the script waits for it all the same.
+    // A `ps` that never names it stands for that moment, and a gh that takes its time; the script asks only whether its own gh lives.
+    await program(join(home, '.local', 'bin', 'ps'), '#!/bin/bash\necho "bash -s"\n')
+    await writeFile(join(home, 'slow'), '')
+    await writeFile(join(home, 'code'), 'EARL-Y123')
+    const [early, earlyLog, earlyCode] = await ask()
+    assert.equal(earlyCode, 'EARL-Y123')
+    await rm(join(home, '.local', 'bin', 'ps'))
+    await rm(join(home, 'slow'))
+    try {
+      process.kill(Number(early))
+    } catch {
+      // It ended by itself.
+    }
+    await rm(earlyLog, { force: true })
+    await rm(join(home, '.cache', 'openagent-github-login.pid'), { force: true })
 
     // GitHub gives no code: said, and nothing is left waiting.
     await writeFile(join(home, 'no-code'), '')
