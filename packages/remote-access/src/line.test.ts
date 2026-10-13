@@ -249,7 +249,8 @@ test('a computer keeps a line open to its server, and the server asks the comput
     const port = listed[0]!.line!.port
     // The second of the lines' ports: the first was the replaced line's until that one was taken out.
     assert.equal(port, Number(r.server.OPENAGENT_REMOTE_ACCESS_LINE_PORT) + 1)
-    const machine = await until('the server’s OpenAgent saved the computer', () => r.machines[0])
+    // The replaced line's address is taken off the machines, and this one's is the only one left.
+    const machine = await until('the server’s OpenAgent saved the computer', () => (r.machines.length === 1 && r.machines[0]!.url === `http://127.0.0.1:${port}` ? r.machines[0] : undefined))
     assert.deepEqual(machine, { id: `http://127.0.0.1:${port}`, url: `http://127.0.0.1:${port}`, label: listed[0]!.name })
     const at = machine.url
 
