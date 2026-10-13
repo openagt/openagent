@@ -1,16 +1,25 @@
 {
   "id": "2026-10-13T19-24-34-562Z",
   "startedAt": "2026-10-13T19:24:34.623Z",
-  "status": "running",
+  "endedAt": "2026-10-13T19:24:38.878Z",
+  "status": "done",
   "intent": "Tell me “hi” nothing else",
   "driver": "claude-code",
-  "model": "sonnet",
+  "model": "claude-sonnet-5-5",
+  "branch": "agent-2026-10-13T19-24-34-562Z",
+  "cost": 0.0261499,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
       "pid": 14857,
-      "publish": "commit"
+      "publish": "commit",
+      "baseCommit": "2e28e53fb1a0fe2d74429d55bea290e33c50009a"
     },
-    "host": "Suleimans-MacBook-Pro.local"
+    "pid": 14857,
+    "host": "Suleimans-MacBook-Pro.local",
+    "baseCommit": "2e28e53fb1a0fe2d74429d55bea290e33c50009a",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/gemstack/.branches/agent-2026-10-13T19-24-34-562Z",
+    "sessionId": "cd12d62f-f89a-4c7a-879e-79ceef09d0ed"
   }
 }
