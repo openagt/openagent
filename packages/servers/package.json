@@ -1,6 +1,6 @@
 {
   "name": "@openagt/servers",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Connect your VPS: give a server's address and a user name, and OpenAgent installs itself there over SSH, with this computer's own SSH keys. The server then starts OpenAgent by itself, opens its door over HTTPS, and is a machine a run can be sent to. The server gets its two logins from this computer, over SSH: your GitHub login, copied when you tick it, and a Claude login made for it with claude setup-token. It brings the Servers section of the dashboard's Settings page.",
   "license": "MIT",
   "repository": {
