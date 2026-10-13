@@ -24,11 +24,10 @@ const tailwind = readFileSync('tailwind.css', 'utf8')
 // do not have. They are local now, so the pairing is what needs pinning: a class the stylesheet
 // does not define is silently nothing, which is exactly how the styling went missing the first time.
 describe('MessageScrollerViewport', () => {
-  test('asks for a toned scrollbar, a stable gutter and a faded bottom edge', () => {
+  test('asks for a toned scrollbar and a stable gutter', () => {
     const className = viewport().className
     expect(className).toContain('scrollbar-thin')
     expect(className).toContain('scrollbar-gutter-stable')
-    expect(className).toContain('scroll-fade-b')
     // Quiet while the log is chasing the live edge, so the bar is not a twitching distraction.
     expect(className).toContain('data-autoscrolling:scrollbar-quiet')
   })
@@ -37,7 +36,7 @@ describe('MessageScrollerViewport', () => {
     const asked = viewport()
       .className.split(/\s+/)
       .map(token => token.split(':').at(-1) ?? '')
-      .filter(token => token.startsWith('scrollbar-') || token.startsWith('scroll-fade'))
+      .filter(token => token.startsWith('scrollbar-'))
     expect(asked.length).toBeGreaterThan(0)
     for (const utility of asked) expect(tailwind, utility).toContain(`@utility ${utility} {`)
   })

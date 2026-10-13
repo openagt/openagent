@@ -52,19 +52,29 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('AgentActionsMenu (#toolbar-menu)', () => {
-  test('the session\'s menu holds what belongs to the session, and not the project\'s page on its git host', async () => {
-    render(<AgentActionsMenu part="session" projectId="p1" agentId="run-1" events={[]} label="my session" onDeleted={vi.fn()} />)
+  test('the session\'s menu holds what belongs to the session, and the project\'s page on its git host after what opens the session\'s own', async () => {
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} label="my session" onDeleted={vi.fn()} />)
     openMenu()
     // No retained worktree here, so the folder item names the project root it will actually open.
-    await waitFor(() => expect(screen.getByText('Open project folder')).toBeTruthy())
-    expect(screen.queryByText('Open on GitHub')).toBeNull()
-    expect(onGitHostHome).not.toHaveBeenCalled()
-    expect(screen.getByText('Open in editor')).toBeTruthy()
-    expect(screen.getByText('Delete session')).toBeTruthy()
+    await waitFor(() => expect(screen.getByText('Open on GitHub')).toBeTruthy())
+    expect(screen.getAllByRole('menuitem').map(item => item.textContent!.trim())).toEqual(['Open project folder', 'Open in editor', 'Open on GitHub', 'Delete session'])
+    expect(screen.getByText('Open on GitHub').closest('a')!.getAttribute('href')).toBe('https://github.com/o/r')
+    // The offer of a repository and where the records go are the project's own page's.
+    expect(onRepositoryOffer).not.toHaveBeenCalled()
+    expect(onRecordsReach).not.toHaveBeenCalled()
+  })
+
+  test('a project with no page on a git host adds no item to the session\'s menu', async () => {
+    onGitHostHome.mockResolvedValueOnce(null)
+    render(<AgentActionsMenu projectId="p-none" agentId="run-1" events={[]} onDeleted={vi.fn()} />)
+    openMenu()
+    await waitFor(() => expect(onGitHostHome).toHaveBeenCalledWith('p-none'))
+    await screen.findByText('Open project folder')
+    expect(screen.queryByText(/^Open on /)).toBeNull()
   })
 
   test('opening the folder addresses this session, whichever checkout it resolves to', async () => {
-    render(<AgentActionsMenu part="session" projectId="p1" agentId="run-1" events={[]} onDeleted={vi.fn()} />)
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} onDeleted={vi.fn()} />)
     openMenu()
     fireEvent.click(await screen.findByText('Open project folder'))
     await waitFor(() => expect(sendOpenInApp).toHaveBeenCalledWith('p1', 'files', 'run-1'))
@@ -73,14 +83,14 @@ describe('AgentActionsMenu (#toolbar-menu)', () => {
   test("names the folder item for what it opens once the session's worktree is gone (#1195)", async () => {
     // A finished, non-retained run has no checkout of its own, so the item resolves to the project
     // root. Promising "the session's folder" there was a lie the user could not see.
-    render(<AgentActionsMenu part="session" projectId="p1" agentId="run-1" events={[]} onDeleted={vi.fn()} />)
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} onDeleted={vi.fn()} />)
     openMenu()
     expect(await screen.findByText('Open project folder')).toBeTruthy()
     expect(screen.queryByText("Open session's folder")).toBeNull()
     cleanup()
 
     // A retained worktree still exists, so the session wording is honest again.
-    render(<AgentActionsMenu part="session" projectId="p1" agentId="run-1" events={[]} retainedWorktree onDeleted={vi.fn()} />)
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} retainedWorktree onDeleted={vi.fn()} />)
     openMenu()
     expect(await screen.findByText("Open session's folder")).toBeTruthy()
   })
@@ -92,7 +102,7 @@ describe('AgentActionsMenu (#toolbar-menu)', () => {
       { kind: 'session', driver: 'claude', workspace: '/repo/.openagent/worktrees/run-1', fake: false },
       { kind: 'session-update', sessionId: '45015d11-755b-423c-ae71-8dbfd54f7cce' },
     ] as never
-    render(<AgentActionsMenu part="session" projectId="p1" agentId="run-1" events={events} onDeleted={vi.fn()} />)
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={events} onDeleted={vi.fn()} />)
     openMenu()
     // The id is visible in its own right: it is the only handle on the conversation off-dashboard.
     expect(await screen.findByText('45015d11')).toBeTruthy()
@@ -107,7 +117,7 @@ describe('AgentActionsMenu (#toolbar-menu)', () => {
   })
 
   test('offers nothing to copy for a run that never reported a session', async () => {
-    render(<AgentActionsMenu part="session" projectId="p1" agentId="run-1" events={[]} onDeleted={vi.fn()} />)
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} onDeleted={vi.fn()} />)
     openMenu()
     await waitFor(() => expect(screen.getByText('Open in editor')).toBeTruthy())
     expect(screen.queryByText('Copy resume command')).toBeNull()
@@ -116,7 +126,7 @@ describe('AgentActionsMenu (#toolbar-menu)', () => {
 
   test('Delete asks to confirm before deleting', async () => {
     const onDeleted = vi.fn()
-    render(<AgentActionsMenu part="session" projectId="p1" agentId="run-1" events={[]} label="my session" onDeleted={onDeleted} />)
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} label="my session" onDeleted={onDeleted} />)
     openMenu()
     fireEvent.click(await screen.findByText('Delete session'))
     // The confirm dialog, not a bare delete: the session and its history go for good.
@@ -131,7 +141,7 @@ describe('the live-session action: Stop', () => {
   const liveEvents = [{ kind: 'session-update', sessionId: 'working' }] as never
 
   test('a live session offers Stop, and no Merge while it works', async () => {
-    render(<AgentActionsMenu part="session" projectId="p1" agentId="run-1" events={liveEvents} onDeleted={vi.fn()} />)
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={liveEvents} onDeleted={vi.fn()} />)
     openMenu()
     await waitFor(() => expect(screen.getByText('Stop agent')).toBeTruthy())
     expect(screen.queryByText(/Merge/)).toBeNull()
@@ -139,7 +149,7 @@ describe('the live-session action: Stop', () => {
 
   test('an ended session offers no Stop', async () => {
     const ended = [{ kind: 'session-update', sessionId: 'working' }, { kind: 'end', ok: true }] as never
-    render(<AgentActionsMenu part="session" projectId="p1" agentId="run-1" events={ended} onDeleted={vi.fn()} />)
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={ended} onDeleted={vi.fn()} />)
     openMenu()
     await waitFor(() => expect(screen.getByText('Open in editor')).toBeTruthy())
     expect(screen.queryByText('Stop agent')).toBeNull()
@@ -171,7 +181,7 @@ describe('the menu with no session: the project home (#809)', () => {
     await screen.findByText('Open folder')
     expect(screen.queryByRole('menuitem', { name: 'Skills…' })).toBeNull()
     cleanup()
-    render(<AgentActionsMenu projectId="p1" agentId="a1" events={[]} part="session" onOpenSkills={onOpenSkills} />)
+    render(<AgentActionsMenu projectId="p1" agentId="a1" events={[]} onOpenSkills={onOpenSkills} />)
     openMenu()
     await screen.findByRole('menu')
     expect(screen.queryByRole('menuitem', { name: 'Skills…' })).toBeNull()
@@ -196,7 +206,7 @@ describe('the menu with no session: the project home (#809)', () => {
   })
 
   test('a finished session with something to delete has one rule above it', async () => {
-    render(<AgentActionsMenu part="session" projectId="p1" agentId="run-1" events={[]} onDeleted={vi.fn()} />)
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} onDeleted={vi.fn()} />)
     openMenu()
     const menu = await screen.findByRole('menu')
     expect(menu.querySelectorAll('[role="separator"]')).toHaveLength(1)
@@ -214,7 +224,7 @@ describe('the editor picker in the menu (#727)', () => {
       { bin: 'code', label: 'VS Code' },
       { bin: 'cursor', label: 'Cursor' },
     ]
-    render(<AgentActionsMenu part="session" projectId="p1" agentId="run-1" events={[]} />)
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} />)
     await openEditorMenu()
     fireEvent.click(await screen.findByText('Cursor'))
     expect(updatePreferences).toHaveBeenCalledWith({ editor: 'cursor' })
@@ -223,7 +233,7 @@ describe('the editor picker in the menu (#727)', () => {
   test('picking Default clears the editor', async () => {
     prefs = { editor: 'cursor' }
     detectedEditors = [{ bin: 'cursor', label: 'Cursor' }]
-    render(<AgentActionsMenu part="session" projectId="p1" agentId="run-1" events={[]} />)
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} />)
     await openEditorMenu()
     // "Default" names the setting a person sets to choose it.
     expect(await screen.findByText('$OPENAGENT_EDITOR, or code')).toBeTruthy()
@@ -234,7 +244,7 @@ describe('the editor picker in the menu (#727)', () => {
   test('shows a stored editor that was not auto-detected as a custom row', async () => {
     prefs = { editor: 'mate' }
     detectedEditors = [{ bin: 'code', label: 'VS Code' }]
-    render(<AgentActionsMenu part="session" projectId="p1" agentId="run-1" events={[]} />)
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} />)
     await openEditorMenu()
     await waitFor(() => expect(screen.getAllByText('mate').length).toBeGreaterThan(0))
   })
@@ -286,7 +296,7 @@ describe('Where the agents\u2019 records go, in the project\u2019s menu', () => 
 
     onRecordsReach.mockClear()
     onRecordsReach.mockResolvedValue('kept')
-    render(<AgentActionsMenu part="session" projectId="p1" agentId="run-1" events={[]} />)
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} />)
     fireEvent.click(screen.getByRole('button', { name: /session actions/i }))
     await waitFor(() => expect(screen.getByText('Open project folder')).toBeTruthy())
     expect(screen.queryByText(/the agents\u2019 records/)).toBeNull()
@@ -330,7 +340,7 @@ describe('Create a repository, for a project that lives on this machine only', (
 
     onRepositoryOffer.mockClear()
     onRepositoryOffer.mockResolvedValue({ repository: 'me/shop', name: 'GitHub' })
-    render(<AgentActionsMenu part="session" projectId="p1" agentId="run-1" events={[]} />)
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} />)
     fireEvent.click(screen.getByRole('button', { name: /session actions/i }))
     await waitFor(() => expect(screen.getByText('Open project folder')).toBeTruthy())
     expect(screen.queryByText(/Create a repository/)).toBeNull()
@@ -338,10 +348,10 @@ describe('Create a repository, for a project that lives on this machine only', (
   })
 })
 
-// An agent's page has two menus: the session's, whose button is the session's name, and the project's ⋮.
-describe('the two menus of an agent\'s page', () => {
+// An agent's page has one menu, whose button is the session's name.
+describe('the menu of an agent\'s page', () => {
   test('the session\'s menu button is the session\'s name with a small arrow; the whole name on hover', () => {
-    render(<AgentActionsMenu part="session" projectId="p1" agentId="run-1" events={[]} label="Fix the login page" />)
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} label="Fix the login page" />)
     const button = screen.getByRole('button', { name: 'Session actions' })
     expect(button.textContent).toBe('Fix the login page')
     expect(button.getAttribute('title')).toBe('Fix the login page')
@@ -350,7 +360,7 @@ describe('the two menus of an agent\'s page', () => {
   })
 
   test('a name not known yet is a grey bar in its place, and the menu opens all the same', async () => {
-    render(<AgentActionsMenu part="session" projectId="p1" agentId="run-1" events={[]} />)
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} />)
     expect(screen.getByTestId('title-placeholder').className).toContain('bg-muted')
     openMenu()
     await waitFor(() => expect(screen.getByText('Open project folder')).toBeTruthy())
@@ -358,42 +368,24 @@ describe('the two menus of an agent\'s page', () => {
 
   test('the session\'s menu shows and hides the details strip, when the page has one', async () => {
     const onToggle = vi.fn()
-    const { rerender } = render(<AgentActionsMenu part="session" projectId="p1" agentId="run-1" events={[]} label="x" details={{ open: false, onToggle }} />)
+    const { rerender } = render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} label="x" details={{ open: false, onToggle }} />)
     openMenu()
     fireEvent.click(await screen.findByText('Show details'))
     expect(onToggle).toHaveBeenCalledTimes(1)
-    rerender(<AgentActionsMenu part="session" projectId="p1" agentId="run-1" events={[]} label="x" details={{ open: true, onToggle }} />)
+    rerender(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} label="x" details={{ open: true, onToggle }} />)
     openMenu()
     expect(await screen.findByText('Hide details')).toBeTruthy()
     cleanup()
-    render(<AgentActionsMenu part="session" projectId="p1" agentId="run-1" events={[]} label="x" />)
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} label="x" />)
     openMenu()
     await waitFor(() => expect(screen.getByText('Open project folder')).toBeTruthy())
     expect(screen.queryByText(/details/)).toBeNull()
   })
 
   test('"Remove worktree" says the worktree\'s size on disk beside it', async () => {
-    render(<AgentActionsMenu part="session" projectId="p1" agentId="run-1" events={[]} label="x" retainedWorktree size="1.2 MB" />)
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} label="x" retainedWorktree size="1.2 MB" />)
     openMenu()
     expect((await screen.findByText('Remove worktree')).closest('[role=menuitem]')!.textContent!.trim()).toBe('Remove worktree1.2 MB')
-  })
-
-  test('the project\'s menu holds the project\'s page on its git host alone', async () => {
-    render(<AgentActionsMenu part="project" projectId="p1" agentId="run-1" events={[]} retainedWorktree onDeleted={vi.fn()} />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Project actions' }))
-    expect(await screen.findByText('Open on GitHub')).toBeTruthy()
-    expect(screen.getAllByRole('menuitem')).toHaveLength(1)
-    expect(onRepositoryOffer).not.toHaveBeenCalled()
-  })
-
-  test('a project with no page on a git host has no ⋮ on an agent\'s page: its place is kept, before the answer and after', async () => {
-    onGitHostHome.mockResolvedValueOnce(null)
-    render(<AgentActionsMenu part="project" projectId="p-none" agentId="run-1" events={[]} />)
-    expect(screen.getByTestId('project-menu-place')).toBeTruthy()
-    await waitFor(() => expect(onGitHostHome).toHaveBeenCalledWith('p-none'))
-    await new Promise(resolve => setTimeout(resolve, 20))
-    expect(screen.queryByRole('button', { name: 'Project actions' })).toBeNull()
-    expect(screen.getByTestId('project-menu-place').className).toContain('w-7')
   })
 })
 
@@ -502,7 +494,7 @@ describe('Remove project, in the project’s menu', () => {
     expect(screen.queryByText('Remove project…')).toBeNull()
     cleanup()
 
-    render(<AgentActionsMenu part="session" projectId="p1" agentId="run-1" events={[]} onDeleted={vi.fn()} onProjectRemoved={onProjectRemoved} />)
+    render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} onDeleted={vi.fn()} onProjectRemoved={onProjectRemoved} />)
     fireEvent.click(screen.getByRole('button', { name: /session actions/i }))
     await waitFor(() => expect(screen.getByText('Open in editor')).toBeTruthy())
     expect(screen.queryByText('Remove project…')).toBeNull()

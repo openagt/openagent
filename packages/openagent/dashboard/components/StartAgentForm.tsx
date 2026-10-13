@@ -3,7 +3,7 @@ import { CircleAlert, Folder } from 'lucide-react'
 import { onProjects, onStartCheck } from '../rpc/projects.js'
 import type { ProjectSummary } from '../../src/index.js'
 import { usePreferences, usePreferencesLoaded, updatePreferences } from '../lib/preferences.js'
-import { offeredPublishPicks, publishPickIn, reachedByLine } from '../../src/client.js'
+import { offeredPublishPicks, publishPickIn } from '../../src/client.js'
 import { useMachines } from '../lib/machines.js'
 import { useSelectedMachineId } from '../lib/remote-target.js'
 import { cleanupPick, offersPostMergeCleanup, startPicks, useStartAgent } from '../lib/use-start-agent.js'
@@ -60,8 +60,8 @@ export function StartAgentForm({
   projectId: string
   /** The project's name, for its chip above the box; absent until the projects are read. */
   projectName?: string | null | undefined
-  /** `runsOn` names the machine a remote agent executes on (#1067), for the "runs on <machine>" marker, and `byLine` says that machine is a person's own computer, reached by the line it keeps open here. */
-  onAgentStarted?: ((intent: string, agentId: string, runsOn?: string, byLine?: boolean) => void) | undefined
+  /** `runsOn` names the machine a remote agent executes on (#1067), for the "runs on <machine>" marker. */
+  onAgentStarted?: ((intent: string, agentId: string, runsOn?: string) => void) | undefined
   /** The project's files for the `#` picker (#504), owned by the shell. */
   files: string[]
   /** The Context set, shared with the right rail's file tree (#492), owned by the shell. */
@@ -148,7 +148,7 @@ export function StartAgentForm({
       // Show the run in the Runs rail immediately (#405): its tool writes the run's card a beat
       // later, so seed an optimistic row with the typed prompt until the real one takes over.
       // A remote agent (#1067) carries the machine label so the view can mark where it executes.
-      onAgentStarted?.(text, result.agentId, machine?.label, machine !== undefined && reachedByLine(machine.url)) // select the run we just started (#761)
+      onAgentStarted?.(text, result.agentId, machine?.label) // select the run we just started (#761)
       composerRef.current?.clear()
     }
   }

@@ -675,13 +675,30 @@ describe('where the agent runs, for the chip beside its name', () => {
       page.reconfigure({ url: own })
     }
   })
+})
 
-  test('the notice of a run on a saved machine draws a server, and a computer for a person\'s own, reached by its line', () => {
-    const icon = (name: string) => screen.getByText(new RegExp(`^Running on ${name}\\.`)).closest('[role="status"]')!.querySelector('svg')!.getAttribute('class')
-    const { rerender } = render(view({ live: true, target: 'remote', remoteLabel: 'Server' }))
-    expect(icon('Server')).toContain('lucide-server')
-    rerender(view({ live: true, target: 'remote', remoteLabel: 'MacBook', remoteByLine: true }))
-    expect(icon('MacBook')).toContain('lucide-laptop')
+describe('the bars over the chat', () => {
+  test('the top bar and its notices lie over the chat\'s start, the message box and what sits on it over its end', () => {
+    render(view({ live: true }))
+    expect(within(screen.getByTestId('chat-top')).getByTestId('bar-runs-on')).toBeTruthy()
+    for (const part of ['work-bar', 'composer-live']) expect(within(screen.getByTestId('chat-bottom')).getByTestId(part)).toBeTruthy()
+    expect(screen.getByTestId('chat-top').contains(screen.getByText(/the channel delivered this line/))).toBe(false)
+  })
+
+  test('a lost live stream is said under the top bar, whatever the chat shows', () => {
+    const { rerender } = render(view({ live: true }))
+    expect(screen.queryByText(/Live stream lost/)).toBeNull()
+    rerender(view({ live: true, lost: true }))
+    expect(within(screen.getByTestId('chat-top')).getByRole('status').textContent).toMatch(/^Live stream lost/)
+    rerender(view({ live: true, lost: true, events: [] }))
+    expect(within(screen.getByTestId('chat-top')).getByRole('status')).toBeTruthy()
+  })
+
+  test('an agent on another machine has no notice of it: the chip beside its name says where it runs', () => {
+    render(view({ live: true, target: 'remote', remoteLabel: 'MacBook' }))
+    expect(screen.getByTestId('bar-runs-on').textContent).toBe('MacBook')
+    expect(screen.queryByText(/Running on/)).toBeNull()
+    expect(within(screen.getByTestId('chat-top')).queryByRole('status')).toBeNull()
   })
 })
 
@@ -726,6 +743,23 @@ describe('a run just started', () => {
     expect(screen.queryByText(/Started from the branch/)).toBeNull()
     rerender(view({ live: true, events, card: { status: 'done', workspace: '/repo/.branches/agent-1', branch: 'agent-1', base: 'my/work', driver: 'codex' } }))
     expect(screen.getByText(/Started from the branch/).textContent).toBe('Started from the branch my/work, not from the main branch.')
+  })
+
+  test('what was opened in one agent\'s chat is not open in the next agent\'s: each chat is its own', () => {
+    const events = [{ kind: 'driver', event: { type: 'start', prompt: 'Say hi' } }, { kind: 'driver', event: { type: 'text', text: 'Hi.' } }] as OpenAgentEvent[]
+    const card = { status: 'running' as const, workspace: '/repo/.branches/agent-1', branch: 'agent-1', driver: 'codex' }
+    const { rerender } = render(view({ live: true, events, card }))
+    const scroller = document.querySelector('[data-slot="message-scroller"]')
+    fireEvent.click(screen.getByRole('button', { name: 'Session set up' }))
+    expect(screen.getByRole('button', { name: 'Session set up' }).getAttribute('aria-expanded')).toBe('true')
+    // The same agent, with more to show: its line stays open, in the same scroller.
+    rerender(view({ live: true, events: [...events, { kind: 'driver', event: { type: 'text', text: 'More.' } }] as OpenAgentEvent[], card }))
+    expect(screen.getByRole('button', { name: 'Session set up' }).getAttribute('aria-expanded')).toBe('true')
+    expect(document.querySelector('[data-slot="message-scroller"]')).toBe(scroller)
+    // Another agent: its line is folded, and its chat is a scroller of its own, at its own place.
+    rerender(view({ agentId: 'run-2', live: true, events, card: { ...card, workspace: '/repo/.branches/agent-2', branch: 'agent-2' } }))
+    expect(screen.getByRole('button', { name: 'Session set up' }).getAttribute('aria-expanded')).toBe('false')
+    expect(document.querySelector('[data-slot="message-scroller"]')).not.toBe(scroller)
   })
 
   test('no spinner while the answer is being written, and none once the run has ended', () => {

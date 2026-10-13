@@ -9,9 +9,10 @@ import { AgentActionBar } from './AgentActionBar.js'
 import { AgentComposer } from './AgentComposer.js'
 import { AgentWorkBar } from './AgentWorkBar.js'
 import { AgentFeed } from './AgentFeed.js'
+import { ChatNote, ChatPane } from './ChatPane.js'
 import { ActionsRunNotice } from './ActionsRunNotice.js'
+import { LostStreamNotice } from './LostStreamNotice.js'
 import { CloudMirrorRow, CloudAgentNotice } from './CloudAgentNotice.js'
-import { RemoteAgentNotice } from './RemoteAgentNotice.js'
 import { ModuleSlot } from './ModulePageView.js'
 import { useMountedModules } from '../lib/use-modules.js'
 import { Committing, HandoffActions, HandoffSummary, handoffSays, isCommitAsk } from './AgentHandoff.js'
@@ -58,7 +59,6 @@ export function AgentView({
   projectName,
   target,
   remoteLabel,
-  remoteByLine,
   files,
   lost = false,
   writing = '',
@@ -85,14 +85,11 @@ export function AgentView({
   projectName?: string | null | undefined
   /** Where the agent executes (#1053/#610): `actions` swaps the live feed for a burst-mode affordance; `remote` is relayed to a machine (#1067); `web` is handed to a Claude Code cloud session. */
   target?: 'local' | 'actions' | 'remote' | 'web' | undefined
-  /** The machine this agent executes on (#1067), when it is relayed to another one. Set only for a
-   *  just-started remote run: its diff, handoff, and push/PR now relay to the machine (slice 2), so the
-   *  panels are shown, and a "runs on <machine>" notice says where the agent executes. */
+  /** The machine this agent executes on (#1067), when it is relayed to another one, by the name it
+   *  was given: the chip beside the session's name says it. */
   remoteLabel?: string | undefined
-  /** That machine is a person's own computer, reached by the line it keeps open here: the notice draws a computer, not a server. */
-  remoteByLine?: boolean | undefined
   files: string[]
-  /** The live channel's health (#948) — surfaced as a banner over the feed. */
+  /** The live channel's health (#948) — surfaced as a banner under the top bar. */
   lost?: boolean
   /** The message the agent is writing, as far as it has got: shown after the feed while it runs. */
   writing?: string
@@ -327,40 +324,89 @@ export function AgentView({
   lastSay.current = { agentId, say }
 
   return (
-    <>
-      <AgentActionBar
-        projectId={projectId}
-        agentId={agentId}
-        events={shown}
-        label={label}
-        projectName={projectName}
-        runsOn={runsOn}
-        retainedWorktree={hasWorktree}
-        onWorktreeRemoved={onWorktreeRemoved}
-        onDeleted={onDeleted}
-        expanded={open}
-        onToggle={toggle}
-        ready={ready}
-        checkout={checkout}
-      />
-      {/* The always-available session-details strip: agent + spend (#322). What the run changed is
-          in the side panel's Changes tab, not here. */}
-      {open && <AgentDetails events={shown} card={card} />}
-      {/* A GitHub Actions run replays in a burst at the end (#1053), so the live feed looks stalled:
-          say the wait is expected and link through to the live Actions run. */}
-      <ActionsRunNotice target={target} events={shown} live={working} />
-      {/* A run handed to Claude Code on the web (#610): the work is happening in a cloud session
-          this machine cannot stream, so point at where it is rather than show an empty feed. */}
-      <CloudAgentNotice target={target} events={shown} projectId={projectId} agentId={agentId} />
-      {/* A run relayed to a saved machine (#1067): its diff, handoff, and push/PR now relay to the
-          machine (slice 2), so this notice only says where the agent executes. */}
-      <RemoteAgentNotice machine={remoteLabel} byLine={remoteByLine} />
+    <ChatPane
+      top={
+        <>
+          <AgentActionBar
+            projectId={projectId}
+            agentId={agentId}
+            events={shown}
+            label={label}
+            projectName={projectName}
+            runsOn={runsOn}
+            retainedWorktree={hasWorktree}
+            onWorktreeRemoved={onWorktreeRemoved}
+            onDeleted={onDeleted}
+            expanded={open}
+            onToggle={toggle}
+            ready={ready}
+            checkout={checkout}
+          />
+          {/* The always-available session-details strip: agent + spend (#322). What the run changed is
+              in the side panel's Changes tab, not here. */}
+          {open && <AgentDetails events={shown} card={card} />}
+          {/* A GitHub Actions run replays in a burst at the end (#1053), so the live feed looks stalled:
+              say the wait is expected and link through to the live Actions run. */}
+          <ActionsRunNotice target={target} events={shown} live={working} />
+          {/* A run handed to Claude Code on the web (#610): the work is happening in a cloud session
+              this machine cannot stream, so point at where it is rather than show an empty feed. */}
+          <CloudAgentNotice target={target} events={shown} projectId={projectId} agentId={agentId} />
+          {lost && <LostStreamNotice />}
+        </>
+      }
+      bottom={
+        <>
+          {/* Keyed by the run: a list opened for one main agent is not open for the next. */}
+          <SubagentsBar key={agentId} subagents={subagents} doing={doing} onOpen={onOpenAgent} />
+          {/* The questions the agent stopped on, above the message box; the newest takes the keys. */}
+          {agentId && questions.map((choice, at) => <QuestionPanel key={`${agentId}:${choice.id}`} projectId={projectId} agentId={agentId} choice={choice} active={at === questions.length - 1} onSaid={onSending} />)}
+          {/* Where the work is and the next step, right above the message box. */}
+          <AgentWorkBar
+            projectName={projectName}
+            checkout={checkout}
+            summary={
+              ready &&
+              (showHandoff ? (
+                <>
+                  <HandoffSummary handoff={handoff.handoff} subagent={subagent} />
+                  {handoff.error && <span className="text-danger">{handoff.error}</span>}
+                </>
+              ) : (
+                runSlots.map(slots => {
+                  const Summary = slots.summary
+                  return Summary ? (
+                    <ModuleSlot key={slots.package} package={slots.package} label="run summary">
+                      <Summary projectId={projectId} agentId={agentId} working={working} />
+                    </ModuleSlot>
+                  ) : null
+                })
+              ))
+            }
+            actions={
+              // A run that is working is still writing its branch; the next step is offered once it has ended,
+              // and a run whose subagents still work has not: it goes on as each of them ends.
+              committing ? <Committing /> : ended ? <HandoffActions projectId={projectId} agentId={agentId} state={handoff} subagent={subagent} onAsked={onSending} /> : undefined
+            }
+            show={say}
+          />
+          <AgentComposer
+            projectId={projectId}
+            agentId={agentId}
+            live={feedLive}
+            files={files}
+            onAgentStarted={onAgentStarted}
+            onSending={onSending}
+            onQueued={onQueued}
+            outcome={outcome}
+            model={modelLabel}
+          />
+        </>
+      }
+    >
       {/* Nothing to show yet is not the same thing in both states: a live run is waiting for its
           first event, a finished one is still reading its log. */}
-      {!feedSettled ? (
-        <div className="flex-1" />
-      ) : live !== true && archived === null && shown.length === 0 ? (
-        <div className="grid flex-1 place-items-center text-sm text-muted-foreground">Loading agent…</div>
+      {!feedSettled ? null : live !== true && archived === null && shown.length === 0 ? (
+        <ChatNote>Loading agent…</ChatNote>
       ) : (
         // A finished log is static, so it does not follow new output; it opens at the end, where
         // the outcome, the final spend and the last changes are (#948). "Live" for the scroll
@@ -368,10 +414,14 @@ export function AgentView({
         // its new leg up to two seconds before `live` flips, and entering follow mode with the
         // first streamed row absorbs the continuation one event at a time instead of jolting the
         // scroller when the poll lands.
+        //
+        // Keyed by the run, as the rest of the page is not: what was opened in one agent's chat (its
+        // "Session set up" line, a run of its steps) is not open in the next one's, and each chat
+        // opens at its own place, not where the one before was left.
         <AgentFeed
+          key={agentId}
           events={shown}
           projectId={projectId}
-          lost={lost}
           writing={feedLive ? writing : ''}
           {...(shownSending !== undefined ? { sending: shownSending } : {})}
           working={feedLive || shownSending !== undefined}
@@ -389,50 +439,6 @@ export function AgentView({
           onOpenScreen={onOpenScreen}
         />
       )}
-      {/* Keyed by the run: a list opened for one main agent is not open for the next. */}
-      <SubagentsBar key={agentId} subagents={subagents} doing={doing} onOpen={onOpenAgent} />
-      {/* The questions the agent stopped on, above the message box; the newest takes the keys. */}
-      {agentId && questions.map((choice, at) => <QuestionPanel key={`${agentId}:${choice.id}`} projectId={projectId} agentId={agentId} choice={choice} active={at === questions.length - 1} onSaid={onSending} />)}
-      {/* Where the work is and the next step, right above the message box. */}
-      <AgentWorkBar
-        projectName={projectName}
-        checkout={checkout}
-        summary={
-          ready &&
-          (showHandoff ? (
-            <>
-              <HandoffSummary handoff={handoff.handoff} subagent={subagent} />
-              {handoff.error && <span className="text-danger">{handoff.error}</span>}
-            </>
-          ) : (
-            runSlots.map(slots => {
-              const Summary = slots.summary
-              return Summary ? (
-                <ModuleSlot key={slots.package} package={slots.package} label="run summary">
-                  <Summary projectId={projectId} agentId={agentId} working={working} />
-                </ModuleSlot>
-              ) : null
-            })
-          ))
-        }
-        actions={
-          // A run that is working is still writing its branch; the next step is offered once it has ended,
-          // and a run whose subagents still work has not: it goes on as each of them ends.
-          committing ? <Committing /> : ended ? <HandoffActions projectId={projectId} agentId={agentId} state={handoff} subagent={subagent} onAsked={onSending} /> : undefined
-        }
-        show={say}
-      />
-      <AgentComposer
-        projectId={projectId}
-        agentId={agentId}
-        live={feedLive}
-        files={files}
-        onAgentStarted={onAgentStarted}
-        onSending={onSending}
-        onQueued={onQueued}
-        outcome={outcome}
-        model={modelLabel}
-      />
-    </>
+    </ChatPane>
   )
 }

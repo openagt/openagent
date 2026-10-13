@@ -39,7 +39,7 @@ export function ProjectHome({
   scope?: string | null
   events: OpenAgentEvent[]
   /** Carries the started agent's id through to the shell; dropping it is what #1169 was. */
-  onAgentStarted?: ((intent: string, agentId: string, runsOn?: string, byLine?: boolean) => void) | undefined
+  onAgentStarted?: ((intent: string, agentId: string, runsOn?: string) => void) | undefined
   files: string[]
   /** The Context set and its edits, owned by the shell and shared with the file tree (#492). */
   context: Set<string>
