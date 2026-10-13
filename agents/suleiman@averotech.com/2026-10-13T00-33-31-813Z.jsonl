@@ -1,0 +1,7 @@
+{"kind":"start","prompt":"a new test, dont do any thing, just say hello world","at":"2026-10-13T00:33:33.263Z"}
+{"kind":"session","sessionId":"149862ea-c054-4ada-bed6-0740ea9ee046","at":"2026-10-13T00:33:34.353Z"}
+{"kind":"said","text":"Hello world","at":"2026-10-13T00:33:35.379Z"}
+{"kind":"rate-limit","limit":{"status":"allowed","window":"five_hour","resetsAt":1791867000000},"at":"2026-10-13T00:33:35.384Z"}
+{"kind":"result","text":"Hello world","sessionId":"149862ea-c054-4ada-bed6-0740ea9ee046","at":"2026-10-13T00:33:36.334Z"}
+{"kind":"cost","usd":0.0436454,"at":"2026-10-13T00:33:36.334Z"}
+{"kind":"ended","status":"done","at":"2026-10-13T00:33:37.315Z"}
