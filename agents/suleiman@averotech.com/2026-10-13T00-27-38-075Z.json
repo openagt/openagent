@@ -6,7 +6,6 @@
   "intent": "Hi",
   "driver": "claude-code",
   "model": "claude-sonnet-5-5",
-  "branch": "agent-2026-10-13T00-27-38-075Z",
   "cost": 0.028457899999999998,
   "caller": {
     "runner": {
