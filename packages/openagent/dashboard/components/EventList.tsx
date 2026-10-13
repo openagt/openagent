@@ -1,6 +1,6 @@
 import type { AgentMeta, ChoiceRequest, OpenAgentEvent } from '../../src/index.js'
 import { foldScreenRows, formatOpenAgentEvent } from '../../src/client.js'
-import { Fragment, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { pendingChoices } from '../lib/live-state.js'
 import { startedBefore, subagentEnd, subagentStartedAt, type SubagentEnd } from '../lib/subagents.js'
@@ -415,6 +415,8 @@ const TIME = 'ml-auto shrink-0 pt-0.5 text-[10px] tabular-nums text-muted-foregr
 /** The grouping key of a row about one of the run's subagents. */
 
 const SUBAGENT = 'subagent'
+/** How near its end a chat counts as being at it, in pixels: the scroller's own measure. */
+const AT_END = 8
 const NO_SUBAGENTS: readonly AgentMeta[] = []
 const NONE_QUEUED: readonly string[] = []
 const NOTHING_DOING: Record<string, string> = {}
@@ -431,6 +433,32 @@ function shownAsRow(e: OpenAgentEvent): boolean {
   if (e.kind === 'driver' && e.event.type === 'result') return false
   if (e.kind === 'driver' && e.event.type === 'rate-limit') return e.event.limit.status !== 'allowed'
   return true
+}
+
+// The room the page's bars take of the log grew (a question opened over the message box, the
+// agent's work came in, a notice came under the top bar): a log that was at its end stays at it.
+// The scroller does this itself only for a log that follows its end, and only for the room at the
+// end. A log left at its end, an ended agent's, it leaves where it was, its last rows under the
+// bar. A prompt the scroller holds at the top is left to it: its spacer is then shown. Done as the
+// list changes its size, padding counted, before the frame is drawn.
+function useEndKept(viewport: RefObject<HTMLDivElement | null>, content: RefObject<HTMLDivElement | null>, endRoom: RefObject<HTMLDivElement | null>): void {
+  useLayoutEffect(() => {
+    const view = viewport.current
+    const list = content.current
+    const room = endRoom.current
+    if (!view || !list || !room || typeof ResizeObserver === 'undefined') return
+    const taken = () => (Number.parseFloat(getComputedStyle(list).paddingTop) || 0) + room.getBoundingClientRect().height
+    let was = taken()
+    const observer = new ResizeObserver(() => {
+      const grew = taken() - was
+      was += grew
+      // Rows coming in change the list's size too, and no room: nothing to keep.
+      if (grew <= 0 || view.querySelector('[data-message-scroller-spacer]:not([hidden])')) return
+      if (view.scrollHeight - grew - view.scrollTop - view.clientHeight <= AT_END) view.scrollTop = view.scrollHeight
+    })
+    observer.observe(list, { box: 'border-box' })
+    return () => observer.disconnect()
+  }, [viewport, content, endRoom])
 }
 
 export function EventList({
@@ -575,11 +603,31 @@ export function EventList({
       <SessionLine setup={setup} working={working} added={added} {...(settingUp ? { live: { since: unfolded[unfolded.length - 1]?.at } } : {})} />
     </MessageScrollerItem>
   )
+  // The page's bars lie over the log's two ends (ChatPane says how much of each, `--chat-top` and
+  // `--chat-bottom`; with no bar there is none): the rows start under the top one and end above the
+  // bottom one.
+  //
+  // The scroller reads the room at the start off the padding, so a prompt it brings to the top
+  // lands under the bar. The room at the end is an element and no padding: the scroller acts on
+  // its content growing (it stays at the end, it keeps a prompt at the top), and padding is no
+  // part of that. That element is the list's first and is drawn last, the scroller's own spacer
+  // after it: the scroller looks for a new prompt among the elements added after those it had, so
+  // one that stayed last would hide every new row from it. (With it first, the scroller no longer
+  // sees a row come in above the others. None does here but a first prompt, which it goes to.)
+  //
+  // The viewport's scroll padding is for the browser: a page down moves by what is seen, and a row
+  // brought into view lands clear of the bars.
+  const viewport = useRef<HTMLDivElement>(null)
+  const content = useRef<HTMLDivElement>(null)
+  const endRoom = useRef<HTMLDivElement>(null)
+  useEndKept(viewport, content, endRoom)
   return (
     <MessageScrollerProvider autoScroll={stick} defaultScrollPosition={openAt ?? (stick ? 'end' : 'start')}>
-      <MessageScroller className="flex-1">
-        <MessageScrollerViewport aria-label="Agent output">
-          <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-2 p-4 font-mono text-xs">
+      {/* A layer of its own: "Jump to latest" stays under the page's bars. */}
+      <MessageScroller className="isolate flex-1">
+        <MessageScrollerViewport ref={viewport} aria-label="Agent output" className="scroll-pt-(--chat-top) scroll-pb-(--chat-bottom)">
+          <MessageScrollerContent ref={content} spacerClassName="order-last" className="mx-auto w-full max-w-3xl gap-2 px-4 pt-[calc(var(--chat-top,0px)+1rem)] font-mono text-xs">
+            <div ref={endRoom} data-testid="log-end-room" className="order-9998 h-[calc(var(--chat-bottom,0px)+0.5rem)] shrink-0" aria-hidden />
             {shown.map((e, i, rows) => {
               const message = textOf(e)
               const choiceRow = choiceRows?.rows.get(e)
@@ -692,7 +740,7 @@ export function EventList({
             {tail}
           </MessageScrollerContent>
         </MessageScrollerViewport>
-        <MessageScrollerButton />
+        <MessageScrollerButton className="data-[direction=end]:bottom-[calc(var(--chat-bottom,0px)+1.25rem)]" />
       </MessageScroller>
     </MessageScrollerProvider>
   )

@@ -32,17 +32,14 @@ import {
   DropdownMenuSubContent,
 } from './ui/dropdown-menu.js'
 
-// The menus of a page's top bar, as Claude Code on the web splits them.
+// The one menu of a page's top bar.
 //
-// On an agent's page there are two. The agent's name is the first (`part="session"`): the name
-// with a small ⌄, opening to what belongs to this session — its details, its folder, its editor,
-// its session link, the command that resumes it, and Stop, Remove worktree, Delete. The ⋮ at the
-// bar's end is the second (`part="project"`): what belongs to the project — its page on its git
-// host. A project with no such page has no ⋮ there: its place is kept, so nothing beside it moves
-// when the answer lands.
+// On an agent's page (the menu is given the agent) the agent's name is its button: the name with a small ⌄, opening
+// to the session's details, its folder, its editor, the project's page on its git host, its
+// session link, the command that resumes it, and Stop, Remove worktree, Delete.
 //
-// On the "New agent" page there is no session, and one ⋮ holds all of the project's (no `part`):
-// its git host page, its skills, the offer of a repository, where the agents' records go, its folder, its editor.
+// On the "New agent" page there is no session, and a ⋮ holds all of the project's: its git host
+// page, its skills, the offer of a repository, where the agents' records go, its folder, its editor.
 //
 // The handoff's Push / Open PR are not here: they move the work forward, and sit in the bar above
 // the message box. The editor keeps its preferred-editor submenu; Delete opens its confirm dialog
@@ -57,7 +54,6 @@ export function AgentActionsMenu({
   onDeleted,
   onProjectRemoved,
   onOpenSkills,
-  part,
   details,
   size,
 }: {
@@ -73,18 +69,16 @@ export function AgentActionsMenu({
   onProjectRemoved?: (() => void) | undefined
   /** Open the list of the project's skills; given, the project's menu offers "Skills…". */
   onOpenSkills?: (() => void) | undefined
-  /** Which of an agent's page's two menus this is; absent, the one menu of a page with no session. */
-  part?: 'session' | 'project' | undefined
   /** The session's details strip under the bar (its coding agent, its spend): the session's menu shows and hides it. */
   details?: { open: boolean; onToggle: () => void } | undefined
   /** The size on disk of the session's worktree, said beside "Remove worktree". */
   size?: string | undefined
 }) {
-  const ofSession = part !== 'project'
-  const ofProject = part !== 'session'
+  // Given an agent, this is its page's menu, under the session's name; with none, the ⋮ of a page with no session.
+  const session = !!agentId
   const active = isAgentActive(events)
   const info = sessionInfo(events)
-  const session = describeSessionLink(info)
+  const sessionLink = describeSessionLink(info)
 
   // Whether this session still has a checkout of its own. A live agent is working in one; a finished
   // run only keeps one while its work has not reached the remote (#737/E5), since that is what
@@ -114,17 +108,17 @@ export function AgentActionsMenu({
   // Hold the last git host page while a new project's loads, so the item does not flicker.
   // Asked again after a repository is created: the project has a page on its git host from then on.
   const [created, setCreated] = useState(0)
-  const home = useLoaded<GitHostHome | null>(ofProject ? () => onGitHostHome(projectId) : null, null, [projectId, created, ofProject], 'previous')
+  const home = useLoaded<GitHostHome | null>(() => onGitHostHome(projectId), null, [projectId, created], 'previous')
   // A project that lives on this machine only may be offered a repository on a host; the project's
   // menu offers it, a session's does not. Creating one puts the project's code on a server under
   // the person's account, so it is asked once more before it happens.
-  const offer = useLoaded<RepositoryOffer | null>(ofProject && !agentId ? () => onRepositoryOffer(projectId) : null, null, [projectId, agentId, created, ofProject])
+  const offer = useLoaded<RepositoryOffer | null>(session ? null : () => onRepositoryOffer(projectId), null, [projectId, session, created])
   const [confirmCreate, setConfirmCreate] = useState(false)
   // Where the agents' records go: kept on this machine until the person shares them with the
   // project's remote. The project's menu says which and switches it; sharing pushes a branch, so it
   // is asked once more before it happens. A project with no remote has nothing to switch.
   const [switched, setSwitched] = useState(0)
-  const reach = useLoaded<RecordsReach | null>(ofProject && !agentId ? () => onRecordsReach(projectId) : null, null, [projectId, agentId, created, switched, ofProject], 'previous')
+  const reach = useLoaded<RecordsReach | null>(session ? null : () => onRecordsReach(projectId), null, [projectId, session, created, switched], 'previous')
   const [confirmShare, setConfirmShare] = useState(false)
   // Removing a project takes it off the dashboard's list and deletes nothing in its folder; it is
   // asked once more, and the question says what stays.
@@ -157,18 +151,21 @@ export function AgentActionsMenu({
 
   const name = label?.trim() || agentId
   // What the button is called: the menu acts on one session, or, with none, on the project.
-  const title = part === 'session' ? 'Session actions' : 'Project actions'
+  const title = session ? 'Session actions' : 'Project actions'
   const removable = retainedWorktree && !active && !!agentId
   const deletable = !!onDeleted && !active && !!agentId
-
-  // The project's menu of an agent's page holds the git host page alone: with none, no menu. Its
-  // place is kept either way, so the count beside it does not move when the answer lands.
-  if (part === 'project' && !home) return <span data-testid="project-menu-place" className="h-7 w-7 shrink-0" aria-hidden />
+  // The project's page on its git host: the first item of the project's menu, and in a session's
+  // menu after what opens the session's own.
+  const homeItem = home && (
+    <DropdownMenuItem render={<a href={home.url} target="_blank" rel="noreferrer" />}>
+      <ExternalLink className="h-3.5 w-3.5 shrink-0" /> Open on {home.name}
+    </DropdownMenuItem>
+  )
 
   return (
     <>
       <DropdownMenu>
-        {part === 'session' ? (
+        {session ? (
           // The session's name is the menu's button: the name, cut short when the bar is tight, and a
           // small ⌄. A name not known yet is a grey bar in its place, so the bar is laid out the
           // same from the first frame.
@@ -197,19 +194,15 @@ export function AgentActionsMenu({
             <TooltipContent>{title}</TooltipContent>
           </Tooltip>
         )}
-        <DropdownMenuContent align={part === 'session' ? 'start' : 'end'} className="min-w-[14rem]">
-          {details && ofSession && (
+        <DropdownMenuContent align={session ? 'start' : 'end'} className="min-w-[14rem]">
+          {details && (
             <DropdownMenuItem onClick={details.onToggle}>
               <Info className="h-3.5 w-3.5 shrink-0" /> {details.open ? 'Hide details' : 'Show details'}
             </DropdownMenuItem>
           )}
-          {home && (
-            <DropdownMenuItem render={<a href={home.url} target="_blank" rel="noreferrer" />}>
-              <ExternalLink className="h-3.5 w-3.5 shrink-0" /> Open on {home.name}
-            </DropdownMenuItem>
-          )}
+          {!session && homeItem}
           {/* The door to the project's skills: which it has, and the list to add or remove some. */}
-          {onOpenSkills && ofProject && !agentId && (
+          {onOpenSkills && !session && (
             <DropdownMenuItem onClick={onOpenSkills}>
               <Puzzle className="h-3.5 w-3.5 shrink-0" /> Skills…
             </DropdownMenuItem>
@@ -229,8 +222,6 @@ export function AgentActionsMenu({
               <CloudOff className="h-3.5 w-3.5 shrink-0" /> Stop sharing the agents&rsquo; records
             </DropdownMenuItem>
           )}
-          {ofSession && (
-            <>
           {/* Named for what it actually opens (#1195): once a session's worktree is gone this
               resolves to the project root, and calling that "the session's folder" was a lie the
               user could not see. */}
@@ -254,9 +245,10 @@ export function AgentActionsMenu({
               <PreferredEditorItems busy={busy} />
             </DropdownMenuSubContent>
           </DropdownMenuSub>
-          {session && (
-            <DropdownMenuItem render={<a href={session.href} target="_blank" rel="noreferrer" />}>
-              <ExternalLink className="h-3.5 w-3.5 shrink-0" /> {session.label.replace(' ↗', '')}
+          {session && homeItem}
+          {sessionLink && (
+            <DropdownMenuItem render={<a href={sessionLink.href} target="_blank" rel="noreferrer" />}>
+              <ExternalLink className="h-3.5 w-3.5 shrink-0" /> {sessionLink.label.replace(' ↗', '')}
             </DropdownMenuItem>
           )}
           {/* The agent's session id (#1195), shown because it is the only handle on the
@@ -299,11 +291,9 @@ export function AgentActionsMenu({
               <Trash2 className="h-3.5 w-3.5 shrink-0" /> Delete session
             </DropdownMenuItem>
           )}
-            </>
-          )}
 
           {/* Last, and apart: the one item of the project's menu that takes something away. */}
-          {onProjectRemoved && !agentId && (
+          {onProjectRemoved && !session && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setConfirmRemove(true)} className="text-danger">
@@ -355,7 +345,7 @@ export function AgentActionsMenu({
           onSuccess={() => setSwitched(n => n + 1)}
         />
       )}
-      {onProjectRemoved && !agentId && (
+      {onProjectRemoved && !session && (
         <RemoveProjectDialog projectId={projectId} open={confirmRemove} onOpenChange={setConfirmRemove} onRemoved={onProjectRemoved} />
       )}
       {onDeleted && agentId && (

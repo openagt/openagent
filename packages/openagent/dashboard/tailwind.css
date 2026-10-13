@@ -106,8 +106,8 @@ body {
 }
 
 /* The Recents fade strip only appears once the list is scrolled, so it never dims the first row at
-   rest. Its opacity is driven by the rail's own scroll position (the same scroll-timeline mechanism
-   as the chat log's scroll-fade). Without scroll-timeline support it stays hidden. */
+   rest. Its opacity is driven by the rail's own scroll position, on a scroll timeline. Without
+   scroll-timeline support it stays hidden. */
 .rail-fade {
   opacity: 0;
 }
@@ -278,41 +278,4 @@ body {
 /* Reserve the bar's width always, so arriving output does not shift the text sideways. */
 @utility scrollbar-gutter-stable {
   scrollbar-gutter: stable;
-}
-
-/* The log's bottom edge fades out while there is more below it (#914), so the cut is a gradient
-   rather than a guillotine. Reduced from shadcn's published `scroll-fade` (packages/shadcn/src/
-   tailwind.css) to the one edge we use: the mask size is animated on a scroll timeline, so it
-   reaches zero at the live edge and the newest line is never dimmed. Browsers without scroll
-   timelines get the static fade, which is only wrong at the very bottom. */
-@property --scroll-fade-b {
-  syntax: '<length-percentage>';
-  inherits: false;
-  initial-value: 0px;
-}
-
-@keyframes scroll-fade-reveal-b {
-  from {
-    --scroll-fade-b: var(--scroll-fade-size);
-  }
-  to {
-    --scroll-fade-b: 0px;
-  }
-}
-
-@utility scroll-fade-b {
-  --scroll-fade-size: min(12%, 2.5rem);
-  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - var(--scroll-fade-b, 0px)), transparent 100%);
-  mask-repeat: no-repeat;
-
-  @supports (animation-timeline: scroll()) {
-    animation: scroll-fade-reveal-b 1ms ease-in-out;
-    animation-timeline: scroll(self y);
-    animation-range: calc(100% - 6rem) 100%;
-    animation-fill-mode: both;
-  }
-
-  @supports not (animation-timeline: scroll()) {
-    --scroll-fade-b: var(--scroll-fade-size);
-  }
 }

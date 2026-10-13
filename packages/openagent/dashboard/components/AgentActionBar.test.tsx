@@ -2,19 +2,16 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import type { AgentWorktree, OpenAgentEvent } from '../../src/index.js'
 
-// The two menus read the daemon and have tests of their own: here each is a stand-in that says
-// which menu it is and what it was handed, so what the bar lays out, and what it leaves out, is
-// checked on what is really on screen.
+// The menu reads the daemon and has tests of its own: here it is a stand-in that says what it was
+// handed, so what the bar lays out, and what it leaves out, is checked on what is really on screen.
 const menus = vi.hoisted(() => [] as Record<string, unknown>[])
 vi.mock('./AgentActionsMenu.js', () => ({
-  AgentActionsMenu: (props: { part?: string; label?: string; size?: string; details?: { open: boolean; onToggle: () => void } }) => {
+  AgentActionsMenu: (props: { agentId?: string; label?: string; size?: string; details?: { open: boolean; onToggle: () => void } }) => {
     menus.push(props)
-    return props.part === 'session' ? (
+    return (
       <button type="button" onClick={props.details?.onToggle}>
         [{props.label ?? 'no name'} ⌄]
       </button>
-    ) : (
-      <button type="button">[⋮]</button>
     )
   },
 }))
@@ -35,23 +32,22 @@ const AGENTS = {
 } as unknown as Record<string, OpenAgentEvent[]>
 const DIRTY: AgentWorktree = { checkout: { path: '/w', dirty: true, sizeBytes: 5 * 1024 * 1024 }, branch: 'agent-dark-mode', pr: { number: 7, url: 'https://github.com/o/r/pull/7', state: 'OPEN', title: 'Dark mode' } }
 
-const lastSession = () => menus.filter(menu => menu['part'] === 'session').at(-1)!
+const lastSession = () => menus.at(-1)!
 
 describe('AgentActionBar', () => {
-  test.each(Object.keys(AGENTS))('a %s agent with a dirty checkout: the name as its menu, the chip, the project\'s menu; no status word, no clean or dirty, no branch', kind => {
+  test.each(Object.keys(AGENTS))('a %s agent with a dirty checkout: the name as its menu, the chip; no second menu, no status word, no clean or dirty, no branch', kind => {
     const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS[kind]!} label="Dark mode" projectName="gemstack" checkout={DIRTY} />)
     // All the bar says, word for word: nothing of the agent's state, of its tree, of its branch.
-    expect(container.textContent).toBe('[Dark mode ⌄]This machine · gemstack[⋮]')
+    expect(container.textContent).toBe('[Dark mode ⌄]This machine · gemstack')
+    expect(screen.getAllByRole('button')).toHaveLength(1)
   })
 
-  test('the name comes first, then the chip with where the agent runs and its project, and the project\'s menu last', () => {
+  test('the name comes first, then the chip with where the agent runs and its project', () => {
     render(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS.finished!} label="Dark mode" projectName="gemstack" runsOn="Studio" checkout={DIRTY} />)
     const chip = screen.getByTestId('runs-on')
     expect(chip.textContent).toBe('Studio · gemstack')
     expect(chip.getAttribute('title')).toBe('Studio · gemstack')
-    const [name, project] = screen.getAllByRole('button')
-    expect(name!.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(chip.compareDocumentPosition(project!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByRole('button').compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     // The chip is the part a narrow bar drops, and it is cut at a cap: the name keeps its room.
     // Shown unless the bar is narrow: never hidden by itself.
     expect(chip.className.split(' ')).toContain('@max-md:hidden')
@@ -76,12 +72,12 @@ describe('AgentActionBar', () => {
     }
   })
 
-  test('the count of errors is still said, for a running agent and for one that ended, before the project\'s menu', () => {
+  test('the count of errors is still said, for a running agent and for one that ended, at the bar\'s end', () => {
     const error = { kind: 'error', message: 'The push was rejected' }
     for (const kind of ['running', 'finished', 'stopped']) {
       const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={[...AGENTS[kind]!.slice(0, 2), error, ...AGENTS[kind]!.slice(2)] as OpenAgentEvent[]} label="Dark mode" checkout={DIRTY} />)
       expect(screen.getByRole('alert').textContent).toBe('1 error')
-      expect(container.textContent).toBe('[Dark mode ⌄]This machine1 error[⋮]')
+      expect(container.textContent).toBe('[Dark mode ⌄]This machine1 error')
       cleanup()
     }
   })
@@ -89,11 +85,21 @@ describe('AgentActionBar', () => {
   test('the worktree\'s size is handed to the session\'s menu, not said in the bar; before the agent\'s own reads have answered there is none, and no count', () => {
     const withError = [...AGENTS.failed!.slice(0, 2), { kind: 'error', message: 'The push was rejected' }, ...AGENTS.failed!.slice(2)] as OpenAgentEvent[]
     const { container, rerender } = render(<AgentActionBar projectId="p1" agentId="run-1" events={withError} label="Dark mode" checkout={DIRTY} ready={false} />)
-    expect(container.textContent).toBe('[Dark mode ⌄]This machine[⋮]')
+    expect(container.textContent).toBe('[Dark mode ⌄]This machine')
     expect(lastSession()['size']).toBe('')
     rerender(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS.finished!} label="Dark mode" checkout={DIRTY} />)
     expect(lastSession()['size']).toBe('5 MB')
     expect(container.textContent).not.toContain('5 MB')
+  })
+
+  test('the bar keeps its end free for the side panel\'s button, and on a phone its start for the menu\'s', () => {
+    const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS.finished!} label="Dark mode" checkout={DIRTY} />)
+    const row = container.firstElementChild!.className.split(' ')
+    for (const cls of ['pr-12', 'md:pl-4', 'max-md:pl-11']) expect(row).toContain(cls)
+    // With nothing at its end the row is as tall as the "New agent" page's, which has its ⋮ there.
+    expect(row).toContain('min-h-11')
+    // The menu is the agent's own: it is handed the agent.
+    expect(lastSession()['agentId']).toBe('run-1')
   })
 
   test('a name not known yet is still the session\'s menu, handed no name', () => {

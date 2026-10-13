@@ -100,7 +100,7 @@ describe('StartAgentForm (#1774)', () => {
     const onAgentStarted = vi.fn()
     render(<StartAgentForm {...props} onAgentStarted={onAgentStarted} />)
     fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r1', undefined, false))
+    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r1', undefined))
     expect(start).toHaveBeenCalledWith('p1', 'do the thing', { driver: 'codex', model: 'gpt-5' })
   })
 
@@ -298,20 +298,9 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(onCommands).toHaveBeenCalled())
     expect(screen.queryByRole('alert')).toBeNull()
     fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r2', 'box', false))
+    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r2', 'box'))
     expect(start).toHaveBeenCalledWith('p1', 'do the thing', { machine: 'd1' })
     expect(onStartCheck).not.toHaveBeenCalled()
-  })
-
-  test('a start on a person\'s own computer, reached by the line it keeps open here, says so: the run\'s page draws a computer from its first moment', async () => {
-    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true, remote: true, address: 'github.com/acme/shop' })
-    machine.current = { id: 'http://127.0.0.1:4210', url: 'http://127.0.0.1:4210', label: 'MacBook' }
-    start.mockResolvedValue({ agentId: 'r4' })
-    const onAgentStarted = vi.fn()
-    render(<StartAgentForm {...props} onAgentStarted={onAgentStarted} />)
-    await waitFor(() => expect(onCommands).toHaveBeenCalled())
-    fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r4', 'MacBook', true))
   })
 
   test('a project with no repository address runs here only: a machine picked on another project is not its target', async () => {
@@ -324,7 +313,7 @@ describe('StartAgentForm (#1774)', () => {
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalled())
     expect(start.mock.calls[0]![2]).not.toHaveProperty('machine')
-    expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r3', undefined, false)
+    expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r3', undefined)
   })
 
   test('what would stop the run is said before the Start, for the coding agent picked; a warning is said too, and neither turns Start off', async () => {

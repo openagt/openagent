@@ -1,17 +1,14 @@
 import type { ReactNode } from 'react'
 import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
-import { TriangleAlert } from 'lucide-react'
+import { ChatNote } from './ChatPane.js'
 import { EventList } from './EventList.js'
 import type { SessionSetup } from './SessionLine.js'
 
 // One agent's feed: the live/replayed event log, or a waiting placeholder before anything has
 // streamed. Rendered by the agent's own view (AgentView), whose action bar already carries the
-// session link, the session name and the status. `lost` is the live channel's health (#948):
-// while the stream is down the feed is behind reality, and saying so beats letting "the agent
-// went quiet" and "the connection died" look identical.
+// session link, the session name and the status.
 export function AgentFeed({
   events,
-  lost = false,
   writing = '',
   sending,
   working = false,
@@ -34,7 +31,6 @@ export function AgentFeed({
    *  row, since the agent's page asks it above the message box. Required, so no caller shows an
    *  open question as log text by leaving it out. */
   projectId: string
-  lost?: boolean
   /** The message the agent is writing, as far as it has got: a row after the last, growing as it comes. */
   writing?: string
   /** A message just sent to an ended agent, shown as the last prompt until its own line arrives. */
@@ -62,42 +58,26 @@ export function AgentFeed({
   /** Show the run's live screen: what the row of a live screen does on a click. */
   onOpenScreen?: (() => void) | undefined
 }) {
-  const lostBanner = lost && (
-    <div role="status" className="flex items-center gap-2 border-b border-border bg-warning/10 px-4 py-2 text-xs text-warning">
-      <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
-      Live stream lost — reconnecting. The session keeps running; this view may be behind.
-    </div>
-  )
   // A message that waits is a row too: with no event yet it is the feed's only one.
-  if (events.length === 0 && sending === undefined && !queued?.length) {
-    return (
-      <>
-        {lostBanner}
-        <div className="grid flex-1 place-items-center text-sm text-muted-foreground">{emptyLabel}</div>
-      </>
-    )
-  }
+  if (events.length === 0 && sending === undefined && !queued?.length) return <ChatNote>{emptyLabel}</ChatNote>
   return (
-    <>
-      {lostBanner}
-      <EventList
-        events={events}
-        writing={writing}
-        {...(sending !== undefined ? { sending } : {})}
-        working={working}
-        {...(queued ? { queued } : {})}
-        {...(waitingOn ? { waitingOn } : {})}
-        stick={stick}
-        {...(openAt ? { openAt } : {})}
-        {...(tail ? { tail } : {})}
-        projectId={projectId}
-        {...(subagents ? { subagents } : {})}
-        {...(doing ? { doing } : {})}
-        setup={setup}
-        onOpenAgent={onOpenAgent}
-        onOpenChange={onOpenChange}
-        onOpenScreen={onOpenScreen}
-      />
-    </>
+    <EventList
+      events={events}
+      writing={writing}
+      {...(sending !== undefined ? { sending } : {})}
+      working={working}
+      {...(queued ? { queued } : {})}
+      {...(waitingOn ? { waitingOn } : {})}
+      stick={stick}
+      {...(openAt ? { openAt } : {})}
+      {...(tail ? { tail } : {})}
+      projectId={projectId}
+      {...(subagents ? { subagents } : {})}
+      {...(doing ? { doing } : {})}
+      setup={setup}
+      onOpenAgent={onOpenAgent}
+      onOpenChange={onOpenChange}
+      onOpenScreen={onOpenScreen}
+    />
   )
 }

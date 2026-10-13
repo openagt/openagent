@@ -18,8 +18,8 @@ export function ProjectActions({
   onOpenSkills?: (() => void) | undefined
 }) {
   return (
-    // As an agent's top bar does, the row keeps its two ends free on a phone, for the shell's two buttons.
-    <div className="flex items-center gap-2 overflow-hidden py-2 md:px-4 max-md:px-11">
+    // As an agent's top bar does, the row keeps its end free for the side panel's button, and on a phone its start for the menu's.
+    <div className="flex items-center gap-2 overflow-hidden py-2 pr-12 md:pl-4 max-md:pl-11">
       <div className="grow shrink-0" />
       <AgentActionsMenu projectId={projectId} events={NO_EVENTS} onProjectRemoved={onProjectRemoved} onOpenSkills={onOpenSkills} />
     </div>

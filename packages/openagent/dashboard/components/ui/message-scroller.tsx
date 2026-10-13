@@ -19,6 +19,9 @@ import { cn } from '../../lib/utils.js'
 // tailwind-scrollbar plugin rather than from shadcn. #914 puts that back as three local utilities
 // on plain `scrollbar-width` / `scrollbar-color` / `scrollbar-gutter` (see tailwind.css), so the
 // log's bar is toned like the rest of the app instead of being whatever the OS paints.
+//
+// Upstream's `scroll-fade` on the viewport is not here: an agent's page lays its bars over the
+// log's two ends (ChatPane), and each bar carries the fade of its own edge.
 
 // The Provider needs no styling (no data-slot / className), so it is the primitive's directly,
 // re-exported for a uniform `message-scroller` import site rather than wrapped for nothing.
@@ -40,7 +43,7 @@ export function MessageScrollerViewport({ className, ...props }: ComponentProps<
       data-slot="message-scroller-viewport"
       className={cn(
         'size-full min-h-0 min-w-0 overflow-y-auto overscroll-contain',
-        'scroll-fade-b scrollbar-thin scrollbar-gutter-stable data-autoscrolling:scrollbar-quiet',
+        'scrollbar-thin scrollbar-gutter-stable data-autoscrolling:scrollbar-quiet',
         className,
       )}
       {...props}

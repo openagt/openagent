@@ -38,7 +38,7 @@ const TABS: Record<'views' | 'docs', { label: string; help: string }> = {
 //
 // The rail is closed until the person opens it, on each agent's page and on the "New agent" page
 // apart (`lib/side-panel.ts` remembers which are open): closed, it is
-// a narrow strip holding one button at the top right of the page; open, it is half the page wide,
+// one button laid over the top right corner of the page; open, it is half the page wide,
 // and the same button, at the end of the tabs, closes it. A closed rail renders no panel, so nothing in it reads anything.
 /** The last ask from the chat the rail moved for. */
 let revealShown = 0
@@ -171,9 +171,10 @@ export function RightRail({
       <TooltipContent>{open ? 'Close the side panel' : `Open the side panel: ${tabs.map(t => panels.find(panel => panelTab(panel) === t)?.label ?? TABS[t as 'views' | 'docs'].label).join(', ')}`}</TooltipContent>
     </Tooltip>
   )
-  // Closed, the panel is its button, in a column of its own; a phone has no width for a column, so
-  // there the button lies over the top right corner of the page, which the page's top row keeps free.
-  if (!open) return <aside className={cn('flex shrink-0 flex-col p-2', isMobile && 'absolute top-0 right-0 z-10')}>{toggle}</aside>
+  // Closed, the panel is its button alone, laid over the top right corner of the page, which the
+  // page's top row keeps free: the page then runs to the window's edge, its scroll bar with it. The
+  // button stands clear of that scroll bar.
+  if (!open) return <aside className="absolute top-0 right-0 z-10 flex flex-col p-2 md:pr-4">{toggle}</aside>
   // The remembered tab may have just lost its content (the last doc deleted, a gate resolved), so
   // fall back to the first one that still exists rather than rendering an empty panel.
   const active: Tab = tabs.includes(tab) ? tab : tabs[0]!

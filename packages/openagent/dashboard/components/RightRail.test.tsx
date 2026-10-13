@@ -248,6 +248,8 @@ describe('RightRail open and closed', () => {
     expect(screen.queryByText('files')).toBeNull()
     // A closed rail renders no panel, so nothing in it reads anything.
     expect(shown).not.toHaveBeenCalled()
+    // Closed, it takes no column: its button lies over the page's top right corner, clear of the page's scroll bar.
+    expect(opener.closest('aside')!.className.split(' ')).toEqual(expect.arrayContaining(['absolute', 'top-0', 'right-0', 'md:pr-4']))
     fireEvent.click(opener)
     expect(screen.getByRole('tab', { name: /Files/ })).toBeTruthy()
     expect(screen.getByText('files')).toBeTruthy()
