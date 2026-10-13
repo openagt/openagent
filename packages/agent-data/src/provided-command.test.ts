@@ -97,6 +97,11 @@ test('a package command runs with Node in the project and answers its JSON, its 
     assert.deepEqual(await runPackageCommand(root, { name: 'tool', bin: join(dir, 'fails.cjs') }, []), { ok: false, error: 'no such thing' })
     assert.deepEqual(await runPackageCommand(root, { name: 'tool', bin: join(dir, 'text.cjs') }, []), { ok: false, error: 'tool printed no JSON' })
     assert.deepEqual(await runPackageCommand(root, { name: 'tool', bin: join(dir, 'cwd.cjs') }, []), { ok: true, output: await realpath(root) })
+    // What a caller adds is what the command is started with, beside what this process has, and for that command alone.
+    await writeFile(join(dir, 'said.cjs'), `process.stdout.write(JSON.stringify([process.env.OPENAGENT_TEST_SAID ?? null, typeof process.env.PATH]))`)
+    assert.deepEqual(await runPackageCommand(root, { name: 'tool', bin: join(dir, 'said.cjs') }, [], { OPENAGENT_TEST_SAID: 'a word' }), { ok: true, output: ['a word', 'string'] })
+    assert.deepEqual(await runPackageCommand(root, { name: 'tool', bin: join(dir, 'said.cjs') }, []), { ok: true, output: [null, 'string'] })
+    assert.equal(process.env.OPENAGENT_TEST_SAID, undefined)
   } finally {
     await rm(root, { recursive: true, force: true })
   }

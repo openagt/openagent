@@ -4,6 +4,7 @@ import type { Duplex } from 'node:stream'
 import { connect } from 'node:tls'
 import { keyFingerprint } from './der.js'
 import { DATA, END, HEAD, Link, RESET, carriedHeaders, carriedPath, carriedValue, readHead, sendBody, type Frame } from './frames.js'
+import { COMPUTER_HEADER } from './store.js'
 
 /**
  * This computer's end of a line: it calls its server, says who it is with the key it has there,
@@ -70,7 +71,7 @@ export function dial(url: string, pin: string, signal?: AbortSignal): Promise<Du
  * Ask the door for a line with this computer's key there. Answers what arrived after the door's
  * yes, which is already the line's. Throws {@link NotLetIn} on the door's no.
  */
-export function knock(socket: Duplex, url: string, key: string): Promise<Buffer> {
+export function knock(socket: Duplex, url: string, key: string, computer?: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     let heard = Buffer.alloc(0)
     const timer = setTimeout(() => done(new Error('the server did not answer')), DIAL_MS)
@@ -100,7 +101,7 @@ export function knock(socket: Duplex, url: string, key: string): Promise<Buffer>
     socket.on('data', onData)
     socket.once('close', onClose)
     socket.once('error', onClose)
-    socket.write(`GET ${LINE_PATH} HTTP/1.1\r\nHost: ${new URL(url).host}\r\nConnection: Upgrade\r\nUpgrade: ${LINE_PROTOCOL}\r\nAuthorization: Bearer ${key}\r\n\r\n`)
+    socket.write(`GET ${LINE_PATH} HTTP/1.1\r\nHost: ${new URL(url).host}\r\nConnection: Upgrade\r\nUpgrade: ${LINE_PROTOCOL}\r\nAuthorization: Bearer ${key}\r\n${computer !== undefined ? `${COMPUTER_HEADER}: ${computer}\r\n` : ''}\r\n`)
   })
 }
 
@@ -211,6 +212,10 @@ export interface KeepLineOptions {
   pin: string
   /** This computer's id and key there, as one word. */
   key: string
+  /** Which computer this is, as its OpenAgent says it too: the server lists it once. */
+  computer?: string
+  /** Told each time the server answered the key: let in, or no longer. */
+  onAnswer?: (letIn: boolean) => void
   target: string
   watch: () => boolean
   /** Ends the line for good. */
@@ -237,8 +242,9 @@ export async function keepLine(opts: KeepLineOptions): Promise<void> {
     const began = Date.now()
     try {
       const socket = await dial(opts.url, opts.pin, opts.signal)
-      const rest = await knock(socket, opts.url, opts.key)
+      const rest = await knock(socket, opts.url, opts.key, opts.computer)
       if (opts.signal.aborted) return void socket.destroy()
+      opts.onAnswer?.(true)
       log(`remote-access: a line is open to ${host}`)
       told = undefined
       const end = (): void => void socket.destroy()
@@ -254,7 +260,10 @@ export async function keepLine(opts: KeepLineOptions): Promise<void> {
       if (why !== told) log(`remote-access: no line to ${host}: ${why}`)
       told = why
       // A no is not asked again in a hurry: nothing changes it but the person.
-      if (err instanceof NotLetIn) failed = retry.length
+      if (err instanceof NotLetIn) {
+        failed = retry.length
+        opts.onAnswer?.(false)
+      }
     }
     failed = Date.now() - began > HELD_MS ? 0 : failed + 1
     const wait = retry[Math.min(failed, retry.length) - 1] ?? 0
@@ -333,10 +342,10 @@ export function readLineLink(pasted: string): LineLink | undefined {
 }
 
 /** Get in at a server's door to keep a line open there: the link's code is spent, and this computer's key there is answered. */
-export async function enterForLine(link: LineLink, name: string): Promise<{ ok: true; key: string } | { ok: false; error: string }> {
+export async function enterForLine(link: LineLink, name: string, computer?: string): Promise<{ ok: true; key: string } | { ok: false; error: string }> {
   try {
     const socket = await dial(link.url, link.pin)
-    const answer = await exchange(socket, 'POST', new URL(link.door), { 'Content-Type': 'application/json' }, JSON.stringify({ code: link.code, computer: name, line: true }))
+    const answer = await exchange(socket, 'POST', new URL(link.door), { 'Content-Type': 'application/json', ...(computer !== undefined ? { [COMPUTER_HEADER]: computer } : {}) }, JSON.stringify({ code: link.code, computer: name, line: true }))
     if (answer.status !== 200) return { ok: false, error: answer.body.trim().slice(0, 200) || `the server answered ${answer.status}` }
     const { key } = JSON.parse(answer.body) as { key?: unknown }
     return typeof key === 'string' && key ? { ok: true, key } : { ok: false, error: 'the server answered no key' }

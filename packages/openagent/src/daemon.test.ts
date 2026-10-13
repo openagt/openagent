@@ -110,7 +110,7 @@ test("the services of OpenAgent's own packages run while the daemon does: told i
   const cwd = await tmpWorkspace()
   const env = await configEnv(cwd)
   const ac = new AbortController()
-  const started: { packages: string[]; url: string; home: string | undefined }[] = []
+  const started: { packages: string[]; url: string; home: string | undefined; computer: string | undefined }[] = []
   let answeredAtStop: number | undefined
   let url = ''
   try {
@@ -119,7 +119,7 @@ test("the services of OpenAgent's own packages run while the daemon does: told i
       signal: ac.signal,
       env,
       packageServices: opts => {
-        started.push({ packages: opts.commands.map(command => command.package), url: opts.url, home: opts.env.XDG_CONFIG_HOME })
+        started.push({ packages: opts.commands.map(command => command.package), url: opts.url, home: opts.env.XDG_CONFIG_HOME, computer: opts.env.OPENAGENT_COMPUTER })
         return {
           stop: async () => {
             answeredAtStop = (await fetch(url)).status
@@ -130,7 +130,10 @@ test("the services of OpenAgent's own packages run while the daemon does: told i
     url = state.url
     // Started once the dashboard listens, like the open hooks: never a reason the address came late.
     for (let i = 0; i < 250 && started.length === 0; i++) await new Promise(resolve => setTimeout(resolve, 20))
-    assert.deepEqual(started, [{ packages: ['@openagt/remote-access'], url: state.url, home: env.XDG_CONFIG_HOME }])
+    // Told where OpenAgent is and which computer this is: the word the home file keeps, made at this first start.
+    const computer = JSON.parse(await readFile(join(env.XDG_CONFIG_HOME!, 'openagent.json'), 'utf8')).computer as string
+    assert.match(computer, /^[a-f0-9]{32}$/)
+    assert.deepEqual(started, [{ packages: ['@openagt/remote-access'], url: state.url, home: env.XDG_CONFIG_HOME, computer }])
     ac.abort()
     await done
     assert.equal(answeredAtStop, 200, 'the services end first, before the dashboard closes')

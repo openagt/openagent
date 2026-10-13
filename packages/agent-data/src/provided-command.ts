@@ -156,15 +156,15 @@ export const COMMAND_MAX_OUTPUT = 16 * 1024 * 1024
  * Run one package command in the project and read its standard output as JSON: with Node (a
  * package's commands are Node scripts), in the project root, never through a shell, bounded in
  * time and output. A command that exits non-zero answers its last stderr line; one that prints no
- * JSON says so.
+ * JSON says so. `more` is what the command is started with beside what this process itself has.
  */
-export async function runPackageCommand(root: string, command: { name: string; bin: string }, args: readonly string[]): Promise<PackageCommandResult> {
+export async function runPackageCommand(root: string, command: { name: string; bin: string }, args: readonly string[], more?: NodeJS.ProcessEnv): Promise<PackageCommandResult> {
   const { name, bin } = command
   const run = await new Promise<{ failed?: string; stdout: string }>(resolvePromise => {
     execFile(
       process.execPath,
       [bin, ...args],
-      { cwd: root, timeout: COMMAND_TIMEOUT_MS, maxBuffer: COMMAND_MAX_OUTPUT, encoding: 'utf8' },
+      { cwd: root, timeout: COMMAND_TIMEOUT_MS, maxBuffer: COMMAND_MAX_OUTPUT, encoding: 'utf8', ...(more ? { env: { ...process.env, ...more } } : {}) },
       (error, stdout, stderr) => {
         if (!error) return resolvePromise({ stdout })
         const said = stderr.trim().split('\n').at(-1)?.trim()

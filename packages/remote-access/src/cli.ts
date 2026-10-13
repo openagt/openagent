@@ -4,7 +4,7 @@ import { hostname } from 'node:os'
 import { ENTER_PATH, readKeyWord } from './door.js'
 import { enterForLine, leaveLine, readLineLink } from './line-out.js'
 import { HTTPS_PORT, serve } from './serve.js'
-import { MAX_LINES, Unreadable, addCode, addressOf, pidAlive, readStore, removeDevice, update, type Line, type Store } from './store.js'
+import { MAX_LINES, Unreadable, addCode, addressOf, computerWordFor, isComputerId, pidAlive, readStore, removeComputer, update, type Device, type Line, type Store } from './store.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -18,7 +18,7 @@ export const USAGE = `usage: remote-access <command>
   on             Phone on Wi-Fi on: the door opens on the network this computer is on, over plain HTTP
   off            Phone on Wi-Fi off: nothing listens on the network; the devices stay in the list
   add            a link a new device gets in with, once, for five minutes: the address a QR code holds
-  remove <id>    take one device out, by its id as status names it; it is out at once
+  remove <id>    take one device out, by its id as status names it; it is out at once, a computer with all it holds here
   https <at>     this computer is a server, reached at this number or name: the door is open to every network,
                  over HTTPS, with a certificate it asks for and renews itself (ports 80 and 443 must be reachable)
   https off      no longer a server: Phone on Wi-Fi decides again
@@ -63,16 +63,51 @@ export interface Status {
   problem?: string
   /** On a server: the address the door is open at. */
   https?: { address: string }
-  /** A device with `line` is a computer that keeps a line open here. */
-  devices: { id: string; name: string; added: string; seen?: string; line?: true }[]
-  /** The servers this computer keeps a line open to, what each may do through it, and the id this computer has among that server's devices. */
-  lines: { url: string; mode: Line['mode']; id?: string }[]
+  /**
+   * The devices that are in, a computer once: its key for OpenAgent and its line are one row,
+   * under the first one's id, with the other's in `also`. A device with `line` is a computer that
+   * keeps a line open here.
+   */
+  devices: { id: string; name: string; added: string; seen?: string; line?: true; also?: string[] }[]
+  /**
+   * The servers this computer keeps a line open to, what each may do through it, the id this
+   * computer has among that server's devices, and whether the server said no to its key.
+   */
+  lines: { url: string; mode: Line['mode']; id?: string; refused?: true }[]
 }
 
 const isListening = (store: Store): boolean => (store.on || store.https !== undefined) && store.listening !== undefined && pidAlive(store.listening.pid)
 
 /** Why a door that should be open does not listen, when its own process said nothing: that process is not running. */
 const NOT_RUNNING = 'The door opens once OpenAgent runs on this computer.'
+
+/**
+ * The devices as a person reads them: a computer is one row, its key for OpenAgent and its line
+ * together. The row is the first entry's; the line's name is the computer's own, and when it was
+ * added and last seen are the earliest and the latest of the two. Never more than one of each
+ * kind in a row: every other key is a row of its own, so the list names every key that is in.
+ */
+function listed(devices: readonly Device[]): Status['devices'] {
+  const rows: (Status['devices'][number] & { computer?: string; kinds: boolean[] })[] = []
+  for (const { id, name, added, seen, line, computer } of devices) {
+    const isLine = line !== undefined
+    const row = computer !== undefined ? rows.find(candidate => candidate.computer === computer && !candidate.kinds.includes(isLine)) : undefined
+    if (!row) {
+      rows.push({ id, name, added, ...(seen ? { seen } : {}), ...(line ? { line: true as const } : {}), ...(computer !== undefined ? { computer } : {}), kinds: [isLine] })
+      continue
+    }
+    row.kinds.push(isLine)
+    row.also = [...(row.also ?? []), id]
+    if (added < row.added) row.added = added
+    if (seen && (row.seen === undefined || seen > row.seen)) row.seen = seen
+    if (line) {
+      row.line = true
+      row.name = name
+    }
+  }
+  // Which computer an entry says it is stays in the file: a page that knew it could say it too.
+  return rows.map(({ computer: _computer, kinds: _kinds, ...row }) => row)
+}
 
 function statusOf(store: Store): Status {
   const listening = isListening(store)
@@ -83,10 +118,10 @@ function statusOf(store: Store): Status {
     listening,
     ...(problem ? { problem } : {}),
     ...(store.https ? { https: { address: store.https.address } } : {}),
-    devices: store.devices.map(({ id, name, added, seen, line }) => ({ id, name, added, ...(seen ? { seen } : {}), ...(line ? { line: true as const } : {}) })),
-    lines: store.lines.map(({ url, mode, key }) => {
+    devices: listed(store.devices),
+    lines: store.lines.map(({ url, mode, key, refused }) => {
       const id = readKeyWord(key)?.id
-      return { url, mode, ...(id ? { id } : {}) }
+      return { url, mode, ...(id ? { id } : {}), ...(refused ? { refused: true as const } : {}) }
     }),
   }
 }
@@ -176,7 +211,9 @@ async function addLine(io: CliIO, pasted: string, mode: Line['mode']): Promise<S
   if (!link) throw new Refused('That is not a link a server gives: on the server, Devices, Add device.')
   const before = await readStore(io.env)
   if (!lineAt(before, link.url) && before.lines.length >= MAX_LINES) throw new Refused('This computer keeps as many lines as it can: remove one first.')
-  const entered = await (io.enterForLine ?? enterForLine)(link, ownName())
+  // Which computer this is, as OpenAgent tells the commands it runs: the server lists it once, and a line asked for anew takes the old one's place.
+  const computer = isComputerId(io.env.OPENAGENT_COMPUTER) ? computerWordFor(io.env.OPENAGENT_COMPUTER, link.url) : undefined
+  const entered = await (io.enterForLine ?? enterForLine)(link, ownName(), computer)
   if (!entered.ok) throw new Refused(`The server did not give a line: ${entered.error}`)
   const line: Line = { url: link.url, pin: link.pin, key: entered.key, mode }
   const old = await update(io.env, store => {
@@ -192,10 +229,13 @@ async function addLine(io: CliIO, pasted: string, mode: Line['mode']): Promise<S
 async function setLineMode(io: CliIO, at: string, mode: Line['mode']): Promise<Status> {
   const found = await update(io.env, store => {
     const line = lineAt(store, at)
-    if (line) line.mode = mode
-    return line !== undefined
+    // A line the server said no to is not one any more: it is asked for anew, with a new link.
+    // Letting the server do less is written all the same: what it may do, should the old line ever carry again, is the least the person said.
+    if (line && (!line.refused || mode === 'watch')) line.mode = mode
+    return line
   })
   if (!found) throw new Refused(`This computer keeps no line to ${at}.`)
+  if (found.refused) throw new Refused(`The server at ${at} no longer lets this computer in for its line. Ask for the line anew, with a new link.`)
   return statusOf(await readStore(io.env))
 }
 
@@ -268,7 +308,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
       case 'remove': {
         const [id] = rest
         if (rest.length !== 1 || !id) break
-        if (!(await removeDevice(io.env, id))) throw new Refused(`no device has the id ${id}`)
+        if (!(await removeComputer(io.env, id))) throw new Refused(`no device has the id ${id}`)
         return print(statusOf(await readStore(io.env)))
       }
       case 'https': {

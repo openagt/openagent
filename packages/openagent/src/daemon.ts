@@ -8,13 +8,14 @@ import { defaultModelsSource } from './dashboard/models.js'
 import { startBackgroundServices } from './daemon-services.js'
 import { projectErrorStore } from './project-errors.js'
 import { resolveDashboardBundle } from './dashboard/bundle.js'
-import { ensureBridgeToken, listProjects, nodeRegistryFs, readPreferences, registryPreferencesStore, type Preferences } from './registry.js'
+import { ensureBridgeToken, ensureComputerId, listProjects, nodeRegistryFs, readPreferences, registryPreferencesStore, type Preferences } from './registry.js'
+import { sayComputer } from './dashboard/machine-call.js'
 import { bridgeSessionsFrom } from './dashboard/bridge-sessions.js'
 import { bridgeQuestions } from './dashboard/bridge-store.js'
 import { bridgeBrowserDir, bridgeBrowserOwner, startBridgeBrowser, type BridgeBrowser, type BridgeBrowserOptions } from './bridge-browser.js'
 import { runProjectHooks } from './project-hooks.js'
 import { builtInServices } from './built-in.js'
-import { startPackageServices, type PackageServices, type PackageServicesOptions } from './package-services.js'
+import { COMPUTER_ENV, startPackageServices, type PackageServices, type PackageServicesOptions } from './package-services.js'
 import { readAllAgents } from './store/index.js'
 import type { BridgeSession } from './dashboard/index.js'
 
@@ -85,6 +86,10 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   // another origin, behind a key of its own. The key may not exist yet, hence ensure, not read.
   const bridgeOn = (await readPreferences(undefined, env).catch((): Preferences => ({}))).bridge === true
   const bridgeToken = bridgeOn ? await ensureBridgeToken(undefined, env) : undefined
+  // Which computer this is, said to every machine it gets into and to its own packages' services:
+  // a machine lists this computer once by it. A home file that cannot be written says nothing.
+  const computer = await ensureComputerId(undefined, env).catch(() => undefined)
+  sayComputer(computer)
   // The project's own `.openagent/` — where its hooks file sits, and where a run's tool keeps
   // the run's card and diary inside the run's checkout. Created up front so the daemon works as the
   // very first command in a fresh workspace, before any run has made the directory.
@@ -174,7 +179,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
 
   // The services of OpenAgent's own packages: each runs for as long as the daemon does, and is
   // told the daemon's address.
-  const packageServices = (opts.packageServices ?? startPackageServices)({ commands: await builtInServices().catch(() => []), url: dashboard.url, env, log: console.log })
+  const packageServices = (opts.packageServices ?? startPackageServices)({ commands: await builtInServices().catch(() => []), url: dashboard.url, env: computer !== undefined ? { ...env, [COMPUTER_ENV]: computer } : env, log: console.log })
 
   // Everything that runs in the background beside serving the dashboard: the data sync and the
   // cloud sweeps.

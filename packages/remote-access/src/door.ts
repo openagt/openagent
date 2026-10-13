@@ -9,7 +9,7 @@ import type { Secured } from './certificate.js'
 import { deviceName } from './device-name.js'
 import { LINE_PATH, LINE_PROTOCOL } from './line-out.js'
 import { enterPage, notInPage } from './pages.js'
-import { enter, isIn, readStore, removeDevice, storePath, update, type Entry, type Store } from './store.js'
+import { COMPUTER_HEADER, enter, isComputerId, isIn, readStore, removeDevice, sha256, storePath, update, type Entry, type Store } from './store.js'
 
 /**
  * The door: the one thing that lets anything in from the network. A request from a device that is in is
@@ -40,6 +40,12 @@ const COOKIE_RESEND_MS = 24 * 60 * 60 * 1000
 const SEEN_FLUSH_MS = 60_000
 /** A code, a computer's name and their wrapping, generously. */
 const MAX_ENTER_BODY = 4 * 1024
+/** The computer a request says it is, when it says one: as the file keeps it, the word's SHA-256, never the word. */
+function saidComputer(req: IncomingMessage): string | undefined {
+  const said = req.headers[COMPUTER_HEADER]
+  return isComputerId(said) ? sha256(said) : undefined
+}
+
 /** How another computer's OpenAgent sends its key: the scheme of its `Authorization` header. */
 const BEARER = /^Bearer +(\S+)$/i
 
@@ -178,18 +184,31 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
 
   const sockets = new Map<string, Set<Socket>>()
   const seen = new Map<string, number>()
+  // Which computer each device that called with its key says it is: written with the times, for an entry that does not say yet.
+  const said = new Map<string, string>()
   const cookieSent = new Map<string, number>()
 
   const flushSeen = async (): Promise<void> => {
     if (seen.size === 0) return
     const times = new Map(seen)
+    const computers = new Map(said)
     seen.clear()
+    said.clear()
     await update(env, store => {
       for (const device of store.devices) {
         const at = times.get(device.id)
         if (at !== undefined) device.seen = new Date(at).toISOString()
+        // Said once and kept: a computer that got in before it said which one it is, is listed once from here on.
+        // Never beside an entry of the same kind that says the same: a computer holds one key for OpenAgent and
+        // one line, and a second key under its name would be one the list does not show.
+        const computer = computers.get(device.id)
+        const held = (other: Store['devices'][number]): boolean => other !== device && other.computer === computer && (other.line !== undefined) === (device.line !== undefined)
+        if (computer !== undefined && device.computer === undefined && !store.devices.some(held)) device.computer = computer
       }
-    }).catch(() => {})
+    }).catch(() => {
+      // Not written: a line says which computer it is only when it is asked for, so its word is kept for the next write.
+      for (const [id, computer] of computers) if (!said.has(id)) said.set(id, computer)
+    })
   }
   const letIn = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (req.method === 'GET' || req.method === 'HEAD') {
@@ -213,7 +232,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     const forLine = byComputer && line === true
     if (forLine && !opts.lines) return refuse(res, 403, 'this door gives no line: only a server does')
     const name = forLine ? saidName(computer as string) : byComputer ? computerName(computer as string) : deviceName(req.headers['user-agent'])
-    const entry = typeof code === 'string' && code ? await enter(env, code, name, now(), forLine ? opts.lines!.ports : undefined) : undefined
+    const entry = typeof code === 'string' && code ? await enter(env, code, name, now(), forLine ? opts.lines!.ports : undefined, byComputer ? saidComputer(req) : undefined) : undefined
     if (!entry) return refuse(res, 403, 'this code no longer works')
     const headers = { 'content-type': 'application/json', 'cache-control': 'no-store' }
     // A computer is answered its key; a browser gets it as a cookie its pages cannot read.
@@ -246,8 +265,9 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
   const passOn = (req: IncomingMessage, res: ServerResponse, entry: Entry, byBearer: boolean): void => {
     const headers: OutgoingHttpHeaders = { ...req.headers }
     for (const name of HOP_HEADERS) delete headers[name]
-    // OpenAgent never sees a key, a computer's no more than a device's.
+    // OpenAgent never sees a key, a computer's no more than a device's, nor what a computer says it is to this door.
     if (byBearer) delete headers.authorization
+    delete headers[COMPUTER_HEADER]
     // OpenAgent is asked as its own browser asks it: at its own address, from its own page.
     headers.host = target.host
     if (headers.origin) headers.origin = target.origin
@@ -298,6 +318,10 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
 
       const { entry, byBearer } = who
       seen.set(entry.id, now())
+      // Only a computer says which one it is: a page's word for it is not taken.
+      const computer = byBearer ? saidComputer(req) : undefined
+      // The first word counts: what an entry says it is, is not changed by what its key's holder says later.
+      if (computer !== undefined && !said.has(entry.id)) said.set(entry.id, computer)
       let held = sockets.get(entry.id)
       if (!held) sockets.set(entry.id, (held = new Set()))
       if (!held.has(req.socket)) {
@@ -334,6 +358,8 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       // Gone while the file was read: there is no line to give.
       if (socket.destroyed) return
       seen.set(device.id, now())
+      const computer = saidComputer(req)
+      if (computer !== undefined && !said.has(device.id)) said.set(device.id, computer)
       let held = sockets.get(device.id)
       if (!held) sockets.set(device.id, (held = new Set()))
       held.add(socket as Socket)

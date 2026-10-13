@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { AddMachineDialog, Button, Checkbox, Input, QrCode, SettingsSection, Switch, formatDateTime, formatRelative, reachedByLine, useModuleHost, usePolled, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
-import { askLink, connect, forget, loadDevices, loadServers, login, logout, markAdded, ownGithub, reach, removeDevice, type Answer, type DeviceRow, type DoorLink, type OwnGithub, type ServerRow, type ServersRead, type StepState } from './servers.js'
+import { askLink, connect, forget, idsOf, loadDevices, loadServers, login, logout, markAdded, ownGithub, reach, removeDevice, type Answer, type DeviceRow, type DevicesRead, type DoorLink, type OwnGithub, type ServerRow, type ServersRead, type StepState } from './servers.js'
 
 // Settings → Machines: the other computers a run can be sent to, each listed once. A server this
 // computer installed OpenAgent on is listed with all that is set up on it; a machine added with a
@@ -29,7 +29,7 @@ const NOT_READ: Answer<ServersRead> | undefined = undefined
 const CODE_MS = 5 * 60_000
 const NO_MACHINES: ModuleMachines | undefined = undefined
 const NOT_ASKED: Answer<OwnGithub> | undefined = undefined
-const NOT_LISTED: Answer<DeviceRow[]> | undefined = undefined
+const NOT_LISTED: Answer<DevicesRead> | undefined = undefined
 /**
  * How often a server's devices are asked for again while a code is on the page: a device that
  * just got in shows soon. Each time is a login over SSH, and a server may shut out an address
@@ -108,7 +108,9 @@ function DeviceLine({ device, address, busy, ownKey, onRemove }: { device: Devic
           {`Added ${formatRelative(device.added)}`}
           {device.seen !== undefined ? `, last seen ${formatRelative(device.seen)}` : ''}
         </p>
-        {device.own ? (
+        {device.own && ownKey ? (
+          <p className="text-muted-foreground">This computer: its OpenAgent, and the line it keeps open to the server. The switch above says what the server may do through the line. To take this computer out, remove the server from this list.</p>
+        ) : device.own ? (
           <p className="text-muted-foreground">This computer, by the line it keeps open to the server. The switch above says what the server may do through it.</p>
         ) : ownKey ? (
           <p className="text-muted-foreground">This computer's OpenAgent: it sends runs to the server and reads them with this. To take it out, remove the server from this list.</p>
@@ -137,6 +139,7 @@ function ServerDevices({
   busy,
   ownDevice,
   onGotIn,
+  onLine,
   answerMs = DEVICES_ANSWER_MS,
 }: {
   host: ModuleHost
@@ -151,13 +154,15 @@ function ServerDevices({
   ownDevice: string | undefined
   /** A device got in while a code was on the page. */
   onGotIn: () => void
+  /** Told with each read whether the server said no to this computer's line. */
+  onLine: (refused: boolean) => void
 }) {
   // One read at a time, and none for a page nobody looks at: a read that takes long is not joined by the next.
-  const asking = useRef<Promise<Answer<DeviceRow[]>> | undefined>(undefined)
-  const answered = useRef<Answer<DeviceRow[]> | undefined>(undefined)
-  const ask = (): Promise<Answer<DeviceRow[]>> => {
+  const asking = useRef<Promise<Answer<DevicesRead>> | undefined>(undefined)
+  const answered = useRef<Answer<DevicesRead> | undefined>(undefined)
+  const ask = (): Promise<Answer<DevicesRead>> => {
     if (document.hidden && answered.current) return Promise.resolve(answered.current)
-    asking.current ??= new Promise<Answer<DeviceRow[]>>(resolve => {
+    asking.current ??= new Promise<Answer<DevicesRead>>(resolve => {
       const late = setTimeout(() => resolve({ ok: false, error: 'The server did not say in time which devices are in.' }), answerMs)
       void loadDevices(host, address).then(answer => {
         clearTimeout(late)
@@ -168,19 +173,26 @@ function ServerDevices({
       .finally(() => (asking.current = undefined))
     return asking.current
   }
-  const { value: read, reload } = usePolled<Answer<DeviceRow[]> | undefined>(ask, NOT_LISTED, awaited ? Math.min(everyMs, WITH_A_CODE_MS) : everyMs, [address, awaited], 'previous')
+  const { value: read, reload } = usePolled<Answer<DevicesRead> | undefined>(ask, NOT_LISTED, awaited ? Math.min(everyMs, WITH_A_CODE_MS) : everyMs, [address, awaited], 'previous')
   // The answer of the last removal, shown until the read made after it has landed.
   const [changed, setChanged] = useState<DeviceRow[] | undefined>()
   const [removing, setRemoving] = useState(false)
   const [error, setError] = useState<string | undefined>()
   // The last list the server gave: a read that fails once says why, and takes nothing off the page.
   const listed = useRef<DeviceRow[] | undefined>(undefined)
-  if (read?.ok) listed.current = read.value
+  if (read?.ok) listed.current = read.value.devices
   const devices = changed ?? listed.current
+
+  // What this computer's own door says of its line to the server comes with the list: told at every read, so what a press said meanwhile is put right by the next one.
+  useEffect(() => {
+    if (read?.ok) onLine(read.value.lineRefused)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [read])
 
   // The devices that were in when the code came on the page: one more, and the code is spent.
   const before = useRef<string[] | undefined>(undefined)
-  const ids = devices?.map(device => device.id).join(',')
+  // Every id under every row: a computer that gets in again is a new id under the row it had.
+  const ids = devices?.flatMap(idsOf).join(',')
   useEffect(() => {
     if (!awaited) return void (before.current = undefined)
     if (ids === undefined) return
@@ -196,9 +208,9 @@ function ServerDevices({
     const answer = await removeDevice(host, address, device.id)
     if (answer.ok) {
       // What the server said after the removal is the list from here on, also when the next read fails or is not made.
-      listed.current = answer.value
+      listed.current = answer.value.devices
       answered.current = answer
-      setChanged(answer.value)
+      setChanged(answer.value.devices)
     } else setError(answer.error)
     // A read that was on its way when the device went tells the list before: the next one is asked once it has landed.
     await asking.current?.catch(() => {})
@@ -216,7 +228,7 @@ function ServerDevices({
       {devices !== undefined && devices.length > 0 && (
         <ul aria-label={`The devices that are in on ${address}`} className="space-y-2">
           {devices.map(device => (
-            <DeviceLine key={device.id} device={device} address={address} busy={busy || removing} ownKey={device.id === ownDevice} onRemove={() => void remove(device)} />
+            <DeviceLine key={device.id} device={device} address={address} busy={busy || removing} ownKey={ownDevice !== undefined && idsOf(device).includes(ownDevice)} onRemove={() => void remove(device)} />
           ))}
         </ul>
       )}
@@ -274,6 +286,8 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
   // Why a server whose install ended is not among the machines, by its address.
   const [notAdded, setNotAdded] = useState<Record<string, string>>({})
   const adding = useRef(new Set<string>())
+  // The servers that said no to the key this computer asks for its line with, by address: the switch then reads off.
+  const [refusedLines, setRefusedLines] = useState<Record<string, boolean>>({})
   // The code on the page, and the server whose door made it.
   const [code, setCode] = useState<(DoorLink & { address: string }) | undefined>()
 
@@ -465,6 +479,7 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
             const unfinished = !server.working && !failed && server.steps.some(step => step.state === 'waiting')
             const reason = notAdded[server.address]
             const { github, claude } = server.logins
+            const lineRefused = refusedLines[server.address] === true
             return (
               <li key={server.address} aria-label={server.address} className="space-y-2 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -530,7 +545,9 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
                     <span className="min-w-0">
                       <span className="block text-sm">Start runs on this computer from the phone</span>
                       <span className="block text-xs text-muted-foreground">
-                        {server.reach === 'full'
+                        {lineRefused
+                          ? `Off: ${server.address} no longer lets this computer in for its line. Turn it on to set the line up again: "Run on" on ${server.address}'s page then offers this computer.`
+                          : server.reach === 'full'
                           ? `On: on ${server.address}'s page, "Run on" offers this computer, and a run started there runs here. This computer must be on.`
                           : server.reach === 'watch'
                             ? `Off: ${server.address}'s page shows this computer's runs. It cannot start one here, or say anything to one.`
@@ -539,9 +556,14 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
                     </span>
                     <Switch
                       aria-label={`Start runs on this computer from ${server.address}`}
-                      checked={server.reach === 'full'}
+                      checked={server.reach === 'full' && !lineRefused}
                       disabled={busy}
-                      onCheckedChange={on => void act(() => reach(host, server.address, on ? 'full' : 'watch'))}
+                      onCheckedChange={on =>
+                        void act(() => reach(host, server.address, on ? 'full' : 'watch')).then(done => {
+                          // A line asked for anew is one the server lets in: said at once, not at the next look at its devices.
+                          if (done) setRefusedLines(lines => ({ ...lines, [server.address]: false }))
+                        })
+                      }
                     />
                   </label>
                 )}
@@ -702,7 +724,7 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
                   </ul>
                 )}
                 {installed(server) && (
-                  <ServerDevices host={host} address={server.address} everyMs={devicesEveryMs} awaited={code?.address === server.address} busy={busy || known === undefined} ownDevice={machine?.device} onGotIn={() => setCode(undefined)} />
+                  <ServerDevices host={host} address={server.address} everyMs={devicesEveryMs} awaited={code?.address === server.address} busy={busy || known === undefined} ownDevice={machine?.device} onGotIn={() => setCode(undefined)} onLine={refused => setRefusedLines(lines => (lines[server.address] === refused ? lines : { ...lines, [server.address]: refused }))} />
                 )}
               </li>
             )

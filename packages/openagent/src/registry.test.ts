@@ -6,6 +6,7 @@ import {
   nameMachine,
   addProject,
   ensureBridgeToken,
+  ensureComputerId,
   listMachines,
   listProjects,
   projectId,
@@ -498,6 +499,26 @@ test('ensureBridgeToken generates a base64url token, persists it, and reuses it 
   assert.equal(stored.preferences.bridgeToken, undefined)
   // A second call reuses the persisted one rather than rotating it.
   assert.equal(await ensureBridgeToken(fs, ENV), first)
+})
+
+test('which computer this is is a word made once and kept, beside the projects and the machines; what is no such word in the file is not read as one', async () => {
+  const fs = memFs({ [FILE]: JSON.stringify({ projects: [], preferences: { theme: 'dark' }, bridgeToken: 'kept' }) })
+  const first = await ensureComputerId(fs, ENV)
+  assert.match(first, /^[a-f0-9]{32}$/)
+  const stored = JSON.parse(fs.files.get(FILE)!)
+  // Top-level, never among the preferences a browser is handed; what the file held stays.
+  assert.equal(stored.computer, first)
+  assert.equal(stored.preferences.computer, undefined)
+  assert.equal(stored.bridgeToken, 'kept')
+  assert.equal(await ensureComputerId(fs, ENV), first)
+  // Asked for twice at once on a new home: one word, not two.
+  const fresh = memFs()
+  const [a, b] = await Promise.all([ensureComputerId(fresh, ENV), ensureComputerId(fresh, ENV)])
+  assert.equal(a, b)
+  for (const bad of [42, '', 'short', 'A'.repeat(32), `${'a'.repeat(31)};`, null]) {
+    const edited = memFs({ [FILE]: JSON.stringify({ projects: [], preferences: {}, computer: bad }) })
+    assert.match(await ensureComputerId(edited, ENV), /^[a-f0-9]{32}$/)
+  }
 })
 
 test('readBridgeToken returns undefined until one is generated, then the persisted token (#1237)', async () => {

@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { isIP } from 'node:net'
 import { dirname, join } from 'node:path'
@@ -30,7 +30,33 @@ export interface Device {
    * OpenAgent saved it under stays good.
    */
   line?: { port: number }
+  /**
+   * Which computer the entry is: the SHA-256 of the word that computer says, hex. Its OpenAgent
+   * and its line say the same word, so a computer is listed once, and one that gets in again
+   * takes the place of what it had. Kept as a key is: the file never holds what would let someone
+   * else say it. Absent for a phone or a browser, and for a computer that never said.
+   */
+  computer?: string
 }
+
+/**
+ * How a computer says which one it is, when it gets in and with every call it makes with its
+ * key: the same word from its OpenAgent and from its line, so it is listed once here.
+ */
+export const COMPUTER_HEADER = 'x-openagent-computer'
+
+/** What a computer says it is: a word of its own making, the same for all that gets in from it. */
+export const isComputerId = (value: unknown): value is string => typeof value === 'string' && /^[a-z0-9]{16,64}$/.test(value)
+
+/**
+ * The word a computer says to one door, made from the word it keeps and that door's address: each
+ * door hears another word, so one that a door learned says nothing at any other door. OpenAgent
+ * makes the same word for the calls it sends that door itself.
+ */
+export function computerWordFor(word: string, door: string): string {
+  return createHmac('sha256', word).update(new URL(door).origin).digest('hex').slice(0, 32)
+}
+
 /** A server this computer keeps a line open to, so the server can ask this computer's OpenAgent things. */
 export interface Line {
   /** The server's door, as an origin: `https://203.0.113.7`. */
@@ -41,6 +67,8 @@ export interface Line {
   key: string
   /** What the server may do through the line: everything a machine is asked, or only what reads. */
   mode: 'full' | 'watch'
+  /** The server said no to this computer's key when the line was last asked for: nothing changes that but the person. */
+  refused?: true
 }
 
 /** A code a new device gets in with, once. */
@@ -148,22 +176,22 @@ export function sanitize(value: unknown): Store {
   for (const entry of Array.isArray(obj.devices) ? obj.devices : []) {
     if (devices.length >= MAX_DEVICES) break
     if (!entry || typeof entry !== 'object') continue
-    const { id, name, key, added, seen, line } = entry as Record<string, unknown>
+    const { id, name, key, added, seen, line, computer } = entry as Record<string, unknown>
     if (typeof id !== 'string' || !/^[a-z0-9]{6,32}$/.test(id) || !isDigest(key) || !isIso(added)) continue
     if (devices.some(device => device.id === id)) continue
     const port = line && typeof line === 'object' ? (line as Record<string, unknown>).port : undefined
     // One port for one computer: a second entry that names a port already given is in without a line.
     const own = isPort(port) && !devices.some(device => device.line?.port === port)
-    devices.push({ id, name: typeof name === 'string' && name.trim() ? name.trim().slice(0, MAX_NAME) : 'A device', key, added, ...(isIso(seen) ? { seen } : {}), ...(own ? { line: { port } } : {}) })
+    devices.push({ id, name: typeof name === 'string' && name.trim() ? name.trim().slice(0, MAX_NAME) : 'A device', key, added, ...(isIso(seen) ? { seen } : {}), ...(own ? { line: { port } } : {}), ...(isDigest(computer) ? { computer } : {}) })
   }
   const lines: Line[] = []
   for (const entry of Array.isArray(obj.lines) ? obj.lines : []) {
     if (lines.length >= MAX_LINES) break
     if (!entry || typeof entry !== 'object') continue
-    const { url, pin, key, mode } = entry as Record<string, unknown>
+    const { url, pin, key, mode, refused } = entry as Record<string, unknown>
     if (!isLineUrl(url) || typeof pin !== 'string' || !pin || typeof key !== 'string' || !key) continue
     if (lines.some(line => line.url === url)) continue
-    lines.push({ url, pin, key, mode: mode === 'watch' ? 'watch' : 'full' })
+    lines.push({ url, pin, key, mode: mode === 'watch' ? 'watch' : 'full', ...(refused === true ? { refused: true } : {}) })
   }
   const codes: Code[] = []
   for (const entry of Array.isArray(obj.codes) ? obj.codes : []) {
@@ -306,8 +334,13 @@ export interface Entry {
 /**
  * Let a new device in with `code`: the code is spent, the device is saved, and its key is
  * answered once. `undefined` for a code that is unknown, spent or too old, and when the list is full.
+ *
+ * A computer that says which one it is (`computer`, the SHA-256 of the word it said) takes the
+ * place of what it had here before of the same kind, its key for OpenAgent or its line: it is
+ * not listed a second time, and a line keeps the port it had, so the address OpenAgent saved the
+ * computer under stays good.
  */
-export async function enter(env: NodeJS.ProcessEnv, code: string, name: string, now = Date.now(), line?: { from: number; count: number }): Promise<Entry | undefined> {
+export async function enter(env: NodeJS.ProcessEnv, code: string, name: string, now = Date.now(), line?: { from: number; count: number }, computer?: string): Promise<Entry | undefined> {
   const digest = sha256(code)
   // Looked up before the file is locked: a flood of wrong codes from the network changes nothing and holds no writer up.
   if (!liveCodes((await readStore(env)).codes, now).some(candidate => sameDigest(candidate.code, digest))) return undefined
@@ -315,13 +348,18 @@ export async function enter(env: NodeJS.ProcessEnv, code: string, name: string, 
     const live = liveCodes(store.codes, now)
     const match = live.find(candidate => sameDigest(candidate.code, digest))
     store.codes = live.filter(candidate => candidate !== match)
-    if (!match || store.devices.length >= MAX_DEVICES) return undefined
-    // A computer that got in for a line gets the first of the lines' ports no other computer has.
-    const taken = new Set(store.devices.map(device => device.line?.port))
-    const port = line && Array.from({ length: line.count }, (_, at) => line.from + at).find(candidate => !taken.has(candidate))
+    if (!match) return undefined
+    // What this computer had here before, of the same kind: the new entry is in its place.
+    const before = computer === undefined ? [] : store.devices.filter(device => device.computer === computer && (device.line !== undefined) === (line !== undefined))
+    const others = store.devices.filter(device => !before.includes(device))
+    if (others.length >= MAX_DEVICES) return undefined
+    // A computer that got in for a line gets the port it had, or the first of the lines' ports no other computer has.
+    const taken = new Set(others.map(device => device.line?.port))
+    const had = before.find(device => device.line !== undefined)?.line?.port
+    const port = line && (had !== undefined && had >= line.from && had < line.from + line.count ? had : Array.from({ length: line.count }, (_, at) => line.from + at).find(candidate => !taken.has(candidate)))
     if (line && port === undefined) return undefined
     const entry: Entry = { id: randomBytes(6).toString('hex'), key: newSecret() }
-    store.devices.push({ id: entry.id, name, key: sha256(entry.key), added: new Date(now).toISOString(), ...(port !== undefined ? { line: { port } } : {}) })
+    store.devices = [...others, { id: entry.id, name, key: sha256(entry.key), added: new Date(now).toISOString(), ...(port !== undefined ? { line: { port } } : {}), ...(computer !== undefined ? { computer } : {}) }]
     return entry
   })
 }
@@ -332,7 +370,23 @@ export function isIn(store: Store, entry: Entry): boolean {
   return device !== undefined && sameDigest(device.key, sha256(entry.key))
 }
 
-/** Take a device out; false when no device has that id. */
+/**
+ * Take a computer out, by the id of either entry it has here: its key for OpenAgent and its line
+ * go together, as the list shows them as one row. Exactly what that row holds: the entry, and
+ * the first of the other kind that says it is the same computer. A phone or a browser, and a
+ * computer that never said which one it is, is the one entry. False when no device has that id.
+ */
+export async function removeComputer(env: NodeJS.ProcessEnv, id: string): Promise<boolean> {
+  return update(env, store => {
+    const named = store.devices.find(device => device.id === id)
+    if (!named) return false
+    const partner = named.computer === undefined ? undefined : store.devices.find(device => device !== named && device.computer === named.computer && (device.line !== undefined) !== (named.line !== undefined))
+    store.devices = store.devices.filter(device => device !== named && device !== partner)
+    return true
+  })
+}
+
+/** Take one entry out, and no other: what a device does when it takes itself out. False when no device has that id. */
 export async function removeDevice(env: NodeJS.ProcessEnv, id: string): Promise<boolean> {
   return update(env, store => {
     const kept = store.devices.filter(device => device.id !== id)

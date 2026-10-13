@@ -8,7 +8,7 @@ import { createServer, type Server } from 'node:https'
 import { createServer as createTcpServer, type AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { machineFetch, NOT_THE_MACHINE } from './machine-call.js'
+import { COMPUTER_HEADER, computerSaid, computerWordFor, machineFetch, NOT_THE_MACHINE, sayComputer } from './machine-call.js'
 import { enterRemote, pingRemote, startRemoteAgent, streamRemoteEvents } from './remote-run.js'
 import type { OpenAgentEvent } from '../events.js'
 
@@ -20,7 +20,7 @@ interface Machine {
   /** What the machine's key is known by. */
   pin: string
   /** What the machine was asked, in order. */
-  asked: { method: string; path: string; authorization?: string | undefined; body: string }[]
+  asked: { method: string; path: string; authorization?: string | undefined; computer?: string | string[] | undefined; body: string }[]
   close: () => Promise<void>
 }
 
@@ -33,7 +33,7 @@ async function machine(answer: (path: string) => { status: number; body?: string
     let body = ''
     req.setEncoding('utf8').on('data', chunk => (body += chunk))
     req.on('end', () => {
-      asked.push({ method: req.method ?? '', path: req.url ?? '', authorization: req.headers.authorization, body })
+      asked.push({ method: req.method ?? '', path: req.url ?? '', authorization: req.headers.authorization, computer: req.headers[COMPUTER_HEADER], body })
       const { status, body: text, lines } = answer(req.url ?? '')
       res.writeHead(status, { 'content-type': lines ? 'application/x-ndjson' : 'application/json' })
       if (!lines) return void res.end(text ?? '')
@@ -163,5 +163,43 @@ test('a machine over plain HTTP is called as before, and a redirect is not follo
   } finally {
     await new Promise<void>(resolve => plain.close(() => resolve()))
     await new Promise<void>(resolve => elsewhere.close(() => resolve()))
+  }
+})
+
+test('once OpenAgent said which computer this is, every call to a machine says it, in a word of that machine\'s own, beside what the call itself says; until then none does', async () => {
+  const studio = await machine()
+  const seen: (string | string[] | undefined)[] = []
+  const plain = createPlainServer((req, res) => {
+    seen.push(req.headers[COMPUTER_HEADER])
+    res.writeHead(200).end('here')
+  })
+  await new Promise<void>(resolve => plain.listen(0, '127.0.0.1', resolve))
+  const at = `http://127.0.0.1:${(plain.address() as AddressInfo).port}`
+  const MAC = 'a'.repeat(32)
+  try {
+    await machineFetch(`${studio.url}/_relay/ping`, studio.pin, { headers: { authorization: 'Bearer d1.sekret' } })
+    await machineFetch(`${at}/`, undefined)
+    assert.equal(computerSaid(), undefined)
+    sayComputer(MAC)
+    assert.equal(computerSaid(), MAC)
+    // To a machine known by its key, and to one on the same Wi-Fi: a call with headers of its own keeps them.
+    await machineFetch(`${studio.url}/_relay/ping`, studio.pin, { headers: { authorization: 'Bearer d1.sekret' } })
+    await machineFetch(`${studio.url}/_remote-access/enter`, studio.pin, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+    await machineFetch(`${at}/`, undefined)
+    // Each machine hears a word of its own, made from the word this computer keeps and the machine's address: never the word itself.
+    const [toStudio, toPlain] = [computerWordFor(MAC, studio.url), computerWordFor(MAC, at)]
+    assert.deepEqual(studio.asked.map(({ authorization, computer }) => [authorization, computer]), [['Bearer d1.sekret', undefined], ['Bearer d1.sekret', toStudio], [undefined, toStudio]])
+    assert.deepEqual(seen, [undefined, toPlain])
+    assert.notEqual(toStudio, toPlain)
+    for (const word of [toStudio, toPlain]) assert.match(word, /^[a-f0-9]{32}$/)
+    assert.equal([toStudio, toPlain].includes(MAC), false)
+    // The same answer as the door package's own `computerWordFor`, pinned in its tests too: the two must agree, or a computer is two rows.
+    assert.equal(computerWordFor(MAC, 'https://203.0.113.5'), '46613e5444e67e384ccb7c7ba693c92e')
+    assert.equal(computerWordFor(MAC, 'https://203.0.113.5/_remote-access/enter'), '46613e5444e67e384ccb7c7ba693c92e')
+    assert.equal(computerWordFor(MAC, 'http://studio.local:4201/x'), 'c72e4164c235580bb030ea4b32ffb51b')
+  } finally {
+    sayComputer(undefined)
+    await studio.close()
+    await new Promise<void>(resolve => plain.close(() => resolve()))
   }
 })

@@ -3,11 +3,15 @@ import type { ProvidedCommand } from '@openagt/agent-data'
 
 /**
  * The services of OpenAgent's own packages: each declared command's `serve`, run as a process of
- * its own for as long as OpenAgent runs, and told where OpenAgent is (`OPENAGENT_URL`). OpenAgent
+ * its own for as long as OpenAgent runs, and told where OpenAgent is (`OPENAGENT_URL`) and which
+ * computer this is (`OPENAGENT_COMPUTER`), which the daemon puts in what it hands over. OpenAgent
  * knows nothing of what a service does. One that ends by itself is started again after a
  * while; all of them end with OpenAgent. Each is started in a process group of its own, so a
  * Ctrl-C in OpenAgent's terminal reaches OpenAgent alone, which then ends them in its own order.
  */
+
+/** How a package of this computer is told which computer this is: the name of the word in what it is started with. */
+export const COMPUTER_ENV = 'OPENAGENT_COMPUTER'
 
 export interface PackageServicesOptions {
   /** The commands to run, each a package's declared service. */

@@ -179,14 +179,32 @@ test('devices asks the server\'s door who is in, and marks the line this compute
     }
 
     // The line this computer keeps there is not taken out as a device is: it would go on asking with a key that opens nothing.
-    const before = calls.length
+    const removals = (): number => calls.filter(call => /remote-access remove /.test(call.script)).length
     const own = await run(home.env, ['remove-device', 'box.example.com', LINE.id], { exec, door })
     assert.equal(own.code, 1)
     assert.deepEqual(own.err, ['That device is the line this computer keeps open to box.example.com. To take it out, remove the server here.'])
+    const before = calls.length
     const noId = await run(home.env, ['remove-device', 'box.example.com', "x'; reboot; '"], { exec, door })
     assert.equal(noId.code, 1)
     assert.deepEqual(noId.err, ["x'; reboot; ' is not a device's id"])
     assert.equal(calls.length, before)
+
+    // A computer is one row there, its OpenAgent and its line: this computer's row is its own by its line, under whichever id the row is listed,
+    // and no id of that row takes it out, since the server takes a computer out whole.
+    const KEY = { id: 'c1b2c3d4e5f6', name: 'Studio', added: '2026-10-13T19:00:00.000Z', seen: '2026-10-13T19:30:00.000Z', line: true, also: [LINE.id] }
+    listed = [PHONE, KEY, OTHER]
+    assert.deepEqual((await run(home.env, ['devices', 'box.example.com'], { exec, door })).out, { devices: [PHONE, { ...KEY, own: true }, OTHER] })
+    for (const id of [KEY.id, LINE.id]) {
+      const whole = await run(home.env, ['remove-device', 'box.example.com', id], { exec, door })
+      assert.equal(whole.code, 1, id)
+      assert.deepEqual(whole.err, ['That device is the line this computer keeps open to box.example.com. To take it out, remove the server here.'])
+    }
+    assert.equal(removals(), 0)
+    listed = [PHONE, LINE, OTHER]
+
+    // The door says when the server said no to the key this computer asks for its line with: told with the list.
+    const refusedDoor: CliIO['door'] = async () => ({ ok: true, out: JSON.stringify({ lines: [{ url: 'https://box.example.com', mode: 'full', id: LINE.id, refused: true }] }) })
+    assert.deepEqual((await run(home.env, ['devices', 'box.example.com'], { exec, door: refusedDoor })).out, { devices: [PHONE, { ...LINE, own: true }, OTHER], lineRefused: true })
 
     assert.deepEqual((await run(home.env, ['remove-device', 'box.example.com', PHONE.id], { exec, door })).out, { devices: [{ ...LINE, own: true }, OTHER] })
     assert.match(calls.at(-1)!.script, /remote-access remove "\$ID"\n/)

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button, Input, QrCode, SettingsRow, SettingsSection, Switch, formatDateTime, formatRelative, useModuleHost, usePolled } from '@openagt/dashboard/module'
-import { addDevice, loadStatus, removeDevice, setSwitch, type AddLink, type Answer, type DoorStatus } from './devices.js'
+import { addDevice, idsOf, loadStatus, removeDevice, setSwitch, type AddLink, type Answer, type DoorStatus } from './devices.js'
 
 // Settings → Devices: the phones and browsers that are in, and the one switch that lets them
 // reach this computer on the Wi-Fi it is on. Read with `remote-access status`; the switch, a new
@@ -29,7 +29,8 @@ export function DevicesSettings({ everyMs = 5_000 }: { /** How often the status 
   const status = changed ?? (read?.ok ? read.value : undefined)
 
   // A code is good for five minutes: it leaves the page when its time is up, and when a device got in with it.
-  const ids = status?.devices.map(device => device.id).join(',') ?? ''
+  // Every id under every row: a computer that gets in again is a new id under the row it had.
+  const ids = status?.devices.flatMap(idsOf).join(',') ?? ''
   useEffect(() => {
     if (!link) return
     if (ids.split(',').some(id => id && !link.before.includes(id))) return setLink(undefined)
@@ -60,7 +61,7 @@ export function DevicesSettings({ everyMs = 5_000 }: { /** How often the status 
     setError(undefined)
     const answer = await addDevice(host)
     if (answer.ok) {
-      setLink({ ...answer.value, before: status?.devices.map(device => device.id) ?? [] })
+      setLink({ ...answer.value, before: status?.devices.flatMap(idsOf) ?? [] })
       setByNumber(false)
     } else setError(answer.error)
     setBusy(false)

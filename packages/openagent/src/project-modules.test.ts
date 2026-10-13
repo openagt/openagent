@@ -113,6 +113,7 @@ test('a module runs its own package\'s command in the project and gets its JSON,
 const args = process.argv.slice(2)
 if (args[0] === 'fail') { console.error('first line'); console.error('refused: no such run'); process.exit(1) }
 if (args[0] === 'words') { console.log('not json'); process.exit(0) }
+if (args[0] === 'said') { console.log(JSON.stringify(process.env.OPENAGENT_COMPUTER ?? null)); process.exit(0) }
 console.log(JSON.stringify({ args, cwd: process.cwd() }))`),
     })
     await pkg(join(root, 'node_modules', 'two'), { name: 'two', bin: { a: 'bin/a', b: 'bin/b' }, exports: { './dashboard': './w.js' } }, {
@@ -124,6 +125,9 @@ console.log(JSON.stringify({ args, cwd: process.cwd() }))`),
     const two = (await findProjectModule(root, 'two'))!
 
     assert.deepEqual(await runModuleCommand(root, one, ['--limit', '5']), { ok: true, output: { args: ['--limit', '5'], cwd: root } })
+    // What the caller hands over is what the command is started with: which computer this is, for a command of the computer's own, and nothing for any other.
+    assert.deepEqual(await runModuleCommand(root, one, ['said'], undefined, { OPENAGENT_COMPUTER: 'a'.repeat(32) }), { ok: true, output: 'a'.repeat(32) })
+    assert.deepEqual(await runModuleCommand(root, one, ['said']), { ok: true, output: null })
     assert.deepEqual(await runModuleCommand(root, one, ['fail']), { ok: false, error: 'refused: no such run' })
     assert.deepEqual(await runModuleCommand(root, one, ['words']), { ok: false, error: 'one printed no JSON' })
     assert.deepEqual(await runModuleCommand(root, one, [], 'other'), { ok: false, error: 'one has no command other' })
