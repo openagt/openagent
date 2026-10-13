@@ -54,7 +54,7 @@ test('the dashboard\'s modules are every registered project\'s, one per package,
     await addProject(a, '2026-09-19T00:00:00.000Z')
     await addProject(b, '2026-09-19T00:00:01.000Z')
 
-    // The computer's modules (the Devices section, the Servers section) come first, and are no project's. Then the built-in modules (Files, the logs package's), which are every project's, from the first; then the projects' own.
+    // The computer's modules (the Devices section, the Machines section) come first, and are no project's. Then the built-in modules (Files, the logs package's), which are every project's, from the first; then the projects' own.
     assert.deepEqual(await onModules(), [
       { package: '@openagt/remote-access', url: '/_computer-modules/%40openagt%2Fremote-access/dashboard.js', projects: [] },
       { package: '@openagt/servers', url: '/_computer-modules/%40openagt%2Fservers/dashboard.js', projects: [] },

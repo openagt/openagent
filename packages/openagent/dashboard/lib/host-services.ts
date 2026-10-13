@@ -28,6 +28,9 @@ export const INERT_HOST_SERVICES: HostServices = {
   async addMachine() {
     return { ok: false, error: 'no dashboard to save a machine in' }
   },
+  async removeMachine() {
+    return { ok: false, error: 'no dashboard to remove a machine from' }
+  },
   async watchScreen() {
     return undefined
   },

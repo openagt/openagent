@@ -5,21 +5,17 @@ import { createElement } from 'react'
 vi.mock('../rpc/machines.js', async () => (await import('../test-machines.js')).machinesRpc)
 
 import { daemon, machinesRpc, saveMachines } from '../test-machines.js'
-import { addMachine, removeMachine, useMachines, useMachinesLoaded } from './machines.js'
+import { addMachine, removeMachine, useMachines } from './machines.js'
+import { getSelectedMachineId, selectMachine } from './remote-target.js'
 
 const STUDIO = { id: 'http://192.168.1.5:4200', label: 'Studio', url: 'http://192.168.1.5:4200' }
 
 afterEach(async () => {
   cleanup()
+  selectMachine(null) // module-level state, so it outlives a test unless reset
   localStorage.clear()
   await saveMachines()
 })
-
-function Known() {
-  const loaded = useMachinesLoaded()
-  const machines = useMachines()
-  return createElement('p', null, loaded ? machines.map(machine => machine.label).join(', ') || 'none' : 'not read yet')
-}
 
 function List() {
   return createElement('p', null, useMachines().map(machine => machine.label).join(', ') || 'none')
@@ -27,15 +23,15 @@ function List() {
 
 describe('the saved machines', () => {
   // First in the file on purpose: it needs a page that has not read the list yet.
-  test('are the daemon\'s list, read when a page first needs them; a first read that fails is tried again by the next page, and until an answer "none saved" is not known', async () => {
+  test('are the daemon\'s list, read when a page first needs them; a first read that fails is tried again by the next page', async () => {
     daemon.machines = [STUDIO]
     machinesRpc.onMachines.mockRejectedValueOnce(new Error('the daemon is starting'))
-    const first = render(createElement(Known))
+    const first = render(createElement(List))
     await waitFor(() => expect(machinesRpc.onMachines).toHaveBeenCalledTimes(1))
     await act(async () => {})
-    expect(screen.getByText('not read yet')).toBeTruthy()
+    expect(screen.getByText('none')).toBeTruthy()
     first.unmount()
-    render(createElement(Known))
+    render(createElement(List))
     await waitFor(() => expect(screen.getByText('Studio')).toBeTruthy())
   })
 
@@ -79,6 +75,23 @@ describe('the saved machines', () => {
       expect(await removeMachine(STUDIO.id)).toEqual({ ok: false, error: 'The machine could not be removed.' })
     })
     expect(screen.getByText('Studio')).toBeTruthy()
+  })
+
+  test('a removed machine is no longer where the next run starts (#1072); another one stays picked, and so does one the daemon did not remove', async () => {
+    const BOX = { id: 'http://box.tail.ts:4200', label: 'Box', url: 'http://box.tail.ts:4200' }
+    await saveMachines(BOX, STUDIO)
+    selectMachine(STUDIO.id)
+    await removeMachine(BOX.id)
+    expect(getSelectedMachineId()).toBe(STUDIO.id)
+
+    machinesRpc.sendRemoveMachine.mockResolvedValueOnce({ ok: false, error: 'An agent is working on Studio. Stop it, or wait until it ends, then remove the machine.' })
+    expect((await removeMachine(STUDIO.id)).ok).toBe(false)
+    machinesRpc.sendRemoveMachine.mockRejectedValueOnce(new Error('the daemon is gone'))
+    expect((await removeMachine(STUDIO.id)).ok).toBe(false)
+    expect(getSelectedMachineId()).toBe(STUDIO.id)
+
+    expect(await removeMachine(STUDIO.id)).toEqual({ ok: true })
+    expect(getSelectedMachineId()).toBe(null)
   })
 
   test('the list is read again when the window is looked at again: another browser may have changed it', async () => {

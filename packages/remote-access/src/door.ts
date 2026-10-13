@@ -78,7 +78,8 @@ function keyWord(entry: Entry): string {
   return `${entry.id}.${entry.key}`
 }
 
-function readKeyWord(word: string): Entry | undefined {
+/** What such a word holds; `undefined` for a word that is not one. */
+export function readKeyWord(word: string): Entry | undefined {
   const dot = word.indexOf('.')
   return dot > 0 && dot < word.length - 1 ? { id: word.slice(0, dot), key: word.slice(dot + 1) } : undefined
 }

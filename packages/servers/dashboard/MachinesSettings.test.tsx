@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { ModuleHostContext, type MachineAdded, type ModuleCommandResult, type ModuleHost, type ModuleMachines } from '@openagt/dashboard/module'
-import { ServersSettings, olderThan } from './ServersSettings.js'
-import type { LoginRow, ServerRow, StepState } from './servers.js'
+import { ModuleHostContext, type MachineAdded, type MachineRemoved, type ModuleCommandResult, type ModuleHost, type ModuleMachines } from '@openagt/dashboard/module'
+import { MachinesSettings, olderThan } from './MachinesSettings.js'
+import type { DeviceRow, LoginRow, ServerRow, StepState } from './servers.js'
 
 const LABELS = { login: 'Log in', user: 'The user openagent', tools: 'git, gh, Node and Chrome', name: 'Your name and email for git', openagent: 'OpenAgent', agent: 'Claude Code', service: 'The service', door: 'The door' }
 const LINK = { url: 'https://203.0.113.5/_remote-access/enter#code.pin', expires: new Date(Date.now() + 5 * 60_000).toISOString() }
@@ -20,12 +20,20 @@ const OCTOCAT: ModuleCommandResult = { ok: true, output: { account: 'octocat' } 
 /**
  * A host whose `servers` command answers what `answer` says for its arguments, with these machines saved.
  * This computer's own `gh` answers `own` when asked whose login it holds: nobody's, unless said.
+ * A server's door answers `devices` when asked who is in, and when one is taken out: nobody, unless said.
  */
-function dashboard(answer: (args: string[]) => ModuleCommandResult, saved: ModuleMachines = { version: '1.2.3', machines: [] }, added: MachineAdded = { ok: true }, own: ModuleCommandResult = NO_GH) {
-  const runComputerCommand = vi.fn(async (args: string[]) => (args[0] === 'github' ? own : answer(args)))
+function dashboard(
+  answer: (args: string[]) => ModuleCommandResult,
+  saved: ModuleMachines = { version: '1.2.3', machines: [] },
+  added: MachineAdded = { ok: true },
+  own: ModuleCommandResult = NO_GH,
+  devices: (args: string[]) => ModuleCommandResult = () => ({ ok: true, output: { devices: [] } }),
+) {
+  const runComputerCommand = vi.fn(async (args: string[]) => (args[0] === 'github' ? own : args[0] === 'devices' || args[0] === 'remove-device' ? devices(args) : answer(args)))
   const inProject = vi.fn(async () => ({ ok: false as const, error: 'the servers are no project\'s' }))
   const machines = vi.fn(async () => saved)
   const addMachine = vi.fn(async (_link: string, _label?: string) => added)
+  const removeMachine = vi.fn(async (_id: string): Promise<MachineRemoved> => ({ ok: true }))
   const host: ModuleHost = {
     package: '@openagt/servers',
     runCommand: inProject,
@@ -39,17 +47,19 @@ function dashboard(answer: (args: string[]) => ModuleCommandResult, saved: Modul
     agents: vi.fn(async () => []),
     machines,
     addMachine,
+    removeMachine,
     watchScreen: vi.fn(async () => undefined),
     sendToScreen: vi.fn(async () => false),
   }
-  const ran = (): string[] => runComputerCommand.mock.calls.map(([args]) => args.join(' '))
-  return { host, runComputerCommand, machines, addMachine, ran }
+  // What was asked of the `servers` command, without the reads a row makes again and again by itself.
+  const ran = (): string[] => runComputerCommand.mock.calls.map(([args]) => args.join(' ')).filter(line => !line.startsWith('devices '))
+  return { host, runComputerCommand, machines, addMachine, removeMachine, ran }
 }
 
 function show(host: ModuleHost) {
   return render(
     <ModuleHostContext.Provider value={host}>
-      <ServersSettings everyMs={40} />
+      <MachinesSettings everyMs={40} devicesEveryMs={60} />
     </ModuleHostContext.Provider>,
   )
 }
@@ -59,7 +69,7 @@ const stepNames = (): string[] => within(screen.getByRole('list', { name: 'The i
 
 afterEach(cleanup)
 
-describe('Settings → Servers', () => {
+describe('Settings → Machines', () => {
   test('an address and a user name, root unless said: Connect installs this computer\'s own OpenAgent there, in no project', async () => {
     const { host, ran } = dashboard(() => ok({ servers: [] }))
     show(host)
@@ -132,6 +142,19 @@ describe('Settings → Servers', () => {
     expect(ran().filter(line => line.startsWith('reach '))).toEqual(['reach 203.0.113.5 full'])
   })
 
+  test('an update leaves the switch as the person set it: a server that was told to only watch is not let start runs again by itself', async () => {
+    let adding = true
+    const { host, ran } = dashboard(args => {
+      if (args[0] === 'link') return ok(LINK)
+      if (args[0] === 'added') adding = false
+      return ok({ servers: [server(ALL_DONE, { adding, reach: 'watch' })] })
+    })
+    show(host)
+    await waitFor(() => expect(ran()).toContain('added 203.0.113.5'))
+    await new Promise(resolve => setTimeout(resolve, 150))
+    expect(ran().filter(line => line.startsWith('reach '))).toEqual([])
+  })
+
   test('an installed server gives a code for a phone or a browser, asked of its door; the code leaves with Done and with its time, and a door that does not answer is told', async () => {
     const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5', version: '1.2.3' }] }
     let link: ModuleCommandResult = ok(LINK)
@@ -196,10 +219,10 @@ describe('Settings → Servers', () => {
     const { host, ran, addMachine } = dashboard(args => (args[0] === 'link' ? ok(LINK) : ok({ servers: [server(ALL_DONE)] })), { version: '1.2.3', machines: [] }, { ok: false, error: 'this code no longer works' })
     show(host)
     expect((await screen.findByRole('alert')).textContent).toBe('this code no longer works')
-    expect(stepNames().at(-1)).toBe('Among your machines: failed')
+    expect(stepNames().at(-1)).toBe('Runs can be sent to it: failed')
     await new Promise(resolve => setTimeout(resolve, 150))
     expect(addMachine).toHaveBeenCalledTimes(1)
-    fireEvent.click(screen.getByRole('button', { name: 'Add 203.0.113.5 to Machines' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Finish connecting 203.0.113.5' }))
     await waitFor(() => expect(addMachine).toHaveBeenCalledTimes(2))
     expect(ran()).not.toContain('added 203.0.113.5')
   })
@@ -227,7 +250,7 @@ describe('Settings → Servers', () => {
     // Afterwards it is a press: the page does not ask a server that is down for a link at every look.
     await new Promise(resolve => setTimeout(resolve, 150))
     expect(addMachine).toHaveBeenCalledTimes(1)
-    expect(screen.getByRole('button', { name: 'Add 203.0.113.5 to Machines' }).textContent).toBe('Add again')
+    expect(screen.getByRole('button', { name: 'Connect 203.0.113.5 again' }).textContent).toBe('Connect again')
   })
 
   test('a server that is among the machines shows its OpenAgent; one that fell behind this computer says so and has Update', async () => {
@@ -235,7 +258,7 @@ describe('Settings → Servers', () => {
     const same = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false })] }), saved('1.2.3'))
     show(same.host)
     expect(await screen.findByText('OpenAgent 1.2.3.')).toBeTruthy()
-    expect(stepNames().at(-1)).toBe('Among your machines: done')
+    expect(stepNames().at(-1)).toBe('Runs can be sent to it: done')
     expect(screen.queryByRole('button', { name: 'Update 203.0.113.5' })).toBeNull()
     expect(same.addMachine).not.toHaveBeenCalled()
     cleanup()
@@ -252,31 +275,43 @@ describe('Settings → Servers', () => {
     expect(await screen.findByText('Does not answer right now.')).toBeTruthy()
   })
 
-  test('on a computer that is itself a server the section is not there, and nothing of it runs: servers are connected from a person\'s own computer', async () => {
+  test('on a computer that is itself a server the section lists its machines and offers no server to connect: servers are connected from a person\'s own computer', async () => {
     let fails = false
-    const { host, ran, machines, addMachine } = dashboard(() => (fails ? { ok: false, error: 'the command could not be run' } : { ok: true, output: { server: true, servers: [server(ALL_DONE)] } }))
+    // A person's own computer, reached by the line it keeps open to this server: saved by the address that stands for it here.
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'http://127.0.0.1:4210', label: 'MacBook', url: 'http://127.0.0.1:4210', version: '1.2.3' }] }
+    const { host, ran, addMachine, removeMachine } = dashboard(() => (fails ? { ok: false, error: 'the command could not be run' } : { ok: true, output: { server: true, servers: [server(ALL_DONE)] } }), saved)
     const { container } = show(host)
-    // Nothing before this computer said which it is: the section never shows on a server for a moment.
+    // Nothing before this computer said which it is: a server never offers to connect one for a moment.
     expect(container.textContent).toBe('')
-    await waitFor(() => expect(ran()).toContain('status'))
-    await new Promise(resolve => setTimeout(resolve, 100))
-    expect(container.textContent).toBe('')
-    // A read that fails later does not bring it back.
+    const row = await screen.findByRole('listitem', { name: 'MacBook' })
+    expect(within(row).getByText('Your computer. It keeps a line open to this server. Removed here, it is back when it calls again: to take it out, remove it under Devices.')).toBeTruthy()
+    expect(within(row).queryByText('http://127.0.0.1:4210')).toBeNull()
+    expect(within(row).getByText('Online')).toBeTruthy()
+    expect(screen.getByText('The other computers that run OpenAgent, where a run can be sent from here.')).toBeTruthy()
+    // Nothing of a server to connect, and what this computer's own file holds of servers is not listed.
+    expect(screen.queryByRole('button', { name: 'Connect' })).toBeNull()
+    expect(screen.queryByLabelText("The server's address")).toBeNull()
+    expect(screen.queryByRole('listitem', { name: '203.0.113.5' })).toBeNull()
+    // A read that fails later does not bring any of it back.
     fails = true
     const before = ran().length
     await waitFor(() => expect(ran().length).toBeGreaterThan(before + 1))
-    expect(container.textContent).toBe('')
-    // Only the question itself was asked: no GitHub login, no machines, and a server it holds is not added to anything.
+    expect(screen.queryByRole('button', { name: 'Connect' })).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+    // Only the question itself was asked: no GitHub login, no server's devices, and a server it holds is not added to anything.
     expect(new Set(ran())).toEqual(new Set(['status']))
     expect(host.runComputerCommand).not.toHaveBeenCalledWith(['github'])
-    expect(machines).not.toHaveBeenCalled()
+    expect(host.runComputerCommand).not.toHaveBeenCalledWith(['devices', '203.0.113.5'])
     expect(addMachine).not.toHaveBeenCalled()
+    // Its own computer can be taken off the list like any machine.
+    fireEvent.click(within(row).getByRole('button', { name: 'Remove MacBook' }))
+    await waitFor(() => expect(removeMachine).toHaveBeenCalledWith('http://127.0.0.1:4210'))
   })
 
   test('a person\'s own computer that cannot be read shows the section, with why', async () => {
     const { host } = dashboard(() => ({ ok: false, error: 'the command could not be run' }))
     show(host)
-    expect(await screen.findByText('Servers')).toBeTruthy()
+    expect(await screen.findByText('Machines')).toBeTruthy()
     expect((await screen.findByRole('alert')).textContent).toContain('the command could not be run')
   })
 
@@ -290,15 +325,237 @@ describe('Settings → Servers', () => {
     await waitFor(() => expect(ran()).toContain('connect 203.0.113.5 ubuntu 1.2.3'))
   })
 
-  test('a server taken out of the machines is not put back by itself; Remove takes it off this list', async () => {
-    const { host, ran, addMachine } = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false })] }))
+  test('a server that is not among the machines is not put back by itself; Remove takes it off this list', async () => {
+    const { host, ran, addMachine, removeMachine } = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false })] }))
     show(host)
-    expect(await screen.findByText('Installed, and not among your machines.')).toBeTruthy()
+    expect(await screen.findByText('Installed. A run cannot be sent to it yet.')).toBeTruthy()
     await new Promise(resolve => setTimeout(resolve, 120))
     expect(addMachine).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'Add 203.0.113.5 to Machines' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Finish connecting 203.0.113.5' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Remove 203.0.113.5' }))
     await waitFor(() => expect(ran()).toContain('forget 203.0.113.5'))
+    expect(removeMachine).not.toHaveBeenCalled()
+  })
+
+  test('a server is listed once, with the machines that are no server after it; Remove takes this computer out of the server and the server off the list, and not while a run is at work there', async () => {
+    const BOX = { id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5', version: '1.2.3' }
+    const STUDIO = { id: 'http://192.168.1.5:4200', label: 'Studio', url: 'http://192.168.1.5:4200', version: '1.2.0' }
+    const OFF = { id: 'http://box.tail.ts:4200', label: 'Old box', url: 'http://box.tail.ts:4200' }
+    const { host, ran, removeMachine } = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false })] }), { version: '1.2.3', machines: [STUDIO, BOX, OFF] })
+    show(host)
+    const studio = await screen.findByRole('listitem', { name: 'Studio' })
+    expect(within(screen.getByRole('list', { name: 'Machines' })).getAllByRole('listitem').filter(item => ['203.0.113.5', 'Studio', 'Old box'].includes(item.getAttribute('aria-label') ?? '')).map(item => item.getAttribute('aria-label'))).toEqual(['203.0.113.5', 'Studio', 'Old box'])
+    // A machine added with a link: where it answers, whether it does, and no word about being behind.
+    expect(within(studio).getByText(STUDIO.url)).toBeTruthy()
+    expect(within(studio).getByText('Online')).toBeTruthy()
+    expect(within(screen.getByRole('listitem', { name: 'Old box' })).getByText('Offline')).toBeTruthy()
+    expect(screen.getAllByText('203.0.113.5')).toHaveLength(1)
+
+    removeMachine.mockResolvedValueOnce({ ok: false, error: 'An agent is working on 203.0.113.5. Stop it, or wait until it ends, then remove the machine.' })
+    fireEvent.click(screen.getByRole('button', { name: 'Remove 203.0.113.5' }))
+    expect(await screen.findByText(/^An agent is working on 203\.0\.113\.5\./)).toBeTruthy()
+    expect(ran()).not.toContain('forget 203.0.113.5')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove 203.0.113.5' }))
+    await waitFor(() => expect(ran()).toContain('forget 203.0.113.5'))
+    expect(removeMachine.mock.calls.map(([id]) => id)).toEqual([BOX.id, BOX.id])
+    // What was said of the first try is gone with the second.
+    expect(screen.queryByText(/^An agent is working/)).toBeNull()
+
+    fireEvent.click(within(studio).getByRole('button', { name: 'Remove Studio' }))
+    await waitFor(() => expect(removeMachine).toHaveBeenLastCalledWith(STUDIO.id))
+    expect(ran().filter(line => line.startsWith('forget '))).toHaveLength(1)
+  })
+
+  test('before this computer said which machines it has, the section does not claim there are none; once it has, it says so, and Add machine asks for the link another machine gives', async () => {
+    const { host, machines } = dashboard(() => ok({ servers: [] }))
+    let say: (saved: ModuleMachines) => void = () => {}
+    machines.mockImplementationOnce(() => new Promise<ModuleMachines>(resolve => (say = resolve)))
+    show(host)
+    await screen.findByRole('button', { name: 'Connect' })
+    expect(screen.queryByText(/No machines saved/)).toBeNull()
+    say({ version: '1.2.3', machines: [] })
+    expect(await screen.findByText('No machines saved. To add one that already runs OpenAgent, use the link it gives: its Settings, Devices, Add device.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Add machine' }))
+    expect(await screen.findByText(/On the other machine, open Settings, find Devices, and press Add device\./)).toBeTruthy()
+  })
+
+  test('an installed server lists the devices that are in on it, with when each was last there; Remove takes one out there, and this computer\'s own line is not taken out as a device is', async () => {
+    // This computer says which of the server's devices its own OpenAgent is: the id it is listed under there.
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5', version: '1.2.3', device: 'c1b2c3d4e5f6' }] }
+    const ago = (minutes: number): string => new Date(Date.now() - minutes * 60_000).toISOString()
+    const PHONE: DeviceRow = { id: 'a1b2c3d4e5f6', name: 'iPhone, Safari', added: ago(3 * 24 * 60), seen: ago(5) }
+    const NEVER: DeviceRow = { id: 'b1b2c3d4e5f6', name: 'Mac, Chrome', added: ago(2 * 24 * 60) }
+    const MINE: DeviceRow = { id: '0f9e8d7c6b5a', name: 'MacBook', added: ago(60), seen: ago(1), line: true, own: true }
+    const OTHER: DeviceRow = { id: '112233445566', name: 'Studio', added: ago(60), line: true }
+    const KEY: DeviceRow = { id: 'c1b2c3d4e5f6', name: 'OpenAgent on MacBook', added: ago(90), seen: ago(1) }
+    // An older key of the same computer, which opens nothing any more: named alike, and a device like any other.
+    const DEAD: DeviceRow = { id: 'd1b2c3d4e5f6', name: 'OpenAgent on MacBook', added: ago(3 * 24 * 60), seen: ago(2 * 24 * 60) }
+    let listed = [PHONE, NEVER, MINE, OTHER, KEY, DEAD]
+    let refuses = false
+    const { host, runComputerCommand } = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false, reach: 'full' })] }), saved, { ok: true }, NO_GH, args => {
+      if (args[0] === 'remove-device') {
+        if (refuses) return { ok: false, error: `no device has the id ${args[2]}` }
+        listed = listed.filter(device => device.id !== args[2])
+      }
+      return ok({ devices: listed })
+    })
+    show(host)
+    const list = await screen.findByRole('list', { name: 'The devices that are in on 203.0.113.5' })
+    const rows = (): string[] => within(list).getAllByRole('listitem').map(item => item.textContent ?? '')
+    expect(rows()).toHaveLength(6)
+    expect(rows()[0]).toMatch(/^iPhone, SafariAdded 3d ago, last seen 5m ago/)
+    // A device that never came back after it got in says only when it was added.
+    expect(rows()[1]).toMatch(/^Mac, ChromeAdded 2d ago(?!, last seen)/)
+    // This computer's own line is named as such, and has no Remove: it is ended from this row.
+    expect(rows()[2]).toContain('This computer, by the line it keeps open to the server. The switch above says what the server may do through it.')
+    expect(screen.queryByRole('button', { name: 'Remove MacBook from 203.0.113.5' })).toBeNull()
+    expect(rows()[3]).toContain('A computer that keeps a line open to the server')
+    expect(screen.getByRole('button', { name: 'Remove Studio from 203.0.113.5' })).toBeTruthy()
+    // This computer's own OpenAgent there is named as such too, and has no Remove; its older key, named alike, has one.
+    expect(rows()[4]).toContain("This computer's OpenAgent: it sends runs to the server and reads them with this. To take it out, remove the server from this list.")
+    expect(rows()[5]).not.toContain("This computer's OpenAgent")
+    expect(screen.getAllByRole('button', { name: 'Remove OpenAgent on MacBook from 203.0.113.5' })).toHaveLength(1)
+    expect(runComputerCommand).toHaveBeenCalledWith(['devices', '203.0.113.5'])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove iPhone, Safari from 203.0.113.5' }))
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['remove-device', '203.0.113.5', PHONE.id]))
+    await waitFor(() => expect(rows()).toHaveLength(5))
+    expect(screen.queryByText('iPhone, Safari')).toBeNull()
+
+    // A device the server did not take out stays listed, with what the server said.
+    refuses = true
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Mac, Chrome from 203.0.113.5' }))
+    expect((await screen.findByRole('alert')).textContent).toBe(`no device has the id ${NEVER.id}`)
+    expect(rows()).toHaveLength(5)
+  })
+
+  test('a server with no device says so; one whose devices cannot be read says why, and goes on showing the last it read; one never read says only that; a server that is not installed is not asked', async () => {
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5', version: '1.2.3' }] }
+    let answer: ModuleCommandResult = ok({ devices: [] })
+    const { host } = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false })] }), saved, { ok: true }, NO_GH, () => answer)
+    show(host)
+    expect(await screen.findByText('No device is in on the server. Add device gives a code for a phone or a browser.')).toBeTruthy()
+    answer = ok({ devices: [{ id: 'a1b2c3d4e5f6', name: 'iPhone, Safari', added: new Date().toISOString() }] })
+    expect(await screen.findByText('iPhone, Safari')).toBeTruthy()
+    answer = { ok: false, error: 'ssh: connect to host 203.0.113.5 port 22: Connection refused' }
+    expect((await screen.findByRole('alert')).textContent).toBe('ssh: connect to host 203.0.113.5 port 22: Connection refused')
+    // The list it read before stays, with its Remove: one read that fails takes nothing off the page.
+    expect(screen.getByText('iPhone, Safari')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Remove iPhone, Safari from 203.0.113.5' })).toBeTruthy()
+    expect(screen.queryByText('The devices that are in on the server could not be read.')).toBeNull()
+    cleanup()
+
+    const never = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false })] }), saved, { ok: true }, NO_GH, () => answer)
+    show(never.host)
+    expect(await screen.findByText('The devices that are in on the server could not be read.')).toBeTruthy()
+    expect((await screen.findByRole('alert')).textContent).toBe('ssh: connect to host 203.0.113.5 port 22: Connection refused')
+    cleanup()
+
+    const installing = dashboard(() => ok({ servers: [server(['done', 'running'], { working: true })] }))
+    show(installing.host)
+    await screen.findByRole('list', { name: 'The install on 203.0.113.5' })
+    await new Promise(resolve => setTimeout(resolve, 150))
+    expect(installing.runComputerCommand).not.toHaveBeenCalledWith(['devices', '203.0.113.5'])
+  })
+
+  test('a server is asked for its devices one read at a time: a read that takes long is not joined by the next', async () => {
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5', version: '1.2.3' }] }
+    const { host, runComputerCommand } = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false })] }), saved)
+    let answer: (result: ModuleCommandResult) => void = () => {}
+    const slow = new Promise<ModuleCommandResult>(resolve => (answer = resolve))
+    const asked = (): number => runComputerCommand.mock.calls.filter(([args]) => args[0] === 'devices').length
+    const usual = runComputerCommand.getMockImplementation()!
+    runComputerCommand.mockImplementation(async (args: string[]) => (args[0] === 'devices' && asked() === 1 ? slow : usual(args)))
+    show(host)
+    await waitFor(() => expect(asked()).toBe(1))
+    // Many looks later the server was still asked once: its answer has not come.
+    await new Promise(resolve => setTimeout(resolve, 400))
+    expect(asked()).toBe(1)
+    answer(ok({ devices: [{ id: 'a1b2c3d4e5f6', name: 'iPhone, Safari', added: new Date().toISOString() }] }))
+    expect(await screen.findByText('iPhone, Safari')).toBeTruthy()
+    await waitFor(() => expect(asked()).toBeGreaterThan(1))
+  })
+
+  test('a device that was taken out stays off the page when the read made after it fails; a tab nobody looks at asks the server nothing', async () => {
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5', version: '1.2.3' }] }
+    const PHONE: DeviceRow = { id: 'a1b2c3d4e5f6', name: 'iPhone, Safari', added: new Date().toISOString() }
+    const MAC: DeviceRow = { id: 'b1b2c3d4e5f6', name: 'Mac, Chrome', added: new Date().toISOString() }
+    let fails = false
+    const { host, runComputerCommand } = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false })] }), saved, { ok: true }, NO_GH, args => {
+      if (args[0] === 'remove-device') {
+        // The server takes the device out, and from then on does not answer.
+        fails = true
+        return ok({ devices: [MAC] })
+      }
+      return fails ? { ok: false, error: 'ssh: connect to host 203.0.113.5 port 22: Connection refused' } : ok({ devices: [PHONE, MAC] })
+    })
+    const asked = (): number => runComputerCommand.mock.calls.filter(([args]) => args[0] === 'devices').length
+    show(host)
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove iPhone, Safari from 203.0.113.5' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('ssh: connect to host 203.0.113.5 port 22: Connection refused')
+    await new Promise(resolve => setTimeout(resolve, 200))
+    expect(screen.queryByText('iPhone, Safari')).toBeNull()
+    expect(screen.getByText('Mac, Chrome')).toBeTruthy()
+
+    Object.defineProperty(document, 'hidden', { value: true, configurable: true })
+    try {
+      await new Promise(resolve => setTimeout(resolve, 150))
+      const before = asked()
+      await new Promise(resolve => setTimeout(resolve, 300))
+      expect(asked()).toBe(before)
+    } finally {
+      Object.defineProperty(document, 'hidden', { value: false, configurable: true })
+    }
+    const again = asked()
+    await waitFor(() => expect(asked()).toBeGreaterThan(again))
+  })
+
+  test('a server whose login is being changed is not removed: nothing of it is taken out before it can be forgotten', async () => {
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5', version: '1.2.3' }] }
+    let github: LoginRow = { there: false, working: true, asking: true, code: 'ABCD-1234' }
+    const { host, ran, removeMachine } = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false, logins: { github, claude: NONE } })] }), saved)
+    show(host)
+    const remove = (await screen.findByRole('button', { name: 'Remove 203.0.113.5' })) as HTMLButtonElement
+    expect(remove.disabled).toBe(true)
+    expect(remove.title).toBe('One of its logins is being changed right now: wait until that ends.')
+    fireEvent.click(remove)
+    github = NONE
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Remove 203.0.113.5' }) as HTMLButtonElement).disabled).toBe(false))
+    expect(removeMachine).not.toHaveBeenCalled()
+    expect(ran()).not.toContain('forget 203.0.113.5')
+  })
+
+  test('a look that could not read the servers says so, and takes no row off the page', async () => {
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5', version: '1.2.3' }] }
+    let fails = false
+    const { host } = dashboard(() => (fails ? { ok: false, error: 'servers printed no JSON' } : ok({ servers: [server(ALL_DONE, { adding: false })] })), saved)
+    show(host)
+    await screen.findByText('OpenAgent 1.2.3.')
+    fails = true
+    expect(await screen.findByText('The servers could not be read: servers printed no JSON')).toBeTruthy()
+    // Still the server's own row, with all that is on it, and not a machine with a Remove of another kind.
+    expect(screen.getByText('OpenAgent 1.2.3.')).toBeTruthy()
+    expect(screen.getByRole('list', { name: 'The install on 203.0.113.5' })).toBeTruthy()
+    expect(screen.getAllByText('203.0.113.5')).toHaveLength(1)
+  })
+
+  test('a code leaves the page once a device got in with it', async () => {
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5', version: '1.2.3' }] }
+    const LAPTOP: DeviceRow = { id: '0f9e8d7c6b5a', name: 'OpenAgent on MacBook', added: new Date().toISOString() }
+    let listed = [LAPTOP]
+    const { host } = dashboard(args => (args[0] === 'link' ? ok(LINK) : ok({ servers: [server(ALL_DONE, { adding: false })] })), saved, { ok: true }, NO_GH, () => ok({ devices: listed }))
+    show(host)
+    await screen.findByText('OpenAgent on MacBook')
+    const code = () => screen.queryByRole('img', { name: 'The code a new device scans to get into 203.0.113.5' })
+    fireEvent.click(screen.getByRole('button', { name: 'Add a device to 203.0.113.5' }))
+    await waitFor(() => expect(code()).toBeTruthy())
+    // The devices that were in when the code came on the page are no reason for it to leave.
+    await new Promise(resolve => setTimeout(resolve, 200))
+    expect(code()).toBeTruthy()
+    listed = [LAPTOP, { id: 'a1b2c3d4e5f6', name: 'iPhone, Safari', added: new Date().toISOString() }]
+    await waitFor(() => expect(code()).toBeNull())
+    expect(screen.getByText('iPhone, Safari')).toBeTruthy()
   })
 
   test('a command that refuses says why; servers that cannot be read say so', async () => {

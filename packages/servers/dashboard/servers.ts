@@ -1,7 +1,7 @@
 import type { ModuleHost } from '@openagt/dashboard/module'
 
-// What the section shows: the answer of `servers status`, read forgivingly, and the things a
-// person does, each one of the package's own commands. The servers are this computer's, not a
+// What the section shows of this computer's servers: the answer of `servers status`, read
+// forgivingly, and the things a person does, each one of the package's own commands. The servers are this computer's, not a
 // project's: each command runs in no project, so the section is there with no project added.
 
 export type StepState = 'waiting' | 'running' | 'done' | 'failed'
@@ -63,6 +63,18 @@ export interface DoorLink {
   expires: string
 }
 
+/** A phone, a browser or a computer that is in on a server, as the server's door lists it. */
+export interface DeviceRow {
+  id: string
+  name: string
+  added: string
+  seen?: string
+  /** A computer that keeps a line open to the server. */
+  line?: true
+  /** That computer is this one. */
+  own?: true
+}
+
 export type Answer<T> = { ok: true; value: T } | { ok: false; error: string }
 
 const text = (value: unknown): string | undefined => (typeof value === 'string' && value ? value : undefined)
@@ -93,6 +105,20 @@ export function readServers(output: unknown): ServerRow[] | undefined {
       if (stepId && name && STATES.includes(state as string)) list.push({ id: stepId, label: name, state: state as StepState, ...(words ? { said: words } : {}) })
     }
     rows.push({ address: at, url: door, user: who, ...(known ? { fingerprint: known } : {}), working: working === true, adding: adding === true, ...(reach === 'full' || reach === 'watch' ? { reach } : {}), steps: list, logins: { github: readLogin(github), claude: readLogin(claude) } })
+  }
+  return rows
+}
+
+export function readDevices(output: unknown): DeviceRow[] | undefined {
+  if (!output || typeof output !== 'object') return undefined
+  const { devices } = output as Record<string, unknown>
+  if (!Array.isArray(devices)) return undefined
+  const rows: DeviceRow[] = []
+  for (const entry of devices) {
+    if (!entry || typeof entry !== 'object') continue
+    const { id, name, added, seen, line, own } = entry as Record<string, unknown>
+    const [deviceId, deviceName, addedAt, seenAt] = [text(id), text(name), text(added), text(seen)]
+    if (deviceId && deviceName && addedAt) rows.push({ id: deviceId, name: deviceName, added: addedAt, ...(seenAt ? { seen: seenAt } : {}), ...(line === true ? { line: true } : {}), ...(own === true ? { own: true } : {}) })
   }
   return rows
 }
@@ -153,3 +179,7 @@ export const markAdded = (host: ModuleHost, address: string): Promise<Answer<Ser
 export const forget = (host: ModuleHost, address: string): Promise<Answer<ServerRow[]>> => run(host, ['forget', address], readServers)
 /** Keep a line open from this computer to the server, and say what the server may do through it. */
 export const reach = (host: ModuleHost, address: string, mode: Reach): Promise<Answer<ServerRow[]>> => run(host, ['reach', address, mode], readServers)
+/** The devices that are in on the server, asked of its door over SSH. */
+export const loadDevices = (host: ModuleHost, address: string): Promise<Answer<DeviceRow[]>> => run(host, ['devices', address], readDevices)
+/** Take one device out on the server; answers the ones still in. */
+export const removeDevice = (host: ModuleHost, address: string, id: string): Promise<Answer<DeviceRow[]>> => run(host, ['remove-device', address, id], readDevices)

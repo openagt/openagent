@@ -155,6 +155,16 @@ export async function enterRemote(door: string, code: string, name: string, pin?
 }
 
 /**
+ * The id a machine lists this computer under, among the devices that are in there: a door hands
+ * out a key as that id, a dot, and the secret. Never the secret; `undefined` for a key of
+ * another shape, so nothing of one is ever taken for an id.
+ */
+export function deviceIdOf(key: string): string | undefined {
+  const id = key.slice(0, Math.max(0, key.indexOf('.')))
+  return /^[a-z0-9]{6,32}$/.test(id) ? id : undefined
+}
+
+/**
  * Take this computer out of a machine: its key there stops working. Whether the machine did;
  * one that cannot be reached keeps the key until this computer is removed there by hand.
  */

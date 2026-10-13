@@ -1,7 +1,7 @@
 import { nameAddress, numberAddress, urlHost, type AddressDeps } from './address.js'
 import { doorFingerprint } from './certificate.js'
 import { hostname } from 'node:os'
-import { ENTER_PATH } from './door.js'
+import { ENTER_PATH, readKeyWord } from './door.js'
 import { enterForLine, leaveLine, readLineLink } from './line-out.js'
 import { HTTPS_PORT, serve } from './serve.js'
 import { MAX_LINES, Unreadable, addCode, addressOf, pidAlive, readStore, removeDevice, update, type Line, type Store } from './store.js'
@@ -65,8 +65,8 @@ export interface Status {
   https?: { address: string }
   /** A device with `line` is a computer that keeps a line open here. */
   devices: { id: string; name: string; added: string; seen?: string; line?: true }[]
-  /** The servers this computer keeps a line open to, and what each may do through it. */
-  lines: { url: string; mode: Line['mode'] }[]
+  /** The servers this computer keeps a line open to, what each may do through it, and the id this computer has among that server's devices. */
+  lines: { url: string; mode: Line['mode']; id?: string }[]
 }
 
 const isListening = (store: Store): boolean => (store.on || store.https !== undefined) && store.listening !== undefined && pidAlive(store.listening.pid)
@@ -84,7 +84,10 @@ function statusOf(store: Store): Status {
     ...(problem ? { problem } : {}),
     ...(store.https ? { https: { address: store.https.address } } : {}),
     devices: store.devices.map(({ id, name, added, seen, line }) => ({ id, name, added, ...(seen ? { seen } : {}), ...(line ? { line: true as const } : {}) })),
-    lines: store.lines.map(({ url, mode }) => ({ url, mode })),
+    lines: store.lines.map(({ url, mode, key }) => {
+      const id = readKeyWord(key)?.id
+      return { url, mode, ...(id ? { id } : {}) }
+    }),
   }
 }
 

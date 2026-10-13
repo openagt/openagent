@@ -205,17 +205,22 @@ test('the saved machines are told with the OpenAgent each runs, beside this comp
       await sendAddMachine(silent.link('b'), 'Silent')
       await sendAddMachine(gone.link('c'), 'Gone')
       await gone.close()
+      // A key as a door hands one out: the id the machine lists this computer under, a dot, the secret.
+      const door = 'http://127.0.0.1:9'
+      await addMachine({ url: door, key: 'a1b2c3d4e5f6.s3cret-of-the-door', door: `${door}${ENTER}`, label: 'Door' })
       const told = await onMachineVersions()
       assert.equal(told.version, openagentVersion())
-      // Never this computer's key there: a page reads this.
+      // Never this computer's key there: a page reads this. The id it is listed under there is no key.
       assert.deepEqual(
         [...told.machines].sort((a, b) => a.label.localeCompare(b.label)),
         [
           { id: behind.url, label: 'Behind', url: behind.url, version: '0.0.1' },
+          { id: door, label: 'Door', url: door, device: 'a1b2c3d4e5f6' },
           { id: gone.url, label: 'Gone', url: gone.url },
           { id: silent.url, label: 'Silent', url: silent.url },
         ],
       )
+      assert.doesNotMatch(JSON.stringify(told), /s3cret|key-/)
     } finally {
       await behind.close()
       await silent.close()

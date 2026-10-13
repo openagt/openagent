@@ -49,7 +49,7 @@ export const RELAY_PREFIX = '/_relay'
 export const WATCH_HEADER = 'x-openagent-watch'
 
 /** What a call that acts is refused with (403) on a computer that only lets its server watch: read by the person, on the page the call was made from. */
-export const WATCH_ONLY = 'This computer only lets its server watch. Turn on "Start runs on this computer from the phone" in its Settings, under Servers.'
+export const WATCH_ONLY = 'This computer only lets its server watch. Turn on "Start runs on this computer from the phone" in its Settings, under Machines.'
 
 /** What the daemon wires behind the relay endpoints: its own start closure and an events tail. */
 export interface RelayHandlers {

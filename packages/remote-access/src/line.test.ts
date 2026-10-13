@@ -231,9 +231,12 @@ async function rig(): Promise<Rig> {
 test('a computer keeps a line open to its server, and the server asks the computer through it as it asks any machine', async () => {
   const r = await rig()
   try {
-    const status = await command<{ lines: { url: string; mode: string }[] }>(r.computer, 'line', 'add', await r.link())
+    const status = await command<{ lines: { url: string; mode: string; id?: string }[] }>(r.computer, 'line', 'add', await r.link())
     assert.equal(status.lines.length, 1)
     assert.equal(status.lines[0]!.mode, 'full')
+    // The computer says which of the server's devices it is: its id there, never its key.
+    assert.deepEqual([status.lines[0]!.id], (await readStore(r.server)).devices.map(device => device.id))
+    assert.doesNotMatch(JSON.stringify(status), new RegExp((await readStore(r.computer)).lines[0]!.key.split('.')[1]!))
 
     // A program hands the link over on standard input: what it is told a second time replaces the line it had.
     let out = ''

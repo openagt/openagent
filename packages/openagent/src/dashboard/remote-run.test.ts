@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { enterRemote, leaveRemote, remoteFacts, remoteProject, startRemoteAgent, streamRemoteEvents, pingRemote, relayRpc, remoteVersion, MachineRefusal, RelayedAgents, foldRelayedEvent, type RemoteTarget } from './remote-run.js'
+import { deviceIdOf, enterRemote, leaveRemote, remoteFacts, remoteProject, startRemoteAgent, streamRemoteEvents, pingRemote, relayRpc, remoteVersion, MachineRefusal, RelayedAgents, foldRelayedEvent, type RemoteTarget } from './remote-run.js'
 import { type AgentMeta } from '../store/index.js'
 import type { OpenAgentEvent } from '../events.js'
 
@@ -80,7 +80,7 @@ test('startRemoteAgent surfaces a non-2xx from the machine as an ok:false result
 })
 
 test('a machine that refuses a call and says why (403) is answered in its own words: a start, a project asked for, a relayed call', async () => {
-  const WHY = 'This computer only lets its server watch. Turn on "Start runs on this computer from the phone" in its Settings, under Servers.'
+  const WHY = 'This computer only lets its server watch. Turn on "Start runs on this computer from the phone" in its Settings, under Machines.'
   let why = WHY
   const srv = await server((req, res) => {
     req.resume()
@@ -623,4 +623,10 @@ test('a run followed by its record is kept by its project, does not hold its mac
     for (const res of open) res.end()
     await srv.close()
   }
+})
+
+test('the id a machine lists this computer under is the word of its key before the dot, and nothing of a key of another shape', () => {
+  assert.equal(deviceIdOf('a1b2c3d4e5f6.Zm9vYmFyLXNlY3JldA'), 'a1b2c3d4e5f6')
+  // No dot, nothing before it, or what no door makes as an id: no id, so no part of a secret is ever told as one.
+  for (const key of ['Zm9vYmFyLXNlY3JldA', '.secret', 'd1.key', 'UPPERCASE12.secret', 'a1b2c3-d4e5f6.secret', `${'a'.repeat(33)}.secret`, '']) assert.equal(deviceIdOf(key), undefined, key)
 })
