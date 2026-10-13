@@ -18,9 +18,9 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The first time this computer meets a server, the server's key is taken as it is, shown,
   and remembered. A server that later shows another key is refused. Picked over showing the
   key and waiting for a click, and over taking only servers this computer already met.
-- SSH is only for the install, an update, the server's logins and a device's code. For
-  everything else this computer reaches the server through the server's door, with a key
-  of its own.
+- SSH is only for the install, an update, the server's logins, a device's code and the
+  list of its devices. For everything else this computer reaches the server through the
+  server's door, with a key of its own.
 
 ## On the server
 - Everything runs as a user of its own, `openagent`. `root`, or a user that becomes root,
@@ -30,8 +30,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   the server reads like one made on this computer. Picked over the name of the GitHub login
   the server holds, which a server with no login lacks; and over a name of the server's
   own, which ties its commits to nobody on GitHub.
-- A server's own Settings has no Servers section: servers are connected from the person's
-  own computer. Picked over a server that connects other servers.
+- A server's own Settings offers no server to connect: servers are connected from the
+  person's own computer. Picked over a server that connects other servers.
 
 ## The server's logins
 - The GitHub login is this computer's own, copied to the server when the person ticks it,
@@ -53,6 +53,15 @@ already made, and lists it in its pull request; for anything else it proposes an
   and a link. Picked over letting this computer's browser in by itself at the end of the
   install and adding the phone from the server's own Settings, one more step for the
   phone.
+
+## In Settings
+- A server and every other machine are listed together, in one Machines section, each
+  once. Picked over a Servers section beside Machines, where a server showed in both.
+- A server is set up from the person's own computer, with nothing left to do on the
+  server's own page: its row lists the devices that are in on it, each with when it was
+  last seen and a way to take it out. The server's own Settings lists them too. Picked
+  over the server's page alone, a second place to go to for every set-up; and over this
+  computer alone, where a lost phone stays in while that computer is away.
 
 ## An update
 - When the server falls behind this computer, its row says so and has an "Update" button.

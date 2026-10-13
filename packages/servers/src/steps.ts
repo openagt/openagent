@@ -356,6 +356,16 @@ export function linkScript(): string {
   return script(SERVER_USER, {}, `\n  ${DOOR} add\n`)
 }
 
+/** The script that asks the server's door which devices are in. Run as the server's own user. */
+export function devicesScript(): string {
+  return script(SERVER_USER, {}, `\n  ${DOOR} status\n`)
+}
+
+/** The script that takes one device out at the server's door, and answers the ones still in. Run as the server's own user. */
+export function removeDeviceScript(id: string): string {
+  return script(SERVER_USER, { ID: id }, `\n  ${DOOR} remove "$ID"\n`)
+}
+
 /** A script that puts a login on the server or takes it off, and who runs it there. */
 export interface LoginScript {
   as: StepDef['as']

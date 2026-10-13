@@ -80,7 +80,7 @@ test('a call that may only watch starts no run, clones no project and does nothi
   ]
   for (const [path, body] of acts) assert.deepEqual(await said(await post(path, body, WATCH)), [403, WATCH_ONLY], path)
   assert.deepEqual(did, [], 'nothing reached the computer')
-  assert.match(WATCH_ONLY, /^This computer only lets its server watch\. Turn on "Start runs on this computer from the phone" in its Settings, under Servers\.$/)
+  assert.match(WATCH_ONLY, /^This computer only lets its server watch\. Turn on "Start runs on this computer from the phone" in its Settings, under Machines\.$/)
 
   // The header only restricts: the same calls without it are answered in full.
   assert.deepEqual((await said(await post(acts[0]![0], acts[0]![1])))[0], 200)

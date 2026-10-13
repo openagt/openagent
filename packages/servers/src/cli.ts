@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { isDeviceId, readDevices, removeDevice, type Devices, type ServerDevice } from './devices.js'
 import { AlreadyWorking, askLink, install } from './install.js'
 import { AlreadyAtWork, changeLogin, ownGithubAccount, type Mint } from './logins.js'
 import { ownDoor, type OwnDoor } from './own-door.js'
@@ -24,6 +25,9 @@ export const USAGE = `usage: servers <command>
                                        copied to the server once it is installed
   link <address>                       a link the server's door gives for a new machine, once, for five minutes
   added <address>                      the server is among OpenAgent's machines: nothing is left to add
+  devices <address>                    the devices that are in on the server, as its door lists them, asked over SSH; the
+                                       line this computer keeps open to the server is marked as its own
+  remove-device <address> <id>         take one device out on the server, by its id as devices names it: it is out at once
   github                               the GitHub account gh is logged in to on this computer: whose login a copy would be,
                                        or why there is none to copy
   login <address> github               copy this computer's GitHub login to the server, over SSH
@@ -231,6 +235,35 @@ async function setReach(io: CliIO, said: string, mode: Reach): Promise<Status> {
   return statusOf(await readStore(io.env), io.env)
 }
 
+/**
+ * Which of a server's devices is the line this computer keeps open to it, as this computer's own
+ * door says: its id there. `undefined` when this computer keeps no line to that server, and when
+ * its door did not say. Asked of the door whatever this package's own file says of a line: the
+ * door is the one that keeps it.
+ */
+async function ownLineId(io: CliIO, server: Server): Promise<string | undefined> {
+  const answer = await (io.door ?? ownDoor)(['status'], io.env)
+  if (!answer.ok || answer.out === undefined) return undefined
+  try {
+    const { lines } = JSON.parse(answer.out) as { lines?: unknown }
+    const line = Array.isArray(lines) ? (lines as Record<string, unknown>[]).find(candidate => candidate?.url === doorUrl(server.address)) : undefined
+    return typeof line?.id === 'string' && isDeviceId(line.id) ? line.id : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** What `devices` and `remove-device` answer. */
+export interface DevicesStatus {
+  devices: ServerDevice[]
+}
+
+/** The devices a server's door listed, with this computer's own line among them marked; a refusal for a server that did not say. */
+function devicesOf(answer: Devices, own: string | undefined): DevicesStatus {
+  if (!answer.ok) throw new Refused(answer.error)
+  return { devices: answer.devices.map(device => (device.line && device.id === own ? { ...device, own: true as const } : device)) }
+}
+
 const isKind = (said: string | undefined): said is LoginKind => (LOGIN_KINDS as readonly string[]).includes(said ?? '')
 
 /** Whether one of the server's logins is being changed right now. */
@@ -314,6 +347,22 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         const link = await askLink(await still(io, address), io.exec ? { exec: io.exec } : {})
         if (!link.ok) throw new Refused(link.error)
         return print({ url: link.url, expires: link.expires })
+      }
+      case 'devices': {
+        const [address] = rest
+        if (rest.length !== 1 || !address) break
+        const server = await still(io, address)
+        return print(devicesOf(await readDevices(server, io.exec ? { exec: io.exec } : {}), await ownLineId(io, server)))
+      }
+      case 'remove-device': {
+        const [address, id] = rest
+        if (rest.length !== 2 || !address || !id) break
+        const server = await still(io, address)
+        if (!isDeviceId(id)) throw new Refused(`${id} is not a device's id`)
+        const own = await ownLineId(io, server)
+        // Taken out there, the line would go on asking with a key that opens nothing: it is this computer's to end.
+        if (id === own) throw new Refused(`That device is the line this computer keeps open to ${server.address}. To take it out, remove the server here.`)
+        return print(devicesOf(await removeDevice(server, id, io.exec ? { exec: io.exec } : {}), own))
       }
       case 'added': {
         const [address] = rest

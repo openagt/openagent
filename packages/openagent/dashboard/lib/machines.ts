@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { onMachines, sendAddMachine, sendRemoveMachine, type AddMachineResult, type Machine, type RemoveMachineResult } from '../rpc/machines.js'
+import { getSelectedMachineId, selectMachine } from './remote-target.js'
 
 // The saved machines: the other computers running OpenAgent that a run can be sent to. The list
 // is the daemon's, kept in the person's home file, so every browser on this computer shows the
@@ -57,9 +58,12 @@ export async function addMachine(pasted: string, label?: string): Promise<AddMac
 /**
  * Take a saved machine off the list, and answer whether the daemon did, with its reason when it
  * did not. The list is read again either way, so a machine the daemon did not remove is still shown.
+ * A removed machine is no longer where the next run starts (#1072): that run would point at
+ * something that is not in the list.
  */
 export async function removeMachine(id: string): Promise<RemoveMachineResult> {
   const result = await sendRemoveMachine(id).catch((): RemoveMachineResult => ({ ok: false, error: 'The machine could not be removed.' }))
+  if (result.ok && getSelectedMachineId() === id) selectMachine(null)
   await refreshMachines()
   return result
 }
@@ -69,9 +73,4 @@ export function useMachines(): Machine[] {
   const machines = useSyncExternalStore(subscribe, () => cache ?? EMPTY, () => EMPTY)
   useEffect(ensureLoaded, [])
   return machines
-}
-
-/** Whether the daemon has answered with the list: until then "none saved" is not known. */
-export function useMachinesLoaded(): boolean {
-  return useSyncExternalStore(subscribe, () => cache !== null, () => false)
 }

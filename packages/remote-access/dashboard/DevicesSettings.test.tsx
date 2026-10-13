@@ -25,6 +25,7 @@ function door(answer: (args: string[]) => ModuleCommandResult) {
     agents: vi.fn(async () => []),
     machines: vi.fn(async () => ({ version: '0.0.0', machines: [] })),
     addMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
+    removeMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     watchScreen: vi.fn(async () => undefined),
     sendToScreen: vi.fn(async () => false),
   }

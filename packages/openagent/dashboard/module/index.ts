@@ -362,6 +362,11 @@ export interface ModuleHost {
    */
   addMachine(link: string, label?: string): Promise<MachineAdded>
   /**
+   * Take a saved machine off the list, by its id, and this computer out of the machine: its key
+   * there stops working. Refused, with the reason, while a run is at work there.
+   */
+  removeMachine(id: string): Promise<MachineRemoved>
+  /**
    * What the live screen of a run shows, as the screen's own stream of bytes, until `signal` ends
    * it; nothing when the run has no live screen. OpenAgent asks the computer the run is on, which
    * may be another machine: the bytes are that computer's, to read as data and never to run.
@@ -379,6 +384,8 @@ export interface ModuleMachine {
   url: string
   /** The OpenAgent it runs; absent for a machine that does not answer right now. */
   version?: string
+  /** The id the machine lists this computer under, among the devices that are in there. */
+  device?: string
 }
 
 /** What {@link ModuleHost.machines} answers. */
@@ -390,6 +397,9 @@ export interface ModuleMachines {
 
 /** How saving a machine went: done, or stopped, with the reason. */
 export type MachineAdded = { ok: true } | { ok: false; error: string }
+
+/** How removing a machine went: done, or refused, with the reason. */
+export type MachineRemoved = { ok: true } | { ok: false; error: string }
 
 /** What the dashboard knows about the module it is serving: every service but the commands and the reads, which it binds to the package. */
 export type ModuleHostBase = Omit<ModuleHost, 'runCommand' | 'act' | 'runComputerCommand' | 'read'>
@@ -450,6 +460,8 @@ export { LinkActions, type ProjectLinks, type LinkTargets } from '../components/
 export { cn } from '../lib/utils.js'
 export { SettingsSection, SettingsRow, SettingsSelectRow, type SettingsOption } from '../components/SettingsRows.js'
 export { QrCode } from '../components/QrCode.js'
+export { AddMachineDialog } from '../components/AddMachineDialog.js'
+export { reachedByLine } from '../../src/client.js'
 export { useCodingAgents, type CodingAgent } from '../lib/models.js'
 export { MAX_SPEND_OFFSET } from '../../src/preference-defaults.js'
 export { formatRelative, formatDateTime, formatDuration, formatAge } from '../lib/format-date.js'

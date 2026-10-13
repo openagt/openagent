@@ -1,7 +1,7 @@
 import { hostname } from 'node:os'
 import { basename } from 'node:path'
 import { readSharing } from '@openagt/agent-data'
-import { enterRemote, leaveRemote, pingRemote, remoteProject, remoteVersion } from '../dashboard/remote-run.js'
+import { deviceIdOf, enterRemote, leaveRemote, pingRemote, remoteProject, remoteVersion } from '../dashboard/remote-run.js'
 import { errorMessage } from '../error-message.js'
 import { repositoryAddress, repositorySpelling } from '../repository-address.js'
 import { contextRemote, resolveProjectPath } from './context.js'
@@ -90,19 +90,22 @@ export async function onMachinesReachable(): Promise<Record<string, boolean>> {
 export interface MachineVersions {
   /** This computer's own. */
   version: string
-  /** Each saved machine, with its version when it answers and says. */
-  machines: (Machine & { version?: string })[]
+  /** Each saved machine, with its version when it answers and says, and the id it lists this computer under among its devices. */
+  machines: (Machine & { version?: string; device?: string })[]
 }
 
 /**
  * The saved machines with the OpenAgent each runs, beside this computer's own: how a page tells
  * that a machine fell behind this computer. One short call to each, with this computer's key.
+ * The key itself is never told: only the id the machine lists this computer under, which a page
+ * that lists the machine's devices names this computer by.
  */
 export async function onMachineVersions(): Promise<MachineVersions> {
   const machines = await Promise.all(
     (await listMachines()).map(async machine => {
       const version = await remoteVersion(machine)
-      return { id: machine.id, label: machine.label, url: machine.url, ...(version !== undefined ? { version } : {}) }
+      const device = deviceIdOf(machine.key)
+      return { id: machine.id, label: machine.label, url: machine.url, ...(version !== undefined ? { version } : {}), ...(device !== undefined ? { device } : {}) }
     }),
   )
   return { version: openagentVersion(), machines }

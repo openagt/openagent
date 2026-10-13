@@ -13,7 +13,6 @@ import { useNotificationPermission } from '../lib/notification-permission.js'
 import { OnboardingChecklist } from './OnboardingChecklist.js'
 import { BridgeSettings } from './BridgeSettings.js'
 import { BridgeBrowserSettings } from './BridgeBrowserSettings.js'
-import { MachinesSettings } from './MachinesSettings.js'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
 import { Switch } from './ui/switch.js'
 import { RadioGroup, RadioGroupItem } from './ui/radio-group.js'
@@ -117,9 +116,6 @@ export function SettingsPage({
             onChange={next => updatePreferences({ postMergeCleanup: next })}
           />
         </Section>
-
-        {/* A saved machine is the other place a session can run on. */}
-        <MachinesSettings />
 
         <Section title="Notifications">
           <ToggleRow

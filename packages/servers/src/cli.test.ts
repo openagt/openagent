@@ -147,6 +147,64 @@ test('link asks the server\'s door; added says nothing is left to add; forget ta
   }
 })
 
+test('devices asks the server\'s door who is in, and marks the line this computer keeps there; remove-device takes one out, never that line', async () => {
+  const home = await testHome()
+  try {
+    await run(home.env, ['connect', 'box.example.com', 'root', '1.2.3'], { startWork: () => 0 })
+    const PHONE = { id: 'a1b2c3d4e5f6', name: 'iPhone, Safari', added: '2026-10-12T17:50:00.000Z', seen: '2026-10-13T19:24:00.000Z' }
+    const LINE = { id: '0f9e8d7c6b5a', name: 'Studio', added: '2026-10-13T19:20:00.000Z', line: true }
+    const OTHER = { id: '112233445566', name: 'Laptop', added: '2026-10-13T19:21:00.000Z', line: true }
+    let listed: unknown[] = [PHONE, LINE, OTHER]
+    const { exec, calls } = pretendServer(call => {
+      const removed = /^ID='([a-z0-9]+)'$/m.exec(call.script)?.[1]
+      if (removed) listed = listed.filter(device => (device as { id: string }).id !== removed)
+      return { out: JSON.stringify({ on: false, listening: true, devices: listed, lines: [] }) }
+    })
+    const asked: string[] = []
+    // This computer's own door: it keeps a line to the server, and one to another server.
+    const lines = [{ url: 'https://other.example.com', mode: 'full', id: OTHER.id }, { url: 'https://box.example.com', mode: 'full', id: LINE.id }]
+    const door: CliIO['door'] = async args => (asked.push(args.join(' ')), { ok: true, out: JSON.stringify({ on: false, listening: false, devices: [], lines }) })
+
+    // The door is asked which line is this computer's, whatever this package's own file says of one: the door keeps the line.
+    assert.deepEqual((await run(home.env, ['devices', 'BOX.example.com'], { exec, door })).out, { devices: [PHONE, { ...LINE, own: true }, OTHER] })
+    assert.deepEqual(asked, ['status'])
+    assert.deepEqual(calls[0]!.args.slice(-5, -1), ['-l', 'root', '--', 'box.example.com'])
+    // A device that says it keeps no line is not this computer's line, whatever id it has.
+    listed = [PHONE, { ...LINE, line: undefined }, OTHER]
+    assert.deepEqual((await run(home.env, ['devices', 'box.example.com'], { exec, door })).out, { devices: [PHONE, { id: LINE.id, name: LINE.name, added: LINE.added }, OTHER] })
+    listed = [PHONE, LINE, OTHER]
+    // A door that does not say, or says something else, marks nothing: the list is still told.
+    for (const silent of [{ ok: false as const, error: 'the door of this computer did not answer' }, { ok: true as const }, { ok: true as const, out: 'not JSON' }, { ok: true as const, out: JSON.stringify({ lines: [{ url: 'https://box.example.com', id: '$(reboot)' }] }) }]) {
+      assert.deepEqual((await run(home.env, ['devices', 'box.example.com'], { exec, door: async () => silent })).out, { devices: [PHONE, LINE, OTHER] })
+    }
+
+    // The line this computer keeps there is not taken out as a device is: it would go on asking with a key that opens nothing.
+    const before = calls.length
+    const own = await run(home.env, ['remove-device', 'box.example.com', LINE.id], { exec, door })
+    assert.equal(own.code, 1)
+    assert.deepEqual(own.err, ['That device is the line this computer keeps open to box.example.com. To take it out, remove the server here.'])
+    const noId = await run(home.env, ['remove-device', 'box.example.com', "x'; reboot; '"], { exec, door })
+    assert.equal(noId.code, 1)
+    assert.deepEqual(noId.err, ["x'; reboot; ' is not a device's id"])
+    assert.equal(calls.length, before)
+
+    assert.deepEqual((await run(home.env, ['remove-device', 'box.example.com', PHONE.id], { exec, door })).out, { devices: [{ ...LINE, own: true }, OTHER] })
+    assert.match(calls.at(-1)!.script, /remote-access remove "\$ID"\n/)
+
+    const refused = await run(home.env, ['devices', 'box.example.com'], { exec: pretendServer(() => ({ code: 1, err: 'the door is not installed' })).exec, door })
+    assert.equal(refused.code, 1)
+    assert.deepEqual(refused.err, ['the door is not installed'])
+    for (const args of [['devices', '203.0.113.9'], ['remove-device', '203.0.113.9', PHONE.id]]) {
+      const unknown = await run(home.env, args, { exec, door })
+      assert.equal(unknown.code, 1)
+      assert.deepEqual(unknown.err, ['no server at 203.0.113.9'])
+    }
+    for (const args of [['devices'], ['devices', 'box.example.com', 'more'], ['remove-device', 'box.example.com']]) assert.equal((await run(home.env, args)).code, 2)
+  } finally {
+    await home.remove()
+  }
+})
+
 test('connect with "github" keeps the person\'s tick until the install copies the login; the tick counts as it is at each press', async () => {
   const home = await testHome()
   try {

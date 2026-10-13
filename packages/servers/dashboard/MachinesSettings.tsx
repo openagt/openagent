@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { Button, Checkbox, Input, QrCode, SettingsSection, Switch, useModuleHost, usePolled, type ModuleMachines } from '@openagt/dashboard/module'
-import { askLink, connect, forget, loadServers, login, logout, markAdded, ownGithub, reach, type Answer, type DoorLink, type OwnGithub, type ServerRow, type ServersRead, type StepState } from './servers.js'
+import { AddMachineDialog, Button, Checkbox, Input, QrCode, SettingsSection, Switch, formatDateTime, formatRelative, reachedByLine, useModuleHost, usePolled, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
+import { askLink, connect, forget, loadDevices, loadServers, login, logout, markAdded, ownGithub, reach, removeDevice, type Answer, type DeviceRow, type DoorLink, type OwnGithub, type ServerRow, type ServersRead, type StepState } from './servers.js'
 
-// Settings → Servers: "Connect your VPS". A person gives a server's address and a user name, and
-// OpenAgent installs itself there over SSH. The install is the `servers` command's own process;
-// the section reads how far it is with `servers status` and lists its steps. Once the steps are
-// done the section asks the server's door for a link and saves the server among OpenAgent's
-// machines with it, as a person would by pasting the link under Machines.
+// Settings → Machines: the other computers a run can be sent to, each listed once. A server this
+// computer installed OpenAgent on is listed with all that is set up on it; a machine added with a
+// link, and a person's own computer that keeps a line open to this one, by its name.
+//
+// "Connect your VPS": a person gives a server's address and a user name, and OpenAgent installs
+// itself there over SSH. The install is the `servers` command's own process; the section reads
+// how far it is with `servers status` and lists its steps. Once the steps are done the section
+// asks the server's door for a link and saves the server among OpenAgent's machines with it, as
+// a person does for another machine by pasting its link.
 //
 // An installed server lists its two logins. GitHub's is this computer's own, copied when the
 // person ticks it or presses for it, or one the server gets for itself: GitHub gives the server a
@@ -16,13 +20,24 @@ import { askLink, connect, forget, loadServers, login, logout, markAdded, ownGit
 //
 // An installed server also gives a code for a phone or a browser: a server has no screen to press
 // "Add device" on, so this computer asks the server's door for the link over SSH, and the row
-// shows it as the Devices section does, as a QR code and a link.
+// shows it as the Devices section does, as a QR code and a link. The row also lists the devices
+// that are in on the server, asked of its door over SSH, each with a way to take it out: a
+// person sets a server up from here, and does not open the server's own page for it.
 
 const NOT_READ: Answer<ServersRead> | undefined = undefined
 /** How long a door's code is good for. */
 const CODE_MS = 5 * 60_000
 const NO_MACHINES: ModuleMachines | undefined = undefined
 const NOT_ASKED: Answer<OwnGithub> | undefined = undefined
+const NOT_LISTED: Answer<DeviceRow[]> | undefined = undefined
+/**
+ * How often a server's devices are asked for again while a code is on the page: a device that
+ * just got in shows soon. Each time is a login over SSH, and a server may shut out an address
+ * that logs in too often: not more often than this.
+ */
+const WITH_A_CODE_MS = 10_000
+/** How long a read of a server's devices is waited for: one that never answers is not left in the way of the next. */
+const DEVICES_ANSWER_MS = 45_000
 
 /** A day, as a person reads it. */
 const day = (iso: string | undefined): string => (iso === undefined ? '' : new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }))
@@ -61,24 +76,193 @@ export function olderThan(a: string, b: string): boolean {
   return false
 }
 
-export function ServersSettings({ everyMs = 3_000 }: { /** How often the installs are read again. */ everyMs?: number }) {
+export function MachinesSettings({
+  everyMs = 3_000,
+  devicesEveryMs = 30_000,
+}: {
+  /** How often the installs are read again. */
+  everyMs?: number
+  /** How often a server is asked which devices are in: each time is a login over SSH. */
+  devicesEveryMs?: number
+}) {
   const host = useModuleHost()
   const { value: read, reload } = usePolled<Answer<ServersRead> | undefined>(() => loadServers(host), NOT_READ, everyMs, [])
-  // What this computer last said it is. A server is connected from a person's own computer: on a
-  // server's own page there is no such section, and a read that fails later does not bring it back.
+  // What this computer last said it is. A server is connected from a person's own computer: a
+  // server's own page offers none to connect, and a read that fails later does not bring that back.
   const isServer = useRef<boolean | undefined>(undefined)
   if (read?.ok) isServer.current = read.value.isServer
-  // Nothing shows until this computer said which it is, so the section never shows on a server for a moment.
-  if (read === undefined || isServer.current === true) return null
-  return <Servers read={read} reload={reload} everyMs={everyMs} />
+  // Nothing shows until this computer said which it is, so a server never offers to connect one for a moment.
+  if (read === undefined) return null
+  return <Machines read={read} reload={reload} everyMs={everyMs} devicesEveryMs={devicesEveryMs} isServer={isServer.current === true} />
 }
 
-/** The section itself, on a person's own computer: nothing of it runs on a server. */
-function Servers({ read, reload, everyMs }: { read: Answer<ServersRead>; reload: () => Promise<unknown>; everyMs: number }) {
+/** A device that is in on a server: what it is, when it was last there, and a way to take it out. */
+function DeviceLine({ device, address, busy, ownKey, onRemove }: { device: DeviceRow; address: string; busy: boolean; /** The device is this computer's OpenAgent, by the key it has on the server. */ ownKey: boolean; onRemove: () => void }) {
+  // This computer is in on its server by itself: taken out there alone, its row here would go on asking with a key that opens nothing.
+  const own = device.own === true || ownKey
+  return (
+    <li className="flex items-center justify-between gap-4">
+      <div className="min-w-0">
+        <p className="truncate">{device.name}</p>
+        <p className="text-muted-foreground" title={formatDateTime(device.seen ?? device.added)}>
+          {`Added ${formatRelative(device.added)}`}
+          {device.seen !== undefined ? `, last seen ${formatRelative(device.seen)}` : ''}
+        </p>
+        {device.own ? (
+          <p className="text-muted-foreground">This computer, by the line it keeps open to the server. The switch above says what the server may do through it.</p>
+        ) : ownKey ? (
+          <p className="text-muted-foreground">This computer's OpenAgent: it sends runs to the server and reads them with this. To take it out, remove the server from this list.</p>
+        ) : (
+          device.line && <p className="text-muted-foreground">{`A computer that keeps a line open to the server: runs can be started on it from the server's page. Remove it and it is no longer in "Run on" there.`}</p>
+        )}
+      </div>
+      {!own && (
+        <Button size="sm" variant="outline" disabled={busy} aria-label={`Remove ${device.name} from ${address}`} onClick={onRemove}>
+          Remove
+        </Button>
+      )}
+    </li>
+  )
+}
+
+/**
+ * The devices that are in on one server, as its door lists them. Asked over SSH, so not often:
+ * more often while a code is on the page, which a device is about to get in with.
+ */
+function ServerDevices({
+  host,
+  address,
+  everyMs,
+  awaited,
+  busy,
+  ownDevice,
+  onGotIn,
+  answerMs = DEVICES_ANSWER_MS,
+}: {
+  host: ModuleHost
+  address: string
+  everyMs: number
+  /** How long one read is waited for. */
+  answerMs?: number
+  /** A code is on the page for this server. */
+  awaited: boolean
+  busy: boolean
+  /** The id the server lists this computer's OpenAgent under, when this computer said. */
+  ownDevice: string | undefined
+  /** A device got in while a code was on the page. */
+  onGotIn: () => void
+}) {
+  // One read at a time, and none for a page nobody looks at: a read that takes long is not joined by the next.
+  const asking = useRef<Promise<Answer<DeviceRow[]>> | undefined>(undefined)
+  const answered = useRef<Answer<DeviceRow[]> | undefined>(undefined)
+  const ask = (): Promise<Answer<DeviceRow[]>> => {
+    if (document.hidden && answered.current) return Promise.resolve(answered.current)
+    asking.current ??= new Promise<Answer<DeviceRow[]>>(resolve => {
+      const late = setTimeout(() => resolve({ ok: false, error: 'The server did not say in time which devices are in.' }), answerMs)
+      void loadDevices(host, address).then(answer => {
+        clearTimeout(late)
+        resolve(answer)
+      })
+    })
+      .then(answer => (answered.current = answer))
+      .finally(() => (asking.current = undefined))
+    return asking.current
+  }
+  const { value: read, reload } = usePolled<Answer<DeviceRow[]> | undefined>(ask, NOT_LISTED, awaited ? Math.min(everyMs, WITH_A_CODE_MS) : everyMs, [address, awaited], 'previous')
+  // The answer of the last removal, shown until the read made after it has landed.
+  const [changed, setChanged] = useState<DeviceRow[] | undefined>()
+  const [removing, setRemoving] = useState(false)
+  const [error, setError] = useState<string | undefined>()
+  // The last list the server gave: a read that fails once says why, and takes nothing off the page.
+  const listed = useRef<DeviceRow[] | undefined>(undefined)
+  if (read?.ok) listed.current = read.value
+  const devices = changed ?? listed.current
+
+  // The devices that were in when the code came on the page: one more, and the code is spent.
+  const before = useRef<string[] | undefined>(undefined)
+  const ids = devices?.map(device => device.id).join(',')
+  useEffect(() => {
+    if (!awaited) return void (before.current = undefined)
+    if (ids === undefined) return
+    const now = ids.split(',').filter(Boolean)
+    if (before.current === undefined) before.current = now
+    else if (now.some(id => !before.current!.includes(id))) onGotIn()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [awaited, ids])
+
+  const remove = async (device: DeviceRow): Promise<void> => {
+    setRemoving(true)
+    setError(undefined)
+    const answer = await removeDevice(host, address, device.id)
+    if (answer.ok) {
+      // What the server said after the removal is the list from here on, also when the next read fails or is not made.
+      listed.current = answer.value
+      answered.current = answer
+      setChanged(answer.value)
+    } else setError(answer.error)
+    // A read that was on its way when the device went tells the list before: the next one is asked once it has landed.
+    await asking.current?.catch(() => {})
+    await reload().catch(() => {})
+    setChanged(undefined)
+    setRemoving(false)
+  }
+
+  if (read === undefined) return null
+  return (
+    <div className="space-y-2 border-t border-border pt-2 text-xs">
+      <p>
+        {devices === undefined ? 'The devices that are in on the server could not be read.' : devices.length === 0 ? 'No device is in on the server. Add device gives a code for a phone or a browser.' : 'The devices that are in on the server:'}
+      </p>
+      {devices !== undefined && devices.length > 0 && (
+        <ul aria-label={`The devices that are in on ${address}`} className="space-y-2">
+          {devices.map(device => (
+            <DeviceLine key={device.id} device={device} address={address} busy={busy || removing} ownKey={device.id === ownDevice} onRemove={() => void remove(device)} />
+          ))}
+        </ul>
+      )}
+      {(error ?? (read.ok ? undefined : read.error)) !== undefined && (
+        <pre role="alert" className="overflow-x-auto whitespace-pre-wrap rounded-md border border-border bg-background p-2 font-mono text-foreground">
+          {error ?? (read.ok ? undefined : read.error)}
+        </pre>
+      )}
+    </div>
+  )
+}
+
+/** A machine that is no server of this computer's: one added with a link, or a person's own computer that keeps a line open to this one. */
+function MachineLine({ machine, known, busy, onRemove }: { machine: ModuleMachine; /** The machines were asked whether they answer. */ known: boolean; busy: boolean; onRemove: () => void }) {
+  const computer = reachedByLine(machine.url)
+  const state = !known ? 'Checking…' : machine.version !== undefined ? 'Online' : 'Offline'
+  return (
+    <li aria-label={machine.label} className="flex items-center justify-between gap-4 py-3">
+      <div className="min-w-0">
+        <p className="truncate text-sm">{machine.label}</p>
+        {computer ? (
+          <p className="text-xs text-muted-foreground">Your computer. It keeps a line open to this server. Removed here, it is back when it calls again: to take it out, remove it under Devices.</p>
+        ) : (
+          <p className="truncate text-xs text-muted-foreground">{machine.url}</p>
+        )}
+      </div>
+      <div className="flex shrink-0 items-center gap-3">
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${state === 'Online' ? 'bg-[var(--color-primary)]' : 'bg-muted-foreground/40'}`} />
+          {state}
+        </span>
+        <Button size="sm" variant="outline" disabled={busy} aria-label={`Remove ${machine.label}`} onClick={onRemove}>
+          Remove
+        </Button>
+      </div>
+    </li>
+  )
+}
+
+/** The section itself. On a computer that is itself a server it lists the machines, and offers no server to connect. */
+function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: Answer<ServersRead>; reload: () => Promise<unknown>; everyMs: number; devicesEveryMs: number; isServer: boolean }) {
   const host = useModuleHost()
   const { value: known, reload: reloadMachines } = usePolled<ModuleMachines | undefined>(() => host.machines(), NO_MACHINES, Math.max(everyMs, 10_000), [])
+  const [addingByLink, setAddingByLink] = useState(false)
   // Whose GitHub login a copy would be: asked of this computer's own gh, which asks GitHub, so not often.
-  const { value: own } = usePolled<Answer<OwnGithub> | undefined>(() => ownGithub(host), NOT_ASKED, Math.max(everyMs, 5 * 60_000), [])
+  const { value: own } = usePolled<Answer<OwnGithub> | undefined>(isServer ? null : () => ownGithub(host), NOT_ASKED, Math.max(everyMs, 5 * 60_000), [isServer])
   const account = own?.ok && 'account' in own.value ? own.value.account : undefined
   /** Why there is no GitHub login to copy, once this computer said so. */
   const noLogin = own === undefined || account !== undefined ? undefined : own.ok ? ('problem' in own.value ? own.value.problem : undefined) : own.error
@@ -93,7 +277,13 @@ function Servers({ read, reload, everyMs }: { read: Answer<ServersRead>; reload:
   // The code on the page, and the server whose door made it.
   const [code, setCode] = useState<(DoorLink & { address: string }) | undefined>()
 
-  const servers = read.ok ? read.value.servers : []
+  // The servers as last read: a read that fails once says so, and takes no row off the page.
+  const lastServers = useRef<ServerRow[]>([])
+  if (read.ok) lastServers.current = read.value.servers
+  // A server lists no servers of its own: what its file may hold from before it was one is not shown.
+  const servers = isServer ? [] : lastServers.current
+  // The machines that are no server's row: each machine is listed once.
+  const others = (known?.machines ?? []).filter(machine => !servers.some(server => server.url === machine.url))
   const inMachines = (server: ServerRow, among = known) => among?.machines.find(machine => machine.url === server.url)
   const installed = (server: ServerRow): boolean => !server.working && server.steps.every(step => step.state === 'done')
 
@@ -128,11 +318,13 @@ function Servers({ read, reload, everyMs }: { read: Answer<ServersRead>; reload:
     setNotAdded(reasons => without(reasons, server.address))
     const stopped = (why: string): void => setNotAdded(reasons => ({ ...reasons, [server.address]: why }))
     try {
-      // Read now, not as the page last saw them: the machines change under Machines, too.
+      // Read now, not as the page last saw them: the machines change from the launcher, too.
       if (inMachines(server, await host.machines())?.version === undefined) {
         const link = await askLink(host, server.address)
         const added = link.ok ? await host.addMachine(link.value.url, server.address) : link
         if (!added.ok) return stopped(added.error)
+        // At once: this computer has a new key there, and the row names its own entry among the server's devices by it.
+        await reloadMachines().catch(() => {})
       }
       const told = await markAdded(host, server.address)
       if (!told.ok) return stopped(told.error)
@@ -173,6 +365,38 @@ function Servers({ read, reload, everyMs }: { read: Answer<ServersRead>; reload:
     setBusy(false)
   }
 
+  /** Take a machine off the list, and this computer out of it; whether it went. */
+  const takeOut = async (machine: ModuleMachine): Promise<boolean> => {
+    const removed = await host.removeMachine(machine.id).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
+    if (!removed.ok) setError(removed.error)
+    await reloadMachines().catch(() => {})
+    return removed.ok
+  }
+
+  const removeMachine = async (machine: ModuleMachine): Promise<void> => {
+    setBusy(true)
+    setError(undefined)
+    await takeOut(machine)
+    setBusy(false)
+  }
+
+  /**
+   * Take a server off the list: this computer's key there, the line it keeps to it, and its row.
+   * A server a run is at work on stays as it is, and the section says why.
+   */
+  const removeServer = async (server: ServerRow): Promise<void> => {
+    // From the press on: the machines are asked first, and a second press meanwhile is no second removal.
+    setBusy(true)
+    setError(undefined)
+    const machine = inMachines(server, await host.machines().catch(() => known))
+    if (!machine || (await takeOut(machine))) {
+      const forgotten = await forget(host, server.address)
+      if (!forgotten.ok) setError(forgotten.error)
+      await reload().catch(() => {})
+    }
+    setBusy(false)
+  }
+
   const submit = (event: FormEvent): void => {
     event.preventDefault()
     if (!address.trim() || !user.trim()) return
@@ -182,39 +406,57 @@ function Servers({ read, reload, everyMs }: { read: Answer<ServersRead>; reload:
 
   return (
     <SettingsSection
-      title="Servers"
-      description="Connect your VPS: give its address and a user name, and OpenAgent installs itself there over SSH, with this computer's own SSH keys. The server then runs OpenAgent by itself, and is one of your machines."
-    >
-      <form onSubmit={submit} className="flex flex-wrap items-end gap-2 py-3">
-        <label className="min-w-40 flex-1 space-y-1 text-xs text-muted-foreground">
-          <span>The server's address</span>
-          <Input aria-label="The server's address" placeholder="203.0.113.5" value={address} onChange={event => setAddress(event.target.value)} />
-        </label>
-        <label className="w-32 space-y-1 text-xs text-muted-foreground">
-          <span>User name</span>
-          <Input aria-label="User name" value={user} onChange={event => setUser(event.target.value)} />
-        </label>
-        {/* Not before this computer has said which OpenAgent it runs: that is the one the server gets. */}
-        <Button size="sm" type="submit" disabled={busy || !known || !address.trim() || !user.trim()}>
-          Connect
+      title="Machines"
+      description={
+        isServer
+          ? 'The other computers that run OpenAgent, where a run can be sent from here.'
+          : "The other computers that run OpenAgent, where a run can be sent. Connect your VPS: give its address and a user name, and OpenAgent installs itself there over SSH, with this computer's own SSH keys. A computer that already runs OpenAgent is added with the link it gives."
+      }
+      action={
+        <Button size="sm" variant="outline" className="whitespace-nowrap" onClick={() => setAddingByLink(true)}>
+          Add machine
         </Button>
-      </form>
-      <div className="space-y-2 pb-3">
-        <label className="flex items-start gap-2 text-xs">
-          <Checkbox checked={copy && account !== undefined} onCheckedChange={checked => setCopy(checked === true)} disabled={busy || account === undefined} className="mt-0.5" aria-label="Copy my GitHub login to the server" />
-          <span>
-            {account !== undefined ? `Copy my GitHub login (${account}) to the server.` : 'Copy my GitHub login to the server.'}{' '}
-            <span className="text-muted-foreground">
-              {noLogin ?? "It can do there all it can do here, and every agent that runs on the server works with it. It goes there at the install's end, to a server met for the first time too, whose key is taken as it is."}
-            </span>
-          </span>
-        </label>
-        <p className="text-xs text-muted-foreground">
-          The user is root, or one that becomes root without a password. It is only used to install, to update and to give the server its logins: what runs on the server afterwards runs as a user of its own, openagent.
+      }
+    >
+      {!isServer && (
+        <>
+          <form onSubmit={submit} className="flex flex-wrap items-end gap-2 py-3">
+            <label className="min-w-40 flex-1 space-y-1 text-xs text-muted-foreground">
+              <span>The server's address</span>
+              <Input aria-label="The server's address" placeholder="203.0.113.5" value={address} onChange={event => setAddress(event.target.value)} />
+            </label>
+            <label className="w-32 space-y-1 text-xs text-muted-foreground">
+              <span>User name</span>
+              <Input aria-label="User name" value={user} onChange={event => setUser(event.target.value)} />
+            </label>
+            {/* Not before this computer has said which OpenAgent it runs: that is the one the server gets. */}
+            <Button size="sm" type="submit" disabled={busy || !known || !address.trim() || !user.trim()}>
+              Connect
+            </Button>
+          </form>
+          <div className="space-y-2 pb-3">
+            <label className="flex items-start gap-2 text-xs">
+              <Checkbox checked={copy && account !== undefined} onCheckedChange={checked => setCopy(checked === true)} disabled={busy || account === undefined} className="mt-0.5" aria-label="Copy my GitHub login to the server" />
+              <span>
+                {account !== undefined ? `Copy my GitHub login (${account}) to the server.` : 'Copy my GitHub login to the server.'}{' '}
+                <span className="text-muted-foreground">
+                  {noLogin ?? "It can do there all it can do here, and every agent that runs on the server works with it. It goes there at the install's end, to a server met for the first time too, whose key is taken as it is."}
+                </span>
+              </span>
+            </label>
+            <p className="text-xs text-muted-foreground">
+              The user is root, or one that becomes root without a password. It is only used to install, to update, to give the server its logins and to list its devices: what runs on the server afterwards runs as a user of its own, openagent.
+            </p>
+          </div>
+        </>
+      )}
+      {known !== undefined && servers.length === 0 && others.length === 0 && (
+        <p className="py-3 text-sm text-muted-foreground">
+          {isServer ? 'No machines saved.' : 'No machines saved. To add one that already runs OpenAgent, use the link it gives: its Settings, Devices, Add device.'}
         </p>
-      </div>
-      {servers.length > 0 && (
-        <ul aria-label="Servers" className="divide-y divide-border">
+      )}
+      {(servers.length > 0 || others.length > 0) && (
+        <ul aria-label="Machines" className="divide-y divide-border">
           {servers.map(server => {
             const machine = inMachines(server)
             const failed = !server.working && server.steps.some(step => step.state === 'failed')
@@ -238,7 +480,7 @@ function Servers({ read, reload, everyMs }: { read: Answer<ServersRead>; reload:
                           : machine
                             ? 'Does not answer right now.'
                             : installed(server) && !server.adding
-                              ? 'Installed, and not among your machines.'
+                              ? 'Installed. A run cannot be sent to it yet.'
                               : `Logs in as ${server.user}.`}
                     </p>
                   </div>
@@ -255,8 +497,8 @@ function Servers({ read, reload, everyMs }: { read: Answer<ServersRead>; reload:
                       </Button>
                     )}
                     {installed(server) && machine?.version === undefined && (reason !== undefined || !server.adding) && (
-                      <Button size="sm" variant="outline" disabled={busy} aria-label={`Add ${server.address} to Machines`} onClick={() => void addToMachines(server)}>
-                        {machine ? 'Add again' : 'Add to Machines'}
+                      <Button size="sm" variant="outline" disabled={busy} aria-label={machine ? `Connect ${server.address} again` : `Finish connecting ${server.address}`} onClick={() => void addToMachines(server)}>
+                        {machine ? 'Connect again' : 'Finish connecting'}
                       </Button>
                     )}
                     {installed(server) && (
@@ -268,10 +510,15 @@ function Servers({ read, reload, everyMs }: { read: Answer<ServersRead>; reload:
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={busy}
+                        // Not while one of its logins is being changed: the server is not forgotten then, and nothing of it is taken out before.
+                        disabled={busy || github.working || claude.working}
                         aria-label={`Remove ${server.address}`}
-                        title="Takes the server off this list. Nothing is changed on the server: its logins stay there until you remove them."
-                        onClick={() => void act(() => forget(host, server.address))}
+                        title={
+                          github.working || claude.working
+                            ? 'One of its logins is being changed right now: wait until that ends.'
+                            : 'Takes the server off this list, and this computer out of the server. Nothing else is changed on the server: OpenAgent goes on running there, and its logins stay there until you remove them.'
+                        }
+                        onClick={() => void removeServer(server)}
                       >
                         Remove
                       </Button>
@@ -325,7 +572,7 @@ function Servers({ read, reload, everyMs }: { read: Answer<ServersRead>; reload:
                         {step.label}
                       </span>
                       {step.id === 'login' && step.state === 'done' && server.fingerprint !== undefined && (
-                        <span className="ml-2 font-mono text-muted-foreground">{`The server's key: ${server.fingerprint}`}</span>
+                        <span className="ml-2 break-all font-mono text-muted-foreground">{`The server's key: ${server.fingerprint}`}</span>
                       )}
                       {step.said !== undefined && step.state === 'failed' && (
                         <pre role="alert" className="mt-1 ml-4 overflow-x-auto whitespace-pre-wrap rounded-md border border-border bg-background p-2 font-mono text-foreground">
@@ -343,12 +590,12 @@ function Servers({ read, reload, everyMs }: { read: Answer<ServersRead>; reload:
                     </li>
                   )}
                   {installed(server) && (
-                    <li aria-label={`Among your machines: ${machine ? 'done' : reason !== undefined ? 'failed' : server.adding ? 'running' : 'not started'}`}>
+                    <li aria-label={`Runs can be sent to it: ${machine ? 'done' : reason !== undefined ? 'failed' : server.adding ? 'running' : 'not started'}`}>
                       <span className={machine ? undefined : reason !== undefined ? 'text-danger' : 'text-muted-foreground'}>
                         <span aria-hidden className="inline-block w-4">
                           {MARK[machine ? 'done' : reason !== undefined ? 'failed' : server.adding ? 'running' : 'waiting']}
                         </span>
-                        Among your machines
+                        Runs can be sent to it
                       </span>
                       {reason !== undefined && !machine && (
                         <pre role="alert" className="mt-1 ml-4 overflow-x-auto whitespace-pre-wrap rounded-md border border-border bg-background p-2 font-mono text-foreground">
@@ -454,12 +701,18 @@ function Servers({ read, reload, everyMs }: { read: Answer<ServersRead>; reload:
                     </LoginLine>
                   </ul>
                 )}
+                {installed(server) && (
+                  <ServerDevices host={host} address={server.address} everyMs={devicesEveryMs} awaited={code?.address === server.address} busy={busy || known === undefined} ownDevice={machine?.device} onGotIn={() => setCode(undefined)} />
+                )}
               </li>
             )
           })}
+          {others.map(machine => (
+            <MachineLine key={machine.id} machine={machine} known={known !== undefined} busy={busy} onRemove={() => void removeMachine(machine)} />
+          ))}
         </ul>
       )}
-      {!read.ok && (
+      {!read.ok && !isServer && (
         <p role="alert" className="py-3 text-xs text-danger">{`The servers could not be read: ${read.error}`}</p>
       )}
       {error !== undefined && (
@@ -467,6 +720,7 @@ function Servers({ read, reload, everyMs }: { read: Answer<ServersRead>; reload:
           {error}
         </p>
       )}
+      {addingByLink && <AddMachineDialog onClose={() => setAddingByLink(false)} onAdded={() => void reloadMachines()} />}
     </SettingsSection>
   )
 }

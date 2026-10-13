@@ -245,12 +245,11 @@ export const Composer = forwardRef<ComposerHandle, {
         onSelect: (m: Machine) => selectMachine(m.id),
         onSelectLocal: () => selectMachine(null),
         onAddMachine: () => setAddingMachine(true),
-        // #1072: drop a saved machine; clear the selection if it was the run target.
+        // #1072: drop a saved machine; it is then no longer the run target either.
         onRemove: (m: Machine) => {
           setMachineRefusal(null)
           void removeMachine(m.id).then(result => {
-            if (!result.ok) return setMachineRefusal(result.error)
-            if (selectedMachineId === m.id) selectMachine(null)
+            if (!result.ok) setMachineRefusal(result.error)
           })
         },
         status: machineStatus,
