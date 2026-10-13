@@ -1,15 +1,24 @@
 {
   "id": "2026-10-13T00-21-28-986Z",
   "startedAt": "2026-10-13T00:21:29.301Z",
-  "status": "running",
+  "endedAt": "2026-10-13T00:21:38.602Z",
+  "status": "done",
   "intent": "tell me hi, nothing else",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "branch": "agent-2026-10-13T00-21-28-986Z",
+  "cost": 0.057429999999999995,
   "caller": {
     "runner": {
       "host": "ubuntu-s-1vcpu-2gb-fra1",
-      "pid": 337216
+      "pid": 337216,
+      "baseCommit": "62bc653cdd66020974e4d19bdcc1bbe09eb9b1d5"
     },
-    "host": "ubuntu-s-1vcpu-2gb-fra1"
+    "pid": 337216,
+    "host": "ubuntu-s-1vcpu-2gb-fra1",
+    "baseCommit": "62bc653cdd66020974e4d19bdcc1bbe09eb9b1d5",
+    "kind": "prompt",
+    "workspace": "/home/openagent/projects/openagent/.branches/agent-2026-10-13T00-21-28-986Z",
+    "sessionId": "af86f5ab-1dda-4566-8e6d-5917940793af"
   }
 }
