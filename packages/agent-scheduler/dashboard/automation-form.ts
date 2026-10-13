@@ -169,11 +169,6 @@ export function isUntouched(draft: AutomationDraft): boolean {
   return draft.name === '' && draft.prompt === '' && draft.when === '' && draft.waitsFor === ''
 }
 
-/** What the words beside a pace say of it, given whether a shell line is typed: how the two decide together when the row runs. */
-export function paceHint(draft: AutomationDraft): string {
-  return draft.when.trim() !== '' ? 'at most, and only when the shell line prints something' : 'by time alone'
-}
-
 /** What trying a shell line answered, as the page shows it. */
 export interface TriedLine {
   /** The time the line was given as `$LAST_RUN`. */

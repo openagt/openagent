@@ -3,12 +3,12 @@ import { Button, type ModuleCommandResult, type ModuleProject } from '@openagt/d
 import type { PublishPick } from '../src/state.js'
 import { MAX_AGENTS, OWN_AUTOMATIONS_DIR, type AgentName } from '../src/names.js'
 import { parseInterval, parseTimeOfDay } from '../src/pace.js'
-import { atRowsPace, draftProblem, draftRow, editArgs, editedWords, keptWhereHint, ownPaceArgs, paceHint, removeWarning, removedWords, savedFile, saysTheSame, type AutomationDraft, type OpenedAutomation, type OwnPace } from './automation-form.js'
+import { atRowsPace, draftProblem, draftRow, editArgs, editedWords, keptWhereHint, ownPaceArgs, removeWarning, removedWords, savedFile, saysTheSame, type AutomationDraft, type OpenedAutomation, type OwnPace } from './automation-form.js'
 import { AgentsFields, PaceFields, PublishField, RunsOnFields, SaidFields, SaidShown, Section, type ModelDraft } from './fields.js'
-import { agentOf, agentsArgs, agentsDraftOf, atOnce, atOnceWords, draftOf, isOwn, pace, runsOnWords, paceArgs, paceProblem, publishes, rowTitle, saysAtOnce, withDraft, type AgentModels, type AgentsDraft, type PaceDraft, type SchedulerCommand } from './schedulers.js'
+import { agentOf, agentsArgs, agentsDraftOf, atOnce, atOnceWords, draftOf, isOwn, pace, runsOnWords, paceArgs, paceProblem, publishes, rowTitle, saysAtOnce, spelled, withDraft, type AgentModels, type AgentsDraft, type PaceDraft, type SchedulerCommand } from './schedulers.js'
 
 // The Edit panel of the Automations page: one panel, with the same parts in the same order, for
-// every row. What it does; when it runs; how many agents at once; what it runs on, a coding agent
+// every row. What it does; when it runs: what it waits for, and how long it waits after a start; how many agents at once; what it runs on, a coding agent
 // and a model; what its runs publish.
 //
 // A row that comes from a skill of the project shows what it does greyed, since its words are the
@@ -274,10 +274,10 @@ export function EditPanel({
       <Section title="When it runs">
         {own ? (
           <PaceFields
-            name={`when ${title} runs`}
+            name={`How long ${title} waits after a start`}
             draft={own.pace}
-            work={{ label: 'Whenever the shell line prints something', disabled: own.when.trim() === '' }}
-            everyHint={paceHint(own)}
+            work={own.when.trim() !== '' ? { waitsFor: own.waitsFor.trim() || undefined } : undefined}
+            noWait={own.when.trim() !== ''}
             start={{ count: 1, unit: 'd' }}
             counted={`Counted from its last start, ${where}.`}
             disabled={saving}
@@ -286,10 +286,11 @@ export function EditPanel({
           />
         ) : (
           <PaceFields
-            name={`when ${title} runs`}
+            name={`How long ${title} waits after a start`}
             draft={paceDraft}
-            asSaid={{ label: asSaid, says: lower(pace(withDraft(scheduled, { kind: 'skill' }))) }}
-            work={scheduled.when !== undefined && scheduled.every !== undefined ? { label: 'Whenever there is work' } : undefined}
+            work={scheduled.when !== undefined ? { waitsFor: scheduled.waitsFor } : undefined}
+            asSaid={{ label: asSaid, says: scheduled.every !== undefined ? spelled(scheduled.every) : 'no wait' }}
+            noWait={scheduled.when !== undefined && scheduled.every !== undefined}
             start={{ count: skills?.count ?? 1, unit: skills?.unit ?? 'd' }}
             counted={`Counted from its last start, ${where}.`}
             disabled={saving}
@@ -300,7 +301,7 @@ export function EditPanel({
       </Section>
       <Section title="How many at once">
         <AgentsFields
-          name={`how many of ${title} at once`}
+          name={`How many of ${title} at once`}
           draft={agents}
           asSaid={own ? undefined : { label: asSaid, says: lower(atOnceWords(scheduled.skillAgents ?? 1)) }}
           start={scheduled.skillAgents ?? 1}
