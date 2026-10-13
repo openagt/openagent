@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { DEVICE_COOKIE, ENTER_PATH, openDoor, readBearer, readEntry, type Door } from './door.js'
-import { addCode, enter, readStore, removeDevice, type Entry } from './store.js'
+import { COMPUTER_HEADER, addCode, enter, readStore, removeDevice, sha256, type Entry } from './store.js'
 import { testHome } from './test-home.js'
 
 // The door in front of a stand-in for OpenAgent: a real server on this machine that records what
@@ -374,6 +374,80 @@ test('a computer takes itself out with its key, and is out at once; nobody takes
   } finally {
     await r.close()
   }
+})
+
+test('a computer says which one it is when it gets in: got in again, it is in the place of what it had, and its old key opens nothing', async () => {
+  const r = await rig()
+  try {
+    const MAC = 'a'.repeat(32)
+    const get = async (computer: string | undefined, name = 'Mac'): Promise<string> => {
+      const answer = await fetch(`${r.at}${ENTER_PATH}`, { method: 'POST', headers: { 'content-type': 'application/json', ...(computer !== undefined ? { [COMPUTER_HEADER]: computer } : {}) }, body: JSON.stringify({ code: (await addCode(r.env)).code, computer: name }) })
+      assert.equal(answer.status, 200)
+      return ((await answer.json()) as { key: string }).key
+    }
+    const first = await get(MAC)
+    const other = await get('b'.repeat(32), 'Studio')
+    // What is no such word is not one: the computer is let in, as one that did not say.
+    const unsaid = await get('not a computer')
+    const second = await get(MAC)
+    const store = await readStore(r.env)
+    // The file keeps the word as it keeps a key: its SHA-256, never the word.
+    assert.deepEqual(store.devices.map(device => [device.id, device.computer]), [[readBearer(`Bearer ${other}`)!.id, sha256('b'.repeat(32))], [readBearer(`Bearer ${unsaid}`)!.id, undefined], [readBearer(`Bearer ${second}`)!.id, sha256(MAC)]])
+    assert.doesNotMatch(JSON.stringify(store), new RegExp(MAC))
+    assert.equal((await fetch(`${r.at}/_relay/ping`, { headers: { authorization: `Bearer ${first}` } })).status, 401)
+    assert.equal((await fetch(`${r.at}/_relay/ping`, { headers: { authorization: `Bearer ${second}` } })).status, 200)
+
+    // A phone's page cannot say it is a computer: what a browser sends with a code names no computer.
+    const phone = await fetch(`${r.at}${ENTER_PATH}`, { method: 'POST', headers: { 'content-type': 'application/json', [COMPUTER_HEADER]: MAC }, body: JSON.stringify({ code: (await addCode(r.env)).code }) })
+    assert.equal(phone.status, 200)
+    const after = await readStore(r.env)
+    assert.equal(after.devices.length, 4)
+    assert.equal(after.devices.at(-1)!.computer, undefined)
+    assert.equal((await fetch(`${r.at}/_relay/ping`, { headers: { authorization: `Bearer ${second}` } })).status, 200)
+  } finally {
+    await r.close()
+  }
+})
+
+test('a computer that got in before it said which one it is says so with its key: noted once, kept, never taken from a page, and not passed on to OpenAgent', async () => {
+  const r = await rig()
+  const env = r.env
+  const MAC = 'a'.repeat(32)
+  const { entry } = await r.letIn('OpenAgent on a laptop')
+  const { entry: phone, cookie } = await r.letIn()
+  const authorization = `Bearer ${entry.id}.${entry.key}`
+  await fetch(`${r.at}/_relay/ping`, { headers: { authorization, [COMPUTER_HEADER]: MAC } })
+  // A device's page says it too: a cookie's word for a computer is not taken.
+  await fetch(`${r.at}/`, { headers: { cookie, [COMPUTER_HEADER]: 'c'.repeat(32) } })
+  // What it says later changes nothing: an entry is the computer it first said.
+  await fetch(`${r.at}/_relay/ping`, { headers: { authorization, [COMPUTER_HEADER]: 'b'.repeat(32) } })
+  for (const asked of r.asked) assert.equal(asked.headers[COMPUTER_HEADER], undefined)
+  // Written with the times: closing the door writes what it still held.
+  await r.door.close()
+  const said = Object.fromEntries((await readStore(env)).devices.map(device => [device.id, device.computer]))
+  // What is written is kept too: a door opened anew does not take another word for that entry.
+  const again = await openDoor({ env, target: r.target, port: 0, host: '127.0.0.1' })
+  await fetch(`http://127.0.0.1:${again.port}/_relay/ping`, { headers: { authorization, [COMPUTER_HEADER]: 'b'.repeat(32) } })
+  await again.close()
+  const kept = (await readStore(env)).devices.find(device => device.id === entry.id)?.computer
+  await r.close()
+  assert.deepEqual(said, { [entry.id]: sha256(MAC), [phone.id]: undefined })
+  assert.equal(kept, sha256(MAC))
+})
+
+test('a key that says it is a computer already listed with a key of that kind is not put in that computer\'s row: the list names every key that is in', async () => {
+  const r = await rig()
+  const env = r.env
+  const MAC = 'a'.repeat(32)
+  // The computer's own entry, which said its word when it got in.
+  const own = (await enter(env, (await addCode(env)).code, 'OpenAgent on Mac', undefined, undefined, sha256(MAC)))!
+  // Someone who is in gets in once more as a computer, and says the first one's word with the new key.
+  const { entry: extra } = await r.letIn('OpenAgent on Mac')
+  await fetch(`${r.at}/_relay/ping`, { headers: { authorization: `Bearer ${extra.id}.${extra.key}`, [COMPUTER_HEADER]: MAC } })
+  await r.door.close()
+  const said = Object.fromEntries((await readStore(env)).devices.map(device => [device.id, device.computer]))
+  await r.close()
+  assert.deepEqual(said, { [own.id]: sha256(MAC), [extra.id]: undefined })
 })
 
 test('readBearer reads a computer\'s key off its header, and nothing else', () => {

@@ -161,7 +161,16 @@ export interface Registry {
    * carries a key, so the list is never part of what the browser is handed.
    */
   machines?: MachineRecord[]
+  /**
+   * Which computer this is, as it says to the machines it gets into: a word made once and kept,
+   * so a machine lists this computer once, and takes what it had there for replaced when it gets
+   * in again. Top-level, and never part of what the browser is handed. Absent until first needed.
+   */
+  computer?: string
 }
+
+/** What a computer says it is: made here, and read back only as what was made. */
+const isComputerId = (value: unknown): value is string => typeof value === 'string' && /^[a-z0-9]{16,64}$/.test(value)
 
 /** A read/write handle for the user preferences, wired into the dashboard's context by the daemon. */
 export interface PreferencesStore {
@@ -402,6 +411,7 @@ export async function readRegistry(
     // Kept only as a non-empty string, so a hand-edited registry can't smuggle a junk key.
     ...(typeof obj.bridgeToken === 'string' && obj.bridgeToken ? { bridgeToken: obj.bridgeToken } : {}),
     ...(machines.length ? { machines } : {}),
+    ...(isComputerId(obj.computer) ? { computer: obj.computer } : {}),
   }
 }
 
@@ -422,12 +432,13 @@ export async function readRegistry(
  */
 async function writeRegistry(registry: Registry, fs: RegistryFs, env: NodeJS.ProcessEnv): Promise<void> {
   const file = registryPath(env)
-  const { projects, preferences, bridgeToken, machines } = registry
+  const { projects, preferences, bridgeToken, machines, computer } = registry
   const contents = {
     projects,
     preferences,
     ...(bridgeToken ? { bridgeToken } : {}),
     ...(machines?.length ? { machines } : {}),
+    ...(computer ? { computer } : {}),
   }
   const json = JSON.stringify(contents, null, 2)
   await fs.mkdir(dirname(file))
@@ -579,6 +590,23 @@ export async function ensureBridgeToken(
     const bridgeToken = randomBytes(32).toString('base64url')
     await writeRegistry({ ...registry, bridgeToken }, fs, env)
     return bridgeToken
+  })
+}
+
+/**
+ * Which computer this is: read the word the home file keeps, or make one and keep it now.
+ * Serialized with the other mutators, so two starts at once do not each make another.
+ */
+export async function ensureComputerId(
+  fs: RegistryFs = nodeRegistryFs(),
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string> {
+  return serialize(async () => {
+    const registry = await readRegistry(fs, env)
+    if (registry.computer) return registry.computer
+    const computer = randomBytes(16).toString('hex')
+    await writeRegistry({ ...registry, computer }, fs, env)
+    return computer
   })
 }
 

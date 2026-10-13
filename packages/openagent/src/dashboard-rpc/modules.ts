@@ -5,6 +5,8 @@ import { computerModuleUrl, moduleUrl } from '../dashboard/module-serve.js'
 import { providedDataChanged } from '../store/provided.js'
 import { callModuleRead, serverHost, type ModuleReadResult } from '../dashboard/module-host.js'
 import { relayOr } from './relay-agent.js'
+import { COMPUTER_ENV } from '../package-services.js'
+import { computerSaid } from '../dashboard/machine-call.js'
 import { DATA_BRANCH, pullFileBranch } from '@openagt/agent-data'
 
 export type { ModuleCommandResult } from '../project-modules.js'
@@ -80,7 +82,9 @@ export async function runComputerCommand(pkg: string, args: string[], command?: 
   if (!Array.isArray(args)) return { ok: false, error: 'arguments must be a list' }
   const module = await findComputerModule(pkg)
   if (!module) return { ok: false, error: `${pkg} is not this computer's` }
-  return runCommand(homedir(), module, args, command)
+  // Told which computer this is, in the word OpenAgent's own calls are made from: what such a command sets up on another machine is listed there as this computer's.
+  const computer = computerSaid()
+  return runCommand(homedir(), module, args, command, computer !== undefined ? { [COMPUTER_ENV]: computer } : undefined)
 }
 
 /**

@@ -12,7 +12,12 @@ export interface DeviceRow {
   seen?: string
   /** A computer that keeps a line open here: this server starts runs on it. */
   line?: true
+  /** A computer is one row: the ids of what else it holds here, its line beside its key for OpenAgent. */
+  also?: string[]
 }
+
+/** Every id a row is listed under. */
+export const idsOf = (device: Pick<DeviceRow, 'id' | 'also'>): string[] => [device.id, ...(device.also ?? [])]
 
 /** The door as `status` tells it. */
 export interface DoorStatus {
@@ -43,9 +48,10 @@ export function readStatus(output: unknown): DoorStatus | undefined {
   const rows: DeviceRow[] = []
   for (const entry of devices) {
     if (!entry || typeof entry !== 'object') continue
-    const { id, name, added, seen, line } = entry as Record<string, unknown>
+    const { id, name, added, seen, line, also } = entry as Record<string, unknown>
     const [deviceId, deviceName, addedAt, seenAt] = [text(id), text(name), text(added), text(seen)]
-    if (deviceId && deviceName && addedAt) rows.push({ id: deviceId, name: deviceName, added: addedAt, ...(seenAt ? { seen: seenAt } : {}), ...(line === true ? { line: true } : {}) })
+    const others = Array.isArray(also) ? also.filter((other): other is string => typeof other === 'string' && other !== '') : []
+    if (deviceId && deviceName && addedAt) rows.push({ id: deviceId, name: deviceName, added: addedAt, ...(seenAt ? { seen: seenAt } : {}), ...(line === true ? { line: true } : {}), ...(others.length ? { also: others } : {}) })
   }
   const why = text(problem)
   const address = https && typeof https === 'object' ? text((https as Record<string, unknown>).address) : undefined

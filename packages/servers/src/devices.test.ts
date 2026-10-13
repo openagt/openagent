@@ -52,6 +52,21 @@ test('what a server lists is read as data: only what a device is, as many as a d
   assert.equal(listed[4]!.added, '2026-10-12T17:50:00.000Z')
   // Whatever a server wrote around a time, only the time is kept.
   for (const device of listed) for (const time of [device.added, device.seen]) if (time !== undefined) assert.match(time, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/)
+  // A computer listed once, with what else it holds there: ids as a door makes them, each under one row only.
+  const rows = devicesIn(
+    status([
+      { ...PHONE, also: [LAPTOP.id, '$(reboot)', PHONE.id, LAPTOP.id, 42, 'aaaaaaaaaaa1', 'aaaaaaaaaaa2', 'aaaaaaaaaaa3', 'aaaaaaaaaaa4'] },
+      // An id already under the first row is no row of its own, and is under no second row.
+      LAPTOP,
+      { id: 'e1b2c3d4e5f6', name: 'Mac', added: PHONE.added, also: [LAPTOP.id, 'bbbbbbbbbbb1'] },
+      { ...PHONE, id: 'f1b2c3d4e5f6', also: 'none' },
+    ]),
+  )!
+  assert.deepEqual(rows.map(row => [row.id, row.also]), [
+    [PHONE.id, [LAPTOP.id, 'aaaaaaaaaaa1', 'aaaaaaaaaaa2', 'aaaaaaaaaaa3']],
+    ['e1b2c3d4e5f6', ['bbbbbbbbbbb1']],
+    ['f1b2c3d4e5f6', undefined],
+  ])
   const many = Array.from({ length: 80 }, (_, index) => ({ ...PHONE, id: `device${String(index).padStart(3, '0')}` }))
   assert.equal(devicesIn(status(many))!.length, 50)
 })

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, createHmac } from 'node:crypto'
 import { request } from 'node:https'
 import { isIP } from 'node:net'
 import { Readable } from 'node:stream'
@@ -27,6 +27,30 @@ export const NOT_THE_MACHINE = 'what answers at this address is not the machine 
 /** How long a machine gets to show its key once it took the connection. */
 const HANDSHAKE_MS = 10_000
 
+/** How this computer says which one it is to a machine's door, with every call: the door lists it once by it. */
+export const COMPUTER_HEADER = 'x-openagent-computer'
+
+let computer: string | undefined
+
+/** Say which computer this is from here on, with every call to a machine. Set once, when OpenAgent starts. */
+export function sayComputer(id: string | undefined): void {
+  computer = id
+}
+
+/** The word OpenAgent was told to say, as the home file keeps it: what its own packages are handed, to say the same. */
+export function computerSaid(): string | undefined {
+  return computer
+}
+
+/**
+ * The word this computer says to one machine's door, made from the word it keeps and that door's
+ * address: each door hears another word, so one that a machine learned says nothing at any other.
+ * A door's own package makes the same word for the line it keeps to that door.
+ */
+export function computerWordFor(word: string, door: string): string {
+  return createHmac('sha256', word).update(new URL(door).origin).digest('hex').slice(0, 32)
+}
+
 export interface MachineCall {
   method?: string
   headers?: Record<string, string>
@@ -34,7 +58,8 @@ export interface MachineCall {
   signal?: AbortSignal
 }
 
-export function machineFetch(url: string, pin: string | undefined, init: MachineCall = {}): Promise<Response> {
+export function machineFetch(url: string, pin: string | undefined, call: MachineCall = {}): Promise<Response> {
+  const init: MachineCall = computer === undefined ? call : { ...call, headers: { ...call.headers, [COMPUTER_HEADER]: computerWordFor(computer, url) } }
   const target = new URL(url)
   if (target.protocol !== 'https:' || pin === undefined) return fetch(url, { ...init, redirect: 'error' })
   return new Promise<Response>((resolve, reject) => {

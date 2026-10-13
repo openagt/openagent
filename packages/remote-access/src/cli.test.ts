@@ -9,7 +9,7 @@ import { USAGE, runCli, type CliIO } from './cli.js'
 import { keyFingerprint } from './der.js'
 import { ENTER_PATH } from './door.js'
 import { readFile, writeFile } from 'node:fs/promises'
-import { readStore, storePath } from './store.js'
+import { readStore, storePath, update } from './store.js'
 import { testHome } from './test-home.js'
 import { testOffice } from './test-office.js'
 
@@ -195,6 +195,63 @@ test('on a server, add answers one HTTPS link at the server\'s address, with wha
     stop.abort()
     await serving
     await office.close()
+    await home.remove()
+  }
+})
+
+test('status lists a computer once, its OpenAgent and its line as one row, and never says which computer an entry is; remove takes the computer out whole', async () => {
+  const home = await testHome()
+  try {
+    const MAC = 'a'.repeat(64)
+    const key = 'f'.repeat(64)
+    const phone = { id: 'aaaaaa000001', name: 'iPhone, Safari', key, added: '2026-10-12T10:00:00.000Z', seen: '2026-10-13T10:00:00.000Z' }
+    const agent = { id: 'aaaaaa000002', name: 'OpenAgent on Mac', key, added: '2026-10-12T12:00:00.000Z', seen: '2026-10-13T09:00:00.000Z', computer: MAC }
+    const other = { id: 'aaaaaa000003', name: 'OpenAgent on Studio', key, added: '2026-10-12T13:00:00.000Z', computer: 'b'.repeat(64) }
+    const line = { id: 'aaaaaa000004', name: 'Mac', key, added: '2026-10-12T11:00:00.000Z', seen: '2026-10-13T11:00:00.000Z', line: { port: 4300 }, computer: MAC }
+    // A computer that never said which one it is stays a row of its own, whatever it is called.
+    const unsaid = { id: 'aaaaaa000005', name: 'OpenAgent on Mac', key, added: '2026-10-12T14:00:00.000Z' }
+    // A second key of a kind the computer's row already holds is a row of its own: the list names every key that is in.
+    const second = { id: 'aaaaaa000006', name: 'OpenAgent on Mac', key, added: '2026-10-12T15:00:00.000Z', computer: MAC }
+    await update(home.env, store => void (store.devices = [phone, agent, other, line, unsaid, second]))
+    const status = await run(home.env, ['status'])
+    assert.deepEqual((status.out as { devices: unknown }).devices, [
+      { id: phone.id, name: phone.name, added: phone.added, seen: phone.seen },
+      // The computer's own name, as its line is listed; added when the first of the two was, seen when the last of them was.
+      { id: agent.id, name: 'Mac', added: line.added, seen: line.seen, line: true, also: [line.id] },
+      { id: other.id, name: other.name, added: other.added },
+      { id: unsaid.id, name: unsaid.name, added: unsaid.added },
+      { id: second.id, name: second.name, added: second.added },
+    ])
+    assert.doesNotMatch(JSON.stringify(status.out), /aaaaaaaaaaaaaaaa|computer/)
+
+    // By either id of the row: what the row holds is out, the computer's key for OpenAgent and its line, and nothing else is,
+    // the key that is a row of its own no more than anybody's.
+    const after = await run(home.env, ['remove', line.id])
+    assert.deepEqual((after.out as { devices: { id: string }[] }).devices.map(device => device.id), [phone.id, other.id, unsaid.id, second.id])
+    assert.deepEqual((await readStore(home.env)).devices.map(device => device.id), [phone.id, other.id, unsaid.id, second.id])
+    assert.deepEqual((await run(home.env, ['remove', agent.id])).err, [`no device has the id ${agent.id}`])
+  } finally {
+    await home.remove()
+  }
+})
+
+test('a line the server said no to is told as refused, and is not told what the server may do: it is asked for anew; that the server may do less is written all the same', async () => {
+  const home = await testHome()
+  try {
+    await update(home.env, store => void (store.lines = [{ url: 'https://box.example.com', pin: 'p'.repeat(43), key: '0f9e8d7c6b5a.the-secret', mode: 'full', refused: true }]))
+    assert.deepEqual(((await run(home.env, ['status'])).out as { lines: unknown }).lines, [{ url: 'https://box.example.com', mode: 'full', id: '0f9e8d7c6b5a', refused: true }])
+    const told = await run(home.env, ['line', 'full', 'box.example.com'])
+    assert.equal(told.code, 1)
+    assert.deepEqual(told.err, ['The server at box.example.com no longer lets this computer in for its line. Ask for the line anew, with a new link.'])
+    assert.equal((await readStore(home.env)).lines[0]!.mode, 'full')
+    // Only watching: answered as refused too, so whoever asked goes for a new line, and written, so the old one does no more should it ever carry again.
+    const less = await run(home.env, ['line', 'watch', 'box.example.com'])
+    assert.equal(less.code, 1)
+    assert.deepEqual(less.err, told.err)
+    assert.deepEqual((await readStore(home.env)).lines.map(({ mode, refused }) => [mode, refused]), [['watch', true]])
+    assert.equal((await run(home.env, ['line', 'full', 'box.example.com'])).code, 1)
+    assert.equal((await readStore(home.env)).lines[0]!.mode, 'watch')
+  } finally {
     await home.remove()
   }
 })

@@ -25,6 +25,12 @@ already made, and lists it in its pull request; for anything else it proposes an
   second kind of key that opens less: a key that starts an agent already runs anything on
   the computer.
 
+- A computer is listed once among the devices, whatever it holds there, and is taken out
+  whole. Picked over a row for its OpenAgent and one for its line, where one laptop showed
+  twice.
+- A computer that gets in again takes the place of what it had there. Picked over a new
+  entry each time, which left the old ones to be removed by hand.
+
 ## Phone on Wi-Fi
 - The link on the Wi-Fi is plain HTTP, behind a switch that is off until a person turns it
   on, and turning it on says first what plain HTTP means. A lock of its own comes later.
@@ -46,3 +52,5 @@ already made, and lists it in its pull request; for anything else it proposes an
 - Through that connection the server does everything a machine is asked, until the person turns
   one switch off; then it only reads. Picked over a server that only watches until it is let
   do more.
+- A line the server no longer lets in reads as off on the computer, which says why. Picked
+  over a switch that goes on saying on over a line that carries nothing.

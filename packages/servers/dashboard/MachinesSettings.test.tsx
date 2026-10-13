@@ -430,6 +430,53 @@ describe('Settings → Machines', () => {
     expect(rows()).toHaveLength(5)
   })
 
+  test('this computer is one row among the server\'s devices, its OpenAgent and its line together, with no Remove; another computer\'s row has one', async () => {
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5', version: '1.2.3', device: 'c1b2c3d4e5f6' }] }
+    const now = new Date().toISOString()
+    // As the server lists a computer: one row, under one id, with what else it holds there.
+    const MINE: DeviceRow = { id: 'c1b2c3d4e5f6', name: 'MacBook', added: now, seen: now, line: true, also: ['0f9e8d7c6b5a'], own: true }
+    // Listed under its line's id, with its OpenAgent's beside: this computer's all the same.
+    const OTHER: DeviceRow = { id: '112233445566', name: 'Studio', added: now, line: true, also: ['aabbccddeeff'] }
+    const { host } = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false, reach: 'full' })] }), saved, { ok: true }, NO_GH, () => ok({ devices: [MINE, OTHER] }))
+    show(host)
+    const list = await screen.findByRole('list', { name: 'The devices that are in on 203.0.113.5' })
+    const rows = within(list).getAllByRole('listitem').map(item => item.textContent ?? '')
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toContain('This computer: its OpenAgent, and the line it keeps open to the server. The switch above says what the server may do through the line. To take this computer out, remove the server from this list.')
+    expect(screen.queryByRole('button', { name: 'Remove MacBook from 203.0.113.5' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Remove Studio from 203.0.113.5' })).toBeTruthy()
+    cleanup()
+
+    const under: ModuleMachines = { version: '1.2.3', machines: [{ ...saved.machines[0]!, device: '0f9e8d7c6b5a' }] }
+    const second = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false, reach: 'full' })] }), under, { ok: true }, NO_GH, () => ok({ devices: [{ ...MINE, own: undefined }, OTHER] }))
+    show(second.host)
+    await screen.findByText(/This computer's OpenAgent: it sends runs to the server and reads them with this\./)
+    expect(screen.queryByRole('button', { name: 'Remove MacBook from 203.0.113.5' })).toBeNull()
+  })
+
+  test('a server that no longer lets this computer in for its line: the switch reads off and says why, and turning it on asks for the line anew', async () => {
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5', version: '1.2.3' }] }
+    let lineRefused = true
+    const { host, ran } = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false, reach: 'full' })] }), saved, { ok: true }, NO_GH, () => ok({ devices: [], lineRefused }))
+    show(host)
+    await screen.findByText('Off: 203.0.113.5 no longer lets this computer in for its line. Turn it on to set the line up again: "Run on" on 203.0.113.5\'s page then offers this computer.')
+    const theSwitch = screen.getByRole('switch', { name: 'Start runs on this computer from 203.0.113.5' })
+    expect(theSwitch.getAttribute('aria-checked')).toBe('false')
+    // The server's own file still says "full": what the door says of the line is what counts.
+    fireEvent.click(theSwitch)
+    await waitFor(() => expect(ran()).toContain('reach 203.0.113.5 full'))
+    // At once, before the next look at the server's devices says so too.
+    await screen.findByText(/On: on 203\.0\.113\.5's page, "Run on" offers this computer/)
+    expect(screen.getByRole('switch', { name: 'Start runs on this computer from 203.0.113.5' }).getAttribute('aria-checked')).toBe('true')
+    // What the door says at each look is what the switch reads: a door that still says refused after the press is believed, and the switch is off again.
+    await screen.findByText(/^Off: 203\.0\.113\.5 no longer lets this computer in for its line\./)
+    expect(screen.getByRole('switch', { name: 'Start runs on this computer from 203.0.113.5' }).getAttribute('aria-checked')).toBe('false')
+    // And once the door says the line is let in, it is on with nothing pressed.
+    lineRefused = false
+    await screen.findByText(/On: on 203\.0\.113\.5's page, "Run on" offers this computer/)
+    expect(screen.getByRole('switch', { name: 'Start runs on this computer from 203.0.113.5' }).getAttribute('aria-checked')).toBe('true')
+  })
+
   test('a server with no device says so; one whose devices cannot be read says why, and goes on showing the last it read; one never read says only that; a server that is not installed is not asked', async () => {
     const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5', version: '1.2.3' }] }
     let answer: ModuleCommandResult = ok({ devices: [] })
@@ -556,6 +603,14 @@ describe('Settings → Machines', () => {
     listed = [LAPTOP, { id: 'a1b2c3d4e5f6', name: 'iPhone, Safari', added: new Date().toISOString() }]
     await waitFor(() => expect(code()).toBeNull())
     expect(screen.getByText('iPhone, Safari')).toBeTruthy()
+
+    // A computer that gets in again is a new id under the row it had, and no new row: the code is spent all the same.
+    fireEvent.click(screen.getByRole('button', { name: 'Add a device to 203.0.113.5' }))
+    await waitFor(() => expect(code()).toBeTruthy())
+    await new Promise(resolve => setTimeout(resolve, 200))
+    expect(code()).toBeTruthy()
+    listed = [{ ...LAPTOP, also: ['c1b2c3d4e5f6'] }, listed[1]!]
+    await waitFor(() => expect(code()).toBeNull())
   })
 
   test('a command that refuses says why; servers that cannot be read say so', async () => {

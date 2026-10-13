@@ -126,6 +126,12 @@ describe('Settings → Devices', () => {
     // The code leaves in the render after the one that shows the new device.
     await waitFor(() => expect(screen.queryByRole('img', { name: 'The code a new device scans' })).toBeNull())
     expect(screen.getByRole('button', { name: 'Add device' })).toBeTruthy()
+
+    // A computer that gets in again is a new id under the row it had, and no new row: the code is spent all the same.
+    fireEvent.click(screen.getByRole('button', { name: 'Add device' }))
+    await screen.findByRole('img', { name: 'The code a new device scans' })
+    devices = [{ id: 'new000new000', name: 'Android phone, Chrome', added: new Date().toISOString(), also: ['again0again0'] }]
+    await waitFor(() => expect(screen.queryByRole('img', { name: 'The code a new device scans' })).toBeNull())
   })
 
   test('a removed device does not come back from a read that was on its way before the removal', async () => {

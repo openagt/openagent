@@ -9,7 +9,7 @@ import { openDoor } from './door.js'
 import { DATA, END, FrameReader, HEAD, Link, MAX_PAYLOAD, PING, PONG, RESET, carriedHeaders, carriedPath, frame } from './frames.js'
 import { carry, dial, enterForLine, knock, readLineLink, unchunked, WATCH_HEADER } from './line-out.js'
 import { serve } from './serve.js'
-import { readStore, update, type Store } from './store.js'
+import { addCode, computerWordFor, enter, readStore, sha256, update, type Store } from './store.js'
 import { testHome } from './test-home.js'
 import { testOffice } from './test-office.js'
 
@@ -374,6 +374,67 @@ test('a line that ends is asked for again, and a computer taken out on the serve
     await until('the computer is out on the server', async () => ((await readStore(r.server)).devices.length === 0 ? true : undefined))
     await until('the server’s OpenAgent dropped the machine', () => (r.machines.length === 0 ? true : undefined))
     await assert.rejects(fetch(`${machine.url}/_relay/ping`))
+  } finally {
+    await r.stop()
+  }
+})
+
+test('a computer that says which one it is: its line asked for anew is in the old one\'s place at the same address, the server lists it once, and a line the server took out is written down until it is asked for anew', async () => {
+  const r = await rig()
+  try {
+    const MAC = 'a'.repeat(32)
+    // As OpenAgent tells its door and the commands it runs.
+    r.computer.OPENAGENT_COMPUTER = MAC
+    await command(r.computer, 'line', 'add', await r.link())
+    const first = await until('the server lists the computer', async () => (await readStore(r.server)).devices[0])
+    // Which computer it is: the SHA-256 of the word it says to this door, which is not the word it keeps.
+    assert.match(first.computer ?? '', /^[0-9a-f]{64}$/)
+    const said = first.computer!
+    assert.equal(said, sha256(computerWordFor(MAC, new URL(await r.link()).origin)))
+    assert.doesNotMatch(JSON.stringify(await readStore(r.server)), new RegExp(MAC))
+    const machine = await until('the server’s OpenAgent saved the computer', () => r.machines[0])
+    const carries = async (): Promise<true | undefined> => ((await fetch(`${machine.url}/_relay/ping`)).status === 200 ? true : undefined)
+    await until('the line carries', carries)
+
+    // The computer's OpenAgent is in on the server too, and says the same: one row, by the computer's own name.
+    const agent = (await enter(r.server, (await addCode(r.server)).code, 'OpenAgent on the computer', undefined, undefined, said))!
+    const listed = await command<{ devices: { id: string; name: string; line?: true; also?: string[] }[] }>(r.server, 'status')
+    assert.deepEqual(listed.devices.map(({ id, name, line, also }) => ({ id, name, line, also })), [{ id: first.id, name: first.name, line: true, also: [agent.id] }])
+
+    // Asked for anew: in the old one's place, at the same port, so the machine the server saved is still the computer.
+    await command(r.computer, 'line', 'add', await r.link())
+    const again = await until('the old line is replaced', async () => (await readStore(r.server)).devices.find(device => device.line !== undefined && device.id !== first.id))
+    assert.deepEqual((await readStore(r.server)).devices.map(device => device.id).sort(), [agent.id, again.id].sort())
+    assert.equal(again.line!.port, first.line!.port)
+    await until('the line carries again', () => carries().catch(() => undefined))
+    assert.deepEqual(r.machines.map(saved => saved.url), [machine.url])
+
+    // An entry that does not say which computer it is learns it from the computer's next call for its line.
+    await update(r.server, store => {
+      for (const device of store.devices) if (device.line) delete device.computer
+    })
+    await update(r.server, store => void delete store.https)
+    await until('the door is closed', async () => ((await readStore(r.server)).listening === undefined ? true : undefined))
+    await update(r.server, store => void (store.https = { address: '127.0.0.1' }))
+    await until('the line carries once more', () => carries().catch(() => undefined))
+    // Written with the times a device was last seen, once a minute and when the door closes: the door is closed here to see it.
+    await update(r.server, store => void delete store.https)
+    await until('the server noted which computer the line is', async () => ((await readStore(r.server)).devices.find(device => device.id === again.id)?.computer === said ? true : undefined))
+    await update(r.server, store => void (store.https = { address: '127.0.0.1' }))
+    await until('the line carries after that', () => carries().catch(() => undefined))
+
+    // The person takes the computer out on the server: its OpenAgent and its line go together.
+    await command(r.server, 'remove', agent.id)
+    assert.deepEqual((await readStore(r.server)).devices, [])
+    // The computer's door is told no, and writes it down: the person is told, and the line is not just called for again and again.
+    await until('the computer wrote down that its line was refused', async () => ((await readStore(r.computer)).lines[0]?.refused === true ? true : undefined))
+    assert.equal(await runCli(['line', 'full', '127.0.0.1'], { env: r.computer, stdout: () => {}, stderr: () => {} }), 1)
+
+    // Asked for anew with a new link, it is a line again.
+    await command(r.computer, 'line', 'add', await r.link())
+    assert.equal((await readStore(r.computer)).lines[0]!.refused, undefined)
+    const back = await until('the server’s OpenAgent saved the computer again', () => r.machines[0])
+    await until('the new line carries', async () => ((await fetch(`${back.url}/_relay/ping`)).status === 200 ? true : undefined))
   } finally {
     await r.stop()
   }

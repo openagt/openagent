@@ -71,9 +71,21 @@ export interface DeviceRow {
   seen?: string
   /** A computer that keeps a line open to the server. */
   line?: true
-  /** That computer is this one. */
+  /** A computer is one row: the ids of what else it holds on the server. */
+  also?: string[]
+  /** That computer is this one, by the line it keeps open to the server. */
   own?: true
 }
+
+/** What a server's door lists, and what this computer's own door says of its line there. */
+export interface DevicesRead {
+  devices: DeviceRow[]
+  /** The server said no to the key this computer asks for its line with. */
+  lineRefused: boolean
+}
+
+/** Every id a row is listed under: its own, and those of what else the computer holds there. */
+export const idsOf = (device: Pick<DeviceRow, 'id' | 'also'>): string[] => [device.id, ...(device.also ?? [])]
 
 export type Answer<T> = { ok: true; value: T } | { ok: false; error: string }
 
@@ -109,18 +121,20 @@ export function readServers(output: unknown): ServerRow[] | undefined {
   return rows
 }
 
-export function readDevices(output: unknown): DeviceRow[] | undefined {
+export function readDevices(output: unknown): DevicesRead | undefined {
   if (!output || typeof output !== 'object') return undefined
-  const { devices } = output as Record<string, unknown>
+  const { devices, lineRefused } = output as Record<string, unknown>
   if (!Array.isArray(devices)) return undefined
   const rows: DeviceRow[] = []
   for (const entry of devices) {
     if (!entry || typeof entry !== 'object') continue
-    const { id, name, added, seen, line, own } = entry as Record<string, unknown>
+    const { id, name, added, seen, line, also, own } = entry as Record<string, unknown>
     const [deviceId, deviceName, addedAt, seenAt] = [text(id), text(name), text(added), text(seen)]
-    if (deviceId && deviceName && addedAt) rows.push({ id: deviceId, name: deviceName, added: addedAt, ...(seenAt ? { seen: seenAt } : {}), ...(line === true ? { line: true } : {}), ...(own === true ? { own: true } : {}) })
+    const others = Array.isArray(also) ? also.filter((other): other is string => typeof other === 'string' && other !== '') : []
+    if (deviceId && deviceName && addedAt)
+      rows.push({ id: deviceId, name: deviceName, added: addedAt, ...(seenAt ? { seen: seenAt } : {}), ...(line === true ? { line: true } : {}), ...(others.length ? { also: others } : {}), ...(own === true ? { own: true } : {}) })
   }
-  return rows
+  return { devices: rows, lineRefused: lineRefused === true }
 }
 
 function readLink(output: unknown): DoorLink | undefined {
@@ -180,6 +194,6 @@ export const forget = (host: ModuleHost, address: string): Promise<Answer<Server
 /** Keep a line open from this computer to the server, and say what the server may do through it. */
 export const reach = (host: ModuleHost, address: string, mode: Reach): Promise<Answer<ServerRow[]>> => run(host, ['reach', address, mode], readServers)
 /** The devices that are in on the server, asked of its door over SSH. */
-export const loadDevices = (host: ModuleHost, address: string): Promise<Answer<DeviceRow[]>> => run(host, ['devices', address], readDevices)
-/** Take one device out on the server; answers the ones still in. */
-export const removeDevice = (host: ModuleHost, address: string, id: string): Promise<Answer<DeviceRow[]>> => run(host, ['remove-device', address, id], readDevices)
+export const loadDevices = (host: ModuleHost, address: string): Promise<Answer<DevicesRead>> => run(host, ['devices', address], readDevices)
+/** Take one device out on the server, a computer with all it holds there; answers the ones still in. */
+export const removeDevice = (host: ModuleHost, address: string, id: string): Promise<Answer<DevicesRead>> => run(host, ['remove-device', address, id], readDevices)

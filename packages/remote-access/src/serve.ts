@@ -6,7 +6,7 @@ import { keepCertificate, type KeepOptions, type Keeper, type Secured } from './
 import { openDoor, type Door } from './door.js'
 import { linePorts, openLines, tellOpenAgent } from './line-in.js'
 import { keepLine } from './line-out.js'
-import { pidAlive, readStoreStrict, storePath, update, type Line, type Store } from './store.js'
+import { computerWordFor, isComputerId, pidAlive, readStoreStrict, storePath, update, type Line, type Store } from './store.js'
 
 /**
  * The door's process: it runs for as long as OpenAgent runs, and follows the file. With the
@@ -119,6 +119,22 @@ export async function serve(opts: ServeOptions): Promise<void> {
   // The lines this computer keeps open, by what each is asked for with; what each server may do is read anew for every call.
   const kept = new Map<string, AbortController>()
   const modes = new Map<string, Line['mode']>()
+  /** Write down whether the server took the key a line was asked for with, when that changed. */
+  const answers = new Map<string, boolean>()
+  const noteAnswer = async (asked: Line, letIn: boolean): Promise<void> => {
+    // Only a change is written: a line that calls again says the same each time, and so does a server that keeps saying no.
+    if (answers.get(asked.key) === letIn) return
+    // Remembered once it is written: an answer that could not be written down is written at the next one.
+    const written = await update(env, store => {
+      const line = store.lines.find(candidate => candidate.url === asked.url && candidate.key === asked.key)
+      if (line && (line.refused === true) === letIn) {
+        if (letIn) delete line.refused
+        else line.refused = true
+      }
+      return true
+    }).catch(() => false)
+    if (written) answers.set(asked.key, letIn)
+  }
   const followLines = (store: Store): void => {
     const wanted = new Map(store.lines.map(line => [`${line.url}\n${line.pin}\n${line.key}`, line]))
     modes.clear()
@@ -132,7 +148,22 @@ export async function serve(opts: ServeOptions): Promise<void> {
       if (kept.has(id)) continue
       const controller = new AbortController()
       kept.set(id, controller)
-      void keepLine({ url: line.url, pin: line.pin, key: line.key, target: opts.target, watch: () => modes.get(line.url) !== 'full', signal: controller.signal, log, ...opts.line })
+      answers.set(line.key, !line.refused)
+      // Which computer this is, as OpenAgent said when it started this door: its line says the same.
+      const computer = isComputerId(env.OPENAGENT_COMPUTER) ? computerWordFor(env.OPENAGENT_COMPUTER, line.url) : undefined
+      void keepLine({
+        url: line.url,
+        pin: line.pin,
+        key: line.key,
+        ...(computer !== undefined ? { computer } : {}),
+        // Written down, so the person is told: a line the server said no to stays so until it is asked for anew.
+        onAnswer: letIn => void noteAnswer(line, letIn),
+        target: opts.target,
+        watch: () => modes.get(line.url) !== 'full',
+        signal: controller.signal,
+        log,
+        ...opts.line,
+      })
     }
   }
 
