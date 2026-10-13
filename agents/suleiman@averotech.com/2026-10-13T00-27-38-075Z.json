@@ -1,0 +1,16 @@
+{
+  "id": "2026-10-13T00-27-38-075Z",
+  "startedAt": "2026-10-13T00:27:38.950Z",
+  "status": "running",
+  "intent": "Hi",
+  "driver": "claude-code",
+  "model": "sonnet",
+  "caller": {
+    "runner": {
+      "host": "ubuntu-s-1vcpu-2gb-fra1",
+      "pid": 346299,
+      "publish": "commit"
+    },
+    "host": "ubuntu-s-1vcpu-2gb-fra1"
+  }
+}
