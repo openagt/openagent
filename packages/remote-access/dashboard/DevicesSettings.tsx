@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, QrCode, SettingsRow, SettingsSection, Switch, formatDateTime, formatRelative, useModuleHost, usePolled } from '@openagt/dashboard/module'
+import { Button, Input, QrCode, SettingsRow, SettingsSection, Switch, formatDateTime, formatRelative, useModuleHost, usePolled } from '@openagt/dashboard/module'
 import { addDevice, loadStatus, removeDevice, setSwitch, type AddLink, type Answer, type DoorStatus } from './devices.js'
 
 // Settings → Devices: the phones and browsers that are in, and the one switch that lets them
@@ -125,12 +125,12 @@ export function DevicesSettings({ everyMs = 5_000 }: { /** How often the status 
               )}
               <label className="block space-y-1 text-xs text-muted-foreground">
                 <span>Another computer that runs OpenAgent? Paste this link there, in Settings, Machines, Add machine.</span>
-                <input
+                <Input
                   readOnly
                   aria-label="The link another computer pastes"
                   value={byNumber && link.numberUrl ? link.numberUrl : link.url}
                   onFocus={event => event.currentTarget.select()}
-                  className="w-full rounded-md border border-border bg-background px-2 py-1 font-mono text-xs text-foreground"
+                  className="h-8 bg-background px-2 font-mono text-xs"
                 />
               </label>
               <div>

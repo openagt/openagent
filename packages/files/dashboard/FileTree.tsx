@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ElementType, type ReactNode } from 'react'
 import { Check, FileIcon, FolderIcon, FolderOpenIcon } from 'lucide-react'
-import { cn, useModuleHost, usePolled, type ModulePanelProps } from '@openagt/dashboard/module'
+import { Input, cn, useModuleHost, usePolled, type ModulePanelProps } from '@openagt/dashboard/module'
 import type { ProjectTree } from '../src/server.js'
 import type { AgentTree, FileMark } from '../src/tree.js'
 import { projectKey, treeKey } from './keys.js'
@@ -281,13 +281,13 @@ export function FileTree({ projectId, agentId, activity, context }: ModulePanelP
 
   return (
     <div className="flex min-h-0 flex-auto flex-col p-2">
-      <input
+      <Input
         type="search"
         value={query}
         onChange={e => setQuery(e.target.value)}
         placeholder="Filter files…"
         aria-label="Filter files"
-        className="mb-2 w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+        className="mb-2 h-7 bg-background px-2 text-xs shadow-none"
       />
       {caption && <p className="px-1 pb-1 text-[10px] text-muted-foreground">{caption}</p>}
       {/* A query with zero hits used to render an empty pane, which reads as broken (#948). */}

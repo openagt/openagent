@@ -172,7 +172,7 @@ export function AddSkillsDialog({ projectId, skills, onClose, onSaved }: { proje
   }
 
   return (
-    <Dialog open onOpenChange={open => { if (!open && !busy) onClose() }} title="Add skills">
+    <Dialog open onOpenChange={open => { if (!open && !busy) onClose() }} title="Skills">
       {saved ? (
         <div className="space-y-2 text-xs leading-relaxed text-muted-foreground">
           {saved.written.length > 0 && (

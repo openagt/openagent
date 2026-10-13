@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { SettingsRow, SettingsSection, useModuleHost, usePolled, type ModuleSettingsProps } from '@openagt/dashboard/module'
+import { Input, SettingsRow, SettingsSection, useModuleHost, usePolled, type ModuleSettingsProps } from '@openagt/dashboard/module'
 import { MAX_SPEND_OFFSET, loosestSpendOffset, offsetsThatDiffer, readSchedulers, saveSpendOffset, typedOffset, type SchedulerRow } from './schedulers.js'
 
 // Settings → Scheduler: the one number that reaches every project, how far past the quota boundary
@@ -57,7 +57,7 @@ export function SchedulerSettings({ projects }: ModuleSettingsProps) {
           label="Spend offset"
           description={`How far every project's scheduler may start work past the quota boundary, in percentage points (max ${MAX_SPEND_OFFSET}). Negative holds it back; positive lets it borrow from the days ahead. One number, saved to every project; the handle on the usage bar moves the same number.${differing.length > 0 ? ` Shown: the loosest. ${differing.map(d => `${d.name} is at ${d.offset}`).join(', ')}; saving sets every project to the same number.` : ''}`}
           control={
-            <input
+            <Input
               type="number"
               // The text as typed while the field has the focus, so a number can be typed through a state that is none yet ("-").
               value={text ?? String(Math.round(offset * 10) / 10)}
@@ -72,7 +72,7 @@ export function SchedulerSettings({ projects }: ModuleSettingsProps) {
               }}
               onBlur={() => setText(undefined)}
               aria-label="Spend offset"
-              className="w-24 rounded-md border border-border bg-background px-2 py-1 text-sm"
+              className="h-8 w-24 bg-background px-2"
             />
           }
         />

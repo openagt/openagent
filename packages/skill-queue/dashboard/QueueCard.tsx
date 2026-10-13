@@ -1,5 +1,5 @@
 import { FastForward, ListTodo, Play } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitleLink, StartAgentButton, Tooltip, TooltipContent, TooltipTrigger, pathsIn, useFileNames, usePolled, useModuleHost, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
+import { Card, CardContent, CardHeader, CardTitleLink, Input, StartAgentButton, Tooltip, TooltipContent, TooltipTrigger, pathsIn, useFileNames, usePolled, useModuleHost, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
 import { fanOutLabel, workOnEntryPrompt } from '../src/module.js'
 import { EntryTitle, entryView } from './entry.js'
 import { useQueueStarts } from './starts.js'
@@ -78,7 +78,7 @@ export function QueueCard({ projects }: ModuleCardProps) {
                         <Tooltip>
                           <TooltipTrigger
                             render={
-                              <input
+                              <Input
                                 type="number"
                                 min={1}
                                 step={1}
@@ -91,7 +91,7 @@ export function QueueCard({ projects }: ModuleCardProps) {
                                   const next = Math.round(Number(typed))
                                   if (Number.isFinite(next)) starts.setCount(project.id, next)
                                 }}
-                                className="h-7 w-11 shrink-0 rounded border border-border bg-background px-1 text-center text-xs tabular-nums text-foreground"
+                                className="h-7 w-11 shrink-0 bg-background px-1 text-center text-xs tabular-nums shadow-none"
                               />
                             }
                           />

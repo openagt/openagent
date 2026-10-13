@@ -2,6 +2,7 @@ import { useState, type KeyboardEvent } from 'react'
 import { parseMachineLink } from '../../src/client.js'
 import { addMachine } from '../lib/machines.js'
 import { Button } from './ui/button.js'
+import { Input } from './ui/input.js'
 import { Dialog } from './ui/dialog.js'
 
 // The "Add a machine" modal (#1052). The other machine's OpenAgent listens on its own computer
@@ -43,21 +44,21 @@ export function AddMachineDialog({ onClose, onAdded }: { onClose: () => void; on
           On the other machine, open Settings, find Devices, and press Add device. Copy the link under the code and paste it
           here. It works once, and for a short time.
         </p>
-        <input
+        <Input
           type="text"
           value={url}
           placeholder="http://studio.local:4201/…"
           autoFocus
           onChange={e => setUrl(e.target.value)}
-          className="w-full rounded-md border border-border bg-background px-2 py-1 font-mono text-xs text-foreground"
+          className="h-8 bg-background px-2 font-mono text-xs"
         />
-        <input
+        <Input
           type="text"
           value={label}
           maxLength={60}
           placeholder={parsed ? `Name (optional) — defaults to ${new URL(parsed.url).host}` : 'Name (optional)'}
           onChange={e => setLabel(e.target.value)}
-          className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+          className="h-8 bg-background px-2"
         />
         {url.trim() !== '' && !valid && (
           <p className="text-xs text-warning">

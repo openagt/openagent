@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
 import { cn } from '../lib/utils.js'
 
 // The Settings page's building blocks (#958): a section, a row, a row picked from a list. The page's
@@ -52,10 +53,13 @@ export interface SettingsOption {
   disabled?: boolean
 }
 
+/** What stands in for the empty value in the list: a choice whose value is no text ("Auto-detect", an agent's own default) is still a choice to pick. */
+const NO_VALUE = '\u0000none'
+
 /**
  * One setting picked from a list.
  *
- * A row with nothing to pick renders nothing at all (#1172). An empty `<select>` is a control that
+ * A row with nothing to pick renders nothing at all (#1172). An empty list is a control that
  * cannot be operated — it reads as broken rather than as "no choices here", which is exactly the
  * paper cut this guard exists for. Every list on this page has a fixed first entry today ("Auto-detect",
  * the agent's own default), so nothing hits it; it is here because the next list will be added
@@ -75,25 +79,25 @@ export function SettingsSelectRow({
   onChange: (next: string) => void
 }) {
   if (options.length === 0) return null
+  const items = options.map(o => ({ value: o.value === '' ? NO_VALUE : o.value, label: o.label, disabled: o.disabled === true }))
   return (
     <SettingsRow
       label={label}
       description={description}
       control={
-        <select
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          aria-label={label}
-          className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-        >
-          {options.map(o => (
-            <option key={o.value} value={o.value} disabled={o.disabled}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+        <Select items={items} value={value === '' ? NO_VALUE : value} onValueChange={next => onChange(next === NO_VALUE ? '' : (next as string))}>
+          <SelectTrigger size="sm" aria-label={label} className="max-w-[min(16rem,45vw)]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent align="end">
+            {items.map(item => (
+              <SelectItem key={item.value} value={item.value} disabled={item.disabled}>
+                {item.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       }
     />
   )
 }
-
