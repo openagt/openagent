@@ -274,7 +274,9 @@ describe('in words', () => {
     expect(nextWords(new Date(2026, 9, 8, 10, 0), now)).toBe('as soon as the scheduler looks')
     expect(nextWords(new Date(2026, 9, 3, 10, 0), now)).toBe('as soon as the scheduler looks')
     const waiting = { command: 'a', on: true, publish: 'commit' as const, ...MADE, decision: { command: 'a', outcome: 'not due (next start from 2026-10-10 10:00, every 2d at 10:00)' } }
-    expect(decided(waiting, now)).toBe('Next: Saturday 10:00')
+    expect(decided(waiting, now)).toBe('Next start Saturday 10:00')
+    // Beside a shell line the time is where the wait ends, not the start: it still needs work.
+    expect(decided({ ...waiting, when: 'npx x' }, now)).toBe('Next start Saturday 10:00, if there is work')
     expect(decided({ ...waiting, on: false }, now)).toBeUndefined()
   })
 
@@ -372,12 +374,15 @@ describe('in words', () => {
     expect(publishes({ ...base, publish: 'merge' })).toBe('May open a pull request that merges on green')
   })
 
-  test("what the scheduler last decided for a command, for a person: No work, Not due yet, how many are running, else the tool's own words; nothing where the row says it in another place, switched off or just started", () => {
+  test("what the scheduler last decided for a command, for a person: No work, when it starts next while its wait is not over, how many are running, else the tool's own words; nothing where the row says it in another place, switched off or just started", () => {
     const on = { command: 'a', on: true, publish: 'commit' as const, ...MADE }
     const said = (outcome: string, over: object = {}) => decided({ ...on, ...over, decision: { command: 'a', outcome } })
     expect(said('not due')).toBe('No work')
-    expect(said('not due (last start 2h ago, every 6h)')).toBe('Not due yet')
-    expect(said('not due (last start less than a minute ago, every 15m)')).toBe('Not due yet')
+    // A wait that is not over is said as the time left, counted from the row's last start as of now.
+    const twoHoursAgo = { id: 'r', at: new Date(Date.now() - 2 * 3_600_000).toISOString() }
+    expect(said('not due (last start 2h ago, every 6h)', { every: '6h', lastRun: twoHoursAgo })).toBe('Next start in 4h')
+    expect(said('not due (last start 2h ago, every 6h)', { every: '6h', when: 'npx x', lastRun: twoHoursAgo })).toBe('Next start in 4h, if there is work')
+    expect(said('not due (last start less than a minute ago, every 15m)', { every: '15m', lastRun: { id: 'r', at: new Date().toISOString() } })).toBe('Next start in 15 min')
     expect(said('cap reached (1 in flight: 2026-10-03T10-00-00-000Z on other-box)')).toBe('One is already running')
     expect(said('cap reached (3 in flight: a on x, b on y, c on z)')).toBe('3 are already running')
     // A reason only the tool knows stays in the tool's words.

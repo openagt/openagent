@@ -173,7 +173,7 @@ describe('the Automations page: its rows', () => {
         ],
       },
       schedule: [
-        { command: 'post-merge-cleanup', every: '1d', lastRun: { id: 'r1', at: '2026-10-03T08:00:00.000Z' } },
+        { command: 'post-merge-cleanup', every: '1d', lastRun: { id: 'r1', at: new Date(Date.now() - 2 * 3_600_000).toISOString() } },
         { command: 'update-tickets', every: '15m', when: 'gh issue list' },
         { command: 'triage', every: '6h' },
         { command: 'plan-tickets', every: '2d' },
@@ -189,11 +189,12 @@ describe('the Automations page: its rows', () => {
     expect(ran.className).not.toMatch(/text-danger/)
     fireEvent.click(ran)
     expect(host.openAgent).toHaveBeenLastCalledWith('p1', 'r1')
-    expect(within(row('/post-merge-cleanup')).getByText('Not due yet')).toBeTruthy()
+    // A wait that is not over says when the row starts next.
+    expect(within(row('/post-merge-cleanup')).getByText('Next start in 22h')).toBeTruthy()
     expect(within(row('/update-tickets')).getByText('Never ran')).toBeTruthy()
     expect(within(row('/update-tickets')).getByText('No work')).toBeTruthy()
     expect(within(row('/triage')).getByText('One is already running')).toBeTruthy()
-    expect(within(row('/plan-tickets')).getByText('Next: 3 Jan 10:00')).toBeTruthy()
+    expect(within(row('/plan-tickets')).getByText('Next start 3 Jan 10:00')).toBeTruthy()
     // A reason only the tool knows is said in the tool's words.
     expect(within(row('/check-links')).getByText('Check failed: gh: not found')).toBeTruthy()
     // Switched off here, and its failure is still said: nothing tries the work again by itself. An off row says no decision.

@@ -450,17 +450,32 @@ export function publishes(command: SchedulerCommand): string {
  * agent cannot run says so whatever its switch: switching it on would start nothing. Then nothing
  * for a command switched off here, whose row says "Off", for one switched on that no tick has
  * decided yet, and for one the tick started, whose row says when it last ran. A decision is said in
- * plain words where the tool's own are a rule's shorthand ("No work", "Not due yet", "One is
- * already running"), and in the tool's words with a capital where they carry a reason only the tool
- * knows (`Quota: …`, `Check failed: …`). A command waiting for its time of day says when it is
- * next due: "Next: Saturday 10:00".
+ * plain words where the tool's own are a rule's shorthand ("No work", "One is already running"),
+ * and in the tool's words with a capital where they carry a reason only the tool knows
+ * (`Quota: …`, `Check failed: …`). A command whose wait is not over says when it starts next:
+ * "Next start in 3h, if there is work", "Next start Saturday 10:00".
  */
 export function decided(command: SchedulerCommand, now: Date = new Date()): string | undefined {
   const elsewhere = cannotRun(command)
   if (elsewhere) return elsewhere
   // Whether the row's agent can read its skill is said off the files, as of now: the last look's word on it may be about another agent, picked away since.
   if (!command.on || command.decision?.outcome.startsWith('not a command of ')) return undefined
-  return outcomeWords(command.decision?.outcome, now)
+  return waitingWords(command, now) ?? outcomeWords(command.decision?.outcome, now)
+}
+
+/**
+ * What a command whose last look found its wait not over says: when it starts next, in the words
+ * its Edit panel uses. A look that named the time it is due from (a pace with a time of day) is
+ * taken at its word; else the time left is counted from the row's last start, as of now. Nothing
+ * for any other decision.
+ */
+function waitingWords(command: SchedulerCommand, now: Date): string | undefined {
+  const outcome = command.decision?.outcome
+  if (outcome === undefined || !/^not due \((last start|next start from) /.test(outcome)) return undefined
+  const named = /^not due \(next start from (\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d),/.exec(outcome)
+  const from = named && new Date(Number(named[1]), Number(named[2]) - 1, Number(named[3]), Number(named[4]), Number(named[5]))
+  if (from && from.getTime() > now.getTime()) return `Next start ${nextWords(from, now)}${command.when !== undefined ? ', if there is work' : ''}`
+  return nextStart(command, now)
 }
 
 /** That the coding agent a row's runs are on cannot run it at all, for a person: its skill is not in that agent's own skills folder. Nothing for a row it can run. */
