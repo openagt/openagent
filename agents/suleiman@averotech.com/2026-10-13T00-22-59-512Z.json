@@ -1,0 +1,15 @@
+{
+  "id": "2026-10-13T00-22-59-512Z",
+  "startedAt": "2026-10-13T00:22:59.840Z",
+  "status": "running",
+  "intent": "ask me what color i like",
+  "driver": "claude-code",
+  "model": "opus",
+  "caller": {
+    "runner": {
+      "host": "ubuntu-s-1vcpu-2gb-fra1",
+      "pid": 339126
+    },
+    "host": "ubuntu-s-1vcpu-2gb-fra1"
+  }
+}
