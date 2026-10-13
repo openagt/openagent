@@ -156,6 +156,7 @@ export function DevicesSettings({ everyMs = 5_000 }: { /** How often the status 
                   {`Added ${formatRelative(device.added)}`}
                   {device.seen !== undefined ? `, last seen ${formatRelative(device.seen)}` : ''}
                 </p>
+                {device.line && <p className="text-xs text-muted-foreground">A computer of yours: runs can be started on it from here. Remove it and it is no longer in "Run on".</p>}
               </div>
               <Button size="sm" variant="outline" disabled={busy} aria-label={`Remove ${device.name}`} onClick={() => void act(() => removeDevice(host, device.id))}>
                 Remove

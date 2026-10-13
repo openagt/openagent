@@ -243,6 +243,7 @@ export function AgentHistory({
       {...(row.agent.otherHost && row.agent.host ? { startedOn: row.agent.host } : {})}
       cloudState={cloudRunState(row.agent, Date.now())}
       {...(row.agent.remoteLabel ? { remoteLabel: row.agent.remoteLabel } : {})}
+      remoteByLine={row.agent.remoteByLine === true}
       onClick={leave(row.onClick)}
       onNear={row.onNear}
     />
@@ -526,6 +527,7 @@ function AgentHistoryRow({
   cloud = false,
   cloudState,
   remoteLabel,
+  remoteByLine = false,
   startedOn,
   fold,
 }: {
@@ -553,6 +555,8 @@ function AgentHistoryRow({
   cloudState?: CloudRunState | undefined
   /** The machine's label, for the glyph's tooltip. */
   remoteLabel?: string | undefined
+  /** That machine is a person's own computer, reached by the line it keeps open here: the glyph is a computer, not a server. */
+  remoteByLine?: boolean
   /** The machine whose daemon started the run, when that is another machine (#1648): a glyph names it. */
   startedOn?: string | undefined
 }) {
@@ -560,6 +564,7 @@ function AgentHistoryRow({
   // session the bridge reports as parked (#1668).
   const parked = status === 'waiting' || cloudState === 'waiting'
   const picked = driverFromImpl(driver)
+  const MachineIcon = remoteByLine ? Laptop : Server
   // A web agent's local process ends at the hand-off by design, so its `done` is about this
   // machine, not the session (#1264): the cloud side keeps working and opens its own PR. Saying
   // "done" under ten working cloud agents is the lie the demo would put on camera — and "in cloud"
@@ -657,7 +662,7 @@ function AgentHistoryRow({
             {remote && (
               <Tooltip>
                 <TooltipTrigger render={<span className="flex items-center" />}>
-                  <Server className="h-3 w-3 text-muted-foreground" aria-label={remoteLabel ? `Runs on ${remoteLabel}` : 'Runs on another machine'} />
+                  <MachineIcon className="h-3 w-3 text-muted-foreground" aria-label={remoteLabel ? `Runs on ${remoteLabel}` : 'Runs on another machine'} />
                 </TooltipTrigger>
                 <TooltipContent>{remoteLabel ? `Runs on ${remoteLabel}` : 'Runs on another machine'}</TooltipContent>
               </Tooltip>

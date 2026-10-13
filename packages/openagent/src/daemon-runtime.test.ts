@@ -453,17 +453,24 @@ test('a relayed run\'s events are read from the project the call names, not from
   await writeFile(join(worktree, OPENAGENT_DIR, `${agentId}.jsonl`), JSON.stringify({ kind: 'said', text: 'from the shop' }) + '\n')
   await addProject(shop, new Date().toISOString(), undefined, env)
   const runtime = createProjectRuntime({ cwd: home, env })
-  const read = (project: string): Promise<OpenAgentEvent[]> =>
+  // What is expected is waited for until it is there, however busy the computer is; what must
+  // not come is given the time it would take.
+  const read = (project: string, expected = false): Promise<OpenAgentEvent[]> =>
     new Promise(resolvePromise => {
       const events: OpenAgentEvent[] = []
-      const stop = runtime.tailRelayEvents(project, agentId, event => events.push(event))
-      setTimeout(() => {
+      const end = (): void => {
+        clearTimeout(timer)
         stop()
         resolvePromise(events)
-      }, 600)
+      }
+      const stop = runtime.tailRelayEvents(project, agentId, event => {
+        events.push(event)
+        if (expected) setImmediate(end)
+      })
+      const timer = setTimeout(end, expected ? 10_000 : 600)
     })
   try {
-    const events = await read(projectId(shop))
+    const events = await read(projectId(shop), true)
     assert.equal(JSON.stringify(events).includes('from the shop'), true, JSON.stringify(events))
     // The same run asked for in the daemon's own folder, or in no project of this machine: nothing.
     assert.deepEqual(await read(projectId(home)), [])
@@ -554,12 +561,12 @@ test('a run whose record names a saved machine\'s computer is that machine\'s, w
   // And one under the id of the machine's run in the shop.
   const other = await project('other', [[MINE, 'server-box'], [ON_SERVER, 'server-box']])
   // A machine is asked its name behind a list's back when it is slow: asked again until the name is as expected.
-  const named = async (from: { machineNames: () => Promise<(host: string) => string | undefined> }, host: string, expected: string | undefined): Promise<string | undefined> => {
+  const named = async (from: { machineNames: () => Promise<(host: string) => { label: string } | undefined> }, host: string, expected: string | undefined): Promise<string | undefined> => {
     for (let i = 0; i < 100; i++) {
-      if ((await from.machineNames())(host) === expected) return expected
+      if ((await from.machineNames())(host)?.label === expected) return expected
       await new Promise(resolve => setTimeout(resolve, 50))
     }
-    return (await from.machineNames())(host)
+    return (await from.machineNames())(host)?.label
   }
 
   // A machine: its ping says its computer's own name, and its events stream stays open, as a real one's does.
@@ -626,7 +633,7 @@ test('a run whose record names a saved machine\'s computer is that machine\'s, w
     for (const res of open.splice(0)) res.end()
     await runtime.dispose()
     runtime = createProjectRuntime({ cwd: join(base, 'shop'), env })
-    assert.equal((await runtime.remoteAgents.machineNames())('server-box'), 'Server')
+    assert.equal((await runtime.remoteAgents.machineNames())('server-box')?.label, 'Server')
     assert.equal((await runtime.remoteAgents.machineNames())('rom-thinkpad-x280'), undefined)
     assert.deepEqual(await runtime.remoteAgents.home(shop, ON_SERVER), atMachine)
     assert.equal(asked.filter(line => line.endsWith('/_relay/ping')).length, 1, 'not asked again')

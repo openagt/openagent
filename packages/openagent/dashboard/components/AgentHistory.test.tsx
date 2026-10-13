@@ -201,6 +201,13 @@ describe('AgentHistory rows', () => {
     expect(screen.getByLabelText('Runs on my-laptop')).toBeTruthy()
   })
 
+  test('a run on a person\'s own computer, reached by its line, shows a computer where a server\'s run shows a server, with the same words', () => {
+    const agents = [agent({ id: 'on-computer', target: 'remote', remoteLabel: 'MacBook', remoteByLine: true }), agent({ id: 'on-server', target: 'remote', remoteLabel: 'Server' })]
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={agents} selectedAgentId={null} onSelect={() => {}} />)
+    expect(screen.getByLabelText('Runs on MacBook').getAttribute('class')).toContain('lucide-laptop')
+    expect(screen.getByLabelText('Runs on Server').getAttribute('class')).toContain('lucide-server')
+  })
+
   test('a run another machine started says whose it is; this daemon\'s own does not (#1067, #1648)', () => {
     const rows = [
       { projectId: 'p', projectName: 'gemstack', agent: agent({ id: 'theirs', host: 'rom-thinkpad-x280', otherHost: true }) },

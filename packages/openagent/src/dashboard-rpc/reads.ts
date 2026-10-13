@@ -22,6 +22,8 @@ import { bridgeQuestions } from '../dashboard/bridge-store.js'
 import type { BridgeEvent, BridgeHello, BridgeQuestion } from '../dashboard/bridge-endpoints.js'
 import type { BridgeAnswer, BridgeContact, BridgeVersion } from '../dashboard/bridge-store.js'
 import { isHostName, readBridgeToken, readPreferences, type Preferences } from '../registry.js'
+import { reachedByLine } from '../reached-by-line.js'
+import type { SavedMachine } from '../dashboard/rpc-serve.js'
 import { hostname } from 'node:os'
 
 // The read model behind the dashboard (#405): the agent history, an agent's replay, and the
@@ -103,8 +105,8 @@ export function withFollowed(followed: AgentMeta[], local: AgentMeta[], sent: (a
   const rows = local.map(record => {
     const run = live.get(record.id)
     if (!run) return record
-    const { remoteLabel } = run
-    return { ...record, status: run.status, updatedAt: run.updatedAt, target: 'remote' as const, ...(remoteLabel !== undefined ? { remoteLabel } : {}), ...(run.sessionId !== undefined ? { sessionId: run.sessionId } : {}) }
+    const { remoteLabel, remoteByLine } = run
+    return { ...record, status: run.status, updatedAt: run.updatedAt, target: 'remote' as const, ...(remoteLabel !== undefined ? { remoteLabel } : {}), ...(remoteByLine ? { remoteByLine } : {}), ...(run.sessionId !== undefined ? { sessionId: run.sessionId } : {}) }
   })
   return [...followed.filter(run => !recorded.has(run.id) && sent(run.id)), ...rows]
 }
@@ -133,16 +135,24 @@ export function markOtherHost(agent: AgentMeta, thisHost: string = hostname()): 
 }
 
 /**
+ * What a run's row says of the saved machine it runs on: the name the machine was given, and
+ * that it is a person's own computer reached by its line, when it is one.
+ */
+export function onMachine(machine: SavedMachine): Pick<AgentMeta, 'remoteLabel' | 'remoteByLine'> {
+  return { remoteLabel: machine.label, ...(reachedByLine(machine.url) ? { remoteByLine: true as const } : {}) }
+}
+
+/**
  * A run whose record names the computer of a saved machine runs on that machine, whoever started
  * it there, and reads like one this computer sent: by the name the machine was given. The record
  * comes through the project's shared records, so it is here for a run started on the machine's
  * own page too, and after this daemon forgot the runs it sent. A run of this computer, and one of
  * a computer that is no saved machine, pass through untouched.
  */
-export function markMachine(agent: AgentMeta, machineOf: (host: string) => string | undefined, thisHost: string = hostname()): AgentMeta {
+export function markMachine(agent: AgentMeta, machineOf: (host: string) => SavedMachine | undefined, thisHost: string = hostname()): AgentMeta {
   if (agent.host === undefined || agent.host === thisHost || agent.remoteLabel !== undefined) return agent
-  const label = machineOf(agent.host)
-  return label === undefined ? agent : { ...agent, target: 'remote', remoteLabel: label }
+  const machine = machineOf(agent.host)
+  return machine === undefined ? agent : { ...agent, target: 'remote', ...onMachine(machine) }
 }
 
 /**
@@ -157,7 +167,7 @@ export function markSaving(agent: AgentMeta, thisHost: string = hostname(), aliv
 }
 
 /** Every annotation a run's record gets on its way to the dashboard: what the daemon knows and the disk cannot. */
-function forDashboard(agent: AgentMeta, machineOf: (host: string) => string | undefined): AgentMeta {
+function forDashboard(agent: AgentMeta, machineOf: (host: string) => SavedMachine | undefined): AgentMeta {
   return markSaving(markOtherHost(markMachine(markCloudWaiting(asRecorded(agent)), machineOf)))
 }
 
@@ -168,7 +178,7 @@ function forDashboard(agent: AgentMeta, machineOf: (host: string) => string | un
  * computer's, that it is being saved. A computer's name that is no name is none.
  */
 export function asRecorded(agent: AgentMeta): AgentMeta {
-  const { remoteLabel: _label, otherHost: _other, saving: _saving, cloudWaiting: _waiting, ...said } = agent
+  const { remoteLabel: _label, remoteByLine: _byLine, otherHost: _other, saving: _saving, cloudWaiting: _waiting, ...said } = agent
   if (said.target === 'remote') delete said.target
   if (said.host !== undefined && !isHostName(said.host)) delete said.host
   return said

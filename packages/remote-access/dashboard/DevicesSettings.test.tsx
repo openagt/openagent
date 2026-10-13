@@ -181,6 +181,14 @@ describe('Settings → Devices', () => {
     expect(screen.queryByRole('button', { name: 'Phone does not open it? Use the number.' })).toBeNull()
   })
 
+  test('a computer that keeps a line open here is listed by its own name, and says what it is', async () => {
+    const { host } = door(() => ok({ ...OPEN, devices: [PHONE, { id: 'aaa111aaa111', name: 'Adas-MacBook', added: PHONE.added, line: true }] }))
+    show(host)
+    expect(await screen.findByText('Adas-MacBook')).toBeTruthy()
+    expect(screen.getAllByText('A computer of yours: runs can be started on it from here. Remove it and it is no longer in "Run on".')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Remove Adas-MacBook' })).toBeTruthy()
+  })
+
   test('the devices that are in are listed, and each is removed alone', async () => {
     let state: object = { ...OPEN, devices: [PHONE, { id: 'fff000fff000', name: 'Mac, Chrome', added: PHONE.added }] }
     const { host, runComputerCommand } = door(args => {

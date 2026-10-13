@@ -5,12 +5,12 @@ import { findAgent, findCheckout, fromDiaryLine, isPidAlive, isRunId, projectBra
 import { OPENAGENT_DIR } from './openagent-dir.js'
 import type { OpenAgentEvent } from './events.js'
 import type { StartAgentOptions, StartAgentResult, AddProjectResult, RemoveProjectResult } from './dashboard/index.js'
-import type { EventsSource, RemoteAgents } from './dashboard/rpc-serve.js'
+import type { EventsSource, RemoteAgents, SavedMachine } from './dashboard/rpc-serve.js'
 import { RelayedAgents, remoteFacts, startRemoteAgent, type BringProject, type RelayProject, type RemoteTarget } from './dashboard/remote-run.js'
 import { cloneProject, cloneTarget } from './clone-project.js'
 import { screenInDiary } from './dashboard/screen.js'
 import { dispatchRelayRpc } from './dashboard-rpc/relay-dispatch.js'
-import { asRecorded } from './dashboard-rpc/reads.js'
+import { asRecorded, onMachine } from './dashboard-rpc/reads.js'
 import { tailAgentEvents } from './dashboard-rpc/events-tail.js'
 import { addProject, isHostName, listMachines, listProjects, nameMachine, projectId, removeProject, type MachineRecord } from './registry.js'
 import { repositoryAddress } from './repository-address.js'
@@ -124,7 +124,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject }: Project
       () => void (asking = undefined),
       () => void (asking = undefined),
     ))
-  const machineNames = async (): Promise<(host: string) => string | undefined> => {
+  const machineNames = async (): Promise<(host: string) => SavedMachine | undefined> => {
     // A list that could not be read keeps the last one: a read that fails once does not hand a machine's runs back to this computer.
     const read = async (): Promise<void> => void (machines = await listMachines(undefined, env).catch(() => machines))
     await read()
@@ -139,7 +139,10 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject }: Project
         await read()
       }
     }
-    return host => machineOf(host)?.label
+    return host => {
+      const machine = machineOf(host)
+      return machine && { label: machine.label, url: machine.url }
+    }
   }
   // A name two saved machines say is no machine's: neither gets the other's runs by saying it.
   const machineOf = (host: string): MachineRecord | undefined => {
@@ -198,7 +201,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject }: Project
       // The row starts as the record may say the run is, and the machine's own events take it from there.
       // Its cost is counted again from what the machine says, from the run's first line on.
       const { cost: _counted, ...said } = asRecorded(agent)
-      relayedAgents.register(agentId, home.target, { ...said, target: 'remote', remoteLabel: home.label }, project, false)
+      relayedAgents.register(agentId, home.target, { ...said, target: 'remote', ...onMachine({ label: home.label, url: home.target.url }) }, project, false)
     },
     sent: agentId => relayedAgents.isSent(agentId),
     machineNames,
@@ -274,7 +277,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject }: Project
         updatedAt: now,
         target: 'remote',
         intent: prompt,
-        remoteLabel: machine.label,
+        ...onMachine(machine),
         // The machine's word, as the run is: its record, which names the coding agent, never comes here.
         ...(typeof result.driver === 'string' && result.driver.length <= MAX_DRIVER_NAME ? { driver: result.driver } : {}),
       }

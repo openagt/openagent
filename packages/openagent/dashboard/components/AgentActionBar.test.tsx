@@ -64,6 +64,18 @@ describe('AgentActionBar', () => {
     expect(screen.getByTestId('runs-on').textContent).toBe('This machine')
   })
 
+  test('on a page opened from somewhere else than the computer it is on, this machine goes by the name the page was reached at', () => {
+    const page = (globalThis as unknown as { jsdom: { reconfigure(to: { url: string }): void } }).jsdom
+    const own = window.location.href
+    page.reconfigure({ url: 'https://165.245.244.10/' })
+    try {
+      render(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS.finished!} label="Dark mode" projectName="gemstack" checkout={DIRTY} />)
+      expect(screen.getByTestId('runs-on').textContent).toBe('165.245.244.10 · gemstack')
+    } finally {
+      page.reconfigure({ url: own })
+    }
+  })
+
   test('the count of errors is still said, for a running agent and for one that ended, before the project\'s menu', () => {
     const error = { kind: 'error', message: 'The push was rejected' }
     for (const kind of ['running', 'finished', 'stopped']) {

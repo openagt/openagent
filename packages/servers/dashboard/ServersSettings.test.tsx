@@ -128,6 +128,8 @@ describe('Settings → Servers', () => {
     await new Promise(resolve => setTimeout(resolve, 150))
     expect(ran().filter(line => line === 'link 203.0.113.5')).toHaveLength(1)
     expect(addMachine).toHaveBeenCalledTimes(1)
+    // A server just connected is let start runs on this computer, once, without a press.
+    expect(ran().filter(line => line.startsWith('reach '))).toEqual(['reach 203.0.113.5 full'])
   })
 
   test('an installed server gives a code for a phone or a browser, asked of its door; the code leaves with Done and with its time, and a door that does not answer is told', async () => {
@@ -439,6 +441,39 @@ describe('Settings → Servers', () => {
     expect(logins.getByRole('alert').textContent).toBe('No yes came from the browser in 10 minutes.')
     fireEvent.click(logins.getByRole('button', { name: 'Remove the GitHub login from 203.0.113.5' }))
     expect(await screen.findByText('The server did not answer.')).toBeTruthy()
+  })
+
+  test('a server among the machines has the switch that lets it start runs on this computer: off until set, on asks for the line, off again leaves it only watching', async () => {
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5', version: '1.2.3' }] }
+    let row = server(ALL_DONE, { adding: false })
+    const { host, ran } = dashboard(args => {
+      if (args[0] === 'reach') row = { ...row, reach: args[2] as 'full' | 'watch' }
+      return ok({ servers: [row] })
+    }, saved)
+    show(host)
+    const theSwitch = await screen.findByRole('switch', { name: 'Start runs on this computer from 203.0.113.5' })
+    expect(theSwitch.getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByText(/Off\. Turn it on to pick this computer under "Run on" on 203\.0\.113\.5's page, from your phone\./)).toBeTruthy()
+    fireEvent.click(theSwitch)
+    await waitFor(() => expect(ran()).toContain('reach 203.0.113.5 full'))
+    await screen.findByText(/On: on 203\.0\.113\.5's page, "Run on" offers this computer, and a run started there runs here\. This computer must be on\./)
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Start runs on this computer from 203.0.113.5' }).getAttribute('aria-checked')).toBe('true'))
+    fireEvent.click(screen.getByRole('switch', { name: 'Start runs on this computer from 203.0.113.5' }))
+    await waitFor(() => expect(ran()).toContain('reach 203.0.113.5 watch'))
+    await screen.findByText(/Off: 203\.0\.113\.5's page shows this computer's runs\. It cannot start one here, or say anything to one\./)
+  })
+
+  test('a server that is not among the machines, or still being installed, has no such switch; a line that could not be set up says why', async () => {
+    const { host } = dashboard(() => ok({ servers: [server(['done', 'running'], { working: true })] }))
+    show(host)
+    await screen.findByRole('list', { name: 'The install on 203.0.113.5' })
+    expect(screen.queryByRole('switch')).toBeNull()
+    cleanup()
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5', version: '1.2.3' }] }
+    const refusing = dashboard(args => (args[0] === 'reach' ? { ok: false, error: 'The server did not give a line: this door gives no line: only a server does' } : ok({ servers: [server(ALL_DONE, { adding: false })] })), saved)
+    show(refusing.host)
+    fireEvent.click(await screen.findByRole('switch', { name: 'Start runs on this computer from 203.0.113.5' }))
+    await screen.findByText('The server did not give a line: this door gives no line: only a server does')
   })
 
   test('older is by the three numbers of a version', () => {

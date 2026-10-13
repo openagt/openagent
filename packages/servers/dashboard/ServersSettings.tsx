@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { Button, Checkbox, Input, QrCode, SettingsSection, useModuleHost, usePolled, type ModuleMachines } from '@openagt/dashboard/module'
-import { askLink, connect, forget, loadServers, login, logout, markAdded, ownGithub, type Answer, type DoorLink, type OwnGithub, type ServerRow, type ServersRead, type StepState } from './servers.js'
+import { Button, Checkbox, Input, QrCode, SettingsSection, Switch, useModuleHost, usePolled, type ModuleMachines } from '@openagt/dashboard/module'
+import { askLink, connect, forget, loadServers, login, logout, markAdded, ownGithub, reach, type Answer, type DoorLink, type OwnGithub, type ServerRow, type ServersRead, type StepState } from './servers.js'
 
 // Settings → Servers: "Connect your VPS". A person gives a server's address and a user name, and
 // OpenAgent installs itself there over SSH. The install is the `servers` command's own process;
@@ -136,6 +136,9 @@ function Servers({ read, reload, everyMs }: { read: Answer<ServersRead>; reload:
       }
       const told = await markAdded(host, server.address)
       if (!told.ok) return stopped(told.error)
+      // A server just connected can start runs on this computer, until the person says otherwise:
+      // the switch on its row. One that could not be given its line shows the switch off.
+      if (told.value.find(row => row.address === server.address)?.reach === undefined) await reach(host, server.address, 'full')
       await Promise.all([reload(), reloadMachines()]).catch(() => {})
     } catch (err) {
       // Told, so the page does not try by itself again at its next look.
@@ -275,6 +278,26 @@ function Servers({ read, reload, everyMs }: { read: Answer<ServersRead>; reload:
                     )}
                   </div>
                 </div>
+                {installed(server) && machine && (
+                  <label className="flex items-start justify-between gap-4">
+                    <span className="min-w-0">
+                      <span className="block text-sm">Start runs on this computer from the phone</span>
+                      <span className="block text-xs text-muted-foreground">
+                        {server.reach === 'full'
+                          ? `On: on ${server.address}'s page, "Run on" offers this computer, and a run started there runs here. This computer must be on.`
+                          : server.reach === 'watch'
+                            ? `Off: ${server.address}'s page shows this computer's runs. It cannot start one here, or say anything to one.`
+                            : `Off. Turn it on to pick this computer under "Run on" on ${server.address}'s page, from your phone.`}
+                      </span>
+                    </span>
+                    <Switch
+                      aria-label={`Start runs on this computer from ${server.address}`}
+                      checked={server.reach === 'full'}
+                      disabled={busy}
+                      onCheckedChange={on => void act(() => reach(host, server.address, on ? 'full' : 'watch'))}
+                    />
+                  </label>
+                )}
                 {code?.address === server.address && (
                   <div className="space-y-2">
                     <QrCode text={code.url} label={`The code a new device scans to get into ${server.address}`} />

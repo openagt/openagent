@@ -71,7 +71,14 @@ export interface Server {
   github?: Login
   /** The Claude login this computer made for the server. */
   claude?: Login
+  /**
+   * Set once this computer keeps a line open to the server, so a run can be started here from
+   * the server's page: what the server may do through it, everything or only read.
+   */
+  reach?: Reach
 }
+
+export type Reach = 'full' | 'watch'
 
 export interface Store {
   servers: Server[]
@@ -193,7 +200,7 @@ export function sanitize(value: unknown): Store {
   for (const entry of Array.isArray(obj.servers) ? obj.servers : []) {
     if (servers.length >= MAX_SERVERS) break
     if (!entry || typeof entry !== 'object') continue
-    const { address, user, fingerprint, steps, worker, adding, github, claude } = entry as Record<string, unknown>
+    const { address, user, fingerprint, steps, worker, adding, github, claude, reach } = entry as Record<string, unknown>
     const [githubLogin, claudeLogin] = [readLogin(github), readLogin(claude)]
     if (typeof address !== 'string' || addressOf(address) !== address || !isUser(user)) continue
     if (servers.some(server => server.address === address)) continue
@@ -212,6 +219,7 @@ export function sanitize(value: unknown): Store {
       steps: STEP_IDS.map(id => known.get(id) ?? { id, state: 'waiting' }),
       ...(readWorker(worker) ?? {}),
       adding: adding === true,
+      ...(reach === 'full' || reach === 'watch' ? { reach } : {}),
       ...(githubLogin ? { github: githubLogin } : {}),
       ...(claudeLogin ? { claude: claudeLogin } : {}),
     })

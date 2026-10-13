@@ -4,7 +4,9 @@ import { CHALLENGE_PREFIX, LETS_ENCRYPT } from './acme.js'
 import { onOwnNetwork, urlHost, type AddressDeps } from './address.js'
 import { keepCertificate, type KeepOptions, type Keeper, type Secured } from './certificate.js'
 import { openDoor, type Door } from './door.js'
-import { pidAlive, readStoreStrict, storePath, update, type Store } from './store.js'
+import { linePorts, openLines, tellOpenAgent } from './line-in.js'
+import { keepLine } from './line-out.js'
+import { pidAlive, readStoreStrict, storePath, update, type Line, type Store } from './store.js'
 
 /**
  * The door's process: it runs for as long as OpenAgent runs, and follows the file. With the
@@ -15,6 +17,10 @@ import { pidAlive, readStoreStrict, storePath, update, type Store } from './stor
  * door is open to every network, over HTTPS, once it has a certificate for that address. The
  * certificate is asked for here and renewed here, and the proof its office reads is shown on
  * port 80, which otherwise only sends a browser on to the door.
+ *
+ * The lines are kept here too. To each server the file names, this computer keeps a line open,
+ * whatever its own door does. And on a server, each computer that keeps a line here gets its
+ * address, and OpenAgent is told of it.
  */
 
 /** The door's port on a server, and the port the certificate office reads the proof on. */
@@ -41,6 +47,8 @@ export interface ServeOptions {
   pollMs?: number
   /** After how long a door that could not be opened is tried again. */
   retryMs?: number
+  /** How a line is kept, for a test that cannot wait: its retries, its questions, its patience. */
+  line?: { retryMs?: readonly number[]; pingMs?: number; quietMs?: number }
 }
 
 /** The door's port for an OpenAgent at `target`. */
@@ -108,8 +116,53 @@ export async function serve(opts: ServeOptions): Promise<void> {
   let turned = false
   const proofs = new Map<string, string>()
 
+  // The lines this computer keeps open, by what each is asked for with; what each server may do is read anew for every call.
+  const kept = new Map<string, AbortController>()
+  const modes = new Map<string, Line['mode']>()
+  const followLines = (store: Store): void => {
+    const wanted = new Map(store.lines.map(line => [`${line.url}\n${line.pin}\n${line.key}`, line]))
+    modes.clear()
+    for (const line of store.lines) modes.set(line.url, line.mode)
+    for (const [id, controller] of kept) {
+      if (wanted.has(id)) continue
+      controller.abort()
+      kept.delete(id)
+    }
+    for (const [id, line] of wanted) {
+      if (kept.has(id)) continue
+      const controller = new AbortController()
+      kept.set(id, controller)
+      void keepLine({ url: line.url, pin: line.pin, key: line.key, target: opts.target, watch: () => modes.get(line.url) !== 'full', signal: controller.signal, log, ...opts.line })
+    }
+  }
+
+  // On a server: the computers that keep a line here, and whether OpenAgent still has to be told of them.
+  const ports = linePorts(opts.target, env)
+  let untold = false
+  let toldAt = 0
+  let whyUntold: string | undefined
+  const lines = openLines({ log, ...(opts.line?.quietMs !== undefined ? { quietMs: opts.line.quietMs } : {}), onChange: () => void (untold = true) })
+  const tell = async (): Promise<void> => {
+    // Told at once when there is something to tell; after a failure, not before a while has passed.
+    if (!untold || !door || !served || Date.now() - toldAt < (opts.retryMs ?? 10_000) / 2) return
+    // Cleared before the telling: a computer that calls while OpenAgent is being told is told of next.
+    untold = false
+    try {
+      await tellOpenAgent(opts.target, lines.computers(), ports)
+      whyUntold = undefined
+    } catch (err) {
+      untold = true
+      toldAt = Date.now()
+      const why = err instanceof Error ? err.message : String(err)
+      // Said once: an OpenAgent that is still starting fails the same way until it is up.
+      if (why !== whyUntold) log(`remote-access: OpenAgent was not told of the computers on a line yet: ${why}`)
+      whyUntold = why
+    }
+  }
+
   const closeServed = async (): Promise<void> => {
     if (!served) return
+    await lines.close()
     served.keeper.stop()
     served.proof.closeAllConnections()
     await new Promise<void>(resolve => served!.proof.close(() => resolve()))
@@ -165,7 +218,9 @@ export async function serve(opts: ServeOptions): Promise<void> {
     if (served && !door && secured) {
       try {
         const using = secured
-        door = await openDoor({ env, target: opts.target, port: httpsPort, ...(opts.host !== undefined ? { host: opts.host } : {}), knocks: () => true, secured: using })
+        door = await openDoor({ env, target: opts.target, port: httpsPort, ...(opts.host !== undefined ? { host: opts.host } : {}), knocks: () => true, secured: using, lines: { take: lines.take, ports } })
+        // OpenAgent may have started anew since it was last told.
+        untold = true
         // A certificate renewed while the door was being opened is the one it speaks with.
         if (secured !== using) door.renew(secured)
         failedAt = undefined
@@ -191,6 +246,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
       if (problem !== undefined && store.problem !== problem) log(`remote-access: ${problem}`)
     }
     door?.dropRemoved(store)
+    if (door) await lines.follow(store)
   }
 
   const reconcile = async (): Promise<void> => {
@@ -202,6 +258,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
     const store = await readStoreStrict(env)
     // A file that cannot be read is left as it is, and so is the door: it lets nobody in until the file reads again.
     if (store === 'unreadable') return log(`remote-access: ${storePath(env)} cannot be read; nobody gets in until it is corrected`)
+    followLines(store)
     // No longer a server, or one at another address: what was open for the old address is closed.
     if (served && served.address !== store.https?.address) {
       await closeServed()
@@ -264,7 +321,10 @@ export async function serve(opts: ServeOptions): Promise<void> {
   // One look at a time: a look that opens the door writes the file, which the next look reads.
   let looking: Promise<void> = Promise.resolve()
   const look = (): void => {
-    looking = looking.then(reconcile).catch(err => log(`remote-access: ${err instanceof Error ? err.message : String(err)}`))
+    looking = looking
+      .then(reconcile)
+      .then(tell)
+      .catch(err => log(`remote-access: ${err instanceof Error ? err.message : String(err)}`))
   }
   look()
   const timer = setInterval(look, opts.pollMs ?? 1_000)
@@ -275,6 +335,8 @@ export async function serve(opts: ServeOptions): Promise<void> {
   })
   clearInterval(timer)
   await looking
+  for (const controller of kept.values()) controller.abort()
+  kept.clear()
   await closeServed()
   if (door) {
     await door.close()

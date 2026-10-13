@@ -30,6 +30,9 @@
     "test": "tsc -p tsconfig.test.json && node --test --test-timeout=60000 'dist-test/**/*.test.js' && cd dashboard && vitest run",
     "clean": "rm -rf dist dist-test"
   },
+  "dependencies": {
+    "@openagt/remote-access": "workspace:*"
+  },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",
     "@testing-library/dom": "^10.4.1",

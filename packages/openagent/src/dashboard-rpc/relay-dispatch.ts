@@ -14,16 +14,23 @@ import { asArrived } from './relay-agent.js'
 // Whitelist only: start/delete/remove-worktree stay OFF it.
 
 type RelayFn = (...args: unknown[]) => Promise<unknown>
+// Each entry is a read or an act, and this is the one place that says which: a computer that only
+// lets its server watch answers the reads and refuses the acts (relay-endpoints.ts). An entry goes
+// in one of the two lists, so nothing is relayed that was not classed. `readModule` is a read for
+// as long as a module's read changes nothing, which is what a module's read is.
+const RELAY_READS = { onProjectFiles, readModule, onGitStatus, onAgentWorktree, onAgentHandoff, onAgent }
+const RELAY_ACTS = { sendStop, sendChoice, sendMessage, sendOpenPullRequest, sendPush, sendMerge }
 // Null-prototype, like RPC_HANDLERS (R1): the key is a request-controlled string, so a plain object
 // would answer `constructor`/`toString`/`valueOf` off Object.prototype and invoke them as handlers.
-const RELAY_FNS = Object.assign(Object.create(null) as Record<string, RelayFn>, {
-  onProjectFiles, readModule,
-  onGitStatus, onAgentWorktree, onAgentHandoff, onAgent,
-  sendStop, sendChoice, sendMessage, sendOpenPullRequest, sendPush, sendMerge,
-}) as unknown as Record<string, RelayFn>
+const RELAY_FNS = Object.assign(Object.create(null) as Record<string, RelayFn>, RELAY_READS, RELAY_ACTS) as unknown as Record<string, RelayFn>
 
 /** The names a relay caller may invoke. */
 export const RELAY_RPC_NAMES: readonly string[] = Object.keys(RELAY_FNS)
+
+/** Whether a relayed RPC only reads. A name that is not on the whitelist is no read. */
+export function isRelayRead(fn: string): boolean {
+  return Object.hasOwn(RELAY_READS, fn)
+}
 
 /**
  * Dispatch one relayed RPC against `projectId` (this machine's own id for the project). `args[0]`

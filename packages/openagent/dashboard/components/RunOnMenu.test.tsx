@@ -7,6 +7,8 @@ import { RunOnMenu, type ConnectionControl } from './RunOnMenu.js'
 afterEach(cleanup)
 
 const STUDIO: Machine = { id: 'studio', url: 'http://192.168.1.5:4200', label: 'Studio' }
+// A person's own computer, reached by the line it keeps open to this server: saved by the address that stands for it here.
+const MACBOOK: Machine = { id: 'macbook', url: 'http://127.0.0.1:4210', label: 'MacBook' }
 
 function renderMenu(over: Partial<ConnectionControl> = {}, chip = true) {
   const connection: ConnectionControl = {
@@ -83,6 +85,76 @@ describe('the "Run on" pick as a chip', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove machine Studio' }))
     expect(connection.onRemove).toHaveBeenCalledWith(STUDIO)
     expect(connection.onSelect).not.toHaveBeenCalled()
+  })
+})
+
+describe('a saved machine that is a person\'s own computer, reached by the line it keeps open to this server', () => {
+  const row = () => screen.getByRole('menuitem', { name: /^MacBook/ })
+
+  test('its row draws a computer and says what it is, not the address that stands for it here; a server\'s row is as it was', async () => {
+    renderMenu({ machines: [MACBOOK, STUDIO], status: { macbook: 'online', studio: 'online' } })
+    await openMenu(trigger())
+    expect(row().textContent).toBe('MacBookYour computer. The run starts there.')
+    expect(row().querySelector('svg.lucide-laptop')).toBeTruthy()
+    expect(row().querySelector('svg.lucide-server')).toBeNull()
+    const studio = screen.getByRole('menuitem', { name: /^Studio/ })
+    expect(studio.textContent).toBe('Studiohttp://192.168.1.5:4200')
+    expect(studio.querySelector('svg.lucide-server')).toBeTruthy()
+    expect(studio.querySelector('svg.lucide-laptop')).toBeNull()
+  })
+
+  test('not connected, its row says what the computer needs', async () => {
+    renderMenu({ machines: [MACBOOK], status: { macbook: 'offline' } })
+    await openMenu(trigger())
+    expect(row().textContent).toBe('MacBookNot connected. It must be on, with OpenAgent running.')
+  })
+
+  test('it has no remove here: it is taken out under Devices. A click still picks it', async () => {
+    const connection = renderMenu({ machines: [MACBOOK, STUDIO] })
+    await openMenu(trigger())
+    expect(screen.queryByRole('button', { name: 'Remove machine MacBook' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Remove machine Studio' })).toBeTruthy()
+    fireEvent.click(row())
+    expect(connection.onSelect).toHaveBeenCalledWith(MACBOOK)
+  })
+
+  test('picked, the chip and the icon button draw a computer; a picked server draws a server', () => {
+    for (const chip of [true, false]) {
+      renderMenu({ machines: [MACBOOK, STUDIO], selectedMachineId: 'macbook' }, chip)
+      expect(trigger().querySelector('svg.lucide-laptop')).toBeTruthy()
+      expect(trigger().querySelector('svg.lucide-server')).toBeNull()
+      cleanup()
+      renderMenu({ machines: [MACBOOK, STUDIO], selectedMachineId: 'studio' }, chip)
+      expect(trigger().querySelector('svg.lucide-server')).toBeTruthy()
+      expect(trigger().querySelector('svg.lucide-laptop')).toBeNull()
+      cleanup()
+    }
+  })
+})
+
+// The dashboard is its own machine's, also on a phone: there "This machine" would read as the phone.
+describe('the page opened from somewhere else than the computer it is on', () => {
+  const page = (globalThis as unknown as { jsdom: { reconfigure(to: { url: string }): void } }).jsdom
+  const own = window.location.href
+  afterEach(() => page.reconfigure({ url: own }))
+
+  test('the first row and the chip say the name the page was reached at; the row\'s description stays, and a picked machine still reads by its label', async () => {
+    page.reconfigure({ url: 'https://165.245.244.10/' })
+    renderMenu()
+    expect(trigger().textContent).toBe('165.245.244.10')
+    expect((await hoverTooltip(trigger())).textContent).toBe('Run on — 165.245.244.10')
+    await openMenu(trigger())
+    const items = screen.getAllByRole('menuitem')
+    expect(items[0]!.textContent).toBe('165.245.244.10Start the run here, through this project\'s start hook.')
+    fireEvent.click(items[0]!)
+    cleanup()
+
+    page.reconfigure({ url: 'http://suleimans-macbook-pro.local:4200/' })
+    renderMenu()
+    expect(trigger().textContent).toBe('suleimans-macbook-pro.local')
+    cleanup()
+    renderMenu({ selectedMachineId: 'studio' })
+    expect(trigger().textContent).toBe('Studio')
   })
 })
 

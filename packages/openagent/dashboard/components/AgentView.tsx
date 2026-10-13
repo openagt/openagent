@@ -23,6 +23,7 @@ import { agentLogKey } from '../lib/agent-log.js'
 import { revealChange, revealScreen } from '../lib/reveal-change.js'
 import { sidePanelName } from '../lib/side-panel.js'
 import { modelName, useModels } from '../lib/models.js'
+import { thisMachineName } from '../lib/this-machine.js'
 import { driverFromImpl } from '../../src/client.js'
 
 // One session's view, whether it is running or finished (#1026).
@@ -57,6 +58,7 @@ export function AgentView({
   projectName,
   target,
   remoteLabel,
+  remoteByLine,
   files,
   lost = false,
   writing = '',
@@ -87,6 +89,8 @@ export function AgentView({
    *  just-started remote run: its diff, handoff, and push/PR now relay to the machine (slice 2), so the
    *  panels are shown, and a "runs on <machine>" notice says where the agent executes. */
   remoteLabel?: string | undefined
+  /** That machine is a person's own computer, reached by the line it keeps open here: the notice draws a computer, not a server. */
+  remoteByLine?: boolean | undefined
   files: string[]
   /** The live channel's health (#948) — surfaced as a banner over the feed. */
   lost?: boolean
@@ -164,7 +168,7 @@ export function AgentView({
   const modelLabel = model ? modelName(picked ? models?.[picked] : undefined, model) : undefined
   // Where the agent runs, for the chip beside its name: a machine by the name it was given.
   // A run another computer started, which is no saved machine, is named by that computer: it did not run here.
-  const runsOn = remoteLabel ?? (target === 'web' ? 'Cloud' : target === 'actions' ? 'GitHub Actions' : target === 'remote' ? 'Another machine' : card?.otherHost && card.host ? card.host : 'This machine')
+  const runsOn = remoteLabel ?? (target === 'web' ? 'Cloud' : target === 'actions' ? 'GitHub Actions' : target === 'remote' ? 'Another machine' : card?.otherHost && card.host ? card.host : thisMachineName())
   const [open, setOpen] = useState(false)
   // What the installed modules add to this run's page: a summary in the bar above the message box.
   const { runSlots: mountedSlots, panels: mountedPanels } = useMountedModules()
@@ -350,7 +354,7 @@ export function AgentView({
       <CloudAgentNotice target={target} events={shown} projectId={projectId} agentId={agentId} />
       {/* A run relayed to a saved machine (#1067): its diff, handoff, and push/PR now relay to the
           machine (slice 2), so this notice only says where the agent executes. */}
-      <RemoteAgentNotice machine={remoteLabel} />
+      <RemoteAgentNotice machine={remoteLabel} byLine={remoteByLine} />
       {/* Nothing to show yet is not the same thing in both states: a live run is waiting for its
           first event, a finished one is still reading its log. */}
       {!feedSettled ? (

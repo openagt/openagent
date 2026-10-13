@@ -236,6 +236,8 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A run shows where it runs, on this computer or on a saved machine, as one icon with its
   words on hover, and the same wherever it is listed and however it was started. Picked over
   showing where it was started from, and over more words in the run's header.
+- On a page a phone opened, the computer that runs OpenAgent is named by the address the phone
+  reached it at. Picked over "This machine", which the phone's holder reads as the phone.
 
 ## Saying something to a run
 - What a person says reaches a run through what the run's tool reads: a line in the run's

@@ -7,6 +7,7 @@ import { end, readJsonBody, requireGet, sendJson } from './http.js'
 import { passToScreen, screenCallOf, type ScreenCall } from './screen.js'
 import { isRunId } from '../store/index.js'
 import { openagentVersion } from '../version.js'
+import { isRelayRead } from '../dashboard-rpc/relay-dispatch.js'
 
 /**
  * The machine-side of the remote-agent relay (#1067): the endpoints through which another
@@ -35,6 +36,20 @@ import { openagentVersion } from '../version.js'
  * brings one here.
  */
 export const RELAY_PREFIX = '/_relay'
+
+/**
+ * The header of a call that may only watch. A computer that keeps a line open to its server
+ * passes each call that comes down the line on to its own OpenAgent, and adds this header while
+ * its person lets the server watch and no more. Such a call is answered when it only reads: the
+ * ping, a run's events, where a project stands, a run's screen, a relayed function that is a
+ * read. One that acts is refused with {@link WATCH_ONLY}: a start, a clone, a click or a key on
+ * a run's screen, any other relayed function. The header only restricts, whatever its value: a
+ * call without it is answered in full.
+ */
+export const WATCH_HEADER = 'x-openagent-watch'
+
+/** What a call that acts is refused with (403) on a computer that only lets its server watch: read by the person, on the page the call was made from. */
+export const WATCH_ONLY = 'This computer only lets its server watch. Turn on "Start runs on this computer from the phone" in its Settings, under Servers.'
 
 /** What the daemon wires behind the relay endpoints: its own start closure and an events tail. */
 export interface RelayHandlers {
@@ -72,13 +87,17 @@ export async function handleRelayRequest(
   pathname: string,
   handlers: RelayHandlers | undefined,
 ): Promise<void> {
+  // A call that may only watch: a GET reads, and is answered. Anything else acts and is refused,
+  // but for a relayed function, whose name says whether it reads (handleRpc).
+  const watch = req.headers[WATCH_HEADER] !== undefined
+  if (watch && req.method !== 'GET' && pathname !== `${RELAY_PREFIX}/rpc`) return end(res, 403, WATCH_ONLY)
   // Ping is a pure reachability probe (#1072): it needs no wired handlers and starts nothing,
   // so it answers even on a host that enabled no relay.
   if (pathname === `${RELAY_PREFIX}/ping`) return handlePing(req, res)
   if (!handlers) return end(res, 404, 'relay not enabled')
   if (pathname === `${RELAY_PREFIX}/start`) return handleStart(req, res, handlers)
   if (pathname === `${RELAY_PREFIX}/events`) return handleEvents(req, res, handlers)
-  if (pathname === `${RELAY_PREFIX}/rpc`) return handleRpc(req, res, handlers)
+  if (pathname === `${RELAY_PREFIX}/rpc`) return handleRpc(req, res, handlers, watch)
   if (pathname === `${RELAY_PREFIX}/project`) return handleProject(req, res, handlers)
   const screenCall = screenCallOf(pathname, `${RELAY_PREFIX}/screen`)
   if (screenCall) return handleScreen(req, res, handlers, screenCall)
@@ -194,8 +213,8 @@ async function handleProject(req: IncomingMessage, res: ServerResponse, handlers
 }
 
 const MAX_RPC_BODY = 256 * 1024
-/** POST /_relay/rpc: run one whitelisted RPC on this machine and answer {result}. */
-async function handleRpc(req: IncomingMessage, res: ServerResponse, handlers: RelayHandlers): Promise<void> {
+/** POST /_relay/rpc: run one whitelisted RPC on this machine and answer {result}. A call that may only `watch` runs a read and no other. */
+async function handleRpc(req: IncomingMessage, res: ServerResponse, handlers: RelayHandlers, watch: boolean): Promise<void> {
   if (req.method !== 'POST') return end(res, 405, 'method not allowed', { allow: 'POST' })
   if (!handlers.rpc) return end(res, 404, 'relay rpc not enabled')
   let body: { fn?: unknown; args?: unknown; project?: unknown }
@@ -207,6 +226,7 @@ async function handleRpc(req: IncomingMessage, res: ServerResponse, handlers: Re
   const fn = typeof body.fn === 'string' ? body.fn : ''
   const args = Array.isArray(body.args) ? body.args : []
   if (!fn) return end(res, 400, 'missing rpc name')
+  if (watch && !isRelayRead(fn)) return end(res, 403, WATCH_ONLY)
   try {
     const projectId = await projectNamed(handlers, body.project)
     if (projectId === undefined) return end(res, 404, 'no such project on this machine')

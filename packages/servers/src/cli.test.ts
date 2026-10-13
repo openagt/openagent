@@ -353,3 +353,53 @@ test('login claude asks the person and gives the server the login; a second pres
     await home.remove()
   }
 })
+
+test('reach asks the server for a link once and has this computer\'s own door keep a line with it; after that only what the server may do changes; forget takes the line with it', async () => {
+  const home = await testHome()
+  try {
+    await run(home.env, ['connect', 'box.example.com', 'root', '1.2.3'], { startWork: () => 0 })
+    const link = { url: 'https://box.example.com/_remote-access/enter#code.pin', expires: '2026-10-11T12:00:00.000Z' }
+    const { exec, calls } = pretendServer(() => ({ out: JSON.stringify(link) }))
+    const asked: string[] = []
+    let answers: (args: string[]) => { ok: true } | { ok: false; error: string } = () => ({ ok: true })
+    // What the door is told, and after a bar what it is handed on standard input.
+    const door: CliIO['door'] = async (args, _env, input) => (asked.push(args.join(' ') + (input === undefined ? '' : ` | ${input}`)), answers(args))
+
+    assert.equal(serversOf(await run(home.env, ['status']))[0]!.reach, undefined)
+    // The first time: a link from the server, over SSH, and the door gets in with it.
+    assert.equal(serversOf(await run(home.env, ['reach', 'box.example.com', 'full'], { exec, door }))[0]!.reach, 'full')
+    assert.deepEqual(asked, [`line add - | ${link.url}`])
+    assert.equal(calls.length, 1)
+
+    // From then on the server is asked nothing: the door is told what the server may do.
+    assert.equal(serversOf(await run(home.env, ['reach', 'box.example.com', 'watch'], { exec, door }))[0]!.reach, 'watch')
+    assert.deepEqual(asked.slice(1), ['line watch box.example.com'])
+    assert.equal(calls.length, 1)
+
+    // A line the door no longer keeps is asked for anew, as what the person just picked.
+    answers = args => (args[1] === 'add' ? { ok: true } : { ok: false, error: 'This computer keeps no line to box.example.com.' })
+    assert.equal(serversOf(await run(home.env, ['reach', 'box.example.com', 'watch'], { exec, door }))[0]!.reach, 'watch')
+    assert.deepEqual(asked.slice(2), ['line watch box.example.com', `line add - watch | ${link.url}`])
+    assert.equal(calls.length, 2)
+
+    // What the door or the server refuses is said, and nothing is kept of the try.
+    answers = () => ({ ok: false, error: 'The server did not give a line: this code no longer works' })
+    const refused = await run(home.env, ['reach', 'box.example.com', 'full'], { exec, door })
+    assert.equal(refused.code, 1)
+    assert.deepEqual(refused.err, ['The server did not give a line: this code no longer works'])
+    assert.equal(serversOf(await run(home.env, ['status']))[0]!.reach, 'watch')
+    const unreachable = await run(home.env, ['reach', 'box.example.com', 'full'], { exec: pretendServer(() => ({ code: 1, err: 'the door is not open' })).exec, door })
+    assert.deepEqual(unreachable.err, ['the door is not open'])
+
+    for (const args of [['reach', 'box.example.com'], ['reach', 'box.example.com', 'half'], ['reach']]) assert.equal((await run(home.env, args, { exec, door })).code, 2)
+    assert.deepEqual((await run(home.env, ['reach', '203.0.113.9', 'full'], { exec, door })).err, ['no server at 203.0.113.9'])
+
+    // A server taken off the list is left no way to this computer.
+    asked.length = 0
+    answers = () => ({ ok: true })
+    assert.deepEqual((await run(home.env, ['forget', 'box.example.com'], { door })).out, { servers: [] })
+    assert.deepEqual(asked, ['line remove box.example.com'])
+  } finally {
+    await home.remove()
+  }
+})

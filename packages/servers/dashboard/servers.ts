@@ -48,9 +48,14 @@ export interface ServerRow {
   fingerprint?: string
   working: boolean
   adding: boolean
+  /** Set once this computer keeps a line open to the server: what the server may do through it. */
+  reach?: Reach
   steps: StepRow[]
   logins: Record<LoginKind, LoginRow>
 }
+
+/** What a server may do on this computer through the line this computer keeps to it: everything a machine is asked, or only read. */
+export type Reach = 'full' | 'watch'
 
 /** The link the server's door gives for a new machine. */
 export interface DoorLink {
@@ -76,7 +81,7 @@ export function readServers(output: unknown): ServerRow[] | undefined {
   const rows: ServerRow[] = []
   for (const entry of servers) {
     if (!entry || typeof entry !== 'object') continue
-    const { address, url, user, fingerprint, working, adding, steps, logins } = entry as Record<string, unknown>
+    const { address, url, user, fingerprint, working, adding, reach, steps, logins } = entry as Record<string, unknown>
     const { github, claude } = (logins && typeof logins === 'object' ? logins : {}) as Record<string, unknown>
     const [at, door, who, known] = [text(address), text(url), text(user), text(fingerprint)]
     if (!at || !door || !who || !Array.isArray(steps)) continue
@@ -87,7 +92,7 @@ export function readServers(output: unknown): ServerRow[] | undefined {
       const [stepId, name, words] = [text(id), text(label), text(said)]
       if (stepId && name && STATES.includes(state as string)) list.push({ id: stepId, label: name, state: state as StepState, ...(words ? { said: words } : {}) })
     }
-    rows.push({ address: at, url: door, user: who, ...(known ? { fingerprint: known } : {}), working: working === true, adding: adding === true, steps: list, logins: { github: readLogin(github), claude: readLogin(claude) } })
+    rows.push({ address: at, url: door, user: who, ...(known ? { fingerprint: known } : {}), working: working === true, adding: adding === true, ...(reach === 'full' || reach === 'watch' ? { reach } : {}), steps: list, logins: { github: readLogin(github), claude: readLogin(claude) } })
   }
   return rows
 }
@@ -146,3 +151,5 @@ export const logout = (host: ModuleHost, address: string, kind: LoginKind): Prom
 export const askLink = (host: ModuleHost, address: string): Promise<Answer<DoorLink>> => run(host, ['link', address], readLink)
 export const markAdded = (host: ModuleHost, address: string): Promise<Answer<ServerRow[]>> => run(host, ['added', address], readServers)
 export const forget = (host: ModuleHost, address: string): Promise<Answer<ServerRow[]>> => run(host, ['forget', address], readServers)
+/** Keep a line open from this computer to the server, and say what the server may do through it. */
+export const reach = (host: ModuleHost, address: string, mode: Reach): Promise<Answer<ServerRow[]>> => run(host, ['reach', address, mode], readServers)

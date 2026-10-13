@@ -661,6 +661,28 @@ describe('where the agent runs, for the chip beside its name', () => {
     render(view({ card }))
     expect(screen.getByTestId('bar-runs-on').textContent).toBe('rom-thinkpad-x280')
   })
+
+  test('on a page opened from somewhere else, this machine goes by the name the page was reached at', () => {
+    const page = (globalThis as unknown as { jsdom: { reconfigure(to: { url: string }): void } }).jsdom
+    const own = window.location.href
+    page.reconfigure({ url: 'https://165.245.244.10/' })
+    try {
+      const { rerender } = render(view({ live: true }))
+      expect(screen.getByTestId('bar-runs-on').textContent).toBe('165.245.244.10')
+      rerender(view({ live: true, target: 'remote', remoteLabel: 'Studio' }))
+      expect(screen.getByTestId('bar-runs-on').textContent).toBe('Studio')
+    } finally {
+      page.reconfigure({ url: own })
+    }
+  })
+
+  test('the notice of a run on a saved machine draws a server, and a computer for a person\'s own, reached by its line', () => {
+    const icon = (name: string) => screen.getByText(new RegExp(`^Running on ${name}\\.`)).closest('[role="status"]')!.querySelector('svg')!.getAttribute('class')
+    const { rerender } = render(view({ live: true, target: 'remote', remoteLabel: 'Server' }))
+    expect(icon('Server')).toContain('lucide-server')
+    rerender(view({ live: true, target: 'remote', remoteLabel: 'MacBook', remoteByLine: true }))
+    expect(icon('MacBook')).toContain('lucide-laptop')
+  })
 })
 
 describe('the model under the message box', () => {

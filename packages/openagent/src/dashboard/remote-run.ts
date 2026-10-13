@@ -101,6 +101,22 @@ function relayHeaders(key: string): Record<string, string> {
 /** What a machine says when this computer's key no longer lets it in: it was removed there. */
 const NOT_IN = 'this computer is no longer in on the machine: add the machine again, with a new link'
 
+/** How much of a machine's own words about a failure is shown. */
+const MAX_SAID = 600
+
+/**
+ * Why a machine refused a call, in its own words: a 403 carries them, written for the person to
+ * read on the page the call was made from (a computer that only lets its server watch says so,
+ * and where that is changed). Nothing for any other answer, and for a 403 that gives no reason.
+ */
+async function refusalOf(res: Response): Promise<string | undefined> {
+  if (res.status !== 403) return undefined
+  return (await res.text().catch(() => '')).trim().slice(0, MAX_SAID) || undefined
+}
+
+/** A machine refused a call and said why: the message is the machine's own words, for the person to read. */
+export class MachineRefusal extends Error {}
+
 const ENTER_TIMEOUT_MS = 10_000
 /** How long a machine gets to take this computer out: it is not waited for by a person. */
 const LEAVE_TIMEOUT_MS = 5_000
@@ -166,7 +182,7 @@ export async function startRemoteAgent(target: RemoteTarget, body: RelayStartBod
       signal: AbortSignal.timeout(START_TIMEOUT_MS),
     })
     if (res.status === 401) return { ok: false, error: NOT_IN }
-    if (!res.ok) return { ok: false, error: `the machine refused the run (${res.status})` }
+    if (!res.ok) return { ok: false, error: (await refusalOf(res)) ?? `the machine refused the run (${res.status})` }
     return (await res.json()) as RelayStartResult
   } catch (err) {
     return { ok: false, error: `could not reach the machine: ${errorMessage(err)}` }
@@ -200,7 +216,7 @@ export async function remoteProject(target: RemoteTarget, bring?: BringProject):
     if (res.status === 401) return { state: 'unasked', error: NOT_IN }
     // An OpenAgent from before a machine cloned a project by itself has no such call.
     if (res.status === 404) return { state: 'unasked', error: 'it runs an older OpenAgent, which cannot clone a project by itself. Update it, or add the project there.' }
-    if (!res.ok) return { state: 'unasked', error: `the machine refused (${res.status})` }
+    if (!res.ok) return { state: 'unasked', error: (await refusalOf(res)) ?? `the machine refused (${res.status})` }
     const said = (await res.json()) as { state?: unknown; error?: unknown }
     if (said.state === 'there' || said.state === 'coming' || said.state === 'missing') return { state: said.state }
     return { state: 'failed', error: typeof said.error === 'string' && said.error ? said.error.slice(0, MAX_SAID) : 'the machine did not say why' }
@@ -217,9 +233,6 @@ export interface BringProject {
   from?: string
 }
 
-/** How much of a machine's own words about a failure is shown. */
-const MAX_SAID = 600
-
 const RPC_TIMEOUT_MS = 60_000 // a relayed git push/PR runs over the network on the machine
 
 /**
@@ -227,7 +240,8 @@ const RPC_TIMEOUT_MS = 60_000 // a relayed git push/PR runs over the network on 
  * holds this computer's key there, so a read/diff/handoff/push/PR for a relayed agent runs ON the machine: POST
  * {fn, args} to the remote's /_relay/rpc with the key (no Origin), returning the machine's
  * result. Throws on an unreachable machine or a non-2xx so the caller falls back to its own empty/error
- * shape, the same way a failed local read does.
+ * shape, the same way a failed local read does. A refusal the machine gave a reason for is thrown
+ * as a {@link MachineRefusal}, so the reason can be shown in place of that shape's own words.
  */
 export async function relayRpc(target: RemoteTarget, fn: string, args: unknown[]): Promise<unknown> {
   const res = await machineFetch(`${trimSlashes(target.url)}/_relay/rpc`, target.pin, {
@@ -236,7 +250,10 @@ export async function relayRpc(target: RemoteTarget, fn: string, args: unknown[]
     body: JSON.stringify({ fn, args, project: target.project }),
     signal: AbortSignal.timeout(RPC_TIMEOUT_MS),
   })
-  if (!res.ok) throw new Error(`the machine refused the request (${res.status})`)
+  if (!res.ok) {
+    const why = await refusalOf(res)
+    throw why === undefined ? new Error(`the machine refused the request (${res.status})`) : new MachineRefusal(why)
+  }
   const body = (await res.json()) as { result?: unknown }
   return body.result
 }

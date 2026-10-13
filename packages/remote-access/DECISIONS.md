@@ -37,3 +37,12 @@ already made, and lists it in its pull request; for anything else it proposes an
 - On a server the door speaks HTTPS, with a certificate for the server's number that it
   asks Let's Encrypt for and renews itself. Picked over a name the person buys and points
   at the server, one more thing to set up; a field for a name can come later.
+
+## Reaching a computer from its server
+- A computer keeps one connection open to its server, and the server asks the computer through
+  it. So a phone on the server's page starts a run on the computer, while nothing on a network
+  reaches the computer. Picked over opening the computer itself to the internet, and over a
+  private network app on every device, one more thing to install and sign in to.
+- Through that connection the server does everything a machine is asked, until the person turns
+  one switch off; then it only reads. Picked over a server that only watches until it is let
+  do more.

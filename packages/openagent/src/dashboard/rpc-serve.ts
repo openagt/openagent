@@ -31,6 +31,12 @@ export type RemoveProjectHandler = (projectId: string, files: boolean) => Remove
  * Returns undefined when there is no in-memory stream, so `onEvents` falls back to tailing the log. */
 export type EventsSource = (projectId: string, agentId?: string) => AsyncIterable<OpenAgentEvent> | undefined
 
+/** A saved machine as a run's row needs it: the name it was given, and its address. */
+export interface SavedMachine {
+  label: string
+  url: string
+}
+
 /** Look up the machine a relayed agent (#1067) executes on, or undefined for an ordinary local agent. The
  *  daemon wires this from its live relayed-agent map; a run-scoped RPC uses it to forward a remote agent's
  *  read/steer/handoff to that machine instead of resolving a (nonexistent) local checkout. */
@@ -55,10 +61,10 @@ export interface RemoteAgents {
   /** Follow a run that runs on a saved machine, when it is not followed yet: its events then stream here, as for a run this computer sent. */
   follow(projectId: string, agentId: string): Promise<void>
   /**
-   * The name a saved machine was given, by its computer's own name, as the records of its runs
-   * carry it: asked of the machines first, when one has not said its name yet.
+   * The saved machine, by its computer's own name, as the records of its runs carry it: the name
+   * it was given and its address. Asked of the machines first, when one has not said its name yet.
    */
-  machineNames(): Promise<(host: string) => string | undefined>
+  machineNames(): Promise<(host: string) => SavedMachine | undefined>
 }
 
 /**
