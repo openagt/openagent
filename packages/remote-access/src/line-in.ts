@@ -41,7 +41,12 @@ class Session {
   private readonly calls = new Map<number, Pending>()
   private next = 1
 
-  constructor(socket: Duplex, head: Buffer, quietMs: number, onGone: () => void) {
+  constructor(
+    socket: Duplex,
+    head: Buffer,
+    private readonly quietMs: number,
+    onGone: () => void,
+  ) {
     this.link = new Link(socket, {
       quietMs,
       onFrame: frame => this.arrived(frame),
@@ -69,8 +74,24 @@ class Session {
       call.answered = true
       call.resolve({ status, headers: carriedHeaders(head.headers), body: call.body })
     } else if (kind === DATA && call.answered) {
-      // A reader that cannot keep up holds the line until it can.
-      if (!call.body.write(payload)) this.link.hold(new Promise(resolve => call.body.once('drain', resolve).once('close', resolve)))
+      // Nothing is written to an answer that was cut, so nothing waits for it either.
+      if (call.body.destroyed) return
+      if (call.body.write(payload)) return
+      // A reader that cannot keep up holds the line until it can, but not for long: the one call
+      // is given up before the whole line would be taken for dead.
+      this.link.hold(
+        new Promise<void>(resolve => {
+          const done = (): void => {
+            clearTimeout(slow)
+            resolve()
+          }
+          const slow = setTimeout(() => {
+            this.giveUp(number, new Error('its reader did not keep up'))
+            resolve()
+          }, Math.floor(this.quietMs / 3))
+          call.body.once('drain', done).once('close', done)
+        }),
+      )
     } else if (kind === END && call.answered) {
       this.calls.delete(number)
       call.body.end()
@@ -174,9 +195,12 @@ export function openLines(opts: LinesOptions = {}): Lines {
       if (value !== undefined) headers[name] = value
     }
     const gone = new AbortController()
+    const connection = req.socket
     // A caller that left before the answer ended is no longer answered: the computer is told.
     res.once('close', () => {
       if (!res.writableFinished) gone.abort()
+      // A call whose body was not read to its end does not keep its connection: the next call on it would wait for what is never read.
+      if (!req.complete) connection.destroy()
     })
     session.ask(req.method, path, headers, req.method === 'GET' ? Readable.from([]) : req, gone.signal).then(
       asked => {
@@ -192,6 +216,8 @@ export function openLines(opts: LinesOptions = {}): Lines {
           return void res.destroy()
         }
         asked.body.pipe(res)
+        // A caller that left takes what still waited for it along: nothing of it holds the line.
+        res.once('close', () => asked.body.destroy())
         // An answer the line cut midway is cut here too, so the caller asks again instead of waiting for ever.
         asked.body.once('error', () => res.destroy())
       },

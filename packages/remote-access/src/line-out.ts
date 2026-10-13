@@ -185,7 +185,8 @@ export function carry(socket: Duplex, rest: Buffer, opts: CarryOptions): Promise
         if (kind === DATA) {
           // Nothing is written to a call whose asking has ended: a late piece is dropped.
           if (upstream.writableEnded || upstream.destroyed) return
-          if (!upstream.write(payload)) link.hold(new Promise(done => upstream.once('drain', done).once('close', done)))
+          // Until it is written, or until the call's asking ended: a call that has ended says so, and never that it drained.
+          if (!upstream.write(payload)) link.hold(new Promise(done => upstream.once('drain', done).once('finish', done).once('close', done)))
         } else if (kind === END) {
           if (!upstream.writableEnded) upstream.end()
         } else if (kind === RESET) {
@@ -270,12 +271,13 @@ export async function keepLine(opts: KeepLineOptions): Promise<void> {
 }
 
 /** A body sent in pieces, each after its length, put together. */
-function unchunked(said: Buffer): Buffer {
+export function unchunked(said: Buffer): Buffer {
   const pieces: Buffer[] = []
   for (let at = 0; ; ) {
     const lineEnd = said.indexOf('\r\n', at)
     const size = lineEnd === -1 ? 0 : parseInt(said.subarray(at, lineEnd).toString('latin1'), 16)
-    if (!size) return Buffer.concat(pieces)
+    // A length that is none ends the reading, a negative one as much as a missing one.
+    if (!(size > 0)) return Buffer.concat(pieces)
     pieces.push(said.subarray(lineEnd + 2, lineEnd + 2 + size))
     at = lineEnd + 2 + size + 2
   }

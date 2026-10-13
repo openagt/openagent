@@ -204,7 +204,7 @@ async function removeLine(io: CliIO, at: string): Promise<Status> {
   })
   if (!removed) throw new Refused(`This computer keeps no line to ${at}.`)
   // A server that cannot be reached right now keeps the key until this computer is removed there, among its devices.
-  await (io.leaveLine ?? leaveLine)(removed, `${removed.url}${ENTER_PATH}`)
+  if (!(await (io.leaveLine ?? leaveLine)(removed, `${removed.url}${ENTER_PATH}`))) io.stderr(`The server could not be told: it still lists this computer among its devices. Remove it there.`)
   return statusOf(await readStore(io.env))
 }
 

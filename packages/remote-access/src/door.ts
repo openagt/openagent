@@ -317,7 +317,8 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
   const giveLine = (req: IncomingMessage, socket: Duplex, head: Buffer): void => {
     // The connection is this function's from here on, its errors too: a caller that leaves midway ends only itself.
     socket.on('error', () => socket.destroy())
-    const no = (status: number, text: string): void => void socket.end(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`)
+    // Answered and closed from this side: a connection taken over is no longer under the door's own time limits, and a caller that stays would hold one of its places for good.
+    const no = (status: number, text: string): void => void socket.end(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`, () => socket.destroy())
     void (async () => {
       const path = (req.url ?? '/').split('?')[0]
       if (!opts.lines || path !== LINE_PATH || req.method !== 'GET' || req.headers.upgrade?.toLowerCase() !== LINE_PROTOCOL) return no(404, 'Not Found')

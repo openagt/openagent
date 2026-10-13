@@ -32,8 +32,12 @@ export interface Frame {
 export const MAX_PAYLOAD = 64 * 1024
 const HEADER = 9
 const NOTHING = Buffer.alloc(0)
-/** How much may wait to be sent on one line before the line is dropped. */
+/**
+ * How much may wait to be sent on one line before the line is dropped, in bytes and in frames: a
+ * frame of a few bytes costs far more memory than its bytes while it waits.
+ */
 const MAX_WAITING = 32 * 1024 * 1024
+const MAX_WAITING_FRAMES = 8_192
 
 export function frame(kind: number, call: number, payload: Buffer = NOTHING): Buffer {
   const header = Buffer.allocUnsafe(HEADER)
@@ -83,6 +87,7 @@ export class Link {
   private readonly watch: NodeJS.Timeout
   private heard = Date.now()
   private held = 0
+  private waiting = 0
   private closed = false
 
   constructor(
@@ -114,10 +119,9 @@ export class Link {
       return void this.socket.destroy()
     }
     try {
-      for (const one of frames) {
-        if (one.kind === PING) this.send(PONG, 0)
-        else if (one.kind !== PONG) this.opts.onFrame(one)
-      }
+      // However many times it was asked in one piece, the line says once that it still carries.
+      if (frames.some(one => one.kind === PING)) this.send(PONG, 0)
+      for (const one of frames) if (one.kind !== PING && one.kind !== PONG) this.opts.onFrame(one)
     } catch {
       // Whatever the other end sent, it ends its line at most: never the process that reads it.
       this.socket.destroy()
@@ -128,11 +132,12 @@ export class Link {
   send(kind: number, call: number, payload?: Buffer): boolean {
     if (this.closed) return false
     // An end that asks and asks and reads no answer is left: what waits for it is never let grow without end.
-    if (this.socket.writableLength > MAX_WAITING) {
+    if (this.socket.writableLength > MAX_WAITING || this.waiting > MAX_WAITING_FRAMES) {
       this.socket.destroy()
       return false
     }
-    return this.socket.write(frame(kind, call, payload))
+    this.waiting++
+    return this.socket.write(frame(kind, call, payload), () => void this.waiting--)
   }
 
   /** Once what was sent has left this computer. */

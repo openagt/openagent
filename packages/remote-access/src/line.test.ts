@@ -3,10 +3,11 @@ import { test } from 'node:test'
 import { createServer, request, type IncomingMessage, type Server } from 'node:http'
 import { connect as connectTcp, createServer as createTcpServer, type AddressInfo, type Socket } from 'node:net'
 import { runCli } from './cli.js'
-import { PassThrough } from 'node:stream'
+import { Duplex, PassThrough } from 'node:stream'
+import { connect as connectTls } from 'node:tls'
 import { openDoor } from './door.js'
-import { DATA, END, FrameReader, HEAD, Link, MAX_PAYLOAD, RESET, carriedHeaders, carriedPath, frame } from './frames.js'
-import { carry, dial, enterForLine, knock, readLineLink, WATCH_HEADER } from './line-out.js'
+import { DATA, END, FrameReader, HEAD, Link, MAX_PAYLOAD, PING, PONG, RESET, carriedHeaders, carriedPath, frame } from './frames.js'
+import { carry, dial, enterForLine, knock, readLineLink, unchunked, WATCH_HEADER } from './line-out.js'
 import { serve } from './serve.js'
 import { readStore, update, type Store } from './store.js'
 import { testHome } from './test-home.js'
@@ -57,6 +58,29 @@ test('what the other end of a line sends never stops the process that reads it: 
   link.take(frame(HEAD, 1, Buffer.from('{}')))
   assert.equal(socket.destroyed, true)
   return new Promise<void>(resolve => setImmediate(() => (assert.equal(closed, true), resolve())))
+})
+
+test('an end that asks and reads no answer is left, and one piece full of questions gets one answer', () => {
+  // Nothing written to this connection ever leaves: what waits only grows.
+  const stuck = new Duplex({ read() {}, write() {} })
+  const flooded = new Link(stuck, { quietMs: 60_000, onFrame: () => {}, onClose: () => {} })
+  for (let n = 0; n < 9_000 && !stuck.destroyed; n++) flooded.send(DATA, 1)
+  assert.equal(stuck.destroyed, true)
+
+  const written: Buffer[] = []
+  const socket = new Duplex({ read() {}, write: (chunk: Buffer, _encoding, done) => (written.push(chunk), done()) })
+  const link = new Link(socket, { quietMs: 60_000, onFrame: () => {}, onClose: () => {} })
+  link.take(Buffer.concat(Array.from({ length: 500 }, () => frame(PING, 0))))
+  assert.deepEqual(
+    new FrameReader().push(Buffer.concat(written)).map(one => one.kind),
+    [PONG],
+  )
+  socket.destroy()
+})
+
+test('a body in pieces is put together, and a length that is none ends the reading', () => {
+  assert.equal(unchunked(Buffer.from('5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n')).toString(), 'hello world')
+  for (const none of ['-6\r\nabc', 'zz\r\nabc', '', '5']) assert.equal(unchunked(Buffer.from(none)).length, 0, none)
 })
 
 test('only a server gives a line: its link is HTTPS and names its key', () => {
@@ -167,6 +191,9 @@ async function rig(): Promise<Rig> {
       }
       const body = await bodyOf(req)
       asked.push({ line, watch: req.headers[WATCH_HEADER] === '1', body, headers: req.headers })
+      // An answer that takes its time.
+      if (req.url === '/_relay/slow') return void setTimeout(() => res.writeHead(200, { 'content-type': 'text/plain' }).end('at last'), 700)
+      if (req.url?.startsWith('/_relay/huge?')) return void res.writeHead(200, { 'content-type': 'application/octet-stream' }).end(Buffer.alloc(Number(req.url.split('?')[1]), 7))
       if (req.url === '/_relay/large') return void res.writeHead(200, { 'content-type': 'application/octet-stream' }).end(Buffer.alloc(300_000, 7))
       res.writeHead(req.url === '/_relay/refused' ? 403 : 200, { 'content-type': 'application/json', 'x-said': 'by the computer' }).end(JSON.stringify({ heard: body, host: 'the-computer' }))
     })()
@@ -422,6 +449,7 @@ test('whatever a server sends down a line, this computer passes on one checked c
   const asked: string[] = []
   const agent = createServer((req, res) => {
     void bodyOf(req).then(body => {
+      if (req.url === '/_relay/slow') return void setTimeout(() => res.writeHead(200, { 'content-type': 'text/plain' }).end('at last'), 700)
       asked.push(`${req.method} ${req.url} ${body}`)
       res.writeHead(200, { 'content-type': 'text/plain' }).end('ok')
     })
@@ -455,6 +483,14 @@ test('whatever a server sends down a line, this computer passes on one checked c
     assert.equal(await statusOf(10), 404)
     await new Promise(resolve => setTimeout(resolve, 100))
     assert.deepEqual(asked, ['GET /_relay/ping ', 'POST /_relay/rpc {}', 'POST /_relay/rpc second'])
+    // A call with a large body, whole in one piece, whose answer takes its time: the line reads on meanwhile.
+    far.write(Buffer.concat([head(20, 'POST', '/_relay/slow'), frame(DATA, 20, Buffer.alloc(MAX_PAYLOAD, 120)), frame(DATA, 20, Buffer.alloc(MAX_PAYLOAD, 120)), frame(END, 20)]))
+    await new Promise(resolve => setTimeout(resolve, 60))
+    const began = Date.now()
+    far.write(head(21, 'GET', '/_relay/ping'))
+    assert.equal(await statusOf(21), 200)
+    assert.ok(Date.now() - began < 400, 'a read waited for the slow call before it')
+    assert.equal(await statusOf(20), 200)
   } finally {
     await close()
     await carried
@@ -526,5 +562,49 @@ test('a door that gives no line answers a request for one as it answers any requ
     await door.close()
     await shut(upstream)
     await home.remove()
+  }
+})
+
+test('one call that is slow, or whose caller left, does not hold the other calls of the line', async () => {
+  const r = await rig()
+  try {
+    await command(r.computer, 'line', 'add', await r.link())
+    const machine = await until('the server’s OpenAgent saved the computer', () => r.machines[0])
+    const ping = async (): Promise<number> => {
+      const began = Date.now()
+      assert.equal((await fetch(`${machine.url}/_relay/ping`, { signal: AbortSignal.timeout(3_000) })).status, 200)
+      return Date.now() - began
+    }
+    await until('the line carries', () => ping().catch(() => undefined))
+
+    // A caller that leaves without reading an answer the computer already ended takes it along.
+    for (const size of [400_000, 655_360, 680_000, 704_512, 1_000_000]) {
+      await new Promise<void>((resolve, reject) => {
+        const req = request({ host: '127.0.0.1', port: Number(new URL(machine.url).port), path: `/_relay/huge?${size}`, agent: false }, res => {
+          res.pause()
+          setTimeout(() => (res.destroy(), resolve()), 80)
+        })
+        req.on('error', reject).end()
+      })
+      assert.ok((await ping()) < 300, `the line was held after an answer of ${size} bytes nobody read`)
+    }
+
+    // A call with a large body whose answer takes its time: the line carries the others meanwhile.
+    const slow = fetch(`${machine.url}/_relay/slow`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt: 'x'.repeat(200_000) }) })
+    await new Promise(resolve => setTimeout(resolve, 100))
+    assert.ok((await ping()) < 400, 'a ping waited for the slow call')
+    assert.equal(await (await slow).text(), 'at last')
+
+    // A request for a line that is refused is closed from the door's side, whatever the caller does after.
+    const link = new URL(await r.link())
+    const socket = connectTls({ host: '127.0.0.1', port: Number(link.port), rejectUnauthorized: false })
+    await new Promise<void>(resolve => socket.once('secureConnect', resolve))
+    const answered = new Promise<string>(resolve => socket.once('data', (chunk: Buffer) => resolve(chunk.toString().split('\r\n')[0]!)))
+    const closed = new Promise<true>(resolve => socket.once('close', () => resolve(true)))
+    socket.write('GET /_remote-access/line HTTP/1.1\r\nHost: x\r\nConnection: Upgrade\r\nUpgrade: openagent-line\r\nAuthorization: Bearer nobody.nothing\r\n\r\n')
+    assert.match(await answered, /^HTTP\/1\.1 401 /)
+    assert.equal(await Promise.race([closed, new Promise<false>(resolve => setTimeout(() => resolve(false), 3_000))]), true)
+  } finally {
+    await r.stop()
   }
 })
