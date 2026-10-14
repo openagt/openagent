@@ -2,6 +2,9 @@ import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { cachedRead, clearCache, invalidate } from './cache.js'
 
+/** What a cached read answered, without the moment it was read: these tests are about the answer. */
+const answer = <T>(read: { value: T | undefined; pending: boolean }): { value: T | undefined; pending: boolean } => ({ value: read.value, pending: read.pending })
+
 // A promise you resolve by hand, so a "slow" read is slow on purpose rather than by sleeping.
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reject: (error: Error) => void } {
   let resolve!: (value: T) => void
@@ -37,16 +40,16 @@ test('a known value answers without calling again, until it is stale', async () 
   let now = 1000
   const opts = { ttlMs: 100, budgetMs: 50, now: () => now }
 
-  assert.deepEqual(await cachedRead('k', load, opts), { value: 1, pending: false })
-  assert.deepEqual(await cachedRead('k', load, opts), { value: 1, pending: false })
+  assert.deepEqual(answer(await cachedRead('k', load, opts)), { value: 1, pending: false })
+  assert.deepEqual(answer(await cachedRead('k', load, opts)), { value: 1, pending: false })
   assert.equal(calls, 1)
 
   // Past the TTL the caller still gets the old value at once; the refresh happens behind it.
   now += 200
-  assert.deepEqual(await cachedRead('k', load, opts), { value: 1, pending: false })
+  assert.deepEqual(answer(await cachedRead('k', load, opts)), { value: 1, pending: false })
   await settle()
   assert.equal(calls, 2)
-  assert.deepEqual(await cachedRead('k', load, opts), { value: 2, pending: false })
+  assert.deepEqual(answer(await cachedRead('k', load, opts)), { value: 2, pending: false })
 })
 
 test('a first ask slower than the budget reports pending, and the answer lands for the next one', async () => {
@@ -58,7 +61,7 @@ test('a first ask slower than the budget reports pending, and the answer lands f
 
   gate.resolve('pr-9')
   await settle()
-  assert.deepEqual(await cachedRead('k', load, { budgetMs: 5 }), { value: 'pr-9', pending: false })
+  assert.deepEqual(answer(await cachedRead('k', load, { budgetMs: 5 })), { value: 'pr-9', pending: false })
 })
 
 test('a failed read keeps the last good value rather than dropping it', async () => {
@@ -85,4 +88,18 @@ test('invalidate forces the next read to go again', async () => {
   assert.equal((await cachedRead('k', load, { budgetMs: 50 })).value, 1)
   invalidate('k')
   assert.equal((await cachedRead('k', load, { budgetMs: 50 })).value, 2)
+})
+
+test('a cached answer says when it was read, for a caller that knows of something that happened since', async () => {
+  let clock = 1_000
+  const now = (): number => clock
+  const read = await cachedRead('when', async () => 'first', { now })
+  assert.equal(read.at, 1_000, 'the moment the value landed')
+  clock = 2_000
+  const again = await cachedRead('when', async () => 'second', { now })
+  assert.deepEqual([again.value, again.at], ['first', 1_000], 'still the first answer, still its own age')
+  // Thrown away and read anew: the age is the new read's.
+  invalidate('when')
+  const fresh = await cachedRead('when', async () => 'third', { now })
+  assert.deepEqual([fresh.value, fresh.at], ['third', 2_000])
 })

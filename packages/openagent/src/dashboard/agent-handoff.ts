@@ -147,6 +147,12 @@ export interface AgentHandoffDeps {
   from?: string
   /** How git is asked whether the branch holds commits on top of its PR's head (default the real one). */
   git?: GitRunner
+  /**
+   * When the run ended ({@link AgentMeta.endedAt}), so a pull request it opened on its way out is
+   * not missed: a cached answer read while the run still worked cannot know about one, and the bar
+   * would go on offering to open a request the branch already has. See {@link lookupAgentPr}.
+   */
+  endedAt?: string
 }
 
 /**
@@ -180,7 +186,12 @@ async function lookupAgentPr(cwd: string, branch: string, deps: AgentHandoffDeps
     const value = await deps.pr(cwd, branch).catch(() => undefined)
     return { value, latest: value, pending: false }
   }
-  const prs = await cachedPrsForBranch(cwd, branch).catch(() => ({ value: undefined, pending: false }))
+  let prs = await cachedPrsForBranch(cwd, branch).catch((): Cached<LinkedPr[]> => ({ value: undefined, pending: false }))
+  if (answeredBefore(prs.at, deps.endedAt)) {
+    forgetBranchPrs(cwd, branch)
+    forgetPr(cwd, branch)
+    prs = await cachedPrsForBranch(cwd, branch).catch((): Cached<LinkedPr[]> => ({ value: undefined, pending: false }))
+  }
   // `latest` beside the run's own PR: whether the session moved past its PR is asked of the PR
   // that last saw the branch ({@link pickAgentPr}).
   return {
@@ -188,6 +199,25 @@ async function lookupAgentPr(cwd: string, branch: string, deps: AgentHandoffDeps
     latest: prs.value ? pickAgentPr(prs.value, deps.since, 'latest') : undefined,
     pending: prs.pending,
   }
+}
+
+/**
+ * Whether a cached pull request answer is from before the run ended, and so cannot have seen what
+ * the run did on its way out.
+ *
+ * A run told to publish its own work opens its pull request as it finishes. The lookup cached while
+ * it was still working says the branch has none, and that answer lives for a minute — long enough
+ * for the bar to offer "Open PR" for a branch that already has one, which is the single mistake
+ * that bar exists to prevent. An answer taken before the run's own end is thrown away rather than
+ * trusted; one taken after it has seen everything the run did.
+ *
+ * Nothing is thrown away for a run still going (no end to be older than), for an answer that was
+ * never read, or for a record whose end is not a date.
+ */
+export function answeredBefore(at: number | undefined, endedAt: string | undefined): boolean {
+  if (at === undefined || endedAt === undefined) return false
+  const ended = Date.parse(endedAt)
+  return Number.isFinite(ended) && at < ended
 }
 
 /** The cached single-PR read {@link resolveAgentPr} asks for the recorded PR's current state. */
@@ -320,14 +350,14 @@ export async function readAgentHandoff(
  */
 export async function readRunHandoff(
   cwd: string,
-  agent: Pick<AgentMeta, 'id' | 'startedAt' | 'branch' | 'baseCommit' | 'landed' | 'status' | 'host' | 'pr'>,
+  agent: Pick<AgentMeta, 'id' | 'startedAt' | 'endedAt' | 'branch' | 'baseCommit' | 'landed' | 'status' | 'host' | 'pr'>,
   deps: AgentHandoffDeps = {},
 ): Promise<AgentHandoff | undefined> {
   const at = agentBranchFor(agent) ?? agent.landed
   if (at === undefined) return undefined
   // A commit has no pull request to look up: only a branch is asked of the git host.
   const noPr: AgentHandoffDeps = agentBranchFor(agent) === undefined ? { pr: async () => undefined } : {}
-  const handoff = await readAgentHandoff(cwd, at, { since: agent.startedAt, ...(agent.baseCommit !== undefined ? { from: agent.baseCommit } : {}), ...deps, ...noPr })
+  const handoff = await readAgentHandoff(cwd, at, { since: agent.startedAt, ...(agent.endedAt !== undefined ? { endedAt: agent.endedAt } : {}), ...(agent.baseCommit !== undefined ? { from: agent.baseCommit } : {}), ...deps, ...noPr })
   if (!handoff) return undefined
   if (agent.landed !== undefined) return { ...handoff, landed: true }
   if (!handoff.exists) return leftNothing(agent) ? { ...handoff, unchanged: true } : handoff
