@@ -3,19 +3,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Driver } from '@openagt/agent-driver'
 
-/**
- * A run's short name, the way Claude Code on the web names a session: "README.md condensing" for
- * "make readme.md shorter". The person's own words are the whole prompt — too long for a list and
- * often a paragraph — so a list of runs used to read as a column of first lines. The name is asked
- * of the same coding agent the run is on, in one throwaway session with that agent's small, fast
- * model: it costs about a cent, it is never the run's own session (nothing is added to what the
- * agent was asked), and it runs beside the first turn, so nothing waits for it.
- *
- * The session is given an empty directory of its own, not the run's checkout. A coding agent in a
- * checkout reads it: asked in the run's own folder, Haiku looked around and answered "The file is
- * `hello.sh` in the branch agent-2026-10-14T06-27…" — a sentence about the work, not a name. With
- * nothing to look at, the prompt is all it has.
- */
+// A run's short name, the way Claude Code on the web names a session: "README.md condensing" for
+// "make readme.md shorter". The person's own words are the whole prompt — too long for a list and
+// often a paragraph — so a list of runs read as a column of first lines. The name is asked of the
+// same coding agent the run is on, in one throwaway session with that agent's small, fast model: it
+// costs about a cent, it is never the run's own session (nothing is added to what the agent was
+// asked), and it runs beside the first turn, so nothing waits for it.
+//
+// The session is given an empty directory of its own, not the run's checkout. A coding agent in a
+// checkout reads it: asked in the run's own folder, Haiku looked around and answered "The file is
+// `hello.sh` in the branch agent-2026-10-14T06-27…" — a sentence about the work, not a name. With
+// nothing to look at, the prompt is all it has.
 
 /** What the naming session is for, so a coding agent does not treat the ask as work. */
 export const TITLE_SYSTEM =
@@ -47,8 +45,9 @@ export function titlePrompt(prompt: string): string {
 
 /**
  * The name out of what the model answered: its first non-empty line, free of the wrapping a model
- * adds on its own (quotes, a trailing stop, a "Title:" lead-in), cut to {@link MAX_TITLE}.
- * `undefined` when nothing usable came back — a run keeps the person's own words then.
+ * adds on its own (quotes, a trailing stop, a "Title:" lead-in). `undefined` when nothing usable
+ * came back, or when what came back is a sentence rather than a name — a run keeps the person's
+ * own words then.
  */
 export function titleOf(said: string): string | undefined {
   const line = said
