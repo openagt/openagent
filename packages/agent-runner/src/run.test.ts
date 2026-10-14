@@ -201,6 +201,28 @@ test('a run is named by the agent\'s small model: the name on its record, and a 
   }
 })
 
+test('a run told how hard to think starts its agent that way and keeps it on its record', async () => {
+  const repo = await testRepo()
+  try {
+    const starts: (string | undefined)[] = []
+    const driver: Driver = {
+      id: 'claude-code',
+      start: opts => {
+        starts.push(opts.effort)
+        return new FakeDriver({ respond: () => 'Done.' }).start(opts)
+      },
+    }
+    const run = await runCommand(repo, { prompt: 'think about it', effort: 'high', driver, now: () => NOW, gitHost: noGitHost })
+    assert.equal(run.status, 'done')
+    // The naming session is the agent's own small model and thinks as it does by default; the run's
+    // own session is the one told.
+    assert.ok(starts.includes('high'))
+    assert.equal((await findRun(repo, run.id))?.effort, 'high')
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
 test('the tick\'s run does not mark itself again, and a dirty tree keeps the checkout with the reason', async () => {
   const repo = await testRepo()
   try {

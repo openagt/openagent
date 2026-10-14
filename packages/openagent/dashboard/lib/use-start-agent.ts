@@ -11,10 +11,11 @@ type StartArgs = Parameters<typeof sendStart>
  * hook's own default. The publish pick is carried as saved, and not at all when none was made: the
  * daemon that starts the run decides the pick in force.
  */
-export function startPicks(preferences: Preferences): { driver?: string; model?: string; publish?: PublishPick } {
+export function startPicks(preferences: Preferences): { driver?: string; model?: string; effort?: string; publish?: PublishPick } {
   return {
     ...(preferences.driver ? { driver: preferences.driver } : {}),
     ...(preferences.model ? { model: preferences.model } : {}),
+    ...(preferences.effort ? { effort: preferences.effort } : {}),
     ...(preferences.publish ? { publish: preferences.publish } : {}),
   }
 }

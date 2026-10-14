@@ -25,6 +25,8 @@ export interface RunCard {
   /** The agent program that ran: `claude-code`, `codex`, … as the writer names it. */
   driver?: string
   model?: string
+  /** How hard that model was told to think, by the agent's own names (`medium`, `high`, …). */
+  effort?: string
   /** The branch the work is on. */
   branch?: string
   /** The pull request the work is on. */
@@ -135,7 +137,7 @@ export function parseRunCard(json: string): RunCard | undefined {
   const r = raw as Record<string, unknown>
   if (typeof r['id'] !== 'string' || !isRunId(r['id']) || typeof r['startedAt'] !== 'string' || !isStatus(r['status'])) return undefined
   const card: RunCard = { id: r['id'], startedAt: r['startedAt'], status: r['status'] }
-  for (const key of ['endedAt', 'intent', 'title', 'driver', 'model', 'branch'] as const) {
+  for (const key of ['endedAt', 'intent', 'title', 'driver', 'model', 'effort', 'branch'] as const) {
     if (typeof r[key] === 'string') card[key] = r[key]
   }
   if (typeof r['cost'] === 'number') card.cost = r['cost']
@@ -150,8 +152,8 @@ export function parseRunCard(json: string): RunCard | undefined {
 
 /** A card as it is written: the package's fields first, `caller` last, pretty, one trailing newline. */
 export function formatRunCard(card: RunCard): string {
-  const { id, startedAt, endedAt, status, intent, title, driver, model, branch, pr, cost, caller } = card
-  const ordered = { id, startedAt, endedAt, status, intent, title, driver, model, branch, pr, cost, caller }
+  const { id, startedAt, endedAt, status, intent, title, driver, model, effort, branch, pr, cost, caller } = card
+  const ordered = { id, startedAt, endedAt, status, intent, title, driver, model, effort, branch, pr, cost, caller }
   return JSON.stringify(ordered, null, 2) + '\n'
 }
 

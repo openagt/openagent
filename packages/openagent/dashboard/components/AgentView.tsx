@@ -25,6 +25,7 @@ import { agentLogKey } from '../lib/agent-log.js'
 import { revealChange, revealScreen } from '../lib/reveal-change.js'
 import { panesPage } from '../lib/panes.js'
 import { modelName, useModels } from '../lib/models.js'
+import { effortLabel } from './EffortMenu.js'
 import { thisMachineName } from '../lib/this-machine.js'
 import { driverFromImpl } from '../../src/client.js'
 
@@ -165,6 +166,9 @@ export function AgentView({
   const picked = driverFromImpl(driver)
   const models = useModels()
   const modelLabel = model ? modelName(picked ? models?.[picked] : undefined, model) : undefined
+  // The model and how hard it was told to think, as Claude Code says them under its box: the two
+  // words of the session's own setup, which it keeps for its whole life.
+  const underBox = [modelLabel, card?.effort ? effortLabel(card.effort) : undefined].filter(Boolean).join(' · ') || undefined
   // Where the agent runs, for the chip beside its name: a machine by the name it was given.
   // A run another computer started, which is no saved machine, is named by that computer: it did not run here.
   const runsOn = remoteLabel ?? (target === 'web' ? 'Cloud' : target === 'actions' ? 'GitHub Actions' : target === 'remote' ? 'Another machine' : card?.otherHost && card.host ? card.host : thisMachineName())
@@ -407,7 +411,7 @@ export function AgentView({
             onSending={onSending}
             onQueued={onQueued}
             outcome={outcome}
-            model={modelLabel}
+            model={underBox}
           />
         </>
       }

@@ -208,7 +208,22 @@ export function parseCodexModels(stdout: string): { models: DriverModel[] } | { 
     const name = entry?.['display_name']
     if (entry?.['visibility'] !== 'list' || typeof id !== 'string') continue
     const priority = typeof entry['priority'] === 'number' ? entry['priority'] : Number.MAX_SAFE_INTEGER
-    listed.push({ model: { id, name: typeof name === 'string' ? name : id }, priority })
+    // What the catalog says of the model itself: how hard it can think, and how much conversation
+    // it holds. `context_window` is what a thread may really use; `max_context_window` is the
+    // model's ceiling under other plans.
+    const efforts = Array.isArray(entry['supported_reasoning_levels'])
+      ? (entry['supported_reasoning_levels'] as Record<string, unknown>[]).map(level => level?.['effort']).filter((level): level is string => typeof level === 'string')
+      : []
+    const window = entry['context_window']
+    listed.push({
+      model: {
+        id,
+        name: typeof name === 'string' ? name : id,
+        ...(efforts.length > 0 ? { efforts } : {}),
+        ...(typeof window === 'number' && window > 0 ? { contextWindow: window } : {}),
+      },
+      priority,
+    })
   }
   return { models: listed.sort((a, b) => a.priority - b.priority).map(entry => entry.model) }
 }
@@ -293,6 +308,9 @@ export class CodexSession implements DriverSession {
     // writable: committing is the agent's job, and a worktree's git dir already is.
     // The `-c` value is TOML; a JSON string array is a valid TOML array.
     if ((this.config.sandbox ?? 'workspace-write') === 'workspace-write' && gitDir) args.push('-c', `sandbox_workspace_write.writable_roots=${JSON.stringify([gitDir])}`)
+    // How hard the model may think: Codex takes it as a config override, by the names its own
+    // model list gives ({@link DriverModel.efforts}). Its own default when none is asked for.
+    if (this.startOpts.effort) args.push('-c', `model_reasoning_effort=${JSON.stringify(this.startOpts.effort)}`)
     if (this.config.extraArgs) args.push(...this.config.extraArgs)
     return args
   }

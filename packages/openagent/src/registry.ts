@@ -99,6 +99,12 @@ export interface Preferences {
   notifyHumanIntervention?: boolean
   /** The model to run on (#628), e.g. `opus` / `sonnet`, handed to the project's start hook. Absent = the hook's own default. */
   model?: string
+  /**
+   * How hard that model may think, by the coding agent's own names (`low`, `medium`, `high`, …),
+   * handed to the project's start hook. Absent = the agent's own default. Kept whatever the model:
+   * a model that does not take one simply never shows it, and the pick stays for the one that does.
+   */
+  effort?: string
   /** Which coding agent a run starts on (#650): `claude-code` or `codex`, handed to the project's start hook. Absent = the hook's own default. */
   driver?: string
   /** How far a run started from the dashboard publishes its work: `nothing`, or the level handed to the project's start hook, `commit`, `branch`, `pr` or `merge`. The launcher's menu shows it and writes it. Absent = none saved: the daemon decides where a Start goes. */
@@ -307,6 +313,10 @@ function sanitizePreferences(value: unknown): Preferences {
   // handed to the CLI as `--model Default` and fail the turn on a word nobody chose.
   const model = typeof input['model'] === 'string' ? input['model'].trim() : ''
   if (model && model.toLowerCase() !== 'default') preferences.model = model
+  // `effort` is free-form too: the levels come from the agent's own model list, and a level this
+  // version has never heard of still belongs to the agent that offered it.
+  const effort = typeof input['effort'] === 'string' ? input['effort'].trim() : ''
+  if (effort) preferences.effort = effort.slice(0, 20)
   // `driver` (#650) is constrained to the known set so junk never reaches the agent; the set is the
   // shared node-free vocabulary (driver-names.ts).
   if (isDriverName(input['driver'] as string | undefined)) preferences.driver = input['driver'] as string

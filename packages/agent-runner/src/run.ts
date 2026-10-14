@@ -106,6 +106,11 @@ function modelOf(model: string | undefined): { model?: string } {
   return model !== undefined ? { model } : {}
 }
 
+/** How hard the model may think, the same way: named, or left out so the tool thinks as it does by default. */
+function effortOf(effort: string | undefined): { effort?: string } {
+  return effort !== undefined ? { effort } : {}
+}
+
 export interface RunOptions {
   /** What the agent is told, usually a slash command. */
   prompt: string
@@ -121,6 +126,8 @@ export interface RunOptions {
   marked?: boolean
   /** The model the session starts on; the tool's own default when absent. */
   model?: string
+  /** How hard that model may think (`--effort`); the tool's own default when absent. */
+  effort?: string
   driver: Driver
   /** The branch to work on, an existing one; a fresh `agent-<id>` when absent. */
   branch?: string
@@ -194,7 +201,7 @@ async function runOnce(repo: string, opts: RunOptions): Promise<RunOutcome> {
     // git is never locked out by it. The run's record waits on it, so it lands after.
     const marking = opts.marked
       ? Promise.resolve()
-      : writeMarker(repo, markerCard({ id, startedAt, prompt: opts.prompt, driver: opts.driver.id, ...modelOf(opts.model), mark }), logs).then(
+      : writeMarker(repo, markerCard({ id, startedAt, prompt: opts.prompt, driver: opts.driver.id, ...modelOf(opts.model), ...effortOf(opts.effort), mark }), logs).then(
           marked => {
             if (!marked.ok && !marked.committed) log(`[agent-runner] the run's record could not be written: ${marked.error}`)
           },
@@ -211,7 +218,7 @@ async function runOnce(repo: string, opts: RunOptions): Promise<RunOutcome> {
       const detail = `could not create a checkout: ${errorMessage(err)}`
       const endedAt = clock()
       await marking
-      await recordRun(repo, { ...markerCard({ id, startedAt, prompt: opts.prompt, driver: opts.driver.id, ...modelOf(opts.model), mark }), status: 'failed', endedAt }, [{ kind: 'ended', status: 'failed', detail, at: endedAt }], logs)
+      await recordRun(repo, { ...markerCard({ id, startedAt, prompt: opts.prompt, driver: opts.driver.id, ...modelOf(opts.model), ...effortOf(opts.effort), mark }), status: 'failed', endedAt }, [{ kind: 'ended', status: 'failed', detail, at: endedAt }], logs)
       if (opts.parent !== undefined) await tellParent(repo, opts.parent, childEndedLine({ id, status: 'failed', detail }), telling)
       return { id, status: 'failed', checkout: { reclaimed: false, reason: 'no checkout' }, detail }
     }
@@ -222,12 +229,13 @@ async function runOnce(repo: string, opts: RunOptions): Promise<RunOutcome> {
     return await session(repo, {
       id,
       checkout,
-      card: { id, startedAt, status: 'running', intent: opts.prompt, driver: opts.driver.id, ...modelOf(opts.model), branch: checkout.branch, caller: { runner: mark, pid, host, ...forReaders(mark), kind: 'prompt', workspace: checkout.path } },
+      card: { id, startedAt, status: 'running', intent: opts.prompt, driver: opts.driver.id, ...modelOf(opts.model), ...effortOf(opts.effort), branch: checkout.branch, caller: { runner: mark, pid, host, ...forReaders(mark), kind: 'prompt', workspace: checkout.path } },
       prompt: opts.prompt,
       ...(opts.attached !== undefined ? { attached: opts.attached } : {}),
       ...addedOf(opts.publish, opts.then),
       driver: opts.driver,
       ...modelOf(opts.model),
+      ...effortOf(opts.effort),
       ...(opts.branchPr ? { prBefore: opts.branchPr } : {}),
       continued: false,
       marking,
@@ -256,6 +264,8 @@ export interface ResumeOptions {
   /** How an ended parent is continued, in its own process; absent, only a working parent is told. */
   resume?: ParentDeps['resume']
   model?: string
+  /** How hard the model may think on this leg; the record's own when absent. */
+  effort?: string
   host?: string
   pid?: number
   /** Whether a pid is a live process here: what the run's lock asks of its holder. */
@@ -345,6 +355,7 @@ async function resumeOnce(repo: string, opts: ResumeOptions): Promise<{ outcome:
     if (!reopened.ok && !reopened.committed) log(`[agent-runner] the run's record could not be written: ${reopened.error}`)
 
     const model = opts.model ?? card.model
+    const effort = opts.effort ?? card.effort
     const outcome = await session(repo, {
       id: opts.id,
       checkout,
@@ -354,6 +365,7 @@ async function resumeOnce(repo: string, opts: ResumeOptions): Promise<{ outcome:
       ...addedOf(previous.publish, previous.then),
       driver: opts.driver,
       ...modelOf(model),
+      ...effortOf(effort),
       continued: true,
       ...(sessionId !== undefined ? { resumeSessionId: sessionId } : {}),
       telling: { host, isAlive, ...(opts.resume ? { resume: opts.resume } : {}), log },
@@ -412,6 +424,8 @@ interface SessionRun {
   attached?: string
   driver: Driver
   model?: string
+  /** How hard the model may think this session. */
+  effort?: string
   /** The pull request the run's branch had before this session: its end announces only a new one. */
   prBefore?: { url: string }
   continued: boolean
@@ -466,6 +480,7 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
     driverSession = await run.driver.start({
       cwd: run.checkout.path,
       ...(run.model !== undefined ? { model: run.model } : {}),
+      ...(run.effort !== undefined ? { effort: run.effort } : {}),
       signal: stopped,
       ...(run.resumeSessionId !== undefined ? { resumeSessionId: run.resumeSessionId } : {}),
       log: { dir, card: { id: run.id, ...startCard }, continue: run.continued },

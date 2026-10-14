@@ -1,4 +1,4 @@
-import { DRIVERS, DRIVER_LABELS } from '../../src/client.js'
+import { DRIVERS, DRIVER_LABELS, type DriverName } from '../../src/client.js'
 import type { DriverOption } from '../components/DriverModelMenu.js'
 import { useLoaded } from './use-async.js'
 import { onModels, type DriverModels, type ModelsView } from '../rpc/models.js'
@@ -36,6 +36,18 @@ export function driverOptions(models: ModelsView | undefined): DriverOption[] {
  */
 export function modelName(models: DriverModels | undefined, id: string): string {
   return (models?.models.find(m => m.id === id) ?? models?.models.find(m => m.resolvedId === id))?.name ?? id
+}
+
+/**
+ * The effort levels the picked model offers, by the coding agent's own names and in its own order
+ * (`DriverModel.efforts`). Empty for a model that takes none, for an agent that could not list its
+ * models, and before the daemon has answered — the control is simply not there then.
+ */
+export function modelEfforts(models: ModelsView | undefined, driver: string | undefined, id: string | undefined): readonly string[] {
+  if (!driver || !id) return []
+  const answer = models?.[driver as DriverName]
+  const listed = answer?.models ?? []
+  return (listed.find(m => m.id === id) ?? listed.find(m => m.resolvedId === id))?.efforts ?? []
 }
 
 export type { DriverModels, ModelsView }

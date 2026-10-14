@@ -37,6 +37,8 @@ export interface RunCard {
   title?: string
   driver?: string
   model?: string
+  /** How hard that model was told to think, by the agent's own names (`medium`, `high`, …). */
+  effort?: string
   branch?: string
   pr?: { number: number; url: string }
   ticket?: string
@@ -109,7 +111,7 @@ export function parseRunCard(input: unknown): RunCard | undefined {
   const status = r['status']
   if (typeof r['id'] !== 'string' || !isRunId(r['id']) || typeof r['startedAt'] !== 'string' || !(STATUSES as readonly unknown[]).includes(status)) return undefined
   const card: RunCard = { id: r['id'], startedAt: r['startedAt'], status: status as RunStatus }
-  for (const key of ['endedAt', 'intent', 'title', 'driver', 'model', 'branch', 'ticket'] as const) {
+  for (const key of ['endedAt', 'intent', 'title', 'driver', 'model', 'effort', 'branch', 'ticket'] as const) {
     if (typeof r[key] === 'string') card[key] = r[key]
   }
   if (typeof r['cost'] === 'number') card.cost = r['cost']

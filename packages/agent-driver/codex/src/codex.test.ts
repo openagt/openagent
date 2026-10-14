@@ -117,7 +117,7 @@ function requests(seen: Seen): { method: unknown; params: unknown }[] {
 }
 
 /** Runs one turn on a Codex driver with `opts` against a fake server, and answers what the server saw. */
-async function spawnedWith(opts: ConstructorParameters<typeof CodexDriver>[0], start: { cwd?: string; system?: string; model?: string } = {}): Promise<Seen> {
+async function spawnedWith(opts: ConstructorParameters<typeof CodexDriver>[0], start: { cwd?: string; system?: string; model?: string; effort?: string } = {}): Promise<Seen> {
   let seen: Seen | undefined
   const session = await new CodexDriver({ spawn: fakeAppServer({}, s => (seen = s)), ...opts }).start({ cwd: '/ws', ...start })
   await session.prompt('go')
@@ -232,6 +232,13 @@ test('a Codex turn asks the app server for a sandboxed conversation in the works
     { method: 'thread/start', params: { cwd: '/ws', approvalPolicy: 'never', sandbox: 'workspace-write' } },
     { method: 'turn/start', params: { threadId: 'thread-1', input: [{ type: 'text', text: 'go', text_elements: [] }] } },
   ])
+})
+
+test('CodexDriver tells Codex how hard to think when the caller asked, and says nothing when it did not', async () => {
+  const asked = await spawnedWith({}, { cwd: '/ws', effort: 'xhigh' })
+  assert.deepEqual([...asked.args], ['app-server', '-c', 'model_reasoning_effort="xhigh"'])
+  const plain = await spawnedWith({}, { cwd: '/ws' })
+  assert.ok(![...plain.args].some(arg => arg.includes('model_reasoning_effort')), 'Codex thinks as it does by default')
 })
 
 test('CodexDriver makes the git dir writable, so a plain checkout can commit (#1747)', async () => {
@@ -482,7 +489,7 @@ const CATALOG = JSON.stringify({
   models: [
     { slug: 'gpt-reserve', display_name: 'GPT-Reserve', visibility: 'hide', priority: 3 },
     { slug: 'gpt-5.5', display_name: 'GPT-5.5', visibility: 'list', priority: 12 },
-    { slug: 'gpt-5.6-terra', display_name: 'GPT-5.6-Terra', visibility: 'list', priority: 7 },
+    { slug: 'gpt-5.6-terra', display_name: 'GPT-5.6-Terra', visibility: 'list', priority: 7, context_window: 272_000, max_context_window: 872_000, supported_reasoning_levels: [{ effort: 'low' }, { effort: 'medium' }, { effort: 'high' }] },
     { slug: 'gpt-5.6-luna', display_name: 'GPT-5.6-Luna', visibility: 'list', priority: 8 },
   ],
 })
@@ -490,7 +497,8 @@ const CATALOG = JSON.stringify({
 test('parseCodexModels keeps the models Codex lists, in its own order', () => {
   assert.deepEqual(parseCodexModels(CATALOG), {
     models: [
-      { id: 'gpt-5.6-terra', name: 'GPT-5.6-Terra' },
+      // Codex says both of these itself: what the model may think at, and how much it holds.
+      { id: 'gpt-5.6-terra', name: 'GPT-5.6-Terra', efforts: ['low', 'medium', 'high'], contextWindow: 272_000 },
       { id: 'gpt-5.6-luna', name: 'GPT-5.6-Luna' },
       { id: 'gpt-5.5', name: 'GPT-5.5' },
     ],

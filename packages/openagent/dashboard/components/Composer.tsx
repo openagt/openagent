@@ -21,7 +21,8 @@ import { useMachines, removeMachine, type Machine } from '../lib/machines.js'
 import { useSelectedMachineId, selectMachine } from '../lib/remote-target.js'
 import { useMachineStatus } from '../lib/use-machine-status.js'
 import { takePendingDraft } from '../lib/draft-handoff.js'
-import { driverOptions, useModels } from '../lib/models.js'
+import { driverOptions, modelEfforts, useModels } from '../lib/models.js'
+import { EffortMenu } from './EffortMenu.js'
 import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.js'
 import { ClaudeLogo, CodexLogo } from './driver-logos.js'
 import { Button } from './ui/button.js'
@@ -208,13 +209,23 @@ export const Composer = forwardRef<ComposerHandle, {
   // nothing on screen saying which. Every value is preferences-backed and global, so the same
   // controls in either place read and write the same state.
   const driverModelEl = showDriverModel && (
-    <DriverModelMenu
-      drivers={driverOptions(models).map(d => ({ ...d, ...DRIVER_UI[d.value as DriverName] }))}
-      driver={driver}
-      model={model}
-      onChange={(a, m) => updatePreferences({ driver: a, model: m })}
-      busy={busy}
-    />
+    <>
+      <DriverModelMenu
+        drivers={driverOptions(models).map(d => ({ ...d, ...DRIVER_UI[d.value as DriverName] }))}
+        driver={driver}
+        model={model}
+        onChange={(a, m) => updatePreferences({ driver: a, model: m })}
+        busy={busy}
+      />
+      {/* How hard that model may think, beside it: the levels are the model's own, so the control
+          is there only for a model that offers some. */}
+      <EffortMenu
+        efforts={modelEfforts(models, driver, model)}
+        {...(preferences.effort ? { effort: preferences.effort } : {})}
+        onChange={effort => updatePreferences({ effort: effort ?? '' })}
+        busy={busy}
+      />
+    </>
   )
   {/* Commands and saved prompts get a visible surface (#948): load, save and delete in one menu,
       instead of loading only behind typing `/`. Not in the compact row, which has no room and
