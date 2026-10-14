@@ -6,7 +6,6 @@
   "intent": "open google.com and take screen shot",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-10-14T04-25-58-505Z",
   "cost": 0.24774419999999997,
   "caller": {
     "runner": {
