@@ -381,13 +381,14 @@ describe('ChangesPanel, as Claude Code on the web draws it', () => {
     expect(screen.queryByText('Show more lines')).toBeNull()
   })
 
-  test('a diff is read again when the list says its file changed, not on a poll of its own', async () => {
-    const { rerender } = render(<ChangesPanel projectId="p1" agentId="run-1" context={context} activity={1} />)
+  test('a diff is read again when "Refresh" is pressed, not on a poll of its own', async () => {
+    render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
     await waitFor(() => expect(readDiff).toHaveBeenCalledTimes(3))
-    readRun.mockResolvedValue({ source: 'checkout', changes: { ...changes, 'src/app.ts': { status: 'modified', committed: true, added: 9, removed: 0 } }, merged: false })
-    rerender(<ChangesPanel projectId="p1" agentId="run-1" context={context} activity={2} />)
-    await waitFor(() => expect(readDiff).toHaveBeenCalledTimes(4))
-    expect(readDiff).toHaveBeenLastCalledWith(expect.anything(), 'p1', 'src/app.ts', 'run-1', undefined, false)
+    await new Promise(resolve => setTimeout(resolve, 300))
+    expect(readDiff).toHaveBeenCalledTimes(3)
+    fireEvent.click(screen.getByLabelText('The pane’s settings'))
+    fireEvent.click(await screen.findByText('Refresh'))
+    await waitFor(() => expect(readDiff).toHaveBeenCalledTimes(6))
   })
 
   test('a file asked for from the chat is scrolled to', async () => {
@@ -421,5 +422,13 @@ describe('rowsOf', async () => {
       { kind: 'del', text: 'x', number: 1 },
       { kind: 'del', text: 'y', number: 2 },
     ])
+  })})
+
+describe('ChangesPanel, diffs kept up to date', () => {
+  test('the agent doing something reads the diffs again, though their counts did not change', async () => {
+    const { rerender } = render(<ChangesPanel projectId="p1" agentId="run-1" context={context} activity={1} />)
+    await waitFor(() => expect(readDiff).toHaveBeenCalledTimes(3))
+    rerender(<ChangesPanel projectId="p1" agentId="run-1" context={context} activity={2} />)
+    await waitFor(() => expect(readDiff).toHaveBeenCalledTimes(6), { timeout: 2_000 })
   })
 })

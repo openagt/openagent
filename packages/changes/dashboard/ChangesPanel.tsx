@@ -122,11 +122,13 @@ interface DiffProps {
   whole: boolean
   wrap: boolean
   /**
-   * What the list last said of the file, and "Refresh": a diff is read again when either changes,
-   * not on a poll of its own. The list is read every few seconds and at once when the agent does
-   * something, so a diff follows the agent's edits without one read per diff per poll.
+   * What the list last said of the file, the agent's last burst of activity, and "Refresh": a diff
+   * is read again when one of them changes, not on a poll of its own, so a diff follows the
+   * agent's edits without one read per diff every few seconds.
    */
   version: string
+  /** The project's own page has no agent whose activity says when its files change: its diffs are read again every few seconds. */
+  poll: boolean
   onWhole: () => void
 }
 
@@ -150,9 +152,9 @@ function LazyDiff({ root, ...props }: DiffProps & { root: HTMLElement | null }) 
 /** A diff that is never read again on its own: what the list says of the file, or "Refresh", reads it again. */
 const NO_POLL = 3_600_000
 
-function DiffBody({ projectId, agentId, path, commit, whole, wrap, version, onWhole }: DiffProps) {
+function DiffBody({ projectId, agentId, path, commit, whole, wrap, version, poll, onWhole }: DiffProps) {
   const host = useModuleHost()
-  const { value, loaded } = usePolled<FileDiff | null>(() => readDiff(host, projectId, path, agentId, commit, whole), null, NO_POLL, [projectId, agentId, path, commit, whole, version], {
+  const { value, loaded } = usePolled<FileDiff | null>(() => readDiff(host, projectId, path, agentId, commit, whole), null, poll ? 8_000 : NO_POLL, [projectId, agentId, path, commit, whole, version], {
     remember: diffKey(projectId, agentId, path, commit, whole),
   })
   // Asked for whole, the diff shown so far stays until the whole file answers: the place clicked is not lost to a "Reading…" line.
@@ -250,12 +252,15 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
   const { value: commitChanges, loaded: commitLoaded } = usePolled<Record<string, FileMark> | null>(agentId && sha ? () => readCommit(host, projectId, agentId, sha) : null, null, 60_000, [projectId, agentId, sha], agentId && sha ? { remember: commitKey(projectId, agentId, sha) } : undefined)
   // "Refresh" in the ⋮ menu: every read again now, the diffs too.
   const [refresh, setRefresh] = useState(0)
-  // The agent did something: read again now rather than on the next poll, once per burst.
+  // The agent did something: read again now rather than on the next poll, once per burst, and the
+  // diffs shown with it: an edit may leave a file's counts as they were.
+  const [burst, setBurst] = useState(0)
   useEffect(() => {
     if (activity === undefined) return
     const timer = setTimeout(() => {
       reload()
       reloadCommits()
+      setBurst(activity)
     }, 300)
     return () => clearTimeout(timer)
   }, [activity, reload, reloadCommits])
@@ -443,7 +448,8 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
                       commit={sha}
                       whole={whole.has(wholeKey(path, sha))}
                       wrap={settings.wrap}
-                      version={`${refresh}:${mark.status}:${mark.committed}:${mark.added ?? ''}:${mark.removed ?? ''}`}
+                      version={`${refresh}:${burst}:${mark.status}:${mark.committed}:${mark.added ?? ''}:${mark.removed ?? ''}`}
+                      poll={agentId === undefined}
                       onWhole={() => showWhole(page, path, sha)}
                     />
                   )}

@@ -44,7 +44,8 @@ export function parsePorcelain(out: string): PorcelainEntry[] {
  */
 export async function readFileStatuses(cwd: string, git: GitRunner = nodeGitRunner()): Promise<Record<string, FileGitStatus>> {
   // Every new file by itself: without it git names a new folder once (`?? newdir/`), which is no file.
-  const out = await git(['status', '--porcelain', '--untracked-files=all'], cwd).catch(() => '')
+  // And names as they are: quoted, `café` would read `caf\303\251`, which the line counts do not use.
+  const out = await git(['-c', 'core.quotePath=false', 'status', '--porcelain', '--untracked-files=all'], cwd).catch(() => '')
   const map: Record<string, FileGitStatus> = {}
   for (const { code, path } of parsePorcelain(out)) {
     map[path] = code === '??' ? 'untracked' : code.includes('D') ? 'deleted' : 'modified'

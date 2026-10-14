@@ -113,3 +113,9 @@ test('a new folder on disk is listed file by file, with its lines', async () => 
     'feature/b.ts': { status: 'untracked', committed: false, added: 2, removed: 0 },
   })
 })
+
+test('a file with a name that is not plain English is counted in the project folder too', async () => {
+  await writeFile(join(root, 'café.txt'), 'one\ntwo\n')
+  const marks = (await read('project', {})) as Record<string, { added?: number }>
+  assert.equal(marks['café.txt']?.added, 2)
+})

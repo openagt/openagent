@@ -70,7 +70,7 @@ function More({ children, onClick }: { children: string; onClick: (() => void) |
 export function DiffView({ diff, wrap, whole, onWhole, className }: { diff: FileDiff; wrap: boolean; whole: boolean; onWhole?: () => void; className?: string }) {
   if (diff.binary) return <p className="p-2 text-xs text-muted-foreground">Binary file, nothing to show.</p>
   const { rows, shown } = read(diff.patch)
-  if (rows.length === 0) return <p className="p-2 text-xs text-muted-foreground">Empty file.</p>
+  if (rows.length === 0) return <p className="p-2 text-xs text-muted-foreground">{diff.status === 'untracked' || diff.status === 'added' ? 'Empty file.' : 'No line changed.'}</p>
   const ask = diff.lines !== undefined && diff.lines > MAX_PREVIEW_LINES ? undefined : onWhole
   const width = `${String(rows.reduce((most, row) => (row.kind === 'gap' ? most : Math.max(most, row.number)), 0)).length + 1}ch`
   // Lines are left under the last change while the file has more than the diff shows.
