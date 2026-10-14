@@ -511,6 +511,45 @@ function NewButton({
 /** A main agent's list of subagents, as its row folds it: how many, how many work, and the fold. */
 type SubagentsFold = { count: number; working: number; open: boolean; onToggle: () => void }
 
+// A run just started: its title comes in letter by letter, each out of a light blur, as Claude
+// Code on the web shows a new session's. The stand-in row starts it; the run's own row, taking that
+// row's place a moment later, goes on from where it was, so the title neither restarts nor jumps
+// to whole. Kept by the title's words, for as long as a reveal lasts.
+const REVEAL_STEP_MS = 30
+const REVEAL_LETTERS = 24
+const REVEAL_MS = REVEAL_STEP_MS * REVEAL_LETTERS + 300
+const revealedSince = new Map<string, number>()
+
+function RevealedTitle({ text, start }: { text: string; start: boolean }) {
+  // How far into its reveal the title is, read once, when the row is drawn first.
+  const [elapsed] = useState(() => {
+    const now = Date.now()
+    for (const [words, since] of revealedSince) if (now - since > REVEAL_MS) revealedSince.delete(words)
+    const since = revealedSince.get(text)
+    if (since !== undefined) return now - since
+    if (!start) return REVEAL_MS
+    revealedSince.set(text, now)
+    return 0
+  })
+  if (elapsed >= REVEAL_MS) return text
+  const letters = [...text]
+  const delay = (at: number) => ({ animationDelay: `${Math.min(at, REVEAL_LETTERS) * REVEAL_STEP_MS - elapsed}ms` })
+  return (
+    <>
+      {letters.slice(0, REVEAL_LETTERS).map((letter, at) => (
+        <span key={at} className="letter-in" style={delay(at)}>
+          {letter}
+        </span>
+      ))}
+      {letters.length > REVEAL_LETTERS && (
+        <span className="letter-in" style={delay(REVEAL_LETTERS)}>
+          {letters.slice(REVEAL_LETTERS).join('')}
+        </span>
+      )}
+    </>
+  )
+}
+
 // One agent row: a pulsing dot + RUNNING badge for a working agent, a still dot + WAITING for one
 // parked on the user (#785), else the terminal-status badge.
 function AgentHistoryRow({
@@ -693,14 +732,16 @@ function AgentHistoryRow({
           The end-fade stays as the truncation cue; a title that fits gets no tooltip at all. */}
       {overflowing ? (
         <Tooltip>
-          <TooltipTrigger render={<span ref={titleRef} className={titleClass} />}>{titleText}</TooltipTrigger>
+          <TooltipTrigger render={<span ref={titleRef} className={titleClass} />}>
+            <RevealedTitle text={titleText} start={standIn} />
+          </TooltipTrigger>
           <TooltipContent side="right" className="max-w-96 whitespace-pre-wrap break-words">
             {titleText}
           </TooltipContent>
         </Tooltip>
       ) : (
         <span ref={titleRef} className={titleClass}>
-          {titleText}
+          <RevealedTitle text={titleText} start={standIn} />
         </span>
       )}
     </Button>

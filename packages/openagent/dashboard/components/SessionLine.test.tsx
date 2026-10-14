@@ -16,13 +16,13 @@ const setup = { workspace: '/repo/.branches/agent-1', branch: 'agent-1', driver:
 describe('SessionLine', () => {
   test('it is one folded line saying the session was set up', () => {
     render(<SessionLine setup={setup} />)
-    expect(screen.getByRole('button', { name: 'Session set up' }).getAttribute('aria-expanded')).toBe('false')
+    expect(screen.getByRole('button', { name: 'Initialized session' }).getAttribute('aria-expanded')).toBe('false')
     expect(screen.queryByText('/repo/.branches/agent-1')).toBeNull()
   })
 
   test('opened, it says the checkout, the branch, and the coding agent with its model by name', () => {
     const { container } = render(<SessionLine setup={setup} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Session set up' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Initialized session' }))
     expect(Array.from(container.querySelectorAll('.border > div')).map(n => n.textContent)).toEqual([
       'Made the checkout/repo/.branches/agent-1',
       'Made the branchagent-1',
@@ -30,13 +30,13 @@ describe('SessionLine', () => {
     ])
     // A green check in front of each step that was done.
     expect(container.querySelectorAll('.border svg.text-success')).toHaveLength(3)
-    fireEvent.click(screen.getByRole('button', { name: 'Session set up' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Initialized session' }))
     expect(container.querySelector('.border')).toBeNull()
   })
 
   test('an agent started from a branch other than the main one says so, in one sentence under its branch', () => {
     const { container } = render(<SessionLine setup={{ ...setup, base: 'my/work' }} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Session set up' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Initialized session' }))
     expect(Array.from(container.querySelectorAll('.border > div')).map(n => n.textContent)).toEqual([
       'Made the checkout/repo/.branches/agent-1',
       'Made the branchagent-1',
@@ -47,7 +47,7 @@ describe('SessionLine', () => {
 
   test('what Auto adds after each message is the last row, word for word; an agent with nothing added has no such row', () => {
     const { container, rerender } = render(<SessionLine setup={setup} added="When you finish, if you changed any file, commit your work." />)
-    fireEvent.click(screen.getByRole('button', { name: 'Session set up' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Initialized session' }))
     expect(Array.from(container.querySelectorAll('.border > div')).map(n => n.textContent).at(-1)).toBe(
       'Auto adds after each message: “When you finish, if you changed any file, commit your work.”',
     )
@@ -57,13 +57,13 @@ describe('SessionLine', () => {
 
   test('an agent started from the main branch has no such sentence', () => {
     render(<SessionLine setup={setup} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Session set up' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Initialized session' }))
     expect(screen.queryByText(/Started from the branch/)).toBeNull()
   })
 
   test('a fact the card does not say is no line, and a coding agent with no model is named alone', () => {
     const { container } = render(<SessionLine setup={{ driver: 'codex' }} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Session set up' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Initialized session' }))
     expect(Array.from(container.querySelectorAll('.border > div')).map(n => n.textContent)).toEqual(['Started Codex'])
   })
 
@@ -72,12 +72,12 @@ describe('SessionLine', () => {
     expect(container.firstChild).toBeNull()
   })
 
-  test('an agent at work whose card is not read yet says "Session set up" at once, with nothing to open; the button comes with the card', () => {
+  test('an agent at work whose card is not read yet says "Initialized session" at once, with nothing to open; the button comes with the card', () => {
     const { rerender } = render(<SessionLine setup={{}} working />)
-    expect(screen.getByText('Session set up')).toBeTruthy()
+    expect(screen.getByText('Initialized session')).toBeTruthy()
     expect(screen.queryByRole('button')).toBeNull()
     rerender(<SessionLine setup={setup} working />)
-    expect(screen.getByRole('button', { name: 'Session set up' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Initialized session' })).toBeTruthy()
   })
 
   test('an agent at work elsewhere, whose card may never say them, draws nothing', () => {
@@ -103,7 +103,7 @@ describe('SessionLine', () => {
     // Set up: the folded line.
     rerender(<SessionLine setup={{ driver: 'claude-code', branch: 'agent-1' }} />)
     expect(screen.queryByRole('status')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Session set up' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Initialized session' })).toBeTruthy()
   })
 
   test('with no time to count from, the moving line has no seconds', () => {

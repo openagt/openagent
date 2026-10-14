@@ -282,6 +282,18 @@ function toolArgument(input: unknown): string | undefined {
   return key === undefined ? undefined : (fields[key] as string)
 }
 
+/**
+ * The few words Claude gives a call to say what it does ("List project files"), its `description`,
+ * when the call's detail is something else (a command): a call whose detail is that description
+ * (a subagent's) has nothing more to say.
+ */
+function callSummary(input: unknown): { summary?: string } {
+  if (typeof input !== 'object' || input === null) return {}
+  const summary = (input as Record<string, unknown>)['description']
+  if (typeof summary !== 'string' || summary.trim() === '' || toolArgument(input) === summary) return {}
+  return { summary: summary.replace(/\s+/g, ' ').trim() }
+}
+
 /** The one argument that says what a tool call did, on one line and cut short. */
 export function toolDetail(input: unknown): string | undefined {
   return callArgument(toolArgument(input)).detail
@@ -400,7 +412,7 @@ export class StreamJsonParser {
         this.assistantText += block['text']
         events.push({ type: 'text', text: block['text'] })
       } else if (block['type'] === 'tool_use' && typeof block['name'] === 'string') {
-        events.push({ type: 'action', label: block['name'], ...callArgument(toolArgument(block['input'])), ...(typeof block['id'] === 'string' ? { id: block['id'] } : {}) })
+        events.push({ type: 'action', label: block['name'], ...callArgument(toolArgument(block['input'])), ...callSummary(block['input']), ...(typeof block['id'] === 'string' ? { id: block['id'] } : {}) })
       } else if (block['type'] === 'thinking' && typeof block['thinking'] === 'string' && block['thinking'].trim() !== '') {
         events.push({ type: 'thought', text: block['thinking'].trim() })
       }

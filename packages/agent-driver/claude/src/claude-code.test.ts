@@ -43,7 +43,7 @@ test('StreamJsonParser says what each tool call did, and passes thinking with te
   assert.deepEqual(p.push(JSON.stringify({ type: 'assistant', message: { role: 'assistant', content } })), [
     { type: 'thought', text: 'Checking 17*23 gives 391, so 19*21 is larger.' },
     // A command of two lines: the one line, and the command as it was given.
-    { type: 'action', label: 'Bash', detail: 'git status --short', whole: 'git status\n  --short' },
+    { type: 'action', label: 'Bash', detail: 'git status --short', whole: 'git status\n  --short', summary: 'Show status' },
     { type: 'action', label: 'Skill', detail: 'tickets' },
     { type: 'action', label: 'Read', detail: '/repo/src/app.ts' },
     { type: 'action', label: 'WebFetch', detail: 'https://example.com' },

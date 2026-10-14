@@ -50,7 +50,7 @@ export function AgentFeed({
   /** The run's subagents, what each is doing now, and how a click on one's row opens it. */
   subagents?: readonly AgentMeta[] | undefined
   doing?: Record<string, string> | undefined
-  /** What was set up for the agent before it began: the chat's "Session set up" line. */
+  /** What was set up for the agent before it began: the chat's "Initialized session" line. */
   setup?: SessionSetup | undefined
   onOpenAgent?: ((agentId: string) => void) | undefined
   /** Show a changed file's change: a click on a file's row at the end of a turn. */

@@ -726,16 +726,16 @@ describe('a run just started', () => {
   test('an agent just started on a machine says nothing of a set-up before its card is listed: no checkout is made for it here', () => {
     const events = [{ kind: 'driver', event: { type: 'start', prompt: 'Say hi' } }, { kind: 'driver', event: { type: 'text', text: 'Hi.' } }] as OpenAgentEvent[]
     render(view({ live: true, events, remoteLabel: 'laptop' }))
-    expect(screen.queryByText('Session set up')).toBeNull()
+    expect(screen.queryByText('Initialized session')).toBeNull()
   })
 
   test('the chat says what was set up for the agent, off its card; before the card is listed the line of an agent at work has nothing to open', () => {
     const events = [{ kind: 'driver', event: { type: 'start', prompt: 'Say hi' } }, { kind: 'driver', event: { type: 'text', text: 'Hi.' } }] as OpenAgentEvent[]
     const { rerender } = render(view({ live: true, events }))
-    expect(screen.getByText('Session set up')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Session set up' })).toBeNull()
+    expect(screen.getByText('Initialized session')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Initialized session' })).toBeNull()
     rerender(view({ live: true, events, card: { status: 'done', workspace: '/repo/.branches/agent-1', branch: 'agent-1', driver: 'codex' } }))
-    fireEvent.click(screen.getByRole('button', { name: 'Session set up' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Initialized session' }))
     expect(screen.getByText('/repo/.branches/agent-1')).toBeTruthy()
     expect(screen.getByText('agent-1')).toBeTruthy()
     expect(screen.queryByText(/Started from the branch/)).toBeNull()
@@ -748,15 +748,15 @@ describe('a run just started', () => {
     const card = { status: 'running' as const, workspace: '/repo/.branches/agent-1', branch: 'agent-1', driver: 'codex' }
     const { rerender } = render(view({ live: true, events, card }))
     const scroller = document.querySelector('[data-slot="message-scroller"]')
-    fireEvent.click(screen.getByRole('button', { name: 'Session set up' }))
-    expect(screen.getByRole('button', { name: 'Session set up' }).getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'Initialized session' }))
+    expect(screen.getByRole('button', { name: 'Initialized session' }).getAttribute('aria-expanded')).toBe('true')
     // The same agent, with more to show: its line stays open, in the same scroller.
     rerender(view({ live: true, events: [...events, { kind: 'driver', event: { type: 'text', text: 'More.' } }] as OpenAgentEvent[], card }))
-    expect(screen.getByRole('button', { name: 'Session set up' }).getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Initialized session' }).getAttribute('aria-expanded')).toBe('true')
     expect(document.querySelector('[data-slot="message-scroller"]')).toBe(scroller)
     // Another agent: its line is folded, and its chat is a scroller of its own, at its own place.
     rerender(view({ agentId: 'run-2', live: true, events, card: { ...card, workspace: '/repo/.branches/agent-2', branch: 'agent-2' } }))
-    expect(screen.getByRole('button', { name: 'Session set up' }).getAttribute('aria-expanded')).toBe('false')
+    expect(screen.getByRole('button', { name: 'Initialized session' }).getAttribute('aria-expanded')).toBe('false')
     expect(document.querySelector('[data-slot="message-scroller"]')).not.toBe(scroller)
   })
 

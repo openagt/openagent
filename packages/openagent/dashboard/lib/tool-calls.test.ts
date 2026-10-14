@@ -11,7 +11,7 @@ describe('toolCall', () => {
     expect(toolCall('Edit', '/repo/src/app.ts').verb).toBe('Edited')
     expect(toolCall('Write', '/repo/src/new.ts')).toMatchObject({ verb: 'Wrote', target: 'new.ts', kind: 'edit' })
     expect(toolCall('Grep', 'TODO')).toMatchObject({ verb: 'Searched', target: 'TODO', kind: 'search' })
-    expect(toolCall('Skill', 'browser')).toMatchObject({ verb: 'Used skill', target: 'browser', kind: 'other' })
+    expect(toolCall('Skill', 'browser')).toMatchObject({ verb: 'Used skill', target: 'browser', kind: 'skill' })
   })
 
   test("Codex's item kinds read the same way", () => {
@@ -44,13 +44,18 @@ describe('toolCall', () => {
 
 describe('callsSummary', () => {
   test('one kind is counted, singular and plural', () => {
-    expect(line([toolCall('Bash', 'a')])).toBe('Ran 1 command')
+    expect(line([toolCall('Bash', 'a')])).toBe('Ran a command')
     expect(line([toolCall('Bash', 'a'), toolCall('commandExecution', 'b')])).toBe('Ran 2 commands')
   })
 
   test('several kinds are counted in the order they first came', () => {
-    const calls = [toolCall('Read', '/a'), toolCall('Bash', 'x'), toolCall('Read', '/b'), toolCall('Edit', '/a'), toolCall('Grep', 'x'), toolCall('Skill', 'browser')]
-    expect(line(calls)).toBe('Read 2 files, ran 1 command, edited 1 file, searched 1 time, used 1 tool')
+    const calls = [toolCall('Read', '/a'), toolCall('Bash', 'x'), toolCall('Read', '/b'), toolCall('Edit', '/a'), toolCall('Grep', 'x'), toolCall('WebFetch', 'https://x.dev')]
+    expect(line(calls)).toBe('Read 2 files, ran a command, edited a file, searched once, used a tool')
+  })
+
+  test('a lone skill is said by its name, several are counted', () => {
+    expect(line([toolCall('Bash', 'x'), toolCall('Skill', 'branches')])).toBe('Ran a command, used skill branches')
+    expect(line([toolCall('Skill', 'branches'), toolCall('Skill', 'github')])).toBe('Used 2 skills')
   })
 })
 
@@ -75,7 +80,7 @@ describe('a call whose files are known', () => {
 
   test('a run that changed one file names it, with its size, among the kinds in the order they came', () => {
     expect(line([toolCall('Bash', 'a'), toolCall('Bash', 'b'), toolCall('Bash', 'c'), toolCall('Write', made.path, [made])])).toBe('Ran 3 commands, created DESCRIPTION.md +11 −0')
-    expect(line([toolCall('Edit', edited.path, [edited]), toolCall('Bash', 'a')])).toBe('Edited app.ts +2 −1, ran 1 command')
+    expect(line([toolCall('Edit', edited.path, [edited]), toolCall('Bash', 'a')])).toBe('Edited app.ts +2 −1, ran a command')
   })
 
   test('a file edited by several calls of the run is one file: a new file reads its lines at the end', () => {
@@ -91,11 +96,11 @@ describe('a call whose files are known', () => {
 
   test('edits whose files are not known are counted as calls, beside the ones that are', () => {
     expect(line([toolCall('Edit', '/ws/old.ts'), toolCall('Edit', '/ws/older.ts')])).toBe('Edited 2 files')
-    expect(line([toolCall('Edit', edited.path, [edited]), toolCall('Edit', '/ws/old.ts')])).toBe('Edited app.ts +2 −1, edited 1 file')
+    expect(line([toolCall('Edit', edited.path, [edited]), toolCall('Edit', '/ws/old.ts')])).toBe('Edited app.ts +2 −1, edited a file')
   })
 
   test('the parts keep the size apart from the words, for the chat to draw it in its colors', () => {
-    expect(callsSummary([toolCall('Bash', 'a'), toolCall('Write', made.path, [made])])).toEqual([{ text: 'Ran 1 command' }, { text: 'created DESCRIPTION.md', size: { added: 11, removed: 0 } }])
+    expect(callsSummary([toolCall('Bash', 'a'), toolCall('Write', made.path, [made])])).toEqual([{ text: 'Ran a command' }, { text: 'created DESCRIPTION.md', size: { added: 11, removed: 0 } }])
     expect(callsSummary([])).toEqual([])
   })
 })

@@ -146,15 +146,19 @@ describe('the chat\'s rows and the message box over their end', () => {
     HTMLElement.prototype.scrollTo = function (this: HTMLElement, to?: ScrollToOptions | number) { this.scrollTop = typeof to === 'object' ? (to.top ?? 0) : 0 } as typeof HTMLElement.prototype.scrollTo
   }
 
-  test('a message sent to an ended agent is brought to the top at once, though the room at the end is there', async () => {
+  test('a message sent lands at the end, under the last answer: the log goes there from a reader scrolled up, and lifts nothing to the top', async () => {
     layOut()
     const { rerender } = render(<EventList events={ended} projectId="p1" stick={false} openAt="end" />)
     // Opened at its end: the room at the end is the last thing in view.
     await waitFor(() => expect(screen.getByTestId('log-end-room').getBoundingClientRect().bottom).toBe(500))
+    // The reader scrolls up, then sends.
+    viewport().scrollTop = 0
     rerender(<EventList events={ended} projectId="p1" stick={false} openAt="end" sending="And now this" working />)
     const sent = () => screen.getByText('And now this').closest<HTMLElement>('[data-message-id]')!
-    // Under the top of the view, with a little of the row before it still seen.
-    await waitFor(() => expect(sent().getBoundingClientRect().top).toBe(64))
+    await waitFor(() => expect(screen.getByTestId('log-end-room').getBoundingClientRect().bottom).toBe(500))
+    // In view, just above the room at the end: the scroller kept no empty room under it.
+    expect(sent().getBoundingClientRect().bottom).toBeLessThanOrEqual(screen.getByTestId('log-end-room').getBoundingClientRect().top)
+    expect(spacer().hidden).toBe(true)
   })
 
   describe('a chat at its end when its rows get less room', () => {
@@ -241,14 +245,6 @@ describe('the chat\'s rows and the message box over their end', () => {
       expect(scroll.top).toBe(700)
       shorten(scroll, 33)
       expect(scroll.top).toBe(700)
-    })
-
-    test('a prompt the scroller holds at the top is left to the scroller', () => {
-      list()
-      const scroll = view({ height: 2000, shown: 500, top: 1500 })
-      spacer().hidden = false
-      grow(scroll, 300)
-      expect(scroll.top).toBe(1500)
     })
 
     test('a chat that comes with its page opens at its end: the bar is measured after the list has opened', () => {
