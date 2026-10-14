@@ -144,6 +144,12 @@ export interface StartHookInput {
   publish?: string
   /** The branch the run's own branch starts from; origin's default branch when absent. */
   base?: string
+  /**
+   * Whether the run is given a short name by a small model (the person's setting). `false` reaches
+   * the run's own tool through the environment rather than the line, so no project's `hooks.yml`
+   * has to carry it; absent means named, which is what every run was before the setting existed.
+   */
+  nameRun?: boolean
 }
 
 /**
@@ -170,6 +176,10 @@ export type RunHookResult = { ok: true; id: string; driver?: string } | { ok: fa
 export function runStartHook(cwd: string, input: StartHookInput, opts: Omit<RunHooksOptions, 'log'> = {}): Promise<RunHookResult> {
   return runRunHook(cwd, 'start', {
     PROMPT: input.prompt,
+    // Not for the line to pass on: the run's own tool reads it from the environment it is started
+    // in, since it is the hook's own child. So turning naming off needs no `hooks.yml` of any
+    // project changed, which a setting nobody can act on would not be a setting at all.
+    ...(input.nameRun === false ? { OPENAGENT_NAME_RUN: '0' } : {}),
     ...(input.driver !== undefined ? { DRIVER: input.driver } : {}),
     ...(input.model !== undefined ? { MODEL: input.model } : {}),
     ...(input.effort !== undefined ? { EFFORT: input.effort } : {}),

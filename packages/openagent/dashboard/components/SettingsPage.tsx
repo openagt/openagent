@@ -110,6 +110,12 @@ export function SettingsPage({
             onChange={value => updatePreferences({ model: value })}
           />
           <ToggleRow
+            label="Name each run"
+            description="A small model is asked for the two to five words a run's row shows, in place of the first line of your prompt. One short turn with no tools, about a thirtieth of a cent a run. Off, a run is listed by what you asked for."
+            checked={preferences.nameRuns ?? true}
+            onChange={next => updatePreferences({ nameRuns: next })}
+          />
+          <ToggleRow
             label="Post-merge cleanup"
             description="The box in the launcher's Auto menu, ticked by default: once a run ends done with a pull request, a fresh agent runs /post-merge-cleanup on its branch before it merges. In projects with that command."
             checked={preferences.postMergeCleanup ?? false}

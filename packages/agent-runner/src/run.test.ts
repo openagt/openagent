@@ -196,6 +196,19 @@ test('a run is named by the agent\'s small model: the name on its record, and a 
     // A subagent is not named: its row is the task its main agent gave it.
     const child = await runCommand(repo, { prompt: 'check the links', driver, parent: run.id, now: () => new Date(NOW.getTime() + 60_000), gitHost: noGitHost })
     assert.equal((await findRun(repo, child.id))?.title, undefined)
+
+    // Naming turned off by the person: whoever started this process said so in its environment, and
+    // the run keeps the words they typed. Nothing is asked of a model, so nothing is paid for.
+    const was = process.env.OPENAGENT_NAME_RUN
+    process.env.OPENAGENT_NAME_RUN = '0'
+    try {
+      const unnamed = await runCommand(repo, { prompt: 'make readme.md shorter again', driver, now: () => new Date(NOW.getTime() + 120_000), gitHost: noGitHost })
+      assert.equal((await findRun(repo, unnamed.id))?.title, undefined)
+      assert.deepEqual((await readUntimedDiary(repo, unnamed.id)).filter(line => line.kind === 'title'), [])
+    } finally {
+      if (was === undefined) delete process.env.OPENAGENT_NAME_RUN
+      else process.env.OPENAGENT_NAME_RUN = was
+    }
   } finally {
     await removeRepo(repo)
   }

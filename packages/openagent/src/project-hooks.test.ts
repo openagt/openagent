@@ -115,6 +115,19 @@ test('a start line that names the coding agent of its run is taken at its word; 
   }
 })
 
+test('naming a run off reaches the run\'s own tool through the environment, with no line of any hooks.yml changed', async () => {
+  // The line below never mentions it: the run's tool is the line's own child and reads it there.
+  const cwd = await project(`start: 'printf "%s\\n" "\${OPENAGENT_NAME_RUN-unset}" >> named.txt; echo "{\\"ok\\":true,\\"id\\":\\"run-1\\"}"'\n`)
+  try {
+    assert.deepEqual(await runStartHook(cwd, { prompt: 'x' }), { ok: true, id: 'run-1' })
+    assert.deepEqual(await runStartHook(cwd, { prompt: 'x', nameRun: false }), { ok: true, id: 'run-1' })
+    assert.deepEqual(await runStartHook(cwd, { prompt: 'x', nameRun: true }), { ok: true, id: 'run-1' })
+    assert.equal(await readFile(join(cwd, 'named.txt'), 'utf8'), 'unset\n0\nunset\n')
+  } finally {
+    await rm(cwd, { recursive: true, force: true })
+  }
+})
+
 test('the start line gets the prompt and the picks in its environment, and the id it answers on stdout comes back', async () => {
   const cwd = await project(`start: 'printf "%s|%s|%s|%s|%s|%s\\n" "$PROMPT" "$DRIVER" "\${MODEL-unset}" "\${THEN-unset}" "\${PUBLISH-unset}" "\${BASE-unset}" >> started.txt; echo "{\\"ok\\":true,\\"id\\":\\"run-1\\"}"'\n`)
   try {

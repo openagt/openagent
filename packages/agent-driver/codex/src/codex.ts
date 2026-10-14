@@ -311,10 +311,40 @@ export class CodexSession implements DriverSession {
     // How hard the model may think: Codex takes it as a config override, by the names its own
     // model list gives ({@link DriverModel.efforts}). Its own default when none is asked for.
     if (this.startOpts.effort) args.push('-c', `model_reasoning_effort=${JSON.stringify(this.startOpts.effort)}`)
+    // Nothing to do in the folder, so none of what a session is given to do it with ({@link
+    // DriverStartOptions.noTools}). Codex has no one switch for it, as Claude Code's `--tools ""`
+    // is: its tools and the rest ride on its feature flags, so they go off one by one.
+    if (this.startOpts.noTools) for (const feature of SPARE_FEATURES) args.push('-c', `features.${feature}=false`)
     if (this.config.extraArgs) args.push(...this.config.extraArgs)
     return args
   }
 }
+
+/**
+ * What a session that has nothing to do can be started without, by the names `codex features list`
+ * gives them ({@link DriverStartOptions.noTools}). Measured on codex-cli 0.144.4: a turn that sent
+ * 11,338 tokens to be answered in 8 sends 8,799 with these off. The rest is Codex's own base
+ * instructions, which come from the binary — a Codex home holding nothing but a login sends the
+ * same — so this is as small as such a turn gets, where Claude Code's gets to a sixth.
+ *
+ * A name this list has and Codex no longer does is ignored by it, silently and without failing
+ * (checked), so the list ageing costs the saving and never the run.
+ */
+const SPARE_FEATURES = [
+  'shell_tool',
+  'unified_exec',
+  'apps',
+  'plugins',
+  'browser_use',
+  'computer_use',
+  'image_generation',
+  'in_app_browser',
+  'multi_agent',
+  'tool_suggest',
+  'goals',
+  'personality',
+  'hooks',
+] as const
 
 /** The absolute git common dir of `cwd`, or `undefined` when it is not a repository or git is missing. */
 function gitCommonDir(cwd: string): Promise<string | undefined> {
