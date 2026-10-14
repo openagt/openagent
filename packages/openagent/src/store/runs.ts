@@ -33,6 +33,8 @@ export interface RunCard {
   endedAt?: string
   status: RunStatus
   intent?: string
+  /** The run's short name, two to five words, as a list of runs shows it; absent when nothing named it. */
+  title?: string
   driver?: string
   model?: string
   branch?: string
@@ -107,7 +109,7 @@ export function parseRunCard(input: unknown): RunCard | undefined {
   const status = r['status']
   if (typeof r['id'] !== 'string' || !isRunId(r['id']) || typeof r['startedAt'] !== 'string' || !(STATUSES as readonly unknown[]).includes(status)) return undefined
   const card: RunCard = { id: r['id'], startedAt: r['startedAt'], status: status as RunStatus }
-  for (const key of ['endedAt', 'intent', 'driver', 'model', 'branch', 'ticket'] as const) {
+  for (const key of ['endedAt', 'intent', 'title', 'driver', 'model', 'branch', 'ticket'] as const) {
     if (typeof r[key] === 'string') card[key] = r[key]
   }
   if (typeof r['cost'] === 'number') card.cost = r['cost']

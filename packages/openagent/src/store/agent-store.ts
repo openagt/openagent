@@ -42,6 +42,8 @@ export interface AgentMeta {
   host?: string
   /** What this session was asked for (from the `intent` event). */
   intent?: string
+  /** The session's short name, as a list shows it: two to five words a small model gave it. */
+  title?: string
   /**
    * The run this one was started for, by its id: this run is that run's subagent. Written on the
    * card by the tool that started it; absent on a run a person or a schedule started.

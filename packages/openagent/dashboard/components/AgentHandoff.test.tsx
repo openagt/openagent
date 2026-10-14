@@ -61,8 +61,10 @@ describe('run handoff (#799)', () => {
   test('counts what a finished session produced and offers the next step, and lists neither the commits nor the files (#1023)', async () => {
     onAgentHandoff.mockResolvedValue(worked)
     render(<Harness />)
-    await waitFor(() => expect(screen.getByText('1 commit')).toBeTruthy())
-    expect(screen.getByText('1 file')).toBeTruthy()
+    // The chip is the size of the change; how many commits and files is its hover.
+    await waitFor(() => expect(screen.getByLabelText('1 commit · 1 file')).toBeTruthy())
+    expect(screen.getByText('+12')).toBeTruthy()
+    expect(screen.getByText('−3')).toBeTruthy()
     // The commits and the files themselves are in the side panel's Changes tab.
     expect(screen.queryByText('add dark mode')).toBeNull()
     expect(screen.queryByText('src/theme.ts')).toBeNull()
@@ -72,7 +74,7 @@ describe('run handoff (#799)', () => {
   test('the branch name is not repeated — the action bar it sits in already says it (#1023)', async () => {
     onAgentHandoff.mockResolvedValue(worked)
     render(<Harness />)
-    await waitFor(() => expect(screen.getByText('1 commit')).toBeTruthy())
+    await waitFor(() => expect(screen.getByLabelText('1 commit · 1 file')).toBeTruthy())
     expect(screen.queryByText('openagent/dark-mode')).toBeNull()
   })
 
@@ -272,11 +274,11 @@ describe('run handoff (#799)', () => {
       pr: { number: 42, url: 'https://example.test/42', state: 'OPEN', title: 'Add dark mode' },
     })
     render(<Harness />)
-    await waitFor(() => expect(screen.getByText('1 commit')).toBeTruthy())
+    await waitFor(() => expect(screen.getByLabelText('1 commit · 1 file')).toBeTruthy())
     expect(screen.queryByText('Open PR')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Other choices' })).toBeNull()
-    // The bar links the pull request: pushed is not said beside it.
-    expect(screen.queryByText('· pushed')).toBeNull()
+    // The bar links the pull request: pushed is not part of what the chip says.
+    expect(screen.queryByLabelText(/pushed/)).toBeNull()
     // The one step left for an open, unmerged PR is the human's Merge — the withheld-merge
     // ending (#1363) leaves exactly this behind when the agent never signalled.
     fireEvent.click(screen.getByText('Merge PR'))
@@ -345,7 +347,6 @@ describe('run handoff (#799)', () => {
     })
     render(<Harness />)
     await waitFor(() => expect(screen.getByText('Open PR')).toBeTruthy())
-    expect(screen.getByText('not published')).toBeTruthy()
     expect(screen.queryByText('Merge PR')).toBeNull()
     fireEvent.click(screen.getByText('Open PR'))
     await waitFor(() => expect(sendOpenPullRequest).toHaveBeenCalledWith('p1', 'run-1', { draft: false }))
@@ -359,7 +360,7 @@ describe('run handoff (#799)', () => {
       pr: { number: 42, url: 'https://example.test/42', state: 'MERGED', title: 'Add dark mode' },
     })
     render(<Harness />)
-    await waitFor(() => expect(screen.getByText('1 commit')).toBeTruthy())
+    await waitFor(() => expect(screen.getByLabelText('1 commit · 1 file')).toBeTruthy())
     expect(screen.queryByText('Merge PR')).toBeNull()
     expect(screen.queryByText('Open PR')).toBeNull()
   })
@@ -416,41 +417,39 @@ describe('run handoff (#799)', () => {
     render(<Harness />)
     await waitFor(() => expect(screen.getByText('Merged into the main branch.')).toBeTruthy())
     expect(screen.queryByRole('button', { name: /Open PR|Publish branch|Merge/ })).toBeNull()
-    expect(screen.queryByText('not published')).toBeNull()
   })
 
-  test('work still only on this machine says not published beside its button; once pushed it says pushed; with no remote it says neither', async () => {
+  test('work still only on this machine is said by the button that publishes it; once pushed the chip says pushed; with no remote it says neither', async () => {
     onAgentHandoff.mockResolvedValue(worked)
     render(<Harness />)
-    await waitFor(() => expect(screen.getByText('not published')).toBeTruthy())
-    expect(screen.getByText('Open PR')).toBeTruthy()
+    // The button names the step that has not happened yet, so no word beside it repeats it.
+    await waitFor(() => expect(screen.getByText('Open PR')).toBeTruthy())
+    expect(screen.queryByText('not published')).toBeNull()
     cleanup()
 
-    // No git host package: the same word beside Publish branch.
+    // No git host package: the same, beside Publish branch.
     onAgentHandoff.mockResolvedValue({ ...worked, gitHost: false })
     render(<Harness />)
     await waitFor(() => expect(screen.getByText('Publish branch')).toBeTruthy())
-    expect(screen.getByText('not published')).toBeTruthy()
+    expect(screen.queryByText('not published')).toBeNull()
     cleanup()
 
     onAgentHandoff.mockResolvedValue({ ...worked, pushed: true })
     render(<Harness />)
-    await waitFor(() => expect(screen.getByText('· pushed')).toBeTruthy())
-    expect(screen.queryByText('not published')).toBeNull()
+    await waitFor(() => expect(screen.getByLabelText('1 commit · 1 file · pushed')).toBeTruthy())
     cleanup()
 
     onAgentHandoff.mockResolvedValue({ ...worked, hasRemote: false })
     render(<Harness />)
-    await waitFor(() => expect(screen.getByText('1 commit')).toBeTruthy())
-    expect(screen.queryByText(/published|· pushed/)).toBeNull()
+    await waitFor(() => expect(screen.getByLabelText('1 commit · 1 file')).toBeTruthy())
   })
 
   test('a subagent is offered no pull request, no push and no merge: its line says whether its main agent landed it', async () => {
     onAgentHandoff.mockResolvedValue({ ...worked, pushed: true })
     render(<Harness subagent />)
     await waitFor(() => expect(screen.getByText('not landed')).toBeTruthy())
-    expect(screen.getByText('1 commit')).toBeTruthy()
-    expect(screen.queryByText('· pushed')).toBeNull()
+    // A subagent's work is its main agent's to land, so the chip never says pushed.
+    expect(screen.getByLabelText('1 commit · 1 file')).toBeTruthy()
     expect(screen.queryByText('not published')).toBeNull()
     expect(screen.queryByRole('button')).toBeNull()
     cleanup()
@@ -471,8 +470,7 @@ describe('run handoff (#799)', () => {
     onAgentHandoff.mockResolvedValue({ ...worked, branch: 'a'.repeat(40), landed: true })
     render(<Harness subagent />)
     await waitFor(() => expect(screen.getByText('landed')).toBeTruthy())
-    expect(screen.getByText('1 commit')).toBeTruthy()
-    expect(screen.getByText('1 file')).toBeTruthy()
+    expect(screen.getByLabelText('1 commit · 1 file')).toBeTruthy()
     expect(screen.queryByRole('button')).toBeNull()
     cleanup()
 

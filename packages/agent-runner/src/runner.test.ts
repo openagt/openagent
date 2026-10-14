@@ -10,6 +10,7 @@ import { markerCard, writeMarker } from './records.js'
 import { runCommand } from './run.js'
 import { detachResume, detachRun, driverFor, readyToRun, resumeArgs, resumeProject, runArgs } from './runner.js'
 import { removeRepo, testRepo } from './test-repo.js'
+import { TITLE_SYSTEM } from './title.js'
 
 // The detached start, with the spawn faked: the process asked for, the id answered. The marker is
 // the run's process's to write: pushing it takes seconds, and the page waits on the id.
@@ -98,7 +99,9 @@ test('a resumed run continues on the tool its record names, and a Codex run with
     const codex = (turn: string): Driver => ({
       id: 'codex',
       start: opts => {
-        startedWith.push({ ...(opts.model !== undefined ? { model: opts.model } : {}) })
+        // The session that names the run is its own, on the small model (`title.ts`): not one of
+        // the run's own, so it is not counted here.
+        if (opts.system !== TITLE_SYSTEM) startedWith.push({ ...(opts.model !== undefined ? { model: opts.model } : {}) })
         return new FakeDriver({ turns: [{ text: turn }], sessionId: 's-codex' }).start(opts)
       },
     })

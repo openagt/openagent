@@ -49,6 +49,12 @@ describe('AgentHistory (#785)', () => {
     expect(container.querySelector('.animate-pulse')).toBeTruthy()
   })
 
+  test('a named run reads by its name, not by the words the person typed', () => {
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ title: 'Welcome message' })]} selectedAgentId={null} onSelect={() => {}} />)
+    expect(screen.getByText('Welcome message')).toBeTruthy()
+    expect(screen.queryByText("replace 'Hello, world!' with 'Welcome!'")).toBeNull()
+  })
+
   test('a run that ended on its question reads as waiting, with the still dot', () => {
     // It asked and waits for the answer: its dot stays, still, where a working run's pulses.
     const { container } = renderRail(

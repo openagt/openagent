@@ -58,3 +58,20 @@ test('a tool call and what it gave back are two diary lines, the second naming t
     await rm(dir, { recursive: true, force: true })
   }
 })
+
+test('the run can be named once: the name on the card and a line in the diary, and a second name is ignored', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'session-log-title-'))
+  try {
+    const log = new SessionLog(dir, { id: 'r1' })
+    await log.open()
+    await log.title('README.md condensing')
+    await log.title('Something else')
+    await log.settled()
+    assert.equal(log.card.title, 'README.md condensing')
+    assert.equal(JSON.parse(await readFile(log.cardPath, 'utf8')).title, 'README.md condensing')
+    const lines = (await readFile(log.diaryPath, 'utf8')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line))
+    assert.deepEqual(lines.filter(line => line.kind === 'title').map(line => line.text), ['README.md condensing'])
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})

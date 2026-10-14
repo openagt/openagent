@@ -326,6 +326,10 @@ export function AgentView({
     checkout?.pr !== undefined ||
     (live === false ? (handoff.loaded ? handoffSays(handoff.handoff) : held) : checkout?.checkout?.dirty === true || held)
   lastSay.current = { agentId, say }
+  // What the bar is about right now, so the ✕ hides this and not the next thing the agent does:
+  // the run, its branch, how much work is on it, and where that work has got to.
+  const onBranch = handoff.handoff
+  const workState = [agentId, checkout?.branch ?? '', onBranch?.commits.length ?? 0, onBranch?.pendingFiles?.length ?? 0, onBranch?.insertions ?? 0, onBranch?.deletions ?? 0, onBranch?.pushed ?? false, checkout?.pr?.number ?? '', checkout?.pr?.state ?? ''].join('|')
 
   return (
     <ChatPane
@@ -392,6 +396,7 @@ export function AgentView({
               committing ? <Committing /> : ended ? <HandoffActions projectId={projectId} agentId={agentId} state={handoff} subagent={subagent} onAsked={onSending} /> : undefined
             }
             show={say}
+            state={workState}
           />
           <AgentComposer
             projectId={projectId}

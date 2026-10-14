@@ -11,6 +11,7 @@ import { projectGitHost, type GitHost, type MergeOutcome } from './git-host.js'
 import { basicSkills } from './basic-skills.js'
 import { acquireRunLock, isPidAlive, releaseRunLock } from './run-lock.js'
 import { runEndedLine } from './ended.js'
+import { nameRun } from './title.js'
 import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
 
 /**
@@ -473,6 +474,19 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
     status = 'failed'
     detail = errorMessage(err)
   }
+  // The run's short name, asked of a small model beside the first turn (`title.ts`): a run that is
+  // being continued was named when it began, and one whose agent never started has nothing to name.
+  // A subagent is not named: its row is its task, written by the agent that started it, and an
+  // orchestration of a dozen of them would pay for a dozen namings for rows nobody looks for.
+  const naming =
+    driverSession && !run.continued && run.card.title === undefined && runnerMark(run.card)?.parent === undefined
+      ? nameRun(run.driver, { prompt: run.prompt, signal: stopped }).then(
+          async title => {
+            if (title !== undefined) await driverSession?.log?.title(title)
+          },
+          () => {},
+        )
+      : undefined
   try {
     // The prompts this process owes the agent: the run's own, then the lines that reached the
     // inbox after the last turn took it but while the card still said running. Whoever wrote
@@ -538,6 +552,9 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
     await driverSession?.dispose().catch(() => {})
   }
 
+  // The name lands on the card before the record is copied: a run named after that copy would be
+  // named only in its checkout, which is removed with the run.
+  await naming
   // The record: the two files the session kept, copied onto the branch unchanged.
   const live = driverSession?.log
   const card = (await readLiveCard(run.checkout.path, run.id)) ?? { ...run.card, status, endedAt: run.clock(), branch, ...(pr ? { pr } : {}) }

@@ -43,6 +43,8 @@ export function formatOpenAgentEvent(event: OpenAgentEvent): string {
       return formatDriverEvent(event.event)
     case 'intent':
       return `▶ "${truncate(event.text)}"`
+    case 'title':
+      return `Named the session: ${truncate(event.text)}`
     case 'end':
       if (event.ok) return '✓ finished'
       if (event.stopped) return '■ stopped'

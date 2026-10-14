@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { IssueLinks, Markdown } from './Markdown.js'
 
 afterEach(cleanup)
@@ -141,6 +141,15 @@ describe('Markdown lists', () => {
     expect(document.querySelector('pre')!.textContent).toBe(' same\n-old\n+new')
   })
 
+  test('a code block is a card: the language above it, and a copy button that takes the code', async () => {
+    const written: string[] = []
+    Object.assign(navigator, { clipboard: { writeText: (text: string) => { written.push(text); return Promise.resolve() } } })
+    render(<Markdown text={'```bash\nnpm test\n```'} />)
+    expect(screen.getByText('bash')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Copy the code' }))
+    await waitFor(() => expect(written).toEqual(['npm test']))
+  })
+
   test('a closing fence written at the left edge leaves the code as it is under a well-closed one', () => {
     render(<Markdown text={'1. run:\n   ```bash\n   npm test\n   npm run build\n```\n2. next'} />)
     expect(document.querySelector('pre')!.textContent).toBe('npm test\nnpm run build')
@@ -151,7 +160,8 @@ describe('Markdown lists', () => {
     render(<Markdown text={'- a\n  - b\n  ```\ncode\n  ```\n- d'} />)
     const [outer, inner] = screen.getAllByRole('list')
     expect(inner!.querySelector('pre')).toBeNull()
-    expect(outer!.children[0]!.querySelector(':scope > pre')!.textContent).toBe('code')
+    // The block is the outer item's own child: its card, with the code in it.
+    expect(outer!.children[0]!.querySelector(':scope > div > pre')!.textContent).toBe('code')
   })
 
   test('items written at uneven indents are still one list', () => {

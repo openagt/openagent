@@ -20,6 +20,16 @@ describe('EventList conversation rows', () => {
     expect(screen.getByText(/quota exhausted/)).toBeTruthy()
   })
 
+  test('the name the session was given is a row of its own', () => {
+    const events: OpenAgentEvent[] = [
+      { kind: 'driver', event: { type: 'start', prompt: 'make readme.md shorter' } },
+      { kind: 'title', text: 'README.md condensing' },
+      { kind: 'driver', event: { type: 'text', text: 'done' } },
+    ]
+    render(<EventList events={events} stick={false} />)
+    expect(screen.getByText('Named the session: README.md condensing')).toBeTruthy()
+  })
+
   test("the agent's session id is not a row: it is plumbing, read by the run's menu", () => {
     const events: OpenAgentEvent[] = [
       { kind: 'driver', event: { type: 'start', prompt: 'hello' } },
