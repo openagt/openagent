@@ -1,8 +1,7 @@
 {
   "id": "2026-10-14T04-25-58-505Z",
   "startedAt": "2026-10-14T04:25:58.591Z",
-  "endedAt": "2026-10-14T04:26:12.866Z",
-  "status": "done",
+  "status": "running",
   "intent": "open google.com and take screen shot",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
@@ -10,11 +9,11 @@
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
-      "pid": 57297,
+      "pid": 22879,
       "publish": "commit",
       "baseCommit": "e5fa4408b7428219cd68021a23776ca1b8eb2018"
     },
-    "pid": 57297,
+    "pid": 22879,
     "host": "Suleimans-MacBook-Pro.local",
     "baseCommit": "e5fa4408b7428219cd68021a23776ca1b8eb2018",
     "kind": "prompt",
