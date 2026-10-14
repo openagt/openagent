@@ -1,5 +1,5 @@
 import type { LinkedPr } from './pull-requests.js'
-import type { PublishLevel } from '../publish-levels.js'
+import type { PublishPick } from '../publish-levels.js'
 
 // The dashboard's request/result vocabulary (#345/#396/#475): the shapes the Start / Add /
 // Preview RPCs speak. They live here, on neither the HTTP server nor the RPC mount, so both —
@@ -60,7 +60,7 @@ export interface StartAgentOptions {
   /** Which coding agent the run is on: `claude-code` or `codex`. */
   driver?: string
   /** The person's saved pick of how far the run takes its work when the agent finishes. Absent, none is saved: the daemon starts the run at `commit`. A saved pick the project is not offered is held to the furthest the project goes with no pull request. */
-  publish?: PublishLevel
+  publish?: PublishPick
   /**
    * The branch the agent's own branch starts from, as this machine has it, commits that are not
    * pushed included: the launcher's "My local branch" pick. Absent, origin's default branch. A

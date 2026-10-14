@@ -1,18 +1,18 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { PublishLevel } from '../../src/client.js'
+import type { PublishPick } from '../../src/client.js'
 import { hoverTooltip, openMenu } from '../test-utils.js'
 import { AutoMenu } from './AutoMenu.js'
 
 afterEach(cleanup)
 
-const ALL: PublishLevel[] = ['commit', 'branch', 'pr', 'merge']
+const ALL: PublishPick[] = ['nothing', 'commit', 'branch', 'pr', 'merge']
 
 function renderMenu(over: Partial<Parameters<typeof AutoMenu>[0]> = {}) {
   const onPublish = vi.fn()
   const onCleanup = vi.fn()
   const view = render(
-    <AutoMenu publish="commit" picks={ALL} onPublish={onPublish} cleanup={undefined} onCleanup={onCleanup} busy={false} {...over} />,
+    <AutoMenu publish="nothing" picks={ALL} onPublish={onPublish} cleanup={undefined} onCleanup={onCleanup} busy={false} {...over} />,
   )
   return { onPublish, onCleanup, ...view }
 }
@@ -27,6 +27,7 @@ const label = (over: Partial<Parameters<typeof AutoMenu>[0]>): string => {
 
 describe('AutoMenu', () => {
   test('the button reads what will happen: the publish pick, and the cleanup when ticked', () => {
+    expect(label({ publish: 'nothing' })).toBe('Auto: Off')
     expect(label({ publish: 'commit' })).toBe('Auto: Commit')
     expect(label({ publish: 'branch' })).toBe('Auto: Publish branch')
     expect(label({ publish: 'pr' })).toBe('Auto: Open PR')
@@ -40,18 +41,19 @@ describe('AutoMenu', () => {
     await openMenu(trigger())
     expect(screen.getByText('When the agent finishes')).toBeTruthy()
     expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual([
+      'OffAdds nothing to your message. The agent decides, and usually commits.',
       'CommitIt commits its work on its branch.',
       'Publish branchIt commits and pushes its branch.',
       'Open PRIt commits, pushes its branch and opens a pull request.',
       'Merge on greenIt commits, pushes its branch and opens a pull request set to merge once its checks pass.',
     ])
-    expect(screen.getAllByRole('menuitem').map(item => item.getAttribute('aria-current'))).toEqual(['false', 'false', 'true', 'false'])
+    expect(screen.getAllByRole('menuitem').map(item => item.getAttribute('aria-current'))).toEqual(['false', 'false', 'false', 'true', 'false'])
     // The drawn check follows the same pick.
-    expect(screen.getAllByRole('menuitem').map(item => item.querySelector('svg')!.classList.contains('opacity-100'))).toEqual([false, false, true, false])
+    expect(screen.getAllByRole('menuitem').map(item => item.querySelector('svg')!.classList.contains('opacity-100'))).toEqual([false, false, false, true, false])
   })
 
   test('only the offered picks are listed', async () => {
-    renderMenu({ publish: 'branch', picks: ['commit', 'branch'] })
+    renderMenu({ publish: 'commit', picks: ['nothing', 'commit'] })
     await openMenu(trigger())
     expect(screen.getAllByRole('menuitem').map(item => item.getAttribute('aria-current'))).toEqual(['false', 'true'])
   })

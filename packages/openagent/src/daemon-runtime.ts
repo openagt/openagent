@@ -18,7 +18,7 @@ import { writeHookLines } from './built-in.js'
 import { fileBranchRepo, installProject, writeSharing } from '@openagt/agent-data'
 import { removeProjectFiles } from './remove-files.js'
 import { runProjectHooks, runStartHook } from './project-hooks.js'
-import { publishLevelIn } from './publish-levels.js'
+import { publishLevelOf, publishPickIn } from './publish-levels.js'
 import { isBranchName } from './branch-name.js'
 import { hasRemote } from './has-remote.js'
 import { projectGitHost } from './store/git-host.js'
@@ -292,7 +292,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject }: Project
     // with none saved the run commits and pushes nothing, and with one the project is not offered
     // it goes as far as the project does with no pull request: its branch pushed, or its work
     // committed where there is no remote.
-    const publish = publishLevelIn(options.publish, (await projectGitHost(projectCwd).catch(() => undefined)) !== undefined, await hasRemote(projectCwd))
+    const publish = publishLevelOf(publishPickIn(options.publish, (await projectGitHost(projectCwd).catch(() => undefined)) !== undefined, await hasRemote(projectCwd)))
     const started = await runStartHook(projectCwd, {
       prompt,
       ...(options.driver !== undefined ? { driver: options.driver } : {}),

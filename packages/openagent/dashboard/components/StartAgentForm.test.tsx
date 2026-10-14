@@ -151,7 +151,7 @@ describe('StartAgentForm (#1774)', () => {
     expect(context.compareDocumentPosition(autoMenu()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  test('the publish options: the button reads Commit until the person picks, and the Start carries no pick, left to the daemon; a saved pick is shown and carried; a change writes the saved setting', async () => {
+  test('the publish options: the button reads Commit until the person picks, and the Start carries no pick, left to the daemon; a saved pick is shown and carried, Off too; a change writes the saved setting', async () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
     start.mockResolvedValue({ agentId: 'r1' })
     render(<StartAgentForm {...props} />)
@@ -160,7 +160,7 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', {}))
 
     await openMenu(autoMenu())
-    expect(publishOptions()).toEqual(['Commit', 'Publish branch', 'Open PR', 'Merge on green'])
+    expect(publishOptions()).toEqual(['Off', 'Commit', 'Publish branch', 'Open PR', 'Merge on green'])
     fireEvent.click(screen.getByRole('menuitem', { name: /^Open PR/ }))
     expect(updatePreferences).toHaveBeenCalledWith({ publish: 'pr' })
 
@@ -171,27 +171,35 @@ describe('StartAgentForm (#1774)', () => {
     expect(autoMenu().textContent).toBe('Auto: Merge on green')
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', { publish: 'merge' }))
+
+    cleanup()
+    start.mockClear()
+    prefs.current = { publish: 'nothing' }
+    render(<StartAgentForm {...props} />)
+    expect(autoMenu().textContent).toBe('Auto: Off')
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', { publish: 'nothing' }))
   })
 
-  test('a project with no git host package is offered Commit and Publish branch only, and a saved pull request pick reads as the branch, which is where the daemon holds it', async () => {
+  test('a project with no git host package is offered Off, Commit and Publish branch only, and a saved pull request pick reads as the branch, which is where the daemon holds it', async () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: false })
     prefs.current = { publish: 'merge' }
     start.mockResolvedValue({ agentId: 'r1' })
     render(<StartAgentForm {...props} />)
     await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Publish branch'))
     await openMenu(autoMenu())
-    expect(publishOptions()).toEqual(['Commit', 'Publish branch'])
+    expect(publishOptions()).toEqual(['Off', 'Commit', 'Publish branch'])
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', { publish: 'merge' }))
   })
 
-  test('a project with no remote is offered Commit alone; its button reads Commit until the person picks, and with a saved publish pick too', async () => {
+  test('a project with no remote is offered Off and Commit; its button reads Commit until the person picks, and with a saved publish pick too', async () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: false, remote: false })
     start.mockResolvedValue({ agentId: 'r1' })
     render(<StartAgentForm {...props} />)
     await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Commit'))
     await openMenu(autoMenu())
-    expect(publishOptions()).toEqual(['Commit'])
+    expect(publishOptions()).toEqual(['Off', 'Commit'])
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', {}))
 
@@ -204,13 +212,13 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', { publish: 'merge' }))
   })
 
-  test('a project with no remote but the cleanup command: the Auto menu holds the cleanup under its one pick', async () => {
+  test('a project with no remote but the cleanup command: the Auto menu holds the cleanup under its two picks', async () => {
     onCommands.mockResolvedValue({ commands: [{ name: 'post-merge-cleanup' }], startHook: true, gitHost: false, remote: false })
     prefs.current = { publish: 'merge', postMergeCleanup: true }
     render(<StartAgentForm {...props} />)
     await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Commit · cleanup'))
     await openMenu(autoMenu())
-    expect(publishOptions()).toEqual(['Commit'])
+    expect(publishOptions()).toEqual(['Off', 'Commit'])
     expect(screen.getByRole('menuitemcheckbox', { name: /^Post-merge cleanup/ })).toBeTruthy()
   })
 

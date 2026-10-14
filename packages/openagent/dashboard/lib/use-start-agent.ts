@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Preferences, PublishLevel } from '../../src/index.js'
+import type { Preferences, PublishPick } from '../../src/index.js'
 import { sendStart } from '../rpc/control.js'
 import { onProjectOnMachine, sendProjectToMachine } from '../rpc/machines.js'
 import { useAction } from './use-action.js'
@@ -11,7 +11,7 @@ type StartArgs = Parameters<typeof sendStart>
  * hook's own default. The publish pick is carried as saved, and not at all when none was made: the
  * daemon that starts the run decides the pick in force.
  */
-export function startPicks(preferences: Preferences): { driver?: string; model?: string; publish?: PublishLevel } {
+export function startPicks(preferences: Preferences): { driver?: string; model?: string; publish?: PublishPick } {
   return {
     ...(preferences.driver ? { driver: preferences.driver } : {}),
     ...(preferences.model ? { model: preferences.model } : {}),

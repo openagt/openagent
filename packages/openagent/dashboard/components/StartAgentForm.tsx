@@ -3,7 +3,7 @@ import { CircleAlert, Folder } from 'lucide-react'
 import { onProjects, onStartCheck } from '../rpc/projects.js'
 import type { ProjectSummary } from '../../src/index.js'
 import { usePreferences, usePreferencesLoaded, updatePreferences } from '../lib/preferences.js'
-import { offeredPublishLevels, publishLevelIn } from '../../src/client.js'
+import { offeredPublishPicks, publishPickIn } from '../../src/client.js'
 import { useMachines } from '../lib/machines.js'
 import { useSelectedMachineId } from '../lib/remote-target.js'
 import { cleanupPick, offersPostMergeCleanup, startPicks, useStartAgent } from '../lib/use-start-agent.js'
@@ -39,11 +39,11 @@ const STARTING = 'Starting session'
 // so with a machine picked there is no chip and the Start names no branch.
 // The "Auto" menu, under the box at the left (the model menu is at the right): what the agent
 // does by itself when it finishes. Its button reads the picks, so nothing is hidden.
-// In it, how far the run takes its work: Commit, Publish branch, Open PR, Merge on green.
-// The level is handed to the start hook as `PUBLISH`. Until the person
+// In it, how far the run takes its work: Off, Commit, Publish branch, Open PR, Merge on green.
+// The level is handed to the start hook as `PUBLISH`; Off hands it none. Until the person
 // picks, the button shows the pick the daemon will start the run at: Commit, which pushes
 // nothing. Saved, so the pick holds for every next run. A project with no git host package
-// is offered Commit and Publish branch only, and one with no remote Commit alone.
+// is offered Off, Commit and Publish branch only, and one with no remote Off and Commit.
 // In it too, the "Post-merge cleanup" box, where the project has that command: ticked, the run is
 // followed by a fresh agent running the command on its branch before its pull request merges. The
 // box writes the same saved setting as Settings → Agent, so its state is every next run's default.
@@ -101,7 +101,7 @@ export function StartAgentForm({
   const gitHost = machine ? true : (launcher?.gitHost ?? true)
   // A project with no remote can publish nothing: its picks stop at the commit.
   const remote = machine ? true : (launcher?.remote ?? true)
-  const publishPick = publishLevelIn(preferences.publish, gitHost, remote)
+  const publishPick = publishPickIn(preferences.publish, gitHost, remote)
   // The two branches the agent can start from, where the pick is offered at all.
   const startFrom = machine ? undefined : launcher?.startFrom
   const startFromPick: StartFrom = preferences.startFrom?.[projectId] ?? 'main'
@@ -192,7 +192,7 @@ export function StartAgentForm({
           />
           <AutoMenu
             publish={publishPick}
-            picks={offeredPublishLevels(gitHost, remote)}
+            picks={offeredPublishPicks(gitHost, remote)}
             onPublish={pick => updatePreferences({ publish: pick })}
             cleanup={offersCleanup ? (preferences.postMergeCleanup ?? false) : undefined}
             onCleanup={next => updatePreferences({ postMergeCleanup: next })}

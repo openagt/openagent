@@ -3,7 +3,7 @@
 // the client can import these at runtime without dragging the server barrel (relay,
 // sandbox, node:fs/http, …) into the browser bundle. Types come from the root entry.
 export { DRIVERS, DRIVER_LABELS, isDriverName, driverFromImpl, type DriverName } from './driver-names.js'
-export { PUBLISH_LABELS, isPublishLevel, offeredPublishLevels, publishLevelIn, type PublishLevel } from './publish-levels.js'
+export { PUBLISH_LABELS, isPublishPick, offeredPublishPicks, publishPickIn, type PublishPick } from './publish-levels.js'
 export { formatOpenAgentEvent } from './terminal.js'
 export { foldScreenRows } from './screens.js'
 export { formatBytes } from './format-bytes.js'
