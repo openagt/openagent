@@ -164,19 +164,20 @@ body {
   border-radius: 9999px;
   background: currentColor;
   translate: var(--row);
-  animation: 1.6s ease-in-out infinite;
 }
+/* Each dot's animation whole, its name with its timing: the build's minifier read a timing with no
+   name as no animation at all, and the dots stood still. */
 .dot-shapes > span:nth-child(1) {
   --row: 0 3px;
-  animation-name: dot-shape-1;
+  animation: dot-shape-1 1.6s ease-in-out infinite;
 }
 .dot-shapes > span:nth-child(2) {
   --row: 5px 3px;
-  animation-name: dot-shape-2;
+  animation: dot-shape-2 1.6s ease-in-out infinite;
 }
 .dot-shapes > span:nth-child(3) {
   --row: 10px 3px;
-  animation-name: dot-shape-3;
+  animation: dot-shape-3 1.6s ease-in-out infinite;
 }
 @keyframes dot-shape-1 {
   0%, 18%, 100% { translate: 0 3px; }
@@ -231,7 +232,7 @@ body {
     background: none;
     color: inherit;
   }
-  .dot-shapes > span,
+  .dot-shapes > span:nth-child(n),
   .morph-in,
   .bubble-in,
   .letter-in {
