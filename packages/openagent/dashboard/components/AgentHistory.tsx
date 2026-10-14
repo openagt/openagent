@@ -9,7 +9,7 @@ import { formatRelative } from '../lib/format-date.js'
 import { usePreferences } from '../lib/preferences.js'
 import { STATUS_DOT, STATUS_RING } from '../lib/status-tone.js'
 import { DriverLogo } from './driver-logos.js'
-import { agentLabel } from '../lib/agent-label.js'
+import { agentLabel, awaitingName } from '../lib/agent-label.js'
 import { holdsMainAgent, isOpenSubagent, nestRows, taskLabel } from '../lib/subagents.js'
 import { AddProjectPanel } from './AddProjectPanel.js'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from './ui/dropdown-menu.js'
@@ -231,6 +231,9 @@ export function AgentHistory({
       saving={row.agent.saving === true && status === row.agent.status}
       // A subagent's prompt is its task and then the lines every subagent is told: its row names the task.
       intent={subagent ? taskLabel(row.agent) : agentLabel(row.agent)}
+      // A name is seconds away: the row holds the place rather than printing the whole prompt and
+      // swapping it for the name a moment later.
+      naming={!subagent && awaitingName(row.agent, preferences.nameRuns !== false)}
       driver={row.agent.driver}
       // On the Overview the project is what tells the rows apart, so the row still names it; a
       // project's own rail already knows its project, and a subagent is in its main agent's.
@@ -309,9 +312,20 @@ export function AgentHistory({
                 {/* A just-started run, before its run.json exists — highlighted while following it. */}
                 {showOptimistic && (
                   <SidebarMenuItem>
-                    {/* Drawn as the run's own row will be a few seconds on (the same words, the same
-                        logo, not dimmed), so that row taking its place changes nothing on screen. */}
-                    <AgentHistoryRow status="running" intent={optimistic?.intent ?? undefined} {...(crossProject && startProjectName ? { project: startProjectName } : {})} subtitle="just now" driver={preferences.driver} active={starting} standIn onClick={leave(() => onSelect(null))} />
+                    {/* Drawn as the run's own row will be a few seconds on (the same logo, not
+                        dimmed), so that row taking its place changes nothing on screen. With naming
+                        on that row will carry a name, so this one holds the place rather than
+                        printing the prompt and having it swapped a second later. */}
+                    <AgentHistoryRow
+                      status="running"
+                      {...(preferences.nameRuns === false ? { intent: optimistic?.intent ?? undefined } : { intent: undefined, naming: true })}
+                      {...(crossProject && startProjectName ? { project: startProjectName } : {})}
+                      subtitle="just now"
+                      driver={preferences.driver}
+                      active={starting}
+                      standIn
+                      onClick={leave(() => onSelect(null))}
+                    />
                   </SidebarMenuItem>
                 )}
                 {tree.map(({ row, subagents }) => {
@@ -557,6 +571,7 @@ function RevealedTitle({ text, start }: { text: string; start: boolean }) {
 function AgentHistoryRow({
   status,
   intent,
+  naming = false,
   project,
   subtitle,
   active,
@@ -577,6 +592,8 @@ function AgentHistoryRow({
   /** The row's subagents, folded or open under it: a count at the row's end, so a row with subagents is no taller than one without. */
   fold?: SubagentsFold | undefined
   intent: string | undefined
+  /** The run's name is on its way: the row shows where it will go, not the prompt it would replace. */
+  naming?: boolean
   /** When the sessions come from several projects, which one this is: it is what tells the rows apart there. */
   project?: string | undefined
   subtitle: string
@@ -628,7 +645,7 @@ function AgentHistoryRow({
     const el = titleRef.current
     if (el) setOverflowing(el.scrollWidth > el.clientWidth + 1)
   }, [intent])
-  const titleText = intent || 'New agent'
+  const titleText = naming ? '' : intent || 'New agent'
   const titleClass = cn('rail-title min-w-0 flex-1 text-sm font-normal', overflowing && 'is-overflowing')
   // What the row says in a word, the one the status badge used to print: it names the circle, and
   // opens the sentence the row's hover says.
@@ -662,7 +679,7 @@ function AgentHistoryRow({
             // The row prints its name and a circle; what it no longer prints is still its name
             // here, so a reader who cannot see the row's colour, or cannot hover it, is told the
             // same sentence.
-            aria-label={`${titleText} · ${said}`}
+            aria-label={`${naming ? 'Naming this session' : titleText} · ${said}`}
             className={cn(
               'rail-row h-8 w-full items-center gap-2 px-2 text-left',
               active && 'bg-accent text-accent-foreground',
@@ -686,7 +703,9 @@ function AgentHistoryRow({
         )}
       />
       <span ref={titleRef} className={titleClass}>
-        <RevealedTitle text={titleText} start={standIn} />
+        {/* Nothing yet, and something coming: a bar where the name goes, rather than a blank row or
+            the prompt it is about to replace. */}
+        {naming ? <span aria-hidden className="block h-3.5 w-2/3 animate-pulse rounded bg-muted-foreground/20" /> : <RevealedTitle text={titleText} start={standIn} />}
       </span>
       {/* Which coding agent ran it, as its own mark at the row's end (his pick): a session is told
           from the next by its agent as much as by its words, and a logo reads faster than a word. */}
