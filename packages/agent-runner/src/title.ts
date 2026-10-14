@@ -17,10 +17,10 @@ import type { Driver } from '@openagt/agent-driver'
 //
 // What it costs, measured: a fifth of a cent a run as it was first written, a thirtieth of one with
 // the tools off — the tools and the servers behind them were twenty thousand of the twenty-three
-// thousand tokens such a turn sent, to be answered in seven. That saving is Claude Code's: Codex
-// cannot be asked for a session with no tools, so a run on Codex is named for what it always cost
-// (~11,300 tokens, no price: Codex reports counts and never a price). A person who would rather not
-// pay turns naming off in Settings — on either agent — and the run keeps their own words.
+// thousand tokens such a turn sent, to be answered in seven. Codex goes the same way and not as
+// far — ~11,300 tokens to ~8,800, since what is left there is its own base instructions — and it
+// reports counts, never a price. A person who would rather not pay at all turns naming off in
+// Settings, on either agent, and the run keeps their own words.
 //
 // The session is given an empty directory of its own, not the run's checkout. A coding agent in a
 // checkout reads it: asked in the run's own folder, Haiku looked around and answered "The file is

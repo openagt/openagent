@@ -117,7 +117,7 @@ function requests(seen: Seen): { method: unknown; params: unknown }[] {
 }
 
 /** Runs one turn on a Codex driver with `opts` against a fake server, and answers what the server saw. */
-async function spawnedWith(opts: ConstructorParameters<typeof CodexDriver>[0], start: { cwd?: string; system?: string; model?: string; effort?: string } = {}): Promise<Seen> {
+async function spawnedWith(opts: ConstructorParameters<typeof CodexDriver>[0], start: { cwd?: string; system?: string; model?: string; effort?: string; noTools?: boolean } = {}): Promise<Seen> {
   let seen: Seen | undefined
   const session = await new CodexDriver({ spawn: fakeAppServer({}, s => (seen = s)), ...opts }).start({ cwd: '/ws', ...start })
   await session.prompt('go')
@@ -235,6 +235,21 @@ test('a Codex turn asks the app server for a sandboxed conversation in the works
     { method: 'thread/start', params: { cwd: '/ws', approvalPolicy: 'never', sandbox: 'workspace-write' } },
     { method: 'turn/start', params: { threadId: 'thread-1', input: [{ type: 'text', text: 'go', text_elements: [] }] } },
   ])
+})
+
+test('a session with nothing to do in its folder is started without what it would do it with', async () => {
+  const bare = await spawnedWith({}, { cwd: '/ws', noTools: true })
+  const off = [...bare.args].filter(arg => arg.startsWith('features.')).map(arg => arg.replace(/^features\.|=false$/g, ''))
+  // Codex has no one switch for it: its shell, its exec and the rest ride on feature flags, which
+  // go off one by one. A name Codex no longer knows is ignored by it rather than refused, so the
+  // list ageing costs the saving and never the run.
+  assert.ok(off.includes('shell_tool') && off.includes('unified_exec'), 'the tools it would run things with')
+  assert.ok(off.includes('apps') && off.includes('plugins') && off.includes('browser_use'), 'and what it would reach out with')
+  assert.equal(off.length, 13)
+  assert.equal([...bare.args].filter(arg => arg === '-c').length, off.length, 'each one its own override')
+  // Every other session is started as it always was.
+  const usual = await spawnedWith({}, { cwd: '/ws' })
+  assert.ok(![...usual.args].some(arg => arg.startsWith('features.')), 'nothing turned off for a session with work to do')
 })
 
 test('CodexDriver tells Codex how hard to think when the caller asked, and says nothing when it did not', async () => {

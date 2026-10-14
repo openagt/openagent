@@ -112,10 +112,10 @@ export interface DriverStartOptions {
    * sends — and safer: with no tool to reach for, a small model cannot mistake the words it is
    * given for work to do. A driver whose agent has no such mode ignores it and runs as usual.
    *
-   * Claude Code's takes it. Codex's ignores it: its shell and its patch tool are its harness, not
-   * a list it is given, and there is no flag that drops them. Measured, a naming turn there sends
-   * ~11,300 tokens to be answered in 8, and turning its memories, apps and plugins off saves 8% of
-   * that — not worth changing what a person set for their own Codex.
+   * Both drivers take it, and neither gets as far as the other. Claude Code has one switch for it
+   * (`--tools ""`), which takes a turn from ~23,000 tokens to ~3,600. Codex has none: its tools
+   * ride on its feature flags, which go off one by one, and what is left is its own base
+   * instructions — ~11,300 tokens down to ~8,800.
    */
   noTools?: boolean
   /** Abort the whole session; disposing kills the underlying process. */
