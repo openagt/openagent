@@ -22,7 +22,7 @@ export interface MountedCard extends ModuleCard {
   projects: string[]
 }
 
-/** A side-rail tab as the shell mounts it: the tab, plus the package it came from and the projects that have it. */
+/** A pane as the shell mounts it: the pane, plus the package it came from and the projects that have it. */
 export interface MountedPanel extends ModulePanel {
   package: string
   projects: string[]
@@ -61,7 +61,7 @@ export interface MountedModules {
   /** Every package's cards, in the order the Overview draws the ones it draws: by `order`, then by package name. */
   cards: MountedCard[]
   linkActions: MountedLinkAction[]
-  /** The side-rail tabs, in package order. */
+  /** The panes beside the chat, in package order. */
   panels: MountedPanel[]
   /** The run slots, one entry per module that has any, in package order. */
   runSlots: MountedRunSlots[]
@@ -115,7 +115,7 @@ export function byMountOrder(a: { order?: number; package: string }, b: { order?
 
 /**
  * What the registered projects' modules add (#1774), in package order: the pages, a segment two
- * modules claim going to the first, the cards (#1818), sorted by their order then their package, the link actions, the side-rail tabs, the run slots, the Settings sections (sorted as the cards are) and the usage bar's stop line (the first module's that declares one),
+ * modules claim going to the first, the cards (#1818), sorted by their order then their package, the link actions, the panes, the run slots, the Settings sections (sorted as the cards are) and the usage bar's stop line (the first module's that declares one),
  * every one of them, each carrying the package it came from and the projects that have it. `loaded` is false until the module list has
  * been read and every module in it imported, so the shell can tell "no such page" from "not
  * loaded yet". A change of `reloadKey` reads the list again at once; what is mounted stays until

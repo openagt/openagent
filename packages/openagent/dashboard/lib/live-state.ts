@@ -8,32 +8,6 @@ import type { AgentMeta, OpenAgentEvent, ChoiceRequest } from '../../src/index.j
 export { pendingChoices } from '../../src/client.js'
 
 /**
- * One ad-hoc markdown view the agent pushed to the right rail (#441): the `view` event
- * minus its discriminant, derived so a field added to the event carries through here on
- * its own — the same way {@link ChoiceEvent} tracks the `choice` event.
- */
-type ViewEvent = Extract<OpenAgentEvent, { kind: 'view' }>
-export type AgentView = Omit<ViewEvent, 'kind'>
-
-/**
- * Every markdown view the agent has shown this agent (#441), in first-seen order. A `view`
- * event with an id already seen updates it in place (the agent re-showed the same title),
- * so the rail keeps one entry per view rather than stacking duplicates.
- */
-export function agentViews(events: readonly OpenAgentEvent[]): AgentView[] {
-  const byId = new Map<string, AgentView>()
-  for (const event of events) {
-    // Strip the discriminant and keep the rest, like pendingChoices — a new field on the
-    // view event is then carried without touching this.
-    if (event.kind === 'view') {
-      const { kind: _kind, ...view } = event
-      byId.set(event.id, view)
-    }
-  }
-  return [...byId.values()]
-}
-
-/**
  * Whether the agent is still going, i.e. worth showing a Stop button. An agent ends with a
  * single `end` event; until one arrives (and once anything has streamed) it is live.
  */

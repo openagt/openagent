@@ -9,7 +9,7 @@ import { readAgentCommitChanges, readAgentCommitFileDiff, readAgentCommits, read
 // run's id (`agentId`) and reads wherever the run's files are now (`tree.ts`); a read without one
 // is about the project's own folder.
 
-/** What the Files tab shows for the project itself: every file, the ones changed on disk marked. */
+/** What the Files pane shows for the project itself: every file, the ones changed on disk marked. */
 export interface ProjectTree {
   files: string[]
   changes: Record<string, FileMark>

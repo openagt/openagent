@@ -6,7 +6,7 @@ import { currentAgentEvents } from './live-state.js'
 
 // The live agent feed (#405), shared. The dashboard is a projection of the selected run's diary,
 // the file the run's own tool writes as the agent works, streamed over Server-Sent Events that
-// push one `OpenAgentEvent` per new line. Both the main event view and the right rail's choice
+// push one `OpenAgentEvent` per new line. Both the main event view and the choice
 // gates (#440) read this same stream, so the subscription lives here and each consumer owns one
 // channel rather than opening a second.
 //

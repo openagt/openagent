@@ -34,7 +34,7 @@ import {
 //     asks it above the message box); a resolved one collapses to the AnsweredChoice ✓ card and hides
 //     its "✓ chose" line.
 //   - Screens: the newest open `screen` line at an address, before the run's end, is live: its
-//     line opens the side panel on the tab that shows the screen. An earlier one stays its one
+//     line opens the pane that shows the screen. An earlier one stays its one
 //     line of text, and an `ended` one is hidden.
 //   - A turn's end and the spend so far are not rows, and neither is a clean end or an end waiting
 //     on an answer: the agent's last message, or its question, is how such a turn ends. A stopped

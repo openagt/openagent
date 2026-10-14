@@ -1,8 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import type { OpenAgentEvent } from '../../src/index.js'
-import { agentViews, pendingChoices, isAgentActive, currentAgentEvents, agentOutcome, cardOutcome, actionsRunUrl } from './live-state.js'
+import { pendingChoices, isAgentActive, currentAgentEvents, agentOutcome, cardOutcome, actionsRunUrl } from './live-state.js'
 
-const view = (id: string, title: string, markdown: string): OpenAgentEvent => ({ kind: 'view', id, title, markdown })
 const choice = (id: string, title: string): OpenAgentEvent => ({
   kind: 'choice',
   id,
@@ -11,32 +10,6 @@ const choice = (id: string, title: string): OpenAgentEvent => ({
   recommended: 'a',
 })
 const resolved = (id: string): OpenAgentEvent => ({ kind: 'choice-resolved', id, picked: 'a', by: 'user' })
-
-describe('agentViews', () => {
-  test('lists views in first-seen order, one entry each', () => {
-    const views = agentViews([view('plan', 'Plan', '# one'), view('diff', 'Diff', '# two')])
-    expect(views).toEqual([
-      { id: 'plan', title: 'Plan', markdown: '# one' },
-      { id: 'diff', title: 'Diff', markdown: '# two' },
-    ])
-  })
-
-  test('re-showing an id updates it in place rather than stacking a duplicate', () => {
-    const views = agentViews([view('plan', 'Plan', '# draft'), view('plan', 'Plan', '# final')])
-    expect(views).toEqual([{ id: 'plan', title: 'Plan', markdown: '# final' }])
-  })
-
-  test('ignores non-view events', () => {
-    expect(agentViews([choice('c1', 'Approve?'), { kind: 'log', message: 'hi' }])).toEqual([])
-  })
-
-  test('carries a field added to the view event without a code change here', () => {
-    // The mapping strips `kind` and keeps the rest, so an extra field flows through.
-    // This is what the old hand-listed `{ id, title, markdown }` mapping would have dropped.
-    const extended = { kind: 'view', id: 'plan', title: 'Plan', markdown: '# x', pinned: true } as unknown as OpenAgentEvent
-    expect(agentViews([extended])).toEqual([{ id: 'plan', title: 'Plan', markdown: '# x', pinned: true }])
-  })
-})
 
 describe('pendingChoices', () => {
   test('an open choice is pending; a resolved one is not', () => {

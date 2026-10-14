@@ -13,7 +13,7 @@ import { SettingsPage } from './components/SettingsPage.js'
 import { AgentView } from './components/AgentView.js'
 import { agentLabel } from './lib/agent-label.js'
 import { subagentsOf, taskLabel } from './lib/subagents.js'
-import { RightRail } from './components/RightRail.js'
+import { PaneLayout, PanesProvider } from './components/Panes.js'
 import { MenuButton, PhoneBar } from './components/PhoneBar.js'
 import { useIsMobile } from './lib/use-mobile.js'
 import { NotFound } from './components/NotFound.js'
@@ -31,7 +31,6 @@ import { formatRoute, type Route } from './lib/route.js'
 import { dataLinkRoute } from './lib/data-link.js'
 import { useActivityNotifications, useInterventionNotifications } from './lib/use-notifications.js'
 import { usePreferences, notificationsEnabled, newActivityEnabled, humanInterventionEnabled } from './lib/preferences.js'
-import { agentViews, currentAgentEvents } from './lib/live-state.js'
 import { useDocumentTitle } from './lib/document-title.js'
 import { useWorking } from './lib/use-working.js'
 import { useFavicon } from './lib/favicon.js'
@@ -54,7 +53,7 @@ const EMPTY_ACTIVITY: ProjectionRead<Activity> = { items: [], whole: [] }
 /** Stable initial for the cross-project recents poll, so it does not churn on every render. */
 const EMPTY_RECENT: RecentAgent[] = []
 
-// The dashboard shell (#405 phase 2): Sessions | main | Docs/History rail, with the project
+// The dashboard shell (#405 phase 2): Sessions | main | the panes, with the project
 // selection in the top nav as a dropdown since #772 (it used to be a rail of its own). The main pane
 // is one of three views chosen by the selection: the project home/launcher (Live, the default —
 // Start form + cards) or one session's own view (AgentView), live or finished — the same frame
@@ -132,7 +131,7 @@ export function App() {
   const { agents: agents, reload, loaded: agentsLoaded } = useAgents(projectId ?? scope, agentStart.id !== null && agentStart.projectId === (projectId ?? scope) ? agentStart.id : null)
 
   // The Context set lives in the shell (#492/#504) so the two surfaces that feed it share one
-  // source of truth: the launcher's `@`/`#` chips and Context picker, and the right rail's file tree.
+  // source of truth: the launcher's `@`/`#` chips and Context picker, and the Files pane's tree.
   const { context, add: addContext, remove: removeContext, toggle: toggleContext, reset: resetContext } = useContextSet()
 
   // The picked Context is one project's, so changing projects starts fresh. Keyed off the route
@@ -292,8 +291,8 @@ export function App() {
       sendToScreen,
   }
 
-  // The live agent feed is owned here so both the main view and the right rail's views tab read
-  // one shared event stream.
+  // The live agent feed is owned here: the main view and the panes' count of its events read one
+  // shared event stream.
   // The agent whose feed and controls are in play is simply the one in the URL; in the no-id
   // fallback there is none yet, and a null id resolves to the project root, as before.
   const { events, lost, writing } = useLiveEvents(projectId, agentId, agentStart.tick)
@@ -304,15 +303,6 @@ export function App() {
     if (ends > 0) reload()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ends])
-  // The rail's views stay scoped to the newest `session` segment even though an agent's feed no
-  // longer is (a resumed session appends a second segment to the same journal). Choice gates
-  // are no longer folded here: they live inline in the transcript (#1455 items 6/7), where
-  // EventList derives open/answered state from the same events it renders.
-  const current = currentAgentEvents(events)
-  const views = projectId ? agentViews(current) : []
-  // The selected session's loop verdict, for the rail's pinned block under the tabs. It comes up
-  // from AgentView rather than being folded here: a finished agent's events live in its archived log,
-  // which that view is the one to read.
 
   // Is an agent working (#875)? Drives the mark and the tab icon.
   const working = useWorking()
@@ -463,7 +453,7 @@ export function App() {
     <HostServicesContext.Provider value={hostServices}>
     <SidebarProvider className="h-screen flex-col overflow-hidden">
       {/* The top navbar is gone (#772 follow-up): its brand, global nav and utility controls moved
-          into the sidebar (AgentHistory), so the workspace and right rail get the full height. */}
+          into the sidebar (AgentHistory), so the workspace and the panes get the full height. */}
       {!healthy && (
         <div role="alert" className="flex items-center gap-2 border-b border-border bg-warning/10 px-4 py-2 text-xs text-warning">
           <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -512,23 +502,16 @@ export function App() {
             opens it. An agent's page and the "New agent" page keep that corner of their top row
             free; a page with no top row of its own gets a bar that names it. */}
         {isMobile && <MenuButton />}
-        <main className="flex min-w-0 flex-1 flex-col">
-          {isMobile && phoneTitle !== null && <PhoneBar title={phoneTitle} />}
-          {renderMain()}
-        </main>
-        {/* A module's page takes the full width itself (#1774): no rail beside it, the way Settings
-            takes the whole main pane with none either. */}
-        {!pageSegment && (
-          <RightRail
-            projectId={projectId}
-            agentId={agentId}
-            views={views}
-            files={files}
-            context={context}
-            toggleContext={toggleContext}
-            activity={events.length}
-          />
-        )}
+        {/* A project's page and an agent's have panes beside them (Panes). A module's page takes
+            the full width itself (#1774), the way Settings and the Overview do. */}
+        <PanesProvider projectId={projectId} agentId={agentId} enabled={!pageSegment} files={files} context={context} toggleContext={toggleContext} activity={events.length}>
+          <PaneLayout>
+            <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+              {isMobile && phoneTitle !== null && <PhoneBar title={phoneTitle} />}
+              {renderMain()}
+            </main>
+          </PaneLayout>
+        </PanesProvider>
       </div>
     </SidebarProvider>
     </HostServicesContext.Provider>

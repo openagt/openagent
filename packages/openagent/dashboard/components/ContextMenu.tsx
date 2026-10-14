@@ -96,7 +96,7 @@ export function ContextMenu({
               <ContextFiles files={contextFiles} onRemove={onToggle} busy={busy} />
             </div>
           ) : (
-            <p className="px-2 py-1 text-xs text-muted-foreground/60">None yet — add with # or the Files tab.</p>
+            <p className="px-2 py-1 text-xs text-muted-foreground/60">None yet — add with # or the Files pane.</p>
           )}
         </DropdownMenuGroup>
       </DropdownMenuContent>

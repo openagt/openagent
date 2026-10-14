@@ -4,7 +4,7 @@ import type { FileChange } from '../src/diff.js'
 import { readChanges } from './reads.js'
 
 // What a working run has changed so far, on its page (#817): a count in the bar above the message
-// box. Which files changed, and their diffs, are in the side panel's Changes tab.
+// box. Which files changed, and their diffs, are in the Changes pane.
 //
 // Read from the run's own checkout, not from the agent's tool calls: a tool's name reaches the
 // dashboard but not its arguments, and git is both the honest source (the outcome, not the intent)

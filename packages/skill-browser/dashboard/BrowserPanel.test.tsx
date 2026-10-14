@@ -4,7 +4,7 @@ import { ModuleHostContext, type ModuleHost } from '@openagt/dashboard/module'
 import { CONSOLE, FRAME, PULSE, STATE, streamPart, type ConsoleLine } from '../src/stream.js'
 import { BrowserPanel } from './BrowserPanel.js'
 
-// The Browser tab inside a faked dashboard: `watchScreen` answers a stream the test writes to,
+// The Browser pane inside a faked dashboard: `watchScreen` answers a stream the test writes to,
 // `sendToScreen` records what the person did. jsdom draws nothing, so a picture is a stub of the
 // size the test says, and the canvas is given a place on the page.
 
@@ -90,7 +90,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-test('the tab shows the browser live: the address, the picture, and a click goes to the page where it was made', async () => {
+test('the pane shows the browser live: the address, the picture, and a click goes to the page where it was made', async () => {
   const world = dashboard()
   render(show(world.host))
   await waitFor(() => expect(world.host.watchScreen).toHaveBeenCalledWith('p', 'run-1', expect.any(AbortSignal)))
@@ -155,7 +155,7 @@ test('a picture too large to be a browser\'s is not drawn, and bytes that are no
   expect(world.cancelled()).toBe(1)
 })
 
-test('with no browser open the tab says so and asks again; a closed tab stops asking and lets the stream go', async () => {
+test('with no browser open the pane says so and asks again; a closed pane stops asking and lets the stream go', async () => {
   vi.useFakeTimers()
   const world = dashboard()
   world.browser(false)
@@ -183,7 +183,7 @@ test('with no browser open the tab says so and asks again; a closed tab stops as
   expect(world.host.watchScreen).toHaveBeenCalledTimes(4)
 })
 
-test('a browser that closes leaves the tab saying so; a page with no session has no browser', async () => {
+test('a browser that closes leaves the pane saying so; a page with no session has no browser', async () => {
   const world = dashboard()
   const { rerender } = render(show(world.host))
   await waitFor(() => expect(world.host.watchScreen).toHaveBeenCalled())

@@ -61,12 +61,12 @@ describe('EventList conversation rows', () => {
     const events: OpenAgentEvent[] = [
       { kind: 'driver', event: { type: 'start', prompt: 'go' } },
       { kind: 'driver', event: { type: 'text', text: 'On it.' } },
-      { kind: 'view', id: 'v1', title: 'Plan', markdown: '# p' },
+      { kind: 'log', message: 'A note.' },
       { kind: 'choice', id: 'g1', title: 'Proceed?', options: [{ id: 'a', label: 'Yes' }] },
       { kind: 'end', ok: true },
     ]
     render(<EventList events={events} stick={false} />)
-    for (const label of ['agent', 'view', 'choice', 'end']) expect(screen.queryByText(label)).toBeNull()
+    for (const label of ['agent', 'log', 'choice', 'end']) expect(screen.queryByText(label)).toBeNull()
     const column = screen.getByText('On it.').closest('[data-slot="message-scroller-content"]')!
     expect(column.className).toContain('mx-auto')
     expect(column.className).toContain('max-w-3xl')
@@ -272,7 +272,7 @@ describe('EventList tool calls', () => {
   })
 
   test('another kind of row between calls ends the run', () => {
-    render(<EventList events={[prompt, call('Bash', 'ls'), { kind: 'view', id: 'v1', title: 'Plan', markdown: '# p' }, call('Bash', 'pwd')]} stick={false} />)
+    render(<EventList events={[prompt, call('Bash', 'ls'), { kind: 'log', message: 'A note.' }, call('Bash', 'pwd')]} stick={false} />)
     expect(screen.getByRole('button', { name: 'Ran ls' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Ran pwd' })).toBeTruthy()
   })
@@ -590,7 +590,7 @@ describe('EventList row wash (#1508)', () => {
 })
 
 // A screen line (a command the agent ran showing something, e.g. its browser): the newest open one
-// is live, and its line opens the side panel on the tab that shows the screen; an older one, or
+// is live, and its line opens the pane that shows the screen; an older one, or
 // one after the run ended, is a line of text; an `ended` line is hidden. No screen is in the chat.
 describe('EventList screen rows', () => {
   const at = (n: number) => `http://127.0.0.1:${n}/?t=x`

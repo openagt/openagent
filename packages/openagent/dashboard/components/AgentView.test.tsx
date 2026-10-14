@@ -459,21 +459,19 @@ describe('a changed file\'s row in the chat', () => {
     const modules: MountedModules = { pages: [], cards: [], linkActions: [], panels, runSlots: [], settings: [], loaded: true }
     return <ModulesContext.Provider value={modules}>{ui}</ModulesContext.Provider>
   }
-  const panel = (over: object) => ({ id: 'changes', label: 'Changes', help: '', Panel: () => null, package: '@openagt/files', projects: ['p1'], ...over })
+  const panel = (over: object) => ({ id: 'changes', label: 'Changes', help: '', icon: () => null, Panel: () => null, package: '@openagt/files', projects: ['p1'], ...over })
 
-  test('with a tab that lists changes, a click opens this agent\'s side panel and asks for the file by its path in the checkout', async () => {
+  test('with a pane that lists changes, a click asks this agent\'s page for the file by its path in the checkout', async () => {
     const { useRevealedChange, forgetRevealedChanges } = await import('../lib/reveal-change.js')
     forgetRevealedChanges()
-    localStorage.removeItem('oa.side-panel')
     const Asked = () => <span data-testid="asked">{useRevealedChange('p1/run-1')?.path ?? ''}</span>
     onAgent.mockResolvedValue(events)
     render(withPanels(<>{view({ events, card: { status: 'done', workspace: WS } })}<Asked /></>, [panel({ changes: true as const })]))
     fireEvent.click(await screen.findByRole('button', { name: 'Show the change to A.md' }))
     expect(screen.getByTestId('asked').textContent).toBe('docs/A.md')
-    expect(JSON.parse(localStorage.getItem('oa.side-panel') ?? '[]')).toEqual(['p1/run-1'])
   })
 
-  test('with no such tab, or one of another project, the row is there and is no button', async () => {
+  test('with no such pane, or one of another project, the row is there and is no button', async () => {
     onAgent.mockResolvedValue(events)
     const { unmount } = render(withPanels(view({ events, card: { status: 'done', workspace: WS } }), [panel({})]))
     expect((await screen.findByRole('list', { name: 'Files changed' })).textContent).toBe('A.md+2 −1')

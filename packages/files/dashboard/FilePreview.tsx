@@ -89,8 +89,9 @@ export function FilePreviewHover({
         {children}
       </PreviewCard.Trigger>
       <PreviewCard.Portal>
-        <PreviewCard.Positioner side="left" align="start" sideOffset={8}>
-          <PreviewCard.Popup className="z-50 flex max-h-[70vh] w-[42rem] max-w-[80vw] flex-col overflow-hidden rounded-md border border-border bg-card text-card-foreground shadow-lg">
+        {/* The layer is the positioner's, as every popup's is: on the popup inside it, it would count for nothing against the page. */}
+        <PreviewCard.Positioner side="left" align="start" sideOffset={8} className="z-50">
+          <PreviewCard.Popup className="flex max-h-[70vh] w-[42rem] max-w-[80vw] flex-col overflow-hidden rounded-md border border-border bg-card text-card-foreground shadow-lg">
             <FilePreviewCard projectId={projectId} agentId={agentId} path={path} changed={changed} />
           </PreviewCard.Popup>
         </PreviewCard.Positioner>

@@ -15,10 +15,10 @@ const NAMED_KEYS = new Set(['Enter', 'Tab', 'Escape', 'Backspace', 'ArrowUp', 'A
 const CONSOLE_OPEN_KEY = 'oa.browser-console'
 
 /**
- * The Browser tab: the browser the session's agent opened, live. The address bar (back, forward,
+ * The Browser pane: the browser the session's agent opened, live. The address bar (back, forward,
  * reload, the address) over the picture; a click, a scroll and typing on the picture go to the
  * page. Under the picture, the page's console, behind a bar that says how many errors the page
- * has. The stream is held only while the tab is on screen: a closed tab, another tab picked, or
+ * has. The stream is held only while the pane is on screen: a closed pane, or
  * a page in the background asks the session's computer for nothing.
  */
 export function BrowserPanel({ projectId, agentId, activity }: ModulePanelProps) {
@@ -67,7 +67,7 @@ export function BrowserPanel({ projectId, agentId, activity }: ModulePanelProps)
           for (const part of parts(value)) {
             if (part.kind === FRAME) {
               const drawn = await draw(canvas.current, part.bytes)
-              // The picture took a moment: the tab may show another session's browser by now.
+              // The picture took a moment: the pane may show another session's browser by now.
               if (stopped) break
               if (drawn) setLive(true)
             } else if (part.kind === STATE) {

@@ -1,11 +1,10 @@
 import { useSyncExternalStore } from 'react'
-import { setSidePanelOpen } from './side-panel.js'
 
-// What a row of the chat asks the side panel to show. A changed file: the row of a file at the
-// end of a turn opens the side panel on the tab that lists what the agent changed, with that file
-// picked. A live screen: its row opens the side panel on the tab that shows it. An ask is kept
-// for the page it was made on (`sidePanelName`), for the page's life; `at` tells one ask from
-// the next for the same thing.
+// What a row of the chat asks the page's panes to show. A changed file: the row of a file at the
+// end of a turn opens the pane that lists what the agent changed, with that file picked. A live
+// screen: its row opens the pane that shows it. An ask is kept for the page it was made on
+// (`panesPage`), for the page's life; `at` tells one ask from the next for the same thing. The
+// panes act on it (Panes): they know which pane lists changes and which shows a screen.
 
 /** The file asked for, and which ask it is. */
 export interface RevealedChange {
@@ -23,10 +22,9 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-/** Open the side panel of the page with this name, on this changed file. */
+/** Ask the page with this name for this changed file. */
 export function revealChange(name: string, path: string): void {
   asked.set(name, { path, at: ++asks })
-  setSidePanelOpen(name, true)
   for (const listener of listeners) listener()
 }
 
@@ -35,10 +33,9 @@ export function useRevealedChange(name: string): RevealedChange | undefined {
   return useSyncExternalStore(subscribe, () => asked.get(name), () => undefined)
 }
 
-/** Open the side panel of the page with this name, on the run's live screen. */
+/** Ask the page with this name for the run's live screen. */
 export function revealScreen(name: string): void {
   screens.set(name, ++asks)
-  setSidePanelOpen(name, true)
   for (const listener of listeners) listener()
 }
 

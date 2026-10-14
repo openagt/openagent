@@ -21,8 +21,6 @@ export function formatOpenAgentEvent(event: OpenAgentEvent): string {
       return `  ${event.message}`
     case 'error':
       return `✗ ${event.headline}${event.detail ? `\n    ${event.detail.replace(/\n/g, '\n    ')}` : ''}`
-    case 'view':
-      return `▶ view: ${event.title}`
     case 'settled':
       return `◆ done for now — waiting for your next message`
     case 'branch':

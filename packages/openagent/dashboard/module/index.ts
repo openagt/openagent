@@ -189,7 +189,7 @@ export interface ModuleSchedule {
 }
 
 /**
- * The Context as a side-rail tab sees it (#504): the files the next run is pointed at. A tab may
+ * The Context as a pane sees it (#504): the files the next run is pointed at. A pane may
  * show which files are in it and add or remove one.
  */
 export interface ModuleContext {
@@ -199,19 +199,19 @@ export interface ModuleContext {
   toggle(path: string): void
 }
 
-/** What a side-rail tab is rendered with: the project on screen, the run selected in it (if any), the Context. */
+/** What a pane is rendered with: the project on screen, the run selected in it (if any), the Context. */
 export interface ModulePanelProps {
   projectId: string
   /** The run whose page this is; absent on the project's own page. */
   agentId?: string
   /**
    * How many events the run's feed has shown: it grows each time the agent does something, so a
-   * tab showing what the agent changes reads again then, rather than on its next poll. Absent on
+   * pane showing what the agent changes reads again then, rather than on its next poll. Absent on
    * the project's own page.
    */
   activity?: number
   /**
-   * On a tab that lists what a run changed (`changes`): the changed file a click in the chat
+   * On a pane that lists what a run changed (`changes`): the changed file a click in the chat
    * asked to see, by its path in the run's checkout. `at` tells one ask from the next for the
    * same file. Absent until a file is asked for.
    */
@@ -220,30 +220,31 @@ export interface ModulePanelProps {
 }
 
 /**
- * A tab a module adds to the side rail (#492), shown on every project's page and every run's page
- * of the projects that have the module, before the dashboard's own tabs. A tab with nothing to
- * show says so inside it: the rail cannot know a module is empty without rendering it.
+ * A pane a module adds beside the chat (#492), on every project's page and every run's page of
+ * the projects that have the module: an icon at the end of the page's top bar opens it, in a
+ * column with the other open panes. A pane with nothing to show says so inside it: the top bar
+ * cannot know a module is empty without rendering it.
  */
 export interface ModulePanel {
-  /** Which tab this is among the module's own, for the rail's key and its remembered pick. */
+  /** Which pane this is among the module's own, for its key and for remembering that it is open. */
   id: string
-  /** The tab's label. */
+  /** The pane's name: on its card, and what its icon is called. */
   label: string
-  /** The tab's tooltip: one sentence on what it shows. */
+  /** The icon's tooltip: one sentence on what the pane shows. */
   help: string
-  /** A count shown on the tab beside its label; none when absent or 0. */
-  count?(props: ModulePanelProps): number
+  /** The pane's icon in the top bar, drawn at the size its `className` gives. */
+  icon: ComponentType<{ className?: string }>
   /**
-   * This tab lists what a run changed. The chat's row of a changed file then opens the side panel
-   * on it, and hands it the file as `reveal`. Without such a tab, those rows open nothing.
+   * This pane lists what a run changed. The chat's row of a changed file then opens it, and
+   * hands it the file as `reveal`. Without such a pane, those rows open nothing.
    */
   changes?: true
   /**
-   * This tab shows a run's live screen ({@link ModuleHost.watchScreen}). The chat's row of a live
-   * screen then opens the side panel on it. Without such a tab, that row is a line of text.
+   * This pane shows a run's live screen ({@link ModuleHost.watchScreen}). The chat's row of a live
+   * screen then opens it. Without such a pane, that row is a line of text.
    */
   screen?: true
-  /** The tab's contents. */
+  /** The pane's contents. */
   Panel: ComponentType<ModulePanelProps>
 }
 
@@ -272,7 +273,7 @@ export interface ModuleDefinition {
   cards?: ModuleCard[]
   /** The actions the module offers on the links dashboard pages show, wherever the link's project has the module's package. */
   linkActions?: LinkAction[]
-  /** The tabs the module adds to the side rail. */
+  /** The panes the module adds beside the chat. */
   panels?: ModulePanel[]
   /** What the module adds to a run's page. */
   run?: ModuleRunSlots
