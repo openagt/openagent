@@ -88,6 +88,12 @@ export type OpenAgentEvent = { at?: string } & (
   | { kind: 'session-update'; sessionId: string; sessionLink?: string }
   /** What this session was asked for, emitted once as it opens (#211). */
   | { kind: 'intent'; text: string }
+  /**
+   * The short name the session was given, emitted once, soon after it opens: a small model's two
+   * to five words for what the person asked, which is what every list of sessions shows instead of
+   * the prompt's first line.
+   */
+  | { kind: 'title'; text: string }
   /** The wrapped agent's own progress, forwarded verbatim (never gated on). */
   | { kind: 'driver'; event: DriverEvent }
   /**

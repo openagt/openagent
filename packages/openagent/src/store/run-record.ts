@@ -46,6 +46,7 @@ const EVENT_KINDS: Record<OpenAgentEvent['kind'], true> = {
   'choice-resolved': true,
   driver: true,
   intent: true,
+  title: true,
   end: true,
 }
 

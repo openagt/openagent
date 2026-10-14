@@ -173,6 +173,30 @@ test("an agent that commits nothing: done, no PR, its empty branch goes with the
   }
 })
 
+test('a run is named by the agent\'s small model: the name on its record, and a line in its diary', async () => {
+  const repo = await testRepo()
+  try {
+    // The run's agent and the one that names it are the same CLI, so one fake answers both: the
+    // naming session is the one asked to name something.
+    const driver: Driver = {
+      id: 'claude-code',
+      start: opts => new FakeDriver({ respond: prompt => (prompt.includes('Name this coding session') ? 'README.md condensing' : 'Done.') }).start(opts),
+    }
+    const run = await runCommand(repo, { prompt: 'make readme.md shorter', driver, now: () => NOW, gitHost: noGitHost })
+    assert.equal(run.status, 'done')
+    const record = await findRun(repo, run.id)
+    assert.equal(record?.title, 'README.md condensing')
+    assert.equal(record?.intent, 'make readme.md shorter', 'the words the person typed are kept as they were')
+    assert.deepEqual(
+      (await readUntimedDiary(repo, run.id)).filter(line => line.kind === 'title'),
+      [{ kind: 'title', text: 'README.md condensing' }],
+      'the conversation says where the name came from, once',
+    )
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
 test('the tick\'s run does not mark itself again, and a dirty tree keeps the checkout with the reason', async () => {
   const repo = await testRepo()
   try {

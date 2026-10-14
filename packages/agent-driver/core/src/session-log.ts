@@ -36,6 +36,8 @@ export interface LogCard {
   id: string
   startedAt?: string
   intent?: string
+  /** The run's short name, two to five words, as a list shows it; absent until something names it. */
+  title?: string
   driver?: string
   model?: string
   branch?: string
@@ -184,6 +186,21 @@ export class SessionLog {
     const { caller, ...rest } = fields
     this.card = { ...this.card, ...rest, ...(caller ? { caller: { ...this.card.caller, ...caller } } : {}) }
     return this.queue(() => this.writeCard())
+  }
+
+  /**
+   * The run's short name: on the card, so every list of runs reads it, and a diary line too, so
+   * the conversation shows where the name came from. Nothing else names a run, so the first one
+   * given stays.
+   */
+  title(text: string): Promise<void> {
+    if (this.card.title !== undefined) return this.tail
+    this.card = { ...this.card, title: text }
+    const at = this.clock()
+    return this.queue(async () => {
+      await appendFile(this.diaryPath, JSON.stringify({ kind: 'title', text, at }) + '\n')
+      await this.writeCard()
+    })
   }
 
   /** Close the log: the `ended` line and the card's status and end time. */
