@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import type { AgentHandoff } from '../../src/index.js'
-import { ChevronDown, GitCommitHorizontal, GitMerge, GitPullRequest, GitPullRequestDraft, Upload } from 'lucide-react'
+import { ChevronDown, GitPullRequestDraft, Upload } from 'lucide-react'
 import { sendMerge, sendMergeBranch, sendMessage, sendOpenPullRequest, sendPush } from '../rpc/control.js'
 import type { AgentHandoffState } from '../lib/use-agent-handoff.js'
 import { cn } from '../lib/utils.js'
@@ -47,16 +47,14 @@ export function HandoffSummary({ handoff, subagent = false }: { handoff: AgentHa
   if (handoff.empty && handoff.pendingFiles?.length) return null
   if (handoff.empty) return <span className="text-muted-foreground">{handoff.merged ? 'merged' : 'no changes'}</span>
   const files = `${handoff.files.length} file${handoff.files.length === 1 ? '' : 's'}`
+  // What the branch holds, as Claude Code says it: the `+N −N` pair alone, in a chip. The counts
+  // behind it — how many commits, how many files, whether they are on the remote — are the same
+  // work in more words, so they are the chip's hover rather than three more things to read on a row
+  // that already carries the branch and the next step. The files themselves are a pane away.
+  const held = [commits, files, ...(!subagent && handoff.pushed && !handoff.pr ? ['pushed'] : [])].join(' · ')
   return (
-    <span className="flex items-center gap-x-2 whitespace-nowrap text-muted-foreground">
-      <span>{commits}</span>
-      <span>·</span>
-      <span>{files}</span>
-      <DiffStat added={handoff.insertions} removed={handoff.deletions} className="text-xs" />
-      {/* Whether the work is on the remote yet is the first handoff question — say it. The PR
-          itself is not repeated here: the bar already links it. That it is not there yet is said
-          beside the button that publishes it ({@link HandoffActions}), where it is always in view. */}
-      {!subagent && handoff.pushed && !handoff.pr && <span>· pushed</span>}
+    <span className="flex shrink-0 items-center whitespace-nowrap rounded-md bg-background/60 px-1.5 py-0.5" title={held} aria-label={held}>
+      <DiffStat added={handoff.insertions} removed={handoff.deletions} className="text-[11px] font-medium" />
     </span>
   )
 }
@@ -67,7 +65,8 @@ export function HandoffSummary({ handoff, subagent = false }: { handoff: AgentHa
  * What is left once a session has ended: its work is on this machine only, since an agent pushes
  * and opens its pull request only when its task or the person asks, and this is how a person
  * publishes it. Both put the agent's work on a shared remote under the user's name, so it is a
- * deliberate click, and "not published" beside the button says nothing left yet. They sit in the
+ * deliberate click, and the button's own word — Publish branch, Open PR — says it has not
+ * happened yet. They sit in the
  * bar rather than behind the disclosure, because the point of the handoff is to be offered without
  * being looked for. Once a PR exists neither shows — the bar links the PR, and the interventions
  * queue (#632) has picked it up by then. What shows is what the PR still needs: the commit of work
@@ -147,6 +146,7 @@ export function HandoffActions({
         <Uncommitted paths={paths} committed={!handoff.empty} />
         <Button
           size="xs"
+          variant="ghost"
           disabled={busy}
           onClick={() => {
             onAsked?.(COMMIT_MESSAGE)
@@ -164,7 +164,6 @@ export function HandoffActions({
             act('commit', ask, 'Could not ask the agent to commit.')
           }}
         >
-          <GitCommitHorizontal className="h-3.5 w-3.5" />
           {pending === 'commit' ? 'Asking…' : 'Commit'}
         </Button>
       </>
@@ -187,8 +186,7 @@ export function HandoffActions({
       return (
         <>
           <Reason>not in the PR yet</Reason>
-          <Button size="xs" disabled={busy} onClick={push}>
-            <Upload className="h-3.5 w-3.5" />
+          <Button size="xs" variant="ghost" disabled={busy} onClick={push}>
             {pending === 'push' ? 'Updating PR…' : 'Update PR'}
           </Button>
         </>
@@ -197,10 +195,10 @@ export function HandoffActions({
     return (
       <Button
         size="xs"
+        variant="ghost"
         disabled={busy}
         onClick={() => act('merge', () => sendMerge(projectId, agentId), 'Could not merge the pull request.')}
       >
-        <GitMerge className="h-3.5 w-3.5" />
         {pending === 'merge' ? 'Merging…' : 'Merge PR'}
       </Button>
     )
@@ -226,10 +224,10 @@ export function HandoffActions({
         <Reason>Not in {mainBranchName(handoff.base)} yet.</Reason>
         <Button
           size="xs"
+          variant="ghost"
           disabled={busy}
           onClick={() => act('merge-branch', () => sendMergeBranch(projectId, agentId), 'Could not merge the branch.')}
         >
-          <GitMerge className="h-3.5 w-3.5" />
           {pending === 'merge-branch' ? 'Merging…' : 'Merge'}
         </Button>
       </>
@@ -241,9 +239,7 @@ export function HandoffActions({
     if (handoff.pushed) return <Reason>Pushed — no git host package to open a pull request with.</Reason>
     return (
       <>
-        <NotPublished />
-        <Button size="xs" disabled={busy} onClick={push}>
-          <Upload className="h-3.5 w-3.5" />
+        <Button size="xs" variant="ghost" disabled={busy} onClick={push}>
           {pending === 'push' ? 'Publishing…' : 'Publish branch'}
         </Button>
       </>
@@ -255,15 +251,14 @@ export function HandoffActions({
   const openPr = (draft: boolean) => act('pr', () => sendOpenPullRequest(projectId, agentId, { draft }), 'Could not open the pull request.')
   return (
     <>
-      {!handoff.pushed && <NotPublished />}
       <span className="inline-flex">
         <Button
           size="xs"
-          className="rounded-r-none"
+          variant="ghost"
+          className="rounded-r-none pr-1.5"
           disabled={busy}
           onClick={() => openPr(false)}
         >
-          <GitPullRequest className="h-3.5 w-3.5" />
           {pending === 'pr' ? 'Opening PR…' : pending === 'push' ? 'Publishing…' : 'Open PR'}
         </Button>
         <DropdownMenu>
@@ -272,8 +267,8 @@ export function HandoffActions({
               aria-label="Other choices"
               disabled={busy}
               className={cn(
-                buttonVariants({ size: 'xs' }),
-                'rounded-l-none border-l border-[var(--color-primary-foreground)]/30 px-1 data-[popup-open]:bg-[var(--color-primary)] data-[popup-open]:text-[var(--color-primary-foreground)] data-[popup-open]:opacity-90',
+                buttonVariants({ size: 'xs', variant: 'ghost' }),
+                'rounded-l-none px-1 text-muted-foreground data-[popup-open]:bg-[var(--color-accent)] data-[popup-open]:text-[var(--color-accent-foreground)]',
               )}
             >
               <ChevronDown className="h-3.5 w-3.5" />
@@ -294,15 +289,6 @@ export function HandoffActions({
       </span>
     </>
   )
-}
-
-/**
- * The work is on this machine only. A run publishes nothing by itself, so this is the usual answer
- * of a finished run, and it must not read as silence: said beside the button that publishes, at
- * the end of the bar, where it is in view at every width.
- */
-function NotPublished() {
-  return <Reason>not published</Reason>
 }
 
 /**
