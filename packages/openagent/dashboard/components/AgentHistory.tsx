@@ -252,7 +252,7 @@ export function AgentHistory({
   return (
     // A fixed-width, in-flow column (`collapsible="none"`): with the top navbar gone (#772
     // follow-up), the sidebar carries the app's chrome — brand, global nav, and the utility
-    // controls in the footer — so the workspace and right rail get the full height. A phone has no
+    // controls in the footer — so the workspace and the panes get the full height. A phone has no
     // width for a column: there it is a sheet over the page, closed until asked for.
     <Sidebar collapsible={isMobile ? 'offcanvas' : 'none'} className="w-(--sidebar-width) border-r border-sidebar-border">
       {/* The brand and the project select, set apart from everything below by a rule (#1513): the

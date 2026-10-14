@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 
 // Below this the screen is a phone's: the sidebar is a sheet over the page (shadcn's default), and
-// the side panel covers the page. Word for word the question Tailwind's `max-md` asks, so the
+// the panes lie over the page. Word for word the question Tailwind's `max-md` asks, so the
 // classes and this never disagree: a rem here follows the browser's own font size, as it does there.
 const PHONE = '(width < 48rem)'
 

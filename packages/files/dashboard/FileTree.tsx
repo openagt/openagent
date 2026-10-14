@@ -59,7 +59,7 @@ function Row({ icon: Icon, gitStatus, mark, className, children }: {
 
 /**
  * A folder row. Its contents are built only while it is open: a closed folder costs one row however
- * much lies under it, so the tab opens as fast on a large repository as on a small one, and a
+ * much lies under it, so the pane opens as fast on a large repository as on a small one, and a
  * re-render of the page does not walk every file of the repository.
  */
 function Folder({ name, gitStatus, children }: {
@@ -103,13 +103,13 @@ function sourceCaption(tree: AgentTree): string | undefined {
   return undefined
 }
 
-// The side rail's Files tab (#492): a lazy, collapsible tree built from the flat `git ls-files`
+// The Files pane (#492): a lazy, collapsible tree built from the flat `git ls-files`
 // list, the project's own (the `project` read) on its page. A run's tree is its own read (the
 // `tree` read): its checkout, then its branch, then its merge commit, so a finished run keeps
 // showing what it changed; a run that changed nothing shows the project's files with nothing
 // marked, and a run whose changes none of those still holds says so in one line. The marks say
 // what is not merged yet: once a run's work is merged its tree is plain, a caption says so, and
-// what it changed is the Changes tab's to list (`ChangesPanel.tsx`). It is a viewer,
+// what it changed is the Changes pane's to list (`ChangesPanel.tsx`). It is a viewer,
 // not an editor: hovering a file previews it. With no files, it says so in one line.
 //
 // Folders are native `<details>`: open/closed state, keyboard operation and the disclosure

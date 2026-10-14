@@ -12,16 +12,16 @@ already made, and lists it in its pull request; for anything else it proposes an
   `type`, …), which work with any coding agent and outside any scheduler. Picked over the
   scheduler starting a Chrome beside every run and plugging its browser tools into the
   agent, which works with one coding agent and only under the scheduler.
-- A person watching a run sees the browser live in a Browser tab beside the run's chat: the
+- A person watching a run sees the browser live in a Browser pane beside the run's chat: the
   browser's toolbar over the live picture, and can click and type in it. The chat keeps one
-  line where the agent opened it, which opens the tab. Picked over the browser as a message
-  in the chat where the agent opened it, and over a frame above the message box: a tab has
+  line where the agent opened it, which opens the pane. Picked over the browser as a message
+  in the chat where the agent opened it, and over a frame above the message box: a pane has
   room for the browser's console under the picture.
 - The page's console is under the picture, behind a thin bar that is closed at first and
   says how many errors the page has; a click opens it. The agent reads the same lines
   with `browser console`. Picked over a console that is always open, which takes the room
   of the picture, most of all on a phone.
-- The picture is streamed from the computer the agent runs on, so the tab shows the same
+- The picture is streamed from the computer the agent runs on, so the pane shows the same
   on that computer, on a phone and on another computer.
 - A run that stops to ask a question keeps its browser, and its live screen, for the
   answer. Picked over closing the browser at every end of a run.

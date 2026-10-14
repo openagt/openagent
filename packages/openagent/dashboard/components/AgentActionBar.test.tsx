@@ -92,10 +92,11 @@ describe('AgentActionBar', () => {
     expect(container.textContent).not.toContain('5 MB')
   })
 
-  test('the bar keeps its end free for the side panel\'s button, and on a phone its start for the menu\'s', () => {
+  test('on a phone the bar keeps its start free for the menu\'s button; its end is its own, for the panes\' icons', () => {
     const { container } = render(<AgentActionBar projectId="p1" agentId="run-1" events={AGENTS.finished!} label="Dark mode" checkout={DIRTY} />)
     const row = container.firstElementChild!.className.split(' ')
-    for (const cls of ['pr-12', 'md:pl-4', 'max-md:pl-11']) expect(row).toContain(cls)
+    for (const cls of ['pr-2', 'md:pl-4', 'max-md:pl-11']) expect(row).toContain(cls)
+    expect(row).not.toContain('pr-12')
     // With nothing at its end the row is as tall as the "New agent" page's, which has its ⋮ there.
     expect(row).toContain('min-h-11')
     // The menu is the agent's own: it is handed the agent.

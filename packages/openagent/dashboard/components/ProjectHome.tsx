@@ -14,8 +14,8 @@ import { ScrollArea } from './ui/scroll-area.js'
 //
 // It is laid out as an agent's page is. The agents that wait for an answer are rows at the top, in
 // the chat's column (#1455 item 4), and the box to start an agent is at the bottom, where an agent's
-// message box is. The project's Docs are not here: they are the side panel's "Docs" tab
-// (RightRail), on this page as on an agent's.
+// message box is. The project's Docs are not here: they are the Docs pane (Panes), on this page
+// as on an agent's.
 export function ProjectHome({
   projectId,
   projectName,

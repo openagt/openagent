@@ -22,7 +22,7 @@ import { SubagentsBar } from './SubagentLine.js'
 import { holdsMainAgent } from '../lib/subagents.js'
 import { agentLogKey } from '../lib/agent-log.js'
 import { revealChange, revealScreen } from '../lib/reveal-change.js'
-import { sidePanelName } from '../lib/side-panel.js'
+import { panesPage } from '../lib/panes.js'
 import { modelName, useModels } from '../lib/models.js'
 import { thisMachineName } from '../lib/this-machine.js'
 import { driverFromImpl } from '../../src/client.js'
@@ -103,9 +103,6 @@ export function AgentView({
   subagents?: readonly AgentMeta[]
   /** Open another run of this project: what a subagent's row does on a click. */
   onOpenAgent?: ((agentId: string) => void) | undefined
-  /** The loop's verdict, handed up so the right rail can pin it under its tabs. It is reported from
-   *  here rather than read in the shell because a finished agent's log is archived, and this view is
-   *  the one that reads it back. */
 }) {
   // The archived log, read only once the agent has ended: while it runs, the channel is the truth.
   // `archiveBehind` re-reads it whenever the live channel has outgrown the copy on screen (#1460):
@@ -169,13 +166,13 @@ export function AgentView({
   const [open, setOpen] = useState(false)
   // What the installed modules add to this run's page: a summary in the bar above the message box.
   const { runSlots: mountedSlots, panels: mountedPanels } = useMountedModules()
-  // A changed file's row in the chat opens the side panel on the tab that lists changes, when a
-  // module of this project has one.
+  // A changed file's row in the chat opens the pane that lists changes, when a module of this
+  // project has one.
   const listsChanges = mountedPanels.some(panel => panel.changes && panel.projects.includes(projectId))
-  const onOpenChange = useMemo(() => (listsChanges ? (path: string) => revealChange(sidePanelName(projectId, agentId), path) : undefined), [listsChanges, projectId, agentId])
-  // A live screen's row in the chat opens the side panel on the tab that shows it, the same way.
+  const onOpenChange = useMemo(() => (listsChanges ? (path: string) => revealChange(panesPage(projectId, agentId), path) : undefined), [listsChanges, projectId, agentId])
+  // A live screen's row in the chat opens the pane that shows it, the same way.
   const showsScreen = mountedPanels.some(panel => panel.screen && panel.projects.includes(projectId))
-  const onOpenScreen = useMemo(() => (showsScreen ? () => revealScreen(sidePanelName(projectId, agentId)) : undefined), [showsScreen, projectId, agentId])
+  const onOpenScreen = useMemo(() => (showsScreen ? () => revealScreen(panesPage(projectId, agentId)) : undefined), [showsScreen, projectId, agentId])
   const runSlots = mountedSlots.filter(slots => slots.projects.includes(projectId))
   const toggle = useCallback(() => setOpen(o => !o), [])
 
@@ -343,7 +340,7 @@ export function AgentView({
             checkout={checkout}
           />
           {/* The always-available session-details strip: agent + spend (#322). What the run changed is
-              in the side panel's Changes tab, not here. */}
+              in the Changes pane, not here. */}
           {open && <AgentDetails events={shown} card={card} />}
           {/* A GitHub Actions run replays in a burst at the end (#1053), so the live feed looks stalled:
               say the wait is expected and link through to the live Actions run. */}

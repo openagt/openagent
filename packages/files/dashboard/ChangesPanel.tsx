@@ -6,10 +6,10 @@ import { commitKey, commitsKey, projectKey, treeKey } from './keys.js'
 import { readCommit, readCommits, readProject, readTree } from './reads.js'
 import { FilePreviewCard } from './FilePreview.js'
 
-// The side panel's Changes tab, as Claude Code on the web draws it: the files that changed in a
+// The Changes pane, as Claude Code on the web draws it: the files that changed in a
 // list on the left, and on the right the diff of the one picked, the first file picked by itself.
 // On a run's page, what that run changed, read from the same place its Files tree is (the `tree`
-// read), and kept once its work is merged: the Files tab's marks say what is not merged yet and go
+// read), and kept once its work is merged: the Files pane's marks say what is not merged yet and go
 // with the merge, this list says what the run did and stays. On the project's own page, the files
 // changed in the project's folder and not committed (the `project` read).
 //
@@ -70,7 +70,7 @@ function Line({ children }: { children: string }) {
   return <p className="p-3 text-xs text-muted-foreground">{children}</p>
 }
 
-/** The last ask from the chat that was taken: a tab opened again later does not take it a second time. */
+/** The last ask from the chat that was taken: a pane opened again later does not take it a second time. */
 let revealTaken = 0
 
 export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePanelProps) {

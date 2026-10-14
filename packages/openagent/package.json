@@ -87,6 +87,7 @@
     "lucide-react": "^0.469.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-resizable-panels": "^4.14.2",
     "tailwind-merge": "^2.6.0",
     "tiptap-markdown": "^0.8.10",
     "uqr": "0.1.3",

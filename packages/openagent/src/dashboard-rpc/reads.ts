@@ -332,7 +332,7 @@ export async function onDashboard(): Promise<DashboardData> {
  * file git sees (tracked + untracked, honoring .gitignore), repo-relative and sorted, via
  * `git ls-files`. Localhost-only by nature — the relay has no checkout, so it resolves `[]`.
  * Pass a live `agentId` to list that agent's worktree instead of the project root (#738). The
- * Files tab reads its own list, through its module.
+ * Files pane reads its own list, through its module.
  */
 export async function onProjectFiles(projectId: string, agentId?: string): Promise<string[]> {
   return relayOr(agentId, 'onProjectFiles', [projectId, agentId], () => withAgentPath(projectId, agentId, crawlRepoFiles, []), [])

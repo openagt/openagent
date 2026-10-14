@@ -7,7 +7,7 @@ import { readFileStatuses, type FileGitStatus } from './status.js'
 import { readFileDiff, type FileDiff } from './diff.js'
 import { cutToPreview, readFileContent, safeRepoPath, type FileContent } from './read.js'
 
-// A run's files, for the agent page's Files tab, for as long as git still has them. The run's
+// A run's files, for the agent page's Files pane, for as long as git still has them. The run's
 // checkout while it exists; once it is reclaimed, the run's branch, local or on origin; once the
 // branch is gone too, the commit its pull request merged as, or, for a run its main agent landed,
 // the last commit its record kept. A run's record says the commit its own work begins at. A run
@@ -17,10 +17,10 @@ import { cutToPreview, readFileContent, safeRepoPath, type FileContent } from '.
 // nothing would be left of it.
 // A run that ended `done`, `failed`
 // or `stopped` on this machine and left no checkout, no branch and no pull request changed nothing:
-// its branch went with its checkout because the remote already had everything on it, so the tab
+// its branch went with its checkout because the remote already had everything on it, so the pane
 // shows the project as it is, nothing marked. Any other run is never judged so: one from another
 // machine may simply not have its branch here. Every source is read through git by ref in the
-// project's own repository, never copied, and never fetched: the tab polls, and a fetch on a poll
+// project's own repository, never copied, and never fetched: the pane polls, and a fetch on a poll
 // is a network call. A run none of them is left for is gone, and says so.
 
 /**
@@ -50,8 +50,8 @@ export interface FileMark {
 
 /**
  * What the module shows for a run: the tree at its last state and the paths it changed. `merged`
- * says the run changed something and all of it is merged, nothing left uncommitted: the Files tab
- * then marks nothing, since its marks say what is not merged yet, and the Changes tab still lists
+ * says the run changed something and all of it is merged, nothing left uncommitted: the Files pane
+ * then marks nothing, since its marks say what is not merged yet, and the Changes pane still lists
  * the changes. The tree of merged work holds no deleted path.
  */
 export type AgentTree =
@@ -212,7 +212,7 @@ async function treeAt(git: GitRunner, cwd: string, ref: string): Promise<string[
   return out.split('\0').filter(Boolean)
 }
 
-/** The tree plus the paths a change deleted, which the tree no longer holds but the tab still shows. */
+/** The tree plus the paths a change deleted, which the tree no longer holds but the pane still shows. */
 function withDeleted(files: string[], changes: Record<string, FileMark>): string[] {
   const all = new Set(files)
   for (const [path, mark] of Object.entries(changes)) if (mark.status === 'deleted') all.add(path)
@@ -220,7 +220,7 @@ function withDeleted(files: string[], changes: Record<string, FileMark>): string
 }
 
 /**
- * The Files tab's answer for a resolved source. A checkout lists every file git sees in it and
+ * The Files pane's answer for a resolved source. A checkout lists every file git sees in it and
  * marks both what the run committed since it forked and what is on disk uncommitted, the
  * uncommitted mark winning a path marked both: it is what the file is now. A branch, a merge or a
  * landed commit lists the commit's tree and marks what it changed, all committed. A run that changed nothing

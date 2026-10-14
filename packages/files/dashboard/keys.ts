@@ -1,6 +1,6 @@
-// The keys the reads are remembered under (`usePolled`'s `remember`): the two tabs read the same
-// project and the same run, so a tab opened after the other, or opened again, shows what was read
-// last at once, while it is read again. Without them every switch of tab passed through
+// The keys the reads are remembered under (`usePolled`'s `remember`): the two panes read the same
+// project and the same run, so a pane opened after the other, or opened again, shows what was read
+// last at once, while it is read again. Without them every opening of a pane passed through
 // "Looking for this run’s changes…".
 
 /** The project's own files. */

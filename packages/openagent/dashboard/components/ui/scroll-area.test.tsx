@@ -18,12 +18,6 @@ describe('ScrollArea', () => {
     expect(viewport?.contains(screen.getByText('a session row'))).toBe(true)
   })
 
-  test('hands the viewport out by ref, for a rail that scrolls itself', () => {
-    let viewport: HTMLDivElement | null = null
-    render(<ScrollArea viewportRef={el => void (viewport = el)}>content</ScrollArea>)
-    expect(viewport).toBe(document.querySelector('[data-slot="scroll-area-viewport"]'))
-  })
-
   test('the thumb is drawn from our tokens, not the OS scrollbar', () => {
     // A scrollbar reads its root's context, so it is rendered inside one rather than bare.
     render(<ScrollArea>content</ScrollArea>)

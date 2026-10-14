@@ -64,7 +64,7 @@ export function StartAgentForm({
   onAgentStarted?: ((intent: string, agentId: string, runsOn?: string) => void) | undefined
   /** The project's files for the `#` picker (#504), owned by the shell. */
   files: string[]
-  /** The Context set, shared with the right rail's file tree (#492), owned by the shell. */
+  /** The Context set, shared with the Files pane's tree (#492), owned by the shell. */
   context: Set<string>
   /** Add a path to the Context (from an `@`/`#` mention). */
   addContext: (path: string) => void

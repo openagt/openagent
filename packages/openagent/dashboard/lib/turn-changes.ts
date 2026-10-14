@@ -2,11 +2,11 @@ import type { OpenAgentEvent } from '../../src/index.js'
 
 // The files an agent's edits changed, turn by turn, off the log: each edit's own account of what
 // it did to its file (the `changed` of a tool call's output), summed for each file of a turn.
-// A file changed by a shell command is no edit and is not here: the Changes tab lists it.
+// A file changed by a shell command is no edit and is not here: the Changes pane lists it.
 
 /** One file a turn's edits changed. */
 export interface ChangedFile {
-  /** The file's path in the agent's checkout, as the Changes tab names it. */
+  /** The file's path in the agent's checkout, as the Changes pane names it. */
   path: string
   /** The path's last part: what the row reads. */
   name: string

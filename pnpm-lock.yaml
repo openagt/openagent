@@ -432,6 +432,9 @@ importers:
       react-dom:
         specifier: ^19.2.0
         version: 19.2.7(react@19.2.7)
+      react-resizable-panels:
+        specifier: ^4.14.2
+        version: 4.14.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       tailwind-merge:
         specifier: ^2.6.0
         version: 2.6.1
@@ -2397,6 +2400,12 @@ packages:
   react-is@17.0.2:
     resolution: {integrity: sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==}
 
+  react-resizable-panels@4.14.2:
+    resolution: {integrity: sha512-s35mfXhwpPEPnB+BKPCZJ9VZU0CHb1I9trm9tijEGBNv1Srl0HzIweENeXnsQvd0Xm9BeOBkEzDGVJOZM2mkEQ==}
+    peerDependencies:
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
+
   react-streaming@0.4.20:
     resolution: {integrity: sha512-jUZqdDVrXcKCNR1PGclIK9Ggeb1+8jP6WRWDSYbu8OsOCHiu/F+PGtVx+0thIoSzOdKxaNMSowk0bNlLsPv2jw==}
     peerDependencies:
@@ -4059,6 +4068,11 @@ snapshots:
       scheduler: 0.27.0
 
   react-is@17.0.2: {}
+
+  react-resizable-panels@4.14.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+    dependencies:
+      react: 19.2.7
+      react-dom: 19.2.7(react@19.2.7)
 
   react-streaming@0.4.20(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
     dependencies:

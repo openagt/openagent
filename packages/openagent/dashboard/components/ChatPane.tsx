@@ -13,7 +13,7 @@ import { useLayoutEffect, useRef, type ReactNode } from 'react'
 // scroll bar that lies over the content takes none.
 //
 // The chat's room is a layer of its own (`isolate`): what the dashboard opens over the page (a
-// file's preview, from the side panel) stays over the message box's bar. And what lies over the
+// file's preview, from the Files pane) stays over the message box's bar. And what lies over the
 // chat is cut at the room's edges: over a bar as tall as the room (a tall question on a short
 // window), the bar's fade stays off the top bar.
 export function ChatPane({ top, bottom, children }: { top: ReactNode; bottom: ReactNode; children?: ReactNode }) {

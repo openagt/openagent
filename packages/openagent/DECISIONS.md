@@ -75,12 +75,20 @@ already made, and lists it in its pull request; for anything else it proposes an
   channel is a skill's, fired by the tool that runs the agent when a run ends. Picked over
   the dashboard's Discord watchers, which posted only while the dashboard was running.
 - The dashboard grows by modules: a package that adds to the dashboard (pages, Overview
-  cards, link actions, side-rail tabs, a run's summary, Settings sections) is a module;
+  cards, link actions, panes beside the chat, a run's summary, Settings sections) is a module;
   a skill that brings pages is a module that is also a skill. A module is one OpenAgent
   brings itself, or a package among a project's dependencies, whoever wrote it. The
-  Files tab is the first module that is no skill. Picked over keeping Files a folder
+  Files pane is the first module that is no skill. Picked over keeping Files a folder
   inside OpenAgent, which gave it a boundary but taught the module contract nothing, and
   named module over widget.
+- What a module shows beside the chat is a pane, as on Claude Code on the web. Each pane
+  has an icon at the end of the page's top bar, which opens and closes it. The open panes
+  are cards in one column, in the order they were opened, the agent's browser among them.
+  The line between the chat and the column, and the line between two panes, is dragged.
+  Each agent's page keeps its own sizes, and a page never sized starts with the last sizes
+  set on any. On a phone the column lies over the chat. Picked over one side panel with a
+  tab per module, which showed one of them at a time; over the browser in a column of its
+  own; and over one size for every page.
 - The packages every project wants are built in: OpenAgent depends on them and uses them
   for every project through the same contract as any package (a module by its
   `./dashboard` export, a provider of a kind of data and the writer of its hook lines by
@@ -153,7 +161,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   over a line in each project's hooks file, which is a project's and shared with its team,
   where a service is one computer's; and over running it inside OpenAgent's own process,
   where a fault in it is a fault in OpenAgent.
-- The chat shows a `screen` line as one line, which opens the tab its package brings, and
+- The chat shows a `screen` line as one line, which opens the pane its package brings, and
   knows nothing of what the screen is. What the screen shows is streamed from the computer
   the run is on, through OpenAgent, as pictures: to this computer, to a phone, to another
   computer. Picked over framing the page that computer serves, which showed on that
@@ -261,7 +269,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   the run ends for good. Picked over a run's end closing it, which left a waiting run's
   question on screen as text nobody could answer.
 - A run that finished `done` on this machine and left no checkout, branch or pull request
-  changed nothing, and its Files tab shows the project's files with nothing marked. Picked
+  changed nothing, and its Files pane shows the project's files with nothing marked. Picked
   over saying its changes are gone, which read as lost work. No other run is judged so.
 
 ## Sweeping origin's scratch refs

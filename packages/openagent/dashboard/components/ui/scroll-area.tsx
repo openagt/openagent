@@ -1,4 +1,4 @@
-import type { ComponentProps, Ref } from 'react'
+import type { ComponentProps } from 'react'
 import { ScrollArea as ScrollAreaPrimitive } from '@base-ui-components/react/scroll-area'
 import { cn } from '../../lib/utils.js'
 
@@ -21,12 +21,9 @@ import { cn } from '../../lib/utils.js'
 export function ScrollArea({
   className,
   children,
-  viewportRef,
   viewportClassName,
   ...props
 }: ScrollAreaPrimitive.Root.Props & {
-  /** The scrolled element, for a rail that scrolls itself (ViewsRail). */
-  viewportRef?: Ref<HTMLDivElement>
   /** Extra classes on the viewport — where the height cap belongs when the Root has no definite
    *  height. A `max-h-*` on the Root only caps the box; the viewport's `h-full` cannot resolve
    *  against a parent's max-height, so the content grows instead of scrolling. Put the cap here. */
@@ -35,7 +32,6 @@ export function ScrollArea({
   return (
     <ScrollAreaPrimitive.Root data-slot="scroll-area" className={cn('relative', className)} {...props}>
       <ScrollAreaPrimitive.Viewport
-        ref={viewportRef}
         data-slot="scroll-area-viewport"
         className={cn(
           // No focus ring on the viewport: a scroll region is not a control, and the ring painted a

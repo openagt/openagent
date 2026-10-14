@@ -110,7 +110,7 @@ describe('ChangesPanel', () => {
 })
 
 describe('ChangesPanel remembered', () => {
-  test('opened again for the same run, the tab shows what was read last at once, with no "Looking…" line, and reads again', async () => {
+  test('opened again for the same run, the pane shows what was read last at once, with no "Looking…" line, and reads again', async () => {
     const first = render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
     await waitFor(() => expect(screen.getByText('What this run changed. Not merged yet.')).toBeTruthy())
     first.unmount()
@@ -249,7 +249,7 @@ describe('ChangesPanel, a file asked for from the chat', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /app\.ts/ }).getAttribute('aria-pressed')).toBe('true'))
   })
 
-  test('an ask already taken is not taken again by a tab opened later', async () => {
+  test('an ask already taken is not taken again by a pane opened later', async () => {
     const taken = ask('src/app.ts')
     const first = render(<ChangesPanel projectId="p1" agentId="run-1" context={context} reveal={taken} />)
     await waitFor(() => expect(screen.getByRole('button', { name: /app\.ts/ }).getAttribute('aria-pressed')).toBe('true'))

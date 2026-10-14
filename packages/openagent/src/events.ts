@@ -113,13 +113,6 @@ export type OpenAgentEvent = { at?: string } & (
    */
   | { kind: 'error'; headline: string; detail?: string }
   /**
-   * An ad-hoc markdown view the agent pushed to show the user (#441), e.g. a plan,
-   * a summary, or a diff writeup. Non-blocking (unlike a `choice`): the dashboard
-   * renders it as a view in the right rail. `id` is stable per title, so re-showing
-   * the same view updates it in place rather than stacking a duplicate.
-   */
-  | { kind: 'view'; id: string; title: string; markdown: string }
-  /**
    * The pull request this session's work is on (E6), the moment one is opened for it.
    *
    * An event for the same reason `branch` is: only an event reaches the agent's meta,
