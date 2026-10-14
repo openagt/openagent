@@ -72,8 +72,7 @@ function rowGroup(e: OpenAgentEvent): string {
   return e.kind
 }
 
-// A driver `start` opens a fresh prompt turn — the natural anchor the scroller keeps in view.
-// Only the newest one is handed to the scroller as its anchor (see `anchor` in EventList).
+// A driver `start` opens a fresh prompt turn.
 function isTurnBoundary(e: OpenAgentEvent): boolean {
   return e.kind === 'driver' && e.event.type === 'start'
 }
@@ -273,11 +272,12 @@ function Answer({ question, answer }: { question: string; answer: string }) {
 // `queued`: a message the working agent has not read yet. Dimmed, with the word under it where a
 // read message's time shows on hover.
 // `attached`: what the run handed the agent with this message, folded under the box.
-function Prompt({ text, at, queued = false, attached }: { text: string; at?: string | undefined; queued?: boolean; attached?: string | undefined }) {
+// `fresh`: a message just sent, which slides in where it lands, as Claude Code on the web's does.
+function Prompt({ text, at, queued = false, attached, fresh = false }: { text: string; at?: string | undefined; queued?: boolean; attached?: string | undefined; fresh?: boolean }) {
   const [open, setOpen] = useState(false)
   const tall = isTall(text)
   return (
-    <div className="group/prompt flex min-w-0 flex-1 flex-col items-end font-sans text-foreground">
+    <div className={`group/prompt flex min-w-0 flex-1 flex-col items-end font-sans text-foreground ${fresh ? 'bubble-in' : ''}`}>
       <div role="group" aria-label={queued ? 'Your message, queued' : 'Your message'} className={`max-w-[85%] min-w-0 rounded-xl bg-muted px-3.5 py-2 ${queued ? 'opacity-60' : ''}`}>
         <div className={tall && !open ? 'max-h-40 overflow-hidden' : ''}>
           <Markdown text={text} />
@@ -439,9 +439,8 @@ function shownAsRow(e: OpenAgentEvent): boolean {
 // question opened over it, the agent's work came in), or the view itself got shorter (the top
 // bar's details opened, a notice came under it). A log that was at its end stays at it. The
 // scroller does this itself only for a log that follows its end, and a frame late. A log left at
-// its end, an ended agent's, it leaves where it was, its last rows under the bar. A prompt the
-// scroller holds at the top is left to it: its spacer is then shown. Done as the room at the
-// list's end or the view changes its size, before the frame is drawn.
+// its end, an ended agent's, it leaves where it was, its last rows under the bar. Done as the room
+// at the list's end or the view changes its size, before the frame is drawn.
 function useEndKept(viewport: RefObject<HTMLDivElement | null>, endRoom: RefObject<HTMLDivElement | null>): void {
   useLayoutEffect(() => {
     const view = viewport.current
@@ -454,7 +453,7 @@ function useEndKept(viewport: RefObject<HTMLDivElement | null>, endRoom: RefObje
       const lost = was - left()
       was -= lost
       // A bar that got shorter, a view that got taller: nothing to keep.
-      if (lost <= 0 || view.querySelector('[data-message-scroller-spacer]:not([hidden])')) return
+      if (lost <= 0) return
       if (view.scrollHeight - view.scrollTop - view.clientHeight - lost <= AT_END) view.scrollTop = view.scrollHeight
     })
     observer.observe(room)
@@ -546,6 +545,8 @@ export function EventList({
   const { rows: shown, steps, current } = foldSteps(unfolded, working && !written)
   // Nothing has come since the prompt, not even a thought that is no row: the agent is starting.
   const starting = unfolded.length > 0 && isTurnBoundary(unfolded[unfolded.length - 1]!)
+  // When the turn going on began: the live line counts from there, whatever step it names.
+  const turnStart = [...unfolded].reverse().find(isTurnBoundary)?.at ?? unfolded[unfolded.length - 1]?.at
   // The prompts that told this run one of its subagents ended: SUBAGENT rows, not the reader's own.
   const ends = new Map<OpenAgentEvent, SubagentEnd>()
   for (const e of shown) {
@@ -556,27 +557,6 @@ export function EventList({
   // stops being shown (an end the run went on after) then changes no other row's identity, and
   // the scroller keeps its place. A message just sent has no place yet.
   const idOf = (e: OpenAgentEvent): string => rowIds.get(e) ?? 'sending'
-  // The scroller's anchor is the newest prompt alone. It brings an anchor it has not yet brought
-  // into view to the top whenever one row takes another's place, and it starts with the oldest:
-  // with every prompt an anchor, a log opened with several turns in it jumped to its first prompt
-  // the moment the agent went on (the message being written giving way to the whole message, an
-  // end giving way to the next prompt).
-  const anchor = [...shown].reverse().find(isTurnBoundary)
-  // An end that is no longer a row keeps an empty place in the list, where it was. The scroller
-  // brings a new prompt to the top only when it finds it past the rows it already had: with the
-  // end gone from the list, the prompt that follows it would sit at the end's old place, unseen.
-  const passedAbove = new Map<OpenAgentEvent, OpenAgentEvent[]>()
-  const passedLast: OpenAgentEvent[] = []
-  for (let at = 0, waiting: OpenAgentEvent[] = []; at <= kept.length; at++) {
-    const e = kept[at]
-    if (e === undefined) passedLast.push(...waiting)
-    else if (passed.has(e)) waiting.push(e)
-    else if (waiting.length > 0) {
-      passedAbove.set(e, waiting)
-      waiting = []
-    }
-  }
-  const placeOf = (e: OpenAgentEvent): ReactNode => <MessageScrollerItem key={`passed-${idOf(e)}`} messageId={idOf(e)} hidden />
   const groupOf = (e: OpenAgentEvent): string => (ends.has(e) ? SUBAGENT : rowGroup(e))
   const started = startedBefore(shown, subagents)
   const startedRows = (at: number): ReactNode =>
@@ -600,20 +580,25 @@ export function EventList({
   // What the run adds after each message is the same for all of them: read off the first.
   const firstPrompt = events.find(isTurnBoundary)
   const added = firstPrompt?.kind === 'driver' && firstPrompt.event.type === 'start' ? firstPrompt.event.added : undefined
-  const setupRow = setup !== undefined && (
+  const setupLine = setup !== undefined && <SessionLine setup={setup} working={working} added={added} {...(settingUp ? { live: { since: turnStart } } : {})} />
+  // Once set up, the line is the first row of the first turn's work, when that turn has some, as
+  // Claude Code on the web opens its first "Ran 2 commands" with "Initialized session".
+  const setupInSteps = setupLine !== false && !settingUp && setupAt >= 0 && shown[setupAt] !== undefined && steps.has(shown[setupAt]!)
+  const setupRow = setupLine && !setupInSteps && (
     <MessageScrollerItem key="setup" messageId="setup" className="-mx-1.5 flex items-start gap-2 rounded-sm px-1.5 empty:hidden">
-      <SessionLine setup={setup} working={working} added={added} {...(settingUp ? { live: { since: unfolded[unfolded.length - 1]?.at } } : {})} />
+      {setupLine}
     </MessageScrollerItem>
   )
   // The page's message box lies over the log's end (ChatPane says how much of it, `--chat-bottom`;
   // with no bar there is none): the rows end above it.
   //
   // That room is an element and no padding: the scroller acts on its content growing (it stays at
-  // the end, it keeps a prompt at the top), and padding is no part of that. That element is the
-  // list's first and is drawn last, the scroller's own spacer after it: the scroller looks for a
-  // new prompt among the elements added after those it had, so one that stayed last would hide
-  // every new row from it. (With it first, the scroller no longer sees a row come in above the
-  // others. None does here but a first prompt, which it goes to.)
+  // the end), and padding is no part of that. It is the list's first element and is drawn last.
+  //
+  // No row is the scroller's anchor: a message sent lands under the last answer, where it is
+  // written, as Claude Code on the web shows it, and the log follows its end. An anchor brought
+  // each new prompt to the top of the view, a jump of the whole page, and the room the scroller
+  // kept under it was measured a frame late, so the chat shook as the answer grew.
   //
   // The viewport's scroll padding is for the browser: a page down moves by what is seen, and a row
   // brought into view lands clear of the bar.
@@ -642,7 +627,6 @@ export function EventList({
               const answer = own && message !== null ? answeredQuestion(message) : undefined
               return (
                 <Fragment key={idOf(e)}>
-                {passedAbove.get(e)?.map(placeOf)}
                 {changes.ended.has(e) && (
                   <MessageScrollerItem messageId={`changes-${idOf(e)}`} className="-mx-1.5 flex items-start gap-2 rounded-sm px-1.5">
                     <ChangedFiles files={changes.ended.get(e)!} onOpen={onOpenChange} />
@@ -659,11 +643,11 @@ export function EventList({
                 {startedRows(i)}
                 {/* Every row carries the same -mx/px pair so a washed row's band and a plain row's
                     text share the exact same columns; only the background differs. */}
-                <MessageScrollerItem messageId={idOf(e)} scrollAnchor={e === anchor} className={`group/row -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${end ? '' : rowWash(e)}`}>
+                <MessageScrollerItem messageId={idOf(e)} className={`group/row -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${end ? '' : rowWash(e)}`}>
                   {answer ? (
                     <Answer {...answer} />
                   ) : own && message !== null ? (
-                    <Prompt text={message} at={at} attached={e.kind === 'driver' && e.event.type === 'start' ? e.event.attached : undefined} />
+                    <Prompt text={message} at={at} attached={e.kind === 'driver' && e.event.type === 'start' ? e.event.attached : undefined} fresh={idOf(e) === 'sending'} />
                   ) : end ? (
                     // A subagent ended: which one and how, then what the run was told about it.
                     <div className="flex min-w-0 flex-1 flex-col">
@@ -674,7 +658,7 @@ export function EventList({
                     // The agent's reply, shown whole.
                     <Reply text={message} />
                   ) : steps.has(e) ? (
-                    <ToolCalls steps={steps.get(e)!} />
+                    <ToolCalls steps={steps.get(e)!} lead={setupInSteps && i === setupAt ? setupLine : undefined} />
                   ) : choiceRow && choiceRow.pick === undefined ? (
                     <Asking choice={choiceRow.choice} />
                   ) : choiceRow?.pick !== undefined ? (
@@ -706,17 +690,11 @@ export function EventList({
                 </Fragment>
               )
             })}
-            {passedLast.map(placeOf)}
             {shown.length === setupAt && setupRow}
             {startedRows(shown.length)}
             {written && (
               <MessageScrollerItem messageId="writing" className="-mx-1.5 flex items-start gap-2 rounded-sm px-1.5">
                 <Reply text={written} />
-              </MessageScrollerItem>
-            )}
-            {working && !written && !settingUp && (
-              <MessageScrollerItem messageId="working" className="-mx-1.5 flex items-center gap-2 rounded-sm px-1.5">
-                <LiveLine call={current} word={starting ? 'Starting…' : 'Working…'} since={unfolded[unfolded.length - 1]?.at} />
               </MessageScrollerItem>
             )}
             {/* The last turn's files, once it has ended: while the agent works the list still grows.
@@ -726,6 +704,13 @@ export function EventList({
                 <ChangedFiles files={changes.last} onOpen={onOpenChange} />
               </MessageScrollerItem>
             )}
+            {/* The live line's place is kept when it has nothing to say (a message being written,
+                the agent's turn over): nothing under it moves up when it goes, nor down when it comes. */}
+            {shown.length > 0 && (
+              <div data-testid="live-line" className="-mx-1.5 flex min-h-5 shrink-0 items-center gap-2 rounded-sm px-1.5">
+                {working && !written && !settingUp && <LiveLine call={current} word={starting ? 'Starting…' : 'Working…'} since={turnStart} />}
+              </div>
+            )}
             {!working && waitingOn > 0 && (
               <MessageScrollerItem messageId="waiting-on" className="-mx-1.5 flex items-center gap-2 rounded-sm px-1.5">
                 <LiveLine word={`Waiting for ${waitingOn} ${waitingOn === 1 ? 'subagent' : 'subagents'}`} />
@@ -733,7 +718,7 @@ export function EventList({
             )}
             {queued.map((text, at) => (
               <MessageScrollerItem key={`queued-${at}`} messageId={`queued-${at}`} className="-mx-1.5 flex items-start gap-2 rounded-sm px-1.5">
-                <Prompt text={text} queued />
+                <Prompt text={text} queued fresh />
               </MessageScrollerItem>
             ))}
             {tail}

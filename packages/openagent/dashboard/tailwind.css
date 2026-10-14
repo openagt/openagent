@@ -124,9 +124,12 @@ body {
   }
 }
 
-/* The chat's last line while the agent works (ToolCalls.tsx): a band of light crossing the grey
-   text, and three dots rising one after the other. Still, and plain grey, for a reader who asked
-   for less motion. */
+/* The chat's last line while the agent works (ToolCalls.tsx), as Claude Code on the web draws
+   its own: a band of light crossing the grey text, and three dots in the accent colour that move
+   from one shape to the next (a row, a slope, a peak, the other slope). Its words, when they change,
+   come in out of a light blur instead of swapping at once. A message just sent slides in where it
+   lands, a little past its place and back. Still, and plain grey, for a reader who asked for less
+   motion. */
 .text-shimmer {
   background: linear-gradient(90deg, var(--muted-foreground) 35%, var(--foreground) 50%, var(--muted-foreground) 65%) 0 0 / 250% 100%;
   -webkit-background-clip: text;
@@ -142,33 +145,81 @@ body {
     background-position: -66% 0;
   }
 }
-.dot-wave {
-  display: inline-flex;
-  gap: 3px;
+.dot-shapes {
+  position: relative;
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  color: var(--primary);
 }
-.dot-wave > span {
+.dot-shapes > span {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 4px;
   height: 4px;
   border-radius: 9999px;
   background: currentColor;
-  animation: dot-wave 1.2s ease-in-out infinite;
+  translate: var(--row);
+  animation: 1.6s ease-in-out infinite;
 }
-.dot-wave > span:nth-child(2) {
-  animation-delay: 0.15s;
+.dot-shapes > span:nth-child(1) {
+  --row: 0 3px;
+  animation-name: dot-shape-1;
 }
-.dot-wave > span:nth-child(3) {
-  animation-delay: 0.3s;
+.dot-shapes > span:nth-child(2) {
+  --row: 5px 3px;
+  animation-name: dot-shape-2;
 }
-@keyframes dot-wave {
-  0%,
-  60%,
-  100% {
-    opacity: 0.35;
-    transform: translateY(0);
+.dot-shapes > span:nth-child(3) {
+  --row: 10px 3px;
+  animation-name: dot-shape-3;
+}
+@keyframes dot-shape-1 {
+  0%, 18%, 100% { translate: 0 3px; }
+  25%, 43% { translate: 0 6px; }
+  50%, 68% { translate: 1px 6px; }
+  75%, 93% { translate: 0 0; }
+}
+@keyframes dot-shape-2 {
+  0%, 18%, 100% { translate: 5px 3px; }
+  25%, 43% { translate: 5px 3px; }
+  50%, 68% { translate: 5px 0; }
+  75%, 93% { translate: 5px 3px; }
+}
+@keyframes dot-shape-3 {
+  0%, 18%, 100% { translate: 10px 3px; }
+  25%, 43% { translate: 10px 0; }
+  50%, 68% { translate: 9px 6px; }
+  75%, 93% { translate: 10px 6px; }
+}
+.morph-in {
+  animation: morph-in 0.18s cubic-bezier(0.2, 0, 0, 1);
+}
+@keyframes morph-in {
+  from {
+    opacity: 0;
+    filter: blur(2px);
+    translate: 0 2px;
   }
-  30% {
-    opacity: 1;
-    transform: translateY(-3px);
+}
+.bubble-in {
+  animation: bubble-in 0.3s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+/* A just-started run's title in the list on the left (AgentHistory.tsx), letter by letter. */
+.letter-in {
+  animation: letter-in 0.3s ease-out both;
+}
+@keyframes letter-in {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+  }
+}
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    translate: 0 8px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -177,7 +228,10 @@ body {
     background: none;
     color: inherit;
   }
-  .dot-wave > span {
+  .dot-shapes > span,
+  .morph-in,
+  .bubble-in,
+  .letter-in {
     animation: none;
   }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { callsSummary, summaryWords, toolCall } from '../lib/tool-calls.js'
 import type { FileEdit } from '../lib/turn-changes.js'
@@ -14,11 +14,15 @@ export interface CallOutput {
   changed?: readonly FileEdit[]
 }
 
-/** A tool call: its name, what it was given on one line (`detail`) and whole (`whole`), what it gave back. */
+/**
+ * A tool call: its name, what it was given on one line (`detail`) and whole (`whole`), the coding
+ * agent's own few words for it (`summary`), what it gave back.
+ */
 export interface Call {
   label: string
   detail?: string
   whole?: string
+  summary?: string
   id?: string
   output?: CallOutput
 }
@@ -37,10 +41,10 @@ export function Seconds({ since }: { since: string }) {
   return <span className="shrink-0 tabular-nums">{seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`}</span>
 }
 
-// Three dots moving in a wave: the agent is at it.
+// Three dots moving from one shape to the next: the agent is at it.
 export function Dots() {
   return (
-    <span className="dot-wave shrink-0" aria-hidden>
+    <span className="dot-shapes shrink-0" aria-hidden>
       <span />
       <span />
       <span />
@@ -51,19 +55,27 @@ export function Dots() {
 // A box of an opened call: the page's code font, and it scrolls once it is taller than its limit.
 const BOX = 'max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md px-2.5 py-1.5 font-mono text-xs text-foreground'
 
-// One tool call: the verb in grey, what it was done to in dark, on one line. With a detail or an
-// output it opens, on a click: the detail whole in a box (a command with "$" in front) and, under
-// it, what the call printed, in a box that scrolls; a call that failed says so, with its exit code
-// when it has one. A call still going on (`live`) reads in the present ("Running"), shimmers, and
-// counts the seconds since it began when it says when that was.
-function CallLine({ label, detail, whole, output, live }: Call & { live?: { since: string | undefined } }) {
+// One tool call: the verb in grey, what it was done to in dark, on one line. A command the coding
+// agent said in a few words of its own reads as those words ("List project files"), the command
+// itself one click further. With a detail or an output it opens, on a click: the detail whole in a
+// box (a command with "$" in front) and, under it, what the call printed, in a box that scrolls; a
+// call that failed says so, with its exit code when it has one. A call still going on (`live`)
+// reads in the present ("Running"), shimmers, and counts the seconds when it says since when.
+function CallLine({ label, detail, whole, summary, output, live }: Call & { live?: { since: string | undefined } }) {
   const [open, setOpen] = useState(false)
   const call = toolCall(label, detail, output?.changed)
   const given = whole ?? call.detail
+  const said = call.kind === 'command' ? summary : undefined
   const words = (
     <>
-      <span className={cn('shrink-0', live && 'text-shimmer')}>{live ? call.doing : call.verb}</span>
-      {call.target !== undefined && <span className={cn('truncate', live ? 'text-shimmer' : 'text-foreground')}>{call.target}</span>}
+      {said !== undefined ? (
+        <span className={cn('truncate', live && 'text-shimmer')}>{said}</span>
+      ) : (
+        <>
+          <span className={cn('shrink-0', live && 'text-shimmer')}>{live ? call.doing : call.verb}</span>
+          {call.target !== undefined && <span className={cn('truncate', live ? 'text-shimmer' : 'text-foreground')}>{call.target}</span>}
+        </>
+      )}
       {call.size !== undefined && <LinesChanged {...call.size} />}
       {live?.since !== undefined && <Seconds since={live.since} />}
     </>
@@ -75,7 +87,7 @@ function CallLine({ label, detail, whole, output, live }: Call & { live?: { sinc
         type="button"
         onClick={() => setOpen(o => !o)}
         aria-expanded={open}
-        aria-label={[live ? call.doing : call.verb, call.target].filter(Boolean).join(' ')}
+        aria-label={said ?? [live ? call.doing : call.verb, call.target].filter(Boolean).join(' ')}
         className="flex max-w-full min-w-0 items-center gap-1.5 text-left hover:text-foreground"
       >
         {words}
@@ -121,33 +133,39 @@ function ThoughtLine({ text }: { text: string }) {
 
 // The last line of the chat while the agent works, in place of a spinner: the call going on now
 // ("Running pnpm test 9s"), or, between calls, a word saying it is at it ("Working…"). Moving dots
-// in front, the text shimmering, the seconds counting.
+// in front, the text shimmering, the seconds counting from the start of the turn (`since`), so the
+// count goes on from one step to the next. When the line names a new step, its words come in out
+// of a light blur instead of swapping at once.
 export function LiveLine({ call, word, since }: { call?: Call | undefined; word: string; since?: string | undefined }) {
   return (
     <div role="status" className="flex min-w-0 flex-1 items-center gap-2 font-sans text-sm text-muted-foreground">
       <Dots />
-      {call ? (
-        <CallLine {...call} live={{ since }} />
-      ) : (
-        <>
-          <span className="text-shimmer">{word}</span>
-          {since !== undefined && <Seconds since={since} />}
-        </>
-      )}
+      <span key={call ? (call.id ?? `${call.label} ${call.detail ?? ''}`) : word} className="morph-in flex min-w-0 items-center gap-2">
+        {call ? (
+          <CallLine {...call} live={{ since }} />
+        ) : (
+          <>
+            <span className="text-shimmer">{word}</span>
+            {since !== undefined && <Seconds since={since} />}
+          </>
+        )}
+      </span>
     </div>
   )
 }
 
 // The agent's steps between two messages, as Claude Code on the web draws them: one grey line for
-// the whole run ("Ran 2 commands"), opening to a bordered box with one line per step, each opening
-// further. A lone call is its own line ("Read AGENTS.md"). A run with no call in it draws nothing.
-export function ToolCalls({ steps }: { steps: readonly ToolStep[] }) {
+// the whole run ("Ran 2 commands"), opening to one bordered panel with a row per step, a line
+// between two rows, each row opening further. `lead` is a row the panel opens with: the session's
+// set-up, before the first turn's steps. A lone call with nothing to lead it is its own line
+// ("Read AGENTS.md"). A run with no call in it draws nothing.
+export function ToolCalls({ steps, lead }: { steps: readonly ToolStep[]; lead?: ReactNode }) {
   const [open, setOpen] = useState(false)
   const calls = steps.flatMap(step => (step.type === 'action' ? [toolCall(step.label, step.detail, step.output?.changed)] : []))
   if (calls.length === 0) return null
   const summary = callsSummary(calls)
   const only = steps.length === 1 ? steps[0] : undefined
-  if (only?.type === 'action') {
+  if (only?.type === 'action' && !lead) {
     return (
       <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
         <CallLine {...only} />
@@ -170,14 +188,13 @@ export function ToolCalls({ steps }: { steps: readonly ToolStep[] }) {
         <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')} aria-hidden />
       </button>
       {open && (
-        <div className="mt-1.5 flex flex-col gap-1.5 rounded-lg border border-border px-3 py-2">
-          {steps.map((step, at) =>
-            step.type === 'action' ? (
-              <CallLine key={at} {...step} />
-            ) : (
-              <ThoughtLine key={at} text={step.text} />
-            ),
-          )}
+        <div className="mt-1.5 flex flex-col divide-y divide-border rounded-lg border border-border">
+          {lead && <div className="px-3 py-2">{lead}</div>}
+          {steps.map((step, at) => (
+            <div key={at} className="px-3 py-2">
+              {step.type === 'action' ? <CallLine {...step} /> : <ThoughtLine text={step.text} />}
+            </div>
+          ))}
         </div>
       )}
     </div>

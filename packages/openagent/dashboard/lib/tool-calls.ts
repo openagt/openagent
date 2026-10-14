@@ -7,7 +7,7 @@
 import { sumEdits, type ChangedFile, type FileEdit } from './turn-changes.js'
 
 /** What a call did, for counting a run of calls. */
-type CallKind = 'command' | 'read' | 'edit' | 'search' | 'other'
+type CallKind = 'command' | 'read' | 'edit' | 'search' | 'skill' | 'other'
 
 export interface ToolCall {
   /** The grey word: what was done. */
@@ -47,7 +47,7 @@ const CALLS: Record<string, { verb: string; doing: string; kind: CallKind; file?
   Glob: { verb: 'Searched', doing: 'Searching', kind: 'search' },
   WebSearch: { verb: 'Searched the web', doing: 'Searching the web', kind: 'search' },
   WebFetch: { verb: 'Fetched', doing: 'Fetching', kind: 'other' },
-  Skill: { verb: 'Used skill', doing: 'Using skill', kind: 'other' },
+  Skill: { verb: 'Used skill', doing: 'Using skill', kind: 'skill' },
   Task: { verb: 'Started agent', doing: 'Starting agent', kind: 'other' },
   Agent: { verb: 'Started agent', doing: 'Starting agent', kind: 'other' },
   TodoWrite: { verb: 'Updated todos', doing: 'Updating todos', kind: 'other' },
@@ -96,12 +96,14 @@ export function toolCall(label: string, detail?: string, changed?: readonly File
   return call
 }
 
+// One of a kind reads as Claude Code on the web says it: "Ran a command", not "Ran 1 command".
 const COUNTED: Record<CallKind, (n: number) => string> = {
-  command: n => `ran ${n} ${n === 1 ? 'command' : 'commands'}`,
-  read: n => `read ${n} ${n === 1 ? 'file' : 'files'}`,
-  edit: n => `edited ${n} ${n === 1 ? 'file' : 'files'}`,
-  search: n => `searched ${n} ${n === 1 ? 'time' : 'times'}`,
-  other: n => `used ${n} ${n === 1 ? 'tool' : 'tools'}`,
+  command: n => (n === 1 ? 'ran a command' : `ran ${n} commands`),
+  read: n => (n === 1 ? 'read a file' : `read ${n} files`),
+  edit: n => (n === 1 ? 'edited a file' : `edited ${n} files`),
+  search: n => (n === 1 ? 'searched once' : `searched ${n} times`),
+  skill: n => `used ${n} skills`,
+  other: n => (n === 1 ? 'used a tool' : `used ${n} tools`),
 }
 
 /** One part of a run's line: its words, and the lines its edits added and removed when they are known. */
@@ -112,7 +114,7 @@ export interface SummaryPart {
 
 /**
  * A run of calls in one line, as parts to be joined with ", ": each kind counted, in the order the
- * kinds first came ("Ran 2 commands", "read 1 file"). The edits whose files are known are said by
+ * kinds first came ("Ran 2 commands", "read a file"), a lone skill by its name ("used skill branches"). The edits whose files are known are said by
  * their files instead of counted: one file by its name ("created DESCRIPTION.md"), several by how
  * many ("edited 3 files"), "created" when the run made every one of them, with the lines added and
  * removed over the run. A file edited by several calls of the run is one file. Edits whose files
@@ -126,6 +128,8 @@ export function callsSummary(calls: readonly ToolCall[]): SummaryPart[] {
   const files = sumEdits(edits.map(file => ({ path: file.path, added: file.added, removed: file.removed, ...(file.created ? { created: true as const } : {}) })))
   const unknown = calls.filter(call => call.kind === 'edit' && call.files === undefined).length
   const parts = [...counts].flatMap(([kind, n]): SummaryPart[] => {
+    // A skill is said by its name: "used skill branches".
+    if (kind === 'skill' && n === 1) return [{ text: `used skill ${calls.find(call => call.kind === 'skill')?.target ?? ''}`.trim() }]
     if (kind !== 'edit' || files.length === 0) return [{ text: COUNTED[kind](n) }]
     const verb = files.every(file => file.created) ? 'created' : 'edited'
     const named: SummaryPart = { text: files.length === 1 ? `${verb} ${files[0]!.name}` : `${verb} ${files.length} files`, size: sizeOf(files) }

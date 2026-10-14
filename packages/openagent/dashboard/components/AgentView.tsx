@@ -243,7 +243,9 @@ export function AgentView({
   }, [queued, feedLive])
   const onQueued = useCallback((text: string) => setQueued(was => ({ texts: [...(was?.texts ?? []), text], prompts })), [prompts])
   // A run just started writes its prompt line only once its record is saved and its checkout made.
-  const shownSending = sending?.text ?? (startedWith && prompts === 0 ? startedWith : undefined)
+  // Told apart from the prompts in the same draw that brings the prompt's line, not an effect
+  // later: for that one frame the message was in the chat twice.
+  const shownSending = (sending && prompts <= sending.prompts ? sending.text : undefined) ?? (startedWith && prompts === 0 ? startedWith : undefined)
   // The agent works, or is about to: on a message just sent, or as its feed shows before the
   // agents poll does.
   const going = feedLive || shownSending !== undefined
@@ -422,7 +424,7 @@ export function AgentView({
           writing={feedLive ? writing : ''}
           {...(shownSending !== undefined ? { sending: shownSending } : {})}
           working={feedLive || shownSending !== undefined}
-          queued={queued?.texts}
+          queued={queued && prompts <= queued.prompts ? queued.texts : undefined}
           waitingOn={!going && live === false && outcome?.ok !== false && !outcome?.waiting ? subagentsRunning : 0}
           {...(feedLive ? {} : { stick: false, openAt: 'end' as const, emptyLabel: 'This agent has no events.' })}
           // A web agent's log dead-ends at the hand-off (#1265): the mirror box rides the tail of

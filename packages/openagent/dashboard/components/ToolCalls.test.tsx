@@ -80,18 +80,18 @@ describe('ToolCalls', () => {
 
   test('the line opens to a bordered box with one line per call, in order, each opening further', () => {
     const { container } = render(<ToolCalls steps={[bash('pnpm build'), { type: 'action', label: 'Edit', detail: '/repo/src/app.ts' }]} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Ran 1 command, edited 1 file' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ran a command, edited a file' }))
     const box = container.querySelector('.border')!
     expect(Array.from(box.querySelectorAll('button')).map(b => b.textContent)).toEqual(['Ranpnpm build', 'Editedapp.ts'])
     fireEvent.click(screen.getByRole('button', { name: 'Edited app.ts' }))
     expect(screen.getByText('/repo/src/app.ts')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Ran 1 command, edited 1 file' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ran a command, edited a file' }))
     expect(container.querySelector('.border')).toBeNull()
   })
 
   test("Codex's calls read the same: its item kinds have their own verbs", () => {
     render(<ToolCalls steps={[{ type: 'action', label: 'commandExecution', detail: 'pnpm test' }, { type: 'action', label: 'fileChange', detail: '/repo/a.ts' }]} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Ran 1 command, edited 1 file' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ran a command, edited a file' }))
     expect(screen.getByRole('button', { name: 'Ran pnpm test' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Edited a.ts' })).toBeTruthy()
   })
@@ -99,7 +99,7 @@ describe('ToolCalls', () => {
   test('a thought is no line of its own: it is inside the opened box, folded, where it was thought', () => {
     const { container } = render(<ToolCalls steps={[{ type: 'thought', text: 'look at the docs first' }, bash('ls')]} />)
     expect(screen.queryByText(/Thought|look at the docs/)).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Ran 1 command' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ran a command' }))
     expect(Array.from(container.querySelectorAll('.border button')).map(b => b.textContent)).toEqual(['Thought', 'Ranls'])
     expect(screen.queryByText('look at the docs first')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Thought' }))
@@ -119,7 +119,7 @@ describe('LiveLine', () => {
     expect(status.textContent).toBe('ReadingAGENTS.md')
     expect(screen.getByText('Reading').className).toContain('text-shimmer')
     expect(screen.getByText('AGENTS.md').className).toContain('text-shimmer')
-    expect(container.querySelectorAll('.dot-wave > span')).toHaveLength(3)
+    expect(container.querySelectorAll('.dot-shapes > span')).toHaveLength(3)
     expect(screen.queryByText('Working…')).toBeNull()
   })
 
@@ -151,7 +151,7 @@ describe('LiveLine', () => {
     const { container } = render(<LiveLine word="Working…" since="2026-10-04T10:00:00.000Z" />)
     expect(screen.getByText('Working…').className).toContain('text-shimmer')
     expect(screen.getByText('3s')).toBeTruthy()
-    expect(container.querySelector('.dot-wave')).toBeTruthy()
+    expect(container.querySelector('.dot-shapes')).toBeTruthy()
   })
 })
 
@@ -176,7 +176,7 @@ describe('ToolCalls, edits whose files are known', () => {
 
   test('a run with no known file reads as before, with no size', () => {
     render(<ToolCalls steps={[bash('a'), { type: 'action', label: 'Edit', detail: '/ws/a.ts', id: 'e1', output: { text: 'ok' } }]} />)
-    const line = screen.getByRole('button', { name: 'Ran 1 command, edited 1 file' })
+    const line = screen.getByRole('button', { name: 'Ran a command, edited a file' })
     expect(line.querySelector('.text-success')).toBeNull()
   })
 })

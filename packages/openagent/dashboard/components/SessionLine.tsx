@@ -58,7 +58,9 @@ export function SessionLine({ setup, live, working = false, added }: { setup: Se
     return (
       <div role="status" className="flex min-w-0 flex-1 items-center gap-2 font-sans text-sm text-muted-foreground">
         <Dots />
-        <span className="text-shimmer">{step}</span>
+        <span key={step} className="morph-in">
+          <span className="text-shimmer">{step}</span>
+        </span>
         {live.since !== undefined && <Seconds since={live.since} />}
       </div>
     )
