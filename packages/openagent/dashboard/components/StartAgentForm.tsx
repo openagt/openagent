@@ -161,7 +161,7 @@ export function StartAgentForm({
   return (
     // The width and the padding of an agent's message box (`AgentComposer.tsx`): the box is in the
     // same place on both pages.
-    <form onSubmit={e => e.preventDefault()} className="mx-auto w-full max-w-3xl p-2">
+    <form onSubmit={e => e.preventDefault()} className="relative mx-auto w-full max-w-3xl p-2">
       <Composer
         ref={composerRef}
         files={files}
@@ -219,7 +219,9 @@ export function StartAgentForm({
         // The chat's own first line (`SessionLine.tsx`), in its words and its look: the page that
         // opens a moment later goes on saying it. A machine that does not have the project yet
         // clones it first, which can take minutes: the line says so for as long as it does.
-        <p role="status" className="mt-2 flex items-center gap-2 px-1.5 text-sm text-muted-foreground">
+        // It lies over the page above the box and takes no room: the box does not move when it
+        // comes, nor when it goes.
+        <p role="status" className="absolute inset-x-2 bottom-full flex items-center gap-2 px-1.5 pb-1 text-sm text-muted-foreground">
           <Dots />
           <span className="text-shimmer">{cloning && sentTo ? `Cloning ${projectName ?? 'this project'} on ${sentTo}, the first time only` : note}</span>
         </p>
