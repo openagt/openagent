@@ -244,7 +244,7 @@ export interface ModulePanel {
    * screen then opens it. Without such a pane, that row is a line of text.
    */
   screen?: true
-  /** The pane's contents. */
+  /** The pane's contents. They may put their own things in the card's header: {@link PaneTitle}, {@link PaneActions}. */
   Panel: ComponentType<ModulePanelProps>
 }
 
@@ -450,11 +450,12 @@ export { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 export { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover.js'
 export { RangeSlider } from '../components/ui/slider.js'
 export { Separator } from '../components/ui/separator.js'
-export { PreviewCard } from '@base-ui-components/react/preview-card'
 export { DiffStat } from '../components/DiffStat.js'
 export { ScrollArea } from '../components/ui/scroll-area.js'
 export { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/tooltip.js'
-export { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../components/ui/dropdown-menu.js'
+export { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '../components/ui/dropdown-menu.js'
+export { ContextMenu, ContextMenuTrigger } from '../components/ui/context-menu.js'
+export { PaneTitle, PaneActions } from '../components/PaneHeader.js'
 export { Markdown } from '../components/Markdown.js'
 export { StartAgentButton } from '../components/StartAgentButton.js'
 export { LinkActions, type ProjectLinks, type LinkTargets } from '../components/LinkActions.js'

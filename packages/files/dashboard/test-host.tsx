@@ -1,7 +1,8 @@
 import { vi } from 'vitest'
 import { render as rtlRender, type RenderResult } from '@testing-library/react'
-import type { ReactElement, ReactNode } from 'react'
+import { useState, type ReactElement, type ReactNode } from 'react'
 import { ModuleHostContext, type ModuleHost } from '@openagt/dashboard/module'
+import { PaneHeaderContext } from '../../openagent/dashboard/components/PaneHeader.js'
 
 // The dashboard as the Files module sees it, faked: every service a spy. The tests mock the
 // module's own reads (`reads.ts`), so the host's `read` is never what answers them.
@@ -27,9 +28,28 @@ export function fakeHost(): ModuleHost {
   }
 }
 
-/** Render `ui` inside a fake host; `rerender` keeps the same host. */
+/** A pane's card as the dashboard draws it: a header with the two places a pane fills, over the pane. */
+function PaneCard({ children }: { children: ReactNode }) {
+  const [title, setTitle] = useState<HTMLElement | null>(null)
+  const [actions, setActions] = useState<HTMLElement | null>(null)
+  return (
+    <section>
+      <header>
+        <div ref={setTitle} data-testid="pane-title" />
+        <div ref={setActions} data-testid="pane-actions" />
+      </header>
+      <PaneHeaderContext.Provider value={{ title, actions }}>{children}</PaneHeaderContext.Provider>
+    </section>
+  )
+}
+
+/** Render `ui` inside a fake host, in a pane's card; `rerender` keeps the same host. */
 export function renderWithHost(ui: ReactElement, host: ModuleHost = fakeHost()): RenderResult {
-  const wrap = (node: ReactNode) => <ModuleHostContext.Provider value={host}>{node}</ModuleHostContext.Provider>
+  const wrap = (node: ReactNode) => (
+    <ModuleHostContext.Provider value={host}>
+      <PaneCard>{node}</PaneCard>
+    </ModuleHostContext.Provider>
+  )
   const result = rtlRender(wrap(ui))
   return { ...result, rerender: (next: ReactNode) => result.rerender(wrap(next)) }
 }
