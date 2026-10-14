@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { DiffStat, useModuleHost, type ModuleRunProps } from '@openagt/dashboard/module'
 import type { FileChange } from '../src/diff.js'
-import { readChanges } from './reads.js'
+import { readCounts } from './reads.js'
 
 // What a working run has changed so far, on its page (#817): a count in the bar above the message
 // box. Which files changed, and their diffs, are in the Changes pane.
@@ -31,7 +31,7 @@ export function ChangesSummary({ projectId, agentId, working }: ModuleRunProps) 
   useEffect(() => {
     if (!working) return
     let live = true
-    readChanges(host, projectId, agentId).then(
+    readCounts(host, projectId, agentId).then(
       next => live && setRead({ run, changes: next }),
       () => {}, // a failed read keeps the last count; the next tick usually succeeds
     )

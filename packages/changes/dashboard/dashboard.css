@@ -1,0 +1,7 @@
+/* The module's own utilities, and nothing else: no reset, no base styles, since the dashboard's page
+   already has them. The dashboard's theme file gives the utilities the page's tokens, so the
+   module's colours follow the dashboard's theme. */
+@import 'tailwindcss/theme' layer(theme);
+@import 'tailwindcss/utilities' layer(utilities);
+@import '../../openagent/dashboard/module/theme.css';
+@source '.';

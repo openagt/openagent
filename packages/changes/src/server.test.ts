@@ -1,0 +1,84 @@
+import { strict as assert } from 'node:assert'
+import { execFileSync } from 'node:child_process'
+import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { after, before, test } from 'node:test'
+import type { ModuleServerHost, RunFacts } from '@openagt/dashboard/module-server'
+import server from './server.js'
+
+let dir: string
+let root: string
+const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
+
+/** The host for the project at `root` whose runs have the given facts. */
+const host = (runs: Record<string, RunFacts> = {}): ModuleServerHost => ({
+  root,
+  run: async id => runs[id],
+  mergeCommit: async () => ({ pending: false }),
+})
+const read = (name: string, input: Record<string, unknown>, runs?: Record<string, RunFacts>) => server.reads[name]!(host(runs), input)
+
+before(async () => {
+  dir = await realpath(await mkdtemp(join(tmpdir(), 'changes-server-')))
+  root = join(dir, 'repo')
+  execFileSync('git', ['init', '-q', '-b', 'main', root])
+  git(root, 'config', 'user.email', 't@t')
+  git(root, 'config', 'user.name', 't')
+  await writeFile(join(root, 'a.txt'), 'a\n')
+  git(root, 'add', '-A')
+  git(root, 'commit', '-q', '-m', 'base')
+  // The person's own edit in the project folder, and a new file.
+  await writeFile(join(root, 'a.txt'), 'mine\n')
+  await writeFile(join(root, 'new.txt'), 'new\n')
+})
+after(() => rm(dir, { recursive: true, force: true }))
+
+test('the project read marks what is changed on disk, uncommitted', async () => {
+  assert.deepEqual(await read('project', {}), { 'a.txt': { status: 'modified', committed: false }, 'new.txt': { status: 'untracked', committed: false } })
+})
+
+test('a diff without a run is the project folder’s', async () => {
+  const diff = (await read('diff', { path: 'a.txt' })) as { patch: string }
+  assert.match(diff.patch, /\+mine/)
+  assert.equal(await read('diff', { path: 'nothing-changed.txt' }), null)
+  assert.equal(await read('diff', { path: '../outside' }), null)
+})
+
+test('a working run’s counts are its own checkout’s; a run with none never shows the project folder’s as its own', async () => {
+  const checkout = join(dir, 'wt')
+  git(root, 'worktree', 'add', '-q', '-b', 'agent-x', checkout)
+  await writeFile(join(checkout, 'b.txt'), 'b\n')
+  const runs = { 'run-x': { checkout, changedNothing: false }, 'run-ended': { record: { status: 'done' }, changedNothing: false } }
+  assert.deepEqual(((await read('counts', { agentId: 'run-x' }, runs)) as { path: string }[]).map(c => c.path), ['b.txt'])
+  assert.deepEqual(await read('counts', { agentId: 'run-ended' }, runs), [])
+  assert.deepEqual(await read('counts', {}, runs), [])
+})
+
+test('a run the host does not know yet is starting, nothing changed; a read naming no run is gone', async () => {
+  assert.deepEqual(await read('run', { agentId: 'run-unknown' }), { source: 'starting', changes: {} })
+  assert.deepEqual(await read('run', {}), { source: 'gone' })
+})
+
+test('a run’s commits and one commit’s changes and diff are read for the run; with no run, or a commit that is not the run’s, nothing is', async () => {
+  const checkout = join(dir, 'wt-commits')
+  git(root, 'worktree', 'add', '-q', '-b', 'agent-c', checkout, 'main')
+  await writeFile(join(checkout, 'c.txt'), 'c\n')
+  git(checkout, 'add', '-A')
+  git(checkout, 'commit', '-q', '-m', 'Add c')
+  const sha = git(checkout, 'rev-parse', 'HEAD')
+  const runs = { 'run-c': { checkout, changedNothing: false } }
+  assert.deepEqual(((await read('commits', { agentId: 'run-c' }, runs)) as { sha: string; subject: string }[]).map(c => [c.sha, c.subject]), [[sha, 'Add c']])
+  assert.deepEqual(await read('commits', {}, runs), [])
+  assert.deepEqual(await read('commit', { agentId: 'run-c', commit: sha }, runs), { 'c.txt': { status: 'added', committed: true } })
+  assert.equal(await read('commit', { agentId: 'run-c', commit: git(root, 'rev-parse', 'main') }, runs), null)
+  assert.equal(await read('commit', { commit: sha }, runs), null)
+  // A later commit changes the file again: the first commit's diff is still its own, not the run's whole change.
+  await writeFile(join(checkout, 'c.txt'), 'c\nmore\n')
+  git(checkout, 'commit', '-q', '-am', 'More c')
+  const inCommit = ((await read('diff', { agentId: 'run-c', path: 'c.txt', commit: sha }, runs)) as { patch: string }).patch
+  assert.match(inCommit, /\+c/)
+  assert.doesNotMatch(inCommit, /\+more/)
+  assert.match(((await read('diff', { agentId: 'run-c', path: 'c.txt' }, runs)) as { patch: string }).patch, /\+more/)
+  assert.equal(await read('diff', { agentId: 'run-c', path: 'a.txt', commit: sha }, runs), null)
+})

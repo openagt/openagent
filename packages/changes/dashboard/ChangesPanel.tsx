@@ -1,17 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { cn, formatRelative, useModuleHost, usePolled, type ModulePanelProps } from '@openagt/dashboard/module'
-import type { ProjectTree } from '../src/server.js'
-import type { AgentCommit, AgentTree, FileMark } from '../src/tree.js'
-import { commitKey, commitsKey, projectKey, treeKey } from './keys.js'
-import { readCommit, readCommits, readProject, readTree } from './reads.js'
-import { FilePreviewCard } from './FilePreview.js'
+import type { AgentChanges, AgentCommit, FileMark } from '../src/run.js'
+import { commitKey, commitsKey, projectKey, runKey } from './keys.js'
+import { readCommit, readCommits, readProject, readRun } from './reads.js'
+import { DiffCard } from './DiffCard.js'
 
 // The Changes pane, as Claude Code on the web draws it: the files that changed in a
 // list on the left, and on the right the diff of the one picked, the first file picked by itself.
-// On a run's page, what that run changed, read from the same place its Files tree is (the `tree`
-// read), and kept once its work is merged: the Files pane's marks say what is not merged yet and go
-// with the merge, this list says what the run did and stays. On the project's own page, the files
-// changed in the project's folder and not committed (the `project` read).
+// On a run's page, what that run changed, read wherever its work is now (the `run` read), and kept
+// once its work is merged: this list says what the run did and stays. On the project's own page,
+// the files changed in the project's folder and not committed (the `project` read).
 //
 // Under the list, a run's commits, newest first, with "All changes" above them. A click on a commit
 // shows only that commit: its files in the list, its own diff on the right, and its name where the
@@ -64,7 +62,7 @@ function CommitRow({ label, detail, title, picked, onPick }: { label: string; de
 
 const NO_COMMITS: AgentCommit[] = []
 
-const EMPTY_PROJECT: ProjectTree = { files: [], changes: {} }
+const NO_CHANGES: Record<string, FileMark> = {}
 
 function Line({ children }: { children: string }) {
   return <p className="p-3 text-xs text-muted-foreground">{children}</p>
@@ -75,13 +73,13 @@ let revealTaken = 0
 
 export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePanelProps) {
   const host = useModuleHost()
-  const { value: projectTree, loaded: projectLoaded } = usePolled<ProjectTree>(agentId ? null : () => readProject(host, projectId), EMPTY_PROJECT, 8_000, [projectId, agentId], { remember: projectKey(projectId) })
-  const { value: answer, loaded: treeLoaded, reload } = usePolled<AgentTree | null>(agentId ? () => readTree(host, projectId, agentId) : null, null, 8_000, [projectId, agentId], agentId ? { remember: treeKey(projectId, agentId) } : undefined)
+  const { value: projectChanges, loaded: projectLoaded } = usePolled<Record<string, FileMark>>(agentId ? null : () => readProject(host, projectId), NO_CHANGES, 8_000, [projectId, agentId], { remember: projectKey(projectId) })
+  const { value: answer, loaded: runLoaded, reload } = usePolled<AgentChanges | null>(agentId ? () => readRun(host, projectId, agentId) : null, null, 8_000, [projectId, agentId], agentId ? { remember: runKey(projectId, agentId) } : undefined)
   // A run whose files move as it ends answers pending for a moment: the list it last showed stays.
-  const lastTree = useRef<{ agentId: string; tree: AgentTree } | null>(null)
-  if (agentId && answer && 'files' in answer) lastTree.current = { agentId, tree: answer }
-  const last = lastTree.current
-  const runTree = answer?.source === 'pending' && last !== null && last.agentId === agentId ? last.tree : answer
+  const lastRun = useRef<{ agentId: string; changes: AgentChanges } | null>(null)
+  if (agentId && answer && 'changes' in answer) lastRun.current = { agentId, changes: answer }
+  const last = lastRun.current
+  const run = answer?.source === 'pending' && last !== null && last.agentId === agentId ? last.changes : answer
   const { value: commitsRead, loaded: commitsLoaded, reload: reloadCommits } = usePolled<AgentCommit[]>(agentId ? () => readCommits(host, projectId, agentId) : null, NO_COMMITS, 8_000, [projectId, agentId], agentId ? { remember: commitsKey(projectId, agentId) } : undefined)
   // As with the list of files: while the run's files move as it ends, the commits last read stay.
   const lastCommits = useRef<{ agentId: string; commits: AgentCommit[] } | null>(null)
@@ -120,15 +118,15 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
   }, [revealedAt, revealedPath, agentId])
 
   if (agentId) {
-    if (!treeLoaded || !commitsLoaded || !runTree || runTree.source === 'pending') return <Line>Looking for this run’s changes…</Line>
-    if (runTree.source === 'gone') return <Line>This run’s changes are gone from this machine: its checkout was reclaimed and it left no branch or merged pull request here.</Line>
+    if (!runLoaded || !commitsLoaded || !run || run.source === 'pending') return <Line>Looking for this run’s changes…</Line>
+    if (run.source === 'gone') return <Line>This run’s changes are gone from this machine: its checkout was reclaimed and it left no branch or merged pull request here.</Line>
   } else if (!projectLoaded) return <Line>Reading the project’s files…</Line>
 
-  const all = agentId ? (runTree && 'changes' in runTree ? runTree.changes : {}) : projectTree.changes
+  const all = agentId ? (run && 'changes' in run ? run.changes : NO_CHANGES) : projectChanges
   if (Object.keys(all).length === 0 && commits.length === 0) return <Line>{agentId ? 'This run changed no files.' : 'Nothing is changed in the project’s folder.'}</Line>
   const changes = commit ? (commitChanges ?? {}) : all
   const paths = Object.keys(changes).sort()
-  const merged = agentId !== undefined && runTree !== null && 'merged' in runTree && runTree.merged
+  const merged = agentId !== undefined && run !== null && 'merged' in run && run.merged
   const caption = commit ? `${commit.short} ${commit.subject}` : agentId ? (merged ? 'What this run changed. Merged.' : 'What this run changed. Not merged yet.') : 'Changed in the project’s folder, not committed.'
   // A file asked for from the chat may be named by its whole path on disk, when the run's card no
   // longer says where its checkout was: the listed file that path ends with is the one meant.
@@ -165,7 +163,7 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
         </div>
         {/* Keyed by the file and the commit: a diff still being read is never shown under another's name. */}
         <div className="flex min-w-0 flex-auto flex-col overflow-auto">
-          {picked !== undefined ? <FilePreviewCard key={`${sha ?? ''}:${picked}`} projectId={projectId} agentId={agentId} path={picked} commit={sha} /> : <Line>{nothing}</Line>}
+          {picked !== undefined ? <DiffCard key={`${sha ?? ''}:${picked}`} projectId={projectId} agentId={agentId} path={picked} commit={sha} /> : <Line>{nothing}</Line>}
         </div>
       </div>
     </div>

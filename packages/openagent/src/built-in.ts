@@ -17,7 +17,7 @@ import { declaring, lineRuns, lookupProvidedCommand, packageBins, projectPackage
  */
 
 /** The packages every project has: an agent cannot start, be shown or be put on a git host without them. */
-export const BUILT_IN_PACKAGES: readonly string[] = ['@openagt/files', '@openagt/skill-branches', '@openagt/skill-github', '@openagt/skill-logs', '@openagt/agent-runner']
+export const BUILT_IN_PACKAGES: readonly string[] = ['@openagt/changes', '@openagt/files', '@openagt/skill-branches', '@openagt/skill-github', '@openagt/skill-logs', '@openagt/agent-runner']
 
 /**
  * The packages that are this computer's and no project's: the door to it, and the servers it

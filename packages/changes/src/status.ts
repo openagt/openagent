@@ -1,11 +1,11 @@
 import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
-// Per-file git status for the panel's file tree (#492): the working-tree state of each changed
-// file, so the tree can dot untracked/modified/deleted entries. A single `git status --porcelain`
-// read, mapped to repo-relative path -> state. Forgiving: a non-repo / failed git yields `{}`.
+// Per-file git status for the Changes pane (#492): the working-tree state of each changed file,
+// untracked, modified or deleted. A single `git status --porcelain` read, mapped to repo-relative
+// path -> state. Forgiving: a non-repo / failed git yields `{}`.
 
 /**
- * The tree's per-file git state. `added` is a file a commit created (a run's committed change,
- * `tree.ts`); the working tree's status here never says it, a new file there is `untracked`.
+ * One changed file's git state. `added` is a file a commit created (a run's committed change,
+ * `run.ts`); the working tree's status here never says it, a new file there is `untracked`.
  */
 export type FileGitStatus = 'untracked' | 'added' | 'modified' | 'deleted'
 

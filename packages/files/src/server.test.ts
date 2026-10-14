@@ -34,55 +34,26 @@ before(async () => {
 })
 after(() => rm(dir, { recursive: true, force: true }))
 
-test('the project read lists its files and marks what is changed on disk, uncommitted', async () => {
-  assert.deepEqual(await read('project', {}), {
-    files: ['a.txt', 'new.txt'],
-    changes: { 'a.txt': { status: 'modified', committed: false }, 'new.txt': { status: 'untracked', committed: false } },
-  })
+test('the project read lists the files in its folder, changed or not', async () => {
+  assert.deepEqual(await read('project', {}), ['a.txt', 'new.txt'])
 })
 
-test('a diff or a file without a run is the project folder’s', async () => {
-  const diff = (await read('diff', { path: 'a.txt' })) as { patch: string }
-  assert.match(diff.patch, /\+mine/)
-  assert.equal(await read('diff', { path: 'nothing-changed.txt' }), null)
+test('a file without a run is the project folder’s', async () => {
+  assert.equal(((await read('content', { path: 'a.txt' })) as { text: string }).text, 'mine')
   assert.equal(((await read('content', { path: 'new.txt' })) as { text: string }).text, 'new')
   assert.equal(await read('content', { path: '../outside' }), null)
 })
 
-test('a run’s changes are its own checkout’s; a run with none never shows the project folder’s as its own', async () => {
+test('a run’s tree and files are its own checkout’s', async () => {
   const checkout = join(dir, 'wt')
   git(root, 'worktree', 'add', '-q', '-b', 'agent-x', checkout)
   await writeFile(join(checkout, 'b.txt'), 'b\n')
-  const runs = { 'run-x': { checkout, changedNothing: false }, 'run-ended': { record: { status: 'done' }, changedNothing: false } }
-  assert.deepEqual(((await read('changes', { agentId: 'run-x' }, runs)) as { path: string }[]).map(c => c.path), ['b.txt'])
-  assert.deepEqual(await read('changes', { agentId: 'run-ended' }, runs), [])
-  assert.deepEqual(await read('changes', {}, runs), [])
+  const runs = { 'run-x': { checkout, changedNothing: false } }
+  assert.deepEqual(await read('tree', { agentId: 'run-x' }, runs), { source: 'checkout', files: ['a.txt', 'b.txt'] })
+  assert.equal(((await read('content', { agentId: 'run-x', path: 'a.txt' }, runs)) as { text: string }).text, 'a', 'the run’s copy, not the person’s edit in the project folder')
 })
 
 test('a tree read for a run the host does not know yet is starting, from the project HEAD; a read naming no run is gone', async () => {
-  assert.equal(((await read('tree', { agentId: 'run-unknown' })) as { source: string }).source, 'starting')
+  assert.deepEqual(await read('tree', { agentId: 'run-unknown' }), { source: 'starting', files: ['a.txt'] })
   assert.deepEqual(await read('tree', {}), { source: 'gone' })
-})
-
-test('a run’s commits and one commit’s changes and diff are read for the run; with no run, or a commit that is not the run’s, nothing is', async () => {
-  const checkout = join(dir, 'wt-commits')
-  git(root, 'worktree', 'add', '-q', '-b', 'agent-c', checkout, 'main')
-  await writeFile(join(checkout, 'c.txt'), 'c\n')
-  git(checkout, 'add', '-A')
-  git(checkout, 'commit', '-q', '-m', 'Add c')
-  const sha = git(checkout, 'rev-parse', 'HEAD')
-  const runs = { 'run-c': { checkout, changedNothing: false } }
-  assert.deepEqual(((await read('commits', { agentId: 'run-c' }, runs)) as { sha: string; subject: string }[]).map(c => [c.sha, c.subject]), [[sha, 'Add c']])
-  assert.deepEqual(await read('commits', {}, runs), [])
-  assert.deepEqual(await read('commit', { agentId: 'run-c', commit: sha }, runs), { 'c.txt': { status: 'added', committed: true } })
-  assert.equal(await read('commit', { agentId: 'run-c', commit: git(root, 'rev-parse', 'main') }, runs), null)
-  assert.equal(await read('commit', { commit: sha }, runs), null)
-  // A later commit changes the file again: the first commit's diff is still its own, not the run's whole change.
-  await writeFile(join(checkout, 'c.txt'), 'c\nmore\n')
-  git(checkout, 'commit', '-q', '-am', 'More c')
-  const inCommit = ((await read('diff', { agentId: 'run-c', path: 'c.txt', commit: sha }, runs)) as { patch: string }).patch
-  assert.match(inCommit, /\+c/)
-  assert.doesNotMatch(inCommit, /\+more/)
-  assert.match(((await read('diff', { agentId: 'run-c', path: 'c.txt' }, runs)) as { patch: string }).patch, /\+more/)
-  assert.equal(await read('diff', { agentId: 'run-c', path: 'a.txt', commit: sha }, runs), null)
 })
