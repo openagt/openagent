@@ -49,7 +49,8 @@ export interface FileChange {
 function hunksOnly(patch: string): string {
   const lines = patch.split('\n')
   const start = lines.findIndex(line => line.startsWith('--- ') || line.startsWith('@@'))
-  return (start === -1 ? [] : lines.slice(start)).join('\n').trimEnd()
+  // Only the newline git ends with: a blank unchanged line is a single space, and it is a line.
+  return (start === -1 ? [] : lines.slice(start)).join('\n').replace(/\n+$/, '')
 }
 
 /** Count the +/- lines of a unified patch, ignoring the `---`/`+++` file headers. */
@@ -173,8 +174,8 @@ export async function readFileChanges(
   const paths = Object.keys(statuses).filter(safeRepoPath)
   if (paths.length === 0) return []
 
-  const numstat = await git(['diff', '--numstat', 'HEAD'], cwd)
-    .catch(() => git(['diff', '--numstat'], cwd))
+  const numstat = await git(['-c', 'core.quotePath=false', 'diff', '--numstat', '--no-renames', 'HEAD'], cwd)
+    .catch(() => git(['-c', 'core.quotePath=false', 'diff', '--numstat', '--no-renames'], cwd))
     .catch(() => '')
   const counted = new Map(parseNumstat(numstat).map(entry => [entry.path, entry]))
 

@@ -197,3 +197,9 @@ test('an untracked file reached through a symlink out of the repo is refused', a
   await symlink(join(outside, 'secret.txt'), join(dir, 'src', 'link.txt'))
   assert.equal(await readFileDiff(dir, 'src/link.txt', 'untracked', async () => ''), null)
 })
+
+test('a blank unchanged line at the end of a change is kept: it is a line', async () => {
+  const diff = await readFileDiff('/repo', 'a.txt', 'modified', fakeGit(['--- a/a.txt', '+++ b/a.txt', '@@ -1,3 +1,3 @@', '-a', '+A', ' b', ' ', ''].join('\n')))
+  assert.ok(diff)
+  assert.equal(diff.patch.split('\n').at(-1), ' ')
+})

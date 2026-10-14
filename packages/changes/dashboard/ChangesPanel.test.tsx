@@ -57,15 +57,15 @@ describe('ChangesPanel', () => {
   test('every file’s diff shows, one under another; the first file is picked; a click on another picks it and scrolls to its diff', async () => {
     const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView')
     render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
-    const first = await findRow(/old\.txt/)
+    const first = await findRow(/app\.ts/)
     expect(first.getAttribute('aria-pressed')).toBe('true')
     for (const path of ['old.txt', 'src/app.ts', 'src/new.ts']) await waitFor(() => expect(readDiff).toHaveBeenCalledWith(expect.anything(), 'p1', path, 'run-1', undefined, false))
-    expect(screen.getAllByRole('region').filter(r => r.closest('[aria-label=Diffs]')).map(r => r.getAttribute('aria-label'))).toEqual(['old.txt', 'src/app.ts', 'src/new.ts'])
-    const row = within(list()).getByRole('button', { name: /app\.ts/ })
+    expect(screen.getAllByRole('region').filter(r => r.closest('[aria-label=Diffs]')).map(r => r.getAttribute('aria-label'))).toEqual(['src/app.ts', 'src/new.ts', 'old.txt'])
+    const row = within(list()).getByRole('button', { name: /new\.ts/ })
     expect(row.getAttribute('aria-pressed')).toBe('false')
     fireEvent.click(row)
     await waitFor(() => expect(row.getAttribute('aria-pressed')).toBe('true'))
-    expect(scrolled.mock.contexts.at(-1)).toBe(screen.getByRole('region', { name: 'src/app.ts' }))
+    expect(scrolled.mock.contexts.at(-1)).toBe(screen.getByRole('region', { name: 'src/new.ts' }))
     expect(first.getAttribute('aria-pressed')).toBe('false')
     await waitFor(() => expect(screen.getAllByText('const b = 3').length).toBe(3))
   })
@@ -76,16 +76,16 @@ describe('ChangesPanel', () => {
     readRun.mockResolvedValue({ source: 'checkout', changes: { 'src/app.ts': changes['src/app.ts'], 'old.txt': changes['old.txt'] }, merged: false })
     rerender(<ChangesPanel projectId="p1" agentId="run-1" context={context} activity={2} />)
     await waitFor(() => expect(queryRow(/new\.ts/)).toBeNull())
-    expect(row(/old\.txt/).getAttribute('aria-pressed')).toBe('true')
+    expect(row(/app\.ts/).getAttribute('aria-pressed')).toBe('true')
   })
 
   test('a click counts for the run it was made on: another run with the same file starts at its own first file', async () => {
     const { rerender } = render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
-    fireEvent.click(await findRow(/app\.ts/))
+    fireEvent.click(await findRow(/new\.ts/))
     rerender(<ChangesPanel projectId="p1" agentId="run-2" context={context} />)
     await waitFor(() => expect(readRun).toHaveBeenCalledWith(expect.anything(), 'p1', 'run-2'))
-    await waitFor(() => expect(row(/old\.txt/).getAttribute('aria-pressed')).toBe('true'))
-    expect(row(/app\.ts/).getAttribute('aria-pressed')).toBe('false')
+    await waitFor(() => expect(row(/app\.ts/).getAttribute('aria-pressed')).toBe('true'))
+    expect(row(/new\.ts/).getAttribute('aria-pressed')).toBe('false')
   })
 
   test('a merged run keeps its list, and says it is merged', async () => {
@@ -184,7 +184,7 @@ describe('ChangesPanel commits', () => {
     fireEvent.click(commitRows()[0]!)
     await waitFor(() => expect(screen.getByText(NOT_MERGED)).toBeTruthy())
     expect(within(list()).getAllByRole('button')).toHaveLength(3)
-    await waitFor(() => expect(screen.getAllByRole('region').filter(r => r.closest('[aria-label=Diffs]')).map(r => r.getAttribute('aria-label'))).toEqual(['old.txt', 'src/app.ts', 'src/new.ts']))
+    await waitFor(() => expect(screen.getAllByRole('region').filter(r => r.closest('[aria-label=Diffs]')).map(r => r.getAttribute('aria-label'))).toEqual(['src/app.ts', 'src/new.ts', 'old.txt']))
   })
 
   test('a picked commit that is no longer one of the run’s gives way to "All changes"', async () => {
@@ -263,12 +263,12 @@ describe('ChangesPanel, a file asked for from the chat', () => {
   })
 
   test('an ask already taken is not taken again by a pane opened later', async () => {
-    const taken = ask('src/app.ts')
+    const taken = ask('src/new.ts')
     const first = render(<ChangesPanel projectId="p1" agentId="run-1" context={context} reveal={taken} />)
-    await waitFor(() => expect(row(/app\.ts/).getAttribute('aria-pressed')).toBe('true'))
+    await waitFor(() => expect(row(/new\.ts/).getAttribute('aria-pressed')).toBe('true'))
     first.unmount()
     render(<ChangesPanel projectId="p1" agentId="run-1" context={context} reveal={taken} />)
-    await waitFor(() => expect(row(/old\.txt/).getAttribute('aria-pressed')).toBe('true'))
+    await waitFor(() => expect(row(/app\.ts/).getAttribute('aria-pressed')).toBe('true'))
   })
 
   test('with a commit picked, the ask goes back to "All changes" and picks the file there', async () => {
@@ -285,7 +285,7 @@ describe('ChangesPanel, a file asked for from the chat', () => {
 
   test('a file asked for that the list does not hold leaves the first file picked', async () => {
     render(<ChangesPanel projectId="p1" agentId="run-1" context={context} reveal={ask('gone.md')} />)
-    await waitFor(() => expect(row(/old\.txt/).getAttribute('aria-pressed')).toBe('true'))
+    await waitFor(() => expect(row(/app\.ts/).getAttribute('aria-pressed')).toBe('true'))
   })
 
   test('a file asked for by its whole path on disk is the listed file that path ends with', async () => {
@@ -353,5 +353,73 @@ describe('ChangesPanel, as Claude Code on the web draws it', () => {
     render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
     await waitFor(() => expect(screen.getByText('b')).toBeTruthy())
     expect(screen.queryByText('Show more lines')).toBeNull()
+  })
+
+  test('a binary, an empty, a cut, a missing and a failed diff each say so', async () => {
+    readRun.mockResolvedValue({ source: 'checkout', changes: { 'a.bin': { status: 'modified', committed: true } }, merged: false })
+    const say = async (diff: unknown, words: string) => {
+      readDiff.mockImplementation(async () => (diff instanceof Error ? Promise.reject(diff) : diff) as never)
+      render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
+      await waitFor(() => expect(screen.getByText(words)).toBeTruthy())
+      cleanup()
+      forgetRemembered()
+    }
+    const base = { path: 'a.bin', status: 'modified', added: 0, removed: 0, truncated: false, binary: false }
+    await say({ ...base, patch: '', binary: true }, 'Binary file, nothing to show.')
+    await say({ ...base, status: 'untracked', patch: '' }, 'Empty file.')
+    await say({ ...base, patch: '@@ -1 +1 @@\n-a\n+b', truncated: true }, 'Cut here. The rest is in the worktree.')
+    await say(null, 'No change to show.')
+    await say(new Error('daemon restarted'), 'Reading the diff…')
+  })
+
+  test('a file longer than a diff may be offers no whole view: it would be cut before the change', async () => {
+    readRun.mockResolvedValue({ source: 'checkout', changes: { 'pnpm-lock.yaml': { status: 'modified', committed: true } }, merged: false })
+    readDiff.mockResolvedValue({ path: 'pnpm-lock.yaml', status: 'modified', patch: '@@ -7000 +7000 @@\n-a\n+b', added: 1, removed: 1, truncated: false, binary: false, lines: 9000 })
+    render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
+    const gap = await screen.findByText('6999 unmodified lines')
+    expect((gap.closest('button') as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.queryByText('Show more lines')).toBeNull()
+  })
+
+  test('a diff is read again when the list says its file changed, not on a poll of its own', async () => {
+    const { rerender } = render(<ChangesPanel projectId="p1" agentId="run-1" context={context} activity={1} />)
+    await waitFor(() => expect(readDiff).toHaveBeenCalledTimes(3))
+    readRun.mockResolvedValue({ source: 'checkout', changes: { ...changes, 'src/app.ts': { status: 'modified', committed: true, added: 9, removed: 0 } }, merged: false })
+    rerender(<ChangesPanel projectId="p1" agentId="run-1" context={context} activity={2} />)
+    await waitFor(() => expect(readDiff).toHaveBeenCalledTimes(4))
+    expect(readDiff).toHaveBeenLastCalledWith(expect.anything(), 'p1', 'src/app.ts', 'run-1', undefined, false)
+  })
+
+  test('a file asked for from the chat is scrolled to', async () => {
+    const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView')
+    render(<ChangesPanel projectId="p1" agentId="run-1" context={context} reveal={{ path: 'old.txt', at: 99_999 }} />)
+    await waitFor(() => expect(scrolled.mock.contexts.at(-1)).toBe(screen.getByRole('region', { name: 'old.txt' })))
+  })
+})
+
+describe('rowsOf', async () => {
+  const { rowsOf } = await import('./DiffView.js')
+  test('numbers each line by the new file, a removed one by the old, and counts the unchanged lines left out', () => {
+    expect(rowsOf('@@ -3,3 +3,3 @@\n a\n-b\n+c\n d\n@@ -20 +20,2 @@\n e\n+f\n\\ No newline at end of file')).toEqual([
+      { kind: 'gap', hidden: 2 },
+      { kind: 'same', text: 'a', number: 3 },
+      { kind: 'del', text: 'b', number: 4 },
+      { kind: 'add', text: 'c', number: 4 },
+      { kind: 'same', text: 'd', number: 5 },
+      { kind: 'gap', hidden: 14 },
+      { kind: 'same', text: 'e', number: 20 },
+      { kind: 'add', text: 'f', number: 21 },
+    ])
+  })
+
+  test('a new file’s lines, with no hunk header, are all added from line 1; a deleted file’s are all removed', () => {
+    expect(rowsOf('+one\n+@@ two')).toEqual([
+      { kind: 'add', text: 'one', number: 1 },
+      { kind: 'add', text: '@@ two', number: 2 },
+    ])
+    expect(rowsOf('@@ -1,2 +0,0 @@\n-x\n-y')).toEqual([
+      { kind: 'del', text: 'x', number: 1 },
+      { kind: 'del', text: 'y', number: 2 },
+    ])
   })
 })

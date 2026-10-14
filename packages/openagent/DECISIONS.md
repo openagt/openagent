@@ -96,6 +96,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   preview tab, a double click keeps it open as a tab, and a right click attaches it to the
   next run's Context or copies its path or its name. Picked over a click that added the
   file to the Context, and over a card that showed the file while the pointer rested on it.
+- The Changes pane shows every changed file's diff, one under another, as Claude Code on
+  the web does, and a click in its list scrolls to that file's. Picked over one diff at a
+  time beside the list.
 - The packages every project wants are built in: OpenAgent depends on them and uses them
   for every project through the same contract as any package (a module by its
   `./dashboard` export, a provider of a kind of data and the writer of its hook lines by

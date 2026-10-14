@@ -43,7 +43,8 @@ export function parsePorcelain(out: string): PorcelainEntry[] {
  * modified. Renames map to the new path. Returns `{}` when the path is not a git repo.
  */
 export async function readFileStatuses(cwd: string, git: GitRunner = nodeGitRunner()): Promise<Record<string, FileGitStatus>> {
-  const out = await git(['status', '--porcelain'], cwd).catch(() => '')
+  // Every new file by itself: without it git names a new folder once (`?? newdir/`), which is no file.
+  const out = await git(['status', '--porcelain', '--untracked-files=all'], cwd).catch(() => '')
   const map: Record<string, FileGitStatus> = {}
   for (const { code, path } of parsePorcelain(out)) {
     map[path] = code === '??' ? 'untracked' : code.includes('D') ? 'deleted' : 'modified'

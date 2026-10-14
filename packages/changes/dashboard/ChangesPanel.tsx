@@ -31,7 +31,7 @@ import type { FileDiff } from '../src/diff.js'
 import { commitKey, commitsKey, diffKey, projectKey, runKey } from './keys.js'
 import { readCommit, readCommits, readDiff, readProject, readRun } from './reads.js'
 import { DiffView } from './DiffView.js'
-import { foldAll, foldDiff, setChangesSetting, showWhole, useChangesSettings, usePageDiffs } from './settings.js'
+import { foldAll, foldDiff, setChangesSetting, showWhole, useChangesSettings, usePageDiffs, wholeKey } from './settings.js'
 
 // The Changes pane, as Claude Code on the web draws it: in its header the branch the changes are
 // measured from and the run's own ("main → agent-…"), then search and a ⋮ menu; the files that
@@ -114,41 +114,66 @@ function CommitRow({ label, detail, title, picked, onPick }: { label: string; de
   )
 }
 
-/**
- * One file's diff, read once it comes near the view: a change of two hundred files reads the diffs
- * it is scrolled to, not all of them at once. Read again every few seconds, as the agent may still
- * be editing; a diff read before shows at once.
- */
-function LazyDiff({ projectId, agentId, path, commit, whole, wrap, refresh, onWhole }: {
+interface DiffProps {
   projectId: string
   agentId: string | undefined
   path: string
   commit: string | undefined
   whole: boolean
   wrap: boolean
-  refresh: number
+  /**
+   * What the list last said of the file, and "Refresh": a diff is read again when either changes,
+   * not on a poll of its own. The list is read every few seconds and at once when the agent does
+   * something, so a diff follows the agent's edits without one read per diff per poll.
+   */
+  version: string
   onWhole: () => void
-}) {
+}
+
+/**
+ * One file's diff, read once it comes near the view of the diffs (`root`): a change of two hundred
+ * files reads the diffs it is scrolled to, not all of them at once.
+ */
+function LazyDiff({ root, ...props }: DiffProps & { root: HTMLElement | null }) {
   const spot = useRef<HTMLDivElement>(null)
   const [near, setNear] = useState(typeof IntersectionObserver === 'undefined')
   useEffect(() => {
-    if (near || !spot.current) return
-    const watch = new IntersectionObserver(entries => entries.some(entry => entry.isIntersecting) && setNear(true), { rootMargin: '600px' })
+    if (near || !spot.current || !root) return
+    const watch = new IntersectionObserver(entries => entries.some(entry => entry.isIntersecting) && setNear(true), { root, rootMargin: '600px 0px' })
     watch.observe(spot.current)
     return () => watch.disconnect()
-  }, [near])
+  }, [near, root])
   if (!near) return <div ref={spot} className="h-16" />
-  return <DiffBody projectId={projectId} agentId={agentId} path={path} commit={commit} whole={whole} wrap={wrap} refresh={refresh} onWhole={onWhole} />
+  return <DiffBody {...props} />
 }
 
-function DiffBody({ projectId, agentId, path, commit, whole, wrap, refresh, onWhole }: Parameters<typeof LazyDiff>[0]) {
+/** A diff that is never read again on its own: what the list says of the file, or "Refresh", reads it again. */
+const NO_POLL = 3_600_000
+
+function DiffBody({ projectId, agentId, path, commit, whole, wrap, version, onWhole }: DiffProps) {
   const host = useModuleHost()
-  const { value, loaded } = usePolled<FileDiff | null>(() => readDiff(host, projectId, path, agentId, commit, whole), null, 8_000, [projectId, agentId, path, commit, whole, refresh], {
+  const { value, loaded } = usePolled<FileDiff | null>(() => readDiff(host, projectId, path, agentId, commit, whole), null, NO_POLL, [projectId, agentId, path, commit, whole, version], {
     remember: diffKey(projectId, agentId, path, commit, whole),
   })
-  if (!loaded) return <p className="px-3 py-2 text-xs text-muted-foreground">Reading the diff…</p>
-  if (!value) return <p className="px-3 py-2 text-xs text-muted-foreground">No change to show.</p>
-  return <DiffView diff={value} wrap={wrap} whole={whole} onWhole={onWhole} className="py-1" />
+  // Asked for whole, the diff shown so far stays until the whole file answers: the place clicked is not lost to a "Reading…" line.
+  const shown = useRef<FileDiff | null>(null)
+  if (loaded) shown.current = value
+  const diff = loaded ? value : shown.current
+  if (!loaded && !diff) return <p className="px-3 py-2 text-xs text-muted-foreground">Reading the diff…</p>
+  if (!diff) return <p className="px-3 py-2 text-xs text-muted-foreground">No change to show.</p>
+  return <DiffView diff={diff} wrap={wrap} whole={whole} onWhole={onWhole} className="py-1" />
+}
+
+/** The files in the order the list shows them: folder by folder, folders first, when grouped. */
+function listOrder(paths: string[], group: boolean): string[] {
+  if (!group) return paths
+  const order: string[] = []
+  const walk = (node: Folder) => {
+    for (const dir of [...node.dirs.values()].sort((a, b) => a.name.localeCompare(b.name))) walk(dir)
+    order.push(...node.files)
+  }
+  walk(foldersOf(paths))
+  return order
 }
 
 /** Search the changed files by name, and go to the one picked. */
@@ -253,7 +278,8 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
 
   const all = agentId ? (run && 'changes' in run ? run.changes : NO_CHANGES) : projectChanges
   const changes = commit ? (commitChanges ?? NO_CHANGES) : all
-  const paths = useMemo(() => Object.keys(changes).sort(), [changes])
+  // One order for the list and the diffs, so the first row is the first diff.
+  const paths = useMemo(() => listOrder(Object.keys(changes).sort((a, b) => a.localeCompare(b)), settings.group), [changes, settings.group])
   // A file asked for from the chat may be named by its whole path on disk, when the run's card no
   // longer says where its checkout was: the listed file that path ends with is the one meant.
   const meant = clicked === null || paths.includes(clicked) ? clicked : (paths.filter(path => clicked.endsWith(`/${path}`)).sort((a, b) => b.length - a.length)[0] ?? null)
@@ -268,8 +294,10 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
   }, [clickedAt, meant])
   const pick = (path: string) => setClick({ agentId, sha, path, at: Date.now() })
 
-  const merged = agentId !== undefined && run !== null && 'merged' in run && run.merged
+  // Only work that changed something is merged or not: a run that changed nothing, or one starting, says neither.
+  const merged = agentId !== undefined && run !== null && 'merged' in run ? run.merged : undefined
   const between = run && 'changes' in run && run.from && run.to ? `${run.from} → ${run.to}` : undefined
+  const [diffsElement, setDiffsElement] = useState<HTMLElement | null>(null)
   const header = (
     <>
       {between && (
@@ -277,7 +305,7 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
           {/* One line, cut at its end on a narrow pane: the branches come first. */}
           <h2 className="min-w-0 truncate pl-2 text-xs font-medium text-muted-foreground" title={between}>
             {between}
-            <span className="pl-1 text-[10px] font-normal">{merged ? '· merged' : '· not merged yet'}</span>
+            {merged !== undefined && <span className="pl-1 text-[10px] font-normal">{merged ? '· merged' : '· not merged yet'}</span>}
           </h2>
         </PaneTitle>
       )}
@@ -374,7 +402,7 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
               </section>
             )}
           </div>
-          <div aria-label="Diffs" className="flex min-h-0 min-w-0 flex-auto flex-col overflow-y-auto">
+          <div ref={setDiffsElement} aria-label="Diffs" className="flex min-h-0 min-w-0 flex-auto flex-col overflow-y-auto">
             {caption && (
               <p className="truncate border-b border-border px-3 py-1.5 text-[11px] text-muted-foreground" title={caption}>
                 {caption}
@@ -406,7 +434,19 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
                     <span className={cn('min-w-0 truncate', mark.status === 'deleted' && 'line-through')}>{path}</span>
                     <Counts mark={mark} />
                   </button>
-                  {!isFolded && <LazyDiff projectId={projectId} agentId={agentId} path={path} commit={sha} whole={whole.has(path)} wrap={settings.wrap} refresh={refresh} onWhole={() => showWhole(page, path)} />}
+                  {!isFolded && (
+                    <LazyDiff
+                      root={diffsElement}
+                      projectId={projectId}
+                      agentId={agentId}
+                      path={path}
+                      commit={sha}
+                      whole={whole.has(wholeKey(path, sha))}
+                      wrap={settings.wrap}
+                      version={`${refresh}:${mark.status}:${mark.committed}:${mark.added ?? ''}:${mark.removed ?? ''}`}
+                      onWhole={() => showWhole(page, path, sha)}
+                    />
+                  )}
                 </section>
               )
             })}

@@ -217,7 +217,7 @@ async function changedPaths(git: GitRunner, cwd: string, from: string, to: strin
 
 /** {@link changedPaths}, each with its line counts from `git diff --numstat`. */
 async function committedChanges(git: GitRunner, cwd: string, from: string, to: string): Promise<Record<string, FileMark>> {
-  const [changes, numstat] = await Promise.all([changedPaths(git, cwd, from, to), git(['diff', '--numstat', '--no-renames', from, to], cwd).catch(() => '')])
+  const [changes, numstat] = await Promise.all([changedPaths(git, cwd, from, to), git(['-c', 'core.quotePath=false', 'diff', '--numstat', '--no-renames', from, to], cwd).catch(() => '')])
   for (const count of parseNumstat(numstat)) {
     const mark = changes[count.path]
     if (mark && !count.binary) changes[count.path] = { ...mark, added: count.added, removed: count.removed }

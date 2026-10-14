@@ -11,6 +11,7 @@ export interface ChangesSettings {
 
 export interface PageDiffs {
   folded: ReadonlySet<string>
+  /** The diffs shown whole, by {@link wholeKey}. */
   whole: ReadonlySet<string>
 }
 
@@ -74,10 +75,13 @@ export function foldAll(page: string, paths: string[] | null) {
   changed()
 }
 
-/** Show every line of a file's diff, not only those around its changes. */
-export function showWhole(page: string, path: string) {
+/** The name a diff shown whole is kept under: its file, in one commit or in all changes. */
+export const wholeKey = (path: string, commit: string | undefined) => `${commit ?? ''}:${path}`
+
+/** Show every line of a file's diff, not only those around its changes: in the commit shown, or in all changes. */
+export function showWhole(page: string, path: string, commit: string | undefined) {
   const diffs = pages.get(page) ?? NONE
-  pages.set(page, { ...diffs, whole: new Set([...diffs.whole, path]) })
+  pages.set(page, { ...diffs, whole: new Set([...diffs.whole, wholeKey(path, commit)]) })
   changed()
 }
 

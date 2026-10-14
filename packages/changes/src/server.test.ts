@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, test } from 'node:test'
@@ -98,4 +98,18 @@ test('a run’s read names the branch it is measured from and its own; a diff as
   assert.doesNotMatch(near, /line 0\n/)
   assert.match(whole, /line 0\n/)
   assert.equal(((await read('diff', { agentId: 'run-n', path: 'many.txt' }, runs)) as { lines?: number }).lines, 20, 'the file’s own length, so the pane knows lines are left under the change')
+})
+
+test('a new folder on disk is listed file by file, with its lines', async () => {
+  const checkout = join(dir, 'wt-folder')
+  git(root, 'worktree', 'add', '-q', '-b', 'agent-folder', checkout, 'main')
+  await mkdir(join(checkout, 'feature'))
+  await writeFile(join(checkout, 'feature', 'a.ts'), 'a\n')
+  await writeFile(join(checkout, 'feature', 'b.ts'), 'b\nb\n')
+  const runs = { 'run-f': { checkout, changedNothing: false } }
+  const answer = (await read('run', { agentId: 'run-f' }, runs)) as { changes: Record<string, unknown> }
+  assert.deepEqual(answer.changes, {
+    'feature/a.ts': { status: 'untracked', committed: false, added: 1, removed: 0 },
+    'feature/b.ts': { status: 'untracked', committed: false, added: 2, removed: 0 },
+  })
 })
