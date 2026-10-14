@@ -6,7 +6,6 @@
   "intent": "tell me hi. nothing else",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-10-14T04-33-23-289Z",
   "cost": 0.044994599999999996,
   "caller": {
     "runner": {
