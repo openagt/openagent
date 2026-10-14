@@ -1,0 +1,16 @@
+{
+  "id": "2026-10-14T05-53-50-083Z",
+  "startedAt": "2026-10-14T05:53:50.348Z",
+  "status": "running",
+  "intent": "ask me about my fav color",
+  "driver": "claude-code",
+  "model": "opus",
+  "caller": {
+    "runner": {
+      "host": "ubuntu-s-1vcpu-2gb-fra1",
+      "pid": 2024243,
+      "publish": "commit"
+    },
+    "host": "ubuntu-s-1vcpu-2gb-fra1"
+  }
+}
