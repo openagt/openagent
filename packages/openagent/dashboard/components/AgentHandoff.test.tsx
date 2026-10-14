@@ -283,6 +283,74 @@ describe('run handoff (#799)', () => {
     await waitFor(() => expect(sendMerge).toHaveBeenCalledWith('p1', 'run-1'))
   })
 
+  test('more work after the pull request was opened: Commit first, then the push that brings it to the PR, then the Merge', async () => {
+    const pr = { number: 42, url: 'https://example.test/42', state: 'OPEN', title: 'Add dark mode' }
+    // Asked for another change, the agent left it uncommitted: a merge would land the PR without it.
+    onAgentHandoff.mockResolvedValue({ ...worked, pushed: true, pr, pendingFiles: ['index.html'] })
+    render(<Harness />)
+    await waitFor(() => expect(screen.getByText('index.html left uncommitted.')).toBeTruthy())
+    expect(screen.queryByText('Merge PR')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Commit' }))
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', 'Commit your work.', 'run-1'))
+    cleanup()
+
+    // Committed: the branch is one commit past the pull request's head.
+    const commits = [{ sha: 'bbbbbbb2', short: 'bbbbbbb', subject: 'a darker dark mode' }, ...worked.commits]
+    const behind = { ...pr, headRefOid: 'aaaaaaa1' }
+    onAgentHandoff.mockResolvedValue({ ...worked, commits, pushed: false, pr: behind })
+    render(<Harness />)
+    await waitFor(() => expect(screen.getByText('not in the PR yet')).toBeTruthy())
+    expect(screen.queryByText('Merge PR')).toBeNull()
+    expect(screen.queryByText('Open PR')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Update PR' }))
+    await waitFor(() => expect(sendPush).toHaveBeenCalledWith('p1', 'run-1'))
+    expect(sendOpenPullRequest).not.toHaveBeenCalled()
+    cleanup()
+
+    // Pushed: the pull request has everything, and its Merge is the step left.
+    onAgentHandoff.mockResolvedValue({ ...worked, commits, pushed: true, pr: { ...pr, headRefOid: 'bbbbbbb2' } })
+    render(<Harness />)
+    await waitFor(() => expect(screen.getByText('Merge PR')).toBeTruthy())
+    expect(screen.queryByText('not in the PR yet')).toBeNull()
+  })
+
+  test('a branch that differs from the remote because the remote moved has nothing to push: the Merge stays', async () => {
+    const pr = { number: 42, url: 'https://example.test/42', state: 'OPEN', title: 'Add dark mode' }
+    // The pull request was updated on the git host and this machine fetched it: its head is no commit of this branch.
+    onAgentHandoff.mockResolvedValue({ ...worked, pushed: false, pr: { ...pr, headRefOid: 'ccccccc3' } })
+    render(<Harness />)
+    await waitFor(() => expect(screen.getByText('Merge PR')).toBeTruthy())
+    expect(screen.queryByRole('button', { name: 'Update PR' })).toBeNull()
+    cleanup()
+
+    // A pull request read without its head, and one whose branch only the remote has: nothing is known to push.
+    onAgentHandoff.mockResolvedValue({ ...worked, pushed: false, pr })
+    render(<Harness />)
+    await waitFor(() => expect(screen.getByText('Merge PR')).toBeTruthy())
+    expect(screen.queryByRole('button', { name: 'Update PR' })).toBeNull()
+    cleanup()
+    onAgentHandoff.mockResolvedValue({ ...worked, exists: false, commits: [], files: [], empty: true, pushed: false, pr: { ...pr, headRefOid: 'aaaaaaa1' } })
+    render(<Harness />)
+    await waitFor(() => expect(screen.getByText('Merge PR')).toBeTruthy())
+    expect(screen.queryByRole('button', { name: 'Update PR' })).toBeNull()
+  })
+
+  test('work committed after the pull request merged is offered a pull request of its own', async () => {
+    const commits = [{ sha: 'bbbbbbb2', short: 'bbbbbbb', subject: 'a darker dark mode' }, ...worked.commits]
+    onAgentHandoff.mockResolvedValue({
+      ...worked,
+      commits,
+      pr: { number: 42, url: 'https://example.test/42', state: 'MERGED', title: 'Add dark mode', headRefOid: 'aaaaaaa1' },
+      movedPastPr: true,
+    })
+    render(<Harness />)
+    await waitFor(() => expect(screen.getByText('Open PR')).toBeTruthy())
+    expect(screen.getByText('not published')).toBeTruthy()
+    expect(screen.queryByText('Merge PR')).toBeNull()
+    fireEvent.click(screen.getByText('Open PR'))
+    await waitFor(() => expect(sendOpenPullRequest).toHaveBeenCalledWith('p1', 'run-1', { draft: false }))
+  })
+
   test('a merged or closed PR offers nothing — landed is an answer, not an action (#1391)', async () => {
     onAgentHandoff.mockResolvedValue({
       ...worked,

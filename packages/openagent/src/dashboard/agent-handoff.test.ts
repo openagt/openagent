@@ -294,6 +294,22 @@ test('an existing PR is the Open PR answer, unless the session kept committing a
   assert.equal(calls.filter(call => call[0] === 'open').length, 1)
 })
 
+test('the handoff says when the session kept committing after its PR merged or closed, so the bar offers the next one (#1512)', async () => {
+  const { branches } = fakeBranches({ 'openagent/work': state({ commits: [{ sha: 'tip0000000', subject: 'more' }, { sha: 'older00000', subject: 'first' }] }) })
+  // The repository knows `older00000` as a commit the tip builds on, and no other.
+  const git = async (args: string[]) => {
+    if (args.join(' ') === 'merge-base --is-ancestor older00000 tip0000000') return ''
+    throw new Error('exit 1')
+  }
+  const read = (pr: LinkedPr) => readAgentHandoff('/repo', 'openagent/work', { branches, git, pr: async () => pr })
+  const merged = { number: 6, url: 'u6', state: 'MERGED', title: 'landed', createdAt: '2026-07-27T00:00:00Z' }
+  assert.equal((await read({ ...merged, headRefOid: 'older00000' }))?.movedPastPr, true, 'the tip builds on the merged PR\'s head')
+  assert.equal((await read({ ...merged, headRefOid: 'tip0000000' }))?.movedPastPr, undefined, 'the merged PR covers the tip: everything landed')
+  assert.equal((await read({ ...merged, state: 'OPEN', headRefOid: 'older00000' }))?.movedPastPr, undefined, 'an open PR takes pushed commits itself')
+  assert.equal((await read(merged))?.movedPastPr, undefined, 'a PR read without its head: no guess')
+  assert.equal((await read({ ...merged, headRefOid: 'elsewhere0' }))?.movedPastPr, undefined, 'a PR updated on the git host: the tip does not build on its head, and nothing here is past it')
+})
+
 test('resolveAgentPr reads the PR the run recorded, and asks gh only for its state (E6)', async () => {
   const asked: (string | undefined)[] = []
   const live = { number: 41, url: 'https://github.com/o/r/pull/41', state: 'MERGED', title: 'the work' }
