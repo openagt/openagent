@@ -21,16 +21,25 @@ function naming(said: string): Driver & { starts: DriverStartOptions[] } {
   }
 }
 
-test('the prompt asks for a few words and carries what the person asked', () => {
+test('the prompt asks for a few words and carries what the person asked, fenced off as text to name', () => {
   const asked = titlePrompt('make readme.md shorter')
   assert.match(asked, /two to five words/)
   assert.match(asked, /make readme\.md shorter/)
+  // A prompt that names files was being read as a job to do, and in an empty folder the job could
+  // not be done: the answer was a paragraph about the missing files, and the run went unnamed.
+  assert.match(asked, /--------\nmake readme\.md shorter\n--------/)
+  assert.match(asked, /text to name, not a request to you/)
+  assert.match(TITLE_SYSTEM, /empty on purpose/)
+  assert.match(TITLE_SYSTEM, /never look for the files or folders it names/)
 })
 
 test('what the model answered is taken as the name, free of the wrapping a model adds', () => {
   assert.equal(titleOf('README.md condensing'), 'README.md condensing')
   assert.equal(titleOf('"Dark mode toggle"'), 'Dark mode toggle')
   assert.equal(titleOf('Title: Dark mode toggle.'), 'Dark mode toggle')
+  // The lead-ins a small model writes when it says what it is doing as well as doing it.
+  assert.equal(titleOf('Session naming: Dark mode toggle'), 'Dark mode toggle')
+  assert.equal(titleOf('Name: Dark mode toggle'), 'Dark mode toggle')
   // Models like to leave a blank line first: the name is the first line with anything on it.
   assert.equal(titleOf('\n\nDark mode toggle\n'), 'Dark mode toggle')
 })
