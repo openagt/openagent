@@ -42,6 +42,8 @@ export interface LogCard {
   model?: string
   branch?: string
   pr?: { number: number; url: string }
+  /** How much of the model's context the conversation filled at the last turn ({@link DriverUsage.contextTokens}). */
+  contextTokens?: number
   caller?: Record<string, unknown>
 }
 
@@ -142,6 +144,8 @@ export class SessionLog {
     if (event.type === 'text') this.partial = undefined
     const line = { ...diaryLine(event), at: this.clock() }
     if (event.type === 'result' && event.usage?.costUsd !== undefined) this.card.cost = (this.card.cost ?? 0) + event.usage.costUsd
+    // How full the conversation is now, not a total: the newest turn's reading replaces the one before.
+    if (event.type === 'result' && event.usage?.contextTokens !== undefined) this.card.contextTokens = event.usage.contextTokens
     if ((event.type === 'session' || event.type === 'result') && event.sessionId) {
       this.card.caller = { ...this.card.caller, sessionId: event.sessionId }
     }

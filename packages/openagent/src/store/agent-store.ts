@@ -183,6 +183,8 @@ export interface AgentMeta {
   model?: string
   /** How hard that model was told to think, by the coding agent's own names (`medium`, `high`, …); absent, it thinks as it does by default. */
   effort?: string
+  /** How much of the model's context the conversation filled at the last turn; absent when the agent reports no reading. */
+  contextTokens?: number
 }
 
 /**

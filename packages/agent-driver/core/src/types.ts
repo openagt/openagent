@@ -227,6 +227,13 @@ export interface DriverUsage {
   cacheReadTokens: number
   /** Tokens written to the prompt cache. */
   cacheCreationTokens: number
+  /**
+   * How much of the model's context the conversation filled when the turn ended: the last model
+   * call's whole prompt (cached part included) plus what that call wrote. Not the turn's total —
+   * a turn makes several calls over one growing conversation, and adding those up would say the
+   * window is far fuller than it is. Absent when the agent reports no per-call reading.
+   */
+  contextTokens?: number
 }
 
 /**

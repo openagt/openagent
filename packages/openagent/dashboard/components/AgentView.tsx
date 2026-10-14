@@ -24,7 +24,8 @@ import { holdsMainAgent } from '../lib/subagents.js'
 import { agentLogKey } from '../lib/agent-log.js'
 import { revealChange, revealScreen } from '../lib/reveal-change.js'
 import { panesPage } from '../lib/panes.js'
-import { modelName, useModels } from '../lib/models.js'
+import { modelContextWindow, modelName, useModels } from '../lib/models.js'
+import { ContextCircle } from './ContextCircle.js'
 import { effortLabel } from './EffortMenu.js'
 import { thisMachineName } from '../lib/this-machine.js'
 import { driverFromImpl } from '../../src/client.js'
@@ -169,6 +170,9 @@ export function AgentView({
   // The model and how hard it was told to think, as Claude Code says them under its box: the two
   // words of the session's own setup, which it keeps for its whole life.
   const underBox = [modelLabel, card?.effort ? effortLabel(card.effort) : undefined].filter(Boolean).join(' · ') || undefined
+  // How full this session's context is: the run's own last reading, against what the agent says
+  // the model holds. Either missing, no circle.
+  const window = modelContextWindow(models, picked, model)
   // Where the agent runs, for the chip beside its name: a machine by the name it was given.
   // A run another computer started, which is no saved machine, is named by that computer: it did not run here.
   const runsOn = remoteLabel ?? (target === 'web' ? 'Cloud' : target === 'actions' ? 'GitHub Actions' : target === 'remote' ? 'Another machine' : card?.otherHost && card.host ? card.host : thisMachineName())
@@ -412,6 +416,7 @@ export function AgentView({
             onQueued={onQueued}
             outcome={outcome}
             model={underBox}
+            {...(card?.contextTokens !== undefined && window !== undefined ? { context: <ContextCircle used={card.contextTokens} size={window} /> } : {})}
           />
         </>
       }

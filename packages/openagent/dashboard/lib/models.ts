@@ -50,6 +50,17 @@ export function modelEfforts(models: ModelsView | undefined, driver: string | un
   return (listed.find(m => m.id === id) ?? listed.find(m => m.resolvedId === id))?.efforts ?? []
 }
 
+/**
+ * How much conversation the picked model holds, by the coding agent's own word (Codex says it; for
+ * Claude it is what the driver knows of the family). `undefined` for a model nobody has said it
+ * of — nothing here guesses one.
+ */
+export function modelContextWindow(models: ModelsView | undefined, driver: string | undefined, id: string | undefined): number | undefined {
+  if (!driver || !id) return undefined
+  const listed = models?.[driver as DriverName]?.models ?? []
+  return (listed.find(m => m.id === id) ?? listed.find(m => m.resolvedId === id))?.contextWindow
+}
+
 export type { DriverModels, ModelsView }
 
 /** A coding agent as a module offers it: its name for the run (`claude-code`), its label, its models, and why it lists none. */

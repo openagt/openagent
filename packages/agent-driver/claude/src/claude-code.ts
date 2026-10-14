@@ -333,6 +333,8 @@ export class StreamJsonParser {
   private assistantText = ''
   private sessionId?: string
   private usage?: DriverUsage
+  /** How full the conversation was at the last model call of this turn: that call's own `usage`. */
+  private context?: number
   /** The text block being written, as far as its pieces have got. */
   private partial = ''
 
@@ -376,7 +378,7 @@ export class StreamJsonParser {
       const result = obj['result']
       if (typeof result === 'string') this.finalText = result
       const usage = parseUsage(obj)
-      if (usage) this.usage = usage
+      if (usage) this.usage = { ...usage, ...(this.context !== undefined ? { contextTokens: this.context } : {}) }
       return announced // The `result` event is emitted by the runner after `close`.
     }
     return announced
@@ -404,6 +406,11 @@ export class StreamJsonParser {
   private handleAssistant(obj: Record<string, unknown>): DriverEvent[] {
     const message = obj['message']
     if (typeof message !== 'object' || message === null) return []
+    // Every assistant message carries the usage of the one model call that wrote it, so the last
+    // of them says how full the conversation is now. The `result` line's usage is the turn's total
+    // over every call it made, which is a different number and a much bigger one.
+    const context = contextOf((message as Record<string, unknown>)['usage'])
+    if (context !== undefined) this.context = context
     const content = (message as Record<string, unknown>)['content']
     if (!Array.isArray(content)) return []
     const events: DriverEvent[] = []
@@ -484,6 +491,21 @@ function parseRateLimit(obj: Record<string, unknown>): DriverRateLimit | undefin
  * `total_cost_usd` plus a `usage` object of token counts. Returns undefined when
  * the line carries neither, so a driver/agent that omits usage stays usage-free.
  */
+/**
+ * How full the conversation was at one model call: the whole prompt it was given (the cached part
+ * included) and what it wrote back. `undefined` when the message carries no usage.
+ */
+export function contextOf(raw: unknown): number | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined
+  const usage = raw as Record<string, unknown>
+  const num = (key: string): number => {
+    const value = usage[key]
+    return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
+  }
+  const total = num('input_tokens') + num('cache_read_input_tokens') + num('cache_creation_input_tokens') + num('output_tokens')
+  return total > 0 ? total : undefined
+}
+
 function parseUsage(obj: Record<string, unknown>): DriverUsage | undefined {
   const cost = obj['total_cost_usd']
   const raw = obj['usage']

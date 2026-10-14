@@ -33,6 +33,8 @@ export interface RunCard {
   pr?: { number: number; url: string }
   /** What the run cost, in US dollars. */
   cost?: number
+  /** How much of the model's context the conversation filled at the run's last turn. */
+  contextTokens?: number
   /** The writer's own record, under one key: stored as given, never read. */
   caller?: Record<string, unknown>
 }
@@ -141,6 +143,7 @@ export function parseRunCard(json: string): RunCard | undefined {
     if (typeof r[key] === 'string') card[key] = r[key]
   }
   if (typeof r['cost'] === 'number') card.cost = r['cost']
+  if (typeof r['contextTokens'] === 'number') card.contextTokens = r['contextTokens']
   const pr = r['pr']
   if (pr && typeof pr === 'object' && typeof (pr as Record<string, unknown>)['number'] === 'number' && typeof (pr as Record<string, unknown>)['url'] === 'string') {
     card.pr = { number: (pr as { number: number }).number, url: (pr as { url: string }).url }
@@ -152,8 +155,8 @@ export function parseRunCard(json: string): RunCard | undefined {
 
 /** A card as it is written: the package's fields first, `caller` last, pretty, one trailing newline. */
 export function formatRunCard(card: RunCard): string {
-  const { id, startedAt, endedAt, status, intent, title, driver, model, effort, branch, pr, cost, caller } = card
-  const ordered = { id, startedAt, endedAt, status, intent, title, driver, model, effort, branch, pr, cost, caller }
+  const { id, startedAt, endedAt, status, intent, title, driver, model, effort, branch, pr, cost, contextTokens, caller } = card
+  const ordered = { id, startedAt, endedAt, status, intent, title, driver, model, effort, branch, pr, cost, contextTokens, caller }
   return JSON.stringify(ordered, null, 2) + '\n'
 }
 
