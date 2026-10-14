@@ -16,7 +16,7 @@ import {
 } from './ui/dropdown-menu.js'
 
 const PUBLISH_DESCRIPTIONS: Readonly<Record<PublishPick, string>> = {
-  nothing: 'It commits and publishes nothing. You decide after.',
+  nothing: 'Adds nothing to your message. The agent decides, and usually commits.',
   commit: 'It commits its work on its branch.',
   branch: 'It commits and pushes its branch.',
   pr: 'It commits, pushes its branch and opens a pull request.',

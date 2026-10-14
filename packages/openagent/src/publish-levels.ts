@@ -2,8 +2,9 @@
  * How far a run takes its work when its agent finishes, node-free so every surface shares
  * one copy: the registry's preference sanitizer, the daemon's Start and the dashboard bundle.
  * The levels are the words a project's start hook is handed as `PUBLISH`, the ones
- * `agent-runner run --publish` takes. The launcher's menu offers them after "Nothing", the pick
- * that hands the hook no level: the run then commits and publishes nothing unless its prompt asks.
+ * `agent-runner run --publish` takes. The launcher's menu offers them after "Off", the pick
+ * that hands the hook no level: nothing is added to the person's message then, and whether the
+ * agent commits is its own, by the branches skill in its checkout.
  * Until a person picks, a run commits its work and pushes nothing: what leaves the machine is the
  * person's to ask for.
  */
@@ -21,7 +22,7 @@ export const PUBLISH_PICKS = ['nothing', ...PUBLISH_LEVELS] as const
 export type PublishPick = (typeof PUBLISH_PICKS)[number]
 
 export const PUBLISH_LABELS: Readonly<Record<PublishPick, string>> = {
-  nothing: 'Nothing',
+  nothing: 'Off',
   commit: 'Commit',
   branch: 'Publish branch',
   pr: 'Open PR',
@@ -57,7 +58,7 @@ export function publishPickIn(saved: PublishPick | undefined, gitHost: boolean, 
   return furthestWithoutRequest(remote)
 }
 
-/** The level a pick hands the start hook; none for Nothing. */
+/** The level a pick hands the start hook; none for Off. */
 export function publishLevelOf(pick: PublishPick): PublishLevel | undefined {
   return pick === 'nothing' ? undefined : pick
 }

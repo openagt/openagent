@@ -178,10 +178,13 @@ already made, and lists it in its pull request; for anything else it proposes an
   one copy of a tool and the tool's page went through another.
 - The line gets the prompt, and the coding agent, the model and how far to publish when the
   person picked them; anything else is the line's own business. The publish pick is one menu
-  beside Start: Nothing, Commit, Publish branch, Open PR, Merge on green. It is saved like the
+  beside Start: Off, Commit, Publish branch, Open PR, Merge on green. Off adds nothing to the
+  person's message: whether the agent then commits is its own, by the branches skill in its
+  checkout, where Commit asks for it. Picked over the name "Nothing", which promised that
+  nothing is committed. It is saved like the
   coding agent. A project with no git host package
-  is offered Nothing, Commit and Publish branch only. A project with no remote can publish
-  nothing, so it is offered Nothing and Commit, and a saved pick it is not offered counts
+  is offered Off, Commit and Publish branch only. A project with no remote can publish
+  nothing, so it is offered Off and Commit, and a saved pick it is not offered counts
   as Commit.
   Picked over handing over every option the launcher once had, which is how the options
   became the thing to maintain.

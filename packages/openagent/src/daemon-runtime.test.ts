@@ -79,9 +79,9 @@ test('a Start goes no further than the project can, the commit with no remote, t
     // No pick saved: the daemon starts the run at the commit, which pushes nothing.
     assert.deepEqual(await runtime.onStart('Fix it'), { ok: true, agentId: 'run-8' })
     assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'commit', 'no pick, no remote: the commit')
-    // Nothing is a pick: the line is given no level.
+    // Off is a pick: the line is given no level.
     assert.deepEqual(await runtime.onStart('Fix it', { publish: 'nothing' }), { ok: true, agentId: 'run-8' })
-    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'unset', 'Nothing saved: no level')
+    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'unset', 'Off saved: no level')
     execFileSync('git', ['remote', 'add', 'origin', 'https://example.com/x.git'], { cwd: home })
     assert.deepEqual(await runtime.onStart('Fix it', { publish: 'merge' }), { ok: true, agentId: 'run-8' })
     assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'branch', 'a remote and no git host: the branch')

@@ -27,7 +27,7 @@ const label = (over: Partial<Parameters<typeof AutoMenu>[0]>): string => {
 
 describe('AutoMenu', () => {
   test('the button reads what will happen: the publish pick, and the cleanup when ticked', () => {
-    expect(label({ publish: 'nothing' })).toBe('Auto: Nothing')
+    expect(label({ publish: 'nothing' })).toBe('Auto: Off')
     expect(label({ publish: 'commit' })).toBe('Auto: Commit')
     expect(label({ publish: 'branch' })).toBe('Auto: Publish branch')
     expect(label({ publish: 'pr' })).toBe('Auto: Open PR')
@@ -41,7 +41,7 @@ describe('AutoMenu', () => {
     await openMenu(trigger())
     expect(screen.getByText('When the agent finishes')).toBeTruthy()
     expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual([
-      'NothingIt commits and publishes nothing. You decide after.',
+      'OffAdds nothing to your message. The agent decides, and usually commits.',
       'CommitIt commits its work on its branch.',
       'Publish branchIt commits and pushes its branch.',
       'Open PRIt commits, pushes its branch and opens a pull request.',

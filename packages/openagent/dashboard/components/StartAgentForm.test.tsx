@@ -151,7 +151,7 @@ describe('StartAgentForm (#1774)', () => {
     expect(context.compareDocumentPosition(autoMenu()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  test('the publish options: the button reads Commit until the person picks, and the Start carries no pick, left to the daemon; a saved pick is shown and carried, Nothing too; a change writes the saved setting', async () => {
+  test('the publish options: the button reads Commit until the person picks, and the Start carries no pick, left to the daemon; a saved pick is shown and carried, Off too; a change writes the saved setting', async () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
     start.mockResolvedValue({ agentId: 'r1' })
     render(<StartAgentForm {...props} />)
@@ -160,7 +160,7 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', {}))
 
     await openMenu(autoMenu())
-    expect(publishOptions()).toEqual(['Nothing', 'Commit', 'Publish branch', 'Open PR', 'Merge on green'])
+    expect(publishOptions()).toEqual(['Off', 'Commit', 'Publish branch', 'Open PR', 'Merge on green'])
     fireEvent.click(screen.getByRole('menuitem', { name: /^Open PR/ }))
     expect(updatePreferences).toHaveBeenCalledWith({ publish: 'pr' })
 
@@ -176,30 +176,30 @@ describe('StartAgentForm (#1774)', () => {
     start.mockClear()
     prefs.current = { publish: 'nothing' }
     render(<StartAgentForm {...props} />)
-    expect(autoMenu().textContent).toBe('Auto: Nothing')
+    expect(autoMenu().textContent).toBe('Auto: Off')
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', { publish: 'nothing' }))
   })
 
-  test('a project with no git host package is offered Nothing, Commit and Publish branch only, and a saved pull request pick reads as the branch, which is where the daemon holds it', async () => {
+  test('a project with no git host package is offered Off, Commit and Publish branch only, and a saved pull request pick reads as the branch, which is where the daemon holds it', async () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: false })
     prefs.current = { publish: 'merge' }
     start.mockResolvedValue({ agentId: 'r1' })
     render(<StartAgentForm {...props} />)
     await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Publish branch'))
     await openMenu(autoMenu())
-    expect(publishOptions()).toEqual(['Nothing', 'Commit', 'Publish branch'])
+    expect(publishOptions()).toEqual(['Off', 'Commit', 'Publish branch'])
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', { publish: 'merge' }))
   })
 
-  test('a project with no remote is offered Nothing and Commit; its button reads Commit until the person picks, and with a saved publish pick too', async () => {
+  test('a project with no remote is offered Off and Commit; its button reads Commit until the person picks, and with a saved publish pick too', async () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: false, remote: false })
     start.mockResolvedValue({ agentId: 'r1' })
     render(<StartAgentForm {...props} />)
     await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Commit'))
     await openMenu(autoMenu())
-    expect(publishOptions()).toEqual(['Nothing', 'Commit'])
+    expect(publishOptions()).toEqual(['Off', 'Commit'])
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', {}))
 
@@ -218,7 +218,7 @@ describe('StartAgentForm (#1774)', () => {
     render(<StartAgentForm {...props} />)
     await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Commit · cleanup'))
     await openMenu(autoMenu())
-    expect(publishOptions()).toEqual(['Nothing', 'Commit'])
+    expect(publishOptions()).toEqual(['Off', 'Commit'])
     expect(screen.getByRole('menuitemcheckbox', { name: /^Post-merge cleanup/ })).toBeTruthy()
   })
 
