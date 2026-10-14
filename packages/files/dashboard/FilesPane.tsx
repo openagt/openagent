@@ -126,7 +126,7 @@ function FileSearch({ files, onOpen }: { files: string[]; onOpen: (path: string)
 export function FilesPane({ projectId, agentId, activity, context }: ModulePanelProps) {
   const host = useModuleHost()
   const page = `${projectId}/${agentId ?? ''}`
-  const { tabs, active } = useOpenFiles(page)
+  const { tabs, active, source } = useOpenFiles(page)
   const settings = useFilesSettings()
   const open = (path: string, keep: boolean) => openFile(page, path, keep)
 
@@ -161,6 +161,11 @@ export function FilesPane({ projectId, agentId, activity, context }: ModulePanel
     return () => clearInterval(timer)
   }, [pending, reloadTree])
   const files = agentId ? (runTree && 'files' in runTree ? runTree.files : EMPTY_FILES) : projectFiles
+  // The tab shown is in view, though the header has room for fewer tabs than are open.
+  const tablist = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    tablist.current?.querySelector('[aria-selected=true]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [active, tabs.length])
 
   const header = (
     <>
@@ -185,7 +190,7 @@ export function FilesPane({ projectId, agentId, activity, context }: ModulePanel
         {tabs.length === 0 ? (
           <h2 className="truncate pl-1 text-xs font-medium text-muted-foreground">Files</h2>
         ) : (
-          <div role="tablist" aria-label="Open files" className="flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]">
+          <div ref={tablist} role="tablist" aria-label="Open files" className="flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]">
             {tabs.map(tab => (
               <Tab key={tab.path} tab={tab} shown={tab.path === active} onShow={() => showFile(page, tab.path)} onKeep={() => open(tab.path, true)} onClose={() => closeFile(page, tab.path)} />
             ))}
@@ -238,7 +243,11 @@ export function FilesPane({ projectId, agentId, activity, context }: ModulePanel
               <FileTree files={files} caption={runTree ? sourceCaption(runTree) : undefined} shown={active} context={context} onOpen={open} />
             </div>
           )}
-          {active !== undefined ? <FileView key={active} projectId={projectId} agentId={agentId} path={active} wrap={settings.wrap} /> : <NoFileOpen />}
+          {active !== undefined ? (
+            <FileView key={active} page={page} projectId={projectId} agentId={agentId} path={active} wrap={settings.wrap} source={source?.has(active) ?? false} />
+          ) : (
+            <NoFileOpen tree={settings.tree} />
+          )}
         </div>
       </div>
     </>

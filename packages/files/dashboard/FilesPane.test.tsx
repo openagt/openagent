@@ -15,7 +15,7 @@ const { forgetOpenFiles } = await import('./open-files.js')
 const context = (files: string[] = [], toggle: (path: string) => void = () => {}) => ({ files: new Set(files), toggle })
 /** A folder's clickable row. */
 const folder = (name: string) => screen.getByText(name).closest('summary')!
-/** A file's row in the tree. */
+/** The header's tabs: name, shown, preview or kept. */
 const tabs = () => screen.queryAllByRole('tab').map(tab => [tab.textContent, tab.getAttribute('aria-selected'), tab.querySelector('.italic') ? 'preview' : 'kept'])
 const files = ['src/app.ts', 'README.md']
 
@@ -263,5 +263,85 @@ describe('opening files, as Claude Code on the web does', () => {
     fireEvent.click(await screen.findByText('Preview tabs'))
     fireEvent.click(screen.getByTitle('README.md'))
     await waitFor(() => expect(tabs()).toEqual([['README.md', 'true', 'kept']]))
+  })
+
+  test('on a run’s page the run’s copy is read, and the file shows with its lines numbered', async () => {
+    render(<FilesPane projectId="p1" agentId="run-1" context={context()} />)
+    fireEvent.click(await screen.findByTitle('README.md'))
+    await waitFor(() => expect(readContent).toHaveBeenCalledWith(expect.anything(), 'p1', 'README.md', 'run-1'))
+    readContent.mockResolvedValue({ path: 'a.ts', text: 'const a = 1\nconst b = 2', truncated: false, binary: false })
+    fireEvent.click(folder('src'))
+    fireEvent.click(await within(treeOf()).findByTitle('src/app.ts'))
+    await waitFor(() => expect(screen.getByText('const b = 2')).toBeTruthy())
+    expect(screen.getByText('2')).toBeTruthy()
+  })
+
+  test('nothing is read before a file is opened', async () => {
+    render(<FilesPane projectId="p1" context={context()} />)
+    await screen.findByText('README.md')
+    expect(readContent).not.toHaveBeenCalled()
+  })
+
+  test('an empty, a binary, a cut and a missing file each say so, rendered Markdown too', async () => {
+    const say = async (content: unknown, path: string, words: string) => {
+      readContent.mockResolvedValue(content)
+      render(<FilesPane projectId="p1" context={context()} />)
+      fireEvent.click(await screen.findByTitle(path))
+      await waitFor(() => expect(screen.getByText(words)).toBeTruthy())
+      cleanup()
+      forgetRemembered()
+      forgetOpenFiles()
+    }
+    await say({ path: 'README.md', text: '', truncated: false, binary: false }, 'README.md', 'Empty file.')
+    await say({ path: 'README.md', text: '', truncated: false, binary: true }, 'README.md', 'Binary file, nothing to show.')
+    await say({ path: 'README.md', text: '# Long', truncated: true, binary: false }, 'README.md', 'Cut here. The rest is in the worktree.')
+    await say(null, 'README.md', 'This file is not here: it was deleted or moved, or it cannot be read.')
+  })
+
+  test('a failed read is not an unhandled rejection: the file is still being read', async () => {
+    readContent.mockRejectedValue(new Error('daemon restarted'))
+    render(<FilesPane projectId="p1" context={context()} />)
+    fireEvent.click(await screen.findByTitle('README.md'))
+    await waitFor(() => expect(readContent).toHaveBeenCalled())
+    expect(screen.getByText('Reading the file…')).toBeTruthy()
+  })
+
+  test('a tab shown again shows its file at once, and a Markdown file shown as its source stays so', async () => {
+    readContent.mockImplementation(async (_host: unknown, _projectId: string, path: string) => ({ path, text: path === 'README.md' ? '# Hello\n\nSome **bold** words.' : 'const a = 1', truncated: false, binary: false }))
+    render(<FilesPane projectId="p1" context={context()} />)
+    fireEvent.doubleClick(await screen.findByTitle('README.md'))
+    fireEvent.click(await screen.findByLabelText('Show the source'))
+    fireEvent.click(folder('src'))
+    fireEvent.doubleClick(await within(treeOf()).findByTitle('src/app.ts'))
+    await waitFor(() => expect(screen.getByText('const a = 1')).toBeTruthy())
+    readContent.mockReturnValue(new Promise(() => {}) as never)
+    fireEvent.click(within(screen.getAllByRole('tab')[0]!).getByTitle('README.md'))
+    expect(screen.queryByText('Reading the file…')).toBeNull()
+    expect(screen.getByText('# Hello')).toBeTruthy()
+  })
+
+  test('closing the last tab while it is shown shows the one before it', async () => {
+    render(<FilesPane projectId="p1" context={context()} />)
+    fireEvent.doubleClick(await screen.findByTitle('README.md'))
+    fireEvent.click(folder('src'))
+    fireEvent.doubleClick(await within(treeOf()).findByTitle('src/app.ts'))
+    fireEvent.click(screen.getByLabelText('Close app.ts'))
+    await waitFor(() => expect(tabs()).toEqual([['README.md', 'true', 'kept']]))
+  })
+
+  test('each page has its own tabs', async () => {
+    const { rerender } = render(<FilesPane projectId="p1" agentId="run-1" context={context()} />)
+    fireEvent.doubleClick(await screen.findByTitle('README.md'))
+    await waitFor(() => expect(tabs()).toEqual([['README.md', 'true', 'kept']]))
+    rerender(<FilesPane projectId="p1" agentId="run-2" context={context()} />)
+    await waitFor(() => expect(tabs()).toEqual([]))
+    rerender(<FilesPane projectId="p1" agentId="run-1" context={context()} />)
+    await waitFor(() => expect(tabs()).toEqual([['README.md', 'true', 'kept']]))
+  })
+
+  test('Shift+F10 on a focused file opens its right-click menu', async () => {
+    render(<FilesPane projectId="p1" context={context()} />)
+    fireEvent.keyDown(await screen.findByTitle('README.md'), { key: 'F10', shiftKey: true })
+    expect(await screen.findByText('Attach as context')).toBeTruthy()
   })
 })

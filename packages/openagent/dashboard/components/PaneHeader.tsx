@@ -2,7 +2,7 @@ import { createContext, useContext, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 // What a pane puts in its own card's header, as Claude Code's panes do (Files: a button that hides
-// the tree and the opened files as tabs; Changes: the branch it compares). The card keeps two
+// the tree, and the opened files as tabs). The card keeps two
 // places in its header: the title, where the pane's name stands until the pane puts something
 // there, and the actions, before the buttons that let the pane fill the page and close it.
 

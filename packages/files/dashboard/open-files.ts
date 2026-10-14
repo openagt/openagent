@@ -18,6 +18,8 @@ export interface OpenFiles {
   tabs: OpenTab[]
   /** The file shown; absent with no tab open. */
   active?: string
+  /** The Markdown files shown as their source rather than rendered. */
+  source?: ReadonlySet<string>
 }
 
 export interface FilesSettings {
@@ -91,7 +93,17 @@ export function openFile(page: string, path: string, keep: boolean) {
     const preview = kept ? -1 : tabs.findIndex(tab => !tab.kept)
     next = preview === -1 ? [...tabs, { path, kept }] : tabs.map((tab, i) => (i === preview ? { path, kept } : tab))
   }
-  pages.set(page, { tabs: next, active: path })
+  pages.set(page, { ...(pages.get(page) ?? NONE), tabs: next, active: path })
+  changed()
+}
+
+/** Show a Markdown file as its source, or rendered again. */
+export function showSource(page: string, path: string, source: boolean) {
+  const open = pages.get(page) ?? NONE
+  const shown = new Set(open.source)
+  if (source) shown.add(path)
+  else shown.delete(path)
+  pages.set(page, { ...open, source: shown })
   changed()
 }
 
@@ -111,7 +123,8 @@ export function closeFile(page: string, path: string) {
   if (at === -1) return
   const tabs = open.tabs.filter(tab => tab.path !== path)
   const active = open.active === path ? (tabs[at] ?? tabs[at - 1])?.path : open.active
-  pages.set(page, active === undefined ? { tabs } : { tabs, active })
+  const source = open.source && new Set([...open.source].filter(p => p !== path))
+  pages.set(page, { tabs, ...(active === undefined ? {} : { active }), ...(source ? { source } : {}) })
   changed()
 }
 

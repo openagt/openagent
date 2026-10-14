@@ -1,6 +1,11 @@
 import { cn } from '@openagt/dashboard/module'
 import type { FileContent } from '../src/read.js'
 
+/** Said under a file cut at the pane's cap, rendered or not. */
+export function Cut() {
+  return <p className="px-2 py-1 text-[10px] italic text-muted-foreground">Cut here. The rest is in the worktree.</p>
+}
+
 // What a file looks like in the pane: its contents (#828).
 //
 // Deliberately plain: no syntax highlighting, no editing. The dashboard is not an editor (the risk
@@ -22,7 +27,7 @@ export function ContentView({ content, wrap = false, className }: { content: Fil
           <span>{line || ' '}</span>
         </div>
       ))}
-      {content.truncated && <p className="px-2 py-1 text-[10px] italic text-muted-foreground">Cut here. The rest is in the worktree.</p>}
+      {content.truncated && <Cut />}
     </div>
   )
 }

@@ -1,34 +1,43 @@
-import { useState } from 'react'
 import { Code, Eye, FolderIcon } from 'lucide-react'
 import { Button, Markdown, Tooltip, TooltipContent, TooltipTrigger, useModuleHost, usePolled } from '@openagt/dashboard/module'
 import type { FileContent } from '../src/read.js'
 import { readContent } from './reads.js'
-import { ContentView } from './ContentView.js'
+import { contentKey } from './keys.js'
+import { ContentView, Cut } from './ContentView.js'
+import { showSource } from './open-files.js'
 
 // The right side of the Files pane: the file shown, under its path, as Claude Code on the web shows
 // it. A Markdown file is shown rendered, with a button for its source. Read from the selected
-// agent's worktree (#815), and read again every few seconds: the agent may be editing it.
+// agent's worktree (#815), and read again every few seconds: the agent may be editing it. A tab
+// shown again shows what was read last at once.
 
 const isMarkdown = (path: string) => /\.(md|mdx|markdown)$/i.test(path)
 
 /** What stands on the right while no file is open. */
-export function NoFileOpen() {
+export function NoFileOpen({ tree }: { tree: boolean }) {
   return (
     <div className="flex flex-auto flex-col items-center justify-center gap-1 p-6 text-center">
       <FolderIcon aria-hidden className="mb-2 size-6 text-muted-foreground" />
       <p className="text-sm">Open files appear here</p>
-      <p className="text-xs text-muted-foreground">Pick a file in the tree.</p>
+      <p className="text-xs text-muted-foreground">{tree ? 'Pick a file in the tree.' : 'Show the file tree to pick a file.'}</p>
     </div>
   )
 }
 
-export function FileView({ projectId, agentId, path, wrap }: { projectId: string; agentId?: string | undefined; path: string; wrap: boolean }) {
+export function FileView({ page, projectId, agentId, path, wrap, source }: {
+  /** The page whose open files these are (`open-files.ts`). */
+  page: string
+  projectId: string
+  agentId?: string | undefined
+  path: string
+  wrap: boolean
+  /** A Markdown file is shown as its source rather than rendered. */
+  source: boolean
+}) {
   const host = useModuleHost()
-  const { value, loaded } = usePolled<FileContent | null>(() => readContent(host, projectId, path, agentId), null, 5_000, [projectId, agentId, path])
-  // The files shown as their source, though they are Markdown: kept while the pane is open.
-  const [source, setSource] = useState<ReadonlySet<string>>(new Set())
+  const { value, loaded } = usePolled<FileContent | null>(() => readContent(host, projectId, path, agentId), null, 5_000, [projectId, agentId, path], { remember: contentKey(projectId, agentId, path) })
   const markdown = isMarkdown(path)
-  const rendered = markdown && !source.has(path)
+  const rendered = markdown && !source
   const parts = path.split('/')
 
   return (
@@ -51,7 +60,7 @@ export function FileView({ projectId, agentId, path, wrap }: { projectId: string
                   size="icon-sm"
                   className="shrink-0 text-muted-foreground"
                   aria-label={rendered ? 'Show the source' : 'Show it rendered'}
-                  onClick={() => setSource(shown => (shown.has(path) ? new Set([...shown].filter(p => p !== path)) : new Set([...shown, path])))}
+                  onClick={() => showSource(page, path, rendered)}
                 />
               }
             >
@@ -65,10 +74,11 @@ export function FileView({ projectId, agentId, path, wrap }: { projectId: string
         {!loaded ? (
           <p className="p-3 text-xs text-muted-foreground">Reading the file…</p>
         ) : !value ? (
-          <p className="p-3 text-xs text-muted-foreground">Nothing to show.</p>
-        ) : rendered && !value.binary ? (
+          <p className="p-3 text-xs text-muted-foreground">This file is not here: it was deleted or moved, or it cannot be read.</p>
+        ) : rendered && !value.binary && value.text ? (
           <div className="px-5 py-4">
             <Markdown text={value.text} />
+            {value.truncated && <Cut />}
           </div>
         ) : (
           <ContentView content={value} wrap={wrap} className="py-1" />

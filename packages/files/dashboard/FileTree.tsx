@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Check, ChevronRight, Search } from 'lucide-react'
 import { ContextMenu, ContextMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, Input, cn, type ModuleContext } from '@openagt/dashboard/module'
 import { FileIcon } from './file-icon.js'
@@ -63,6 +63,17 @@ function Folder({ name, children }: { name: string; children: () => ReactNode })
 /** Put text on the clipboard; a page the browser refuses it to copies nothing. */
 const copy = (text: string) => void navigator.clipboard?.writeText(text).catch(() => {})
 
+/**
+ * The keys that open a right-click menu, Shift+F10 and the Menu key, open the focused row's: Base
+ * UI's menu opens on the pointer's right click only, which left the Context out of the keyboard's reach.
+ */
+function openMenuByKey(event: KeyboardEvent<HTMLButtonElement>) {
+  if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return
+  event.preventDefault()
+  const row = event.currentTarget.getBoundingClientRect()
+  event.currentTarget.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: row.left + 24, clientY: row.bottom }))
+}
+
 /** A file row: one click opens it as a preview, a double click keeps it, a right click opens its menu. */
 function FileRow({ path, shown, attached, onOpen, onAttach }: {
   path: string
@@ -81,6 +92,7 @@ function FileRow({ path, shown, attached, onOpen, onAttach }: {
             title={path}
             onClick={() => onOpen(path, false)}
             onDoubleClick={() => onOpen(path, true)}
+            onKeyDown={openMenuByKey}
             className={cn(ROW, shown && 'bg-accent')}
           />
         }
