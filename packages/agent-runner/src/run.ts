@@ -476,9 +476,11 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
   }
   // The run's short name, asked of a small model beside the first turn (`title.ts`): a run that is
   // being continued was named when it began, and one whose agent never started has nothing to name.
+  // A subagent is not named: its row is its task, written by the agent that started it, and an
+  // orchestration of a dozen of them would pay for a dozen namings for rows nobody looks for.
   const naming =
-    driverSession && !run.continued && run.card.title === undefined
-      ? nameRun(run.driver, { cwd: run.checkout.path, prompt: run.prompt, signal: stopped }).then(
+    driverSession && !run.continued && run.card.title === undefined && runnerMark(run.card)?.parent === undefined
+      ? nameRun(run.driver, { prompt: run.prompt, signal: stopped }).then(
           async title => {
             if (title !== undefined) await driverSession?.log?.title(title)
           },

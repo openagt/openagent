@@ -54,7 +54,7 @@ export function HandoffSummary({ handoff, subagent = false }: { handoff: AgentHa
   const held = [commits, files, ...(!subagent && handoff.pushed && !handoff.pr ? ['pushed'] : [])].join(' · ')
   return (
     <span className="flex shrink-0 items-center whitespace-nowrap rounded-md bg-background/60 px-1.5 py-0.5" title={held} aria-label={held}>
-      <DiffStat added={handoff.insertions} removed={handoff.deletions} className="text-[11px] font-medium" />
+      <DiffStat added={handoff.insertions} removed={handoff.deletions} zeros className="text-[11px] font-medium" />
     </span>
   )
 }

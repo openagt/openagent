@@ -192,6 +192,10 @@ test('a run is named by the agent\'s small model: the name on its record, and a 
       [{ kind: 'title', text: 'README.md condensing' }],
       'the conversation says where the name came from, once',
     )
+
+    // A subagent is not named: its row is the task its main agent gave it.
+    const child = await runCommand(repo, { prompt: 'check the links', driver, parent: run.id, now: () => new Date(NOW.getTime() + 60_000), gitHost: noGitHost })
+    assert.equal((await findRun(repo, child.id))?.title, undefined)
   } finally {
     await removeRepo(repo)
   }
