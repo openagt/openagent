@@ -12,6 +12,7 @@
 - Create tickets/2026-10-08_openagt-init-one-command-skills.plan.md
 - Create tickets/2026-10-03_pretty-dashboard-url.plan.md
 - Create tickets/2026-10-09_new-automation-shell-line-plain-words.plan.md
+- Create tickets/2026-10-09_pr-comment-resumes-agent.plan.md
 
 
 ## Priority 4
