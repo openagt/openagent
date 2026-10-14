@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Loader2, Play, Square } from 'lucide-react'
 import { Composer, type ComposerHandle } from './Composer.js'
 import { sendMessage, sendStop } from '../rpc/control.js'
@@ -38,6 +38,7 @@ export function AgentComposer({
   onQueued,
   outcome,
   model,
+  context,
 }: {
   projectId: string
   /** Which run this addresses (#749). */
@@ -56,6 +57,8 @@ export function AgentComposer({
   outcome?: AgentOutcome | undefined
   /** The model the session runs on, by its name: said under the box. */
   model?: string | undefined
+  /** How full the session's context is, as a circle beside the model. */
+  context?: ReactNode
 }) {
   const composerRef = useRef<ComposerHandle>(null)
   const { busy, error, run } = useAction()
@@ -171,6 +174,7 @@ export function AgentComposer({
         showDriverModel={false}
         inAgent
         sessionModel={model}
+        sessionContext={context}
         idleControl={idleControl}
         placeholder={live ? 'Message the agent…' : 'Message the agent to continue it…'}
       />

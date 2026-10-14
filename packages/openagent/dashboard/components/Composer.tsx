@@ -73,6 +73,8 @@ export const Composer = forwardRef<ComposerHandle, {
   /** Inside a session: the model it runs on, said at the right of the row under the box, where
    *  the launcher has its select. Words, not a menu: a session keeps the model it started with. */
   sessionModel?: string | undefined
+  /** Inside a session: how full its context is, beside the model. */
+  sessionContext?: ReactNode
   /** Run the composed text. */
   onSubmit: (text: string) => void | Promise<void>
   /** Mirror the live prompt out, so the launcher can drive its note. */
@@ -102,7 +104,7 @@ export const Composer = forwardRef<ComposerHandle, {
    *  without one the slot keeps its collapse-when-empty behavior for the launcher. */
   idleControl?: ReactNode
 }>(function Composer(
-  { files, addContext, removeContext, aboveControls, belowControls, sessionModel, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, compact = false, showDriverModel = true, inAgent = false, canSubmit = true, idleControl },
+  { files, addContext, removeContext, aboveControls, belowControls, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, compact = false, showDriverModel = true, inAgent = false, canSubmit = true, idleControl },
   ref,
 ) {
   const [prompt, setPrompt] = useState('')
@@ -369,7 +371,12 @@ export const Composer = forwardRef<ComposerHandle, {
           {belowControls}
         </div>
         <div className="shrink-0">
-          {driverModelEl || (sessionModel !== undefined && <span className="px-2 text-xs text-muted-foreground">{sessionModel}</span>)}
+          {driverModelEl || (
+            <span className="flex items-center">
+              {sessionModel !== undefined && <span className="px-2 text-xs text-muted-foreground">{sessionModel}</span>}
+              {sessionContext}
+            </span>
+          )}
         </div>
       </div>
 

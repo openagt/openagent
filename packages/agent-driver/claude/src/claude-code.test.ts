@@ -178,6 +178,19 @@ test('StreamJsonParser pulls token + cost usage off the result line (#322)', () 
   })
 })
 
+test('how full the conversation is comes from the last model call, not from the turn\'s total', () => {
+  const p = new StreamJsonParser()
+  const call = (input: number, cacheRead: number, output: number) =>
+    JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'hi' }], usage: { input_tokens: input, cache_read_input_tokens: cacheRead, output_tokens: output } } })
+  // Two calls of one turn, over one growing conversation: the second is how full it is now.
+  p.push(call(100, 20_000, 500))
+  p.push(call(100, 40_000, 300))
+  p.push(JSON.stringify({ type: 'result', subtype: 'success', result: 'done', session_id: 's', usage: { input_tokens: 200, output_tokens: 800, cache_read_input_tokens: 60_000, cache_creation_input_tokens: 0 } }))
+  // The turn's own totals are what it cost; 40_400 is what the window holds, not 61_000.
+  assert.equal(p.result().usage?.contextTokens, 40_400)
+  assert.equal(p.result().usage?.cacheReadTokens, 60_000)
+})
+
 test('StreamJsonParser leaves usage off when the result line reports none (#322)', () => {
   const p = new StreamJsonParser()
   p.push(JSON.stringify({ type: 'result', subtype: 'success', result: 'done', session_id: 's' }))

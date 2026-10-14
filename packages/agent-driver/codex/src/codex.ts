@@ -418,6 +418,8 @@ export class CodexAppServerParser implements AgentCliParser {
   private sessionId: string | undefined
   private turnId: string | undefined
   private usage: DriverUsage | undefined
+  /** How full the conversation was at the last model call of this turn. */
+  private context: number | undefined
   private failed: string | undefined
   private ended = false
 
@@ -476,7 +478,7 @@ export class CodexAppServerParser implements AgentCliParser {
     return {
       text: this.text,
       ...(this.sessionId ? { sessionId: this.sessionId } : {}),
-      ...(this.usage ? { usage: this.usage } : {}),
+      ...(this.usage ? { usage: { ...this.usage, ...(this.context !== undefined ? { contextTokens: this.context } : {}) } } : {}),
     }
   }
 
@@ -514,9 +516,14 @@ export class CodexAppServerParser implements AgentCliParser {
       case 'thread/tokenUsage/updated': {
         // A resumed conversation first repeats its last turn's reading: only this turn's count.
         if (this.turnId === undefined || params['turnId'] !== this.turnId) return []
-        // `last` is one model call; a turn makes several, and its usage is their sum.
+        // `last` is one model call; a turn makes several, and its usage is their sum. How full
+        // the conversation is, though, is that one call's prompt and answer — the newest reading
+        // wins rather than being added, or a long turn would read as a window many times over.
         const last = parseCodexUsage(field(params['tokenUsage'], 'last'))
-        if (last) this.usage = addUsage(this.usage, last)
+        if (last) {
+          this.usage = addUsage(this.usage, last)
+          this.context = last.inputTokens + last.cacheReadTokens + last.cacheCreationTokens + last.outputTokens
+        }
         return []
       }
       case 'turn/completed': {

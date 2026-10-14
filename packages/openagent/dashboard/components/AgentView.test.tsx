@@ -14,6 +14,11 @@ const onBridgeEvents = vi.fn(async () => [] as unknown)
 const onBridgeAnswer = vi.fn(async () => null as unknown)
 const onAgentWorktree = vi.fn(async () => ({ branch: 'agent-x' }) as unknown)
 const onGitHostHome = vi.fn(async () => null as unknown)
+// The models each agent lists, with what one of them holds: the daemon's read, stubbed here so the
+// context circle has a window to measure against.
+vi.mock('../rpc/models.js', () => ({
+  onModels: () => Promise.resolve({ 'claude-code': { models: [{ id: 'opus', name: 'Opus 5.5', resolvedId: 'claude-opus-5-5', contextWindow: 200_000 }] }, codex: { models: [] } }),
+}))
 vi.mock('../rpc/reads.js', () => ({ onAgent, onRetainedWorktrees, onAgentHandoff, onAgentsDoing, onBridgeQuestion, onBridgeEvents, onBridgeAnswer, onAgentWorktree, onGitHostHome }))
 const sendMessage = vi.fn(async () => ({ ok: true }) as unknown)
 vi.mock('../rpc/control.js', () => ({
@@ -57,10 +62,11 @@ vi.mock('./AgentWorkBar.js', () => ({
 }))
 // The composer shows only what the view tells it about the run going: the one fact of it under test here.
 vi.mock('./AgentComposer.js', () => ({
-  AgentComposer: ({ live, outcome, model, onQueued }: { live: boolean; outcome?: unknown; model?: string; onQueued?: (text: string) => void }) => (
+  AgentComposer: ({ live, outcome, model, context, onQueued }: { live: boolean; outcome?: unknown; model?: string; context?: ReactNode; onQueued?: (text: string) => void }) => (
     <>
       <button type="button" onClick={() => onQueued?.('and then this')}>queue-one</button>
       <span data-testid="composer-model">{model ?? ''}</span>
+      <span data-testid="composer-context">{context}</span>
       <span data-testid="composer-live">{String(live)}</span>
       <span data-testid="composer-outcome">{JSON.stringify(outcome ?? null)}</span>
     </>
@@ -709,6 +715,17 @@ describe('the model under the message box', () => {
     expect(screen.getByTestId('composer-model').textContent).toMatch(/opus/i)
     rerender(view({ live: true, events: [], card: { status: 'running', driver: 'claude-code' } }))
     expect(screen.getByTestId('composer-model').textContent).toBe('')
+  })
+
+  test('how full the context is shows beside the model, and only when both numbers are known', async () => {
+    const { rerender } = render(view({ live: true, events: [], card: { status: 'running', driver: 'claude-code', model: 'opus', contextTokens: 50_000 } }))
+    // Opus holds 200k, says the stubbed model list: a quarter of it is used.
+    await waitFor(() => expect(screen.getByRole('img', { name: '50.0k of 200k used · 75% of the context left' })).toBeTruthy())
+    // A run with no reading yet, and a model nobody said a window of, draw nothing.
+    rerender(view({ live: true, events: [], card: { status: 'running', driver: 'claude-code', model: 'opus' } }))
+    expect(screen.queryByRole('img', { name: /of the context left/ })).toBeNull()
+    rerender(view({ live: true, events: [], card: { status: 'running', driver: 'codex', model: 'gpt-5.6-luna', contextTokens: 50_000 } }))
+    expect(screen.queryByRole('img', { name: /of the context left/ })).toBeNull()
   })
 
   test('how hard the model was told to think is said beside it, as Claude Code says it', () => {

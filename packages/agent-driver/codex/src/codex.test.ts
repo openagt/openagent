@@ -170,6 +170,9 @@ test('a Codex turn reports its tokens, summed over its model calls, but never a 
     outputTokens: 127 + 25,
     cacheReadTokens: 9984 + 13056,
     cacheCreationTokens: 0,
+    // How full the conversation is, though, is the LAST call alone: its whole prompt and answer.
+    // Summing the calls (27_328) would say the window holds twice what it does.
+    contextTokens: 13_686 + 25,
   })
   // The tokens are real and reported; `costUsd: 0` would read as free, so it is absent.
   assert.equal('costUsd' in usage!, false)

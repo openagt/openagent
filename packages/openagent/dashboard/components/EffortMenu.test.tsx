@@ -33,8 +33,9 @@ describe('the effort menu', () => {
     expect(picked).toHaveBeenCalledWith(undefined)
   })
 
-  test('a level reads as the agent writes it, capitalised', () => {
-    expect(effortLabel('xhigh')).toBe('Xhigh')
+  test("a level reads as the agent writes it, capitalised, and the one id nobody says out loud is spelled", () => {
     expect(effortLabel('medium')).toBe('Medium')
+    expect(effortLabel('ultra')).toBe('Ultra')
+    expect(effortLabel('xhigh')).toBe('Extra high')
   })
 })

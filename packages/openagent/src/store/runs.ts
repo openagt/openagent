@@ -43,6 +43,8 @@ export interface RunCard {
   pr?: { number: number; url: string }
   ticket?: string
   cost?: number
+  /** How much of the model's context the conversation filled at the run's last turn. */
+  contextTokens?: number
   caller?: Record<string, unknown>
 }
 
@@ -115,6 +117,7 @@ export function parseRunCard(input: unknown): RunCard | undefined {
     if (typeof r[key] === 'string') card[key] = r[key]
   }
   if (typeof r['cost'] === 'number') card.cost = r['cost']
+  if (typeof r['contextTokens'] === 'number') card.contextTokens = r['contextTokens']
   const pr = r['pr'] as Record<string, unknown> | undefined
   if (pr && typeof pr === 'object' && typeof pr['number'] === 'number' && typeof pr['url'] === 'string') card.pr = { number: pr['number'], url: pr['url'] }
   const caller = r['caller']

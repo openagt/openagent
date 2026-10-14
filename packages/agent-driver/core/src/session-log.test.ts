@@ -75,3 +75,20 @@ test('the run can be named once: the name on the card and a line in the diary, a
     await rm(dir, { recursive: true, force: true })
   }
 })
+
+test('the card says how full the conversation is now, the newest reading replacing the one before', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'session-log-context-'))
+  try {
+    const log = new SessionLog(dir, { id: 'r1' })
+    await log.open()
+    const turn = (contextTokens: number) => log.record({ type: 'result', text: 'ok', usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheCreationTokens: 0, contextTokens } })
+    await turn(20_000)
+    await turn(45_000)
+    await log.settled()
+    // Not 65_000: the window holds one conversation, and the last turn says how full it is.
+    assert.equal(log.card.contextTokens, 45_000)
+    assert.equal(JSON.parse(await readFile(log.cardPath, 'utf8')).contextTokens, 45_000)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})

@@ -8,9 +8,15 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 // model it lists them on, so nothing here decides what a level is called or which exist: a model
 // that offers none has no control at all.
 
-/** A level as a person reads it: the agent's own word, capitalised. */
+/**
+ * A level as a person reads it: the agent's own word, capitalised. One is spelled out — `xhigh` is
+ * the agent's id for it and "Xhigh" is nobody's word — and any level not listed here is shown as
+ * the agent writes it, so a new one needs no change to appear.
+ */
+const SPELLED: Record<string, string> = { xhigh: 'Extra high' }
+
 export function effortLabel(effort: string): string {
-  return effort.charAt(0).toUpperCase() + effort.slice(1)
+  return SPELLED[effort] ?? effort.charAt(0).toUpperCase() + effort.slice(1)
 }
 
 export function EffortMenu({

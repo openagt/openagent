@@ -22,7 +22,7 @@ function spend(events: OpenAgentEvent[]): { costUsd?: number; turns: number } {
 }
 
 /** What the strip reads off the run's card: the agent that ran it and the model it ran. */
-export type AgentDetailsCard = Pick<AgentMeta, 'driver' | 'model' | 'effort'>
+export type AgentDetailsCard = Pick<AgentMeta, 'driver' | 'model' | 'effort' | 'contextTokens'>
 
 function Fact({ label, value }: { label: string; value: string }) {
   return (
