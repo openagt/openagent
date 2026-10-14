@@ -1,16 +1,25 @@
 {
   "id": "2026-10-14T05-49-24-712Z",
   "startedAt": "2026-10-14T05:49:24.781Z",
-  "status": "running",
+  "endedAt": "2026-10-14T05:49:39.762Z",
+  "status": "done",
   "intent": "what is your name?",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "branch": "agent-2026-10-14T05-49-24-712Z",
+  "cost": 0.0469826,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
       "pid": 40536,
-      "publish": "commit"
+      "publish": "commit",
+      "baseCommit": "b142b47cb2ddd89986d3a595e5dfc874c54fddc0"
     },
-    "host": "Suleimans-MacBook-Pro.local"
+    "pid": 40536,
+    "host": "Suleimans-MacBook-Pro.local",
+    "baseCommit": "b142b47cb2ddd89986d3a595e5dfc874c54fddc0",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/gemstack/.branches/agent-2026-10-14T05-49-24-712Z",
+    "sessionId": "fcb7f15e-326a-4290-b598-5ab4198261e0"
   }
 }
