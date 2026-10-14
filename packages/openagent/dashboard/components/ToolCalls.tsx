@@ -41,10 +41,10 @@ export function Seconds({ since }: { since: string }) {
   return <span className="shrink-0 tabular-nums">{seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`}</span>
 }
 
-// Three dots moving from one shape to the next: the agent is at it.
+// Three dots moving in a wave: the agent is at it.
 export function Dots() {
   return (
-    <span className="dot-shapes shrink-0" aria-hidden>
+    <span className="dot-wave shrink-0" aria-hidden>
       <span />
       <span />
       <span />

@@ -128,8 +128,8 @@ body {
 }
 
 /* The chat's last line while the agent works (ToolCalls.tsx), as Claude Code on the web draws
-   its own: a band of light crossing the grey text, and three dots in the accent colour that move
-   from one shape to the next (a row, a slope, a peak, the other slope). Its words, when they change,
+   its own: a band of light crossing the grey text, and three dots in the accent colour rising one
+   after the other. Its words, when they change,
    come in out of a light blur instead of swapping at once. A message just sent slides in where it
    lands, a little past its place and back. Still, and plain grey, for a reader who asked for less
    motion. */
@@ -148,54 +148,35 @@ body {
     background-position: -66% 0;
   }
 }
-.dot-shapes {
-  position: relative;
-  display: inline-block;
-  width: 14px;
-  height: 10px;
+.dot-wave {
+  display: inline-flex;
+  gap: 3px;
   color: var(--primary);
 }
-.dot-shapes > span {
-  position: absolute;
-  top: 0;
-  left: 0;
+.dot-wave > span {
   width: 4px;
   height: 4px;
   border-radius: 9999px;
   background: currentColor;
-  translate: var(--row);
+  animation: dot-wave 1.2s ease-in-out infinite;
 }
-/* Each dot's animation whole, its name with its timing: the build's minifier read a timing with no
-   name as no animation at all, and the dots stood still. */
-.dot-shapes > span:nth-child(1) {
-  --row: 0 3px;
-  animation: dot-shape-1 1.6s ease-in-out infinite;
+.dot-wave > span:nth-child(2) {
+  animation-delay: 0.15s;
 }
-.dot-shapes > span:nth-child(2) {
-  --row: 5px 3px;
-  animation: dot-shape-2 1.6s ease-in-out infinite;
+.dot-wave > span:nth-child(3) {
+  animation-delay: 0.3s;
 }
-.dot-shapes > span:nth-child(3) {
-  --row: 10px 3px;
-  animation: dot-shape-3 1.6s ease-in-out infinite;
-}
-@keyframes dot-shape-1 {
-  0%, 18%, 100% { translate: 0 3px; }
-  25%, 43% { translate: 0 6px; }
-  50%, 68% { translate: 1px 6px; }
-  75%, 93% { translate: 0 0; }
-}
-@keyframes dot-shape-2 {
-  0%, 18%, 100% { translate: 5px 3px; }
-  25%, 43% { translate: 5px 3px; }
-  50%, 68% { translate: 5px 0; }
-  75%, 93% { translate: 5px 3px; }
-}
-@keyframes dot-shape-3 {
-  0%, 18%, 100% { translate: 10px 3px; }
-  25%, 43% { translate: 10px 0; }
-  50%, 68% { translate: 9px 6px; }
-  75%, 93% { translate: 10px 6px; }
+@keyframes dot-wave {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
 }
 .morph-in {
   animation: morph-in 0.18s cubic-bezier(0.2, 0, 0, 1);
@@ -232,7 +213,7 @@ body {
     background: none;
     color: inherit;
   }
-  .dot-shapes > span:nth-child(n),
+  .dot-wave > span,
   .morph-in,
   .bubble-in,
   .letter-in {

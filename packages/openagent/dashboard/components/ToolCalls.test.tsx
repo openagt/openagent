@@ -119,7 +119,7 @@ describe('LiveLine', () => {
     expect(status.textContent).toBe('ReadingAGENTS.md')
     expect(screen.getByText('Reading').className).toContain('text-shimmer')
     expect(screen.getByText('AGENTS.md').className).toContain('text-shimmer')
-    expect(container.querySelectorAll('.dot-shapes > span')).toHaveLength(3)
+    expect(container.querySelectorAll('.dot-wave > span')).toHaveLength(3)
     expect(screen.queryByText('Working…')).toBeNull()
   })
 
@@ -151,7 +151,7 @@ describe('LiveLine', () => {
     const { container } = render(<LiveLine word="Working…" since="2026-10-04T10:00:00.000Z" />)
     expect(screen.getByText('Working…').className).toContain('text-shimmer')
     expect(screen.getByText('3s')).toBeTruthy()
-    expect(container.querySelector('.dot-shapes')).toBeTruthy()
+    expect(container.querySelector('.dot-wave')).toBeTruthy()
   })
 })
 
