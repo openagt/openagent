@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import { hostname } from 'node:os'
 import assert from 'node:assert/strict'
-import { readAgentHandoff, readRunHandoff, leftNothing, resolveAgentPr, mergeAgentPr, agentBranchFor, openAgentPullRequest, openRemoteBranchPullRequest, pushAgentBranch, mergeAgentBranch, type HandoffAgent } from './agent-handoff.js'
+import { answeredBefore, readAgentHandoff, readRunHandoff, leftNothing, resolveAgentPr, mergeAgentPr, agentBranchFor, openAgentPullRequest, openRemoteBranchPullRequest, pushAgentBranch, mergeAgentBranch, type HandoffAgent } from './agent-handoff.js'
 import { pickAgentPr, type LinkedPr } from './pull-requests.js'
 import type { BranchState, BranchesFor, BranchesSource } from '../store/branches.js'
 import type { GitHostFor, GitHostSource } from '../store/git-host.js'
@@ -270,6 +270,21 @@ test('a run started from a local branch says what a pull request would carry ove
   asked.length = 0
   assert.equal((await readRunHandoff('/repo', run, { branches, gitHost: noGitHost, pr: noPr }))?.carries, undefined)
   assert.deepEqual(asked, [undefined])
+})
+
+test('a pull request answer older than the run’s own end is not trusted: the run opens one as it finishes', () => {
+  const ended = '2026-10-14T18:55:00.000Z'
+  const at = Date.parse(ended)
+  // Read while the run still worked: it cannot know about the request the run opened on its way out.
+  assert.equal(answeredBefore(at - 1, ended), true)
+  // Read after it ended: it has seen everything the run did.
+  assert.equal(answeredBefore(at, ended), false)
+  assert.equal(answeredBefore(at + 1, ended), false)
+  // A run still going has no end to be older than, and an answer never read has no age.
+  assert.equal(answeredBefore(at - 1, undefined), false)
+  assert.equal(answeredBefore(undefined, ended), false)
+  // A record whose end is not a date decides nothing.
+  assert.equal(answeredBefore(at - 1, 'whenever'), false)
 })
 
 test('the Open PR button refuses a session with no branch, a gone branch, an empty branch, a merged branch, a project with no branches provider, and one with no git host', async () => {

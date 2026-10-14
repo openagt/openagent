@@ -36,6 +36,11 @@ export interface Cached<T> {
   value: T | undefined
   /** True when no value is known yet and a read is still running. */
   pending: boolean
+  /**
+   * When this value was read, for a caller that knows of something that happened since and cannot
+   * be in it — a pull request the run opened as it ended, say. Absent while nothing is known yet.
+   */
+  at?: number
 }
 
 /** Clock seam, so the tests do not sleep. */
@@ -63,13 +68,13 @@ export async function cachedRead<T>(key: string, load: () => Promise<T>, options
   // the cost of being current is never paid by the caller that happens to ask.
   if (entry?.has) {
     if (now() - entry.at >= ttlMs && !entry.inflight) void refresh(key, load, now)
-    return { value: entry.value, pending: false }
+    return { value: entry.value, pending: false, at: entry.at }
   }
 
   // Nothing known yet: join the running read, or start one, and wait a moment for it.
   const inflight = entry?.inflight ?? refresh(key, load, now)
   const settled = await withBudget(inflight, budgetMs)
-  if (settled.done) return { value: settled.value, pending: false }
+  if (settled.done) return { value: settled.value, pending: false, at: (entries.get(key) as Entry<T> | undefined)?.at ?? now() }
   return { value: undefined, pending: true }
 }
 
