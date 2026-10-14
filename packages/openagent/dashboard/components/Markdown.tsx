@@ -1,4 +1,5 @@
 import { createContext, Fragment, useContext, type ReactNode } from 'react'
+import { CopyButton } from './ui/copy-button.js'
 
 // A tiny, dependency-free Markdown renderer for an agent's replies, the surfaced PLAN/TODO docs
 // and the agent's pushed views (#441). Builds React nodes (never injects HTML), so agent-written
@@ -29,19 +30,30 @@ function diffLineClass(line: string): string | undefined {
 // A fenced-code block, rendered both when its closing fence arrives and when the doc ends
 // mid-fence; one place so the markup and classes can't drift between the two. A block fenced as
 // `diff` has its added and removed lines coloured, as the changed-lines counts are.
+//
+// A card, as Claude Code on the web sets one: a bordered box whose top strip names the language
+// and carries the copy button. Code is the one thing in an answer a reader takes somewhere else,
+// and selecting it by hand out of a scrolling box is where that went wrong.
 function codeBlock(lines: string[], language: string, key: number): ReactNode {
+  const text = lines.join('\n')
   return (
-    <pre key={key} className="overflow-x-auto rounded bg-muted p-2 text-xs">
-      <code>
-        {language === 'diff'
-          ? lines.map((line, i) => (
-              <span key={i} className={diffLineClass(line)}>
-                {i < lines.length - 1 ? `${line}\n` : line}
-              </span>
-            ))
-          : lines.join('\n')}
-      </code>
-    </pre>
+    <div key={key} className="overflow-hidden rounded-lg border border-border bg-muted/50">
+      <div className="flex h-7 items-center justify-between gap-2 border-b border-border/70 px-2 text-[11px] text-muted-foreground">
+        <span className="truncate font-mono">{language}</span>
+        <CopyButton text={text} label="Copy the code" />
+      </div>
+      <pre className="overflow-x-auto p-2 text-xs">
+        <code>
+          {language === 'diff'
+            ? lines.map((line, i) => (
+                <span key={i} className={diffLineClass(line)}>
+                  {i < lines.length - 1 ? `${line}\n` : line}
+                </span>
+              ))
+            : text}
+        </code>
+      </pre>
+    </div>
   )
 }
 
