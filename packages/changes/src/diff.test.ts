@@ -4,7 +4,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { readFileChanges, readFileDiff } from './diff.js'
-import { safeRepoPath } from './read.js'
+import { safeRepoPath } from './confined.js'
 
 const PATCH = [
   'diff --git a/src/a.ts b/src/a.ts',
@@ -187,8 +187,8 @@ test('readFileChanges on a clean checkout is empty and asks git nothing', async 
 })
 
 test('an untracked file reached through a symlink out of the repo is refused', async () => {
-  // The untracked branch reads the file itself rather than asking git, so it carries the same
-  // containment duty as the contents preview and goes through the same confined read (#828).
+  // The untracked branch reads the file itself rather than asking git, so it carries the
+  // containment duty itself and goes through the confined read (#828).
   const { mkdir, symlink } = await import('node:fs/promises')
   const dir = await mkdtemp(join(tmpdir(), 'file-diff-link-'))
   const outside = await mkdtemp(join(tmpdir(), 'file-diff-out-'))

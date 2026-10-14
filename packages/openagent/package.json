@@ -61,6 +61,7 @@
     "@openagt/agent-driver-codex": "workspace:*",
     "@base-ui-components/react": "1.0.0-rc.0",
     "@openagt/agent-data": "workspace:*",
+    "@openagt/changes": "workspace:*",
     "@openagt/files": "workspace:*",
     "@openagt/remote-access": "workspace:*",
     "@openagt/servers": "workspace:*",

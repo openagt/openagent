@@ -1,11 +1,10 @@
-// Reading one file out of a checkout, for the panel's hover card: the diff of a changed file
-// (#816, diff.ts) and the contents of an unchanged one (#828). Both take a path from the
-// client, so the guard and the confined read live here, once, and every caller goes through them.
+// Reading one file out of a checkout, for the tree's hover card (#828). The path comes from the
+// browser, so the guard and the confined read live here, once, and every caller goes through them.
 
-/** Cap what a hover card renders, whether it is a patch or a file. */
+/** Cap what a hover card renders. */
 export const MAX_PREVIEW_LINES = 500
 
-/** One unchanged file's contents for the tree's hover card (#828). */
+/** One file's contents for the tree's hover card (#828). */
 export interface FileContent {
   /** The repo-relative path asked for. */
   path: string
@@ -63,9 +62,9 @@ export function cutToPreview(body: string): { body: string; truncated: boolean }
 }
 
 /**
- * One unchanged file's contents (#828). Null when the path is unsafe, outside the checkout, or
- * unreadable. A file git has not touched still reads from the resolved checkout, so a session's
- * hover shows its worktree's copy rather than the project root's (#815).
+ * One file's contents (#828). Null when the path is unsafe, outside the checkout, or unreadable.
+ * Read from the resolved checkout, so a session's hover shows its worktree's copy rather than the
+ * project root's (#815).
  */
 export async function readFileContent(cwd: string, path: string): Promise<FileContent | null> {
   const raw = await readConfinedFile(cwd, path)

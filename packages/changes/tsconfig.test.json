@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "outDir": "dist-test", "rootDir": "src", "paths": { "@openagt/dashboard/module-server": ["../openagent/src/module-server.d.ts"] } },
+  "include": ["src"]
+}

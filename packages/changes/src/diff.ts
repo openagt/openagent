@@ -1,16 +1,16 @@
 import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 import type { FileGitStatus } from './status.js'
-import { cutToPreview, readConfinedFile, safeRepoPath } from './read.js'
+import { cutToPreview, readConfinedFile, safeRepoPath } from './confined.js'
 
-// One changed file's diff for the tree's hover card (#816) and the agent view's Changes section
-// (#817). The tree already says a file is M/U/D; this says what actually changed, without
-// leaving the dashboard for `git diff`. Read against whatever checkout the caller resolved, so
-// a session's hover shows its worktree and not the project root (#815).
+// One changed file's diff for the Changes pane (#816, #817). The list already says a file is new,
+// modified or deleted; this says what actually changed, without leaving the dashboard for
+// `git diff`. Read against whatever checkout the caller resolved, so a run's diff shows its
+// worktree and not the project root (#815).
 //
-// This is the first read that takes a caller-supplied path, so the guard is here rather than at
-// the call site: `safeRepoPath` is the only way in, and every caller goes through it.
+// The read takes a caller-supplied path, so the guard is here rather than at the call site:
+// `safeRepoPath` is the only way in, and every caller goes through it.
 
-/** One file's diff, capped so a hover card can render it. */
+/** One file's diff, capped so the pane can render it. */
 export interface FileDiff {
   /** The repo-relative path asked for. */
   path: string
@@ -71,7 +71,7 @@ function asAllAdded(text: string): string {
 
 /**
  * The diff for one changed file in the checkout at `cwd`, or, given a `range`, between two
- * commits of the repository at `cwd` (a run's committed change, `tree.ts`).
+ * commits of the repository at `cwd` (a run's committed change, `run.ts`).
  *
  * Tracked files diff against `HEAD`, not the index, so a change the agent staged still shows;
  * that also matches `git status --porcelain`, which is what dotted the file in the first place.

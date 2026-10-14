@@ -274,7 +274,7 @@ export function AgentView({
   const outcome = working ? undefined : (agentOutcome(shown) ?? (card ? cardOutcome(card.status) : undefined))
   const questions = useMemo(() => pendingChoices(shown), [shown])
   // Until the handoff has actually loaded, a just-stopped agent keeps showing the modules' summaries
-  // (the Files module's count of changed files, #1030): the summary swaps once, to the handoff,
+  // (the Changes module's count of changed files, #1030): the summary swaps once, to the handoff,
   // instead of blanking for the beat the handoff read takes.
   const showHandoff = live === false && handoff.loaded
   // Whether this run's own facts are in, so the bar shows them together: its log (for an ended

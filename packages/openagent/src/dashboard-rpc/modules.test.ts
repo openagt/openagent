@@ -54,10 +54,11 @@ test('the dashboard\'s modules are every registered project\'s, one per package,
     await addProject(a, '2026-09-19T00:00:00.000Z')
     await addProject(b, '2026-09-19T00:00:01.000Z')
 
-    // The computer's modules (the Devices section, the Machines section) come first, and are no project's. Then the built-in modules (Files, the logs package's), which are every project's, from the first; then the projects' own.
+    // The computer's modules (the Devices section, the Machines section) come first, and are no project's. Then the built-in modules (Changes, Files, the logs package's), which are every project's, from the first; then the projects' own.
     assert.deepEqual(await onModules(), [
       { package: '@openagt/remote-access', url: '/_computer-modules/%40openagt%2Fremote-access/dashboard.js', projects: [] },
       { package: '@openagt/servers', url: '/_computer-modules/%40openagt%2Fservers/dashboard.js', projects: [] },
+      { package: '@openagt/changes', url: `/_modules/${projectId(a)}/%40openagt%2Fchanges/dashboard.js`, projects: [projectId(a), projectId(b)] },
       { package: '@openagt/files', url: `/_modules/${projectId(a)}/%40openagt%2Ffiles/dashboard.js`, projects: [projectId(a), projectId(b)] },
       { package: '@openagt/skill-logs', url: `/_modules/${projectId(a)}/%40openagt%2Fskill-logs/dashboard.js`, projects: [projectId(a), projectId(b)] },
       { package: 'logs', url: `/_modules/${projectId(a)}/logs/w.js`, projects: [projectId(a), projectId(b)] },
@@ -149,11 +150,11 @@ test('a module reads through its own server part, in its own project; nothing el
     assert.deepEqual(await readModule(projectId(a), 'logs', 'where', {}), { ok: false, error: 'logs has no server part' })
     assert.deepEqual(await readModule(projectId(a), 'nothing', 'where', {}), { ok: false, error: 'nothing is no module of this project' })
     assert.deepEqual(await readModule('nowhere-1', 'reader', 'where', {}), { ok: false, error: 'unknown project' })
-    // The built-in Files module reads the project's own files.
+    // The built-in Files module reads the project's own files: none that git sees, in a folder that is no repository.
     await writeFile(join(a, 'hello.txt'), 'hi')
     const files = await readModule(projectId(a), '@openagt/files', 'project', {})
     assert.equal(files.ok, true)
-    assert.ok(files.ok && (files.output as { files: string[] }).files !== undefined)
+    assert.ok(files.ok && Array.isArray(files.output))
   } finally {
     if (previous === undefined) delete process.env.XDG_CONFIG_HOME
     else process.env.XDG_CONFIG_HOME = previous

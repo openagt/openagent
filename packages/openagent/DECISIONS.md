@@ -89,12 +89,15 @@ already made, and lists it in its pull request; for anything else it proposes an
   set on any. On a phone the column lies over the chat. Picked over one side panel with a
   tab per module, which showed one of them at a time; over the browser in a column of its
   own; and over one size for every page.
+- Changes and Files are two modules that share nothing: the Files tree marks no file as
+  changed. Picked over one module for both panes, and over the Files tree asking Changes
+  for its marks, which would tie the two.
 - The packages every project wants are built in: OpenAgent depends on them and uses them
   for every project through the same contract as any package (a module by its
   `./dashboard` export, a provider of a kind of data and the writer of its hook lines by
-  its `openagent` key). They are Files, the runner, the packages that read a project's
-  runs and checkouts, and the GitHub package, so an empty folder starts an agent, shows
-  it, and can be put on GitHub. A built-in git host is a project's only when the
+  its `openagent` key). They are Changes, Files, the runner, the packages that read a
+  project's runs and checkouts, and the GitHub package, so an empty folder starts an
+  agent, shows it, and can be put on GitHub. A built-in git host is a project's only when the
   project's remote is on that host: it was not chosen by the project, so it does not
   answer for a project on another host. Picked over each project installing them itself,
   which left a project with nothing installed unable to start an agent or to see one.
@@ -272,8 +275,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   the run ends for good. Picked over a run's end closing it, which left a waiting run's
   question on screen as text nobody could answer.
 - A run that finished `done` on this machine and left no checkout, branch or pull request
-  changed nothing, and its Files pane shows the project's files with nothing marked. Picked
-  over saying its changes are gone, which read as lost work. No other run is judged so.
+  changed nothing, and its Files pane shows the project's files. Picked over saying its
+  changes are gone, which read as lost work. No other run is judged so.
 
 ## Sweeping origin's scratch refs
 - A branch on origin is a run's, and may be swept once landed, unclaimed by a pull request,
