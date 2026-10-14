@@ -1,0 +1,15 @@
+{
+  "id": "2026-10-14T05-32-02-559Z",
+  "startedAt": "2026-10-14T05:31:54.394Z",
+  "status": "running",
+  "intent": "/plan-tickets",
+  "driver": "claude-code",
+  "model": "opus",
+  "caller": {
+    "runner": {
+      "host": "Suleimans-MacBook-Pro.local",
+      "publish": "commit"
+    },
+    "host": "Suleimans-MacBook-Pro.local"
+  }
+}
