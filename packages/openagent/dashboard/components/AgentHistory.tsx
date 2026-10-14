@@ -4,14 +4,12 @@ import type { ComponentType } from 'react'
 import type { AgentMeta, AgentStatus, RecentAgent, ProjectSummary } from '../../src/index.js'
 import { DRIVER_LABELS, driverFromImpl, cloudRunState, type CloudRunState } from '../../src/client.js'
 import { Button, buttonVariants } from './ui/button.js'
-import { Badge } from './ui/badge.js'
 import { cn } from '../lib/utils.js'
 import { formatRelative } from '../lib/format-date.js'
 import { usePreferences } from '../lib/preferences.js'
-import { STATUS_TONE } from '../lib/status-tone.js'
+import { STATUS_DOT, STATUS_RING } from '../lib/status-tone.js'
 import { agentLabel } from '../lib/agent-label.js'
 import { holdsMainAgent, isOpenSubagent, nestRows, taskLabel } from '../lib/subagents.js'
-import { DriverLogo } from './driver-logos.js'
 import { AddProjectPanel } from './AddProjectPanel.js'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from './ui/dropdown-menu.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
@@ -233,10 +231,10 @@ export function AgentHistory({
       // A subagent's prompt is its task and then the lines every subagent is told: its row names the task.
       intent={subagent ? taskLabel(row.agent) : agentLabel(row.agent)}
       driver={row.agent.driver}
-      // On the Overview the project is what tells the rows apart, so it leads the meta
-      // line; a project's own rail already knows its project, so it shows just the time. A
-      // subagent is in its main agent's project.
-      subtitle={row.project && !subagent ? `${row.project} · ${formatRelative(row.agent.startedAt)}` : formatRelative(row.agent.startedAt)}
+      // On the Overview the project is what tells the rows apart, so the row still names it; a
+      // project's own rail already knows its project, and a subagent is in its main agent's.
+      {...(row.project && !subagent ? { project: row.project } : {})}
+      subtitle={formatRelative(row.agent.startedAt)}
       active={row.active}
       remote={row.agent.target === 'remote'}
       cloud={row.agent.target === 'web'}
@@ -312,7 +310,7 @@ export function AgentHistory({
                   <SidebarMenuItem>
                     {/* Drawn as the run's own row will be a few seconds on (the same words, the same
                         logo, not dimmed), so that row taking its place changes nothing on screen. */}
-                    <AgentHistoryRow status="running" intent={optimistic?.intent ?? undefined} subtitle={crossProject && startProjectName ? `${startProjectName} · just now` : 'just now'} driver={preferences.driver} active={starting} standIn onClick={leave(() => onSelect(null))} />
+                    <AgentHistoryRow status="running" intent={optimistic?.intent ?? undefined} {...(crossProject && startProjectName ? { project: startProjectName } : {})} subtitle="just now" driver={preferences.driver} active={starting} standIn onClick={leave(() => onSelect(null))} />
                   </SidebarMenuItem>
                 )}
                 {tree.map(({ row, subagents }) => {
@@ -550,11 +548,15 @@ function RevealedTitle({ text, start }: { text: string; start: boolean }) {
   )
 }
 
-// One agent row: a pulsing dot + RUNNING badge for a working agent, a still dot + WAITING for one
-// parked on the user (#785), else the terminal-status badge.
+// One agent row, one line: a small circle and the session's name, as Claude Code on the web lists
+// its sessions. The row used to be two lines — a status word, the project, the time and the agent's
+// logo above the name — which made the list a column of paragraphs and fitted half as many sessions
+// on the screen. What those words said is now the circle (what the run is doing, by its colour and
+// whether it is filled) and the row's hover, which says all of it in a sentence.
 function AgentHistoryRow({
   status,
   intent,
+  project,
   subtitle,
   active,
   onClick,
@@ -571,9 +573,11 @@ function AgentHistoryRow({
   fold,
 }: {
   status: AgentStatus
-  /** The row's subagents, folded or open under it: a count on the row's first line, so a row with subagents is no taller than one without. */
+  /** The row's subagents, folded or open under it: a count at the row's end, so a row with subagents is no taller than one without. */
   fold?: SubagentsFold | undefined
   intent: string | undefined
+  /** When the sessions come from several projects, which one this is: it is what tells the rows apart there. */
+  project?: string | undefined
   subtitle: string
   /** The agent that ran it, so the row can show whose session it was. */
   driver?: string | undefined
@@ -624,126 +628,111 @@ function AgentHistoryRow({
     if (el) setOverflowing(el.scrollWidth > el.clientWidth + 1)
   }, [intent])
   const titleText = intent || 'New agent'
-  const titleClass = cn('rail-title w-full px-2 text-sm font-normal', overflowing && 'is-overflowing')
+  const titleClass = cn('rail-title min-w-0 flex-1 text-sm font-normal', overflowing && 'is-overflowing')
+  // What the row says in a word, the one the status badge used to print: it names the circle, and
+  // opens the sentence the row's hover says.
+  const word = parked ? 'waiting' : inCloud ? 'in cloud' : cloudWord ? cloudWord : savingNow ? 'saving…' : status
+  // The circle: filled while something is going on, a ring once nothing is, and the colour is the
+  // status vocabulary every list shares (`status-tone.ts`). Only a run that is working pulses — a
+  // run parked on you has been still for as long as you have not answered it (#785).
+  const working = status === 'running' || inCloud || savingNow
+  const dotTone = savingNow ? STATUS_DOT['saving'] : parked ? STATUS_DOT['waiting'] : working ? STATUS_DOT['running'] : STATUS_DOT[status]
+  const ringTone = (cloudWord ? STATUS_RING[cloudWord] : STATUS_RING[status]) ?? STATUS_RING['done']
+  // Everything the two-line row used to print, in one sentence on hover: the word, where the run
+  // is and when it started, which coding agent ran it, and the machine or cloud it ran on.
+  const said = [
+    word,
+    ...(project ? [project] : []),
+    subtitle,
+    ...(picked ? [DRIVER_LABELS[picked]] : []),
+    ...(startedOn ? [`started on ${startedOn}`] : []),
+    ...(remote ? [remoteLabel ? `runs on ${remoteLabel}` : 'runs on another machine'] : []),
+    ...(cloud ? ['a Claude Code cloud session'] : []),
+  ].join(' · ')
+  // The hover says what the row no longer prints, and a name too long for the rail in full under it
+  // (#1494) — the marquee it replaced forced reading at the animation's pace. The row itself is the
+  // trigger, so there is no wrapper between the list and its rows.
   return (
-    <Button
-      variant="ghost"
-      className={cn(
-        // px-0 (overriding the button base's px-4) so the card has no horizontal padding: the title
-        // spans edge to edge and its clip/fade land on the border. Inner rows carry their own px-2.
-        'rail-row h-auto w-full flex-col items-start gap-0.5 px-0 py-2 text-left',
-        active && 'bg-accent text-accent-foreground',
-      )}
-      {...(standIn ? { 'data-stand-in': '' } : {})}
-      onClick={onClick}
-      onPointerEnter={onNear}
-      onFocus={onNear}
-    >
-      <span className="flex w-full items-center gap-2 px-2">
-        {/* The dot means "the agent is working", so a run parked on you gets a still one (#785):
-            it used to pulse identically whether it was mid-edit or had been idle for an hour. */}
-        {/* The saving dot pulses green like the session pill's (#1431), so the two surfaces
-            describe the same window the same way. */}
-        {/* `parked` alone covers the cloud-side wait: its local status is done, but "waiting"
-            always comes with the still dot, wherever the session is parked. */}
-        {(status === 'running' || parked) && (
-          <span className={cn('inline-block h-2 w-2 shrink-0 rounded-full', parked ? 'bg-muted-foreground' : 'animate-pulse bg-primary')} />
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            // The row prints its name and a circle; what it no longer prints is still its name
+            // here, so a reader who cannot see the row's colour, or cannot hover it, is told the
+            // same sentence.
+            aria-label={`${titleText} · ${said}`}
+            className={cn(
+              'rail-row h-8 w-full items-center gap-2 px-2 text-left',
+              active && 'bg-accent text-accent-foreground',
+            )}
+            {...(standIn ? { 'data-stand-in': '' } : {})}
+            onClick={onClick}
+            onPointerEnter={onNear}
+            onFocus={onNear}
+          />
+        }
+      >
+      {/* The circle stands where the status word stood, and carries that word for a reader who
+          cannot see a colour. */}
+      <span
+        role="img"
+        aria-label={word}
+        className={cn(
+          'inline-block h-2 w-2 shrink-0 rounded-full',
+          dotTone ?? cn('border', ringTone),
+          working && 'animate-pulse',
         )}
-        {savingNow && <span className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-success" />}
-        <Badge className={cn('shrink-0 border-transparent px-0 text-[10px] uppercase', parked || savingNow ? 'text-muted-foreground' : inCloud ? 'text-primary' : cloudWord ? 'text-success' : STATUS_TONE[status])}>
-          {parked ? 'waiting' : inCloud ? 'in cloud' : cloudWord ? cloudWord : savingNow ? 'saving…' : status}
-        </Badge>
-        <span className="truncate text-xs font-normal text-muted-foreground">{subtitle}</span>
-        {/* Right cluster: a machine glyph when the run is relayed to a saved machine (#1067),
-            a cloud glyph for a Claude Code cloud session (#1263), then the driver logo. The logo
-            is the only thing naming the driver on this row, so it carries a title rather than
-            being decorative. */}
-        {(remote || cloud || picked || startedOn || fold) && (
-          <span className="ml-auto flex shrink-0 items-center gap-1.5">
-            {/* The row's subagents: how many, and the fold of their list. Inside the row's own
-                button, so it is a span that takes the click for itself. */}
-            {fold && (
-              <span
-                role="button"
-                tabIndex={0}
-                aria-expanded={fold.open}
-                aria-label={`${fold.count} agent${fold.count === 1 ? '' : 's'}${fold.working > 0 ? ` · ${fold.working} running` : ''}`}
-                title={`${fold.count} subagent${fold.count === 1 ? '' : 's'}${fold.working > 0 ? `, ${fold.working} running` : ''}`}
-                onClick={e => {
-                  e.stopPropagation()
-                  fold.onToggle()
-                }}
-                onKeyDown={e => {
-                  if (e.key !== 'Enter' && e.key !== ' ') return
-                  e.preventDefault()
-                  e.stopPropagation()
-                  fold.onToggle()
-                }}
-                className="flex items-center gap-0.5 rounded-sm px-1 text-[11px] font-normal tabular-nums text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
-              >
-                <ChevronDown className={cn('h-3 w-3 shrink-0 transition-transform', fold.open || '-rotate-90')} aria-hidden />
-                <Bot className="h-3 w-3 shrink-0" aria-hidden />
-                {fold.count}
-              </span>
-            )}
-            {/* Another machine's daemon started this run (#1648): the shared agent-data branch lists every
-                machine's runs here, and one that looked exactly like this daemon's own was a mystery
-                solved only by reading the archive. A glyph, not a word in the meta line: the rail's
-                fixed width truncated a hostname to "from…". */}
-            {startedOn && (
-              <Tooltip>
-                <TooltipTrigger render={<span className="flex items-center" />}>
-                  <Laptop className="h-3 w-3 text-muted-foreground" aria-label={`Started on ${startedOn}`} />
-                </TooltipTrigger>
-                <TooltipContent>Started on {startedOn}.</TooltipContent>
-              </Tooltip>
-            )}
-            {remote && (
-              <Tooltip>
-                <TooltipTrigger render={<span className="flex items-center" />}>
-                  <MachineIcon className="h-3 w-3 text-muted-foreground" aria-label={remoteLabel ? `Runs on ${remoteLabel}` : 'Runs on another machine'} />
-                </TooltipTrigger>
-                <TooltipContent>{remoteLabel ? `Runs on ${remoteLabel}` : 'Runs on another machine'}</TooltipContent>
-              </Tooltip>
-            )}
-            {cloud && (
-              <Tooltip>
-                <TooltipTrigger render={<span className="flex items-center" />}>
-                  <Cloud className="h-3 w-3 text-muted-foreground" aria-label="Runs as a Claude Code cloud session" />
-                </TooltipTrigger>
-                <TooltipContent>Runs as a Claude Code cloud session; it works and opens its PR over there.</TooltipContent>
-              </Tooltip>
-            )}
-            {picked && (
-              // The logo is the only thing naming the driver on this row, so the trigger carries the
-              // accessible name and the logo itself stays decorative.
-              <Tooltip>
-                <TooltipTrigger render={<span className="flex items-center" role="img" aria-label={DRIVER_LABELS[picked]} />}>
-                  <DriverLogo driver={picked} className="h-3 w-3 text-muted-foreground" />
-                </TooltipTrigger>
-                <TooltipContent>{DRIVER_LABELS[picked]}</TooltipContent>
-              </Tooltip>
-            )}
-          </span>
-        )}
+      />
+      <span ref={titleRef} className={titleClass}>
+        <RevealedTitle text={titleText} start={standIn} />
       </span>
-      {/* A truncated title shows its full prompt in a tooltip (#1494) — the hover marquee it
-          replaces forced reading at the animation's pace and moved the text under the cursor.
-          The end-fade stays as the truncation cue; a title that fits gets no tooltip at all. */}
-      {overflowing ? (
-        <Tooltip>
-          <TooltipTrigger render={<span ref={titleRef} className={titleClass} />}>
-            <RevealedTitle text={titleText} start={standIn} />
-          </TooltipTrigger>
-          <TooltipContent side="right" className="max-w-96 whitespace-pre-wrap break-words">
-            {titleText}
-          </TooltipContent>
-        </Tooltip>
-      ) : (
-        <span ref={titleRef} className={titleClass}>
-          <RevealedTitle text={titleText} start={standIn} />
+      {/* Where the sessions of several projects are listed together, the project is what tells one
+          row from the next, so it stays on the row: small, at the end, and the first to give up
+          width. A project's own rail knows its project and shows none. */}
+      {project && <span className="min-w-0 shrink truncate text-xs text-muted-foreground">{project}</span>}
+      {/* What is unusual about where the run is, kept on the row as one small glyph: another
+          machine, a person's own computer, a cloud session. Rare, so the row stays a circle and a
+          name nearly always; the coding agent's own logo was on every row and is now in the
+          sentence instead. */}
+      {startedOn && (
+        <Laptop className="h-3 w-3 shrink-0 text-muted-foreground" role="img" aria-label={`Started on ${startedOn}`} />
+      )}
+      {remote && (
+        <MachineIcon className="h-3 w-3 shrink-0 text-muted-foreground" role="img" aria-label={remoteLabel ? `Runs on ${remoteLabel}` : 'Runs on another machine'} />
+      )}
+      {cloud && <Cloud className="h-3 w-3 shrink-0 text-muted-foreground" role="img" aria-label="Runs as a Claude Code cloud session" />}
+      {/* The row's subagents: how many, and the fold of their list. A control, so it stays on the
+          row rather than moving into the hover. Inside the row's own button, so it is a span that
+          takes the click for itself. */}
+      {fold && (
+        <span
+          role="button"
+          tabIndex={0}
+          aria-expanded={fold.open}
+          aria-label={`${fold.count} agent${fold.count === 1 ? '' : 's'}${fold.working > 0 ? ` · ${fold.working} running` : ''}`}
+          title={`${fold.count} subagent${fold.count === 1 ? '' : 's'}${fold.working > 0 ? `, ${fold.working} running` : ''}`}
+          onClick={e => {
+            e.stopPropagation()
+            fold.onToggle()
+          }}
+          onKeyDown={e => {
+            if (e.key !== 'Enter' && e.key !== ' ') return
+            e.preventDefault()
+            e.stopPropagation()
+            fold.onToggle()
+          }}
+          className="flex shrink-0 items-center gap-0.5 rounded-sm px-1 text-[11px] font-normal tabular-nums text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+        >
+          <ChevronDown className={cn('h-3 w-3 shrink-0 transition-transform', fold.open || '-rotate-90')} aria-hidden />
+          <Bot className="h-3 w-3 shrink-0" aria-hidden />
+          {fold.count}
         </span>
       )}
-    </Button>
+      </TooltipTrigger>
+      <TooltipContent side="right" className="max-w-96 whitespace-pre-wrap break-words">
+        {overflowing ? `${titleText}\n${said}` : said}
+      </TooltipContent>
+    </Tooltip>
   )
 }

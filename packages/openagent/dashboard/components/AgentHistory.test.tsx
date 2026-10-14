@@ -44,8 +44,10 @@ const renderRail = (ui: ReactElement) => render(<SidebarProvider>{ui}</SidebarPr
 
 describe('AgentHistory (#785)', () => {
   test('a working run reads as running and animates', () => {
+    // One line: the circle says what the row used to print as a word, and the row's name says it too.
     const { container } = renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent()]} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.getByText('running')).toBeTruthy()
+    expect(screen.getByLabelText('running')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /· running ·/ })).toBeTruthy()
     expect(container.querySelector('.animate-pulse')).toBeTruthy()
   })
 
@@ -60,25 +62,25 @@ describe('AgentHistory (#785)', () => {
     const { container } = renderRail(
       <AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'waiting' })]} selectedAgentId={null} onSelect={() => {}} />,
     )
-    expect(screen.getByText('waiting')).toBeTruthy()
-    expect(screen.queryByText('running')).toBeNull()
+    expect(screen.getByLabelText('waiting')).toBeTruthy()
+    expect(screen.queryByLabelText('running')).toBeNull()
     expect(container.querySelector('.animate-pulse')).toBeNull()
-    expect(container.querySelector('.rounded-full.bg-muted-foreground')).toBeTruthy()
+    expect(container.querySelector('.rounded-full.bg-warning')).toBeTruthy()
   })
 
   test('an ended run the daemon marks saving reads as saving… (#1455)', () => {
     const { container } = renderRail(
       <AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done', saving: true })]} selectedAgentId={null} onSelect={() => {}} />,
     )
-    expect(screen.getByText('saving…')).toBeTruthy()
-    expect(screen.queryByText('done')).toBeNull()
+    expect(screen.getByLabelText('saving…')).toBeTruthy()
+    expect(screen.queryByLabelText('done')).toBeNull()
     expect(container.querySelector('.animate-pulse')).toBeTruthy()
   })
 
   test('an ended run without the mark reads as plain done (#1455)', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done' })]} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.queryByText('saving…')).toBeNull()
-    expect(screen.getByText('done')).toBeTruthy()
+    expect(screen.queryByLabelText('saving…')).toBeNull()
+    expect(screen.getByLabelText('done')).toBeTruthy()
   })
 
   test('a session selected before its row lands highlights the starting row (#784)', () => {
@@ -109,7 +111,8 @@ describe('AgentHistory (#785)', () => {
       </SidebarProvider>,
     )
     const row = [...container.querySelectorAll('button')].find(row => row.hasAttribute('data-stand-in'))!
-    expect(row.textContent).toBe('runningalpha · just nowadd dark mode')
+    expect(row.textContent).toBe('add dark modealpha')
+    expect(row.getAttribute('aria-label')).toBe('add dark mode · running · alpha · just now')
     expect(row.textContent).not.toContain('starting…')
     expect(row.className).not.toContain('opacity-70')
   })
@@ -123,7 +126,9 @@ describe('AgentHistory (#785)', () => {
         <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId="run-3" onSelect={() => {}} startTick={1} startIntent="add a footer" startId="run-3" startProjectName="alpha" />
       </SidebarProvider>,
     )
-    expect([...container.querySelectorAll('button')].find(row => row.hasAttribute('data-stand-in'))!.textContent).toBe('runningjust nowadd a footer')
+    const standInRow = [...container.querySelectorAll('button')].find(row => row.hasAttribute('data-stand-in'))!
+    expect(standInRow.textContent).toBe('add a footer')
+    expect(standInRow.getAttribute('aria-label')).toBe('add a footer · running · just now')
   })
 
   test('the starting row retires when the run it stands in for lands, even if it never ran', () => {
@@ -157,7 +162,7 @@ describe('AgentHistory (#785)', () => {
     )
     const rows = [...container.querySelectorAll('button')]
     expect(rows.some(row => row.hasAttribute('data-stand-in'))).toBe(false)
-    expect(rows.some(row => row.textContent?.includes('failed'))).toBe(true)
+    expect(rows.some(row => row.getAttribute('aria-label')?.includes('failed'))).toBe(true)
   })
 
   test('the starting row survives a run that was already there when Start was clicked', () => {
@@ -255,7 +260,8 @@ describe('AgentHistory rows', () => {
       />,
     )
     expect(screen.getByText('fix login')).toBeTruthy()
-    expect(screen.getByText(/alpha/)).toBeTruthy()
+    // Which project a row belongs to is in the row's own name now, not printed under it.
+    expect(screen.getByRole('button', { name: /fix login · running · alpha/ })).toBeTruthy()
     fireEvent.click(screen.getByText('add tests'))
     expect(picked).toEqual(['proj-b', 'r-b'])
   })
@@ -280,22 +286,22 @@ describe('subagents on the rail', () => {
 
   test('a main agent whose own turn is over reads as running while a subagent works, and as done once none does', () => {
     const { container, rerender } = renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c1', { status: 'running' }), { ...main, saving: true }]} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.getAllByText('running')).toHaveLength(2)
-    expect(screen.queryByText('done')).toBeNull()
-    // One dot and one word: not "saving…" as well.
-    expect(screen.queryByText('saving…')).toBeNull()
+    expect(screen.getAllByLabelText('running')).toHaveLength(2)
+    expect(screen.queryByLabelText('done')).toBeNull()
+    // One circle and one word: not "saving…" as well.
+    expect(screen.queryByLabelText('saving…')).toBeNull()
     expect(container.querySelectorAll('.animate-pulse')).toHaveLength(2)
     rerender(<SidebarProvider><AgentHistory projectId="p1" scope="p1" agents={[sub('c1', { status: 'waiting' }), main]} selectedAgentId={null} onSelect={() => {}} /></SidebarProvider>)
-    expect(screen.queryByText('running')).toBeNull()
-    expect(screen.getByText('done')).toBeTruthy()
+    expect(screen.queryByLabelText('running')).toBeNull()
+    expect(screen.getByLabelText('done')).toBeTruthy()
   })
 
   test('a main agent reads as running for the moment after a subagent ended: it is about to go on', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c1', { endedAt: new Date().toISOString() }), main]} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.getByText('running')).toBeTruthy()
+    expect(screen.getByLabelText('running')).toBeTruthy()
     cleanup()
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c1', { endedAt: '2026-07-19T16:10:00.000Z' }), main]} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.queryByText('running')).toBeNull()
+    expect(screen.queryByLabelText('running')).toBeNull()
   })
 
   test("the count of subagents is on the main agent's own row, and a click on it folds the list without opening the agent", () => {
@@ -313,8 +319,8 @@ describe('subagents on the rail', () => {
 
   test('a main agent that failed or was stopped keeps its own word while a subagent works', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c1', { status: 'running' }), { ...main, status: 'failed' }]} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.getByText('failed')).toBeTruthy()
-    expect(screen.getAllByText('running')).toHaveLength(1)
+    expect(screen.getByLabelText('failed')).toBeTruthy()
+    expect(screen.getAllByLabelText('running')).toHaveLength(1)
   })
 
   test('a subagent stopped on a question keeps the list open too', () => {
@@ -362,7 +368,7 @@ describe('subagents on the rail', () => {
     renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={recentAgents} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getAllByRole('button', { name: /1 agent/ })).toHaveLength(1)
     // The subagent's row does not name the project again: it is its main agent's.
-    expect(screen.getAllByText(/alpha/)).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: /alpha/ })).toHaveLength(1)
     const titles = screen.getAllByText(/^(split the login work|task c1|other project)$/).map(el => el.textContent)
     expect(titles).toEqual(['other project', 'split the login work', 'task c1'])
   })
@@ -431,8 +437,8 @@ describe('cloud sessions on the rail (#1263/#1264)', () => {
         onSelect={() => {}}
       />,
     )
-    expect(screen.getByText('in cloud')).toBeTruthy()
-    expect(screen.queryByText('done')).toBeNull()
+    expect(screen.getByLabelText('in cloud')).toBeTruthy()
+    expect(screen.queryByLabelText('done')).toBeNull()
   })
 
   test('a web run stopped early is just stopped: nothing is working anywhere', () => {
@@ -444,8 +450,8 @@ describe('cloud sessions on the rail (#1263/#1264)', () => {
         onSelect={() => {}}
       />,
     )
-    expect(screen.getByText('stopped')).toBeTruthy()
-    expect(screen.queryByText('in cloud')).toBeNull()
+    expect(screen.getByLabelText('stopped')).toBeTruthy()
+    expect(screen.queryByLabelText('in cloud')).toBeNull()
   })
 
   test('a web run parked on a question the bridge reported reads as waiting (#1668)', () => {
@@ -457,8 +463,8 @@ describe('cloud sessions on the rail (#1263/#1264)', () => {
         onSelect={() => {}}
       />,
     )
-    expect(screen.getByText('waiting')).toBeTruthy()
-    expect(screen.queryByText('in cloud')).toBeNull()
+    expect(screen.getByLabelText('waiting')).toBeTruthy()
+    expect(screen.queryByLabelText('in cloud')).toBeNull()
   })
 
   test('adopted cloud work reads done (its PR badge says the rest) or merged; an old run with nothing adopted is done (#1668)', () => {
@@ -476,9 +482,9 @@ describe('cloud sessions on the rail (#1263/#1264)', () => {
         onSelect={() => {}}
       />,
     )
-    expect(screen.getByText('merged')).toBeTruthy()
-    expect(screen.getAllByText('done')).toHaveLength(2)
-    expect(screen.queryByText('in cloud')).toBeNull()
+    expect(screen.getByLabelText('merged')).toBeTruthy()
+    expect(screen.getAllByLabelText('done')).toHaveLength(2)
+    expect(screen.queryByLabelText('in cloud')).toBeNull()
   })
 
   test('a web run shows the cloud glyph and still names its agent (#1263)', () => {
@@ -491,15 +497,16 @@ describe('cloud sessions on the rail (#1263/#1264)', () => {
       />,
     )
     expect(screen.getByLabelText('Runs as a Claude Code cloud session')).toBeTruthy()
-    // claude-web is still Claude: where it runs is the target, not the agent.
-    expect(screen.getByLabelText('Claude Code')).toBeTruthy()
+    // claude-web is still Claude: where it runs is the target, not the agent. The agent's own logo
+    // is no longer a glyph on every row — the row says which agent ran it.
+    expect(screen.getByRole('button', { name: /Claude Code/ })).toBeTruthy()
   })
 
   test('a local finished run keeps its plain done badge and gets no cloud glyph', () => {
     renderRail(
       <AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done', driver: 'claude-code' })]} selectedAgentId={null} onSelect={() => {}} />,
     )
-    expect(screen.getByText('done')).toBeTruthy()
+    expect(screen.getByLabelText('done')).toBeTruthy()
     expect(screen.queryByLabelText('Runs as a Claude Code cloud session')).toBeNull()
   })
 })
@@ -513,8 +520,8 @@ describe('AgentHistory title tooltip (#1494)', () => {
     const clientSpy = vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(120)
     try {
       renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ intent: long })]} selectedAgentId={null} onSelect={() => {}} />)
-      const title = await screen.findByText(long)
-      const tip = await hoverTooltip(title)
+      const row = (await screen.findByText(long)).closest('button')!
+      const tip = await hoverTooltip(row)
       expect(tip.textContent).toContain(long)
     } finally {
       scrollSpy.mockRestore()
@@ -522,13 +529,12 @@ describe('AgentHistory title tooltip (#1494)', () => {
     }
   })
 
-  test('a title that fits is a plain span — no tooltip wiring at all', () => {
+  test('a title that fits is not repeated in the hover: the hover says what the row no longer prints', async () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent()]} selectedAgentId={null} onSelect={() => {}} />)
-    const title = screen.getByText("replace 'Hello, world!' with 'Welcome!'")
-    // Not overflowing (zero widths measure as fitting): hovering has no listeners to open anything.
-    fireEvent.mouseEnter(title)
-    fireEvent.mouseMove(title)
-    expect(screen.queryByRole('tooltip')).toBeNull()
+    const row = screen.getByText("replace 'Hello, world!' with 'Welcome!'").closest('button')!
+    const tip = await hoverTooltip(row)
+    expect(tip.textContent).toContain('running')
+    expect(tip.textContent).not.toContain("replace 'Hello, world!'")
   })
 })
 
