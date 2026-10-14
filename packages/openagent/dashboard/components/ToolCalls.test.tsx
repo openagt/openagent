@@ -96,14 +96,27 @@ describe('ToolCalls', () => {
     expect(screen.getByRole('button', { name: 'Edited a.ts' })).toBeTruthy()
   })
 
-  test('a thought is no line of its own: it is inside the opened box, folded, where it was thought', () => {
-    const { container } = render(<ToolCalls steps={[{ type: 'thought', text: 'look at the docs first' }, bash('ls')]} />)
+  test('a thought is no line of its own: inside the opened box it is its own first words, folded, where it was thought', () => {
+    const { container } = render(<ToolCalls steps={[{ type: 'thought', text: 'look at the docs first\nthen the code' }, bash('ls')]} />)
     expect(screen.queryByText(/Thought|look at the docs/)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Ran a command' }))
-    expect(Array.from(container.querySelectorAll('.border button')).map(b => b.textContent)).toEqual(['Thought', 'Ranls'])
-    expect(screen.queryByText('look at the docs first')).toBeNull()
+    // The row says what was thought, not the word "Thought": half a panel of identical rows said nothing.
+    expect(Array.from(container.querySelectorAll('.border button')).map(b => b.textContent)).toEqual(['look at the docs first', 'Ranls'])
+    expect(screen.queryByText('then the code')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Thought' }))
-    expect(screen.getByText('look at the docs first')).toBeTruthy()
+    expect(screen.getByText(/then the code/)).toBeTruthy()
+  })
+
+  test('a long thought is cut short on its row, and one with nothing in it still has a word', () => {
+    const { container } = render(<ToolCalls steps={[{ type: 'thought', text: `${'word '.repeat(40)}` }, bash('ls')]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Ran a command' }))
+    const row = Array.from(container.querySelectorAll('.border button'))[0]!
+    expect(row.textContent!.length).toBeLessThanOrEqual(91)
+    expect(row.textContent!.endsWith('…')).toBe(true)
+    cleanup()
+    render(<ToolCalls steps={[{ type: 'thought', text: '  \n ' }, bash('ls')]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Ran a command' }))
+    expect(screen.getByRole('button', { name: 'Thought' }).textContent).toBe('Thought')
   })
 
   test('thoughts with no call draw nothing', () => {

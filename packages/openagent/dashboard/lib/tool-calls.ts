@@ -106,10 +106,35 @@ const COUNTED: Record<CallKind, (n: number) => string> = {
   other: n => (n === 1 ? 'used a tool' : `used ${n} tools`),
 }
 
-/** One part of a run's line: its words, and the lines its edits added and removed when they are known. */
+/** One part of a run's line: its words, what kind of call it counts, and the lines its edits added and removed when they are known. */
 export interface SummaryPart {
   text: string
+  kind: CallKind
   size?: LineCount
+}
+
+/**
+ * How much a kind is worth saying on the one line the chat gives a run of calls, most first. An
+ * edit names the files it changed and how big the change was, so it is always the one to keep; a
+ * read is the one a run has most of and says least.
+ */
+const WORTH_SAYING: readonly CallKind[] = ['edit', 'command', 'skill', 'search', 'other', 'read']
+
+/** How many parts that line holds, as Claude Code on the web's does: one short phrase, two at most. The rest are a click away, in the panel the line opens. */
+export const PARTS_SHOWN = 2
+
+/**
+ * The parts to draw, in the order they happened: the two worth saying most ({@link WORTH_SAYING}).
+ * A run that did four things in three kinds read as a list; what it changed and what it ran say it,
+ * and every step is in the panel below either way.
+ */
+export function partsShown(parts: readonly SummaryPart[]): SummaryPart[] {
+  if (parts.length <= PARTS_SHOWN) return [...parts]
+  const keep = new Set([...parts].sort((a, b) => WORTH_SAYING.indexOf(a.kind) - WORTH_SAYING.indexOf(b.kind)).slice(0, PARTS_SHOWN))
+  const shown = parts.filter(part => keep.has(part))
+  // The line always opens with a capital, whichever part now begins it.
+  const first = shown[0]
+  return first ? [{ ...first, text: first.text.charAt(0).toUpperCase() + first.text.slice(1) }, ...shown.slice(1).map(part => ({ ...part, text: part.text.charAt(0).toLowerCase() + part.text.slice(1) }))] : []
 }
 
 /**
@@ -129,11 +154,11 @@ export function callsSummary(calls: readonly ToolCall[]): SummaryPart[] {
   const unknown = calls.filter(call => call.kind === 'edit' && call.files === undefined).length
   const parts = [...counts].flatMap(([kind, n]): SummaryPart[] => {
     // A skill is said by its name: "used skill branches".
-    if (kind === 'skill' && n === 1) return [{ text: `used skill ${calls.find(call => call.kind === 'skill')?.target ?? ''}`.trim() }]
-    if (kind !== 'edit' || files.length === 0) return [{ text: COUNTED[kind](n) }]
+    if (kind === 'skill' && n === 1) return [{ kind, text: `used skill ${calls.find(call => call.kind === 'skill')?.target ?? ''}`.trim() }]
+    if (kind !== 'edit' || files.length === 0) return [{ kind, text: COUNTED[kind](n) }]
     const verb = files.every(file => file.created) ? 'created' : 'edited'
-    const named: SummaryPart = { text: files.length === 1 ? `${verb} ${files[0]!.name}` : `${verb} ${files.length} files`, size: sizeOf(files) }
-    return unknown > 0 ? [named, { text: COUNTED.edit(unknown) }] : [named]
+    const named: SummaryPart = { kind, text: files.length === 1 ? `${verb} ${files[0]!.name}` : `${verb} ${files.length} files`, size: sizeOf(files) }
+    return unknown > 0 ? [named, { kind, text: COUNTED.edit(unknown) }] : [named]
   })
   const first = parts[0]
   return first ? [{ ...first, text: first.text.charAt(0).toUpperCase() + first.text.slice(1) }, ...parts.slice(1)] : []

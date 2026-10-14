@@ -1,10 +1,11 @@
 import type { AgentMeta, ChoiceRequest, OpenAgentEvent } from '../../src/index.js'
 import { foldScreenRows, formatOpenAgentEvent } from '../../src/client.js'
 import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { ChevronRight } from 'lucide-react'
+import { Check, ChevronRight, Copy } from 'lucide-react'
 import { pendingChoices } from '../lib/live-state.js'
 import { startedBefore, subagentEnd, subagentStartedAt, type SubagentEnd } from '../lib/subagents.js'
 import { answeredQuestion } from '../lib/answered-question.js'
+import { formatAge } from '../lib/format-date.js'
 import { AnsweredChoice } from './AnsweredChoice.js'
 import { Markdown } from './Markdown.js'
 import { SessionLine, sessionLineEmpty, type SessionSetup } from './SessionLine.js'
@@ -221,6 +222,38 @@ function Reply({ text }: { text: string }) {
   )
 }
 
+/**
+ * Under the last thing the agent said: a button that copies it, and how long ago it said it, as
+ * Claude Code on the web puts them under its last message. Only the last one has it — a row of
+ * controls under every reply would be a row of controls down the whole chat.
+ */
+function ReplyFooter({ text, at }: { text: string; at?: string | undefined }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <div className="flex items-center gap-1 font-sans text-muted-foreground">
+      <button
+        type="button"
+        aria-label={copied ? 'Copied' : 'Copy this message'}
+        title={copied ? 'Copied' : 'Copy this message'}
+        onClick={() => {
+          void navigator.clipboard?.writeText(text).then(
+            () => setCopied(true),
+            () => undefined,
+          )
+        }}
+        className="flex h-6 w-6 items-center justify-center rounded hover:bg-accent hover:text-accent-foreground"
+      >
+        {copied ? <Check className="h-3.5 w-3.5" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
+      </button>
+      {at !== undefined && (
+        <time dateTime={at} title={new Date(at).toLocaleString()} className="px-1 text-[11px]">
+          {formatAge(at)}
+        </time>
+      )}
+    </div>
+  )
+}
+
 // More than this many lines, or this many characters, and the user's own message is cut short
 // behind "Show more".
 const PROMPT_LINES = 8
@@ -259,7 +292,7 @@ function Asking({ choice }: { choice: ChoiceRequest }) {
 // the answer under it, in place of the sentence the agent was resumed with.
 function Answer({ question, answer }: { question: string; answer: string }) {
   return (
-    <div role="group" aria-label="Your answer" className="max-w-[85%] min-w-0 rounded-lg border border-border px-3.5 py-2 font-sans text-sm">
+    <div role="group" aria-label="Your answer" className="min-w-[min(100%,20rem)] max-w-[85%] rounded-lg border border-border p-2.5 font-sans text-sm">
       <div className="text-muted-foreground">{question}</div>
       <div className="text-foreground">{answer}</div>
     </div>
@@ -427,10 +460,11 @@ const NOTHING_DOING: Record<string, string> = {}
  * session's menu reads it from the events. A turn's end and what the run has spent are not rows
  * either: the run's details count the turns and total the spend. A quota reading is worth a row
  * only when the quota is running low or used up; the agent reports it after every turn,
- * "allowed" included.
+ * "allowed" included. The name the session was given is not a row: it is the name, written where
+ * a name goes — the top bar and the rail — and a line announcing it read as a step the agent took.
  */
 function shownAsRow(e: OpenAgentEvent): boolean {
-  if (e.kind === 'session-update' || e.kind === 'usage') return false
+  if (e.kind === 'session-update' || e.kind === 'usage' || e.kind === 'title') return false
   if (e.kind === 'driver' && e.event.type === 'result') return false
   if (e.kind === 'driver' && e.event.type === 'rate-limit') return e.event.limit.status !== 'allowed'
   return true
@@ -619,6 +653,14 @@ export function EventList({
   const viewport = useRef<HTMLDivElement>(null)
   const endRoom = useRef<HTMLDivElement>(null)
   useEndKept(viewport, endRoom)
+  // The last thing the agent said, once its turn is over: what the footer under the turn copies.
+  const lastShown = shown[shown.length - 1]
+  const lastText = lastShown ? textOf(lastShown) : null
+  const lastSaid =
+    !working && sending === undefined && lastShown !== undefined && lastText !== null && !isTurnBoundary(lastShown) && !ends.has(lastShown)
+      ? { text: lastText, at: lastShown.at }
+      : undefined
+
   return (
     <MessageScrollerProvider autoScroll={stick} defaultScrollPosition={openAt ?? (stick ? 'end' : 'start')}>
       <FollowSent sent={(sending === undefined ? 0 : 1) + queued.length} />
@@ -658,7 +700,7 @@ export function EventList({
                 {startedRows(i)}
                 {/* Every row carries the same -mx/px pair so a washed row's band and a plain row's
                     text share the exact same columns; only the background differs. */}
-                <MessageScrollerItem messageId={idOf(e)} className={`group/row -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${end ? '' : rowWash(e)}`}>
+                <MessageScrollerItem messageId={idOf(e)} className={`group/row -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${own || answer ? 'mt-5 first:mt-0' : ''} ${end ? '' : rowWash(e)}`}>
                   {answer ? (
                     <Answer {...answer} />
                   ) : own && message !== null ? (
@@ -719,11 +761,22 @@ export function EventList({
                 <ChangedFiles files={changes.last} onOpen={onOpenChange} />
               </MessageScrollerItem>
             )}
+            {/* Under everything the turn left behind, once it has ended: the reply copied, and how
+                long ago it was said. Claude Code on the web puts the pair under its last message;
+                here the turn's files come between, and the footer closes the turn under them. */}
+            {lastSaid && (
+              <div className="-mx-1.5 flex items-start gap-2 rounded-sm px-1.5">
+                <ReplyFooter text={lastSaid.text} at={lastSaid.at} />
+              </div>
+            )}
             {/* The live line's place is kept when it has nothing to say (a message being written,
                 the agent's turn over): nothing under it moves up when it goes, nor down when it comes. */}
             {shown.length > 0 && (
               <div data-testid="live-line" className="-mx-1.5 flex min-h-5 shrink-0 items-center gap-2 rounded-sm px-1.5">
-                {working && !written && !settingUp && <LiveLine call={current} word={starting ? 'Starting…' : 'Working…'} since={turnStart} />}
+                {/* Under the reply as it streams, too: the agent is still at it, and Claude Code on
+                    the web keeps its dots and its count there. The line said a word before, which
+                    under a streaming reply read as a second thing going on. */}
+                {working && !settingUp && <LiveLine {...(written ? {} : { call: current })} since={turnStart} />}
               </div>
             )}
             {!working && waitingOn > 0 && (

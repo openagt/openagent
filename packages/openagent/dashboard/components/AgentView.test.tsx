@@ -737,23 +737,25 @@ describe('the model under the message box', () => {
     expect(screen.getByTestId('composer-model').textContent).toBe('')
   })
 
-  test('how full the context is shows beside the model, and only when both numbers are known', async () => {
+  test('how full the context is shows beside the model, empty until there is a reading, and only when the window is known', async () => {
     const { rerender } = render(view({ live: true, events: [], card: { status: 'running', driver: 'claude-code', model: 'opus', contextTokens: 50_000 } }))
     // Opus holds 200k, says the stubbed model list: a quarter of it is used.
     await waitFor(() => expect(screen.getByRole('img', { name: '50.0k of 200k used · 75% of the context left' })).toBeTruthy())
-    // A run with no reading yet, and a model nobody said a window of, draw nothing.
+    // No reading yet: the ring is there and empty, as Claude Code's is from the first frame.
     rerender(view({ live: true, events: [], card: { status: 'running', driver: 'claude-code', model: 'opus' } }))
-    expect(screen.queryByRole('img', { name: /of the context left/ })).toBeNull()
+    expect(screen.getByRole('img', { name: '0 of 200k used · 100% of the context left' })).toBeTruthy()
+    // A model nobody said a window of draws nothing: a fullness no one can measure is worse than none.
     rerender(view({ live: true, events: [], card: { status: 'running', driver: 'codex', model: 'gpt-5.6-luna', contextTokens: 50_000 } }))
     expect(screen.queryByRole('img', { name: /of the context left/ })).toBeNull()
   })
 
   test('how hard the model was told to think is said beside it, as Claude Code says it', () => {
     const { rerender } = render(view({ live: true, events: [], card: { status: 'running', driver: 'claude-code', model: 'opus', effort: 'medium' } }))
-    expect(screen.getByTestId('composer-model').textContent).toMatch(/opus · Medium/i)
+    // Two words with a space between, as Claude Code sets them: "Opus 5  High".
+    expect(screen.getByTestId('composer-model').textContent).toMatch(/opus\u2002Medium/i)
     // A run on the agent's own effort says the model alone.
     rerender(view({ live: true, events: [], card: { status: 'running', driver: 'claude-code', model: 'opus' } }))
-    expect(screen.getByTestId('composer-model').textContent).not.toMatch(/·/)
+    expect(screen.getByTestId('composer-model').textContent).toBe('opus')
   })
 })
 
@@ -766,7 +768,9 @@ describe('a run just started', () => {
     const started = [{ kind: 'driver', event: { type: 'start', prompt: 'Say hi' } }, { kind: 'driver', event: { type: 'thought', text: 'hm' } }] as OpenAgentEvent[]
     rerender(view({ live: true, events: started, startedWith: 'Say hi' }))
     expect(screen.getAllByText('Say hi')).toHaveLength(1)
-    expect(screen.getByText('Working…')).toBeTruthy()
+    // The set-up line has given way to the moving line, which names no step while the agent thinks.
+    expect(screen.queryByText('Starting session')).toBeNull()
+    expect(screen.getByRole('status')).toBeTruthy()
   })
 
   test('an agent just started on a machine says nothing of a set-up before its card is listed: no checkout is made for it here', () => {
@@ -806,12 +810,13 @@ describe('a run just started', () => {
     expect(document.querySelector('[data-slot="message-scroller"]')).not.toBe(scroller)
   })
 
-  test('no spinner while the answer is being written, and none once the run has ended', () => {
+  test('the dots stay under the answer being written, and go once the run has ended', () => {
     const events = [{ kind: 'driver', event: { type: 'start', prompt: 'Say hi' } }] as OpenAgentEvent[]
     const { rerender } = render(view({ live: true, events, writing: 'Hi th' }))
-    expect(screen.queryByRole('status')).toBeNull()
+    // Still at it, naming no step: Claude Code on the web keeps its dots under the streaming reply.
+    expect(screen.getByRole('status').textContent).toBe('')
     rerender(view({ live: false, events: [...events, { kind: 'end', ok: true }] as OpenAgentEvent[] }))
-    expect(screen.queryByText(/Starting…|Working…/)).toBeNull()
+    expect(screen.queryByRole('status')).toBeNull()
   })
 })
 

@@ -211,6 +211,33 @@ describe('QuestionPanel', () => {
       expect(screen.getByRole('button', { name: 'Skip' })).toBeTruthy()
     })
 
+    test('the card folds away and is put aside by hand, and neither answers the question', () => {
+      render(panel({ active: true }))
+      expect(screen.getAllByRole('radio')).toHaveLength(2)
+      fireEvent.click(screen.getByRole('button', { name: 'Hide the options' }))
+      expect(screen.queryByRole('radio')).toBeNull()
+      // The question itself stays, and so do Skip and Submit.
+      expect(screen.getByRole('region', { name: 'Which database?' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: /Submit/ })).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Show the options' }))
+      expect(screen.getAllByRole('radio')).toHaveLength(2)
+      fireEvent.click(screen.getByRole('button', { name: 'Put this question away' }))
+      expect(screen.queryByRole('region')).toBeNull()
+      // Nothing was sent by either: the agent is still waiting.
+      expect(sendChoice).not.toHaveBeenCalled()
+      expect(sendMessage).not.toHaveBeenCalled()
+    })
+
+    test('the key that submits is on the button, not written out under the options', () => {
+      const { unmount } = render(panel({ active: true }))
+      expect(screen.queryByText(/Number keys pick/)).toBeNull()
+      expect(screen.getByRole('button', { name: /Submit/ }).textContent).toBe('Submit⌃⏎')
+      unmount()
+      // Not the question the keys answer: no key is promised on it.
+      render(panel())
+      expect(screen.getByRole('button', { name: 'Submit' }).textContent).toBe('Submit')
+    })
+
     test('a send that fails says why, and the question stays answerable', async () => {
       const send = vi.fn(async () => {
         throw new Error('that session has no parked question')

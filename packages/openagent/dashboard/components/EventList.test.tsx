@@ -1,6 +1,6 @@
 import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 // The session line names the model as the daemon lists it; no daemon here, so the list never answers.
 vi.mock('../rpc/models.js', () => ({ onModels: () => new Promise(() => {}) }))
@@ -20,14 +20,16 @@ describe('EventList conversation rows', () => {
     expect(screen.getByText(/quota exhausted/)).toBeTruthy()
   })
 
-  test('the name the session was given is a row of its own', () => {
+  test('the name the session was given is no row: it is the name, not a step the agent took', () => {
     const events: OpenAgentEvent[] = [
       { kind: 'driver', event: { type: 'start', prompt: 'make readme.md shorter' } },
       { kind: 'title', text: 'README.md condensing' },
       { kind: 'driver', event: { type: 'text', text: 'done' } },
     ]
     render(<EventList events={events} stick={false} />)
-    expect(screen.getByText('Named the session: README.md condensing')).toBeTruthy()
+    expect(screen.queryByText(/Named the session/)).toBeNull()
+    expect(screen.queryByText('README.md condensing')).toBeNull()
+    expect(screen.getByText('done')).toBeTruthy()
   })
 
   test("the agent's session id is not a row: it is plumbing, read by the run's menu", () => {
@@ -213,8 +215,24 @@ describe('EventList tool calls', () => {
     expect(screen.queryByText(/Thinking|Thought|plan it|all good/)).toBeNull()
     expect(ids()).toEqual(['0', '1', '3', '5'])
     fireEvent.click(screen.getByRole('button', { name: 'Ran a command' }))
+    // Opened, the thought's row is its own first words; the thought whole is one click further.
     fireEvent.click(screen.getByRole('button', { name: 'Thought' }))
-    expect(screen.getByText('plan it')).toBeTruthy()
+    expect(screen.getAllByText('plan it').length).toBeGreaterThan(1)
+  })
+
+  test('the turn that ended closes with a footer: the reply copied, and how long ago it was said', async () => {
+    const at = new Date(Date.now() - 5000).toISOString()
+    const { rerender } = render(<EventList events={[prompt, { ...said('All done.'), at }]} stick={false} />)
+    const copy = screen.getByRole('button', { name: 'Copy this message' })
+    expect(screen.getByText('5s ago')).toBeTruthy()
+    const writeText = vi.fn(async () => {})
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    fireEvent.click(copy)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Copied' })).toBeTruthy())
+    expect(writeText).toHaveBeenCalledWith('All done.')
+    // While the agent works there is no footer: it has not finished saying it.
+    rerender(<EventList events={[prompt, { ...said('All done.'), at }]} working stick={false} />)
+    expect(screen.queryByRole('button', { name: /Copy this message|Copied/ })).toBeNull()
   })
 
   test('what a call printed is no row: it is inside its call, by the call\'s id, also across a message', () => {
@@ -232,29 +250,29 @@ describe('EventList tool calls', () => {
     expect(screen.getByLabelText('Output').textContent).toBe('/repo')
   })
 
-  test('once a call has printed, it is over: it joins its run and the last line reads "Working…"', () => {
+  test('once a call has printed, it is over: it joins its run and the last line names no step', () => {
     const run: OpenAgentEvent = { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'ls', id: 't1' } }
     const { rerender } = render(<EventList events={[prompt, run]} working stick={false} />)
     expect(screen.getByRole('status').textContent).toBe('Runningls')
     rerender(<EventList events={[prompt, run, { kind: 'driver', event: { type: 'output', id: 't1', text: 'a.ts' } }]} working stick={false} />)
     expect(screen.getByRole('button', { name: 'Ran ls' })).toBeTruthy()
-    expect(screen.getByRole('status').textContent).toBe('Working…')
+    // Between two calls there is no step to name: the dots say the agent is at it, as Claude Code's do.
+    expect(screen.getByRole('status').textContent).toBe('')
   })
 
-  test('while only a thought has come since the prompt, the spinner reads "Working…", not "Starting…"', () => {
+  test('a thought is no step: the moving line names nothing while the agent thinks', () => {
     render(<EventList events={[prompt, thought('hm')]} working stick={false} />)
-    expect(screen.getByText('Working…')).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toBe('')
   })
 
   test('while the agent works, the last call is the line going on now, not yet in its run', () => {
     const { rerender } = render(<EventList events={[prompt, call('Bash', 'ls'), call('Read', '/repo/AGENTS.md')]} working stick={false} />)
     expect(screen.getByRole('button', { name: 'Ran ls' })).toBeTruthy()
     expect(screen.getByRole('status').textContent).toBe('ReadingAGENTS.md')
-    expect(screen.queryByText(/Working…|Starting…/)).toBeNull()
     // The next event came: the call is over and joins its run; the agent is between calls.
     rerender(<EventList events={[prompt, call('Bash', 'ls'), call('Read', '/repo/AGENTS.md'), thought('next')]} working stick={false} />)
     expect(screen.getByRole('button', { name: 'Ran a command, read a file' })).toBeTruthy()
-    expect(screen.getByRole('status').textContent).toBe('Working…')
+    expect(screen.getByRole('status').textContent).toBe('')
   })
 
   test('the first call of a turn is the line going on now alone: no run line above it yet', () => {
@@ -270,7 +288,8 @@ describe('EventList tool calls', () => {
     expect(screen.queryByRole('status')).toBeNull()
     rerender(<EventList events={events} working writing="So" stick={false} />)
     expect(screen.getByRole('button', { name: 'Ran ls' })).toBeTruthy()
-    expect(screen.queryByRole('status')).toBeNull()
+    // The agent is still at it while its reply streams: the dots stay, naming no step.
+    expect(screen.getByRole('status').textContent).toBe('')
   })
 
   test('the line going on now counts from the time of the last event', () => {
@@ -398,13 +417,13 @@ describe('EventList session line', () => {
     // The agent's first output: set up, and the usual moving line takes over.
     rerender(<EventList events={[prompt, { kind: 'driver', event: { type: 'thought', text: 'hm' } }]} setup={setup} working stick={false} />)
     expect(screen.getByRole('button', { name: 'Initialized session' })).toBeTruthy()
-    expect(screen.getAllByRole('status').map(n => n.textContent)).toEqual(['Working…'])
+    expect(screen.getAllByRole('status').map(n => n.textContent)).toEqual([''])
   })
 
-  test('a later prompt is no set-up: the line stays folded and "Starting…" is the moving line', () => {
+  test('a later prompt is no set-up: the line stays folded and the moving line is the only one', () => {
     render(<EventList events={[prompt, said, { ...prompt }]} setup={setup} working stick={false} />)
     expect(screen.getByRole('button', { name: 'Initialized session' })).toBeTruthy()
-    expect(screen.getAllByRole('status').map(n => n.textContent)).toEqual(['Starting…'])
+    expect(screen.getAllByRole('status').map(n => n.textContent)).toEqual([''])
   })
 
   test('the agent\'s first row came before its card was read: the line is there with that row, not after it', () => {
@@ -872,9 +891,9 @@ describe('EventList scroll anchor', () => {
   test('the live line keeps its place when it has nothing to say: nothing under it moves when the turn ends', () => {
     const events = [prompt('first'), reply('one')]
     const { rerender } = render(<EventList events={events} working stick={false} />)
-    expect(screen.getByTestId('live-line').textContent).toContain('Working…')
+    expect(screen.getByTestId('live-line').querySelector('[role="status"]')).toBeTruthy()
     rerender(<EventList events={[...events, { kind: 'end', ok: true } as OpenAgentEvent]} stick={false} />)
-    expect(screen.getByTestId('live-line').textContent).toBe('')
+    expect(screen.getByTestId('live-line').querySelector('[role="status"]')).toBeNull()
   })
 })
 
@@ -916,7 +935,7 @@ describe('EventList queued messages and the wait for subagents', () => {
 
   test('while the agent works the moving line is its own: the wait for subagents is not said too', () => {
     render(<EventList events={[prompt, said]} working waitingOn={2} stick={false} />)
-    expect(screen.getAllByRole('status').map(n => n.textContent)).toEqual(['Working…'])
+    expect(screen.getAllByRole('status').map(n => n.textContent)).toEqual([''])
   })
 })
 

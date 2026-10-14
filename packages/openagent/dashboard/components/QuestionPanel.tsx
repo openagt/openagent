@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check } from 'lucide-react'
+import { Check, ChevronDown, X } from 'lucide-react'
 import type { ChoiceRequest } from '../../src/index.js'
 import { sendChoice, sendMessage } from '../rpc/control.js'
 import { useAction } from '../lib/use-action.js'
@@ -57,6 +57,10 @@ export function QuestionPanel({
   const [picked, setPicked] = useState<string | typeof OTHER | undefined>(() => (choice.multi ? undefined : (choice.recommended ?? choice.options[0]?.id)))
   const [checked, setChecked] = useState<Set<string>>(() => new Set(choice.multi ? choice.options.filter(o => o.default).map(o => o.id) : []))
   const [other, setOther] = useState('')
+  // Folded, and put away: the card's own two controls, as Claude Code's card has them. Neither
+  // answers the question; the agent goes on waiting, and the chat keeps the "Asking" row.
+  const [folded, setFolded] = useState(false)
+  const [hidden, setHidden] = useState(false)
   const otherInput = useRef<HTMLInputElement>(null)
   const parked = busy || sent
   const words = other.trim()
@@ -119,12 +123,38 @@ export function QuestionPanel({
     return () => window.removeEventListener('keydown', onKey)
   }, [active, choice.options, send])
 
-  const row = (on: boolean) => cn('flex w-full items-start gap-3 rounded-lg border px-3 py-2 text-left', on ? 'border-primary bg-accent/60' : 'border-border hover:bg-accent/40')
+  // A row is a filled block, not an outlined one, as Claude Code on the web draws its options: the
+  // card already has the only border, and five outlines inside one made the panel read as a stack
+  // of boxes. The one picked is a lighter fill in its place.
+  const row = (on: boolean) => cn('flex w-full items-start gap-3 rounded-[5px] p-2 text-left', on ? 'bg-accent' : 'bg-muted/60 hover:bg-muted')
+  if (hidden) return null
   return (
     <section role="region" aria-label={choice.title} className="mx-auto w-full max-w-3xl px-2 pt-2">
-      <div className="rounded-xl border border-border bg-card p-3">
-        <h2 className="mb-2 px-1 text-sm font-medium">{choice.title}</h2>
-        <ul className="flex flex-col gap-1.5">
+      <div className="rounded-[10px] border border-border bg-background p-3">
+        <div className="mb-2 flex items-start gap-2 px-1">
+          <h2 className="min-w-0 flex-1 text-sm font-medium">{choice.title}</h2>
+          {/* Folded away or put aside by hand, as Claude Code's is: the question is still in the
+              chat, and the agent waits for it either way. */}
+          <button
+            type="button"
+            aria-label={folded ? 'Show the options' : 'Hide the options'}
+            aria-expanded={!folded}
+            onClick={() => setFolded(f => !f)}
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          >
+            <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', folded && '-rotate-90')} aria-hidden />
+          </button>
+          <button
+            type="button"
+            aria-label="Put this question away"
+            onClick={() => setHidden(true)}
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          >
+            <X className="h-3.5 w-3.5" aria-hidden />
+          </button>
+        </div>
+        {!folded && (
+        <ul className="flex flex-col gap-[3px]">
           {choice.options.map((o, at) => {
             const on = choice.multi ? checked.has(o.id) : picked === o.id
             return (
@@ -168,15 +198,17 @@ export function QuestionPanel({
             </li>
           )}
         </ul>
+        )}
         {error && (
           <p role="alert" className="mt-2 px-1 text-xs text-danger">
             {error}
           </p>
         )}
         <div className="mt-3 flex items-center gap-2">
-          {/* One line in every state, so the buttons never move. */}
+          {/* One line in every state, so the buttons never move. What the keys do is not written
+              out: the number beside each option says it, and the key that submits is on the button. */}
           <span role={parked ? 'status' : undefined} className="min-w-0 flex-1 truncate px-1 text-xs text-muted-foreground">
-            {busy ? 'Sending your answer…' : sent ? 'Answer sent — waiting for the agent to pick it up…' : active ? 'Number keys pick · Ctrl+Enter submits' : ''}
+            {busy ? 'Sending your answer…' : sent ? 'Answer sent — waiting for the agent to pick it up…' : ''}
           </span>
           {!send && (
             <Button variant="ghost" size="sm" disabled={parked} onClick={() => say(SKIP_MESSAGE)}>
@@ -185,6 +217,7 @@ export function QuestionPanel({
           )}
           <Button size="sm" disabled={parked || !ready} onClick={submit}>
             Submit
+            {active && <kbd className="font-sans text-[11px] opacity-70" aria-hidden>⌃⏎</kbd>}
           </Button>
         </div>
       </div>

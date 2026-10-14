@@ -63,9 +63,10 @@ describe('AgentComposer box', () => {
     expect(props().sessionModel).toBeUndefined()
   })
 
-  test('the box\'s own words are short: no list of the triggers, live or ended', () => {
+  test('the box says what sending does, live or ended, in one short line', () => {
     renderComposer()
-    expect(props().placeholder).toBe('Message the agent…')
+    // A working agent reads what is sent when its turn ends: the one thing worth saying there.
+    expect(props().placeholder).toBe('Send now, and the agent reads it when its turn ends')
     cleanup()
     renderComposer({ live: false })
     expect(props().placeholder).toBe('Message the agent to continue it…')
