@@ -92,6 +92,10 @@ already made, and lists it in its pull request; for anything else it proposes an
 - Changes and Files are two modules that share nothing: the Files tree marks no file as
   changed. Picked over one module for both panes, and over the Files tree asking Changes
   for its marks, which would tie the two.
+- In the Files pane, as in Claude Code on the web, one click on a file shows it in a
+  preview tab, a double click keeps it open as a tab, and a right click attaches it to the
+  next run's Context or copies its path or its name. Picked over a click that added the
+  file to the Context, and over a card that showed the file while the pointer rested on it.
 - The packages every project wants are built in: OpenAgent depends on them and uses them
   for every project through the same contract as any package (a module by its
   `./dashboard` export, a provider of a kind of data and the writer of its hook lines by
@@ -158,7 +162,7 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A module may bring a server part (`./server`) that the daemon calls in its own process,
   given the project's folder and the facts about a run, never a verdict about them. Picked
   over reading only through the package's command, a new process for every read of a tree
-  that polls every 8 seconds and a preview on every hover.
+  that polls every 8 seconds and an opened file read again every few seconds.
 - A package that is the computer's may bring a service: a command of its own
   that OpenAgent runs for as long as it runs itself, and tells its own address. Picked
   over a line in each project's hooks file, which is a project's and shared with its team,

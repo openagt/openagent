@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { mkdtemp, mkdir, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { MAX_PREVIEW_LINES, readFileContent, safeRepoPath } from './read.js'
+import { MAX_PREVIEW_CHARS, MAX_PREVIEW_LINES, readFileContent, safeRepoPath } from './read.js'
 
 const scratch = () => mkdtemp(join(tmpdir(), 'file-read-'))
 
@@ -66,4 +66,13 @@ test('safeRepoPath still rejects everything that is not a plain repo-relative pa
   for (const bad of ['', '../outside.ts', '/etc/passwd', 'C:\\win.ini', '--output=/tmp/x', '.git/config', 'a\0b']) {
     assert.equal(safeRepoPath(bad), false, `expected ${JSON.stringify(bad)} to be rejected`)
   }
+})
+
+test('readFileContent cuts a file of one very long line, as a minified bundle is, and says so', async () => {
+  const dir = await scratch()
+  await writeFile(join(dir, 'bundle.js'), 'x'.repeat(MAX_PREVIEW_CHARS + 10))
+  const content = await readFileContent(dir, 'bundle.js')
+  assert.ok(content)
+  assert.equal(content.truncated, true)
+  assert.equal(content.text.length, MAX_PREVIEW_CHARS)
 })

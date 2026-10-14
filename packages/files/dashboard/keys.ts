@@ -7,3 +7,6 @@ export const projectKey = (projectId: string) => `files:project:${projectId}`
 
 /** A run's files. */
 export const treeKey = (projectId: string, agentId: string) => `files:tree:${projectId}:${agentId}`
+
+/** One opened file: a tab shown again shows it at once, while it is read again. */
+export const contentKey = (projectId: string, agentId: string | undefined, path: string) => `files:content:${projectId}:${agentId ?? ''}:${path}`

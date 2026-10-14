@@ -1,10 +1,10 @@
 // The Files module for the dashboard: the package's `./dashboard` export, built into OpenAgent and
 // loaded for every project. It adds one pane beside the chat: the project's files, or a run's, for
-// as long as its checkout, branch or merge commit exists. Its data is its own server part's reads
+// as long as its checkout, branch or merge commit exists, and the files opened from them. Its data is its own server part's reads
 // (`../src/server.ts`).
 import { defineModule } from '@openagt/dashboard/module'
 import { FolderIcon } from 'lucide-react'
-import { FileTree } from './FileTree.js'
+import { FilesPane } from './FilesPane.js'
 import './dashboard.css'
 
 export default defineModule({
@@ -12,9 +12,9 @@ export default defineModule({
     {
       id: 'files',
       label: 'Files',
-      help: 'The project’s files, or a session’s as it left them — hover one to preview it, click one to add it to the next run’s Context.',
+      help: 'The project’s files, or a session’s as it left them — click one to open it, right-click one to attach it to the next run’s Context.',
       icon: FolderIcon,
-      Panel: FileTree,
+      Panel: FilesPane,
     },
   ],
   stylesheet: 'dashboard.css',

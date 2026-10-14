@@ -1,9 +1,10 @@
-import { createContext, useContext, useEffect, useMemo, type ComponentType, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react'
 import { FileText, Maximize2, Minimize2, MoreVertical, X } from 'lucide-react'
 import type { Layout } from 'react-resizable-panels'
 import type { WorkspaceDoc } from '../../src/index.js'
 import { DocsPanel } from './DocsPanel.js'
 import { ModuleSlot } from './ModulePageView.js'
+import { PaneHeaderContext } from './PaneHeader.js'
 import { useMountedModules, type MountedPanel } from '../lib/use-modules.js'
 import type { ModuleContext, ModulePanelProps } from '../module/index.js'
 import { Button } from './ui/button.js'
@@ -238,17 +239,27 @@ export function PaneMenu() {
   )
 }
 
-/** One open pane: a card with its name, the button that lets it fill the page and the one that closes it, over what it shows. */
+/**
+ * One open pane: a card with its name, the button that lets it fill the page and the one that
+ * closes it, over what it shows. A module's pane may put its own things in place of its name and
+ * before those buttons (`PaneTitle`, `PaneActions`).
+ */
 function PaneCard({ pane }: { pane: Pane }) {
   const { page, expanded, panelProps, reveal, docs, docsLoaded } = useContext(PanesContext)
   const fills = expanded === pane.id
+  const [title, setTitle] = useState<HTMLElement | null>(null)
+  const [actions, setActions] = useState<HTMLElement | null>(null)
+  const slots = useMemo(() => ({ title, actions }), [title, actions])
   return (
     // A pane that fills the page is laid over the whole of it, where it is: its contents are not
     // drawn anew, so what was opened and scrolled in it stays.
     <div className={fills ? 'absolute inset-0 z-30 flex bg-background p-2' : 'flex h-full min-h-0 min-w-0'}>
       <section aria-label={pane.label} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground">
-        <header className="flex h-9 shrink-0 items-center gap-0.5 pr-1 pl-3">
-          <h2 className="min-w-0 flex-1 truncate text-xs font-medium text-muted-foreground">{pane.label}</h2>
+        <header className="flex h-9 shrink-0 items-center gap-0.5 pr-1 pl-1">
+          {/* The pane's name stands until the pane puts its own title here. */}
+          <div ref={setTitle} className="peer flex min-w-0 flex-1 items-center gap-0.5 empty:hidden" />
+          <h2 className="min-w-0 flex-1 truncate pl-2 text-xs font-medium text-muted-foreground peer-[:not(:empty)]:hidden">{pane.label}</h2>
+          <div ref={setActions} className="flex shrink-0 items-center gap-0.5 empty:hidden" />
           <Tooltip>
             <TooltipTrigger
               render={
@@ -277,7 +288,9 @@ function PaneCard({ pane }: { pane: Pane }) {
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {pane.panel && panelProps ? (
             <ModuleSlot package={pane.panel.package} label={`${pane.label} pane`}>
-              <pane.panel.Panel {...(pane.panel.changes && reveal ? { ...panelProps, reveal } : panelProps)} />
+              <PaneHeaderContext.Provider value={slots}>
+                <pane.panel.Panel {...(pane.panel.changes && reveal ? { ...panelProps, reveal } : panelProps)} />
+              </PaneHeaderContext.Provider>
             </ModuleSlot>
           ) : (
             <DocsPanel docs={docs} loaded={docsLoaded} />
