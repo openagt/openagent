@@ -266,7 +266,7 @@ describe('AgentView: when the bar above the message box is there', () => {
     await new Promise(resolve => setTimeout(resolve, 20))
     expect(shown()).toBe('false')
     unmount()
-    onAgentWorktree.mockResolvedValue({ branch: 'agent-z', pr: { number: 3, url: 'https://x/pull/3', state: 'MERGED', title: 'T' } })
+    onAgentWorktree.mockResolvedValue({ branch: 'agent-z', pr: { number: 3, url: 'https://x/pull/3', state: 'OPEN', title: 'T' } })
     render(view({ agentId: 'run-3' }))
     await waitFor(() => expect(shown()).toBe('true'))
   })
@@ -884,20 +884,52 @@ describe('AgentView: while the agent commits', () => {
   })
 })
 
+describe('AgentView: the bar when the work is landed', () => {
+  const LANDED = { ...PUSHED, hasRemote: false, gitHost: false, pushed: false, landed: true }
+  const ENDED = [{ kind: 'session', driver: 'claude-code', workspace: '/w' }, { kind: 'driver', event: { type: 'start', prompt: 'Add a page' } }, { kind: 'end', ok: true }] as OpenAgentEvent[]
+
+  test('a run whose work is landed has no bar: there is no step left for one to offer', async () => {
+    onAgent.mockResolvedValue(ENDED)
+    onAgentHandoff.mockResolvedValue(LANDED)
+    const { unmount } = render(view({ events: ENDED }))
+    await waitFor(() => expect(onAgentHandoff).toHaveBeenCalled())
+    await new Promise(resolve => setTimeout(resolve, 30))
+    expect(screen.getByTestId('work-bar').dataset.show).toBe('false')
+    unmount()
+
+    // A merged pull request is the same answer, whichever read says so.
+    onAgentWorktree.mockResolvedValue({ branch: 'agent-m', pr: { number: 9, url: 'https://x/pull/9', state: 'MERGED', title: 'T' } })
+    onAgentHandoff.mockResolvedValue({ ...PUSHED, merged: true, pushed: true })
+    render(view({ agentId: 'run-m', events: ENDED }))
+    await waitFor(() => expect(onAgentHandoff).toHaveBeenCalledWith('p1', 'run-m'))
+    await new Promise(resolve => setTimeout(resolve, 30))
+    expect(screen.getByTestId('work-bar').dataset.show).toBe('false')
+  })
+
+  test('work left uncommitted after the merge keeps the bar: that work is not landed', async () => {
+    onAgent.mockResolvedValue(ENDED)
+    onAgentWorktree.mockResolvedValue({ branch: 'agent-p', pr: { number: 9, url: 'https://x/pull/9', state: 'MERGED', title: 'T' } })
+    onAgentHandoff.mockResolvedValue({ ...PUSHED, merged: true, pushed: true, pendingFiles: ['index.html'] })
+    render(view({ agentId: 'run-p', events: ENDED }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Commit' })).toBeTruthy())
+    expect(screen.getByTestId('work-bar').dataset.show).toBe('true')
+  })
+})
+
 describe('AgentView: the next step while the agent works again', () => {
-  const MERGED = { ...PUSHED, hasRemote: false, gitHost: false, pushed: false, landed: true }
+  const LEFT = { ...PUSHED, hasRemote: false, gitHost: false, pushed: false }
   const ended = [{ kind: 'session', driver: 'claude-code', workspace: '/w' }, { kind: 'driver', event: { type: 'start', prompt: 'Add a page' } }, { kind: 'end', ok: true }] as OpenAgentEvent[]
 
   test('a message sent to an ended agent takes the last step out of the bar at once, before the agents poll says it works', async () => {
     onAgent.mockResolvedValue(ended)
-    onAgentHandoff.mockResolvedValue(MERGED)
+    onAgentHandoff.mockResolvedValue(LEFT)
     const { rerender } = render(view({ events: ended }))
-    await waitFor(() => expect(screen.getByText('Merged into the main branch.')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/Not in the main branch yet/)).toBeTruthy())
     expect(screen.getByTestId('work-bar').dataset.show).toBe('true')
     // The feed shows the new turn; the poll still says ended.
     const again = [...ended, { kind: 'session', driver: 'claude-code', workspace: '/w' }, { kind: 'driver', event: { type: 'start', prompt: 'Add a footer' } }] as OpenAgentEvent[]
     rerender(view({ events: again, live: false }))
-    await waitFor(() => expect(screen.queryByText('Merged into the main branch.')).toBeNull())
+    await waitFor(() => expect(screen.queryByText(/Not in the main branch yet/)).toBeNull())
     // It ends with a file left: the bar goes from empty to the new step, the old one never back.
     const over = [...again, { kind: 'end', ok: true }] as OpenAgentEvent[]
     let answer: (handoff: unknown) => void = () => {}
@@ -905,8 +937,8 @@ describe('AgentView: the next step while the agent works again', () => {
     onAgent.mockResolvedValue(over)
     rerender(view({ events: over, live: false }))
     await new Promise(resolve => setTimeout(resolve, 20))
-    expect(screen.queryByText('Merged into the main branch.')).toBeNull()
-    answer({ ...MERGED, landed: false, empty: true, commits: [], pendingFiles: ['index.html'] })
+    expect(screen.queryByText(/Not in the main branch yet/)).toBeNull()
+    answer({ ...LEFT, empty: true, commits: [], pendingFiles: ['index.html'] })
     await waitFor(() => expect(screen.getByRole('button', { name: 'Commit' })).toBeTruthy())
   })
 })

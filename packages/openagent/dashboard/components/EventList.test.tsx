@@ -214,10 +214,9 @@ describe('EventList tool calls', () => {
     render(<EventList events={[prompt, thought('plan it'), call('Bash', 'ls'), said('Done.'), thought('all good'), said('Bye.')]} stick={false} />)
     expect(screen.queryByText(/Thinking|Thought|plan it|all good/)).toBeNull()
     expect(ids()).toEqual(['0', '1', '3', '5'])
-    fireEvent.click(screen.getByRole('button', { name: 'Ran a command' }))
-    // Opened, the thought's row is its own first words; the thought whole is one click further.
-    fireEvent.click(screen.getByRole('button', { name: 'Thought' }))
-    expect(screen.getAllByText('plan it').length).toBeGreaterThan(1)
+    // Nor inside: thinking is no step the agent took, and the panel is the steps. Settings turns it on.
+    expect(screen.getByRole('button', { name: 'Ran ls' })).toBeTruthy()
+    expect(screen.queryByText('plan it')).toBeNull()
   })
 
   test('the turn that ended closes with a footer: the reply copied, and how long ago it was said', async () => {
@@ -271,7 +270,7 @@ describe('EventList tool calls', () => {
     expect(screen.getByRole('status').textContent).toBe('ReadingAGENTS.md')
     // The next event came: the call is over and joins its run; the agent is between calls.
     rerender(<EventList events={[prompt, call('Bash', 'ls'), call('Read', '/repo/AGENTS.md'), thought('next')]} working stick={false} />)
-    expect(screen.getByRole('button', { name: 'Ran a command, read a file' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Ran 2 commands' })).toBeTruthy()
     expect(screen.getByRole('status').textContent).toBe('')
   })
 
@@ -980,10 +979,13 @@ describe('EventList changed files', () => {
     expect(rows()).toEqual(['A.md+2 −1'])
   })
 
-  test('the folded line of the turn\'s calls names the file and its size too', () => {
+  test("the folded line of the turn's calls counts them; the file and its size are inside it", () => {
     const events = [prompt('go'), { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'ls', id: 'b1' } } as OpenAgentEvent, ...edit('c1', `${WS}/A.md`, 2, 1), said]
     render(<EventList events={events} setup={{ workspace: WS }} stick={false} />)
-    expect(screen.getByRole('button', { name: 'Ran a command, edited A.md +2 −1' })).toBeTruthy()
+    const line = screen.getByRole('button', { name: 'Ran 2 commands' })
+    expect(line.textContent).toBe('Ran 2 commands')
+    fireEvent.click(line)
+    expect(screen.getByRole('button', { name: 'Edited A.md' }).textContent).toBe('EditedA.md+2 −1')
   })
 
   test('a turn that edited no file has no such row', () => {

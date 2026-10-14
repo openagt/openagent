@@ -23,10 +23,18 @@ vi.mock('../rpc/reads.js', () => ({ onAgent }))
 vi.mock('./ThemeToggle.js', () => ({ ThemeToggle: () => null }))
 vi.mock('./NotificationsMenu.js', () => ({ NotificationsMenu: () => null }))
 
+// The rail asks the person's preferences one thing: whether a run is named, which decides whether a
+// row waits for that name or prints the prompt.
+const preferences = vi.hoisted(() => ({ current: {} as Record<string, unknown> }))
+vi.mock('../lib/preferences.js', async importOriginal => ({ ...(await importOriginal<object>()), usePreferences: () => preferences.current }))
+
 const { AgentHistory } = await import('./AgentHistory.js')
 const { forgetRemembered } = await import('../lib/use-async.js')
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  preferences.current = {}
+})
 
 function agent(over: Partial<AgentMeta> = {}): AgentMeta {
   return {
@@ -106,7 +114,7 @@ describe('AgentHistory (#785)', () => {
     expect(home?.className).not.toContain('bg-accent')
   })
 
-  test('the stand-in row reads as the run’s own row will: running, the project and "just now" where every project shows, the prompt, not dimmed', () => {
+  test('the stand-in row reads as the run’s own row will: running, the project and "just now" where every project shows, the name on its way, not dimmed', () => {
     const { container, rerender } = renderRail(
       <AgentHistory projectId="p1" scope={null} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} startTick={0} startIntent="" />,
     )
@@ -116,8 +124,11 @@ describe('AgentHistory (#785)', () => {
       </SidebarProvider>,
     )
     const row = [...container.querySelectorAll('button')].find(row => row.hasAttribute('data-stand-in'))!
-    expect(row.textContent).toBe('add dark modealpha')
-    expect(row.getAttribute('aria-label')).toBe('add dark mode · running · alpha · just now')
+    // The run's own row will carry a name seconds from now, so this one holds the place: printing
+    // the prompt here is what made the rail flicker, the prompt swapped for the name a beat later.
+    expect(row.textContent).toBe('alpha')
+    expect(row.querySelector('.rail-title .animate-pulse')).toBeTruthy()
+    expect(row.getAttribute('aria-label')).toBe('Naming this session · running · alpha · just now')
     expect(row.textContent).not.toContain('starting…')
     expect(row.className).not.toContain('opacity-70')
   })
@@ -132,8 +143,23 @@ describe('AgentHistory (#785)', () => {
       </SidebarProvider>,
     )
     const standInRow = [...container.querySelectorAll('button')].find(row => row.hasAttribute('data-stand-in'))!
-    expect(standInRow.textContent).toBe('add a footer')
-    expect(standInRow.getAttribute('aria-label')).toBe('add a footer · running · just now')
+    expect(standInRow.textContent).toBe('')
+    expect(standInRow.getAttribute('aria-label')).toBe('Naming this session · running · just now')
+  })
+
+  test('with naming turned off the stand-in row prints the prompt: no name is coming to replace it', () => {
+    preferences.current = { nameRuns: false }
+    const { container, rerender } = renderRail(
+      <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId={null} onSelect={() => {}} startTick={0} startIntent="" />,
+    )
+    rerender(
+      <SidebarProvider>
+        <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId="run-4" onSelect={() => {}} startTick={1} startIntent="add a footer" startId="run-4" />
+      </SidebarProvider>,
+    )
+    const row = [...container.querySelectorAll('button')].find(row => row.hasAttribute('data-stand-in'))!
+    expect(row.textContent).toBe('add a footer')
+    expect(row.querySelector('.rail-title .animate-pulse')).toBeNull()
   })
 
   test('the starting row retires when the run it stands in for lands, even if it never ran', () => {
