@@ -363,8 +363,10 @@ export type DriverEvent =
    * none of those has no `detail`. `whole` is that argument as it was given, lines kept, when `detail`
    * is not all of it (a command of several lines, or a long one); it is cut too, to the size limit
    * of an output. `id` is the call's own id in its CLI, the one its `output` event names.
+   * `summary` is the coding agent's own few words for what the call does ("List project files"),
+   * when it gave some beside the detail.
    */
-  | { type: 'action'; label: string; detail?: string; whole?: string; id?: string }
+  | { type: 'action'; label: string; detail?: string; whole?: string; summary?: string; id?: string }
   /**
    * What a tool call gave back once it was over: `id` is its `action`'s, `text` is what it printed,
    * cut to a size limit (`cutOutput`). `failed` says the call failed; `exitCode` is the command's
