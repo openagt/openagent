@@ -6,7 +6,6 @@
   "intent": "/plan-tickets",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-10-14T11-32-45-683Z",
   "cost": 0.1395118,
   "caller": {
     "runner": {
