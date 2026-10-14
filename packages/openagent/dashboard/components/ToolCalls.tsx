@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { callsSummary, summaryWords, toolCall } from '../lib/tool-calls.js'
+import { callsSummary, partsShown, summaryWords, toolCall } from '../lib/tool-calls.js'
 import type { FileEdit } from '../lib/turn-changes.js'
 import { LinesChanged } from './ChangedFiles.js'
 import { cn } from '../lib/utils.js'
@@ -50,6 +50,12 @@ export function Dots() {
       <span />
     </span>
   )
+}
+
+/** A thought's opening line, for the one row the panel gives it: its first sentence, cut short. */
+function firstWords(text: string): string {
+  const line = text.trim().split('\n').find(part => part.trim() !== '')?.trim() ?? 'Thought'
+  return line.length > 90 ? `${line.slice(0, 90).trimEnd()}…` : line
 }
 
 // A box of an opened call: the page's code font, and it scrolls once it is taller than its limit.
@@ -114,12 +120,14 @@ function CallLine({ label, detail, whole, summary, output, live }: Call & { live
 }
 
 // What the agent thought between two calls: no row of the chat, one line inside an opened group.
+// The line is the thought's own first words rather than the word "Thought", which said nothing and
+// made half the panel's rows read the same; the thought whole is one click further.
 function ThoughtLine({ text }: { text: string }) {
   const [open, setOpen] = useState(false)
   return (
     <div className="min-w-0">
-      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} className="flex items-center gap-1.5 hover:text-foreground">
-        <span>Thought</span>
+      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label="Thought" className="flex min-w-0 max-w-full items-center gap-1.5 hover:text-foreground">
+        <span className="truncate italic">{firstWords(text)}</span>
         <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')} aria-hidden />
       </button>
       {open && (
@@ -132,11 +140,15 @@ function ThoughtLine({ text }: { text: string }) {
 }
 
 // The last line of the chat while the agent works, in place of a spinner: the call going on now
-// ("Running pnpm test 9s"), or, between calls, a word saying it is at it ("Working…"). Moving dots
-// in front, the text shimmering, the seconds counting from the start of the turn (`since`), so the
-// count goes on from one step to the next. When the line names a new step, its words come in out
-// of a light blur instead of swapping at once.
-export function LiveLine({ call, word, since }: { call?: Call | undefined; word: string; since?: string | undefined }) {
+// ("Running pnpm test 9s"). Moving dots in front, the text shimmering, the seconds counting from
+// the start of the turn (`since`), so the count goes on from one step to the next. When the line
+// names a new step, its words come in out of a light blur instead of swapping at once.
+//
+// Between two calls — while it thinks, while its reply streams — there is no step to name, and the
+// line is the dots and the seconds, as Claude Code on the web's is. A word standing in for the step
+// ("Working…") said no more than the dots already do, and read as a step that was not one.
+// `word` is for a line that is about something else: waiting on subagents.
+export function LiveLine({ call, word, since }: { call?: Call | undefined; word?: string | undefined; since?: string | undefined }) {
   return (
     <div role="status" className="flex min-w-0 flex-1 items-center gap-2 font-sans text-sm text-muted-foreground">
       <Dots />
@@ -145,7 +157,7 @@ export function LiveLine({ call, word, since }: { call?: Call | undefined; word:
           <CallLine {...call} live={{ since }} />
         ) : (
           <>
-            <span className="text-shimmer">{word}</span>
+            {word !== undefined && <span className="text-shimmer">{word}</span>}
             {since !== undefined && <Seconds since={since} />}
           </>
         )}
@@ -164,6 +176,10 @@ export function ToolCalls({ steps, lead }: { steps: readonly ToolStep[]; lead?: 
   const calls = steps.flatMap(step => (step.type === 'action' ? [toolCall(step.label, step.detail, step.output?.changed)] : []))
   if (calls.length === 0) return null
   const summary = callsSummary(calls)
+  // The line says the two parts worth saying most; the rest of the run is the panel it opens, and
+  // the whole of it is this line's hover.
+  const shown = partsShown(summary)
+  const whole = summaryWords(summary)
   const only = steps.length === 1 ? steps[0] : undefined
   if (only?.type === 'action' && !lead) {
     return (
@@ -174,10 +190,10 @@ export function ToolCalls({ steps, lead }: { steps: readonly ToolStep[]; lead?: 
   }
   return (
     <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
-      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={summaryWords(summary)} className="flex items-center gap-1.5 hover:text-foreground">
+      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={whole} title={shown.length < summary.length ? whole : undefined} className="flex items-center gap-1.5 hover:text-foreground">
         {/* The run in words, part by part, each with the size of its edits when that is known. */}
         <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-left">
-          {summary.map((part, at, parts) => (
+          {shown.map((part, at, parts) => (
             <span key={at} className="flex items-center gap-1.5">
               <span>{part.text}</span>
               {part.size !== undefined && <LinesChanged {...part.size} />}
@@ -189,9 +205,9 @@ export function ToolCalls({ steps, lead }: { steps: readonly ToolStep[]; lead?: 
       </button>
       {open && (
         <div className="mt-1.5 flex flex-col divide-y divide-border rounded-lg border border-border">
-          {lead && <div className="px-3 py-2">{lead}</div>}
+          {lead && <div className="px-2 py-1.5">{lead}</div>}
           {steps.map((step, at) => (
-            <div key={at} className="px-3 py-2">
+            <div key={at} className="px-2 py-1.5">
               {step.type === 'action' ? <CallLine {...step} /> : <ThoughtLine text={step.text} />}
             </div>
           ))}

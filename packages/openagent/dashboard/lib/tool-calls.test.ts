@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { callsSummary, summaryWords, toolCall } from './tool-calls.js'
+import { callsSummary, partsShown, summaryWords, toolCall } from './tool-calls.js'
 
 /** A run's line as the chat reads it. */
 const line = (calls: Parameters<typeof callsSummary>[0]): string => summaryWords(callsSummary(calls))
@@ -100,7 +100,22 @@ describe('a call whose files are known', () => {
   })
 
   test('the parts keep the size apart from the words, for the chat to draw it in its colors', () => {
-    expect(callsSummary([toolCall('Bash', 'a'), toolCall('Write', made.path, [made])])).toEqual([{ text: 'Ran a command' }, { text: 'created DESCRIPTION.md', size: { added: 11, removed: 0 } }])
+    expect(callsSummary([toolCall('Bash', 'a'), toolCall('Write', made.path, [made])])).toEqual([
+      { kind: 'command', text: 'Ran a command' },
+      { kind: 'edit', text: 'created DESCRIPTION.md', size: { added: 11, removed: 0 } },
+    ])
     expect(callsSummary([])).toEqual([])
+  })
+
+  test('the line says the two parts worth saying most, the rest being one click away', () => {
+    const calls = [toolCall('Write', made.path, [made]), toolCall('Read', '/ws/a.ts'), toolCall('Read', '/ws/b.ts'), toolCall('Bash', 'pnpm test'), toolCall('Bash', 'git commit')]
+    // Three kinds happened; what it changed and what it ran are what the line says, in the order
+    // they happened. The reads are in the panel the line opens.
+    expect(summaryWords(partsShown(callsSummary(calls)))).toBe('Created DESCRIPTION.md +11 −0, ran 2 commands')
+    // Two or fewer parts are all said, and the line still opens with a capital.
+    expect(summaryWords(partsShown(callsSummary([toolCall('Read', '/ws/a.ts'), toolCall('Bash', 'ls')])))).toBe('Read a file, ran a command')
+    // Nothing worth saying more than an edit: it stays, whatever else the run did.
+    const noEdit = [toolCall('Read', '/ws/a.ts'), toolCall('Grep', 'x'), toolCall('Bash', 'ls')]
+    expect(summaryWords(partsShown(callsSummary(noEdit)))).toBe('Searched once, ran a command')
   })
 })
