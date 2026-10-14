@@ -6,7 +6,6 @@
   "intent": "what is your name?",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-10-14T05-49-24-712Z",
   "cost": 0.0469826,
   "caller": {
     "runner": {
