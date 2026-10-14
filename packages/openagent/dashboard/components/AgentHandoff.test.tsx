@@ -11,8 +11,8 @@ const sendMessage = vi.fn(async () => ({ ok: true }) as unknown)
 vi.mock('../rpc/reads.js', () => ({ onAgentHandoff }))
 vi.mock('../rpc/control.js', () => ({ sendOpenPullRequest, sendMerge, sendPush, sendMergeBranch, sendMessage }))
 
-const { HandoffActions, HandoffSummary, handoffSays } = await import('./AgentHandoff.js')
-const { useAgentHandoff } = await import('../lib/use-agent-handoff.js')
+const { HandoffActions, HandoffSummary } = await import('./AgentHandoff.js')
+const { handoffSays, useAgentHandoff } = await import('../lib/use-agent-handoff.js')
 
 /** A handoff for a session that did real work, on a repo with a remote and no PR yet. */
 const worked = {
@@ -31,8 +31,9 @@ const worked = {
 }
 
 // The same composition AgentView uses: the verdict and the next step, side by side in one bar.
-function Harness({ subagent = false }: { subagent?: boolean }) {
-  const state = useAgentHandoff('p1', 'run-1')
+// `working`: the run's turn is going, so nothing is read and the answer read before it is dropped.
+function Harness({ subagent = false, working = false }: { subagent?: boolean; working?: boolean }) {
+  const state = useAgentHandoff('p1', 'run-1', !working, false, working)
   return (
     <>
       <HandoffSummary handoff={state.handoff} subagent={subagent} />
@@ -510,6 +511,31 @@ describe('run handoff (#799)', () => {
     expect(handoffSays({ ...worked, exists: false, unchanged: true } as never)).toBe(false)
     expect(handoffSays({ ...worked, exists: false } as never)).toBe(true)
     expect(handoffSays({ ...worked, exists: false, landed: true } as never)).toBe(true)
+  })
+
+  test("a run whose turn has just ended has its branch read every second, not every fifteen", async () => {
+    // A clean run makes its own last commit as it cleans up, after its turn has ended: the read
+    // taken the moment it ends answers for a branch with nothing on it yet, and waiting fifteen
+    // seconds for the next one is what made the last step arrive late.
+    onAgentHandoff.mockResolvedValue({ ...worked, commits: [], files: [], empty: true })
+    const { rerender } = render(<Harness working />)
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(onAgentHandoff).not.toHaveBeenCalled()
+    rerender(<Harness />)
+    await waitFor(() => expect(onAgentHandoff).toHaveBeenCalled())
+    const reads = onAgentHandoff.mock.calls.length
+    await waitFor(() => expect(onAgentHandoff.mock.calls.length).toBeGreaterThan(reads), { timeout: 2500 })
+  })
+
+  test('once the branch has something to say, it is back to the resting pace', async () => {
+    onAgentHandoff.mockResolvedValue(worked)
+    const { rerender } = render(<Harness working />)
+    rerender(<Harness />)
+    await waitFor(() => expect(screen.getByText('Open PR')).toBeTruthy())
+    await new Promise(resolve => setTimeout(resolve, 100))
+    const reads = onAgentHandoff.mock.calls.length
+    await new Promise(resolve => setTimeout(resolve, 1500))
+    expect(onAgentHandoff.mock.calls.length).toBe(reads)
   })
 
   test('nothing is rendered before the first read, so no wrong empty state flashes', () => {
