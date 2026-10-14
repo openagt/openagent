@@ -51,6 +51,11 @@ describe('AgentHistory (#785)', () => {
     expect(container.querySelector('.animate-pulse')).toBeTruthy()
   })
 
+  test("the agent that ran it is a logo at the row's end", () => {
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ driver: 'codex' })]} selectedAgentId={null} onSelect={() => {}} />)
+    expect(screen.getByLabelText('Codex')).toBeTruthy()
+  })
+
   test('a named run reads by its name, not by the words the person typed', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ title: 'Welcome message' })]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getByText('Welcome message')).toBeTruthy()
@@ -497,9 +502,8 @@ describe('cloud sessions on the rail (#1263/#1264)', () => {
       />,
     )
     expect(screen.getByLabelText('Runs as a Claude Code cloud session')).toBeTruthy()
-    // claude-web is still Claude: where it runs is the target, not the agent. The agent's own logo
-    // is no longer a glyph on every row — the row says which agent ran it.
-    expect(screen.getByRole('button', { name: /Claude Code/ })).toBeTruthy()
+    // claude-web is still Claude: where it runs is the target, not the agent.
+    expect(screen.getByLabelText('Claude Code')).toBeTruthy()
   })
 
   test('a local finished run keeps its plain done badge and gets no cloud glyph', () => {

@@ -8,6 +8,7 @@ import { cn } from '../lib/utils.js'
 import { formatRelative } from '../lib/format-date.js'
 import { usePreferences } from '../lib/preferences.js'
 import { STATUS_DOT, STATUS_RING } from '../lib/status-tone.js'
+import { DriverLogo } from './driver-logos.js'
 import { agentLabel } from '../lib/agent-label.js'
 import { holdsMainAgent, isOpenSubagent, nestRows, taskLabel } from '../lib/subagents.js'
 import { AddProjectPanel } from './AddProjectPanel.js'
@@ -687,10 +688,13 @@ function AgentHistoryRow({
       <span ref={titleRef} className={titleClass}>
         <RevealedTitle text={titleText} start={standIn} />
       </span>
-      {/* Where the sessions of several projects are listed together, the project is what tells one
-          row from the next, so it stays on the row: small, at the end, and the first to give up
-          width. A project's own rail knows its project and shows none. */}
-      {project && <span className="min-w-0 shrink truncate text-xs text-muted-foreground">{project}</span>}
+      {/* Which coding agent ran it, as its own mark at the row's end (his pick): a session is told
+          from the next by its agent as much as by its words, and a logo reads faster than a word. */}
+      {picked && (
+        <span role="img" aria-label={DRIVER_LABELS[picked]} className="flex shrink-0 items-center">
+          <DriverLogo driver={picked} className="h-3 w-3 text-muted-foreground" />
+        </span>
+      )}
       {/* What is unusual about where the run is, kept on the row as one small glyph: another
           machine, a person's own computer, a cloud session. Rare, so the row stays a circle and a
           name nearly always; the coding agent's own logo was on every row and is now in the
@@ -702,6 +706,10 @@ function AgentHistoryRow({
         <MachineIcon className="h-3 w-3 shrink-0 text-muted-foreground" role="img" aria-label={remoteLabel ? `Runs on ${remoteLabel}` : 'Runs on another machine'} />
       )}
       {cloud && <Cloud className="h-3 w-3 shrink-0 text-muted-foreground" role="img" aria-label="Runs as a Claude Code cloud session" />}
+      {/* Where the sessions of several projects are listed together, the project is what tells one
+          row from the next, so it stays on the row: small, after the marks, and the first to give
+          up width. A project's own rail knows its project and shows none. */}
+      {project && <span className="min-w-0 shrink truncate text-xs text-muted-foreground">{project}</span>}
       {/* The row's subagents: how many, and the fold of their list. A control, so it stays on the
           row rather than moving into the hover. Inside the row's own button, so it is a span that
           takes the click for itself. */}
