@@ -7,7 +7,7 @@ import { startedBefore, subagentEnd, subagentStartedAt, type SubagentEnd } from 
 import { answeredQuestion } from '../lib/answered-question.js'
 import { AnsweredChoice } from './AnsweredChoice.js'
 import { Markdown } from './Markdown.js'
-import { SessionLine, type SessionSetup } from './SessionLine.js'
+import { SessionLine, sessionLineEmpty, type SessionSetup } from './SessionLine.js'
 import { ChangedFiles } from './ChangedFiles.js'
 import { turnChanges } from '../lib/turn-changes.js'
 import { SubagentLine } from './SubagentLine.js'
@@ -20,6 +20,7 @@ import {
   MessageScrollerItem,
   MessageScrollerProvider,
   MessageScrollerViewport,
+  useMessageScroller,
 } from './ui/message-scroller.js'
 
 // Presentational event log, shared by the live stream and past-run replay. Most events render as
@@ -462,6 +463,19 @@ function useEndKept(viewport: RefObject<HTMLDivElement | null>, endRoom: RefObje
   }, [viewport, endRoom])
 }
 
+// A message sent lands at the log's end: the log goes there, also from a reader who had scrolled
+// up, and follows its end from then on. `sent` counts the messages sent and not yet read back as
+// their own prompt lines; it going up is a message just sent.
+function FollowSent({ sent }: { sent: number }) {
+  const { scrollToEnd } = useMessageScroller()
+  const was = useRef(sent)
+  useLayoutEffect(() => {
+    if (sent > was.current) scrollToEnd({ behavior: 'smooth' })
+    was.current = sent
+  }, [sent, scrollToEnd])
+  return null
+}
+
 export function EventList({
   events,
   writing = '',
@@ -510,7 +524,7 @@ export function EventList({
   subagents?: readonly AgentMeta[]
   /** What each working subagent is doing now, by id. */
   doing?: Record<string, string>
-  /** What was set up for the agent before it began: the "Session set up" line under the first
+  /** What was set up for the agent before it began: the "Initialized session" line under the first
    *  prompt (the first row when the log has no prompt). Without it, no such line. */
   setup?: SessionSetup | undefined
   /** Open another run's page: what a subagent's row does on a click. */
@@ -569,7 +583,7 @@ export function EventList({
         </Tooltip>
       </MessageScrollerItem>
     ))
-  // The "Session set up" line: under the first prompt, which opens the log; above everything when
+  // The "Initialized session" line: under the first prompt, which opens the log; above everything when
   // the log has no prompt. It breaks the run of rows like a subagent's row: the row after it
   // shows its badge.
   const setupAt = setup === undefined ? -1 : shown.length > 0 && isTurnBoundary(shown[0]!) ? 1 : 0
@@ -583,7 +597,7 @@ export function EventList({
   const setupLine = setup !== undefined && <SessionLine setup={setup} working={working} added={added} {...(settingUp ? { live: { since: turnStart } } : {})} />
   // Once set up, the line is the first row of the first turn's work, when that turn has some, as
   // Claude Code on the web opens its first "Ran 2 commands" with "Initialized session".
-  const setupInSteps = setupLine !== false && !settingUp && setupAt >= 0 && shown[setupAt] !== undefined && steps.has(shown[setupAt]!)
+  const setupInSteps = setupLine !== false && !sessionLineEmpty(setup, working) && !settingUp && setupAt >= 0 && shown[setupAt] !== undefined && steps.has(shown[setupAt]!)
   const setupRow = setupLine && !setupInSteps && (
     <MessageScrollerItem key="setup" messageId="setup" className="-mx-1.5 flex items-start gap-2 rounded-sm px-1.5 empty:hidden">
       {setupLine}
@@ -607,6 +621,7 @@ export function EventList({
   useEndKept(viewport, endRoom)
   return (
     <MessageScrollerProvider autoScroll={stick} defaultScrollPosition={openAt ?? (stick ? 'end' : 'start')}>
+      <FollowSent sent={(sending === undefined ? 0 : 1) + queued.length} />
       {/* A layer of its own: "Jump to latest" stays under the message box's bar. */}
       <MessageScroller className="isolate flex-1">
         <MessageScrollerViewport ref={viewport} aria-label="Agent output" className="scroll-pb-(--chat-bottom)">

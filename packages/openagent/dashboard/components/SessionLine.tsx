@@ -36,7 +36,7 @@ function Step({ label, value }: { label: string; value?: string }) {
 // goes. An agent that runs elsewhere has no checkout made here: it says "Starting session" until
 // its card names a branch.
 //
-// Once set up, it is one grey folded line, "Session set up", opening to the steps that were done,
+// Once set up, it is one grey folded line, "Initialized session", opening to the steps that were done,
 // a green check each: the checkout, the branch, the coding agent that was started. An agent told
 // to start from a branch other than the main one says so, in a sentence: a person's local branch,
 // or, for a subagent, its main agent's. A card that says none of them draws nothing.
@@ -47,6 +47,11 @@ function Step({ label, value }: { label: string; value?: string }) {
 //
 // An agent seen at work before its card was read says the same words, with nothing to open yet:
 // its first row is there, so it was set up, and the line does not land after that row.
+/** Whether the line has nothing to say, and draws nothing: a card that names none of the steps, of an agent not seen at work or run elsewhere. */
+export function sessionLineEmpty(setup: SessionSetup, working: boolean): boolean {
+  return setup.workspace === undefined && setup.branch === undefined && setup.driver === undefined && (!working || setup.elsewhere === true)
+}
+
 export function SessionLine({ setup, live, working = false, added }: { setup: SessionSetup; live?: { since?: string | undefined } | undefined; working?: boolean; added?: string | undefined }) {
   const [open, setOpen] = useState(false)
   const picked = driverFromImpl(setup.driver)
@@ -67,13 +72,13 @@ export function SessionLine({ setup, live, working = false, added }: { setup: Se
   }
   if (setup.workspace === undefined && setup.branch === undefined && agent === undefined) {
     // An agent that runs elsewhere may never say any of them.
-    if (!working || setup.elsewhere) return null
-    return <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">Session set up</div>
+    if (sessionLineEmpty(setup, working)) return null
+    return <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">Initialized session</div>
   }
   return (
     <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
       <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} className="flex items-center gap-1.5 hover:text-foreground">
-        <span>Session set up</span>
+        <span>Initialized session</span>
         <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')} aria-hidden />
       </button>
       {open && (

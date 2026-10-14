@@ -332,7 +332,7 @@ describe('EventList question and answer', () => {
   })
 })
 
-// The "Session set up" line: what was made for the agent before it began, under the first prompt.
+// The "Initialized session" line: what was made for the agent before it began, under the first prompt.
 describe('EventList session line', () => {
   const setup = { workspace: '/repo/.branches/agent-1', branch: 'agent-1', driver: 'codex' }
   const ids = () => Array.from(document.querySelectorAll('[data-message-id]')).map(n => n.getAttribute('data-message-id'))
@@ -344,7 +344,7 @@ describe('EventList session line', () => {
     render(<EventList events={[told, { kind: 'driver', event: { type: 'text', text: 'Fixed.' } }]} setup={{ workspace: '/w', branch: 'agent-1' }} stick={false} />)
     expect(screen.getByText('Fix the typo')).toBeTruthy()
     expect(screen.queryByText(/When you finish/)).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Session set up' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Initialized session' }))
     expect(screen.getByText('“When you finish, if you changed any file, commit your work.”')).toBeTruthy()
   })
 
@@ -367,7 +367,7 @@ describe('EventList session line', () => {
   test('it sits right under the first prompt, and opens to what was set up', () => {
     render(<EventList events={[prompt, said, { ...prompt }]} setup={setup} stick={false} />)
     expect(ids()).toEqual(['0', 'setup', '1', '2'])
-    fireEvent.click(screen.getByRole('button', { name: 'Session set up' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Initialized session' }))
     expect(screen.getByText('agent-1')).toBeTruthy()
   })
 
@@ -387,25 +387,25 @@ describe('EventList session line', () => {
     expect(screen.getAllByRole('status').map(n => n.textContent)).toEqual(['Starting Codex'])
     // The agent's first output: set up, and the usual moving line takes over.
     rerender(<EventList events={[prompt, { kind: 'driver', event: { type: 'thought', text: 'hm' } }]} setup={setup} working stick={false} />)
-    expect(screen.getByRole('button', { name: 'Session set up' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Initialized session' })).toBeTruthy()
     expect(screen.getAllByRole('status').map(n => n.textContent)).toEqual(['Working…'])
   })
 
   test('a later prompt is no set-up: the line stays folded and "Starting…" is the moving line', () => {
     render(<EventList events={[prompt, said, { ...prompt }]} setup={setup} working stick={false} />)
-    expect(screen.getByRole('button', { name: 'Session set up' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Initialized session' })).toBeTruthy()
     expect(screen.getAllByRole('status').map(n => n.textContent)).toEqual(['Starting…'])
   })
 
   test('the agent\'s first row came before its card was read: the line is there with that row, not after it', () => {
     render(<EventList events={[prompt, said]} setup={{}} working stick={false} />)
     expect(ids()).toEqual(['0', 'setup', '1'])
-    expect(screen.getByText('Session set up')).toBeTruthy()
+    expect(screen.getByText('Initialized session')).toBeTruthy()
   })
 
   test('with no setup given there is no line', () => {
     render(<EventList events={[prompt, said]} stick={false} />)
-    expect(screen.queryByText('Session set up')).toBeNull()
+    expect(screen.queryByText('Initialized session')).toBeNull()
   })
 })
 

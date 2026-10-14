@@ -151,7 +151,7 @@ export function AgentView({
 
   // A run started for another run: it opens no pull request, its main agent lands its work.
   const subagent = card?.parent !== undefined
-  // What was set up for the agent before it began, off its card: the chat's "Session set up" line.
+  // What was set up for the agent before it began, off its card: the chat's "Initialized session" line.
   const { workspace, branch, base, driver, model } = card ?? {}
   // An agent just started on a machine has no card listed yet: the machine's name says where it runs.
   const elsewhere = (target !== undefined && target !== 'local') || remoteLabel !== undefined
@@ -415,7 +415,7 @@ export function AgentView({
         // scroller when the poll lands.
         //
         // Keyed by the run, as the rest of the page is not: what was opened in one agent's chat (its
-        // "Session set up" line, a run of its steps) is not open in the next one's, and each chat
+        // "Initialized session" line, a run of its steps) is not open in the next one's, and each chat
         // opens at its own place, not where the one before was left.
         <AgentFeed
           key={agentId}
@@ -426,7 +426,10 @@ export function AgentView({
           working={feedLive || shownSending !== undefined}
           queued={queued && prompts <= queued.prompts ? queued.texts : undefined}
           waitingOn={!going && live === false && outcome?.ok !== false && !outcome?.waiting ? subagentsRunning : 0}
-          {...(feedLive ? {} : { stick: false, openAt: 'end' as const, emptyLabel: 'This agent has no events.' })}
+          {...(feedLive ? {} : { openAt: 'end' as const, emptyLabel: 'This agent has no events.' })}
+          // A message just sent to an ended agent: the chat follows its end from the send on, not
+          // only once the agent's own line arrives, by which time the chat had grown past the view.
+          {...(going ? {} : { stick: false })}
           // A web agent's log dead-ends at the hand-off (#1265): the mirror box rides the tail of
           // the scroller, where "and then…" belongs. Self-nulling for every other target.
           tail={<CloudMirrorRow target={target} events={shown} />}
