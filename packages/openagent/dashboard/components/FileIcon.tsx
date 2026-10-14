@@ -1,9 +1,9 @@
 import { File, FileCode, FileCog, FileImage, FileJson, FileTerminal, FileText, type LucideIcon } from 'lucide-react'
-import { cn } from '@openagt/dashboard/module'
+import { cn } from '../lib/utils.js'
 
 // A file's icon by its kind, coloured as Claude Code on the web colours them: pictures pink,
 // markup orange, documents green, code by its language, settings amber. A kind not listed is a
-// plain grey file.
+// plain grey file. The dashboard's own, so every pane that lists files draws them the same.
 
 interface Kind {
   icon: LucideIcon

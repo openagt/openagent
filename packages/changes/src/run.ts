@@ -3,7 +3,7 @@ import { hostname } from 'node:os'
 import { nodeGitRunner, originDefaultBranch, type GitRunner } from '@openagt/agent-data'
 import type { MergeLookup, ModuleServerHost } from '@openagt/dashboard/module-server'
 import { readFileStatuses, type FileGitStatus } from './status.js'
-import { readFileDiff, type FileDiff } from './diff.js'
+import { CONTEXT_LINES, parseNumstat, readFileChanges, readFileDiff, type FileDiff } from './diff.js'
 import { safeRepoPath } from './confined.js'
 
 // What a run changed, for the agent page's Changes pane, for as long as git still has it. The run's
@@ -45,6 +45,9 @@ export type AgentWorkAt =
 export interface FileMark {
   status: FileGitStatus
   committed: boolean
+  /** Lines added and removed; absent for a binary file, or one git could not count. */
+  added?: number
+  removed?: number
 }
 
 /**
@@ -69,6 +72,17 @@ function asker(git: GitRunner, cwd: string): (args: string[]) => Promise<string>
 /** The commit `ref` names, when this machine has it. */
 async function commitOf(ask: (args: string[]) => Promise<string>, ref: string): Promise<string | undefined> {
   return (await ask(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])) || undefined
+}
+
+/** The name of the project's default branch, as a person says it: `main`, not `origin/main`. */
+export async function defaultBranchName(root: string, git: GitRunner = nodeGitRunner()): Promise<string | undefined> {
+  return (await defaultBranch(asker(git, root)))?.replace(/^origin\//, '')
+}
+
+/** The name of the branch a checkout has out; none for a detached one. */
+export async function checkoutBranch(path: string, git: GitRunner = nodeGitRunner()): Promise<string | undefined> {
+  const name = await asker(git, path)(['rev-parse', '--abbrev-ref', 'HEAD'])
+  return name && name !== 'HEAD' ? name : undefined
 }
 
 /** The project's default branch: origin's HEAD, else a local `main` or `master`. */
@@ -188,7 +202,7 @@ async function starting(ask: (args: string[]) => Promise<string>, root: string, 
 }
 
 /** `git diff --name-status` between two commits, as marks; a rename reads as a deletion and an addition. */
-async function committedChanges(git: GitRunner, cwd: string, from: string, to: string): Promise<Record<string, FileMark>> {
+async function changedPaths(git: GitRunner, cwd: string, from: string, to: string): Promise<Record<string, FileMark>> {
   const out = await git(['diff', '--name-status', '--no-renames', '-z', from, to], cwd).catch(() => '')
   const parts = out.split('\0')
   const changes: Record<string, FileMark> = {}
@@ -197,6 +211,25 @@ async function committedChanges(git: GitRunner, cwd: string, from: string, to: s
     const path = parts[i + 1]!
     if (!code || !path) continue
     changes[path] = { status: code === 'A' ? 'added' : code === 'D' ? 'deleted' : 'modified', committed: true }
+  }
+  return changes
+}
+
+/** {@link changedPaths}, each with its line counts from `git diff --numstat`. */
+async function committedChanges(git: GitRunner, cwd: string, from: string, to: string): Promise<Record<string, FileMark>> {
+  const [changes, numstat] = await Promise.all([changedPaths(git, cwd, from, to), git(['diff', '--numstat', '--no-renames', from, to], cwd).catch(() => '')])
+  for (const count of parseNumstat(numstat)) {
+    const mark = changes[count.path]
+    if (mark && !count.binary) changes[count.path] = { ...mark, added: count.added, removed: count.removed }
+  }
+  return changes
+}
+
+/** What is changed on disk in the checkout at `cwd` and not committed, with line counts. */
+export async function pendingChanges(cwd: string, git: GitRunner = nodeGitRunner()): Promise<Record<string, FileMark>> {
+  const changes: Record<string, FileMark> = {}
+  for (const change of await readFileChanges(cwd, await readFileStatuses(cwd, git), git)) {
+    changes[change.path] = { status: change.status, committed: false, ...(change.binary ? {} : { added: change.added, removed: change.removed }) }
   }
   return changes
 }
@@ -211,9 +244,8 @@ export async function readAgentChanges(root: string, at: AgentWorkAt, git: GitRu
   if (at.source === 'pending' || at.source === 'gone') return at
   if (at.source === 'unchanged' || at.source === 'starting') return { source: at.source, changes: {} }
   if (at.source === 'checkout') {
-    const [committed, pending] = await Promise.all([at.base ? committedChanges(git, at.path, at.base, 'HEAD') : ({} as Record<string, FileMark>), readFileStatuses(at.path, git)])
-    const changes: Record<string, FileMark> = { ...committed }
-    for (const [path, status] of Object.entries(pending)) changes[path] = { status, committed: false }
+    const [committed, pending] = await Promise.all([at.base ? committedChanges(git, at.path, at.base, 'HEAD') : ({} as Record<string, FileMark>), pendingChanges(at.path, git)])
+    const changes: Record<string, FileMark> = { ...committed, ...pending }
     // Merged only with nothing left on disk: uncommitted work is not in the default branch.
     return { source: 'checkout', changes, merged: at.merged && Object.keys(committed).length > 0 && Object.keys(pending).length === 0 }
   }
@@ -230,18 +262,18 @@ export async function readAgentChanges(root: string, at: AgentWorkAt, git: GitRu
  * the fork point to the checkout's last commit. On a branch, a merge or a landed commit it is the
  * commit's own change. Null for a path that is unsafe or not changed there.
  */
-export async function readAgentFileDiff(root: string, at: AgentWorkAt, path: string, git: GitRunner = nodeGitRunner()): Promise<FileDiff | null> {
+export async function readAgentFileDiff(root: string, at: AgentWorkAt, path: string, git: GitRunner = nodeGitRunner(), context: number = CONTEXT_LINES): Promise<FileDiff | null> {
   if (at.source === 'pending' || at.source === 'gone' || at.source === 'unchanged' || at.source === 'starting' || !safeRepoPath(path)) return null
   if (at.source === 'checkout') {
     const pending = (await readFileStatuses(at.path, git))[path]
-    if (pending) return readFileDiff(at.path, path, pending, git)
+    if (pending) return readFileDiff(at.path, path, pending, git, undefined, context)
     if (!at.base) return null
-    const mark = (await committedChanges(git, at.path, at.base, 'HEAD'))[path]
-    return mark ? readFileDiff(at.path, path, mark.status, git, { from: at.base, to: 'HEAD' }) : null
+    const mark = (await changedPaths(git, at.path, at.base, 'HEAD'))[path]
+    return mark ? readFileDiff(at.path, path, mark.status, git, { from: at.base, to: 'HEAD' }, context) : null
   }
   if (!at.base) return null
-  const mark = (await committedChanges(git, root, at.base, at.ref))[path]
-  return mark ? readFileDiff(root, path, mark.status, git, { from: at.base, to: at.ref }) : null
+  const mark = (await changedPaths(git, root, at.base, at.ref))[path]
+  return mark ? readFileDiff(root, path, mark.status, git, { from: at.base, to: at.ref }, context) : null
 }
 
 /** One commit of a run's work. */
@@ -308,10 +340,10 @@ export async function readAgentCommitChanges(root: string, at: AgentWorkAt, sha:
 }
 
 /** One file's diff in one commit of the run's work; null for a commit that is not the run's, or a path it did not change. */
-export async function readAgentCommitFileDiff(root: string, at: AgentWorkAt, sha: string, path: string, git: GitRunner = nodeGitRunner()): Promise<FileDiff | null> {
+export async function readAgentCommitFileDiff(root: string, at: AgentWorkAt, sha: string, path: string, git: GitRunner = nodeGitRunner(), context: number = CONTEXT_LINES): Promise<FileDiff | null> {
   if (!safeRepoPath(path)) return null
   const range = await commitRange(root, at, sha, git)
   if (!range) return null
-  const mark = (await committedChanges(git, range.cwd, range.from, range.to))[path]
-  return mark ? readFileDiff(range.cwd, path, mark.status, git, { from: range.from, to: range.to }) : null
+  const mark = (await changedPaths(git, range.cwd, range.from, range.to))[path]
+  return mark ? readFileDiff(range.cwd, path, mark.status, git, { from: range.from, to: range.to }, context) : null
 }

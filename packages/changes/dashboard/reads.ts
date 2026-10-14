@@ -1,5 +1,6 @@
 import type { ModuleHost } from '@openagt/dashboard/module'
-import type { AgentChanges, AgentCommit, FileMark } from '../src/run.js'
+import type { AgentCommit, FileMark } from '../src/run.js'
+import type { RunChanges } from '../src/server.js'
 import type { FileChange, FileDiff } from '../src/diff.js'
 
 // The module's reads, typed: each asks the module's own server part (`../src/server.ts`) through
@@ -16,11 +17,14 @@ async function read<T>(host: ModuleHost, projectId: string, name: string, input:
 export const readProject = (host: ModuleHost, projectId: string) => read<Record<string, FileMark>>(host, projectId, 'project', {})
 
 /** What a run changed, wherever its work is now. */
-export const readRun = (host: ModuleHost, projectId: string, agentId: string) => read<AgentChanges>(host, projectId, 'run', { agentId })
+export const readRun = (host: ModuleHost, projectId: string, agentId: string) => read<RunChanges>(host, projectId, 'run', { agentId })
 
-/** One changed file's diff: the run's (in one of its commits, when `commit` names one), or the project folder's. */
-export const readDiff = (host: ModuleHost, projectId: string, path: string, agentId?: string, commit?: string) =>
-  read<FileDiff | null>(host, projectId, 'diff', agentId !== undefined ? { path, agentId, ...(commit !== undefined ? { commit } : {}) } : { path })
+/**
+ * One changed file's diff: the run's (in one of its commits, when `commit` names one), or the
+ * project folder's. `whole` asks for every line of the file, not only those around its changes.
+ */
+export const readDiff = (host: ModuleHost, projectId: string, path: string, agentId?: string, commit?: string, whole = false) =>
+  read<FileDiff | null>(host, projectId, 'diff', { path, ...(agentId !== undefined ? { agentId, ...(commit !== undefined ? { commit } : {}) } : {}), ...(whole ? { whole } : {}) })
 
 /** The commits of a run's work, newest first. */
 export const readCommits = (host: ModuleHost, projectId: string, agentId: string) => read<AgentCommit[]>(host, projectId, 'commits', { agentId })

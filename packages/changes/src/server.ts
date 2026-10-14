@@ -1,7 +1,7 @@
 import type { ModuleReadInput, ModuleServer, ModuleServerHost } from '@openagt/dashboard/module-server'
 import { readFileStatuses, type FileGitStatus } from './status.js'
-import { readFileChanges, readFileDiff, type FileChange, type FileDiff } from './diff.js'
-import { readAgentChanges, readAgentCommitChanges, readAgentCommitFileDiff, readAgentCommits, readAgentFileDiff, resolveAgentWork, type AgentChanges, type AgentCommit, type FileMark } from './run.js'
+import { CONTEXT_LINES, WHOLE_FILE, readFileChanges, readFileDiff, type FileChange, type FileDiff } from './diff.js'
+import { checkoutBranch, defaultBranchName, pendingChanges, readAgentChanges, readAgentCommitChanges, readAgentCommitFileDiff, readAgentCommits, readAgentFileDiff, resolveAgentWork, type AgentChanges, type AgentCommit, type FileMark } from './run.js'
 
 // The Changes module's server part: the reads its browser part makes. A read about a run takes the
 // run's id (`agentId`) and reads wherever the run's work is now (`run.ts`); a read without one is
@@ -19,18 +19,39 @@ function commitId(input: ModuleReadInput): string | undefined {
   return typeof input.commit === 'string' ? input.commit : undefined
 }
 
-/** What is changed in the project's own folder and not committed. */
-async function project(host: ModuleServerHost): Promise<Record<string, FileMark>> {
-  const changes: Record<string, FileMark> = {}
-  for (const [path, status] of Object.entries(await readFileStatuses(host.root))) changes[path] = { status, committed: false }
-  return changes
+/** A diff asked for with `whole: true` shows every line of the file, not three around each change. */
+function contextOf(input: ModuleReadInput): number {
+  return input.whole === true ? WHOLE_FILE : CONTEXT_LINES
 }
 
-/** What a run changed, wherever its work is now. */
-async function run(host: ModuleServerHost, input: ModuleReadInput): Promise<AgentChanges> {
+/** What a run changed, and the branches it is between: the one it is measured from, and its own. */
+export type RunChanges = AgentChanges & { from?: string; to?: string }
+
+/** What is changed in the project's own folder and not committed. */
+function project(host: ModuleServerHost): Promise<Record<string, FileMark>> {
+  return pendingChanges(host.root)
+}
+
+/**
+ * What a run changed, wherever its work is now, and between which branches: the one its record
+ * says it started from, else the default branch; and the one its record names, else the one its
+ * checkout has out.
+ */
+async function run(host: ModuleServerHost, input: ModuleReadInput): Promise<RunChanges> {
   const agentId = runId(input)
   if (agentId === undefined) return { source: 'gone' }
-  return readAgentChanges(host.root, await resolveAgentWork(host, agentId)).catch((): AgentChanges => ({ source: 'gone' }))
+  try {
+    const [facts, at] = await Promise.all([host.run(agentId).catch(() => undefined), resolveAgentWork(host, agentId)])
+    const changes = await readAgentChanges(host.root, at)
+    if (!('changes' in changes)) return changes
+    const [from, to] = await Promise.all([
+      facts?.record?.base ?? defaultBranchName(host.root),
+      facts?.record?.branch ?? (at.source === 'checkout' ? checkoutBranch(at.path) : at.source === 'branch' ? at.branch : undefined),
+    ])
+    return { ...changes, ...(from ? { from } : {}), ...(to ? { to } : {}) }
+  } catch {
+    return { source: 'gone' }
+  }
 }
 
 /**
@@ -45,10 +66,10 @@ async function diff(host: ModuleServerHost, input: ModuleReadInput): Promise<Fil
   if (agentId !== undefined) {
     const at = await resolveAgentWork(host, agentId)
     const sha = commitId(input)
-    return (sha !== undefined ? readAgentCommitFileDiff(host.root, at, sha, path) : readAgentFileDiff(host.root, at, path)).catch(() => null)
+    return (sha !== undefined ? readAgentCommitFileDiff(host.root, at, sha, path, undefined, contextOf(input)) : readAgentFileDiff(host.root, at, path, undefined, contextOf(input))).catch(() => null)
   }
   const status: FileGitStatus | undefined = (await readFileStatuses(host.root))[path]
-  return status ? readFileDiff(host.root, path, status).catch(() => null) : null
+  return status ? readFileDiff(host.root, path, status, undefined, undefined, contextOf(input)).catch(() => null) : null
 }
 
 /**

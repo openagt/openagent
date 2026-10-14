@@ -5,7 +5,18 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, test } from 'node:test'
 import type { ModuleServerHost } from '@openagt/dashboard/module-server'
-import { readAgentChanges, readAgentCommitChanges, readAgentCommitFileDiff, readAgentCommits, readAgentFileDiff, resolveAgentWork } from './run.js'
+import { readAgentChanges as readChanges, readAgentCommitChanges as readCommitChanges, readAgentCommitFileDiff, readAgentCommits, readAgentFileDiff, resolveAgentWork, type AgentChanges, type FileMark } from './run.js'
+
+/** Marks without their line counts: what most cases here are about. One case checks the counts. */
+const plain = (marks: Record<string, FileMark>): Record<string, FileMark> => Object.fromEntries(Object.entries(marks).map(([path, { status, committed }]) => [path, { status, committed }]))
+const readAgentChanges = async (...args: Parameters<typeof readChanges>): Promise<AgentChanges> => {
+  const read = await readChanges(...args)
+  return 'changes' in read ? { ...read, changes: plain(read.changes) } : read
+}
+const readAgentCommitChanges = async (...args: Parameters<typeof readCommitChanges>) => {
+  const marks = await readCommitChanges(...args)
+  return marks && plain(marks)
+}
 
 let dir: string
 let root: string
@@ -373,4 +384,16 @@ test('a run’s commits are listed newest first, uncommitted work in none; one c
   assert.deepEqual(await readAgentCommitChanges(root, onBranch, first), { 'b.txt': { status: 'added', committed: true } })
   assert.deepEqual(await readAgentCommits(root, { source: 'gone' }), [])
   assert.deepEqual(await readAgentCommits(root, { source: 'unchanged' }), [])
+})
+
+test('each changed file carries its lines added and removed, committed or on disk', async () => {
+  const path = join(dir, 'wt-counts')
+  git(root, 'worktree', 'add', '-q', '-b', 'agent-counts', path, 'main')
+  const base = git(root, 'rev-parse', 'main')
+  commit(path, 'two lines', { 'counted.txt': 'one\ntwo\n' })
+  await writeFile(join(path, 'loose.txt'), 'a\nb\nc\n')
+  const read = await readChanges(root, await resolveAgentWork(inCheckout(path, { baseCommit: base }), 'run-counts'))
+  assert.ok('changes' in read)
+  assert.deepEqual(read.changes['counted.txt'], { status: 'added', committed: true, added: 2, removed: 0 })
+  assert.deepEqual(read.changes['loose.txt'], { status: 'untracked', committed: false, added: 3, removed: 0 })
 })

@@ -13,3 +13,7 @@ export const commitsKey = (projectId: string, agentId: string) => `changes:commi
 
 /** What one commit of a run changed. */
 export const commitKey = (projectId: string, agentId: string, commit: string) => `changes:commit:${projectId}:${agentId}:${commit}`
+
+/** One file's diff, as last read. */
+export const diffKey = (projectId: string, agentId: string | undefined, path: string, commit: string | undefined, whole: boolean) =>
+  `changes:diff:${projectId}:${agentId ?? ''}:${commit ?? ''}:${whole ? 'whole' : 'near'}:${path}`
