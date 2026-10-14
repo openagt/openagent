@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentMeta, AgentWorktree, OpenAgentEvent } from '../../src/index.js'
-import { onAgent, onAgentsDoing, onRetainedWorktrees } from '../rpc/reads.js'
+import { onAgent, onAgentsDoing, onGitHostHome, onRetainedWorktrees } from '../rpc/reads.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
 import { useAgentHandoff } from '../lib/use-agent-handoff.js'
 import { useCheckoutStatus } from '../lib/use-checkout-status.js'
@@ -9,6 +9,7 @@ import { AgentActionBar } from './AgentActionBar.js'
 import { AgentComposer } from './AgentComposer.js'
 import { AgentWorkBar } from './AgentWorkBar.js'
 import { AgentFeed } from './AgentFeed.js'
+import { IssueLinks } from './Markdown.js'
 import { ChatNote, ChatPane } from './ChatPane.js'
 import { ActionsRunNotice } from './ActionsRunNotice.js'
 import { LostStreamNotice } from './LostStreamNotice.js'
@@ -135,6 +136,10 @@ export function AgentView({
   const retained = useLoaded<string[]>(live === false ? () => onRetainedWorktrees(projectId) : null, [], [projectId, agentId, live], { remember: `retained:${projectId}` })
   const [removed, setRemoved] = useState(false)
   const onWorktreeRemoved = useCallback(() => setRemoved(true), [])
+  // The project's page on GitHub, where `#12` in an answer leads. Another host names its issues
+  // under another path, so its numbers stay text.
+  const gitHostHome = useLoaded(() => onGitHostHome(projectId), null, [projectId], { remember: `git-host-home:${projectId}` })
+  const issueLinks = gitHostHome?.name === 'GitHub' ? gitHostHome.url : undefined
   // The view is mounted un-keyed, so switching agents only swaps props: per-agent latches must
   // reset by hand or the previous agent's Remove press hides this one's offer (and a stale
   // archiveBehind can swallow the catch-up re-read on an equal-length collision).
@@ -417,6 +422,7 @@ export function AgentView({
         // Keyed by the run, as the rest of the page is not: what was opened in one agent's chat (its
         // "Initialized session" line, a run of its steps) is not open in the next one's, and each chat
         // opens at its own place, not where the one before was left.
+        <IssueLinks.Provider value={issueLinks}>
         <AgentFeed
           key={agentId}
           events={shown}
@@ -440,6 +446,7 @@ export function AgentView({
           onOpenChange={onOpenChange}
           onOpenScreen={onOpenScreen}
         />
+        </IssueLinks.Provider>
       )}
     </ChatPane>
   )

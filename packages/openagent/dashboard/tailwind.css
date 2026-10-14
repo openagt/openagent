@@ -28,6 +28,8 @@
   --muted: #f3f5f2;
   --muted-foreground: #66756c;
   --border: #e3e7e1;
+  /* A code word in an answer (Markdown.tsx): a dark red, as Claude Code on the web sets them. */
+  --code-foreground: #a63a36;
   --primary: #6f7f00;
   --primary-foreground: #ffffff;
   --accent: #eef1ec;
@@ -58,6 +60,7 @@
      text #d3c6aa, green accent #a7c080, borders #475258. */
   --background: #2d353b;
   --foreground: #d3c6aa;
+  --code-foreground: #e67e80;
   --card: #232a2e;
   --card-foreground: #d3c6aa;
   --muted: #343f44;
