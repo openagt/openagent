@@ -67,6 +67,13 @@ export interface DriverModel {
    * id a run's {@link DriverEvent} `model` names, so a reader finds the entry by either.
    */
   resolvedId?: string
+  /**
+   * How hard it may think, by the names its own agent takes ({@link DriverStartOptions.effort}),
+   * in the order the agent lists them. Empty or absent: this model takes no effort.
+   */
+  efforts?: string[]
+  /** How many tokens of conversation it holds, when the agent says; absent when it does not. */
+  contextWindow?: number
 }
 
 /** The parts of the person's own setup a coding agent can load, by the names every adapter takes. */
@@ -93,6 +100,11 @@ export interface DriverStartOptions {
   system?: string
   /** Model id to pass through when the wrapped agent supports selecting one. */
   model?: string
+  /**
+   * How hard the model may think, by the names the agent itself takes ({@link DriverModel.efforts}):
+   * `medium`, `high`, … A driver whose agent does not take one ignores it.
+   */
+  effort?: string
   /** Abort the whole session; disposing kills the underlying process. */
   signal?: AbortSignal
   /**

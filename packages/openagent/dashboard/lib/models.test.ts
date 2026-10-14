@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { driverOptions, modelName } from './models.js'
+import { driverOptions, modelName, modelEfforts } from './models.js'
 
 describe('modelName', () => {
   const claude = { models: [{ id: 'opus', name: 'Opus 5.5', resolvedId: 'claude-opus-5-5' }] }
@@ -34,5 +34,23 @@ describe('driverOptions', () => {
 
   test('before the daemon answers, each agent says it is being asked', () => {
     expect(driverOptions(undefined).map(o => o.modelsNote)).toEqual(['Asking Claude Code…', 'Asking Codex…'])
+  })
+})
+
+describe('modelEfforts', () => {
+  const models = {
+    'claude-code': { models: [{ id: 'opus', name: 'Opus 5.5', resolvedId: 'claude-opus-5-5', efforts: ['low', 'medium', 'high'] }, { id: 'haiku', name: 'Haiku 5.5' }] },
+    codex: { models: [{ id: 'gpt-5.6-luna', name: 'GPT-5.6-Luna', efforts: ['low', 'medium'] }] },
+  }
+  test("the levels the picked model offers, by its own id or the full id it runs", () => {
+    expect(modelEfforts(models, 'claude-code', 'opus')).toEqual(['low', 'medium', 'high'])
+    expect(modelEfforts(models, 'claude-code', 'claude-opus-5-5')).toEqual(['low', 'medium', 'high'])
+    expect(modelEfforts(models, 'codex', 'gpt-5.6-luna')).toEqual(['low', 'medium'])
+  })
+
+  test('a model that offers none, an agent that listed none, and a list not answered yet all offer none', () => {
+    expect(modelEfforts(models, 'claude-code', 'haiku')).toEqual([])
+    expect(modelEfforts(models, 'claude-code', undefined)).toEqual([])
+    expect(modelEfforts(undefined, 'claude-code', 'opus')).toEqual([])
   })
 })

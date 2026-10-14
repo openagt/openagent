@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { Readable, Writable } from 'node:stream'
-import { parseInitializeLine, readClaudeModels } from './claude-code-models.js'
+import { contextWindowOf, parseInitializeLine, readClaudeModels } from './claude-code-models.js'
 import { ClaudeCodeDriver } from './claude-code.js'
 import type { SpawnLike, SpawnedProcess } from '@openagt/agent-driver'
 
@@ -15,7 +15,7 @@ const ANSWER = JSON.stringify({
       commands: [],
       models: [
         { value: 'default', resolvedModel: 'claude-opus-5-5', displayName: 'Default (recommended)', description: 'Opus 5.5 · Best for everyday, complex tasks' },
-        { value: 'opus', resolvedModel: 'claude-opus-5-5', displayName: 'Opus 5.5', description: 'Most capable for ambitious work' },
+        { value: 'opus', resolvedModel: 'claude-opus-5-5', displayName: 'Opus 5.5', description: 'Most capable for ambitious work', supportsEffort: true, supportedEffortLevels: ['low', 'medium', 'high'] },
         { value: 'claude-fable-5-1', resolvedModel: 'claude-fable-5-1', displayName: 'Fable 5.1', description: 'For your toughest challenges' },
         { value: 'haiku', resolvedModel: 'claude-haiku-4-5-20251001', displayName: 'Haiku 4.5', description: 'Fastest for quick answers' },
       ],
@@ -23,14 +23,17 @@ const ANSWER = JSON.stringify({
   },
 })
 
-test('parseInitializeLine reads the models in the CLI\'s order, leaving out "default", each alias with the full id it runs', () => {
+test('parseInitializeLine reads the models in the CLI\'s order, leaving out "default", each alias with the full id it runs, with what it may think and how much it holds', () => {
   assert.deepEqual(parseInitializeLine(ANSWER), {
     models: [
-      { id: 'opus', name: 'Opus 5.5', resolvedId: 'claude-opus-5-5' },
-      { id: 'claude-fable-5-1', name: 'Fable 5.1' },
-      { id: 'haiku', name: 'Haiku 4.5', resolvedId: 'claude-haiku-4-5-20251001' },
+      // The CLI lists the levels a model may think at; how much conversation it holds it does not
+      // say, so that comes from what this package knows of the family (`contextWindowOf`).
+      { id: 'opus', name: 'Opus 5.5', resolvedId: 'claude-opus-5-5', efforts: ['low', 'medium', 'high'], contextWindow: 200_000 },
+      { id: 'claude-fable-5-1', name: 'Fable 5.1', contextWindow: 200_000 },
+      { id: 'haiku', name: 'Haiku 4.5', resolvedId: 'claude-haiku-4-5-20251001', contextWindow: 200_000 },
     ],
   })
+  assert.equal(contextWindowOf('gpt-5.6-terra'), undefined, 'a model this does not know says nothing')
 })
 
 test('parseInitializeLine skips every other line', () => {

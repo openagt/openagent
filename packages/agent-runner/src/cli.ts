@@ -16,7 +16,7 @@ import { isPublish, PUBLISH_LEVELS } from './records.js'
 
 export const USAGE = `usage: agent-runner <command>
 
-  run <prompt> [--model <id>] [--driver <claude-code|codex>] [--then <prompt>] [--publish <commit|branch|pr|merge>] [--attach <text>] [--parent <id>] [--base <ref>]
+  run <prompt> [--model <id>] [--effort <level>] [--driver <claude-code|codex>] [--then <prompt>] [--publish <commit|branch|pr|merge>] [--attach <text>] [--parent <id>] [--base <ref>]
                                 one run of <prompt> in its own checkout, now, recorded; on Claude Code unless --driver says Codex,
                                 on the coding agent's own default model unless --model names one;
                                 with --then, once it ends done with a pull request, a fresh agent on its branch gets that prompt and the run's id, and the merge waits for it;
@@ -100,7 +100,7 @@ type Command = (args: string[], io: CliIo, git: GitRunner) => Promise<unknown>
 
 const COMMANDS: Record<string, Command> = {
   async run(args, io, git) {
-    const { positionals, values } = parse(args, { id: { type: 'string' }, model: { type: 'string' }, resume: { type: 'string' }, answer: { type: 'string' }, detach: { type: 'boolean' }, mark: { type: 'boolean' }, driver: { type: 'string' }, then: { type: 'string' }, publish: { type: 'string' }, attach: { type: 'string' }, started: { type: 'string' }, parent: { type: 'string' }, base: { type: 'string' } }, 0, 1)
+    const { positionals, values } = parse(args, { id: { type: 'string' }, model: { type: 'string' }, effort: { type: 'string' }, resume: { type: 'string' }, answer: { type: 'string' }, detach: { type: 'boolean' }, mark: { type: 'boolean' }, driver: { type: 'string' }, then: { type: 'string' }, publish: { type: 'string' }, attach: { type: 'string' }, started: { type: 'string' }, parent: { type: 'string' }, base: { type: 'string' } }, 0, 1)
     const repo = await project(io.cwd, git)
     const driver = values.driver
     if (driver !== undefined && !isDriverName(driver)) throw new Usage(`unknown driver "${driver}"; the drivers are ${DRIVER_NAMES.join(' and ')}`)
@@ -138,13 +138,14 @@ const COMMANDS: Record<string, Command> = {
         ...(positionals[0] !== undefined ? { text: positionals[0] } : {}),
         ...(values.answer !== undefined ? { answer: values.answer } : {}),
         ...(values.model !== undefined ? { model: values.model } : {}),
+        ...(values.effort !== undefined ? { effort: values.effort } : {}),
       })
       return { ok: true, detached: true, ...resumed }
     }
     if (values.detach) {
       if (positionals[0] === undefined) throw new Usage('expected 1 argument(s), got 0')
       if (values.id !== undefined) throw new Usage('--detach takes no --id: the run\'s id is minted and answered')
-      const started = await detachRun(repo, { prompt: positionals[0], ...(values.model !== undefined ? { model: values.model } : {}), ...(driver !== undefined ? { driver } : {}), ...named })
+      const started = await detachRun(repo, { prompt: positionals[0], ...(values.model !== undefined ? { model: values.model } : {}), ...(values.effort !== undefined ? { effort: values.effort } : {}), ...(driver !== undefined ? { driver } : {}), ...named })
       return { ok: true, detached: true, ...started }
     }
     if (values.resume !== undefined) {
@@ -153,6 +154,7 @@ const COMMANDS: Record<string, Command> = {
         ...(positionals[0] !== undefined ? { text: positionals[0] } : {}),
         ...(values.answer !== undefined ? { answer: values.answer } : {}),
         ...(values.model !== undefined ? { model: values.model } : {}),
+        ...(values.effort !== undefined ? { effort: values.effort } : {}),
         log: io.stderr,
       })
       return { ok: outcome.status === 'done' || outcome.status === 'waiting', ...outcome }
@@ -164,6 +166,7 @@ const COMMANDS: Record<string, Command> = {
       ...(values.started !== undefined ? { startedAt: new Date(values.started).toISOString() } : {}),
       ...(values.mark ? { mark: true } : {}),
       ...(values.model !== undefined ? { model: values.model } : {}),
+      ...(values.effort !== undefined ? { effort: values.effort } : {}),
       ...(driver !== undefined ? { driver } : {}),
       ...named,
       log: io.stderr,

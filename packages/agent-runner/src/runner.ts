@@ -55,6 +55,7 @@ export function runArgs(run: SpawnedRun): string[] {
   if (run.startedAt !== undefined) args.push('--started', run.startedAt)
   if (run.mark) args.push('--mark')
   if (run.model !== undefined) args.push('--model', run.model)
+  if (run.effort !== undefined) args.push('--effort', run.effort)
   if (run.driver !== undefined) args.push('--driver', run.driver)
   if (run.then !== undefined) args.push('--then', run.then)
   if (run.publish !== undefined) args.push('--publish', run.publish)
@@ -74,6 +75,8 @@ export interface SpawnedRun {
   /** The run writes its own marker: a person's detached start, answered before the marker is pushed. */
   mark?: boolean
   model?: string
+  /** How hard the model may think (`run --effort`); the agent's own default when absent. */
+  effort?: string
   driver?: DriverName
   /** The follow-up's prompt (`run --then`); a person's start only. */
   then?: string
@@ -88,11 +91,12 @@ export interface SpawnedRun {
 }
 
 /** The command line of a spawned resume: the text as the argument, or the answer. */
-export function resumeArgs(run: { id: string; text?: string; answer?: string; model?: string }): string[] {
+export function resumeArgs(run: { id: string; text?: string; answer?: string; model?: string; effort?: string }): string[] {
   const args = ['run', '--resume', run.id]
   if (run.text !== undefined) args.push(run.text)
   if (run.answer !== undefined) args.push('--answer', run.answer)
   if (run.model !== undefined) args.push('--model', run.model)
+  if (run.effort !== undefined) args.push('--effort', run.effort)
   return args
 }
 
@@ -113,7 +117,7 @@ export async function spawnRun(repo: string, run: SpawnedRun): Promise<void> {
 }
 
 /** A resumed run's process, detached the same way: `agent-runner run --resume <id> …`. */
-export async function spawnResume(repo: string, run: { id: string; text?: string; answer?: string; model?: string }): Promise<void> {
+export async function spawnResume(repo: string, run: { id: string; text?: string; answer?: string; model?: string; effort?: string }): Promise<void> {
   await spawnDetached(repo, run.id, resumeArgs(run))
 }
 
@@ -144,7 +148,7 @@ async function spawnDetached(repo: string, id: string, args: string[]): Promise<
  */
 export async function detachRun(
   repo: string,
-  opts: { prompt: string; model?: string; driver?: DriverName; then?: string; publish?: Publish; attached?: string; parent?: string; base?: string; now?: () => Date },
+  opts: { prompt: string; model?: string; effort?: string; driver?: DriverName; then?: string; publish?: Publish; attached?: string; parent?: string; base?: string; now?: () => Date },
   deps: { spawn?: typeof spawnRun } = {},
 ): Promise<{ id: string; driver: DriverName; model?: string }> {
   const now = opts.now ?? (() => new Date())
@@ -152,7 +156,7 @@ export async function detachRun(
   const driver = opts.driver ?? 'claude-code'
   const model = opts.model
   const named = { ...(opts.then !== undefined ? { then: opts.then } : {}), ...(opts.publish !== undefined ? { publish: opts.publish } : {}), ...(opts.attached !== undefined ? { attached: opts.attached } : {}), ...(opts.parent !== undefined ? { parent: opts.parent } : {}), ...(opts.base !== undefined ? { base: opts.base } : {}) }
-  await (deps.spawn ?? spawnRun)(repo, { id, prompt: opts.prompt, mark: true, driver, ...(model !== undefined ? { model } : {}), ...named })
+  await (deps.spawn ?? spawnRun)(repo, { id, prompt: opts.prompt, mark: true, driver, ...(model !== undefined ? { model } : {}), ...(opts.effort !== undefined ? { effort: opts.effort } : {}), ...named })
   return { id, driver, ...(model !== undefined ? { model } : {}) }
 }
 
@@ -163,7 +167,7 @@ export async function detachRun(
  */
 export async function detachResume(
   repo: string,
-  opts: { id: string; text?: string; answer?: string; model?: string },
+  opts: { id: string; text?: string; answer?: string; model?: string; effort?: string },
   deps: { spawn?: typeof spawnResume } = {},
 ): Promise<{ id: string }> {
   if (!(await findRun(repo, opts.id))) throw new Error(`no run ${opts.id} in this project`)
@@ -178,7 +182,7 @@ export async function detachResume(
  * one given; none given, the coding agent starts on its own default. A parent it names that has
  * ended by the time this run ends is continued in a process of its own.
  */
-export async function runProject(repo: string, opts: { prompt: string; id?: string; startedAt?: string; mark?: boolean; model?: string; driver?: DriverName; then?: string; publish?: Publish; attached?: string; parent?: string; base?: string; log?: (line: string) => void }): Promise<RunOutcome> {
+export async function runProject(repo: string, opts: { prompt: string; id?: string; startedAt?: string; mark?: boolean; model?: string; effort?: string; driver?: DriverName; then?: string; publish?: Publish; attached?: string; parent?: string; base?: string; log?: (line: string) => void }): Promise<RunOutcome> {
   const id = opts.id ?? runIdFrom(new Date().toISOString())
   const driver = opts.driver ?? 'claude-code'
   const setup = await readPersonal(repo, opts.log ?? (() => {}))
@@ -189,6 +193,7 @@ export async function runProject(repo: string, opts: { prompt: string; id?: stri
     // A run given its id was marked by whoever spawned it, unless it was told to mark itself.
     marked: opts.id !== undefined && opts.mark !== true,
     ...(opts.model !== undefined ? { model: opts.model } : {}),
+    ...(opts.effort !== undefined ? { effort: opts.effort } : {}),
     driver: driverFor(driver, id, setup),
     ...(opts.then !== undefined ? { then: opts.then, nextDriver: (next: string) => driverFor(driver, next, setup) } : {}),
     ...(opts.publish !== undefined ? { publish: opts.publish } : {}),
@@ -212,7 +217,7 @@ export function resumeDetached(repo: string): (id: string, line: { text: string 
  */
 export async function resumeProject(
   repo: string,
-  opts: { id: string; text?: string; answer?: string; model?: string; log?: (line: string) => void },
+  opts: { id: string; text?: string; answer?: string; model?: string; effort?: string; log?: (line: string) => void },
   deps: { driverFor?: typeof driverFor } = {},
 ): Promise<RunOutcome> {
   const card = await findRun(repo, opts.id)
@@ -224,6 +229,7 @@ export async function resumeProject(
     ...(opts.text !== undefined ? { text: opts.text } : {}),
     ...(opts.answer !== undefined ? { answer: opts.answer } : {}),
     ...(opts.model !== undefined ? { model: opts.model } : {}),
+    ...(opts.effort !== undefined ? { effort: opts.effort } : {}),
     driver: (deps.driverFor ?? driverFor)(recorded, opts.id, setup),
     nextDriver: next => (deps.driverFor ?? driverFor)(recorded, next, setup),
     resume: resumeDetached(repo),

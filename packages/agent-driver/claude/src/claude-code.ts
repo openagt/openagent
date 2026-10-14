@@ -219,6 +219,8 @@ export class ClaudeCodeSession implements DriverSession {
     if (resumeId) args.push('--resume', resumeId)
     else if (system) args.push('--append-system-prompt', system)
     if (this.startOpts.model) args.push('--model', this.startOpts.model)
+    // How hard the model may think (`claude --effort <level>`); the CLI's own default when none.
+    if (this.startOpts.effort) args.push('--effort', this.startOpts.effort)
     const mcpConfig = this.mcpConfigFile()
     if (mcpConfig) args.push('--mcp-config', mcpConfig)
     if (this.config.extraArgs) args.push(...this.config.extraArgs)

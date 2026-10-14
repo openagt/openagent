@@ -21,7 +21,7 @@ import { DASHBOARD_DIR, DASHBOARD_HOOKS } from './names.js'
 
 /** The lines, in the order a new file lists them: one line each. */
 export const HOOK_LINES: Readonly<Record<string, string | readonly string[]>> = {
-  start: 'agent-runner run --detach "$PROMPT" ${DRIVER:+--driver "$DRIVER"} ${MODEL:+--model "$MODEL"} ${THEN:+--then "$THEN"} ${PUBLISH:+--publish "$PUBLISH"} ${BASE:+--base "$BASE"}',
+  start: 'agent-runner run --detach "$PROMPT" ${DRIVER:+--driver "$DRIVER"} ${MODEL:+--model "$MODEL"} ${EFFORT:+--effort "$EFFORT"} ${THEN:+--then "$THEN"} ${PUBLISH:+--publish "$PUBLISH"} ${BASE:+--base "$BASE"}',
   resume: 'agent-runner run --detach --resume "$RUN_ID" ${TEXT:+"$TEXT"} ${ANSWER:+--answer "$ANSWER"}',
   check: 'agent-runner check ${DRIVER:+--driver "$DRIVER"}',
 }

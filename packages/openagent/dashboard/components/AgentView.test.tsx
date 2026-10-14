@@ -710,6 +710,14 @@ describe('the model under the message box', () => {
     rerender(view({ live: true, events: [], card: { status: 'running', driver: 'claude-code' } }))
     expect(screen.getByTestId('composer-model').textContent).toBe('')
   })
+
+  test('how hard the model was told to think is said beside it, as Claude Code says it', () => {
+    const { rerender } = render(view({ live: true, events: [], card: { status: 'running', driver: 'claude-code', model: 'opus', effort: 'medium' } }))
+    expect(screen.getByTestId('composer-model').textContent).toMatch(/opus · Medium/i)
+    // A run on the agent's own effort says the model alone.
+    rerender(view({ live: true, events: [], card: { status: 'running', driver: 'claude-code', model: 'opus' } }))
+    expect(screen.getByTestId('composer-model').textContent).not.toMatch(/·/)
+  })
 })
 
 // A run just started writes its prompt line seconds later: the page shows it at once, and says it is starting.

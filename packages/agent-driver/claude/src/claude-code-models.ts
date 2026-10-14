@@ -100,9 +100,34 @@ export function parseInitializeLine(line: string): { models: DriverModel[] } | {
     const name = model?.['displayName']
     const resolved = model?.['resolvedModel']
     if (typeof id !== 'string' || typeof name !== 'string' || id === 'default') continue
-    models.push({ id, name, ...(typeof resolved === 'string' && resolved !== id ? { resolvedId: resolved } : {}) })
+    // How hard the model may think, as the CLI lists it (`--effort`). It says nothing about how
+    // much conversation a model holds, so nothing here claims to know.
+    const efforts = model?.['supportsEffort'] === true && Array.isArray(model['supportedEffortLevels'])
+      ? (model['supportedEffortLevels'] as unknown[]).filter((level): level is string => typeof level === 'string')
+      : []
+    models.push({
+      id,
+      name,
+      ...(typeof resolved === 'string' && resolved !== id ? { resolvedId: resolved } : {}),
+      ...(efforts.length > 0 ? { efforts } : {}),
+      ...(contextWindowOf(typeof resolved === 'string' ? resolved : id) !== undefined ? { contextWindow: contextWindowOf(typeof resolved === 'string' ? resolved : id)! } : {}),
+    })
   }
   return { models }
+}
+
+/**
+ * How much conversation a Claude model holds. The CLI does not say, and the number is what turns
+ * tokens into "how full is this session", so it is kept here by model family rather than guessed
+ * from nothing: a model this does not know shows no fullness at all, which is honest.
+ */
+const CONTEXT_WINDOWS: { match: RegExp; tokens: number }[] = [
+  { match: /^claude-(opus|sonnet|haiku|fable)-(4|5)/, tokens: 200_000 },
+]
+
+/** The window of a model by its full id, or `undefined` for a model this does not know. */
+export function contextWindowOf(id: string): number | undefined {
+  return CONTEXT_WINDOWS.find(entry => entry.match.test(id))?.tokens
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {

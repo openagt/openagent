@@ -356,6 +356,22 @@ test('ClaudeCodeDriver builds correct CLI args (permission mode, system, model)'
   assert.ok(captured.includes('claude-haiku-4-5-20251001'))
 })
 
+test('ClaudeCodeDriver tells the CLI how hard to think when the caller asked, and says nothing when it did not', async () => {
+  const run = async (effort?: string): Promise<string[]> => {
+    let captured: string[] = []
+    const spawn: SpawnLike = (_cmd, args) => {
+      captured = [...args]
+      return fakeSpawn([JSON.stringify({ type: 'result', result: 'ok' })])(_cmd, args, { cwd: '/ws', env: {} })
+    }
+    const session = await new ClaudeCodeDriver({ spawn }).start({ cwd: '/ws', ...(effort !== undefined ? { effort } : {}) })
+    await session.prompt('go')
+    return captured
+  }
+  const asked = await run('high')
+  assert.deepEqual(asked.slice(asked.indexOf('--effort'), asked.indexOf('--effort') + 2), ['--effort', 'high'])
+  assert.ok(!(await run()).includes('--effort'), 'the CLI thinks as it does by default')
+})
+
 test('ClaudeCodeDriver omits --mcp-config when no mcpServers are configured', async () => {
   let captured: string[] = []
   const spawn: SpawnLike = (_cmd, args) => {

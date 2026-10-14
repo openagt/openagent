@@ -181,6 +181,8 @@ export interface AgentMeta {
    * on its own default (and on records from before this field).
    */
   model?: string
+  /** How hard that model was told to think, by the coding agent's own names (`medium`, `high`, …); absent, it thinks as it does by default. */
+  effort?: string
 }
 
 /**
