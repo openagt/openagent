@@ -80,43 +80,36 @@ describe('ToolCalls', () => {
 
   test('the line opens to a bordered box with one line per call, in order, each opening further', () => {
     const { container } = render(<ToolCalls steps={[bash('pnpm build'), { type: 'action', label: 'Edit', detail: '/repo/src/app.ts' }]} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Ran a command, edited a file' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ran 2 commands' }))
     const box = container.querySelector('.border')!
     expect(Array.from(box.querySelectorAll('button')).map(b => b.textContent)).toEqual(['Ranpnpm build', 'Editedapp.ts'])
     fireEvent.click(screen.getByRole('button', { name: 'Edited app.ts' }))
     expect(screen.getByText('/repo/src/app.ts')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Ran a command, edited a file' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ran 2 commands' }))
     expect(container.querySelector('.border')).toBeNull()
   })
 
   test("Codex's calls read the same: its item kinds have their own verbs", () => {
     render(<ToolCalls steps={[{ type: 'action', label: 'commandExecution', detail: 'pnpm test' }, { type: 'action', label: 'fileChange', detail: '/repo/a.ts' }]} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Ran a command, edited a file' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ran 2 commands' }))
     expect(screen.getByRole('button', { name: 'Ran pnpm test' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Edited a.ts' })).toBeTruthy()
   })
 
-  test('a thought is no line of its own: inside the opened box it is its own first words, folded, where it was thought', () => {
-    const { container } = render(<ToolCalls steps={[{ type: 'thought', text: 'look at the docs first\nthen the code' }, bash('ls')]} />)
+  test('what the agent thought is not shown at all: the panel is the steps it took', () => {
+    const { container } = render(<ToolCalls steps={[{ type: 'thought', text: 'look at the docs first\nthen the code' }, bash('ls'), bash('pwd')]} />)
     expect(screen.queryByText(/Thought|look at the docs/)).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Ran a command' }))
-    // The row says what was thought, not the word "Thought": half a panel of identical rows said nothing.
-    expect(Array.from(container.querySelectorAll('.border button')).map(b => b.textContent)).toEqual(['look at the docs first', 'Ranls'])
-    expect(screen.queryByText('then the code')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Thought' }))
-    expect(screen.getByText(/then the code/)).toBeTruthy()
+    // Thinking is no step, and Claude Code on the web's panel has none of it. A person who wants to
+    // read it turns it on in Settings, which is what `showThinking` does.
+    fireEvent.click(screen.getByRole('button', { name: 'Ran 2 commands' }))
+    expect(Array.from(container.querySelectorAll('.border button')).map(b => b.textContent)).toEqual(['Ranls', 'Ranpwd'])
+    expect(screen.queryByText(/look at the docs/)).toBeNull()
   })
 
-  test('a long thought is cut short on its row, and one with nothing in it still has a word', () => {
-    const { container } = render(<ToolCalls steps={[{ type: 'thought', text: `${'word '.repeat(40)}` }, bash('ls')]} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Ran a command' }))
-    const row = Array.from(container.querySelectorAll('.border button'))[0]!
-    expect(row.textContent!.length).toBeLessThanOrEqual(91)
-    expect(row.textContent!.endsWith('…')).toBe(true)
-    cleanup()
-    render(<ToolCalls steps={[{ type: 'thought', text: '  \n ' }, bash('ls')]} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Ran a command' }))
-    expect(screen.getByRole('button', { name: 'Thought' }).textContent).toBe('Thought')
+  test('a lone call with only thinking beside it is still its own line, not a panel of one', () => {
+    render(<ToolCalls steps={[{ type: 'thought', text: 'hm' }, bash('ls')]} />)
+    // The thought is not drawn, so what is left is one call: it reads as that call, as a lone one does.
+    expect(screen.getByRole('button', { name: 'Ran ls' })).toBeTruthy()
   })
 
   test('thoughts with no call draw nothing', () => {
@@ -173,12 +166,15 @@ describe('ToolCalls, edits whose files are known', () => {
   const made = { path: '/ws/docs/DESCRIPTION.md', added: 11, removed: 0, created: true as const }
   const write: ToolStep = { type: 'action', label: 'Write', detail: made.path, id: 'w1', output: { text: 'ok', changed: [made] } }
 
-  test('the folded line names the file and its size, as Claude Code\'s does, the size in its own colors', () => {
+  test("the folded line counts the steps and says no more, as Claude Code's does; the file and its size are inside", () => {
     render(<ToolCalls steps={[bash('a'), bash('b'), bash('c'), write]} />)
-    const line = screen.getByRole('button', { name: 'Ran 3 commands, created DESCRIPTION.md +11 −0' })
-    expect(line.textContent).toBe('Ran 3 commands,created DESCRIPTION.md+11 −0')
-    expect(line.querySelector('.text-success')!.textContent).toBe('+11')
-    expect(line.querySelector('.text-danger')!.textContent).toBe('−0')
+    const line = screen.getByRole('button', { name: 'Ran 4 commands' })
+    expect(line.textContent).toBe('Ran 4 commands')
+    expect(line.querySelector('.text-success')).toBeNull()
+    fireEvent.click(line)
+    const inside = screen.getByRole('button', { name: 'Created DESCRIPTION.md' })
+    expect(inside.textContent).toBe('CreatedDESCRIPTION.md+11 −0')
+    expect(inside.querySelector('.text-success')!.textContent).toBe('+11')
   })
 
   test('a lone edit is its own line: "Created", the file\'s name, its size', () => {
@@ -187,9 +183,9 @@ describe('ToolCalls, edits whose files are known', () => {
     expect(line.textContent).toBe('CreatedDESCRIPTION.md+11 −0')
   })
 
-  test('a run with no known file reads as before, with no size', () => {
+  test('a run with no known file reads the same: the line is the count either way', () => {
     render(<ToolCalls steps={[bash('a'), { type: 'action', label: 'Edit', detail: '/ws/a.ts', id: 'e1', output: { text: 'ok' } }]} />)
-    const line = screen.getByRole('button', { name: 'Ran a command, edited a file' })
+    const line = screen.getByRole('button', { name: 'Ran 2 commands' })
     expect(line.querySelector('.text-success')).toBeNull()
   })
 })

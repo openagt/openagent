@@ -131,6 +131,12 @@ export interface Preferences {
    * run keeps the person's own words. **Absent = on.**
    */
   nameRuns?: boolean
+  /**
+   * Show what the agent thought between its steps: a row of its own inside the panel a run of calls
+   * opens, saying the thought's first words. Thinking is not a step the agent took, and Claude Code
+   * on the web shows none of it, so it is off unless a person asks to read it. **Absent = off.**
+   */
+  showThinking?: boolean
   /** Preferred editor for "Open in editor" (#727): an editor CLI (e.g. `code`, `cursor`, `zed`).
    * Absent falls back to `$OPENAGENT_EDITOR`, then `code`. */
   editor?: string
@@ -299,6 +305,7 @@ const BOOLEAN_PREFERENCES: Record<BooleanPreferenceKey, true> = {
   onboardingDismissed: true,
   postMergeCleanup: true,
   nameRuns: true,
+  showThinking: true,
 }
 
 const PREFERENCE_KEYS = Object.keys(BOOLEAN_PREFERENCES) as BooleanPreferenceKey[]

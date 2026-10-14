@@ -165,6 +165,7 @@ describe('SettingsPage on and off rows', () => {
       // Naming a run costs money for something only a person looks at, so it is a switch — on
       // until it is turned off, since a list of first lines is what it was put there to fix.
       ['Name each run', true],
+      ['Show what the agent thought', false],
       ['Post-merge cleanup', true],
       ['Browser', true],
       ['Human Queue', true],

@@ -116,6 +116,12 @@ export function SettingsPage({
             onChange={next => updatePreferences({ nameRuns: next })}
           />
           <ToggleRow
+            label="Show what the agent thought"
+            description="Inside a run of steps, a row for each thought between them. Off, the panel is the steps the agent took and nothing else."
+            checked={preferences.showThinking ?? false}
+            onChange={next => updatePreferences({ showThinking: next })}
+          />
+          <ToggleRow
             label="Post-merge cleanup"
             description="The box in the launcher's Auto menu, ticked by default: once a run ends done with a pull request, a fresh agent runs /post-merge-cleanup on its branch before it merges. In projects with that command."
             checked={preferences.postMergeCleanup ?? false}

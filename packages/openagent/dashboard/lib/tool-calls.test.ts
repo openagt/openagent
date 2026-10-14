@@ -1,8 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { callsSummary, partsShown, summaryWords, toolCall } from './tool-calls.js'
-
-/** A run's line as the chat reads it. */
-const line = (calls: Parameters<typeof callsSummary>[0]): string => summaryWords(callsSummary(calls))
+import { callsWords, toolCall } from './tool-calls.js'
 
 describe('toolCall', () => {
   test("Claude Code's tools read as a verb and what it was done to", () => {
@@ -42,80 +39,11 @@ describe('toolCall', () => {
   })
 })
 
-describe('callsSummary', () => {
-  test('one kind is counted, singular and plural', () => {
-    expect(line([toolCall('Bash', 'a')])).toBe('Ran a command')
-    expect(line([toolCall('Bash', 'a'), toolCall('commandExecution', 'b')])).toBe('Ran 2 commands')
-  })
-
-  test('several kinds are counted in the order they first came', () => {
-    const calls = [toolCall('Read', '/a'), toolCall('Bash', 'x'), toolCall('Read', '/b'), toolCall('Edit', '/a'), toolCall('Grep', 'x'), toolCall('WebFetch', 'https://x.dev')]
-    expect(line(calls)).toBe('Read 2 files, ran a command, edited a file, searched once, used a tool')
-  })
-
-  test('a lone skill is said by its name, several are counted', () => {
-    expect(line([toolCall('Bash', 'x'), toolCall('Skill', 'branches')])).toBe('Ran a command, used skill branches')
-    expect(line([toolCall('Skill', 'branches'), toolCall('Skill', 'github')])).toBe('Used 2 skills')
-  })
-})
-
-// What an edit did to its file, when its coding agent said it (`changed` on the call's output).
-describe('a call whose files are known', () => {
-  const made = { path: '/ws/docs/DESCRIPTION.md', added: 11, removed: 0, created: true as const }
-  const edited = { path: '/ws/src/app.ts', added: 2, removed: 1 }
-
-  test('it names its file and says its size; "Created" when it made the file, "Edited" otherwise, whatever the tool is called', () => {
-    expect(toolCall('Write', made.path, [made])).toMatchObject({ verb: 'Created', target: 'DESCRIPTION.md', kind: 'edit', size: { added: 11, removed: 0 } })
-    expect(toolCall('Write', edited.path, [edited])).toMatchObject({ verb: 'Edited', target: 'app.ts', size: { added: 2, removed: 1 } })
-    expect(toolCall('Edit', edited.path, [edited])).toMatchObject({ verb: 'Edited', target: 'app.ts', size: { added: 2, removed: 1 } })
-    // Codex names every file of one change: each by its name, the sizes summed.
-    expect(toolCall('fileChange', `${made.path}, ${edited.path}`, [made, edited])).toMatchObject({ verb: 'Edited', target: 'DESCRIPTION.md, app.ts', size: { added: 13, removed: 1 } })
-    expect(toolCall('fileChange', made.path, [made, { ...made, path: '/ws/b.md', added: 1 }]).verb).toBe('Created')
-  })
-
-  test('a call that changed no file, or whose files are not known, reads as before, with no size', () => {
-    expect(toolCall('Edit', edited.path, [])).toEqual(toolCall('Edit', edited.path))
-    expect(toolCall('Edit', edited.path).size).toBeUndefined()
-  })
-
-  test('a run that changed one file names it, with its size, among the kinds in the order they came', () => {
-    expect(line([toolCall('Bash', 'a'), toolCall('Bash', 'b'), toolCall('Bash', 'c'), toolCall('Write', made.path, [made])])).toBe('Ran 3 commands, created DESCRIPTION.md +11 −0')
-    expect(line([toolCall('Edit', edited.path, [edited]), toolCall('Bash', 'a')])).toBe('Edited app.ts +2 −1, ran a command')
-  })
-
-  test('a file edited by several calls of the run is one file: a new file reads its lines at the end', () => {
-    const again = { path: made.path, added: 2, removed: 1 }
-    expect(line([toolCall('Write', made.path, [made]), toolCall('Edit', made.path, [again])])).toBe('Created DESCRIPTION.md +12 −0')
-    expect(line([toolCall('Edit', edited.path, [edited]), toolCall('Edit', edited.path, [edited])])).toBe('Edited app.ts +4 −2')
-  })
-
-  test('several files are counted, with their lines over the run: "created" only when the run made every one', () => {
-    expect(line([toolCall('Write', made.path, [made]), toolCall('Edit', edited.path, [edited])])).toBe('Edited 2 files +13 −1')
-    expect(line([toolCall('Write', made.path, [made]), toolCall('Write', '/ws/b.md', [{ ...made, path: '/ws/b.md', added: 1 }])])).toBe('Created 2 files +12 −0')
-  })
-
-  test('edits whose files are not known are counted as calls, beside the ones that are', () => {
-    expect(line([toolCall('Edit', '/ws/old.ts'), toolCall('Edit', '/ws/older.ts')])).toBe('Edited 2 files')
-    expect(line([toolCall('Edit', edited.path, [edited]), toolCall('Edit', '/ws/old.ts')])).toBe('Edited app.ts +2 −1, edited a file')
-  })
-
-  test('the parts keep the size apart from the words, for the chat to draw it in its colors', () => {
-    expect(callsSummary([toolCall('Bash', 'a'), toolCall('Write', made.path, [made])])).toEqual([
-      { kind: 'command', text: 'Ran a command' },
-      { kind: 'edit', text: 'created DESCRIPTION.md', size: { added: 11, removed: 0 } },
-    ])
-    expect(callsSummary([])).toEqual([])
-  })
-
-  test('the line says the two parts worth saying most, the rest being one click away', () => {
-    const calls = [toolCall('Write', made.path, [made]), toolCall('Read', '/ws/a.ts'), toolCall('Read', '/ws/b.ts'), toolCall('Bash', 'pnpm test'), toolCall('Bash', 'git commit')]
-    // Three kinds happened; what it changed and what it ran are what the line says, in the order
-    // they happened. The reads are in the panel the line opens.
-    expect(summaryWords(partsShown(callsSummary(calls)))).toBe('Created DESCRIPTION.md +11 −0, ran 2 commands')
-    // Two or fewer parts are all said, and the line still opens with a capital.
-    expect(summaryWords(partsShown(callsSummary([toolCall('Read', '/ws/a.ts'), toolCall('Bash', 'ls')])))).toBe('Read a file, ran a command')
-    // Nothing worth saying more than an edit: it stays, whatever else the run did.
-    const noEdit = [toolCall('Read', '/ws/a.ts'), toolCall('Grep', 'x'), toolCall('Bash', 'ls')]
-    expect(summaryWords(partsShown(callsSummary(noEdit)))).toBe('Searched once, ran a command')
+describe('callsWords', () => {
+  test("a run of calls is counted and no more, as Claude Code on the web counts one", () => {
+    // Every step is a command there, whatever it was: an edit and two shell commands read as three.
+    expect(callsWords(1)).toBe('Ran a command')
+    expect(callsWords(3)).toBe('Ran 3 commands')
+    expect(callsWords(12)).toBe('Ran 12 commands')
   })
 })

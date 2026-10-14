@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { callsSummary, partsShown, summaryWords, toolCall } from '../lib/tool-calls.js'
+import { callsWords, toolCall } from '../lib/tool-calls.js'
+import { usePreferences } from '../lib/preferences.js'
 import type { FileEdit } from '../lib/turn-changes.js'
 import { LinesChanged } from './ChangedFiles.js'
 import { cn } from '../lib/utils.js'
@@ -166,21 +167,22 @@ export function LiveLine({ call, word, since }: { call?: Call | undefined; word?
   )
 }
 
-// The agent's steps between two messages, as Claude Code on the web draws them: one grey line for
-// the whole run ("Ran 2 commands"), opening to one bordered panel with a row per step, a line
-// between two rows, each row opening further. `lead` is a row the panel opens with: the session's
+// The agent's steps between two messages, as Claude Code on the web draws them: one grey line
+// counting them ("Ran 2 commands") and saying no more, opening to one bordered panel with a row per
+// step, a line between two rows, each row opening further. What each step was, which file it
+// changed and how much, is in there rather than on the line. `lead` is a row the panel opens with: the session's
 // set-up, before the first turn's steps. A lone call with nothing to lead it is its own line
 // ("Read AGENTS.md"). A run with no call in it draws nothing.
 export function ToolCalls({ steps, lead }: { steps: readonly ToolStep[]; lead?: ReactNode }) {
   const [open, setOpen] = useState(false)
-  const calls = steps.flatMap(step => (step.type === 'action' ? [toolCall(step.label, step.detail, step.output?.changed)] : []))
+  // What the agent thought between two calls is not a step it took, and Claude Code on the web's
+  // panel has none of it. Shown only to a person who asked for it in Settings.
+  const thinking = usePreferences().showThinking === true
+  const shown = thinking ? steps : steps.filter(step => step.type === 'action')
+  const calls = steps.filter(step => step.type === 'action')
   if (calls.length === 0) return null
-  const summary = callsSummary(calls)
-  // The line says the two parts worth saying most; the rest of the run is the panel it opens, and
-  // the whole of it is this line's hover.
-  const shown = partsShown(summary)
-  const whole = summaryWords(summary)
-  const only = steps.length === 1 ? steps[0] : undefined
+  const words = callsWords(calls.length)
+  const only = shown.length === 1 ? shown[0] : undefined
   if (only?.type === 'action' && !lead) {
     return (
       <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
@@ -190,23 +192,14 @@ export function ToolCalls({ steps, lead }: { steps: readonly ToolStep[]; lead?: 
   }
   return (
     <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
-      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={whole} title={shown.length < summary.length ? whole : undefined} className="flex items-center gap-1.5 hover:text-foreground">
-        {/* The run in words, part by part, each with the size of its edits when that is known. */}
-        <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-left">
-          {shown.map((part, at, parts) => (
-            <span key={at} className="flex items-center gap-1.5">
-              <span>{part.text}</span>
-              {part.size !== undefined && <LinesChanged {...part.size} />}
-              {at < parts.length - 1 && <span className="-ml-1.5">,</span>}
-            </span>
-          ))}
-        </span>
+      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={words} className="flex items-center gap-1.5 hover:text-foreground">
+        <span className="min-w-0 truncate text-left">{words}</span>
         <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')} aria-hidden />
       </button>
       {open && (
         <div className="mt-1.5 flex flex-col divide-y divide-border rounded-lg border border-border">
           {lead && <div className="px-2 py-1.5">{lead}</div>}
-          {steps.map((step, at) => (
+          {shown.map((step, at) => (
             <div key={at} className="px-2 py-1.5">
               {step.type === 'action' ? <CallLine {...step} /> : <ThoughtLine text={step.text} />}
             </div>
