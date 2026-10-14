@@ -172,9 +172,9 @@ export function RightRail({
     </Tooltip>
   )
   // Closed, the panel is its button alone, laid over the top right corner of the page, which the
-  // page's top row keeps free: the page then runs to the window's edge, its scroll bar with it. The
-  // button stands clear of that scroll bar.
-  if (!open) return <aside className="absolute top-0 right-0 z-10 flex flex-col p-2 md:pr-4">{toggle}</aside>
+  // page's top row keeps free: the page then runs to the window's edge, its scroll bar with it,
+  // under that row.
+  if (!open) return <aside className="absolute top-0 right-0 z-10 flex flex-col p-2">{toggle}</aside>
   // The remembered tab may have just lost its content (the last doc deleted, a gate resolved), so
   // fall back to the first one that still exists rather than rendering an empty panel.
   const active: Tab = tabs.includes(tab) ? tab : tabs[0]!

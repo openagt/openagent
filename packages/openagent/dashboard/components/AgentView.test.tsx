@@ -677,8 +677,8 @@ describe('where the agent runs, for the chip beside its name', () => {
   })
 })
 
-describe('the bars over the chat', () => {
-  test('the top bar and its notices lie over the chat\'s start, the message box and what sits on it over its end', () => {
+describe('the page\'s two bars', () => {
+  test('the top bar and its notices are the page\'s first row; the message box and what sits on it lie over the chat\'s end', () => {
     render(view({ live: true }))
     expect(within(screen.getByTestId('chat-top')).getByTestId('bar-runs-on')).toBeTruthy()
     for (const part of ['work-bar', 'composer-live']) expect(within(screen.getByTestId('chat-bottom')).getByTestId(part)).toBeTruthy()

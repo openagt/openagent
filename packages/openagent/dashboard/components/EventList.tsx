@@ -435,30 +435,32 @@ function shownAsRow(e: OpenAgentEvent): boolean {
   return true
 }
 
-// The room the page's bars take of the log grew (a question opened over the message box, the
-// agent's work came in, a notice came under the top bar): a log that was at its end stays at it.
-// The scroller does this itself only for a log that follows its end, and only for the room at the
-// end. A log left at its end, an ended agent's, it leaves where it was, its last rows under the
-// bar. A prompt the scroller holds at the top is left to it: its spacer is then shown. Done as the
-// list changes its size, padding counted, before the frame is drawn.
-function useEndKept(viewport: RefObject<HTMLDivElement | null>, content: RefObject<HTMLDivElement | null>, endRoom: RefObject<HTMLDivElement | null>): void {
+// The room the log's rows have got smaller: the message box's bar grew over the log's end (a
+// question opened over it, the agent's work came in), or the view itself got shorter (the top
+// bar's details opened, a notice came under it). A log that was at its end stays at it. The
+// scroller does this itself only for a log that follows its end, and a frame late. A log left at
+// its end, an ended agent's, it leaves where it was, its last rows under the bar. A prompt the
+// scroller holds at the top is left to it: its spacer is then shown. Done as the room at the
+// list's end or the view changes its size, before the frame is drawn.
+function useEndKept(viewport: RefObject<HTMLDivElement | null>, endRoom: RefObject<HTMLDivElement | null>): void {
   useLayoutEffect(() => {
     const view = viewport.current
-    const list = content.current
     const room = endRoom.current
-    if (!view || !list || !room || typeof ResizeObserver === 'undefined') return
-    const taken = () => (Number.parseFloat(getComputedStyle(list).paddingTop) || 0) + room.getBoundingClientRect().height
-    let was = taken()
+    if (!view || !room || typeof ResizeObserver === 'undefined') return
+    // What the rows have of the view: its height, less the room the bar takes at the end.
+    const left = () => view.clientHeight - room.getBoundingClientRect().height
+    let was = left()
     const observer = new ResizeObserver(() => {
-      const grew = taken() - was
-      was += grew
-      // Rows coming in change the list's size too, and no room: nothing to keep.
-      if (grew <= 0 || view.querySelector('[data-message-scroller-spacer]:not([hidden])')) return
-      if (view.scrollHeight - grew - view.scrollTop - view.clientHeight <= AT_END) view.scrollTop = view.scrollHeight
+      const lost = was - left()
+      was -= lost
+      // A bar that got shorter, a view that got taller: nothing to keep.
+      if (lost <= 0 || view.querySelector('[data-message-scroller-spacer]:not([hidden])')) return
+      if (view.scrollHeight - view.scrollTop - view.clientHeight - lost <= AT_END) view.scrollTop = view.scrollHeight
     })
-    observer.observe(list, { box: 'border-box' })
+    observer.observe(room)
+    observer.observe(view)
     return () => observer.disconnect()
-  }, [viewport, content, endRoom])
+  }, [viewport, endRoom])
 }
 
 export function EventList({
@@ -603,30 +605,27 @@ export function EventList({
       <SessionLine setup={setup} working={working} added={added} {...(settingUp ? { live: { since: unfolded[unfolded.length - 1]?.at } } : {})} />
     </MessageScrollerItem>
   )
-  // The page's bars lie over the log's two ends (ChatPane says how much of each, `--chat-top` and
-  // `--chat-bottom`; with no bar there is none): the rows start under the top one and end above the
-  // bottom one.
+  // The page's message box lies over the log's end (ChatPane says how much of it, `--chat-bottom`;
+  // with no bar there is none): the rows end above it.
   //
-  // The scroller reads the room at the start off the padding, so a prompt it brings to the top
-  // lands under the bar. The room at the end is an element and no padding: the scroller acts on
-  // its content growing (it stays at the end, it keeps a prompt at the top), and padding is no
-  // part of that. That element is the list's first and is drawn last, the scroller's own spacer
-  // after it: the scroller looks for a new prompt among the elements added after those it had, so
-  // one that stayed last would hide every new row from it. (With it first, the scroller no longer
-  // sees a row come in above the others. None does here but a first prompt, which it goes to.)
+  // That room is an element and no padding: the scroller acts on its content growing (it stays at
+  // the end, it keeps a prompt at the top), and padding is no part of that. That element is the
+  // list's first and is drawn last, the scroller's own spacer after it: the scroller looks for a
+  // new prompt among the elements added after those it had, so one that stayed last would hide
+  // every new row from it. (With it first, the scroller no longer sees a row come in above the
+  // others. None does here but a first prompt, which it goes to.)
   //
   // The viewport's scroll padding is for the browser: a page down moves by what is seen, and a row
-  // brought into view lands clear of the bars.
+  // brought into view lands clear of the bar.
   const viewport = useRef<HTMLDivElement>(null)
-  const content = useRef<HTMLDivElement>(null)
   const endRoom = useRef<HTMLDivElement>(null)
-  useEndKept(viewport, content, endRoom)
+  useEndKept(viewport, endRoom)
   return (
     <MessageScrollerProvider autoScroll={stick} defaultScrollPosition={openAt ?? (stick ? 'end' : 'start')}>
-      {/* A layer of its own: "Jump to latest" stays under the page's bars. */}
+      {/* A layer of its own: "Jump to latest" stays under the message box's bar. */}
       <MessageScroller className="isolate flex-1">
-        <MessageScrollerViewport ref={viewport} aria-label="Agent output" className="scroll-pt-(--chat-top) scroll-pb-(--chat-bottom)">
-          <MessageScrollerContent ref={content} spacerClassName="order-last" className="mx-auto w-full max-w-3xl gap-2 px-4 pt-[calc(var(--chat-top,0px)+1rem)] font-mono text-xs">
+        <MessageScrollerViewport ref={viewport} aria-label="Agent output" className="scroll-pb-(--chat-bottom)">
+          <MessageScrollerContent spacerClassName="order-last" className="mx-auto w-full max-w-3xl gap-2 px-4 pt-4 font-mono text-xs">
             <div ref={endRoom} data-testid="log-end-room" className="order-9998 h-[calc(var(--chat-bottom,0px)+0.5rem)] shrink-0" aria-hidden />
             {shown.map((e, i, rows) => {
               const message = textOf(e)
