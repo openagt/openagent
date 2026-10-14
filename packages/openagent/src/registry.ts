@@ -1,7 +1,7 @@
 import { basename, dirname, join, resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { isDriverName } from './driver-names.js'
-import { isPublishPick, type PublishPick } from './publish-levels.js'
+import { isPublishLevel, type PublishLevel } from './publish-levels.js'
 import { nodeFs } from './node-fs.js'
 
 /**
@@ -101,8 +101,8 @@ export interface Preferences {
   model?: string
   /** Which coding agent a run starts on (#650): `claude-code` or `codex`, handed to the project's start hook. Absent = the hook's own default. */
   driver?: string
-  /** How far a run started from the dashboard publishes its work: `nothing`, or the level handed to the project's start hook, `commit`, `branch`, `pr` or `merge`. The launcher's menu shows it and writes it. Absent = none saved: the daemon decides where a Start goes. */
-  publish?: PublishPick
+  /** How far a run started from the dashboard publishes its work: the level handed to the project's start hook, `commit`, `branch`, `pr` or `merge`. The launcher's menu shows it and writes it. Absent = none saved: the daemon decides where a Start goes. */
+  publish?: PublishLevel
   /**
    * Where an agent started from the launcher starts, per project: the projects, by id, whose
    * launcher is set to "My local branch" (the branch the project's folder is on, as this machine
@@ -311,7 +311,7 @@ function sanitizePreferences(value: unknown): Preferences {
   // shared node-free vocabulary (driver-names.ts).
   if (isDriverName(input['driver'] as string | undefined)) preferences.driver = input['driver'] as string
   // `publish` is constrained to the picks the launcher's menu lists.
-  if (isPublishPick(input['publish'])) preferences.publish = input['publish']
+  if (isPublishLevel(input['publish'])) preferences.publish = input['publish']
   const startFrom = sanitizeStartFrom(input['startFrom'])
   if (Object.keys(startFrom).length) preferences.startFrom = startFrom
   // `editor` (#727) is a free-form CLI name, trimmed and length-capped so junk / a huge string

@@ -1,5 +1,5 @@
 import { Check, ChevronDown } from 'lucide-react'
-import { PUBLISH_LABELS, type PublishPick } from '../../src/client.js'
+import { PUBLISH_LABELS, type PublishLevel } from '../../src/client.js'
 import { cn } from '../lib/utils.js'
 import { buttonVariants } from './ui/button.js'
 import { OptionLabel } from './ui/option-label.js'
@@ -15,8 +15,7 @@ import {
   DropdownMenuSeparator,
 } from './ui/dropdown-menu.js'
 
-const PUBLISH_DESCRIPTIONS: Readonly<Record<PublishPick, string>> = {
-  nothing: 'It commits and publishes nothing. You decide after.',
+const PUBLISH_DESCRIPTIONS: Readonly<Record<PublishLevel, string>> = {
   commit: 'It commits its work on its branch.',
   branch: 'It commits and pushes its branch.',
   pr: 'It commits, pushes its branch and opens a pull request.',
@@ -36,10 +35,10 @@ export function AutoMenu({
   busy,
 }: {
   /** The publish pick in force. */
-  publish: PublishPick
+  publish: PublishLevel
   /** The publish picks the project is offered. */
-  picks: readonly PublishPick[]
-  onPublish: (pick: PublishPick) => void
+  picks: readonly PublishLevel[]
+  onPublish: (pick: PublishLevel) => void
   /** Whether "Post-merge cleanup" is ticked; undefined where the project does not have the command. */
   cleanup: boolean | undefined
   onCleanup: (next: boolean) => void

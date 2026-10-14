@@ -2,7 +2,7 @@ import { contextAddProject, contextProjectErrors, contextProjects, contextRemove
 import { readProjectCommands, type ProjectCommand } from '../project-commands.js'
 import { DATA_BRANCH, branchReach, originDefaultBranch, pullFileBranch, writeSharing, type BranchReach } from '@openagt/agent-data'
 import { readProjectHooks, runCheckHook, startLineTakesBase, type StartReadiness } from '../project-hooks.js'
-import { isPublishPick, publishPickIn, type PublishPick } from '../publish-levels.js'
+import { isPublishLevel, publishLevelIn, type PublishLevel } from '../publish-levels.js'
 import { hasRemote } from '../has-remote.js'
 import { repositoryAddress } from '../repository-address.js'
 import { currentBranch } from '../dashboard/git-status.js'
