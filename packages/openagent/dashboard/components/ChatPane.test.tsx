@@ -4,20 +4,16 @@ import type { OpenAgentEvent } from '../../src/index.js'
 import { ChatNote, ChatPane } from './ChatPane.js'
 import { EventList } from './EventList.js'
 
-// The test DOM lays nothing out: an element's height is what `heights` says for its test id, the
-// list's top padding is `padding`, and the scroll bar is as wide as `scrollBar` says. The
-// observers are stand-ins a test fires by hand.
+// The test DOM lays nothing out: an element's height is what `heights` says for its test id, and
+// the scroll bar is as wide as `scrollBar` says. The observers are stand-ins a test fires by hand.
 let heights: Record<string, number> = {}
-let padding = 0
 let scrollBar = 0
 let observers: { fire: () => void; targets: Element[] }[] = []
 const resize = (target: Element) => act(() => observers.filter(o => o.targets.includes(target)).forEach(o => o.fire()))
 const rect = (top: number, height: number) => ({ top, bottom: top + height, height, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) })
-const computed = window.getComputedStyle
 
 beforeEach(() => {
-  heights = { 'chat-top': 44.5, 'chat-bottom': 96 }
-  padding = 0
+  heights = { 'chat-bottom': 96.5 }
   scrollBar = 11
   observers = []
   HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) { return rect(0, heights[this.dataset['testid'] ?? ''] ?? 0) }
@@ -29,13 +25,11 @@ beforeEach(() => {
     observe(target: Element) { this.targets.push(target) }
     disconnect() { observers = observers.filter(o => o !== this) }
   })
-  vi.spyOn(window, 'getComputedStyle').mockImplementation((el, pseudo) => (el.matches('[data-slot="message-scroller-content"]') ? ({ ...computed(el, pseudo), paddingTop: `${padding}px` } as CSSStyleDeclaration) : computed(el, pseudo)))
 })
 afterEach(() => {
   cleanup()
   // What a test put on the prototype over the browser's own goes with it.
   for (const name of ['getBoundingClientRect', 'offsetWidth', 'clientHeight', 'scrollHeight', 'scrollTo']) delete (HTMLElement.prototype as unknown as Record<string, unknown>)[name]
-  vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
@@ -43,43 +37,68 @@ const pane = () => screen.getByTestId('chat-pane')
 const room = (name: string) => pane().style.getPropertyValue(name)
 
 describe('ChatPane', () => {
-  test('the page says the room each bar takes, and again when a bar changes its size', () => {
+  test('the page says the room the message box\'s bar takes, and again when the bar changes its size', () => {
     render(<ChatPane top={<b>top bar</b>} bottom={<b>message box</b>}><p>chat</p></ChatPane>)
-    // To the part of a pixel: a bar's fade starts where the bar ends.
-    expect([room('--chat-top'), room('--chat-bottom')]).toEqual(['44.5px', '96px'])
-    // A question opens above the message box: the bar at the end is taller.
+    // To the part of a pixel: the bar's fade starts where the bar ends.
+    expect(room('--chat-bottom')).toBe('96.5px')
+    // A question opens above the message box: the bar is taller.
     heights['chat-bottom'] = 400
     resize(screen.getByTestId('chat-bottom'))
-    expect([room('--chat-top'), room('--chat-bottom')]).toEqual(['44.5px', '400px'])
+    expect(room('--chat-bottom')).toBe('400px')
   })
 
-  test('the bars lie over the chat and stop short of its scroll bar; one that lies over the content takes no room', () => {
-    const { unmount } = render(<ChatPane top={<b>top bar</b>} bottom={<b>message box</b>}><p>chat</p></ChatPane>)
-    for (const bar of ['chat-top', 'chat-bottom']) expect(screen.getByTestId(bar).className.split(' ')).toEqual(expect.arrayContaining(['absolute', 'left-0', 'right-(--chat-scroll-bar)', 'bg-background']))
-    expect(screen.getByTestId('chat-top').className.split(' ')).toContain('top-0')
-    expect(screen.getByTestId('chat-bottom').className.split(' ')).toContain('bottom-0')
-    expect(room('--chat-scroll-bar')).toBe('11px')
+  test('the top bar is the page\'s first row, and the chat\'s room starts under it: the chat keeps no room for it', () => {
+    render(<ChatPane top={<b>top bar</b>} bottom={<b>message box</b>}><p>chat</p></ChatPane>)
+    const top = screen.getByTestId('chat-top')
+    expect(top.parentElement).toBe(pane())
+    expect(top.className.split(' ')).not.toContain('absolute')
+    // The chat and what lies over it share the room under the top bar, which the top bar is no part of.
+    const chatRoom = screen.getByText('chat').parentElement!
+    expect(chatRoom.parentElement).toBe(pane())
+    // What lies over the chat is cut at the room's edges: nothing of it reaches the top bar. And the
+    // room is a layer of its own: a popup the dashboard opens over the page stays over the message box's bar.
+    expect(chatRoom.className.split(' ')).toEqual(expect.arrayContaining(['relative', 'isolate', 'min-h-0', 'flex-1', 'overflow-hidden']))
+    expect(chatRoom.contains(top)).toBe(false)
+    expect(screen.getByTestId('chat-bottom').parentElement).toBe(chatRoom)
+    expect(room('--chat-top')).toBe('')
     // In the page's order: the top bar, the chat, the message box.
     expect(document.body.textContent).toBe('top barchatmessage box')
+  })
+
+  test('the message box\'s bar lies over the chat and stops short of its scroll bar; a scroll bar that lies over the content takes no room', () => {
+    const { unmount } = render(<ChatPane top={<b>top bar</b>} bottom={<b>message box</b>}><p>chat</p></ChatPane>)
+    expect(screen.getByTestId('chat-bottom').className.split(' ')).toEqual(expect.arrayContaining(['absolute', 'bottom-0', 'left-0', 'right-(--chat-scroll-bar)', 'bg-background']))
+    expect(room('--chat-scroll-bar')).toBe('11px')
     unmount()
     scrollBar = 0
     render(<ChatPane top={<b>top bar</b>} bottom={<b>message box</b>}><p>chat</p></ChatPane>)
     expect(room('--chat-scroll-bar')).toBe('0px')
   })
 
-  test('the page is a layer of its own, so what the shell lays over its corners stays over the bars; a tall bar at the end stays under the top one', () => {
+  test('a bar too tall for the chat\'s room scrolls inside itself', () => {
     render(<ChatPane top={null} bottom={null} />)
-    expect(pane().className.split(' ')).toEqual(expect.arrayContaining(['relative', 'isolate']))
-    expect(screen.getByTestId('chat-bottom').className.split(' ')).toEqual(expect.arrayContaining(['max-h-[calc(100%-2.75rem)]', 'overflow-y-auto']))
+    expect(screen.getByTestId('chat-bottom').className.split(' ')).toEqual(expect.arrayContaining(['max-h-full', 'overflow-y-auto']))
   })
 
-  test('a note stands in the middle of the room the bars leave', () => {
+  test('the chat fades out at each end of its room: under the top bar, and above the message box\'s bar', () => {
+    render(<ChatPane top={<b>top bar</b>} bottom={<b>message box</b>}><p>chat</p></ChatPane>)
+    const chatRoom = screen.getByText('chat').parentElement!
+    const fades = [...chatRoom.querySelectorAll<HTMLElement>(':scope > [aria-hidden]')].filter(el => el.className.includes('to-transparent')).map(el => el.className.split(' '))
+    expect(fades).toHaveLength(2)
+    for (const fade of fades) expect(fade).toEqual(expect.arrayContaining(['pointer-events-none', 'absolute', 'left-0', 'right-(--chat-scroll-bar)']))
+    expect(fades[0]).toEqual(expect.arrayContaining(['top-0', 'bg-gradient-to-b']))
+    expect(fades[1]).toEqual(expect.arrayContaining(['bottom-(--chat-bottom)', 'bg-gradient-to-t']))
+  })
+
+  test('a note stands in the middle of the room the message box leaves', () => {
     render(<ChatPane top={null} bottom={null}><ChatNote>Loading agent…</ChatNote></ChatPane>)
-    expect(screen.getByText('Loading agent…').className.split(' ')).toEqual(expect.arrayContaining(['place-items-center', 'pt-(--chat-top)', 'pb-(--chat-bottom)']))
+    const note = screen.getByText('Loading agent…').className.split(' ')
+    expect(note).toEqual(expect.arrayContaining(['place-items-center', 'pb-(--chat-bottom)']))
+    expect(note).not.toContain('pt-(--chat-top)')
   })
 })
 
-describe('the chat\'s rows under the bars', () => {
+describe('the chat\'s rows and the message box over their end', () => {
   const said = (text: string) => ({ kind: 'driver', event: { type: 'text', text } })
   const ended = [{ kind: 'driver', event: { type: 'start', prompt: 'Say hi' } }, ...Array.from({ length: 12 }, (_, at) => said(`reply ${at}`)), { kind: 'end', ok: true }] as OpenAgentEvent[]
   const viewport = () => document.querySelector<HTMLElement>('[data-slot="message-scroller-viewport"]')!
@@ -92,12 +111,13 @@ describe('the chat\'s rows under the bars', () => {
     return [...rows, screen.getByTestId('log-end-room'), ...(spacer().hidden ? [] : [spacer()])]
   }
 
-  test('the rows start under the top bar and end above the message box, and the browser\'s own scrolling keeps clear of both', () => {
+  test('the rows end above the message box, and the browser\'s own scrolling keeps clear of it; no room is kept at the start', () => {
     render(<EventList events={ended} projectId="p1" />)
-    expect(content().className.split(' ')).toEqual(expect.arrayContaining(['px-4', 'pt-[calc(var(--chat-top,0px)+1rem)]']))
+    expect(content().className.split(' ')).toEqual(expect.arrayContaining(['px-4', 'pt-4']))
     const end = screen.getByTestId('log-end-room')
     expect(end.className.split(' ')).toContain('h-[calc(var(--chat-bottom,0px)+0.5rem)]')
-    expect(viewport().className.split(' ')).toEqual(expect.arrayContaining(['scroll-pt-(--chat-top)', 'scroll-pb-(--chat-bottom)']))
+    expect(viewport().className.split(' ')).toContain('scroll-pb-(--chat-bottom)')
+    expect(viewport().className).not.toContain('--chat-top')
     // "Jump to latest" stands above the message box and its fade, and nowhere else; it never lies over a bar.
     const button = document.querySelector<HTMLElement>('[data-slot="message-scroller-button"]')!.className.split(' ')
     expect(button).toContain('data-[direction=end]:bottom-[calc(var(--chat-bottom,0px)+1.25rem)]')
@@ -137,7 +157,9 @@ describe('the chat\'s rows under the bars', () => {
     await waitFor(() => expect(sent().getBoundingClientRect().top).toBe(64))
   })
 
-  describe('a chat at its end when the room the bars take grows', () => {
+  describe('a chat at its end when its rows get less room', () => {
+    // The view is 500 tall from its first layout on: the list reads it as it comes to the page.
+    beforeEach(() => Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, get(this: HTMLElement) { return this.matches('[data-slot="message-scroller-viewport"]') ? 500 : 0 } }))
     // The viewport as a test sets it: how tall the list is, how tall the view, where it is scrolled to.
     const view = (scroll: { height: number; shown: number; top: number }) => {
       const el = viewport()
@@ -146,50 +168,78 @@ describe('the chat\'s rows under the bars', () => {
       Object.defineProperty(el, 'scrollTop', { configurable: true, get: () => scroll.top, set: (to: number) => void (scroll.top = Math.min(to, scroll.height - scroll.shown)) })
       return scroll
     }
-    // The list is taller by what the bars took, and says so as a list that changed its size does.
-    const grow = (scroll: { height: number }, by: { end?: number; start?: number }) => {
-      heights['log-end-room'] = (heights['log-end-room'] ?? 0) + (by.end ?? 0)
-      padding += by.start ?? 0
-      scroll.height += (by.end ?? 0) + (by.start ?? 0)
-      resize(content())
+    // The list is taller by what the message box's bar took, and the room at its end says so as an element that changed its size does.
+    const grow = (scroll: { height: number }, by: number) => {
+      heights['log-end-room'] = (heights['log-end-room'] ?? 0) + by
+      scroll.height += by
+      resize(screen.getByTestId('log-end-room'))
+    }
+    // The view is shorter by what the top bar took of the page, and says so as a view that changed its size does.
+    const shorten = (scroll: { shown: number }, by: number) => {
+      scroll.shown -= by
+      resize(viewport())
     }
     const list = () => {
       heights['log-end-room'] = 104
-      padding = 60
       render(<EventList events={ended} projectId="p1" stick={false} openAt="end" />)
     }
 
     test('it stays at its end: a question opened over the message box does not cover its last rows', () => {
       list()
       const scroll = view({ height: 2000, shown: 500, top: 1500 })
-      grow(scroll, { end: 300 })
+      grow(scroll, 300)
       expect(scroll.top).toBe(1800)
     })
 
-    test('a notice that comes under the top bar pushes its last rows under the message box no more than a question does', () => {
+    test('a notice that comes under the top bar makes the view shorter, and pushes its last rows under the message box no more than a question does', () => {
       list()
       const scroll = view({ height: 2000, shown: 500, top: 1500 })
-      grow(scroll, { start: 33 })
+      shorten(scroll, 33)
       expect(scroll.top).toBe(1533)
-      // Both at once, as when another agent's page has a taller top bar and a taller message box.
-      grow(scroll, { start: 40, end: 200 })
+      // Both in one frame, as when the details open under the top bar while a question opens over the message box.
+      heights['log-end-room'] = 304
+      scroll.height += 200
+      shorten(scroll, 40)
       expect(scroll.top).toBe(1773)
     })
 
-    test('rows that come in, and a bar that gets shorter, are nothing to act on', () => {
+    test('a bar that gets shorter and a view that gets taller are nothing to act on', () => {
       list()
-      // A few pixels from its end, which still counts as at it: only room that grew moves the view.
+      // A few pixels from its end, which still counts as at it: only room that was lost moves the view.
       const scroll = view({ height: 2000, shown: 500, top: 1495 })
-      grow(scroll, {})
+      grow(scroll, -50)
       expect(scroll.top).toBe(1495)
-      grow(scroll, { end: -50 })
+      shorten(scroll, -30)
       expect(scroll.top).toBe(1495)
+    })
+
+    test('a chat shorter than its view is left at its top when rows make it longer, though the bar grew before', () => {
+      list()
+      const scroll = view({ height: 500, shown: 500, top: 0 })
+      // The list fills the view whatever its rows take: the bar grows by 40, and nothing scrolls yet.
+      heights['log-end-room'] = 144
+      resize(screen.getByTestId('log-end-room'))
+      // Rows then make the list longer than the view, and the view a little shorter: only that little is lost.
+      scroll.height += 30
+      shorten(scroll, 2)
+      expect(scroll.top).toBe(0)
+    })
+
+    test('a chat a little way from its end is left where it is, however much room is lost', () => {
+      list()
+      const scroll = view({ height: 2000, shown: 500, top: 1400 })
+      grow(scroll, 300)
+      expect(scroll.top).toBe(1400)
+      shorten(scroll, 60)
+      expect(scroll.top).toBe(1400)
     })
 
     test('a chat scrolled away from its end is left where it is', () => {
       list()
       const scroll = view({ height: 2000, shown: 500, top: 700 })
-      grow(scroll, { end: 300 })
+      grow(scroll, 300)
+      expect(scroll.top).toBe(700)
+      shorten(scroll, 33)
       expect(scroll.top).toBe(700)
     })
 
@@ -197,20 +247,19 @@ describe('the chat\'s rows under the bars', () => {
       list()
       const scroll = view({ height: 2000, shown: 500, top: 1500 })
       spacer().hidden = false
-      grow(scroll, { end: 300 })
+      grow(scroll, 300)
       expect(scroll.top).toBe(1500)
     })
 
-    test('a chat that comes with its page opens at its end: the bars are measured after the list has opened', () => {
+    test('a chat that comes with its page opens at its end: the bar is measured after the list has opened', () => {
       // With no bar measured yet the list has its own room only.
       heights['log-end-room'] = 8
-      padding = 16
       render(<ChatPane top={null} bottom={null}><EventList events={ended} projectId="p1" stick={false} openAt="end" /></ChatPane>)
-      expect(room('--chat-bottom')).toBe('96px')
-      // The list opened at its end before the page said its bars' room; the room then came, at both ends.
+      expect(room('--chat-bottom')).toBe('96.5px')
+      // The list opened at its end before the page said the bar's room; the room then came.
       const scroll = view({ height: 2000, shown: 500, top: 1500 })
-      grow(scroll, { start: 44.5, end: 96 })
-      expect(scroll.top).toBe(1640.5)
+      grow(scroll, 96.5)
+      expect(scroll.top).toBe(1596.5)
     })
   })
 })

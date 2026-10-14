@@ -20,8 +20,8 @@ import { cn } from '../../lib/utils.js'
 // on plain `scrollbar-width` / `scrollbar-color` / `scrollbar-gutter` (see tailwind.css), so the
 // log's bar is toned like the rest of the app instead of being whatever the OS paints.
 //
-// Upstream's `scroll-fade` on the viewport is not here: an agent's page lays its bars over the
-// log's two ends (ChatPane), and each bar carries the fade of its own edge.
+// Upstream's `scroll-fade` on the viewport is not here: an agent's page lays its message box over
+// the log's end and draws the fade of each end itself (ChatPane).
 
 // The Provider needs no styling (no data-slot / className), so it is the primitive's directly,
 // re-exported for a uniform `message-scroller` import site rather than wrapped for nothing.
