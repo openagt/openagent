@@ -70,7 +70,9 @@ export function HandoffSummary({ handoff, subagent = false }: { handoff: AgentHa
  * deliberate click, and "not published" beside the button says nothing left yet. They sit in the
  * bar rather than behind the disclosure, because the point of the handoff is to be offered without
  * being looked for. Once a PR exists neither shows — the bar links the PR, and the interventions
- * queue (#632) has picked it up by then.
+ * queue (#632) has picked it up by then. What shows is what the PR still needs: the commit of work
+ * left uncommitted, the push of commits it does not have, and its merge. Work committed after the
+ * PR merged or closed is offered the next one.
  *
  * A subagent is offered none of them: it opens no pull request, and its branch is its main
  * agent's to land. In their place it says whether that happened, landed or not landed, at the end
@@ -132,41 +134,14 @@ export function HandoffActions({
   // While the PR lookup is still out (#1028), nothing is offered: acting on "not known yet" is
   // how a second PR gets opened.
   if (handoff.prPending) return null
-  // Once a PR exists the bar links it and the needs-you queue (#632) has it: offering to open one
-  // again is the single mistake this must not make. What is still worth offering is the Merge
-  // (#1391): an open, unmerged PR takes one human click to land.
-  if (handoff.pr) {
-    if (handoff.pr.state !== 'OPEN' || handoff.merged) return null
-    return (
-      <Button
-        size="xs"
-        disabled={busy}
-        onClick={() => act('merge', () => sendMerge(projectId, agentId), 'Could not merge the pull request.')}
-      >
-        <GitMerge className="h-3.5 w-3.5" />
-        {pending === 'merge' ? 'Merging…' : 'Merge PR'}
-      </Button>
-    )
-  }
-  // A run that changed nothing shows nothing here: there is nothing to do, and a finished run with
-  // work always shows its button, so silence already says it. A reason is written only where
-  // something was left behind the user may act on.
-  // A branch the run's own tool deleted because it held nothing is no loss, so it too is silent.
-  if (!handoff.exists) return handoff.unchanged ? null : <Reason>Branch gone — nothing to open a PR from.</Reason>
-  // A branch with no diff never gets the button (#1173): there is nothing the git host would accept a PR
-  // for, and offering one that fails with "No commits between main and <branch>" is the dead end
-  // this bar exists to prevent. When the tree holds uncommitted work, that work is named, and the
-  // next step is offered: the agent is asked to commit it. The agent commits, not the dashboard:
-  // it knows what it changed and writes the message, and nothing is committed on its behalf.
-  // The same holds for a branch that has commits and uncommitted work on top (an agent that
-  // committed, was asked for more, and left that uncommitted): every step below would be refused
-  // while the checkout is unclean, and would leave the newest work behind, so Commit comes first.
+  // Uncommitted work comes before every other step, with a pull request or without one: a push or
+  // an opened pull request would be refused while the checkout is unclean, and a merge would leave
+  // the newest work behind. The work is named, and the next step is offered: the agent is asked to commit it. The agent
+  // commits, not the dashboard: it knows what it changed and writes the message, and nothing is
+  // committed on its behalf. This is also the agent that committed, was asked for more, and left
+  // that uncommitted.
   const paths = handoff.pendingFiles ?? []
-  if (handoff.empty || paths.length > 0) {
-    // Commits that undo each other: there is work, and none of it is left to take. Said, so the
-    // missing button does not read as a fault.
-    if (paths.length === 0 && handoff.commits.length > 0) return <Reason>Nothing to {handoff.hasRemote ? 'publish' : 'merge'}: the commits cancel out.</Reason>
-    if (paths.length === 0) return null
+  if (paths.length > 0) {
     return (
       <>
         <Uncommitted paths={paths} committed={!handoff.empty} />
@@ -195,6 +170,51 @@ export function HandoffActions({
       </>
     )
   }
+  const push = () => act('push', () => sendPush(projectId, agentId), 'Could not push the branch.')
+  // Once a PR exists the bar links it and the needs-you queue (#632) has it: offering to open one
+  // again is the single mistake this must not make. What is still worth offering is the Merge
+  // (#1391): an open, unmerged PR takes one human click to land. An agent asked for more after its
+  // PR was opened has commits the PR does not: the push that brings them to it comes first, since a
+  // merge would land the PR without them. Offered only when the PR's own head is an earlier commit
+  // of this branch: a branch that differs from the remote because the remote moved (the PR was
+  // updated on the git host) has nothing to push, and a push of it would be refused.
+  // An agent that kept committing after its PR merged or closed is past that PR: its newer work
+  // is offered a pull request of its own, as work with no PR is, below.
+  if (handoff.pr && !handoff.movedPastPr) {
+    if (handoff.pr.state !== 'OPEN' || handoff.merged) return null
+    const prHead = handoff.pr.headRefOid
+    if (!handoff.pushed && handoff.commits.slice(1).some(commit => commit.sha === prHead)) {
+      return (
+        <>
+          <Reason>not in the PR yet</Reason>
+          <Button size="xs" disabled={busy} onClick={push}>
+            <Upload className="h-3.5 w-3.5" />
+            {pending === 'push' ? 'Updating PR…' : 'Update PR'}
+          </Button>
+        </>
+      )
+    }
+    return (
+      <Button
+        size="xs"
+        disabled={busy}
+        onClick={() => act('merge', () => sendMerge(projectId, agentId), 'Could not merge the pull request.')}
+      >
+        <GitMerge className="h-3.5 w-3.5" />
+        {pending === 'merge' ? 'Merging…' : 'Merge PR'}
+      </Button>
+    )
+  }
+  // A run that changed nothing shows nothing here: there is nothing to do, and a finished run with
+  // work always shows its button, so silence already says it. A reason is written only where
+  // something was left behind the user may act on.
+  // A branch the run's own tool deleted because it held nothing is no loss, so it too is silent.
+  if (!handoff.exists) return handoff.unchanged ? null : <Reason>Branch gone — nothing to open a PR from.</Reason>
+  // A branch with no diff never gets the button (#1173): there is nothing the git host would accept a PR
+  // for, and offering one that fails with "No commits between main and <branch>" is the dead end
+  // this bar exists to prevent. Commits that undo each other: there is work, and none of it is
+  // left to take. Said, so the missing button does not read as a fault.
+  if (handoff.empty) return handoff.commits.length > 0 ? <Reason>Nothing to {handoff.hasRemote ? 'publish' : 'merge'}: the commits cancel out.</Reason> : null
   // The main branch already has the work: there is no step left, with a remote or without one.
   // The commits and files stay counted beside it, measured from where the run's work began.
   if (handoff.merged) return <Reason>Merged into {mainBranchName(handoff.base)}.</Reason>
@@ -215,7 +235,6 @@ export function HandoffActions({
       </>
     )
   }
-  const push = () => act('push', () => sendPush(projectId, agentId), 'Could not push the branch.')
   // No git host package (#1820): nothing opens a pull request for this project, so the last step is
   // the push, and a pushed branch is where the handoff ends.
   if (!handoff.gitHost) {

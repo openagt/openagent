@@ -1,4 +1,5 @@
 import { hostname } from 'node:os'
+import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 import { cachedPrView, cachedPrsForBranch, forgetBranchPrs, forgetPr, pickAgentPr, type LinkedPr, type BranchPrLookup } from './pull-requests.js'
 import type { Cached } from './cache.js'
 import type { AgentMeta } from '../store/index.js'
@@ -87,6 +88,12 @@ export interface AgentHandoff {
   /** The PR is not known yet, rather than absent (#1028): the lookup is still running. */
   prPending?: boolean
   /**
+   * The session kept committing after its PR merged or closed (#1512): the branch holds commits
+   * on top of the PR's head, so the PR is not the answer to that work, which needs a pull request
+   * of its own.
+   */
+  movedPastPr?: boolean
+  /**
    * The files the session changed and never committed, read from its own checkout (#1173).
    *
    * The agent is told to commit its work, but one that ended without doing so holds its whole
@@ -120,6 +127,8 @@ export interface AgentHandoffDeps {
   order?: 'first' | 'latest'
   /** The commit the run's own work begins at ({@link AgentMeta.baseCommit}): what the branch is measured from. */
   from?: string
+  /** How git is asked whether the branch holds commits on top of its PR's head (default the real one). */
+  git?: GitRunner
 }
 
 /**
@@ -148,10 +157,19 @@ export function leftNothing(agent: { status?: string; host?: string; pr?: unknow
  * The branch's PR as it applies to *this* run: the injected seam when the caller gave one, else
  * the cached history filtered through {@link pickAgentPr} with the agent's start time (#1251).
  */
-async function lookupAgentPr(cwd: string, branch: string, deps: AgentHandoffDeps): Promise<Cached<LinkedPr | undefined>> {
-  if (deps.pr) return { value: await deps.pr(cwd, branch).catch(() => undefined), pending: false }
+async function lookupAgentPr(cwd: string, branch: string, deps: AgentHandoffDeps): Promise<Cached<LinkedPr | undefined> & { latest?: LinkedPr | undefined }> {
+  if (deps.pr) {
+    const value = await deps.pr(cwd, branch).catch(() => undefined)
+    return { value, latest: value, pending: false }
+  }
   const prs = await cachedPrsForBranch(cwd, branch).catch(() => ({ value: undefined, pending: false }))
-  return { value: prs.value ? pickAgentPr(prs.value, deps.since, deps.order) : undefined, pending: prs.pending }
+  // `latest` beside the run's own PR: whether the session moved past its PR is asked of the PR
+  // that last saw the branch ({@link pickAgentPr}).
+  return {
+    value: prs.value ? pickAgentPr(prs.value, deps.since, deps.order) : undefined,
+    latest: prs.value ? pickAgentPr(prs.value, deps.since, 'latest') : undefined,
+    pending: prs.pending,
+  }
 }
 
 /** The cached single-PR read {@link resolveAgentPr} asks for the recorded PR's current state. */
@@ -268,6 +286,7 @@ export async function readAgentHandoff(
     gitHost: gitHost !== undefined,
     ...(pr.value ? { pr: pr.value } : {}),
     ...(pr.pending ? { prPending: true } : {}),
+    ...((await commitsPastPr(cwd, pr.latest, commits, deps.git)) ? { movedPastPr: true } : {}),
     ...(state.pendingFiles ? { pendingFiles: state.pendingFiles } : {}),
   }
 }
@@ -385,6 +404,20 @@ function movedPastPr(state: Pick<AgentHandoff, 'pr' | 'commits'>): boolean {
   if (!state.pr || state.pr.state === 'OPEN') return false
   const tip = state.commits[0]?.sha
   return Boolean(state.pr.headRefOid && tip && state.pr.headRefOid !== tip)
+}
+
+/**
+ * Whether the branch holds commits on top of the head of its merged or closed PR: what the bar
+ * offers the next pull request on. Narrower than {@link movedPastPr}, which a person's click is
+ * checked by: a PR whose head the branch does not build on was updated on the git host, and the
+ * branch here has nothing that PR did not land. Asked of git rather than read off the commits,
+ * which no longer hold the PR's head once it is merged and the default branch is fetched.
+ */
+async function commitsPastPr(cwd: string, pr: LinkedPr | undefined, commits: HandoffCommit[], git: GitRunner = nodeGitRunner()): Promise<boolean> {
+  const tip = commits[0]?.sha
+  const head = pr?.headRefOid
+  if (!pr || pr.state === 'OPEN' || !head || !tip || head === tip) return false
+  return git(['merge-base', '--is-ancestor', head, tip], cwd).then(() => true, () => false)
 }
 
 /**
