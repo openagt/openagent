@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentMeta, AgentWorktree, OpenAgentEvent } from '../../src/index.js'
 import { onAgent, onAgentsDoing, onGitHostHome, onRetainedWorktrees } from '../rpc/reads.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
-import { useAgentHandoff } from '../lib/use-agent-handoff.js'
+import { handoffSays, useAgentHandoff } from '../lib/use-agent-handoff.js'
 import { useCheckoutStatus } from '../lib/use-checkout-status.js'
 import { isAgentActive, agentOutcome, cardOutcome, pendingChoices } from '../lib/live-state.js'
 import { AgentActionBar } from './AgentActionBar.js'
@@ -16,7 +16,7 @@ import { LostStreamNotice } from './LostStreamNotice.js'
 import { CloudMirrorRow, CloudAgentNotice } from './CloudAgentNotice.js'
 import { ModuleSlot } from './ModulePageView.js'
 import { useMountedModules } from '../lib/use-modules.js'
-import { Committing, HandoffActions, HandoffSummary, handoffSays, isCommitAsk } from './AgentHandoff.js'
+import { Committing, HandoffActions, HandoffSummary, isCommitAsk } from './AgentHandoff.js'
 import { AgentDetails, type AgentDetailsCard } from './AgentDetails.js'
 import { QuestionPanel } from './QuestionPanel.js'
 import { SubagentsBar } from './SubagentLine.js'
@@ -327,12 +327,17 @@ export function AgentView({
   // what the branch holds. An agent that changed nothing has no bar. A bar that is there stays
   // while the agent works (it committed: its checkout is clean again) and while an ended agent's
   // branch is still being read, so it never goes and comes back.
+  //
+  // Once the bar has something to say for this run it keeps it (`|| held`): a run makes its own
+  // last commit while it cleans up, after its turn ends, and the branch read taken in between
+  // answers for a branch that holds nothing — which used to hide the bar for the seconds until the
+  // next read. The read itself now comes a second later rather than fifteen (`SETTLING_MS`).
   const lastSay = useRef<{ agentId: string | null; say: boolean }>({ agentId: null, say: false })
   const held = lastSay.current.agentId === agentId && lastSay.current.say
   const say =
     committing ||
     checkout?.pr !== undefined ||
-    (live === false ? (handoff.loaded ? handoffSays(handoff.handoff) : held) : checkout?.checkout?.dirty === true || held)
+    (live === false ? (handoff.loaded ? handoffSays(handoff.handoff) || held : held) : checkout?.checkout?.dirty === true || held)
   lastSay.current = { agentId, say }
   // What the bar is about right now, so the ✕ hides this and not the next thing the agent does:
   // the run, its branch, how much work is on it, and where that work has got to.

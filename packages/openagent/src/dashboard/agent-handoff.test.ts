@@ -213,7 +213,10 @@ test('a run’s handoff off its record: its branch from where its own work begin
   assert.deepEqual([onBranch?.exists, onBranch?.landed], [true, undefined])
   const landed = await readRunHandoff('/repo', run({ baseCommit: start, landed: tip }), deps)
   assert.deepEqual([landed?.exists, landed?.landed, landed?.commits.length], [true, true, 2])
-  assert.deepEqual(calls, [['show', 'agent-sub', { from: start }], ['show', tip, { from: start }]])
+  // The run started from another branch, so its branch is read twice: its own work from where that
+  // work begins, and again from the default branch, for what a pull request would carry (both
+  // answers are the same here, so it says nothing). A landed run has no branch and is read once.
+  assert.deepEqual(calls, [['show', 'agent-sub', { from: start }], ['show', 'agent-sub'], ['show', tip, { from: start }]])
 
   // A commit has no pull request: none is looked up for it, whatever the lookup would answer.
   let asked = 0
@@ -228,6 +231,45 @@ test('a run’s handoff off its record: its branch from where its own work begin
   // Not landed, the branch gone with its checkout: it changed nothing.
   assert.equal((await readRunHandoff('/repo', run({ branch: 'gone' }), deps))?.unchanged, true)
   assert.equal(await readRunHandoff('/repo', run({}), deps), undefined)
+})
+
+test('a run started from a local branch says what a pull request would carry over the default branch', async () => {
+  // His test-project: the skills are committed on a local branch, not on main. A run started from
+  // that branch did one file of its own, and a pull request against main takes the skills too.
+  const start = 'b'.repeat(40)
+  const own = state({ branch: 'agent-x', base: start, commits: [{ sha: 'a'.repeat(40), subject: 'say hello' }], files: [{ path: 'hello.sh', insertions: 5, deletions: 0, binary: false }] })
+  let overDefault = state({
+    branch: 'agent-x',
+    base: 'origin/main',
+    commits: [own.commits[0]!, { sha: 'd'.repeat(40), subject: 'the skills' }],
+    files: [own.files[0]!, ...Array.from({ length: 42 }, (_, i) => ({ path: `.claude/skills/skill-${i}/SKILL.md`, insertions: 12, deletions: 0, binary: false }))],
+  })
+  const asked: (string | undefined)[] = []
+  const branches: BranchesFor = async () => ({
+    list: async () => [],
+    show: async (_branches, from) => (asked.push(from), [from === undefined ? overDefault : own]),
+    push: async () => ({ ok: true, pushed: true }),
+    merge: async () => ({ ok: true, into: 'main', commit: 'c'.repeat(40), from: start, deleted: true }),
+    remove: async () => ({ ok: true }),
+  })
+  const run = { id: 'r1', startedAt: '2026-10-01T00:00:00Z', status: 'done' as const, host: hostname(), branch: 'agent-x' }
+
+  const read = await readRunHandoff('/repo', { ...run, baseCommit: start }, { branches, gitHost: noGitHost, pr: noPr })
+  // The run's own work is still counted from where that work begins: one file, five lines.
+  assert.deepEqual([read?.files.length, read?.insertions], [1, 5])
+  // And what a pull request would take is the whole stack the branch sits on, said beside the button.
+  assert.deepEqual(read?.carries, { base: 'origin/main', commits: 2, files: 43, insertions: 509, deletions: 0 })
+  assert.deepEqual(asked, [start, undefined])
+
+  // Both reads agreeing means a pull request takes exactly this run's work: nothing to say.
+  overDefault = own
+  assert.equal((await readRunHandoff('/repo', { ...run, baseCommit: start }, { branches, gitHost: noGitHost, pr: noPr }))?.carries, undefined)
+
+  // A run started from the branch the project starts from is measured there already: nothing to
+  // say, and nothing read a second time.
+  asked.length = 0
+  assert.equal((await readRunHandoff('/repo', run, { branches, gitHost: noGitHost, pr: noPr }))?.carries, undefined)
+  assert.deepEqual(asked, [undefined])
 })
 
 test('the Open PR button refuses a session with no branch, a gone branch, an empty branch, a merged branch, a project with no branches provider, and one with no git host', async () => {

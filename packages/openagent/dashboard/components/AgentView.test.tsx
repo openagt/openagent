@@ -283,8 +283,28 @@ describe('AgentView: when the bar above the message box is there', () => {
     rerender(view({ live: false }))
     await new Promise(resolve => setTimeout(resolve, 20))
     expect(shown()).toBe('true')
-    answer({ ...PUSHED, empty: true, commits: [] })
-    await waitFor(() => expect(shown()).toBe('false'))
+    answer(PUSHED)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Open PR' })).toBeTruthy())
+    expect(shown()).toBe('true')
+  })
+
+  test('a branch read taken before the run\'s own last commit never takes the bar away again', async () => {
+    // The blink: a clean run commits what it was holding as it cleans up, after its turn has
+    // ended, so the read taken the moment the run ends answers for a branch with nothing on it.
+    onAgent.mockResolvedValue(ARCHIVED)
+    onAgentWorktree.mockResolvedValue({ branch: 'agent-x', checkout: { path: '/w', dirty: true } })
+    onAgentHandoff.mockResolvedValue({ ...PUSHED, empty: true, commits: [], files: [] })
+    const { rerender } = render(view({ live: true }))
+    await waitFor(() => expect(shown()).toBe('true'))
+    onAgentWorktree.mockResolvedValue({ branch: 'agent-x' })
+    rerender(view({ live: false }))
+    await waitFor(() => expect(onAgentHandoff).toHaveBeenCalled())
+    await new Promise(resolve => setTimeout(resolve, 30))
+    expect(shown()).toBe('true')
+    // And the commit, once it is seen, lands in the bar that stayed.
+    onAgentHandoff.mockResolvedValue(PUSHED)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Open PR' })).toBeTruthy(), { timeout: 3000 })
+    expect(shown()).toBe('true')
   })
 })
 
