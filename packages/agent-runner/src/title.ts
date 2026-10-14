@@ -6,9 +6,14 @@ import type { Driver } from '@openagt/agent-driver'
 // A run's short name, the way Claude Code on the web names a session: "README.md condensing" for
 // "make readme.md shorter". The person's own words are the whole prompt — too long for a list and
 // often a paragraph — so a list of runs read as a column of first lines. The name is asked of the
-// same coding agent the run is on, in one throwaway session with that agent's small, fast model: it
-// costs about a cent, it is never the run's own session (nothing is added to what the agent was
+// same coding agent the run is on, in one throwaway session with that agent's small, fast model and
+// no tools at all: it is never the run's own session (nothing is added to what the agent was
 // asked), and it runs beside the first turn, so nothing waits for it.
+//
+// What it costs, measured: a fifth of a cent a run as it was first written, a thirtieth of one with
+// the tools off — the tools and the servers behind them were twenty thousand of the twenty-three
+// thousand tokens such a turn sent, to be answered in seven. A person who would rather not pay even
+// that turns naming off in Settings, and the run keeps their own words.
 //
 // The session is given an empty directory of its own, not the run's checkout. A coding agent in a
 // checkout reads it: asked in the run's own folder, Haiku looked around and answered "The file is
@@ -104,7 +109,7 @@ export async function nameRun(
     // Never inside the run's checkout: an untracked folder there is a dirty tree, and the
     // branches rule never reclaims one.
     empty = await mkdtemp(join(tmpdir(), 'openagent-naming-'))
-    const session = await driver.start({ cwd: empty, model, system: TITLE_SYSTEM, signal: stop.signal })
+    const session = await driver.start({ cwd: empty, model, system: TITLE_SYSTEM, noTools: true, signal: stop.signal })
     try {
       const turn = await session.prompt(titlePrompt(opts.prompt))
       return titleOf(turn.text)

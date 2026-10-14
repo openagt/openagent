@@ -221,7 +221,11 @@ export class ClaudeCodeSession implements DriverSession {
     if (this.startOpts.model) args.push('--model', this.startOpts.model)
     // How hard the model may think (`claude --effort <level>`); the CLI's own default when none.
     if (this.startOpts.effort) args.push('--effort', this.startOpts.effort)
-    const mcpConfig = this.mcpConfigFile()
+    // Nothing to do in the folder, so nothing to do it with: the CLI's built-in tools and the MCP
+    // servers it would otherwise load are most of what such a turn sends, and a model with no tool
+    // cannot go looking for the files the words it is naming happen to mention.
+    if (this.startOpts.noTools) args.push('--tools', '', '--strict-mcp-config')
+    const mcpConfig = this.startOpts.noTools ? undefined : this.mcpConfigFile()
     if (mcpConfig) args.push('--mcp-config', mcpConfig)
     if (this.config.extraArgs) args.push(...this.config.extraArgs)
     return args

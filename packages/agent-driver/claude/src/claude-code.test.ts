@@ -385,6 +385,31 @@ test('ClaudeCodeDriver tells the CLI how hard to think when the caller asked, an
   assert.ok(!(await run()).includes('--effort'), 'the CLI thinks as it does by default')
 })
 
+test('a session with nothing to do in its folder is started with no tools and no MCP servers', async () => {
+  const run = async (noTools?: boolean): Promise<string[]> => {
+    let captured: string[] = []
+    const spawn: SpawnLike = (_cmd, args) => {
+      captured = [...args]
+      return fakeSpawn([JSON.stringify({ type: 'result', result: 'ok' })])(_cmd, args, { cwd: '/ws', env: {} })
+    }
+    const driver = new ClaudeCodeDriver({ spawn, mcpServers: { memory: { command: 'memory-server' } } })
+    const session = await driver.start({ cwd: '/ws', ...(noTools !== undefined ? { noTools } : {}) })
+    await session.prompt('go')
+    return captured
+  }
+  // The tools and the servers behind them are most of what such a turn sends, and a model with no
+  // tool cannot go looking for the files the words it is naming happen to mention.
+  const bare = await run(true)
+  assert.deepEqual(bare.slice(bare.indexOf('--tools'), bare.indexOf('--tools') + 2), ['--tools', ''])
+  assert.ok(bare.includes('--strict-mcp-config'))
+  assert.ok(!bare.includes('--mcp-config'), 'no servers either, so none are written')
+  // Every other session is started as it always was.
+  const usual = await run()
+  assert.ok(!usual.includes('--tools'))
+  assert.ok(!usual.includes('--strict-mcp-config'))
+  assert.ok(usual.includes('--mcp-config'))
+})
+
 test('ClaudeCodeDriver omits --mcp-config when no mcpServers are configured', async () => {
   let captured: string[] = []
   const spawn: SpawnLike = (_cmd, args) => {
