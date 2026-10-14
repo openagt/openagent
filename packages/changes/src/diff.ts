@@ -10,6 +10,11 @@ import { cutToPreview, readConfinedFile, safeRepoPath } from './confined.js'
 // The read takes a caller-supplied path, so the guard is here rather than at the call site:
 // `safeRepoPath` is the only way in, and every caller goes through it.
 
+/** The unchanged lines a diff shows around each change, as git does. */
+export const CONTEXT_LINES = 3
+/** Enough unchanged lines around a change to show the whole file: what "Show more lines" asks for. */
+export const WHOLE_FILE = 100_000
+
 /** One file's diff, capped so the pane can render it. */
 export interface FileDiff {
   /** The repo-relative path asked for. */
@@ -23,7 +28,12 @@ export interface FileDiff {
   truncated: boolean
   /** Nothing textual to show (git reports a binary change, or the file is not UTF-8 text). */
   binary: boolean
+  /** How many lines the file has now, so the pane knows whether lines are left under its last change; absent for a deleted file. */
+  lines?: number
 }
+
+/** How many lines a text has, a last line with no newline counted. */
+const linesIn = (text: string) => (text === '' ? 0 : text.split('\n').length - (text.endsWith('\n') ? 1 : 0))
 
 /** One changed file in a session's Changes list (#817): what moved, and by how much. */
 export interface FileChange {
@@ -39,7 +49,8 @@ export interface FileChange {
 function hunksOnly(patch: string): string {
   const lines = patch.split('\n')
   const start = lines.findIndex(line => line.startsWith('--- ') || line.startsWith('@@'))
-  return (start === -1 ? [] : lines.slice(start)).join('\n').trimEnd()
+  // Only the newline git ends with: a blank unchanged line is a single space, and it is a line.
+  return (start === -1 ? [] : lines.slice(start)).join('\n').replace(/\n+$/, '')
 }
 
 /** Count the +/- lines of a unified patch, ignoring the `---`/`+++` file headers. */
@@ -86,6 +97,7 @@ export async function readFileDiff(
   status: FileGitStatus,
   git: GitRunner = nodeGitRunner(),
   range?: { from: string; to: string },
+  context: number = CONTEXT_LINES,
 ): Promise<FileDiff | null> {
   if (!safeRepoPath(path)) return null
 
@@ -104,16 +116,18 @@ export async function readFileDiff(
   // `HEAD` is missing in a repo with no commits yet; the working-tree diff is the honest answer
   // there rather than an error.
   const raw = range
-    ? await git(['diff', '--unified=3', range.from, range.to, '--', path], cwd).catch(() => '')
-    : await git(['diff', '--unified=3', 'HEAD', '--', path], cwd)
-        .catch(() => git(['diff', '--unified=3', '--', path], cwd))
+    ? await git(['diff', `--unified=${context}`, range.from, range.to, '--', path], cwd).catch(() => '')
+    : await git(['diff', `--unified=${context}`, 'HEAD', '--', path], cwd)
+        .catch(() => git(['diff', `--unified=${context}`, '--', path], cwd))
         .catch(() => '')
   if (!raw.trim()) return null
   if (/^Binary files /m.test(raw)) return { path, status, patch: '', added: 0, removed: 0, truncated: false, binary: true }
 
   const { body: patch, truncated } = cutToPreview(hunksOnly(raw))
   if (!patch) return null
-  return { path, status, patch, ...countChanges(patch), truncated, binary: false }
+  // The file as it is now: the range's last commit's copy, or the one on disk.
+  const now = status === 'deleted' ? undefined : range ? await git(['show', `${range.to}:${path}`], cwd).catch(() => undefined) : (await readConfinedFile(cwd, path))?.toString('utf8')
+  return { path, status, patch, ...countChanges(patch), truncated, binary: false, ...(now !== undefined ? { lines: linesIn(now) } : {}) }
 }
 
 
@@ -160,8 +174,8 @@ export async function readFileChanges(
   const paths = Object.keys(statuses).filter(safeRepoPath)
   if (paths.length === 0) return []
 
-  const numstat = await git(['diff', '--numstat', 'HEAD'], cwd)
-    .catch(() => git(['diff', '--numstat'], cwd))
+  const numstat = await git(['-c', 'core.quotePath=false', 'diff', '--numstat', '--no-renames', 'HEAD'], cwd)
+    .catch(() => git(['-c', 'core.quotePath=false', 'diff', '--numstat', '--no-renames'], cwd))
     .catch(() => '')
   const counted = new Map(parseNumstat(numstat).map(entry => [entry.path, entry]))
 

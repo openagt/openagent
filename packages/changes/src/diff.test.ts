@@ -4,7 +4,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { readFileChanges, readFileDiff } from './diff.js'
-import { safeRepoPath } from './confined.js'
+import { MAX_PREVIEW_LINES, safeRepoPath } from './confined.js'
 
 const PATCH = [
   'diff --git a/src/a.ts b/src/a.ts',
@@ -62,23 +62,23 @@ test('a binary change says so rather than dumping bytes', async () => {
 })
 
 test('a long patch is cut and says it was cut', async () => {
-  const body = ['--- a/big.ts', '+++ b/big.ts', '@@ -1 +1,600 @@', ...Array.from({ length: 600 }, (_, i) => `+line ${i}`)]
+  const body = ['--- a/big.ts', '+++ b/big.ts', '@@ -1 +1,6000 @@', ...Array.from({ length: 6000 }, (_, i) => `+line ${i}`)]
   const diff = await readFileDiff('/repo', 'big.ts', 'modified', fakeGit(body.join('\n')))
   assert.ok(diff)
   assert.equal(diff.truncated, true)
-  assert.equal(diff.patch.split('\n').length, 500)
+  assert.equal(diff.patch.split('\n').length, MAX_PREVIEW_LINES)
 })
 
 test('a long untracked file is counted whole, though its preview is cut', async () => {
   // The Changes list takes an untracked file's added count from this read, and that count is the
-  // file's line count — counting the cut preview reported every big new file as 500.
+  // file's line count — counting the cut preview reported every big new file as the cap.
   const dir = await mkdtemp(join(tmpdir(), 'openagent-diff-'))
-  await writeFile(join(dir, 'big.ts'), Array.from({ length: 900 }, (_, i) => `line ${i}`).join('\n') + '\n')
+  await writeFile(join(dir, 'big.ts'), Array.from({ length: 9000 }, (_, i) => `line ${i}`).join('\n') + '\n')
   const diff = await readFileDiff(dir, 'big.ts', 'untracked', fakeGit(''))
   assert.ok(diff)
-  assert.equal(diff.added, 900)
+  assert.equal(diff.added, 9000)
   assert.equal(diff.truncated, true)
-  assert.equal(diff.patch.split('\n').length, 500)
+  assert.equal(diff.patch.split('\n').length, MAX_PREVIEW_LINES)
 })
 
 test('a repo with no commits falls back to the working-tree diff', async () => {
@@ -196,4 +196,10 @@ test('an untracked file reached through a symlink out of the repo is refused', a
   await mkdir(join(dir, 'src'))
   await symlink(join(outside, 'secret.txt'), join(dir, 'src', 'link.txt'))
   assert.equal(await readFileDiff(dir, 'src/link.txt', 'untracked', async () => ''), null)
+})
+
+test('a blank unchanged line at the end of a change is kept: it is a line', async () => {
+  const diff = await readFileDiff('/repo', 'a.txt', 'modified', fakeGit(['--- a/a.txt', '+++ b/a.txt', '@@ -1,3 +1,3 @@', '-a', '+A', ' b', ' ', ''].join('\n')))
+  assert.ok(diff)
+  assert.equal(diff.patch.split('\n').at(-1), ' ')
 })

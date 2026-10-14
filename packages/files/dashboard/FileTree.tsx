@@ -1,7 +1,6 @@
 import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Check, ChevronRight, Search } from 'lucide-react'
-import { ContextMenu, ContextMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, Input, cn, type ModuleContext } from '@openagt/dashboard/module'
-import { FileIcon } from './file-icon.js'
+import { ContextMenu, ContextMenuTrigger, DropdownMenuContent, FileIcon, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, Input, cn, type ModuleContext } from '@openagt/dashboard/module'
 
 // The Files pane's tree (#492): a lazy, collapsible tree built from the flat list of paths, with
 // "Filter files…" over it. As in Claude Code on the web: one click on a file opens it as a

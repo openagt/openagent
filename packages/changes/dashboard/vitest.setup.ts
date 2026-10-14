@@ -10,3 +10,6 @@ import { configure } from '@testing-library/react'
 // The timeout is a ceiling, not a delay: a passing query still returns as soon as it matches, so
 // this costs nothing when things are healthy and only buys patience when the machine is starved.
 configure({ asyncUtilTimeout: 5000 })
+
+// jsdom lays nothing out, so it has no `scrollIntoView`: a click in the list scrolls the diffs to the file's.
+Element.prototype.scrollIntoView ??= () => {}

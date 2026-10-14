@@ -6,6 +6,7 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuTrigger,
+  FileIcon,
   Input,
   PaneActions,
   PaneTitle,
@@ -23,7 +24,6 @@ import {
 import type { AgentTree } from '../src/tree.js'
 import { projectKey, treeKey } from './keys.js'
 import { readProject, readTree } from './reads.js'
-import { FileIcon } from './file-icon.js'
 import { FileTree } from './FileTree.js'
 import { FileView, NoFileOpen } from './FileView.js'
 import { closeFile, openFile, setFilesSetting, showFile, useFilesSettings, useOpenFiles, type OpenTab } from './open-files.js'
