@@ -5,8 +5,9 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 // a ring that fills as the conversation grows. The reading is the last model call's own (what it
 // was given, cached part included, plus what it wrote), not a total of the turn's calls, and the
 // window is what the coding agent says of the model — Codex says it outright, and for Claude it is
-// what `@openagt/agent-driver-claude` knows of the family. Without both numbers there is no circle:
-// a fullness nobody can measure is worse than none.
+// what `@openagt/agent-driver-claude` knows of the family. Without a window there is no circle: a
+// fullness nobody can measure is worse than none. With one and no reading yet the ring is there and
+// empty, as Claude Code's is from the session's first frame, rather than appearing mid-turn.
 
 /** A token count as a person reads it: `18.2k`, `184k`, `1.2M`. */
 export function tokens(count: number): string {
@@ -17,8 +18,8 @@ export function tokens(count: number): string {
 }
 
 export function ContextCircle({ used, size }: { used: number; size: number }) {
-  if (!(size > 0) || !(used > 0)) return null
-  const part = Math.min(used / size, 1)
+  if (!(size > 0)) return null
+  const part = Math.min(Math.max(used, 0) / size, 1)
   // The ring is drawn as one stroked circle whose dash is the filled part: no arc maths, and it
   // fills clockwise from the top (the -90° turn).
   const r = 5

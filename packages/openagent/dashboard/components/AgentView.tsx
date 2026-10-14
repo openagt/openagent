@@ -169,7 +169,9 @@ export function AgentView({
   const modelLabel = model ? modelName(picked ? models?.[picked] : undefined, model) : undefined
   // The model and how hard it was told to think, as Claude Code says them under its box: the two
   // words of the session's own setup, which it keeps for its whole life.
-  const underBox = [modelLabel, card?.effort ? effortLabel(card.effort) : undefined].filter(Boolean).join(' · ') || undefined
+  // Two words with a space between them, as Claude Code sets them under its box ("Opus 5  High"):
+  // they are one setting read together, and a dot between made them read as two separate facts.
+  const underBox = [modelLabel, card?.effort ? effortLabel(card.effort) : undefined].filter(Boolean).join('\u2002') || undefined
   // How full this session's context is: the run's own last reading, against what the agent says
   // the model holds. Either missing, no circle.
   const window = modelContextWindow(models, picked, model)
@@ -421,7 +423,7 @@ export function AgentView({
             onQueued={onQueued}
             outcome={outcome}
             model={underBox}
-            {...(card?.contextTokens !== undefined && window !== undefined ? { context: <ContextCircle used={card.contextTokens} size={window} /> } : {})}
+            {...(window !== undefined ? { context: <ContextCircle used={card?.contextTokens ?? 0} size={window} /> } : {})}
           />
         </>
       }

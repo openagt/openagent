@@ -176,7 +176,10 @@ export function AgentComposer({
         sessionModel={model}
         sessionContext={context}
         idleControl={idleControl}
-        placeholder={live ? 'Message the agent…' : 'Message the agent to continue it…'}
+        // What the box can do, not what it is for: a working agent reads what is sent to it when
+        // its turn ends, which is the one thing worth saying there, and Claude Code's box says the
+        // same in the same place.
+        placeholder={live ? 'Send now, and the agent reads it when its turn ends' : 'Message the agent to continue it…'}
       />
     </div>
   )
