@@ -5,15 +5,22 @@ import type { Driver } from '@openagt/agent-driver'
 
 // A run's short name, the way Claude Code on the web names a session: "README.md condensing" for
 // "make readme.md shorter". The person's own words are the whole prompt — too long for a list and
-// often a paragraph — so a list of runs read as a column of first lines. The name is asked of the
+// often a paragraph — so a list of runs read as a column of first lines.
+//
+// Neither coding agent hands us a name to use instead. A headless Claude Code run emits none and
+// writes none to its transcript (nor does any of the 21,155 on this machine); Codex does keep a
+// `title` per thread, in `~/.codex/state_*.sqlite`, and in all 129 threads here it is the first
+// user message truncated — the column of first lines again. So the name is asked of the
 // same coding agent the run is on, in one throwaway session with that agent's small, fast model and
 // no tools at all: it is never the run's own session (nothing is added to what the agent was
 // asked), and it runs beside the first turn, so nothing waits for it.
 //
 // What it costs, measured: a fifth of a cent a run as it was first written, a thirtieth of one with
 // the tools off — the tools and the servers behind them were twenty thousand of the twenty-three
-// thousand tokens such a turn sent, to be answered in seven. A person who would rather not pay even
-// that turns naming off in Settings, and the run keeps their own words.
+// thousand tokens such a turn sent, to be answered in seven. That saving is Claude Code's: Codex
+// cannot be asked for a session with no tools, so a run on Codex is named for what it always cost
+// (~11,300 tokens, no price: Codex reports counts and never a price). A person who would rather not
+// pay turns naming off in Settings — on either agent — and the run keeps their own words.
 //
 // The session is given an empty directory of its own, not the run's checkout. A coding agent in a
 // checkout reads it: asked in the run's own folder, Haiku looked around and answered "The file is

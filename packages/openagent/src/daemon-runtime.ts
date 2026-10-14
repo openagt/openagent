@@ -12,7 +12,7 @@ import { screenInDiary } from './dashboard/screen.js'
 import { dispatchRelayRpc } from './dashboard-rpc/relay-dispatch.js'
 import { asRecorded, onMachine } from './dashboard-rpc/reads.js'
 import { tailAgentEvents } from './dashboard-rpc/events-tail.js'
-import { addProject, isHostName, listMachines, listProjects, nameMachine, projectId, removeProject, type MachineRecord } from './registry.js'
+import { addProject, isHostName, listMachines, listProjects, nameMachine, projectId, readPreferences, removeProject, type MachineRecord, type Preferences } from './registry.js'
 import { repositoryAddress } from './repository-address.js'
 import { writeHookLines } from './built-in.js'
 import { fileBranchRepo, installProject, writeSharing } from '@openagt/agent-data'
@@ -293,8 +293,12 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject }: Project
     // it goes as far as the project does with no pull request: its branch pushed, or its work
     // committed where there is no remote.
     const publish = publishLevelOf(publishPickIn(options.publish, (await projectGitHost(projectCwd).catch(() => undefined)) !== undefined, await hasRemote(projectCwd)))
+    // Named unless the person turned naming off: read here rather than sent from the page, so a
+    // run a schedule starts is named exactly as one a person starts is.
+    const nameRun = (await readPreferences(undefined, process.env).catch((): Preferences => ({}))).nameRuns !== false
     const started = await runStartHook(projectCwd, {
       prompt,
+      ...(nameRun ? {} : { nameRun: false }),
       ...(options.driver !== undefined ? { driver: options.driver } : {}),
       ...(options.model !== undefined ? { model: options.model } : {}),
       ...(options.effort !== undefined ? { effort: options.effort } : {}),

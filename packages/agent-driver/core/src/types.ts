@@ -111,6 +111,11 @@ export interface DriverStartOptions {
    * tools is, which is both cheaper — the tools and what they bring are most of what such a turn
    * sends — and safer: with no tool to reach for, a small model cannot mistake the words it is
    * given for work to do. A driver whose agent has no such mode ignores it and runs as usual.
+   *
+   * Claude Code's takes it. Codex's ignores it: its shell and its patch tool are its harness, not
+   * a list it is given, and there is no flag that drops them. Measured, a naming turn there sends
+   * ~11,300 tokens to be answered in 8, and turning its memories, apps and plugins off saves 8% of
+   * that — not worth changing what a person set for their own Codex.
    */
   noTools?: boolean
   /** Abort the whole session; disposing kills the underlying process. */

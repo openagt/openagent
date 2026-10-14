@@ -493,8 +493,10 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
   // being continued was named when it began, and one whose agent never started has nothing to name.
   // A subagent is not named: its row is its task, written by the agent that started it, and an
   // orchestration of a dozen of them would pay for a dozen namings for rows nobody looks for.
+  // `OPENAGENT_NAME_RUN=0` is the person's setting, put in this process's environment by whoever
+  // started it: naming costs money for something only a person looks at, so it can be declined.
   const naming =
-    driverSession && !run.continued && run.card.title === undefined && runnerMark(run.card)?.parent === undefined
+    process.env.OPENAGENT_NAME_RUN !== '0' && driverSession && !run.continued && run.card.title === undefined && runnerMark(run.card)?.parent === undefined
       ? nameRun(run.driver, { prompt: run.prompt, signal: stopped }).then(
           async title => {
             if (title !== undefined) await driverSession?.log?.title(title)

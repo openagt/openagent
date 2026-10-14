@@ -226,6 +226,7 @@ test('every boolean preference survives a save; the sanitizer cannot silently dr
     bridgeBrowser: true,
     onboardingDismissed: true,
     postMergeCleanup: true,
+    nameRuns: true,
   }
   const fs = memFs()
   await writePreferences(allOn, fs, ENV)

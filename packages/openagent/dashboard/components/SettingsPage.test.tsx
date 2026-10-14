@@ -162,19 +162,24 @@ describe('SettingsPage on and off rows', () => {
     await waitFor(() => expect(checked(row('Post-merge cleanup'))).toBe(true))
     // No box to tick anywhere among the page's own rows: on and off is a switch.
     expect(screen.getAllByRole('switch').map(each => [each.getAttribute('aria-label'), checked(each)])).toEqual([
+      // Naming a run costs money for something only a person looks at, so it is a switch — on
+      // until it is turned off, since a list of first lines is what it was put there to fix.
+      ['Name each run', true],
       ['Post-merge cleanup', true],
       ['Browser', true],
       ['Human Queue', true],
       ['New activity', false],
       ['Browser bridge', false],
     ])
+    fireEvent.click(row('Name each run'))
+    expect(checked(row('Name each run'))).toBe(false)
     fireEvent.click(row('Post-merge cleanup'))
     expect(checked(row('Post-merge cleanup'))).toBe(false)
     fireEvent.click(row('New activity'))
     expect(checked(row('New activity'))).toBe(true)
     fireEvent.click(row('Human Queue'))
     fireEvent.click(row('Browser'))
-    expect(saves()).toEqual([{ postMergeCleanup: false }, { notifyNewActivity: true }, { notifyHumanIntervention: false }, { notifyBrowser: false }])
+    expect(saves()).toEqual([{ nameRuns: false }, { postMergeCleanup: false }, { notifyNewActivity: true }, { notifyHumanIntervention: false }, { notifyBrowser: false }])
     expect([checked(row('Human Queue')), checked(row('Browser'))]).toEqual([false, false])
   })
 

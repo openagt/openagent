@@ -123,6 +123,14 @@ export interface Preferences {
    * too. **Absent = off.**
    */
   postMergeCleanup?: boolean
+  /**
+   * Name each run: a small model is asked for the two to five words a list of runs shows in place
+   * of the first line of the prompt (`agent-runner`'s `title.ts`). It is one short turn of the
+   * cheapest model with no tools, measured at a thirtieth of a cent a run, and it is the only
+   * money OpenAgent spends on something a person only looks at — so it can be turned off, and the
+   * run keeps the person's own words. **Absent = on.**
+   */
+  nameRuns?: boolean
   /** Preferred editor for "Open in editor" (#727): an editor CLI (e.g. `code`, `cursor`, `zed`).
    * Absent falls back to `$OPENAGENT_EDITOR`, then `code`. */
   editor?: string
@@ -290,6 +298,7 @@ const BOOLEAN_PREFERENCES: Record<BooleanPreferenceKey, true> = {
   bridgeBrowser: true,
   onboardingDismissed: true,
   postMergeCleanup: true,
+  nameRuns: true,
 }
 
 const PREFERENCE_KEYS = Object.keys(BOOLEAN_PREFERENCES) as BooleanPreferenceKey[]
