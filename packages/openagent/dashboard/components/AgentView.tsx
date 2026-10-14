@@ -334,12 +334,21 @@ export function AgentView({
   // last commit while it cleans up, after its turn ends, and the branch read taken in between
   // answers for a branch that holds nothing — which used to hide the bar for the seconds until the
   // next read. The read itself now comes a second later rather than fifteen (`SETTLING_MS`).
+  // Landed: the pull request is merged and the checkout holds nothing the request does not. There is
+  // no step left, so the bar goes rather than standing there saying so. The request itself is not
+  // lost with it — the details strip under the session's menu carries it.
+  const onBranchNow = handoff.handoff
+  const landed =
+    live === false &&
+    (onBranchNow?.landed === true ||
+      ((onBranchNow?.merged === true || checkout?.pr?.state === 'MERGED') && !onBranchNow?.pendingFiles?.length && onBranchNow?.movedPastPr !== true))
   const lastSay = useRef<{ agentId: string | null; say: boolean }>({ agentId: null, say: false })
   const held = lastSay.current.agentId === agentId && lastSay.current.say
   const say =
-    committing ||
-    checkout?.pr !== undefined ||
-    (live === false ? (handoff.loaded ? handoffSays(handoff.handoff) || held : held) : checkout?.checkout?.dirty === true || held)
+    !landed &&
+    (committing ||
+      checkout?.pr !== undefined ||
+      (live === false ? (handoff.loaded ? handoffSays(handoff.handoff) || held : held) : checkout?.checkout?.dirty === true || held))
   lastSay.current = { agentId, say }
   // What the bar is about right now, so the ✕ hides this and not the next thing the agent does:
   // the run, its branch, how much work is on it, and where that work has got to.
@@ -367,7 +376,7 @@ export function AgentView({
           />
           {/* The always-available session-details strip: agent + spend (#322). What the run changed is
               in the Changes pane, not here. */}
-          {open && <AgentDetails events={shown} card={card} />}
+          {open && <AgentDetails events={shown} card={card} {...(checkout?.pr ? { pr: checkout.pr } : {})} />}
           {/* A GitHub Actions run replays in a burst at the end (#1053), so the live feed looks stalled:
               say the wait is expected and link through to the live Actions run. */}
           <ActionsRunNotice target={target} events={shown} live={working} />

@@ -8,7 +8,8 @@ import { modelName, useModels } from '../lib/models.js'
 // model by the name its agent gives it ("Opus 5.5" for `opus`),
 // and what it has spent so far, added up from the run's record: one usage event per turn the coding agent priced (#322), one
 // result per turn it answered. The record keeps no token counts, so none are shown. The git
-// branch / PR / changes sit in the bar row right above this, so they are not repeated here.
+// branch / changes sit in the bar row right above this, so they are not repeated here. The pull
+// request is, because the bar goes once the work is landed and the request would go with it.
 
 /** What the record says the agent spent: the priced turns added up, and the turns it answered. */
 function spend(events: OpenAgentEvent[]): { costUsd?: number; turns: number } {
@@ -33,7 +34,7 @@ function Fact({ label, value }: { label: string; value: string }) {
   )
 }
 
-export function AgentDetails({ events, card }: { events: OpenAgentEvent[]; card?: AgentDetailsCard | undefined }) {
+export function AgentDetails({ events, card, pr }: { events: OpenAgentEvent[]; card?: AgentDetailsCard | undefined; pr?: { number: number; url: string; state: string } | undefined }) {
   const picked = driverFromImpl(card?.driver)
   const agent = picked ? DRIVER_LABELS[picked] : card?.driver
   const models = useModels()
@@ -46,6 +47,15 @@ export function AgentDetails({ events, card }: { events: OpenAgentEvent[]; card?
       {model && <Fact label="Model" value={model} />}
       {costUsd !== undefined && <Fact label="Spent" value={`$${costUsd.toFixed(2)}`} />}
       {turns > 0 && <Fact label="Turns" value={String(turns)} />}
+      {pr && (
+        <span className="flex items-baseline gap-1.5">
+          <span className="text-muted-foreground/70">Pull request</span>
+          <a href={pr.url} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+            #{pr.number}
+          </a>
+          <span className="text-muted-foreground/70">{pr.state.toLowerCase()}</span>
+        </span>
+      )}
       {costUsd === undefined && turns === 0 && <span className="text-muted-foreground/70">No spend reported yet</span>}
     </div>
   )
