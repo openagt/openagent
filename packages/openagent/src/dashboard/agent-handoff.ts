@@ -94,6 +94,24 @@ export interface AgentHandoff {
    */
   movedPastPr?: boolean
   /**
+   * What a pull request for this branch would carry beyond the run's own work: the branch measured
+   * against the project's default branch, for a run started from another branch.
+   *
+   * A run started from a branch of this machine sits on that branch's unlanded commits, and its own
+   * work is measured from where it began ({@link base}) — which is the right count of what the run
+   * did. The pull request, though, goes to the default branch, so that branch's work rides along in
+   * it. Absent when a pull request would carry exactly what the run did, which is every run started
+   * from the branch the project starts agents from.
+   */
+  carries?: {
+    /** The branch a pull request would go to, as the branches provider names it. */
+    base: string
+    commits: number
+    files: number
+    insertions: number
+    deletions: number
+  }
+  /**
    * The files the session changed and never committed, read from its own checkout (#1173).
    *
    * The agent is told to commit its work, but one that ended without doing so holds its whole
@@ -312,7 +330,32 @@ export async function readRunHandoff(
   const handoff = await readAgentHandoff(cwd, at, { since: agent.startedAt, ...(agent.baseCommit !== undefined ? { from: agent.baseCommit } : {}), ...deps, ...noPr })
   if (!handoff) return undefined
   if (agent.landed !== undefined) return { ...handoff, landed: true }
-  return !handoff.exists && leftNothing(agent) ? { ...handoff, unchanged: true } : handoff
+  if (!handoff.exists) return leftNothing(agent) ? { ...handoff, unchanged: true } : handoff
+  // Only a run that began somewhere other than the default branch can carry more than its own
+  // work, and only its own branch can be measured again: the extra read is skipped for every
+  // other run.
+  const carries = agent.baseCommit !== undefined ? await carriedToDefault(cwd, handoff, deps) : undefined
+  return carries ? { ...handoff, carries } : handoff
+}
+
+/**
+ * What a pull request for this run's branch would carry, when that is more than the run's own work
+ * ({@link AgentHandoff.carries}).
+ *
+ * The same read as the handoff's, measured from the project's default branch rather than from the
+ * commit the run began at: a run started from a local branch sits on that branch's unlanded commits,
+ * and a pull request takes the whole stack. Nothing when the two reads agree — the run started from
+ * the default branch after all — and nothing when the branch cannot be measured against it.
+ */
+async function carriedToDefault(cwd: string, own: AgentHandoff, deps: AgentHandoffDeps): Promise<AgentHandoff['carries']> {
+  const branches = await (deps.branches ?? projectBranches)(cwd).catch(() => undefined)
+  if (!branches) return undefined
+  const [state] = await branches.show([own.branch]).catch(() => [])
+  if (!state?.exists || state.base === undefined) return undefined
+  const insertions = state.files.reduce((sum, file) => sum + file.insertions, 0)
+  const deletions = state.files.reduce((sum, file) => sum + file.deletions, 0)
+  if (state.files.length === own.files.length && insertions === own.insertions && deletions === own.deletions) return undefined
+  return { base: state.base, commits: state.commits.length, files: state.files.length, insertions, deletions }
 }
 
 /**

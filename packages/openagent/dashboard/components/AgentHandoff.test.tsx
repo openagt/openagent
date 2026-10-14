@@ -513,6 +513,24 @@ describe('run handoff (#799)', () => {
     expect(handoffSays({ ...worked, exists: false, landed: true } as never)).toBe(true)
   })
 
+  test('a run started from another branch says what a pull request would carry over main, beside the button', async () => {
+    onAgentHandoff.mockResolvedValue({ ...worked, carries: { base: 'origin/main', commits: 2, files: 43, insertions: 529, deletions: 0 } })
+    render(<Harness />)
+    await waitFor(() => expect(screen.getByText('43 files over main')).toBeTruthy())
+    // The numbers themselves are the hover; the row says the one that matters.
+    expect(screen.getByTitle("A pull request against main carries 2 commits · 43 files · +529 −0, this run's work among them.")).toBeTruthy()
+    // Nothing is blocked by it: the button is where it was, and the run's own work is still counted.
+    expect(screen.getByText('Open PR')).toBeTruthy()
+    expect(screen.getByLabelText('1 commit · 1 file')).toBeTruthy()
+  })
+
+  test('a run started from the branch the project starts from says nothing of the kind', async () => {
+    onAgentHandoff.mockResolvedValue(worked)
+    render(<Harness />)
+    await waitFor(() => expect(screen.getByText('Open PR')).toBeTruthy())
+    expect(screen.queryByText(/over main/)).toBeNull()
+  })
+
   test("a run whose turn has just ended has its branch read every second, not every fifteen", async () => {
     // A clean run makes its own last commit as it cleans up, after its turn has ended: the read
     // taken the moment it ends answers for a branch with nothing on it yet, and waiting fifteen

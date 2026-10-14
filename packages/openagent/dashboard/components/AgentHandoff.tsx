@@ -239,6 +239,7 @@ export function HandoffActions({
   const openPr = (draft: boolean) => act('pr', () => sendOpenPullRequest(projectId, agentId, { draft }), 'Could not open the pull request.')
   return (
     <>
+      {handoff.carries && <Carries carries={handoff.carries} />}
       <span className="inline-flex">
         <Button
           size="xs"
@@ -276,6 +277,26 @@ export function HandoffActions({
           </DropdownMenu>
       </span>
     </>
+  )
+}
+
+/**
+ * What a pull request would carry beyond the run's own work, beside the button that opens it: the
+ * run started from a branch of this machine, and that branch's own unlanded commits go up with it.
+ *
+ * Said, never blocked: the pull request is still one click, and this is the one place a person can
+ * see before the click that it takes more than this run's changes. The counts the bar already shows
+ * are the run's own work, measured from where it began, and both numbers are true — which is
+ * exactly why the second one has to be said out loud.
+ */
+function Carries({ carries }: { carries: NonNullable<AgentHandoff['carries']> }) {
+  const base = mainBranchName(carries.base)
+  const files = `${carries.files} file${carries.files === 1 ? '' : 's'}`
+  const commits = `${carries.commits} commit${carries.commits === 1 ? '' : 's'}`
+  return (
+    <Reason title={`A pull request against ${base} carries ${commits} · ${files} · +${carries.insertions} −${carries.deletions}, this run's work among them.`}>
+      {files} over {base}
+    </Reason>
   )
 }
 
