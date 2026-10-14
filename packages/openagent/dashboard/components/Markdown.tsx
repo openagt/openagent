@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react'
+import { createContext, Fragment, useContext, type ReactNode } from 'react'
 
 // A tiny, dependency-free Markdown renderer for an agent's replies, the surfaced PLAN/TODO docs
 // and the agent's pushed views (#441). Builds React nodes (never injects HTML), so agent-written
@@ -8,10 +8,11 @@ import { Fragment, type ReactNode } from 'react'
 // javascript: smuggling), and pipe tables (#869 — an agent comparing options or listing files
 // reaches for one, and it rendered as raw pipes). Anything else falls through as a paragraph.
 // `compact` shrinks everything a notch (text-xs, smaller headings) so a reply reads at the density
-// of the surrounding event log rather than a full document.
+// of the surrounding event log rather than a full document. Otherwise it is set as Claude Code on
+// the web sets an answer: lines 20px apart, paragraphs a little further.
 export function Markdown({ text, compact = false }: { text: string; compact?: boolean }) {
   return (
-    <div className={compact ? 'space-y-1.5 text-xs leading-relaxed' : 'space-y-2 text-sm leading-relaxed'}>
+    <div className={compact ? 'space-y-1.5 text-xs leading-relaxed' : 'space-y-2.5 text-sm leading-5'}>
       {renderBlocks(text.replace(/\r\n/g, '\n').split('\n'), compact)}
     </div>
   )
@@ -194,11 +195,11 @@ function renderList(lines: string[], compact: boolean, depth: number, key: numbe
     if (items.length === 0) return
     lists.push(
       ordered ? (
-        <ol key={`${key}-${lists.length}`} start={start} className="ml-5 list-decimal space-y-1 marker:text-muted-foreground">
+        <ol key={`${key}-${lists.length}`} start={start} className="ml-6 list-decimal space-y-1 [&>li]:pl-1">
           {items}
         </ol>
       ) : (
-        <ul key={`${key}-${lists.length}`} className="ml-4 list-disc space-y-1 marker:text-muted-foreground">
+        <ul key={`${key}-${lists.length}`} className="ml-6 list-disc space-y-1 [&>li]:pl-1">
           {items}
         </ul>
       ),
@@ -355,15 +356,34 @@ function renderBlocks(lines: string[], compact = false, depth = 0): ReactNode[] 
   return blocks
 }
 
-// Inline spans: `code`, [text](url), **bold**, *italic*, bare URLs. Applied left-to-right,
+// Inline spans: `code`, [text](url), **bold**, *italic*, bare URLs, `#12`. Applied left-to-right,
 // non-overlapping; code wins over the rest so a URL inside backticks stays literal, and what bold
 // or italic wraps is read the same way, so a file name in bold is still code. Links
 // render only for http(s) targets. A link to a file path (no scheme: `/repo/a.md`, `src/a.ts`)
 // is the file's name as inline code with the path on hover: the browser cannot open a file, and
 // the raw `[a.md](/repo/a.md)` read as noise. Anything else stays plain text.
 const LINK_CLASS = 'text-primary underline underline-offset-2 break-all'
-// A name in the text (a file, a branch, a command) is framed, so it stands out from the sentence around it.
-const CODE_CLASS = 'rounded border border-border bg-muted px-1 py-px text-xs'
+// A name in the text (a file, a branch, a command) is framed and coloured, so it stands out from
+// the sentence around it, as Claude Code on the web sets one.
+const CODE_CLASS = 'rounded-[5px] border-[0.5px] border-foreground/10 bg-foreground/5 px-[3px] py-px text-[0.9em] text-(--code-foreground)'
+// `#12` as a link: the issue or pull request of that number, on the project's GitHub page.
+const ISSUE_CLASS = 'whitespace-nowrap rounded bg-primary/10 px-1.5 text-primary hover:bg-primary/15'
+
+/**
+ * Where `#12` in an answer leads: the project's page on GitHub, under which `issues/12` opens the
+ * issue or the pull request of that number. Given by the agent's page; without it `#12` is text.
+ */
+export const IssueLinks = createContext<string | undefined>(undefined)
+
+function IssueRef({ number }: { number: string }) {
+  const home = useContext(IssueLinks)
+  if (!home) return `#${number}`
+  return (
+    <a href={`${home}/issues/${number}`} target="_blank" rel="noreferrer" className={ISSUE_CLASS}>
+      #{number}
+    </a>
+  )
+}
 
 function link(href: string, label: string, key: number): ReactNode {
   return (
@@ -375,7 +395,7 @@ function link(href: string, label: string, key: number): ReactNode {
 
 function inline(text: string): ReactNode {
   const parts: ReactNode[] = []
-  const re = /(`[^`]+`|\[[^\]]+\]\((?:https?:\/\/)?[^\s):]+\)|\*\*[^*]+\*\*|\*[^*]+\*|https?:\/\/[^\s<>)\]]+)/g
+  const re = /(`[^`]+`|\[[^\]]+\]\((?:https?:\/\/)?[^\s):]+\)|\*\*[^*]+\*\*|\*[^*]+\*|https?:\/\/[^\s<>)\]]+|(?<![\w/&#])#\d+\b)/g
   let last = 0
   let m: RegExpExecArray | null
   let key = 0
@@ -396,6 +416,7 @@ function inline(text: string): ReactNode {
       else parts.push(<Fragment key={key++}>{token}</Fragment>)
     } else if (token.startsWith('**')) parts.push(<strong key={key++}>{inline(token.slice(2, -2))}</strong>)
     else if (token.startsWith('*')) parts.push(<em key={key++}>{inline(token.slice(1, -1))}</em>)
+    else if (token.startsWith('#')) parts.push(<IssueRef key={key++} number={token.slice(1)} />)
     else parts.push(link(token, token, key++))
     last = m.index + token.length
   }
