@@ -1,4 +1,4 @@
-import { appendFile, mkdir, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { DriverEvent } from './types.js'
 
@@ -166,7 +166,10 @@ export class SessionLog {
       this.partial = undefined
       if (newest === undefined) return
       this.liveWritten = true
-      await writeFile(this.livePath, newest)
+      // Written aside and moved over the old one: a watcher reading the file between a write's
+      // emptying it and its filling it read nothing, and the page lost the message for a frame.
+      await writeFile(`${this.livePath}.next`, newest)
+      await rename(`${this.livePath}.next`, this.livePath)
     })
   }
 
