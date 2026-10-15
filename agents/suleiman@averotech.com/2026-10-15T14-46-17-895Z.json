@@ -1,0 +1,16 @@
+{
+  "id": "2026-10-15T14-46-17-895Z",
+  "startedAt": "2026-10-15T14:46:18.007Z",
+  "status": "running",
+  "intent": "open google and search for open agent",
+  "driver": "claude-code",
+  "model": "opus",
+  "caller": {
+    "runner": {
+      "host": "Suleimans-MacBook-Pro.local",
+      "pid": 16606,
+      "publish": "merge"
+    },
+    "host": "Suleimans-MacBook-Pro.local"
+  }
+}
