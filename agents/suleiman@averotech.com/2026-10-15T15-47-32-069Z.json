@@ -1,0 +1,15 @@
+{
+  "id": "2026-10-15T15-47-32-069Z",
+  "startedAt": "2026-10-15T15:47:32.501Z",
+  "status": "running",
+  "intent": "Create new test.md conatin “hello world”",
+  "driver": "claude-code",
+  "model": "sonnet",
+  "caller": {
+    "runner": {
+      "host": "ubuntu-s-1vcpu-2gb-fra1",
+      "pid": 2442558
+    },
+    "host": "ubuntu-s-1vcpu-2gb-fra1"
+  }
+}
