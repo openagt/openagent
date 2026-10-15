@@ -1,15 +1,24 @@
 {
   "id": "2026-10-15T15-47-32-069Z",
   "startedAt": "2026-10-15T15:47:32.501Z",
-  "status": "running",
+  "endedAt": "2026-10-15T15:47:45.488Z",
+  "status": "done",
   "intent": "Create new test.md conatin “hello world”",
   "driver": "claude-code",
-  "model": "sonnet",
+  "model": "claude-sonnet-5-5",
+  "branch": "agent-2026-10-15T15-47-32-069Z",
+  "cost": 0.0322248,
   "caller": {
     "runner": {
       "host": "ubuntu-s-1vcpu-2gb-fra1",
-      "pid": 2442558
+      "pid": 2442558,
+      "baseCommit": "5ffd1ca948e70f8c4c2c8fd3d3ad9483953793cc"
     },
-    "host": "ubuntu-s-1vcpu-2gb-fra1"
+    "pid": 2442558,
+    "host": "ubuntu-s-1vcpu-2gb-fra1",
+    "baseCommit": "5ffd1ca948e70f8c4c2c8fd3d3ad9483953793cc",
+    "kind": "prompt",
+    "workspace": "/home/openagent/projects/openagent/.branches/agent-2026-10-15T15-47-32-069Z",
+    "sessionId": "aa017bc2-4736-4621-b7d6-8316b2bf2835"
   }
 }
