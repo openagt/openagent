@@ -5,3 +5,30 @@
 @import 'tailwindcss/utilities' layer(utilities);
 @import '../../openagent/dashboard/module/theme.css';
 @source '.';
+
+/* The agent's own pointer on the picture (BrowserPanel.tsx): an arrow where it last clicked or
+   typed, and a ring that opens once around that place as it arrives, so the move is seen and the
+   page is not left pulsing. The animation is named, never a shorthand: a minifier reads a
+   nameless one as none. Still, for a reader who asked for less motion. */
+.agent-pointer-ring {
+  animation-name: agent-pointer-ring;
+  animation-duration: 0.7s;
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  animation-fill-mode: forwards;
+}
+@keyframes agent-pointer-ring {
+  from {
+    opacity: 0.8;
+    scale: 0.25;
+  }
+  to {
+    opacity: 0;
+    scale: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-pointer-ring {
+    animation-name: none;
+    opacity: 0;
+  }
+}

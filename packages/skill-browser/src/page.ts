@@ -136,22 +136,29 @@ async function locate(page: CdpSession, ref: number): Promise<{ x: number; y: nu
   return point
 }
 
+/** Where on the page something happened, for whoever watches to be shown the agent's own pointer. */
+export interface Point {
+  x: number
+  y: number
+}
+
 /** A real mouse click at the element's middle, so the page sees what a person's click makes. */
-export async function click(page: CdpSession, ref: number): Promise<void> {
+export async function click(page: CdpSession, ref: number): Promise<Point> {
   const { x, y } = await locate(page, ref)
   const base = { x, y, button: 'left', clickCount: 1 }
   await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y })
   await page.send('Input.dispatchMouseEvent', { ...base, type: 'mousePressed' })
   await page.send('Input.dispatchMouseEvent', { ...base, type: 'mouseReleased' })
   await settle(page)
+  return { x, y }
 }
 
 /**
  * Put `text` in element `ref`, replacing what it held. A `select` takes the option whose text or
  * value is `text`; anything else is focused, its content selected, and the text typed over it.
  */
-export async function type(page: CdpSession, ref: number, text: string): Promise<void> {
-  await locate(page, ref)
+export async function type(page: CdpSession, ref: number, text: string): Promise<Point> {
+  const at = await locate(page, ref)
   const outcome = await evaluate<string>(
     page,
     `(() => {
@@ -182,10 +189,14 @@ export async function type(page: CdpSession, ref: number, text: string): Promise
       return document.activeElement === el ? 'focused' : 'element [${ref}] does not take the focus'
     })()`,
   )
-  if (outcome === 'set') return settle(page)
+  if (outcome === 'set') {
+    await settle(page)
+    return at
+  }
   if (outcome !== 'focused') throw new PageError(outcome)
   await page.send('Input.insertText', { text })
   await settle(page)
+  return at
 }
 
 /** The keys `press` knows, as DevTools key events. */
@@ -208,6 +219,27 @@ export async function press(page: CdpSession, key: string): Promise<void> {
   await page.send('Input.dispatchKeyEvent', { ...event, type: 'keyDown' })
   await page.send('Input.dispatchKeyEvent', { ...event, type: 'keyUp' })
   await settle(page)
+}
+
+/**
+ * What the pointer looks like at a point of the page: the CSS cursor the page would show there,
+ * for the picture a person watches to show the same. `auto` is the browser's own choice, which is
+ * an I-beam where there are words to select and the plain arrow elsewhere; a cursor the page gave
+ * a picture of its own is the plain arrow, since no page picks what a watcher's browser fetches.
+ */
+export async function cursorAt(page: CdpSession, x: number, y: number): Promise<string> {
+  return evaluate<string>(
+    page,
+    `(() => {
+      const el = document.elementFromPoint(${x}, ${y})
+      if (!el) return 'default'
+      const said = getComputedStyle(el).cursor
+      if (said !== 'auto') return said
+      const range = document.caretRangeFromPoint ? document.caretRangeFromPoint(${x}, ${y}) : null
+      const node = range && range.startContainer
+      return node && node.nodeType === 3 && (node.textContent || '').trim() ? 'text' : 'default'
+    })()`,
+  ).catch(() => 'default')
 }
 
 /** The visible part of the page as PNG bytes. */

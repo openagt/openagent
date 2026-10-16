@@ -2,12 +2,20 @@ import { KEYS } from './page.js'
 import type { CdpSession } from './cdp.js'
 
 /**
- * What a person watching the screen sends back (a click, a scroll, typing, the address bar's
+ * What a person watching the screen sends back (their mouse, a scroll, typing, the address bar's
  * buttons), and the DevTools calls it becomes. Anything not recognized becomes no call at all: a
  * malformed request never reaches Chrome.
+ *
+ * The mouse is sent as a mouse, not as clicks: where it moved, when it went down and when it came
+ * up. So the page hovers under it, a press and a drag are a press and a drag (a slider moves,
+ * words are selected), and a click is what a down and an up at one place already make. `leave`
+ * says the pointer left the picture, so what it hovered stops hovering.
  */
 export type ScreenInput =
-  | { type: 'click'; x: number; y: number }
+  | { type: 'move'; x: number; y: number; held?: boolean }
+  | { type: 'down'; x: number; y: number; clicks?: number }
+  | { type: 'up'; x: number; y: number; clicks?: number }
+  | { type: 'leave' }
   | { type: 'scroll'; x: number; y: number; deltaY: number }
   | { type: 'text'; text: string }
   | { type: 'key'; key: string }
@@ -21,17 +29,38 @@ export interface CdpCall {
   params: Record<string, unknown>
 }
 
+/** Where a pointer says it is, when it says a place at all. */
+function place(input: { x: number; y: number }): { x: number; y: number } | undefined {
+  return Number.isFinite(input.x) && Number.isFinite(input.y) ? { x: input.x, y: input.y } : undefined
+}
+
+/** How many clicks an input says, for the page to tell a click from a double one: one to three. */
+function clicks(said: number | undefined): number {
+  return said !== undefined && Number.isInteger(said) && said >= 1 && said <= 3 ? said : 1
+}
+
 /** The calls one input maps to; `back` and `forward` need the history, so they are the caller's. */
 export function inputCalls(input: ScreenInput): CdpCall[] {
   switch (input?.type) {
-    case 'click': {
-      if (!Number.isFinite(input.x) || !Number.isFinite(input.y)) return []
-      const base = { x: input.x, y: input.y, button: 'left', clickCount: 1 }
-      return [
-        { method: 'Input.dispatchMouseEvent', params: { ...base, type: 'mousePressed' } },
-        { method: 'Input.dispatchMouseEvent', params: { ...base, type: 'mouseReleased' } },
-      ]
+    case 'move': {
+      const at = place(input)
+      if (!at) return []
+      // A move with the button held is a drag: the page is told which button, as a mouse does.
+      const held = input.held === true
+      return [{ method: 'Input.dispatchMouseEvent', params: { ...at, type: 'mouseMoved', button: held ? 'left' : 'none', buttons: held ? 1 : 0 } }]
     }
+    case 'down': {
+      const at = place(input)
+      return at ? [{ method: 'Input.dispatchMouseEvent', params: { ...at, type: 'mousePressed', button: 'left', buttons: 1, clickCount: clicks(input.clicks) } }] : []
+    }
+    case 'up': {
+      const at = place(input)
+      return at ? [{ method: 'Input.dispatchMouseEvent', params: { ...at, type: 'mouseReleased', button: 'left', buttons: 0, clickCount: clicks(input.clicks) } }] : []
+    }
+    case 'leave':
+      // DevTools has no "the mouse left": a move to a point off the page is one, and what the
+      // page hovered stops hovering.
+      return [{ method: 'Input.dispatchMouseEvent', params: { type: 'mouseMoved', x: -1, y: -1, button: 'none', buttons: 0 } }]
     case 'scroll':
       if (!Number.isFinite(input.x) || !Number.isFinite(input.y) || !Number.isFinite(input.deltaY)) return []
       return [{ method: 'Input.dispatchMouseEvent', params: { type: 'mouseWheel', x: input.x, y: input.y, deltaX: 0, deltaY: input.deltaY } }]

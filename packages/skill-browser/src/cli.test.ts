@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { resolveChromePath } from './chrome.js'
 import { runCli, stateFile } from './cli.js'
+import { AFTER_RUN_MS, shortAddress } from './host.js'
 import { absoluteUrl } from './page.js'
 import { inputCalls } from './screen.js'
 import { CONSOLE, FRAME, jpegSize, readConsoleLine, readState, STATE, streamReader, type ConsoleLine } from './stream.js'
@@ -101,7 +102,8 @@ test('the agent opens a page, reads it, types, picks, clicks and presses; the ch
 
     const [screen] = await lines(diary)
     assert.equal(screen?.['kind'], 'screen')
-    assert.equal(screen?.['label'], `browser · ${url}/`)
+    // The address as a line of a chat says it: no scheme, and the root path is no path.
+    assert.equal(screen?.['label'], `browser · ${new URL(url).host}`)
     const view = String(screen?.['url'])
     const screenAt = (path: string, token = new URL(view).searchParams.get('t')) => `${new URL(view).origin}${path}?t=${token}`
 
@@ -145,7 +147,7 @@ test('the agent opens a page, reads it, types, picks, clicks and presses; the ch
   }
 })
 
-test('the run ending closes its browser, a question does not, and the ended run gets no more lines', needsChrome, async () => {
+test('the browser outlives its run, for the person, and the diary says how long for', needsChrome, async () => {
   const { url, server } = await site()
   const { cwd, diary, cli } = await project()
   try {
@@ -154,13 +156,21 @@ test('the run ending closes its browser, a question does not, and the ended run 
     await appendFile(diary, JSON.stringify({ kind: 'ended', status: 'waiting' }) + '\n')
     await new Promise(r => setTimeout(r, 2500))
     assert.equal((await cli('read')).code, 0, 'still open while the run waits')
+    assert.ok(!(await lines(diary)).some(line => line['until'] !== undefined), 'a run that only waits says nothing about keeping it')
     // The line arrives in two writes, the way a check can catch a writer halfway.
     const ended = JSON.stringify({ kind: 'ended', status: 'done' }) + '\n'
     await appendFile(diary, ended.slice(0, 9))
     await new Promise(r => setTimeout(r, 2500))
     await appendFile(diary, ended.slice(9))
-    assert.ok(await until(() => gone(stateFile(cwd))), 'the browser closes once the diary says the run ended')
-    assert.equal((await lines(diary)).at(-1)?.['kind'], 'ended')
+    const kept = async () => (await lines(diary)).find(line => line['kind'] === 'screen' && line['until'] !== undefined)
+    assert.ok(await until(async () => (await kept()) !== undefined), 'the run ending, the browser says it stays for the person')
+    const stays = Date.parse(String((await kept())!['until']) ) - Date.now()
+    assert.ok(stays > AFTER_RUN_MS - 60_000 && stays <= AFTER_RUN_MS, `it stays about as long as it says, not ${stays}ms`)
+    assert.equal((await cli('read')).code, 0, 'the run ending does not take the page from the person')
+    // Closed by hand, the diary says so, so nobody is shown a browser that is gone.
+    assert.equal((await cli('close')).code, 0)
+    assert.ok(await until(() => gone(stateFile(cwd))), 'the state file goes with the browser')
+    assert.equal((await lines(diary)).at(-1)?.['ended'], true)
   } finally {
     await cli('close')
     server.close()
@@ -342,6 +352,23 @@ test('a command before open refuses, close has nothing to do; a wrong command li
   assert.equal((await cli('fly', 'away')).code, 2)
 })
 
+test('the address a screen says it shows is one line of a chat, whatever the page did to it', () => {
+  // The address of the page Google sends a headless browser to, as it came back from a real run:
+  // three hundred characters, which wrapped over five lines of the chat.
+  const captcha =
+    'https://www.google.com/sorry/index?continue=https://www.google.com/search%3Fq%3Dlatest%2BAI%2Bnews%26hl%3Den%26sei%3DwSPSasefGLriwN4Pk7WC0Ak&hl=en&q=EhAqAKBBJWUFACXp5c-MNL9gGMHHyNYGIjBZF4lzX3wO83Egus-ALJqWj9cN7nQvyPi1BXOQGyV2V2ROxo9kYWnq0mHOJTmB35cyAVJaAUNgrKSTkYP6v6Ic'
+  assert.equal(shortAddress(captcha), 'www.google.com/sorry/index?…')
+  assert.equal(shortAddress('http://localhost:3000/'), 'localhost:3000')
+  assert.equal(shortAddress('http://localhost:3000/settings/machines'), 'localhost:3000/settings/machines')
+  assert.equal(shortAddress('https://example.test/a#top'), 'example.test/a#…')
+  // Longer than a line even without its query: cut in the middle, where a path says least.
+  const deep = `https://example.test/${'part/'.repeat(20)}end`
+  assert.equal(shortAddress(deep).length, 56)
+  assert.match(shortAddress(deep), /^example\.test\/part\/.*….*end$/)
+  // Not an address at all: its own text, cut the same way.
+  assert.equal(shortAddress('about:blank'), 'about:blank')
+})
+
 test('an address without a scheme is http; other schemes are refused', () => {
   assert.equal(absoluteUrl('localhost:3000/a'), 'http://localhost:3000/a')
   assert.equal(absoluteUrl('https://example.com'), 'https://example.com')
@@ -349,9 +376,16 @@ test('an address without a scheme is http; other schemes are refused', () => {
   assert.throws(() => absoluteUrl('javascript:alert(1)'), /only http and https/)
 })
 
-test('the screen passes on only input it knows', () => {
-  assert.equal(inputCalls({ type: 'click', x: 1, y: 2 }).length, 2)
-  assert.deepEqual(inputCalls({ type: 'click', x: Number.NaN, y: 2 }), [])
+test('the screen passes on only input it knows, and a person\'s mouse as a mouse', () => {
+  assert.deepEqual(inputCalls({ type: 'move', x: 1, y: 2 }), [{ method: 'Input.dispatchMouseEvent', params: { x: 1, y: 2, type: 'mouseMoved', button: 'none', buttons: 0 } }])
+  // A move with the button held is a drag: the page is told the button is down.
+  assert.deepEqual(inputCalls({ type: 'move', x: 1, y: 2, held: true })[0]?.params['buttons'], 1)
+  assert.deepEqual(inputCalls({ type: 'down', x: 1, y: 2 }), [{ method: 'Input.dispatchMouseEvent', params: { x: 1, y: 2, type: 'mousePressed', button: 'left', buttons: 1, clickCount: 1 } }])
+  assert.equal(inputCalls({ type: 'up', x: 1, y: 2, clicks: 2 })[0]?.params['clickCount'], 2, 'a second click in the same place selects a word')
+  assert.equal(inputCalls({ type: 'up', x: 1, y: 2, clicks: 9 })[0]?.params['clickCount'], 1, 'and nothing stranger than a triple click')
+  assert.equal(inputCalls({ type: 'leave' })[0]?.params['x'], -1, 'the pointer left the picture: the page hovers over nothing')
+  assert.deepEqual(inputCalls({ type: 'move', x: Number.NaN, y: 2 }), [])
+  assert.deepEqual(inputCalls({ type: 'down', x: 1, y: Number.POSITIVE_INFINITY }), [])
   assert.deepEqual(inputCalls({ type: 'navigate', url: 'file:///etc/passwd' }), [])
   assert.deepEqual(inputCalls({ type: 'key', key: 'F13' }), [])
   assert.deepEqual(inputCalls({ type: 'text', text: '' }), [])
