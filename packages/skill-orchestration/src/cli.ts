@@ -7,7 +7,8 @@ import { projectRoot } from '@openagt/skill-branches'
 import { isPidAlive, readyToRun, spawnRun, withdrawMarker, writeMarker } from '@openagt/agent-runner'
 import { parseSettings, readSettings, writeSettings } from './settings.js'
 import { cleanup } from './cleanup.js'
-import { Refused, landSubagent, listSubagents, readSubagent, savePlan, showPlan, startSubagent, stopSubagent, type SubagentDeps } from './subagents.js'
+import { runCommand } from './check.js'
+import { Refused, landSubagent, listSubagents, nextTasks, readSubagent, retrySubagent, savePlan, showPlan, startSubagent, stopSubagent, type Started, type SubagentDeps } from './subagents.js'
 
 /**
  * The `orchestration` command: JSON on stdout, one line for a person on stderr, and the exit code
@@ -22,14 +23,21 @@ export const USAGE = `usage: orchestration <command>
   plan              your saved plan, its tasks, its question, and whether the person approved it
   start --task <id> start a subagent on that task of your plan, on a branch started from yours, on the coding
                     agent and model the person set for the task's level; answers its id at once; refused until
-                    the person approved your saved plan, for a task of any uncertainty, and while as many of
-                    your subagents run as the person allows
+                    the person approved your saved plan, for a task of any uncertainty, for one whose \`Needs:\`
+                    tasks are not landed, and while as many of your subagents run as the person allows
+  next              every task of your plan and where it stands — landed, running, ended and not landed, waiting
+                    for another task, yours to do, or startable — and how many more subagents may run at once
+  retry <id> "<feedback>"
+                    another subagent on the task that one did, on a branch started from yours, told what to do
+                    differently; refused while that subagent is running, and by every rule start holds to
   settings          the person's settings for subagents on this machine
   settings <json>   save them whole: {"simple": {"driver", "model"}, "hard": {...}, "atOnce": <n>}, each optional
   list              your subagents, newest first
   read <id>         one subagent: how it stands, its branch, and its last reply as \`result\`
   stop <id>         stop a subagent that is running
-  land <id>         merge an ended subagent's branch into yours, then delete that branch
+  land <id>         merge an ended subagent's branch into yours, run the \`Check:\` line of the task it did, and
+                    the plan's own check when that was the last task, then delete that branch; a check that
+                    fails is refused with its output, and the merge and the branch stay
   cleanup           remove what this package left in the project: the settings file, then .orchestration/ and the rule hiding it from git once it is empty;
                     the command a dashboard asks for when a project is removed with its files
 
@@ -45,7 +53,7 @@ export interface CliIo {
 class Usage extends Error {}
 
 export async function runCli(argv: string[], io: CliIo, given: Partial<SubagentDeps> = {}): Promise<number> {
-  const deps: SubagentDeps = { git: nodeGitRunner(), host: hostname(), isAlive: isPidAlive, stop: pid => void process.kill(pid, 'SIGTERM'), ready: readyToRun, now: () => new Date(), mark: writeMarker, unmark: withdrawMarker, spawn: spawnRun, ...given }
+  const deps: SubagentDeps = { git: nodeGitRunner(), host: hostname(), isAlive: isPidAlive, stop: pid => void process.kill(pid, 'SIGTERM'), ready: readyToRun, now: () => new Date(), mark: writeMarker, unmark: withdrawMarker, spawn: spawnRun, run: runCommand, ...given }
   const [command, ...rest] = argv
   const run = command && Object.hasOwn(COMMANDS, command) ? COMMANDS[command] : undefined
   if (!run) {
@@ -97,9 +105,21 @@ const COMMANDS: Record<string, Command> = {
     const { values } = parse(args, { task: { type: 'string' } }, 0)
     const task = values.task?.trim()
     if (!task) throw new Usage('say which task of your plan to start with --task <id>')
-    const started = await startSubagent(await project(io.cwd, deps), io.env, { task }, deps)
-    if (started.uncommitted) io.stderr('your checkout has uncommitted changes: the subagent does not have them')
-    return { ok: true, ...started }
+    return said(await startSubagent(await project(io.cwd, deps), io.env, { task }, deps), io)
+  },
+
+  async next(args, io, deps) {
+    parse(args, {}, 0)
+    return { ok: true, ...(await nextTasks(await project(io.cwd, deps), io.env, deps)) }
+  },
+
+  async retry(args, io, deps) {
+    // The feedback is one argument of the main agent's own words, which may begin with a dash: it
+    // is taken as it stands and never read as an option.
+    const [id, feedback, ...more] = args
+    if (id === undefined || id.startsWith('-') || feedback === undefined || more.length > 0) throw new Usage('expected 2 argument(s): retry <id> "<what to do differently>"')
+    if (!feedback.trim()) throw new Usage('say in the second argument what the next subagent should do differently')
+    return said(await retrySubagent(await project(io.cwd, deps), io.env, id, feedback.trim(), deps), io)
   },
 
   async settings(args, io, deps) {
@@ -149,6 +169,13 @@ const COMMANDS: Record<string, Command> = {
     parse(args, {}, 0)
     return cleanup(await project(io.cwd, deps), deps.git)
   },
+}
+
+/** A subagent started, with what the agent is told beside it: neither of these stops a start. */
+function said(started: Started, io: CliIo): { ok: true } & Started {
+  if (started.uncommitted) io.stderr('your checkout has uncommitted changes: the subagent does not have them')
+  for (const other of started.sharedFiles ?? []) io.stderr(`${other.id} is running "${other.task}", which owns ${other.files.join(', ')} too: two agents writing one file conflict when you land the second`)
+  return { ok: true, ...started }
 }
 
 /** The project the working directory belongs to, even from inside a checkout under `.branches/`. */

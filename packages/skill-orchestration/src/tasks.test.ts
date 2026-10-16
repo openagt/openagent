@@ -70,6 +70,19 @@ test('taskId: the heading lowercased, one dash per run of anything else, a leadi
   )
 })
 
+test('parsePlan: a `Check:` line above the first task is the plan\'s own check, and no part of the context a subagent is told', () => {
+  const plan = parsePlan('# T\n\nWork in `src/`.\n\nCheck: `pnpm -w test`\n\n## Do it\n\nLevel: simple\nCheck: pnpm test\nUncertainty: 0\n')
+  assert.equal(plan.check, 'pnpm -w test')
+  assert.equal(plan.context, 'Work in `src/`.', 'the check line is out of the context')
+  assert.equal(plan.tasks[0]?.check, 'pnpm test', 'a task keeps its own check line')
+  assert.equal(taskText(plan, plan.tasks[0]!), 'Work in `src/`.\n\nDo it\n\nCheck your work with: pnpm test', 'the plan\'s check is nowhere in what a subagent is given')
+  assert.equal(parsePlan('check: pnpm verify\n\n## A\n').check, 'pnpm verify', 'whatever its case, and with no title above it')
+  const twice = parsePlan('# T\n\nCheck: one\nCheck: two\n\n## A\n')
+  assert.deepEqual([twice.check, twice.context], ['one', undefined], 'the first line is the check, and neither line is context')
+  assert.equal(parsePlan('# T\n\nThe prose.\n\n## A\n').check, undefined)
+  assert.equal(parsePlan('# T\n\nCheck:\n\n## A\n').check, undefined, 'a line that names no command is no check')
+})
+
 test('parsePlan: a key is read whatever its case and wherever it stands under the heading, and never twice', () => {
   const plan = parsePlan('## Do it\n\nFirst, read the README.\n\nlevel: HARD\nUNCERTAINTY: 2\nLevel: simple\nCheck: pnpm test\n')
   assert.deepEqual(plan.tasks[0], { id: 'do-it', name: 'Do it', level: 'hard', check: 'pnpm test', uncertainty: 2, body: 'First, read the README.' })

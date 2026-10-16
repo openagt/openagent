@@ -43,6 +43,23 @@ already made, and lists it in its pull request; for anything else it proposes an
   when unset; `start` is refused past it, and the main agent starts the next when it is told
   one ended. Picked over the command waiting for a free place, which keeps a process waiting,
   and over one limit for the whole machine.
+- `start` is refused for a task whose `Needs:` names a task that has not landed, and the refusal
+  says of each one whether nobody started it, it is running, or it ended and was not landed. Picked
+  over the skill file telling the main agent to wait for them: a rule that lives only as prose is
+  forgotten, and a subagent started early does its task against work that is not in its checkout.
+- Two running subagents whose tasks name the same file is said on `start`, not refused: the person
+  approved a plan that says so, and the main agent may have meant it. Picked over refusing, which
+  would make the main agent change an approved plan to start a task it was told to start.
+- `next` answers where every task of the plan stands — landed, running, ended and not landed,
+  waiting for a task that is not landed, the main agent's own, startable — and how many more
+  subagents may run at once. Picked over the main agent holding its plan's state in its head: it is
+  the scheduler of its own plan only as long as it remembers, and `start`'s refusals are the same
+  answer one task at a time, after the money is spent.
+- A subagent that failed is tried again with `retry <id> "<feedback>"`: a new subagent on the same
+  task, told what to do differently, on a branch started from the main agent's as any `start` is.
+  Picked over the main agent starting the task again by hand, which says nothing about what went
+  wrong, and over a retry carrying on from the failed subagent's branch: a retry is a clean attempt,
+  and the failed branch stays for the main agent to read.
 - The settings are this machine's, in a file the orchestration package keeps at the
   project's root, hidden from git, written by `orchestration settings`. Picked over the
   dashboard's own settings file, which a skill would have to know, and over the tracked
@@ -81,6 +98,12 @@ already made, and lists it in its pull request; for anything else it proposes an
   the subagent's branch is deleted. Picked over a squash per task, and over the skill file
   telling the agent to merge and delete by hand: a rule that lives only as prose is
   forgotten, and a branch would stay behind for every task.
+- `land` runs the `Check:` line of the task the subagent did, in the main agent's checkout and on
+  the merged work, and refuses with the command's output when it fails, leaving the merge in and the
+  subagent's branch alive. The land after which every task of the plan is landed runs the plan's own
+  check, the project's. Picked over landing whatever a subagent committed and finding out at the
+  pull request, and over the project's checks on every land, which pays for the whole project's
+  build and tests once per task and asks a half-landed plan to pass them.
 - `land` keeps the subagent's last commit, under `refs/landed/<run id>` on this machine,
   and on its record. Picked over the commit id alone: git drops the commit once the main
   agent's branch is squashed and deleted. Picked over saving the list of changed files:
