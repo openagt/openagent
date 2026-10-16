@@ -374,8 +374,84 @@ function codexArgument(item: Record<string, unknown>): string | undefined {
     return paths.length > 0 ? paths.join(', ') : undefined
   }
   if (typeof item['server'] === 'string' && typeof item['tool'] === 'string') return `${item['server']}.${item['tool']}`
+  // A call that names a tool and no server: a collab call, which says which operation it is
+  // (`spawnAgent`) and, in `agentsStates`, the agents it concerns. Without this the row read as a
+  // bare label with nothing beside it.
+  if (typeof item['tool'] === 'string' && item['tool'] !== '') {
+    const named = collabAgents(item)
+      .map(agent => agent.name)
+      .filter((name): name is string => name !== undefined)
+    return named.length > 0 ? `${item['tool']} ${named.join(', ')}` : item['tool']
+  }
   if (typeof item['query'] === 'string') return item['query']
   return undefined
+}
+
+/**
+ * The item types of a collab call — the app-server's own spelling, and the core protocol's name
+ * for the same thing, which `codex exec --json` emits. Our driver speaks app-server, so
+ * `collabAgentToolCall` is the one that arrives; the other is one string compare and costs nothing.
+ */
+const COLLAB_ITEMS = new Set(['collabAgentToolCall', 'collab_tool_call'])
+
+/**
+ * The collab operations after which the agents a call names are still working: `spawnAgent` starts
+ * an agent that goes on after the call is over, and `sendInput` and `resumeAgent` give a live one
+ * more to do. The rest end the row — `wait` comes back when the agent has answered and
+ * `closeAgent` ends it, and so does an operation we do not know: a row that never resolves is the
+ * bug this is here to avoid.
+ */
+const COLLAB_LIVE = new Set(['spawnAgent', 'sendInput', 'resumeAgent'])
+
+/** The agents a collab call concerns, one per `agentsStates` entry: what keys the row, the name, the role. */
+function collabAgents(item: Record<string, unknown>): { key?: string; name?: string; role?: string }[] {
+  const states = item['agentsStates']
+  if (!Array.isArray(states)) return []
+  return states
+    .map(raw => {
+      if (typeof raw !== 'object' || raw === null) return undefined
+      const state = raw as Record<string, unknown>
+      const said = (key: string): string | undefined => {
+        const value = state[key]
+        return typeof value === 'string' && value.trim() !== '' ? value : undefined
+      }
+      // The thread is the agent itself and the same across the call's notifications; the nickname
+      // is the fallback when an entry names no thread.
+      const key = said('agentThreadId') ?? said('threadId') ?? said('id') ?? said('agentNickname')
+      const name = said('agentNickname')
+      const role = said('agentRole')
+      if (key === undefined && name === undefined && role === undefined) return undefined
+      return { ...(key !== undefined ? { key } : {}), ...(name !== undefined ? { name } : {}), ...(role !== undefined ? { role } : {}) }
+    })
+    .filter((agent): agent is { key?: string; name?: string; role?: string } => agent !== undefined)
+}
+
+/**
+ * The subagents one collab item describes, one event each: the names and roles come from its
+ * `agentsStates`, the model and the prompt from the item. A row's id is the item's id and the
+ * agent's own thread joined, because one call can concern several agents and the item id alone
+ * could not tell them apart; an item whose agents cannot be read at all is still one row, for the
+ * status and the prompt it does carry.
+ */
+function codexSubagents(item: Record<string, unknown>, completed: boolean): Extract<DriverEvent, { type: 'subagent' }>[] {
+  const itemId = typeof item['id'] === 'string' && item['id'] !== '' ? item['id'] : undefined
+  const bad = item['status'] === 'failed' || item['status'] === 'declined'
+  const tool = item['tool']
+  const status: 'working' | 'ended' | 'failed' = bad ? 'failed' : !completed || (typeof tool === 'string' && COLLAB_LIVE.has(tool)) ? 'working' : 'ended'
+  const model = typeof item['model'] === 'string' && item['model'].trim() !== '' ? oneLine(item['model']) : undefined
+  const prompt = typeof item['prompt'] === 'string' && item['prompt'].trim() !== '' ? cutOutput(item['prompt']) : undefined
+  const common = { type: 'subagent' as const, status, ...(model !== undefined ? { model } : {}), ...(prompt !== undefined ? { prompt } : {}) }
+  const agents = collabAgents(item)
+  if (agents.length === 0) return itemId === undefined ? [] : [{ ...common, id: itemId }]
+  return agents.map((agent, index) => {
+    const key = agent.key ?? String(index)
+    return {
+      ...common,
+      id: itemId === undefined ? key : `${itemId}:${key}`,
+      ...(agent.name !== undefined ? { name: oneLine(agent.name) } : {}),
+      ...(agent.role !== undefined ? { role: oneLine(agent.role) } : {}),
+    }
+  })
 }
 
 /**
@@ -593,8 +669,17 @@ export class CodexAppServerParser implements AgentCliParser {
     // Any other item is the agent using a tool: its kind, and what it did.
     if (NOT_TOOLS.has(type)) return []
     const id = item['id']
-    if (!completed) return [{ type: 'action', label: type, ...callArgument(codexArgument(item)), ...(typeof id === 'string' ? { id } : {}) }]
-    if (typeof id !== 'string') return []
+    // A collab call is one or more subagents of the agent's own, said beside the call's own row.
+    const collab = COLLAB_ITEMS.has(type) ? codexSubagents(item, completed) : []
+    if (!completed) return [{ type: 'action', label: type, ...callArgument(codexArgument(item)), ...(typeof id === 'string' ? { id } : {}) }, ...collab]
+    if (typeof id !== 'string') return collab
+    // A collab call reports neither changed files nor printed output, so the paths below gave a
+    // finished one no `output` at all and a reader's row stayed live for ever (the rule that a
+    // call which gave nothing back has no `output` stands for every other tool).
+    if (COLLAB_ITEMS.has(type)) {
+      const failed = item['status'] === 'failed' || item['status'] === 'declined'
+      return [{ type: 'output', id, text: '', ...(failed ? { failed: true as const } : {}) }, ...collab]
+    }
     // A change to files that finished reports each file and its patch. A change that did not go
     // through changed none.
     if (Array.isArray(item['changes'])) {

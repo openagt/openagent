@@ -106,6 +106,44 @@ test('StreamJsonParser says what an edit or a write did to its file: lines added
   ])
 })
 
+// The `Agent` tool's input, as Claude Code's own schema defines it: `description` is the short
+// name of the task, `prompt` the task, `subagent_type` the kind of agent, `model` an override.
+test('StreamJsonParser says the subagent an Agent call starts, beside the call\'s own row, and ends it on the result', () => {
+  const p = new StreamJsonParser()
+  const assistant = (blocks: unknown[]) => JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: blocks } })
+  const result = (blocks: unknown[]) => JSON.stringify({ type: 'user', message: { role: 'user', content: blocks } })
+  const input = { description: 'Map landing page and dashboard serving', subagent_type: 'Explore', model: 'sonnet', prompt: 'Read how the pages are served.' }
+  assert.deepEqual(p.push(assistant([{ type: 'tool_use', id: 'toolu_a', name: 'Agent', input }])), [
+    // The row a reader shows today, unchanged...
+    { type: 'action', label: 'Agent', detail: 'Map landing page and dashboard serving', id: 'toolu_a' },
+    // ...and the subagent beside it, on the call's own id.
+    { type: 'subagent', id: 'toolu_a', status: 'working', name: 'Map landing page and dashboard serving', role: 'Explore', model: 'sonnet', prompt: 'Read how the pages are served.' },
+  ])
+  // Said whole again under the same id: a reader replaces the row rather than appending a second one.
+  assert.deepEqual(p.push(result([{ type: 'tool_result', tool_use_id: 'toolu_a', content: 'Mapped it' }])), [
+    { type: 'output', id: 'toolu_a', text: 'Mapped it' },
+    { type: 'subagent', id: 'toolu_a', status: 'ended', name: 'Map landing page and dashboard serving', role: 'Explore', model: 'sonnet', prompt: 'Read how the pages are served.' },
+  ])
+  // No `model` means the subagent runs on the parent's, which the CLI does not repeat: absent, not
+  // guessed. `Task` is the same tool in a Claude Code from before it was renamed.
+  assert.deepEqual(p.push(assistant([{ type: 'tool_use', id: 'toolu_b', name: 'Task', input: { description: 'Check the tests', subagent_type: 'general-purpose' } }])), [
+    { type: 'action', label: 'Task', detail: 'Check the tests', id: 'toolu_b' },
+    { type: 'subagent', id: 'toolu_b', status: 'working', name: 'Check the tests', role: 'general-purpose' },
+  ])
+  // A result that is an error failed the subagent, not just the call.
+  assert.deepEqual(p.push(result([{ type: 'tool_result', tool_use_id: 'toolu_b', content: 'No such agent type', is_error: true }])), [
+    { type: 'output', id: 'toolu_b', text: 'No such agent type', failed: true },
+    { type: 'subagent', id: 'toolu_b', status: 'failed', name: 'Check the tests', role: 'general-purpose' },
+  ])
+  // Any other tool's call is no subagent, and its result ends none.
+  assert.deepEqual(p.push(assistant([{ type: 'tool_use', id: 'toolu_c', name: 'Bash', input: { command: 'ls' } }])), [{ type: 'action', label: 'Bash', detail: 'ls', id: 'toolu_c' }])
+  assert.deepEqual(p.push(result([{ type: 'tool_result', tool_use_id: 'toolu_c', content: 'ok' }])), [{ type: 'output', id: 'toolu_c', text: 'ok' }])
+  // A long task is cut the way an output is, and a call with no id is left as the plain row it was.
+  const [, started] = p.push(assistant([{ type: 'tool_use', id: 'toolu_d', name: 'Agent', input: { description: 'Long one', prompt: 'p'.repeat(5000) } }]))
+  assert.ok(started?.type === 'subagent' && started.prompt?.includes('… 1000 characters cut …') && started.role === undefined)
+  assert.deepEqual(p.push(assistant([{ type: 'tool_use', name: 'Agent', input: { description: 'Nameless call' } }])), [{ type: 'action', label: 'Agent', detail: 'Nameless call' }])
+})
+
 test('StreamJsonParser passes the message being written as the text so far, each text block from empty', () => {
   const p = new StreamJsonParser()
   const piece = (event: object): string => JSON.stringify({ type: 'stream_event', event })

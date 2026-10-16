@@ -62,3 +62,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   person's login, made on the first run. Picked over leaving Codex's personal files in
   with a warning. Skills in `~/.agents/skills` have no switch: a warning, not a changed
   home directory, which would also move git's and gh's credentials.
+- One event says a subagent a coding agent started inside its own session — its name, its
+  role, its model and whether it is still working — and each adapter fills as much of it
+  as its own CLI says, leaving out what it does not. Picked over an event shape per coding
+  agent, which a reader would have to learn twice, and over leaving such a call as the
+  plain tool row it was: a row with no name on it, and on Codex one that never resolved.

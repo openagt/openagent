@@ -264,6 +264,40 @@ function stdinLines(text: string): string {
 const DETAIL_KEYS = ['skill', 'command', 'file_path', 'notebook_path', 'path', 'url', 'pattern', 'query', 'description', 'prompt']
 
 /**
+ * The tools Claude Code starts an in-process subagent with. `Agent` is its name today; `Task` is
+ * the same tool in versions before it was renamed. Both are accepted — one string compare, and an
+ * older CLI shows its subagents rather than nothing.
+ */
+const AGENT_TOOLS = new Set(['Agent', 'Task'])
+
+/**
+ * The subagent one `Agent` call starts, off the call's own input: `description` is the name Claude
+ * gave the task, `subagent_type` the kind of agent, `prompt` what it was told to do, and `model`
+ * only when the call overrode the parent's — absent means the parent's model, which the CLI does
+ * not repeat here, so we leave it out rather than guess.
+ */
+function claudeSubagent(id: string, input: unknown, status: 'working' | 'ended' | 'failed'): Extract<DriverEvent, { type: 'subagent' }> {
+  const fields = typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {}
+  const said = (key: string): string | undefined => {
+    const value = fields[key]
+    return typeof value === 'string' && value.trim() !== '' ? value : undefined
+  }
+  const name = said('description')
+  const role = said('subagent_type')
+  const model = said('model')
+  const prompt = said('prompt')
+  return {
+    type: 'subagent',
+    id,
+    status,
+    ...(name !== undefined ? { name: oneLine(name) } : {}),
+    ...(role !== undefined ? { role: oneLine(role) } : {}),
+    ...(model !== undefined ? { model: oneLine(model) } : {}),
+    ...(prompt !== undefined ? { prompt: cutOutput(prompt) } : {}),
+  }
+}
+
+/**
  * What an edit or a write did to its file, off the CLI's own account of the call: a file it made
  * holds its content's lines, all added; a file it changed holds a patch, whose `+` and `-` lines
  * are counted. Any other call's account names no file this way, and says nothing.
@@ -341,6 +375,8 @@ export class StreamJsonParser {
   private context?: number
   /** The text block being written, as far as its pieces have got. */
   private partial = ''
+  /** The subagents of this turn that have not ended yet, by their `Agent` call's id, as they were announced. */
+  private readonly subagents = new Map<string, Extract<DriverEvent, { type: 'subagent' }>>()
 
   /** Feed one line; returns the events it produced (may be empty). */
   push(line: string): DriverEvent[] {
@@ -426,6 +462,14 @@ export class StreamJsonParser {
         events.push({ type: 'text', text: block['text'] })
       } else if (block['type'] === 'tool_use' && typeof block['name'] === 'string') {
         events.push({ type: 'action', label: block['name'], ...callArgument(toolArgument(block['input'])), ...callSummary(block['input']), ...(typeof block['id'] === 'string' ? { id: block['id'] } : {}) })
+        // An `Agent` call is a subagent of its own: said beside its row, never instead of it. The
+        // call's id is the subagent's, so its result ends the same row; a call without one cannot
+        // be paired with its result and is left as the plain row it always was.
+        if (AGENT_TOOLS.has(block['name']) && typeof block['id'] === 'string') {
+          const started = claudeSubagent(block['id'], block['input'], 'working')
+          this.subagents.set(block['id'], started)
+          events.push(started)
+        }
       } else if (block['type'] === 'thinking' && typeof block['thinking'] === 'string' && block['thinking'].trim() !== '') {
         events.push({ type: 'thought', text: block['thinking'].trim() })
       }
@@ -437,7 +481,8 @@ export class StreamJsonParser {
    * The CLI's own line after a tool call: a `user` message whose `tool_result` blocks each name
    * the call (`tool_use_id`) and hold what it gave back. A result with no text says nothing. The
    * line of an edit or a write also says, beside the message, what the call did to the file
-   * (`tool_use_result`): that is the result's `changed`.
+   * (`tool_use_result`): that is the result's `changed`. The result of an `Agent` call also ends
+   * its subagent's row, failed when the result is an error.
    */
   private handleResults(obj: Record<string, unknown>): DriverEvent[] {
     const message = obj['message']
@@ -453,8 +498,16 @@ export class StreamJsonParser {
       if (block['type'] !== 'tool_result' || typeof block['tool_use_id'] !== 'string') continue
       const text = cutOutput(resultText(block['content']))
       const failed = block['is_error'] === true
-      if (text === '' && !failed && !change) continue
-      events.push({ type: 'output', id: block['tool_use_id'], text, ...(failed ? { failed: true as const } : {}), ...(change && !failed ? { changed: [change] } : {}) })
+      if (text !== '' || failed || change) {
+        events.push({ type: 'output', id: block['tool_use_id'], text, ...(failed ? { failed: true as const } : {}), ...(change && !failed ? { changed: [change] } : {}) })
+      }
+      // A subagent's call: its row is over. Said again whole, so a reader replaces the row by its
+      // id without having to remember what the first one carried.
+      const subagent = this.subagents.get(block['tool_use_id'])
+      if (subagent) {
+        this.subagents.delete(block['tool_use_id'])
+        events.push({ ...subagent, status: failed ? 'failed' : 'ended' })
+      }
     }
     return events
   }
