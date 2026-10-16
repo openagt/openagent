@@ -9,6 +9,12 @@ export type RunStatus = 'running' | 'done' | 'stopped' | 'failed' | 'waiting'
  * The card: what was asked, where the work went, how it ended, what it cost. The package's
  * fields, every one plain; `caller` is the writer's own bookkeeping, one key, stored and never read
  * here.
+ *
+ * A writer may put fields of its own beside these, as it may on a diary line: they pass through a
+ * read and a write untouched, and nothing here reads them. They have to, because a card is read
+ * and written again by whatever version of this package happens to be running — a run's own
+ * process, a resume, a tool landing a subagent's work — and those versions differ. A read that
+ * kept only the fields it knew would have each of them quietly strip what the others wrote.
  */
 export interface RunCard {
   /** The run's name, file-safe; the writer's ids sort by time, so the id order is the time order. */
@@ -123,10 +129,17 @@ export function personDir(email: string | undefined): string {
   return cleaned.length > 0 && cleaned.length <= MAX_PERSON_DIR && /^[a-z0-9][a-z0-9@._+-]*$/.test(cleaned) ? cleaned : ANONYMOUS_DIR
 }
 
+/** The fields this package knows; every other field on a card is the writer's and passes through. */
+const OWN_FIELDS: readonly string[] = ['id', 'startedAt', 'endedAt', 'status', 'intent', 'title', 'driver', 'model', 'effort', 'branch', 'pr', 'cost', 'contextTokens', 'caller']
+
 /**
  * A card read back from its file: the package's fields, each kept only when it has the right
- * shape, plus `caller` as it is. `undefined` for anything that is not a card — not JSON, not an
- * object, or missing an id, a start or a status.
+ * shape, plus `caller` as it is, plus every other field the writer put there, as it was.
+ * `undefined` for anything that is not a card — not JSON, not an object, or missing an id, a
+ * start or a status.
+ *
+ * A field of the package's own that is there in the wrong shape is dropped, and dropped for good:
+ * it is the package's to hold, so a bad one is not carried through as a writer's.
  */
 export function parseRunCard(json: string): RunCard | undefined {
   let raw: unknown
@@ -150,13 +163,17 @@ export function parseRunCard(json: string): RunCard | undefined {
   }
   const caller = r['caller']
   if (caller && typeof caller === 'object' && !Array.isArray(caller)) card.caller = caller as Record<string, unknown>
+  for (const [key, value] of Object.entries(r)) if (!OWN_FIELDS.includes(key)) (card as unknown as Record<string, unknown>)[key] = value
   return card
 }
 
-/** A card as it is written: the package's fields first, `caller` last, pretty, one trailing newline. */
+/**
+ * A card as it is written: the package's fields first, then the writer's own, `caller` last,
+ * pretty, one trailing newline.
+ */
 export function formatRunCard(card: RunCard): string {
-  const { id, startedAt, endedAt, status, intent, title, driver, model, effort, branch, pr, cost, contextTokens, caller } = card
-  const ordered = { id, startedAt, endedAt, status, intent, title, driver, model, effort, branch, pr, cost, contextTokens, caller }
+  const { id, startedAt, endedAt, status, intent, title, driver, model, effort, branch, pr, cost, contextTokens, caller, ...theirs } = card
+  const ordered = { id, startedAt, endedAt, status, intent, title, driver, model, effort, branch, pr, cost, contextTokens, ...theirs, caller }
   return JSON.stringify(ordered, null, 2) + '\n'
 }
 
@@ -211,7 +228,10 @@ export function newestFirst<T extends { id: string }>(cards: readonly T[]): T[] 
   return [...cards].sort((a, b) => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))
 }
 
-/** The card as the command prints it: the package's fields, never the writer's. */
+/**
+ * The card as the command prints it: everything on it but `caller`, the writer's own bookkeeping.
+ * A field a writer put beside the package's own is part of the record and is printed with them.
+ */
 export function publicCard(card: RunCard): Omit<RunCard, 'caller'> {
   const { caller: _caller, ...own } = card
   return own

@@ -57,12 +57,32 @@ test('a card reads back with the package\'s fields and the writer\'s under calle
     pr: { number: 7, url: 'https://x/pull/7' },
     cost: 0.62,
     caller: { pid: 923, host: 'laptop' },
+    // Not the package's fields, so not read here, and kept as they were.
+    ticket: 'tickets/2026-09-01_fix.md',
+    stray: 'ignored',
+    model_extra: 1,
   })
-  assert.deepEqual(Object.keys(publicCard(card)).includes('caller'), false, 'the command prints the package\'s fields only')
-  assert.ok(!('caller' in publicCard(card)))
+  assert.ok(!('caller' in publicCard(card)), 'the command prints everything but the writer\'s own key')
+  assert.equal((publicCard(card) as Record<string, unknown>)['ticket'], 'tickets/2026-09-01_fix.md')
   // A field of the wrong shape is dropped, not kept: the card is the package's contract.
   const odd = parseRunCard(JSON.stringify({ id: 'r2', startedAt: 'now', status: 'failed', pr: { number: '7' }, cost: '1', caller: [] }))!
   assert.deepEqual(odd, { id: 'r2', startedAt: 'now', status: 'failed' })
+})
+
+test('a card a writer put its own fields on keeps them through the reads and writes of a continuation', () => {
+  // A run that ends, is continued, and ends again is read and written three times over, each time
+  // by whatever version is running — the run's own process, a resume, a tool landing a subagent's
+  // work. `ticket` stands for any field this version does not know: it must come out as it went in.
+  const started = '{"id":"r1","startedAt":"t","status":"done","intent":"split it","ticket":"tickets/2026-09-01_fix.md","caller":{"pid":1}}'
+
+  const read = parseRunCard(started)!
+  assert.equal((read as unknown as Record<string, unknown>)['ticket'], 'tickets/2026-09-01_fix.md', 'a read keeps what it does not know')
+
+  const continued = parseRunCard(formatRunCard({ ...read, status: 'running' }))!
+  const ended = parseRunCard(formatRunCard({ ...continued, status: 'done', endedAt: 'u' }))!
+  assert.equal((ended as unknown as Record<string, unknown>)['ticket'], 'tickets/2026-09-01_fix.md', 'and so does every write after it')
+  assert.equal(ended.intent, 'split it')
+  assert.equal(ended.status, 'done')
 })
 
 test('what is not a card reads as none', () => {
@@ -73,12 +93,16 @@ test('what is not a card reads as none', () => {
   assert.equal(parseRunCard(JSON.stringify({ id: '../x', startedAt: 'now', status: 'done' })), undefined, 'not an id')
 })
 
-test('a card is written with the package\'s fields first, caller last, and reads back the same', () => {
+test('a card is written with the package\'s fields first, the writer\'s next, caller last, and reads back the same', () => {
   const card = { id: 'r1', startedAt: 't', status: 'running' as const, caller: { pid: 1 }, intent: 'x' }
   const text = formatRunCard(card)
   assert.ok(text.endsWith('\n'))
   assert.deepEqual(Object.keys(JSON.parse(text)), ['id', 'startedAt', 'status', 'intent', 'caller'], 'absent fields are not written')
   assert.deepEqual(parseRunCard(text), card)
+
+  const theirs = { ...card, ticket: 'tickets/2026-09-01_fix.md' }
+  assert.deepEqual(Object.keys(JSON.parse(formatRunCard(theirs))), ['id', 'startedAt', 'status', 'intent', 'ticket', 'caller'])
+  assert.deepEqual(parseRunCard(formatRunCard(theirs)), theirs)
 })
 
 test('a diary is JSON lines; the agent\'s are four kinds, everything else is the writer\'s', () => {
