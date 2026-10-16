@@ -171,6 +171,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   over a line in each project's hooks file, which is a project's and shared with its team,
   where a service is one computer's; and over running it inside OpenAgent's own process,
   where a fault in it is a fault in OpenAgent.
+- The chat says in its own words what the terminal says with its glyphs: how a run ended,
+  what it reported, where its work is, what the model's quota is doing. A grey word for what
+  happened, and the thing it happened to beside it, as a tool call's row reads. Picked over
+  showing the terminal's own line in the chat, where `■ stopped`, a two-space indent and a
+  time spelled for a machine say nothing to a person reading a conversation.
 - The chat shows a `screen` line as one line, which opens the pane its package brings, and
   knows nothing of what the screen is. What the screen shows is streamed from the computer
   the run is on, through OpenAgent, as pictures: to this computer, to a phone, to another

@@ -154,7 +154,7 @@ describe('AgentView event source (#1026/#1383)', () => {
     onAgent.mockResolvedValueOnce(ARCHIVED).mockResolvedValue(full)
     render(view({ events: ahead }))
     await waitFor(() => expect(onAgent.mock.calls.length).toBeGreaterThanOrEqual(2))
-    await waitFor(() => expect(screen.getByText(/pull request: #7/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('#7')).toBeTruthy())
   })
 })
 
