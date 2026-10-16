@@ -732,7 +732,8 @@ test('land: the subagent\'s branch merged into the caller\'s, then gone, here an
     // A second one from the same start.
     const second = await endedSubagent(repo, SECOND, 'docs.txt')
     const landed = await run(checkout, MAIN, ['land', FIRST])
-    assert.deepEqual([landed.code, landed.out, landed.err], [0, { ok: true, id: FIRST, branch, merged: true }, ''])
+    // No plan is saved in this test, so there is no task check to run and the land says so.
+    assert.deepEqual([landed.code, landed.out, landed.err], [0, { ok: true, id: FIRST, branch, merged: true, unchecked: 'no-plan' }, ''])
     assert.equal(await readFile(join(checkout, 'tests.txt'), 'utf8'), `${FIRST}\n`, 'the work is on the main agent\'s branch')
     assert.equal(await hasRef(repo, `refs/heads/${branch}`), false)
     const card = await findRun(repo, FIRST)
@@ -747,14 +748,14 @@ test('land: the subagent\'s branch merged into the caller\'s, then gone, here an
     assert.deepEqual([again.code, again.out], [1, { ok: false, reason: 'nothing-to-land', id: FIRST }])
 
     // The next is landed as a merge: the main agent's branch has moved on.
-    assert.deepEqual((await run(checkout, MAIN, ['land', SECOND])).out, { ok: true, id: SECOND, branch: second, merged: true })
+    assert.deepEqual((await run(checkout, MAIN, ['land', SECOND])).out, { ok: true, id: SECOND, branch: second, merged: true, unchecked: 'no-plan' })
     assert.equal(await readFile(join(checkout, 'docs.txt'), 'utf8'), `${SECOND}\n`)
     assert.equal((await git(['log', '-1', '--format=%s'], checkout)).trim(), `Merge branch '${second}'`)
 
     // One the main agent merged by hand is only deleted.
     const byHand = await endedSubagent(repo, OTHERS, 'notes.txt')
     await git(['merge', '-q', '--no-edit', byHand], checkout)
-    assert.deepEqual((await run(checkout, MAIN, ['land', OTHERS])).out, { ok: true, id: OTHERS, branch: byHand, merged: false })
+    assert.deepEqual((await run(checkout, MAIN, ['land', OTHERS])).out, { ok: true, id: OTHERS, branch: byHand, merged: false, unchecked: 'no-plan' })
     assert.equal(await hasRef(repo, `refs/heads/${byHand}`), false)
     assert.equal((await findRun(repo, OTHERS))?.caller?.['landed'], (await git(['rev-parse', landedRef(OTHERS)], repo)).trim(), 'merged by hand, its last commit is kept all the same')
     assert.equal((await git(['log', '-1', '--format=%s', landedRef(OTHERS)], repo)).trim(), 'Add notes.txt')
@@ -816,11 +817,11 @@ test('land: a subagent whose checkout is still there loses it only when it holds
     assert.equal(await stat(join(checkout, 'tests.txt')).then(() => true, () => false), false, 'nothing merged')
 
     await rm(join(theirs, 'half-done.txt'))
-    assert.deepEqual((await run(checkout, MAIN, ['land', FIRST])).out, { ok: true, id: FIRST, branch, merged: true })
+    assert.deepEqual((await run(checkout, MAIN, ['land', FIRST])).out, { ok: true, id: FIRST, branch, merged: true, unchecked: 'no-plan' })
     assert.deepEqual([await stat(theirs).then(() => true, () => false), await hasRef(repo, `refs/heads/${branch}`)], [false, false])
 
     const named = await endedSubagent(repo, SECOND, 'docs.txt', { branch: 'docs' })
-    assert.deepEqual((await run(checkout, MAIN, ['land', SECOND])).out, { ok: true, id: SECOND, branch: named, merged: true })
+    assert.deepEqual((await run(checkout, MAIN, ['land', SECOND])).out, { ok: true, id: SECOND, branch: named, merged: true, unchecked: 'no-plan' })
     assert.equal(await hasRef(repo, 'refs/heads/docs'), true, 'only an agent\'s branch is deleted')
     const kept = await findRun(repo, SECOND)
     assert.equal(kept?.branch, 'docs')
@@ -853,10 +854,18 @@ test('land: the task\'s own `Check:` line runs on the merged work, and a check t
     assert.equal(await hasRef(repo, `refs/heads/${branch}`), false)
     assert.equal((await findRun(repo, FIRST))?.caller?.['landed'], (await git(['rev-parse', landedRef(FIRST)], repo)).trim())
 
+    // A subagent whose record never said which task it did: the same silence, named apart, since
+    // this is what a run started by an older copy of the command leaves behind — and what a run
+    // whose record lost the task looks like, which is how a land once reported checks it never ran.
+    const nameless = await endedSubagent(repo, '2026-10-01T10-05-00-000Z', 'nameless.txt')
+    const unknown = await run(checkout, MAIN, ['land', '2026-10-01T10-05-00-000Z'])
+    assert.deepEqual([unknown.out, unknown.checks], [{ ok: true, id: '2026-10-01T10-05-00-000Z', branch: nameless, merged: true, unchecked: 'no-task-on-record' }, []])
+
     // A task with no check of its own has nothing to run, and the plan's own check waits for the last task.
     const docs = await endedSubagent(repo, SECOND, 'docs.txt', { task: DOCS })
     const second = await run(checkout, MAIN, ['land', SECOND])
-    assert.deepEqual([second.out, second.checks], [{ ok: true, id: SECOND, branch: docs, merged: true }, []])
+    // That task names no `Check:` line, so nothing ran and the answer says which kind of nothing.
+    assert.deepEqual([second.out, second.checks], [{ ok: true, id: SECOND, branch: docs, merged: true, unchecked: 'no-check-line' }, []])
 
     // The last land runs the plan's own check, the project's: it fails, and nothing is landed.
     const typo = await endedSubagent(repo, OTHERS, 'typo.txt', { task: TYPO })
@@ -865,7 +874,9 @@ test('land: the task\'s own `Check:` line runs on the merged work, and a check t
     assert.match(broken.err, /every task of the plan is landed and the plan's own check, `pnpm verify`, failed with exit 1/)
     assert.equal(await hasRef(repo, `refs/heads/${typo}`), true)
     const last = await run(checkout, MAIN, ['land', OTHERS])
-    assert.deepEqual([last.out, last.checks], [{ ok: true, id: OTHERS, branch: typo, merged: false, projectCheck: PROJECT_CHECK }, [PROJECT_CHECK]])
+    // The last land runs the project's check; this task names no `Check:` line of its own, and the
+    // answer says that rather than leaving a land that checked nothing reading as one that passed.
+    assert.deepEqual([last.out, last.checks], [{ ok: true, id: OTHERS, branch: typo, merged: false, projectCheck: PROJECT_CHECK, unchecked: 'no-check-line' }, [PROJECT_CHECK]])
 
     // A check that printed more than a refusal carries keeps its end, where a command that stopped says why.
     await endedSubagent(repo, '2026-10-01T10-05-00-000Z', 'more.txt', { task: TESTS })
@@ -876,7 +887,8 @@ test('land: the task\'s own `Check:` line runs on the merged work, and a check t
     // runs, since every task of the plan is landed.
     const byHand = await endedSubagent(repo, '2026-10-01T10-06-00-000Z', 'notes.txt', { task: 'gone-from-the-plan' })
     const nothing = await run(checkout, MAIN, ['land', '2026-10-01T10-06-00-000Z'])
-    assert.deepEqual([nothing.code, nothing.out, nothing.checks], [0, { ok: true, id: '2026-10-01T10-06-00-000Z', branch: byHand, merged: true, projectCheck: PROJECT_CHECK }, [PROJECT_CHECK]])
+    // Its task is no longer in the plan, so there is no check of its own to run: said, not silent.
+    assert.deepEqual([nothing.code, nothing.out, nothing.checks], [0, { ok: true, id: '2026-10-01T10-06-00-000Z', branch: byHand, merged: true, projectCheck: PROJECT_CHECK, unchecked: 'task-gone' }, [PROJECT_CHECK]])
   } finally {
     await removeRepo(repo)
   }

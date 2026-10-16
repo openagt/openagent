@@ -8,7 +8,7 @@ import { findRun, patchRun, readDiary } from '@openagt/skill-logs'
 import { inboxPath, readLiveCard } from './live-card.js'
 import { acquireRunLock, lockHolder, releaseRunLock } from './run-lock.js'
 import { addedLine, HOLD_MERGE_LINE, PUBLISH_LINES, resumeRun, runCommand, STOPPED_DETAIL } from './run.js'
-import { recordRun, runnerMark } from './records.js'
+import { markerCard, recordRun, runnerMark, writeMarker } from './records.js'
 import type { GitHost } from './git-host.js'
 import { sweep } from './sweep.js'
 import { git, readUntimedDiary, removeRepo, testRepo } from './test-repo.js'
@@ -231,6 +231,28 @@ test('a run told how hard to think starts its agent that way and keeps it on its
     // own session is the one told.
     assert.ok(starts.includes('high'))
     assert.equal((await findRun(repo, run.id))?.effort, 'high')
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
+test('a run marked by another tool keeps that tool\'s own fields on its record, to the end', async () => {
+  const repo = await testRepo()
+  try {
+    // What `orchestration start` writes before it spawns the run: the task's name as the run's
+    // title, and the task's id under the writer's own key. Neither is an argument of the run.
+    const marker = markerCard({ id: 'sub-1', startedAt: NOW.toISOString(), prompt: 'write about.html', driver: 'fake', mark: { host: 'laptop', pid: 1, parent: 'main-1' } })
+    await writeMarker(repo, { ...marker, title: 'Write about.html from the README', caller: { ...marker.caller, task: 'write-about-html', retries: 'sub-0' } })
+    const run = await runCommand(repo, { prompt: 'write about.html', id: 'sub-1', marked: true, driver: new FakeDriver({ respond: () => 'Done.' }), now: () => NOW, gitHost: noGitHost })
+    assert.equal(run.status, 'done')
+    const ended = await findRun(repo, 'sub-1')
+    assert.equal(ended?.status, 'done', 'the run ended and wrote its own record')
+    assert.equal(ended?.title, 'Write about.html from the README', 'the title the tool gave it survives the end of the run')
+    assert.equal(ended?.caller?.['task'], 'write-about-html', 'and so does the task its row is named by')
+    assert.equal(ended?.caller?.['retries'], 'sub-0', 'every key of the writer\'s, not a list this code knows')
+    // What the run itself knows is the run's: a marker never speaks over it.
+    assert.equal(ended?.caller?.['pid'], process.pid, 'the pid is this process\'s, not the marker\'s')
+    assert.equal(ended?.status, 'done', 'and the status is the one it ended with, never the marker\'s `running`')
   } finally {
     await removeRepo(repo)
   }
