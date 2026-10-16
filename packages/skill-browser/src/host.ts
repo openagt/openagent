@@ -6,9 +6,9 @@ import { dirname } from 'node:path'
 import { activePage, connectCdp, listPages, type CdpSession, type PageTarget } from './cdp.js'
 import { launchChrome, type Chrome } from './chrome.js'
 import { consoleCall, consoleLog, errorsNote, FLOOD_BYTES, FLOOD_LINES, flooded, heardOnce, logEntry, printConsole, thrown, went, type Said } from './console.js'
-import { click, navigate, PageError, press, readPage, run, screenshot, type } from './page.js'
+import { click, cursorAt, navigate, PageError, press, readPage, run, screenshot, type } from './page.js'
 import { inputCalls, stepHistory, type ScreenInput } from './screen.js'
-import { CONSOLE, FRAME, MAX_TITLE, MAX_URL, PULSE, STATE, streamPart } from './stream.js'
+import { ACTED, CONSOLE, CURSOR, CURSORS, FRAME, MAX_TITLE, MAX_URL, PULSE, STATE, streamPart, type ActedPoint, type Cursor } from './stream.js'
 
 /**
  * The browser's own process: started by the first `open`, it keeps Chrome, the page connection
@@ -30,9 +30,12 @@ import { CONSOLE, FRAME, MAX_TITLE, MAX_URL, PULSE, STATE, streamPart } from './
  * logs more in a second than a page has to say is no longer listened to, until it goes to
  * another address.
  *
- * It ends, closing Chrome, on the first of: `browser close`; the run it belongs to ending (an
- * `ended` line reaching the diary after it started); the diary's file going away (the run's
- * checkout reclaimed); no command and no input for `idleMs`; Chrome exiting.
+ * It ends, closing Chrome, on the first of: `browser close`; the diary's file going away (the
+ * run's checkout reclaimed); nothing using it for `idleMs`; Chrome exiting. The run it belongs to
+ * ending does not end it: a browser is a page a person looks at and clicks in, and the run
+ * finishing is when they want it most, so it stays {@link AFTER_RUN_MS} longer, and longer than
+ * that while someone still watches. Using it is a command, a person's click, and a person
+ * watching: a browser on someone's screen is not unused.
  */
 
 /** What the state file holds, for the command to find this process. */
@@ -58,12 +61,18 @@ export interface HostCommand {
 
 export type HostAnswer = { ok: true; output: string; png?: string } | { ok: false; reason: string }
 
-/** The screen line a diary gets: where the live view is, and what it showed then. Written with `at`, its time, as every diary line is. */
+/**
+ * The screen line a diary gets: where the live view is, and what it showed then. Written with
+ * `at`, its time, as every diary line is. `ended` says the browser has closed; `until` says it
+ * outlives its run, up to that time, so whoever reads the diary keeps showing the live view that
+ * long. A reader shows no row for either.
+ */
 export interface ScreenLine {
   kind: 'screen'
   url: string
   label: string
   ended?: true
+  until?: string
 }
 
 /** The pictures Chrome is asked for: at most this large, and at most one every `FRAME_GAP_MS`. */
@@ -73,12 +82,17 @@ const FRAME_GAP_MS = 80
 const MAX_VIEWERS = 8
 /** How often a stream that says nothing else says it is still there. */
 const PULSE_EVERY_S = 20
+/** How often the page is asked what its cursor is where the person's pointer is. */
+const CURSOR_EVERY_MS = 100
+/** How long the browser stays after its run ended, unused, for the person to look at the page and click in it. */
+export const AFTER_RUN_MS = 10 * 60 * 1000
 
-/** One person watching: the answer their stream is written to, the picture kept for when it can take one, what it was last told the address bar says, and the number of the console line it gets next. */
+/** One person watching: the answer their stream is written to, the picture kept for when it can take one, what it was last told the address bar says and the pointer looks like, and the number of the console line it gets next. */
 interface Viewer {
   res: ServerResponse
   waiting?: Buffer
   said?: string
+  shape?: Cursor
   next: number
 }
 
@@ -117,9 +131,13 @@ export async function runHost(opts: HostOptions): Promise<void> {
   let lastUse = Date.now()
   let screenUrl = ''
   let screenShown = false
+  /** What the newest screen line said the browser showed: said again by a line that keeps it. */
+  let screenLabel = ''
 
   /** Dialogs the page opened since the last command answered, each accepted as it opened. */
   let dialogs: string[] = []
+  /** Until when the diary says the browser stays past its run's end; 0 until it says so. */
+  let keptUntil = 0
 
   /** The console's lines, and the number of the newest one the agent was told the errors up to. */
   const log = consoleLog()
@@ -140,6 +158,13 @@ export async function runHost(opts: HostOptions): Promise<void> {
     log.add(said)
     for (const viewer of viewers) pour(viewer)
   }
+  /** What the pointer looks like where the person last moved it, and whether the page is being asked. */
+  let shape: Cursor = 'default'
+  let askedAt = 0
+  let asking = false
+  /** Where the agent last clicked or typed; none until it does. */
+  let acted: ActedPoint | undefined
+
   /** The last attach, so two callers never attach to a new tab at once. */
   let attaching: Promise<CdpSession> | undefined
 
@@ -228,6 +253,9 @@ export async function runHost(opts: HostOptions): Promise<void> {
       const frame = params['frame'] as { parentId?: string; url?: string } | undefined
       if (!frame || frame.parentId || typeof frame.url !== 'string') return
       pageErrors.set(id, 0)
+      // Another page: where the agent last acted is nowhere on it, so whoever joins from here
+      // on is told of no pointer at all.
+      acted = undefined
       note(went(frame.url))
       // Another address is another page: it is listened to, whatever the one before it said.
       if (deaf) {
@@ -254,6 +282,40 @@ export async function runHost(opts: HostOptions): Promise<void> {
     else viewer.res.write(streamPart(FRAME, jpeg))
   }
 
+  /** What the pointer looks like, for one watcher that has not been told this shape. */
+  const point = (viewer: Viewer): void => {
+    if (viewer.shape === shape || viewer.res.writableNeedDrain) return
+    viewer.shape = shape
+    viewer.res.write(streamPart(CURSOR, Buffer.from(JSON.stringify({ cursor: shape }))))
+  }
+
+  /**
+   * What the pointer looks like where the person moved it, told to whoever watches when it is
+   * not what they were told before: the pictures Chrome draws hold no pointer, so its shape is
+   * the watcher's to draw, and only the page knows it. Asked of the page a few times a second at
+   * most, and never twice at once, since a pointer crossing the picture asks all the way.
+   */
+  const follow = async (p: CdpSession, x: number, y: number): Promise<void> => {
+    if (asking || Date.now() - askedAt < CURSOR_EVERY_MS) return
+    asking = true
+    askedAt = Date.now()
+    try {
+      // A page may name pictures of its own before the keyword it falls back on: the keyword is
+      // what a watcher is told, and anything else is the plain arrow.
+      const said = (await cursorAt(p, x, y)).split(',').at(-1)?.trim()
+      shape = CURSORS.find(known => known === said) ?? 'default'
+    } finally {
+      asking = false
+    }
+    for (const viewer of viewers) point(viewer)
+  }
+
+  /** Where the agent just acted, told to whoever watches, so they see the agent's own pointer move. */
+  const tellActed = (where: ActedPoint): void => {
+    acted = where
+    for (const viewer of viewers) if (!viewer.res.writableNeedDrain) viewer.res.write(streamPart(ACTED, Buffer.from(JSON.stringify(where))))
+  }
+
   /** Chrome draws pictures of the page the agent is on while someone watches, and none otherwise. */
   let castTurn: Promise<void> = Promise.resolve()
   const cast = (): Promise<void> =>
@@ -276,6 +338,8 @@ export async function runHost(opts: HostOptions): Promise<void> {
   let pulseIn = PULSE_EVERY_S
   const tell = async (): Promise<void> => {
     if (viewers.size === 0) return
+    // A browser on someone's screen is not unused, whether or not they click in it.
+    lastUse = Date.now()
     const target = activePage(await listPages(chrome.endpoint).catch(() => []))
     if (target && target.id !== pageId) await current().catch(() => {})
     const said = JSON.stringify({ url: (target?.url ?? '').slice(0, MAX_URL), title: (target?.title ?? '').slice(0, MAX_TITLE) })
@@ -315,7 +379,7 @@ export async function runHost(opts: HostOptions): Promise<void> {
       const closed = new Promise<void>(resolve => server.close(() => resolve()))
       server.closeAllConnections()
       await closed
-      if (screenShown && !runEnded) await writeScreen({ kind: 'screen', url: screenUrl, label: 'browser · closed', ended: true })
+      if (screenShown) await writeScreen({ kind: 'screen', url: screenUrl, label: 'browser · closed', ended: true })
       await chrome.close()
       // A browser started after this one closed writes the same file: only this one's goes.
       const state = await readFile(opts.stateFile, 'utf8').catch(() => '')
@@ -341,17 +405,20 @@ export async function runHost(opts: HostOptions): Promise<void> {
         const output = await readPage(p)
         // The chat gets a screen here, where the agent used the browser.
         const url = /^URL: (.*)$/m.exec(output)?.[1] ?? first
-        await writeScreen({ kind: 'screen', url: screenUrl, label: `browser · ${url}` })
+        screenLabel = `browser · ${url}`
+        await writeScreen({ kind: 'screen', url: screenUrl, label: screenLabel })
         screenShown = true
+        // A browser opened again in a run that had ended keeps nothing from before it.
+        keptUntil = 0
         return { ok: true, output }
       }
       case 'read':
         return { ok: true, output: await readPage(p) }
       case 'click':
-        await click(p, ref())
+        tellActed({ ...(await click(p, ref())), act: 'click' })
         return { ok: true, output: await readPage(await current()) }
       case 'type':
-        await type(p, ref(), second)
+        tellActed({ ...(await type(p, ref(), second)), act: 'type' })
         return { ok: true, output: await readPage(await current()) }
       case 'press':
         await press(p, first)
@@ -398,6 +465,8 @@ export async function runHost(opts: HostOptions): Promise<void> {
       // Someone who joins a screen others watch sees what they see; the first one waits for
       // the picture Chrome draws as it starts.
       if (latest) show(viewer, latest)
+      point(viewer)
+      if (acted) viewer.res.write(streamPart(ACTED, Buffer.from(JSON.stringify(acted))))
       pour(viewer)
       void cast()
       void tell().catch(() => {})
@@ -415,6 +484,9 @@ export async function runHost(opts: HostOptions): Promise<void> {
       }
       const calls = inputCalls(input)
       for (const call of calls) await p.send(call.method, call.params).catch(() => {})
+      // The page hovers under the pointer now: what it shows there is asked for and passed on,
+      // without the person waiting for the answer to their move.
+      if (input?.type === 'move') void follow(p, input.x, input.y).catch(() => {})
       return void res.writeHead(calls.length ? 204 : 400).end()
     }
     if (url.pathname === '/command') {
@@ -452,26 +524,46 @@ export async function runHost(opts: HostOptions): Promise<void> {
   // Where the run's diary stood when this started: an `ended` line after it is this run ending.
   let diaryOffset = opts.diary ? (await stat(opts.diary).catch(() => undefined))?.size ?? 0 : 0
   let runEnded = false
+
+  /**
+   * The browser outlives its run: the diary says until when, so whoever reads it keeps showing
+   * the live view until then. Said again while the browser is still being used, each time for the
+   * whole window from that use, so a person reading the page keeps it as long as they are there;
+   * at most one line per half a window, so a run's diary never fills with them.
+   */
+  const keepAfterRun = async (): Promise<void> => {
+    const until = lastUse + AFTER_RUN_MS
+    if (!screenShown || until - keptUntil < AFTER_RUN_MS / 2) return
+    keptUntil = until
+    await writeScreen({ kind: 'screen', url: screenUrl, label: screenLabel, until: new Date(until).toISOString() })
+  }
+
   const timer = setInterval(() => {
     void (async () => {
-      if (Date.now() - lastUse > opts.idleMs) return end()
+      // Once the run has ended the browser is the person's alone: it goes sooner when they leave it.
+      if (Date.now() - lastUse > (runEnded ? AFTER_RUN_MS : opts.idleMs)) return end()
       if (opts.diary) {
         const read = await readFrom(opts.diary, diaryOffset)
-        if (read === undefined) {
-          runEnded = true
-          return end()
-        }
+        // The run's checkout is reclaimed: there is nowhere left to say what the browser shows.
+        if (read === undefined) return end()
         // A diary written back shorter (a run resumed from its record) is followed from its end.
         if (read.size < diaryOffset) diaryOffset = read.size
         const fresh = read.bytes
         // Only whole lines are read: a line still being written is read again, complete, next time.
         const whole = fresh.lastIndexOf(0x0a) + 1
         diaryOffset += whole
-        // A run that stops on a question ends `waiting` and keeps its browser for the answer.
-        if (diaryLines(fresh.subarray(0, whole)).some(line => line['kind'] === 'ended' && line['status'] !== 'waiting')) {
-          runEnded = true
-          return end()
+        for (const line of diaryLines(fresh.subarray(0, whole))) {
+          // A run that stops on a question ends `waiting`, and its browser is for the answer: it
+          // stays while the person is there, as a run still going does.
+          if (line['kind'] === 'ended' && line['status'] !== 'waiting') runEnded = true
+          // The run goes again, on an answer or on more work: anything but its own end and this
+          // browser's own lines says so, and the browser is the run's again, not the person's alone.
+          else if (line['kind'] !== 'screen' && line['kind'] !== 'ended') {
+            runEnded = false
+            keptUntil = 0
+          }
         }
+        if (runEnded) await keepAfterRun()
       }
     })()
   }, 2000)

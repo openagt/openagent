@@ -15,6 +15,10 @@ export const STATE = 2
 
 /** A line of the page's console: a {@link ConsoleLine} as JSON. */
 export const CONSOLE = 3
+/** What the pointer looks like where the person points: `{ cursor }` as JSON, one CSS cursor name. */
+export const CURSOR = 4
+/** Where the agent last did something to the page: an {@link ActedPoint} as JSON. */
+export const ACTED = 5
 
 /** The longest message a reader takes: a picture of the page is a few hundred kilobytes. */
 export const MAX_PART = 2 * 1024 * 1024
@@ -30,6 +34,11 @@ export const MAX_CONSOLE = 16 * 1024
 export const MAX_CONSOLE_TEXT = 2000
 export const MAX_CONSOLE_WHERE = 300
 
+/** The longest `CURSOR` or `ACTED` a reader takes: each is one small object. */
+export const MAX_SMALL = 256
+/** The largest coordinate a point may name: past any picture a page is drawn at. */
+const MAX_POINT = 100_000
+
 const HEAD = 5
 
 export interface StreamPart {
@@ -41,6 +50,81 @@ export interface StreamPart {
 export interface ScreenState {
   url: string
   title: string
+}
+
+/**
+ * The cursors a screen says the page shows, the CSS keywords and nothing else: it is the page
+ * that says what its cursor is, and what a page says is nobody's to put in a style, where
+ * `url(…)` would have whoever watches fetch a picture of that page's choosing.
+ */
+export const CURSORS = [
+  'default',
+  'none',
+  'context-menu',
+  'help',
+  'pointer',
+  'progress',
+  'wait',
+  'cell',
+  'crosshair',
+  'text',
+  'vertical-text',
+  'alias',
+  'copy',
+  'move',
+  'no-drop',
+  'not-allowed',
+  'grab',
+  'grabbing',
+  'all-scroll',
+  'col-resize',
+  'row-resize',
+  'n-resize',
+  'e-resize',
+  's-resize',
+  'w-resize',
+  'ne-resize',
+  'nw-resize',
+  'se-resize',
+  'sw-resize',
+  'ew-resize',
+  'ns-resize',
+  'nesw-resize',
+  'nwse-resize',
+  'zoom-in',
+  'zoom-out',
+] as const
+export type Cursor = (typeof CURSORS)[number]
+
+/** What a `CURSOR` message says; nothing when it is no cursor this screen passes on. */
+export function readCursor(bytes: Uint8Array): Cursor | undefined {
+  if (bytes.length > MAX_SMALL) return undefined
+  try {
+    const said = JSON.parse(new TextDecoder().decode(bytes)) as { cursor?: unknown } | null
+    return CURSORS.find(known => known === said?.cursor)
+  } catch {
+    return undefined
+  }
+}
+
+/** Where the agent last clicked or typed, in the picture's own pixels. */
+export interface ActedPoint {
+  x: number
+  y: number
+  act: 'click' | 'type'
+}
+
+/** What an `ACTED` message says; nothing when it is no point of the agent's. */
+export function readActed(bytes: Uint8Array): ActedPoint | undefined {
+  if (bytes.length > MAX_SMALL) return undefined
+  try {
+    const said = JSON.parse(new TextDecoder().decode(bytes)) as { x?: unknown; y?: unknown; act?: unknown } | null
+    const place = (n: unknown): boolean => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= MAX_POINT
+    if (!said || !place(said.x) || !place(said.y) || (said.act !== 'click' && said.act !== 'type')) return undefined
+    return { x: said.x as number, y: said.y as number, act: said.act }
+  } catch {
+    return undefined
+  }
 }
 
 /** What kind of line: the console's own levels, and `went` for the page going to another address. */

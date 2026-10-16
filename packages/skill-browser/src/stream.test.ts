@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { FRAME, jpegSize, MAX_PART, MAX_STATE, MAX_URL, readState, STATE, streamPart, streamReader } from './stream.js'
+import { FRAME, jpegSize, MAX_PART, MAX_SMALL, MAX_STATE, MAX_URL, readActed, readCursor, readState, STATE, streamPart, streamReader } from './stream.js'
 
 const bytes = (...values: number[]) => new Uint8Array(values)
 
@@ -49,6 +49,31 @@ test('what the address bar says is bounded: an address is cut, and a message too
   const said = (value: object) => readState(new TextEncoder().encode(JSON.stringify(value)))
   assert.equal(said({ url: `http://a/${'x'.repeat(5000)}`, title: 'A' })?.url.length, MAX_URL)
   assert.equal(said({ url: 'http://a/', title: 'x'.repeat(MAX_STATE) }), undefined)
+})
+
+test('the cursor a screen passes on is a CSS keyword and nothing a page made up', () => {
+  const said = (value: unknown) => readCursor(new TextEncoder().encode(JSON.stringify(value)))
+  assert.equal(said({ cursor: 'pointer' }), 'pointer')
+  assert.equal(said({ cursor: 'grabbing' }), 'grabbing')
+  // A page naming a picture of its own would have whoever watches fetch it: no cursor at all.
+  assert.equal(said({ cursor: 'url(http://a.test/x.png), pointer' }), undefined)
+  assert.equal(said({ cursor: 'expression(alert(1))' }), undefined)
+  assert.equal(said({ cursor: 1 }), undefined)
+  assert.equal(said(null), undefined)
+  assert.equal(readCursor(new TextEncoder().encode('not json')), undefined)
+  assert.equal(said({ cursor: 'pointer', pad: 'x'.repeat(MAX_SMALL) }), undefined, 'longer than a cursor ever is')
+})
+
+test('where the agent acted is read only when it is a point of a picture', () => {
+  const said = (value: unknown) => readActed(new TextEncoder().encode(JSON.stringify(value)))
+  assert.deepEqual(said({ x: 12, y: 34, act: 'click' }), { x: 12, y: 34, act: 'click' })
+  assert.deepEqual(said({ x: 0, y: 0, act: 'type' }), { x: 0, y: 0, act: 'type' })
+  assert.equal(said({ x: -1, y: 0, act: 'click' }), undefined)
+  assert.equal(said({ x: 1e6, y: 0, act: 'click' }), undefined)
+  assert.equal(said({ x: 1, y: Number.NaN, act: 'click' }), undefined)
+  assert.equal(said({ x: '1', y: 2, act: 'click' }), undefined)
+  assert.equal(said({ x: 1, y: 2, act: 'press' }), undefined)
+  assert.equal(said(null), undefined)
 })
 
 test('a JPEG says how large its picture is before anyone decodes it', () => {

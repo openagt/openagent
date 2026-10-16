@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { ModuleHostContext, type ModuleHost } from '@openagt/dashboard/module'
-import { CONSOLE, FRAME, PULSE, STATE, streamPart, type ConsoleLine } from '../src/stream.js'
+import { ACTED, CONSOLE, CURSOR, FRAME, PULSE, STATE, streamPart, type ConsoleLine } from '../src/stream.js'
 import { BrowserPanel } from './BrowserPanel.js'
 
 // The Browser pane inside a faked dashboard: `watchScreen` answers a stream the test writes to,
@@ -90,7 +90,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-test('the pane shows the browser live: the address, the picture, and a click goes to the page where it was made', async () => {
+test('the pane shows the browser live: the address, the picture, and the mouse goes to the page where it was moved', async () => {
   const world = dashboard()
   render(show(world.host))
   await waitFor(() => expect(world.host.watchScreen).toHaveBeenCalledWith('p', 'run-1', expect.any(AbortSignal)))
@@ -103,15 +103,79 @@ test('the pane shows the browser live: the address, the picture, and a click goe
   expect((screen.getByLabelText('Address') as HTMLInputElement).value).toBe('http://localhost:3000/')
   expect(screen.queryByText(/No browser is open/)).toBeNull()
 
-  fireEvent.click(view, { clientX: 40 + 100, clientY: 100 + 50 })
-  expect(world.sent).toEqual([{ type: 'click', x: 200, y: 100 }])
+  // The mouse is passed on as a mouse: a press and a release in one place are the page's click.
+  fireEvent.pointerDown(view, { pointerId: 1, pointerType: 'mouse', clientX: 40 + 100, clientY: 100 + 50, detail: 1 })
+  fireEvent.pointerUp(view, { pointerId: 1, pointerType: 'mouse', clientX: 40 + 100, clientY: 100 + 50, detail: 1 })
+  expect(world.sent).toEqual([
+    { type: 'down', x: 200, y: 100, clicks: 1 },
+    { type: 'up', x: 200, y: 100, clicks: 1 },
+  ])
 
   fireEvent.keyDown(view, { key: 'a' })
   fireEvent.keyDown(view, { key: 'Enter' })
   fireEvent.keyDown(view, { key: 'c', metaKey: true })
   fireEvent.keyDown(view, { key: 'Shift' })
   fireEvent.wheel(view, { clientX: 40, clientY: 100, deltaY: 30 })
-  expect(world.sent.slice(1)).toEqual([{ type: 'text', text: 'a' }, { type: 'key', key: 'Enter' }, { type: 'scroll', x: 0, y: 0, deltaY: 60 }])
+  expect(world.sent.slice(2)).toEqual([{ type: 'text', text: 'a' }, { type: 'key', key: 'Enter' }, { type: 'scroll', x: 0, y: 0, deltaY: 60 }])
+})
+
+test('the mouse hovers, drags and leaves, and the pointer takes the shape the page gives it', async () => {
+  const world = dashboard()
+  render(show(world.host))
+  await waitFor(() => expect(world.host.watchScreen).toHaveBeenCalled())
+  await world.says(FRAME, jpeg())
+  const view = await screen.findByRole('img', { name: "The agent's browser" })
+
+  // Moving over the picture is a move on the page, so what is under it hovers.
+  fireEvent.pointerMove(view, { pointerId: 1, pointerType: 'mouse', clientX: 40 + 10, clientY: 100 + 10 })
+  expect(world.sent).toEqual([{ type: 'move', x: 20, y: 20, held: false }])
+
+  // The page says the pointer is a hand there: the picture shows a hand.
+  await world.says(CURSOR, new TextEncoder().encode(JSON.stringify({ cursor: 'pointer' })))
+  expect(view.style.cursor).toBe('pointer')
+  // What a page says is not a style of its own choosing.
+  await world.says(CURSOR, new TextEncoder().encode(JSON.stringify({ cursor: 'url(http://evil.test/x.png), pointer' })))
+  expect(view.style.cursor).toBe('pointer')
+
+  // A press, then a move: the page is told the button is down, so a drag drags.
+  fireEvent.pointerDown(view, { pointerId: 1, pointerType: 'mouse', clientX: 40 + 10, clientY: 100 + 10, detail: 1 })
+  fireEvent.pointerMove(view, { pointerId: 1, pointerType: 'mouse', clientX: 40 + 60, clientY: 100 + 10 })
+  await waitFor(() => expect(world.sent.at(-1)).toEqual({ type: 'move', x: 120, y: 20, held: true }))
+  fireEvent.pointerUp(view, { pointerId: 1, pointerType: 'mouse', clientX: 40 + 60, clientY: 100 + 10, detail: 1 })
+  expect(world.sent.at(-1)).toEqual({ type: 'up', x: 120, y: 20, clicks: 1 })
+  // Two presses in a row are said to be two, so a word is selected as it would be anywhere.
+  fireEvent.pointerDown(view, { pointerId: 1, pointerType: 'mouse', clientX: 40 + 60, clientY: 100 + 10, detail: 2 })
+  expect(world.sent.at(-1)).toEqual({ type: 'down', x: 120, y: 20, clicks: 2 })
+  fireEvent.pointerUp(view, { pointerId: 1, pointerType: 'mouse', clientX: 40 + 60, clientY: 100 + 10, detail: 2 })
+
+  // The pointer left the picture: the page hovers over nothing, and a pointer still held does not.
+  fireEvent.pointerLeave(view, { pointerId: 1, pointerType: 'mouse' })
+  expect(world.sent.at(-1)).toEqual({ type: 'leave' })
+  fireEvent.pointerDown(view, { pointerId: 1, pointerType: 'mouse', clientX: 40, clientY: 100, detail: 1 })
+  fireEvent.pointerLeave(view, { pointerId: 1, pointerType: 'mouse' })
+  expect(world.sent.at(-1)).toEqual({ type: 'down', x: 0, y: 0, clicks: 1 })
+})
+
+test("the agent's own pointer is drawn where it last acted, and goes with the page", async () => {
+  const world = dashboard()
+  render(show(world.host))
+  await waitFor(() => expect(world.host.watchScreen).toHaveBeenCalled())
+  await world.says(STATE, state('http://a.test/'))
+  await world.says(FRAME, jpeg())
+  await screen.findByRole('img', { name: "The agent's browser" })
+  expect(screen.queryByText('agent clicked')).toBeNull()
+
+  await world.says(ACTED, new TextEncoder().encode(JSON.stringify({ x: 200, y: 100, act: 'click' })))
+  expect(screen.getByText('agent clicked')).toBeTruthy()
+  await world.says(ACTED, new TextEncoder().encode(JSON.stringify({ x: 200, y: 100, act: 'type' })))
+  expect(screen.getByText('agent typed')).toBeTruthy()
+  // A point no picture holds is no point at all.
+  await world.says(ACTED, new TextEncoder().encode(JSON.stringify({ x: -5, y: 100, act: 'click' })))
+  expect(screen.getByText('agent typed')).toBeTruthy()
+
+  // Another page: where the agent acted is nowhere on it.
+  await world.says(STATE, state('http://a.test/two'))
+  expect(screen.queryByText(/^agent /)).toBeNull()
 })
 
 test('the address bar goes where the person says, and is not overwritten while they type', async () => {
@@ -220,6 +284,15 @@ test('where the pointer is a finger, a field takes the typing and a drag scrolls
   fireEvent.pointerUp(view, { pointerId: 1, pointerType: 'touch', clientX: 140, clientY: 250 })
   fireEvent.pointerMove(view, { pointerId: 1, pointerType: 'touch', clientX: 140, clientY: 100 })
   expect(world.sent.slice(3)).toEqual([{ type: 'scroll', x: 200, y: 300, deltaY: 100 }])
+
+  // A finger that stayed where it landed is a click there, and no move of a mouse.
+  fireEvent.pointerDown(view, { pointerId: 2, pointerType: 'touch', clientX: 140, clientY: 300 })
+  fireEvent.pointerMove(view, { pointerId: 2, pointerType: 'touch', clientX: 142, clientY: 302 })
+  fireEvent.pointerUp(view, { pointerId: 2, pointerType: 'touch', clientX: 142, clientY: 302 })
+  expect(world.sent.slice(4)).toEqual([
+    { type: 'down', x: 204, y: 404, clicks: 1 },
+    { type: 'up', x: 204, y: 404, clicks: 1 },
+  ])
 })
 
 test('the console is under the picture, behind a bar that is closed at first and counts the page\'s errors', async () => {

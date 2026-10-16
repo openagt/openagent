@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { resolveChromePath } from './chrome.js'
 import { runCli, stateFile } from './cli.js'
+import { AFTER_RUN_MS } from './host.js'
 import { absoluteUrl } from './page.js'
 import { inputCalls } from './screen.js'
 import { CONSOLE, FRAME, jpegSize, readConsoleLine, readState, STATE, streamReader, type ConsoleLine } from './stream.js'
@@ -145,7 +146,7 @@ test('the agent opens a page, reads it, types, picks, clicks and presses; the ch
   }
 })
 
-test('the run ending closes its browser, a question does not, and the ended run gets no more lines', needsChrome, async () => {
+test('the browser outlives its run, for the person, and the diary says how long for', needsChrome, async () => {
   const { url, server } = await site()
   const { cwd, diary, cli } = await project()
   try {
@@ -154,13 +155,21 @@ test('the run ending closes its browser, a question does not, and the ended run 
     await appendFile(diary, JSON.stringify({ kind: 'ended', status: 'waiting' }) + '\n')
     await new Promise(r => setTimeout(r, 2500))
     assert.equal((await cli('read')).code, 0, 'still open while the run waits')
+    assert.ok(!(await lines(diary)).some(line => line['until'] !== undefined), 'a run that only waits says nothing about keeping it')
     // The line arrives in two writes, the way a check can catch a writer halfway.
     const ended = JSON.stringify({ kind: 'ended', status: 'done' }) + '\n'
     await appendFile(diary, ended.slice(0, 9))
     await new Promise(r => setTimeout(r, 2500))
     await appendFile(diary, ended.slice(9))
-    assert.ok(await until(() => gone(stateFile(cwd))), 'the browser closes once the diary says the run ended')
-    assert.equal((await lines(diary)).at(-1)?.['kind'], 'ended')
+    const kept = async () => (await lines(diary)).find(line => line['kind'] === 'screen' && line['until'] !== undefined)
+    assert.ok(await until(async () => (await kept()) !== undefined), 'the run ending, the browser says it stays for the person')
+    const stays = Date.parse(String((await kept())!['until']) ) - Date.now()
+    assert.ok(stays > AFTER_RUN_MS - 60_000 && stays <= AFTER_RUN_MS, `it stays about as long as it says, not ${stays}ms`)
+    assert.equal((await cli('read')).code, 0, 'the run ending does not take the page from the person')
+    // Closed by hand, the diary says so, so nobody is shown a browser that is gone.
+    assert.equal((await cli('close')).code, 0)
+    assert.ok(await until(() => gone(stateFile(cwd))), 'the state file goes with the browser')
+    assert.equal((await lines(diary)).at(-1)?.['ended'], true)
   } finally {
     await cli('close')
     server.close()
@@ -349,9 +358,16 @@ test('an address without a scheme is http; other schemes are refused', () => {
   assert.throws(() => absoluteUrl('javascript:alert(1)'), /only http and https/)
 })
 
-test('the screen passes on only input it knows', () => {
-  assert.equal(inputCalls({ type: 'click', x: 1, y: 2 }).length, 2)
-  assert.deepEqual(inputCalls({ type: 'click', x: Number.NaN, y: 2 }), [])
+test('the screen passes on only input it knows, and a person\'s mouse as a mouse', () => {
+  assert.deepEqual(inputCalls({ type: 'move', x: 1, y: 2 }), [{ method: 'Input.dispatchMouseEvent', params: { x: 1, y: 2, type: 'mouseMoved', button: 'none', buttons: 0 } }])
+  // A move with the button held is a drag: the page is told the button is down.
+  assert.deepEqual(inputCalls({ type: 'move', x: 1, y: 2, held: true })[0]?.params['buttons'], 1)
+  assert.deepEqual(inputCalls({ type: 'down', x: 1, y: 2 }), [{ method: 'Input.dispatchMouseEvent', params: { x: 1, y: 2, type: 'mousePressed', button: 'left', buttons: 1, clickCount: 1 } }])
+  assert.equal(inputCalls({ type: 'up', x: 1, y: 2, clicks: 2 })[0]?.params['clickCount'], 2, 'a second click in the same place selects a word')
+  assert.equal(inputCalls({ type: 'up', x: 1, y: 2, clicks: 9 })[0]?.params['clickCount'], 1, 'and nothing stranger than a triple click')
+  assert.equal(inputCalls({ type: 'leave' })[0]?.params['x'], -1, 'the pointer left the picture: the page hovers over nothing')
+  assert.deepEqual(inputCalls({ type: 'move', x: Number.NaN, y: 2 }), [])
+  assert.deepEqual(inputCalls({ type: 'down', x: 1, y: Number.POSITIVE_INFINITY }), [])
   assert.deepEqual(inputCalls({ type: 'navigate', url: 'file:///etc/passwd' }), [])
   assert.deepEqual(inputCalls({ type: 'key', key: 'F13' }), [])
   assert.deepEqual(inputCalls({ type: 'text', text: '' }), [])

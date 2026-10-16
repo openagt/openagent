@@ -23,8 +23,26 @@ already made, and lists it in its pull request; for anything else it proposes an
   of the picture, most of all on a phone.
 - The picture is streamed from the computer the agent runs on, so the pane shows the same
   on that computer, on a phone and on another computer.
-- A run that stops to ask a question keeps its browser, and its live screen, for the
-  answer. Picked over closing the browser at every end of a run.
+- The person's pointer reaches the page as a mouse, not as bare clicks: where it moved,
+  when it went down and when it came up. So the page hovers under it as it would under
+  their own mouse, a drag drags (a slider, a selection), a second click in a place is said
+  to be the second, and the pointer takes the shape the page gives it there. Picked over
+  passing on clicks alone, where nothing ever hovered, nothing could be dragged and the
+  pointer stayed an arrow over every link.
+- The agent's own pointer is drawn on the picture where the agent last clicked or typed,
+  and stays there until it acts again or the page goes elsewhere. Picked over drawing
+  nothing, where a person looking a moment later cannot tell where the agent is working.
+- The browser outlives the run that opened it: it stays ten minutes after the run ends,
+  and longer while someone is still watching it, so the person can look at the page the
+  agent left and click around in it themselves. A browser on someone's screen counts as
+  used, whether or not they click. Picked over closing it at the end of the run, which
+  took the page away two seconds after the agent finished, exactly when the person went
+  to look at it.
+- A page that asks something only a person can give — a sign-in, a "prove you are a
+  human" check, a code from their phone — is handed to the person: the agent says what
+  the page wants and asks, its browser stays open for the answer, and the person does it
+  in the live view themselves. Picked over the agent trying to get through such a page
+  itself, and over giving up on it without asking.
 - The skill calls the command by its full name and a version range,
   `npx @openagt/skill-browser@0.1`: the name is ours on npm, so no other package can run
   under it, and nothing is installed in the project. Picked over `npx browser` with the

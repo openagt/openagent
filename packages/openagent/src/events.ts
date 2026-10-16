@@ -98,13 +98,15 @@ export type OpenAgentEvent = { at?: string } & (
   | { kind: 'driver'; event: DriverEvent }
   /**
    * A live screen something the agent ran is showing: where it answers, on the loopback of the
-   * computer the run is on, live while it is the newest open screen at that address and the run
-   * has not ended. `label` names what it showed then. The same address with `ended` says the
-   * screen has gone. A diary line a command appends itself (agent-driver's `DIARY_ENV`);
+   * computer the run is on, live while it is the newest open screen at that address. `label`
+   * names what it showed then. The same address with `ended` says the screen has gone, and with
+   * `until` that it outlives the run, up to that time: a screen is a browser the person looks at
+   * and clicks in, which the run ending does not take from them. Both of those are rows a reader
+   * shows nothing for. A diary line a command appends itself (agent-driver's `DIARY_ENV`);
    * OpenAgent passes a watcher's calls on to the address (dashboard/screen.ts) and knows nothing
    * of what the screen is.
    */
-  | { kind: 'screen'; url: string; label: string; ended?: true }
+  | { kind: 'screen'; url: string; label: string; ended?: true; until?: string }
   /** An OpenAgent-level log line. */
   | { kind: 'log'; message: string }
   /**
