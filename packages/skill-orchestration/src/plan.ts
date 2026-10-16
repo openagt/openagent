@@ -1,16 +1,20 @@
 import { createHash } from 'node:crypto'
+import { appendFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { DATA_BRANCH, fileBranchPath, nodeBranchFileFs, withFileBranch, type GitRunner } from '@openagt/agent-data'
 import { worktreePath } from '@openagt/skill-branches'
 import { personDir, runCardFile, RUNS_DIR } from '@openagt/skill-logs'
-import { continuationPrompt } from '@openagt/agent-driver'
-import { readLiveDiary } from '@openagt/agent-runner'
+import { continuationPrompt, logDiaryFile } from '@openagt/agent-driver'
+import { liveDir, readLiveDiary } from '@openagt/agent-runner'
 
 /**
  * A main agent's plan: one markdown file beside its run record on the data branch, and the
  * person's approval of it. The plan is what the person reads before any subagent starts; the
  * approval is their answer to one question, which names the plan by a mark made from its text,
  * so a plan changed after it was approved is a plan not approved.
+ *
+ * The tasks the main agent did itself are marked in the same log: a line of their own, written by
+ * `done`, the main agent's counterpart of landing a subagent.
  */
 
 /** The option the person picks to let the subagents start. */
@@ -70,4 +74,27 @@ export async function planApproved(repo: string, id: string, text: string): Prom
   const approval = continuationPrompt(planQuestion(text), APPROVE)
   const diary = await readLiveDiary(worktreePath(repo, id), id)
   return diary.some(line => line.kind === 'start' && typeof line['prompt'] === 'string' && line['prompt'].startsWith(approval))
+}
+
+/** The kind of the line `done` writes in the main agent's log: a task of its plan it did itself. */
+export const DONE_KIND = 'task-done'
+
+/**
+ * Mark a task of a run's plan as done by the run itself: a line in its log, as its checkout holds
+ * it, where the person's approval is read from too. The log, not the card: the runner writes the
+ * card it keeps in memory over the record at the end of every turn, so a field put on the record
+ * from outside is gone the moment the turn ends, while a line appended to the log is copied onto
+ * the record with every other line.
+ */
+export async function markDone(repo: string, id: string, task: string, at: string): Promise<void> {
+  const log = join(liveDir(worktreePath(repo, id)), logDiaryFile(id))
+  // Never a log of its own: a mark in a file the session does not keep would be copied nowhere.
+  if (!(await stat(log).then(s => s.isFile(), () => false))) throw new Error(`run ${id} has no log in its checkout to mark the task in`)
+  await appendFile(log, JSON.stringify({ kind: DONE_KIND, task, at }) + '\n')
+}
+
+/** The tasks a run marked done itself, by their ids. */
+export async function doneTasks(repo: string, id: string): Promise<Set<string>> {
+  const diary = await readLiveDiary(worktreePath(repo, id), id)
+  return new Set(diary.flatMap(line => (line.kind === DONE_KIND && typeof line['task'] === 'string' ? [line['task']] : [])))
 }

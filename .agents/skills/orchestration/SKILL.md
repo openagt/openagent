@@ -21,6 +21,7 @@ npx @openagt/skill-orchestration@0.1 stop <id>      stop a subagent that is runn
 npx @openagt/skill-orchestration@0.1 retry <id> "<what to do differently>"
                                                     another subagent on the task that one did, told what to do differently
 npx @openagt/skill-orchestration@0.1 land <id>      merge an ended subagent's branch into yours, run the `Check:` line of the task it did, then delete that branch
+npx @openagt/skill-orchestration@0.1 done <task>    mark a task you did yourself as done, once your work on it is committed
 ```
 
 A refusal exits 1 with a line on stderr saying why.
@@ -54,7 +55,7 @@ What to change, for a reader who knows nothing of your conversation.
 
 One `## ` heading per task, and the heading is the task's name: it goes on the record of the subagent that does it and is what a person reads in a list of runs, so name the work. Leave out `Files:`, `Needs:` and `Check:` where a task has none. `Uncertainty:` counts the significant alternatives the task holds, never syntax: 0 when the right way is clear. **Only a task at 0 may be a subagent** — nobody answers a subagent's question — so keep every other task for yourself, and say in the plan which ones those are.
 
-The `Check:` line above the first task is the project's own checks, and `land` runs it once the last task is landed. It is the plan's, not a task's: no subagent is told it. A task's own `Check:` line goes under its heading, and `land` runs that one when that task's work is merged.
+The `Check:` line above the first task is the project's own checks, and it runs once every task is landed or done. It is the plan's, not a task's: no subagent is told it. A task's own `Check:` line goes under its heading, and `land` runs that one when that task's work is merged.
 
 Save it with `plan <file>`, which answers the tasks it read, each with the `id` to start it by: read them back against what you wrote. A file it cannot read as a task list is refused and not saved. Then show the plan in your reply and ask the person with this block as the very last thing in it, `<question>` being the `question` the command answered, copied exactly:
 
@@ -70,9 +71,9 @@ Each task owns the files its `Files:` line lists and touches nothing outside the
 
 ## Start
 
-Commit first: a subagent's branch starts from your branch's last commit. Then `start --task <id>`, one task of the plan at a time. The command writes the subagent's prompt itself, out of the plan — the shared context, the task's own words, the files it owns and its check line — so there is nothing to quote, and the person's settings pick the model from the task's `Level:`. `start` is refused with `limit` while as many of your subagents run as the person allows, and with `needs` for a task whose `Needs:` names a task that is not landed yet: the refusal says of each one whether nobody started it, it is running, or it ended and was not landed, so you know whether to start it, wait for it, or land it.
+Commit first: a subagent's branch starts from your branch's last commit. Then `start --task <id>`, one task of the plan at a time. The command writes the subagent's prompt itself, out of the plan — the shared context, the task's own words, the files it owns and its check line — so there is nothing to quote, and the person's settings pick the model from the task's `Level:`. `start` is refused with `limit` while as many of your subagents run as the person allows, and with `needs` for a task whose `Needs:` names a task that is not landed or done yet: the refusal says of each one whether nobody started it, it is running, or it ended and was not landed, so you know whether to start it, wait for it, or land it.
 
-`next` answers all of that in one go: every task of the plan with its state — `landed`, `running`, `ended` (it ended and was not landed: land it or retry it), `waiting` (it `needs` tasks that are not landed), `yours` (`start` refuses it: it is uncertain, unrated or at no level), `startable` — and `places`, how many more subagents may run at once. Read it instead of keeping the state of your plan in your head.
+`next` answers all of that in one go: every task of the plan with its state — `landed`, `done` (you marked it done), `running`, `ended` (it ended and was not landed: land it or retry it), `waiting` (it `needs` tasks that are not landed), `yours` (`start` refuses it: it is uncertain, unrated or at no level, so do it yourself), `startable` — and `places`, how many more subagents may run at once. Read it instead of keeping the state of your plan in your head.
 
 ## Then end your reply
 
@@ -80,10 +81,14 @@ After starting the subagents, end your reply: do not wait, sleep or poll `list`.
 
 ## Land, and what it checks
 
-`land <id>` merges that subagent's branch into yours, then runs the `Check:` line of the task it did, in your checkout, on the work as it now stands. The land after which every task of the plan is landed runs the plan's own check too, the project's. A check that fails is a refusal carrying the command, its exit code and what it printed: the merge stays in and the subagent's branch stays alive, so fix it on your branch, commit, and `land <id>` again, which then only runs the check. A land that ran no check of the task's says why in `unchecked`: the record does not say which task that subagent did, the plan no longer holds that task, or the task names no `Check:` line. Read it — a land that checked nothing is not a land that checked and passed.
+`land <id>` merges that subagent's branch into yours, then runs the `Check:` line of the task it did, in your checkout, on the work as it now stands. The land after which every task of the plan is landed or done runs the plan's own check too, the project's. A check that fails is a refusal carrying the command, its exit code and what it printed: the merge stays in and the subagent's branch stays alive, so fix it on your branch, commit, and `land <id>` again, which then only runs the check. A land that ran no check of the task's says why in `unchecked`: the record does not say which task that subagent did, the plan no longer holds that task, or the task names no `Check:` line. Read it — a land that checked nothing is not a land that checked and passed.
 
 Where the work is wrong rather than nearly right, `retry <id> "<what to do differently>"` starts another subagent on the same task, with your sentence added to the task's words. Its branch starts from your branch, like any other subagent's: the failed attempt's commits stay on its own branch for you to read, and the retry's branch is the one to land. A subagent that ended `done` may be retried too — a check failing on `land` is how a `done` subagent turns out to have failed; one that is still running is refused.
 
-## When every task is landed
+## Your own tasks
 
-Say so and end your reply: publish nothing yourself. Your branch becomes one pull request when the person publishes it, or asks you to: then, and only once every task is landed, publish it the way this project publishes work, with the tasks listed in the pull request's body.
+A task you keep is finished only when you say so: commit your work on it, then `done <task>`. Like `land`, it runs the task's `Check:` line in your checkout, and the plan's own check when this was the last task left; a check that fails is a refusal that marks nothing, so fix it, commit, and mark it again. From then on `next` says `done`, a task that `Needs:` it may start, and the plan's own check counts it. A mark is never taken back. `done` is refused for a task a subagent landed or is running.
+
+## When every task is landed or done
+
+Say so and end your reply: publish nothing yourself. Your branch becomes one pull request when the person publishes it, or asks you to: then, and only once every task is landed or done, publish it the way this project publishes work, with the tasks listed in the pull request's body.
