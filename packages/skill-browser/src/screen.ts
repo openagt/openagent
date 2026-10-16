@@ -10,12 +10,18 @@ import type { CdpSession } from './cdp.js'
  * up. So the page hovers under it, a press and a drag are a press and a drag (a slider moves,
  * words are selected), and a click is what a down and an up at one place already make. `leave`
  * says the pointer left the picture, so what it hovered stops hovering.
+ *
+ * Pasting is `text`, the same as typing it: what the person's own browser took off their
+ * clipboard goes where the page's cursor is, which is how a password out of a password manager
+ * reaches a sign-in form. Copying needs no input at all: the browser tells whoever watches what
+ * the page has selected, and their own browser copies that.
  */
 export type ScreenInput =
   | { type: 'move'; x: number; y: number; held?: boolean }
   | { type: 'down'; x: number; y: number; clicks?: number }
   | { type: 'up'; x: number; y: number; clicks?: number }
   | { type: 'leave' }
+  | { type: 'selectAll' }
   | { type: 'scroll'; x: number; y: number; deltaY: number }
   | { type: 'text'; text: string }
   | { type: 'key'; key: string }
@@ -57,6 +63,13 @@ export function inputCalls(input: ScreenInput): CdpCall[] {
       const at = place(input)
       return at ? [{ method: 'Input.dispatchMouseEvent', params: { ...at, type: 'mouseReleased', button: 'left', buttons: 0, clickCount: clicks(input.clicks) } }] : []
     }
+    case 'selectAll':
+      // DevTools carries the editing commands a key press stands for, which is how a browser does
+      // select-all itself: the page is never sent a stray "a" that a field would take as typing.
+      return [
+        { method: 'Input.dispatchKeyEvent', params: { type: 'rawKeyDown', key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, modifiers: 4, commands: ['selectAll'] } },
+        { method: 'Input.dispatchKeyEvent', params: { type: 'keyUp', key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, modifiers: 4 } },
+      ]
     case 'leave':
       // DevTools has no "the mouse left": a move to a point off the page is one, and what the
       // page hovered stops hovering.

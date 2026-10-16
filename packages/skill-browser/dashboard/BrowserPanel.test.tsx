@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { ModuleHostContext, type ModuleHost } from '@openagt/dashboard/module'
-import { ACTED, CONSOLE, CURSOR, FRAME, PULSE, STATE, streamPart, type ConsoleLine } from '../src/stream.js'
+import { ACTED, CONSOLE, CURSOR, FRAME, PULSE, SELECTED, STATE, streamPart, type ConsoleLine } from '../src/stream.js'
 import { BrowserPanel } from './BrowserPanel.js'
 
 // The Browser pane inside a faked dashboard: `watchScreen` answers a stream the test writes to,
@@ -64,6 +64,16 @@ function dashboard() {
       })
     },
   }
+}
+
+/** A copy or a paste as the browser makes one, with a clipboard of its own: jsdom has none. */
+function clipboardEvent(type: 'copy' | 'paste', text = ''): Event & { clipboardData: DataTransfer } {
+  const held = new Map<string, string>(text ? [['text/plain', text]] : [])
+  const event = new Event(type, { bubbles: true, cancelable: true })
+  Object.defineProperty(event, 'clipboardData', {
+    value: { getData: (kind: string) => held.get(kind) ?? '', setData: (kind: string, value: string) => void held.set(kind, value) },
+  })
+  return event as Event & { clipboardData: DataTransfer }
 }
 
 /** The start of a JPEG that says it is a picture of this size. */
@@ -154,6 +164,39 @@ test('the mouse hovers, drags and leaves, and the pointer takes the shape the pa
   fireEvent.pointerDown(view, { pointerId: 1, pointerType: 'mouse', clientX: 40, clientY: 100, detail: 1 })
   fireEvent.pointerLeave(view, { pointerId: 1, pointerType: 'mouse' })
   expect(world.sent.at(-1)).toEqual({ type: 'down', x: 0, y: 0, clicks: 1 })
+})
+
+test('what the page has selected is copied out, what is pasted goes in, and select-all is a command', async () => {
+  const world = dashboard()
+  render(show(world.host))
+  await waitFor(() => expect(world.host.watchScreen).toHaveBeenCalled())
+  await world.says(FRAME, jpeg())
+  const view = await screen.findByRole('img', { name: "The agent's browser" })
+
+  // Nothing selected in the page: a copy is the browser's own, and takes nothing from here.
+  const empty = clipboardEvent('copy')
+  fireEvent(view, empty)
+  expect(empty.defaultPrevented).toBe(false)
+
+  // The browser says what the page has selected; a copy hands exactly that to this browser.
+  await world.says(SELECTED, new TextEncoder().encode(JSON.stringify({ text: 'hunter2' })))
+  const copy = clipboardEvent('copy')
+  fireEvent(view, copy)
+  expect(copy.clipboardData!.getData('text/plain')).toBe('hunter2')
+  expect(copy.defaultPrevented).toBe(true)
+
+  // What this browser has on its clipboard goes into the page as typing, where its cursor is.
+  const paste = clipboardEvent('paste', 'from the password manager')
+  fireEvent(view, paste)
+  expect(world.sent.at(-1)).toEqual({ type: 'text', text: 'from the password manager' })
+  expect(paste.defaultPrevented).toBe(true)
+
+  // Select-all is the page's, not the dashboard's; every other key with a hold on it is not.
+  fireEvent.keyDown(view, { key: 'a', metaKey: true })
+  expect(world.sent.at(-1)).toEqual({ type: 'selectAll' })
+  fireEvent.keyDown(view, { key: 'r', metaKey: true })
+  fireEvent.keyDown(view, { key: 'a', metaKey: true, altKey: true })
+  expect(world.sent.filter(input => (input as { type: string }).type === 'selectAll')).toHaveLength(1)
 })
 
 test("the agent's own pointer is drawn where it last acted, and goes with the page", async () => {

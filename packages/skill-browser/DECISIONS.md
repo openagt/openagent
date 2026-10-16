@@ -33,6 +33,12 @@ already made, and lists it in its pull request; for anything else it proposes an
   without its query (a `?…` stands for it), and cut in the middle when it is still longer
   than a line. Picked over the address whole, which on a search page was three hundred
   characters and wrapped over five lines of the chat.
+- What a person watching pastes goes into the page as typing, and what the page has
+  selected is theirs to copy: the browser tells whoever watches what is selected as it
+  changes, so their own browser has it in hand when they press the keys. Picked over
+  asking the browser for the selection at the moment of the press, which is a call to
+  another computer in a moment that does not wait. Select-all is sent as the command the
+  keys stand for, so no letter is typed into a field.
 - The agent's own pointer is drawn on the picture where the agent last clicked or typed,
   and stays there until it acts again or the page goes elsewhere. Picked over drawing
   nothing, where a person looking a moment later cannot tell where the agent is working.

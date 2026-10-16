@@ -6,9 +6,9 @@ import { dirname } from 'node:path'
 import { activePage, connectCdp, listPages, type CdpSession, type PageTarget } from './cdp.js'
 import { launchChrome, type Chrome } from './chrome.js'
 import { consoleCall, consoleLog, errorsNote, FLOOD_BYTES, FLOOD_LINES, flooded, heardOnce, logEntry, printConsole, thrown, went, type Said } from './console.js'
-import { click, cursorAt, navigate, PageError, press, readPage, run, screenshot, type } from './page.js'
+import { click, cursorAt, navigate, PageError, press, readPage, run, screenshot, selectionIn, type } from './page.js'
 import { inputCalls, stepHistory, type ScreenInput } from './screen.js'
-import { ACTED, CONSOLE, CURSOR, CURSORS, FRAME, MAX_TITLE, MAX_URL, PULSE, STATE, streamPart, type ActedPoint, type Cursor } from './stream.js'
+import { ACTED, CONSOLE, CURSOR, CURSORS, FRAME, MAX_SELECTION, MAX_TITLE, MAX_URL, PULSE, SELECTED, STATE, streamPart, type ActedPoint, type Cursor } from './stream.js'
 
 /**
  * The browser's own process: started by the first `open`, it keeps Chrome, the page connection
@@ -113,12 +113,13 @@ const CURSOR_EVERY_MS = 100
 /** How long the browser stays after its run ended, unused, for the person to look at the page and click in it. */
 export const AFTER_RUN_MS = 10 * 60 * 1000
 
-/** One person watching: the answer their stream is written to, the picture kept for when it can take one, what it was last told the address bar says and the pointer looks like, and the number of the console line it gets next. */
+/** One person watching: the answer their stream is written to, the picture kept for when it can take one, what it was last told the address bar says, the pointer looks like and the page has selected, and the number of the console line it gets next. */
 interface Viewer {
   res: ServerResponse
   waiting?: Buffer
   said?: string
   shape?: Cursor
+  selected?: string
   next: number
 }
 
@@ -190,6 +191,8 @@ export async function runHost(opts: HostOptions): Promise<void> {
   let asking = false
   /** Where the agent last clicked or typed; none until it does. */
   let acted: ActedPoint | undefined
+  /** What the page has selected, as the watchers were last told. */
+  let selected = ''
 
   /** The last attach, so two callers never attach to a new tab at once. */
   let attaching: Promise<CdpSession> | undefined
@@ -334,6 +337,26 @@ export async function runHost(opts: HostOptions): Promise<void> {
       asking = false
     }
     for (const viewer of viewers) point(viewer)
+  }
+
+  /** What the page has selected, for one watcher that has not been told this much. */
+  const tellSelection = (viewer: Viewer): void => {
+    if (viewer.selected === selected || viewer.res.writableNeedDrain) return
+    viewer.selected = selected
+    viewer.res.write(streamPart(SELECTED, Buffer.from(JSON.stringify({ text: selected }))))
+  }
+
+  /**
+   * What the page has selected, told to whoever watches when it changed. The picture is pixels:
+   * a person copying out of it copies these words, with their own browser, so they must have them
+   * before they press the keys. Read after the things that change a selection — a press that ends
+   * a drag, a key, select-all — and never while the pointer is only moving.
+   */
+  const readSelection = async (p: CdpSession): Promise<void> => {
+    const now = await selectionIn(p, MAX_SELECTION)
+    if (now === selected) return
+    selected = now
+    for (const viewer of viewers) tellSelection(viewer)
   }
 
   /** Where the agent just acted, told to whoever watches, so they see the agent's own pointer move. */
@@ -492,6 +515,7 @@ export async function runHost(opts: HostOptions): Promise<void> {
       // the picture Chrome draws as it starts.
       if (latest) show(viewer, latest)
       point(viewer)
+      tellSelection(viewer)
       if (acted) viewer.res.write(streamPart(ACTED, Buffer.from(JSON.stringify(acted))))
       pour(viewer)
       void cast()
@@ -513,6 +537,8 @@ export async function runHost(opts: HostOptions): Promise<void> {
       // The page hovers under the pointer now: what it shows there is asked for and passed on,
       // without the person waiting for the answer to their move.
       if (input?.type === 'move') void follow(p, input.x, input.y).catch(() => {})
+      // A press let go, a key, select-all: what the page has selected may be another thing now.
+      else if (calls.length && input?.type !== 'scroll') void readSelection(p).catch(() => {})
       return void res.writeHead(calls.length ? 204 : 400).end()
     }
     if (url.pathname === '/command') {

@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp, CornerDownRight, MousePo
 import { Button, Input, useModuleHost, type ModulePanelProps } from '@openagt/dashboard/module'
 import { KEPT_LINES } from '../src/console.js'
 import type { ScreenInput } from '../src/screen.js'
-import { ACTED, CONSOLE, CURSOR, FRAME, jpegSize, readActed, readConsoleLine, readCursor, readState, STATE, streamReader, type ActedPoint, type ConsoleLevel, type ConsoleLine, type Cursor } from '../src/stream.js'
+import { ACTED, CONSOLE, CURSOR, FRAME, jpegSize, MAX_SELECTION, readActed, readConsoleLine, readCursor, readSelection, readState, SELECTED, STATE, streamReader, type ActedPoint, type ConsoleLevel, type ConsoleLine, type Cursor } from '../src/stream.js'
 
 /** How long until a session with no browser is asked again whether it has one. */
 const ASK_AGAIN_MS = 3_000
@@ -22,7 +22,9 @@ const CONSOLE_OPEN_KEY = 'oa.browser-console'
  * The Browser pane: the browser the session's agent opened, live. The address bar (back, forward,
  * reload, the address) over the picture; the person's mouse, their scrolling and their typing on
  * the picture go to the page, as a mouse and not as bare clicks, so the page hovers, selects and
- * drags under them and the pointer takes the shape the page gives it. The agent's own pointer is
+ * drags under them and the pointer takes the shape the page gives it. What they paste goes in as
+ * typing, and what the page has selected is theirs to copy, so a password comes out of their own
+ * password manager and into the page. The agent's own pointer is
  * drawn where it last clicked or typed. Under the picture, the page's console, behind a bar that
  * says how many errors the page has. The stream is held only while the pane is on screen: a
  * closed pane, or a page in the background asks the session's computer for nothing.
@@ -41,6 +43,8 @@ export function BrowserPanel({ projectId, agentId, activity }: ModulePanelProps)
   const [cursor, setCursor] = useState<Cursor>('default')
   /** Where the agent last clicked or typed, and which act it was: `n` counts them, so each one draws itself again. */
   const [agent, setAgent] = useState<{ at: ActedPoint; n: number } | undefined>(undefined)
+  /** What the page has selected, as the browser last said: what a copy takes, and it must be in hand before the keys are pressed. */
+  const selected = useRef('')
   /** How large the picture is, in its own pixels: where on it the agent's pointer belongs. */
   const [picture, setPicture] = useState<{ width: number; height: number } | undefined>(undefined)
   const editing = useRef(false)
@@ -70,6 +74,7 @@ export function BrowserPanel({ projectId, agentId, activity }: ModulePanelProps)
       const reader = stream.getReader()
       setAgent(undefined)
       setCursor('default')
+      selected.current = ''
       // A stream begins with the console's kept lines: what an earlier stream brought is let go.
       setLines([])
       let newest = 0
@@ -104,6 +109,9 @@ export function BrowserPanel({ projectId, agentId, activity }: ModulePanelProps)
             } else if (part.kind === ACTED) {
               const said = readActed(part.bytes)
               if (said) setAgent({ at: said, n: ++acts })
+            } else if (part.kind === SELECTED) {
+              const said = readSelection(part.bytes)
+              if (said !== undefined) selected.current = said
             } else if (part.kind === CONSOLE) {
               const said = readConsoleLine(part.bytes)
               // Each line once, in its order: its number says so, whatever the stream repeats.
@@ -138,7 +146,16 @@ export function BrowserPanel({ projectId, agentId, activity }: ModulePanelProps)
 
   const send = (input: ScreenInput): void => void services.current.sendToScreen(projectId, agentId, input)
   const onKey = (e: KeyboardEvent): void => {
-    if (e.metaKey || e.ctrlKey || e.altKey) return
+    // Copy and paste are the browser's own events, below; select-all is not, so it is sent as
+    // the command it stands for. Every other key with a hold on it belongs to the dashboard.
+    if (e.metaKey || e.ctrlKey) {
+      if (e.key === 'a' && !e.altKey) {
+        send({ type: 'selectAll' })
+        e.preventDefault()
+      }
+      return
+    }
+    if (e.altKey) return
     if (NAMED_KEYS.has(e.key)) send({ type: 'key', key: e.key })
     else if (e.key.length === 1) send({ type: 'text', text: e.key })
     else return
@@ -189,6 +206,19 @@ export function BrowserPanel({ projectId, agentId, activity }: ModulePanelProps)
             style={live ? { cursor } : undefined}
             className={live ? 'max-h-full max-w-full touch-none outline-none focus-visible:ring-2 focus-visible:ring-ring' : 'hidden'}
             onKeyDown={onKey}
+            // What the page has selected is already in hand, so a copy answers at once, as a
+            // copy must: there is no asking the other computer in the moment the keys are down.
+            onCopy={e => {
+              if (!selected.current) return
+              e.clipboardData.setData('text/plain', selected.current)
+              e.preventDefault()
+            }}
+            // What their own browser took off their clipboard goes into the page as typing.
+            onPaste={e => {
+              const text = e.clipboardData.getData('text/plain').slice(0, MAX_SELECTION)
+              if (text) send({ type: 'text', text })
+              e.preventDefault()
+            }}
           />
         </Hand>
         {live && agent && picture && <AgentPointer at={agent.at} n={agent.n} canvas={canvas} picture={picture} />}

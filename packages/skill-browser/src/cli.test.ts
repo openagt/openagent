@@ -384,6 +384,11 @@ test('the screen passes on only input it knows, and a person\'s mouse as a mouse
   assert.equal(inputCalls({ type: 'up', x: 1, y: 2, clicks: 2 })[0]?.params['clickCount'], 2, 'a second click in the same place selects a word')
   assert.equal(inputCalls({ type: 'up', x: 1, y: 2, clicks: 9 })[0]?.params['clickCount'], 1, 'and nothing stranger than a triple click')
   assert.equal(inputCalls({ type: 'leave' })[0]?.params['x'], -1, 'the pointer left the picture: the page hovers over nothing')
+  // Select-all is sent as the command the keys stand for, so no stray "a" is typed into a field.
+  const all = inputCalls({ type: 'selectAll' })
+  assert.deepEqual(all.map(call => call.params['type']), ['rawKeyDown', 'keyUp'])
+  assert.deepEqual(all[0]?.params['commands'], ['selectAll'])
+  assert.equal(all[0]?.params['text'], undefined)
   assert.deepEqual(inputCalls({ type: 'move', x: Number.NaN, y: 2 }), [])
   assert.deepEqual(inputCalls({ type: 'down', x: 1, y: Number.POSITIVE_INFINITY }), [])
   assert.deepEqual(inputCalls({ type: 'navigate', url: 'file:///etc/passwd' }), [])
