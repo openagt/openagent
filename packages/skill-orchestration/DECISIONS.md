@@ -104,6 +104,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   check, the project's. Picked over landing whatever a subagent committed and finding out at the
   pull request, and over the project's checks on every land, which pays for the whole project's
   build and tests once per task and asks a half-landed plan to pass them.
+- A task the main agent kept for itself is finished when it marks it so with `done <task>`, on its
+  own record: from then on it counts wherever a landed task does, and whichever `land` or `done`
+  finishes the plan runs the plan's own check. Picked over a command that runs the plan's check on
+  demand, which the skill file would have to tell the main agent to call: a rule that lives only as
+  prose is forgotten, and a plan holding one task of the main agent's own never ran its check.
 - `land` keeps the subagent's last commit, under `refs/landed/<run id>` on this machine,
   and on its record. Picked over the commit id alone: git drops the commit once the main
   agent's branch is squashed and deleted. Picked over saving the list of changed files:

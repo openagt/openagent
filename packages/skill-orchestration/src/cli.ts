@@ -8,7 +8,7 @@ import { isPidAlive, readyToRun, spawnRun, withdrawMarker, writeMarker } from '@
 import { parseSettings, readSettings, writeSettings } from './settings.js'
 import { cleanup } from './cleanup.js'
 import { runCommand } from './check.js'
-import { Refused, landSubagent, listSubagents, nextTasks, readSubagent, retrySubagent, savePlan, showPlan, startSubagent, stopSubagent, type Started, type SubagentDeps } from './subagents.js'
+import { Refused, landSubagent, listSubagents, markTaskDone, nextTasks, readSubagent, retrySubagent, savePlan, showPlan, startSubagent, stopSubagent, type Started, type SubagentDeps } from './subagents.js'
 
 /**
  * The `orchestration` command: JSON on stdout, one line for a person on stderr, and the exit code
@@ -25,8 +25,9 @@ export const USAGE = `usage: orchestration <command>
                     agent and model the person set for the task's level; answers its id at once; refused until
                     the person approved your saved plan, for a task of any uncertainty, for one whose \`Needs:\`
                     tasks are not landed, and while as many of your subagents run as the person allows
-  next              every task of your plan and where it stands — landed, running, ended and not landed, waiting
-                    for another task, yours to do, or startable — and how many more subagents may run at once
+  next              every task of your plan and where it stands — landed, done by you, running, ended and not
+                    landed, waiting for another task, yours to do, or startable — and how many more subagents may
+                    run at once
   retry <id> "<feedback>"
                     another subagent on the task that one did, on a branch started from yours, told what to do
                     differently; refused while that subagent is running, and by every rule start holds to
@@ -38,6 +39,10 @@ export const USAGE = `usage: orchestration <command>
   land <id>         merge an ended subagent's branch into yours, run the \`Check:\` line of the task it did, and
                     the plan's own check when that was the last task, then delete that branch; a check that
                     fails is refused with its output, and the merge and the branch stay
+  done <task>       mark a task of your plan that you did yourself as done, once your work on it is committed:
+                    runs its \`Check:\` line, and the plan's own check when that was the last task; a check that
+                    fails is refused with its output and marks nothing; refused for a task a subagent landed or
+                    runs
   cleanup           remove what this package left in the project: the settings file, then .orchestration/ and the rule hiding it from git once it is empty;
                     the command a dashboard asks for when a project is removed with its files
 
@@ -163,6 +168,11 @@ const COMMANDS: Record<string, Command> = {
   async land(args, io, deps) {
     const { positionals } = parse(args, {}, 1)
     return { ok: true, ...(await landSubagent(await project(io.cwd, deps), io.env, positionals[0]!, deps)) }
+  },
+
+  async done(args, io, deps) {
+    const { positionals } = parse(args, {}, 1)
+    return { ok: true, ...(await markTaskDone(await project(io.cwd, deps), io.env, positionals[0]!, deps)) }
   },
 
   async cleanup(args, io, deps) {

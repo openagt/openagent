@@ -342,7 +342,7 @@ test('start: refused for a task whose `Needs:` tasks are not landed, saying what
     // Nobody started what it needs.
     const nobody = await run(checkout, MAIN, ['start', '--task', DOCS])
     assert.deepEqual([nobody.code, nobody.out, nobody.started], [1, { ok: false, reason: 'needs', task: DOCS, waiting: [{ task: TESTS, state: 'unstarted' }] }, []])
-    assert.match(nobody.err, /the task "2\. Add the docs" needs work that is not on your branch yet: add-the-tests \(nobody started it\)/)
+    assert.match(nobody.err, /the task "2\. Add the docs" needs work that is not on your branch yet: add-the-tests \(nobody started it, and you have not marked it done\)/)
     assert.match(nobody.err, /start this task once every one of them is landed/)
 
     // One that is running is one to wait for; one that ended unlanded is one to land.
@@ -871,7 +871,7 @@ test('land: the task\'s own `Check:` line runs on the merged work, and a check t
     const typo = await endedSubagent(repo, OTHERS, 'typo.txt', { task: TYPO })
     const broken = await run(checkout, MAIN, ['land', OTHERS], { run: async () => ({ code: 1, output: 'src/a.ts(3,1): error TS2322' }) })
     assert.deepEqual([broken.code, broken.out.reason, broken.out.command, broken.out.output], [1, 'project-check', PROJECT_CHECK, 'src/a.ts(3,1): error TS2322'])
-    assert.match(broken.err, /every task of the plan is landed and the plan's own check, `pnpm verify`, failed with exit 1/)
+    assert.match(broken.err, /every task of the plan is landed or done and the plan's own check, `pnpm verify`, failed with exit 1/)
     assert.equal(await hasRef(repo, `refs/heads/${typo}`), true)
     const last = await run(checkout, MAIN, ['land', OTHERS])
     // The last land runs the project's check; this task names no `Check:` line of its own, and the
@@ -889,6 +889,127 @@ test('land: the task\'s own `Check:` line runs on the merged work, and a check t
     const nothing = await run(checkout, MAIN, ['land', '2026-10-01T10-06-00-000Z'])
     // Its task is no longer in the plan, so there is no check of its own to run: said, not silent.
     assert.deepEqual([nothing.code, nothing.out, nothing.checks], [0, { ok: true, id: '2026-10-01T10-06-00-000Z', branch: byHand, merged: true, projectCheck: PROJECT_CHECK, unchecked: 'task-gone' }, [PROJECT_CHECK]])
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
+/** A plan with a task the main agent keeps, since it is uncertain, and a task that needs it. */
+const KEPT = `# Split the work
+
+${CONTEXT}
+
+Check: ${PROJECT_CHECK}
+
+## 1. Add the tests
+
+Level: simple
+Check: pnpm test
+Uncertainty: 0
+
+## 2. Change the deploy
+
+Check: pnpm deploy:check
+Uncertainty: 1
+
+## 3. Add the docs
+
+Level: simple
+Needs: Change the deploy
+Uncertainty: 0
+`
+const DEPLOY = 'change-the-deploy'
+
+/** Work committed on the main agent's branch, in its checkout. */
+async function commitIn(checkout: string, file: string): Promise<void> {
+  await writeFile(join(checkout, file), `${file}\n`)
+  await git(['add', '-A'], checkout)
+  await git(['commit', '-q', '-m', `Add ${file}`], checkout)
+}
+
+/** The tasks the main agent marked done, as its own log holds them. */
+async function marks(repo: string): Promise<string[]> {
+  const log = await readFile(join(liveDir(worktreePath(repo, MAIN)), logDiaryFile(MAIN)), 'utf8')
+  return log.split('\n').filter(Boolean).map(line => JSON.parse(line)).filter(line => line.kind === 'task-done').map(line => line.task)
+}
+
+test('done: the main agent\'s own task, marked in its log once committed and checked, is finished for `next`, for `Needs:` and for the last land', async () => {
+  const repo = await testRepo()
+  try {
+    const checkout = await mainAgent(repo)
+    const question = await savePlan(repo, checkout, MAIN, KEPT)
+    assert.deepEqual((await run(checkout, MAIN, ['done', DEPLOY])).out, { ok: false, reason: 'not-approved', question }, 'nothing is done of a plan the person did not approve')
+    await prompted(repo, MAIN, continuationPrompt(question, 'Approve'))
+
+    // Kept, and the task that needs it waits for it, saying it is the main agent's to mark.
+    const before = await run(checkout, MAIN, ['next'])
+    assert.deepEqual(before.out.tasks.map((task: { state: string }) => task.state), ['startable', 'yours', 'waiting'])
+    const waiting = await run(checkout, MAIN, ['start', '--task', DOCS])
+    assert.deepEqual([waiting.out.reason, waiting.out.waiting], ['needs', [{ task: DEPLOY, state: 'unstarted' }]])
+    assert.match(waiting.err, /change-the-deploy \(nobody started it, and you have not marked it done\)/)
+    assert.match(waiting.err, /do it yourself and mark it with `done <task>`/)
+
+    // Not committed is not done, and a check that fails marks nothing.
+    await writeFile(join(checkout, 'deploy.yml'), 'on: push\n')
+    const uncommitted = await run(checkout, MAIN, ['done', DEPLOY])
+    assert.deepEqual([uncommitted.code, uncommitted.out, uncommitted.checks], [1, { ok: false, reason: 'uncommitted' }, []])
+    await git(['add', '-A'], checkout)
+    await git(['commit', '-q', '-m', 'Change the deploy'], checkout)
+    const failed = await run(checkout, MAIN, ['done', DEPLOY], { run: async () => ({ code: 3, output: 'the deploy is broken\n' }) })
+    assert.deepEqual([failed.code, failed.out], [1, { ok: false, reason: 'check', task: DEPLOY, command: 'pnpm deploy:check', code: 3, output: 'the deploy is broken' }])
+    assert.match(failed.err, /the check of "2\. Change the deploy", `pnpm deploy:check`, failed in your checkout with exit 3/)
+    assert.match(failed.err, /mark it with `done change-the-deploy` again; nothing is marked yet/)
+    assert.deepEqual(await marks(repo), [])
+
+    // Checked and marked: in the main agent's own log, where its record's lines come from.
+    const done = await run(checkout, MAIN, ['done', DEPLOY])
+    assert.deepEqual([done.code, done.out, done.checks], [0, { ok: true, task: DEPLOY, name: '2. Change the deploy', check: 'pnpm deploy:check' }, ['pnpm deploy:check']], done.err)
+    assert.deepEqual(await marks(repo), [DEPLOY])
+    assert.deepEqual((await run(checkout, MAIN, ['next'])).out.tasks.map((task: { id: string; state: string }) => [task.id, task.state]), [[TESTS, 'startable'], [DEPLOY, 'done'], [DOCS, 'startable']])
+    assert.deepEqual((await run(checkout, MAIN, ['done', DEPLOY])).out, { ok: false, reason: 'done', task: DEPLOY })
+
+    // What needed it starts now; a task a subagent runs, or landed, is no task to mark.
+    const docs = await run(checkout, MAIN, ['start', '--task', DOCS])
+    assert.equal(docs.code, 0, docs.err)
+    assert.deepEqual((await run(checkout, MAIN, ['done', DOCS])).out, { ok: false, reason: 'running', task: DOCS, id: FIRST })
+    assert.deepEqual((await run(checkout, MAIN, ['done', 'no-such-task'])).out, { ok: false, reason: 'no-task', task: 'no-such-task', tasks: [TESTS, DEPLOY, DOCS] })
+    const tests = await endedSubagent(repo, SECOND, 'tests.txt', { task: TESTS })
+    const first = await run(checkout, MAIN, ['land', SECOND])
+    assert.deepEqual([first.out, first.checks], [{ ok: true, id: SECOND, branch: tests, merged: true, check: 'pnpm test' }, ['pnpm test']], 'the docs are not landed yet: no project check')
+    assert.deepEqual((await run(checkout, MAIN, ['done', TESTS])).out, { ok: false, reason: 'landed', task: TESTS, id: SECOND })
+
+    // The last land counts the task the main agent did: the plan's own check runs.
+    const branch = await endedSubagent(repo, FIRST, 'docs.txt', { task: DOCS })
+    const last = await run(checkout, MAIN, ['land', FIRST])
+    assert.deepEqual([last.out, last.checks], [{ ok: true, id: FIRST, branch, merged: true, projectCheck: PROJECT_CHECK, unchecked: 'no-check-line' }, [PROJECT_CHECK]])
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
+test('done: the mark that finishes the plan runs the plan\'s own check, and marks nothing when it fails', async () => {
+  const repo = await testRepo()
+  try {
+    const checkout = await mainAgent(repo)
+    await prompted(repo, MAIN, continuationPrompt(await savePlan(repo, checkout, MAIN, KEPT), 'Approve'))
+    await endedSubagent(repo, FIRST, 'tests.txt', { task: TESTS })
+    await endedSubagent(repo, SECOND, 'docs.txt', { task: DOCS })
+    assert.equal((await run(checkout, MAIN, ['land', FIRST])).code, 0)
+    assert.equal((await run(checkout, MAIN, ['land', SECOND])).checks.length, 0, 'the deploy is not done: no project check yet')
+    await commitIn(checkout, 'deploy.yml')
+
+    const broken = await run(checkout, MAIN, ['done', DEPLOY], { run: async command => ({ code: command === PROJECT_CHECK ? 1 : 0, output: command === PROJECT_CHECK ? 'src/a.ts(3,1): error TS2322' : '' }) })
+    assert.deepEqual([broken.code, broken.out], [1, { ok: false, reason: 'project-check', task: DEPLOY, command: PROJECT_CHECK, code: 1, output: 'src/a.ts(3,1): error TS2322' }])
+    assert.match(broken.err, /every task of the plan is landed or done and the plan's own check, `pnpm verify`, failed with exit 1/)
+    assert.deepEqual(await marks(repo), [], 'nothing is marked')
+
+    const done = await run(checkout, MAIN, ['done', DEPLOY])
+    assert.deepEqual([done.out, done.checks], [{ ok: true, task: DEPLOY, name: '2. Change the deploy', check: 'pnpm deploy:check', projectCheck: PROJECT_CHECK }, ['pnpm deploy:check', PROJECT_CHECK]])
+    assert.deepEqual(await marks(repo), [DEPLOY])
+
+    // A subagent has no plan to mark a task of.
+    await record(repo, OTHERS, { mark: { parent: MAIN } })
+    assert.deepEqual((await run(checkout, OTHERS, ['done', DEPLOY])).out, { ok: false, reason: 'subagent' })
   } finally {
     await removeRepo(repo)
   }

@@ -3,7 +3,7 @@ import { gitReason, type FileBranchWrite, type GitRunner } from '@openagt/agent-
 import { isAgentBranch, removeWorktree, worktreeBranch, worktreeClean, worktreePath } from '@openagt/skill-branches'
 import { agentLines, findRun, listRuns, publicCard, readDiary, type RunCard } from '@openagt/skill-logs'
 import { AGENT_ID_ENV, isDriverName, markerCard, readLiveCard, recordRun, runIdFrom, runnerMark, type DriverName, type readyToRun, type spawnRun } from '@openagt/agent-runner'
-import { APPROVE, planApproved, planQuestion, readPlan, writePlan } from './plan.js'
+import { APPROVE, doneTasks, markDone, planApproved, planQuestion, readPlan, writePlan } from './plan.js'
 import { parsePlan, taskText, type Plan, type PlanTask } from './tasks.js'
 import { cutOutput, type Ran } from './check.js'
 import { DEFAULT_AT_ONCE, LEVELS, readSettings, runnerFor, type Level } from './settings.js'
@@ -126,13 +126,23 @@ function landedTasks(mine: readonly RunCard[]): Set<string> {
   return new Set(mine.flatMap(card => (landed(card) ? [taskIdOf(card) ?? ''] : [])))
 }
 
+/**
+ * The tasks of the plan whose work is on the caller's branch: the ones a subagent of it landed, and
+ * the ones the caller marked done itself. Either is finished for every rule that waits on a task.
+ */
+async function finishedTasks(repo: string, main: string, mine: readonly RunCard[]): Promise<{ landed: Set<string>; done: Set<string>; finished: Set<string> }> {
+  const landed = landedTasks(mine)
+  const done = await doneTasks(repo, main)
+  return { landed, done, finished: new Set([...landed, ...done]) }
+}
+
 /** The caller's subagents on one task, newest first. */
 function runsOn(mine: readonly RunCard[], task: string): RunCard[] {
   return mine.filter(card => taskIdOf(card) === task)
 }
 
 /** What one task of the plan stands at; `next` answers one of these per task. */
-export type TaskState = 'landed' | 'running' | 'ended' | 'waiting' | 'yours' | 'startable'
+export type TaskState = 'landed' | 'done' | 'running' | 'ended' | 'waiting' | 'yours' | 'startable'
 
 /** One task of the plan as `next` answers it: what it is, where its work stands, and what it waits for. */
 export interface TaskStanding {
@@ -143,27 +153,28 @@ export interface TaskStanding {
   state: TaskState
   /** The caller's subagents on this task, newest first: what to read, land or retry. */
   runs?: string[]
-  /** For a task waiting: the tasks it needs that are not landed. */
+  /** For a task waiting: the tasks it needs that are not finished. */
   needs?: string[]
 }
 
-/** The tasks a task needs that are not landed yet; a task that names itself waits for nothing. */
-function unlanded(task: PlanTask, done: ReadonlySet<string>): string[] {
-  return (task.depends ?? []).filter(one => one !== task.id && !done.has(one))
+/** The tasks a task needs that are not finished yet; a task that names itself waits for nothing. */
+function unfinished(task: PlanTask, finished: ReadonlySet<string>): string[] {
+  return (task.depends ?? []).filter(one => one !== task.id && !finished.has(one))
 }
 
 /**
- * Where one task stands, the first of these that holds: landed, a subagent of it is running, a
- * subagent of it ended and was not landed, the main agent's own (no subagent may take it), waiting
- * for a task that is not landed, startable. The order is the order `start` refuses in, so a
- * startable task is one `start` takes.
+ * Where one task stands, the first of these that holds: landed, done by the main agent itself, a
+ * subagent of it is running, a subagent of it ended and was not landed, the main agent's own (no
+ * subagent may take it), waiting for a task that is not finished, startable. The order is the order
+ * `start` refuses in, so a startable task is one `start` takes.
  */
-function stateOf(task: PlanTask, runs: readonly RunCard[], done: ReadonlySet<string>): { state: TaskState; needs?: string[] } {
-  if (done.has(task.id)) return { state: 'landed' }
+function stateOf(task: PlanTask, runs: readonly RunCard[], tasks: { landed: ReadonlySet<string>; done: ReadonlySet<string>; finished: ReadonlySet<string> }): { state: TaskState; needs?: string[] } {
+  if (tasks.landed.has(task.id)) return { state: 'landed' }
+  if (tasks.done.has(task.id)) return { state: 'done' }
   if (runs.some(card => card.status === 'running')) return { state: 'running' }
   if (runs.length > 0) return { state: 'ended' }
   if (task.uncertainty === undefined || task.uncertainty > 0 || task.level === undefined) return { state: 'yours' }
-  const needs = unlanded(task, done)
+  const needs = unfinished(task, tasks.finished)
   return needs.length > 0 ? { state: 'waiting', needs } : { state: 'startable' }
 }
 
@@ -225,7 +236,7 @@ async function start(repo: string, main: RunCard, which: string, opts: { retries
   // No subagent before the person said yes to the plan as it is saved now, and no words but its own.
   const { plan, task } = await taskOfPlan(repo, main.id, which, deps)
   const mine = await subagentsOf(repo, main.id)
-  waitsFor(task, mine)
+  waitsFor(task, mine, (await finishedTasks(repo, main.id, mine)).finished)
   const settings = await readSettings(repo)
   const own = { driver: main.driver !== undefined && isDriverName(main.driver) ? main.driver : 'claude-code', ...(main.model !== undefined ? { model: main.model } : {}) } as const
   const { driver, model } = runnerFor(settings, task.level, own)
@@ -266,13 +277,14 @@ async function start(repo: string, main: RunCard, which: string, opts: { retries
 }
 
 /**
- * A task whose `Needs:` names a task that is not landed is refused: the subagent's checkout starts
- * from the main agent's branch, so a task started before the work it needs is landed is a task
- * done against work that is not there. What each of those tasks stands at is said, since the main
- * agent waits for one that is running, lands one that ended, and starts one nobody started.
+ * A task whose `Needs:` names a task that is not finished is refused: the subagent's checkout starts
+ * from the main agent's branch, so a task started before the work it needs is there is a task done
+ * against work that is not there. What each of those tasks stands at is said, since the main agent
+ * waits for one that is running, lands one that ended, and starts — or does and marks done — one
+ * nobody started.
  */
-function waitsFor(task: PlanTask, mine: readonly RunCard[]): void {
-  const waiting = unlanded(task, landedTasks(mine)).map(one => {
+function waitsFor(task: PlanTask, mine: readonly RunCard[], finished: ReadonlySet<string>): void {
+  const waiting = unfinished(task, finished).map(one => {
     const runs = runsOn(mine, one)
     const running = runs.find(card => card.status === 'running')
     if (running !== undefined) return { task: one, state: 'running' as const, id: running.id }
@@ -282,11 +294,11 @@ function waitsFor(task: PlanTask, mine: readonly RunCard[]): void {
   })
   if (waiting.length === 0) return
   const said = waiting.map(one =>
-    one.state === 'running' ? `${one.task} (${one.id} is running it)` : one.state === 'ended' ? `${one.task} (${one.id} ended ${one.status} and is not landed)` : `${one.task} (nobody started it)`,
+    one.state === 'running' ? `${one.task} (${one.id} is running it)` : one.state === 'ended' ? `${one.task} (${one.id} ended ${one.status} and is not landed)` : `${one.task} (nobody started it, and you have not marked it done)`,
   )
   throw new Refused(
     { ok: false, reason: 'needs', task: task.id, waiting },
-    `the task "${task.name}" needs work that is not on your branch yet: ${said.join('; ')}. Land what ended, start what nobody started, wait for what runs, and start this task once every one of them is landed`,
+    `the task "${task.name}" needs work that is not on your branch yet: ${said.join('; ')}. Land what ended, start what nobody started — or do it yourself and mark it with \`done <task>\` — wait for what runs, and start this task once every one of them is landed or done`,
   )
 }
 
@@ -347,7 +359,7 @@ export async function nextTasks(repo: string, env: NodeJS.ProcessEnv, deps: Suba
   const main = await mainAgent(repo, env)
   const plan = await approvedPlan(repo, main.id, deps)
   const mine = await subagentsOf(repo, main.id)
-  const done = landedTasks(mine)
+  const finished = await finishedTasks(repo, main.id, mine)
   const running = mine.filter(card => card.status === 'running').length
   const atOnce = (await readSettings(repo)).atOnce ?? DEFAULT_AT_ONCE
   return {
@@ -361,7 +373,7 @@ export async function nextTasks(repo: string, env: NodeJS.ProcessEnv, deps: Suba
         name: task.name,
         ...(task.level !== undefined ? { level: task.level } : {}),
         ...(task.files !== undefined ? { files: task.files } : {}),
-        ...stateOf(task, runs, done),
+        ...stateOf(task, runs, finished),
         ...(runs.length > 0 ? { runs: runs.map(card => card.id) } : {}),
       }
     }),
@@ -466,8 +478,8 @@ export async function showPlan(
  * hand and lands again, which then only deletes. Nothing is deleted before the merge is in.
  *
  * What the subagent did is checked where it now is: the `Check:` line of its task runs in the main
- * agent's checkout after the merge, and the last land — the one after which every task of the plan
- * is landed — runs the plan's own check, the project's. Either failing is a refusal naming the
+ * agent's checkout after the merge, and a land after which every task of the plan is landed or
+ * done by the main agent runs the plan's own check, the project's. Either failing is a refusal naming the
  * command and what it printed, with the merge left in and the branch left alive.
  *
  * The subagent's last commit outlives its branch: it is kept under {@link landedRef}, on this
@@ -514,10 +526,7 @@ export async function landSubagent(repo: string, env: NodeJS.ProcessEnv, id: str
   // the main agent fixes it and lands again, which then only runs the check. A plan that is gone,
   // or that no longer holds the task this subagent did, has no check to run and is no refusal.
   const { checks, unchecked } = await landChecks(repo, main.id, card, deps)
-  for (const check of checks) {
-    const ran = await deps.run(check.command, checkout)
-    if (ran.code !== 0) throw new Refused({ ok: false, reason: check.reason, id, ...check.named, command: check.command, code: ran.code, ...cutOutput(ran.output) }, check.line(ran.code))
-  }
+  const passed = await runChecks(checks, checkout, { id }, deps)
 
   // Kept before anything is deleted: the commit must never be held by nothing.
   await git(['update-ref', landedRef(id), tip], repo)
@@ -531,7 +540,6 @@ export async function landSubagent(repo: string, env: NodeJS.ProcessEnv, id: str
   const { branch: _gone, ...branchless } = card
   const recorded = await recordRun(repo, { ...(gone ? branchless : card), caller: { ...card.caller, landed: tip } }, (await readDiary(repo, id)) ?? [])
   if (!recorded.ok && !recorded.committed) throw new Error(`the record of ${id} could not be written: ${recorded.error}`)
-  const passed = Object.fromEntries(checks.map(check => [check.answer, check.command])) as { check?: string; projectCheck?: string }
   return { id, branch, merged, ...passed, ...(unchecked !== undefined ? { unchecked } : {}) }
 }
 
@@ -543,55 +551,118 @@ export async function landSubagent(repo: string, env: NodeJS.ProcessEnv, id: str
  */
 export type Unchecked = 'no-plan' | 'no-task-on-record' | 'task-gone' | 'no-check-line'
 
-/** One check `land` runs, and how it refuses when the check fails. */
-interface LandCheck {
+/** One check `land` or `done` runs, and how it refuses when the check fails. */
+interface CheckToRun {
   command: string
-  /** What the answer of a land that passed it calls it. */
+  /** What the answer of a command that passed it calls it. */
   answer: 'check' | 'projectCheck'
   reason: 'check' | 'project-check'
   named: Record<string, string>
   line: (code: number) => string
 }
 
+/** A task's own `Check:` line; `then` tells the main agent what to do when it fails. */
+function taskCheck(task: PlanTask, command: string, then: string): CheckToRun {
+  return {
+    command,
+    answer: 'check',
+    reason: 'check',
+    named: { task: task.id },
+    line: code => `the check of "${task.name}", \`${command}\`, failed in your checkout with exit ${code} (its output is in the JSON): ${then}`,
+  }
+}
+
+/**
+ * The plan's own `Check:` line, the project's checks, when every task of the plan is finished:
+ * landed by a subagent or done by the main agent. Not before: they cost the whole project's build
+ * and tests, and a plan half finished has no reason to pass them.
+ */
+function projectCheck(plan: Plan, finished: ReadonlySet<string>, then: string): CheckToRun | undefined {
+  const command = plan.check
+  if (command === undefined || !plan.tasks.every(one => finished.has(one.id))) return undefined
+  return {
+    command,
+    answer: 'projectCheck',
+    reason: 'project-check',
+    named: {},
+    line: code => `every task of the plan is landed or done and the plan's own check, \`${command}\`, failed with exit ${code} (its output is in the JSON): ${then}`,
+  }
+}
+
+/** Run each check in the main agent's checkout, in turn; the first that fails is a refusal naming the command and what it printed. */
+async function runChecks(checks: readonly CheckToRun[], checkout: string, named: Record<string, string>, deps: SubagentDeps): Promise<{ check?: string; projectCheck?: string }> {
+  for (const check of checks) {
+    const ran = await deps.run(check.command, checkout)
+    if (ran.code !== 0) throw new Refused({ ok: false, reason: check.reason, ...named, ...check.named, command: check.command, code: ran.code, ...cutOutput(ran.output) }, check.line(ran.code))
+  }
+  return Object.fromEntries(checks.map(check => [check.answer, check.command])) as { check?: string; projectCheck?: string }
+}
+
 /**
  * What `land` runs on the main agent's checkout once the subagent's work is merged there: the
- * `Check:` line of the task that subagent did, and, when this land is the one after which every
- * task of the plan is landed, the plan's own `Check:` line, the project's checks. The project's are
- * not run on every land: they cost the whole project's build and tests once per task, and a plan
- * half landed has no reason to pass them.
+ * `Check:` line of the task that subagent did, and, when this land is one after which every task of
+ * the plan is finished, the plan's own `Check:` line, the project's checks.
  *
  * When there is no task check to run, it says why rather than nothing: a land that answered `ok`
  * and silently checked nothing read as a land that checked and passed, and an agent reported its
  * tasks as checked when none of them had been.
  */
-async function landChecks(repo: string, main: string, card: RunCard, deps: SubagentDeps): Promise<{ checks: LandCheck[]; unchecked?: Unchecked }> {
+async function landChecks(repo: string, main: string, card: RunCard, deps: SubagentDeps): Promise<{ checks: CheckToRun[]; unchecked?: Unchecked }> {
   const text = await readPlan(repo, main, deps.git)
   if (text === undefined) return { checks: [], unchecked: 'no-plan' }
   const plan = parsePlan(text)
   const id = card.id
   const task = plan.tasks.find(one => one.id === taskIdOf(card))
-  const checks: LandCheck[] = []
+  const checks: CheckToRun[] = []
   if (task?.check !== undefined)
-    checks.push({
-      command: task.check,
-      answer: 'check',
-      reason: 'check',
-      named: { task: task.id },
-      line: code =>
-        `the check of "${task.name}", \`${task.check}\`, failed in your checkout with exit ${code} (its output is in the JSON): the merge is still in and the branch of ${id} is still there, so fix it on your branch, commit, and land ${id} again, which only runs the check — or retry the task with \`retry ${id} "<what to do differently>"\``,
-    })
-  // Landed as of this land: the one being landed counts, since nothing is recorded yet.
-  const done = landedTasks(await subagentsOf(repo, main))
-  if (task !== undefined) done.add(task.id)
-  if (plan.check !== undefined && plan.tasks.every(one => done.has(one.id)))
-    checks.push({
-      command: plan.check,
-      answer: 'projectCheck',
-      reason: 'project-check',
-      named: {},
-      line: code =>
-        `every task of the plan is landed and the plan's own check, \`${plan.check}\`, failed with exit ${code} (its output is in the JSON): the merge is still in and the branch of ${id} is still there, so fix it on your branch, commit, and land ${id} again`,
-    })
+    checks.push(
+      taskCheck(task, task.check, `the merge is still in and the branch of ${id} is still there, so fix it on your branch, commit, and land ${id} again, which only runs the check — or retry the task with \`retry ${id} "<what to do differently>"\``),
+    )
+  // Finished as of this land: the one being landed counts, since nothing is recorded yet.
+  const { finished } = await finishedTasks(repo, main, await subagentsOf(repo, main))
+  if (task !== undefined) finished.add(task.id)
+  const project = projectCheck(plan, finished, `the merge is still in and the branch of ${id} is still there, so fix it on your branch, commit, and land ${id} again`)
+  if (project !== undefined) checks.push(project)
   const unchecked: Unchecked | undefined = task === undefined ? (taskIdOf(card) === undefined ? 'no-task-on-record' : 'task-gone') : task.check === undefined ? 'no-check-line' : undefined
   return { checks, ...(unchecked !== undefined ? { unchecked } : {}) }
+}
+
+/**
+ * Mark a task of the plan done by the main agent itself: the counterpart of landing a subagent, for
+ * a task the main agent kept — an uncertain one above all, which no subagent may take. The mark
+ * goes in the main agent's own log, and from then on the task is finished for every rule that waits
+ * on one: `next` says `done`, a task that `Needs:` it may start, and the plan's own check runs once
+ * every task is landed or done, on whichever `land` or `done` finishes the plan.
+ *
+ * Like a land, it runs the task's own `Check:` line, and the plan's when it is the last, on the
+ * work as it is committed, and a check that fails is a refusal that marks nothing: the main agent
+ * fixes it, commits, and marks it again. A mark is never taken back, as a land is not: the work is
+ * on the main agent's branch, and nothing undoes it there.
+ */
+export async function markTaskDone(repo: string, env: NodeJS.ProcessEnv, which: string, deps: SubagentDeps): Promise<{ task: string; name: string; check?: string; projectCheck?: string; unchecked?: 'no-check-line' }> {
+  const main = await mainAgent(repo, env)
+  if (runnerMark(main)?.parent !== undefined) throw new Refused({ ok: false, reason: 'subagent' }, 'a subagent has no plan: say in your last reply what you did')
+  const plan = await approvedPlan(repo, main.id, deps)
+  const task = plan.tasks.find(one => one.id === which)
+  const ids = plan.tasks.map(one => one.id)
+  if (task === undefined) throw new Refused({ ok: false, reason: 'no-task', task: which, tasks: ids }, `your plan has no task "${which}": its tasks are ${ids.join(', ')}`)
+  const mine = await subagentsOf(repo, main.id)
+  const runs = runsOn(mine, task.id)
+  const lander = runs.find(landed)
+  if (lander !== undefined) throw new Refused({ ok: false, reason: 'landed', task: task.id, id: lander.id }, `the task "${task.name}" is landed already: ${lander.id} did it, so there is nothing to mark`)
+  const tasks = await finishedTasks(repo, main.id, mine)
+  if (tasks.done.has(task.id)) throw new Refused({ ok: false, reason: 'done', task: task.id }, `you marked the task "${task.name}" done already`)
+  // Two agents on one task: the subagent's work would land over the work marked done.
+  const running = runs.find(card => card.status === 'running')
+  if (running !== undefined) throw new Refused({ ok: false, reason: 'running', task: task.id, id: running.id }, `${running.id} is running the task "${task.name}": wait for it and land it, or stop it, before you mark the task done yourself`)
+  // The work is done when it is committed: the checks run on what is, and a subagent that needs this
+  // task starts from the branch's last commit.
+  const checkout = worktreePath(repo, main.id)
+  if (!(await worktreeClean(checkout, deps.git).catch(() => false))) throw new Refused({ ok: false, reason: 'uncommitted' }, 'your checkout has uncommitted changes: commit your work on the task, then mark it done')
+  const again = `fix it on your branch, commit, and mark it with \`done ${task.id}\` again; nothing is marked yet`
+  tasks.finished.add(task.id)
+  const checks = [...(task.check !== undefined ? [taskCheck(task, task.check, again)] : []), ...[projectCheck(plan, tasks.finished, again)].filter(check => check !== undefined)]
+  const passed = await runChecks(checks, checkout, { task: task.id }, deps)
+  await markDone(repo, main.id, task.id, deps.now().toISOString())
+  return { task: task.id, name: task.name, ...passed, ...(task.check === undefined ? { unchecked: 'no-check-line' as const } : {}) }
 }
