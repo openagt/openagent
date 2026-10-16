@@ -111,6 +111,23 @@ function effortOf(effort: string | undefined): { effort?: string } {
   return effort !== undefined ? { effort } : {}
 }
 
+/**
+ * This run's card with what only the tool that marked it knew: every field of the marker this
+ * process did not build itself, and the same for the writer's own `caller` keys. Orchestration's
+ * `title` (the task's name) and its task id come through this way, and so does whatever a later
+ * tool writes there — the rule a card is read and written by, that a writer keeps the fields it
+ * does not know (#2104), applied to a run writing its own record.
+ *
+ * What this process does know wins: it is running, so its status, its branch, its checkout and its
+ * pid are the true ones, and a stale marker never speaks over them.
+ */
+function carried(marked: RunCard | undefined, card: RunCard): RunCard {
+  if (marked === undefined) return card
+  const theirs = Object.fromEntries(Object.entries(marked).filter(([key]) => !(key in card)))
+  const caller = Object.fromEntries(Object.entries(marked.caller ?? {}).filter(([key]) => !(key in (card.caller ?? {}))))
+  return { ...theirs, ...card, ...(Object.keys(caller).length > 0 ? { caller: { ...caller, ...card.caller } } : {}) }
+}
+
 export interface RunOptions {
   /** What the agent is told, usually a slash command. */
   prompt: string
@@ -224,12 +241,28 @@ async function runOnce(repo: string, opts: RunOptions): Promise<RunOutcome> {
     }
     // Only a branch this run made: one it was given holds another run's work, begun elsewhere.
     if (opts.branch === undefined) mark = { ...mark, ...(await startCommit(checkout.path, git)) }
+    // A run another tool marked carries what only that tool knows: orchestration writes the task's
+    // name as the run's `title` and the task's id under `caller`. This process builds its card from
+    // its own arguments, which never held either, and that card seeds the live card the record is
+    // written from at the end — so without reading the marker back, a run loses those fields the
+    // moment it ends, which is when a person and the tool that started it read them.
+    const marked = opts.marked ? await findRun(repo, id).catch(() => undefined) : undefined
     // Awaited here, not returned: the lock is let go in `finally`, and a bare `return` of the
     // promise would run that before the session ends, leaving the run to the sweep.
     return await session(repo, {
       id,
       checkout,
-      card: { id, startedAt, status: 'running', intent: opts.prompt, driver: opts.driver.id, ...modelOf(opts.model), ...effortOf(opts.effort), branch: checkout.branch, caller: { runner: mark, pid, host, ...forReaders(mark), kind: 'prompt', workspace: checkout.path } },
+      card: carried(marked, {
+        id,
+        startedAt,
+        status: 'running',
+        intent: opts.prompt,
+        driver: opts.driver.id,
+        ...modelOf(opts.model),
+        ...effortOf(opts.effort),
+        branch: checkout.branch,
+        caller: { runner: mark, pid, host, ...forReaders(mark), kind: 'prompt', workspace: checkout.path },
+      }),
       prompt: opts.prompt,
       ...(opts.attached !== undefined ? { attached: opts.attached } : {}),
       ...addedOf(opts.publish, opts.then),

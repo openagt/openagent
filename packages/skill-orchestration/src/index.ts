@@ -21,6 +21,7 @@ export {
   type SubagentDeps,
   type TaskStanding,
   type TaskState,
+  type Unchecked,
 } from './subagents.js'
 export { cutOutput, runCommand, CHECK_MAX_OUTPUT, CHECK_TIMEOUT_MS, type Ran } from './check.js'
 export { parsePlan, taskId, taskText, type Plan, type PlanTask } from './tasks.js'

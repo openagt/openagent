@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { OpenAgentEvent } from '../../src/index.js'
-import { inCheckout, turnChanges } from './turn-changes.js'
+import { inCheckout, inProject, turnChanges } from './turn-changes.js'
 
 const WS = '/repo/.branches/agent-1'
 const prompt = (text: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'start', prompt: text } })
@@ -18,6 +18,23 @@ describe('inCheckout', () => {
     expect(inCheckout('/elsewhere/A.md', WS)).toBe('/elsewhere/A.md')
     expect(inCheckout(`${WS}-other/A.md`, WS)).toBe(`${WS}-other/A.md`)
     expect(inCheckout('/x/A.md', undefined)).toBe('/x/A.md')
+  })
+})
+
+describe('inProject', () => {
+  test('a file the agent wrote outside its checkout is no change of the run\'s; a relative path and an unknown checkout are kept', () => {
+    expect(inProject(`${WS}/docs/A.md`, WS)).toBe(true)
+    // What the orchestration skill tells every main agent to write: its plan, outside the checkout.
+    expect(inProject('/tmp/agent-2026-10-16T15-21-13-205Z-plan.md', WS)).toBe(false)
+    expect(inProject(`${WS}-other/A.md`, WS)).toBe(false)
+    expect(inProject('docs/A.md', WS)).toBe(true)
+    expect(inProject('/tmp/A.md', undefined)).toBe(true)
+  })
+
+  test('a turn drops what was written outside the checkout and keeps the rest', () => {
+    const events = [prompt('go'), edit('/tmp/agent-1-plan.md', 63, 0, true), edit(`${WS}/index.html`, 21, 0), said]
+    const { last } = turnChanges(events, WS)
+    expect(last?.map(file => file.name)).toEqual(['index.html'])
   })
 })
 

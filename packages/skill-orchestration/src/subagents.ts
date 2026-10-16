@@ -475,7 +475,7 @@ export async function showPlan(
  * agent's branch is squashed and deleted one day, and what this one subagent changed is still read
  * from those two commits.
  */
-export async function landSubagent(repo: string, env: NodeJS.ProcessEnv, id: string, deps: SubagentDeps): Promise<{ id: string; branch: string; merged: boolean; check?: string; projectCheck?: string }> {
+export async function landSubagent(repo: string, env: NodeJS.ProcessEnv, id: string, deps: SubagentDeps): Promise<{ id: string; branch: string; merged: boolean; check?: string; projectCheck?: string; unchecked?: Unchecked }> {
   const { git } = deps
   const main = await mainAgent(repo, env)
   const card = await subagentOf(repo, main, id)
@@ -513,7 +513,7 @@ export async function landSubagent(repo: string, env: NodeJS.ProcessEnv, id: str
   // deleted or recorded as landed: a check that fails leaves the merge in and the branch alive, so
   // the main agent fixes it and lands again, which then only runs the check. A plan that is gone,
   // or that no longer holds the task this subagent did, has no check to run and is no refusal.
-  const checks = await landChecks(repo, main.id, card, deps)
+  const { checks, unchecked } = await landChecks(repo, main.id, card, deps)
   for (const check of checks) {
     const ran = await deps.run(check.command, checkout)
     if (ran.code !== 0) throw new Refused({ ok: false, reason: check.reason, id, ...check.named, command: check.command, code: ran.code, ...cutOutput(ran.output) }, check.line(ran.code))
@@ -532,8 +532,16 @@ export async function landSubagent(repo: string, env: NodeJS.ProcessEnv, id: str
   const recorded = await recordRun(repo, { ...(gone ? branchless : card), caller: { ...card.caller, landed: tip } }, (await readDiary(repo, id)) ?? [])
   if (!recorded.ok && !recorded.committed) throw new Error(`the record of ${id} could not be written: ${recorded.error}`)
   const passed = Object.fromEntries(checks.map(check => [check.answer, check.command])) as { check?: string; projectCheck?: string }
-  return { id, branch, merged, ...passed }
+  return { id, branch, merged, ...passed, ...(unchecked !== undefined ? { unchecked } : {}) }
 }
+
+/**
+ * Why a land ran no check of the task's: the record does not say which task the subagent did (a run
+ * from before the task was written on records, or one whose record lost it), the plan no longer
+ * holds that task, or the task names no `Check:` line. Said in the answer so a land that checked
+ * nothing cannot be read as a land that checked and passed.
+ */
+export type Unchecked = 'no-plan' | 'no-task-on-record' | 'task-gone' | 'no-check-line'
 
 /** One check `land` runs, and how it refuses when the check fails. */
 interface LandCheck {
@@ -551,10 +559,14 @@ interface LandCheck {
  * task of the plan is landed, the plan's own `Check:` line, the project's checks. The project's are
  * not run on every land: they cost the whole project's build and tests once per task, and a plan
  * half landed has no reason to pass them.
+ *
+ * When there is no task check to run, it says why rather than nothing: a land that answered `ok`
+ * and silently checked nothing read as a land that checked and passed, and an agent reported its
+ * tasks as checked when none of them had been.
  */
-async function landChecks(repo: string, main: string, card: RunCard, deps: SubagentDeps): Promise<LandCheck[]> {
+async function landChecks(repo: string, main: string, card: RunCard, deps: SubagentDeps): Promise<{ checks: LandCheck[]; unchecked?: Unchecked }> {
   const text = await readPlan(repo, main, deps.git)
-  if (text === undefined) return []
+  if (text === undefined) return { checks: [], unchecked: 'no-plan' }
   const plan = parsePlan(text)
   const id = card.id
   const task = plan.tasks.find(one => one.id === taskIdOf(card))
@@ -580,5 +592,6 @@ async function landChecks(repo: string, main: string, card: RunCard, deps: Subag
       line: code =>
         `every task of the plan is landed and the plan's own check, \`${plan.check}\`, failed with exit ${code} (its output is in the JSON): the merge is still in and the branch of ${id} is still there, so fix it on your branch, commit, and land ${id} again`,
     })
-  return checks
+  const unchecked: Unchecked | undefined = task === undefined ? (taskIdOf(card) === undefined ? 'no-task-on-record' : 'task-gone') : task.check === undefined ? 'no-check-line' : undefined
+  return { checks, ...(unchecked !== undefined ? { unchecked } : {}) }
 }
