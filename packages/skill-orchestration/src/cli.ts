@@ -5,7 +5,7 @@ import { parseArgs } from 'node:util'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { projectRoot } from '@openagt/skill-branches'
 import { isPidAlive, readyToRun, spawnRun, withdrawMarker, writeMarker } from '@openagt/agent-runner'
-import { isLevel, LEVELS, parseSettings, readSettings, writeSettings } from './settings.js'
+import { parseSettings, readSettings, writeSettings } from './settings.js'
 import { cleanup } from './cleanup.js'
 import { Refused, landSubagent, listSubagents, readSubagent, savePlan, showPlan, startSubagent, stopSubagent, type SubagentDeps } from './subagents.js'
 
@@ -17,12 +17,13 @@ import { Refused, landSubagent, listSubagents, readSubagent, savePlan, showPlan,
 
 export const USAGE = `usage: orchestration <command>
 
-  plan <file>       save the file as your plan; answers the \`question\` to ask the person
-  plan              your saved plan, its question, and whether the person approved it
-  start --level <simple|hard> <task>
-                    start a subagent on the task, on a branch started from yours, on the coding agent and
-                    model the person set for the level; answers its id at once; refused until the person
-                    approved your saved plan, and while as many of your subagents run as the person allows
+  plan <file>       save the file as your plan; answers the \`tasks\` it was read as and the \`question\` to ask
+                    the person; refused when the file is no task list
+  plan              your saved plan, its tasks, its question, and whether the person approved it
+  start --task <id> start a subagent on that task of your plan, on a branch started from yours, on the coding
+                    agent and model the person set for the task's level; answers its id at once; refused until
+                    the person approved your saved plan, for a task of any uncertainty, and while as many of
+                    your subagents run as the person allows
   settings          the person's settings for subagents on this machine
   settings <json>   save them whole: {"simple": {"driver", "model"}, "hard": {...}, "atOnce": <n>}, each optional
   list              your subagents, newest first
@@ -93,12 +94,10 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async start(args, io, deps) {
-    const { positionals, values } = parse(args, { level: { type: 'string' } }, 1)
-    const task = positionals[0]!
-    if (!task.trim()) throw new Usage('the task is empty')
-    if (values.level === undefined) throw new Refused({ ok: false, reason: 'no-level' }, `say how hard the task is with --level ${LEVELS.join(' or ')}: the person's settings pick the model for it`)
-    if (!isLevel(values.level)) throw new Usage(`unknown level "${values.level}"; the levels are ${LEVELS.join(' and ')}`)
-    const started = await startSubagent(await project(io.cwd, deps), io.env, { task, level: values.level }, deps)
+    const { values } = parse(args, { task: { type: 'string' } }, 0)
+    const task = values.task?.trim()
+    if (!task) throw new Usage('say which task of your plan to start with --task <id>')
+    const started = await startSubagent(await project(io.cwd, deps), io.env, { task }, deps)
     if (started.uncommitted) io.stderr('your checkout has uncommitted changes: the subagent does not have them')
     return { ok: true, ...started }
   },

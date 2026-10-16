@@ -87,49 +87,100 @@ async function savePlan(repo: string, cwd: string, agent: string, text: string):
   return saved.out.question
 }
 
-const PLAN = '# Split the work\n\n## 1. Add the tests\n\n## 2. Add the docs\n'
+/** The context every task of PLAN is told, and the three tasks a subagent may take. */
+const CONTEXT = 'Everything this plan touches is under src/.'
+const PLAN = `# Split the work
+
+${CONTEXT}
+
+## 1. Add the tests
+
+Level: simple
+Files: src/a.test.ts, \`src/b.test.ts\`
+Check: \`pnpm test\`
+Uncertainty: 0
+
+Cover the new code.
+
+## 2. Add the docs
+
+Level: hard
+Needs: Add the tests
+Uncertainty: 0
+
+Write the README.
+
+## 3. Fix the typo
+
+Level: simple
+Uncertainty: 0
+`
+const TESTS = 'add-the-tests'
+const DOCS = 'add-the-docs'
+const TYPO = 'fix-the-typo'
+
+/** What the subagent on the first task is given: the plan's context, the task's own words, its files and its check, then the lines every subagent is told. */
+const TESTS_PROMPT = `${CONTEXT}
+
+1. Add the tests
+
+Cover the new code.
+
+The files this task changes: src/a.test.ts, src/b.test.ts
+
+Check your work with: pnpm test
+
+${SUBAGENT_LINES}`
+const DOCS_PROMPT = `${CONTEXT}\n\n2. Add the docs\n\nWrite the README.\n\n${SUBAGENT_LINES}`
 
 /** A plan saved and approved by the person: their `Approve` to its question, as the runner sends an answer. */
 async function approvedPlan(repo: string, cwd: string, agent: string = MAIN): Promise<void> {
   await prompted(repo, agent, continuationPrompt(await savePlan(repo, cwd, agent, PLAN), 'Approve'))
 }
 
-test('start: a run for the caller, from the caller\'s branch, on the coding agent and model set for its level, else the caller\'s own, told it is a subagent', async () => {
+test('start: a run for the caller, on one task of the plan, from the caller\'s branch, on the coding agent and model set for the task\'s level, else the caller\'s own, told it is a subagent', async () => {
   const repo = await testRepo()
   try {
     const checkout = await mainAgent(repo, { driver: 'codex', model: 'gpt-5.5' })
     await approvedPlan(repo, checkout)
     // Nothing set: the caller's own coding agent and model.
-    const plain = await run(checkout, MAIN, ['start', '--level', 'simple', 'Add the tests'])
-    assert.deepEqual([plain.code, plain.out, plain.err], [0, { ok: true, id: FIRST, level: 'simple', driver: 'codex', model: 'gpt-5.5', base: agentBranchName(MAIN) }, ''])
-    assert.deepEqual(plain.started, [{ id: FIRST, prompt: `Add the tests\n\n${SUBAGENT_LINES}`, parent: MAIN, base: agentBranchName(MAIN), driver: 'codex', model: 'gpt-5.5' }])
-    // Its record is there before its process is: the id answered is one the other commands know.
-    assert.deepEqual((await run(checkout, MAIN, ['list'])).out, [{ id: FIRST, startedAt: '2026-10-01T10:01:00.000Z', status: 'running', intent: 'Add the tests', driver: 'codex', model: 'gpt-5.5' }])
+    const plain = await run(checkout, MAIN, ['start', '--task', TESTS])
+    assert.deepEqual([plain.code, plain.out, plain.err], [0, { ok: true, id: FIRST, task: TESTS, name: '1. Add the tests', level: 'simple', driver: 'codex', model: 'gpt-5.5', base: agentBranchName(MAIN) }, ''])
+    // The task's words are the plan's: its context once, the task's own heading and body, the files it owns and its check.
+    assert.deepEqual(plain.started, [{ id: FIRST, prompt: TESTS_PROMPT, parent: MAIN, base: agentBranchName(MAIN), driver: 'codex', model: 'gpt-5.5' }])
+    // Its record is there before its process is, and it carries the task's name and its id: the
+    // row a person reads is the heading, not the first line of the prompt.
+    assert.deepEqual((await run(checkout, MAIN, ['list'])).out, [
+      { id: FIRST, startedAt: '2026-10-01T10:01:00.000Z', status: 'running', intent: TESTS_PROMPT.slice(0, -SUBAGENT_LINES.length).trimEnd(), title: '1. Add the tests', driver: 'codex', model: 'gpt-5.5' },
+    ])
+    assert.equal((await findRun(repo, FIRST))?.caller?.['task'], TESTS)
     assert.equal((await run(checkout, MAIN, ['stop', FIRST])).out.reason, 'no-process')
 
-    // The setting for the level wins; a setting with no model is that coding agent's own default;
-    // the branch is the one the checkout is on now.
+    // The setting for the task's level wins; a setting with no model is that coding agent's own
+    // default; the branch is the one the checkout is on now.
     assert.equal((await run(repo, undefined, ['settings', JSON.stringify({ hard: { driver: 'claude-code', model: 'opus' }, simple: { driver: 'claude-code' }, atOnce: 10 })])).code, 0)
     await git(['branch', '-m', 'split-the-work'], checkout)
-    const hard = await run(checkout, MAIN, ['start', '--level', 'hard', 'Add the docs'], { now: () => new Date('2026-10-01T10:02:00.000Z') })
-    assert.deepEqual(hard.out, { ok: true, id: SECOND, level: 'hard', driver: 'claude-code', model: 'opus', base: 'split-the-work' })
-    assert.deepEqual(hard.started, [{ id: SECOND, prompt: `Add the docs\n\n${SUBAGENT_LINES}`, parent: MAIN, base: 'split-the-work', driver: 'claude-code', model: 'opus' }])
+    const hard = await run(checkout, MAIN, ['start', '--task', DOCS], { now: () => new Date('2026-10-01T10:02:00.000Z') })
+    assert.deepEqual(hard.out, { ok: true, id: SECOND, task: DOCS, name: '2. Add the docs', level: 'hard', driver: 'claude-code', model: 'opus', base: 'split-the-work' })
+    assert.deepEqual(hard.started, [{ id: SECOND, prompt: DOCS_PROMPT, parent: MAIN, base: 'split-the-work', driver: 'claude-code', model: 'opus' }])
     assert.deepEqual((await run(checkout, MAIN, ['read', SECOND])).out.model, 'opus')
-    const simple = await run(checkout, MAIN, ['start', '--level', 'simple', 'Fix the typo'], { now: () => new Date('2026-10-01T10:02:30.000Z') })
+    const simple = await run(checkout, MAIN, ['start', '--task', TYPO], { now: () => new Date('2026-10-01T10:02:30.000Z') })
     assert.deepEqual(simple.started.map(s => [s.driver, s.model]), [['claude-code', undefined]])
+    // A task with no words of its own is its name alone, and nothing of the task's keys leaks into it.
+    assert.equal(simple.started[0]?.prompt, `${CONTEXT}\n\n3. Fix the typo\n\n${SUBAGENT_LINES}`)
     // The readiness check is the level's coding agent's.
     const checked: string[] = []
-    await run(checkout, MAIN, ['start', '--level', 'hard', 'Check it'], { now: () => new Date('2026-10-01T10:02:40.000Z'), ready: async (_repo, driver) => (checked.push(driver), { problems: ['not logged in'], warnings: [] }) })
+    await run(checkout, MAIN, ['start', '--task', DOCS], { now: () => new Date('2026-10-01T10:02:40.000Z'), ready: async (_repo, driver) => (checked.push(driver), { problems: ['not logged in'], warnings: [] }) })
     assert.deepEqual(checked, ['claude-code'])
 
     // Uncommitted work is not on the branch the subagent starts from: said, and the subagent still starts.
     await writeFile(join(checkout, 'draft.md'), 'not committed\n')
-    const dirty = await run(checkout, MAIN, ['start', '--level', 'simple', 'Read the draft'], { now: () => new Date('2026-10-01T10:03:00.000Z') })
+    const dirty = await run(checkout, MAIN, ['start', '--task', TESTS], { now: () => new Date('2026-10-01T10:03:00.000Z') })
     assert.deepEqual([dirty.code, dirty.out.uncommitted, dirty.started.length], [0, true, 1])
     assert.match(dirty.err, /uncommitted changes: the subagent does not have them/)
 
     // A process that cannot be spawned leaves no record saying a subagent runs.
-    const unspawned = await run(checkout, MAIN, ['start', '--level', 'simple', 'Never starts'], {
+    const unspawned = await run(checkout, MAIN, ['start', '--task', TESTS], {
       now: () => new Date('2026-10-01T10:04:00.000Z'),
       spawn: async () => {
         throw new Error('spawn ENOENT')
@@ -145,10 +196,10 @@ test('start: a run for the caller, from the caller\'s branch, on the coding agen
 test('start is refused for a caller that is no run, for a subagent, and when the coding agent cannot start', async () => {
   const repo = await testRepo()
   try {
-    const none = await run(repo, undefined, ['start', '--level', 'simple', 'Add the tests'])
+    const none = await run(repo, undefined, ['start', '--task', TESTS])
     assert.deepEqual([none.code, none.out, none.started], [1, { ok: false, reason: 'not-a-run' }, []])
     assert.match(none.err, /AGENT_ID is not set/)
-    const unknown = await run(repo, MAIN, ['start', '--level', 'simple', 'Add the tests'])
+    const unknown = await run(repo, MAIN, ['start', '--task', TESTS])
     assert.deepEqual([unknown.code, unknown.out, unknown.started], [1, { ok: false, reason: 'not-a-run', id: MAIN }, []])
     assert.match(unknown.err, /do the task yourself/)
 
@@ -157,58 +208,95 @@ test('start is refused for a caller that is no run, for a subagent, and when the
     const early = (await addWorktree(repo, { agentId: OTHERS, branch: agentBranchName(OTHERS) }, git)).path
     await liveCard(repo, { ...markerCard({ id: OTHERS, startedAt: '2026-10-01T10:03:00.000Z', prompt: 'Split it', driver: 'pi', mark: { host: HOST, pid: 1 } }) })
     await approvedPlan(repo, early, OTHERS)
-    const fromLive = await run(early, OTHERS, ['start', '--level', 'simple', 'Add the tests'])
+    const fromLive = await run(early, OTHERS, ['start', '--task', TESTS])
     assert.deepEqual([fromLive.code, fromLive.started.map(s => [s.parent, s.driver])], [0, [[OTHERS, 'claude-code']]])
 
     const checkout = await mainAgent(repo)
-    const notReady = await run(checkout, MAIN, ['start', '--level', 'simple', 'Add the tests'], { ready: async () => ({ problems: ['claude is not logged in.'], warnings: [] }) })
+    await approvedPlan(repo, checkout)
+    const notReady = await run(checkout, MAIN, ['start', '--task', TESTS], { ready: async () => ({ problems: ['claude is not logged in.'], warnings: [] }) })
     assert.deepEqual([notReady.code, notReady.out, notReady.started], [1, { ok: false, reason: 'not-ready', problems: ['claude is not logged in.'], warnings: [] }, []])
     assert.equal(notReady.err, 'claude is not logged in.')
 
     await git(['checkout', '-q', '--detach'], checkout)
-    const detached = await run(checkout, MAIN, ['start', '--level', 'simple', 'Add the tests'])
+    const detached = await run(checkout, MAIN, ['start', '--task', TESTS])
     assert.deepEqual([detached.code, detached.out.reason, detached.started], [1, 'no-branch', []])
 
     // A run whose directory is no checkout of its own never borrows the project's branch.
     await record(repo, SECOND)
     await mkdir(liveDir(worktreePath(repo, SECOND)), { recursive: true })
-    const noCheckout = await run(repo, SECOND, ['start', '--level', 'simple', 'Add the tests'])
+    const noCheckout = await run(repo, SECOND, ['start', '--task', TESTS])
     assert.deepEqual([noCheckout.out.reason, noCheckout.started], ['no-branch', []])
 
     // A run started for another run starts none of its own.
     await record(repo, FIRST, { mark: { parent: MAIN } })
     await addWorktree(repo, { agentId: FIRST, branch: agentBranchName(FIRST) }, git)
-    const nested = await run(checkout, FIRST, ['start', '--level', 'simple', 'Add the tests'])
+    const nested = await run(checkout, FIRST, ['start', '--task', TESTS])
     assert.deepEqual([nested.code, nested.out, nested.started], [1, { ok: false, reason: 'subagent' }, []])
   } finally {
     await removeRepo(repo)
   }
 })
 
-test('start: refused without a level, and while as many of the caller\'s subagents run as the setting allows, 4 when unset', async () => {
+/** A plan whose tasks a subagent may take, `Task 0` to `Task 6`, and three a subagent may not. */
+const MANY = `# Split the work
+
+${Array.from({ length: 7 }, (_, n) => `## Task ${n}\n\nLevel: simple\nUncertainty: 0\n`).join('\n')}
+## Weigh the options
+
+Level: simple
+Uncertainty: 4
+
+## Unrated
+
+Level: simple
+
+## Levelless
+
+Uncertainty: 0
+`
+
+test('start: refused for a task the plan has not got, for one that is uncertain, unrated or at no level, and while as many of the caller\'s subagents run as the setting allows, 4 when unset', async () => {
   const repo = await testRepo()
   try {
     const checkout = await mainAgent(repo)
-    await approvedPlan(repo, checkout)
-    const unsaid = await run(checkout, MAIN, ['start', 'Add the tests'])
-    assert.deepEqual([unsaid.code, unsaid.out, unsaid.started], [1, { ok: false, reason: 'no-level' }, []])
-    assert.equal((await run(checkout, MAIN, ['start', '--level', 'medium', 'Add the tests'])).code, 2)
+    await prompted(repo, MAIN, continuationPrompt(await savePlan(repo, checkout, MAIN, MANY), 'Approve'))
+
+    // A task the plan does not name: the caller is told which tasks it has.
+    const unknown = await run(checkout, MAIN, ['start', '--task', 'add-the-tests'])
+    assert.deepEqual([unknown.code, unknown.out.reason, unknown.out.task, unknown.started], [1, 'no-task', 'add-the-tests', []])
+    assert.deepEqual(unknown.out.tasks, ['task-0', 'task-1', 'task-2', 'task-3', 'task-4', 'task-5', 'task-6', 'weigh-the-options', 'unrated', 'levelless'])
+
+    // Nobody answers a subagent, so a task with real alternatives in it stays with the caller, and
+    // one nobody rated is not quietly taken for a rated 0.
+    const uncertain = await run(checkout, MAIN, ['start', '--task', 'weigh-the-options'])
+    assert.deepEqual([uncertain.code, uncertain.out, uncertain.started], [1, { ok: false, reason: 'uncertain', task: 'weigh-the-options', uncertainty: 4 }, []])
+    assert.match(uncertain.err, /do this task yourself/)
+    const unrated = await run(checkout, MAIN, ['start', '--task', 'unrated'])
+    assert.deepEqual([unrated.code, unrated.out, unrated.started], [1, { ok: false, reason: 'no-uncertainty', task: 'unrated' }, []])
+    assert.match(unrated.err, /rate it 0 to 10 in the plan/)
+
+    // The level comes from the plan and from nowhere else: a task without one is refused, as a
+    // start without one was.
+    const unsaid = await run(checkout, MAIN, ['start', '--task', 'levelless'])
+    assert.deepEqual([unsaid.code, unsaid.out, unsaid.started], [1, { ok: false, reason: 'no-level', task: 'levelless' }, []])
+    assert.match(unsaid.err, /simple or hard/)
+    assert.equal((await run(checkout, MAIN, ['start', '--level', 'simple', '--task', 'task-0'])).code, 2, 'the plan says the level; the command line cannot')
 
     // Another main agent's subagent and an ended one of the caller's take no place.
     await record(repo, '2026-10-01T09-00-00-000Z', { mark: { parent: OTHERS } })
     await record(repo, '2026-10-01T09-00-01-000Z', { status: 'done', mark: { parent: MAIN } })
     const at = (n: number) => ({ now: () => new Date(Date.parse('2026-10-01T10:10:00.000Z') + n * 1000) })
-    for (let n = 0; n < 4; n++) assert.equal((await run(checkout, MAIN, ['start', '--level', 'simple', `Task ${n}`], at(n))).code, 0, `start ${n}`)
-    const fifth = await run(checkout, MAIN, ['start', '--level', 'hard', 'Task 4'], at(4))
+    for (let n = 0; n < 4; n++) assert.equal((await run(checkout, MAIN, ['start', '--task', `task-${n}`], at(n))).code, 0, `start ${n}`)
+    const fifth = await run(checkout, MAIN, ['start', '--task', 'task-4'], at(4))
     assert.deepEqual([fifth.code, fifth.out, fifth.started], [1, { ok: false, reason: 'limit', running: 4, atOnce: 4 }, []])
     assert.match(fifth.err, /end your reply/)
 
     // The person's setting moves the limit both ways.
     assert.equal((await run(repo, undefined, ['settings', JSON.stringify({ atOnce: 5 })])).code, 0)
-    assert.equal((await run(checkout, MAIN, ['start', '--level', 'hard', 'Task 4'], at(5))).code, 0)
-    assert.equal((await run(checkout, MAIN, ['start', '--level', 'hard', 'Task 5'], at(6))).out.reason, 'limit')
+    assert.equal((await run(checkout, MAIN, ['start', '--task', 'task-4'], at(5))).code, 0)
+    assert.equal((await run(checkout, MAIN, ['start', '--task', 'task-5'], at(6))).out.reason, 'limit')
     assert.equal((await run(repo, undefined, ['settings', JSON.stringify({ atOnce: 1 })])).code, 0)
-    assert.deepEqual((await run(checkout, MAIN, ['start', '--level', 'hard', 'Task 5'], at(7))).out, { ok: false, reason: 'limit', running: 5, atOnce: 1 })
+    assert.deepEqual((await run(checkout, MAIN, ['start', '--task', 'task-5'], at(7))).out, { ok: false, reason: 'limit', running: 5, atOnce: 1 })
   } finally {
     await removeRepo(repo)
   }
@@ -334,7 +422,7 @@ test('plan: saved beside the run\'s record, read back, and no subagent starts un
   const repo = await testRepo()
   try {
     const checkout = await mainAgent(repo)
-    const unplanned = await run(checkout, MAIN, ['start', '--level', 'simple', 'Add the tests'])
+    const unplanned = await run(checkout, MAIN, ['start', '--task', TESTS])
     assert.deepEqual([unplanned.code, unplanned.out, unplanned.started], [1, { ok: false, reason: 'no-plan' }, []])
     assert.match(unplanned.err, /orchestration plan <file>/)
     assert.deepEqual((await run(checkout, MAIN, ['plan'])).out, { ok: false, reason: 'no-plan' })
@@ -342,9 +430,22 @@ test('plan: saved beside the run\'s record, read back, and no subagent starts un
     const question = await savePlan(repo, checkout, MAIN, PLAN)
     assert.match(question, /^Start the subagents on plan [0-9a-f]{8}\?$/)
     assert.equal(await git(['show', `${DATA_BRANCH}:agents/tester@example.com/${MAIN}.plan.md`], join(dirname(repo), 'origin.git')), PLAN, 'on origin, beside the run\'s card')
-    assert.deepEqual((await run(checkout, MAIN, ['plan'])).out, { ok: true, plan: PLAN, question, approved: false })
+    // What the command read the plan as, beside the plan itself: the shared context once, and one
+    // row per task with everything but the words the agent wrote.
+    assert.deepEqual((await run(checkout, MAIN, ['plan'])).out, {
+      ok: true,
+      plan: PLAN,
+      question,
+      approved: false,
+      context: CONTEXT,
+      tasks: [
+        { id: TESTS, name: '1. Add the tests', level: 'simple', files: ['src/a.test.ts', 'src/b.test.ts'], check: 'pnpm test', uncertainty: 0 },
+        { id: DOCS, name: '2. Add the docs', level: 'hard', depends: [TESTS], uncertainty: 0 },
+        { id: TYPO, name: '3. Fix the typo', level: 'simple', uncertainty: 0 },
+      ],
+    })
 
-    const unasked = await run(checkout, MAIN, ['start', '--level', 'simple', 'Add the tests'])
+    const unasked = await run(checkout, MAIN, ['start', '--task', TESTS])
     assert.deepEqual([unasked.code, unasked.out, unasked.started], [1, { ok: false, reason: 'not-approved', question }, []])
     assert.ok(unasked.err.includes(question) && unasked.err.includes('"Approve"'), 'the refusal says what to ask')
 
@@ -356,17 +457,17 @@ test('plan: saved beside the run\'s record, read back, and no subagent starts un
     await prompted(repo, MAIN, `The run ${FIRST}, started for this run, ended done. Its last reply: ${approval}`)
     await prompted(repo, MAIN, continuationPrompt('Start the subagents on plan 00000000?', 'Approve'))
     await prompted(repo, MAIN, approval, 'action')
-    assert.equal((await run(checkout, MAIN, ['start', '--level', 'simple', 'Add the tests'])).out.reason, 'not-approved')
+    assert.equal((await run(checkout, MAIN, ['start', '--task', TESTS])).out.reason, 'not-approved')
 
     await prompted(repo, MAIN, `${approval}\n\nOpen the pull request but do not arm its merge.`)
     assert.equal((await run(checkout, MAIN, ['plan'])).out.approved, true)
-    const started = await run(checkout, MAIN, ['start', '--level', 'simple', 'Add the tests'])
+    const started = await run(checkout, MAIN, ['start', '--task', TESTS])
     assert.deepEqual([started.code, started.started.length], [0, 1])
 
     // A plan changed after the yes is a plan not approved; the same text saved again still is.
-    const changed = await savePlan(repo, checkout, MAIN, `${PLAN}\n## 3. Add a changelog\n`)
+    const changed = await savePlan(repo, checkout, MAIN, `${PLAN}\n## 4. Add a changelog\n\nLevel: simple\nUncertainty: 0\n`)
     assert.notEqual(changed, question)
-    assert.deepEqual((await run(checkout, MAIN, ['start', '--level', 'simple', 'Add the docs'])).out, { ok: false, reason: 'not-approved', question: changed })
+    assert.deepEqual((await run(checkout, MAIN, ['start', '--task', DOCS])).out, { ok: false, reason: 'not-approved', question: changed })
     assert.equal(await savePlan(repo, checkout, MAIN, PLAN), question)
     assert.equal((await run(checkout, MAIN, ['plan'])).out.approved, true)
 
@@ -375,6 +476,13 @@ test('plan: saved beside the run\'s record, read back, and no subagent starts un
     assert.deepEqual([missing.code, missing.out.reason], [1, 'no-file'])
     await writeFile(join(dirname(repo), 'blank.md'), ' \n')
     assert.equal((await run(checkout, MAIN, ['plan', join(dirname(repo), 'blank.md')])).out.reason, 'empty')
+    // A text the command cannot read as a task list is not saved: the plan the person reads is the
+    // one the subagents are started from, so the caller fixes it first.
+    await writeFile(join(dirname(repo), 'prose.md'), '# My plan\n\nI will do it all myself.\n')
+    const unreadable = await run(checkout, MAIN, ['plan', join(dirname(repo), 'prose.md')])
+    assert.deepEqual([unreadable.code, unreadable.out.reason], [1, 'unreadable'])
+    assert.match(unreadable.out.problems.join(' '), /the plan has no task/)
+    assert.equal((await run(checkout, MAIN, ['plan'])).out.plan, PLAN, 'the plan that was there is still there')
     await record(repo, FIRST, { mark: { parent: MAIN } })
     assert.equal((await run(checkout, FIRST, ['plan', join(dirname(repo), `plan-${MAIN}.md`)])).out.reason, 'subagent')
     assert.equal((await run(checkout, undefined, ['plan'])).out.reason, 'not-a-run')
@@ -518,7 +626,7 @@ test('a command line that cannot be read exits 2 with the usage and starts nothi
   const elsewhere = await mkdtemp(join(tmpdir(), 'not-a-repo-'))
   try {
     await mainAgent(repo)
-    for (const argv of [[], ['nope'], ['start'], ['start', ' '], ['start', 'a', 'b'], ['start', 'a', '--driver', 'pi'], ['list', 'extra'], ['read'], ['stop'], ['stop', FIRST, '--force'], ['plan', 'a', 'b'], ['plan', '--nope'], ['land'], ['land', FIRST, SECOND], ['start', '--level', 'simple', 'a', '--model', 'opus'], ['start', '--level', 'simple', 'a', '--driver', 'codex'], ['start', '--level'], ['settings', '{}', '{}']]) {
+    for (const argv of [[], ['nope'], ['start'], ['start', ' '], ['start', '--task'], ['start', '--task', ' '], ['start', 'a', 'b'], ['start', 'a', '--driver', 'pi'], ['list', 'extra'], ['read'], ['stop'], ['stop', FIRST, '--force'], ['plan', 'a', 'b'], ['plan', '--nope'], ['land'], ['land', FIRST, SECOND], ['start', '--level', 'simple', 'a', '--model', 'opus'], ['start', '--level', 'simple', 'a', '--driver', 'codex'], ['start', '--level'], ['settings', '{}', '{}']]) {
       const bad = await run(repo, MAIN, argv)
       assert.deepEqual([bad.code, bad.out, bad.started, bad.stopped], [2, undefined, [], []], argv.join(' '))
       assert.match(bad.err, /usage: orchestration/)

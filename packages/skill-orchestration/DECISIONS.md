@@ -31,13 +31,14 @@ already made, and lists it in its pull request; for anything else it proposes an
   nobody) is added to its task by the command. Picked over the skill file asking the
   main agent to write it into every task: a rule that lives only as prose is forgotten.
 - A subagent's coding agent and model come from the person's settings, by how hard its
-  task is: the main agent says simple or hard for each task, and the setting for that level
+  task is: the plan says simple or hard per task, and the setting for that level
   names the coding agent and model. The main agent never names a model. A level nobody set
   runs on the main agent's own coding agent and model. Picked over the main agent choosing a
   model per task, which spends the person's money on the agent's guess, and over the coding
   agent's own default, which may not be the model the person runs on.
-- `start` is refused without a level. Picked over a missing level meaning simple or hard:
-  either is a silent guess, and a rule that lives only as prose is forgotten.
+- `start` is refused for a task whose plan entry says no level. Picked over a missing level
+  meaning simple or hard: either is a silent guess, and a rule that lives only as prose is
+  forgotten.
 - At most as many of a main agent's subagents run at once as the person's setting says, 4
   when unset; `start` is refused past it, and the main agent starts the next when it is told
   one ended. Picked over the command waiting for a free place, which keeps a process waiting,
@@ -54,6 +55,22 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The plan is one markdown file beside the main agent's run record on the data branch,
   saved with `plan <file>`. Picked over a ticket file per task: tiny tasks would flood the
   tickets, and one file is read in one go when approving.
+- The plan is a task list the command reads, not prose it only keeps and hashes: the prose above
+  the first task is the shared context, and each `## ` heading is one task, its name, with
+  `Level:`, `Files:`, `Needs:`, `Check:` and `Uncertainty:` under it. Picked over the main agent
+  writing each subagent's prompt itself, which retyped the same preamble into every task and left
+  a subagent's row to be the first line of that prompt.
+- A subagent's words come from one task of the plan the person approved: `start --task <id>`, and
+  the command builds the prompt. Picked over a task quoted on the command line, which spends the
+  person's money on words they never read.
+- The task's heading is the name on the subagent's record. Picked over naming a subagent the way a
+  run is named, by asking a small model: the plan already holds the name.
+- Only a task whose `Uncertainty:` is 0 may be a subagent, and one that names no uncertainty is
+  refused as well. Picked over the main agent judging it task by task: a subagent is told nobody
+  will answer it, so a task holding real alternatives is the main agent's own.
+- The two plan formats stay apart: orchestration borrows `Uncertainty:` from the ticket plan format
+  and names no other skill. Picked over one skill owning the format and the other pointing at it,
+  which `skill-plan/DECISIONS.md` forbids: "A capability never names another skill".
 - No subagent starts before the person approved the plan: `start` is refused until the
   main agent's log holds their Approve to a question that names the plan as it is saved,
   so a changed plan needs a new yes. Picked over the skill file telling the agent to ask

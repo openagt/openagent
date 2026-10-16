@@ -4,7 +4,8 @@ import { isAgentBranch, removeWorktree, worktreeBranch, worktreeClean, worktreeP
 import { agentLines, findRun, listRuns, publicCard, readDiary, type RunCard } from '@openagt/skill-logs'
 import { AGENT_ID_ENV, isDriverName, markerCard, readLiveCard, recordRun, runIdFrom, runnerMark, type DriverName, type readyToRun, type spawnRun } from '@openagt/agent-runner'
 import { APPROVE, planApproved, planQuestion, readPlan, writePlan } from './plan.js'
-import { DEFAULT_AT_ONCE, readSettings, runnerFor, type Level } from './settings.js'
+import { parsePlan, taskText, type Plan, type PlanTask } from './tasks.js'
+import { DEFAULT_AT_ONCE, LEVELS, readSettings, runnerFor, type Level } from './settings.js'
 
 /**
  * A main agent and its subagents. The main agent is the run whose agent calls the command: its id
@@ -12,8 +13,10 @@ import { DEFAULT_AT_ONCE, readSettings, runnerFor, type Level } from './settings
  * own checkout, on a branch started from the main agent's, with the main agent as its parent on
  * its record. The runner tells the main agent when a subagent ends; nothing here waits.
  *
- * No subagent starts before the person approved the main agent's plan (`plan.ts`), and a
- * subagent's work reaches the main agent's branch by landing: merged there, its own branch gone.
+ * No subagent starts before the person approved the main agent's plan (`plan.ts`), and every
+ * subagent's words come from one task of that plan (`tasks.ts`): the main agent says which task,
+ * never what to do, so nothing is started that the person did not read. A subagent's work reaches
+ * the main agent's branch by landing: merged there, its own branch gone.
  * What the subagent itself changed stays readable for good: its last commit is kept under a ref
  * of its own and named on its record.
  */
@@ -91,36 +94,37 @@ async function subagentOf(repo: string, main: RunCard, id: string): Promise<RunC
 }
 
 /**
- * Start a subagent on a task: a run with the caller as its parent, its branch started from the
- * branch the caller's checkout is on. The caller says how hard the task is, and the person's
- * setting for that level names the coding agent and model; a level nobody set runs on the
- * caller's own. A subagent starts none of its own, and no more of the caller's run at once than
- * the setting allows. Its record is written before its process is spawned, as a scheduler's run
- * is, so the id answered is one `list`, `read` and `stop` already know.
+ * Start a subagent on one task of the plan: a run with the caller as its parent, its branch
+ * started from the branch the caller's checkout is on. The task's words are the plan's, not the
+ * caller's: the plan's shared context, the task's own heading and body, the files it owns and its
+ * check line. Its heading goes on the record as the run's name, which is what a list of runs and
+ * the dashboard's rows call it.
+ *
+ * The task says how hard it is, and the person's setting for that level names the coding agent and
+ * model; a level nobody set runs on the caller's own. A task of any uncertainty stays with the
+ * caller: a subagent is told nobody will answer it, so a task with real alternatives in it is no
+ * subagent's. A subagent starts none of its own, and no more of the caller's run at once than the
+ * setting allows. Its record is written before its process is spawned, as a scheduler's run is, so
+ * the id answered is one `list`, `read` and `stop` already know.
  */
 export async function startSubagent(
   repo: string,
   env: NodeJS.ProcessEnv,
-  opts: { task: string; level: Level },
+  opts: { task: string },
   deps: SubagentDeps,
-): Promise<{ id: string; level: Level; driver: DriverName; model?: string; base: string; uncommitted?: true }> {
+): Promise<{ id: string; task: string; name: string; level: Level; driver: DriverName; model?: string; base: string; uncommitted?: true }> {
   const main = await mainAgent(repo, env)
   if (runnerMark(main)?.parent !== undefined) throw new Refused({ ok: false, reason: 'subagent' }, 'a subagent starts no subagents: do the task yourself')
   const checkout = worktreePath(repo, main.id)
   const base = await worktreeBranch(checkout, deps.git)
   if (base === undefined) throw new Refused({ ok: false, reason: 'no-branch' }, `the checkout of ${main.id} is on no branch: a subagent starts from a branch`)
+  // No subagent before the person said yes to the plan as it is saved now, and no words but its own.
+  const { plan, task } = await taskOfPlan(repo, main.id, opts.task, deps)
   const settings = await readSettings(repo)
   const own = { driver: main.driver !== undefined && isDriverName(main.driver) ? main.driver : 'claude-code', ...(main.model !== undefined ? { model: main.model } : {}) } as const
-  const { driver, model } = runnerFor(settings, opts.level, own)
+  const { driver, model } = runnerFor(settings, task.level, own)
   const ready = await deps.ready(repo, driver)
   if (ready.problems.length > 0) throw new Refused({ ok: false, reason: 'not-ready', ...ready }, ready.problems.join(' '))
-  // No subagent before the person said yes to the plan as it is saved now.
-  const plan = await readPlan(repo, main.id, deps.git)
-  if (plan === undefined) throw new Refused({ ok: false, reason: 'no-plan' }, 'no plan is saved: save your plan with `orchestration plan <file>` and ask the person the question it answers, before any subagent starts')
-  if (!(await planApproved(repo, main.id, plan))) {
-    const question = planQuestion(plan)
-    throw new Refused({ ok: false, reason: 'not-approved', question }, `the person has not approved the saved plan: ask them "${question}" with the option "${APPROVE}", end your reply there, and start once they chose it`)
-  }
   const atOnce = settings.atOnce ?? DEFAULT_AT_ONCE
   const running = (await listRuns(repo)).filter(card => runnerMark(card)?.parent === main.id && card.status === 'running').length
   if (running >= atOnce) throw new Refused({ ok: false, reason: 'limit', running, atOnce }, `${running} of your subagents are running, the most the person allows at once: end your reply, and start this one when you are told one ended`)
@@ -128,9 +132,10 @@ export async function startSubagent(
   const uncommitted = !(await worktreeClean(checkout, deps.git).catch(() => true))
   const startedAt = deps.now().toISOString()
   const id = runIdFrom(startedAt)
-  const prompt = subagentPrompt(opts.task)
+  const prompt = subagentPrompt(taskText(plan, task))
   const named = model !== undefined ? { model } : {}
-  const marked = await deps.mark(repo, markerCard({ id, startedAt, prompt, driver, ...named, mark: { host: deps.host, parent: main.id, base } }))
+  const marker = markerCard({ id, startedAt, prompt, driver, ...named, mark: { host: deps.host, parent: main.id, base } })
+  const marked = await deps.mark(repo, { ...marker, title: task.name, caller: { ...marker.caller, task: task.id } })
   if (!marked.ok && !marked.committed) throw new Error(`the subagent's record could not be written: ${marked.error}`)
   try {
     await deps.spawn(repo, { id, prompt, driver, ...named, parent: main.id, base })
@@ -138,7 +143,33 @@ export async function startSubagent(
     await deps.unmark(repo, id)
     throw err
   }
-  return { id, level: opts.level, driver, ...named, base, ...(uncommitted ? { uncommitted: true } : {}) }
+  return { id, task: task.id, name: task.name, level: task.level, driver, ...named, base, ...(uncommitted ? { uncommitted: true } : {}) }
+}
+
+/**
+ * One task of the caller's approved plan, ready to be a subagent's: the plan is saved, the person
+ * approved it as it is saved now, the task is in it, it is rated and clearly not uncertain, and it
+ * says how hard it is. Every one of those is a refusal of its own, so the caller is told which.
+ */
+async function taskOfPlan(repo: string, main: string, id: string, deps: SubagentDeps): Promise<{ plan: Plan; task: PlanTask & { level: Level } }> {
+  const text = await readPlan(repo, main, deps.git)
+  if (text === undefined) throw new Refused({ ok: false, reason: 'no-plan' }, 'no plan is saved: save your plan with `orchestration plan <file>` and ask the person the question it answers, before any subagent starts')
+  if (!(await planApproved(repo, main, text))) {
+    const question = planQuestion(text)
+    throw new Refused({ ok: false, reason: 'not-approved', question }, `the person has not approved the saved plan: ask them "${question}" with the option "${APPROVE}", end your reply there, and start once they chose it`)
+  }
+  const plan = parsePlan(text)
+  const task = plan.tasks.find(one => one.id === id)
+  const tasks = plan.tasks.map(one => one.id)
+  if (task === undefined) throw new Refused({ ok: false, reason: 'no-task', task: id, tasks }, `your plan has no task "${id}": its tasks are ${tasks.join(', ')}`)
+  if (task.uncertainty === undefined) throw new Refused({ ok: false, reason: 'no-uncertainty', task: id }, `the task "${task.name}" has no \`Uncertainty:\` line: rate it 0 to 10 in the plan, 0 when it holds no meaningful alternatives, and save the plan again`)
+  if (task.uncertainty > 0)
+    throw new Refused(
+      { ok: false, reason: 'uncertain', task: id, uncertainty: task.uncertainty },
+      `the task "${task.name}" is at uncertainty ${task.uncertainty}: nobody answers a subagent, so do this task yourself and start subagents on the tasks rated 0`,
+    )
+  if (task.level === undefined) throw new Refused({ ok: false, reason: 'no-level', task: id }, `the task "${task.name}" has no \`Level:\` line: say ${LEVELS.join(' or ')} in the plan and save it again, since the person's settings pick the model for it`)
+  return { plan, task: { ...task, level: task.level } }
 }
 
 /** The caller's subagents, newest first. */
@@ -171,20 +202,44 @@ export async function stopSubagent(repo: string, env: NodeJS.ProcessEnv, id: str
   return { id }
 }
 
-/** The caller's plan saved, and the question to ask the person about it. */
-export async function savePlan(repo: string, env: NodeJS.ProcessEnv, text: string, deps: SubagentDeps): Promise<{ question: string }> {
-  const main = await mainAgent(repo, env)
-  if (runnerMark(main)?.parent !== undefined) throw new Refused({ ok: false, reason: 'subagent' }, 'a subagent has no plan: do the task yourself')
-  await writePlan(repo, main.id, text, deps.git)
-  return { question: planQuestion(text) }
+/** A task as the command answers it, without its own words: the agent wrote those itself. */
+function shownTask(one: PlanTask): Omit<PlanTask, 'body'> {
+  const { body: _body, ...shown } = one
+  return shown
 }
 
-/** The caller's plan as it was last saved, its question, and whether the person approved it. */
-export async function showPlan(repo: string, env: NodeJS.ProcessEnv, deps: SubagentDeps): Promise<{ plan: string; question: string; approved: boolean }> {
+/**
+ * The caller's plan saved, the question to ask the person about it, and the tasks the command read
+ * out of it. A text that is no task list is not saved: the caller fixes it before the person reads
+ * it, since a plan the command cannot read is a plan no subagent can be started from.
+ */
+export async function savePlan(repo: string, env: NodeJS.ProcessEnv, text: string, deps: SubagentDeps): Promise<{ question: string; context?: string; tasks: Omit<PlanTask, 'body'>[] }> {
   const main = await mainAgent(repo, env)
-  const plan = await readPlan(repo, main.id, deps.git)
-  if (plan === undefined) throw new Refused({ ok: false, reason: 'no-plan' }, 'no plan is saved')
-  return { plan, question: planQuestion(plan), approved: await planApproved(repo, main.id, plan) }
+  if (runnerMark(main)?.parent !== undefined) throw new Refused({ ok: false, reason: 'subagent' }, 'a subagent has no plan: do the task yourself')
+  const plan = parsePlan(text)
+  if (plan.problems.length > 0) throw new Refused({ ok: false, reason: 'unreadable', problems: plan.problems }, plan.problems.join(' '))
+  await writePlan(repo, main.id, text, deps.git)
+  return { question: planQuestion(text), ...(plan.context !== undefined ? { context: plan.context } : {}), tasks: plan.tasks.map(shownTask) }
+}
+
+/** The caller's plan as it was last saved, its tasks, its question, and whether the person approved it. */
+export async function showPlan(
+  repo: string,
+  env: NodeJS.ProcessEnv,
+  deps: SubagentDeps,
+): Promise<{ plan: string; question: string; approved: boolean; context?: string; tasks: Omit<PlanTask, 'body'>[]; problems?: string[] }> {
+  const main = await mainAgent(repo, env)
+  const text = await readPlan(repo, main.id, deps.git)
+  if (text === undefined) throw new Refused({ ok: false, reason: 'no-plan' }, 'no plan is saved')
+  const plan = parsePlan(text)
+  return {
+    plan: text,
+    question: planQuestion(text),
+    approved: await planApproved(repo, main.id, text),
+    ...(plan.context !== undefined ? { context: plan.context } : {}),
+    tasks: plan.tasks.map(shownTask),
+    ...(plan.problems.length > 0 ? { problems: plan.problems } : {}),
+  }
 }
 
 /**
