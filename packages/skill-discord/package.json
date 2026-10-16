@@ -1,6 +1,6 @@
 {
   "name": "@openagt/skill-discord",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Discord as a skill: post one message to a Discord channel through its webhook, set once per machine.",
   "license": "MIT",
   "repository": {
