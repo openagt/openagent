@@ -28,7 +28,7 @@ export function SubagentItem({ row, onOpen }: { row: SubagentRow; onOpen?: ((key
       </span>
       <span className="min-w-0 shrink truncate text-foreground group-hover/sub:underline">{row.name}</span>
       {/* On a phone the name has the line: the model is in the subagent's pane. */}
-      {row.model && <span className="hidden shrink-0 text-muted-foreground sm:inline">{anyModelName(models, row.model)}</span>}
+      {row.model && <span className="shrink-0 text-muted-foreground max-sm:hidden">{anyModelName(models, row.model)}</span>}
       {row.call && <span className="shrink-0 rounded-sm border border-border px-1 text-[10px] leading-4 text-muted-foreground">no branch</span>}
       {row.working ? (
         // What it is on now and how many calls it made; its last step whole on a hover.
