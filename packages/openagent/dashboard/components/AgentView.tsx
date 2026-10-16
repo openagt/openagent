@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { AgentMeta, AgentWorktree, OpenAgentEvent } from '../../src/index.js'
+import type { AgentDoing, AgentMeta, AgentWorktree, OpenAgentEvent } from '../../src/index.js'
 import { onAgent, onAgentsDoing, onGitHostHome, onRetainedWorktrees } from '../rpc/reads.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
 import { handoffSays, useAgentHandoff } from '../lib/use-agent-handoff.js'
@@ -22,7 +22,7 @@ import { QuestionPanel } from './QuestionPanel.js'
 import { SubagentsBar } from './SubagentLine.js'
 import { holdsMainAgent } from '../lib/subagents.js'
 import { agentLogKey } from '../lib/agent-log.js'
-import { revealChange, revealScreen } from '../lib/reveal-change.js'
+import { revealChange, revealScreen, revealSubagent } from '../lib/reveal-change.js'
 import { panesPage } from '../lib/panes.js'
 import { modelContextWindow, modelName, useModels } from '../lib/models.js'
 import { ContextCircle } from './ContextCircle.js'
@@ -50,7 +50,7 @@ const QUEUED_UNREAD_MS = 5_000
 /** How often what the working subagents are doing is read: the runs poll's own pace. */
 const DOING_EVERY_MS = 2_000
 const NO_SUBAGENTS: readonly AgentMeta[] = []
-const NOTHING_DOING: Record<string, string> = {}
+const NOTHING_DOING: Record<string, AgentDoing> = {}
 
 export function AgentView({
   projectId,
@@ -69,7 +69,6 @@ export function AgentView({
   onAgentStarted,
   onDeleted,
   subagents = NO_SUBAGENTS,
-  onOpenAgent,
 }: {
   projectId: string
   /** Which run this is (#749); absent right after Start, before the poll adopts its id. */
@@ -104,8 +103,6 @@ export function AgentView({
   onDeleted?: (() => void) | undefined
   /** The runs started for this run, oldest first: rows in its chat, and a line above the message box while any works. */
   subagents?: readonly AgentMeta[]
-  /** Open another run of this project: what a subagent's row does on a click. */
-  onOpenAgent?: ((agentId: string) => void) | undefined
 }) {
   // The archived log, read only once the agent has ended: while it runs, the channel is the truth.
   // `archiveBehind` re-reads it whenever the live channel has outgrown the copy on screen (#1460):
@@ -125,7 +122,7 @@ export function AgentView({
   // How many subagents the run's job still waits on: while any, the run is not over, whatever its own turn says.
   const now = Date.now()
   const subagentsRunning = subagents.filter(agent => holdsMainAgent(agent, now)).length
-  const { value: doing } = usePolled<Record<string, string>>(
+  const { value: doing } = usePolled<Record<string, AgentDoing>>(
     workingSubagents ? () => onAgentsDoing(projectId, workingSubagents.split(',')) : null,
     NOTHING_DOING,
     DOING_EVERY_MS,
@@ -188,6 +185,8 @@ export function AgentView({
   // A live screen's row in the chat opens the pane that shows it, the same way.
   const showsScreen = mountedPanels.some(panel => panel.screen && panel.projects.includes(projectId))
   const onOpenScreen = useMemo(() => (showsScreen ? () => revealScreen(panesPage(projectId, agentId)) : undefined), [showsScreen, projectId, agentId])
+  // A subagent's row opens it in the pane beside the chat.
+  const onOpenSubagent = useMemo(() => (key: string) => revealSubagent(panesPage(projectId, agentId), key), [projectId, agentId])
   const runSlots = mountedSlots.filter(slots => slots.projects.includes(projectId))
   const toggle = useCallback(() => setOpen(o => !o), [])
 
@@ -389,7 +388,7 @@ export function AgentView({
       bottom={
         <>
           {/* Keyed by the run: a list opened for one main agent is not open for the next. */}
-          <SubagentsBar key={agentId} subagents={subagents} doing={doing} onOpen={onOpenAgent} />
+          <SubagentsBar key={agentId} subagents={subagents} doing={doing} onOpen={onOpenSubagent} />
           {/* The questions the agent stopped on, above the message box; the newest takes the keys. */}
           {agentId && questions.map((choice, at) => <QuestionPanel key={`${agentId}:${choice.id}`} projectId={projectId} agentId={agentId} choice={choice} active={at === questions.length - 1} onSaid={onSending} />)}
           {/* Where the work is and the next step, right above the message box. */}
@@ -472,7 +471,7 @@ export function AgentView({
           subagents={subagents}
           doing={doing}
           setup={setup}
-          onOpenAgent={onOpenAgent}
+          onOpenSubagent={onOpenSubagent}
           onOpenChange={onOpenChange}
           onOpenScreen={onOpenScreen}
         />

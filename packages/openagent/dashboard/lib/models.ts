@@ -39,6 +39,19 @@ export function modelName(models: DriverModels | undefined, id: string): string 
 }
 
 /**
+ * A model's name as whichever coding agent lists it, for a reader that does not know which agent
+ * ran it (a subagent the coding agent started itself runs on the same agent, and says only its
+ * model): the id itself when none lists it.
+ */
+export function anyModelName(models: ModelsView | undefined, id: string): string {
+  for (const answer of Object.values(models ?? {})) {
+    const name = modelName(answer, id)
+    if (name !== id) return name
+  }
+  return id
+}
+
+/**
  * The effort levels the picked model offers, by the coding agent's own names and in its own order
  * (`DriverModel.efforts`). Empty for a model that takes none, for an agent that could not list its
  * models, and before the daemon has answered — the control is simply not there then.

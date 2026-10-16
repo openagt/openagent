@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
+import type { AgentDoing, AgentMeta, OpenAgentEvent } from '../../src/index.js'
 import { ChatNote } from './ChatPane.js'
 import { EventList } from './EventList.js'
 import type { SessionSetup } from './SessionLine.js'
@@ -22,7 +22,7 @@ export function AgentFeed({
   subagents,
   doing,
   setup,
-  onOpenAgent,
+  onOpenSubagent,
   onOpenChange,
   onOpenScreen,
 }: {
@@ -49,10 +49,10 @@ export function AgentFeed({
   tail?: ReactNode
   /** The run's subagents, what each is doing now, and how a click on one's row opens it. */
   subagents?: readonly AgentMeta[] | undefined
-  doing?: Record<string, string> | undefined
+  doing?: Record<string, AgentDoing> | undefined
   /** What was set up for the agent before it began: the chat's "Initialized session" line. */
   setup?: SessionSetup | undefined
-  onOpenAgent?: ((agentId: string) => void) | undefined
+  onOpenSubagent?: ((key: string) => void) | undefined
   /** Show a changed file's change: a click on a file's row at the end of a turn. */
   onOpenChange?: ((path: string) => void) | undefined
   /** Show the run's live screen: what the row of a live screen does on a click. */
@@ -75,7 +75,7 @@ export function AgentFeed({
       {...(subagents ? { subagents } : {})}
       {...(doing ? { doing } : {})}
       setup={setup}
-      onOpenAgent={onOpenAgent}
+      onOpenSubagent={onOpenSubagent}
       onOpenChange={onOpenChange}
       onOpenScreen={onOpenScreen}
     />

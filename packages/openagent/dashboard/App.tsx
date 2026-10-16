@@ -14,6 +14,7 @@ import { AgentView } from './components/AgentView.js'
 import { agentLabel } from './lib/agent-label.js'
 import { subagentsOf, taskLabel } from './lib/subagents.js'
 import { PaneLayout, PanesProvider } from './components/Panes.js'
+import { SubagentPanel } from './components/SubagentPanel.js'
 import { MenuButton, PhoneBar } from './components/PhoneBar.js'
 import { useIsMobile } from './lib/use-mobile.js'
 import { NotFound } from './components/NotFound.js'
@@ -428,7 +429,6 @@ export function App() {
         target={selectedAgent.target}
         remoteLabel={selectedAgent.remoteLabel}
         subagents={subagents}
-        onOpenAgent={selectAgent}
         onAgentStarted={onAgentStarted}
         onDeleted={() => {
           // Its view is about to point at a session that no longer exists; go home and refresh
@@ -504,7 +504,17 @@ export function App() {
         {isMobile && <MenuButton />}
         {/* A project's page and an agent's have panes beside them (Panes). A module's page takes
             the full width itself (#1774), the way Settings and the Overview do. */}
-        <PanesProvider projectId={projectId} agentId={agentId} enabled={!pageSegment} files={files} context={context} toggleContext={toggleContext} activity={events.length}>
+        <PanesProvider
+          projectId={projectId}
+          agentId={agentId}
+          enabled={!pageSegment}
+          files={files}
+          context={context}
+          toggleContext={toggleContext}
+          activity={events.length}
+          // A subagent a row of the agent's chat opened, beside the chat.
+          subagent={projectId && agentId ? <SubagentPanel projectId={projectId} agentId={agentId} events={events} subagents={subagents} live={selectedAgent?.status === 'running'} onOpenAgent={selectAgent} /> : undefined}
+        >
           <PaneLayout>
             <main className="flex min-h-0 min-w-0 flex-1 flex-col">
               {isMobile && phoneTitle !== null && <PhoneBar title={phoneTitle} />}

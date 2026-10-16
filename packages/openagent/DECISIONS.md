@@ -53,6 +53,14 @@ already made, and lists it in its pull request; for anything else it proposes an
   repository address into, which leaves creating the repository to the person.
 - A subagent's page offers no pull request, no merge and no push. It says landed or not
   landed. Picked over saying nothing in their place.
+- A subagent's row in its main agent's chat opens it in a pane beside the chat: its model and
+  the whole prompt it was given, then what it said and did. Picked over opening its page,
+  which takes the person away from the main agent's chat. Both kinds of subagent have the same
+  row, a subagent of the coding agent's own marked as having no branch.
+- The subagents one turn started are one block under a line saying how many, how long and
+  what they cost, each with a row of its own. Picked over Claude Code's one collapsed row that
+  turns through the names of the ones still working: at most four run at once, and the line
+  above the message box already says how many are running.
 - Which package provides a kind of data when several installed packages declare it: the
   project's own package.json says, under the same `openagent` key with the package's name
   as the value; several and no line means nothing provides it, and the project's banner

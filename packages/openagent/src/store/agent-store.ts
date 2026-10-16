@@ -331,22 +331,32 @@ function doingOf(line: AnyDiaryLine): string | undefined {
 }
 
 /**
- * What each of the named runs is doing now, by id: the last thing its diary says it did (a tool
- * it used, with what) or said, on one line. Only a run with a checkout whose card says `running`
- * has an entry: an ended run is doing nothing, and its row says how it ended.
+ * What a working run is doing, as its row of a list of subagents says it: the last thing its diary
+ * says it did (a tool it used, with what) or said, on one line; the last tool it used; and how many
+ * calls it made so far.
  */
-export async function readDoing(cwd: string, ids: readonly string[], fs: StoreFs = nodeStoreFs(), branches: BranchesFor = projectBranches): Promise<Record<string, string>> {
-  const doing: Record<string, string> = {}
+export interface AgentDoing {
+  doing?: string
+  tool?: string
+  calls: number
+}
+
+/**
+ * What each of the named runs is doing now, by id. Only a run with a checkout whose card says
+ * `running` and whose diary has a step or a word in it has an entry: an ended run is doing nothing,
+ * and its row says how it ended.
+ */
+export async function readDoing(cwd: string, ids: readonly string[], fs: StoreFs = nodeStoreFs(), branches: BranchesFor = projectBranches): Promise<Record<string, AgentDoing>> {
+  const doing: Record<string, AgentDoing> = {}
   const live = await readLiveMetas(cwd, fs, branches).catch((): LiveAgent[] => [])
   for (const agent of live) {
     if (agent.status !== 'running' || !ids.includes(agent.id)) continue
-    const lines = (await fs.read(join(agent.cwd, OPENAGENT_DIR, `${agent.id}.jsonl`)).catch(() => '')).split('\n')
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const said = doingOf(parseDiary(lines[i]!)[0] ?? { kind: '' })
-      if (said === undefined) continue
-      doing[agent.id] = said
-      break
-    }
+    const lines = parseDiary(await fs.read(join(agent.cwd, OPENAGENT_DIR, `${agent.id}.jsonl`)).catch(() => ''))
+    const calls = lines.filter(line => line.kind === 'action' && typeof line['label'] === 'string')
+    const said = lines.flatMap(line => doingOf(line) ?? []).at(-1)
+    if (said === undefined && calls.length === 0) continue
+    const tool = calls.at(-1)?.['label'] as string | undefined
+    doing[agent.id] = { ...(said !== undefined ? { doing: said } : {}), ...(tool !== undefined ? { tool } : {}), calls: calls.length }
   }
   return doing
 }

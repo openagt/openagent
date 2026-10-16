@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react'
-import { FileText, Maximize2, Minimize2, MoreVertical, X } from 'lucide-react'
+import { Bot, FileText, Maximize2, Minimize2, MoreVertical, X } from 'lucide-react'
 import type { Layout } from 'react-resizable-panels'
 import type { WorkspaceDoc } from '../../src/index.js'
 import { DocsPanel } from './DocsPanel.js'
@@ -15,7 +15,7 @@ import { cn } from '../lib/utils.js'
 import { usePolled } from '../lib/use-async.js'
 import { onDocs } from '../rpc/reads.js'
 import { closePanes, paneSizes, paneSizesOwner, panesPage, setExpandedPane, setPaneOpen, setPaneSizes, useExpandedPane, useOpenPanes } from '../lib/panes.js'
-import { useRevealedChange, useRevealedScreen, type RevealedChange } from '../lib/reveal-change.js'
+import { useRevealedChange, useRevealedScreen, useRevealedSubagent, type RevealedChange } from '../lib/reveal-change.js'
 import { isMobileScreen, useIsMobile } from '../lib/use-mobile.js'
 
 // The panes beside the chat, as Claude Code on the web has them: what the installed modules add
@@ -30,6 +30,8 @@ import { isMobileScreen, useIsMobile } from '../lib/use-mobile.js'
 // On a phone there is no room beside the chat: the column of cards lies over the chat's right two
 // thirds, and the icons, which it covers, are one ⋮ menu at the start of the top bar.
 //
+// One pane has no icon: the subagent a row of the chat opened, which only such a row opens.
+//
 // The pieces: the provider knows the page's panes (PanesProvider, around the page and the panes),
 // the top bar draws their icons (PaneToggles, PaneMenu), and the layout puts the column beside the
 // page (PaneLayout).
@@ -37,6 +39,7 @@ import { isMobileScreen, useIsMobile } from '../lib/use-mobile.js'
 /** A pane's own id among the page's: a module's by its package and the id it gave, the dashboard's own by name. */
 const panelId = (panel: MountedPanel): string => `${panel.package}/${panel.id}`
 const DOCS = 'docs'
+const SUBAGENT = 'subagent'
 
 /** The room between the chat and the column of panes, and its two parts. */
 const WORKSPACE = 'workspace'
@@ -51,8 +54,10 @@ interface Pane {
   /** One sentence on what the pane shows, for its icon's tooltip. */
   help: string
   icon: ComponentType<{ className?: string }>
-  /** The module's panel; absent on the dashboard's own Docs pane. */
+  /** The module's panel; absent on the dashboard's own panes. */
   panel?: MountedPanel
+  /** No icon in the top bar: something else on the page opens it. */
+  hidden?: true
 }
 
 interface PanesValue {
@@ -70,9 +75,11 @@ interface PanesValue {
   reveal: RevealedChange | undefined
   docs: WorkspaceDoc[]
   docsLoaded: boolean
+  /** What the Subagent pane shows. */
+  subagent: ReactNode
 }
 
-const NO_PANES: PanesValue = { page: '', enabled: false, panes: [], open: [], expanded: undefined, panelProps: undefined, reveal: undefined, docs: [], docsLoaded: false }
+const NO_PANES: PanesValue = { page: '', enabled: false, panes: [], open: [], expanded: undefined, panelProps: undefined, reveal: undefined, docs: [], docsLoaded: false, subagent: null }
 const PanesContext = createContext<PanesValue>(NO_PANES)
 
 /** The last ask from the chat the panes moved for. */
@@ -91,6 +98,7 @@ export function PanesProvider({
   context,
   toggleContext,
   activity,
+  subagent,
   children,
 }: {
   projectId: string | null
@@ -105,6 +113,8 @@ export function PanesProvider({
   toggleContext: (path: string) => void
   /** How many events the selected run's feed has shown, for the modules' panes. */
   activity?: number
+  /** What the Subagent pane shows, once a row of the chat opened one: on an agent's page. */
+  subagent?: ReactNode
   children: ReactNode
 }) {
   const shown = enabled ? projectId : null
@@ -123,13 +133,20 @@ export function PanesProvider({
   // module's pane is empty without rendering it; an empty one says so inside. The dashboard's own
   // Docs pane is earned by content (#1146): one that can only say "nothing yet" is not offered.
   const { panels: mounted } = useMountedModules()
+  const page = panesPage(shown ?? '', agentId)
+  // The Subagent pane is there once a row asked for a subagent on this page.
+  const subagentAsked = useRevealedSubagent(page)
+  const showsSubagent = subagent !== undefined && subagentAsked !== undefined
   const panes = useMemo<Pane[]>(() => {
     if (!shown) return []
     const ofModules = mounted.filter(panel => panel.projects.includes(shown)).map(panel => ({ id: panelId(panel), label: panel.label, help: panel.help, icon: panel.icon, panel }))
-    return docs.length > 0 ? [...ofModules, { id: DOCS, label: 'Docs', help: 'The PLAN/TODO markdown files at the root of the workspace.', icon: FileText }] : ofModules
-  }, [mounted, shown, docs.length])
+    const own: Pane[] = [
+      ...(docs.length > 0 ? [{ id: DOCS, label: 'Docs', help: 'The PLAN/TODO markdown files at the root of the workspace.', icon: FileText }] : []),
+      ...(showsSubagent ? [{ id: SUBAGENT, label: 'Subagent', help: 'A subagent of this run: its prompt and what it did.', icon: Bot, hidden: true as const }] : []),
+    ]
+    return [...ofModules, ...own]
+  }, [mounted, shown, docs.length, showsSubagent])
 
-  const page = panesPage(shown ?? '', agentId)
   const openIds = useOpenPanes(page)
   const open = useMemo(() => openIds.flatMap(id => panes.find(pane => pane.id === id) ?? []), [openIds, panes])
   const expanded = useExpandedPane(page)
@@ -162,6 +179,14 @@ export function PanesProvider({
     setPaneOpen(page, screenPane, true)
   }, [screenAsked, screenPane, page])
 
+  // A subagent asked for from the chat: its pane is opened.
+  const subagentAt = subagentAsked?.at
+  useEffect(() => {
+    if (subagentAt === undefined || !showsSubagent || subagentAt <= revealShown) return
+    revealShown = subagentAt
+    setPaneOpen(page, SUBAGENT, true)
+  }, [subagentAt, showsSubagent, page])
+
   // The Context as a module's pane sees it: its files only, never the project paths the
   // launcher's project checkboxes also put in it (#661).
   const contextFiles = useMemo(() => new Set(files.filter(f => context.has(f))), [files, context])
@@ -172,8 +197,8 @@ export function PanesProvider({
   )
 
   const value = useMemo<PanesValue>(
-    () => ({ page, enabled: shown !== null, panes, open, expanded: open.some(pane => pane.id === expanded) ? expanded : undefined, panelProps, reveal, docs, docsLoaded }),
-    [page, shown, panes, open, expanded, panelProps, reveal, docs, docsLoaded],
+    () => ({ page, enabled: shown !== null, panes, open, expanded: open.some(pane => pane.id === expanded) ? expanded : undefined, panelProps, reveal, docs, docsLoaded, subagent: subagent ?? null }),
+    [page, shown, panes, open, expanded, panelProps, reveal, docs, docsLoaded, subagent],
   )
   return <PanesContext.Provider value={value}>{children}</PanesContext.Provider>
 }
@@ -187,10 +212,11 @@ function useFolded(): boolean {
 /** The panes' icons, for the end of a page's top bar: one per pane, lit while its pane is open. */
 export function PaneToggles() {
   const { page, panes, open } = useContext(PanesContext)
-  if (useFolded() || panes.length === 0) return null
+  const offered = panes.filter(pane => !pane.hidden)
+  if (useFolded() || offered.length === 0) return null
   return (
     <div role="group" aria-label="Panes" className="flex shrink-0 items-center gap-0.5">
-      {panes.map(pane => {
+      {offered.map(pane => {
         const isOpen = open.includes(pane)
         return (
           <Tooltip key={pane.id}>
@@ -229,7 +255,7 @@ export function PaneMenu() {
         <MoreVertical className="h-4 w-4" aria-hidden />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-[12rem]">
-        {panes.map(pane => (
+        {panes.filter(pane => !pane.hidden || open.includes(pane)).map(pane => (
           <DropdownMenuCheckboxItem key={pane.id} closeOnClick checked={open.includes(pane)} onCheckedChange={checked => setPaneOpen(page, pane.id, checked)}>
             <pane.icon className="h-3.5 w-3.5 shrink-0" aria-hidden /> {pane.label}
           </DropdownMenuCheckboxItem>
@@ -245,7 +271,7 @@ export function PaneMenu() {
  * before those buttons (`PaneTitle`, `PaneActions`).
  */
 function PaneCard({ pane }: { pane: Pane }) {
-  const { page, expanded, panelProps, reveal, docs, docsLoaded } = useContext(PanesContext)
+  const { page, expanded, panelProps, reveal, docs, docsLoaded, subagent } = useContext(PanesContext)
   const fills = expanded === pane.id
   const [title, setTitle] = useState<HTMLElement | null>(null)
   const [actions, setActions] = useState<HTMLElement | null>(null)
@@ -286,7 +312,9 @@ function PaneCard({ pane }: { pane: Pane }) {
         </header>
         {/* The pane fills what is left of the card's height, and scrolls inside itself. */}
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          {pane.panel && panelProps ? (
+          {pane.id === SUBAGENT ? (
+            <PaneHeaderContext.Provider value={slots}>{subagent}</PaneHeaderContext.Provider>
+          ) : pane.panel && panelProps ? (
             <ModuleSlot package={pane.panel.package} label={`${pane.label} pane`}>
               <PaneHeaderContext.Provider value={slots}>
                 <pane.panel.Panel {...(pane.panel.changes && reveal ? { ...panelProps, reveal } : panelProps)} />

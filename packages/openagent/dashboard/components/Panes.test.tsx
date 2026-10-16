@@ -16,7 +16,7 @@ vi.mock('./DocsPanel.js', () => ({ DocsPanel: ({ docs }: { docs: { name: string 
 const { PaneLayout, PaneMenu, PanesProvider, PaneToggles } = await import('./Panes.js')
 const { forgetRemembered } = await import('../lib/use-async.js')
 const { forgetPanes, setPaneOpen } = await import('../lib/panes.js')
-const { forgetRevealedChanges, revealChange, revealScreen } = await import('../lib/reveal-change.js')
+const { forgetRevealedChanges, revealChange, revealScreen, revealSubagent } = await import('../lib/reveal-change.js')
 
 const Icon = () => <svg aria-hidden />
 // The installed modules' panes, as the Files module and the browser skill bring them: each shows what it was given.
@@ -404,6 +404,29 @@ describe('a live screen asked for from the chat', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close Browser' }))
     act(() => revealScreen('p1/r1'))
     expect(cards()).toEqual(['Browser'])
+  })
+})
+
+describe('a subagent asked for from the chat', () => {
+  test('opens the Subagent pane beside the chat, which has no icon of its own; closed, it opens again on the next ask', async () => {
+    render(<Page subagent={<div>the subagent</div>} />)
+    await waitFor(() => expect(icons()).toContain('Docs'))
+    act(() => revealSubagent('p1/other', 'run:x'))
+    expect(cards()).toEqual([])
+    act(() => revealSubagent('p1/r1', 'run:x'))
+    expect(cards()).toEqual(['Subagent'])
+    expect(within(card('Subagent')).getByText('the subagent')).toBeTruthy()
+    expect(icons()).not.toContain('Subagent')
+    fireEvent.click(within(card('Subagent')).getByRole('button', { name: 'Close Subagent' }))
+    expect(cards()).toEqual([])
+    act(() => revealSubagent('p1/r1', 'call:y'))
+    expect(cards()).toEqual(['Subagent'])
+  })
+
+  test('a page with nothing to show for a subagent offers no Subagent pane', () => {
+    render(<Page />)
+    act(() => revealSubagent('p1/r1', 'run:x'))
+    expect(cards()).toEqual([])
   })
 })
 

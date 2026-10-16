@@ -54,7 +54,7 @@ const EVENT_KINDS: Record<OpenAgentEvent['kind'], true> = {
 function eventOf(line: AnyDiaryLine): OpenAgentEvent | undefined {
   switch (line.kind) {
     case 'said':
-      return { kind: 'driver', event: { type: 'text', text: String(line['text']) } }
+      return { kind: 'driver', event: { type: 'text', text: String(line['text']), ...(typeof line['subagent'] === 'string' ? { subagent: line['subagent'] } : {}) } }
     case 'result': {
       const { kind: _kind, ...rest } = line
       return { kind: 'driver', event: { type: 'result', ...rest } as DriverEvent }
@@ -82,6 +82,7 @@ function eventOf(line: AnyDiaryLine): OpenAgentEvent | undefined {
     case 'action':
     case 'output':
     case 'thought':
+    case 'subagent':
     case 'rate-limit':
     case 'notice': {
       const { kind, ...rest } = line

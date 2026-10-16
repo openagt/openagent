@@ -5,6 +5,7 @@ import { usePreferences } from '../lib/preferences.js'
 import type { FileEdit } from '../lib/turn-changes.js'
 import { LinesChanged } from './ChangedFiles.js'
 import { cn } from '../lib/utils.js'
+import { formatElapsed } from '../lib/format-date.js'
 import { Markdown } from './Markdown.js'
 
 /** What a tool call gave back: what it printed, cut by the driver, whether it failed, and the files it changed. */
@@ -38,8 +39,7 @@ export function Seconds({ since }: { since: string }) {
     const tick = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(tick)
   }, [])
-  const seconds = Math.max(0, Math.floor((now - Date.parse(since)) / 1000))
-  return <span className="shrink-0 tabular-nums">{seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`}</span>
+  return <span className="shrink-0 tabular-nums">{formatElapsed(now - Date.parse(since))}</span>
 }
 
 // Three dots moving in a wave: the agent is at it.

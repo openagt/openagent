@@ -190,7 +190,7 @@ test('startedAtFromAgentId inverts agentIdFromStartedAt, and refuses foreign ids
   assert.equal(startedAtFromAgentId(''), undefined)
 })
 
-test('readDoing says what each named working run is doing: the last tool its diary names, or the last thing it said, on one line', async () => {
+test('readDoing says what each named working run is doing: the last tool its diary names, or the last thing it said, on one line, and the last tool and how many calls it made', async () => {
   const line = (value: object) => JSON.stringify(value) + '\n'
   const fs = memFs({
     [liveAt('r1', 'json')]: card('r1', 'running'),
@@ -208,7 +208,7 @@ test('readDoing says what each named working run is doing: the last tool its dia
   const branches = branchesOf(checkoutOf('r1'), checkoutOf('r2'), checkoutOf('r3'), checkoutOf('r4'), checkoutOf('r5'), checkoutOf('r6'))
   const doing = await readDoing(CWD, ['r1', 'r2', 'r3', 'r5', 'r6', 'gone'], fs, branches)
   assert.deepEqual(Object.keys(doing).sort(), ['r1', 'r2'], 'not a run that is not working, one not asked for, one with no diary, or one that did nothing yet')
-  assert.equal(doing['r1'], 'Edit src/ login.ts', 'the last tool, with what, on one line')
-  assert.equal(doing['r2'], 'x'.repeat(139) + '…', 'the last thing said, cut to a line; a torn last line is passed over')
+  assert.deepEqual(doing['r1'], { doing: 'Edit src/ login.ts', tool: 'Edit', calls: 2 }, 'the last tool, with what, on one line; the last tool alone; and how many calls')
+  assert.deepEqual(doing['r2'], { doing: 'x'.repeat(139) + '…', tool: 'Bash', calls: 1 }, 'the last thing said, cut to a line; a torn last line is passed over')
   assert.deepEqual(await readDoing(CWD, [], fs, branches), {})
 })

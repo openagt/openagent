@@ -334,6 +334,15 @@ function callSummary(input: unknown): { summary?: string } {
   return { summary: summary.replace(/\s+/g, ' ').trim() }
 }
 
+/**
+ * The subagent a stream line is from, by its `Agent` call's id: the CLI writes it on every line a
+ * subagent's own conversation makes (`parent_tool_use_id`), and nothing on the agent's own.
+ */
+function withinSubagent(obj: Record<string, unknown>): string | undefined {
+  const parent = obj['parent_tool_use_id']
+  return typeof parent === 'string' && parent !== '' ? parent : undefined
+}
+
 /** The one argument that says what a tool call did, on one line and cut short. */
 export function toolDetail(input: unknown): string | undefined {
   return callArgument(toolArgument(input)).detail
@@ -377,6 +386,11 @@ export class StreamJsonParser {
   private partial = ''
   /** The subagents of this turn that have not ended yet, by their `Agent` call's id, as they were announced. */
   private readonly subagents = new Map<string, Extract<DriverEvent, { type: 'subagent' }>>()
+  /**
+   * The subagents the CLI runs in the background, by their call's id: the call answers at once that
+   * the subagent began, and the CLI's `task_notification` says when it is over.
+   */
+  private readonly backgrounded = new Set<string>()
 
   /** Feed one line; returns the events it produced (may be empty). */
   push(line: string): DriverEvent[] {
@@ -407,9 +421,20 @@ export class StreamJsonParser {
       announced.push({ type: 'model', model: obj['model'] })
     }
 
+    // A subagent's task, as the CLI reports it beside the subagent's own messages: one run in the
+    // background is over when its task is, and its call's answer only said it began.
+    if (type === 'system' && obj['subtype'] === 'task_started' && obj['is_backgrounded'] === true && typeof obj['tool_use_id'] === 'string') {
+      this.backgrounded.add(obj['tool_use_id'])
+      return announced
+    }
+    if (type === 'system' && obj['subtype'] === 'task_notification' && typeof obj['tool_use_id'] === 'string') {
+      return [...announced, ...this.endSubagent(obj['tool_use_id'], obj['status'] !== 'completed')]
+    }
+
     if (type === 'assistant') return [...announced, ...this.handleAssistant(obj)]
     if (type === 'user') return [...announced, ...this.handleResults(obj)]
-    if (type === 'stream_event') return [...announced, ...this.handlePiece(obj['event'])]
+    // A subagent's message being written is not the agent's: only its whole message is shown, as the subagent's.
+    if (type === 'stream_event') return withinSubagent(obj) !== undefined ? announced : [...announced, ...this.handlePiece(obj['event'])]
     if (type === 'rate_limit_event') {
       const limit = parseRateLimit(obj)
       return limit ? [...announced, { type: 'rate-limit', limit }] : announced
@@ -446,35 +471,63 @@ export class StreamJsonParser {
   private handleAssistant(obj: Record<string, unknown>): DriverEvent[] {
     const message = obj['message']
     if (typeof message !== 'object' || message === null) return []
+    // A subagent's own message: its events are the subagent's, and nothing of it is the agent's —
+    // not its text, which is no part of the agent's reply, nor its usage, which is the subagent's
+    // conversation and not the agent's.
+    const within = withinSubagent(obj)
+    const tag = within !== undefined ? { subagent: within } : {}
     // Every assistant message carries the usage of the one model call that wrote it, so the last
     // of them says how full the conversation is now. The `result` line's usage is the turn's total
     // over every call it made, which is a different number and a much bigger one.
-    const context = contextOf((message as Record<string, unknown>)['usage'])
+    const context = within === undefined ? contextOf((message as Record<string, unknown>)['usage']) : undefined
     if (context !== undefined) this.context = context
+    const events: DriverEvent[] = within !== undefined ? this.subagentModel(within, (message as Record<string, unknown>)['model']) : []
     const content = (message as Record<string, unknown>)['content']
-    if (!Array.isArray(content)) return []
-    const events: DriverEvent[] = []
+    if (!Array.isArray(content)) return events
     for (const item of content) {
       if (typeof item !== 'object' || item === null) continue
       const block = item as Record<string, unknown>
       if (block['type'] === 'text' && typeof block['text'] === 'string') {
-        this.assistantText += block['text']
-        events.push({ type: 'text', text: block['text'] })
+        if (within === undefined) this.assistantText += block['text']
+        events.push({ type: 'text', text: block['text'], ...tag })
       } else if (block['type'] === 'tool_use' && typeof block['name'] === 'string') {
-        events.push({ type: 'action', label: block['name'], ...callArgument(toolArgument(block['input'])), ...callSummary(block['input']), ...(typeof block['id'] === 'string' ? { id: block['id'] } : {}) })
+        events.push({ type: 'action', label: block['name'], ...callArgument(toolArgument(block['input'])), ...callSummary(block['input']), ...(typeof block['id'] === 'string' ? { id: block['id'] } : {}), ...tag })
         // An `Agent` call is a subagent of its own: said beside its row, never instead of it. The
         // call's id is the subagent's, so its result ends the same row; a call without one cannot
-        // be paired with its result and is left as the plain row it always was.
-        if (AGENT_TOOLS.has(block['name']) && typeof block['id'] === 'string') {
+        // be paired with its result and is left as the plain row it always was. A subagent's own
+        // `Agent` call is one of its steps: the CLI starts no subagent of a subagent's.
+        if (within === undefined && AGENT_TOOLS.has(block['name']) && typeof block['id'] === 'string') {
           const started = claudeSubagent(block['id'], block['input'], 'working')
           this.subagents.set(block['id'], started)
           events.push(started)
         }
       } else if (block['type'] === 'thinking' && typeof block['thinking'] === 'string' && block['thinking'].trim() !== '') {
-        events.push({ type: 'thought', text: block['thinking'].trim() })
+        events.push({ type: 'thought', text: block['thinking'].trim(), ...tag })
       }
     }
     return events
+  }
+
+  /**
+   * The model a subagent runs on, off its first message, when its call did not name one: the call
+   * leaves the parent's model unsaid, and the subagent's own message says which model wrote it, so
+   * the row is said again with it.
+   */
+  private subagentModel(id: string, model: unknown): DriverEvent[] {
+    const subagent = this.subagents.get(id)
+    if (subagent === undefined || subagent.model !== undefined || typeof model !== 'string' || model.trim() === '') return []
+    const named = { ...subagent, model: oneLine(model) }
+    this.subagents.set(id, named)
+    return [named]
+  }
+
+  /** A subagent's row over, said again whole, so a reader replaces the row by its id without having to remember what the first one carried. */
+  private endSubagent(id: string, failed: boolean): DriverEvent[] {
+    const subagent = this.subagents.get(id)
+    if (subagent === undefined) return []
+    this.subagents.delete(id)
+    this.backgrounded.delete(id)
+    return [{ ...subagent, status: failed ? 'failed' : 'ended' }]
   }
 
   /**
@@ -490,6 +543,7 @@ export class StreamJsonParser {
     const content = (message as Record<string, unknown>)['content']
     if (!Array.isArray(content)) return []
     const events: DriverEvent[] = []
+    const within = withinSubagent(obj)
     // The line describes one call: with several results on it, there is no telling whose it is.
     const change = content.length === 1 ? fileChange(obj['tool_use_result']) : undefined
     for (const item of content) {
@@ -499,15 +553,11 @@ export class StreamJsonParser {
       const text = cutOutput(resultText(block['content']))
       const failed = block['is_error'] === true
       if (text !== '' || failed || change) {
-        events.push({ type: 'output', id: block['tool_use_id'], text, ...(failed ? { failed: true as const } : {}), ...(change && !failed ? { changed: [change] } : {}) })
+        events.push({ type: 'output', id: block['tool_use_id'], text, ...(failed ? { failed: true as const } : {}), ...(change && !failed ? { changed: [change] } : {}), ...(within !== undefined ? { subagent: within } : {}) })
       }
-      // A subagent's call: its row is over. Said again whole, so a reader replaces the row by its
-      // id without having to remember what the first one carried.
-      const subagent = this.subagents.get(block['tool_use_id'])
-      if (subagent) {
-        this.subagents.delete(block['tool_use_id'])
-        events.push({ ...subagent, status: failed ? 'failed' : 'ended' })
-      }
+      // A subagent's call: its row is over, unless the CLI runs it in the background, when the call
+      // answers that it began and the row ends with its task. One that failed to begin is over.
+      if (!this.backgrounded.has(block['tool_use_id']) || failed) events.push(...this.endSubagent(block['tool_use_id'], failed))
     }
     return events
   }

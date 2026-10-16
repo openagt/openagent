@@ -96,6 +96,15 @@ export function formatDuration(ms: number): string {
   return `${Math.floor(hours / 24)}d`
 }
 
+/** A span of work to the second, as a live count reads it: "9s", then "1m 5s", then "1h 2m". */
+export function formatElapsed(ms: number): string {
+  const seconds = Math.max(0, Math.floor(ms / 1000))
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ${seconds % 60}s`
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+}
+
 /** `1 day` / `2 days`, singular only at exactly one. */
 function pluralize(n: number, unit: string): string {
   return `${n} ${unit}${n === 1 ? '' : 's'}`

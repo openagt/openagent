@@ -1,9 +1,9 @@
-import type { AgentMeta, ChoiceRequest, OpenAgentEvent } from '../../src/index.js'
+import type { AgentDoing, AgentMeta, ChoiceRequest, OpenAgentEvent } from '../../src/index.js'
 import { foldScreenRows, formatOpenAgentEvent } from '../../src/client.js'
 import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Check, ChevronRight, Copy } from 'lucide-react'
 import { pendingChoices } from '../lib/live-state.js'
-import { startedBefore, subagentEnd, subagentStartedAt, type SubagentEnd } from '../lib/subagents.js'
+import { callRow, callSubagents, runRow, subagentEnd, subagentEvents, subagentGroups, type SubagentEnd } from '../lib/subagents.js'
 import { answeredQuestion } from '../lib/answered-question.js'
 import { rowWords, type RowWords } from '../lib/row-words.js'
 import { formatAge } from '../lib/format-date.js'
@@ -12,7 +12,7 @@ import { Markdown } from './Markdown.js'
 import { SessionLine, sessionLineEmpty, type SessionSetup } from './SessionLine.js'
 import { ChangedFiles } from './ChangedFiles.js'
 import { turnChanges } from '../lib/turn-changes.js'
-import { SubagentLine } from './SubagentLine.js'
+import { SubagentGroup, SubagentLine } from './SubagentLine.js'
 import { LiveLine, ToolCalls, type CallOutput, type ToolStep } from './ToolCalls.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import {
@@ -43,9 +43,12 @@ import {
 //     on an answer: the agent's last message, or its question, is how such a turn ends. A stopped
 //     or failed end is a row.
 //   - The reply a question follows is shown whole: it is what the question asks about.
-//   - Subagents, when the log is given the run's: each has a row where it was started, read off
-//     its card, so the row of a working one says what it is doing now; and the prompt that told
-//     the run a subagent ended is a subagent's row too, not a message of the user's.
+//   - Subagents, of both kinds: the runs started for this one, read off their cards, and the ones
+//     the coding agent started inside its session, read off the log's `subagent` events. The ones
+//     a turn started are one group where the first was started, each a row that opens the
+//     subagent beside the chat; the call that started one, and everything it said and did, are its
+//     own and no row here. The prompt that told the run a subagent ended is a subagent's row too,
+//     not a message of the user's.
 // The rows sit in one centered column, as a chat's do, with no label saying each row's kind: the
 // user's turn is a box on the right, and every other row says what it is. The first of a run of
 // same-kind rows carries the time its diary line was written, shown while the pointer is on the
@@ -500,7 +503,7 @@ const SUBAGENT = 'subagent'
 const AT_END = 8
 const NO_SUBAGENTS: readonly AgentMeta[] = []
 const NONE_QUEUED: readonly string[] = []
-const NOTHING_DOING: Record<string, string> = {}
+const NOTHING_DOING: Record<string, AgentDoing> = {}
 
 /**
  * Whether an event is a row at all. The agent's session id is plumbing, not conversation: the
@@ -571,7 +574,7 @@ export function EventList({
   subagents = NO_SUBAGENTS,
   doing = NOTHING_DOING,
   setup,
-  onOpenAgent,
+  onOpenSubagent,
   onOpenChange,
   onOpenScreen,
 }: {
@@ -604,12 +607,12 @@ export function EventList({
   /** The runs started for this run, oldest first: each gets a row where it was started. */
   subagents?: readonly AgentMeta[]
   /** What each working subagent is doing now, by id. */
-  doing?: Record<string, string>
+  doing?: Record<string, AgentDoing>
   /** What was set up for the agent before it began: the "Initialized session" line under the first
    *  prompt (the first row when the log has no prompt). Without it, no such line. */
   setup?: SessionSetup | undefined
-  /** Open another run's page: what a subagent's row does on a click. */
-  onOpenAgent?: ((agentId: string) => void) | undefined
+  /** Open a subagent beside the chat, by its row's key: what a subagent's row does on a click. */
+  onOpenSubagent?: ((key: string) => void) | undefined
   /** Show a changed file's change: what the row of a file at the end of a turn does on a click.
    *  Without it, the rows are no buttons. */
   onOpenChange?: ((path: string) => void) | undefined
@@ -625,7 +628,10 @@ export function EventList({
   const changes = useMemo(() => turnChanges(events, workspace), [events, workspace])
   const rowIds = useMemo(() => new Map(events.map((e, at) => [e, String(at)])), [events])
   const asked = useMemo(() => askedReplies(events), [events])
-  const logged = promptFirst(events).filter(e => shownAsRow(e) && !choiceRows?.hidden.has(e) && !screenRows.hidden.has(e))
+  // The coding agent's own subagents, and what of the log their rows say instead.
+  const calls = useMemo(() => callSubagents(events), [events])
+  const theirs = useMemo(() => subagentEvents(events), [events])
+  const logged = promptFirst(events).filter(e => shownAsRow(e) && !choiceRows?.hidden.has(e) && !screenRows.hidden.has(e) && !theirs.has(e))
   // Every row and every passed end, in order, a message just sent last; `shown` is the rows alone.
   const kept: OpenAgentEvent[] = sending === undefined ? logged : [...logged, { kind: 'driver', event: { type: 'start', prompt: sending } }]
   // The text of a row's message: the reply a question follows, without the question's block.
@@ -653,17 +659,18 @@ export function EventList({
   // the scroller keeps its place. A message just sent has no place yet.
   const idOf = (e: OpenAgentEvent): string => rowIds.get(e) ?? 'sending'
   const groupOf = (e: OpenAgentEvent): string => (ends.has(e) ? SUBAGENT : rowGroup(e))
-  const started = startedBefore(shown, subagents)
-  const startedRows = (at: number): ReactNode =>
-    started.get(at)?.map(agent => (
-      <MessageScrollerItem key={`subagent-${agent.id}`} messageId={`subagent-${agent.id}`} className="group/row -mx-1.5 flex items-start gap-2 rounded-sm px-1.5">
-        <SubagentLine agent={agent} doing={doing[agent.id]} onOpen={onOpenAgent} />
-        <Tooltip>
-          <TooltipTrigger render={<span className={TIME} />}>{formatTime(subagentStartedAt(agent))}</TooltipTrigger>
-          <TooltipContent>{new Date(subagentStartedAt(agent)).toLocaleString()}</TooltipContent>
-        </Tooltip>
+  const rows = [...subagents.map(agent => runRow(agent, doing[agent.id])), ...calls.map(call => callRow(call, working, events[0]?.at ?? new Date(0).toISOString()))]
+  const started = subagentGroups(shown, rows, isTurnBoundary)
+  const startedRows = (at: number): ReactNode => {
+    const group = started.get(at)
+    if (!group) return null
+    const first = group[0]!
+    return (
+      <MessageScrollerItem key={`subagent-${first.key}`} messageId={`subagent-${first.key}`} className="group/row -mx-1.5 flex items-start gap-2 rounded-sm px-1.5">
+        <SubagentGroup rows={group} onOpen={onOpenSubagent} />
       </MessageScrollerItem>
-    ))
+    )
+  }
   // The "Initialized session" line: under the first prompt, which opens the log; above everything when
   // the log has no prompt. It breaks the run of rows like a subagent's row: the row after it
   // shows its badge.
@@ -758,7 +765,7 @@ export function EventList({
                   ) : end ? (
                     // A subagent ended: which one and how, then what the run was told about it.
                     <div className="flex min-w-0 flex-1 flex-col">
-                      <SubagentLine agent={end.agent} end={end} onOpen={onOpenAgent} />
+                      <SubagentLine agent={end.agent} end={end} onOpen={onOpenSubagent} />
                       {end.rest && <Message text={end.rest} />}
                     </div>
                   ) : message !== null ? (

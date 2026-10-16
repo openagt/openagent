@@ -144,6 +144,61 @@ test('StreamJsonParser says the subagent an Agent call starts, beside the call\'
   assert.deepEqual(p.push(assistant([{ type: 'tool_use', name: 'Agent', input: { description: 'Nameless call' } }])), [{ type: 'action', label: 'Agent', detail: 'Nameless call' }])
 })
 
+// What Claude Code 2.1 writes for a subagent, as one real run printed it: every line of the
+// subagent's own conversation names its `Agent` call as `parent_tool_use_id`, and a subagent run in
+// the background answers its call at once, its end said later by a `task_notification`.
+test('StreamJsonParser gives a subagent its own events, its model off its first message, and ends one in the background with its task', () => {
+  const p = new StreamJsonParser()
+  const within = (parent: string | null, line: object) => JSON.stringify({ ...line, parent_tool_use_id: parent })
+  const assistant = (parent: string | null, blocks: unknown[], extra: object = {}) => within(parent, { type: 'assistant', message: { role: 'assistant', content: blocks, ...extra } })
+  const result = (parent: string | null, blocks: unknown[]) => within(parent, { type: 'user', message: { role: 'user', content: blocks } })
+  const task = (subtype: string, fields: object) => JSON.stringify({ type: 'system', subtype, ...fields })
+  const named = { type: 'subagent', id: 'toolu_a', name: 'Run echo hi', role: 'general-purpose', prompt: 'Run echo hi and report it.' } as const
+
+  assert.deepEqual(p.push(assistant(null, [{ type: 'tool_use', id: 'toolu_a', name: 'Agent', input: { description: 'Run echo hi', subagent_type: 'general-purpose', prompt: 'Run echo hi and report it.' } }])), [
+    { type: 'action', label: 'Agent', detail: 'Run echo hi', id: 'toolu_a' },
+    { ...named, status: 'working' },
+  ])
+  // In the background: the call's answer says only that the subagent began, and ends nothing.
+  assert.deepEqual(p.push(task('task_started', { task_id: 'a9c8', tool_use_id: 'toolu_a', is_backgrounded: true, description: 'Run echo hi' })), [])
+  assert.deepEqual(p.push(result(null, [{ type: 'tool_result', tool_use_id: 'toolu_a', content: 'Async agent launched successfully.' }])), [{ type: 'output', id: 'toolu_a', text: 'Async agent launched successfully.' }])
+
+  // The subagent's own message: its model, which the call left unsaid, then its steps, all its own.
+  // Its usage is its own conversation's, and its text is no part of the agent's reply.
+  assert.deepEqual(
+    p.push(assistant('toolu_a', [{ type: 'thinking', thinking: 'Run it.' }, { type: 'text', text: 'Running it.' }, { type: 'tool_use', id: 'toolu_b', name: 'Bash', input: { command: 'echo hi' } }], { model: 'claude-haiku-5-5', usage: { input_tokens: 9_000, cache_read_input_tokens: 0, output_tokens: 10 } })),
+    [
+      { ...named, status: 'working', model: 'claude-haiku-5-5' },
+      { type: 'thought', text: 'Run it.', subagent: 'toolu_a' },
+      { type: 'text', text: 'Running it.', subagent: 'toolu_a' },
+      { type: 'action', label: 'Bash', detail: 'echo hi', id: 'toolu_b', subagent: 'toolu_a' },
+    ],
+  )
+  assert.deepEqual(p.push(result('toolu_a', [{ type: 'tool_result', tool_use_id: 'toolu_b', content: 'hi' }])), [{ type: 'output', id: 'toolu_b', text: 'hi', subagent: 'toolu_a' }])
+  // Its model is said once: a second message of the subagent's names it again and changes nothing.
+  assert.deepEqual(p.push(assistant('toolu_a', [{ type: 'text', text: 'It printed hi.' }], { model: 'claude-haiku-5-5' })), [{ type: 'text', text: 'It printed hi.', subagent: 'toolu_a' }])
+  // What it is writing is not the agent's message being written.
+  assert.deepEqual(p.push(within('toolu_a', { type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'It pr' } } })), [])
+
+  // Its task is over: the row ends, with all it carried.
+  assert.deepEqual(p.push(task('task_notification', { task_id: 'a9c8', tool_use_id: 'toolu_a', status: 'completed' })), [{ ...named, status: 'ended', model: 'claude-haiku-5-5' }])
+  // A task of a subagent that is no row of this turn ends nothing.
+  assert.deepEqual(p.push(task('task_notification', { task_id: 'zz', tool_use_id: 'toolu_gone', status: 'completed' })), [])
+
+  // One in the background that did not finish failed.
+  p.push(assistant(null, [{ type: 'tool_use', id: 'toolu_c', name: 'Agent', input: { description: 'Doomed' } }]))
+  p.push(task('task_started', { tool_use_id: 'toolu_c', is_backgrounded: true }))
+  assert.deepEqual(p.push(task('task_notification', { tool_use_id: 'toolu_c', status: 'failed' })), [{ type: 'subagent', id: 'toolu_c', name: 'Doomed', status: 'failed' }])
+
+  // The agent's own reply and how full its own conversation is: nothing of the subagent's in either.
+  p.push(assistant(null, [{ type: 'text', text: 'done' }], { usage: { input_tokens: 100, cache_read_input_tokens: 2_000, output_tokens: 5 } }))
+  // A subagent in the background may still be talking after the agent's last message.
+  p.push(assistant('toolu_a', [{ type: 'text', text: 'One more thing.' }], { usage: { input_tokens: 9_000, cache_read_input_tokens: 0, output_tokens: 10 } }))
+  p.push(JSON.stringify({ type: 'result', subtype: 'success', session_id: 's', usage: { input_tokens: 9_100, output_tokens: 15, cache_read_input_tokens: 2_000, cache_creation_input_tokens: 0 } }))
+  assert.equal(p.result().text, 'done')
+  assert.equal(p.result().usage?.contextTokens, 2_105)
+})
+
 test('StreamJsonParser passes the message being written as the text so far, each text block from empty', () => {
   const p = new StreamJsonParser()
   const piece = (event: object): string => JSON.stringify({ type: 'stream_event', event })
