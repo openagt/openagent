@@ -1,5 +1,5 @@
 import type { BridgeBrowserStatus } from '../bridge-browser.js'
-import { findAgent, findCheckout, readLiveMetas, readAllAgents, readDoing, loadAgentEvents, startedAtFromAgentId, isPidAlive, type AgentMeta, type AgentStatus, isRunId, projectBranches } from '../store/index.js'
+import { findAgent, findCheckout, readLiveMetas, readAllAgents, readDoing, loadAgentEvents, type AgentDoing, startedAtFromAgentId, isPidAlive, type AgentMeta, type AgentStatus, isRunId, projectBranches } from '../store/index.js'
 import { listProjectWorktrees } from '../worktrees.js'
 import { projectGitHost, type GitHostHome } from '../store/git-host.js'
 import { repositoryOffer, type RepositoryOffer } from '../store/repository.js'
@@ -259,7 +259,7 @@ export async function onAgent(projectId: string, agentId: string): Promise<OpenA
 }
 
 /** What each of the named runs of a project is doing now, by id; a run that is not working has no entry. */
-export async function onAgentsDoing(projectId: string, agentIds: string[]): Promise<Record<string, string>> {
+export async function onAgentsDoing(projectId: string, agentIds: string[]): Promise<Record<string, AgentDoing>> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return {}
   return readDoing(cwd, agentIds).catch(() => ({}))

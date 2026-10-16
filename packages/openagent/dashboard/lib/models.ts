@@ -6,9 +6,13 @@ import { onModels, type DriverModels, type ModelsView } from '../rpc/models.js'
 // Which models each coding agent offers, as the daemon asked the agents themselves. The daemon
 // asks once and keeps the answer, so every surface that names a model reads it freely.
 
-/** The models each coding agent offers, `undefined` until the daemon has answered. */
+/**
+ * The models each coding agent offers, `undefined` until the daemon has answered. Remembered for
+ * the page's life: every row and pane that names a model reads it, and one mounted later shows
+ * the names from its first frame rather than the ids for a moment.
+ */
 export function useModels(): ModelsView | undefined {
-  return useLoaded<ModelsView | undefined>(onModels, undefined, [])
+  return useLoaded<ModelsView | undefined>(onModels, undefined, [], { remember: 'models' })
 }
 
 /**
@@ -36,6 +40,19 @@ export function driverOptions(models: ModelsView | undefined): DriverOption[] {
  */
 export function modelName(models: DriverModels | undefined, id: string): string {
   return (models?.models.find(m => m.id === id) ?? models?.models.find(m => m.resolvedId === id))?.name ?? id
+}
+
+/**
+ * A model's name as whichever coding agent lists it, for a reader that does not know which agent
+ * ran it (a subagent the coding agent started itself runs on the same agent, and says only its
+ * model): the id itself when none lists it.
+ */
+export function anyModelName(models: ModelsView | undefined, id: string): string {
+  for (const answer of Object.values(models ?? {})) {
+    const name = modelName(answer, id)
+    if (name !== id) return name
+  }
+  return id
 }
 
 /**

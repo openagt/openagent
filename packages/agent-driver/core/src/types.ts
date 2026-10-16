@@ -381,8 +381,12 @@ export type DriverEvent =
    * after the alias moves on. A driver whose CLI does not say omits it.
    */
   | { type: 'model'; model: string }
-  /** An assistant text chunk streamed out. */
-  | { type: 'text'; text: string }
+  /**
+   * An assistant text chunk streamed out. `subagent`, here and on `action`, `output` and `thought`,
+   * is the id of the {@link DriverEvent subagent} the CLI says wrote it, when it was not the agent
+   * itself: a reader shows those events as that subagent's own, and never as the agent's.
+   */
+  | { type: 'text'; text: string; subagent?: string }
   /**
    * The message the agent is writing, as far as it has got: the whole text so far, not the newest
    * piece. Its `text` event follows once the message is whole. Live only: a log keeps it beside the
@@ -398,7 +402,7 @@ export type DriverEvent =
    * `summary` is the coding agent's own few words for what the call does ("List project files"),
    * when it gave some beside the detail.
    */
-  | { type: 'action'; label: string; detail?: string; whole?: string; summary?: string; id?: string }
+  | { type: 'action'; label: string; detail?: string; whole?: string; summary?: string; id?: string; subagent?: string }
   /**
    * What a tool call gave back once it was over: `id` is its `action`'s, `text` is what it printed,
    * cut to a size limit (`cutOutput`). `failed` says the call failed; `exitCode` is the command's
@@ -406,7 +410,7 @@ export type DriverEvent =
    * reports them: an edit, a write, a patch. A call that gave nothing back and changed no file has
    * no `output`.
    */
-  | { type: 'output'; id: string; text: string; failed?: true; exitCode?: number; changed?: FileChange[] }
+  | { type: 'output'; id: string; text: string; failed?: true; exitCode?: number; changed?: FileChange[]; subagent?: string }
   /**
    * A **subagent the wrapped CLI started inside its own session**: a second agent in the same
    * process, on the same checkout, which the parent handed a task of its own. Nothing to do with
@@ -415,12 +419,15 @@ export type DriverEvent =
    *
    * `id` is stable across the same subagent's updates, so a reader replaces its row rather than
    * appending a second one. On Claude Code it is the `Agent` call's `tool_use` id — one call is one
-   * subagent. On Codex it is the `collabAgentToolCall` item's id and the agent's own thread id
-   * (its nickname, or its place in the list, when the item names no thread) joined by a colon,
-   * because one Codex call can concern several agents at once.
+   * subagent — and the events the subagent's own messages make carry it as their `subagent`. On
+   * Codex it is the `collabAgentToolCall` item's id and the agent's own thread id (its nickname, or
+   * its place in the list, when the item names no thread) joined by a colon, because one Codex call
+   * can concern several agents at once.
    *
    * `status` is the only part a reader may gate a row on: `working` while it runs, `ended` once it
-   * is over, `failed` when it did not go through (Codex's `declined` reads as `failed` too).
+   * is over, `failed` when it did not go through (Codex's `declined` reads as `failed` too). A
+   * Claude Code subagent run in the background is over when the CLI says its task is, not when its
+   * call answers: that answer only says it began.
    * Everything else is whatever the CLI happened to say and is **absent** when it said nothing,
    * never guessed or defaulted. Claude Code gives the name (the call's `description`), the `role`
    * (its `subagent_type`), the `prompt`, and a `model` only when the call overrode the parent's.
@@ -430,11 +437,11 @@ export type DriverEvent =
    *
    * Emitted **beside** the `action` and `output` events of the same call, which both drivers go on
    * emitting unchanged: whoever renders this event renders one row for the subagent and skips
-   * those two for the same `id`, rather than taking away the rows a reader shows today.
+   * those two for the same call — the same `id`, or on Codex the part of it before the colon.
    */
   | { type: 'subagent'; id: string; status: 'working' | 'ended' | 'failed'; name?: string; role?: string; model?: string; prompt?: string }
   /** What the agent thought before it acted, as its CLI summarizes it. */
-  | { type: 'thought'; text: string }
+  | { type: 'thought'; text: string; subagent?: string }
   /**
    * The turn settled with this final text. `sessionLink` is the real URL of the session,
    * for a driver whose session has one of its own (#1317) — a cloud session, say — so a

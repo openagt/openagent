@@ -1,6 +1,6 @@
 import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
 import { describe, expect, test } from 'vitest'
-import { holdsMainAgent, isOpenSubagent, nestRows, startedBefore, subagentEnd, subagentStartedAt, subagentsOf, taskLabel } from './subagents.js'
+import { callSubagents, holdsMainAgent, isOpenSubagent, nestRows, rollUp, runRow, subagentEnd, subagentEvents, subagentGroups, subagentStartedAt, subagentsOf, taskLabel, type SubagentRow } from './subagents.js'
 
 function agent(id: string, over: Partial<AgentMeta> = {}): AgentMeta {
   return { status: 'done', id, startedAt: '2026-10-01T10:00:00.000Z', updatedAt: '2026-10-01T10:00:00.000Z', ...over }
@@ -82,17 +82,86 @@ describe('subagentEnd', () => {
   })
 })
 
-describe('startedBefore', () => {
+describe('subagentGroups', () => {
   const at = (time: string): OpenAgentEvent => ({ kind: 'log', message: time, at: `2026-10-01T10:${time}.000Z` }) as OpenAgentEvent
+  const turn = (time: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'start', prompt: 'go on' }, at: `2026-10-01T10:${time}.000Z` })
+  const isTurn = (e: OpenAgentEvent) => e.kind === 'driver' && e.event.type === 'start'
+  const row = (id: string, startedAt: string) => runRow(agent(id, { startedAt }), undefined)
+  const placed = (groups: Map<number, SubagentRow[]>) => [...groups].map(([index, rows]) => [index, rows.map(one => one.key)])
 
   test('a subagent goes before the first event written after it started; one started after the last event goes at the end', () => {
-    const events = [at('00:00'), at('02:00'), { kind: 'log', message: 'no time' } as OpenAgentEvent, at('04:00')]
-    const rows = startedBefore(events, [agent('a', { startedAt: '2026-10-01T10:01:00.000Z' }), agent('b', { startedAt: '2026-10-01T10:01:30.000Z' }), agent('c', { startedAt: '2026-10-01T10:03:00.000Z' }), agent('d', { startedAt: '2026-10-01T10:09:00.000Z' })])
-    expect([...rows].map(([index, agents]) => [index, agents.map(a => a.id)])).toEqual([
-      [1, ['a', 'b']],
-      [3, ['c']],
-      [4, ['d']],
+    const events = [turn('00:00'), at('02:00'), turn('02:30'), { kind: 'log', message: 'no time' } as OpenAgentEvent, turn('04:00')]
+    const groups = subagentGroups(events, [row('d', '2026-10-01T10:09:00.000Z'), row('a', '2026-10-01T10:01:00.000Z'), row('c', '2026-10-01T10:03:00.000Z')], isTurn)
+    expect(placed(groups)).toEqual([
+      [1, ['run:a']],
+      [4, ['run:c']],
+      [5, ['run:d']],
     ])
+  })
+
+  test('the subagents one turn started are one group, at the place of the first of them, in the order they were started', () => {
+    const events = [turn('00:00'), at('01:10'), at('01:20'), at('01:40'), turn('02:00'), at('03:00')]
+    const groups = subagentGroups(events, [row('b', '2026-10-01T10:01:30.000Z'), row('a', '2026-10-01T10:01:05.000Z'), row('c', '2026-10-01T10:02:30.000Z')], isTurn)
+    expect(placed(groups)).toEqual([
+      [1, ['run:a', 'run:b']],
+      [5, ['run:c']],
+    ])
+  })
+
+  test('a subagent started just before a prompt is a subagent of the turn it was started in, not of the next', () => {
+    const events = [turn('00:00'), at('01:00'), turn('02:00'), at('03:00')]
+    const groups = subagentGroups(events, [row('a', '2026-10-01T10:00:30.000Z'), row('b', '2026-10-01T10:01:30.000Z')], isTurn)
+    expect(placed(groups)).toEqual([[1, ['run:a', 'run:b']]])
+  })
+
+  test("a subagent's row keeps its place when its card's start time moves past the next line of the log", () => {
+    const events = [{ kind: 'log', message: 'a', at: '2026-10-01T10:00:59.000Z' }, { kind: 'log', message: 'b', at: '2026-10-01T10:01:05.000Z' }] as OpenAgentEvent[]
+    const groups = subagentGroups(events, [runRow(agent('2026-10-01T10-01-00-000Z', { startedAt: '2026-10-01T10:01:07.500Z' }), undefined)], isTurn)
+    expect([...groups.keys()]).toEqual([1])
+  })
+})
+
+describe('callSubagents and subagentEvents', () => {
+  const ev = (event: Extract<OpenAgentEvent, { kind: 'driver' }>['event'], at: string): OpenAgentEvent => ({ kind: 'driver', event, at: `2026-10-01T10:${at}.000Z` })
+  const call = ev({ type: 'action', label: 'Agent', id: 'toolu_a' }, '00:10')
+  const started = ev({ type: 'subagent', id: 'toolu_a', status: 'working', name: 'Map the pages' }, '00:10')
+  const named = ev({ type: 'subagent', id: 'toolu_a', status: 'working', name: 'Map the pages', model: 'claude-haiku-5-5' }, '00:11')
+  const read = ev({ type: 'action', label: 'Read', id: 'toolu_b', subagent: 'toolu_a' }, '00:12')
+  const grep = ev({ type: 'action', label: 'Grep', id: 'toolu_c', subagent: 'toolu_a' }, '00:13')
+  const said = ev({ type: 'text', text: 'Found it.', subagent: 'toolu_a' }, '00:14')
+  const answered = ev({ type: 'output', id: 'toolu_a', text: 'Found it.' }, '00:40')
+  const ended = ev({ type: 'subagent', id: 'toolu_a', status: 'ended', name: 'Map the pages', model: 'claude-haiku-5-5' }, '00:40')
+  const own = ev({ type: 'action', label: 'Bash', id: 'toolu_d' }, '00:50')
+
+  test('one subagent per id, as its newest event says, with how many calls it made, the last tool, and when it started and ended', () => {
+    expect(callSubagents([call, started, named, read, grep])).toEqual([{ id: 'toolu_a', status: 'working', name: 'Map the pages', model: 'claude-haiku-5-5', startedAt: '2026-10-01T10:00:10.000Z', calls: 2, tool: 'Grep' }])
+    expect(callSubagents([call, started, named, read, grep, said, answered, ended])[0]).toMatchObject({ status: 'ended', calls: 2, endedAt: '2026-10-01T10:00:40.000Z' })
+  })
+
+  test("what the chat passes over: the subagent's events, its call and that call's answer, and all it said and did; never the run's own steps", () => {
+    const events = [call, started, named, read, grep, said, answered, ended, own]
+    expect([...subagentEvents(events)]).toEqual([call, started, named, read, grep, said, answered, ended])
+    // On Codex the call is the part of the subagent's id before the colon.
+    const codexCall = ev({ type: 'action', label: 'collabAgentToolCall', id: 'item_1' }, '00:10')
+    const codexAgent = ev({ type: 'subagent', id: 'item_1:t1', status: 'working' }, '00:10')
+    expect([...subagentEvents([codexCall, codexAgent, own])]).toEqual([codexCall, codexAgent])
+  })
+})
+
+describe('rollUp', () => {
+  const row = (startedAt: string, over: Partial<SubagentRow> = {}): SubagentRow => ({ key: startedAt, name: 'x', status: 'done', working: false, startedAt, ...over })
+
+  test('how many, from the first start to the last end, and the cost of the ones whose cost is known', () => {
+    expect(rollUp([row('2026-10-01T10:00:00.000Z', { endedAt: '2026-10-01T10:00:40.000Z', cost: 0.25 }), row('2026-10-01T10:00:10.000Z', { endedAt: '2026-10-01T10:01:07.000Z', cost: 0.36 }), row('2026-10-01T10:00:20.000Z', { endedAt: '2026-10-01T10:00:30.000Z' })], 0)).toEqual({
+      count: 3,
+      ms: 67_000,
+      cost: 0.61,
+    })
+  })
+
+  test('up to now while one works, and no cost when none is known', () => {
+    const now = Date.parse('2026-10-01T10:02:00.000Z')
+    expect(rollUp([row('2026-10-01T10:00:00.000Z', { working: true, status: 'running' }), row('2026-10-01T10:00:10.000Z', { endedAt: '2026-10-01T10:00:20.000Z' })], now)).toEqual({ count: 2, ms: 120_000 })
   })
 })
 
@@ -102,11 +171,6 @@ describe('subagentStartedAt', () => {
     expect(subagentStartedAt(agent('c1', { startedAt: '2026-10-01T10:01:07.500Z' }))).toBe('2026-10-01T10:01:07.500Z')
   })
 
-  test("a subagent's row keeps its place when its card's start time moves past the next line of the log", () => {
-    const events = [{ kind: 'log', message: 'a', at: '2026-10-01T10:00:59.000Z' }, { kind: 'log', message: 'b', at: '2026-10-01T10:01:05.000Z' }] as OpenAgentEvent[]
-    const rows = startedBefore(events, [agent('2026-10-01T10-01-00-000Z', { startedAt: '2026-10-01T10:01:07.500Z' })])
-    expect([...rows.keys()]).toEqual([1])
-  })
 })
 
 describe('holdsMainAgent', () => {

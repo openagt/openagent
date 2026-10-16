@@ -86,6 +86,13 @@ test('a line\'s time is its event\'s, on every kind; a line with none reads with
   assert.deepEqual(fromDiaryLine({ kind: 'said', text: 'old' }), { kind: 'driver', event: { type: 'text', text: 'old' } })
 })
 
+test('a subagent of the coding agent\'s own reads as its event, and what it said and did reads as its own', () => {
+  const subagent = { kind: 'subagent', id: 'toolu_a', status: 'working', name: 'Map the pages', model: 'claude-haiku-5-5', prompt: 'Read how the pages are served.' }
+  assert.deepEqual(fromDiaryLine(subagent), { kind: 'driver', event: { type: 'subagent', id: 'toolu_a', status: 'working', name: 'Map the pages', model: 'claude-haiku-5-5', prompt: 'Read how the pages are served.' } })
+  assert.deepEqual(fromDiaryLine({ kind: 'said', text: 'Reading.', subagent: 'toolu_a' }), { kind: 'driver', event: { type: 'text', text: 'Reading.', subagent: 'toolu_a' } })
+  assert.deepEqual(fromDiaryLine({ kind: 'action', label: 'Bash', id: 'toolu_b', subagent: 'toolu_a' }), { kind: 'driver', event: { type: 'action', label: 'Bash', id: 'toolu_b', subagent: 'toolu_a' } })
+})
+
 test('a line whose kind is no longer an event reads as nothing, so an old run shows no empty rows', () => {
   // Kinds runs wrote before OpenAgent stopped running agents: nothing reads them any more.
   assert.equal(fromDiaryLine({ kind: 'handoff', outcome: 'done', pushed: true, url: 'https://x/pr/1' }), undefined)

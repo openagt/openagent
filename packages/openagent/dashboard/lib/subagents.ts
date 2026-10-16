@@ -1,4 +1,4 @@
-import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
+import type { AgentDoing, AgentMeta, OpenAgentEvent } from '../../src/index.js'
 import { startedAtFromAgentId } from '../../src/agent-id.js'
 import { agentLabel } from './agent-label.js'
 
@@ -89,16 +89,179 @@ export function subagentStartedAt(agent: Pick<AgentMeta, 'id' | 'startedAt'>): s
 }
 
 /**
- * Where each subagent's row goes in a log: before the first event written after the subagent
- * started, by index, or at the log's length when none was. An event with no time is passed over.
+ * A subagent the coding agent started inside its own session (its `Agent` tool, Codex's collab
+ * calls), folded out of the run's events: one per `subagent` event id, as the newest of them says,
+ * with how many calls it made and the last of them. It works in the run's own checkout and has no
+ * branch of its own.
  */
-export function startedBefore(events: readonly OpenAgentEvent[], subagents: readonly AgentMeta[]): Map<number, AgentMeta[]> {
-  const rows = new Map<number, AgentMeta[]>()
-  for (const agent of subagents) {
-    const started = Date.parse(subagentStartedAt(agent))
-    const at = events.findIndex(e => e.at !== undefined && Date.parse(e.at) > started)
-    const index = at === -1 ? events.length : at
-    rows.set(index, [...(rows.get(index) ?? []), agent])
+export interface CallSubagent {
+  id: string
+  status: 'working' | 'ended' | 'failed'
+  name?: string
+  role?: string
+  model?: string
+  prompt?: string
+  /** When its first event was written, and when the one that ended it was. */
+  startedAt?: string
+  endedAt?: string
+  /** How many calls it made, and the tool of the last one, as its own events say. */
+  calls: number
+  tool?: string
+}
+
+/** The run's own subagents of its coding agent, in the order they were started. */
+export function callSubagents(events: readonly OpenAgentEvent[]): CallSubagent[] {
+  const byId = new Map<string, CallSubagent>()
+  for (const e of events) {
+    if (e.kind !== 'driver') continue
+    const event = e.event
+    if (event.type === 'subagent') {
+      const was = byId.get(event.id)
+      const { type: _type, ...said } = event
+      byId.set(event.id, {
+        ...said,
+        calls: was?.calls ?? 0,
+        ...(was?.tool !== undefined ? { tool: was.tool } : {}),
+        ...((was?.startedAt ?? e.at) !== undefined ? { startedAt: (was?.startedAt ?? e.at)! } : {}),
+        ...(event.status !== 'working' && e.at !== undefined ? { endedAt: e.at } : {}),
+      })
+    } else if (event.type === 'action' && event.subagent !== undefined) {
+      const subagent = byId.get(event.subagent)
+      if (subagent) byId.set(event.subagent, { ...subagent, calls: subagent.calls + 1, tool: event.label })
+    }
   }
-  return rows
+  return [...byId.values()]
+}
+
+/**
+ * The events the chat shows nothing for, because a subagent's row says them: each subagent's own
+ * events, the call that started it and that call's answer (the `action` and `output` of the same
+ * call — on Codex the call is the part of the subagent's id before the colon), and what the
+ * subagent itself said and did, which is its transcript and no step of the run's own.
+ */
+export function subagentEvents(events: readonly OpenAgentEvent[]): Set<OpenAgentEvent> {
+  const ids = new Set<string>()
+  for (const e of events) if (e.kind === 'driver' && e.event.type === 'subagent') ids.add(e.event.id)
+  const calls = new Set([...ids].flatMap(id => [id, id.split(':')[0]!]))
+  const hidden = new Set<OpenAgentEvent>()
+  for (const e of events) {
+    if (e.kind !== 'driver') continue
+    const event = e.event
+    if (event.type === 'subagent') hidden.add(e)
+    else if ((event.type === 'action' || event.type === 'output' || event.type === 'text' || event.type === 'thought') && event.subagent !== undefined) hidden.add(e)
+    else if ((event.type === 'action' || event.type === 'output') && event.id !== undefined && calls.has(event.id)) hidden.add(e)
+  }
+  return hidden
+}
+
+/** What one subagent of the coding agent's own said and did: its transcript, as the run's events. */
+export function subagentTranscript(events: readonly OpenAgentEvent[], id: string): OpenAgentEvent[] {
+  return events.filter(e => e.kind === 'driver' && (e.event.type === 'action' || e.event.type === 'output' || e.event.type === 'text' || e.event.type === 'thought') && e.event.subagent === id)
+}
+
+/**
+ * A subagent as its row shows it, whichever kind it is: a run of this project's own, on a branch of
+ * its own (`agent`), or one the coding agent started inside its session, which has none (`call`).
+ * The status is a run's word for it, so both read alike.
+ */
+export interface SubagentRow {
+  /** Unique among the run's subagents of both kinds. */
+  key: string
+  name: string
+  model?: string
+  status: string
+  working: boolean
+  startedAt: string
+  endedAt?: string
+  /** What it is on now and how many calls it made, while it works, when that is known. */
+  tool?: string
+  calls?: number
+  /** What its last step was, on one line, while it works. */
+  doing?: string
+  cost?: number
+  prompt?: string
+  agent?: AgentMeta
+  call?: CallSubagent
+}
+
+/** A subagent run as its row. */
+export function runRow(agent: AgentMeta, doing: AgentDoing | undefined): SubagentRow {
+  const working = agent.status === 'running'
+  return {
+    key: `run:${agent.id}`,
+    name: taskLabel(agent),
+    ...(agent.model !== undefined ? { model: agent.model } : {}),
+    status: agent.status,
+    working,
+    startedAt: subagentStartedAt(agent),
+    ...(agent.endedAt !== undefined ? { endedAt: agent.endedAt } : {}),
+    ...(working && doing?.tool !== undefined ? { tool: doing.tool } : {}),
+    ...(working && doing !== undefined ? { calls: doing.calls } : {}),
+    ...(working && doing?.doing !== undefined ? { doing: doing.doing } : {}),
+    ...(agent.cost !== undefined ? { cost: agent.cost } : {}),
+    ...(agent.intent !== undefined ? { prompt: agent.intent } : {}),
+    agent,
+  }
+}
+
+/**
+ * A subagent of the coding agent's own as its row. One still working when the run is not is over
+ * all the same — its process went with the run's — and reads as stopped.
+ */
+export function callRow(call: CallSubagent, runWorking: boolean, fallbackAt: string): SubagentRow {
+  const working = call.status === 'working' && runWorking
+  const status = call.status === 'failed' ? 'failed' : call.status === 'ended' ? 'done' : working ? 'running' : 'stopped'
+  return {
+    key: `call:${call.id}`,
+    name: call.name ?? call.role ?? 'Subagent',
+    ...(call.model !== undefined ? { model: call.model } : {}),
+    status,
+    working,
+    startedAt: call.startedAt ?? fallbackAt,
+    ...(call.endedAt !== undefined ? { endedAt: call.endedAt } : {}),
+    ...(working && call.tool !== undefined ? { tool: call.tool } : {}),
+    ...(working ? { calls: call.calls } : {}),
+    ...(call.prompt !== undefined ? { prompt: call.prompt } : {}),
+    call,
+  }
+}
+
+/**
+ * Where each subagent's row goes in a log, by index into it: the subagents started in one turn are
+ * one group, at the place of the first of them — before the first event written after it started,
+ * or at the log's end — so a turn that started three reads as one block of three under one line
+ * saying all of them. A turn begins at each event `isTurnStart` says begins one.
+ */
+export function subagentGroups(events: readonly OpenAgentEvent[], rows: readonly SubagentRow[], isTurnStart: (e: OpenAgentEvent) => boolean): Map<number, SubagentRow[]> {
+  const turnAt: number[] = []
+  for (const e of events) turnAt.push((turnAt.at(-1) ?? 0) + (isTurnStart(e) ? 1 : 0))
+  const placed = rows
+    .map(row => {
+      const started = Date.parse(row.startedAt)
+      const at = events.findIndex(e => e.at !== undefined && Date.parse(e.at) > started)
+      const index = at === -1 ? events.length : at
+      // The turn it was started in: the one the event before it belongs to.
+      return { row, index, turn: index > 0 ? turnAt[index - 1]! : 0 }
+    })
+    .sort((a, b) => a.index - b.index || (a.row.startedAt < b.row.startedAt ? -1 : 1))
+  const groups = new Map<number, SubagentRow[]>()
+  const firstOfTurn = new Map<number, number>()
+  for (const { row, index, turn: of } of placed) {
+    const at = firstOfTurn.get(of) ?? index
+    firstOfTurn.set(of, at)
+    groups.set(at, [...(groups.get(at) ?? []), row])
+  }
+  return groups
+}
+
+/**
+ * What a group of subagents comes to: how many, how long from the first start to the last end (or
+ * now, while one works), and what they cost, summed over the ones whose cost is known — a subagent
+ * of the coding agent's own has none of its own, its cost is the run's. No cost when none is known.
+ */
+export function rollUp(rows: readonly SubagentRow[], now: number): { count: number; ms: number; cost?: number } {
+  const start = Math.min(...rows.map(row => Date.parse(row.startedAt)))
+  const end = rows.some(row => row.working) ? now : Math.max(...rows.map(row => Date.parse(row.endedAt ?? row.startedAt)))
+  const costs = rows.flatMap(row => (row.cost !== undefined ? [row.cost] : []))
+  return { count: rows.length, ms: Math.max(0, end - start), ...(costs.length > 0 ? { cost: costs.reduce((a, b) => a + b, 0) } : {}) }
 }
