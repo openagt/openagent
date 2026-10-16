@@ -5,6 +5,7 @@ import { Check, ChevronRight, Copy } from 'lucide-react'
 import { pendingChoices } from '../lib/live-state.js'
 import { startedBefore, subagentEnd, subagentStartedAt, type SubagentEnd } from '../lib/subagents.js'
 import { answeredQuestion } from '../lib/answered-question.js'
+import { rowWords, type RowWords } from '../lib/row-words.js'
 import { formatAge } from '../lib/format-date.js'
 import { AnsweredChoice } from './AnsweredChoice.js'
 import { Markdown } from './Markdown.js'
@@ -443,6 +444,34 @@ export function foldSteps(
 }
 
 /**
+ * A row the chat says in its own words (row-words.ts): what happened in grey, and the thing it
+ * happened to beside it, in the page's own colour — a branch, a pull request's number, when a
+ * quota comes back. The first half wraps, since a log line is a sentence; the second is one line,
+ * since it is a name. A failure paints the whole row, so the thing beside it is not lit against
+ * the red.
+ */
+function RowLine({ words, tone }: { words: RowWords; tone: string }) {
+  const { said, thing, href, detail } = words
+  const lit = tone === '' ? 'text-foreground' : tone
+  return (
+    <div className="min-w-0 flex-1 font-sans text-sm">
+      <div className="flex min-w-0 items-baseline gap-1.5">
+        <span className={`min-w-0 whitespace-pre-wrap break-words ${tone || 'text-muted-foreground'}`}>{said}</span>
+        {thing !== undefined &&
+          (href !== undefined ? (
+            <a href={href} target="_blank" rel="noreferrer" className={`min-w-0 shrink-0 truncate hover:underline ${lit}`}>
+              {thing}
+            </a>
+          ) : (
+            <span className={`min-w-0 truncate ${lit}`}>{thing}</span>
+          ))}
+      </div>
+      {detail !== undefined && <div className={`mt-0.5 whitespace-pre-wrap break-words opacity-80 ${tone || 'text-muted-foreground'}`}>{detail}</div>}
+    </div>
+  )
+}
+
+/**
  * A screen's row: the one line the package wrote, whole, in the chat's own words rather than the
  * log's — it is a thing to press, not a line of output, and the chat knows nothing of what the
  * screen is beyond that line. Live, it opens the pane that shows the screen. Once the screen has
@@ -698,6 +727,9 @@ export function EventList({
               const at = e.at
               // The user's own message: a prompt that is not a subagent's end.
               const own = isTurnBoundary(e) && !end
+              // What the chat says for a row that is none of the above; nothing when the
+              // terminal's own line is what it says (row-words.ts).
+              const words = rowWords(e)
               // The prompt the agent was resumed with after an answer in the panel: a box, not a message.
               const answer = own && message !== null ? answeredQuestion(message) : undefined
               return (
@@ -741,6 +773,8 @@ export function EventList({
                     <div className="min-w-0 flex-1 font-sans">
                       <AnsweredChoice choice={choiceRow.choice} pick={choiceRow.pick} />
                     </div>
+                  ) : words ? (
+                    <RowLine words={words} tone={rowTone(e)} />
                   ) : e.kind === 'screen' ? (
                     <ScreenRow label={e.label} onOpen={onOpenScreen && screenRows.live.has(e) ? onOpenScreen : undefined} />
                   ) : (

@@ -15,9 +15,13 @@ describe('EventList conversation rows', () => {
   test('a quota reading is a row only when the quota is running low or used up', () => {
     const quota = (status: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'rate-limit', limit: { status, window: 'five_hour', resetsAt: Date.UTC(2026, 8, 30, 11, 30) } } })
     render(<EventList events={[{ kind: 'driver', event: { type: 'start', prompt: 'hello' } }, quota('allowed'), quota('allowed_warning'), quota('rejected')]} stick={false} />)
-    expect(screen.queryByText(/quota allowed/)).toBeNull()
-    expect(screen.getByText(/quota running low/)).toBeTruthy()
-    expect(screen.getByText(/quota exhausted/)).toBeTruthy()
+    // Two rows, not three: a quota that is fine is no row at all.
+    expect(screen.queryAllByText(/quota/)).toHaveLength(2)
+    expect(screen.getByText(/five-hour quota is running low/)).toBeTruthy()
+    expect(screen.getByText(/five-hour quota is used up/)).toBeTruthy()
+    // When it comes back is said on the reader's own clock, not in the machine's spelling.
+    expect(screen.getAllByText(`resets ${new Date(Date.UTC(2026, 8, 30, 11, 30)).toLocaleString()}`)).toHaveLength(2)
+    expect(screen.queryByText(/2026-09-30T11:30/)).toBeNull()
   })
 
   test('the name the session was given is no row: it is the name, not a step the agent took', () => {
@@ -442,7 +446,7 @@ describe('EventList session line', () => {
 describe('EventList row colour', () => {
   test('an agent error renders in red (#1199)', () => {
     render(<EventList events={[{ kind: 'driver', event: { type: 'error', message: 'rate limited' } }]} stick={false} />)
-    const row = screen.getByText(/agent error: rate limited/)
+    const row = screen.getByText('The agent reported an error')
     expect(row.className).toContain('text-danger')
   })
 
@@ -453,20 +457,20 @@ describe('EventList row colour', () => {
 
   test('a failed run renders in red (#1199)', () => {
     render(<EventList events={[{ kind: 'end', ok: false, detail: 'exited 1' }]} stick={false} />)
-    expect(screen.getByText(/failed: exited 1/).className).toContain('text-danger')
+    expect(screen.getByText('Failed — exited 1').className).toContain('text-danger')
   })
 
   test('a stopped run is not an error, so it is not red (#1199)', () => {
     render(<EventList events={[{ kind: 'end', ok: false, stopped: true }]} stick={false} />)
-    expect(screen.getByText(/stopped/).className).not.toContain('text-danger')
+    expect(screen.getByText('Stopped').className).not.toContain('text-danger')
   })
 
   test('a run waiting on its question is not a failure, and a finished one is not either: neither has an end line (#1774, #1199)', () => {
     const { unmount } = render(<EventList events={[{ kind: 'end', ok: false, waiting: true }]} stick={false} />)
-    expect(screen.queryByText(/waiting for an answer|failed/)).toBeNull()
+    expect(screen.queryByText(/waiting for an answer|Failed/)).toBeNull()
     unmount()
     render(<EventList events={[{ kind: 'end', ok: true }]} stick={false} />)
-    expect(screen.queryByText(/finished|failed/)).toBeNull()
+    expect(screen.queryByText(/finished|Failed/)).toBeNull()
   })
 })
 
@@ -820,8 +824,8 @@ describe('EventList turn ends', () => {
     const events = [prompt('go'), failed, prompt('again'), stopped, prompt('once more'), waiting, prompt('yes'), clean]
     expect([...quietEnds(events)]).toEqual([waiting, clean])
     render(<EventList events={events} sending="try again" stick={false} />)
-    expect(screen.getByText(/failed: boom/)).toBeTruthy()
-    expect(screen.getByText(/stopped/)).toBeTruthy()
+    expect(screen.getByText('Failed — boom')).toBeTruthy()
+    expect(screen.getByText('Stopped')).toBeTruthy()
     expect(screen.queryByText(/finished|waiting for an answer/)).toBeNull()
   })
 })
