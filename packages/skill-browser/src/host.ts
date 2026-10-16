@@ -75,6 +75,32 @@ export interface ScreenLine {
   until?: string
 }
 
+/** How long the address in a screen's line may be: one line of a chat, on a phone too. */
+const ADDRESS_MAX = 56
+
+/**
+ * The address as the chat's one line says it: without its scheme, without its query (a `?…` stands
+ * for it), and cut in the middle when it is still longer than a line. A row of a chat is read at a
+ * glance, and a search page's address is three hundred characters of it — which wrapped over five
+ * lines of the chat where the page the agent opened should have been one.
+ */
+export function shortAddress(url: string): string {
+  let short = url
+  try {
+    const at = new URL(url)
+    // Only the two kinds the browser opens are taken apart; anything else is its own text.
+    if (at.protocol === 'http:' || at.protocol === 'https:') {
+      const path = at.pathname === '/' ? '' : at.pathname.replace(/\/$/, '')
+      short = `${at.host}${path}${at.search ? '?…' : at.hash ? '#…' : ''}`
+    }
+  } catch {
+    // Not an address this can read: its own text, cut like any other.
+  }
+  if (short.length <= ADDRESS_MAX) return short
+  const head = Math.ceil((ADDRESS_MAX - 1) / 2)
+  return `${short.slice(0, head)}…${short.slice(short.length - (ADDRESS_MAX - 1 - head))}`
+}
+
 /** The pictures Chrome is asked for: at most this large, and at most one every `FRAME_GAP_MS`. */
 const CAST = { format: 'jpeg', quality: 60, maxWidth: 1280, maxHeight: 800 }
 const FRAME_GAP_MS = 80
@@ -405,7 +431,7 @@ export async function runHost(opts: HostOptions): Promise<void> {
         const output = await readPage(p)
         // The chat gets a screen here, where the agent used the browser.
         const url = /^URL: (.*)$/m.exec(output)?.[1] ?? first
-        screenLabel = `browser · ${url}`
+        screenLabel = `browser · ${shortAddress(url)}`
         await writeScreen({ kind: 'screen', url: screenUrl, label: screenLabel })
         screenShown = true
         // A browser opened again in a run that had ended keeps nothing from before it.

@@ -442,6 +442,24 @@ export function foldSteps(
   return { rows, steps }
 }
 
+/**
+ * A screen's row: the one line the package wrote, whole, in the chat's own words rather than the
+ * log's — it is a thing to press, not a line of output, and the chat knows nothing of what the
+ * screen is beyond that line. Live, it opens the pane that shows the screen. Once the screen has
+ * gone the same line stays, unpressable and quiet, saying where the agent had been looking. It is
+ * one line whatever it says: an address can be three hundred characters, and the row is read at a
+ * glance.
+ */
+function ScreenRow({ label, onOpen }: { label: string; onOpen?: (() => void) | undefined }) {
+  if (!onOpen) return <div className="min-w-0 flex-1 truncate font-sans text-sm text-muted-foreground">{label}</div>
+  return (
+    <button type="button" onClick={onOpen} className="group/screen flex min-w-0 flex-1 items-center gap-1.5 text-left font-sans text-sm text-foreground">
+      <span className="min-w-0 truncate group-hover/screen:underline">{label}</span>
+      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+    </button>
+  )
+}
+
 // A row's time: small, at the row's right edge, shown while the pointer is on the row. Its place
 // is always there, so nothing moves when it shows.
 const TIME = 'ml-auto shrink-0 pt-0.5 text-[10px] tabular-nums text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-100'
@@ -723,11 +741,8 @@ export function EventList({
                     <div className="min-w-0 flex-1 font-sans">
                       <AnsweredChoice choice={choiceRow.choice} pick={choiceRow.pick} />
                     </div>
-                  ) : e.kind === 'screen' && onOpenScreen && screenRows.live.has(e) ? (
-                    <button type="button" onClick={onOpenScreen} className="group/screen flex min-w-0 flex-1 items-center gap-1 text-left text-foreground">
-                      <span className="min-w-0 truncate group-hover/screen:underline">{(formatOpenAgentEvent(e) ?? '').trim()}</span>
-                      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                    </button>
+                  ) : e.kind === 'screen' ? (
+                    <ScreenRow label={e.label} onOpen={onOpenScreen && screenRows.live.has(e) ? onOpenScreen : undefined} />
                   ) : (
                     <span className={`min-w-0 flex-1 whitespace-pre-wrap break-words ${rowTone(e) || 'text-foreground'}`}>
                       {(formatOpenAgentEvent(e) ?? '').trim()}

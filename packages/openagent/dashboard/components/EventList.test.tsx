@@ -618,11 +618,12 @@ describe('EventList row wash (#1508)', () => {
 })
 
 // A screen line (a command the agent ran showing something, e.g. its browser): the newest open one
-// is live, and its line opens the pane that shows the screen; an older one, or
-// one after the run ended, is a line of text; an `ended` line is hidden. No screen is in the chat.
+// is live, and its line opens the pane that shows the screen; an older one, or one after the run
+// ended with nothing keeping it, is a line of text; an `ended` line is hidden, and so is a line
+// that keeps a screen past its run. Every one of them is one line. No screen is in the chat.
 describe('EventList screen rows', () => {
   const at = (n: number) => `http://127.0.0.1:${n}/?t=x`
-  const opens = () => screen.queryAllByRole('button', { name: /^◆ browser/ }).map(row => row.textContent)
+  const opens = () => screen.queryAllByRole('button', { name: /^browser/ }).map(row => row.textContent)
   const show = (events: OpenAgentEvent[]) => {
     const onOpenScreen = vi.fn()
     render(<EventList events={events} stick={false} onOpenScreen={onOpenScreen} />)
@@ -635,9 +636,9 @@ describe('EventList screen rows', () => {
       { kind: 'driver', event: { type: 'text', text: 'looking' } },
       { kind: 'screen', url: at(1), label: 'browser · http://localhost:3000/b' },
     ])
-    expect(opens()).toEqual(['◆ browser · http://localhost:3000/b'])
-    expect(screen.getByText('◆ browser · http://localhost:3000/')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '◆ browser · http://localhost:3000/b' }))
+    expect(opens()).toEqual(['browser · http://localhost:3000/b'])
+    expect(screen.getByText('browser · http://localhost:3000/')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'browser · http://localhost:3000/b' }))
     expect(onOpenScreen).toHaveBeenCalledTimes(1)
     expect(document.querySelector('iframe')).toBeNull()
   })
@@ -648,16 +649,25 @@ describe('EventList screen rows', () => {
       { kind: 'screen', url: at(1), label: 'browser · closed', ended: true },
     ])
     expect(opens()).toEqual([])
-    expect(screen.queryByText('◆ browser · closed')).toBeNull()
-    expect(screen.getByText('◆ browser · http://localhost:3000/')).toBeTruthy()
+    expect(screen.queryByText('browser · closed')).toBeNull()
+    expect(screen.getByText('browser · http://localhost:3000/')).toBeTruthy()
   })
 
-  test('the run ending ends every screen', () => {
+  test('the run ending ends a screen, unless the browser said it stays past it', () => {
     show([
       { kind: 'screen', url: at(1), label: 'browser · http://localhost:3000/' },
       { kind: 'end', ok: true },
     ])
     expect(opens()).toEqual([])
+    cleanup()
+    // The browser outlives its run: it says until when, and that line is no row of its own.
+    const until = new Date(Date.now() + 60_000).toISOString()
+    show([
+      { kind: 'screen', url: at(1), label: 'browser · http://localhost:3000/' },
+      { kind: 'end', ok: true },
+      { kind: 'screen', url: at(1), label: 'browser · http://localhost:3000/', until },
+    ])
+    expect(opens()).toEqual(['browser · http://localhost:3000/'])
   })
 
   test('a run waiting on an answer keeps its screen live', () => {
@@ -665,13 +675,21 @@ describe('EventList screen rows', () => {
       { kind: 'screen', url: at(1), label: 'browser · http://localhost:3000/' },
       { kind: 'end', ok: true, waiting: true },
     ])
-    expect(opens()).toEqual(['◆ browser · http://localhost:3000/'])
+    expect(opens()).toEqual(['browser · http://localhost:3000/'])
   })
 
   test('with no tab that shows a screen, a live screen is a line of text', () => {
     render(<EventList events={[{ kind: 'screen', url: at(1), label: 'browser · http://localhost:3000/' }]} stick={false} />)
     expect(opens()).toEqual([])
-    expect(screen.getByText('◆ browser · http://localhost:3000/')).toBeTruthy()
+    expect(screen.getByText('browser · http://localhost:3000/')).toBeTruthy()
+  })
+
+  test("a screen's row is one line, however long what it says is", () => {
+    const long = `browser · ${'a/'.repeat(200)}`
+    show([{ kind: 'screen', url: at(1), label: long }])
+    const row = screen.getByRole('button', { name: long }).firstElementChild!
+    expect(row.className).toContain('truncate')
+    expect(row.className).not.toContain('whitespace-pre-wrap')
   })
 })
 

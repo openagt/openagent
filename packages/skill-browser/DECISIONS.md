@@ -29,6 +29,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   to be the second, and the pointer takes the shape the page gives it there. Picked over
   passing on clicks alone, where nothing ever hovered, nothing could be dragged and the
   pointer stayed an arrow over every link.
+- The line the chat shows for the browser says the address short: without its scheme,
+  without its query (a `?…` stands for it), and cut in the middle when it is still longer
+  than a line. Picked over the address whole, which on a search page was three hundred
+  characters and wrapped over five lines of the chat.
 - The agent's own pointer is drawn on the picture where the agent last clicked or typed,
   and stays there until it acts again or the page goes elsewhere. Picked over drawing
   nothing, where a person looking a moment later cannot tell where the agent is working.

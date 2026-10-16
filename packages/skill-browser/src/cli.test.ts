@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { resolveChromePath } from './chrome.js'
 import { runCli, stateFile } from './cli.js'
-import { AFTER_RUN_MS } from './host.js'
+import { AFTER_RUN_MS, shortAddress } from './host.js'
 import { absoluteUrl } from './page.js'
 import { inputCalls } from './screen.js'
 import { CONSOLE, FRAME, jpegSize, readConsoleLine, readState, STATE, streamReader, type ConsoleLine } from './stream.js'
@@ -102,7 +102,8 @@ test('the agent opens a page, reads it, types, picks, clicks and presses; the ch
 
     const [screen] = await lines(diary)
     assert.equal(screen?.['kind'], 'screen')
-    assert.equal(screen?.['label'], `browser · ${url}/`)
+    // The address as a line of a chat says it: no scheme, and the root path is no path.
+    assert.equal(screen?.['label'], `browser · ${new URL(url).host}`)
     const view = String(screen?.['url'])
     const screenAt = (path: string, token = new URL(view).searchParams.get('t')) => `${new URL(view).origin}${path}?t=${token}`
 
@@ -349,6 +350,23 @@ test('a command before open refuses, close has nothing to do; a wrong command li
   assert.deepEqual([close.code, close.out], [0, 'No browser is open.'])
   assert.equal((await cli('click')).code, 2)
   assert.equal((await cli('fly', 'away')).code, 2)
+})
+
+test('the address a screen says it shows is one line of a chat, whatever the page did to it', () => {
+  // The address of the page Google sends a headless browser to, as it came back from a real run:
+  // three hundred characters, which wrapped over five lines of the chat.
+  const captcha =
+    'https://www.google.com/sorry/index?continue=https://www.google.com/search%3Fq%3Dlatest%2BAI%2Bnews%26hl%3Den%26sei%3DwSPSasefGLriwN4Pk7WC0Ak&hl=en&q=EhAqAKBBJWUFACXp5c-MNL9gGMHHyNYGIjBZF4lzX3wO83Egus-ALJqWj9cN7nQvyPi1BXOQGyV2V2ROxo9kYWnq0mHOJTmB35cyAVJaAUNgrKSTkYP6v6Ic'
+  assert.equal(shortAddress(captcha), 'www.google.com/sorry/index?…')
+  assert.equal(shortAddress('http://localhost:3000/'), 'localhost:3000')
+  assert.equal(shortAddress('http://localhost:3000/settings/machines'), 'localhost:3000/settings/machines')
+  assert.equal(shortAddress('https://example.test/a#top'), 'example.test/a#…')
+  // Longer than a line even without its query: cut in the middle, where a path says least.
+  const deep = `https://example.test/${'part/'.repeat(20)}end`
+  assert.equal(shortAddress(deep).length, 56)
+  assert.match(shortAddress(deep), /^example\.test\/part\/.*….*end$/)
+  // Not an address at all: its own text, cut the same way.
+  assert.equal(shortAddress('about:blank'), 'about:blank')
 })
 
 test('an address without a scheme is http; other schemes are refused', () => {
