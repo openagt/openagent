@@ -16,8 +16,8 @@ import type { DriverEvent } from './types.js'
  *
  * The diary: `said` (a text chunk), `result` (a turn's final text), `cost` (a turn's price,
  * `usd`), `question` (the question a turn ended on), `ended` (the status and a detail), and every
- * other event as a line of its own kind (`start`, `session`, `action`, `output`, `thought`,
- * `rate-limit`, `error`, `notice`). Every line the log writes carries `at`, the time it was written (ISO 8601), so a
+ * other event as a line of its own kind (`start`, `session`, `action`, `output`, `subagent`,
+ * `thought`, `rate-limit`, `error`, `notice`). Every line the log writes carries `at`, the time it was written (ISO 8601), so a
  * reader shows when each thing happened, whenever it reads the diary. The agent's environment
  * names the diary ({@link DIARY_ENV}), so a command it runs may append whole lines of its own
  * kinds there too, with an `at` of their own to be shown with a time.

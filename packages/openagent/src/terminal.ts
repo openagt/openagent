@@ -71,6 +71,8 @@ function formatDriverEvent(event: DriverEvent): string {
       return event.detail !== undefined ? `    · ${event.label}  ${truncate(event.detail, 140)}` : `    · ${event.label}`
     case 'output':
       return `      ${event.failed ? '✗' : '→'} ${truncate(event.text, 140)}`
+    case 'subagent':
+      return `    ${event.status === 'ended' ? '✓' : event.status === 'failed' ? '✗' : '·'} subagent ${truncate(event.name ?? event.role ?? event.id, 60)}`
     case 'thought':
       return `    💭 ${truncate(event.text, 140)}`
     case 'result':

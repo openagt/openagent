@@ -42,6 +42,24 @@ test('a run that ends mid-message leaves no live file', async () => {
   }
 })
 
+test('a subagent of the agent\'s own is a diary line of its own kind, with every field its driver filled', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'session-log-subagent-'))
+  try {
+    const log = new SessionLog(dir, { id: 'r1' }, false, () => '2026-10-16T10:00:00.000Z')
+    await log.open()
+    await log.record({ type: 'subagent', id: 'toolu_1', status: 'working', name: 'Map the serving', role: 'Explore', model: 'sonnet', prompt: 'Read how the pages are served.' })
+    // The row ends under the same id; a field the CLI never said is absent on the line too.
+    await log.record({ type: 'subagent', id: 'toolu_1', status: 'ended', name: 'Map the serving', role: 'Explore' })
+    const lines = (await readFile(log.diaryPath, 'utf8')).trim().split('\n').map(line => JSON.parse(line))
+    assert.deepEqual(lines, [
+      { kind: 'subagent', id: 'toolu_1', status: 'working', name: 'Map the serving', role: 'Explore', model: 'sonnet', prompt: 'Read how the pages are served.', at: '2026-10-16T10:00:00.000Z' },
+      { kind: 'subagent', id: 'toolu_1', status: 'ended', name: 'Map the serving', role: 'Explore', at: '2026-10-16T10:00:00.000Z' },
+    ])
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('a tool call and what it gave back are two diary lines, the second naming the first by its id', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'session-log-output-'))
   try {

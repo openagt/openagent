@@ -598,6 +598,72 @@ test('a Codex change to files that finished says each file it changed: lines add
   await session.dispose()
 })
 
+/** A collab call item, with the field names and spellings of the app-server protocol (codex-cli 0.144.4). */
+const collab = (done: boolean, fields: Record<string, unknown>) =>
+  item(!done, { type: 'collabAgentToolCall', senderThreadId: 'thread-1', status: done ? 'completed' : 'inProgress', ...fields })
+
+/** The events of one turn, the conversation itself left out. */
+async function toolEvents(turn: Message[]): Promise<DriverEvent[]> {
+  const events: DriverEvent[] = []
+  const session = await new CodexDriver({ spawn: fakeAppServer({ turn: [...turn, item(false, { type: 'agentMessage', id: 'msg_1', text: 'Done', phase: 'final_answer' }), completed('completed')] }) }).start({ cwd: '/ws', onEvent: e => events.push(e) })
+  await session.prompt('go')
+  return events.filter(e => e.type === 'action' || e.type === 'output' || e.type === 'subagent')
+}
+
+test('a Codex collab call says a subagent for each agent it names, and a finished one no longer leaves its row live', async () => {
+  const two = {
+    id: 'collab-1',
+    tool: 'spawnAgent',
+    receiverThreadIds: ['agent-1', 'agent-2'],
+    prompt: 'Review the patch and report back.',
+    model: 'gpt-5.6-terra',
+    reasoningEffort: 'high',
+    // One call can concern several agents: the name and the role are per agent, here.
+    agentsStates: [
+      { agentNickname: 'reviewer', agentRole: 'reviewer', agentThreadId: 'agent-1' },
+      { agentNickname: 'scout', agentRole: 'explorer', agentThreadId: 'agent-2' },
+    ],
+  }
+  const waiting = { id: 'collab-2', tool: 'wait', agentsStates: [{ agentNickname: 'reviewer', agentRole: 'reviewer', agentThreadId: 'agent-1' }] }
+  const said = { type: 'subagent', status: 'working', model: 'gpt-5.6-terra', prompt: 'Review the patch and report back.' }
+  assert.deepEqual(await toolEvents([collab(false, two), collab(true, two), collab(false, waiting), collab(true, waiting)]), [
+    // The call's own row, which the agent's reader shows today: now with something beside the label.
+    { type: 'action', label: 'collabAgentToolCall', detail: 'spawnAgent reviewer, scout', id: 'collab-1' },
+    // One subagent per agent, keyed by the call and the agent's own thread: the item's id alone
+    // could not tell two agents of one call apart.
+    { ...said, id: 'collab-1:agent-1', name: 'reviewer', role: 'reviewer' },
+    { ...said, id: 'collab-1:agent-2', name: 'scout', role: 'explorer' },
+    // The spawn itself is over — and the agents it started are not: their rows stay live.
+    { type: 'output', id: 'collab-1', text: '' },
+    { ...said, id: 'collab-1:agent-1', name: 'reviewer', role: 'reviewer' },
+    { ...said, id: 'collab-1:agent-2', name: 'scout', role: 'explorer' },
+    // A `wait` says nothing of a model or a prompt of its own, and absent is absent.
+    { type: 'action', label: 'collabAgentToolCall', detail: 'wait reviewer', id: 'collab-2' },
+    { type: 'subagent', id: 'collab-2:agent-1', status: 'working', name: 'reviewer', role: 'reviewer' },
+    // `wait` comes back when the agent has answered: that row is over.
+    { type: 'output', id: 'collab-2', text: '' },
+    { type: 'subagent', id: 'collab-2:agent-1', status: 'ended', name: 'reviewer', role: 'reviewer' },
+  ])
+})
+
+test('a Codex collab call that did not go through reads as failed, and a malformed one degrades quietly', async () => {
+  const refused = { id: 'collab-3', tool: 'spawnAgent', status: 'declined', agentsStates: [{ agentNickname: 'reviewer', agentRole: 'reviewer', agentThreadId: 'agent-1' }] }
+  // Nonsense in every field, and the core protocol's own name for the item (what `codex exec
+  // --json` calls it): neither throws, and what the item does say is still said.
+  const nonsense = { id: 'collab-4', tool: 'spawnAgent', agentsStates: 'nonsense', prompt: 42, model: null }
+  const older = { id: 'collab-5', type: 'collab_tool_call', tool: 'spawnAgent', agentsStates: [{ agentNickname: 'reviewer' }], status: 'completed' }
+  assert.deepEqual(await toolEvents([collab(true, refused), collab(true, nonsense), collab(true, older)]), [
+    // `declined` and `failed` are both "did not go through", as they are for a file change.
+    { type: 'output', id: 'collab-3', text: '', failed: true },
+    { type: 'subagent', id: 'collab-3:agent-1', status: 'failed', name: 'reviewer', role: 'reviewer' },
+    // No agent to be read: one row for the call itself, with no name and no role invented for it.
+    { type: 'output', id: 'collab-4', text: '' },
+    { type: 'subagent', id: 'collab-4', status: 'working' },
+    { type: 'output', id: 'collab-5', text: '' },
+    { type: 'subagent', id: 'collab-5:reviewer', status: 'working', name: 'reviewer' },
+  ])
+})
+
 test('a Codex command that finished says what it printed and its exit code, for the id of its call', async () => {
   const events: DriverEvent[] = []
   const command = (id: string, done: Record<string, unknown> | undefined) => item(done === undefined, { type: 'commandExecution', id, command: '/bin/zsh -lc "pnpm test\n  --run"', ...done })

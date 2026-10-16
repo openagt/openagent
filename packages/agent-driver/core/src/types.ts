@@ -407,6 +407,32 @@ export type DriverEvent =
    * no `output`.
    */
   | { type: 'output'; id: string; text: string; failed?: true; exitCode?: number; changed?: FileChange[] }
+  /**
+   * A **subagent the wrapped CLI started inside its own session**: a second agent in the same
+   * process, on the same checkout, which the parent handed a task of its own. Nothing to do with
+   * this project's own subagents (separate runs on separate branches) — this is the coding agent's
+   * own tool, and a reader shows it as one row that is live and then is over.
+   *
+   * `id` is stable across the same subagent's updates, so a reader replaces its row rather than
+   * appending a second one. On Claude Code it is the `Agent` call's `tool_use` id — one call is one
+   * subagent. On Codex it is the `collabAgentToolCall` item's id and the agent's own thread id
+   * (its nickname, or its place in the list, when the item names no thread) joined by a colon,
+   * because one Codex call can concern several agents at once.
+   *
+   * `status` is the only part a reader may gate a row on: `working` while it runs, `ended` once it
+   * is over, `failed` when it did not go through (Codex's `declined` reads as `failed` too).
+   * Everything else is whatever the CLI happened to say and is **absent** when it said nothing,
+   * never guessed or defaulted. Claude Code gives the name (the call's `description`), the `role`
+   * (its `subagent_type`), the `prompt`, and a `model` only when the call overrode the parent's.
+   * Codex gives each agent's name and role (off the item's `agentsStates`) and the item's `model`
+   * and `prompt`; it never says which model an agent that takes the parent's runs on either.
+   * `prompt` is cut to the size limit of an output (`cutOutput`).
+   *
+   * Emitted **beside** the `action` and `output` events of the same call, which both drivers go on
+   * emitting unchanged: whoever renders this event renders one row for the subagent and skips
+   * those two for the same `id`, rather than taking away the rows a reader shows today.
+   */
+  | { type: 'subagent'; id: string; status: 'working' | 'ended' | 'failed'; name?: string; role?: string; model?: string; prompt?: string }
   /** What the agent thought before it acted, as its CLI summarizes it. */
   | { type: 'thought'; text: string }
   /**
