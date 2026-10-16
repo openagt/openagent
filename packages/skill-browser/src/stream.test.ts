@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { FRAME, jpegSize, MAX_PART, MAX_SMALL, MAX_STATE, MAX_URL, readActed, readCursor, readState, STATE, streamPart, streamReader } from './stream.js'
+import { FRAME, jpegSize, MAX_PART, MAX_SELECTION, MAX_SMALL, MAX_STATE, MAX_URL, readActed, readCursor, readSelection, readState, STATE, streamPart, streamReader } from './stream.js'
 
 const bytes = (...values: number[]) => new Uint8Array(values)
 
@@ -74,6 +74,18 @@ test('where the agent acted is read only when it is a point of a picture', () =>
   assert.equal(said({ x: '1', y: 2, act: 'click' }), undefined)
   assert.equal(said({ x: 1, y: 2, act: 'press' }), undefined)
   assert.equal(said(null), undefined)
+})
+
+test('what the page has selected is read as text, and no more than a person copies', () => {
+  const said = (value: unknown) => readSelection(new TextEncoder().encode(JSON.stringify(value)))
+  assert.equal(said({ text: 'hunter2' }), 'hunter2')
+  assert.equal(said({ text: '' }), '')
+  assert.equal(said({}), undefined)
+  assert.equal(said({ text: 7 }), undefined)
+  assert.equal(readSelection(new TextEncoder().encode('not json')), undefined)
+  // A whole page selected: what is read is cut, and a message past even that says nothing.
+  assert.equal(said({ text: 'x'.repeat(MAX_SELECTION + 10) })?.length, MAX_SELECTION)
+  assert.equal(readSelection(new Uint8Array(MAX_SELECTION + MAX_SMALL + 1)), undefined)
 })
 
 test('a JPEG says how large its picture is before anyone decodes it', () => {

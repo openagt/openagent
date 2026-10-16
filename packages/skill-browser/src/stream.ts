@@ -19,6 +19,8 @@ export const CONSOLE = 3
 export const CURSOR = 4
 /** Where the agent last did something to the page: an {@link ActedPoint} as JSON. */
 export const ACTED = 5
+/** What the page has selected: `{ text }` as JSON, for the watcher's own copy. */
+export const SELECTED = 6
 
 /** The longest message a reader takes: a picture of the page is a few hundred kilobytes. */
 export const MAX_PART = 2 * 1024 * 1024
@@ -36,6 +38,12 @@ export const MAX_CONSOLE_WHERE = 300
 
 /** The longest `CURSOR` or `ACTED` a reader takes: each is one small object. */
 export const MAX_SMALL = 256
+/**
+ * The longest selection a screen passes on, and the longest a reader takes. A person copying out
+ * of the page copies a password, an address, a paragraph; a whole page selected with select-all
+ * is cut here rather than put on a stream that is otherwise pictures.
+ */
+export const MAX_SELECTION = 32 * 1024
 /** The largest coordinate a point may name: past any picture a page is drawn at. */
 const MAX_POINT = 100_000
 
@@ -122,6 +130,17 @@ export function readActed(bytes: Uint8Array): ActedPoint | undefined {
     const place = (n: unknown): boolean => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= MAX_POINT
     if (!said || !place(said.x) || !place(said.y) || (said.act !== 'click' && said.act !== 'type')) return undefined
     return { x: said.x as number, y: said.y as number, act: said.act }
+  } catch {
+    return undefined
+  }
+}
+
+/** What a `SELECTED` message says; nothing when it is no selection of a page's. */
+export function readSelection(bytes: Uint8Array): string | undefined {
+  if (bytes.length > MAX_SELECTION + MAX_SMALL) return undefined
+  try {
+    const said = JSON.parse(new TextDecoder().decode(bytes)) as { text?: unknown } | null
+    return typeof said?.text === 'string' ? said.text.slice(0, MAX_SELECTION) : undefined
   } catch {
     return undefined
   }

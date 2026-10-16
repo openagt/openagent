@@ -242,6 +242,14 @@ export async function cursorAt(page: CdpSession, x: number, y: number): Promise<
   ).catch(() => 'default')
 }
 
+/**
+ * What the page has selected, as text; empty when it has nothing. What a person watching copies
+ * out of the picture: the picture itself is pixels, and only the page knows its own words.
+ */
+export async function selectionIn(page: CdpSession, limit: number): Promise<string> {
+  return evaluate<string>(page, `String(document.getSelection() || '').slice(0, ${limit})`).catch(() => '')
+}
+
 /** The visible part of the page as PNG bytes. */
 export async function screenshot(page: CdpSession): Promise<Buffer> {
   const { data } = await page.send<{ data: string }>('Page.captureScreenshot', { format: 'png' })
