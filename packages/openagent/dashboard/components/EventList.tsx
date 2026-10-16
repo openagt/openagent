@@ -377,9 +377,9 @@ function Message({ text }: { text: string }) {
         onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-label={open ? 'Collapse message' : 'Expand message'}
-        className={`shrink-0 select-none text-muted-foreground transition-transform ${open ? 'rotate-90' : ''}`}
+        className={`mt-0.5 shrink-0 select-none text-muted-foreground transition-transform ${open ? 'rotate-90' : ''}`}
       >
-        ›
+        <ChevronRight className="h-3.5 w-3.5" aria-hidden />
       </button>
       <div
         className={open ? 'min-w-0 flex-1' : 'max-h-[1.35rem] min-w-0 flex-1 cursor-pointer overflow-hidden'}
@@ -764,9 +764,13 @@ export function EventList({
                     <Prompt text={message} at={at} attached={e.kind === 'driver' && e.event.type === 'start' ? e.event.attached : undefined} fresh={idOf(e) === 'sending'} />
                   ) : end ? (
                     // A subagent ended: which one and how, then what the run was told about it.
-                    <div className="flex min-w-0 flex-1 flex-col">
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <SubagentLine agent={end.agent} end={end} onOpen={onOpenSubagent} />
-                      {end.rest && <Message text={end.rest} />}
+                      {end.rest && (
+                        <div className="pl-5 font-sans text-sm text-muted-foreground">
+                          <Message text={end.rest} />
+                        </div>
+                      )}
                     </div>
                   ) : message !== null ? (
                     // The agent's reply, shown whole.

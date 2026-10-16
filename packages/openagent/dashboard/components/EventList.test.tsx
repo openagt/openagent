@@ -699,6 +699,9 @@ describe('EventList screen rows', () => {
 
 // A run's subagents in its chat: a row where each was started, read off the subagent's card, and
 // the prompt that told the run a subagent ended as a row of the subagent's, not the reader's.
+/** The words of a subagent's end line, `ended <status>`, its status in a colour of its own. */
+const endedLine = (status: string) => screen.getByText((_, el) => el?.tagName === 'SPAN' && el.textContent === `ended ${status}`)
+
 describe('EventList subagent rows', () => {
   const sub = (over: Partial<AgentMeta> = {}): AgentMeta => ({
     status: 'running',
@@ -826,7 +829,7 @@ describe('EventList subagent rows', () => {
     render(<EventList events={[...events, told]} subagents={[sub({ status: 'done', endedAt: '2026-10-01T10:03:10.000Z' })]} stick={false} />)
     expect(screen.getAllByLabelText('Your message')).toHaveLength(1)
     expect(screen.getAllByRole('button', { name: 'Open the subagent: Validate the form' })).toHaveLength(2)
-    expect(screen.getByText('ended done')).toBeTruthy()
+    expect(endedLine('done')).toBeTruthy()
     expect(screen.getByText(/Its work is on the branch agent-form/)).toBeTruthy()
     expect(screen.queryByText(/started for this run/)).toBeNull()
   })
@@ -836,7 +839,7 @@ describe('EventList subagent rows', () => {
     const told: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'The run 2026-10-01T10-01-00-000Z, started for this run, ended done.' }, at: '2026-10-01T10:04:00.000Z' }
     render(<EventList events={[...events, typed, told]} subagents={[sub({ status: 'done', endedAt: '2026-10-01T10:03:10.000Z' })]} stick={false} />)
     expect(screen.getAllByLabelText('Your message')).toHaveLength(2)
-    expect(screen.getByText('ended done')).toBeTruthy()
+    expect(endedLine('done')).toBeTruthy()
     // It opens its own run of rows: it holds its time.
     expect(screen.getByText(new Date('2026-10-01T10:04:00.000Z').toLocaleTimeString())).toBeTruthy()
   })
@@ -845,7 +848,7 @@ describe('EventList subagent rows', () => {
     const told: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'The run 2026-10-01T10-03-59-000Z, started for this run, ended done.' }, at: '2026-10-01T10:04:00.000Z' }
     const quick = sub({ id: '2026-10-01T10-03-59-000Z', startedAt: '2026-10-01T10:03:59.000Z', intent: 'Second task', status: 'done', endedAt: '2026-10-01T10:03:59.900Z' })
     render(<EventList events={[...events, told]} subagents={[quick]} stick={false} />)
-    expect(screen.getByText('ended done')).toBeTruthy()
+    expect(endedLine('done')).toBeTruthy()
     expect(screen.queryByText(new Date('2026-10-01T10:04:00.000Z').toLocaleTimeString())).toBeNull()
   })
 
@@ -853,7 +856,7 @@ describe('EventList subagent rows', () => {
     const typed: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'The run 2026-10-01T10-01-00-000Z, started for this run, ended done.' } }
     render(<EventList events={[...events, typed]} stick={false} />)
     expect(screen.getAllByLabelText('Your message')).toHaveLength(2)
-    expect(screen.queryByText('ended done')).toBeNull()
+    expect(screen.queryByText((_, el) => el?.tagName === 'SPAN' && el.textContent === 'ended done')).toBeNull()
   })
 
   test('a subagent started after the last line is the last row', () => {

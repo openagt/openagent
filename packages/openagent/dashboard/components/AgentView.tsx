@@ -19,7 +19,6 @@ import { useMountedModules } from '../lib/use-modules.js'
 import { Committing, HandoffActions, HandoffSummary, isCommitAsk } from './AgentHandoff.js'
 import { AgentDetails, type AgentDetailsCard } from './AgentDetails.js'
 import { QuestionPanel } from './QuestionPanel.js'
-import { SubagentsBar } from './SubagentLine.js'
 import { holdsMainAgent } from '../lib/subagents.js'
 import { agentLogKey } from '../lib/agent-log.js'
 import { revealChange, revealScreen, revealSubagent } from '../lib/reveal-change.js'
@@ -387,8 +386,6 @@ export function AgentView({
       }
       bottom={
         <>
-          {/* Keyed by the run: a list opened for one main agent is not open for the next. */}
-          <SubagentsBar key={agentId} subagents={subagents} doing={doing} onOpen={onOpenSubagent} />
           {/* The questions the agent stopped on, above the message box; the newest takes the keys. */}
           {agentId && questions.map((choice, at) => <QuestionPanel key={`${agentId}:${choice.id}`} projectId={projectId} agentId={agentId} choice={choice} active={at === questions.length - 1} onSaid={onSending} />)}
           {/* Where the work is and the next step, right above the message box. */}

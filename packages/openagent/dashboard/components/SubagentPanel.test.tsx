@@ -94,6 +94,22 @@ describe('the Subagent pane', () => {
     expect(opened).toEqual([sub.id])
   })
 
+  test('it says it has nothing to show only once the read answered, and a log read before is there from the first frame', async () => {
+    const sub: AgentMeta = { status: 'done', id: '2026-10-01T10-05-00-000Z', startedAt: '2026-10-01T10:05:00.000Z', updatedAt: '2026-10-01T10:06:00.000Z', endedAt: '2026-10-01T10:06:00.000Z', parent: 'main', title: 'Fix the typo', intent: 'Fix it.' }
+    let answer: (events: OpenAgentEvent[]) => void = () => {}
+    onAgent.mockReturnValue(new Promise(resolve => (answer = resolve)))
+    render(panel({ subagents: [sub] }))
+    act(() => revealSubagent('p1/main', `run:${sub.id}`))
+    expect(screen.queryByText('It left nothing to show.')).toBeNull()
+    await act(async () => answer([{ kind: 'driver', event: { type: 'text', text: 'Fixed it.' }, at: '2026-10-01T10:05:30.000Z' }]))
+    expect(screen.getByText('Fixed it.')).toBeTruthy()
+    // Opened again, with a read that has not answered yet: what was read before is shown at once.
+    cleanup()
+    onAgent.mockReturnValue(new Promise(() => {}))
+    render(panel({ subagents: [sub] }))
+    expect(screen.getByText('Fixed it.')).toBeTruthy()
+  })
+
   test('a subagent that is not one of this run’s says so', () => {
     render(panel({}))
     act(() => revealSubagent('p1/main', 'run:gone'))

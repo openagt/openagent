@@ -6,9 +6,13 @@ import { onModels, type DriverModels, type ModelsView } from '../rpc/models.js'
 // Which models each coding agent offers, as the daemon asked the agents themselves. The daemon
 // asks once and keeps the answer, so every surface that names a model reads it freely.
 
-/** The models each coding agent offers, `undefined` until the daemon has answered. */
+/**
+ * The models each coding agent offers, `undefined` until the daemon has answered. Remembered for
+ * the page's life: every row and pane that names a model reads it, and one mounted later shows
+ * the names from its first frame rather than the ids for a moment.
+ */
 export function useModels(): ModelsView | undefined {
-  return useLoaded<ModelsView | undefined>(onModels, undefined, [])
+  return useLoaded<ModelsView | undefined>(onModels, undefined, [], { remember: 'models' })
 }
 
 /**

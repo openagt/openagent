@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import type { AgentDoing, AgentMeta } from '../../src/index.js'
+import { CircleCheck, CircleHelp, CircleSlash, CircleX } from 'lucide-react'
+import type { AgentMeta } from '../../src/index.js'
 import { cn } from '../lib/utils.js'
 import { formatElapsed } from '../lib/format-date.js'
 import { STATUS_TONE } from '../lib/status-tone.js'
 import { anyModelName, useModels } from '../lib/models.js'
 import { rollUp, runRow, type SubagentRow } from '../lib/subagents.js'
-import { DisclosureToggle } from './DisclosureToggle.js'
 import { Seconds } from './ToolCalls.js'
 
 // A subagent on its main agent's page, on one line, whichever kind it is: a run of the project's
@@ -78,50 +78,23 @@ export function SubagentGroup({ rows, onOpen }: { rows: readonly SubagentRow[]; 
   )
 }
 
-// The moment a subagent ended, as its main agent was told it: its name and `ended <status>`, which
-// never changes, unlike its row. A click opens it as its row does.
+// The moment a subagent ended, as its main agent was told it: how it ended, by an icon in its
+// colour, and the subagent named as its row names it, in the chat's own type rather than the log's.
+// It never changes, unlike its row. A click opens it as its row does.
 export function SubagentLine({ agent, end, onOpen }: { agent: AgentMeta; end: { status: string; detail?: string }; onOpen?: ((key: string) => void) | undefined }) {
   const row = runRow(agent, undefined)
+  const models = useModels()
+  const Icon = end.status === 'done' ? CircleCheck : end.status === 'failed' ? CircleX : end.status === 'waiting' ? CircleHelp : CircleSlash
+  const tone = end.status === 'waiting' ? 'text-muted-foreground' : (STATUS_TONE[end.status] ?? 'text-muted-foreground')
   return (
-    <span className="flex min-w-0 flex-1 items-baseline gap-2">
-      <button type="button" onClick={() => onOpen?.(row.key)} className="min-w-0 shrink truncate text-left text-foreground hover:underline" aria-label={`Open the subagent: ${row.name}`}>
-        ↳ {row.name}
-      </button>
-      <span className={cn('shrink-0', end.status === 'waiting' ? 'text-muted-foreground' : (STATUS_TONE[end.status] ?? 'text-muted-foreground'))}>ended {end.status}</span>
-      {end.detail && <span className="max-w-[45%] shrink-0 truncate text-muted-foreground">{end.detail}</span>}
-    </span>
-  )
-}
-
-// The line above the message box while any of the run's subagents is working: how many of them
-// are, so it is known once their rows have scrolled out of view. Opened, it lists every subagent
-// as its row in the chat does. Gone once none is working: the rows in the chat stay.
-export function SubagentsBar({
-  subagents,
-  doing,
-  onOpen,
-}: {
-  subagents: readonly AgentMeta[]
-  doing: Record<string, AgentDoing>
-  onOpen?: ((key: string) => void) | undefined
-}) {
-  const [open, setOpen] = useState(false)
-  const working = subagents.filter(agent => agent.status === 'running').length
-  if (working === 0) return null
-  return (
-    <div className="border-t border-border py-1.5">
-      <div className="mx-auto w-full max-w-3xl px-4">
-        <DisclosureToggle open={open} onToggle={() => setOpen(o => !o)}>
-          Subagents · {working} of {subagents.length} running
-        </DisclosureToggle>
-        {open && (
-          <div className="mt-1 flex flex-col gap-0.5 pl-4 font-mono text-xs">
-            {subagents.map(agent => (
-              <SubagentItem key={agent.id} row={runRow(agent, doing[agent.id])} onOpen={onOpen} />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+    <button type="button" onClick={() => onOpen?.(row.key)} className="group/sub flex min-w-0 items-center gap-1.5 text-left font-sans text-sm" aria-label={`Open the subagent: ${row.name}`}>
+      <Icon className={cn('h-3.5 w-3.5 shrink-0', tone)} aria-hidden />
+      <span className="min-w-0 truncate font-medium text-foreground group-hover/sub:underline">{row.name}</span>
+      {row.model && <span className="shrink-0 text-muted-foreground max-sm:hidden">{anyModelName(models, row.model)}</span>}
+      <span className="min-w-0 shrink-0 truncate text-muted-foreground">
+        ended <span className={tone}>{end.status}</span>
+        {end.detail && `: ${end.detail}`}
+      </span>
+    </button>
   )
 }

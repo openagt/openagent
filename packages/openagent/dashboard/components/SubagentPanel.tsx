@@ -7,7 +7,7 @@ import { callRow, callSubagents, runRow, subagentTranscript, type SubagentRow } 
 import { formatElapsed } from '../lib/format-date.js'
 import { anyModelName, useModels } from '../lib/models.js'
 import { STATUS_TONE } from '../lib/status-tone.js'
-import { useLoaded, usePolled } from '../lib/use-async.js'
+import { usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { EventList } from './EventList.js'
 import { PaneActions, PaneTitle } from './PaneHeader.js'
@@ -22,6 +22,8 @@ import { Button } from './ui/button.js'
 
 /** How often a working subagent's own log is read again: the runs poll's own pace. */
 const TRANSCRIPT_EVERY_MS = 2_000
+/** How often an ended one's is: it changes no more, and a read now and then costs nothing. */
+const ENDED_EVERY_MS = 60_000
 const NO_EVENTS: OpenAgentEvent[] = []
 
 export function SubagentPanel({
@@ -56,10 +58,16 @@ export function SubagentPanel({
 
 function Shown({ row, projectId, events, onOpenAgent }: { row: SubagentRow; projectId: string; events: readonly OpenAgentEvent[]; onOpenAgent?: ((agentId: string) => void) | undefined }) {
   const runId = row.agent?.id
-  // A run's own log, read again while it works; one that ended is read once.
-  const { value: liveLog } = usePolled<OpenAgentEvent[]>(runId && row.working ? () => onAgent(projectId, runId) : null, NO_EVENTS, TRANSCRIPT_EVERY_MS, [projectId, runId, row.working], 'previous')
-  const endedLog = useLoaded<OpenAgentEvent[]>(runId && !row.working ? () => onAgent(projectId, runId) : null, NO_EVENTS, [projectId, runId, row.working], 'previous')
-  const ownLog = row.working ? liveLog : endedLog
+  // A run's own log, read often while it works. Remembered by the run, so the pane opened again,
+  // and the read that goes on when the subagent ends, show what was read from the first frame:
+  // without that the pane said it had nothing to show until the read answered.
+  const { value: ownLog, loaded } = usePolled<OpenAgentEvent[]>(
+    runId ? () => onAgent(projectId, runId) : null,
+    NO_EVENTS,
+    row.working ? TRANSCRIPT_EVERY_MS : ENDED_EVERY_MS,
+    [projectId, runId, row.working],
+    runId ? { remember: `subagent-log:${projectId}:${runId}` } : undefined,
+  )
   // A call's transcript is the main agent's events that are its own, shown as plain steps here.
   const callId = row.call?.id
   const transcript = useMemo(() => (callId !== undefined ? subagentTranscript(events, callId).map(untagged) : withoutPrompt(ownLog, row.prompt)), [callId, events, ownLog, row.prompt])
@@ -87,7 +95,7 @@ function Shown({ row, projectId, events, onOpenAgent }: { row: SubagentRow; proj
       <div className="flex min-h-0 flex-1 flex-col">
         {transcript.length > 0 ? (
           <EventList events={transcript} working={row.working} stick={row.working} openAt="start" />
-        ) : (
+        ) : runId && !loaded ? null : (
           <p className="p-3 text-xs text-muted-foreground">{row.working ? 'Nothing said or done yet.' : 'It left nothing to show.'}</p>
         )}
       </div>
