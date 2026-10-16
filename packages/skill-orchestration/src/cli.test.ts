@@ -12,7 +12,8 @@ import { addWorktree, agentBranchName, worktreePath } from '@openagt/skill-branc
 import { findRun, formatRunCard, type AnyDiaryLine, type RunCard, type RunStatus } from '@openagt/skill-logs'
 import { liveDir, markerCard, recordRun, type RunnerMark } from '@openagt/agent-runner'
 import { runCli } from './cli.js'
-import { landedRef, SUBAGENT_LINES, type SubagentDeps } from './subagents.js'
+import { CHECK_MAX_OUTPUT } from './check.js'
+import { landedRef, retryText, SUBAGENT_LINES, type SubagentDeps } from './subagents.js'
 import { git, removeRepo, testRepo } from './test-repo.js'
 
 const HOST = 'this-machine'
@@ -29,12 +30,13 @@ interface Ran {
 
 type Started = Parameters<SubagentDeps['spawn']>[1]
 
-/** The command as the run `agent` calls it from `cwd`, at a fixed time, with a spawn that keeps what it was asked and a stop that keeps the pid. */
-async function run(cwd: string, agent: string | undefined, argv: string[], given: Partial<SubagentDeps> = {}): Promise<Ran & { started: Started[]; stopped: number[] }> {
+/** The command as the run `agent` calls it from `cwd`, at a fixed time, with a spawn that keeps what it was asked, a stop that keeps the pid, and checks that pass and are kept. */
+async function run(cwd: string, agent: string | undefined, argv: string[], given: Partial<SubagentDeps> = {}): Promise<Ran & { started: Started[]; stopped: number[]; checks: string[] }> {
   const outLines: string[] = []
   const errLines: string[] = []
   const started: Started[] = []
   const stopped: number[] = []
+  const checks: string[] = []
   const deps: Partial<SubagentDeps> = {
     host: HOST,
     isAlive: () => true,
@@ -42,16 +44,17 @@ async function run(cwd: string, agent: string | undefined, argv: string[], given
     ready: async () => ({ problems: [], warnings: [] }),
     now: () => new Date('2026-10-01T10:01:00.000Z'),
     spawn: async (_repo, run) => void started.push(run),
+    run: async command => (checks.push(command), { code: 0, output: '' }),
     ...given,
   }
   const code = await runCli(argv, { cwd, env: agent !== undefined ? { AGENT_ID: agent } : {}, stdout: line => outLines.push(line), stderr: line => errLines.push(line) }, deps)
-  return { code, out: outLines.length ? JSON.parse(outLines.join('\n')) : undefined, err: errLines.join('\n'), started, stopped }
+  return { code, out: outLines.length ? JSON.parse(outLines.join('\n')) : undefined, err: errLines.join('\n'), started, stopped, checks }
 }
 
-/** A run's record on the data branch. */
-async function record(repo: string, id: string, opts: { status?: RunStatus; prompt?: string; driver?: string; model?: string; mark?: Partial<RunnerMark>; diary?: AnyDiaryLine[]; branch?: string } = {}): Promise<RunCard> {
+/** A run's record on the data branch; `task` is the task of the plan a subagent was started on, as `start` writes it. */
+async function record(repo: string, id: string, opts: { status?: RunStatus; prompt?: string; driver?: string; model?: string; mark?: Partial<RunnerMark>; diary?: AnyDiaryLine[]; branch?: string; task?: string } = {}): Promise<RunCard> {
   const marker = markerCard({ id, startedAt: '2026-10-01T10:00:00.000Z', prompt: opts.prompt ?? 'Do the work', driver: opts.driver ?? 'claude-code', ...(opts.model !== undefined ? { model: opts.model } : {}), mark: { host: HOST, ...opts.mark } })
-  const card: RunCard = { ...marker, status: opts.status ?? 'running', ...(opts.branch !== undefined ? { branch: opts.branch } : {}) }
+  const card: RunCard = { ...marker, status: opts.status ?? 'running', ...(opts.branch !== undefined ? { branch: opts.branch } : {}), ...(opts.task !== undefined ? { caller: { ...marker.caller, task: opts.task } } : {}) }
   const written = await recordRun(repo, card, opts.diary ?? [])
   assert.ok(written.ok || written.committed, 'the record is written')
   return card
@@ -87,11 +90,14 @@ async function savePlan(repo: string, cwd: string, agent: string, text: string):
   return saved.out.question
 }
 
-/** The context every task of PLAN is told, and the three tasks a subagent may take. */
+/** The context every task of PLAN is told, the project's own check, and the three tasks a subagent may take. */
 const CONTEXT = 'Everything this plan touches is under src/.'
+const PROJECT_CHECK = 'pnpm verify'
 const PLAN = `# Split the work
 
 ${CONTEXT}
+
+Check: ${PROJECT_CHECK}
 
 ## 1. Add the tests
 
@@ -132,6 +138,29 @@ Check your work with: pnpm test
 
 ${SUBAGENT_LINES}`
 const DOCS_PROMPT = `${CONTEXT}\n\n2. Add the docs\n\nWrite the README.\n\n${SUBAGENT_LINES}`
+/** The first task's words alone, without the lines every subagent is told. */
+const TESTS_WORDS = TESTS_PROMPT.slice(0, -SUBAGENT_LINES.length).trimEnd()
+
+/** A subagent whose work is on the main agent's branch, as `land` records it: its task is landed. */
+async function markLanded(repo: string, id: string): Promise<void> {
+  await again(repo, id, card => ({ ...card, status: 'done', caller: { ...card.caller, landed: 'c0ffee1' } }))
+}
+
+/** A subagent that ended, keeping everything its record carries: the task it was started on above all. */
+async function ended(repo: string, id: string, status: RunStatus): Promise<void> {
+  await again(repo, id, card => ({ ...card, status }))
+}
+
+/** A run's record written again, out of the one that is there. */
+async function again(repo: string, id: string, change: (card: RunCard) => RunCard): Promise<void> {
+  const card = await findRun(repo, id)
+  assert.ok(card, `the record of ${id}`)
+  const written = await recordRun(repo, change(card), [])
+  assert.ok(written.ok || written.committed, 'the record is written')
+}
+
+/** The command run `seconds` after the start of the clock, so each start of a test gets an id of its own. */
+const later = (seconds: number) => ({ now: () => new Date(Date.parse('2026-10-01T10:01:00.000Z') + seconds * 1000) })
 
 /** A plan saved and approved by the person: their `Approve` to its question, as the runner sends an answer. */
 async function approvedPlan(repo: string, cwd: string, agent: string = MAIN): Promise<void> {
@@ -156,6 +185,8 @@ test('start: a run for the caller, on one task of the plan, from the caller\'s b
     assert.equal((await findRun(repo, FIRST))?.caller?.['task'], TESTS)
     assert.equal((await run(checkout, MAIN, ['stop', FIRST])).out.reason, 'no-process')
 
+    // The second task needs the first: it starts once that one is landed.
+    await markLanded(repo, FIRST)
     // The setting for the task's level wins; a setting with no model is that coding agent's own
     // default; the branch is the one the checkout is on now.
     assert.equal((await run(repo, undefined, ['settings', JSON.stringify({ hard: { driver: 'claude-code', model: 'opus' }, simple: { driver: 'claude-code' }, atOnce: 10 })])).code, 0)
@@ -302,6 +333,183 @@ test('start: refused for a task the plan has not got, for one that is uncertain,
   }
 })
 
+test('start: refused for a task whose `Needs:` tasks are not landed, saying what each one stands at', async () => {
+  const repo = await testRepo()
+  try {
+    const checkout = await mainAgent(repo)
+    await approvedPlan(repo, checkout)
+
+    // Nobody started what it needs.
+    const nobody = await run(checkout, MAIN, ['start', '--task', DOCS])
+    assert.deepEqual([nobody.code, nobody.out, nobody.started], [1, { ok: false, reason: 'needs', task: DOCS, waiting: [{ task: TESTS, state: 'unstarted' }] }, []])
+    assert.match(nobody.err, /the task "2\. Add the docs" needs work that is not on your branch yet: add-the-tests \(nobody started it\)/)
+    assert.match(nobody.err, /start this task once every one of them is landed/)
+
+    // One that is running is one to wait for; one that ended unlanded is one to land.
+    assert.equal((await run(checkout, MAIN, ['start', '--task', TESTS])).code, 0)
+    const running = await run(checkout, MAIN, ['start', '--task', DOCS], later(60))
+    assert.deepEqual([running.out.reason, running.out.waiting, running.started], ['needs', [{ task: TESTS, state: 'running', id: FIRST }], []])
+    assert.match(running.err, new RegExp(`add-the-tests \\(${FIRST} is running it\\)`))
+    await ended(repo, FIRST, 'failed')
+    const unlanded = await run(checkout, MAIN, ['start', '--task', DOCS], later(120))
+    assert.deepEqual([unlanded.out.reason, unlanded.out.waiting], ['needs', [{ task: TESTS, state: 'ended', id: FIRST, status: 'failed' }]])
+    assert.match(unlanded.err, new RegExp(`add-the-tests \\(${FIRST} ended failed and is not landed\\)`))
+
+    // Landed, and it starts; a task that needs nothing never waited.
+    await markLanded(repo, FIRST)
+    const started = await run(checkout, MAIN, ['start', '--task', DOCS], later(180))
+    assert.deepEqual([started.code, started.out.task, started.started.length], [0, DOCS, 1], started.err)
+    assert.equal((await run(checkout, MAIN, ['start', '--task', TYPO], later(240))).code, 0)
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
+/** Two tasks that write one file, and one that writes its own. */
+const SHARED = `# Split the work
+
+Everything this plan touches is under src/.
+
+## 1. Write the parser
+
+Level: simple
+Files: src/parse.ts, src/parse.test.ts
+Uncertainty: 0
+
+## 2. Use the parser
+
+Level: simple
+Files: src/parse.ts, src/use.ts
+Uncertainty: 0
+
+## 3. Write the docs
+
+Level: simple
+Files: README.md
+Uncertainty: 0
+`
+
+test('start: a task owning a file a running subagent\'s task owns too is said, and starts all the same', async () => {
+  const repo = await testRepo()
+  try {
+    const checkout = await mainAgent(repo)
+    await prompted(repo, MAIN, continuationPrompt(await savePlan(repo, checkout, MAIN, SHARED), 'Approve'))
+    assert.equal((await run(checkout, MAIN, ['start', '--task', 'write-the-parser'])).code, 0)
+
+    // The person's plan says two tasks write src/parse.ts: the main agent may have meant it, so the
+    // second one starts, and it is told which run is in the same file.
+    const second = await run(checkout, MAIN, ['start', '--task', 'use-the-parser'], later(60))
+    assert.deepEqual([second.code, second.out.sharedFiles, second.started.length], [0, [{ id: FIRST, task: '1. Write the parser', files: ['src/parse.ts'] }], 1])
+    assert.match(second.err, new RegExp(`${FIRST} is running "1\\. Write the parser", which owns src/parse\\.ts too: two agents writing one file conflict`))
+
+    // A task that owns no file of a running one's is started with nothing said.
+    const docs = await run(checkout, MAIN, ['start', '--task', 'write-the-docs'], later(120))
+    assert.deepEqual([docs.code, 'sharedFiles' in docs.out, docs.err], [0, false, ''])
+
+    // A subagent that ended is writing nothing any more.
+    await ended(repo, FIRST, 'done')
+    await ended(repo, SECOND, 'failed')
+    const after = await run(checkout, MAIN, ['start', '--task', 'use-the-parser'], later(180))
+    assert.deepEqual([after.code, 'sharedFiles' in after.out, after.err], [0, false, ''])
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
+/** A plan with one task in every state `next` can answer. */
+const STATES = `# Every state
+
+## 1. Add the tests
+
+Level: simple
+Files: src/a.test.ts
+Uncertainty: 0
+
+## 2. Add the docs
+
+Level: hard
+Needs: Add the tests
+Uncertainty: 0
+
+## 3. Fix the typo
+
+Level: simple
+Uncertainty: 0
+
+## 4. Polish the CSS
+
+Level: simple
+Needs: Fix the typo
+Uncertainty: 0
+
+## 5. Rename the package
+
+Level: simple
+Uncertainty: 0
+
+## 6. Weigh the options
+
+Level: simple
+Uncertainty: 4
+
+## 7. Unrated
+
+Level: simple
+
+## 8. Levelless
+
+Uncertainty: 0
+`
+
+test('next: every task of the plan, where its work stands, and how many more subagents may run at once', async () => {
+  const repo = await testRepo()
+  try {
+    const checkout = await mainAgent(repo)
+    const unplanned = await run(checkout, MAIN, ['next'])
+    assert.deepEqual([unplanned.code, unplanned.out], [1, { ok: false, reason: 'no-plan' }])
+    const question = await savePlan(repo, checkout, MAIN, STATES)
+    assert.deepEqual((await run(checkout, MAIN, ['next'])).out, { ok: false, reason: 'not-approved', question })
+    await prompted(repo, MAIN, continuationPrompt(question, 'Approve'))
+
+    // One landed, one running, one that ended and was not landed.
+    assert.equal((await run(checkout, MAIN, ['start', '--task', 'add-the-tests'])).code, 0)
+    assert.equal((await run(checkout, MAIN, ['start', '--task', 'fix-the-typo'], later(60))).code, 0)
+    assert.equal((await run(checkout, MAIN, ['start', '--task', 'rename-the-package'], later(120))).code, 0)
+    await markLanded(repo, FIRST)
+    await ended(repo, OTHERS, 'failed')
+
+    const next = await run(checkout, MAIN, ['next'])
+    assert.deepEqual(next.out, {
+      ok: true,
+      atOnce: 4,
+      running: 1,
+      places: 3,
+      tasks: [
+        { id: 'add-the-tests', name: '1. Add the tests', level: 'simple', files: ['src/a.test.ts'], state: 'landed', runs: [FIRST] },
+        { id: 'add-the-docs', name: '2. Add the docs', level: 'hard', state: 'startable' },
+        { id: 'fix-the-typo', name: '3. Fix the typo', level: 'simple', state: 'running', runs: [SECOND] },
+        { id: 'polish-the-css', name: '4. Polish the CSS', level: 'simple', state: 'waiting', needs: ['fix-the-typo'] },
+        { id: 'rename-the-package', name: '5. Rename the package', level: 'simple', state: 'ended', runs: [OTHERS] },
+        { id: 'weigh-the-options', name: '6. Weigh the options', level: 'simple', state: 'yours' },
+        { id: 'unrated', name: '7. Unrated', level: 'simple', state: 'yours' },
+        { id: 'levelless', name: '8. Levelless', state: 'yours' },
+      ],
+    })
+    // What `next` calls startable is what `start` takes, and what it calls the main agent's own is refused.
+    assert.equal((await run(checkout, MAIN, ['start', '--task', 'add-the-docs'], later(180))).code, 0)
+    for (const task of ['weigh-the-options', 'unrated', 'levelless']) assert.equal((await run(checkout, MAIN, ['start', '--task', task], later(240))).code, 1, task)
+
+    // A startable task still waits while no place is left.
+    assert.equal((await run(repo, undefined, ['settings', JSON.stringify({ atOnce: 2 })])).code, 0)
+    const full = await run(checkout, MAIN, ['next'])
+    assert.deepEqual([full.out.atOnce, full.out.running, full.out.places], [2, 2, 0])
+    assert.equal((await run(repo, undefined, ['settings', JSON.stringify({ atOnce: 1 })])).code, 0)
+    assert.equal((await run(checkout, MAIN, ['next'])).out.places, 0, 'never below none')
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
 test('settings: saved whole on this machine, hidden from git, read back; settings that are not settings are refused and change nothing', async () => {
   const repo = await testRepo()
   try {
@@ -438,6 +646,7 @@ test('plan: saved beside the run\'s record, read back, and no subagent starts un
       question,
       approved: false,
       context: CONTEXT,
+      check: PROJECT_CHECK,
       tasks: [
         { id: TESTS, name: '1. Add the tests', level: 'simple', files: ['src/a.test.ts', 'src/b.test.ts'], check: 'pnpm test', uncertainty: 0 },
         { id: DOCS, name: '2. Add the docs', level: 'hard', depends: [TESTS], uncertainty: 0 },
@@ -501,14 +710,14 @@ test('plan: saved beside the run\'s record, read back, and no subagent starts un
 })
 
 /** A subagent that ended: its record, and its branch one commit past the main agent's, on this machine as a subagent's is. */
-async function endedSubagent(repo: string, id: string, file: string, opts: { status?: RunStatus; branch?: string } = {}): Promise<string> {
+async function endedSubagent(repo: string, id: string, file: string, opts: { status?: RunStatus; branch?: string; task?: string } = {}): Promise<string> {
   const branch = opts.branch ?? agentBranchName(id)
   const path = (await addWorktree(repo, { agentId: id, branch, base: agentBranchName(MAIN) }, git)).path
   await writeFile(join(path, file), `${id}\n`)
   await git(['add', '-A'], path)
   await git(['commit', '-q', '-m', `Add ${file}`], path)
   await git(['worktree', 'remove', '--force', path], repo)
-  await record(repo, id, { status: opts.status ?? 'done', mark: { parent: MAIN, base: agentBranchName(MAIN) }, branch })
+  await record(repo, id, { status: opts.status ?? 'done', mark: { parent: MAIN, base: agentBranchName(MAIN) }, branch, ...(opts.task !== undefined ? { task: opts.task } : {}) })
   return branch
 }
 
@@ -621,12 +830,106 @@ test('land: a subagent whose checkout is still there loses it only when it holds
   }
 })
 
+test('land: the task\'s own `Check:` line runs on the merged work, and a check that fails leaves the merge in and the branch alive', async () => {
+  const repo = await testRepo()
+  try {
+    const checkout = await mainAgent(repo)
+    await approvedPlan(repo, checkout)
+    const branch = await endedSubagent(repo, FIRST, 'tests.txt', { task: TESTS })
+
+    const failed = await run(checkout, MAIN, ['land', FIRST], { run: async () => ({ code: 2, output: 'FAIL src/a.test.ts\n1 test failed\n' }) })
+    assert.deepEqual([failed.code, failed.out.ok, failed.out.reason, failed.out.task, failed.out.command, failed.out.code], [1, false, 'check', TESTS, 'pnpm test', 2])
+    assert.deepEqual([failed.out.output, failed.out.cut], ['FAIL src/a.test.ts\n1 test failed', undefined], 'what the check printed, as it printed it')
+    assert.match(failed.err, /the check of "1\. Add the tests", `pnpm test`, failed in your checkout with exit 2/)
+    assert.match(failed.err, new RegExp(`land ${FIRST} again, which only runs the check`))
+    // The work is merged and the branch is there: the main agent fixes it and lands again.
+    assert.equal(await readFile(join(checkout, 'tests.txt'), 'utf8'), `${FIRST}\n`)
+    assert.equal(await hasRef(repo, `refs/heads/${branch}`), true)
+    assert.deepEqual([await hasRef(repo, landedRef(FIRST)), (await findRun(repo, FIRST))?.caller?.['landed']], [false, undefined], 'nothing says it landed')
+
+    // The second land only runs the check; it passes, and the land finishes.
+    const again = await run(checkout, MAIN, ['land', FIRST])
+    assert.deepEqual([again.code, again.out, again.checks], [0, { ok: true, id: FIRST, branch, merged: false, check: 'pnpm test' }, ['pnpm test']])
+    assert.equal(await hasRef(repo, `refs/heads/${branch}`), false)
+    assert.equal((await findRun(repo, FIRST))?.caller?.['landed'], (await git(['rev-parse', landedRef(FIRST)], repo)).trim())
+
+    // A task with no check of its own has nothing to run, and the plan's own check waits for the last task.
+    const docs = await endedSubagent(repo, SECOND, 'docs.txt', { task: DOCS })
+    const second = await run(checkout, MAIN, ['land', SECOND])
+    assert.deepEqual([second.out, second.checks], [{ ok: true, id: SECOND, branch: docs, merged: true }, []])
+
+    // The last land runs the plan's own check, the project's: it fails, and nothing is landed.
+    const typo = await endedSubagent(repo, OTHERS, 'typo.txt', { task: TYPO })
+    const broken = await run(checkout, MAIN, ['land', OTHERS], { run: async () => ({ code: 1, output: 'src/a.ts(3,1): error TS2322' }) })
+    assert.deepEqual([broken.code, broken.out.reason, broken.out.command, broken.out.output], [1, 'project-check', PROJECT_CHECK, 'src/a.ts(3,1): error TS2322'])
+    assert.match(broken.err, /every task of the plan is landed and the plan's own check, `pnpm verify`, failed with exit 1/)
+    assert.equal(await hasRef(repo, `refs/heads/${typo}`), true)
+    const last = await run(checkout, MAIN, ['land', OTHERS])
+    assert.deepEqual([last.out, last.checks], [{ ok: true, id: OTHERS, branch: typo, merged: false, projectCheck: PROJECT_CHECK }, [PROJECT_CHECK]])
+
+    // A check that printed more than a refusal carries keeps its end, where a command that stopped says why.
+    await endedSubagent(repo, '2026-10-01T10-05-00-000Z', 'more.txt', { task: TESTS })
+    const loud = await run(checkout, MAIN, ['land', '2026-10-01T10-05-00-000Z'], { run: async () => ({ code: 1, output: `${'x'.repeat(9000)}\nthe last line` }) })
+    assert.deepEqual([loud.out.reason, loud.out.cut, loud.out.output.length, loud.out.output.endsWith('\nthe last line')], ['check', true, CHECK_MAX_OUTPUT, true])
+
+    // A subagent whose task is no task of the plan has no check of its own to run; the plan's own
+    // runs, since every task of the plan is landed.
+    const byHand = await endedSubagent(repo, '2026-10-01T10-06-00-000Z', 'notes.txt', { task: 'gone-from-the-plan' })
+    const nothing = await run(checkout, MAIN, ['land', '2026-10-01T10-06-00-000Z'])
+    assert.deepEqual([nothing.code, nothing.out, nothing.checks], [0, { ok: true, id: '2026-10-01T10-06-00-000Z', branch: byHand, merged: true, projectCheck: PROJECT_CHECK }, [PROJECT_CHECK]])
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
+test('retry: a new subagent on the same task, from the caller\'s branch, told what to do differently, naming the run it retries', async () => {
+  const repo = await testRepo()
+  try {
+    const checkout = await mainAgent(repo)
+    await approvedPlan(repo, checkout)
+    assert.equal((await run(checkout, MAIN, ['start', '--task', TESTS])).code, 0)
+
+    // Nothing to retry while it runs.
+    const running = await run(checkout, MAIN, ['retry', FIRST, 'cover the error case'])
+    assert.deepEqual([running.code, running.out, running.started], [1, { ok: false, reason: 'running', id: FIRST }, []])
+    assert.match(running.err, /retry it once it has ended/)
+
+    // One that ended `done` is retried too: its check failing on `land` is how it turns out to have failed.
+    await ended(repo, FIRST, 'done')
+    const feedback = '--force nothing: cover the error case, which is the one that failed'
+    const retried = await run(checkout, MAIN, ['retry', FIRST, feedback], later(60))
+    assert.deepEqual(retried.out, { ok: true, id: SECOND, task: TESTS, name: '1. Add the tests', level: 'simple', driver: 'claude-code', base: agentBranchName(MAIN), retries: FIRST })
+    assert.deepEqual(retried.started, [{ id: SECOND, prompt: `${retryText(TESTS_WORDS, feedback)}\n\n${SUBAGENT_LINES}`, parent: MAIN, base: agentBranchName(MAIN), driver: 'claude-code' }])
+    assert.match(retried.started[0]!.prompt, /Another agent tried this task before you/)
+    assert.match(retried.started[0]!.prompt, /What to do differently: --force nothing: cover the error case/)
+    const card = await findRun(repo, SECOND)
+    assert.deepEqual([card?.caller?.['task'], card?.caller?.['retries'], card?.title], [TESTS, FIRST, '1. Add the tests'])
+
+    // Only the caller's own subagents, and only one started on a task.
+    await record(repo, OTHERS, { status: 'done', mark: { parent: FIRST } })
+    assert.deepEqual((await run(checkout, MAIN, ['retry', OTHERS, 'again'])).out, { ok: false, reason: 'not-yours', id: OTHERS })
+    await record(repo, '2026-10-01T09-00-00-000Z', { status: 'failed', mark: { parent: MAIN } })
+    const taskless = await run(checkout, MAIN, ['retry', '2026-10-01T09-00-00-000Z', 'again'])
+    assert.deepEqual([taskless.code, taskless.out, taskless.started], [1, { ok: false, reason: 'no-task', id: '2026-10-01T09-00-00-000Z' }, []])
+
+    // Every rule `start` holds to holds for a retry: the dependencies, then the places.
+    await record(repo, '2026-10-01T09-00-01-000Z', { status: 'failed', mark: { parent: MAIN }, task: DOCS })
+    const needs = await run(checkout, MAIN, ['retry', '2026-10-01T09-00-01-000Z', 'again'], later(120))
+    assert.deepEqual([needs.out.reason, needs.out.task, needs.started], ['needs', DOCS, []])
+    assert.equal((await run(repo, undefined, ['settings', JSON.stringify({ atOnce: 1 })])).code, 0)
+    const full = await run(checkout, MAIN, ['retry', FIRST, 'again'], later(180))
+    assert.deepEqual([full.out.reason, full.started], ['limit', []])
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
 test('a command line that cannot be read exits 2 with the usage and starts nothing; outside a repository is a refusal', async () => {
   const repo = await testRepo()
   const elsewhere = await mkdtemp(join(tmpdir(), 'not-a-repo-'))
   try {
     await mainAgent(repo)
-    for (const argv of [[], ['nope'], ['start'], ['start', ' '], ['start', '--task'], ['start', '--task', ' '], ['start', 'a', 'b'], ['start', 'a', '--driver', 'pi'], ['list', 'extra'], ['read'], ['stop'], ['stop', FIRST, '--force'], ['plan', 'a', 'b'], ['plan', '--nope'], ['land'], ['land', FIRST, SECOND], ['start', '--level', 'simple', 'a', '--model', 'opus'], ['start', '--level', 'simple', 'a', '--driver', 'codex'], ['start', '--level'], ['settings', '{}', '{}']]) {
+    for (const argv of [[], ['nope'], ['start'], ['start', ' '], ['start', '--task'], ['start', '--task', ' '], ['start', 'a', 'b'], ['start', 'a', '--driver', 'pi'], ['list', 'extra'], ['read'], ['stop'], ['stop', FIRST, '--force'], ['plan', 'a', 'b'], ['plan', '--nope'], ['land'], ['land', FIRST, SECOND], ['next', 'extra'], ['retry'], ['retry', FIRST], ['retry', FIRST, 'why', 'and'], ['retry', FIRST, ' '], ['retry', '--help'], ['start', '--level', 'simple', 'a', '--model', 'opus'], ['start', '--level', 'simple', 'a', '--driver', 'codex'], ['start', '--level'], ['settings', '{}', '{}']]) {
       const bad = await run(repo, MAIN, argv)
       assert.deepEqual([bad.code, bad.out, bad.started, bad.stopped], [2, undefined, [], []], argv.join(' '))
       assert.match(bad.err, /usage: orchestration/)

@@ -7,7 +7,9 @@ import { isLevel, LEVELS, type Level } from './levels.js'
  *
  * The prose above the first task is the plan's shared context, and `start` puts it in front of
  * every task: before this, the agent retyped the same sentences into each subagent's prompt — in
- * the run we reviewed all four tasks opened with the same sixty characters.
+ * the run we reviewed all four tasks opened with the same sixty characters. One line of that prose
+ * is not context: a `Check:` up there is the project's own checks, which `land` runs once the last
+ * task is landed.
  *
  * A task's heading is its name, and the name is what a list of runs calls the subagent that does
  * it; the name slugged is the id `start --task` takes. `Uncertainty:` is borrowed from the ticket
@@ -43,6 +45,8 @@ export interface PlanTask {
 export interface Plan {
   /** The prose above the first task, which every task is told before its own words. */
   context?: string
+  /** How to check the whole plan, as the `Check:` line of its shared context says: the project's own checks, run on the last land. */
+  check?: string
   tasks: PlanTask[]
   /** Why this text is no task list; a plan with any of these is not saved. */
   problems: string[]
@@ -61,19 +65,27 @@ export function taskId(name: string): string {
 export function parsePlan(text: string): Plan {
   const lines = text.split('\n')
   const headings = lines.flatMap((line, at) => (/^##\s+\S/.test(line) ? [at] : []))
-  const context = contextOf(headings.length > 0 ? lines.slice(0, headings[0]) : lines)
+  const shared = contextOf(headings.length > 0 ? lines.slice(0, headings[0]) : lines)
   const read = headings.map((at, n) => task(lines[at]!.replace(/^##\s+/, '').trim(), lines.slice(at + 1, headings[n + 1]), n + 1))
   const tasks = read.map(({ task }) => task)
   const problems = [...read.flatMap(({ problems }) => problems), ...names(tasks), ...unknownNeeds(tasks)]
   if (tasks.length === 0) problems.push('the plan has no task: write one `## ` heading per task, and the prose every task needs above the first')
-  return { ...(context !== undefined ? { context } : {}), tasks, problems }
+  return { ...shared, tasks, problems }
 }
 
-/** The plan's shared context: what is above the first task, without the plan's own `# ` title. */
-function contextOf(lines: readonly string[]): string | undefined {
+/**
+ * The plan's shared context: what is above the first task, without the plan's own `# ` title and
+ * without any `Check:` line. A `Check:` line up there is the project's own checks, which `land`
+ * runs when the last task is landed: it is the plan's, not a task's, so no subagent is told it —
+ * every task says how to check its own work under its own heading.
+ */
+function contextOf(lines: readonly string[]): { context?: string; check?: string } {
   const titleAt = lines.findIndex(line => /^#\s+\S/.test(line))
-  const text = (titleAt === -1 ? lines : lines.slice(titleAt + 1)).join('\n').trim()
-  return text === '' ? undefined : text
+  const above = titleAt === -1 ? lines : lines.slice(titleAt + 1)
+  const isCheck = (line: string) => /^check:/i.test(line)
+  const check = bare(above.find(isCheck)?.slice('check:'.length))
+  const text = above.filter(line => !isCheck(line)).join('\n').trim()
+  return { ...(text !== '' ? { context: text } : {}), ...(check !== undefined ? { check } : {}) }
 }
 
 /** One task: its keys taken out of the lines under its heading, the rest its body. */
