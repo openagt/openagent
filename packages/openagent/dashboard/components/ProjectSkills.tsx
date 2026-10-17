@@ -7,11 +7,11 @@ import { Checkbox } from './ui/checkbox.js'
 import { Dialog } from './ui/dialog.js'
 
 // A project's skills, on its own page (#2023). The door to them is "Skills…" in the project's ⋮
-// menu: it opens the same list with ticks `npx @openagt/init` shows in a terminal. The card under
-// the agents that wait on the person shows only while it has something to say: a project with no
-// skill yet, which needs the door in plain sight; a newer version to take; and skills that have
-// not reached the branch agents start from, with the one press that sends them. Once agents have
-// every skill there is no card.
+// menu: it opens the same list with ticks `npx @openagt/init` shows in a terminal, the skills a
+// project picks beyond the ones every run gets by default. The card under the agents that wait on
+// the person shows only while it has something to say: a newer version to take, and skills that
+// have not reached the branch agents start from, with the one press that sends them. Once agents
+// have every skill there is no card.
 
 const held = (skill: ProjectSkill): boolean => skill.standing !== 'absent'
 const all = (skills: ProjectSkills): ProjectSkill[] => skills.groups.flatMap(group => group.skills)
@@ -117,23 +117,14 @@ export function ProjectSkillsLine({
       onSaved={() => void changed()}
     />
   )
-  const none = !all(skills).some(held)
   const sending = skills.git && here.length > 0
   const inRequest = skills.request !== undefined && waiting.length > 0
   const onBranch = !inRequest && skills.branch !== undefined && waiting.length > 0
   // Nothing to say: the list alone, when the menu opened it.
-  if (!none && newer.length === 0 && !sending && !inRequest && !onBranch && !error) return list || null
+  if (newer.length === 0 && !sending && !inRequest && !onBranch && !error) return list || null
 
   return (
     <div role="status" aria-label="This project's skills" className="m-3 flex flex-col gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">
-      {none && (
-        <span className="flex items-center justify-between gap-3">
-          <span>This project has no skills yet.</span>
-          <Button type="button" variant="outline" size="xs" className="shrink-0" onClick={() => setAdding(skills)}>
-            Add skills
-          </Button>
-        </span>
-      )}
       {newer.length > 0 && (
         <span className="flex items-center justify-between gap-3">
           <span>
@@ -287,7 +278,7 @@ export function AddSkillsDialog({ projectId, skills, onClose, onSaved }: { proje
       ) : (
         <div className="text-xs">
           <p className="mb-2 leading-relaxed text-muted-foreground">
-            A ticked skill is written into the project&rsquo;s folder and an unticked one is deleted{skills.remote ? `; Save sends the change to ${skills.remote}, where your agents start from` : skills.git ? '; Save commits the change' : ''}. Branches, logs, question, and github on a GitHub project come with every run and are not here.
+            A ticked skill is written into the project&rsquo;s folder and an unticked one is deleted{skills.remote ? `; Save sends the change to ${skills.remote}, where your agents start from` : skills.git ? '; Save commits the change' : ''}. The skills every agent gets by default come with every run and are not here.
           </p>
           <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
             {skills.groups.map(group => (

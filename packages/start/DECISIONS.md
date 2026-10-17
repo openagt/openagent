@@ -19,3 +19,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   `.claude/skills/<name>` or `.agents/skills/<name>`, committed on the branch an agent
   starts from. Picked over a skill saying which default it does in a line of its own, a
   format nothing needs yet.
+- The defaults are what an agent needs in any project to work at all (logs, question,
+  and github on a GitHub project) and the skills the dashboard has pages for that need no
+  setup of their own (orchestration, tickets, queue), so a page never shows work an agent
+  cannot do. The rest are picked from init's list. Picked over the first three alone, which
+  left the tickets and the queue a list of ticks away from a new project, and over every
+  skill of the list, each one more description in every agent's context.

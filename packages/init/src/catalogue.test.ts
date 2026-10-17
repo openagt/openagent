@@ -1,14 +1,14 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { carriedSkills, GROUPS, SKILL_NAMES, SKILLS_IN_ALL } from './catalogue.js'
+import { carriedSkills, GROUPS, SKILL_NAMES } from './catalogue.js'
 import { olderThan, stamped, unstamped } from './skill-file.js'
 
-test('the list holds 21 skills in five groups, everything ticked but the two that need a setup of their own, and none of the four basic ones', async () => {
-  assert.equal(SKILL_NAMES.length, 21)
-  assert.equal(new Set(SKILL_NAMES).size, 21, 'no skill twice')
-  assert.equal(SKILLS_IN_ALL, 25)
+test('the list holds 18 skills in four groups, everything ticked but the two that need a setup of their own, and none every run gets by default', async () => {
+  assert.equal(SKILL_NAMES.length, 18)
+  assert.equal(new Set(SKILL_NAMES).size, 18, 'no skill twice')
+  assert.equal(GROUPS.length, 4)
   assert.deepEqual(GROUPS.filter(group => !group.ticked).flatMap(group => group.skills), ['browser', 'discord'])
-  for (const basic of ['branches', 'logs', 'question', 'github']) assert.ok(!SKILL_NAMES.includes(basic), `${basic} comes with every run`)
+  for (const basic of ['branches', 'logs', 'question', 'github', 'orchestration', 'tickets', 'queue']) assert.ok(!SKILL_NAMES.includes(basic), `${basic} comes with every run`)
 })
 
 test('every skill is carried with its own package\'s text: its name, a description, a version, and its command by full name only', async () => {

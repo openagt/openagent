@@ -21,7 +21,7 @@ In your project's root folder:
 npx @openagt/start
 ```
 
-It opens the dashboard. Every agent you start gets the basic skills (logs, question, and github on a GitHub project), with nothing written in your project; a skill of your own with the same name takes one's place.
+It opens the dashboard. Every agent you start gets the default skills (logs, question, github on a GitHub project, orchestration, tickets and queue), with nothing written in your project; a skill of your own with the same name takes one's place.
 
 To give the project more skills, as files of its own:
 

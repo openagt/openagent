@@ -143,11 +143,13 @@ already made, and lists it in its pull request; for anything else it proposes an
   project's remote is on that host: it was not chosen by the project, so it does not
   answer for a project on another host. Picked over each project installing them itself,
   which left a project with nothing installed unable to start an agent or to see one.
-- A project has a skill when the skill's text is in the project, where the coding agents
-  read it (`.claude/skills/<name>/SKILL.md`, `.agents/skills/<name>/SKILL.md`).
-  OpenAgent brings the packages of the skills that have pages itself (tickets, queue,
-  orchestration, browser) and gives each to the projects that hold its text, with its page, its
-  cards and its data; deleting the skill's folder takes them away. The scheduler, a tool
+- A project has a skill when every run gets it by default (`@openagt/start` names those), or
+  when the skill's text is in the project, where the coding agents read it
+  (`.claude/skills/<name>/SKILL.md`, `.agents/skills/<name>/SKILL.md`). OpenAgent brings the
+  packages of the skills that have pages itself (tickets, queue, orchestration, browser) and
+  gives each, with its page, its cards and its data, to every project where the skill is a
+  default, else to the projects that hold its text; deleting the folder of a skill that is no
+  default takes them away. The scheduler, a tool
   with no text, is a project's when one of the project's hook lines runs it. Picked over
   a project's pages coming from its own `package.json`, which needed an install in every
   project, and which a project without Node could not have.
@@ -186,13 +188,14 @@ already made, and lists it in its pull request; for anything else it proposes an
   leaving the push to the person, three steps with a git word at each before an agent had
   the skill, and over committing and pushing unasked.
 - What a project's skills need from the person is a card under the agents that wait on
-  them, in the same column, shown only while there is something to do: no skill yet, a
-  newer version, skills on this computer only with a "Send" button, or skills in a pull
+  them, in the same column, shown only while there is something to do: a newer version,
+  skills on this computer only with a "Send" button, or skills in a pull
   request or on OpenAgent's branch, waiting for a merge. Once agents have them the card is
   gone, with no line saying so. While a skill is not yet on the branch agents start from,
   the launcher does not take its command, so it never offers a command the agent does not
   have. Picked over a line across the top of the page, which read as part of the page's
-  frame.
+  frame; and over a line for a project with no skill yet, which the default skills every
+  run gets made untrue.
 - A module may bring a section of the Settings page, shown after OpenAgent's own
   sections, where a project has its package. It reads and writes through the package's own
   command. Picked over OpenAgent's own sections knowing a package's file and a hook line

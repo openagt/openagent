@@ -50,8 +50,8 @@ function host(asked: string[]): GitHostSource {
 test('the folder on the default branch, past it by the skills alone: its own commit is pushed, so the folder and the remote stay one history', async () => {
   const { dir, git, remote, done } = await project()
   try {
-    await applyChange(dir, { write: ['queue', 'plan'] })
-    assert.deepEqual(await sendSkills(dir, ['queue', 'plan']), { ok: true, sent: 'pushed', branch: 'main' })
+    await applyChange(dir, { write: ['triage', 'plan'] })
+    assert.deepEqual(await sendSkills(dir, ['triage', 'plan']), { ok: true, sent: 'pushed', branch: 'main' })
     assert.equal(remote('rev-parse', 'main').trim(), git('rev-parse', 'HEAD').trim())
     assert.equal(git('status', '--porcelain'), '')
 
@@ -75,9 +75,9 @@ test('other work of the person is never pushed: the skills go onto the remote\'s
     git('commit', '-q', '-am', 'mine, not to push')
     await writeFile(join(dir, 'staged.txt'), 'staged, not committed\n')
     git('add', 'staged.txt')
-    await applyChange(dir, { write: ['queue'] })
-    assert.deepEqual(await sendSkills(dir, ['queue']), { ok: true, sent: 'pushed', branch: 'main' })
-    assert.deepEqual(changed(remote, before, 'main'), ['.agents/skills/queue/SKILL.md', '.claude/skills/queue'])
+    await applyChange(dir, { write: ['triage'] })
+    assert.deepEqual(await sendSkills(dir, ['triage']), { ok: true, sent: 'pushed', branch: 'main' })
+    assert.deepEqual(changed(remote, before, 'main'), ['.agents/skills/triage/SKILL.md', '.claude/skills/triage'])
     assert.equal(remote('log', '--format=%s', '-1', 'main').trim(), 'Update OpenAgent skills')
     assert.equal(git('log', '--format=%s', '-2').trim(), 'Update OpenAgent skills\nmine, not to push', 'the folder has its own commit of the skills')
     assert.equal(git('status', '--porcelain'), 'A  staged.txt\n', 'what was staged stays staged')
@@ -102,17 +102,17 @@ test('a default branch that takes no push: the skills go to a branch of OpenAgen
     await chmod(hook, 0o755)
     const main = remote('rev-parse', 'main').trim()
 
-    await applyChange(dir, { write: ['queue'] })
+    await applyChange(dir, { write: ['triage'] })
     const asked: string[] = []
-    assert.deepEqual(await sendSkills(dir, ['queue'], { gitHost: async () => host(asked) }), { ok: true, sent: 'request', request: { number: 7, url: 'https://example.com/pull/7' } })
+    assert.deepEqual(await sendSkills(dir, ['triage'], { gitHost: async () => host(asked) }), { ok: true, sent: 'request', request: { number: 7, url: 'https://example.com/pull/7' } })
     assert.deepEqual(asked, [SKILLS_BRANCH])
     assert.equal(remote('rev-parse', 'main').trim(), main, 'main as it was')
-    assert.deepEqual(changed(remote, main, SKILLS_BRANCH), ['.agents/skills/queue/SKILL.md', '.claude/skills/queue'])
+    assert.deepEqual(changed(remote, main, SKILLS_BRANCH), ['.agents/skills/triage/SKILL.md', '.claude/skills/triage'])
 
     // A second send while the request is open holds both skills: the branch is written again from main.
     await applyChange(dir, { write: ['plan'] })
-    assert.deepEqual(await sendSkills(dir, ['queue', 'plan'], { gitHost: async () => undefined }), { ok: true, sent: 'branch', branch: SKILLS_BRANCH })
-    assert.deepEqual(changed(remote, main, SKILLS_BRANCH), ['.agents/skills/plan/SKILL.md', '.agents/skills/queue/SKILL.md', '.claude/skills/plan', '.claude/skills/queue'])
+    assert.deepEqual(await sendSkills(dir, ['triage', 'plan'], { gitHost: async () => undefined }), { ok: true, sent: 'branch', branch: SKILLS_BRANCH })
+    assert.deepEqual(changed(remote, main, SKILLS_BRANCH), ['.agents/skills/plan/SKILL.md', '.agents/skills/triage/SKILL.md', '.claude/skills/plan', '.claude/skills/triage'])
   } finally {
     await done()
   }
@@ -122,8 +122,8 @@ test('a remote that cannot be reached is said, after the commit in the folder', 
   const { dir, git, done } = await project()
   try {
     git('remote', 'set-url', 'origin', join(dir, 'no-such-remote.git'))
-    await applyChange(dir, { write: ['queue'] })
-    const sent = await sendSkills(dir, ['queue'])
+    await applyChange(dir, { write: ['triage'] })
+    const sent = await sendSkills(dir, ['triage'])
     assert.ok(!sent.ok && sent.error.startsWith('could not reach the remote: '), JSON.stringify(sent))
     assert.equal(git('log', '--format=%s', '-1').trim(), 'Update OpenAgent skills')
   } finally {

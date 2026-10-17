@@ -36,7 +36,10 @@
     "@openagt/dashboard": "workspace:*",
     "@openagt/skill-github": "workspace:*",
     "@openagt/skill-logs": "workspace:*",
-    "@openagt/skill-question": "workspace:*"
+    "@openagt/skill-orchestration": "workspace:*",
+    "@openagt/skill-question": "workspace:*",
+    "@openagt/skill-queue": "workspace:*",
+    "@openagt/skill-tickets": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

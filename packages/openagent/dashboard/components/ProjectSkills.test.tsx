@@ -67,15 +67,12 @@ describe('ProjectSkillsLine', () => {
     expect(screen.queryByRole('status')).toBeNull()
   })
 
-  test('a project with no skill yet says so, with the door to the list in plain sight', async () => {
+  test('a project that picked no skill has no line either: every run gets the default skills, and the list opens from the project\'s menu', async () => {
     onProjectSkills.mockResolvedValue(skills())
-    render(<ProjectSkillsLine projectId="p1" />)
-    expect(await screen.findByText(/This project has no skills yet\./)).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Add skills' }))
-    expect(await screen.findByRole('dialog')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Update' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Commit' })).toBeNull()
-    expect(screen.queryByText(/waiting to reach/)).toBeNull()
+    const { container } = render(<ProjectSkillsLine projectId="p1" />)
+    await waitFor(() => expect(onProjectSkills.mock.results[0]?.type).toBe('return'))
+    expect(container.textContent).toBe('')
+    expect(screen.queryByRole('button', { name: 'Add skills' })).toBeNull()
   })
 
   test('"Skills…" in the project\'s menu opens the list, also when the line has nothing to say; closing the list tells the menu\'s side', async () => {

@@ -20,10 +20,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   exactly the same. Picked over files hidden from git and linked into each checkout,
   which a teammate, another machine and a cloud agent would not have, and over
   installing the skills' packages into the project.
-- Four basic skills are not in the list: branches, logs and question, and github on a
-  GitHub project, come with every run, with nothing written in the project. Picked over
-  branches alone coming that way, where a person who cannot change the default branch
-  got agents that could not ask a question.
+- The skills every run gets by default are not in the list: branches, and the ones
+  `@openagt/start` names, come with every run, with nothing written in the project. The
+  list holds the skills a project picks beyond them. Picked over branches alone coming
+  that way, where a person who cannot change the default branch got agents that could not
+  ask a question.
 
 ## The list
 - In a terminal init shows the skills as a list with ticks, in groups. Everything is

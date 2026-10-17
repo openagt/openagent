@@ -336,9 +336,6 @@ importers:
       '@openagt/skill-market-research':
         specifier: workspace:*
         version: link:../skill-market-research
-      '@openagt/skill-orchestration':
-        specifier: workspace:*
-        version: link:../skill-orchestration
       '@openagt/skill-plan':
         specifier: workspace:*
         version: link:../skill-plan
@@ -348,9 +345,6 @@ importers:
       '@openagt/skill-post-merge-cleanup':
         specifier: workspace:*
         version: link:../skill-post-merge-cleanup
-      '@openagt/skill-queue':
-        specifier: workspace:*
-        version: link:../skill-queue
       '@openagt/skill-readability':
         specifier: workspace:*
         version: link:../skill-readability
@@ -369,9 +363,6 @@ importers:
       '@openagt/skill-suggest-tickets-to-work-on':
         specifier: workspace:*
         version: link:../skill-suggest-tickets-to-work-on
-      '@openagt/skill-tickets':
-        specifier: workspace:*
-        version: link:../skill-tickets
       '@openagt/skill-triage':
         specifier: workspace:*
         version: link:../skill-triage
@@ -983,9 +974,18 @@ importers:
       '@openagt/skill-logs':
         specifier: workspace:*
         version: link:../skill-logs
+      '@openagt/skill-orchestration':
+        specifier: workspace:*
+        version: link:../skill-orchestration
       '@openagt/skill-question':
         specifier: workspace:*
         version: link:../skill-question
+      '@openagt/skill-queue':
+        specifier: workspace:*
+        version: link:../skill-queue
+      '@openagt/skill-tickets':
+        specifier: workspace:*
+        version: link:../skill-tickets
     devDependencies:
       '@types/node':
         specifier: ^20.0.0

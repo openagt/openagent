@@ -29,22 +29,22 @@ test('the one commit holds the skill files alone: a file the person staged stays
     await run(root, 'add', 'staged.txt')
     await writeFile(join(root, 'README.md'), '# edited\n')
 
-    const added = await cli(root, 'add', 'tickets', 'queue', '--commit')
+    const added = await cli(root, 'add', 'maintenance', 'readability', '--commit')
     assert.equal(added.code, 0)
-    assert.deepEqual(added.out.written, ['tickets', 'queue'])
+    assert.deepEqual(added.out.written, ['maintenance', 'readability'])
     assert.match(added.out.commit, /^[0-9a-f]{7,}$/)
-    assert.equal(await run(root, 'show', '--format=%s', '--name-only', 'HEAD'), 'Add OpenAgent skills\n\n.agents/skills/queue/SKILL.md\n.agents/skills/tickets/SKILL.md\n.claude/skills/queue\n.claude/skills/tickets\n')
+    assert.equal(await run(root, 'show', '--format=%s', '--name-only', 'HEAD'), 'Add OpenAgent skills\n\n.agents/skills/maintenance/SKILL.md\n.agents/skills/readability/SKILL.md\n.claude/skills/maintenance\n.claude/skills/readability\n')
     assert.equal(await run(root, 'status', '--porcelain'), ' M README.md\nA  staged.txt\n', 'what the person had open is as they left it')
     assert.equal((await run(root, 'rev-list', '--count', 'origin/main..main')).trim(), '1', 'the commit is on this machine only')
     assert.equal((await run(root, 'ls-remote', 'origin', 'main')).slice(0, 40), (await run(root, 'rev-parse', 'main~1')).trim(), 'nothing was pushed')
 
-    const removed = await cli(root, 'remove', 'queue', '--commit')
-    assert.deepEqual(removed.out.removed, ['queue'])
-    assert.equal(await run(root, 'show', '--format=%s', '--name-status', 'HEAD'), 'Remove OpenAgent skills\n\nD\t.agents/skills/queue/SKILL.md\nD\t.claude/skills/queue\n')
+    const removed = await cli(root, 'remove', 'readability', '--commit')
+    assert.deepEqual(removed.out.removed, ['readability'])
+    assert.equal(await run(root, 'show', '--format=%s', '--name-status', 'HEAD'), 'Remove OpenAgent skills\n\nD\t.agents/skills/readability/SKILL.md\nD\t.claude/skills/readability\n')
     assert.equal(await run(root, 'status', '--porcelain'), ' M README.md\nA  staged.txt\n')
 
     // Nothing changed at the paths: no commit, and no error.
-    assert.deepEqual(await commitPaths(root, ['.agents/skills/tickets/SKILL.md', '.agents/skills/never/SKILL.md'], 'again'), { ok: true, committed: false })
+    assert.deepEqual(await commitPaths(root, ['.agents/skills/maintenance/SKILL.md', '.agents/skills/never/SKILL.md'], 'again'), { ok: true, committed: false })
   } finally {
     await gone(root)
     await gone(`${root}.git`)
@@ -55,19 +55,17 @@ test('add, remove, update and list for a script: JSON, no question, no commit un
   const root = await folder(true)
   try {
     const empty = await cli(root, 'list')
-    assert.deepEqual({ code: empty.code, has: empty.out.has, of: empty.out.of, scheduler: empty.out.scheduler }, { code: 0, has: 3, of: 25, scheduler: false })
+    assert.deepEqual({ code: empty.code, skills: empty.out.skills.filter((skill: { standing: string }) => skill.standing !== 'absent'), scheduler: empty.out.scheduler }, { code: 0, skills: [], scheduler: false })
 
     const added = await cli(root, 'add', 'plan', 'ux', 'plan')
     assert.deepEqual({ code: added.code, written: added.out.written, already: added.out.already, commit: added.out.commit }, { code: 0, written: ['plan', 'ux'], already: [], commit: undefined })
     assert.equal((await run(root, 'log', '--format=%s')).trim(), 'init', 'no commit was asked for')
-    assert.equal((await cli(root, 'list')).out.has, 5, 'two written, and the three basic ones of a project that is not on GitHub')
 
-    const unknown = await cli(root, 'add', 'tickets', 'nope')
+    const unknown = await cli(root, 'add', 'maintenance', 'nope')
     assert.deepEqual({ code: unknown.code, out: unknown.out }, { code: 1, out: { ok: false, reason: 'unknown-skill', name: 'nope' } })
-    assert.match(unknown.err, /^no skill nope: the skills are tickets, queue, /)
+    assert.match(unknown.err, /^no skill nope: the skills are plan, plan-tickets, /)
     assert.deepEqual(held(await readProject(root)), ['plan', 'ux'], 'nothing of a refused command was written')
-    const basic = await cli(root, 'add', 'logs')
-    assert.equal(basic.out.reason, 'unknown-skill', 'a basic skill comes with every run: init writes none')
+    for (const basic of ['logs', 'tickets']) assert.equal((await cli(root, 'add', basic)).out.reason, 'unknown-skill', `${basic} comes with every run: init writes none`)
 
     for (const argv of [['add'], ['remove'], ['list', 'extra'], ['add', 'plan', '--push'], ['nonsense']]) assert.equal((await cli(root, ...argv)).code, 2, argv.join(' '))
     const bare = await cli(root)
@@ -85,13 +83,13 @@ test('add, remove, update and list for a script: JSON, no question, no commit un
     assert.deepEqual((await cli(root, 'update')).out.written, ['plan'])
     assert.deepEqual(await standings(), { plan: 'current', ux: 'changed' }, 'a text changed by hand is not written over unasked')
     // add leaves a skill the project holds as it is, whatever its text: only update writes over one.
-    const again = await cli(root, 'add', 'ux', 'queue')
-    assert.deepEqual({ written: again.out.written, already: again.out.already }, { written: ['queue'], already: ['ux'] })
+    const again = await cli(root, 'add', 'ux', 'readability')
+    assert.deepEqual({ written: again.out.written, already: again.out.already }, { written: ['readability'], already: ['ux'] })
     assert.equal((await standings())['ux'], 'changed')
-    await cli(root, 'remove', 'queue')
+    await cli(root, 'remove', 'readability')
     assert.deepEqual((await cli(root, 'update', 'ux')).out.written, ['ux'])
     assert.deepEqual(await standings(), { plan: 'current', ux: 'current' })
-    const absent = await cli(root, 'update', 'queue')
+    const absent = await cli(root, 'update', 'readability')
     assert.deepEqual({ code: absent.code, reason: absent.out.reason }, { code: 1, reason: 'not-here' })
 
     // The scheduler by name: its lines, this machine's, nothing for git to see.
@@ -182,15 +180,15 @@ test('in a terminal, a new project: Enter takes the default picks, the files are
     const defaults = GROUPS.filter(group => group.ticked).flatMap(group => group.skills)
     assert.deepEqual(held(await readProject(root)), defaults)
     assert.equal((await readProject(root)).scheduler, true, 'the scheduler is ticked by default')
-    assert.match(shown, /Every agent already gets the basic skills with nothing written here/)
+    assert.match(shown, /Every agent OpenAgent starts already gets its default skills, with nothing written here\. These are more\./)
     assert.doesNotMatch(shown, /not on GitHub/, 'a project with no remote is told nothing about a git host')
     assert.match(shown, /\[ \] browser/)
-    assert.match(shown, /Wrote 19 skills in \.agents\/skills, each linked in \.claude\/skills: tickets, queue, /)
+    assert.match(shown, /Wrote 16 skills in \.agents\/skills, each linked in \.claude\/skills: plan, plan-tickets, /)
     assert.match(shown, /The scheduler starts with the dashboard, on this machine\. Every automation starts switched off\./)
     assert.match(shown, /Committed as [0-9a-f]{7,}, these files alone\. Nothing was pushed/)
     assert.equal((await run(root, 'log', '--format=%s')).trim(), 'Add OpenAgent skills\ninit')
     assert.equal(await run(root, 'status', '--porcelain'), '', 'the hooks file is outside git, and every skill file is committed')
-    assert.equal((await run(root, 'show', '--format=', '--name-only', 'HEAD')).trim().split('\n').length, 38, '19 texts and 19 links')
+    assert.equal((await run(root, 'show', '--format=', '--name-only', 'HEAD')).trim().split('\n').length, 32, '16 texts and 16 links')
   } finally {
     await gone(root)
   }
@@ -200,32 +198,31 @@ test('run again, the ticks show what the project has; a tick removed deletes, a 
   const root = await folder(true)
   try {
     await run(root, 'remote', 'add', 'origin', 'git@github.com:someone/project.git')
-    await cli(root, 'add', 'tickets', 'queue', '--commit')
+    await cli(root, 'add', 'maintenance', 'readability', '--commit')
     const left = await converse(root, [{ after: LIST_KEYS, keys: 'q' }])
     assert.equal(left.code, 0)
-    assert.match(left.shown, /This project has 6 of 25 skills\. The ticks show what it has now\./)
+    assert.match(left.shown, /This project has 2 of these 18\. The ticks show what it has now\./)
     assert.doesNotMatch(left.shown, /not on GitHub/)
     await run(root, 'remote', 'set-url', 'origin', 'https://gitlab.com/someone/project.git')
     const elsewhere = await converse(root, [{ after: LIST_KEYS, keys: 'q' }])
-    assert.match(elsewhere.shown, /This project has 5 of 25 skills\./, 'github is not one of its skills')
     assert.match(elsewhere.shown, /This project is not on GitHub: agents push their branch, and you open the request yourself\. There is no skill for another git host yet\./)
-    assert.match(left.shown, /\[x\] tickets/)
+    assert.match(left.shown, /\[x\] maintenance/)
     assert.match(left.shown, /\[ \] plan /)
     assert.match(left.shown, /\[ \] scheduler/, 'the scheduler is not ticked in a project that has skills and no scheduler')
     assert.match(left.shown, /Left as it is\.\n$/)
-    assert.deepEqual(held(await readProject(root)), ['tickets', 'queue'])
+    assert.deepEqual(held(await readProject(root)), ['maintenance', 'readability'])
 
-    // The cursor starts on tickets: untick it, go down two rows to plan and tick it.
+    // The cursor starts on plan, the first row: tick it, go down eight rows to maintenance and untick it.
     const { shown } = await converse(root, [
-      { after: LIST_KEYS, keys: ` ${DOWN}${DOWN} \r` },
+      { after: LIST_KEYS, keys: ` ${DOWN.repeat(8)} \r` },
       { after: 'Commit these files now? (Y/n)', keys: 'n' },
       { after: 'Open the dashboard? (Y/n)', keys: 'n' },
     ])
     assert.match(shown, /Wrote 1 skill in \.agents\/skills, linked in \.claude\/skills: plan\./)
-    assert.match(shown, /Deleted 1 skill: tickets\./)
+    assert.match(shown, /Deleted 1 skill: maintenance\./)
     assert.match(shown, /Not committed\. The files are in your folder\./)
-    assert.deepEqual(held(await readProject(root)), ['queue', 'plan'])
-    assert.equal(await run(root, 'status', '--porcelain', '-uall'), ' D .agents/skills/tickets/SKILL.md\n D .claude/skills/tickets\n?? .agents/skills/plan/SKILL.md\n?? .claude/skills/plan\n')
+    assert.deepEqual(held(await readProject(root)), ['plan', 'readability'])
+    assert.equal(await run(root, 'status', '--porcelain', '-uall'), ' D .agents/skills/maintenance/SKILL.md\n D .claude/skills/maintenance\n?? .agents/skills/plan/SKILL.md\n?? .claude/skills/plan\n')
   } finally {
     await gone(root)
   }
@@ -275,9 +272,9 @@ test('Ctrl-C at a question ends it there: nothing is written at the newer-text q
     await cli(root, 'add', 'plan')
     const old = stamped(carried.get('plan')!.text.replace(/\n---\n/, '\n---\nA line of the old text.\n'), '0.0.1')
     await writeFile(join(root, '.agents/skills/plan/SKILL.md'), old)
-    // Tick tickets too, then leave at the question about the newer text.
+    // Tick maintenance too, eight rows below plan, then leave at the question about the newer text.
     const atNewer = await converse(root, [
-      { after: LIST_KEYS, keys: ' \r' },
+      { after: LIST_KEYS, keys: `${DOWN.repeat(8)} \r` },
       { after: 'Update it? (y/N)', keys: CTRL_C },
     ])
     assert.equal(atNewer.code, 130)
@@ -286,12 +283,12 @@ test('Ctrl-C at a question ends it there: nothing is written at the newer-text q
     assert.doesNotMatch(atNewer.shown, /Open the dashboard/)
 
     const atCommit = await converse(root, [
-      { after: LIST_KEYS, keys: ' \r' },
+      { after: LIST_KEYS, keys: `${DOWN.repeat(8)} \r` },
       { after: 'Update it? (y/N)', keys: 'n' },
       { after: 'Commit these files now? (Y/n)', keys: CTRL_C },
     ])
     assert.equal(atCommit.code, 130)
-    assert.deepEqual(held(await readProject(root)), ['tickets', 'plan'], 'the files were written before the question')
+    assert.deepEqual(held(await readProject(root)), ['plan', 'maintenance'], 'the files were written before the question')
     assert.equal((await run(root, 'log', '--format=%s')).trim(), 'init', 'nothing was committed')
     assert.doesNotMatch(atCommit.shown, /Open the dashboard/)
   } finally {
@@ -305,16 +302,16 @@ test('a project whose ignore rules cover the skill folders is told so in one lin
     await writeFile(join(root, '.gitignore'), '.claude/\n')
     await run(root, 'add', '.gitignore')
     await run(root, 'commit', '-q', '-m', 'ignore')
-    const refused = await cli(root, 'add', 'tickets', '--commit')
+    const refused = await cli(root, 'add', 'maintenance', '--commit')
     assert.equal(refused.code, 1)
-    assert.equal(refused.err, 'the files are written, but the commit failed: git ignores .claude/skills/tickets: an ignore rule of this project, or of yours, covers it')
-    assert.equal(await run(root, 'status', '--porcelain', '-uall'), '?? .agents/skills/tickets/SKILL.md\n', 'written, and nothing staged')
+    assert.equal(refused.err, 'the files are written, but the commit failed: git ignores .claude/skills/maintenance: an ignore rule of this project, or of yours, covers it')
+    assert.equal(await run(root, 'status', '--porcelain', '-uall'), '?? .agents/skills/maintenance/SKILL.md\n', 'written, and nothing staged')
     const { shown } = await converse(root, [
-      { after: LIST_KEYS, keys: `${DOWN} \r` },
+      { after: LIST_KEYS, keys: `${DOWN.repeat(7)} \r` },
       { after: 'Commit these files now? (Y/n)', keys: 'y' },
       { after: 'Open the dashboard? (Y/n)', keys: 'n' },
     ])
-    assert.match(shown, /Not committed: git ignores \.claude\/skills\/queue: an ignore rule of this project, or of yours, covers it\. The files are in your folder\./)
+    assert.match(shown, /Not committed: git ignores \.claude\/skills\/maintainability: an ignore rule of this project, or of yours, covers it\. The files are in your folder\./)
   } finally {
     await gone(root)
   }
