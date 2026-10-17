@@ -5,7 +5,7 @@
 **Autonomous AI programming.**  
 Stop babysitting your coding agents. Make the important decisions, let AI do the rest.
 
-[![npm](https://img.shields.io/npm/v/@openagt/dashboard)](https://www.npmjs.com/package/@openagt/dashboard) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE) [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/qc8zvdzWNR)
+[![npm](https://img.shields.io/npm/v/@openagt/start)](https://www.npmjs.com/package/@openagt/start) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE) [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/qc8zvdzWNR)
 
 <br clear="left" />
 
@@ -18,20 +18,22 @@ Stop babysitting your coding agents. Make the important decisions, let AI do the
 In your project's root folder:
 
 ```bash
+npx @openagt/start
+```
+
+It opens the dashboard. Every agent you start gets the basic skills (logs, question, and github on a GitHub project), with nothing written in your project; a skill of your own with the same name takes one's place.
+
+To give the project more skills, as files of its own:
+
+```bash
 npx @openagt/init
 ```
 
-It shows the skills as a list with ticks, writes the ones you pick as files of your project, and offers to open the dashboard.
+It shows the skills as a list with ticks, the same list as Skills… in the project's ⋮ menu.
 
-To open the dashboard alone:
-
-```bash
-npx @openagt/dashboard
-```
-
-Or install it:
+Or install OpenAgent:
 
 ```bash
-npm i -g @openagt/dashboard
+npm i -g @openagt/start
 openagent
 ```

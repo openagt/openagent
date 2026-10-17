@@ -17,6 +17,7 @@ import { runProjectHooks } from './project-hooks.js'
 import { builtInServices } from './built-in.js'
 import { COMPUTER_ENV, startPackageServices, type PackageServices, type PackageServicesOptions } from './package-services.js'
 import { readAllAgents } from './store/index.js'
+import { setOpenagentVersion } from './version.js'
 import type { BridgeSession } from './dashboard/index.js'
 
 /**
@@ -65,6 +66,8 @@ export interface RunDaemonOptions {
   signal?: AbortSignal
   /** Env the registry is read from. Default `process.env`; injectable for tests. */
   env?: NodeJS.ProcessEnv
+  /** OpenAgent's version, as the package that started it says: what this computer tells its machines and a phone. `unknown` when unsaid. */
+  version?: string
   /** Called once the server has bound, before it blocks. The only way a caller learns the port. */
   onListening?: (state: DaemonState) => void
   /** How the bridge browser is launched (#1332); default the real Chrome for Testing. For tests. */
@@ -82,6 +85,7 @@ export interface RunDaemonOptions {
 export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promise<void> {
   const port = opts.port ?? DEFAULT_DAEMON_PORT
   const env = opts.env ?? process.env
+  if (opts.version !== undefined) setOpenagentVersion(opts.version)
   // The browser bridge (#1237). Opt-in, because it opens the daemon's one route reachable from
   // another origin, behind a key of its own. The key may not exist yet, hence ensure, not read.
   const bridgeOn = (await readPreferences(undefined, env).catch((): Preferences => ({}))).bridge === true

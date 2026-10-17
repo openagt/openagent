@@ -42,15 +42,15 @@
     "@openagt/agent-driver-codex": "workspace:*",
     "@openagt/agent-data": "workspace:*",
     "@openagt/skill-branches": "workspace:*",
-    "@openagt/skill-github": "workspace:*",
     "@openagt/skill-logs": "workspace:*",
-    "@openagt/skill-question": "workspace:*",
     "@openagt/agent-driver": "workspace:*",
     "yaml": "^2.5.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "@openagt/skill-github": "workspace:*",
+    "@openagt/skill-question": "workspace:*"
   },
   "publishConfig": {
     "access": "public"

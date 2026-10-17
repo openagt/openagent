@@ -45,7 +45,7 @@ export interface CliIo {
   stderr: (line: string) => void
   /** The terminal a person is at; absent when the command is run by a script or a pipe. */
   terminal?: Terminal
-  /** Start the dashboard in `cwd` and wait for it to end: its exit code. `npx @openagt/dashboard` when absent. */
+  /** Start the dashboard in `cwd` and wait for it to end: its exit code. `npx @openagt/start` when absent. */
   openDashboard?: (cwd: string) => Promise<number>
 }
 
@@ -269,16 +269,16 @@ function report(changed: Changed, say: (line?: string) => void): void {
 async function openDashboard(io: CliIo, terminal: Terminal, say: (line?: string) => void): Promise<number> {
   if (!(await ask('Open the dashboard?', true, terminal))) return 0
   say('Starting the dashboard here. Ctrl-C closes it.')
-  return (io.openDashboard ?? npxDashboard)(io.cwd)
+  return (io.openDashboard ?? npxStart)(io.cwd)
 }
 
-/** The dashboard by its full name, in the folder, on this terminal: it offers the folder it was started in as a project. */
-function npxDashboard(cwd: string): Promise<number> {
+/** OpenAgent by its full name, in the folder, on this terminal: it offers the folder it was started in as a project. */
+function npxStart(cwd: string): Promise<number> {
   return new Promise(resolve => {
     // Through a shell on Windows, where `npx` is a script and not a program.
-    const child = spawn('npx', ['--yes', '@openagt/dashboard'], { cwd, stdio: 'inherit', shell: process.platform === 'win32' })
+    const child = spawn('npx', ['--yes', '@openagt/start'], { cwd, stdio: 'inherit', shell: process.platform === 'win32' })
     child.on('error', err => {
-      console.error(`The dashboard could not be started: ${err.message}. Run it yourself: npx @openagt/dashboard`)
+      console.error(`The dashboard could not be started: ${err.message}. Run it yourself: npx @openagt/start`)
       resolve(1)
     })
     child.on('exit', code => resolve(code ?? 0))

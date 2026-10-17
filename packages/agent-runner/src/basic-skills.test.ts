@@ -8,13 +8,32 @@ import { createCheckout, HARNESS_SKILL_DIRS, skillLinkPaths } from '@openagt/ski
 import { basicSkills, everyBasicSkill } from './basic-skills.js'
 import { runCli } from './cli.js'
 import { gitHostCommand } from './git-host.js'
-import { git, removeRepo, testRepo } from './test-repo.js'
+import { SKILLS_ENV } from '@openagt/agent-data'
+import { git, handDownBasicSkills, removeRepo, testRepo } from './test-repo.js'
 
 // The skills every run gets, on a real repository: which ones a project has by its remote, what a
 // checkout holds for them, that the command a text names runs with nothing downloaded, and that a
 // cleanup takes the rules back.
 
 const run = promisify(execFile)
+
+test('a run gets no basic skill when nothing handed the list down: the runner names none itself', async () => {
+  const repo = await testRepo()
+  const before = process.env[SKILLS_ENV]
+  try {
+    delete process.env[SKILLS_ENV]
+    await git(['remote', 'set-url', 'origin', 'git@github.com:someone/project.git'], repo)
+    assert.deepEqual(await basicSkills(repo), [])
+    assert.deepEqual(await everyBasicSkill(), [])
+    assert.equal(await gitHostCommand(repo), undefined, 'nor a git host of its own')
+  } finally {
+    if (before === undefined) delete process.env[SKILLS_ENV]
+    else process.env[SKILLS_ENV] = before
+    await removeRepo(repo)
+  }
+})
+
+handDownBasicSkills()
 const exists = (path: string): Promise<boolean> => lstat(path).then(() => true, () => false)
 const excludeOf = (repo: string): Promise<string> => readFile(join(repo, '.git', 'info', 'exclude'), 'utf8').catch(() => '')
 
