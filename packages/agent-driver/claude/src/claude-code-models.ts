@@ -67,6 +67,9 @@ export function readClaudeModels(opts: ReadClaudeModelsOptions = {}): Promise<Dr
     })
     child.on('error', err => settle({ error: `\`${opts.bin ?? 'claude'}\` could not start: ${err.message}` }))
     child.on('close', code => settle({ error: `Claude Code exited (code ${code}) before it listed its models` }))
+    // A CLI that exits before it reads the request closes the pipe under the write: `close` above
+    // says so, and the EPIPE, with no one listening for it, would be thrown at the process.
+    child.stdin?.on('error', () => {})
     child.stdin?.write(`${JSON.stringify(INITIALIZE)}\n`)
   })
 }

@@ -117,6 +117,9 @@ async function onTopOf(cwd: string, base: string, paths: readonly string[]): Pro
 function run(cwd: string, args: string[], env: Record<string, string>, input?: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = execFile('git', args, { cwd, env: { ...process.env, ...env }, timeout: 30_000 }, (err, stdout) => (err ? reject(err) : resolve(String(stdout))))
+    // A git that ends before it reads its input closes the pipe under the write: its exit code
+    // says how it went, and the EPIPE, with no one listening for it, would be thrown at the process.
+    child.stdin?.on('error', () => {})
     child.stdin?.end(input ?? '')
   })
 }
