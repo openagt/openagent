@@ -156,7 +156,7 @@ export function FileTree({ files, caption, shown, context, filter, onOpen }: {
     <div className="flex min-h-0 flex-auto flex-col px-2 pb-2">
       <div className="relative mt-1 mb-1.5">
         <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input ref={filter} type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Filter files…" aria-label="Filter files" className="h-6 bg-background pr-2 pl-7 text-[13px] shadow-none" />
+        <Input ref={filter} type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Filter files…" aria-label="Filter files" className="h-6 bg-background pr-2! pl-7! text-[13px] shadow-none" />
       </div>
       {caption && <p className="px-1 pb-1 text-[10px] text-muted-foreground">{caption}</p>}
       {/* A query with zero hits used to render an empty pane, which reads as broken (#948). */}
