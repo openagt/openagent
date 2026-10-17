@@ -266,9 +266,12 @@ export function AgentHistory({
         </div>
         <ProjectSelect projects={projects} scope={scope} onScope={onScope} onProjectAdded={onProjectAdded} />
       </SidebarHeader>
-      {/* New/Overview/the modules' pages stack tight as one nav group (gap-0.5), with a little space
-          below the group (pb-2) before the session list. */}
-      <SidebarHeader className="gap-0.5 pb-2">
+      {/* New/Overview/the modules' pages stack tight as one nav group (gap-0.5), close under the
+          project select (no top padding: the select's own section has its room below it), with a
+          little space below the group (pb-2) before the session list. The `!` because a module's
+          stylesheet, loaded after the dashboard's, redefines the header's own `p-2`, which would
+          otherwise win over a plain `pt-0`. */}
+      <SidebarHeader className="gap-0.5 pt-0! pb-2">
         {/* "New" starts a session — but where depends on what exists: with no project it prompts to
             add one first, with one project it starts there, with several it opens a picker. With
             one project picked at the top, it starts there. */}
