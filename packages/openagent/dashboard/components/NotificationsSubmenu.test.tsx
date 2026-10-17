@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { Preferences } from '../../src/index.js'
-import { hoverTooltip } from '../test-utils.js'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 
 const updatePreferences = vi.hoisted(() => vi.fn())
 let prefs: Preferences = {}
@@ -13,7 +13,17 @@ vi.mock('../lib/preferences.js', () => ({
   humanInterventionEnabled: (p: Preferences) => p.notifyHumanIntervention ?? true,
 }))
 
-const { NotificationsMenu } = await import('./NotificationsMenu.js')
+const { NotificationsSubmenu } = await import('./NotificationsSubmenu.js')
+
+/** The submenu as it stands in a menu, the person's at the sidebar's foot; `menu` opens it. */
+const Menu = () => (
+  <DropdownMenu>
+    <DropdownMenuTrigger>menu</DropdownMenuTrigger>
+    <DropdownMenuContent>
+      <NotificationsSubmenu />
+    </DropdownMenuContent>
+  </DropdownMenu>
+)
 
 beforeEach(() => {
   prefs = {}
@@ -25,14 +35,16 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-const bell = () => screen.getByRole('button', { name: /notifications/i })
-const open = () => fireEvent.click(bell())
-/** What the bell says on hover — the state read-out lives in its tooltip now (#1149). */
-const bellTooltip = async () => (await hoverTooltip(bell())).textContent
+/** The menu's Notifications row, the menu opened first. */
+const row = () => {
+  if (!screen.queryByRole('menu')) fireEvent.click(screen.getByRole('button', { name: 'menu' }))
+  return screen.getByRole('menuitem', { name: /notifications/i })
+}
+const open = () => fireEvent.click(row())
 
-describe('NotificationsMenu (#676)', () => {
-  test('the popover groups the method and the categories, both "Human Queue" and "New activity" toggleable', () => {
-    render(<NotificationsMenu />)
+describe('NotificationsSubmenu (#676)', () => {
+  test('the popover groups the method and the categories, both "Human Queue" and "New activity" toggleable', async () => {
+    render(<Menu />)
     open()
     expect(screen.getByText('Deliver to')).toBeTruthy()
     expect(screen.getByText('Browser')).toBeTruthy()
@@ -42,8 +54,8 @@ describe('NotificationsMenu (#676)', () => {
     expect(screen.getByText('New activity')).toBeTruthy()
   })
 
-  test('toggling New activity and Human Queue writes each preference through', () => {
-    render(<NotificationsMenu />)
+  test('toggling New activity and Human Queue writes each preference through', async () => {
+    render(<Menu />)
     open()
     fireEvent.click(screen.getByText('New activity'))
     expect(updatePreferences).toHaveBeenCalledWith({ notifyNewActivity: true })
@@ -52,40 +64,40 @@ describe('NotificationsMenu (#676)', () => {
     expect(updatePreferences).toHaveBeenCalledWith({ notifyHumanIntervention: false })
   })
 
-  test('enabling Browser asks for permission when it has not been granted yet', () => {
+  test('enabling Browser asks for permission when it has not been granted yet', async () => {
     prefs = { notifyBrowser: false }
     vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn() })
-    render(<NotificationsMenu />)
+    render(<Menu />)
     open()
     fireEvent.click(screen.getByText('Browser'))
     expect(updatePreferences).toHaveBeenCalledWith({ notifyBrowser: true })
     expect((globalThis.Notification as unknown as { requestPermission: () => void }).requestPermission).toHaveBeenCalled()
   })
 
-  test('the bell reads active when Browser is on and granted, idle otherwise', async () => {
-    const { rerender } = render(<NotificationsMenu />) // default: browser on + granted
-    expect(await bellTooltip()).toBe('Notifications on')
+  test('the row says On when Browser is on and granted, Off otherwise', () => {
+    const { rerender } = render(<Menu />) // default: browser on + granted
+    expect(row().textContent).toBe('NotificationsOn')
     prefs = { notifyBrowser: false }
-    rerender(<NotificationsMenu />)
-    expect(await bellTooltip()).toBe('Notifications')
+    rerender(<Menu />)
+    expect(screen.getByRole('menuitem', { name: /notifications/i }).textContent).toBe('NotificationsOff')
   })
 
-  test('a blocked browser permission disables the Browser toggle with a hint', () => {
+  test('a blocked browser permission disables the Browser toggle with a hint', async () => {
     vi.stubGlobal('Notification', { permission: 'denied', requestPermission: vi.fn() })
-    render(<NotificationsMenu />)
+    render(<Menu />)
     open()
     expect(screen.getByText('Blocked in your browser settings')).toBeTruthy()
   })
 
-  test('Browser on but not yet granted leaves the bell idle', async () => {
+  test('Browser on but not yet granted reads Off', () => {
     vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn() })
-    render(<NotificationsMenu />)
-    expect(await bellTooltip()).toBe('Notifications')
+    render(<Menu />)
+    expect(row().textContent).toBe('NotificationsOff')
   })
 
-  test('with no browser notification support the menu offers only the categories', () => {
+  test('with no browser notification support the menu offers only the categories', async () => {
     vi.stubGlobal('Notification', undefined)
-    render(<NotificationsMenu />)
+    render(<Menu />)
     open()
     expect(screen.queryByText('Deliver to')).toBeNull()
     expect(screen.getByText('Human Queue')).toBeTruthy()

@@ -17,11 +17,12 @@ vi.mock('../rpc/projects.js', () => ({ onProjects, sendAddProject, sendPickProje
 const onAgent = vi.hoisted(() => vi.fn((_projectId: string, _agentId: string) => Promise.resolve([])))
 vi.mock('../rpc/reads.js', () => ({ onAgent }))
 
-// The rail now also carries the app chrome moved off the top navbar (#772 follow-up). Three of
-// those pull the preferences/machines RPC stubs into jsdom, which this suite deliberately
-// avoids. It is about the agents list, not the chrome (each has its own suite), so stub them out.
-vi.mock('./ThemeToggle.js', () => ({ ThemeToggle: () => null }))
-vi.mock('./NotificationsMenu.js', () => ({ NotificationsMenu: () => null }))
+// The rail also carries the person's menu at its foot (#772 follow-up). Its theme and notifications
+// rows pull the preferences into jsdom, which this suite deliberately avoids. It is about the agents
+// list, not the menu (each has its own suite), so stub them out, and the person is a name.
+vi.mock('./ThemeSubmenu.js', () => ({ ThemeSubmenu: () => null }))
+vi.mock('./NotificationsSubmenu.js', () => ({ NotificationsSubmenu: () => null }))
+vi.mock('../rpc/person.js', () => ({ onPerson: () => Promise.resolve({ name: 'Ada Lovelace' }) }))
 
 // The rail asks the person's preferences one thing: whether a run is named, which decides whether a
 // row waits for that name or prints the prompt.
@@ -241,6 +242,19 @@ describe('AgentHistory rows', () => {
   test('a run on a saved machine shows a machine glyph naming the machine (#1067)', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ target: 'remote', remoteLabel: 'my-laptop' })]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getByLabelText('Runs on my-laptop')).toBeTruthy()
+  })
+
+  test('the coding agent\'s logo is the last mark of every row, after the machine glyph and the subagents\' count, so the logos stand in one column', () => {
+    const main = agent({ id: 'main', target: 'remote', remoteLabel: 'my-laptop', driver: 'codex' })
+    const sub = agent({ id: 'sub', parent: 'main', status: 'done', driver: 'codex' })
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[main, sub]} selectedAgentId={null} onSelect={() => {}} />)
+    const row = screen.getByLabelText('Runs on my-laptop').closest('button')!
+    const marks = [...row.querySelectorAll('[aria-label]')].map(mark => mark.getAttribute('aria-label'))
+    expect(marks.at(-1)).toBe('Codex')
+    expect(marks.indexOf('Runs on my-laptop')).toBeLessThan(marks.indexOf('Codex'))
+    const fold = marks.findIndex(label => label?.startsWith('1 agent'))
+    expect(fold).toBeGreaterThanOrEqual(0)
+    expect(fold).toBeLessThan(marks.indexOf('Codex'))
   })
 
   test('a run on a person\'s own computer, reached by its line, shows a computer where a server\'s run shows a server, with the same words', () => {
@@ -644,15 +658,17 @@ describe('the project select (#1513)', () => {
 
 describe('the rail marks the page that is open', () => {
   const PAGES = [{ segment: 'logs', label: 'Logs' }]
-  /** Which of the rail's ways somewhere say they are the page open now: the rows at its top, and the Settings gear at its foot. */
-  const current = () => ['Overview', 'Logs', 'Settings'].filter(name => screen.getByRole('button', { name }).getAttribute('aria-current') === 'page')
+  /** The person's row at the rail's foot, which opens their menu with Settings in it. */
+  const person = () => screen.getByRole('button', { name: /settings$/i })
+  /** Which of the rail's ways somewhere say they are the page open now: the rows at its top, and the person's row at its foot. */
+  const current = () => [['Overview', screen.getByRole('button', { name: 'Overview' })], ['Logs', screen.getByRole('button', { name: 'Logs' })], ['Settings', person()]].filter(([, row]) => (row as HTMLElement).getAttribute('aria-current') === 'page').map(([name]) => name)
 
   test('with no project, no page and no Settings open, the Overview row is the one marked', () => {
     renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} pages={PAGES} />)
     expect(current()).toEqual(['Overview'])
-    // Not marked is no attribute at all, on a row as on the gear.
+    // Not marked is no attribute at all, on a row as on the person's.
     expect(screen.getByRole('button', { name: 'Logs' }).hasAttribute('aria-current')).toBe(false)
-    expect(screen.getByRole('button', { name: 'Settings' }).hasAttribute('aria-current')).toBe(false)
+    expect(person().hasAttribute('aria-current')).toBe(false)
   })
 
   test('on a module\'s page its row is the one marked, and inside a project none is', () => {
@@ -663,13 +679,15 @@ describe('the rail marks the page that is open', () => {
     expect(current()).toEqual([])
   })
 
-  test('with Settings open its gear is the one marked, and the Overview row is not: Settings has no project and no page either', () => {
+  test('with Settings open the person\'s row is the one marked, and the Overview row is not: Settings has no project and no page either', async () => {
     const onSettings = vi.fn()
     renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} pages={PAGES} atSettings onSettings={onSettings} />)
     expect(current()).toEqual(['Settings'])
     expect(screen.getByRole('button', { name: 'Overview' }).hasAttribute('aria-current')).toBe(false)
-    // The gear still goes there, and the Overview row still goes home.
-    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    // The person's menu still goes there, and the Overview row still goes home.
+    await screen.findByRole('button', { name: 'Ada Lovelace: settings' })
+    fireEvent.click(person())
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }))
     expect(onSettings).toHaveBeenCalledTimes(1)
   })
 })

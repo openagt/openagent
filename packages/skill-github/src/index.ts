@@ -6,3 +6,4 @@ export { readPr, watchAndMerge, spawnMergeWatch, NO_CHECKS_GRACE_MS, WATCH_EVERY
 export { homeUrlFromRemote, homeUrlFor, GIT_HOST_NAME } from './home.js'
 export { runCli, USAGE, type CliIo, type CliDeps, type CliRefusal } from './cli.js'
 export { createRepository, offerRepository, type CreateOffer, type CreateOutcome } from './create.js'
+export { signedIn, type MeOutcome } from './me.js'

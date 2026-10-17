@@ -1,26 +1,23 @@
 import { Bell, BellOff } from 'lucide-react'
 import { useNotificationPermission } from '../lib/notification-permission.js'
 import { usePreferences, updatePreferences, notificationsEnabled, newActivityEnabled, humanInterventionEnabled } from '../lib/preferences.js'
-import { cn } from '../lib/utils.js'
 import { OptionLabel } from './ui/option-label.js'
-import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
   DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuCheckboxItem,
   DropdownMenuSeparator,
 } from './ui/dropdown-menu.js'
 
-// One "Notifications" bell in the sidebar's utility footer (#676). It makes the model legible:
-// the browser is the *delivery method* (where a notification goes), "Human Queue" and "New
-// activity" are the *categories* (what it is about). The trigger shows an active state + dot when
-// browser delivery is effectively on; the popover groups and labels every toggle. This is purely
-// the control that writes the preferences.
+// "Notifications", a row of the person's menu at the foot of the sidebar (#676), saying whether
+// they are on and opening the switches. It makes the model legible: the browser is the *delivery
+// method* (where a notification goes), "Human Queue" and "New activity" are the *categories* (what
+// it is about). This is purely the control that writes the preferences.
 
-export function NotificationsMenu() {
+export function NotificationsSubmenu() {
   const preferences = usePreferences()
   const browser = notificationsEnabled(preferences)
   const activity = newActivityEnabled(preferences)
@@ -28,8 +25,7 @@ export function NotificationsMenu() {
   const permission = useNotificationPermission()
   const browserSupported = permission !== 'unsupported'
   const blocked = permission === 'denied'
-  // Browser delivery only actually fires once the browser has granted permission. "Active"
-  // drives the bell + dot.
+  // Browser delivery only actually fires once the browser has granted permission: only then are they "On".
   const active = browser && permission === 'granted'
 
   const toggleBrowser = (next: boolean) => {
@@ -45,28 +41,13 @@ export function NotificationsMenu() {
       : 'Desktop notifications while the dashboard is open'
 
   return (
-    <DropdownMenu>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <DropdownMenuTrigger
-              type="button"
-              aria-label="Notifications"
-              className={cn(
-                'relative rounded-md p-1.5 hover:bg-accent',
-                active ? 'text-foreground' : 'text-muted-foreground',
-              )}
-            />
-          }
-        >
-          {active ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
-          {active && (
-            <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-[var(--color-primary)]" />
-          )}
-        </TooltipTrigger>
-        <TooltipContent>{active ? 'Notifications on' : 'Notifications'}</TooltipContent>
-      </Tooltip>
-      <DropdownMenuContent align="end" className="min-w-[16rem]">
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>
+        {active ? <Bell className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden /> : <BellOff className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />}
+        <span className="flex-1">Notifications</span>
+        <span className="text-muted-foreground">{active ? 'On' : 'Off'}</span>
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="min-w-[16rem]">
         {browserSupported && (
           <>
             <DropdownMenuGroup>
@@ -102,7 +83,7 @@ export function NotificationsMenu() {
             <OptionLabel label="New activity" description="An agent started or finished" />
           </DropdownMenuCheckboxItem>
         </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
   )
 }

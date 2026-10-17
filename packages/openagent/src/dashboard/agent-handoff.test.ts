@@ -67,6 +67,7 @@ function fakeBranches(
       return answers.merge ?? { ok: true, outcome: 'auto-armed' }
     },
     home: async () => undefined,
+    me: async () => undefined,
   })
   return { branches, gitHost, calls }
 }

@@ -22,6 +22,7 @@ export { onModels } from './models.js'
 export { onMachines, sendAddMachine, sendRemoveMachine, onMachinesReachable, onMachineVersions, sendProjectToMachine, onProjectOnMachine, type Machine, type AddMachineResult, type MachineVersions, type ProjectOnMachine } from './machines.js'
 export { onModules, runModuleCommand, runComputerCommand, readModule, type DashboardModule, type ModuleCommandResult, type ModuleReadResult } from './modules.js'
 export { onProjectSkills, sendChangeSkills, sendProjectSkills, type ProjectSkills, type ProjectSkill, type ChangeSkillsResult } from './skills.js'
+export { onPerson, type Person } from './person.js'
 
 import * as reads from './reads.js'
 import * as control from './control.js'
@@ -32,6 +33,7 @@ import * as models from './models.js'
 import * as machines from './machines.js'
 import * as modules from './modules.js'
 import * as skills from './skills.js'
+import * as person from './person.js'
 import { streamAgentEvents } from './events.js'
 
 /** One RPC: called with whatever the browser sent, answering with whatever JSON.stringify keeps. */
@@ -52,7 +54,7 @@ export type RpcHandler = (...args: never[]) => unknown
 export const RPC_HANDLERS: Record<string, RpcHandler> = Object.assign(
   Object.create(null) as Record<string, RpcHandler>,
   Object.fromEntries(
-    [reads, control, projects, preferences, quota, models, machines, modules, skills]
+    [reads, control, projects, preferences, quota, models, machines, modules, skills, person]
       .flatMap(module => Object.entries(module))
       .filter((entry): entry is [string, RpcHandler] => typeof entry[1] === 'function'),
   ),
