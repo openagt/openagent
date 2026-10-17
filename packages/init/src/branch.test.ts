@@ -18,10 +18,10 @@ test('a skill written into the folder is not on the branch until it is committed
     assert.deepEqual(await on(root, 'HEAD', 'tickets', 'queue'), [])
     const changed = await applyChange(root, { write: ['tickets', 'queue'] })
     assert.deepEqual(await on(root, 'HEAD', 'tickets', 'queue'), [], 'written, not committed')
-    assert.equal(await uncommittedSkills(root), 4, 'two texts and two links')
+    assert.deepEqual(await uncommittedSkills(root), ['tickets', 'queue'], 'two texts and two links')
     await commitChange(root, changed)
     assert.deepEqual(await on(root, 'HEAD', 'tickets', 'queue', 'plan'), ['tickets', 'queue'])
-    assert.equal(await uncommittedSkills(root), 0)
+    assert.deepEqual(await uncommittedSkills(root), [])
 
     // The project's own skills: a real folder where Claude Code reads, and a link to a folder kept somewhere else in the project.
     await mkdir(join(root, '.claude/skills/deploy'), { recursive: true })
@@ -51,7 +51,7 @@ test('where the skills folder is itself a link: to the other skills folder, the 
     assert.deepEqual(await on(root, 'HEAD', 'tickets', 'queue'), ['tickets'])
     // The dashboard's commit works in this shape: the text is one path, and no path goes through the link.
     await applyChange(root, { write: ['queue'] })
-    assert.equal(await uncommittedSkills(root), 1)
+    assert.deepEqual(await uncommittedSkills(root), ['queue'])
     const committed = await commitSkills(root)
     assert.ok(committed.ok && committed.committed, JSON.stringify(committed))
     assert.equal(await run(root, 'show', '--format=', '--name-only', 'HEAD'), '.agents/skills/queue/SKILL.md\n')
@@ -75,13 +75,13 @@ test('the commit of every skill file that stands uncommitted takes a deleted one
     await writeFile(join(root, 'README.md'), '# edited\n')
     await writeFile(join(root, 'staged.txt'), 'theirs\n')
     await run(root, 'add', 'staged.txt')
-    assert.equal(await uncommittedSkills(root), 5, 'plan\'s text and link, ux\'s text and link, tickets\' text')
+    assert.deepEqual(await uncommittedSkills(root), ['tickets', 'plan', 'ux'], 'plan\'s text and link, ux\'s text and link, tickets\' text')
 
     // By name: what a change wrote or deleted, and not the text somebody changed by hand meanwhile.
     const named = await commitSkills(root, ['plan'])
     assert.ok(named.ok && named.committed)
     assert.equal(await run(root, 'show', '--format=%s', '--name-status', 'HEAD'), 'Update OpenAgent skills\n\nA\t.agents/skills/plan/SKILL.md\nA\t.claude/skills/plan\n')
-    assert.equal(await uncommittedSkills(root), 3)
+    assert.deepEqual(await uncommittedSkills(root), ['tickets', 'ux'])
     await run(root, 'reset', '-q', '--soft', 'HEAD~1')
     await run(root, 'reset', '-q', '--', '.agents/skills/plan', '.claude/skills/plan')
 
@@ -89,7 +89,7 @@ test('the commit of every skill file that stands uncommitted takes a deleted one
     assert.ok(committed.ok && committed.committed)
     assert.equal(await run(root, 'show', '--format=%s', '--name-status', 'HEAD'), 'Update OpenAgent skills\n\nA\t.agents/skills/plan/SKILL.md\nM\t.agents/skills/tickets/SKILL.md\nD\t.agents/skills/ux/SKILL.md\nA\t.claude/skills/plan\nD\t.claude/skills/ux\n')
     assert.equal(await run(root, 'status', '--porcelain'), ' M README.md\nA  staged.txt\n')
-    assert.equal(await uncommittedSkills(root), 0)
+    assert.deepEqual(await uncommittedSkills(root), [])
     assert.deepEqual(await commitSkills(root), { ok: true, committed: false }, 'nothing left to commit')
     await rm(join(root, 'staged.txt'))
   } finally {

@@ -62,7 +62,7 @@ async function throughLink(root: string, path: string): Promise<boolean> {
 }
 
 /** The paths git may hold for `names`, from the project's root: each text, each link, and a text in a folder of Claude Code's own where there is no link. */
-async function skillPaths(root: string, names: readonly string[]): Promise<string[]> {
+export async function skillPaths(root: string, names: readonly string[]): Promise<string[]> {
   const paths: string[] = []
   for (const name of names) {
     const link = await lstat(join(root, LINKS_DIR, name)).catch(() => undefined)
@@ -73,11 +73,13 @@ async function skillPaths(root: string, names: readonly string[]): Promise<strin
   return paths
 }
 
-/** How many skill files stand written, changed or deleted in the folder with no commit yet. */
-export async function uncommittedSkills(root: string, git: GitRunner = nodeGitRunner()): Promise<number> {
+/** The skills whose files stand written, changed or deleted in the folder with no commit yet, in the list's order. */
+export async function uncommittedSkills(root: string, git: GitRunner = nodeGitRunner()): Promise<string[]> {
   // Read without taking git's lock on the index: this is polled, and must never stand in the way of the person's own git.
   const status = await git(['--no-optional-locks', 'status', '--porcelain', '-z', '-uall', '--', ...(await skillPaths(root, SKILL_NAMES))], root).catch(() => '')
-  return status.split('\0').filter(Boolean).length
+  // Each entry is "XY <path>", and a skill's every path names it third: `.agents/skills/<name>/…`, `.claude/skills/<name>`.
+  const named = new Set(status.split('\0').filter(Boolean).map(entry => entry.slice(3).split('/')[2]))
+  return SKILL_NAMES.filter(name => named.has(name))
 }
 
 /**

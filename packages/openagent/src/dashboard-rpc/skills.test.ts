@@ -9,7 +9,7 @@ import { addProject, listProjects } from '../registry.js'
 import { readProjectModules } from '../project-modules.js'
 import { provideTestContext } from './test-context.js'
 import { onCommands } from './projects.js'
-import { onProjectSkills, sendChangeSkills, sendCommitSkills } from './skills.js'
+import { onProjectSkills, sendChangeSkills, sendProjectSkills } from './skills.js'
 
 // A project's skills through the dashboard's own calls, against a real folder and real git, with
 // the registry pointed at a temp $XDG_CONFIG_HOME so the person's own is never touched.
@@ -60,8 +60,7 @@ test('a project\'s skills: none yet; written, they are in the folder and wait to
   const { dir, id, git, restore } = await project()
   try {
     const empty = (await onProjectSkills(id))!
-    assert.deepEqual({ scheduler: empty.scheduler, startBranch: empty.startBranch, uncommitted: empty.uncommitted, git: empty.git }, { scheduler: false, startBranch: 'main', uncommitted: 0, git: true })
-    assert.equal(empty.remote, false)
+    assert.deepEqual({ scheduler: empty.scheduler, startBranch: empty.startBranch, uncommitted: empty.uncommitted, git: empty.git, remote: empty.remote, local: empty.local }, { scheduler: false, startBranch: 'main', uncommitted: [], git: true, remote: undefined, local: false })
     assert.deepEqual(empty.groups.map(group => [group.title, group.skills.length]), [['Tickets and queue', 9], ['Reviews and research', 8], ['Subagents', 1], ['After a merge', 1], ['Needs its own setup', 2]])
     assert.ok(flat(empty).every(skill => skill.standing === 'absent' && !skill.waiting && skill.description.length > 10))
 
@@ -70,27 +69,26 @@ test('a project\'s skills: none yet; written, they are in the folder and wait to
     assert.match(await readFile(join(dir, '.agents/skills/tickets/SKILL.md'), 'utf8'), /^---\nname: tickets\n/)
     const waiting = (await onProjectSkills(id))!
     assert.equal(held(waiting), 2)
-    assert.equal(waiting.uncommitted, 4)
+    assert.deepEqual(waiting.uncommitted, ['tickets', 'plan'])
     assert.deepEqual(flat(waiting).filter(skill => skill.waiting).map(skill => skill.name), ['tickets', 'plan'])
     assert.deepEqual(flat(waiting).filter(skill => skill.standing === 'current').map(skill => skill.name), ['tickets', 'plan'])
     // The page follows the text in the folder at once; the launcher says the command has yet to reach the branch.
     assert.ok((await readProjectModules(dir)).some(module => module.package === '@openagt/skill-tickets'))
     assert.deepEqual((await onCommands(id))!.commands.map(command => [command.name, command.waiting]), [['plan', 'main']])
 
-    // By name, as after a save: the files of that skill alone. Then everything that still stands uncommitted.
-    const one = await sendCommitSkills(id, ['plan'])
-    assert.ok(one.ok && one.committed && /^[0-9a-f]{7,}$/.test(one.commit!))
+    // By name, as after a save: the files of that skill alone. With no remote, agents start from this folder's commits: the commit is the send.
+    assert.deepEqual(await sendProjectSkills(id, ['plan']), { ok: true, sent: 'committed' })
     assert.equal(git('show', '--format=', '--name-only', 'HEAD'), '.agents/skills/plan/SKILL.md\n.claude/skills/plan\n')
-    assert.equal((await onProjectSkills(id))!.uncommitted, 2)
-    assert.deepEqual(await sendCommitSkills(id, ['../x']), { ok: false, error: 'not a list of skills' })
-    const committed = await sendCommitSkills(id)
-    assert.ok(committed.ok && committed.committed)
+    assert.deepEqual((await onProjectSkills(id))!.uncommitted, ['tickets'])
+    assert.deepEqual(await sendProjectSkills(id, ['../x']), { ok: false, error: 'not a list of skills' })
+    // Unnamed, as the page's Send: everything still on its way.
+    assert.deepEqual(await sendProjectSkills(id), { ok: true, sent: 'committed' })
     assert.equal(git('log', '--format=%s').trim(), 'Update OpenAgent skills\nUpdate OpenAgent skills\ninit')
     const after = (await onProjectSkills(id))!
-    assert.equal(after.uncommitted, 0)
+    assert.deepEqual(after.uncommitted, [])
     assert.deepEqual(flat(after).filter(skill => skill.waiting), [])
     assert.deepEqual((await onCommands(id))!.commands.map(command => [command.name, command.waiting]), [['plan', undefined]])
-    assert.deepEqual(await sendCommitSkills(id), { ok: true, committed: false })
+    assert.deepEqual(await sendProjectSkills(id), { ok: false, error: 'no skill to send' })
 
     // A tick removed deletes; a text changed since it was written is told as such.
     assert.deepEqual(await sendChangeSkills(id, { remove: ['plan'] }), { ok: true, written: [], removed: ['plan'], left: [] })
@@ -111,10 +109,12 @@ test('with a remote the branch agents start from is the remote\'s: a skill commi
     git('remote', 'add', 'origin', join(dir, '..', 'origin.git'))
     git('push', '-q', '-u', 'origin', 'main')
     await sendChangeSkills(id, { write: ['queue'] })
-    await sendCommitSkills(id)
+    const { commitSkills } = await import('@openagt/init')
+    await commitSkills(dir, ['queue'])
     const local = (await onProjectSkills(id))!
     assert.equal(local.startBranch, 'main')
     assert.deepEqual(flat(local).filter(skill => skill.waiting).map(skill => skill.name), ['queue'], 'committed on this machine, not on origin\'s main yet')
+    assert.equal(local.local, true, 'the folder\'s branch has it: an agent started from it does')
     git('push', '-q', 'origin', 'main')
     assert.deepEqual(flat((await onProjectSkills(id))!).filter(skill => skill.waiting), [])
   } finally {
@@ -165,7 +165,7 @@ test('the scheduler is switched on and off for the project, and only names of th
     assert.equal(held((await onProjectSkills(id))!), 0, 'nothing of a refused change was written')
     assert.equal(await onProjectSkills('no-such-project'), null)
     assert.deepEqual(await sendChangeSkills('no-such-project', { write: ['tickets'] }), { ok: false, error: 'this project has no local path on this server' })
-    assert.deepEqual(await sendCommitSkills('no-such-project'), { ok: false, error: 'this project has no local path on this server' })
+    assert.deepEqual(await sendProjectSkills('no-such-project'), { ok: false, error: 'this project has no local path on this server' })
   } finally {
     await stopScheduler(dir).catch(() => {})
     await restore()
