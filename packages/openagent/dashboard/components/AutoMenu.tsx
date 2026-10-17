@@ -61,7 +61,7 @@ export function AutoMenu({
           }
         >
           <span className="truncate">{label}</span>
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+          <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
         </TooltipTrigger>
         <TooltipContent>What the agent does by itself when it finishes.</TooltipContent>
       </Tooltip>

@@ -1,13 +1,14 @@
 import type { ReactNode } from 'react'
 import { cn } from '../../lib/utils.js'
 
-// The look of what stands in the rows above and under the message box, as in Claude Code's: plain words with
-// an icon, no border, every one the same height and size, muted until pointed at. A class as well
-// as a component, so a menu's button is drawn the same way as a word that is only said.
+// The look of what stands in the rows above and under the message box, as in Claude Code's: plain
+// words with an icon, no border, every one the same height and size, a little smaller than the
+// box's own text, muted until pointed at. A class as well as a component, so a menu's button is
+// drawn the same way as a word that is only said.
 // min-w-0 and overflow-hidden: in a full row an item gives way, and its label is cut short. On a
 // phone the row is too narrow for every item cut short to say anything: there each keeps its whole
 // width, and the row scrolls sideways (Composer).
-export const rowItemClass = 'inline-flex h-8 min-w-0 max-w-full shrink items-center gap-1.5 overflow-hidden rounded-md px-2 text-sm font-normal text-muted-foreground max-sm:max-w-none max-sm:shrink-0'
+export const rowItemClass = 'inline-flex h-7 min-w-0 max-w-full shrink items-center gap-1.5 overflow-hidden rounded-md px-2 text-[13px] font-normal text-muted-foreground max-sm:max-w-none max-sm:shrink-0'
 
 /** A row item that is a button: it lights up under the pointer and shows the keyboard's focus. */
 export const rowButtonClass = cn(

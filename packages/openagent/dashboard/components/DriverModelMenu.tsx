@@ -110,13 +110,13 @@ export function DriverModelMenu({
           }
         >
           {current?.icon ? (
-            <span className="flex h-4 w-4 items-center justify-center">{current.icon}</span>
+            <span className="flex h-3.5 w-3.5 items-center justify-center [&>svg]:size-3.5">{current.icon}</span>
           ) : (
             current?.label
           )}
           {currentModelLabel}
           {level && <span className="text-muted-foreground">{level}</span>}
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />
+          <ChevronDown className="h-3 w-3 shrink-0 opacity-70" />
         </TooltipTrigger>
         <TooltipContent>{said}</TooltipContent>
       </Tooltip>

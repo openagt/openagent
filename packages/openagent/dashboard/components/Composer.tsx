@@ -373,7 +373,7 @@ export const Composer = forwardRef<ComposerHandle, {
         <div className="shrink-0">
           {driverModelEl || (
             <span className="flex items-center">
-              {sessionModel !== undefined && <span className="px-2 text-sm text-muted-foreground">{sessionModel}</span>}
+              {sessionModel !== undefined && <span className="px-2 text-[13px] text-muted-foreground">{sessionModel}</span>}
               {sessionContext}
             </span>
           )}
