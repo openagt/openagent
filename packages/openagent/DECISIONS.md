@@ -152,18 +152,20 @@ already made, and lists it in its pull request; for anything else it proposes an
   writing every text again unasked.
 - A save of the skills list, and Update, take the change to where agents start from in the
   same press: one commit of the skill files it wrote or deleted, those alone, then those
-  files pushed to the remote's default branch, or, where that push is refused, to a branch of
-  OpenAgent's own with a pull request opened for it. Nothing else of the person's is pushed.
-  With no remote the commit is all it takes. Picked over offering the commit init offers and
+  files pushed to the remote's default branch, or, where that push is refused, to a branch
+  of OpenAgent's own with a pull request opened for it, or that branch alone to merge by
+  hand where no git host package opens one. Nothing else of the person's is pushed. With
+  no remote the commit is all it takes. Picked over offering the commit init offers and
   leaving the push to the person, three steps with a git word at each before an agent had
   the skill, and over committing and pushing unasked.
-- What a project's skills need from the person is a card under the agents that wait on them,
-  in the same column, shown only while there is something to do: no skill yet, a newer
-  version, skills on this computer only with a "Send" button, or skills in a pull request.
-  Once agents have them the card is gone, with no line saying so. While a skill is not yet
-  on the branch agents start from, the launcher does not take its command, so it never
-  offers a command the agent does not have. Picked over a line across the top of the page,
-  which read as part of the page's frame.
+- What a project's skills need from the person is a card under the agents that wait on
+  them, in the same column, shown only while there is something to do: no skill yet, a
+  newer version, skills on this computer only with a "Send" button, or skills in a pull
+  request or on OpenAgent's branch, waiting for a merge. Once agents have them the card is
+  gone, with no line saying so. While a skill is not yet on the branch agents start from,
+  the launcher does not take its command, so it never offers a command the agent does not
+  have. Picked over a line across the top of the page, which read as part of the page's
+  frame.
 - A module may bring a section of the Settings page, shown after OpenAgent's own
   sections, where a project has its package. It reads and writes through the package's own
   command. Picked over OpenAgent's own sections knowing a package's file and a hook line

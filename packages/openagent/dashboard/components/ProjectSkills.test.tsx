@@ -172,6 +172,13 @@ describe('ProjectSkillsLine', () => {
     expect(container.textContent).toContain('tickets: not committed, so your agents do not have it yet.')
   })
 
+  test('skills on the branch a send left, where no pull request could be opened, are told to merge it, and offered no send', async () => {
+    onProjectSkills.mockResolvedValue(skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current', true)] }], remote: 'GitLab', branch: 'openagent/skills' }))
+    const { container } = render(<ProjectSkillsLine projectId="p1" />)
+    await waitFor(() => expect(container.textContent).toContain('tickets: on the branch openagent/skills on GitLab. Merge it into main, and your agents get it.'))
+    expect(screen.queryByRole('button', { name: 'Send to GitLab' })).toBeNull()
+  })
+
   test('skills in a pull request are told with it; many are counted, not named', async () => {
     onProjectSkills.mockResolvedValue(
       skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: ['tickets', 'queue', 'plan', 'triage', 'ux'].map(name => skill(name, 'current', true)) }], request: { number: 12, url: 'https://example.com/pull/12' } }),

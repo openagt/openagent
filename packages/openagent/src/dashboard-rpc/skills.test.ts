@@ -9,7 +9,7 @@ import { addProject, listProjects } from '../registry.js'
 import { readProjectModules } from '../project-modules.js'
 import { provideTestContext } from './test-context.js'
 import { onCommands } from './projects.js'
-import { onProjectSkills, sendChangeSkills, sendProjectSkills } from './skills.js'
+import { hostName, onProjectSkills, sendChangeSkills, sendProjectSkills } from './skills.js'
 
 // A project's skills through the dashboard's own calls, against a real folder and real git, with
 // the registry pointed at a temp $XDG_CONFIG_HOME so the person's own is never touched.
@@ -115,8 +115,15 @@ test('with a remote the branch agents start from is the remote\'s: a skill commi
     assert.equal(local.startBranch, 'main')
     assert.deepEqual(flat(local).filter(skill => skill.waiting).map(skill => skill.name), ['queue'], 'committed on this machine, not on origin\'s main yet')
     assert.equal(local.local, true, 'the folder\'s branch has it: an agent started from it does')
+    assert.equal(local.remote, 'the remote', 'a folder on this machine has no host to name')
+    assert.equal(local.branch, undefined)
+    // On OpenAgent's own branch on the remote, as a send leaves it where no pull request could be opened.
+    git('push', '-q', 'origin', 'HEAD:refs/heads/openagent/skills')
+    assert.equal((await onProjectSkills(id))!.branch, 'openagent/skills')
     git('push', '-q', 'origin', 'main')
-    assert.deepEqual(flat((await onProjectSkills(id))!).filter(skill => skill.waiting), [])
+    const sent = (await onProjectSkills(id))!
+    assert.deepEqual(flat(sent).filter(skill => skill.waiting), [])
+    assert.equal(sent.branch, undefined, 'nothing waits: the branch is not told')
   } finally {
     await restore()
   }
@@ -170,4 +177,15 @@ test('the scheduler is switched on and off for the project, and only names of th
     await stopScheduler(dir).catch(() => {})
     await restore()
   }
+})
+
+test('the remote is named for a person by its host, in any of git\'s spellings of the address', () => {
+  assert.equal(hostName('https://github.com/suleimansh/test-project.git'), 'GitHub')
+  assert.equal(hostName('git@gitlab.com:team/app.git'), 'GitLab')
+  assert.equal(hostName('ssh://git@bitbucket.org:22/team/app.git'), 'Bitbucket')
+  assert.equal(hostName('https://user:token@git.example.com/team/app'), 'git.example.com')
+  assert.equal(hostName('/srv/git/app.git'), undefined)
+  assert.equal(hostName('../origin.git'), undefined)
+  assert.equal(hostName('file:///srv/git/app.git'), undefined)
+  assert.equal(hostName(''), undefined)
 })

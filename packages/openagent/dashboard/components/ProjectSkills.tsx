@@ -80,8 +80,8 @@ export function ProjectSkillsLine({
   }
   const newer = all(skills).filter(skill => skill.standing === 'newer').map(skill => skill.name)
   const waiting = all(skills).filter(skill => skill.waiting).map(skill => skill.name)
-  // What a pull request already holds is said with it; what is still on this computer only, apart.
-  const here = skills.request ? skills.uncommitted : [...new Set([...skills.uncommitted, ...waiting])]
+  // What a pull request, or the branch a send left, already holds is said with it; what is still on this computer only, apart.
+  const here = skills.request || skills.branch ? skills.uncommitted : [...new Set([...skills.uncommitted, ...waiting])]
   const update = () =>
     act('update', async () => {
       const written = await run(() => sendChangeSkills(projectId, { write: newer }), 'Could not update the skills.')
@@ -104,8 +104,9 @@ export function ProjectSkillsLine({
   const none = !all(skills).some(held)
   const sending = skills.git && here.length > 0
   const inRequest = skills.request !== undefined && waiting.length > 0
+  const onBranch = !inRequest && skills.branch !== undefined && waiting.length > 0
   // Nothing to say: the list alone, when the menu opened it.
-  if (!none && newer.length === 0 && !sending && !inRequest && !error) return list || null
+  if (!none && newer.length === 0 && !sending && !inRequest && !onBranch && !error) return list || null
 
   return (
     <div role="status" aria-label="This project's skills" className="m-3 flex flex-col gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">
@@ -146,6 +147,11 @@ export function ProjectSkillsLine({
           <a href={skills.request!.url} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'outline', size: 'xs', className: 'shrink-0' })}>
             Open #{skills.request!.number}
           </a>
+        </span>
+      )}
+      {onBranch && (
+        <span>
+          <span className="text-foreground">{named(waiting)}</span>: on the branch {skills.branch} on {skills.remote}. Merge it into {skills.startBranch ?? 'the default branch'}, and your agents get {it(waiting)}.
         </span>
       )}
       {error && <span className="text-danger">{error}</span>}
