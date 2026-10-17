@@ -3,4 +3,4 @@ export { readProject, held, skillCount, standingOf, TEXTS_DIR, LINKS_DIR, type P
 export { applyChange, commitChange, commitMessage, isKnown, type Change, type Changed } from './change.js'
 export { type CommitOutcome } from './commit.js'
 export { stamped, unstamped, olderThan } from './skill-file.js'
-export { skillsOn, uncommittedSkills, commitSkills, type OnBranch } from './branch.js'
+export { skillsOn, skillPaths, uncommittedSkills, commitSkills, type OnBranch } from './branch.js'

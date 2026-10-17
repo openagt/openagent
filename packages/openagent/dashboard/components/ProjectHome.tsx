@@ -64,9 +64,6 @@ export function ProjectHome({
       {/* Above everything, because an agent started on a project whose agent-data branch cannot
           reach origin (#1599) works from stale tickets and a queue nobody else will see. */}
       <ProjectErrorBanner errors={errors} />
-      {/* What the project's skills need from the person, when they need something (#2023); with
-          nothing to say there is no line, and the list opens from the menu above. */}
-      <ProjectSkillsLine key={projectId} projectId={projectId} onChanged={onSkillsChanged} door={{ open: skillsFor === projectId, onClose: () => setSkillsFor(null) }} />
       {/* Laid out as an agent's page is: what waits for the person fills the page from the top, in
           the chat's column, and scrolls there; the box to start an agent stays at the bottom, in
           the place and at the width of an agent's message box. */}
@@ -74,6 +71,10 @@ export function ProjectHome({
         <div className="mx-auto w-full max-w-3xl">
           {events.length > 0 && <AgentOverview events={events} />}
           <OpenQuestions projectId={scope} onOpenAgent={onOpenAgent} />
+          {/* What the project's skills need from the person, when they need something (#2023): a card
+              under the agents that wait, in the same column; with nothing to say there is no card,
+              and the list opens from the menu above. */}
+          <ProjectSkillsLine key={projectId} projectId={projectId} onChanged={onSkillsChanged} door={{ open: skillsFor === projectId, onClose: () => setSkillsFor(null) }} />
         </div>
       </ScrollArea>
       <StartAgentForm

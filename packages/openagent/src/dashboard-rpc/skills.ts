@@ -1,14 +1,19 @@
-import { applyChange, carriedSkills, commitSkills, GROUPS, isKnown, readProject, SCHEDULER, skillCount, SKILLS_IN_ALL, uncommittedSkills, type Standing } from '@openagt/init'
+import { nodeGitRunner } from '@openagt/agent-data'
+import { applyChange, carriedSkills, GROUPS, isKnown, readProject, SCHEDULER, skillsOn, uncommittedSkills, type Standing } from '@openagt/init'
+import { cachedPrView } from '../dashboard/pull-requests.js'
+import { sendSkills, SKILLS_BRANCH, type SendSkillsResult } from '../dashboard/send-skills.js'
 import { waitingSkills } from '../dashboard/start-branch.js'
 import { readProjectHooks, runProjectHooks } from '../project-hooks.js'
 import { providedDataChanged } from '../store/provided.js'
 import { resolveProjectPath } from './context.js'
 
+export type { SendSkillsResult } from '../dashboard/send-skills.js'
+
 /**
  * A project's skills, as the dashboard shows and changes them (#2023): the same list with ticks
  * `npx @openagt/init` shows in a terminal, read and written through that package's own code, so
  * the two cannot drift apart. A project has a skill when the skill's text is in its folder; the
- * dashboard writes and deletes those files, and offers the one commit that holds them.
+ * dashboard writes and deletes those files, and sends them where agents start from.
  */
 
 /** One skill of the list, as it stands in the project. */
@@ -23,21 +28,24 @@ export interface ProjectSkill {
 }
 
 export interface ProjectSkills {
-  /** How many skills the project has, of how many there are: the ones in its folder, and the basic ones every run gets. */
-  has: number
-  of: number
   /** The list's groups; `ticked` says whether a group's skills are ticked in a project that has none yet. */
   groups: { title: string; ticked: boolean; skills: ProjectSkill[] }[]
   /** Whether the scheduler starts with the dashboard for this project, on this machine. */
   scheduler: boolean
   /** The branch agents start from, by its name: the remote's default branch, else the branch the folder is on. Absent where there is none. */
   startBranch?: string
-  /** How many skill files stand written or deleted in the folder with no commit yet. */
-  uncommitted: number
+  /** The skills whose files stand written, changed or deleted in the folder with no commit yet. */
+  uncommitted: string[]
   /** Whether the folder is a git repository: without one there is nothing to commit. */
   git: boolean
-  /** Whether the project has a remote: without one a commit on this machine is all agents need. */
-  remote: boolean
+  /** Where the skills are sent, for a person: the git host's name ("GitHub", "GitLab"), else the remote's host. Absent without a remote: a commit on this machine is all agents need. */
+  remote?: string
+  /** The open pull request the skills went to when the default branch took no push. */
+  request?: { number: number; url: string }
+  /** The branch of OpenAgent's own on the remote that holds every waiting skill, with no pull request for it: where no git host package opens one, it is merged by hand. */
+  branch?: string
+  /** Whether the branch the folder is on has every waiting skill: an agent started from it has them now. */
+  local: boolean
 }
 
 /** The project's skills; `null` when the project is unknown here. */
@@ -47,9 +55,14 @@ export async function onProjectSkills(projectId: string): Promise<ProjectSkills 
   const [state, carried] = await Promise.all([readProject(cwd), carriedSkills()])
   const standing = new Map(state.skills.map(skill => [skill.name, skill.standing]))
   const { start, waiting } = await waitingSkills(cwd, state.skills.filter(skill => skill.standing !== 'absent').map(skill => skill.name))
+  const uncommitted = state.git ? await uncommittedSkills(cwd) : []
+  // Asked of the git host only while something is on its way: a pull request is where it may be.
+  const request = state.remote && (waiting.size > 0 || uncommitted.length > 0) ? (await cachedPrView(cwd, SKILLS_BRANCH)).value : undefined
+  const open = request?.state === 'OPEN' ? { number: request.number, url: request.url } : undefined
+  // With no request, the skills may still be on the remote: on the branch a send left where it could open none.
+  const pushed = state.remote && !open && waiting.size > 0 ? await skillsOn(cwd, `refs/remotes/origin/${SKILLS_BRANCH}`) : undefined
+  const remote = state.remote ? await remoteName(cwd) : undefined
   return {
-    has: skillCount(state),
-    of: SKILLS_IN_ALL,
     groups: GROUPS.map(group => ({
       title: group.title,
       ticked: group.ticked,
@@ -57,10 +70,29 @@ export async function onProjectSkills(projectId: string): Promise<ProjectSkills 
     })),
     scheduler: state.scheduler,
     ...(start ? { startBranch: start.name } : {}),
-    uncommitted: state.git ? await uncommittedSkills(cwd) : 0,
+    uncommitted,
     git: state.git,
-    remote: state.remote,
+    ...(remote ? { remote } : {}),
+    ...(open ? { request: open } : {}),
+    ...(pushed && [...waiting.keys()].every(name => pushed.has(name)) ? { branch: SKILLS_BRANCH } : {}),
+    local: waiting.size > 0 && uncommitted.length === 0 && [...waiting.values()].every(skill => skill.here),
   }
+}
+
+/** The git hosts a person knows by name, by their address. */
+const HOSTS: Record<string, string> = { 'github.com': 'GitHub', 'gitlab.com': 'GitLab', 'bitbucket.org': 'Bitbucket', 'codeberg.org': 'Codeberg' }
+
+/** The remote's host for a person, out of its address in git's spellings (`https://host/…`, `ssh://git@host:22/…`, `git@host:…`); none for a folder on this machine. */
+export function hostName(address: string): string | undefined {
+  const trimmed = address.trim()
+  // With a scheme the host follows it, and `file://` has none; without one only `host:path` names a host.
+  const host = (trimmed.includes('://') ? trimmed.match(/^[a-z][a-z0-9+.-]*:\/\/(?:[^@/]+@)?([^/:]+)/i) : trimmed.match(/^(?:[^@/]+@)?([^/:]+):/))?.[1]?.toLowerCase()
+  return host ? (HOSTS[host] ?? host) : undefined
+}
+
+async function remoteName(cwd: string): Promise<string> {
+  const address = await nodeGitRunner()(['remote', 'get-url', 'origin'], cwd).catch(() => '')
+  return hostName(address) ?? 'the remote'
 }
 
 /** What a change of skills answered: what was written and deleted, what was left as it is, and the scheduler when the change switched it. */
@@ -108,14 +140,17 @@ export async function sendChangeSkills(projectId: string, change: { write?: stri
 }
 
 /**
- * One commit of skill files that stand uncommitted in the project's folder, on the branch the
- * folder is on: the files of the skills `only` names, after a change that wrote or deleted them,
- * else every uncommitted skill file. Never a push.
+ * The skills `only` names, after a change that wrote or deleted them, sent where agents start
+ * from (`sendSkills`); without, every skill that is still on its way there: uncommitted, or not
+ * yet on the remote's default branch.
  */
-export async function sendCommitSkills(projectId: string, only?: string[]): Promise<{ ok: true; committed: boolean; commit?: string } | { ok: false; error: string }> {
+export async function sendProjectSkills(projectId: string, only?: string[]): Promise<SendSkillsResult> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return { ok: false, error: 'this project has no local path on this server' }
   const named = names(only)
   if (!named) return { ok: false, error: 'not a list of skills' }
-  return named.length > 0 ? commitSkills(cwd, named) : commitSkills(cwd)
+  if (named.length > 0) return sendSkills(cwd, named)
+  const skills = await onProjectSkills(projectId)
+  const due = skills ? [...new Set([...skills.uncommitted, ...skills.groups.flatMap(group => group.skills).filter(skill => skill.waiting).map(skill => skill.name)])] : []
+  return sendSkills(cwd, due)
 }
