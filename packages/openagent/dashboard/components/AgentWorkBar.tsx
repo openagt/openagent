@@ -42,8 +42,10 @@ export function AgentWorkBar({
   if (branch === undefined || !show || hiddenAt === signature) return null
   return (
     <div className="mx-auto w-full max-w-3xl px-2 pt-2">
-      {/* One line; on a phone it is as many as its parts need, the next step on a line of its own. */}
-      <div role="group" aria-label="This agent's work" className="flex items-center overflow-hidden rounded-[10px] bg-muted px-2 text-[13px] md:h-10 md:gap-2 max-md:min-h-10 max-md:flex-wrap max-md:gap-x-2 max-md:gap-y-1 max-md:py-1.5">
+      {/* One line; on a phone it is as many as its parts need, the next step on a line of its own.
+          In the dark theme the hover fill is the bar's own colour, so its buttons get Everforest's
+          next step up (both names: `bg-accent` reads the first, the Button's variants the second). */}
+      <div role="group" aria-label="This agent's work" className="flex items-center overflow-hidden rounded-[10px] bg-muted px-2 dark:[--accent:#374145] dark:[--color-accent:#374145] text-[13px] md:h-10 md:gap-2 max-md:min-h-10 max-md:flex-wrap max-md:gap-x-2 max-md:gap-y-1 max-md:py-1.5">
         {projectName && (
           <span className="max-w-32 shrink-0 truncate text-muted-foreground" title={projectName}>
             {projectName}
