@@ -1,4 +1,4 @@
-import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useMemo, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 import { Check, ChevronRight, Search } from 'lucide-react'
 import { ContextMenu, ContextMenuTrigger, DropdownMenuContent, FileIcon, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, Input, cn, type ModuleContext } from '@openagt/dashboard/module'
 
@@ -39,7 +39,7 @@ function buildTree(paths: string[]): TreeNode {
 }
 
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name)
-const ROW = 'flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-start text-sm hover:bg-accent'
+const ROW = 'flex h-6 w-full items-center gap-1.5 rounded-md px-2 text-start text-[13px] leading-[19px] hover:bg-accent'
 
 /**
  * A folder row. Its contents are built only while it is open: a closed folder costs one row however
@@ -51,7 +51,7 @@ function Folder({ name, children }: { name: string; children: () => ReactNode })
   return (
     <details className="group" onToggle={e => setOpen(e.currentTarget.open)}>
       <summary className={cn(ROW, 'cursor-pointer list-none')}>
-        <ChevronRight aria-hidden className="size-3.5 shrink-0 text-muted-foreground group-open:rotate-90" />
+        <ChevronRight aria-hidden className="size-3 shrink-0 text-muted-foreground group-open:rotate-90" />
         <span className="truncate">{name}</span>
       </summary>
       {open && <div className="ml-3">{children()}</div>}
@@ -97,8 +97,8 @@ function FileRow({ path, shown, attached, onOpen, onAttach }: {
         }
       >
         {/* The same width as a folder's chevron, so a file's name lines up with its folder's. */}
-        <span className="flex w-3.5 shrink-0 justify-center">
-          <FileIcon path={path} />
+        <span className="flex w-3 shrink-0 justify-center">
+          <FileIcon path={path} className="size-3" />
         </span>
         <span className="min-w-0 flex-1 truncate">{name}</span>
         {attached && <Check aria-label="In the Context" className="size-3.5 shrink-0 text-primary" />}
@@ -117,13 +117,15 @@ function FileRow({ path, shown, attached, onOpen, onAttach }: {
   )
 }
 
-export function FileTree({ files, caption, shown, context, onOpen }: {
+export function FileTree({ files, caption, shown, context, filter, onOpen }: {
   files: string[]
   /** Where a run's files were read from, said over the tree. */
   caption?: string | undefined
   /** The file the pane shows: its row is lit. */
   shown?: string | undefined
   context: ModuleContext
+  /** "Filter files…", for the pane's search to put the cursor in. */
+  filter?: RefObject<HTMLInputElement | null>
   onOpen: (path: string, keep: boolean) => void
 }) {
   const [query, setQuery] = useState('')
@@ -151,10 +153,10 @@ export function FileTree({ files, caption, shown, context, onOpen }: {
   )
 
   return (
-    <div className="flex min-h-0 flex-auto flex-col p-2">
-      <div className="relative mb-2">
+    <div className="flex min-h-0 flex-auto flex-col px-2 pb-2">
+      <div className="relative mt-1 mb-1.5">
         <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Filter files…" aria-label="Filter files" className="h-7 bg-background pr-2 pl-7 text-xs shadow-none" />
+        <Input ref={filter} type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Filter files…" aria-label="Filter files" className="h-6 bg-background pr-2 pl-7 text-[13px] shadow-none" />
       </div>
       {caption && <p className="px-1 pb-1 text-[10px] text-muted-foreground">{caption}</p>}
       {/* A query with zero hits used to render an empty pane, which reads as broken (#948). */}

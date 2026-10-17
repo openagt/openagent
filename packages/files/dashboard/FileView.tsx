@@ -43,7 +43,7 @@ export function FileView({ page, projectId, agentId, path, wrap, source }: {
   return (
     <div className="flex min-h-0 min-w-0 flex-auto flex-col">
       <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border pr-1 pl-3">
-        <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={path}>
+        <p className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground" title={path}>
           {parts.map((part, i) => (
             <span key={i}>
               {i > 0 && <span className="px-1">/</span>}

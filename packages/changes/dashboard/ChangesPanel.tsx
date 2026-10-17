@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ChevronRight, MoreVertical, Search } from 'lucide-react'
+import { ChevronRight, ListTree, MoreVertical, Search } from 'lucide-react'
 import {
   Button,
   DiffStat,
@@ -22,6 +22,7 @@ import {
   cn,
   formatRelative,
   useModuleHost,
+  useNarrow,
   usePolled,
   type ModulePanelProps,
 } from '@openagt/dashboard/module'
@@ -33,11 +34,12 @@ import { readCommit, readCommits, readDiff, readProject, readRun } from './reads
 import { DiffView } from './DiffView.js'
 import { foldAll, foldDiff, setChangesSetting, showWhole, useChangesSettings, usePageDiffs, wholeKey } from './settings.js'
 
-// The Changes pane, as Claude Code on the web draws it: in its header the branch the changes are
-// measured from and the run's own ("main → agent-…"), then search and a ⋮ menu; the files that
-// changed in a list on the left, each with its lines added and removed, grouped by folder; and on
-// the right every file's diff, one under another, each under its own header that folds it away. A
-// click in the list scrolls to that file's diff.
+// The Changes pane, as Claude Code on the web draws it: in its header a button that hides the list,
+// the branch the changes are measured from and the run's own ("main → agent-…"), then search and a
+// ⋮ menu; the files that changed in a list on the left, each with its lines added and removed,
+// grouped by folder; and on the right every file's diff, one under another, each under its own
+// header that folds it away. A click in the list scrolls to that file's diff. A pane too narrow for
+// both hides the list: its button then shows the list in the diffs' place, until a file is picked.
 //
 // On a run's page, what that run changed, read wherever its work is now (the `run` read), and kept
 // once its work is merged: this list says what the run did and stays. On the project's own page,
@@ -59,10 +61,13 @@ let revealTaken = 0
 
 const nameOf = (path: string) => path.slice(path.lastIndexOf('/') + 1)
 
-/** A changed file's lines added and removed, when git counted them. */
+/** A changed file's lines added and removed, when git counted them: both, as Claude Code writes them, `+1 −0`. */
 function Counts({ mark, className }: { mark: FileMark; className?: string }) {
-  return mark.added !== undefined && mark.removed !== undefined ? <DiffStat added={mark.added} removed={mark.removed} className={cn('shrink-0 text-[11px]', className)} /> : null
+  return mark.added !== undefined && mark.removed !== undefined ? <DiffStat added={mark.added} removed={mark.removed} zeros className={cn('shrink-0 text-xs', className)} /> : null
 }
+
+/** Narrower than this, the pane has room for the list or the diffs, not both. */
+const NARROW = 520
 
 /** A changed file in the list: its icon, its name (or its path, ungrouped), its counts, and a ring while it is only on disk. */
 function ChangeRow({ path, mark, label, picked, onPick }: { path: string; mark: FileMark; label: string; picked: boolean; onPick: () => void }) {
@@ -73,9 +78,9 @@ function ChangeRow({ path, mark, label, picked, onPick }: { path: string; mark: 
         onClick={onPick}
         aria-pressed={picked}
         title={`${path} · ${mark.status === 'untracked' || mark.status === 'added' ? 'new' : mark.status}${mark.committed ? '' : ', not committed'}`}
-        className={cn('flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs hover:bg-accent', picked && 'bg-accent')}
+        className={cn('flex h-6 w-full items-center gap-1.5 rounded-md px-2 text-left text-[13px] leading-[19px] hover:bg-accent', picked && 'bg-accent')}
       >
-        <FileIcon path={path} className="size-3.5" />
+        <FileIcon path={path} className="size-3" />
         <span className={cn('min-w-0 flex-1 truncate', mark.status === 'deleted' && 'line-through')}>{label}</span>
         {!mark.committed && <span aria-label="not committed" className="size-1.5 shrink-0 rounded-full border border-current text-muted-foreground" />}
         <Counts mark={mark} />
@@ -106,9 +111,9 @@ function foldersOf(paths: string[]): Folder {
 function CommitRow({ label, detail, title, picked, onPick }: { label: string; detail?: string; title?: string; picked: boolean; onPick: () => void }) {
   return (
     <li>
-      <button type="button" onClick={onPick} aria-pressed={picked} title={title} className={cn('flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-accent', picked && 'bg-accent')}>
-        <span className="w-full truncate text-xs">{label}</span>
-        {detail !== undefined && <span className="w-full truncate text-[10px] text-muted-foreground">{detail}</span>}
+      <button type="button" onClick={onPick} aria-pressed={picked} title={title} className={cn('flex w-full flex-col rounded-md px-2 py-1.5 text-left hover:bg-accent', picked && 'bg-accent')}>
+        <span className="w-full truncate text-[13px] leading-[19px]">{label}</span>
+        {detail !== undefined && <span className="w-full truncate text-xs text-muted-foreground">{detail}</span>}
       </button>
     </li>
   )
@@ -232,6 +237,13 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
   const page = `${projectId}/${agentId ?? ''}`
   const settings = useChangesSettings()
   const { folded, whole } = usePageDiffs(page)
+  const [body, setBody] = useState<HTMLElement | null>(null)
+  const narrow = useNarrow(body, NARROW)
+  // On a narrow pane the list is shown on a press of its button, in the diffs' place, and hidden
+  // again by the file picked from it; the setting is what a wide pane does.
+  const [peek, setPeek] = useState(false)
+  const listShown = narrow ? peek : settings.list
+  const [commitsOpen, setCommitsOpen] = useState(true)
   const { value: projectChanges, loaded: projectLoaded, reload: reloadProject } = usePolled<Record<string, FileMark>>(agentId ? null : () => readProject(host, projectId), NO_CHANGES, 8_000, [projectId, agentId], { remember: projectKey(projectId) })
   const { value: answer, loaded: runLoaded, reload } = usePolled<RunChanges | null>(agentId ? () => readRun(host, projectId, agentId) : null, null, 8_000, [projectId, agentId], agentId ? { remember: runKey(projectId, agentId) } : undefined)
   // A run whose files move as it ends answers pending for a moment: the list it last showed stays.
@@ -279,6 +291,7 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
     revealTaken = revealedAt
     setCommitClick(null)
     setClick({ agentId, sha: undefined, path: revealedPath, at: Date.now() })
+    setPeek(false)
   }, [revealedAt, revealedPath, agentId])
 
   const all = agentId ? (run && 'changes' in run ? run.changes : NO_CHANGES) : projectChanges
@@ -297,7 +310,10 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
     if (clickedAt === undefined || meant === null) return
     sections.current.get(meant)?.scrollIntoView({ block: 'start' })
   }, [clickedAt, meant])
-  const pick = (path: string) => setClick({ agentId, sha, path, at: Date.now() })
+  const pick = (path: string) => {
+    setClick({ agentId, sha, path, at: Date.now() })
+    setPeek(false)
+  }
 
   // Only work that changed something is merged or not: a run that changed nothing, or one starting, says neither.
   const merged = agentId !== undefined && run !== null && 'merged' in run ? run.merged : undefined
@@ -305,15 +321,34 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
   const [diffsElement, setDiffsElement] = useState<HTMLElement | null>(null)
   const header = (
     <>
-      {between && (
-        <PaneTitle>
-          {/* One line, cut at its end on a narrow pane: the branches come first. */}
-          <h2 className="min-w-0 truncate pl-2 text-xs font-medium text-muted-foreground" title={between}>
+      <PaneTitle>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className={cn('shrink-0 text-muted-foreground', listShown && 'bg-accent text-primary')}
+                aria-label={listShown ? 'Hide the list of files' : 'Show the list of files'}
+                aria-pressed={listShown}
+                onClick={() => (narrow ? setPeek(!peek) : setChangesSetting('list', !settings.list))}
+              />
+            }
+          >
+            <ListTree className="size-4" />
+          </TooltipTrigger>
+          <TooltipContent>{listShown ? 'Hide the list of files' : 'Show the list of files'}</TooltipContent>
+        </Tooltip>
+        {/* One line, cut at its end on a narrow pane: the branches come first. */}
+        {between ? (
+          <h2 className="min-w-0 truncate pl-1 text-[13px] text-muted-foreground" title={between}>
             {between}
-            {merged !== undefined && <span className="pl-1 text-[10px] font-normal">{merged ? '· merged' : '· not merged yet'}</span>}
+            {merged !== undefined && <span className="pl-1 text-xs text-muted-foreground">{merged ? '· merged' : '· not merged yet'}</span>}
           </h2>
-        </PaneTitle>
-      )}
+        ) : (
+          <h2 className="truncate pl-1 text-[13px] text-muted-foreground">Changes</h2>
+        )}
+      </PaneTitle>
       <PaneActions>
         <ChangeSearch paths={paths} changes={changes} onPick={pick} />
         <DropdownMenu>
@@ -371,7 +406,7 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
         .map(dir => (
           <li key={dir.path}>
             <details open className="group">
-              <summary className="flex cursor-pointer list-none items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted-foreground hover:bg-accent">
+              <summary className="flex h-6 cursor-pointer list-none items-center gap-1.5 rounded-md px-2 text-[13px] text-muted-foreground hover:bg-accent">
                 <ChevronRight aria-hidden className="size-3 shrink-0 group-open:rotate-90" />
                 <span className="truncate">{dir.name}</span>
               </summary>
@@ -385,31 +420,38 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
   return (
     <>
       {header}
-      {/* Beside each other while the pane is wide enough; on a narrow pane, as on a phone, the list is over the diffs. */}
-      <div className="@container flex min-h-0 flex-auto border-t border-border">
-        <div className="flex min-h-0 min-w-0 flex-auto @max-md:flex-col">
-          <div className="flex w-1/3 max-w-64 min-w-40 shrink-0 flex-col border-r border-border @max-md:max-h-[40%] @max-md:w-full @max-md:max-w-none @max-md:border-r-0 @max-md:border-b">
+      {/* Beside each other while the pane is wide enough; on a narrow pane, one or the other. */}
+      <div ref={setBody} className="flex min-h-0 min-w-0 flex-auto border-t border-border">
+        {listShown && (
+          <div className={cn('flex min-h-0 flex-col', narrow ? 'w-full' : 'w-1/3 max-w-72 min-w-40 shrink-0 border-r border-border')}>
             <ul aria-label="Changed files" className="min-h-0 flex-auto space-y-0.5 overflow-y-auto p-1">
               {settings.group ? folderOf(foldersOf(paths)) : paths.map(path => rowOf(path, path))}
             </ul>
             {agentId && commits.length > 0 && (
-              <section aria-label="Commits" className="flex max-h-[45%] shrink-0 flex-col border-t border-border">
-                <h3 className="flex justify-between px-3 pt-2 pb-1 text-[10px] text-muted-foreground">
-                  <span>Commits</span>
-                  <span>{commits.length}</span>
+              <section aria-label="Commits" className={cn('flex shrink-0 flex-col border-t border-border', commitsOpen && 'max-h-[45%]')}>
+                <h3>
+                  <button type="button" aria-expanded={commitsOpen} onClick={() => setCommitsOpen(!commitsOpen)} className="mt-1 flex h-6 w-full items-center gap-1.5 px-3 text-[13px] text-muted-foreground hover:text-foreground">
+                    <ChevronRight aria-hidden className={cn('size-3 shrink-0', commitsOpen && 'rotate-90')} />
+                    <span className="flex-1 text-start">Commits</span>
+                    <span className="text-xs">{commits.length}</span>
+                  </button>
                 </h3>
-                <ul className="min-h-0 space-y-0.5 overflow-y-auto p-1">
-                  <CommitRow label="All changes" picked={commit === undefined} onPick={() => setCommitClick(null)} />
-                  {commits.map(c => (
-                    <CommitRow key={c.sha} label={c.subject} detail={`${c.short} · ${c.author} · ${formatRelative(c.date)}`} title={c.subject} picked={c.sha === sha} onPick={() => setCommitClick({ agentId, sha: c.sha })} />
-                  ))}
-                </ul>
+                {commitsOpen && (
+                  <ul className="min-h-0 space-y-0.5 overflow-y-auto p-1 pt-0">
+                    <CommitRow label="All changes" picked={commit === undefined} onPick={() => setCommitClick(null)} />
+                    {commits.map(c => (
+                      <CommitRow key={c.sha} label={c.subject} detail={`${c.short} · ${c.author} · ${formatRelative(c.date)}`} title={c.subject} picked={c.sha === sha} onPick={() => setCommitClick({ agentId, sha: c.sha })} />
+                    ))}
+                  </ul>
+                )}
               </section>
             )}
           </div>
+        )}
+        {!(narrow && listShown) && (
           <div ref={setDiffsElement} aria-label="Diffs" className="flex min-h-0 min-w-0 flex-auto flex-col overflow-y-auto">
             {caption && (
-              <p className="truncate border-b border-border px-3 py-1.5 text-[11px] text-muted-foreground" title={caption}>
+              <p className="shrink-0 truncate border-b border-border px-3 py-1.5 text-xs text-muted-foreground" title={caption}>
                 {caption}
               </p>
             )}
@@ -432,10 +474,10 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
                     type="button"
                     aria-expanded={!isFolded}
                     onClick={() => foldDiff(page, path, !isFolded)}
-                    className={cn('sticky top-0 z-10 flex w-full items-center gap-1.5 border-b border-border bg-card px-2 py-1.5 text-start text-xs hover:bg-accent', path === picked && 'text-foreground')}
+                    className={cn('sticky top-0 z-10 flex h-8 w-full items-center gap-1.5 bg-muted px-2 text-start text-[13px] text-muted-foreground hover:bg-accent', path === picked && 'text-foreground')}
                   >
-                    <ChevronRight aria-hidden className={cn('size-3.5 shrink-0 text-muted-foreground', !isFolded && 'rotate-90')} />
-                    <FileIcon path={path} className="size-3.5" />
+                    <ChevronRight aria-hidden className={cn('size-3.5 shrink-0', !isFolded && 'rotate-90')} />
+                    <FileIcon path={path} className="size-3" />
                     <span className={cn('min-w-0 truncate', mark.status === 'deleted' && 'line-through')}>{path}</span>
                     <Counts mark={mark} />
                   </button>
@@ -457,7 +499,7 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
               )
             })}
           </div>
-        </div>
+        )}
       </div>
     </>
   )

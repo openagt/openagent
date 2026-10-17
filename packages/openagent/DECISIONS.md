@@ -125,6 +125,11 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The Changes pane shows every changed file's diff, one under another, as Claude Code on
   the web does, and a click in its list scrolls to that file's. Picked over one diff at a
   time beside the list.
+- A pane too narrow for both hides Files' tree and Changes' list, as Claude Code on the web
+  does: the button at the start of the pane's header shows it in the pane's place until a
+  file is picked from it. Picked over the tree or the list squeezed above the file.
+- The search button of the Files pane shows the tree and puts the cursor in its "Filter
+  files…". Picked over a search box of its own.
 - The packages every project wants are built in: OpenAgent depends on them and uses them
   for every project through the same contract as any package (a module by its
   `./dashboard` export, a provider of a kind of data and the writer of its hook lines by

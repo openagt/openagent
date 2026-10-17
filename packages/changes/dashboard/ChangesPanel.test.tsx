@@ -154,7 +154,7 @@ describe('ChangesPanel remembered', () => {
 describe('ChangesPanel commits', () => {
   const NEW = { sha: 'b'.repeat(40), short: 'bbbbbbb', subject: 'Change the app', author: 'Agent', date: new Date(Date.now() - 2 * 3_600_000).toISOString() }
   const OLD = { sha: 'a'.repeat(40), short: 'aaaaaaa', subject: 'Add old.txt', author: 'Agent', date: new Date(Date.now() - 3 * 3_600_000).toISOString() }
-  const commitRows = () => within(screen.getByRole('region', { name: 'Commits' })).getAllByRole('button')
+  const commitRows = () => within(within(screen.getByRole('region', { name: 'Commits' })).getByRole('list')).getAllByRole('button')
 
   beforeEach(() => {
     readCommits.mockResolvedValue([NEW, OLD])
@@ -169,6 +169,16 @@ describe('ChangesPanel commits', () => {
     expect(commitRows().map(row => row.getAttribute('aria-pressed'))).toEqual(['true', 'false', 'false'])
     expect(screen.getByRole('region', { name: 'Commits' }).textContent).toContain('Commits2')
     expect(readCommit).not.toHaveBeenCalled()
+  })
+
+  test('the commits fold away under their heading, and open again', async () => {
+    readCommits.mockResolvedValue([NEW, OLD])
+    render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
+    const heading = await within(await screen.findByRole('region', { name: 'Commits' })).findByRole('button', { name: /Commits/ })
+    fireEvent.click(heading)
+    await waitFor(() => expect(within(screen.getByRole('region', { name: 'Commits' })).queryByRole('list')).toBeNull())
+    fireEvent.click(heading)
+    await waitFor(() => expect(commitRows()).toHaveLength(3))
   })
 
   test('a click on a commit shows only that commit: its name, its files, its own diff; "All changes" goes back', async () => {
@@ -295,10 +305,10 @@ describe('ChangesPanel, a file asked for from the chat', () => {
 })
 
 describe('ChangesPanel, as Claude Code on the web draws it', () => {
-  test('each file shows its lines added and removed, in the list and over its diff', async () => {
-    readRun.mockResolvedValue({ source: 'checkout', changes: { 'src/app.ts': { status: 'modified', committed: true, added: 3, removed: 1 } }, merged: false, from: 'main', to: 'agent-x' })
+  test('each file shows its lines added and removed, a count of none too, in the list and over its diff', async () => {
+    readRun.mockResolvedValue({ source: 'checkout', changes: { 'src/app.ts': { status: 'modified', committed: true, added: 3, removed: 0 } }, merged: false, from: 'main', to: 'agent-x' })
     render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
-    await waitFor(() => expect(row(/app\.ts/).textContent).toBe('app.ts+3 −1'))
+    await waitFor(() => expect(row(/app\.ts/).textContent).toBe('app.ts+3 −0'))
     expect(within(screen.getByRole('region', { name: 'src/app.ts' })).getAllByText('+3')).toHaveLength(1)
   })
 
@@ -327,6 +337,38 @@ describe('ChangesPanel, as Claude Code on the web draws it', () => {
     fireEvent.click(screen.getByLabelText('The pane’s settings'))
     fireEvent.click(await screen.findByText('Expand all files'))
     await waitFor(() => expect(folded(true)).toHaveLength(3))
+  })
+
+  test('the button in the header hides the list, and the diffs fill the pane', async () => {
+    render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
+    await findRow(/old\.txt/)
+    fireEvent.click(screen.getByLabelText('Hide the list of files'))
+    await waitFor(() => expect(screen.queryByRole('list', { name: 'Changed files' })).toBeNull())
+    expect(screen.getByRole('region', { name: 'old.txt' })).toBeTruthy()
+    fireEvent.click(screen.getByLabelText('Show the list of files'))
+    await findRow(/old\.txt/)
+  })
+
+  test('on a narrow pane the list is hidden; its button shows it in the diffs’ place, and a file picked there goes back to its diff', async () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(private readonly told: ResizeObserverCallback) {}
+        observe() {
+          this.told([{ contentRect: { width: 400 } } as ResizeObserverEntry], this as unknown as ResizeObserver)
+        }
+        disconnect() {}
+      },
+    )
+    const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView')
+    render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
+    await screen.findByRole('region', { name: 'old.txt' })
+    await waitFor(() => expect(screen.queryByRole('list', { name: 'Changed files' })).toBeNull())
+    fireEvent.click(screen.getByLabelText('Show the list of files'))
+    fireEvent.click(await findRow(/new\.ts/))
+    await waitFor(() => expect(screen.queryByRole('list', { name: 'Changed files' })).toBeNull())
+    await waitFor(() => expect(scrolled.mock.contexts.at(-1)).toBe(screen.getByRole('region', { name: 'src/new.ts' })))
+    vi.unstubAllGlobals()
   })
 
   test('with grouping off in the ⋮ menu, the list shows each file’s whole path', async () => {
