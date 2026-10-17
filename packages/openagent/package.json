@@ -29,10 +29,11 @@
   "files": [
     "dist"
   ],
-  "bin": {
-    "openagent": "dist/bin.js"
-  },
   "exports": {
+    "./serve": {
+      "types": "./dist/serve.d.ts",
+      "default": "./dist/serve.js"
+    },
     "./module": {
       "types": "./dist/module-types/dashboard/module/index.d.ts"
     },
@@ -45,7 +46,6 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json && tsc -p dashboard/tsconfig.module.json && cp dashboard/module/theme.css dist/module.css && cp src/module-server.d.ts dist/module-server.d.ts && node scripts/copy-extension.mjs && cd dashboard && vite build",
     "prepack": "node -e \"if(!process.env.npm_config_user_agent?.startsWith('pnpm/')){console.error('Pack and publish with pnpm: it replaces workspace:* with the real version, npm does not');process.exit(1)}\"",
-    "preview": "node dist/bin.js",
     "dev": "tsc -p tsconfig.build.json --watch",
     "dev:dashboard": "cd dashboard && vite",
     "dev:daemon": "cd dashboard && OPENAGENT_DEV_DAEMON=1 vite",

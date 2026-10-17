@@ -119,19 +119,19 @@ importers:
       '@openagt/skill-branches':
         specifier: workspace:*
         version: link:../skill-branches
-      '@openagt/skill-github':
-        specifier: workspace:*
-        version: link:../skill-github
       '@openagt/skill-logs':
         specifier: workspace:*
         version: link:../skill-logs
-      '@openagt/skill-question':
-        specifier: workspace:*
-        version: link:../skill-question
       yaml:
         specifier: ^2.5.0
         version: 2.9.0
     devDependencies:
+      '@openagt/skill-github':
+        specifier: workspace:*
+        version: link:../skill-github
+      '@openagt/skill-question':
+        specifier: workspace:*
+        version: link:../skill-question
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.43
@@ -968,6 +968,31 @@ importers:
   packages/skill-ux: {}
 
   packages/skill-work-queue: {}
+
+  packages/start:
+    dependencies:
+      '@openagt/agent-data':
+        specifier: workspace:*
+        version: link:../agent-data
+      '@openagt/dashboard':
+        specifier: workspace:*
+        version: link:../openagent
+      '@openagt/skill-github':
+        specifier: workspace:*
+        version: link:../skill-github
+      '@openagt/skill-logs':
+        specifier: workspace:*
+        version: link:../skill-logs
+      '@openagt/skill-question':
+        specifier: workspace:*
+        version: link:../skill-question
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
 
 packages:
 

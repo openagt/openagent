@@ -1,6 +1,6 @@
 import { checkForUpdate, formatUpdateStatus, nodeVersionFetcher, type VersionFetcher } from './update-check.js'
-import { runDaemon, DEFAULT_DAEMON_PORT } from './daemon.js'
-import { errorMessage } from './error-message.js'
+import { runDaemon, DEFAULT_DAEMON_PORT } from '@openagt/dashboard/serve'
+import { handDownSkills } from './skills.js'
 import { openagentVersion } from './version.js'
 
 /** Where the CLI writes. Injectable so tests capture output. */
@@ -103,8 +103,11 @@ async function runForegroundDaemonCmd(args: CliArgs, io: CliIO): Promise<number>
   const cwd = process.cwd()
   const port = args.port ?? DEFAULT_DAEMON_PORT
   try {
+    // Set in this process's own environment, so everything the dashboard starts inherits it.
+    await handDownSkills(process.env)
     await runDaemon(cwd, {
       port,
+      version: openagentVersion(),
       onListening: state => {
         io.out(`◆ dashboard running: ${state.url}`)
         io.out('  Ctrl+C to stop the dashboard. Server logs stream below.')
@@ -115,7 +118,7 @@ async function runForegroundDaemonCmd(args: CliArgs, io: CliIO): Promise<number>
       },
     })
   } catch (err) {
-    io.err(`could not start the dashboard (${errorMessage(err)}).`)
+    io.err(`could not start the dashboard (${err instanceof Error ? err.message : String(err)}).`)
     return 1
   }
   return 0

@@ -8,7 +8,7 @@
   "scripts": {
     "build": "pnpm -r --filter '!__private__website' run build",
     "// Serve the production build the way an install does: the daemon, not a static server": "",
-    "preview": "pnpm build && pnpm -C packages/openagent preview",
+    "preview": "pnpm build && node packages/start/dist/bin.js",
     "dev": "pnpm build && pnpm -C packages/openagent dev",
     "typecheck": "pnpm -r run typecheck",
     "clean": "pnpm -r run clean",
