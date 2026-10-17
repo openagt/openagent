@@ -110,40 +110,40 @@ export function ProjectSkillsLine({
   return (
     <div role="status" aria-label="This project's skills" className="m-3 flex flex-col gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">
       {none && (
-        <span className="flex flex-wrap items-center gap-2">
-          This project has no skills yet.
-          <Button type="button" variant="outline" size="xs" onClick={() => setAdding(skills)}>
+        <span className="flex items-center justify-between gap-3">
+          <span>This project has no skills yet.</span>
+          <Button type="button" variant="outline" size="xs" className="shrink-0" onClick={() => setAdding(skills)}>
             Add skills
           </Button>
         </span>
       )}
       {newer.length > 0 && (
-        <span className="flex flex-wrap items-center gap-2">
+        <span className="flex items-center justify-between gap-3">
           <span>
             <span className="text-foreground">{named(newer)}</span> {newer.length === 1 ? 'has a newer version' : 'have newer versions'}.
           </span>
-          <Button type="button" variant="outline" size="xs" disabled={pending !== null} onClick={() => void update()}>
+          <Button type="button" variant="outline" size="xs" className="shrink-0" disabled={pending !== null} onClick={() => void update()}>
             {pending === 'update' ? 'Updating…' : 'Update'}
           </Button>
         </span>
       )}
       {sending && (
-        <span className="flex flex-wrap items-center gap-2">
+        <span className="flex items-center justify-between gap-3">
           <span>
             <span className="text-foreground">{named(here)}</span>: {skills.remote ? 'on this computer only' : 'not committed'}, so your agents do not have {it(here)} yet.
             {skills.local && skills.remote && ' Or pick My local branch when you start an agent.'}
           </span>
-          <Button type="button" variant="outline" size="xs" disabled={pending !== null} onClick={() => void send()}>
+          <Button type="button" variant="outline" size="xs" className="shrink-0" disabled={pending !== null} onClick={() => void send()}>
             {pending === 'send' ? 'Sending…' : sendWord(skills)}
           </Button>
         </span>
       )}
       {inRequest && (
-        <span className="flex flex-wrap items-center gap-2">
+        <span className="flex items-center justify-between gap-3">
           <span>
             <span className="text-foreground">{named(waiting)}</span>: in pull request #{skills.request!.number}. Your agents get {it(waiting)} once it is merged.
           </span>
-          <a href={skills.request!.url} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'outline', size: 'xs' })}>
+          <a href={skills.request!.url} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'outline', size: 'xs', className: 'shrink-0' })}>
             Open #{skills.request!.number}
           </a>
         </span>
