@@ -1,4 +1,4 @@
-import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useMemo, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 import { Check, ChevronRight, Search } from 'lucide-react'
 import { ContextMenu, ContextMenuTrigger, DropdownMenuContent, FileIcon, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, Input, cn, type ModuleContext } from '@openagt/dashboard/module'
 
@@ -117,13 +117,15 @@ function FileRow({ path, shown, attached, onOpen, onAttach }: {
   )
 }
 
-export function FileTree({ files, caption, shown, context, onOpen }: {
+export function FileTree({ files, caption, shown, context, filter, onOpen }: {
   files: string[]
   /** Where a run's files were read from, said over the tree. */
   caption?: string | undefined
   /** The file the pane shows: its row is lit. */
   shown?: string | undefined
   context: ModuleContext
+  /** "Filter files…", for the pane's search to put the cursor in. */
+  filter?: RefObject<HTMLInputElement | null>
   onOpen: (path: string, keep: boolean) => void
 }) {
   const [query, setQuery] = useState('')
@@ -154,7 +156,7 @@ export function FileTree({ files, caption, shown, context, onOpen }: {
     <div className="flex min-h-0 flex-auto flex-col p-2">
       <div className="relative mb-2">
         <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Filter files…" aria-label="Filter files" className="h-7 bg-background pr-2 pl-7 text-xs shadow-none" />
+        <Input ref={filter} type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Filter files…" aria-label="Filter files" className="h-7 bg-background pr-2 pl-7 text-xs shadow-none" />
       </div>
       {caption && <p className="px-1 pb-1 text-[10px] text-muted-foreground">{caption}</p>}
       {/* A query with zero hits used to render an empty pane, which reads as broken (#948). */}

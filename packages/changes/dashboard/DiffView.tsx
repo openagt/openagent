@@ -55,12 +55,13 @@ function read(patch: string): { rows: Row[]; shown: number } {
   return { rows, shown }
 }
 
-const TONE = { add: 'bg-success/10 text-success', del: 'bg-danger/10 text-danger', same: 'text-foreground' } as const
+// A changed line is lit, with a bar of its colour at its start, its text as any other line's.
+const TONE = { add: 'border-success bg-success/10', del: 'border-danger bg-danger/10', same: 'border-transparent' } as const
 const SIGN = { add: '+', del: '−', same: ' ' } as const
 
 function More({ children, onClick }: { children: string; onClick: (() => void) | undefined }) {
   return (
-    <button type="button" disabled={!onClick} onClick={onClick} className="flex w-full items-center gap-1.5 bg-muted/50 px-2 py-0.5 text-start text-[11px] text-muted-foreground enabled:hover:text-foreground">
+    <button type="button" disabled={!onClick} onClick={onClick} className="flex w-full items-center gap-1.5 bg-muted/50 py-0.5 pr-2 pl-[11px] text-start text-xs text-muted-foreground enabled:hover:text-foreground">
       <ChevronsUpDown aria-hidden className="size-3" />
       {children}
     </button>
@@ -76,12 +77,12 @@ export function DiffView({ diff, wrap, whole, onWhole, className }: { diff: File
   // Lines are left under the last change while the file has more than the diff shows.
   const more = !whole && diff.lines !== undefined && shown < diff.lines
   return (
-    <div className={cn('overflow-x-auto font-mono text-[11px] leading-[1.45]', className)}>
+    <div className={cn('overflow-x-auto font-mono text-xs leading-[1.5] text-foreground', className)}>
       {rows.map((row, i) =>
         row.kind === 'gap' ? (
           <More key={i} onClick={ask}>{`${row.hidden} unmodified ${row.hidden === 1 ? 'line' : 'lines'}`}</More>
         ) : (
-          <div key={i} className={cn('flex', TONE[row.kind])}>
+          <div key={i} className={cn('flex border-l-[3px]', TONE[row.kind])}>
             <span className="shrink-0 select-none pr-2 pl-2 text-right tabular-nums opacity-60" style={{ width: `calc(${width} + 1rem)` }}>
               {row.number}
             </span>

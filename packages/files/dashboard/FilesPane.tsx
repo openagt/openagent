@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ListTree, MoreVertical, Search, X } from 'lucide-react'
 import {
   Button,
@@ -7,17 +7,14 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
   FileIcon,
-  Input,
   PaneActions,
   PaneTitle,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
   cn,
   useModuleHost,
+  useNarrow,
   usePolled,
   type ModulePanelProps,
 } from '@openagt/dashboard/module'
@@ -30,7 +27,9 @@ import { closeFile, openFile, setFilesSetting, showFile, useFilesSettings, useOp
 
 // The Files pane, as Claude Code on the web has it: the tree on the left, the file shown on the
 // right, and in the pane's header a button that hides the tree, then the opened files as tabs (the
-// word "Files" while none is), then search and a ⋮ menu of the pane's settings.
+// word "Files" while none is), then search, which shows the tree and puts the cursor in its
+// "Filter files…", and a ⋮ menu of the pane's settings. A pane too narrow for both hides the tree:
+// its button then shows the tree in the file's place, until a file is opened from it.
 //
 // The tree is the project's own files (the `project` read) on its page, and a run's (the `tree`
 // read) on the run's page: its checkout, then its branch, then its merge commit, so a finished run
@@ -68,67 +67,31 @@ function Tab({ tab, shown, onShow, onKeep, onClose }: { tab: OpenTab; shown: boo
   )
 }
 
-/** Search the files by name, and open the one picked. */
-function FileSearch({ files, onOpen }: { files: string[]; onOpen: (path: string) => void }) {
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return files.slice(0, 50)
-    // A name that matches comes before a folder that does.
-    const named = files.filter(f => nameOf(f).toLowerCase().includes(q))
-    const inFolder = files.filter(f => !nameOf(f).toLowerCase().includes(q) && f.toLowerCase().includes(q))
-    return [...named, ...inFolder].slice(0, 50)
-  }, [files, query])
-  const pick = (path: string) => {
-    onOpen(path)
-    setOpen(false)
-    setQuery('')
-  }
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <Tooltip>
-        <TooltipTrigger render={<PopoverTrigger render={<Button variant="ghost" size="icon-sm" className="shrink-0 text-muted-foreground" aria-label="Search files" />} />}>
-          <Search className="size-3.5" />
-        </TooltipTrigger>
-        <TooltipContent>Search files</TooltipContent>
-      </Tooltip>
-      <PopoverContent align="end" className="w-72 p-1">
-        <Input
-          autoFocus
-          type="search"
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Enter' && matches[0] !== undefined) pick(matches[0])
-          }}
-          placeholder="Search files"
-          aria-label="Search files"
-          className="mb-1 h-7 text-xs shadow-none"
-        />
-        <ul aria-label="Files found" className="max-h-72 overflow-y-auto">
-          {matches.map(path => (
-            <li key={path}>
-              <button type="button" onClick={() => pick(path)} className="flex w-full items-center gap-1.5 rounded-sm px-2 py-1 text-start text-xs hover:bg-accent">
-                <FileIcon path={path} className="size-3.5" />
-                <span className="shrink-0">{nameOf(path)}</span>
-                <span className="min-w-0 truncate text-muted-foreground">{path.slice(0, -nameOf(path).length - 1)}</span>
-              </button>
-            </li>
-          ))}
-          {matches.length === 0 && <li className="px-2 py-1 text-xs text-muted-foreground">No file is called so.</li>}
-        </ul>
-      </PopoverContent>
-    </Popover>
-  )
-}
+/** Narrower than this, the pane has room for the tree or the file, not both. */
+const NARROW = 520
 
 export function FilesPane({ projectId, agentId, activity, context }: ModulePanelProps) {
   const host = useModuleHost()
   const page = `${projectId}/${agentId ?? ''}`
   const { tabs, active, source } = useOpenFiles(page)
   const settings = useFilesSettings()
-  const open = (path: string, keep: boolean) => openFile(page, path, keep)
+  const [body, setBody] = useState<HTMLElement | null>(null)
+  const narrow = useNarrow(body, NARROW)
+  // On a narrow pane the tree is shown on a press of its button, in the file's place, and hidden
+  // again by the file opened from it; the setting is what a wide pane does.
+  const [peek, setPeek] = useState(false)
+  const tree = narrow ? peek : settings.tree
+  const showTree = (shown: boolean) => (narrow ? setPeek(shown) : setFilesSetting('tree', shown))
+  const open = (path: string, keep: boolean) => {
+    openFile(page, path, keep)
+    setPeek(false)
+  }
+  // Search: the tree shows, and the cursor is put in its filter once it is there.
+  const filter = useRef<HTMLInputElement>(null)
+  const [search, setSearch] = useState(0)
+  useEffect(() => {
+    if (search > 0) filter.current?.focus()
+  }, [search])
 
   // The project's files (#492), polled so they track edits; with a run selected, the run's own
   // tree instead (#815), polled so they track an agent editing.
@@ -176,16 +139,16 @@ export function FilesPane({ projectId, agentId, activity, context }: ModulePanel
               <Button
                 variant="ghost"
                 size="icon-sm"
-                className={cn('shrink-0 text-muted-foreground', settings.tree && 'bg-accent text-primary')}
-                aria-label={settings.tree ? 'Hide the file tree' : 'Show the file tree'}
-                aria-pressed={settings.tree}
-                onClick={() => setFilesSetting('tree', !settings.tree)}
+                className={cn('shrink-0 text-muted-foreground', tree && 'bg-accent text-primary')}
+                aria-label={tree ? 'Hide the file tree' : 'Show the file tree'}
+                aria-pressed={tree}
+                onClick={() => showTree(!tree)}
               />
             }
           >
             <ListTree className="size-4" />
           </TooltipTrigger>
-          <TooltipContent>{settings.tree ? 'Hide the file tree' : 'Show the file tree'}</TooltipContent>
+          <TooltipContent>{tree ? 'Hide the file tree' : 'Show the file tree'}</TooltipContent>
         </Tooltip>
         {tabs.length === 0 ? (
           <h2 className="truncate pl-1 text-xs font-medium text-muted-foreground">Files</h2>
@@ -198,13 +161,31 @@ export function FilesPane({ projectId, agentId, activity, context }: ModulePanel
         )}
       </PaneTitle>
       <PaneActions>
-        <FileSearch files={files} onOpen={path => open(path, false)} />
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="shrink-0 text-muted-foreground"
+                aria-label="Search files"
+                onClick={() => {
+                  showTree(true)
+                  setSearch(n => n + 1)
+                }}
+              />
+            }
+          >
+            <Search className="size-3.5" />
+          </TooltipTrigger>
+          <TooltipContent>Search files</TooltipContent>
+        </Tooltip>
         <DropdownMenu>
           <DropdownMenuTrigger aria-label="The pane’s settings" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground">
             <MoreVertical aria-hidden className="size-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-[11rem]">
-            <DropdownMenuCheckboxItem checked={settings.tree} onCheckedChange={checked => setFilesSetting('tree', checked)}>
+            <DropdownMenuCheckboxItem checked={tree} onCheckedChange={showTree}>
               Show file tree
             </DropdownMenuCheckboxItem>
             <DropdownMenuCheckboxItem checked={settings.previews} onCheckedChange={checked => setFilesSetting('previews', checked)}>
@@ -235,20 +216,18 @@ export function FilesPane({ projectId, agentId, activity, context }: ModulePanel
   return (
     <>
       {header}
-      {/* Beside each other while the pane is wide enough; on a narrow pane, as on a phone, the tree is over the file. */}
-      <div className="@container flex min-h-0 flex-auto">
-        <div className="flex min-h-0 min-w-0 flex-auto @max-md:flex-col">
-          {settings.tree && (
-            <div className="flex min-h-0 w-2/5 max-w-72 min-w-40 shrink-0 flex-col border-r border-border @max-md:max-h-[45%] @max-md:w-full @max-md:max-w-none @max-md:border-r-0 @max-md:border-b">
-              <FileTree files={files} caption={runTree ? sourceCaption(runTree) : undefined} shown={active} context={context} onOpen={open} />
-            </div>
-          )}
-          {active !== undefined ? (
-            <FileView key={active} page={page} projectId={projectId} agentId={agentId} path={active} wrap={settings.wrap} source={source?.has(active) ?? false} />
-          ) : (
-            <NoFileOpen tree={settings.tree} />
-          )}
-        </div>
+      {/* Beside each other while the pane is wide enough; on a narrow pane, one or the other. */}
+      <div ref={setBody} className="flex min-h-0 min-w-0 flex-auto">
+        {tree && (
+          <div className={cn('flex min-h-0 flex-col', narrow ? 'w-full' : 'w-2/5 max-w-72 min-w-40 shrink-0 border-r border-border')}>
+            <FileTree files={files} caption={runTree ? sourceCaption(runTree) : undefined} shown={active} context={context} filter={filter} onOpen={open} />
+          </div>
+        )}
+        {narrow && tree ? null : active !== undefined ? (
+          <FileView key={active} page={page} projectId={projectId} agentId={agentId} path={active} wrap={settings.wrap} source={source?.has(active) ?? false} />
+        ) : (
+          <NoFileOpen tree={tree} />
+        )}
       </div>
     </>
   )

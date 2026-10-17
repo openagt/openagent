@@ -26,7 +26,24 @@ beforeEach(() => {
   readProject.mockResolvedValue(files)
   readTree.mockResolvedValue({ source: 'checkout', files })
 })
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
+
+/** Every pane measures 400px wide: too narrow for the tree beside the file. */
+function narrowPanes() {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(private readonly told: ResizeObserverCallback) {}
+      observe() {
+        this.told([{ contentRect: { width: 400 } } as ResizeObserverEntry], this as unknown as ResizeObserver)
+      }
+      disconnect() {}
+    },
+  )
+}
 
 // The tree's own region, for queries that must not meet the header's tabs.
 const treeOf = () => screen.getByLabelText('Filter files').closest('div.flex-col') as HTMLElement
@@ -246,14 +263,31 @@ describe('opening files, as Claude Code on the web does', () => {
     expect(writeText).toHaveBeenCalledWith('app.ts')
   })
 
-  test('search finds a file by its name and opens it', async () => {
+  test('search shows the tree, hidden or not, and puts the cursor in its filter', async () => {
+    readContent.mockResolvedValue({ path: 'README.md', text: 'hello world', truncated: false, binary: false })
     render(<FilesPane projectId="p1" context={context()} />)
-    await screen.findByText('README.md')
+    fireEvent.click(await screen.findByTitle('README.md'))
+    fireEvent.click(screen.getByLabelText('Hide the file tree'))
+    await waitFor(() => expect(screen.queryByLabelText('Filter files')).toBeNull())
     fireEvent.click(screen.getByLabelText('Search files'))
-    const box = await screen.findByPlaceholderText('Search files')
-    fireEvent.change(box, { target: { value: 'app' } })
-    fireEvent.keyDown(box, { key: 'Enter' })
-    await waitFor(() => expect(tabs()).toEqual([['app.ts', 'true', 'preview']]))
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Filter files')))
+    expect(await screen.findByText('hello world')).toBeTruthy()
+  })
+
+  test('on a narrow pane the tree is hidden; its button shows it in the file’s place, and a file opened from it hides it again', async () => {
+    readContent.mockResolvedValue({ path: 'README.md', text: 'hello world', truncated: false, binary: false })
+    narrowPanes()
+    render(<FilesPane projectId="p1" context={context()} />)
+    await waitFor(() => expect(screen.getByLabelText('Show the file tree')).toBeTruthy())
+    expect(screen.queryByLabelText('Filter files')).toBeNull()
+    fireEvent.click(screen.getByLabelText('Show the file tree'))
+    fireEvent.click(await screen.findByTitle('README.md'))
+    await screen.findByText('hello world')
+    expect(screen.queryByLabelText('Filter files')).toBeNull()
+    // Search shows the tree there too, in the file's place.
+    fireEvent.click(screen.getByLabelText('Search files'))
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Filter files')))
+    expect(screen.queryByText('hello world')).toBeNull()
   })
 
   test('with previews off in the ⋮ menu, one click keeps the file', async () => {

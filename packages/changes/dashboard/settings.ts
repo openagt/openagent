@@ -1,10 +1,12 @@
 import { useSyncExternalStore } from 'react'
 
-// The Changes pane's settings from its ⋮ menu, the same on every page and kept in this browser:
-// whether the list groups files by folder, and whether long lines wrap. And, per page for this
+// The Changes pane's settings, the same on every page and kept in this browser: whether the list
+// shows (its button in the header), and from its ⋮ menu whether the list groups files by folder
+// and whether long lines wrap. And, per page for this
 // page load, the files whose diff is folded away and the ones shown whole.
 
 export interface ChangesSettings {
+  list: boolean
   group: boolean
   wrap: boolean
 }
@@ -15,7 +17,7 @@ export interface PageDiffs {
   whole: ReadonlySet<string>
 }
 
-const DEFAULTS: ChangesSettings = { group: true, wrap: true }
+const DEFAULTS: ChangesSettings = { list: true, group: true, wrap: true }
 const NONE: PageDiffs = { folded: new Set(), whole: new Set() }
 const KEY = 'oa.changes'
 
@@ -26,7 +28,11 @@ const listeners = new Set<() => void>()
 function readSettings(): ChangesSettings {
   try {
     const kept = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<ChangesSettings>
-    return { group: typeof kept.group === 'boolean' ? kept.group : DEFAULTS.group, wrap: typeof kept.wrap === 'boolean' ? kept.wrap : DEFAULTS.wrap }
+    return {
+      list: typeof kept.list === 'boolean' ? kept.list : DEFAULTS.list,
+      group: typeof kept.group === 'boolean' ? kept.group : DEFAULTS.group,
+      wrap: typeof kept.wrap === 'boolean' ? kept.wrap : DEFAULTS.wrap,
+    }
   } catch {
     return DEFAULTS
   }
