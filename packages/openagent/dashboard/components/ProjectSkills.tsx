@@ -17,11 +17,27 @@ const held = (skill: ProjectSkill): boolean => skill.standing !== 'absent'
 const all = (skills: ProjectSkills): ProjectSkill[] => skills.groups.flatMap(group => group.skills)
 const count = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`
 
-/** Skills by name for a sentence: up to three named, more counted. */
-export function named(names: readonly string[]): string {
-  if (names.length > 3) return `${names.length} skills`
-  return names.length < 2 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
+/**
+ * Skills as the subject of a sentence: "The orchestration skill", "The tickets and queue skills",
+ * and more than three counted ("21 skills"). "skill" is said, since many names are plain words
+ * (plan, research, ux) that alone do not say what is meant.
+ */
+function Subject({ names }: { names: readonly string[] }) {
+  if (names.length > 3) return <span className="text-foreground">{names.length} skills</span>
+  return (
+    <>
+      The{' '}
+      {names.map((name, index) => (
+        <span key={name}>
+          {index > 0 && (index === names.length - 1 ? ' and ' : ', ')}
+          <span className="text-foreground">{name}</span>
+        </span>
+      ))}{' '}
+      {names.length === 1 ? 'skill' : 'skills'}
+    </>
+  )
 }
+const is = (names: readonly string[]): string => (names.length === 1 ? 'is' : 'are')
 const it = (names: readonly string[]): string => (names.length === 1 ? 'it' : 'them')
 
 /** What stands beside a skill's name in the list when its text is not simply the one the dashboard carries. */
@@ -121,7 +137,7 @@ export function ProjectSkillsLine({
       {newer.length > 0 && (
         <span className="flex items-center justify-between gap-3">
           <span>
-            <span className="text-foreground">{named(newer)}</span> {newer.length === 1 ? 'has a newer version' : 'have newer versions'}.
+            <Subject names={newer} /> {newer.length === 1 ? 'has a newer version' : 'have newer versions'}.
           </span>
           <Button type="button" variant="outline" size="xs" className="shrink-0" disabled={pending !== null} onClick={() => void update()}>
             {pending === 'update' ? 'Updating…' : 'Update'}
@@ -131,7 +147,7 @@ export function ProjectSkillsLine({
       {sending && (
         <span className="flex items-center justify-between gap-3">
           <span>
-            <span className="text-foreground">{named(here)}</span>: {skills.remote ? 'on this computer only' : 'not committed'}, so your agents do not have {it(here)} yet.
+            <Subject names={here} /> {is(here)} {skills.remote ? 'on this computer only' : 'not committed'}, so your agents do not have {it(here)} yet.
             {skills.local && skills.remote && ' Or pick My local branch when you start an agent.'}
           </span>
           <Button type="button" variant="outline" size="xs" className="shrink-0" disabled={pending !== null} onClick={() => void send()}>
@@ -142,7 +158,7 @@ export function ProjectSkillsLine({
       {inRequest && (
         <span className="flex items-center justify-between gap-3">
           <span>
-            <span className="text-foreground">{named(waiting)}</span>: in pull request #{skills.request!.number}. Your agents get {it(waiting)} once it is merged.
+            <Subject names={waiting} /> {is(waiting)} in pull request #{skills.request!.number}. Your agents get {it(waiting)} once it is merged.
           </span>
           <a href={skills.request!.url} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'outline', size: 'xs', className: 'shrink-0' })}>
             Open #{skills.request!.number}
@@ -151,7 +167,7 @@ export function ProjectSkillsLine({
       )}
       {onBranch && (
         <span>
-          <span className="text-foreground">{named(waiting)}</span>: on the branch {skills.branch} on {skills.remote}. Merge it into {skills.startBranch ?? 'the default branch'}, and your agents get {it(waiting)}.
+          <Subject names={waiting} /> {is(waiting)} on the branch {skills.branch} on {skills.remote}. Merge it into {skills.startBranch ?? 'the default branch'}, and your agents get {it(waiting)}.
         </span>
       )}
       {error && <span className="text-danger">{error}</span>}

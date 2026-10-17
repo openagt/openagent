@@ -145,8 +145,8 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A project is also added by its repository's address, for a computer that does not have
   its folder, as a server: OpenAgent clones it into `~/projects/<its name>` and says where
   it went. Picked over asking for the folder at every add, one more thing to read.
-- When a skill in a project has a newer version, the project's page names it ("orchestration
-  has a newer version") with an "Update" button; the texts are written only on that press,
+- When a skill in a project has a newer version, the project's page names it ("The
+  orchestration skill has a newer version") with an "Update" button; the texts are written only on that press,
   and sent on as a save is. Picked over a count of skills that "have a newer text", which
   said neither which skill nor what a text is, over saying nothing until asked, and over
   writing every text again unasked.

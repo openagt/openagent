@@ -122,7 +122,7 @@ describe('ProjectSkillsLine', () => {
     const onChanged = vi.fn()
     const { container } = render(<ProjectSkillsLine projectId="p1" onChanged={onChanged} />)
     await screen.findByRole('button', { name: 'Update' })
-    expect(container.textContent).toContain('tickets and queue have newer versions.')
+    expect(container.textContent).toContain('The tickets and queue skills have newer versions.')
     fireEvent.click(screen.getByRole('button', { name: 'Update' }))
     await waitFor(() => expect(sendChangeSkills).toHaveBeenCalledWith('p1', { write: ['tickets', 'queue'] }))
     await waitFor(() => expect(sendProjectSkills).toHaveBeenCalledWith('p1', ['tickets', 'queue']))
@@ -133,7 +133,7 @@ describe('ProjectSkillsLine', () => {
     onProjectSkills.mockResolvedValue(skills({ groups: [{ title: 'Subagents', ticked: true, skills: [skill('orchestration', 'newer')] }] }))
     const { container } = render(<ProjectSkillsLine projectId="p1" />)
     await screen.findByRole('button', { name: 'Update' })
-    expect(container.textContent).toContain('orchestration has a newer version.')
+    expect(container.textContent).toContain('The orchestration skill has a newer version.')
   })
 
   test('skills on this computer only are told with the one press that sends them; once agents have them the card is gone', async () => {
@@ -142,7 +142,7 @@ describe('ProjectSkillsLine', () => {
     sendProjectSkills.mockResolvedValue({ ok: true, sent: 'pushed', branch: 'main' })
     const { container } = render(<ProjectSkillsLine projectId="p1" />)
     await screen.findByRole('button', { name: 'Send to GitHub' })
-    expect(container.textContent).toContain('tickets and queue: on this computer only, so your agents do not have them yet.')
+    expect(container.textContent).toContain('The tickets and queue skills are on this computer only, so your agents do not have them yet.')
     expect(container.textContent).not.toContain('My local branch')
     fireEvent.click(screen.getByRole('button', { name: 'Send to GitHub' }))
     await waitFor(() => expect(sendProjectSkills).toHaveBeenCalledWith('p1'))
@@ -153,7 +153,7 @@ describe('ProjectSkillsLine', () => {
     onProjectSkills.mockResolvedValue(skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current', true)] }], local: true }))
     const { container } = render(<ProjectSkillsLine projectId="p1" />)
     await screen.findByRole('button', { name: 'Send to GitHub' })
-    expect(container.textContent).toContain('tickets: on this computer only, so your agents do not have it yet. Or pick My local branch when you start an agent.')
+    expect(container.textContent).toContain('The tickets skill is on this computer only, so your agents do not have it yet. Or pick My local branch when you start an agent.')
   })
 
   test('a send that is refused says why and keeps the button', async () => {
@@ -169,13 +169,13 @@ describe('ProjectSkillsLine', () => {
     onProjectSkills.mockResolvedValue(noRemote({ uncommitted: ['tickets'] }))
     const { container } = render(<ProjectSkillsLine projectId="p1" />)
     await screen.findByRole('button', { name: 'Commit' })
-    expect(container.textContent).toContain('tickets: not committed, so your agents do not have it yet.')
+    expect(container.textContent).toContain('The tickets skill is not committed, so your agents do not have it yet.')
   })
 
   test('skills on the branch a send left, where no pull request could be opened, are told to merge it, and offered no send', async () => {
     onProjectSkills.mockResolvedValue(skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current', true)] }], remote: 'GitLab', branch: 'openagent/skills' }))
     const { container } = render(<ProjectSkillsLine projectId="p1" />)
-    await waitFor(() => expect(container.textContent).toContain('tickets: on the branch openagent/skills on GitLab. Merge it into main, and your agents get it.'))
+    await waitFor(() => expect(container.textContent).toContain('The tickets skill is on the branch openagent/skills on GitLab. Merge it into main, and your agents get it.'))
     expect(screen.queryByRole('button', { name: 'Send to GitLab' })).toBeNull()
   })
 
@@ -186,7 +186,7 @@ describe('ProjectSkillsLine', () => {
     const { container } = render(<ProjectSkillsLine projectId="p1" />)
     const open = await screen.findByRole('link', { name: 'Open #12' })
     expect(open.getAttribute('href')).toBe('https://example.com/pull/12')
-    expect(container.textContent).toContain('5 skills: in pull request #12. Your agents get them once it is merged.')
+    expect(container.textContent).toContain('5 skills are in pull request #12. Your agents get them once it is merged.')
     expect(screen.queryByRole('button', { name: 'Send to GitHub' })).toBeNull()
   })
 })
