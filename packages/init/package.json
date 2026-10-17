@@ -1,6 +1,6 @@
 {
   "name": "@openagt/init",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "One command gives a project its OpenAgent skills: pick them from a list with ticks, and they are written as tracked files the coding agents read.",
   "license": "MIT",
   "repository": {
