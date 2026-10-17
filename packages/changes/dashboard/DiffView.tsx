@@ -1,5 +1,5 @@
 import { ChevronsUpDown } from 'lucide-react'
-import { cn } from '@openagt/dashboard/module'
+import { Pieces, cn, useHighlighted } from '@openagt/dashboard/module'
 import type { FileDiff } from '../src/diff.js'
 import { MAX_PREVIEW_LINES } from '../src/confined.js'
 
@@ -9,8 +9,8 @@ import { MAX_PREVIEW_LINES } from '../src/confined.js'
 // the whole file (`onWhole`), unless the file is longer than a diff may be: the whole of it would
 // then be cut before the change.
 //
-// Deliberately plain: no syntax highlighting, no editing. The dashboard is not an editor (the risk
-// raised on #475) — this is here to answer "what did the session do", nothing more.
+// Each line's text is coloured by the file's language, as an editor colours it. No editing: the
+// dashboard is not an editor (the risk raised on #475).
 
 type Row = { kind: 'add' | 'del' | 'same'; text: string; number: number } | { kind: 'gap'; hidden: number }
 
@@ -71,8 +71,14 @@ function More({ children, onClick }: { children: string; onClick: (() => void) |
 }
 
 export function DiffView({ diff, wrap, whole, onWhole, className }: { diff: FileDiff; wrap: boolean; whole: boolean; onWhole?: () => void; className?: string }) {
+  const { rows, shown } = read(diff.binary ? '' : diff.patch)
+  // The lines coloured as one text, the removed ones among the rest: a grammar reads a line by the ones above it.
+  const lines = rows.flatMap(row => (row.kind === 'gap' ? [] : [row.text]))
+  const colored = useHighlighted(lines.join('\n'), diff.path)
+  // Each row's line among them; a gap is none.
+  let at = -1
+  const lineOf = rows.map(row => (row.kind === 'gap' ? -1 : ++at))
   if (diff.binary) return <p className="p-2 text-xs text-muted-foreground">Binary file, nothing to show.</p>
-  const { rows, shown } = read(diff.patch)
   if (rows.length === 0) return <p className="p-2 text-xs text-muted-foreground">{diff.status === 'untracked' || diff.status === 'added' ? 'Empty file.' : 'No line changed.'}</p>
   const ask = diff.lines !== undefined && diff.lines > MAX_PREVIEW_LINES ? undefined : onWhole
   const width = `${String(rows.reduce((most, row) => (row.kind === 'gap' ? most : Math.max(most, row.number)), 0)).length + 1}ch`
@@ -89,7 +95,7 @@ export function DiffView({ diff, wrap, whole, onWhole, className }: { diff: File
               {row.number}
             </span>
             <span className={cn('w-3 shrink-0 select-none', MARK[row.kind])}>{SIGN[row.kind]}</span>
-            <span className={cn('min-w-0 pr-2', wrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre')}>{row.text || ' '}</span>
+            <span className={cn('min-w-0 pr-2', wrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre')}>{colored?.[lineOf[i]!] ? <Pieces pieces={colored[lineOf[i]!]!} /> : row.text || ' '}</span>
           </div>
         ),
       )}

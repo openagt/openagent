@@ -130,6 +130,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   file is picked from it. Picked over the tree or the list squeezed above the file.
 - The search button of the Files pane shows the tree and puts the cursor in its "Filter
   files…". Picked over a search box of its own.
+- Files and Changes colour code by its language, with Shiki's Everforest themes, the family
+  the dashboard's colours come from. Picked over plain text.
+- A file's icon is Material Icon Theme's. Picked over vscode-icons, Catppuccin's outlines, and
+  a small two-tone set of our own.
 - The packages every project wants are built in: OpenAgent depends on them and uses them
   for every project through the same contract as any package (a module by its
   `./dashboard` export, a provider of a kind of data and the writer of its hook lines by

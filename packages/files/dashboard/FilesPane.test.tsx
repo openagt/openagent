@@ -229,8 +229,9 @@ describe('opening files, as Claude Code on the web does', () => {
     await waitFor(() => expect(screen.getByText('bold').tagName).toBe('STRONG'))
     expect(screen.queryByText('# Hello')).toBeNull()
     fireEvent.click(screen.getByLabelText('Show the source'))
-    await waitFor(() => expect(screen.getByText('# Hello')).toBeTruthy())
-    expect(screen.queryByText('bold')).toBeNull()
+    // The source, coloured as Markdown: its text is in pieces, and nothing is drawn bold.
+    await waitFor(() => expect(document.querySelector('.font-mono')?.textContent).toContain('# Hello'))
+    expect(document.querySelector('strong')).toBeNull()
     fireEvent.click(screen.getByLabelText('Show it rendered'))
     await waitFor(() => expect(screen.getByText('bold').tagName).toBe('STRONG'))
   })
@@ -308,6 +309,15 @@ describe('opening files, as Claude Code on the web does', () => {
     fireEvent.click(await within(treeOf()).findByTitle('src/app.ts'))
     await waitFor(() => expect(screen.getByText('const b = 2')).toBeTruthy())
     expect(screen.getByText('2')).toBeTruthy()
+  })
+
+  test('code is coloured by its language', async () => {
+    readContent.mockResolvedValue({ path: 'src/app.ts', text: 'const a = 1', truncated: false, binary: false })
+    render(<FilesPane projectId="p1" context={context()} />)
+    await screen.findByText('src')
+    fireEvent.click(folder('src'))
+    fireEvent.click(await within(treeOf()).findByTitle('src/app.ts'))
+    await waitFor(() => expect(document.querySelector('[style*="--light"]')?.textContent).toBe('const'), { timeout: 5000 })
   })
 
   test('nothing is read before a file is opened', async () => {
