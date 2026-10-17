@@ -1,7 +1,6 @@
 import type { ProjectSummary } from '../../src/index.js'
 import { Layers } from 'lucide-react'
-import { cn } from '../lib/utils.js'
-import { buttonVariants } from './ui/button.js'
+import { rowButtonClass } from './ui/row-item.js'
 import { ContextFiles } from './ContextFiles.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import {
@@ -46,11 +45,7 @@ export function ContextMenu({
             <DropdownMenuTrigger
               type="button"
               disabled={busy}
-              className={cn(
-                buttonVariants({ variant: 'ghost', size: 'sm' }),
-                // h-8 to match the Presets `[/]` button beside it; the open-highlight is shared on the trigger.
-                'h-8 items-center gap-1.5 px-2 text-[11px] font-normal text-muted-foreground hover:text-foreground',
-              )}
+              className={rowButtonClass}
             />
           }
         >

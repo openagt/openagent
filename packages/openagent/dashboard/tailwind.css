@@ -17,11 +17,13 @@
   color-scheme: light;
   /* Everforest's greens on a white canvas (#1141). Everforest Light is paper-coloured (#fdf6e3),
      which reads as orange next to any other app; the identity people recognise is the green, not
-     the paper, so the hues stay and the canvas goes white. Cards sit on white too and are told
-     apart by their border, the usual light-mode direction (the dark theme still recedes).
+     the paper, so the hues stay and the canvas goes near-white, in the greens' own cool grey. As
+     in Claude Code's light, the levels are close: the sidebar a step below the page, and the
+     message box and the panes in pure white, a step above it, told apart by their border too.
      The greens are darkened from Everforest Light, which was mixed for cream: #8da101 is 2.9:1 on
      white, below readable for the small text these tokens carry. */
-  --background: #ffffff;
+  --background: #fafbf9;
+  --sidebar: #f3f5f2;
   --foreground: #3a4248;
   --card: #ffffff;
   --card-foreground: #3a4248;
@@ -32,7 +34,8 @@
   --code-foreground: #a63a36;
   --primary: #6f7f00;
   --primary-foreground: #ffffff;
-  --accent: #eef1ec;
+  /* The hover and active fill: a step below the sidebar too, so a row there still lights up. */
+  --accent: #e9ede6;
   --accent-foreground: #3a4248;
 
   /* Status. Every status colour used to be a raw palette value, so "good" was six different
@@ -56,19 +59,23 @@
 
 .dark {
   color-scheme: dark;
-  /* Everforest Dark (medium) — the landing page's exact values: bg #2d353b, panels #232a2e,
-     text #d3c6aa, green accent #a7c080, borders #475258. */
-  --background: #2d353b;
+  /* Everforest Dark on its darker steps (his pick, after Claude Code's dark): the page on
+     Everforest's dimmest background, panes one step above it, fills and lines a step or two above
+     that, so the levels sit close together on a near-black. The hue, the text (#d3c6aa) and the
+     accents are Everforest's as on the landing page, whose surfaces are the medium ones. */
+  --background: #1e2326;
+  /* The sidebar a step below the page, Everforest's hue taken darker than its own dimmest. */
+  --sidebar: #171c1f;
   --foreground: #d3c6aa;
   --code-foreground: #e67e80;
   --card: #232a2e;
   --card-foreground: #d3c6aa;
-  --muted: #343f44;
+  --muted: #2e383c;
   --muted-foreground: #9da9a0;
-  --border: #475258;
+  --border: #374145;
   --primary: #a7c080;
-  --primary-foreground: #2d353b;
-  --accent: #343f44;
+  --primary-foreground: #1e2326;
+  --accent: #2e383c;
   --accent-foreground: #d3c6aa;
 
   /* Same four meanings on the Everforest Dark accents. */

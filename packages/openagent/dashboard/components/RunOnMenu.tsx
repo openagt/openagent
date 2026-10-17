@@ -5,7 +5,7 @@ import { thisMachineName } from '../lib/this-machine.js'
 import { reachedByLine } from '../../src/client.js'
 import { cn } from '../lib/utils.js'
 import { buttonVariants } from './ui/button.js'
-import { chipClass } from './ui/chip.js'
+import { rowButtonClass } from './ui/row-item.js'
 import { OptionLabel } from './ui/option-label.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from './ui/dropdown-menu.js'
@@ -48,9 +48,9 @@ function StatusDot({ status }: { status: MachineStatus | undefined }) {
 
 // One flat "Run on" list (#1067): this machine, then the saved machines and "Add a machine",
 // with a single checkmark.
-// Two looks for the one menu: an icon button for the compact single row, and a chip that also says
-// the target in words, for the launcher's row above the box.
-export function RunOnMenu({ connection, busy, chip = false }: { connection: ConnectionControl; busy: boolean; chip?: boolean | undefined }) {
+// Two looks for the one menu: an icon button for the compact single row, and the target in words,
+// drawn as the rows around the box draw their items, for the row above it (`inRow`).
+export function RunOnMenu({ connection, busy, inRow = false }: { connection: ConnectionControl; busy: boolean; inRow?: boolean | undefined }) {
   // The selected machine (#1067). An id pointing at a removed machine reads as none, and so does
   // any pick on a project that runs here only.
   const selectedMachine =
@@ -69,17 +69,14 @@ export function RunOnMenu({ connection, busy, chip = false }: { connection: Conn
               disabled={busy}
               aria-label="Run on"
               className={
-                chip
-                  ? cn(
-                      chipClass,
-                      'transition-colors hover:bg-[var(--color-accent)] hover:text-[var(--color-accent-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] disabled:pointer-events-none disabled:opacity-50',
-                    )
+                inRow
+                  ? rowButtonClass
                   : cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'relative h-8 w-8')
               }
             />
           }
         >
-          {chip ? (
+          {inRow ? (
             <>
               <span className="relative flex shrink-0">
                 <Icon className="h-3.5 w-3.5" aria-hidden />
@@ -97,8 +94,8 @@ export function RunOnMenu({ connection, busy, chip = false }: { connection: Conn
         </TooltipTrigger>
         <TooltipContent>{`Run on — ${summary}`}</TooltipContent>
       </Tooltip>
-      {/* The chip is at the row's left, the icon button at the compact row's right: the menu opens inward. */}
-      <DropdownMenuContent align={chip ? 'start' : 'end'} className="min-w-[19rem] max-w-[22rem]">
+      {/* The words are at the row's left, the icon button at the compact row's right: the menu opens inward. */}
+      <DropdownMenuContent align={inRow ? 'start' : 'end'} className="min-w-[19rem] max-w-[22rem]">
         <DropdownMenuItem className="items-start" onClick={() => connection.onSelectLocal()}>
           <Check className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', onThisMachine ? 'opacity-100' : 'opacity-0')} />
           <OptionLabel label={here} description="Start the run here, through this project's start hook." />

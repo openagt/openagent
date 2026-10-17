@@ -10,7 +10,7 @@ const STUDIO: Machine = { id: 'studio', url: 'http://192.168.1.5:4200', label: '
 // A person's own computer, reached by the line it keeps open to this server: saved by the address that stands for it here.
 const MACBOOK: Machine = { id: 'macbook', url: 'http://127.0.0.1:4210', label: 'MacBook' }
 
-function renderMenu(over: Partial<ConnectionControl> = {}, chip = true) {
+function renderMenu(over: Partial<ConnectionControl> = {}, inRow = true) {
   const connection: ConnectionControl = {
     machines: [STUDIO],
     selectedMachineId: null,
@@ -22,18 +22,17 @@ function renderMenu(over: Partial<ConnectionControl> = {}, chip = true) {
     status: {},
     ...over,
   }
-  render(<RunOnMenu connection={connection} busy={false} chip={chip} />)
+  render(<RunOnMenu connection={connection} busy={false} inRow={inRow} />)
   return connection
 }
 
 const trigger = () => screen.getByRole('button', { name: 'Run on' })
 
-describe('the "Run on" pick as a chip', () => {
-  test('it reads "This machine" while no machine is picked, and looks like a chip', () => {
+describe('the "Run on" pick in the row under the box', () => {
+  test('it reads "This machine" while no machine is picked, drawn as the row under the box draws its items: no border', () => {
     renderMenu()
     expect(trigger().textContent).toBe('This machine')
-    expect(trigger().className).toContain('rounded-full')
-    expect(trigger().className).toContain('border')
+    expect(trigger().className).not.toContain('border')
     // An icon before the name and a chevron after it.
     expect(trigger().querySelectorAll('svg')).toHaveLength(2)
   })
@@ -118,13 +117,13 @@ describe('a saved machine that is a person\'s own computer, reached by the line 
     expect(connection.onSelect).toHaveBeenCalledWith(MACBOOK)
   })
 
-  test('picked, the chip and the icon button draw a computer; a picked server draws a server', () => {
-    for (const chip of [true, false]) {
-      renderMenu({ machines: [MACBOOK, STUDIO], selectedMachineId: 'macbook' }, chip)
+  test('picked, the words and the icon button draw a computer; a picked server draws a server', () => {
+    for (const inRow of [true, false]) {
+      renderMenu({ machines: [MACBOOK, STUDIO], selectedMachineId: 'macbook' }, inRow)
       expect(trigger().querySelector('svg.lucide-laptop')).toBeTruthy()
       expect(trigger().querySelector('svg.lucide-server')).toBeNull()
       cleanup()
-      renderMenu({ machines: [MACBOOK, STUDIO], selectedMachineId: 'studio' }, chip)
+      renderMenu({ machines: [MACBOOK, STUDIO], selectedMachineId: 'studio' }, inRow)
       expect(trigger().querySelector('svg.lucide-server')).toBeTruthy()
       expect(trigger().querySelector('svg.lucide-laptop')).toBeNull()
       cleanup()
@@ -138,7 +137,7 @@ describe('the page opened from somewhere else than the computer it is on', () =>
   const own = window.location.href
   afterEach(() => page.reconfigure({ url: own }))
 
-  test('the first row and the chip say the name the page was reached at; the row\'s description stays, and a picked machine still reads by its label', async () => {
+  test('the first row and the button say the name the page was reached at; the row\'s description stays, and a picked machine still reads by its label', async () => {
     page.reconfigure({ url: 'https://165.245.244.10/' })
     renderMenu()
     expect(trigger().textContent).toBe('165.245.244.10')

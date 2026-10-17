@@ -1,7 +1,7 @@
 import { Check, ChevronDown } from 'lucide-react'
 import { PUBLISH_LABELS, type PublishPick } from '../../src/client.js'
 import { cn } from '../lib/utils.js'
-import { buttonVariants } from './ui/button.js'
+import { rowButtonClass } from './ui/row-item.js'
 import { OptionLabel } from './ui/option-label.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import {
@@ -56,16 +56,12 @@ export function AutoMenu({
               type="button"
               disabled={busy}
               aria-label="Auto"
-              className={cn(
-                buttonVariants({ variant: 'ghost', size: 'xs' }),
-                // max-w-full: a long label is cut short instead of pushing the model menu beside it.
-                'max-w-full font-normal text-muted-foreground hover:text-foreground',
-              )}
+              className={rowButtonClass}
             />
           }
         >
           <span className="truncate">{label}</span>
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+          <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
         </TooltipTrigger>
         <TooltipContent>What the agent does by itself when it finishes.</TooltipContent>
       </Tooltip>

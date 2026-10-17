@@ -1,6 +1,6 @@
 import { Check, ChevronDown, GitBranch } from 'lucide-react'
 import { cn } from '../lib/utils.js'
-import { chipClass } from './ui/chip.js'
+import { rowButtonClass } from './ui/row-item.js'
 import { OptionLabel } from './ui/option-label.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuItem } from './ui/dropdown-menu.js'
@@ -8,13 +8,13 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGro
 /** Where the agent's own branch starts: the project's main branch, or the branch the project's folder is on. */
 export type StartFrom = 'main' | 'local'
 
-/** What the chip reads for a pick: the branch's name, the local one marked as such. */
+/** What the button reads for a pick: the branch's name, the local one marked as such. */
 export function startFromLabel(pick: StartFrom, main: string, local: string): string {
   return pick === 'local' ? `${local} (local)` : main
 }
 
-// The launcher's "start from" chip, in the row above the box: the branch the agent starts from,
-// in words, and a menu to pick between the two. The chip reads the pick itself, so where a Start
+// The launcher's "start from" pick, in the row above the box: the branch the agent starts from,
+// in words, and a menu to pick between the two. The button reads the pick itself, so where a Start
 // begins is on screen with the menu shut. The local branch is listed even when it has the main
 // branch's name: local `main` may hold commits that are not pushed.
 export function StartFromMenu({ main, local, pick, onPick, busy }: { main: string; local: string; pick: StartFrom; onPick: (pick: StartFrom) => void; busy: boolean }) {
@@ -32,10 +32,7 @@ export function StartFromMenu({ main, local, pick, onPick, busy }: { main: strin
               type="button"
               disabled={busy}
               aria-label="The agent starts from"
-              className={cn(
-                chipClass,
-                'transition-colors hover:bg-[var(--color-accent)] hover:text-[var(--color-accent-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] disabled:pointer-events-none disabled:opacity-50',
-              )}
+              className={rowButtonClass}
             />
           }
         >
