@@ -13,7 +13,7 @@ export function startFromLabel(pick: StartFrom, main: string, local: string): st
   return pick === 'local' ? `${local} (local)` : main
 }
 
-// The launcher's "start from" pick, in the row under the box: the branch the agent starts from,
+// The launcher's "start from" pick, in the row above the box: the branch the agent starts from,
 // in words, and a menu to pick between the two. The button reads the pick itself, so where a Start
 // begins is on screen with the menu shut. The local branch is listed even when it has the main
 // branch's name: local `main` may hold commits that are not pushed.

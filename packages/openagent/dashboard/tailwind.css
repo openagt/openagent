@@ -22,6 +22,7 @@
      The greens are darkened from Everforest Light, which was mixed for cream: #8da101 is 2.9:1 on
      white, below readable for the small text these tokens carry. */
   --background: #ffffff;
+  --sidebar: #ffffff;
   --foreground: #3a4248;
   --card: #ffffff;
   --card-foreground: #3a4248;
@@ -61,6 +62,8 @@
      that, so the levels sit close together on a near-black. The hue, the text (#d3c6aa) and the
      accents are Everforest's as on the landing page, whose surfaces are the medium ones. */
   --background: #1e2326;
+  /* The sidebar a step below the page, Everforest's hue taken darker than its own dimmest. */
+  --sidebar: #171c1f;
   --foreground: #d3c6aa;
   --code-foreground: #e67e80;
   --card: #232a2e;

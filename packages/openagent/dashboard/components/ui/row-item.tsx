@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { cn } from '../../lib/utils.js'
 
-// The look of what stands in the row under the message box, as in Claude Code's: plain words with
+// The look of what stands in the rows above and under the message box, as in Claude Code's: plain words with
 // an icon, no border, every one the same height and size, muted until pointed at. A class as well
 // as a component, so a menu's button is drawn the same way as a word that is only said.
 // min-w-0 and overflow-hidden: in a full row an item gives way, and its label is cut short. On a

@@ -301,11 +301,11 @@ export function AgentHistory({
                 when the list is empty (#1147): the heading is what makes "No sessions yet." read as
                 the state of this list rather than a lonely line in the sidebar. */}
             <div className="sticky top-0 z-10">
-              <SidebarGroupLabel className="rounded-none bg-background font-normal tracking-wide text-muted-foreground">Recent agents</SidebarGroupLabel>
+              <SidebarGroupLabel className="rounded-none bg-sidebar font-normal tracking-wide text-muted-foreground">Recent agents</SidebarGroupLabel>
               {/* Absolute (hanging just below the label) so it does not push the first row down; it
                   still overlays the rows scrolling up under it. `rail-fade` keeps it invisible at
                   the top of the scroll (so it never dims the first row) and fades it in on scroll. */}
-              <div aria-hidden className="rail-fade pointer-events-none absolute inset-x-0 top-full h-4 bg-gradient-to-b from-background to-transparent" />
+              <div aria-hidden className="rail-fade pointer-events-none absolute inset-x-0 top-full h-4 bg-gradient-to-b from-sidebar to-transparent" />
             </div>
             <SidebarGroupContent>
               <SidebarMenu className="gap-0.5">

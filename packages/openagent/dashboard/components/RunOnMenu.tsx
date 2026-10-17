@@ -49,7 +49,7 @@ function StatusDot({ status }: { status: MachineStatus | undefined }) {
 // One flat "Run on" list (#1067): this machine, then the saved machines and "Add a machine",
 // with a single checkmark.
 // Two looks for the one menu: an icon button for the compact single row, and the target in words,
-// drawn as the row under the box draws its items, for that row (`inRow`).
+// drawn as the rows around the box draw their items, for the row above it (`inRow`).
 export function RunOnMenu({ connection, busy, inRow = false }: { connection: ConnectionControl; busy: boolean; inRow?: boolean | undefined }) {
   // The selected machine (#1067). An id pointing at a removed machine reads as none, and so does
   // any pick on a project that runs here only.

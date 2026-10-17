@@ -48,10 +48,15 @@ export interface ComposerHandle {
   focus: () => void
 }
 
+/** A row of items above or under the box: one line of a fixed height, no wrap. */
+const ROW = 'flex h-8 items-center gap-2'
+/** Its left side, which gives way: each item cut short, and on a phone, where cut short they would say nothing, scrolled sideways under a faded edge. */
+const ROW_LEFT = 'flex min-w-0 flex-1 items-center gap-0.5 max-sm:overflow-x-auto max-sm:[scrollbar-width:none] max-sm:[mask-image:linear-gradient(to_right,#000_85%,transparent)]'
+
 // The shared agent composer (#721), laid out as Claude Code's: a box one line tall when empty that
 // holds the commands menu (+), the text (the Tiptap editor, `/` `@` `#` triggers) and the submit at
-// its right; and one row under it, with where an agent starts (led by the "Run on" pick) and the
-// caller's controls at the left and the model at the right.
+// its right; a row under it with the caller's controls at the left and the model at the right; and,
+// where an agent is started, a row above it saying where (led by the "Run on" pick).
 // Factored out of the launcher (StartAgentForm) so the run-view chat (AgentComposer) gets the
 // same surface, wired to the same data (files, commands, saved prompts, prefs). The caller owns
 // what happens on submit: the launcher starts a run, the chat says the text to the run. The `@`
@@ -64,8 +69,10 @@ export const Composer = forwardRef<ComposerHandle, {
   addContext?: ((path: string) => void) | undefined
   /** Drop a path from the Context when its `@`/`#` chip leaves the editor (#948). */
   removeContext?: ((path: string) => void) | undefined
-  /** The caller's items in the row under the box, after the "Run on" pick: the launcher's project,
-   *  the branch it starts from, its Context picker and its "Auto" menu. */
+  /** Where the agent starts, in the row above the box after the "Run on" pick: the launcher's
+   *  project and the branch it starts from. */
+  startsAt?: ReactNode
+  /** The caller's controls in the row under the box: the launcher's Context picker and "Auto" menu. */
   controls?: ReactNode
   /** Inside a session: the model it runs on, said at the right of the row under the box, where
    *  the launcher has its select. Words, not a menu: a session keeps the model it started with. */
@@ -101,7 +108,7 @@ export const Composer = forwardRef<ComposerHandle, {
    *  without one the slot keeps its collapse-when-empty behavior for the launcher. */
   idleControl?: ReactNode
 }>(function Composer(
-  { files, addContext, removeContext, controls, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, compact = false, showDriverModel = true, inAgent = false, canSubmit = true, idleControl },
+  { files, addContext, removeContext, startsAt, controls, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, compact = false, showDriverModel = true, inAgent = false, canSubmit = true, idleControl },
   ref,
 ) {
   const [prompt, setPrompt] = useState('')
@@ -333,6 +340,19 @@ export const Composer = forwardRef<ComposerHandle, {
 
   return (
     <>
+      {/* Where the agent starts, above the box, where an agent is started (his pick): the machine,
+          the project and the branch, drawn as the row under the box draws its items. A fixed height
+          and no wrap, so a name that lands late moves nothing; the later items give way first, each
+          cut short, and on a phone the row scrolls sideways, its right edge faded to say so. */}
+      {!inAgent && (
+        <div className={cn('mb-1', ROW)}>
+          <div className={ROW_LEFT}>
+            {runOnEl}
+            {startsAt}
+          </div>
+        </div>
+      )}
+
       {/* The box, as Claude Code's: a fill a step above the page and rounder corners than the rest
           of the app, the commands menu (+) at its left, the text, and the submit at its right,
           the two kept at the last line. One line tall when empty, growing with what is typed. The
@@ -345,17 +365,11 @@ export const Composer = forwardRef<ComposerHandle, {
         <div className="flex shrink-0 items-center p-1">{slotEl}</div>
       </div>
 
-      {/* One row under the box, as Claude Code's: where the agent starts (the "Run on" pick, the
-          project, the branch) and the caller's controls at the left, the model at the right, all
-          drawn alike (row-item.tsx). A fixed height and no wrap, and the left side is the one that
-          gives way, each item cut short: a longer label there never moves the model or the page
-          below, and a name that lands late moves nothing. On a phone, where cut short they would
-          say nothing, the left side scrolls sideways instead, its right edge faded to say so. */}
-      <div className="mt-1 flex h-8 items-center gap-2">
-        <div className="flex min-w-0 flex-1 items-center gap-0.5 max-sm:overflow-x-auto max-sm:[scrollbar-width:none] max-sm:[mask-image:linear-gradient(to_right,#000_85%,transparent)]">
-          {!inAgent && runOnEl}
-          {controls}
-        </div>
+      {/* How it runs, under the box: the caller's controls at the left, the model at the right. The
+          left side is the one that gives way: a longer label there never moves the model or the
+          page below. */}
+      <div className={cn('mt-1', ROW)}>
+        <div className={ROW_LEFT}>{controls}</div>
         <div className="shrink-0">
           {driverModelEl || (
             <span className="flex items-center">

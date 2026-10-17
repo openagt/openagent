@@ -40,6 +40,7 @@ vi.mock('./Composer.js', async () => {
     }))
     return (
       <>
+        <div data-testid="starts-at">{props.startsAt}</div>
         <div data-testid="controls">{props.controls}</div>
         <button type="button" disabled={!props.canSubmit} onClick={() => props.onSubmit('do the thing')}>
           submit-typed
@@ -50,8 +51,8 @@ vi.mock('./Composer.js', async () => {
   return { Composer }
 })
 
-/** Where the agent starts, as the row under the box says it: its words before the Context picker. */
-const startsAt = (): string => (screen.getByTestId('controls').textContent ?? '').split('Context')[0]!
+/** Where the agent starts, as the row above the box says it. */
+const startsAt = (): string => screen.getByTestId('starts-at').textContent ?? ''
 
 const { StartAgentForm } = await import('./StartAgentForm.js')
 
@@ -332,10 +333,10 @@ describe('StartAgentForm (#1774)', () => {
     expect((screen.getByText('submit-typed') as HTMLButtonElement).disabled).toBe(false)
   })
 
-  test('the row under the box starts with the project\'s name, said in words, not a button', () => {
+  test('the row above the box starts with the project\'s name, said in words, not a button', () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
     render(<StartAgentForm {...props} projectName="gemstack" />)
-    const project = screen.getByTestId('controls').firstElementChild!
+    const project = screen.getByTestId('starts-at').firstElementChild!
     expect(startsAt()).toBe('gemstack')
     expect(project.textContent).toBe('gemstack')
     expect(project.querySelector('svg')).not.toBeNull()
@@ -346,11 +347,11 @@ describe('StartAgentForm (#1774)', () => {
     expect(screen.queryByText('Start an agent')).toBeNull()
   })
 
-  test('until the project\'s name is known there is no project word, and the row is there all the same', () => {
+  test('until the project\'s name is known there is no project word, and the row is asked for all the same', () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
     const { rerender } = render(<StartAgentForm {...props} />)
     expect(startsAt()).toBe('')
-    expect(screen.getByTestId('controls').textContent).toContain('Context')
+    expect(composerProps.current.startsAt).toBeNull()
     rerender(<StartAgentForm {...props} projectName="gemstack" />)
     expect(startsAt()).toBe('gemstack')
   })

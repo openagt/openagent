@@ -29,8 +29,8 @@ const STARTING = 'Starting session'
 // from the project's check hook.
 // The Context picker (#439/#314) narrows the run's focus to other projects and to files: the
 // picked paths ride the prompt as one `Context:` line at its end.
-// The row under the box starts with where the Start goes: the "Run on" pick, which the Composer
-// draws first, then the project's name, then the branch the agent starts from.
+// The row above the box says where the Start goes: the "Run on" pick, which the Composer draws
+// first, then the project's name, then the branch the agent starts from.
 // That branch is a menu: the project's main branch (origin's default branch, fetched fresh), or
 // "My local branch", the branch the project's folder is on, as committed on this machine. The pick
 // is saved per project. The local pick hands the start hook the branch's name as `BASE`; the main
@@ -58,7 +58,7 @@ export function StartAgentForm({
   toggleContext,
 }: {
   projectId: string
-  /** The project's name, for the row under the box; absent until the projects are read. */
+  /** The project's name, for the row above the box; absent until the projects are read. */
   projectName?: string | null | undefined
   /** `runsOn` names the machine a remote agent executes on (#1067), for the "runs on <machine>" marker. */
   onAgentStarted?: ((intent: string, agentId: string, runsOn?: string) => void) | undefined
@@ -167,19 +167,23 @@ export function StartAgentForm({
         files={files}
         addContext={addContext}
         removeContext={removeContext}
-        // The row under the box: the project and the branch it starts from, then the Context picker
-        // and the "Auto" menu. No project word until the name is known, never a wrong one: the row's
-        // height is fixed, so the name landing moves nothing. The branch waits for the name, which
-        // would otherwise land before it and push it, and for the saved pick, which would otherwise
-        // flip its words.
+        // Where the agent starts, above the box after the "Run on" pick: the project, then the branch
+        // it starts from. No project word until the name is known, never a wrong one: the row's
+        // height is fixed, so the name landing moves nothing. The branch is the row's last, so
+        // nothing beside it is pushed when it lands or its words change; it waits for the name,
+        // which would otherwise land before it and push it, and for the saved pick, which would
+        // otherwise flip its words.
+        startsAt={
+          projectName ? (
+            <>
+              <RowItem icon={<Folder className="h-3.5 w-3.5 shrink-0" aria-hidden />}>{projectName}</RowItem>
+              {startFrom && preferencesLoaded && <StartFromMenu main={startFrom.main} local={startFrom.local} pick={startFromPick} onPick={pickStartFrom} busy={busy} />}
+            </>
+          ) : null
+        }
+        // How it runs, under the box: the Context picker, then the "Auto" menu.
         controls={
           <>
-            {projectName && (
-              <>
-                <RowItem icon={<Folder className="h-3.5 w-3.5 shrink-0" aria-hidden />}>{projectName}</RowItem>
-                {startFrom && preferencesLoaded && <StartFromMenu main={startFrom.main} local={startFrom.local} pick={startFromPick} onPick={pickStartFrom} busy={busy} />}
-              </>
-            )}
             <ContextMenu
               otherProjects={otherProjects}
               context={context}

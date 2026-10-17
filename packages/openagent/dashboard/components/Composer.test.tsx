@@ -294,34 +294,37 @@ describe('the box', () => {
 
 const runOn = () => screen.getByRole('button', { name: 'Run on' })
 
-describe('the row under the box', () => {
-  test('"Run on", then the caller\'s controls, then the model at the right, in one row right under the box, and nothing above the box', () => {
-    renderComposer({ controls: <span>an-item</span> })
-    const row = box().nextElementSibling!
-    const item = screen.getByText('an-item')
+describe('the rows around the box', () => {
+  test('where the agent starts is a row above the box: "Run on", then the caller\'s words; under it, the caller\'s controls and then the model at the right', () => {
+    renderComposer({ startsAt: <span>a-place</span>, controls: <span>a-control</span> })
+    const above = box().previousElementSibling!
+    const under = box().nextElementSibling!
+    const place = screen.getByText('a-place')
+    const control = screen.getByText('a-control')
     const select = agentTrigger()
-    expect(box().previousElementSibling).toBeNull()
-    expect(row.contains(runOn())).toBe(true)
-    expect(row.contains(item)).toBe(true)
-    expect(row.contains(select)).toBe(true)
-    expect(runOn().compareDocumentPosition(item) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(item.compareDocumentPosition(select) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(above.contains(runOn())).toBe(true)
+    expect(above.contains(place)).toBe(true)
+    expect(runOn().compareDocumentPosition(place) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(under.contains(control)).toBe(true)
+    expect(under.contains(select)).toBe(true)
+    expect(control.compareDocumentPosition(select) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getAllByRole('button', { name: 'Run on' })).toHaveLength(1)
-    // Said in words, drawn as every item of the row is: no border of its own.
+    // Said in words, drawn as every item of the rows is: no border of its own.
     expect(runOn().textContent).toBe('This machine')
     expect(runOn().className).not.toContain('border')
-    // One line of a fixed height: a longer label at the left cannot move the select or the page.
-    expect(row.className).toContain('h-8')
-    expect(row.className).not.toContain('flex-wrap')
-    expect(item.parentElement!.className).toContain('min-w-0')
+    // Each one line of a fixed height: a longer label at the left cannot move the select or the page.
+    for (const row of [above, under]) {
+      expect(row.className).toContain('h-8')
+      expect(row.className).not.toContain('flex-wrap')
+    }
+    expect(place.parentElement!.className).toContain('min-w-0')
     expect(select.parentElement!.className).toContain('shrink-0')
   })
 
-  test('with no controls of the caller, the row still carries "Run on" and the select', () => {
+  test('with nothing of the caller\'s, the row above still carries "Run on", and the row under the select', () => {
     renderComposer()
-    const row = box().nextElementSibling!
-    expect(row.contains(runOn())).toBe(true)
-    expect(row.contains(agentTrigger())).toBe(true)
+    expect(box().previousElementSibling!.contains(runOn())).toBe(true)
+    expect(box().nextElementSibling!.contains(agentTrigger())).toBe(true)
   })
 
   test('in a session the model is said in words where the select would be, and is no button', () => {
@@ -374,8 +377,9 @@ describe('the row under the box', () => {
   })
 
   test('the compact form has no row: the caller\'s controls are not drawn and "Run on" stays an icon button in its one row', () => {
-    renderComposer({ compact: true, controls: <span>an-item</span> })
-    expect(screen.queryByText('an-item')).toBeNull()
+    renderComposer({ compact: true, startsAt: <span>a-place</span>, controls: <span>a-control</span> })
+    expect(screen.queryByText('a-place')).toBeNull()
+    expect(screen.queryByText('a-control')).toBeNull()
     expect(runOn().textContent).toBe('')
   })
 })
@@ -387,7 +391,7 @@ describe('in a session', () => {
     expect(screen.getByRole('button', { name: 'Commands' })).toBeTruthy()
   })
 
-  test('the box is the first thing the composer draws', () => {
+  test('there is no row above the box: the box is the first thing the composer draws', () => {
     renderComposer({ inAgent: true, showDriverModel: false })
     expect(box().previousElementSibling).toBeNull()
   })

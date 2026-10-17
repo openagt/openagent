@@ -36,10 +36,10 @@
   --color-info: var(--info);
 
   /* The shadcn sidebar reads its own `--sidebar-*` family so a sidebar can be themed apart from
-     the page. We keep it in step with the rest of the palette (the rail is the app's own surface,
-     not a contrasting slab): background canvas, accent for the hover/active fill, the shared border
-     and the primary ring. */
-  --color-sidebar: var(--background);
+     the page. Its background is its own (`--sidebar`: in the dark theme a step below the page, as
+     Claude Code's); the rest keeps in step with the palette: accent for the hover/active fill, the
+     shared border and the primary ring. */
+  --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--foreground);
   --color-sidebar-primary: var(--primary);
   --color-sidebar-primary-foreground: var(--primary-foreground);
