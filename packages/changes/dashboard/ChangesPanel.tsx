@@ -451,7 +451,7 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
         {!(narrow && listShown) && (
           <div ref={setDiffsElement} aria-label="Diffs" className="flex min-h-0 min-w-0 flex-auto flex-col overflow-y-auto">
             {caption && (
-              <p className="truncate border-b border-border px-3 py-1.5 text-xs text-muted-foreground" title={caption}>
+              <p className="shrink-0 truncate border-b border-border px-3 py-1.5 text-xs text-muted-foreground" title={caption}>
                 {caption}
               </p>
             )}
