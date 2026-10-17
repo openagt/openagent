@@ -55,8 +55,10 @@ function read(patch: string): { rows: Row[]; shown: number } {
   return { rows, shown }
 }
 
-// A changed line is lit, with a bar of its colour at its start, its text as any other line's.
+// A changed line is lit, with a bar of its colour at its start, its number and sign in that colour
+// and its text as any other line's.
 const TONE = { add: 'border-success bg-success/10', del: 'border-danger bg-danger/10', same: 'border-transparent' } as const
+const MARK = { add: 'text-success', del: 'text-danger', same: 'text-muted-foreground' } as const
 const SIGN = { add: '+', del: '−', same: ' ' } as const
 
 function More({ children, onClick }: { children: string; onClick: (() => void) | undefined }) {
@@ -77,16 +79,16 @@ export function DiffView({ diff, wrap, whole, onWhole, className }: { diff: File
   // Lines are left under the last change while the file has more than the diff shows.
   const more = !whole && diff.lines !== undefined && shown < diff.lines
   return (
-    <div className={cn('overflow-x-auto font-mono text-xs leading-[1.5] text-foreground', className)}>
+    <div className={cn('overflow-x-auto font-mono text-xs leading-[17px] text-foreground', className)}>
       {rows.map((row, i) =>
         row.kind === 'gap' ? (
           <More key={i} onClick={ask}>{`${row.hidden} unmodified ${row.hidden === 1 ? 'line' : 'lines'}`}</More>
         ) : (
           <div key={i} className={cn('flex border-l-[3px]', TONE[row.kind])}>
-            <span className="shrink-0 select-none pr-2 pl-2 text-right tabular-nums opacity-60" style={{ width: `calc(${width} + 1rem)` }}>
+            <span className={cn('shrink-0 select-none pr-2 pl-2 text-right tabular-nums', MARK[row.kind])} style={{ width: `calc(${width} + 1rem)` }}>
               {row.number}
             </span>
-            <span className="w-3 shrink-0 select-none opacity-70">{SIGN[row.kind]}</span>
+            <span className={cn('w-3 shrink-0 select-none', MARK[row.kind])}>{SIGN[row.kind]}</span>
             <span className={cn('min-w-0 pr-2', wrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre')}>{row.text || ' '}</span>
           </div>
         ),

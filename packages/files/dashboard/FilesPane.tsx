@@ -55,9 +55,9 @@ const nameOf = (path: string) => path.slice(path.lastIndexOf('/') + 1)
 /** One opened file's tab: a click shows it, a double click keeps a preview, the cross closes it. */
 function Tab({ tab, shown, onShow, onKeep, onClose }: { tab: OpenTab; shown: boolean; onShow: () => void; onKeep: () => void; onClose: () => void }) {
   return (
-    <div role="tab" aria-selected={shown} className={cn('flex h-7 shrink-0 items-center rounded-md text-xs text-muted-foreground hover:bg-accent', shown && 'bg-accent text-foreground')}>
+    <div role="tab" aria-selected={shown} className={cn('flex h-6 shrink-0 items-center rounded-md text-[13px] text-muted-foreground hover:bg-accent', shown && 'bg-accent text-foreground')}>
       <button type="button" title={tab.path} onClick={onShow} onDoubleClick={onKeep} className="flex h-full items-center gap-1.5 pl-2">
-        <FileIcon path={tab.path} className="size-3.5" />
+        <FileIcon path={tab.path} className="size-3" />
         <span className={cn('max-w-40 truncate', !tab.kept && 'italic')}>{nameOf(tab.path)}</span>
       </button>
       <button type="button" aria-label={`Close ${nameOf(tab.path)}`} onClick={onClose} className="flex h-full items-center px-1.5 hover:text-foreground">
@@ -151,7 +151,7 @@ export function FilesPane({ projectId, agentId, activity, context }: ModulePanel
           <TooltipContent>{tree ? 'Hide the file tree' : 'Show the file tree'}</TooltipContent>
         </Tooltip>
         {tabs.length === 0 ? (
-          <h2 className="truncate pl-1 text-xs font-medium text-muted-foreground">Files</h2>
+          <h2 className="truncate pl-1 text-[13px] text-muted-foreground">Files</h2>
         ) : (
           <div ref={tablist} role="tablist" aria-label="Open files" className="flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]">
             {tabs.map(tab => (

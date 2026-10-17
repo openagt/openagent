@@ -78,9 +78,9 @@ function ChangeRow({ path, mark, label, picked, onPick }: { path: string; mark: 
         onClick={onPick}
         aria-pressed={picked}
         title={`${path} · ${mark.status === 'untracked' || mark.status === 'added' ? 'new' : mark.status}${mark.committed ? '' : ', not committed'}`}
-        className={cn('flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-sm hover:bg-accent', picked && 'bg-accent')}
+        className={cn('flex h-6 w-full items-center gap-1.5 rounded-md px-2 text-left text-[13px] leading-[19px] hover:bg-accent', picked && 'bg-accent')}
       >
-        <FileIcon path={path} />
+        <FileIcon path={path} className="size-3" />
         <span className={cn('min-w-0 flex-1 truncate', mark.status === 'deleted' && 'line-through')}>{label}</span>
         {!mark.committed && <span aria-label="not committed" className="size-1.5 shrink-0 rounded-full border border-current text-muted-foreground" />}
         <Counts mark={mark} />
@@ -111,8 +111,8 @@ function foldersOf(paths: string[]): Folder {
 function CommitRow({ label, detail, title, picked, onPick }: { label: string; detail?: string; title?: string; picked: boolean; onPick: () => void }) {
   return (
     <li>
-      <button type="button" onClick={onPick} aria-pressed={picked} title={title} className={cn('flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-accent', picked && 'bg-accent')}>
-        <span className="w-full truncate text-sm">{label}</span>
+      <button type="button" onClick={onPick} aria-pressed={picked} title={title} className={cn('flex w-full flex-col rounded-md px-2 py-1.5 text-left hover:bg-accent', picked && 'bg-accent')}>
+        <span className="w-full truncate text-[13px] leading-[19px]">{label}</span>
         {detail !== undefined && <span className="w-full truncate text-xs text-muted-foreground">{detail}</span>}
       </button>
     </li>
@@ -341,12 +341,12 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
         </Tooltip>
         {/* One line, cut at its end on a narrow pane: the branches come first. */}
         {between ? (
-          <h2 className="min-w-0 truncate pl-1 text-sm font-normal" title={between}>
+          <h2 className="min-w-0 truncate pl-1 text-[13px] text-muted-foreground" title={between}>
             {between}
             {merged !== undefined && <span className="pl-1 text-xs text-muted-foreground">{merged ? '· merged' : '· not merged yet'}</span>}
           </h2>
         ) : (
-          <h2 className="truncate pl-1 text-xs font-medium text-muted-foreground">Changes</h2>
+          <h2 className="truncate pl-1 text-[13px] text-muted-foreground">Changes</h2>
         )}
       </PaneTitle>
       <PaneActions>
@@ -406,8 +406,8 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
         .map(dir => (
           <li key={dir.path}>
             <details open className="group">
-              <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-md px-1.5 py-1 text-sm text-muted-foreground hover:bg-accent">
-                <ChevronRight aria-hidden className="size-4 shrink-0 group-open:rotate-90" />
+              <summary className="flex h-6 cursor-pointer list-none items-center gap-1.5 rounded-md px-2 text-[13px] text-muted-foreground hover:bg-accent">
+                <ChevronRight aria-hidden className="size-3 shrink-0 group-open:rotate-90" />
                 <span className="truncate">{dir.name}</span>
               </summary>
               <ul className="ml-2.5">{folderOf(dir)}</ul>
@@ -430,8 +430,8 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
             {agentId && commits.length > 0 && (
               <section aria-label="Commits" className={cn('flex shrink-0 flex-col border-t border-border', commitsOpen && 'max-h-[45%]')}>
                 <h3>
-                  <button type="button" aria-expanded={commitsOpen} onClick={() => setCommitsOpen(!commitsOpen)} className="flex w-full items-center gap-1.5 px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground">
-                    <ChevronRight aria-hidden className={cn('size-4 shrink-0', commitsOpen && 'rotate-90')} />
+                  <button type="button" aria-expanded={commitsOpen} onClick={() => setCommitsOpen(!commitsOpen)} className="mt-1 flex h-6 w-full items-center gap-1.5 px-3 text-[13px] text-muted-foreground hover:text-foreground">
+                    <ChevronRight aria-hidden className={cn('size-3 shrink-0', commitsOpen && 'rotate-90')} />
                     <span className="flex-1 text-start">Commits</span>
                     <span className="text-xs">{commits.length}</span>
                   </button>
@@ -474,10 +474,10 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
                     type="button"
                     aria-expanded={!isFolded}
                     onClick={() => foldDiff(page, path, !isFolded)}
-                    className={cn('sticky top-0 z-10 flex w-full items-center gap-1.5 border-b border-border bg-card px-2 py-1.5 text-start text-sm hover:bg-accent', path === picked && 'text-foreground')}
+                    className={cn('sticky top-0 z-10 flex h-8 w-full items-center gap-1.5 bg-muted px-2 text-start text-[13px] text-muted-foreground hover:bg-accent', path === picked && 'text-foreground')}
                   >
-                    <ChevronRight aria-hidden className={cn('size-4 shrink-0 text-muted-foreground', !isFolded && 'rotate-90')} />
-                    <FileIcon path={path} />
+                    <ChevronRight aria-hidden className={cn('size-3.5 shrink-0', !isFolded && 'rotate-90')} />
+                    <FileIcon path={path} className="size-3" />
                     <span className={cn('min-w-0 truncate', mark.status === 'deleted' && 'line-through')}>{path}</span>
                     <Counts mark={mark} />
                   </button>

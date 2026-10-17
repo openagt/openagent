@@ -281,10 +281,10 @@ function PaneCard({ pane }: { pane: Pane }) {
     // drawn anew, so what was opened and scrolled in it stays.
     <div className={fills ? 'absolute inset-0 z-30 flex bg-background p-2' : 'flex h-full min-h-0 min-w-0'}>
       <section aria-label={pane.label} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground">
-        <header className="flex h-9 shrink-0 items-center gap-0.5 pr-1 pl-1">
+        <header className="flex h-8 shrink-0 items-center gap-0.5 pr-1 pl-1">
           {/* The pane's name stands until the pane puts its own title here. */}
           <div ref={setTitle} className="peer flex min-w-0 flex-1 items-center gap-0.5 empty:hidden" />
-          <h2 className="min-w-0 flex-1 truncate pl-2 text-xs font-medium text-muted-foreground peer-[:not(:empty)]:hidden">{pane.label}</h2>
+          <h2 className="min-w-0 flex-1 truncate pl-2 text-[13px] text-muted-foreground peer-[:not(:empty)]:hidden">{pane.label}</h2>
           <div ref={setActions} className="flex shrink-0 items-center gap-0.5 empty:hidden" />
           <Tooltip>
             <TooltipTrigger

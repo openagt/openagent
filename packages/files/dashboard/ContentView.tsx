@@ -16,9 +16,10 @@ export function ContentView({ content, wrap = false, className }: { content: Fil
   if (content.binary) return <p className="p-2 text-xs text-muted-foreground">Binary file, nothing to show.</p>
   if (!content.text) return <p className="p-2 text-xs text-muted-foreground">Empty file.</p>
   const lines = content.text.split('\n')
-  const width = `${String(lines.length).length + 1}ch`
+  // The widest number, and the room after it: a padding inside the width would wrap a two-digit number.
+  const width = `calc(${String(lines.length).length}ch + 0.75rem)`
   return (
-    <div className={cn('overflow-auto font-mono text-[11px] leading-[1.45]', className)}>
+    <div className={cn('overflow-auto font-mono text-xs leading-[17px]', className)}>
       {lines.map((line, i) => (
         <div key={i} className={cn('flex px-2 text-foreground', wrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre')}>
           <span className="shrink-0 select-none pr-3 text-right tabular-nums text-muted-foreground/60" style={{ width }}>
