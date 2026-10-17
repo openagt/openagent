@@ -7,10 +7,15 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
 import { ThemeSubmenu } from './ThemeSubmenu.js'
 import { NotificationsSubmenu } from './NotificationsSubmenu.js'
 
-// The foot of the sidebar: the person at this dashboard, their picture and name, as one row that
-// opens their menu (his pick, over a row of three icons): the theme, the notifications, and
-// Settings. The gear at the row's end says what the row opens. The name is git's, the picture the
-// git host's (`onPerson`); with no picture, their initials.
+// The foot of the sidebar: the person at this dashboard, their picture and first name, as one row
+// that opens their menu (his pick, over a row of three icons): the theme, the notifications, and
+// Settings, under their whole name. The gear at the row's end says what the row opens. The name is
+// git's, the picture the git host's (`onPerson`); with no picture, their initials.
+
+/** The first word of a name: what the row says, the whole name being in the menu. */
+export function firstName(name: string): string {
+  return name.trim().split(/\s+/)[0] ?? name
+}
 
 /** Up to two initials of a name: "Suleiman Shahbari" is "SS", "octo" is "O". */
 export function initials(name: string): string {
@@ -42,7 +47,7 @@ export function PersonMenu({ atSettings, onSettings }: { atSettings?: boolean | 
         )}
       >
         <Avatar person={person} />
-        <span className="min-w-0 flex-1 truncate">{person?.name ?? ''}</span>
+        <span className="min-w-0 flex-1 truncate">{person ? firstName(person.name) : ''}</span>
         <Settings className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-[14rem]">

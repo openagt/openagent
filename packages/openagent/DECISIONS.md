@@ -82,8 +82,8 @@ already made, and lists it in its pull request; for anything else it proposes an
 - Notifications are the browser's only: they alert in the open tab. Posting to a
   channel is a skill's, fired by the tool that runs the agent when a run ends. Picked over
   the dashboard's Discord watchers, which posted only while the dashboard was running.
-- The foot of the sidebar is the person: their picture and name, as one row that opens one
-  menu with the theme, the notifications and Settings. The name is git's, the picture the
+- The foot of the sidebar is the person: their picture and first name, as one row that opens
+  one menu with their whole name, the theme, the notifications and Settings. The name is git's, the picture the
   git host's, asked through the project's git host package. The project select stays at the
   top, beside the pages it changes. Picked over a row of three icons, and over the project
   select at the foot.

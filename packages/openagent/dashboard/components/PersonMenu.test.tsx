@@ -7,7 +7,7 @@ vi.mock('../rpc/person.js', () => ({ onPerson }))
 vi.mock('./ThemeSubmenu.js', () => ({ ThemeSubmenu: () => <div role="menuitem">Theme</div> }))
 vi.mock('./NotificationsSubmenu.js', () => ({ NotificationsSubmenu: () => <div role="menuitem">Notifications</div> }))
 
-const { PersonMenu, initials } = await import('./PersonMenu.js')
+const { PersonMenu, firstName, initials } = await import('./PersonMenu.js')
 
 afterEach(() => {
   cleanup()
@@ -15,14 +15,15 @@ afterEach(() => {
 })
 
 describe('PersonMenu', () => {
-  test('the person\'s row: their picture and name, opening the theme, the notifications, and Settings', async () => {
+  test('the person\'s row: their picture and first name, opening their whole name, the theme, the notifications, and Settings', async () => {
     onPerson.mockResolvedValue({ name: 'Ada Lovelace', login: 'ada', avatar: 'https://avatars.githubusercontent.com/u/1' })
     const onSettings = vi.fn()
     const { container } = render(<PersonMenu onSettings={onSettings} />)
     const row = await screen.findByRole('button', { name: 'Ada Lovelace: settings' })
-    expect(row.textContent).toBe('Ada Lovelace')
+    expect(row.textContent).toBe('Ada')
     expect(container.querySelector('img')?.getAttribute('src')).toBe('https://avatars.githubusercontent.com/u/1')
     fireEvent.click(row)
+    expect(screen.getByText('Ada Lovelace')).toBeTruthy()
     expect(screen.getByText('@ada')).toBeTruthy()
     expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Theme', 'Notifications', 'Settings'])
     fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }))
@@ -42,6 +43,12 @@ describe('PersonMenu', () => {
     onPerson.mockResolvedValue({ name: 'Ada Lovelace' })
     render(<PersonMenu atSettings onSettings={() => {}} />)
     expect((await screen.findByRole('button', { name: 'Ada Lovelace: settings' })).getAttribute('aria-current')).toBe('page')
+  })
+
+  test('the first name is the first word; a one-word name, a login say, is itself', () => {
+    expect(firstName('Suleiman Shahbari')).toBe('Suleiman')
+    expect(firstName('  Ada King Lovelace ')).toBe('Ada')
+    expect(firstName('suleimansh')).toBe('suleimansh')
   })
 
   test('initials: the first and last word\'s, or one for one word', () => {
