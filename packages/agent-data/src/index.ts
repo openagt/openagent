@@ -1,4 +1,4 @@
-export { BRANCHES_DIR, DATA_BRANCH, OPENAGENT_DIR } from './names.js'
+export { BRANCHES_DIR, DATA_BRANCH, OPENAGENT_DIR, SKILLS_ENV } from './names.js'
 export { installProject, nodeInstallFs, FIRST_COMMIT_MESSAGE, type InstallResult, type InstallDeps, type InstallFs } from './install.js'
 export { gitignorePath, openagentGitignore } from './openagent-gitignore.js'
 export { lineRuns } from './hook-lines.js'

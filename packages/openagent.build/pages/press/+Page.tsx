@@ -73,7 +73,7 @@ export default function Page() {
         <Step kicker="Name">
           <p style={pStyle}>
             The name is written <b style={{ color: '#d3c6aa', fontWeight: 600 }}>OpenAgent</b> (one word, capital O, capital
-            A), and the package is <CodeChip fontSize={13}>@openagt/dashboard</CodeChip>.
+            A), and the package is <CodeChip fontSize={13}>@openagt/start</CodeChip>.
           </p>
         </Step>
         <Step kicker="Banner">

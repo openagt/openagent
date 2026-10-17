@@ -11,7 +11,10 @@ import { addedLine, HOLD_MERGE_LINE, PUBLISH_LINES, resumeRun, runCommand, STOPP
 import { markerCard, recordRun, runnerMark, writeMarker } from './records.js'
 import type { GitHost } from './git-host.js'
 import { sweep } from './sweep.js'
-import { git, readUntimedDiary, removeRepo, testRepo } from './test-repo.js'
+import { git, handDownBasicSkills, readUntimedDiary, removeRepo, testRepo } from './test-repo.js'
+
+// A run as OpenAgent starts it: with the basic skills handed down.
+handDownBasicSkills()
 
 // One run end to end on a real repository, with the agent faked: the marker, the checkout, the
 // live card the session keeps, the record with what the agent said and cost, the reclaim; a run

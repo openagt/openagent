@@ -1,11 +1,11 @@
 import { readProvidedCommand, runPackageCommand, type ProvidedCommand } from '@openagt/agent-data'
-import { BASIC_PACKAGES, basicGitHosts } from './basic-skills.js'
+import { basicGitHosts, basicPackageNames } from './basic-skills.js'
 
 /**
  * The project's git host (#1820), reached by declaration: whichever package declares
  * `"openagent": { "git-host": "<command>" }` answers the pull requests, and this tool runs that
  * command the way the dashboard runs any provided command. A package the project installed for it
- * comes first; else the git host among this tool's own basic skills, where it answers for the
+ * comes first; else the git host among the basic skills every run gets, where it answers for the
  * project (`basic-skills.ts`), so a project with nothing installed has one too. Nothing here names
  * a git host or a package: a project with none has no pull requests to read back and nothing to
  * merge.
@@ -33,9 +33,9 @@ export interface GitHost {
 
 const NO_GIT_HOST = 'this project has no git host package'
 
-/** The command of the project's git host: its own package's, else this tool's, the names this tool brings never read from the project. */
+/** The command of the project's git host: its own package's, else a basic skill's, the basic skills' names never read from the project. */
 export async function gitHostCommand(repo: string): Promise<ProvidedCommand | undefined> {
-  return readProvidedCommand(repo, 'git-host', await basicGitHosts(repo).catch(() => []), BASIC_PACKAGES).catch(() => undefined)
+  return readProvidedCommand(repo, 'git-host', await basicGitHosts(repo).catch(() => []), await basicPackageNames()).catch(() => undefined)
 }
 
 /** The git host the project declares, run as a command. */

@@ -1,24 +1,15 @@
-import { readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-
 /**
- * OpenAgent's own version, read from the package's own `package.json` at runtime (#312).
- * The compiled entry lives one level under the package root (`dist/` or
- * `dist-test/`), so its `package.json` is always `../package.json`. Cached after
- * the first read; falls back to `unknown` if the file is somehow unreadable.
+ * OpenAgent's version, as the package that started the dashboard says it (`@openagt/start`, the
+ * one people install, through `runDaemon`'s `version`): what this computer tells the machines
+ * it gets into and a phone. `unknown` until said: the packages are unreleased and legitimately
+ * versioned `0.0.0`, so a numeric stand-in would read as a real version (#312).
  */
-let cachedVersion: string | undefined
+let version = 'unknown'
+
 export function openagentVersion(): string {
-  if (cachedVersion !== undefined) return cachedVersion
-  try {
-    const pkgPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json')
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version?: string }
-    // `unknown`, not `0.0.0`: the packages are unreleased and legitimately versioned `0.0.0`, so a
-    // numeric fallback would make a failed read indistinguishable from a correct one (#312).
-    cachedVersion = pkg.version ?? 'unknown'
-  } catch {
-    cachedVersion = 'unknown'
-  }
-  return cachedVersion
+  return version
+}
+
+export function setOpenagentVersion(said: string): void {
+  version = said
 }

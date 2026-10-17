@@ -1,8 +1,9 @@
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 import { strict as assert } from 'node:assert'
-import { DATA_BRANCH, nodeGitRunner, writeSharing } from '@openagt/agent-data'
+import { DATA_BRANCH, nodeGitRunner, SKILLS_ENV, writeSharing } from '@openagt/agent-data'
 import { readDiary, type AnyDiaryLine } from '@openagt/skill-logs'
 
 /**
@@ -12,6 +13,15 @@ import { readDiary, type AnyDiaryLine } from '@openagt/skill-logs'
  */
 
 export const git = nodeGitRunner()
+
+/**
+ * Hand this process the basic skills as `@openagt/start` hands them to OpenAgent: logs, question
+ * and github, from this package's own install.
+ */
+export function handDownBasicSkills(): void {
+  const require = createRequire(import.meta.url)
+  process.env[SKILLS_ENV] = ['@openagt/skill-logs', '@openagt/skill-question', '@openagt/skill-github'].map(name => dirname(require.resolve(`${name}/package.json`))).join(delimiter)
+}
 
 export const RETRIED_RM = { recursive: true, force: true, maxRetries: 10 } as const
 
