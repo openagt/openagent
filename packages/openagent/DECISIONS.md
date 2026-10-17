@@ -82,6 +82,15 @@ already made, and lists it in its pull request; for anything else it proposes an
 - Notifications are the browser's only: they alert in the open tab. Posting to a
   channel is a skill's, fired by the tool that runs the agent when a run ends. Picked over
   the dashboard's Discord watchers, which posted only while the dashboard was running.
+- The dark theme is Everforest on its darker steps: the page on its dimmest background, panes
+  one step above, fills and lines close to them, as Claude Code's dark sits on near-black. The
+  text and the accents are Everforest's as on the landing page, whose surfaces stay the medium
+  ones. Picked over the landing page's exact values, which read light beside Claude Code's.
+- The message box is laid out as Claude Code's: a filled box with rounder corners holding the
+  "+" menu, the text and the send; one row under it with where the agent starts (the machine,
+  the project, the branch), the Context and Auto menus, and the model at the right with its
+  effort in a quieter tone, one menu for both. Picked over a row of bordered chips above the
+  box and a second row under it, and over the effort as a menu of its own.
 - The foot of the sidebar is the person: their picture and first name, as one row that opens
   one menu with their whole name, the theme, the notifications and Settings. The name is git's, the picture the
   git host's, asked through the project's git host package. The project select stays at the

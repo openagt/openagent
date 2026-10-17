@@ -14,7 +14,7 @@ import { AutoMenu } from './AutoMenu.js'
 import { ContextMenu } from './ContextMenu.js'
 import { Composer, type ComposerHandle } from './Composer.js'
 import { StartFromMenu, type StartFrom } from './StartFromMenu.js'
-import { Chip } from './ui/chip.js'
+import { RowItem } from './ui/row-item.js'
 import { Dots } from './ToolCalls.js'
 
 /** The note while the start is asked for: what the chat's first line says next. */
@@ -29,14 +29,14 @@ const STARTING = 'Starting session'
 // from the project's check hook.
 // The Context picker (#439/#314) narrows the run's focus to other projects and to files: the
 // picked paths ride the prompt as one `Context:` line at its end.
-// The row of chips above the box says where the Start goes: the "Run on" pick, which the Composer
+// The row under the box starts with where the Start goes: the "Run on" pick, which the Composer
 // draws first, then the project's name, then the branch the agent starts from.
-// That last chip is a menu: the project's main branch (origin's default branch, fetched fresh), or
+// That branch is a menu: the project's main branch (origin's default branch, fetched fresh), or
 // "My local branch", the branch the project's folder is on, as committed on this machine. The pick
 // is saved per project. The local pick hands the start hook the branch's name as `BASE`; the main
-// branch hands it none. The chip is drawn only where the pick is obeyed: the daemon names the two
+// branch hands it none. The pick is drawn only where it is obeyed: the daemon names the two
 // branches only when the project's start line passes `BASE` on, and a machine has its own branches,
-// so with a machine picked there is no chip and the Start names no branch.
+// so with a machine picked there is none and the Start names no branch.
 // The "Auto" menu, under the box at the left (the model menu is at the right): what the agent
 // does by itself when it finishes. Its button reads the picks, so nothing is hidden.
 // In it, how far the run takes its work: Off, Commit, Publish branch, Open PR, Merge on green.
@@ -58,7 +58,7 @@ export function StartAgentForm({
   toggleContext,
 }: {
   projectId: string
-  /** The project's name, for its chip above the box; absent until the projects are read. */
+  /** The project's name, for the row under the box; absent until the projects are read. */
   projectName?: string | null | undefined
   /** `runsOn` names the machine a remote agent executes on (#1067), for the "runs on <machine>" marker. */
   onAgentStarted?: ((intent: string, agentId: string, runsOn?: string) => void) | undefined
@@ -167,37 +167,35 @@ export function StartAgentForm({
         files={files}
         addContext={addContext}
         removeContext={removeContext}
-        // No chip until the name is known, never a wrong one: the row is there all the same and
-        // its height is fixed, so the name landing moves nothing.
-        // The "start from" chip is the row's last, so nothing is beside it to push when it lands
-        // or when its words change. It waits for the name, which would otherwise land before it
-        // and push it, and for the saved pick, which would otherwise flip its words.
-        aboveControls={
-          projectName ? (
-            <>
-              <Chip icon={<Folder className="h-3.5 w-3.5 shrink-0" aria-hidden />}>{projectName}</Chip>
-              {startFrom && preferencesLoaded && <StartFromMenu main={startFrom.main} local={startFrom.local} pick={startFromPick} onPick={pickStartFrom} busy={busy} />}
-            </>
-          ) : null
-        }
-        belowControls={
+        // The row under the box: the project and the branch it starts from, then the Context picker
+        // and the "Auto" menu. No project word until the name is known, never a wrong one: the row's
+        // height is fixed, so the name landing moves nothing. The branch waits for the name, which
+        // would otherwise land before it and push it, and for the saved pick, which would otherwise
+        // flip its words.
+        controls={
           <>
-          <ContextMenu
-            otherProjects={otherProjects}
-            context={context}
-            contextFiles={contextFiles}
-            summary={contextSummary}
-            busy={busy}
-            onToggle={toggleContext}
-          />
-          <AutoMenu
-            publish={publishPick}
-            picks={offeredPublishPicks(gitHost, remote)}
-            onPublish={pick => updatePreferences({ publish: pick })}
-            cleanup={offersCleanup ? (preferences.postMergeCleanup ?? false) : undefined}
-            onCleanup={next => updatePreferences({ postMergeCleanup: next })}
-            busy={busy}
-          />
+            {projectName && (
+              <>
+                <RowItem icon={<Folder className="h-3.5 w-3.5 shrink-0" aria-hidden />}>{projectName}</RowItem>
+                {startFrom && preferencesLoaded && <StartFromMenu main={startFrom.main} local={startFrom.local} pick={startFromPick} onPick={pickStartFrom} busy={busy} />}
+              </>
+            )}
+            <ContextMenu
+              otherProjects={otherProjects}
+              context={context}
+              contextFiles={contextFiles}
+              summary={contextSummary}
+              busy={busy}
+              onToggle={toggleContext}
+            />
+            <AutoMenu
+              publish={publishPick}
+              picks={offeredPublishPicks(gitHost, remote)}
+              onPublish={pick => updatePreferences({ publish: pick })}
+              cleanup={offersCleanup ? (preferences.postMergeCleanup ?? false) : undefined}
+              onCleanup={next => updatePreferences({ postMergeCleanup: next })}
+              busy={busy}
+            />
           </>
         }
         onSubmit={submit}

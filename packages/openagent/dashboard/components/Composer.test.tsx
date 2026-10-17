@@ -268,19 +268,20 @@ const box = (): HTMLElement => {
 const commands = () => screen.getByRole('button', { name: 'Commands' })
 
 describe('the box', () => {
-  test('it holds the text and the submit alone: the commands menu, the model and "Run on" are outside it', () => {
+  test('it holds the commands menu, the text and the submit: the model and "Run on" are outside it', () => {
     renderComposer()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
     expect(box().contains(screen.getByRole('button', { name: 'Send' }))).toBe(true)
-    expect(box().contains(commands())).toBe(false)
+    expect(box().contains(commands())).toBe(true)
     expect(box().contains(agentTrigger())).toBe(false)
     expect(box().contains(screen.getByRole('button', { name: 'Run on' }))).toBe(false)
   })
 
-  test('the submit is at the right of the text and stays at its last line', () => {
+  test('the commands menu is at the left of the text, the submit at its right, both kept at its last line', () => {
     renderComposer()
     const editor = screen.getByLabelText('prompt')
     const submit = box().querySelector('button[aria-label="Send"]')!
+    expect(commands().compareDocumentPosition(editor) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(editor.compareDocumentPosition(submit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(box().className).toContain('items-end')
   })
@@ -291,27 +292,35 @@ describe('the box', () => {
   })
 })
 
+const runOn = () => screen.getByRole('button', { name: 'Run on' })
+
 describe('the row under the box', () => {
-  test('the commands menu, then the caller\'s controls, then the agent/model select at the right, in one row right under the box', () => {
-    renderComposer({ belowControls: <span>below-left</span> })
+  test('"Run on", then the caller\'s controls, then the model at the right, in one row right under the box, and nothing above the box', () => {
+    renderComposer({ controls: <span>an-item</span> })
     const row = box().nextElementSibling!
-    const left = screen.getByText('below-left')
+    const item = screen.getByText('an-item')
     const select = agentTrigger()
-    expect(row.contains(commands())).toBe(true)
-    expect(row.contains(left)).toBe(true)
+    expect(box().previousElementSibling).toBeNull()
+    expect(row.contains(runOn())).toBe(true)
+    expect(row.contains(item)).toBe(true)
     expect(row.contains(select)).toBe(true)
-    expect(commands().compareDocumentPosition(left) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(left.compareDocumentPosition(select) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(runOn().compareDocumentPosition(item) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(item.compareDocumentPosition(select) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'Run on' })).toHaveLength(1)
+    // Said in words, drawn as every item of the row is: no border of its own.
+    expect(runOn().textContent).toBe('This machine')
+    expect(runOn().className).not.toContain('border')
     // One line of a fixed height: a longer label at the left cannot move the select or the page.
     expect(row.className).toContain('h-8')
     expect(row.className).not.toContain('flex-wrap')
+    expect(item.parentElement!.className).toContain('min-w-0')
     expect(select.parentElement!.className).toContain('shrink-0')
   })
 
-  test('with no controls of the caller, the row still carries the commands menu and the select', () => {
+  test('with no controls of the caller, the row still carries "Run on" and the select', () => {
     renderComposer()
     const row = box().nextElementSibling!
-    expect(row.contains(commands())).toBe(true)
+    expect(row.contains(runOn())).toBe(true)
     expect(row.contains(agentTrigger())).toBe(true)
   })
 
@@ -321,7 +330,6 @@ describe('the row under the box', () => {
     const said = screen.getByText('Opus 5.5')
     expect(row.contains(said)).toBe(true)
     expect(said.closest('button')).toBeNull()
-    expect(commands().compareDocumentPosition(said) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^Driver: / })).toBeNull()
   })
 
@@ -329,38 +337,10 @@ describe('the row under the box', () => {
     renderComposer({ inAgent: true, showDriverModel: false })
     expect(box().nextElementSibling!.textContent).toBe('')
   })
-})
 
-const runOn = () => screen.getByRole('button', { name: 'Run on' })
-
-describe('the row of chips above the box', () => {
-  test('with aboveControls, the "Run on" chip and then its content are in one row above the box, and "Run on" is not in the box', () => {
-    renderComposer({ aboveControls: <span>a-chip</span> })
-    const row = box().previousElementSibling!
-    const chip = screen.getByText('a-chip')
-    expect(row.contains(runOn())).toBe(true)
-    expect(row.contains(chip)).toBe(true)
-    expect(runOn().compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(box().contains(runOn())).toBe(false)
-    expect(screen.getAllByRole('button', { name: 'Run on' })).toHaveLength(1)
-    // Drawn as a chip: it says the target in words.
-    expect(runOn().textContent).toBe('This machine')
-    // One line of a fixed height, and the chips after "Run on" are the first to give way.
-    expect(row.className).toContain('h-6')
-    expect(row.className).not.toContain('flex-wrap')
-    expect(chip.parentElement!.className).toContain('min-w-0')
-    expect(chip.parentElement!.className).toContain('shrink-[100]')
-  })
-
-  test('with no chips of the caller, the row still carries the "Run on" chip', () => {
-    renderComposer()
-    expect(box().previousElementSibling!.contains(runOn())).toBe(true)
-    expect(box().contains(runOn())).toBe(false)
-  })
-
-  test('the chip reads the picked machine, and its menu picks a machine and this machine again', async () => {
+  test('the "Run on" pick reads the picked machine, and its menu picks a machine and this machine again', async () => {
     await saveMachines(STUDIO_MACHINE)
-    renderComposer({ aboveControls: null })
+    renderComposer()
     expect(runOn().textContent).toBe('This machine')
     await openMenu(runOn())
     fireEvent.click(screen.getByRole('menuitem', { name: /^Studio/ }))
@@ -370,13 +350,13 @@ describe('the row of chips above the box', () => {
     await waitFor(() => expect(runOn().textContent).toBe('This machine'))
   })
 
-  test('in a project with no repository address the chip reads "This machine" whatever was picked before, and an offline machine does not block the Start', async () => {
+  test('in a project with no repository address the pick reads "This machine" whatever was picked before, and an offline machine does not block the Start', async () => {
     // Its origin is a folder on this disk: a remote, and still no name another machine knows it by.
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: false, remote: true })
     await saveMachines(STUDIO_MACHINE)
     daemon.reachable = { [STUDIO]: false }
     selectMachine(STUDIO)
-    const { onSubmit } = renderComposer({ aboveControls: null })
+    const { onSubmit } = renderComposer()
     await waitFor(() => expect(runOn().textContent).toBe('This machine'))
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'ship it' } })
     expect(screen.queryByText(/is offline/)).toBeNull()
@@ -384,18 +364,18 @@ describe('the row of chips above the box', () => {
     expect(onSubmit).toHaveBeenCalledWith('ship it')
   })
 
-  test('an offline picked machine still reads its label on the chip, with the note under the box', async () => {
+  test('an offline picked machine still reads its label, with the note under the box', async () => {
     await saveMachines(STUDIO_MACHINE)
     daemon.reachable = { [STUDIO]: false }
     selectMachine(STUDIO)
-    renderComposer({ aboveControls: null })
+    renderComposer()
     await waitFor(() => expect(screen.getByText(/Studio is offline/)).toBeTruthy())
     expect(runOn().textContent).toBe('Studio')
   })
 
-  test('the compact form has no row of chips: "Run on" stays an icon button in its one row', () => {
-    renderComposer({ compact: true, aboveControls: <span>a-chip</span> })
-    expect(screen.queryByText('a-chip')).toBeNull()
+  test('the compact form has no row: the caller\'s controls are not drawn and "Run on" stays an icon button in its one row', () => {
+    renderComposer({ compact: true, controls: <span>an-item</span> })
+    expect(screen.queryByText('an-item')).toBeNull()
     expect(runOn().textContent).toBe('')
   })
 })
@@ -407,7 +387,7 @@ describe('in a session', () => {
     expect(screen.getByRole('button', { name: 'Commands' })).toBeTruthy()
   })
 
-  test('there is no row of chips: the box is the first thing the composer draws', () => {
+  test('the box is the first thing the composer draws', () => {
     renderComposer({ inAgent: true, showDriverModel: false })
     expect(box().previousElementSibling).toBeNull()
   })

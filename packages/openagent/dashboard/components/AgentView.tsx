@@ -25,7 +25,7 @@ import { revealChange, revealScreen, revealSubagent } from '../lib/reveal-change
 import { panesPage } from '../lib/panes.js'
 import { modelContextWindow, modelName, useModels } from '../lib/models.js'
 import { ContextCircle } from './ContextCircle.js'
-import { effortLabel } from './EffortMenu.js'
+import { effortLabel } from '../lib/effort.js'
 import { thisMachineName } from '../lib/this-machine.js'
 import { driverFromImpl } from '../../src/client.js'
 

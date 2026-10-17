@@ -2,13 +2,17 @@ import type { ReactNode } from 'react'
 import { ChevronDown, Check } from 'lucide-react'
 import { cn } from '../lib/utils.js'
 import { NO_MODEL_PINNED } from '../lib/agent-settings.js'
-import { buttonVariants } from './ui/button.js'
+import { effortLabel } from '../lib/effort.js'
+import { rowButtonClass } from './ui/row-item.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
@@ -16,8 +20,10 @@ import {
 
 // The agent's driver + model as one tree (#650/#656/#658): the top level is the coding drivers, and
 // each driver's submenu holds only its own models. Picking a model sets both the driver and the
-// model together, so an incompatible pair (e.g. Codex + a Claude model) can't be chosen. The
-// trigger shows the current driver's logo then the model.
+// model together, so an incompatible pair (e.g. Codex + a Claude model) can't be chosen. Under
+// them, how hard the model may think: the levels are the model's own, so a model that offers none
+// has no such part. The trigger says all three as Claude Code's does: the driver's logo, the
+// model, and the level in a quieter tone ("Opus 5.5 High"); the agent's default level says nothing.
 
 export interface ModelOption {
   value: string
@@ -54,11 +60,22 @@ function modelLabel(driver: DriverOption | undefined, model: string): string | u
   return driver?.models.find(m => m.value === model)?.label ?? model
 }
 
+/** How hard the model may think: the levels it offers, the one in force, and the pick. */
+export interface EffortChoice {
+  /** The levels the picked model offers, in the agent's own order. Empty: the menu has no effort part. */
+  levels: readonly string[]
+  /** The level in force, or `undefined` for the agent's own default. */
+  level?: string | undefined
+  /** Told the new level, or `undefined` when the pick is cleared back to the agent's default. */
+  onChange: (level: string | undefined) => void
+}
+
 export function DriverModelMenu({
   drivers,
   driver,
   model,
   onChange,
+  effort,
   busy,
 }: {
   drivers: DriverOption[]
@@ -66,6 +83,7 @@ export function DriverModelMenu({
   model: string
   /** Set the driver and model together (a model is always picked within its driver). */
   onChange: (driver: string, model: string) => void
+  effort?: EffortChoice | undefined
   busy: boolean
 }) {
   const current = driverOf(drivers, driver)
@@ -73,7 +91,11 @@ export function DriverModelMenu({
   // Spelled out rather than left to the rendered text (#1143): with no model pinned the trigger is
   // a logo and a chevron, which names nothing at all to a screen reader. It used to read as the
   // model label by accident, and that label was "Default".
-  const said = `Driver: ${current?.label ?? ''} · Model: ${currentModelLabel ?? NO_MODEL_PINNED}`
+  const levels = effort?.levels ?? []
+  // A level the model does not offer is still what a run would be given, so it is said rather than
+  // silently read as the default.
+  const level = effort?.level !== undefined ? effortLabel(effort.level) : undefined
+  const said = `Driver: ${current?.label ?? ''} · Model: ${currentModelLabel ?? NO_MODEL_PINNED}${levels.length > 0 ? ` · Effort: ${level ?? 'the agent’s default'}` : ''}`
   return (
     <DropdownMenu>
       <Tooltip>
@@ -83,7 +105,7 @@ export function DriverModelMenu({
               type="button"
               disabled={busy}
               aria-label={said}
-              className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'gap-1.5 px-2 font-normal')}
+              className={cn(rowButtonClass, 'text-foreground')}
             />
           }
         >
@@ -93,7 +115,8 @@ export function DriverModelMenu({
             current?.label
           )}
           {currentModelLabel}
-          <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+          {level && <span className="text-muted-foreground">{level}</span>}
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />
         </TooltipTrigger>
         <TooltipContent>{said}</TooltipContent>
       </Tooltip>
@@ -121,6 +144,24 @@ export function DriverModelMenu({
             </DropdownMenuSubContent>
           </DropdownMenuSub>
         ))}
+        {levels.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Effort</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => effort!.onChange(undefined)}>
+                <Check className={cn('h-3.5 w-3.5 shrink-0', effort?.level === undefined ? 'opacity-100' : 'opacity-0')} />
+                The agent’s default
+              </DropdownMenuItem>
+              {levels.map(one => (
+                <DropdownMenuItem key={one} onClick={() => effort!.onChange(one)}>
+                  <Check className={cn('h-3.5 w-3.5 shrink-0', effort?.level === one ? 'opacity-100' : 'opacity-0')} />
+                  {effortLabel(one)}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

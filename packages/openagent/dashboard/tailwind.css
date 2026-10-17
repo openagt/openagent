@@ -56,19 +56,21 @@
 
 .dark {
   color-scheme: dark;
-  /* Everforest Dark (medium) — the landing page's exact values: bg #2d353b, panels #232a2e,
-     text #d3c6aa, green accent #a7c080, borders #475258. */
-  --background: #2d353b;
+  /* Everforest Dark on its darker steps (his pick, after Claude Code's dark): the page on
+     Everforest's dimmest background, panes one step above it, fills and lines a step or two above
+     that, so the levels sit close together on a near-black. The hue, the text (#d3c6aa) and the
+     accents are Everforest's as on the landing page, whose surfaces are the medium ones. */
+  --background: #1e2326;
   --foreground: #d3c6aa;
   --code-foreground: #e67e80;
   --card: #232a2e;
   --card-foreground: #d3c6aa;
-  --muted: #343f44;
+  --muted: #2e383c;
   --muted-foreground: #9da9a0;
-  --border: #475258;
+  --border: #374145;
   --primary: #a7c080;
-  --primary-foreground: #2d353b;
-  --accent: #343f44;
+  --primary-foreground: #1e2326;
+  --accent: #2e383c;
   --accent-foreground: #d3c6aa;
 
   /* Same four meanings on the Everforest Dark accents. */

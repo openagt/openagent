@@ -22,7 +22,6 @@ import { useSelectedMachineId, selectMachine } from '../lib/remote-target.js'
 import { useMachineStatus } from '../lib/use-machine-status.js'
 import { takePendingDraft } from '../lib/draft-handoff.js'
 import { driverOptions, modelEfforts, useModels } from '../lib/models.js'
-import { EffortMenu } from './EffortMenu.js'
 import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.js'
 import { ClaudeLogo, CodexLogo } from './driver-logos.js'
 import { Button } from './ui/button.js'
@@ -50,9 +49,9 @@ export interface ComposerHandle {
 }
 
 // The shared agent composer (#721), laid out as Claude Code's: a box one line tall when empty that
-// holds the text alone (the Tiptap editor, `/` `@` `#` triggers) with the submit at its right; a
-// row under it with the commands menu and the caller's controls at the left and the model at the
-// right; and, where an agent is started, a row of chips above it led by the "Run on" pick.
+// holds the commands menu (+), the text (the Tiptap editor, `/` `@` `#` triggers) and the submit at
+// its right; and one row under it, with where an agent starts (led by the "Run on" pick) and the
+// caller's controls at the left and the model at the right.
 // Factored out of the launcher (StartAgentForm) so the run-view chat (AgentComposer) gets the
 // same surface, wired to the same data (files, commands, saved prompts, prefs). The caller owns
 // what happens on submit: the launcher starts a run, the chat says the text to the run. The `@`
@@ -65,11 +64,9 @@ export const Composer = forwardRef<ComposerHandle, {
   addContext?: ((path: string) => void) | undefined
   /** Drop a path from the Context when its `@`/`#` chip leaves the editor (#948). */
   removeContext?: ((path: string) => void) | undefined
-  /** The launcher's chips, after the "Run on" chip in the row above the box. */
-  aboveControls?: ReactNode
-  /** The caller's controls in the row under the box, after the commands menu: the launcher's
-   *  Context picker and "Auto" menu. */
-  belowControls?: ReactNode
+  /** The caller's items in the row under the box, after the "Run on" pick: the launcher's project,
+   *  the branch it starts from, its Context picker and its "Auto" menu. */
+  controls?: ReactNode
   /** Inside a session: the model it runs on, said at the right of the row under the box, where
    *  the launcher has its select. Words, not a menu: a session keeps the model it started with. */
   sessionModel?: string | undefined
@@ -104,7 +101,7 @@ export const Composer = forwardRef<ComposerHandle, {
    *  without one the slot keeps its collapse-when-empty behavior for the launcher. */
   idleControl?: ReactNode
 }>(function Composer(
-  { files, addContext, removeContext, aboveControls, belowControls, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, compact = false, showDriverModel = true, inAgent = false, canSubmit = true, idleControl },
+  { files, addContext, removeContext, controls, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, compact = false, showDriverModel = true, inAgent = false, canSubmit = true, idleControl },
   ref,
 ) {
   const [prompt, setPrompt] = useState('')
@@ -211,23 +208,15 @@ export const Composer = forwardRef<ComposerHandle, {
   // nothing on screen saying which. Every value is preferences-backed and global, so the same
   // controls in either place read and write the same state.
   const driverModelEl = showDriverModel && (
-    <>
-      <DriverModelMenu
-        drivers={driverOptions(models).map(d => ({ ...d, ...DRIVER_UI[d.value as DriverName] }))}
-        driver={driver}
-        model={model}
-        onChange={(a, m) => updatePreferences({ driver: a, model: m })}
-        busy={busy}
-      />
-      {/* How hard that model may think, beside it: the levels are the model's own, so the control
-          is there only for a model that offers some. */}
-      <EffortMenu
-        efforts={modelEfforts(models, driver, model)}
-        {...(preferences.effort ? { effort: preferences.effort } : {})}
-        onChange={effort => updatePreferences({ effort: effort ?? '' })}
-        busy={busy}
-      />
-    </>
+    <DriverModelMenu
+      drivers={driverOptions(models).map(d => ({ ...d, ...DRIVER_UI[d.value as DriverName] }))}
+      driver={driver}
+      model={model}
+      onChange={(a, m) => updatePreferences({ driver: a, model: m })}
+      // How hard that model may think, in the same menu: the levels are the model's own.
+      effort={{ levels: modelEfforts(models, driver, model), level: preferences.effort || undefined, onChange: effort => updatePreferences({ effort: effort ?? '' }) }}
+      busy={busy}
+    />
   )
   {/* Commands and saved prompts get a visible surface (#948): load, save and delete in one menu,
       instead of loading only behind typing `/`. Not in the compact row, which has no room and
@@ -249,7 +238,7 @@ export const Composer = forwardRef<ComposerHandle, {
   const runOnEl = inAgent ? null : (
     <RunOnMenu
       busy={busy}
-      chip={!compact}
+      inRow={!compact}
       connection={{
         machines,
         selectedMachineId,
@@ -344,36 +333,33 @@ export const Composer = forwardRef<ComposerHandle, {
 
   return (
     <>
-      {/* The row of chips above the box, where an agent is started. A fixed height and no wrap, so
-          a name that lands late or a chip added later moves nothing below. In a row too narrow for
-          its chips the later ones give way first, each cut short, and the "Run on" pick last. */}
-      {!inAgent && (
-        <div className="mb-1.5 flex h-6 items-center gap-1.5">
-          <div className="flex min-w-0 items-center">{runOnEl}</div>
-          <div className="flex min-w-0 shrink-[100] items-center gap-1.5">{aboveControls}</div>
-        </div>
-      )}
-
-      {/* The box: the text alone, one line tall when empty and growing with what is typed, and the
-          submit at its right, kept at the last line. The editor is borderless: the border is the
-          box's. */}
-      <div className="flex items-end rounded-lg border border-border bg-transparent focus-within:border-muted-foreground/40">
+      {/* The box, as Claude Code's: a fill a step above the page and rounder corners than the rest
+          of the app, the commands menu (+) at its left, the text, and the submit at its right,
+          the two kept at the last line. One line tall when empty, growing with what is typed. The
+          editor is borderless: the border is the box's. */}
+      <div className="flex items-end rounded-xl border border-border bg-card focus-within:border-muted-foreground/40">
+        {/* The editor's own inset sets the text off the box's edge; beside the + it pulls in, so the
+            text starts close to it, as in Claude Code's. */}
+        {commandsEl && <div className="-mr-2 flex shrink-0 items-center p-1">{commandsEl}</div>}
         <div className="min-w-0 flex-1">{editorEl}</div>
         <div className="flex shrink-0 items-center p-1">{slotEl}</div>
       </div>
 
-      {/* The row under the box: the commands menu and the caller's controls at the left, the model
-          at the right. A fixed height and no wrap, and the left side is the one that gives way: a
-          longer label there never moves the model or the page below. */}
+      {/* One row under the box, as Claude Code's: where the agent starts (the "Run on" pick, the
+          project, the branch) and the caller's controls at the left, the model at the right, all
+          drawn alike (row-item.tsx). A fixed height and no wrap, and the left side is the one that
+          gives way, each item cut short: a longer label there never moves the model or the page
+          below, and a name that lands late moves nothing. On a phone, where cut short they would
+          say nothing, the left side scrolls sideways instead, its right edge faded to say so. */}
       <div className="mt-1 flex h-8 items-center gap-2">
-        <div className="flex min-w-0 flex-1 items-center gap-1.5">
-          {commandsEl}
-          {belowControls}
+        <div className="flex min-w-0 flex-1 items-center gap-0.5 max-sm:overflow-x-auto max-sm:[scrollbar-width:none] max-sm:[mask-image:linear-gradient(to_right,#000_85%,transparent)]">
+          {!inAgent && runOnEl}
+          {controls}
         </div>
         <div className="shrink-0">
           {driverModelEl || (
             <span className="flex items-center">
-              {sessionModel !== undefined && <span className="px-2 text-xs text-muted-foreground">{sessionModel}</span>}
+              {sessionModel !== undefined && <span className="px-2 text-sm text-muted-foreground">{sessionModel}</span>}
               {sessionContext}
             </span>
           )}

@@ -40,8 +40,7 @@ vi.mock('./Composer.js', async () => {
     }))
     return (
       <>
-        <div data-testid="above">{props.aboveControls}</div>
-        <div data-testid="below">{props.belowControls}</div>
+        <div data-testid="controls">{props.controls}</div>
         <button type="button" disabled={!props.canSubmit} onClick={() => props.onSubmit('do the thing')}>
           submit-typed
         </button>
@@ -50,6 +49,9 @@ vi.mock('./Composer.js', async () => {
   })
   return { Composer }
 })
+
+/** Where the agent starts, as the row under the box says it: its words before the Context picker. */
+const startsAt = (): string => (screen.getByTestId('controls').textContent ?? '').split('Context')[0]!
 
 const { StartAgentForm } = await import('./StartAgentForm.js')
 
@@ -144,7 +146,7 @@ describe('StartAgentForm (#1774)', () => {
   test('under the box: the Context picker, then the "Auto" menu', async () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true, remote: true })
     render(<StartAgentForm {...props} />)
-    const below = screen.getByTestId('below')
+    const below = screen.getByTestId('controls')
     await waitFor(() => expect(below.contains(autoMenu())).toBe(true))
     const context = within(below).getAllByRole('button')[0]!
     expect(context).not.toBe(autoMenu())
@@ -330,26 +332,27 @@ describe('StartAgentForm (#1774)', () => {
     expect((screen.getByText('submit-typed') as HTMLButtonElement).disabled).toBe(false)
   })
 
-  test('the chip above the box reads the project\'s name, and is a plain chip, not a button', () => {
+  test('the row under the box starts with the project\'s name, said in words, not a button', () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
     render(<StartAgentForm {...props} projectName="gemstack" />)
-    const above = screen.getByTestId('above')
-    expect(above.textContent).toBe('gemstack')
-    expect(above.querySelector('svg')).not.toBeNull()
-    expect(above.querySelector('button')).toBeNull()
+    const project = screen.getByTestId('controls').firstElementChild!
+    expect(startsAt()).toBe('gemstack')
+    expect(project.textContent).toBe('gemstack')
+    expect(project.querySelector('svg')).not.toBeNull()
+    expect(project.tagName).not.toBe('BUTTON')
     // Cut short with an ellipsis where the row is too narrow for it.
     expect(screen.getByText('gemstack').className).toContain('truncate')
-    // No heading over the chips: the page is laid out as an agent's chat, whose box has none.
+    // No heading over the box: the page is laid out as an agent's chat, whose box has none.
     expect(screen.queryByText('Start an agent')).toBeNull()
   })
 
-  test('until the project\'s name is known there is no project chip, and the row of chips is asked for all the same', () => {
+  test('until the project\'s name is known there is no project word, and the row is there all the same', () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
     const { rerender } = render(<StartAgentForm {...props} />)
-    expect(screen.getByTestId('above').textContent).toBe('')
-    expect(composerProps.current.aboveControls).toBeNull()
+    expect(startsAt()).toBe('')
+    expect(screen.getByTestId('controls').textContent).toContain('Context')
     rerender(<StartAgentForm {...props} projectName="gemstack" />)
-    expect(screen.getByTestId('above').textContent).toBe('gemstack')
+    expect(startsAt()).toBe('gemstack')
   })
 
   test('the "start from" chip is after the project\'s chip and reads the main branch until the person picks; then the Start names no branch', async () => {
@@ -357,7 +360,7 @@ describe('StartAgentForm (#1774)', () => {
     start.mockResolvedValue({ agentId: 'r1' })
     render(<StartAgentForm {...props} projectName="gemstack" />)
     await waitFor(() => expect(startFromChip()).not.toBeNull())
-    expect(screen.getByTestId('above').textContent).toBe('gemstackmain')
+    expect(startsAt()).toBe('gemstackmain')
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', {}))
   })
@@ -396,7 +399,7 @@ describe('StartAgentForm (#1774)', () => {
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', {}))
     expect(startFromChip()).toBeNull()
-    expect(screen.getByTestId('above').textContent).toBe('gemstack')
+    expect(startsAt()).toBe('gemstack')
   })
 
   test('with a machine picked there is no "start from" chip, and the Start names no branch of this machine', async () => {
@@ -419,13 +422,13 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(onCommands).toHaveBeenCalled())
     // The launcher has answered, the name has not: no chip yet, the name's chip would push it.
     await new Promise(resolve => setTimeout(resolve, 0))
-    expect(screen.getByTestId('above').textContent).toBe('')
+    expect(startsAt()).toBe('')
     rerender(<StartAgentForm {...props} projectName="gemstack" />)
     // The saved pick is not read yet: no chip that would read "main" and then flip.
-    expect(screen.getByTestId('above').textContent).toBe('gemstack')
+    expect(startsAt()).toBe('gemstack')
     prefsLoaded.current = true
     rerender(<StartAgentForm {...props} projectName="gemstack" />)
-    expect(screen.getByTestId('above').textContent).toBe('gemstackmy/work (local)')
+    expect(startsAt()).toBe('gemstackmy/work (local)')
   })
 
   test('the picked Context rides the prompt as one line at its end, after the command\'s own words', async () => {
