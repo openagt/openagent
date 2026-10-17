@@ -38,6 +38,8 @@ const row = (name: RegExp) => within(list()).getByRole('button', { name })
 const findRow = async (name: RegExp) => within(await screen.findByRole('list', { name: 'Changed files' })).findByRole('button', { name })
 const queryRow = (name: RegExp) => screen.queryByRole('list', { name: 'Changed files' }) && within(list()).queryByRole('button', { name })
 const NOT_MERGED = 'main → agent-x'
+/** A diff's lines as they read, number, sign and text: the text is in pieces once it is coloured. */
+const diffLines = (root: HTMLElement = document.body) => [...root.querySelectorAll('.font-mono > div')].map(line => line.textContent)
 
 describe('ChangesPanel', () => {
   test('a run’s page lists only the files the run changed, grouped by folder, and its header says between which branches and that they are not merged yet', async () => {
@@ -67,7 +69,7 @@ describe('ChangesPanel', () => {
     await waitFor(() => expect(row.getAttribute('aria-pressed')).toBe('true'))
     expect(scrolled.mock.contexts.at(-1)).toBe(screen.getByRole('region', { name: 'src/new.ts' }))
     expect(first.getAttribute('aria-pressed')).toBe('false')
-    await waitFor(() => expect(screen.getAllByText('const b = 3').length).toBe(3))
+    await waitFor(() => expect(diffLines().filter(line => line === '1+const b = 3')).toHaveLength(3))
   })
 
   test('when the picked file leaves the list, the first file is picked again', async () => {
@@ -318,11 +320,17 @@ describe('ChangesPanel, as Claude Code on the web draws it', () => {
     render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
     await waitFor(() => expect(screen.getByText('9 unmodified lines')).toBeTruthy())
     const diff = screen.getByRole('region', { name: 'src/app.ts' })
-    expect(within(diff).getByText('b = 3').parentElement!.textContent).toBe('11+b = 3')
-    expect(within(diff).getByText('b = 2').parentElement!.textContent).toBe('11−b = 2')
+    expect(diffLines(diff)).toContain('11+b = 3')
+    expect(diffLines(diff)).toContain('11−b = 2')
     expect(screen.getByText('Show more lines')).toBeTruthy()
     fireEvent.click(screen.getByText('9 unmodified lines'))
     await waitFor(() => expect(readDiff).toHaveBeenCalledWith(expect.anything(), 'p1', 'src/app.ts', 'run-1', undefined, true))
+  })
+
+  test('a diff’s text is coloured by its file’s language, in the light theme and the dark one', async () => {
+    render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
+    const diff = await screen.findByRole('region', { name: 'src/app.ts' })
+    await waitFor(() => expect(diff.querySelector('[style*="--light"][style*="--dark"]')?.textContent).toBe('const'), { timeout: 5000 })
   })
 
   test('a file’s header folds its diff away; the ⋮ menu folds them all and shows them all again', async () => {
