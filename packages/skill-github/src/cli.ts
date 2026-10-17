@@ -7,6 +7,7 @@ import { mergeRequest } from './merge.js'
 import { watchAndMerge } from './merge-watch.js'
 import { GIT_HOST_NAME, homeUrlFor } from './home.js'
 import { createRepository, offerRepository, type CreateOffer, type CreateOutcome } from './create.js'
+import { signedIn } from './me.js'
 
 /**
  * The command line over the package (#1820): the same functions for an agent in a shell, and for
@@ -32,6 +33,7 @@ export const USAGE = `usage: github <command>
   merge <number>               land pull request <number>: a draft is marked ready, then the merge is armed as --merge arms it
   watch <number>               wait for pull request <number>'s checks and merge it once they pass; what --merge starts where the repository has no auto-merge
   home                         the project's page on GitHub, from its origin remote
+  me                           who is signed in to GitHub through gh: login, name, avatar (a picture's https address)
   create [--check]             create a private repository for a project with no origin, named <account>/<folder>, set it as origin and push;
                                --check only says which repository that would be
 
@@ -161,6 +163,13 @@ const COMMANDS: Record<string, Command> = {
     const url = await homeUrlFor(cwd, git)
     if (!url) throw new Refused({ ok: false, reason: 'no-remote' }, 'no origin remote on GitHub')
     return { ok: true, url, name: GIT_HOST_NAME }
+  },
+
+  async me(args, { cwd, gh }) {
+    parse(args, {}, 0)
+    const outcome = await signedIn(cwd, gh)
+    if (!outcome.ok) throw new Refused(outcome, `nobody is signed in to GitHub through gh: ${outcome.detail}`)
+    return outcome
   },
 }
 

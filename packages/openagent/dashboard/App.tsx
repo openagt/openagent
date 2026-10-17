@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import type { Intervention, Activity, ProjectionRead, ProjectSummary, RecentAgent } from '../src/index.js'
 import { onProjectFiles, onInterventions, onActivity, onRecentAgents, onAgents } from './rpc/reads.js'
 import { sendStart } from './rpc/control.js'
@@ -7,6 +7,7 @@ import { onMachineVersions } from './rpc/machines.js'
 import { addMachine, removeMachine } from './lib/machines.js'
 import { AgentHistory } from './components/AgentHistory.js'
 import { SidebarProvider } from './components/ui/sidebar.js'
+import { useSidebarWidth } from './lib/sidebar-width.js'
 import { ProjectHome } from './components/ProjectHome.js'
 import { DashboardPage } from './components/DashboardPage.js'
 import { SettingsPage } from './components/SettingsPage.js'
@@ -441,6 +442,8 @@ export function App() {
   }
 
   const isMobile = useIsMobile()
+  // The width its edge was dragged to (SidebarResizer), in place of the sidebar's own default.
+  const sidebarWidth = useSidebarWidth()
   // The name a phone's top bar gives the page; null on a project's own pages, which have a top row.
   const phoneTitle = view === 'settings' ? 'Settings' : pageSegment ? (modulePage?.label ?? '') : projectId === null ? 'Overview' : null
 
@@ -451,7 +454,7 @@ export function App() {
     // all, so the link actions they offer reach any page that shows a link.
     <ModulesContext.Provider value={modules}>
     <HostServicesContext.Provider value={hostServices}>
-    <SidebarProvider className="h-screen flex-col overflow-hidden">
+    <SidebarProvider className="h-screen flex-col overflow-hidden" style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
       {/* The top navbar is gone (#772 follow-up): its brand, global nav and utility controls moved
           into the sidebar (AgentHistory), so the workspace and the panes get the full height. */}
       {!healthy && (

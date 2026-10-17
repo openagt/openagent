@@ -20,6 +20,7 @@ function fakeGitHost(answer: RequestsOutcome): { gitHost: GitHostFor; asked: unk
     open: async () => ({ ok: false, error: 'not here' }),
     merge: async () => ({ ok: false, error: 'not here' }),
     home: async () => undefined,
+    me: async () => undefined,
   })
   return { gitHost, asked }
 }

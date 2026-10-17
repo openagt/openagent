@@ -79,9 +79,14 @@ already made, and lists it in its pull request; for anything else it proposes an
   else the branch as the agent named it; OpenAgent derives no session name from a branch.
   Picked over stripping the package's prefix here, which was OpenAgent knowing how the
   package names a branch.
-- Notifications are the browser's only: the bell alerts in the open tab. Posting to a
+- Notifications are the browser's only: they alert in the open tab. Posting to a
   channel is a skill's, fired by the tool that runs the agent when a run ends. Picked over
   the dashboard's Discord watchers, which posted only while the dashboard was running.
+- The foot of the sidebar is the person: their picture and name, as one row that opens one
+  menu with the theme, the notifications and Settings. The name is git's, the picture the
+  git host's, asked through the project's git host package. The project select stays at the
+  top, beside the pages it changes. Picked over a row of three icons, and over the project
+  select at the foot.
 - The dashboard grows by modules: a package that adds to the dashboard (pages, Overview
   cards, link actions, panes beside the chat, a run's summary, Settings sections) is a module;
   a skill that brings pages is a module that is also a skill. A module is one OpenAgent

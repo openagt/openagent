@@ -43,6 +43,7 @@ function host(asked: string[]): GitHostSource {
     requests: async () => ({ ok: true, requests: [] }),
     merge: async () => ({ ok: false, error: 'not here' }),
     home: async () => undefined,
+    me: async () => undefined,
   }
 }
 

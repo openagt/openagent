@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Plus, ChevronDown, Bot, Cloud, Laptop, Server, Settings, LayoutDashboard, Blocks } from 'lucide-react'
+import { Plus, ChevronDown, Bot, Cloud, Laptop, Server, LayoutDashboard, Blocks } from 'lucide-react'
 import type { ComponentType } from 'react'
 import type { AgentMeta, AgentStatus, RecentAgent, ProjectSummary } from '../../src/index.js'
 import { DRIVER_LABELS, driverFromImpl, cloudRunState, type CloudRunState } from '../../src/client.js'
@@ -31,8 +31,8 @@ import { ScrollArea } from './ui/scroll-area.js'
 // Global chrome relocated off the removed top navbar (#772 follow-up): the sidebar is the app's
 // chrome now, so the workspace keeps the full width.
 import { BrandLink } from './BrandLink.js'
-import { ThemeToggle } from './ThemeToggle.js'
-import { NotificationsMenu } from './NotificationsMenu.js'
+import { PersonMenu } from './PersonMenu.js'
+import { SidebarResizer } from './SidebarResizer.js'
 import { readAgentLogAhead } from '../lib/agent-log.js'
 
 // One rendered row of the rail, from either source (a project's own run, or a pooled cross-project
@@ -98,13 +98,13 @@ export function AgentHistory({
   /** Go to the Overview (no project): the brand mark and the Overview item both call it. Defaults
    *  to a no-op so a focused unit test can mount the rail without wiring the shell's chrome. */
   onDashboard?: () => void
-  /** Open Settings, from the sidebar footer where the navbar gear moved. */
+  /** Open Settings, from the person's menu at the sidebar's foot. */
   onSettings?: () => void
   /** The pages the installed modules add (#1774), the picked project's only when one is picked, one nav row each, below Overview. */
   pages?: readonly { segment: string; label: string; icon?: ComponentType<{ className?: string; 'aria-hidden'?: boolean }> }[]
   /** The module page that is the current view, by its segment, or null. */
   activePage?: string | null
-  /** Whether the Settings page is the one open: its gear then reads as the current page, and no row above does. */
+  /** Whether the Settings page is the one open: the person's row then reads as the current page, and no row above does. */
   atSettings?: boolean
   /** Open a module's page by its segment. */
   onPage?: (segment: string) => void
@@ -256,10 +256,10 @@ export function AgentHistory({
     // follow-up), the sidebar carries the app's chrome — brand, global nav, and the utility
     // controls in the footer — so the workspace and the panes get the full height. A phone has no
     // width for a column: there it is a sheet over the page, closed until asked for.
-    <Sidebar collapsible={isMobile ? 'offcanvas' : 'none'} className="w-(--sidebar-width) border-r border-sidebar-border">
-      {/* The brand and the project select, set apart from everything below by a rule (#1513): the
-          project picked here is the one every page under it shows. */}
-      <SidebarHeader className="gap-3 border-b border-sidebar-border pb-3">
+    <Sidebar collapsible={isMobile ? 'offcanvas' : 'none'} className="relative w-(--sidebar-width) border-r border-sidebar-border">
+      {/* The brand and the project select (#1513): the project picked here is the one every page
+          under it shows. No rule under it: the room around it sets it apart. */}
+      <SidebarHeader className="gap-4 pb-2">
         {/* The mark + wordmark, the way home (#909), now that there is no navbar to hold them. */}
         <div className="px-1 pt-1">
           <BrandLink working={working} href={homeHref} onNavigate={leave(onDashboard)} />
@@ -363,21 +363,13 @@ export function AgentHistory({
           </SidebarGroup>
         </ScrollArea>
       </SidebarContent>
-      {/* The navbar's utility controls, relocated to the foot of the sidebar (#772 follow-up):
-          theme, notifications, and Settings. */}
+      {/* The person at this dashboard, as one row that opens their menu: the theme, the
+          notifications and Settings (PersonMenu). */}
       <SidebarFooter className="border-t border-sidebar-border">
-        <div className="flex items-center gap-1">
-          <div className="min-w-0 flex-1" />
-          <ThemeToggle />
-          <NotificationsMenu />
-          <Tooltip>
-            <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={leave(onSettings)} aria-label="Settings" aria-current={atSettings ? 'page' : undefined} className={atSettings ? 'bg-accent text-accent-foreground' : undefined} />}>
-              <Settings className="h-4 w-4" aria-hidden />
-            </TooltipTrigger>
-            <TooltipContent>Settings</TooltipContent>
-          </Tooltip>
-        </div>
+        <PersonMenu atSettings={atSettings} onSettings={leave(onSettings)} />
       </SidebarFooter>
+      {/* Its right edge, dragged to set its width; a phone's sheet has none. */}
+      {!isMobile && <SidebarResizer />}
     </Sidebar>
   )
 }
@@ -707,13 +699,6 @@ function AgentHistoryRow({
             the prompt it is about to replace. */}
         {naming ? <span aria-hidden className="block h-3.5 w-2/3 animate-pulse rounded bg-muted-foreground/20" /> : <RevealedTitle text={titleText} start={standIn} />}
       </span>
-      {/* Which coding agent ran it, as its own mark at the row's end (his pick): a session is told
-          from the next by its agent as much as by its words, and a logo reads faster than a word. */}
-      {picked && (
-        <span role="img" aria-label={DRIVER_LABELS[picked]} className="flex shrink-0 items-center">
-          <DriverLogo driver={picked} className="h-3 w-3 text-muted-foreground" />
-        </span>
-      )}
       {/* What is unusual about where the run is, kept on the row as one small glyph: another
           machine, a person's own computer, a cloud session. Rare, so the row stays a circle and a
           name nearly always; the coding agent's own logo was on every row and is now in the
@@ -754,6 +739,15 @@ function AgentHistoryRow({
           <ChevronDown className={cn('h-3 w-3 shrink-0 transition-transform', fold.open || '-rotate-90')} aria-hidden />
           <Bot className="h-3 w-3 shrink-0" aria-hidden />
           {fold.count}
+        </span>
+      )}
+      {/* Which coding agent ran it, as its own mark at the very end of the row (his pick): a
+          session is told from the next by its agent as much as by its words, and a logo reads
+          faster than a word. Last, after every other mark, so the logos of all rows stand in one
+          column. */}
+      {picked && (
+        <span role="img" aria-label={DRIVER_LABELS[picked]} className="flex shrink-0 items-center">
+          <DriverLogo driver={picked} className="h-3 w-3 text-muted-foreground" />
         </span>
       )}
       </TooltipTrigger>
