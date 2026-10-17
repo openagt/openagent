@@ -87,7 +87,8 @@ export function ProjectSkillsLine({
       onSaved={() => void changed()}
     />
   )
-  const none = skills.has === 0
+  // The basic skills every run gets are not on the list: a project holding none of the list's has no skills yet.
+  const none = !all(skills).some(held)
   const note = skills.uncommitted === 0 && committed !== null
   const late = waiting.length > 0 && skills.startBranch !== undefined
   // Nothing to say: the list alone, when the menu opened it.

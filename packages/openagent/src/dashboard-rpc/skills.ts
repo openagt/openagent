@@ -1,4 +1,4 @@
-import { applyChange, carriedSkills, commitSkills, GROUPS, isKnown, readProject, SCHEDULER, skillCount, SKILLS_IN_ALL, uncommittedSkills, type Standing } from '@openagt/init'
+import { applyChange, carriedSkills, commitSkills, GROUPS, isKnown, readProject, SCHEDULER, uncommittedSkills, type Standing } from '@openagt/init'
 import { waitingSkills } from '../dashboard/start-branch.js'
 import { readProjectHooks, runProjectHooks } from '../project-hooks.js'
 import { providedDataChanged } from '../store/provided.js'
@@ -23,9 +23,6 @@ export interface ProjectSkill {
 }
 
 export interface ProjectSkills {
-  /** How many skills the project has, of how many there are: the ones in its folder, and the basic ones every run gets. */
-  has: number
-  of: number
   /** The list's groups; `ticked` says whether a group's skills are ticked in a project that has none yet. */
   groups: { title: string; ticked: boolean; skills: ProjectSkill[] }[]
   /** Whether the scheduler starts with the dashboard for this project, on this machine. */
@@ -48,8 +45,6 @@ export async function onProjectSkills(projectId: string): Promise<ProjectSkills 
   const standing = new Map(state.skills.map(skill => [skill.name, skill.standing]))
   const { start, waiting } = await waitingSkills(cwd, state.skills.filter(skill => skill.standing !== 'absent').map(skill => skill.name))
   return {
-    has: skillCount(state),
-    of: SKILLS_IN_ALL,
     groups: GROUPS.map(group => ({
       title: group.title,
       ticked: group.ticked,

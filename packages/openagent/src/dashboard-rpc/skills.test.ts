@@ -54,12 +54,13 @@ const alive = (pid: number): boolean => {
 }
 
 const flat = (skills: NonNullable<Awaited<ReturnType<typeof onProjectSkills>>>) => skills.groups.flatMap(group => group.skills)
+const held = (skills: NonNullable<Awaited<ReturnType<typeof onProjectSkills>>>) => flat(skills).filter(skill => skill.standing !== 'absent').length
 
 test('a project\'s skills: none yet; written, they are in the folder and wait to reach the branch agents start from; committed, they no longer wait', async () => {
   const { dir, id, git, restore } = await project()
   try {
     const empty = (await onProjectSkills(id))!
-    assert.deepEqual({ has: empty.has, of: empty.of, scheduler: empty.scheduler, startBranch: empty.startBranch, uncommitted: empty.uncommitted, git: empty.git }, { has: 3, of: 25, scheduler: false, startBranch: 'main', uncommitted: 0, git: true })
+    assert.deepEqual({ scheduler: empty.scheduler, startBranch: empty.startBranch, uncommitted: empty.uncommitted, git: empty.git }, { scheduler: false, startBranch: 'main', uncommitted: 0, git: true })
     assert.equal(empty.remote, false)
     assert.deepEqual(empty.groups.map(group => [group.title, group.skills.length]), [['Tickets and queue', 9], ['Reviews and research', 8], ['Subagents', 1], ['After a merge', 1], ['Needs its own setup', 2]])
     assert.ok(flat(empty).every(skill => skill.standing === 'absent' && !skill.waiting && skill.description.length > 10))
@@ -68,7 +69,7 @@ test('a project\'s skills: none yet; written, they are in the folder and wait to
     assert.deepEqual(written, { ok: true, written: ['tickets', 'plan'], removed: [], left: [] })
     assert.match(await readFile(join(dir, '.agents/skills/tickets/SKILL.md'), 'utf8'), /^---\nname: tickets\n/)
     const waiting = (await onProjectSkills(id))!
-    assert.equal(waiting.has, 5)
+    assert.equal(held(waiting), 2)
     assert.equal(waiting.uncommitted, 4)
     assert.deepEqual(flat(waiting).filter(skill => skill.waiting).map(skill => skill.name), ['tickets', 'plan'])
     assert.deepEqual(flat(waiting).filter(skill => skill.standing === 'current').map(skill => skill.name), ['tickets', 'plan'])
@@ -95,7 +96,7 @@ test('a project\'s skills: none yet; written, they are in the folder and wait to
     assert.deepEqual(await sendChangeSkills(id, { remove: ['plan'] }), { ok: true, written: [], removed: ['plan'], left: [] })
     await writeFile(join(dir, '.agents/skills/tickets/SKILL.md'), (await readFile(join(dir, '.agents/skills/tickets/SKILL.md'), 'utf8')).replace('# Tickets', '# Our tickets'))
     const changed = (await onProjectSkills(id))!
-    assert.equal(changed.has, 4)
+    assert.equal(held(changed), 1)
     assert.equal(flat(changed).find(skill => skill.name === 'tickets')!.standing, 'changed')
     assert.equal(flat(changed).find(skill => skill.name === 'plan')!.standing, 'absent')
   } finally {
@@ -161,7 +162,7 @@ test('the scheduler is switched on and off for the project, and only names of th
     for (const change of [{ write: ['../../etc'] }, { write: ['scheduler'] }, { remove: ['logs'] }, { write: 'tickets' }, { scheduler: 'yes' }, null, 7, ['tickets']] as never[]) {
       assert.deepEqual(await sendChangeSkills(id, change), { ok: false, error: 'not a list of skills' }, JSON.stringify(change))
     }
-    assert.deepEqual((await onProjectSkills(id))!.has, 3, 'nothing of a refused change was written')
+    assert.equal(held((await onProjectSkills(id))!), 0, 'nothing of a refused change was written')
     assert.equal(await onProjectSkills('no-such-project'), null)
     assert.deepEqual(await sendChangeSkills('no-such-project', { write: ['tickets'] }), { ok: false, error: 'this project has no local path on this server' })
     assert.deepEqual(await sendCommitSkills('no-such-project'), { ok: false, error: 'this project has no local path on this server' })

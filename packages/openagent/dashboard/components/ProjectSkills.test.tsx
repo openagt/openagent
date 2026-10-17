@@ -23,8 +23,6 @@ const skill = (name: string, standing: Standing = 'absent', waiting = false) => 
 /** A project's skills as the daemon answers them; `over` changes the parts a test is about. */
 function skills(over: Partial<ProjectSkills> = {}): ProjectSkills {
   return {
-    has: 3,
-    of: 25,
     groups: [
       { title: 'Tickets and queue', ticked: true, skills: [skill('tickets'), skill('queue')] },
       { title: 'Needs its own setup', ticked: false, skills: [skill('browser')] },
@@ -54,7 +52,7 @@ const isTicked = (name: string): boolean => box(name).getAttribute('aria-checked
 
 describe('ProjectSkillsLine', () => {
   test('a project with its skills in order has no line: nothing to say, and the list opens from the project\'s menu', async () => {
-    onProjectSkills.mockResolvedValue(skills())
+    onProjectSkills.mockResolvedValue(skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current'), skill('queue')] }] }))
     const { container } = render(<ProjectSkillsLine projectId="p1" />)
     await waitFor(() => expect(onProjectSkills).toHaveBeenCalledWith('p1'))
     await waitFor(() => expect(onProjectSkills.mock.results[0]?.type).toBe('return'))
@@ -63,7 +61,7 @@ describe('ProjectSkillsLine', () => {
   })
 
   test('a project with no skill yet says so, with the door to the list in plain sight', async () => {
-    onProjectSkills.mockResolvedValue(skills({ has: 0 }))
+    onProjectSkills.mockResolvedValue(skills())
     render(<ProjectSkillsLine projectId="p1" />)
     expect(await screen.findByText(/This project has no skills yet\./)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Add skills' }))
@@ -110,7 +108,7 @@ describe('ProjectSkillsLine', () => {
 
   test('a newer text is told, and Update writes those skills again and nothing else', async () => {
     onProjectSkills.mockResolvedValue(
-      skills({ has: 6, groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'newer'), skill('queue', 'newer'), skill('plan', 'changed')] }] }),
+      skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'newer'), skill('queue', 'newer'), skill('plan', 'changed')] }] }),
     )
     sendChangeSkills.mockResolvedValue({ ok: true, written: ['tickets', 'queue'], removed: [], left: [] })
     const onChanged = vi.fn()
@@ -122,7 +120,7 @@ describe('ProjectSkillsLine', () => {
   })
 
   test('files not committed are told, Commit commits them, and the line then says nothing was pushed', async () => {
-    onProjectSkills.mockResolvedValueOnce(skills({ has: 4, uncommitted: 2 })).mockResolvedValue(skills({ has: 4, uncommitted: 0 }))
+    onProjectSkills.mockResolvedValueOnce(skills({ uncommitted: 2 })).mockResolvedValue(skills({ uncommitted: 0 }))
     sendCommitSkills.mockResolvedValue({ ok: true, committed: true, commit: 'abc1234' })
     render(<ProjectSkillsLine projectId="p1" />)
     expect(await screen.findByText(/2 skill files are not committed\./)).toBeTruthy()
@@ -143,7 +141,7 @@ describe('ProjectSkillsLine', () => {
   })
 
   test('skills in the folder that are not yet on the branch agents start from are named as waiting', async () => {
-    onProjectSkills.mockResolvedValue(skills({ has: 5, groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current', true), skill('queue', 'current', true), skill('plan', 'current')] }] }))
+    onProjectSkills.mockResolvedValue(skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current', true), skill('queue', 'current', true), skill('plan', 'current')] }] }))
     const { container } = render(<ProjectSkillsLine projectId="p1" />)
     await screen.findByText(/waiting to reach/)
     // What it holds is not counted on the line any more: only what is to know of them.
@@ -152,7 +150,7 @@ describe('ProjectSkillsLine', () => {
   })
 
   test('many waiting skills are counted, not named', async () => {
-    onProjectSkills.mockResolvedValue(skills({ has: 8, groups: [{ title: 'Tickets and queue', ticked: true, skills: ['tickets', 'queue', 'plan', 'triage', 'ux'].map(name => skill(name, 'current', true)) }] }))
+    onProjectSkills.mockResolvedValue(skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: ['tickets', 'queue', 'plan', 'triage', 'ux'].map(name => skill(name, 'current', true)) }] }))
     const { container } = render(<ProjectSkillsLine projectId="p1" />)
     await screen.findByText(/waiting to reach/)
     expect(container.textContent).toContain('5 skills: waiting to reach main. An agent started from main does not have them.')
@@ -183,7 +181,7 @@ describe('Add skills', () => {
 
   test('opened again the ticks show what the project has; a tick removed deletes, a tick added writes, and the scheduler is left alone', async () => {
     onProjectSkills.mockResolvedValue(
-      skills({ has: 5, groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current'), skill('queue', 'changed'), skill('plan')] }, { title: 'Needs its own setup', ticked: false, skills: [skill('browser')] }] }),
+      skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current'), skill('queue', 'changed'), skill('plan')] }, { title: 'Needs its own setup', ticked: false, skills: [skill('browser')] }] }),
     )
     sendChangeSkills.mockResolvedValue({ ok: true, written: ['browser'], removed: ['tickets'], left: [{ path: '.agents/skills/tickets', reason: 'it holds other files' }] })
     render(<WithDoor projectId="p1" />)
@@ -250,7 +248,7 @@ describe('the skills line, over time', () => {
   test('the list a person has open keeps the project as it stood when it opened, whatever a later read says', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
-      onProjectSkills.mockResolvedValueOnce(skills()).mockResolvedValue(skills({ has: 4, groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current'), skill('queue')] }] }))
+      onProjectSkills.mockResolvedValueOnce(skills()).mockResolvedValue(skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current'), skill('queue')] }] }))
       render(<WithDoor projectId="p1" />)
       fireEvent.click(await screen.findByRole('button', { name: 'Skills…' }))
       const dialog = await screen.findByRole('dialog')
