@@ -38,16 +38,26 @@ async function commit(path: string, file: string, content: string, message: stri
 }
 
 for (const [which, runner] of [['git', git], ['a git without the ahead-behind atom', oldGit]] as const) {
-  test(`ahead, with ${which}: each branch's own commits, whether origin has it or had it, whether it is merged, in the order asked`, async () => {
+  test(`ahead, with ${which}: each branch's own commits, whether origin has it or had it, whether it is merged, what its checkout left uncommitted, in the order asked`, async () => {
     const repo = await repoWithOrigin()
     try {
       const { path } = await createCheckout(repo, { agentId: 'a1' })
       await commit(path, 'a.md', 'a\n', 'one')
       await commit(path, 'b.md', 'b\n', 'two')
       const [unpushed, nope, main] = await readBranchesAhead(repo, ['agent-a1', 'nope', 'main'], runner)
-      assert.deepEqual(unpushed, { branch: 'agent-a1', exists: true, agent: true, ahead: 2, hasRemote: true, pushed: false, gone: false, merged: false })
-      assert.deepEqual(nope, { branch: 'nope', exists: false, agent: false, ahead: 0, hasRemote: true, pushed: false, gone: false, merged: false })
-      assert.deepEqual(main, { branch: 'main', exists: true, agent: false, ahead: 0, hasRemote: true, pushed: true, gone: false, merged: true })
+      assert.deepEqual(unpushed, { branch: 'agent-a1', exists: true, agent: true, ahead: 2, hasRemote: true, pushed: false, gone: false, merged: false, uncommitted: 0 })
+      assert.deepEqual(nope, { branch: 'nope', exists: false, agent: false, ahead: 0, hasRemote: true, pushed: false, gone: false, merged: false, uncommitted: 0 })
+      assert.deepEqual(main, { branch: 'main', exists: true, agent: false, ahead: 0, hasRemote: true, pushed: true, gone: false, merged: true, uncommitted: 0 })
+
+      // What its checkout left uncommitted, a new file and a changed one; the project's own folder is no checkout.
+      await writeFile(join(path, 'draft.txt'), 'not committed\n')
+      await writeFile(join(path, 'a.md'), 'changed\n')
+      await writeFile(join(repo, 'stray.txt'), 'in the project folder\n')
+      const [left, onMain] = await readBranchesAhead(repo, ['agent-a1', 'main'], runner)
+      assert.equal(left!.uncommitted, 2)
+      assert.equal(onMain!.uncommitted, 0)
+      await rm(join(path, 'draft.txt'))
+      await git(['checkout', '--', 'a.md'], path)
 
       await git(['push', '-q', 'origin', 'agent-a1'], path)
       const [pushed] = await readBranchesAhead(repo, ['agent-a1'], runner)
@@ -112,8 +122,8 @@ test('ahead: a repository with no remote has nothing pushed; the command line pr
     const out: string[] = []
     assert.equal(await runCli(['ahead', 'agent-x', 'agent-data'], { cwd: repo, stdout: l => out.push(l), stderr: () => {} }, git), 0)
     assert.deepEqual(JSON.parse(out.join('')), [
-      { branch: 'agent-x', exists: true, agent: true, ahead: 1, hasRemote: false, pushed: false, gone: false, merged: false },
-      { branch: 'agent-data', exists: false, agent: false, ahead: 0, hasRemote: false, pushed: false, gone: false, merged: false },
+      { branch: 'agent-x', exists: true, agent: true, ahead: 1, hasRemote: false, pushed: false, gone: false, merged: false, uncommitted: 0 },
+      { branch: 'agent-data', exists: false, agent: false, ahead: 0, hasRemote: false, pushed: false, gone: false, merged: false, uncommitted: 0 },
     ])
     const usage: string[] = []
     assert.equal(await runCli(['ahead'], { cwd: repo, stdout: () => {}, stderr: l => usage.push(l) }, git), 2, 'at least one branch')

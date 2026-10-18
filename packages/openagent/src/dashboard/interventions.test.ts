@@ -166,6 +166,7 @@ const waiting = (over: Partial<BranchAhead> = {}): BranchAhead => ({
   pushed: false,
   gone: false,
   merged: false,
+  uncommitted: 0,
   ...over,
 })
 
@@ -301,6 +302,43 @@ test('a run started from another branch is counted from the commit its own work 
   )
   assert.deepEqual(new Map(asked.map((branches, i) => [askedFrom[i], branches])), new Map([['c0ffee', ['agent-based']], [undefined, ['agent-plain-1', 'agent-plain-2']]]), 'the based run asked on its own, the others in one read')
   assert.deepEqual(items.map(i => [i.agentId, i.commits]).sort(), [['r1', 1], ['r2', 1], ['r3', 1]])
+})
+
+test('a finished run that left files uncommitted is "not committed", even with commits or a pull request; one waiting on its question is not', async () => {
+  const left = (over: Partial<AgentMeta> = {}) =>
+    buildInterventions([project('a', '/a')], onlyUnpushed([doneMeta(over)], counting(branch => waiting({ branch, ahead: 3, uncommitted: 2 }))))
+  const { items } = await left()
+  assert.deepEqual(items.map(i => [i.kind, i.files, i.commits, i.agentId]), [['uncommitted', 2, undefined, 'r1']], 'committing is the next step, so it is the one item')
+  const withPr = await left({ pr: { number: 7, url: 'u7' } })
+  assert.deepEqual(withPr.items.map(i => i.kind), ['uncommitted'])
+  const parked = await left({ status: 'waiting' })
+  assert.deepEqual(parked.items.map(i => i.kind), ['unpushed'], 'its question is its next step; its commits still wait')
+})
+
+test('an open request a run opened opens that run: by the request its record names, else by its branch; one opened anywhere else names no run', async () => {
+  const prs = async (): Promise<OpenPr[]> => [
+    { number: 6, title: 'recorded', url: 'u6', isDraft: false, headRefName: 'agent-other-name' },
+    { number: 7, title: 'by branch', url: 'u7', isDraft: false, headRefName: 'agent-seven' },
+    { number: 8, title: 'elsewhere', url: 'u8', isDraft: false, headRefName: 'claude/elegant-maxwell' },
+  ]
+  const agents = [doneMeta({ id: 'r6', branch: 'agent-six', pr: { number: 6, url: 'u6' } }), doneMeta({ id: 'r7', branch: 'agent-seven' })]
+  const { items } = await buildInterventions([project('a', '/a')], { prs, liveAgents: noAgents, agents: async () => agents, branches: async () => undefined })
+  assert.deepEqual(items.map(i => [i.number, i.agentId]), [[6, 'r6'], [7, 'r7'], [8, undefined]])
+})
+
+test('the projects are read at once, not one after the other', async () => {
+  let started = 0
+  let release: () => void = () => {}
+  const gate = new Promise<void>(resolve => (release = resolve))
+  const prs = async (): Promise<OpenPr[]> => {
+    started++
+    if (started === 2) release()
+    await gate
+    return []
+  }
+  const read = buildInterventions([project('a', '/a'), project('b', '/b')], { prs, liveAgents: noAgents, agents: async () => [] })
+  await Promise.race([read, new Promise((_, reject) => setTimeout(() => reject(new Error('the second project waited for the first')), 1000))])
+  assert.equal(started, 2)
 })
 
 test('unpushed items key on the run, so each notifies once (#860)', () => {

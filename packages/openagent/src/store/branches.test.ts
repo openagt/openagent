@@ -143,7 +143,7 @@ test('parseCheckouts keeps the rows with an id and a path; parseBranchStates the
 })
 
 test('parseBranchesAhead keeps the counts with a branch, a number and every verdict; anything else is no answer', () => {
-  const counted = { branch: 'agent-a', exists: true, agent: true, ahead: 2, hasRemote: true, pushed: false, gone: false, merged: false }
+  const counted = { branch: 'agent-a', exists: true, agent: true, ahead: 2, hasRemote: true, pushed: false, gone: false, merged: false, uncommitted: 1 }
   assert.deepEqual(parseBranchesAhead('nope'), [])
-  assert.deepEqual(parseBranchesAhead([counted, { ...counted, ahead: '2' }, { ...counted, gone: undefined }, { ...counted, branch: '' }, null, { ...counted, extra: 1 }]), [counted, counted])
+  assert.deepEqual(parseBranchesAhead([counted, { ...counted, ahead: '2' }, { ...counted, uncommitted: undefined }, { ...counted, gone: undefined }, { ...counted, branch: '' }, null, { ...counted, extra: 1 }]), [counted, counted])
 })

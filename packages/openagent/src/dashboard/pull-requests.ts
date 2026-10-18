@@ -136,10 +136,11 @@ export async function cachedPrView(cwd: string, branch?: string): Promise<Cached
   return cachedRead(prCacheKey(cwd, branch), () => prView(cwd, branch))
 }
 
-/** Forget a branch's PR, after an action that changes whether it has one, and with it how the project's PRs stand. */
+/** Forget a branch's PR, after an action that changes whether it has one, and with it how the project's PRs stand and which are open. */
 export function forgetPr(cwd: string, branch?: string): void {
   invalidate(prCacheKey(cwd, branch))
   invalidate(prStatesCacheKey(cwd))
+  invalidate(openPrsCacheKey(cwd))
 }
 
 /** How a run's pull request stands, as its row in the list of runs shows it. */
@@ -200,6 +201,10 @@ function prStatesCacheKey(cwd: string): string {
   return ['pr-states', cwd].join(KEY_SEP)
 }
 
+function openPrsCacheKey(cwd: string): string {
+  return ['open-prs', cwd].join(KEY_SEP)
+}
+
 function branchPrsCacheKey(cwd: string, branch: string): string {
   return ['prs', cwd, branch].join(KEY_SEP)
 }
@@ -245,4 +250,24 @@ export async function openPrs(cwd: string, gitHost: GitHostFor = projectGitHost)
   const listed = await source.requests({ state: 'open' })
   if (!listed.ok) throw new Error(listed.error)
   return listed.requests.map(openPrOf)
+}
+
+/** How old a project's list of open requests may be before it is read again, behind whoever asks. */
+const OPEN_PRS_TTL_MS = 20_000
+
+/** How long a first ask of a project's open requests waits for them: the git host answers well within it. */
+const OPEN_PRS_FIRST_MS = 15_000
+
+/**
+ * The cached form of {@link openPrs} (#1028), for the Human Queue: it asked the git host at every
+ * poll of every page that shows it, and the page waited. The first ask waits for the answer; after
+ * that the list last read answers at once and is read again behind it once it is
+ * {@link OPEN_PRS_TTL_MS} old. A request opened or merged here is read again at once
+ * ({@link forgetPr}). A first read that fails rejects, as {@link openPrs} does; a later one keeps
+ * the list last read.
+ */
+export async function cachedOpenPrs(cwd: string, read: (cwd: string) => Promise<OpenPr[]> = openPrs): Promise<OpenPr[]> {
+  const cached = await cachedRead(openPrsCacheKey(cwd), () => read(cwd), { ttlMs: OPEN_PRS_TTL_MS, budgetMs: OPEN_PRS_FIRST_MS })
+  if (cached.value === undefined) throw new Error('the open pull requests could not be read')
+  return cached.value
 }

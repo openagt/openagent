@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Plus, ChevronDown, Bot, Cloud, Laptop, Server, LayoutDashboard, Blocks, GitBranch, GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-react'
+import { Plus, ChevronDown, Bot, Cloud, Laptop, Server, LayoutDashboard, Blocks, FilePen, GitBranch, GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-react'
 import type { ComponentType } from 'react'
 import type { AgentMeta, AgentStatus, RecentAgent, ProjectSummary } from '../../src/index.js'
 import { DRIVER_LABELS, driverFromImpl, cloudRunState, type CloudRunState } from '../../src/client.js'
@@ -245,6 +245,7 @@ export function AgentHistory({
       remoteByLine={row.agent.remoteByLine === true}
       {...(row.agent.pr ? { pr: { number: row.agent.pr.number, ...(row.agent.prState ? { state: row.agent.prState } : {}) } } : {})}
       {...(row.agent.unpublished ? { unpublished: row.agent.unpublished } : {})}
+      {...(row.agent.uncommitted ? { uncommitted: row.agent.uncommitted } : {})}
       onClick={leave(row.onClick)}
       onNear={row.onNear}
     />
@@ -600,6 +601,7 @@ function AgentHistoryRow({
   fold,
   pr,
   unpublished,
+  uncommitted,
 }: {
   status: AgentStatus
   /** The row's subagents, folded or open under it: a count at the row's end, so a row with subagents is no taller than one without. */
@@ -637,6 +639,8 @@ function AgentHistoryRow({
   pr?: { number: number; state?: PrState } | undefined
   /** How many commits of its own wait on its branch, never pushed: the Human Queue's "Not published", marked where a pull request would be. */
   unpublished?: number | undefined
+  /** How many files its checkout left uncommitted: the Human Queue's "Not committed", in the same place. */
+  uncommitted?: number | undefined
 }) {
   // A run that ended on its question waits on you (#785), and so does a web run whose cloud
   // session the bridge reports as parked (#1668).
@@ -675,8 +679,13 @@ function AgentHistoryRow({
   const ringTone = (cloudWord ? STATUS_RING[cloudWord] : STATUS_RING[status]) ?? STATUS_RING['done']
   const prMark = pr?.state ? PR_MARKS[pr.state] : undefined
   const prSaid = pr ? `PR #${pr.number}${prMark ? ` ${prMark.word}` : ''}` : undefined
-  // Work that never left the machine, in the Human Queue's words and colour.
-  const unpublishedSaid = unpublished ? `Not published · ${unpublished} commit${unpublished === 1 ? '' : 's'}` : undefined
+  // Work that never left the machine, in the Human Queue's words, icon and colour: files left
+  // uncommitted first, since committing them is the run's next step.
+  const left = uncommitted
+    ? { Icon: FilePen, said: `Not committed · ${uncommitted} file${uncommitted === 1 ? '' : 's'}` }
+    : unpublished
+      ? { Icon: GitBranch, said: `Not published · ${unpublished} commit${unpublished === 1 ? '' : 's'}` }
+      : undefined
   // Everything the two-line row used to print, in one sentence on hover: the word, where the run
   // is and when it started, which coding agent ran it, and the machine or cloud it ran on.
   const said = [
@@ -688,7 +697,7 @@ function AgentHistoryRow({
     ...(remote ? [remoteLabel ? `runs on ${remoteLabel}` : 'runs on another machine'] : []),
     ...(cloud ? ['a Claude Code cloud session'] : []),
     ...(prSaid ? [prSaid] : []),
-    ...(unpublishedSaid ? [unpublishedSaid] : []),
+    ...(left ? [left.said] : []),
   ].join(' · ')
   // The hover says what the row no longer prints, and a name too long for the rail in full under it
   // (#1494) — the marquee it replaced forced reading at the animation's pace. The row itself is the
@@ -779,9 +788,9 @@ function AgentHistoryRow({
           <prMark.Icon className={cn('h-3 w-3', prMark.tone)} aria-hidden />
         </span>
       )}
-      {unpublishedSaid && (
-        <span role="img" aria-label={unpublishedSaid} className="flex shrink-0 items-center">
-          <GitBranch className="h-3 w-3 text-info" aria-hidden />
+      {left && (
+        <span role="img" aria-label={left.said} className="flex shrink-0 items-center">
+          <left.Icon className="h-3 w-3 text-info" aria-hidden />
         </span>
       )}
       {/* Which coding agent ran it, as its own mark at the very end of the row (his pick): a

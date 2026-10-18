@@ -20,7 +20,7 @@ export function testBranches(byProject: Record<string, Checkout[]> = {}, states:
       return branches.flatMap(branch =>
         states
           .filter(state => state.branch === branch)
-          .map(state => ({ branch, exists: state.exists, agent: branch.startsWith('agent-'), ahead: state.commits.length, hasRemote: state.hasRemote, pushed: state.pushed, gone: false, merged: state.merged })),
+          .map(state => ({ branch, exists: state.exists, agent: branch.startsWith('agent-'), ahead: state.commits.length, hasRemote: state.hasRemote, pushed: state.pushed, gone: false, merged: state.merged, uncommitted: state.pendingFiles?.length ?? 0 })),
       )
     },
     async push(branch) {

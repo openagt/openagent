@@ -1,6 +1,7 @@
-import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { basename, dirname } from 'node:path'
+import { BRANCHES_DIR, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 import { isAgentBranch } from './branch-names.js'
-import { commitOf, detectBase } from './branch-state.js'
+import { commitOf, detectBase, parsePorcelain } from './branch-state.js'
 import { repoHasRemote } from './worktree.js'
 
 /**
@@ -9,7 +10,8 @@ import { repoHasRemote } from './worktree.js'
  * commits and lists no file: a branch made before the repository's history was rewritten is
  * thousands of commits and files past the base, and listing its files is what made a read of
  * every branch take seconds. Every branch is answered by one `git for-each-ref`, however many are
- * asked.
+ * asked, and the checkouts by one `git worktree list`: only a branch whose checkout is still there
+ * costs a `git status` of its own, and a run's checkout stays only while it holds something.
  */
 export interface BranchAhead {
   branch: string
@@ -27,6 +29,8 @@ export interface BranchAhead {
   gone: boolean
   /** The default branch already contains it. */
   merged: boolean
+  /** How many paths the checkout under `.branches/` that is on it left uncommitted; 0 with no such checkout. */
+  uncommitted: number
 }
 
 /** Fields of one `for-each-ref` line; a ref name cannot hold it. */
@@ -40,7 +44,7 @@ export async function readBranchesAhead(repo: string, branches: readonly string[
   const ask = (args: string[]): Promise<string> => git(args, repo).catch(() => '')
   const [hasRemote, base, start] = await Promise.all([repoHasRemote(repo, git), detectBase(ask), from !== undefined ? commitOf(ask, from) : undefined])
   const bases = [base, start].flatMap(rev => (rev === undefined ? [] : [rev]))
-  const refs = await readRefs(ask, bases)
+  const [refs, checkouts] = await Promise.all([readRefs(ask, bases), checkoutsOf(ask)])
   // A git older than the `ahead-behind` atom (2.41) refuses it: the branches asked, and only those,
   // are then counted by a `rev-list` each, side by side.
   await Promise.all(
@@ -49,9 +53,17 @@ export async function readBranchesAhead(repo: string, branches: readonly string[
       if (local && !local.past) local.past = await Promise.all(bases.map(async rev => Number((await ask(['rev-list', '--count', `${rev}..${local.tip}`])).trim())))
     }),
   )
+  const uncommitted = new Map(
+    await Promise.all(
+      [...new Set(branches)].flatMap(branch => {
+        const checkout = checkouts.get(branch)
+        return checkout ? [(async () => [branch, parsePorcelain(await git(['status', '--porcelain'], checkout).catch(() => '')).length] as const)()] : []
+      }),
+    ),
+  )
   return branches.map(branch => {
     const local = refs.get(`refs/heads/${branch}`)
-    if (!local) return { branch, exists: false, agent: isAgentBranch(branch), ahead: 0, hasRemote, pushed: false, gone: false, merged: false }
+    if (!local) return { branch, exists: false, agent: isAgentBranch(branch), ahead: 0, hasRemote, pushed: false, gone: false, merged: false, uncommitted: 0 }
     const past = local.past ?? []
     return {
       branch,
@@ -63,6 +75,7 @@ export async function readBranchesAhead(repo: string, branches: readonly string[
       pushed: hasRemote && refs.get(`refs/remotes/origin/${branch}`)?.tip === local.tip,
       gone: local.gone,
       merged: base !== undefined && past[0] === 0,
+      uncommitted: uncommitted.get(branch) ?? 0,
     }
   })
 }
@@ -91,4 +104,18 @@ async function readRefs(ask: (args: string[]) => Promise<string>, bases: readonl
     refs.set(name, { tip, gone: track === '[gone]', ...(counted ? { past: counts.map(count => Number(count.split(' ')[0])) } : {}) })
   }
   return refs
+}
+
+/**
+ * The checkouts under `.branches/`, by the branch each is on: one `git worktree list`. The
+ * project's own folder is not one of them, whatever it has out.
+ */
+async function checkoutsOf(ask: (args: string[]) => Promise<string>): Promise<Map<string, string>> {
+  const checkouts = new Map<string, string>()
+  for (const block of (await ask(['worktree', 'list', '--porcelain'])).split('\n\n')) {
+    const path = /^worktree (.+)$/m.exec(block)?.[1]
+    const branch = /^branch refs\/heads\/(.+)$/m.exec(block)?.[1]
+    if (path && branch && basename(dirname(path)) === BRANCHES_DIR && !checkouts.has(branch)) checkouts.set(branch, path)
+  }
+  return checkouts
 }

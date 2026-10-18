@@ -17,8 +17,8 @@ import { isRunId } from './runs.js'
  *   `<command> show [--from <commit>] <branch>...`      what each branch holds and where it stands, as an array of {@link BranchState}, in the order asked;
  *                                                       measured from `<commit>`, where the branches started, in place of the default branch;
  *                                                       a full commit id in place of a branch is read as a branch that ends there
- *   `<command> ahead [--from <commit>] <branch>...`     how far each branch is past the base and whether the remote has it, as an array of {@link BranchAhead}:
- *                                                       no files, so every run's branch can be asked on a poll
+ *   `<command> ahead [--from <commit>] <branch>...`     how far each branch is past the base, whether the remote has it, and what its checkout left uncommitted,
+ *                                                       as an array of {@link BranchAhead}: no file lists, so every run's branch can be asked on a poll
  *   `<command> merge <b>`                               merge the branch into the default branch, on this machine, then delete it
  *   `<command> push --branch <b>`                       push the branch to the remote; a branch only the remote has is answered as it is
  *   `<command> remove <id> [--from <commit>] [--discard]`  reclaim a run's checkout once its branch holds everything, pushing nothing, its branch measured from the commit it started from; `--discard` drops uncommitted work
@@ -102,6 +102,8 @@ export interface BranchAhead {
   gone: boolean
   /** The project's default branch already contains it. */
   merged: boolean
+  /** How many paths the run's checkout on it left uncommitted; 0 with no checkout. */
+  uncommitted: number
 }
 
 /** What pushing a branch did: `pushed` is false when only the remote had it, so there was nothing here to push. */
@@ -209,9 +211,9 @@ export function parseBranchesAhead(output: unknown): BranchAhead[] {
   return output.flatMap(value => {
     const row = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
     const flags = ['exists', 'agent', 'hasRemote', 'pushed', 'gone', 'merged'] as const
-    if (typeof row['branch'] !== 'string' || row['branch'] === '' || typeof row['ahead'] !== 'number' || flags.some(flag => typeof row[flag] !== 'boolean')) return []
+    if (typeof row['branch'] !== 'string' || row['branch'] === '' || typeof row['ahead'] !== 'number' || typeof row['uncommitted'] !== 'number' || flags.some(flag => typeof row[flag] !== 'boolean')) return []
     const flag = (name: (typeof flags)[number]): boolean => row[name] === true
-    return [{ branch: row['branch'], exists: flag('exists'), agent: flag('agent'), ahead: row['ahead'], hasRemote: flag('hasRemote'), pushed: flag('pushed'), gone: flag('gone'), merged: flag('merged') }]
+    return [{ branch: row['branch'], exists: flag('exists'), agent: flag('agent'), ahead: row['ahead'], hasRemote: flag('hasRemote'), pushed: flag('pushed'), gone: flag('gone'), merged: flag('merged'), uncommitted: row['uncommitted'] }]
   })
 }
 

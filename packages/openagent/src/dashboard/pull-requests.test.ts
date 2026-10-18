@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cachedPrStates, cachedPrView, forgetPr, linkedPrOf, openPrOf, openPrs, prStates, prView, prsForBranch, prsForBranchOrThrow } from './pull-requests.js'
+import { cachedOpenPrs, cachedPrStates, cachedPrView, forgetPr, linkedPrOf, openPrOf, openPrs, prStates, prView, prsForBranch, prsForBranchOrThrow, type OpenPr } from './pull-requests.js'
 import type { GitHostFor, GitHostRequest, RequestsOutcome } from '../store/git-host.js'
 
 // The dashboard's pull request reads (#1820), all through the git host provider: what is asked of it,
@@ -91,4 +91,18 @@ test('the cached states: a failed listing is kept as the states last read, so th
   await cachedPrStates(cwd, read)
   await cachedPrStates(cwd, read)
   assert.equal(calls, before + 1, 'one ask, then the kept answer')
+})
+
+test('the open requests for the Human Queue: the first ask waits for them, the next ones are the list last read, and a request opened or merged here reads them again; a first read that fails is a failure', async () => {
+  const cwd = '/repo-open'
+  let calls = 0
+  let answer: () => Promise<OpenPr[]> = () => new Promise(resolve => setTimeout(() => resolve([{ number: 1, title: 'one', url: 'u/1', isDraft: false }]), 300))
+  const read = () => (calls++, answer())
+  assert.deepEqual((await cachedOpenPrs(cwd, read)).map(pr => pr.number), [1], 'a slow first answer is waited for, never an empty queue')
+  answer = async () => [{ number: 1, title: 'one', url: 'u/1', isDraft: false }, { number: 2, title: 'two', url: 'u/2', isDraft: false }]
+  assert.deepEqual((await cachedOpenPrs(cwd, read)).map(pr => pr.number), [1], 'the list last read')
+  assert.equal(calls, 1)
+  forgetPr(cwd, 'agent-x')
+  assert.deepEqual((await cachedOpenPrs(cwd, read)).map(pr => pr.number), [1, 2], 'read again once a request was opened or merged here')
+  await assert.rejects(cachedOpenPrs('/repo-open-never', () => Promise.reject(new Error('gh: not authenticated'))))
 })

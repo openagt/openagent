@@ -159,6 +159,8 @@ export interface AgentMeta {
    * changes it, not the run.
    */
   unpublished?: number
+  /** How many files the run's checkout left uncommitted, annotated like {@link unpublished}. */
+  uncommitted?: number
   /**
    * The loopback port the agent's browser preview is listening on (#813), or absent when the agent
    * has no browser. What lets the daemon proxy the pane: the port is allocated per agent and the

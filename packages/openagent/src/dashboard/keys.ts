@@ -16,8 +16,8 @@ import type { Intervention } from './interventions.js'
 
 /**
  * The stable identity of an intervention. A PR is its url (survives title edits and re-sorts);
- * the other two have no url and are keyed on the project plus the thing waiting — the agent and
- * the gate it is parked on, or the agent whose branch is unpushed.
+ * the others have no url and are keyed on the project plus the thing waiting — the agent and
+ * the gate it is parked on, or the agent whose work is uncommitted or unpushed.
  *
  * The agent is part of the awaiting key because a gate id is only unique within its own agent:
  * every agent's first gate is `await-choices`. Two agents running in one project (#736) and both
@@ -25,7 +25,7 @@ import type { Intervention } from './interventions.js'
  */
 export function interventionKey(item: Intervention): string {
   if (item.kind === 'awaiting') return `awaiting:${item.projectId}:${item.agentId ?? ''}:${item.awaitId ?? ''}`
-  if (item.kind === 'unpushed') return `unpushed:${item.projectId}:${item.agentId ?? ''}`
+  if (item.kind === 'uncommitted' || item.kind === 'unpushed') return `${item.kind}:${item.projectId}:${item.agentId ?? ''}`
   return item.url ?? ''
 }
 

@@ -106,16 +106,17 @@ export async function withPrStates(cwd: string, agents: AgentMeta[], states: (cw
 }
 
 /**
- * Each finished run whose work never left this machine, marked with how many commits wait, so its
- * row can say so as the Human Queue does: the same rule, {@link unpublishedRuns}. A provider that
- * cannot be read marks nothing.
+ * Each finished run whose work never left this machine, marked with how many files it left
+ * uncommitted and how many commits wait, so its row can say so as the Human Queue does: the same
+ * rule, {@link unpublishedRuns}. A provider that cannot be read marks nothing.
  */
 export async function withUnpublished(cwd: string, agents: AgentMeta[], branches?: BranchesFor): Promise<AgentMeta[]> {
   const found = await unpublishedRuns(cwd, agents, branches).catch(() => new Map<string, Unpublished>())
   if (found.size === 0) return agents
   return agents.map(agent => {
     const work = found.get(agent.id)
-    return work ? { ...agent, unpublished: work.commits } : agent
+    if (!work) return agent
+    return { ...agent, ...(work.commits > 0 ? { unpublished: work.commits } : {}), ...(work.uncommitted > 0 ? { uncommitted: work.uncommitted } : {}) }
   })
 }
 

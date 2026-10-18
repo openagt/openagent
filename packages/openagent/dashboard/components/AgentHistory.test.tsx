@@ -274,10 +274,11 @@ describe('AgentHistory rows', () => {
     expect(screen.queryByLabelText('Started on this-mac')).toBeNull()
   })
 
-  test('work that never left the machine is the Human Queue\'s blue branch, where a pull request would be', async () => {
+  test('work that never left the machine is the Human Queue\'s blue mark, where a pull request would be: a branch for commits, a file for files left uncommitted', async () => {
     const agents = [
       agent({ id: 'waits', status: 'done', driver: 'claude-code', unpublished: 2 }),
       agent({ id: 'one', status: 'done', unpublished: 1 }),
+      agent({ id: 'left', status: 'done', uncommitted: 1, unpublished: 3 }),
       agent({ id: 'none', status: 'done' }),
     ]
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={agents} selectedAgentId={null} onSelect={() => {}} />)
@@ -286,6 +287,8 @@ describe('AgentHistory rows', () => {
     expect(glyph).toContain('text-info')
     expect(screen.getByLabelText('Not published · 1 commit')).toBeTruthy()
     expect(screen.getAllByLabelText(/^Not published/)).toHaveLength(2)
+    // Files left uncommitted come first: committing them is the run's next step.
+    expect(screen.getByLabelText('Not committed · 1 file').querySelector('svg')!.getAttribute('class')).toContain('lucide-file-pen')
     // Just before the logo, where a pull request's mark stands.
     const row = screen.getByLabelText('Not published · 2 commits').closest('button')!
     const marks = [...row.querySelectorAll('[aria-label]')].map(mark => mark.getAttribute('aria-label'))
