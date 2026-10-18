@@ -1,5 +1,6 @@
 Topics: UX, dashboard, landing-page
 Issue: [#1919](https://github.com/openagt/openagent/issues/1919)
+Waiting: the issue's author (#1919) choosing between keeping openagent.build in the address bar and the counter-proposal of a button that goes to the dashboard's own address
 
 # Pretty Dashboard URL
 
