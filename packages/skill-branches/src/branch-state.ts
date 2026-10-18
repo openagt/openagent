@@ -92,7 +92,7 @@ interface Reads {
 const COMMIT_ID = /^[0-9a-f]{40}$/
 
 /** The commit `rev` names, when this machine has it. */
-async function commitOf(ask: (args: string[]) => Promise<string>, rev: string): Promise<string | undefined> {
+export async function commitOf(ask: (args: string[]) => Promise<string>, rev: string): Promise<string | undefined> {
   return (await ask(['rev-parse', '--verify', '--quiet', `${rev}^{commit}`])).trim() || undefined
 }
 
@@ -151,7 +151,7 @@ function soft(git: GitRunner, cwd: string): (args: string[]) => Promise<string> 
 }
 
 /** The project's default branch: what the remote points HEAD at, else the first local conventional one. */
-async function detectBase(ask: (args: string[]) => Promise<string>): Promise<string | undefined> {
+export async function detectBase(ask: (args: string[]) => Promise<string>): Promise<string | undefined> {
   const head = (await ask(['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'])).trim()
   if (head) return head
   for (const name of ['main', 'master']) {

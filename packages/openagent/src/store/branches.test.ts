@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { parseBranchStates, parseCheckouts, providedBranches } from './branches.js'
+import { parseBranchesAhead, parseBranchStates, parseCheckouts, providedBranches } from './branches.js'
 
 // The branches contract (#1774): a project's package declares `"openagent": { "branches": "<command>" }`
 // and OpenAgent reads its checkouts, a branch's state, and moves them, by running that command.
@@ -140,4 +140,10 @@ test('parseCheckouts keeps the rows with an id and a path; parseBranchStates the
     STATE,
     { branch: 'b', exists: false, commits: [], files: [{ path: 'f', insertions: 0, deletions: 0, binary: false }], hasRemote: false, pushed: false, merged: false },
   ])
+})
+
+test('parseBranchesAhead keeps the counts with a branch, a number and every verdict; anything else is no answer', () => {
+  const counted = { branch: 'agent-a', exists: true, agent: true, ahead: 2, hasRemote: true, pushed: false, gone: false, merged: false }
+  assert.deepEqual(parseBranchesAhead('nope'), [])
+  assert.deepEqual(parseBranchesAhead([counted, { ...counted, ahead: '2' }, { ...counted, gone: undefined }, { ...counted, branch: '' }, null, { ...counted, extra: 1 }]), [counted, counted])
 })

@@ -17,10 +17,12 @@ import { isRunId } from './runs.js'
  *   `<command> show [--from <commit>] <branch>...`      what each branch holds and where it stands, as an array of {@link BranchState}, in the order asked;
  *                                                       measured from `<commit>`, where the branches started, in place of the default branch;
  *                                                       a full commit id in place of a branch is read as a branch that ends there
+ *   `<command> ahead [--from <commit>] <branch>...`     how far each branch is past the base and whether the remote has it, as an array of {@link BranchAhead}:
+ *                                                       no files, so every run's branch can be asked on a poll
  *   `<command> merge <b>`                               merge the branch into the default branch, on this machine, then delete it
  *   `<command> push --branch <b>`                       push the branch to the remote; a branch only the remote has is answered as it is
  *   `<command> remove <id> [--from <commit>] [--discard]`  reclaim a run's checkout once its branch holds everything, pushing nothing, its branch measured from the commit it started from; `--discard` drops uncommitted work
- * `list` and `show` read this machine, no network: OpenAgent polls. `show` answers the branch's
+ * `list`, `show` and `ahead` read this machine, no network: OpenAgent polls. `show` answers the branch's
  * git facts only; its pull request is the git host provider's (`git-host.ts`), as every pull request is.
  *
  * That is the whole contract: git, and nothing beyond it (#1820). OpenAgent reads checkouts to
@@ -28,7 +30,7 @@ import { isRunId } from './runs.js'
  * the Human Queue's unpushed rows. Opening a pull request is the push here, then the git host
  * provider's `open`. What a checkout is, where it lives, how a branch is pushed is the package's.
  *
- * The shapes, owned here: {@link Checkout}, {@link BranchState}.
+ * The shapes, owned here: {@link Checkout}, {@link BranchState}, {@link BranchAhead}.
  */
 
 /** A run's checkout: where it works, as a provider lists it. */
@@ -83,6 +85,25 @@ export interface BranchState {
   pendingFiles?: string[]
 }
 
+/** How far a branch is past its base and whether the remote has it, as a provider answers `ahead`: counts, no files. */
+export interface BranchAhead {
+  branch: string
+  /** The branch exists on this machine. */
+  exists: boolean
+  /** A branch the provider made for a run, not one of the person's own. */
+  agent: boolean
+  /** How many commits of its own it has beyond the base. */
+  ahead: number
+  /** The project has a remote to push to. */
+  hasRemote: boolean
+  /** The remote has the branch at this same tip. */
+  pushed: boolean
+  /** It was pushed, and the remote's copy is gone since, as a merged pull request's is. */
+  gone: boolean
+  /** The project's default branch already contains it. */
+  merged: boolean
+}
+
 /** What pushing a branch did: `pushed` is false when only the remote had it, so there was nothing here to push. */
 export type PushOutcome = { ok: true; pushed: boolean } | { ok: false; error: string }
 
@@ -112,6 +133,8 @@ export interface BranchesSource {
    * branch that ended there held.
    */
   show(branches: readonly string[], from?: string): Promise<BranchState[]>
+  /** How far each branch is past its base and whether the remote has it, in the order asked; `[]` when nothing can be read. `from` as for {@link show}. */
+  ahead(branches: readonly string[], from?: string): Promise<BranchAhead[]>
   /** Push a branch to the remote: the checkout on it under its clean rule, else the branch itself. */
   push(branch: string): Promise<PushOutcome>
   /** Merge a branch into the project's default branch, on this machine, then delete it; a merge that conflicts changes nothing. */
@@ -180,6 +203,18 @@ export function parseBranchStates(output: unknown): BranchState[] {
   return states
 }
 
+/** The counts read back from a provider's `ahead`: the objects with a branch and every verdict; anything else is no answer. */
+export function parseBranchesAhead(output: unknown): BranchAhead[] {
+  if (!Array.isArray(output)) return []
+  return output.flatMap(value => {
+    const row = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
+    const flags = ['exists', 'agent', 'hasRemote', 'pushed', 'gone', 'merged'] as const
+    if (typeof row['branch'] !== 'string' || row['branch'] === '' || typeof row['ahead'] !== 'number' || flags.some(flag => typeof row[flag] !== 'boolean')) return []
+    const flag = (name: (typeof flags)[number]): boolean => row[name] === true
+    return [{ branch: row['branch'], exists: flag('exists'), agent: flag('agent'), ahead: row['ahead'], hasRemote: flag('hasRemote'), pushed: flag('pushed'), gone: flag('gone'), merged: flag('merged') }]
+  })
+}
+
 function commitsOf(value: unknown): BranchCommit[] {
   if (!Array.isArray(value)) return []
   return value.flatMap(entry => {
@@ -207,10 +242,28 @@ function filesOf(value: unknown): BranchFile[] {
 /** The branches source over one provider command: each read one run of the command, cached per {@link CACHE_MS}; each write drops the reads. */
 function commandBranches(root: string, command: ProvidedCommand, now: () => number): BranchesSource & { drop(): void } {
   const listed = new Map<string, { at: number; rows: Promise<Checkout[]> }>()
-  const shown = new Map<string, { at: number; states: Promise<BranchState[]> }>()
+  const read = new Map<string, { at: number; answer: Promise<unknown[]> }>()
   const drop = (): void => {
     listed.clear()
-    shown.clear()
+    read.clear()
+  }
+  // A read of branches by name, `show` or `ahead`: concurrent and recent asks of the same branches share one process; a read that failed is not kept.
+  const branchRead = <T>(verb: 'show' | 'ahead', parse: (output: unknown) => T[], branches: readonly string[], from: string | undefined): Promise<T[]> => {
+    const asked = branches.filter(branch => branch !== '')
+    if (asked.length === 0) return Promise.resolve([])
+    const key = [verb, from ?? '', ...asked].join('\0')
+    const known = read.get(key)
+    if (known && now() - known.at < CACHE_MS) return known.answer as Promise<T[]>
+    const entry: { at: number; answer: Promise<T[]> } = { at: now(), answer: Promise.resolve([]) }
+    entry.answer = runPackageCommand(root, command, [verb, ...(from ? ['--from', from] : []), ...asked]).then(result => {
+      if (!result.ok || !Array.isArray(result.output)) {
+        if (read.get(key) === entry) read.delete(key)
+        return []
+      }
+      return parse(result.output)
+    })
+    read.set(key, entry)
+    return entry.answer
   }
   return {
     drop,
@@ -230,23 +283,8 @@ function commandBranches(root: string, command: ProvidedCommand, now: () => numb
       listed.set(key, read)
       return read.rows
     },
-    show(branches, from) {
-      const asked = branches.filter(branch => branch !== '')
-      if (asked.length === 0) return Promise.resolve([])
-      const key = [from ?? '', ...asked].join('\0')
-      const known = shown.get(key)
-      if (known && now() - known.at < CACHE_MS) return known.states
-      const read: { at: number; states: Promise<BranchState[]> } = { at: now(), states: Promise.resolve([]) }
-      read.states = runPackageCommand(root, command, ['show', ...(from ? ['--from', from] : []), ...asked]).then(result => {
-        if (!result.ok || !Array.isArray(result.output)) {
-          if (shown.get(key) === read) shown.delete(key)
-          return []
-        }
-        return parseBranchStates(result.output)
-      })
-      shown.set(key, read)
-      return read.states
-    },
+    show: (branches, from) => branchRead('show', parseBranchStates, branches, from),
+    ahead: (branches, from) => branchRead('ahead', parseBranchesAhead, branches, from),
     async push(branch) {
       const result = await runPackageCommand(root, command, ['push', '--branch', branch])
       drop()

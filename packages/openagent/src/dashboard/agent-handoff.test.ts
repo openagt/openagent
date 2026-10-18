@@ -39,6 +39,7 @@ function fakeBranches(
   const calls: unknown[][] = []
   const branches: BranchesFor = async () => ({
     list: async () => [],
+    ahead: async () => [],
     show: async (asked, from) => {
       calls.push(['show', ...asked, ...(from !== undefined ? [{ from }] : [])])
       return asked.flatMap(branch => {
@@ -261,6 +262,7 @@ test('a run started from a local branch says what a pull request would carry ove
   const asked: (string | undefined)[] = []
   const branches: BranchesFor = async () => ({
     list: async () => [],
+    ahead: async () => [],
     show: async (_branches, from) => (asked.push(from), [from === undefined ? overDefault : own]),
     push: async () => ({ ok: true, pushed: true }),
     merge: async () => ({ ok: true, into: 'main', commit: 'c'.repeat(40), from: start, deleted: true }),

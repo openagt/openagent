@@ -2,8 +2,8 @@ import { listAgents, loadAgentEvents, readLiveMetas, type LiveAgent, type AgentM
 import { pendingChoices } from '../open-choices.js'
 import type { OpenAgentEvent } from '../events.js'
 import type { ProjectSummary, ProjectionRead } from './projects.js'
-import { agentBranchFor } from './agent-handoff.js'
-import { projectBranches, type BranchesFor, type BranchState } from '../store/branches.js'
+import { projectBranches, type BranchesFor } from '../store/branches.js'
+import { unpublishedRuns, type Unpublished } from './unpublished.js'
 import { openPrs, type PrLister } from './pull-requests.js'
 import { interventionKey } from './keys.js'
 
@@ -58,16 +58,7 @@ export interface InterventionsDeps {
   agents?: (cwd: string) => Promise<AgentMeta[]>
   /** The project's checkouts and branches (default the project's provider, {@link projectBranches}): where a branch's state is read; drives the `unpushed` source (#860). */
   branches?: BranchesFor
-  /**
-   * How many of a project's most recent finished agents to inspect for unpushed work. Each one costs
-   * a handful of git reads, and this runs on a poll, so old history is not re-walked every minute:
-   * work that has sat unpushed for dozens of agents is not news, and the agent list stays the record.
-   */
-  handoffLimit?: number
 }
-
-/** How many recent finished agents are inspected per project by default. */
-const HANDOFF_LIMIT = 5
 
 /**
  * Build the cross-project interventions queue: every registered project's open PRs, plus any run
@@ -164,68 +155,39 @@ export async function buildInterventions(
 }
 
 /**
- * The finished agents of a project whose branch still holds unpushed, unmerged commits (#860).
- *
- * Only the most recent {@link InterventionsDeps.handoffLimit} finished agents are inspected, and
- * their branches in one read of the project's branches provider: each read is a process, and
- * this runs on a poll. A run started from another branch is the exception: its branch is read on
- * its own, measured from the commit its own work begins at, as its page measures it; counted from
- * the default branch it would be credited that other branch's commits too. The provider answers git facts only, so the git host PR lookup the handoff
- * summary makes per branch is never paid here: an open PR means the branch was pushed, so
- * `pushed` already excludes it, and the `pr` kind above is what surfaces it.
+ * The finished runs of a project whose work never left this machine (#860), as
+ * {@link unpublishedRuns} finds them for the list of runs too. The provider answers git facts
+ * only, so the git host PR lookup the handoff summary makes per branch is never paid here: an
+ * open PR means the branch was pushed, and the `pr` kind above is what surfaces it.
  */
 async function unpushedFor(
   project: ProjectSummary,
   deps: InterventionsDeps,
   unread: () => void,
 ): Promise<Intervention[]> {
-  const agents = deps.agents ?? listAgents
-  const branches = deps.branches ?? projectBranches
-
-  const finished = (await agents(project.path))
-    // A subagent's branch is its main agent's to land, never a person's to push.
-    .filter(agent => agent.status !== 'running' && agent.parent === undefined)
-    .sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''))
-    .slice(0, deps.handoffLimit ?? HANDOFF_LIMIT)
-    .flatMap(agent => {
-      const branch = agentBranchFor(agent)
-      return branch === undefined ? [] : [{ agent, branch }]
-    })
-  if (finished.length === 0) return []
-
-  // No provider: the project has no checkouts and no branch state to read; nothing is waiting.
-  const source = await branches(project.path).catch(() => undefined)
-  if (!source) return []
-  // One read per commit the branches are measured from; the runs that name none share one.
-  const asks = new Map<string | undefined, string[]>()
-  for (const { agent, branch } of finished) asks.set(agent.baseCommit, [...(asks.get(agent.baseCommit) ?? []), branch])
-  const states = new Map<string, BranchState>()
+  const agents = await (deps.agents ?? listAgents)(project.path)
+  let found: Map<string, Unpublished>
   try {
-    for (const shown of await Promise.all([...asks].map(([from, asked]) => source.show(asked, from)))) {
-      for (const state of shown) states.set(state.branch, state)
-    }
+    found = await unpublishedRuns(project.path, agents, deps.branches ?? projectBranches)
   } catch {
     unread()
     return []
   }
-
-  const items: Intervention[] = []
-  for (const { agent, branch } of finished) {
-    const state = states.get(branch)
-    // Every condition is a reason this is *not* waiting on anyone: the branch is gone, the session
-    // wrote nothing, it already landed, it is already on the remote, or there is nowhere to push.
-    if (!state || !state.exists || state.commits.length === 0 || state.files.length === 0 || state.merged || state.pushed || !state.hasRemote) continue
-    items.push({
-      projectId: project.id,
-      projectName: project.name,
-      kind: 'unpushed',
-      // What was asked, else the name the provider gave the branch, else the branch: never a prefix cut off here.
-      title: agent.intent?.trim() || state.name || branch,
-      agentId: agent.id,
-      branch,
-      commits: state.commits.length,
-      ...(agent.updatedAt ? { createdAt: agent.updatedAt } : {}),
-    })
-  }
-  return items
+  return agents.flatMap(agent => {
+    const work = found.get(agent.id)
+    if (!work) return []
+    return [
+      {
+        projectId: project.id,
+        projectName: project.name,
+        kind: 'unpushed' as const,
+        // What was asked, else the run's own name, else the branch: never a prefix cut off here.
+        title: agent.intent?.trim() || agent.title?.trim() || work.branch,
+        agentId: agent.id,
+        branch: work.branch,
+        commits: work.commits,
+        ...(agent.updatedAt ? { createdAt: agent.updatedAt } : {}),
+      },
+    ]
+  })
 }
