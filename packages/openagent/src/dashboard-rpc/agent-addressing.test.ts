@@ -560,3 +560,21 @@ test('a record that calls its own run a saved machine\'s is not believed: the ro
     await rm(ctx.dir, { recursive: true, force: true })
   }
 })
+
+test('a project\'s list of runs and all projects\' together mark a run\'s row alike: work it left uncommitted shows in both', async () => {
+  const ctx = await projectWithWorktreeAgent({ pid: 0, host: hostname() }, { status: 'done' })
+  try {
+    // Ended, its branch recorded on its card, a file it never committed left in its checkout.
+    const card = join(worktreePath(ctx.dir, ctx.agentId), OPENAGENT_DIR, `${ctx.agentId}.json`)
+    await writeFile(card, JSON.stringify({ ...JSON.parse(await readFile(card, 'utf8')), branch: agentBranchName(ctx.agentId) }))
+    await writeFile(join(worktreePath(ctx.dir, ctx.agentId), 'draft.md'), 'not committed\n')
+    const marks = (rows: { id: string; uncommitted?: number; unpublished?: number }[]) => rows.filter(row => row.id === ctx.agentId).map(row => [row.uncommitted, row.unpublished])
+    const own = marks(await onAgents(ctx.projectId))
+    assert.equal(own.length, 1)
+    assert.ok((own[0]![0] ?? 0) > 0, 'the uncommitted file is marked')
+    assert.deepEqual(marks((await onRecentAgents()).filter(row => row.projectId === ctx.projectId).map(row => row.agent)), own)
+  } finally {
+    ctx.restore()
+    await rm(ctx.dir, { recursive: true, force: true })
+  }
+})
