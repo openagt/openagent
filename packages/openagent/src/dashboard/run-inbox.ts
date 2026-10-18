@@ -28,30 +28,19 @@ async function isRunWorking(cwd: string, agentId: string): Promise<boolean> {
   return agent?.status === 'running' && agent.pid !== undefined && agent.host === hostname() && isPidAlive(agent.pid)
 }
 
-/** The computer a run's record says it runs on, when it says. */
-async function ranOn(cwd: string, agentId: string): Promise<string | undefined> {
-  return (await findAgent(cwd, agentId).catch(() => undefined))?.host
-}
-
 /**
  * Hand one line to a run of the project at `cwd`. A run that is working takes it from its inbox
  * when its turn ends. A run that has ended (done, stopped, failed, or waiting on its question) is
  * continued through the project's `resume` hook. A run that ends while the line is on its way
  * would leave it in an inbox nobody reads, so the run is looked at again after the write, and
  * what is still in the inbox then is taken back and resumes the run instead.
- *
- * A run another computer started is refused: continued here it would move to this computer
- * under its id, with this computer's logins and none of its conversation. A run on a saved
- * machine never comes here: the call goes to that machine.
  */
 export async function sayToRun(
   cwd: string,
   agentId: string,
   line: InboxLine,
-  deps: { isWorking?: (cwd: string, agentId: string) => Promise<boolean>; ranOn?: (cwd: string, agentId: string) => Promise<string | undefined>; host?: string } = {},
+  deps: { isWorking?: (cwd: string, agentId: string) => Promise<boolean> } = {},
 ): Promise<SteerResult> {
-  const where = await (deps.ranOn ?? ranOn)(cwd, agentId)
-  if (where !== undefined && where !== (deps.host ?? hostname())) return { ok: false, error: `This run is on ${where}. Continue it there.` }
   const isWorking = deps.isWorking ?? isRunWorking
   const lines = [line]
   if (await isWorking(cwd, agentId)) {

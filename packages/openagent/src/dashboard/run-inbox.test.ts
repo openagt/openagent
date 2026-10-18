@@ -48,20 +48,3 @@ test('a line written to a run that ended meanwhile is taken back out of the inbo
     await rm(cwd, { recursive: true, force: true })
   }
 })
-
-test('a run another computer started is not continued here: the line is refused with where it runs, and nothing is resumed or written', async () => {
-  const cwd = await realpath(await mkdtemp(join(tmpdir(), 'openagent-run-inbox-')))
-  try {
-    await mkdir(join(cwd, OPENAGENT_DIR), { recursive: true })
-    await writeFile(join(cwd, PROJECT_HOOKS_FILE), `resume: 'echo "$RUN_ID" >> resumed.txt; echo "{\\"id\\":\\"$RUN_ID\\"}"'\n`)
-    const ranOn = async () => 'ubuntu-s-1vcpu-2gb-fra1'
-    const said = await sayToRun(cwd, RUN, { kind: 'message', text: 'go on' }, { ranOn, host: 'rom-laptop', isWorking: async () => false })
-    assert.deepEqual(said, { ok: false, error: 'This run is on ubuntu-s-1vcpu-2gb-fra1. Continue it there.' })
-    assert.equal(await readFile(join(cwd, 'resumed.txt'), 'utf8').catch(() => ''), '')
-    // On the computer it runs on, the same line resumes it.
-    assert.deepEqual(await sayToRun(cwd, RUN, { kind: 'message', text: 'go on' }, { ranOn, host: 'ubuntu-s-1vcpu-2gb-fra1', isWorking: async () => false }), { ok: true })
-    assert.equal(await readFile(join(cwd, 'resumed.txt'), 'utf8'), `${RUN}\n`)
-  } finally {
-    await rm(cwd, { recursive: true, force: true })
-  }
-})

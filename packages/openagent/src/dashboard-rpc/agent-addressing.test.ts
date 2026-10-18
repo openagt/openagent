@@ -509,6 +509,19 @@ test('a call that arrived from another computer is run here whatever the run\'s 
   }
 })
 
+test('a run another computer started, which is no saved machine, is not continued from here: a message and an answer are refused with where it runs, and nothing is resumed', async () => {
+  const ctx = await projectWithWorktreeAgent({ pid: 0, host: 'ubuntu-s-1vcpu-2gb-fra1' }, { status: 'waiting', hooks: RESUME_HOOK, diary: [QUESTION, { kind: 'ended', status: 'waiting' }] })
+  try {
+    const refused = { ok: false, error: 'This run is on ubuntu-s-1vcpu-2gb-fra1. Continue it there.' }
+    assert.deepEqual(await sendMessage(ctx.projectId, 'go on', ctx.agentId), refused)
+    assert.deepEqual(await sendChoice(ctx.projectId, 'await-choices', 'a', ctx.agentId), refused)
+    await assert.rejects(stat(join(ctx.dir, 'resumed.txt')), { code: 'ENOENT' })
+  } finally {
+    ctx.restore()
+    await rm(ctx.dir, { recursive: true, force: true })
+  }
+})
+
 test('a machine that refuses what would change a run, and says why, is answered in its own words; nothing is done here in its place', async () => {
   const ctx = await projectWithWorktreeAgent({ pid: 0, host: 'server-box' }, { status: 'waiting', hooks: RESUME_HOOK, diary: [{ kind: 'said', text: 'kept in the record' }] })
   // A computer that only lets its server watch: it refuses a call that acts, in words for the person.
