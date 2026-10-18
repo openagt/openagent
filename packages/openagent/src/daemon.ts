@@ -1,5 +1,5 @@
 import { mkdir } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import { OPENAGENT_DIR } from './openagent-dir.js'
 import { startDashboard, type Dashboard } from './dashboard/index.js'
 import { createProjectRuntime } from './daemon-runtime.js'
@@ -70,6 +70,14 @@ export interface RunDaemonOptions {
   version?: string
   /** Called once the server has bound, before it blocks. The only way a caller learns the port. */
   onListening?: (state: DaemonState) => void
+  /**
+   * A folder to add to the projects once the dashboard listens, as Add project does with the
+   * records kept on this computer. One already on the list, or inside one that is, is left as it is.
+   * The dashboard adds no folder by itself: this is the caller's.
+   */
+  project?: string
+  /** Called with {@link project}'s path once it was added. */
+  onProjectAdded?: (path: string) => void
   /** How the bridge browser is launched (#1332); default the real Chrome for Testing. For tests. */
   bridgeBrowser?: (opts: BridgeBrowserOptions) => Promise<BridgeBrowser>
   /** How the services of OpenAgent's own packages are started; default each as its own process. For tests. */
@@ -102,6 +110,16 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   // Everything the dashboard drives per project (a run's start, project install, the machine
   // relay) lives in the runtime, so this body stays about the daemon's own lifecycle.
   const runtime = createProjectRuntime({ cwd, env })
+  // A folder the caller asked to add: left as it is when a listed project holds it, so starting
+  // again inside a project, or inside one of its folders, adds nothing.
+  const addFolder = async (folder: string): Promise<void> => {
+    const path = resolve(folder)
+    const listed = await listProjects(undefined, env).catch(() => [])
+    if (listed.some(project => path === project.path || path.startsWith(project.path + sep))) return
+    const added = await runtime.onAddProject(path, false)
+    if (added.ok) opts.onProjectAdded?.(path)
+    else console.log(`[openagent] could not add ${path}: ${added.error}`)
+  }
   // Known only once the dashboard listens; the bridge browser is told it (#1332).
   let daemonUrl: string | undefined
 
@@ -180,6 +198,8 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   for (const record of await listProjects(undefined, env).catch(() => [])) {
     await runProjectHooks(record.path, 'open', { log: console.log })
   }
+  // After the listed projects' open hooks: adding the folder runs its own, so they run once.
+  if (opts.project !== undefined) await addFolder(opts.project)
 
   // The services of OpenAgent's own packages: each runs for as long as the daemon does, and is
   // told the daemon's address.

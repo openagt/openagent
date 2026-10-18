@@ -25,3 +25,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   cannot do. The rest are picked from init's list. Picked over the first three alone, which
   left the tickets and the queue a list of ticks away from a new project, and over every
   skill of the list, each one more description in every agent's context.
+- Typed inside a Git repository, the command adds that repository to the projects, by
+  its top folder, as "Add project" does, with the agents' records kept on this computer.
+  The dashboard adds no folder by itself: this package names the one it was started in.
+  Picked over the person adding the folder they had just typed the command in, a second
+  step before anything else; and over the dashboard adding its own start folder, which
+  brought back at every start a project the person had removed.
