@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button, Input, RadioGroup, RadioGroupOption, type ModuleCommandResult, type ModuleProject } from '@openagt/dashboard/module'
 import { EMPTY_DRAFT, addArgs, draftProblem, draftSentence, isUntouched, ownPaceArgs, savedFile, savedWords, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
 import { PaceFields, SaidFields, Section } from './fields.js'
+import { DEFAULT_AGENT } from '../src/names.js'
 
 // The "New automation" form of the Automations page: a person's own prompt, saved as a command of
 // the project with a row like any skill's. A name; what it does, the same fields a row's Edit panel
@@ -104,7 +105,7 @@ export function AutomationForm({
           </div>
         </Section>
         <Section title="What it does">
-          <SaidFields project={project} said={draft} autoFocus={false} onChange={set} />
+          <SaidFields project={project} said={draft} agent={DEFAULT_AGENT} autoFocus={false} onChange={set} />
         </Section>
         <Section title="When it runs">
           <PaceFields

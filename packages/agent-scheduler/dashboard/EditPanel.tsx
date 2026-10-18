@@ -254,7 +254,7 @@ export function EditPanel({
       <Section title="What it does">
         {own ? (
           <fieldset disabled={saving} className="space-y-2">
-            <SaidFields project={project} said={own} autoFocus onChange={change => (setOwn({ ...own, ...change }), setFailed(undefined))} />
+            <SaidFields project={project} said={own} agent={runsOn.agent} autoFocus onChange={change => (setOwn({ ...own, ...change }), setFailed(undefined))} />
           </fieldset>
         ) : (
           <SaidShown

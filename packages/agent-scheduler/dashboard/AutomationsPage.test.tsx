@@ -1109,7 +1109,9 @@ describe('the Edit panel of a row a person made', () => {
     const kept = await edit('tidy')
     expect(queryRadio(kept, 'No wait')).toBeNull()
     expect(disabled(within(kept).getByRole('button', { name: 'Try it' }))).toBe(true)
-    expect(within(kept).queryByLabelText(/What the line waits for/)).toBeNull()
+    // The plain words show with no line too: they are what "Write the line" is asked from.
+    expect(within(kept).getByLabelText(/What the line waits for/)).toBeTruthy()
+    expect(disabled(within(kept).getByRole('button', { name: 'Write the line' }))).toBe(true)
     fireEvent.click(within(kept).getByRole('button', { name: 'Cancel' }))
 
     const panel = await edit('/answer-comments')
@@ -1655,8 +1657,9 @@ describe('the "New automation" form', () => {
     expect(within(form).getByText('Give it a name. It becomes the command, like /answer-comments.')).toBeTruthy()
     expect(disabled(within(form).getByRole('button', { name: 'Save' }))).toBe(true)
     expect(disabled(within(form).getByRole('button', { name: 'Try it' }))).toBe(true)
-    // The plain words for a shell line show only once there is a line, and only a line can pace it alone.
-    expect(within(form).queryByLabelText(/What the line waits for/)).toBeNull()
+    // The plain words for a shell line show before there is a line, to write it from; only a line can pace it alone.
+    expect(within(form).getByLabelText(/What the line waits for/)).toBeTruthy()
+    expect(disabled(within(form).getByRole('button', { name: 'Write the line' }))).toBe(true)
     expect(queryRadio(form, 'No wait')).toBeNull()
     fireEvent.change(within(form).getByRole('textbox', { name: 'Name' }), { target: { value: 'answer-comments' } })
     expect(within(form).getByText('Write what the agent is told.')).toBeTruthy()
@@ -1724,6 +1727,54 @@ describe('the "New automation" form', () => {
     expect(await within(form).findByText('The line could not be tried: the project is gone')).toBeTruthy()
     // Trying saves nothing.
     expect(runCommand.mock.calls.some(([, args]) => args[0] === 'add')).toBe(false)
+  })
+
+  test('"Write the line" asks the coding agent for a shell line from the plain words and puts it in the line\'s box, saving nothing; a NONE or a failure says why and leaves the box', async () => {
+    const writes: ModuleCommandResult[] = [
+      { ok: true, output: { ok: true, line: 'gh api "repos/{owner}/{repo}/issues/comments?since=$LAST_RUN" --jq \'[.[].html_url]\'' } },
+      { ok: true, output: { ok: true, none: 'nothing on the command line says that.' } },
+      { ok: false, error: 'the line was not written: the agent took longer than 25 seconds' },
+    ]
+    const { host, runCommand } = scheduler((_, args) => (args[0] === 'write-line' ? writes.shift()! : { ok: true, output: { ok: true } }))
+    show(host)
+    fireEvent.click(await screen.findByRole('button', { name: 'New automation in gemstack' }))
+    const form = screen.getByRole('group', { name: 'New automation' })
+    const words = within(form).getByLabelText(/What the line waits for/)
+    const line = within(form).getByLabelText(/A shell line that prints what is new/) as HTMLTextAreaElement
+    expect(within(form).getByText(/Asks Claude Code once for a shell line from these words/)).toBeTruthy()
+    fireEvent.change(words, { target: { value: '  when someone comments on an issue ' } })
+    fireEvent.click(within(form).getByRole('button', { name: 'Write the line' }))
+    await waitFor(() => expect(line.value).toBe('gh api "repos/{owner}/{repo}/issues/comments?since=$LAST_RUN" --jq \'[.[].html_url]\''))
+    expect(runCommand).toHaveBeenCalledWith('p1', ['write-line', '--words=when someone comments on an issue', '--agent=claude-code'])
+    // The line is the person's to read and try: nothing was saved, and "Try it" takes it.
+    expect(disabled(within(form).getByRole('button', { name: 'Try it' }))).toBe(false)
+    fireEvent.click(within(form).getByRole('button', { name: 'Write the line' }))
+    expect(await within(form).findByText('No line can do that: nothing on the command line says that.')).toBeTruthy()
+    expect(line.value).toMatch(/^gh api/)
+    fireEvent.change(words, { target: { value: 'when it rains' } })
+    expect(within(form).queryByRole('status', { name: 'What the agent answered' })).toBeNull()
+    fireEvent.click(within(form).getByRole('button', { name: 'Write the line' }))
+    expect(await within(form).findByText('The line was not written: the line was not written: the agent took longer than 25 seconds')).toBeTruthy()
+    expect(line.value).toMatch(/^gh api/)
+    expect(runCommand.mock.calls.some(([, args]) => args[0] === 'add')).toBe(false)
+  })
+
+  test('a written line that comes back after the person typed in the line\'s box is dropped', async () => {
+    const { host, runCommand } = scheduler()
+    let answer!: (result: ModuleCommandResult) => void
+    runCommand.mockImplementation(async (_projectId: string, args: string[]) => (args[0] === 'write-line' ? new Promise<ModuleCommandResult>(resolve => (answer = resolve)) : { ok: true, output: args[0] === 'status' ? STATUS : { ok: true } }))
+    show(host)
+    fireEvent.click(await screen.findByRole('button', { name: 'New automation in gemstack' }))
+    const form = screen.getByRole('group', { name: 'New automation' })
+    const line = within(form).getByLabelText(/A shell line that prints what is new/) as HTMLTextAreaElement
+    fireEvent.change(within(form).getByLabelText(/What the line waits for/), { target: { value: 'when someone comments' } })
+    fireEvent.click(within(form).getByRole('button', { name: 'Write the line' }))
+    expect(disabled(within(form).getByRole('button', { name: 'Writing…' }))).toBe(true)
+    fireEvent.change(line, { target: { value: 'my own line' } })
+    answer({ ok: true, output: { ok: true, line: 'gh api late' } })
+    await waitFor(() => expect(runCommand.mock.results.some(r => r.type === 'return')).toBe(true))
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(line.value).toBe('my own line')
   })
 
   test('an answer that comes back after the line was changed is not shown under the other line', async () => {

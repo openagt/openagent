@@ -3,7 +3,7 @@ import { Button, Input, Label, RadioGroup, RadioGroupItem, RadioGroupOption, Sel
 import type { PublishPick } from '../src/state.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, MAX_AGENTS, type AgentName } from '../src/names.js'
 import { MAX_COUNT, PACE_UNITS, takesTimeOfDay, type PaceUnit } from '../src/pace.js'
-import { triedLine, type TriedLine } from './automation-form.js'
+import { triedLine, writtenLine, type TriedLine } from './automation-form.js'
 import { PRINTS_SOMETHING, UNIT_WORDS, modelLabel, publishChoices, publishLabel, type AgentModels, type AgentsDraft, type PaceDraft, type SchedulerCommand } from './schedulers.js'
 
 // The fields of the Automations page, shared by the Edit panel of a row and the "New automation"
@@ -37,17 +37,29 @@ export interface Said {
 
 /**
  * "What it does", for an automation a person wrote: what the agent is told, and an optional shell
- * line that prints what is new, with what it waits for in plain words. "Try it" runs the line
- * once in the project and shows what it printed and whether an agent would start; nothing is
- * saved and nothing starts. The answer shown is for the line as it stands: changing the line
- * takes it away, and an answer that comes back late is dropped.
+ * line that prints what is new, with what it waits for in plain words. "Write the line" asks
+ * `agent` for a line from those words and puts it in the line's box, saving nothing: the person
+ * reads it, and "Try it" runs it once in the project and shows what it printed and whether an
+ * agent would start; nothing is saved and nothing starts. An answer shown is for the line as it
+ * stands: changing the line takes it away, and an answer that comes back late is dropped, a
+ * written line too.
  */
-export function SaidFields({ project, said, autoFocus, onChange }: { project: ModuleProject; said: Said; autoFocus: boolean; onChange: (change: Partial<Said>) => void }) {
+export function SaidFields({ project, said, agent, autoFocus, onChange }: { project: ModuleProject; said: Said; agent: AgentName; autoFocus: boolean; onChange: (change: Partial<Said>) => void }) {
   const host = useModuleHost()
   const [tried, setTried] = useState<'trying' | TriedLine | undefined>()
+  const [written, setWritten] = useState<'writing' | string | undefined>()
   /** The last try asked for: an answer to an earlier one, come back late, changes nothing. */
   const asked = useRef(0)
+  /** The same for "Write the line": the line typed since, or the words, wins over a late answer. */
+  const askedLine = useRef(0)
   const line = said.when.trim()
+  const words = said.waitsFor.trim()
+  const lineChanged = (when: string): void => {
+    onChange({ when })
+    // The answer shown, and a try in flight, were for the line as it was.
+    asked.current++
+    setTried(undefined)
+  }
   const tryIt = async (): Promise<void> => {
     const mine = ++asked.current
     setTried('trying')
@@ -55,10 +67,45 @@ export function SaidFields({ project, said, autoFocus, onChange }: { project: Mo
     if (asked.current !== mine) return
     setTried(answer.ok ? triedLine(answer.output) : { printed: '', verdict: `The line could not be tried: ${answer.error}`, tone: 'failed' })
   }
+  const writeIt = async (): Promise<void> => {
+    const mine = ++askedLine.current
+    setWritten('writing')
+    const answer = await host.runCommand(project.id, ['write-line', `--words=${words}`, `--agent=${agent}`]).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
+    if (askedLine.current !== mine) return
+    const read = answer.ok ? writtenLine(answer.output) : { said: `The line was not written: ${answer.error}` }
+    if ('line' in read) lineChanged(read.line)
+    setWritten('said' in read ? read.said : undefined)
+  }
   return (
     <>
       <Label htmlFor="automation-prompt">What the agent is told</Label>
       <Textarea id="automation-prompt" rows={4} autoFocus={autoFocus} value={said.prompt} onChange={e => onChange({ prompt: e.target.value })} placeholder="Answer each new comment below." />
+      <Label htmlFor="automation-waits-for" className="pt-1">
+        What the line waits for, in plain words <span className={hint}>optional, said on the row</span>
+      </Label>
+      <Input
+        id="automation-waits-for"
+        type="text"
+        value={said.waitsFor}
+        onChange={e => {
+          onChange({ waitsFor: e.target.value })
+          askedLine.current++
+          setWritten(undefined)
+        }}
+        placeholder="when someone commented"
+        className="bg-background"
+      />
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="outline" size="sm" disabled={words === '' || written === 'writing'} onClick={() => void writeIt()}>
+          {written === 'writing' ? 'Writing…' : 'Write the line'}
+        </Button>
+        <span className={hint}>Asks {AGENT_LABELS[agent]} once for a shell line from these words, and puts it below; costs a fraction of a cent. Nothing is run or saved.</span>
+      </div>
+      {written !== undefined && written !== 'writing' && (
+        <p role="status" aria-label="What the agent answered" className="text-sm text-danger">
+          {written}
+        </p>
+      )}
       <Label htmlFor="automation-when" className="pt-1">
         A shell line that prints what is new <span className={hint}>optional</span>
       </Label>
@@ -67,10 +114,9 @@ export function SaidFields({ project, said, autoFocus, onChange }: { project: Mo
         rows={2}
         value={said.when}
         onChange={e => {
-          onChange({ when: e.target.value })
-          // The answer shown, and a try in flight, were for the line as it was.
-          asked.current++
-          setTried(undefined)
+          lineChanged(e.target.value)
+          askedLine.current++
+          setWritten(undefined)
         }}
         placeholder={'gh api "repos/{owner}/{repo}/issues/comments?since=$LAST_RUN" --jq \'[.[] | select(.body | startswith("🤖") | not) | {url: .html_url}]\''}
         spellCheck={false}
@@ -92,14 +138,6 @@ export function SaidFields({ project, said, autoFocus, onChange }: { project: Mo
           {tried.printed !== '' && <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words font-mono text-xs">{tried.printed}</pre>}
           {tried.lastRun !== undefined && <p className="mt-2 text-xs text-muted-foreground">Tried as if the row had last started a day ago: $LAST_RUN was {tried.lastRun}.</p>}
         </div>
-      )}
-      {line !== '' && (
-        <>
-          <Label htmlFor="automation-waits-for" className="pt-1">
-            What the line waits for, in plain words <span className={hint}>optional, said on the row</span>
-          </Label>
-          <Input id="automation-waits-for" type="text" value={said.waitsFor} onChange={e => onChange({ waitsFor: e.target.value })} placeholder="when someone commented" className="bg-background" />
-        </>
       )}
     </>
   )

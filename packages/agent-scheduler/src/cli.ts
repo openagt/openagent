@@ -1,15 +1,17 @@
 import { parseArgs } from 'node:util'
 import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 import { projectRoot } from '@openagt/skill-branches'
+import { driverFor } from '@openagt/agent-runner'
 import { runNow, schedulerStatus, startScheduler, stopScheduler, tickProject } from './scheduler.js'
 import { initHooks } from './init.js'
 import { cleanup } from './cleanup.js'
 import { PUBLISH_PICKS, agentInForce, isSwitchedOn, readState, updateState, withAgent, withAgents, withModel, withoutCommand, withoutListed, withPace, withPublish, withSwitch, type PublishPick, type State } from './state.js'
 import { parseInterval, parseTimeOfDay, sinceNow, takesTimeOfDay } from './pace.js'
-import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, MAX_AGENTS, isAgent, isAgents } from './names.js'
+import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, MAX_AGENTS, WRITE_LINE_TIMEOUT_MS, isAgent, isAgents } from './names.js'
 import { ableAgents, homeAgent, readSchedule, type ScheduledCommand } from './schedule.js'
 import { addAutomation, editAutomation, removeAutomation, savedAutomation, tryCheck, type AddRefusal, type ChangedSince, type NotAnAutomation } from './automation.js'
 import type { NewAutomation } from './automation-file.js'
+import { lineContext, writeLine } from './write-line.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -71,6 +73,10 @@ export const USAGE = `usage: agent-scheduler <command>
                                 coding agent can start hold as on a tick. It needs no scheduler running. Not ready within 20 seconds, it starts nothing
   try --when <shell line>       run a check once, as a tick would, asking what is new since a day ago: what it printed and whether an agent would start; nothing is saved or started;
                                 it has 20 seconds, less than a tick gives a check
+  write-line --words <plain words> [--agent <claude-code|codex>]
+                                a shell line for --when, written from what it waits for said in plain words, by one session of the coding agent (Claude Code
+                                unless named) with no tools: a fraction of a cent. The line is only printed, as {line}, or {none} with why no line can do it;
+                                nothing is run or saved. It has ${WRITE_LINE_TIMEOUT_MS / 1000} seconds
   cleanup                       remove what this tool left in the project: the state file and the scheduler's log, then .agent-scheduler/ and the rule hiding it from git once it is empty
                                 (the automations kept on this machine are your own writing and stay);
                                 refused while the state names a scheduler that is alive; the command a dashboard asks for when a project is removed with its files
@@ -322,6 +328,20 @@ const COMMANDS: Record<string, Command> = {
     if (values.when === undefined || !values.when.trim()) throw new Usage('try needs --when, the shell line to run')
     const repo = await project(io.cwd, git)
     return { ok: true, ...(await tryCheck(repo, values.when.trim(), new Date())) }
+  },
+
+  async 'write-line'(args, io, git) {
+    const { values } = parse(args, { words: { type: 'string' }, agent: { type: 'string' } }, 0)
+    const words = values.words?.trim()
+    if (!words) throw new Usage('write-line needs --words, what the line waits for in plain words')
+    const agent = values.agent ?? DEFAULT_AGENT
+    if (!isAgent(agent)) throw new Usage(`--agent is one of ${AGENTS.join(', ')}`)
+    const repo = await project(io.cwd, git)
+    // None of the person's own setup: the session answers in words, and what it would load is only cost.
+    const driver = driverFor(agent, 'write-line', { memory: false, connectors: false, skills: false })
+    const written = await writeLine(driver, words, await lineContext(repo, git))
+    if ('failed' in written) throw new Refused({ ok: false, reason: 'not-written', detail: written.failed }, `the line was not written: ${written.failed}`)
+    return { ok: true, ...written }
   },
 
   async cleanup(args, io, git) {
