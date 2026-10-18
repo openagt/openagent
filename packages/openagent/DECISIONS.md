@@ -159,7 +159,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   OpenAgent's copy and its rule are the only ones. Picked over a project's own copy
   winning, which gave one package two ways into a project.
 - The door to this computer and the servers it installed OpenAgent on are the
-  computer's, not a project's: their sections in Settings are there with no project
+  computer's, not a project's: their entries in Settings are there with no project
   added, and their commands run in no project. Picked over giving them to every project
   and running their commands in the first one, which left a computer with no project, as
   a server is when it was just connected, with no way to let a phone in; and over a
@@ -196,11 +196,25 @@ already made, and lists it in its pull request; for anything else it proposes an
   have. Picked over a line across the top of the page, which read as part of the page's
   frame; and over a line for a project with no skill yet, which the default skills every
   run gets made untrue.
-- A module may bring a section of the Settings page, shown after OpenAgent's own
-  sections, where a project has its package. It reads and writes through the package's own
-  command. Picked over OpenAgent's own sections knowing a package's file and a hook line
-  per setting, which made every package's settings a change to OpenAgent.
-- The scheduler is a package's: its Automations page, its Settings section and its Overview
+- Settings is a dialog over the page you are on: a list of entries on the left, the picked
+  entry's settings on the right. The address carries it, so a reload or a link opens it
+  again, and closing it leaves the page as it was. Picked over a page of its own, which took
+  you away from what you were doing and put a second list beside the sidebar.
+- The list has two groups, by whose the settings are: first, with no title, OpenAgent's own
+  and the packages that are the computer's; then "Project", the packages a project has, each
+  saved in that project. The project group shows the project picked in the sidebar,
+  and has its own select. With every project picked, a change saves to each project that
+  has the package, and a setting they hold differently reads "Mixed". Picked over one list
+  of every project's packages saving one value to all of them, and over a tab per project
+  inside each entry, which crowds with many projects and asks for the project again in
+  every entry.
+- A module may bring an entry of Settings, with its name and icon, where a project has its
+  package. It reads and writes through the package's own command. Picked over OpenAgent's
+  own sections knowing a package's file and a hook line per setting, which made every
+  package's settings a change to OpenAgent.
+- The onboarding checklist is the Overview's alone. Picked over keeping a copy in Settings,
+  where it is no setting.
+- The scheduler is a package's: its Automations page, its Settings entry and its Overview
   card are the scheduler package's own module, read and written through its command.
   OpenAgent reads no scheduler file and has no hook line for a scheduler setting. Picked
   over OpenAgent's own Automation section and scheduler card, which read the scheduler's

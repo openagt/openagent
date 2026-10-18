@@ -10,7 +10,7 @@ import { SidebarProvider } from './components/ui/sidebar.js'
 import { useSidebarWidth } from './lib/sidebar-width.js'
 import { ProjectHome } from './components/ProjectHome.js'
 import { DashboardPage } from './components/DashboardPage.js'
-import { SettingsPage } from './components/SettingsPage.js'
+import { SettingsDialog } from './components/SettingsDialog.js'
 import { AgentView } from './components/AgentView.js'
 import { agentLabel } from './lib/agent-label.js'
 import { subagentsOf, taskLabel } from './lib/subagents.js'
@@ -75,7 +75,7 @@ const EMPTY_RECENT: RecentAgent[] = []
 // page of its own, so it rides along on every navigation.
 export function App() {
   const { route, go: navigate } = useRoute()
-  const { view, projectId, agentId } = route
+  const { projectId, agentId } = route
   // A module's page (#1774): the route names it by its segment, with no project selected.
   const pageSegment = route.page ?? null
 
@@ -191,7 +191,7 @@ export function App() {
   const { value: recentAgents, reload: reloadRecent } = usePolled<RecentAgent[]>(scope === null ? onRecentAgents : null, EMPTY_RECENT, 10_000, [scope])
 
   // An agent just started in `inProject`, which is not always the selected one: the onboarding
-  // checklist starts one from the Overview and the settings page, where nothing is selected (#1169).
+  // checklist starts one from the Overview, where nothing is selected (#1169).
   const agentStarted = (inProject: string | null, intent: string, startedId: string, runsOn?: string) => {
     // Continuing the agent already on screen (#762) appends to its journal — nothing truncates, so
     // nothing would re-replay after a reset. Bumping the tick here is what blanked the transcript
@@ -242,10 +242,17 @@ export function App() {
     go({ projectId: null, agentId: null })
   }
 
-  // The settings page (#958): every setting in one place, plus the Onboarding checklist, which is
-  // where dismissing it from the Overview says you can pick it back up.
+  // Settings (#958): a dialog over the page you are on, which stays under it, its own query too.
+  // Moving between its entries replaces the address, so Back closes it rather than stepping through them.
   const showSettings = () => {
-    go({ view: 'settings', projectId: null, agentId: null })
+    navigate({ ...route, settings: '' }, { keepQuery: true })
+  }
+  const showSettingsEntry = (entry: string) => {
+    navigate({ ...route, settings: entry }, { keepQuery: true, replace: true })
+  }
+  const closeSettings = () => {
+    const { settings: _settings, ...under } = route
+    navigate(under, { keepQuery: true })
   }
 
   // A module's page (#1774): its own segment, with no project selected, like the Overview.
@@ -328,8 +335,6 @@ export function App() {
   // The runs started for the selected one: rows in its chat.
   const subagents = useMemo(() => (agentId ? subagentsOf(agents, agentId) : []), [agents, agentId])
   const renderMain = () => {
-    if (view === 'settings')
-      return <SettingsPage onAgentStarted={agentStarted} onSelectProject={selectProject} onDone={showDashboard} />
     if (pageSegment) {
       if (modulePage)
         return <ModulePageView page={modulePage} projects={scopedProjects} path={route.pagePath ?? []} />
@@ -445,7 +450,7 @@ export function App() {
   // The width its edge was dragged to (SidebarResizer), in place of the sidebar's own default.
   const sidebarWidth = useSidebarWidth()
   // The name a phone's top bar gives the page; null on a project's own pages, which have a top row.
-  const phoneTitle = view === 'settings' ? 'Settings' : pageSegment ? (modulePage?.label ?? '') : projectId === null ? 'Overview' : null
+  const phoneTitle = pageSegment ? (modulePage?.label ?? '') : projectId === null ? 'Overview' : null
 
   return (
     // The whole shell lives inside the SidebarProvider so the sidebar's context (state + Cmd/Ctrl+B,
@@ -497,7 +502,6 @@ export function App() {
           onSettings={showSettings}
           pages={shownPages}
           activePage={pageSegment}
-          atSettings={view === 'settings'}
           onPage={showPage}
           interventionCount={interventions.length}
         />
@@ -506,7 +510,7 @@ export function App() {
             free; a page with no top row of its own gets a bar that names it. */}
         {isMobile && <MenuButton />}
         {/* A project's page and an agent's have panes beside them (Panes). A module's page takes
-            the full width itself (#1774), the way Settings and the Overview do. */}
+            the full width itself (#1774), the way the Overview does. */}
         <PanesProvider
           projectId={projectId}
           agentId={agentId}
@@ -526,6 +530,7 @@ export function App() {
           </PaneLayout>
         </PanesProvider>
       </div>
+      {route.settings !== undefined && <SettingsDialog entry={route.settings} onEntry={showSettingsEntry} onClose={closeSettings} scope={scope} projects={projects} />}
     </SidebarProvider>
     </HostServicesContext.Provider>
     </ModulesContext.Provider>

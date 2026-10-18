@@ -34,10 +34,11 @@ export interface MountedRunSlots extends ModuleRunSlots {
   projects: string[]
 }
 
-/** A Settings section as the shell mounts it: the section, plus the package it came from and the projects that have it. */
+/** A Settings entry as the shell mounts it: the entry, plus the package it came from, the projects that have it, and whether it is the computer's. */
 export interface MountedSettings extends ModuleSettings {
   package: string
   projects: string[]
+  computer: boolean
 }
 
 /** A usage bar stop line as the shell mounts it: the line's read and save, plus the package it came from and the projects that have it. */
@@ -65,7 +66,7 @@ export interface MountedModules {
   panels: MountedPanel[]
   /** The run slots, one entry per module that has any, in package order. */
   runSlots: MountedRunSlots[]
-  /** The Settings page's sections, in the order they are drawn: by `order`, then by package name. */
+  /** The Settings entries, in the order they are listed: by `order`, then by package name. */
   settings: MountedSettings[]
   /** The usage bar's stop line: the first module's that declares one, in package order; absent when none does. */
   usageLimit?: MountedUsageLimit
@@ -152,7 +153,7 @@ export function useModules(reloadKey = 0): MountedModules {
           panels.push({ ...panel, package: module.package, projects: module.projects })
         }
         for (const section of definition?.settings ?? []) {
-          settings.push({ ...section, package: module.package, projects: module.projects })
+          settings.push({ ...section, package: module.package, projects: module.projects, computer: module.computer === true })
         }
         if (definition?.usageLimit) usageLimit ??= { ...definition.usageLimit, package: module.package, projects: module.projects }
         if (definition?.schedule) schedule ??= { ...definition.schedule, package: module.package, projects: module.projects }

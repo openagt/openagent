@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { Input, SettingsRow, SettingsSection, useModuleHost, usePolled, type ModuleSettingsProps } from '@openagt/dashboard/module'
 import { MAX_SPEND_OFFSET, loosestSpendOffset, offsetsThatDiffer, readSchedulers, saveSpendOffset, typedOffset, type SchedulerRow } from './schedulers.js'
 
-// Settings → Scheduler: the one number that reaches every project, how far past the quota boundary
-// scheduled work may still start. Read with `agent-scheduler status` in every project and saved
-// with `agent-scheduler offset` in every project. What each project's scheduler starts is not
-// here: it is a project's own, on the Automations page.
+// Settings › Scheduler: how far past the quota boundary scheduled work may still start. Each
+// project keeps its own, read with `agent-scheduler status` and saved with `agent-scheduler offset`
+// in each project Settings shows: one, or every project that has this package. What each
+// project's scheduler starts is not here: it is on the Automations page.
 
 const EMPTY: SchedulerRow[] = []
 
@@ -51,11 +51,11 @@ export function SchedulerSettings({ projects }: ModuleSettingsProps) {
   const unread = rows.filter(row => row.error !== undefined)
   if (projects.length === 0) return null
   return (
-    <SettingsSection title="Scheduler" description="How far past the quota scheduled work may go, in every project, on this machine. What each project starts by itself is on the Automations page.">
+    <SettingsSection description="How far past the quota scheduled work may go, on this machine. What a project starts by itself is on the Automations page.">
       {offset !== undefined && (
         <SettingsRow
           label="Spend offset"
-          description={`How far every project's scheduler may start work past the quota boundary, in percentage points (max ${MAX_SPEND_OFFSET}). Negative holds it back; positive lets it borrow from the days ahead. One number, saved to every project; the handle on the usage bar moves the same number.${differing.length > 0 ? ` Shown: the loosest. ${differing.map(d => `${d.name} is at ${d.offset}`).join(', ')}; saving sets every project to the same number.` : ''}`}
+          description={`How far the scheduler may start work past the quota boundary, in percentage points (max ${MAX_SPEND_OFFSET}). Negative holds it back; positive lets it borrow from the days ahead. The handle on the usage bar moves the same number.${differing.length > 0 ? ` Shown: the loosest. ${differing.map(d => `${d.name} is at ${d.offset}`).join(', ')}; saving sets each of them to the same number.` : ''}`}
           control={
             <Input
               type="number"

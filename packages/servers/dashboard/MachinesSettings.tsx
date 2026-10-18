@@ -420,7 +420,6 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
 
   return (
     <SettingsSection
-      title="Machines"
       description={
         isServer
           ? 'The other computers that run OpenAgent, where a run can be sent from here.'

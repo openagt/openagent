@@ -77,7 +77,6 @@ export function AgentHistory({
   onSettings = () => {},
   pages = [],
   activePage = null,
-  atSettings = false,
   onPage = () => {},
   interventionCount = 0,
 }: {
@@ -104,8 +103,6 @@ export function AgentHistory({
   pages?: readonly { segment: string; label: string; icon?: ComponentType<{ className?: string; 'aria-hidden'?: boolean }> }[]
   /** The module page that is the current view, by its segment, or null. */
   activePage?: string | null
-  /** Whether the Settings page is the one open: the person's row then reads as the current page, and no row above does. */
-  atSettings?: boolean
   /** Open a module's page by its segment. */
   onPage?: (segment: string) => void
   /** Human Queue count, shown on the Overview item and the picker (#632). */
@@ -285,7 +282,7 @@ export function AgentHistory({
         />
         {/* Overview: the way home, its own nav item directly under New and above the session list,
             more prominent than a menu row. Only this — the current view — carries the active fill. */}
-        <OverviewButton active={projectId === null && activePage === null && !atSettings} count={interventionCount} onClick={leave(onDashboard)} />
+        <OverviewButton active={projectId === null && activePage === null} count={interventionCount} onClick={leave(onDashboard)} />
         {/* The modules' pages the shell hands over (#1774), the picked project's only when one is
             picked: destinations with no project selected, like the Overview, named by the module,
             never by the dashboard — the tickets' page among them, when a package brings one. */}
@@ -369,7 +366,7 @@ export function AgentHistory({
       {/* The person at this dashboard, as one row that opens their menu: the theme, the
           notifications and Settings (PersonMenu). */}
       <SidebarFooter className="border-t border-sidebar-border">
-        <PersonMenu atSettings={atSettings} onSettings={leave(onSettings)} />
+        <PersonMenu onSettings={leave(onSettings)} />
       </SidebarFooter>
       {/* Its right edge, dragged to set its width; a phone's sheet has none. */}
       {!isMobile && <SidebarResizer />}

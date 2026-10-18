@@ -78,7 +78,7 @@ with no `check` line shows nothing there.
 
 A package's own settings are no hook. The scheduler's are the scheduler package's own part of
 the dashboard: its Automations page holds a switch, a pace, a number of agents at once and a
-publish pick per scheduled command, its Settings section holds how far past the quota boundary
+publish pick per scheduled command, its Settings entry holds how far past the quota boundary
 it may start unattended work, and the handle on the usage bar is its stop line. That part reads
 them with `agent-scheduler status` and saves them with `agent-scheduler offset`, `switch`,
 `pace`, `agents` and `publish`.

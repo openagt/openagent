@@ -160,8 +160,8 @@ export interface Preferences {
   customPresets?: CustomPreset[]
   /**
    * Whether the Overview's Onboarding checklist has been dismissed (#958). Absent = show it,
-   * so a fresh install is walked through setup; dismissing only hides it on the Overview, and
-   * the same checklist stays available on the settings page.
+   * so a fresh install is walked through setup; its ✕ sets it, and a switch in Settings ›
+   * Appearance clears it.
    */
   onboardingDismissed?: boolean
 }

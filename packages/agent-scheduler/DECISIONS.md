@@ -209,7 +209,7 @@ already made, and lists it in its pull request; for anything else it proposes an
 ## The dashboard part
 - The scheduler brings its own part of a dashboard: an Automations page (one row per
   scheduled command, with its switch, its pace, its number of agents and its publish pick),
-  a Settings section (the spend cushion) and an Overview card (on or off, the last tick).
+  a Settings entry (the spend cushion, each project's own) and an Overview card (on or off, the last tick).
   All read `status` and write through `offset`, `switch`, `pace`, `agents`, `agent`, `model`, `publish`,
   `add`, `edit` and `remove`; an automation is read through `show`, a check is tried
   through `try`, and a row is started at once through `now`.

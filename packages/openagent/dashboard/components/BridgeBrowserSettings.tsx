@@ -5,7 +5,7 @@ import { sendBridgeBrowser } from '../rpc/control.js'
 import { Button } from './ui/button.js'
 
 /**
- * The bridge browser's line on the settings page (#1332): where the daemon's own browser stands,
+ * The bridge browser's line in Settings › Claude web (#1332): where the daemon's own browser stands,
  * and the one thing only a person can do for it — sign in to claude.ai, once, in its window.
  *
  * The browser is minimized by design, so nothing about it is visible anywhere else: its first

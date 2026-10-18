@@ -68,7 +68,7 @@ export function DevicesSettings({ everyMs = 5_000 }: { /** How often the status 
   }
 
   return (
-    <SettingsSection title="Devices" description="Open OpenAgent on a phone or in another browser, or let another computer's OpenAgent send its runs here. A device gets in with a code once, and stays in until it is removed here.">
+    <SettingsSection description="Open OpenAgent on a phone or in another browser, or let another computer's OpenAgent send its runs here. A device gets in with a code once, and stays in until it is removed here.">
       {status?.https ? (
         <SettingsRow
           label="Open on the internet"

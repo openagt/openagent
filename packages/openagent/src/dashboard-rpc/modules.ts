@@ -20,6 +20,8 @@ export interface DashboardModule {
   url: string
   /** The registered projects whose packages include it, in the registry's order; none for one of the computer's, whose commands run in no project. */
   projects: string[]
+  /** Set for one of the computer's packages: what it keeps is the person's, in their home folder, and no project's. */
+  computer?: true
 }
 
 /**
@@ -33,7 +35,7 @@ export interface DashboardModule {
 export async function onModules(): Promise<DashboardModule[]> {
   const byPackage = new Map<string, DashboardModule>()
   for (const module of await readComputerModules().catch(() => [])) {
-    byPackage.set(module.package, { package: module.package, url: computerModuleUrl(module), projects: [] })
+    byPackage.set(module.package, { package: module.package, url: computerModuleUrl(module), projects: [], computer: true })
   }
   for (const project of await contextProjects().list()) {
     const modules = await readProjectModules(project.path).catch(() => [])

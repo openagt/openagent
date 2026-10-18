@@ -311,7 +311,7 @@ describe('Settings → Machines', () => {
   test('a person\'s own computer that cannot be read shows the section, with why', async () => {
     const { host } = dashboard(() => ({ ok: false, error: 'the command could not be run' }))
     show(host)
-    expect(await screen.findByText('Machines')).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Add machine' })).toBeTruthy()
     expect((await screen.findByRole('alert')).textContent).toContain('the command could not be run')
   })
 

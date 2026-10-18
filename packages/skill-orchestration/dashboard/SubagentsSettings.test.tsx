@@ -3,7 +3,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { ModuleHostContext, type ModuleCommandResult, type ModuleHost } from '@openagt/dashboard/module'
 import { SubagentsSettings } from './SubagentsSettings.js'
 import { runnerChoices, runnerOf, runnerValue } from './choices.js'
-import { choices, pick, showing } from '../../openagent/dashboard/test-controls.js'
+import { choices, offered, pick, showing } from '../../openagent/dashboard/test-controls.js'
 
 // The coding agents' own lists, as the dashboard asked them: Claude Code answered, Codex listed one.
 vi.mock('../../openagent/dashboard/rpc/models.js', () => ({
@@ -19,8 +19,7 @@ const PROJECTS = [
 ]
 
 /** A host whose `orchestration settings` keeps what it was given per project, as the command does. */
-function fakeHost(saved: Record<string, unknown> = {}, refuse?: (projectId: string) => string | undefined) {
-  const files: Record<string, unknown> = { p1: saved, p2: saved }
+function fakeHost(saved: Record<string, unknown> = {}, refuse?: (projectId: string) => string | undefined, files: Record<string, unknown> = { p1: saved, p2: saved }) {
   const runCommand = vi.fn(async (projectId: string, args: string[]): Promise<ModuleCommandResult> => {
     const refused = refuse?.(projectId)
     if (refused !== undefined) return { ok: false, error: refused }
@@ -62,8 +61,8 @@ const modelsListed = () => waitFor(async () => expect(await choices(menu('Hard t
 
 afterEach(cleanup)
 
-describe('Subagents settings', () => {
-  test('each level offers the main agent\'s own, then every coding agent by its default and its models; a pick is saved whole in every project', async () => {
+describe('Settings › Orchestration', () => {
+  test('each level offers the main agent\'s own, then every coding agent by its default and its models; a pick is saved in every project', async () => {
     const { host, runCommand, files } = fakeHost({ hard: { driver: 'claude-code', model: 'opus' }, atOnce: 3 })
     show(host)
     await waitFor(() => expect(showing(menu('Hard tasks'))).toBe('Claude Code · Opus 5.5'))
@@ -87,7 +86,34 @@ describe('Subagents settings', () => {
     expect(showing(menu('At once'))).toBe('6')
   })
 
-  test('nothing saved reads as the main agent\'s own and 4 at once; the first project that answers is the one shown', async () => {
+  test('projects that hold a setting differently read "Mixed", each named with its own; a pick changes that one setting in each and keeps the rest of each', async () => {
+    const { host, files } = fakeHost({}, undefined, { p1: { hard: { driver: 'claude-code', model: 'opus' }, atOnce: 2 }, p2: { atOnce: 2 } })
+    show(host)
+    await modelsListed()
+    await waitFor(() => expect(showing(menu('Hard tasks'))).toBe('Mixed'))
+    expect(screen.getByText(/A task the main agent marks hard\. gemstack: Claude Code · Opus 5\.5 · other: Same as the main agent\./)).toBeTruthy()
+    // "Mixed" says what is held; it is no choice to make.
+    expect((await offered(menu('Hard tasks')))[0]).toEqual(['Mixed', true])
+    // The settings the projects agree on read as they are.
+    expect(showing(menu('At once'))).toBe('2')
+    expect(showing(menu('Simple tasks'))).toBe('Same as the main agent')
+    await pick(menu('Simple tasks'), 'Codex · its own default')
+    await waitFor(() => expect(files).toEqual({ p1: { hard: { driver: 'claude-code', model: 'opus' }, atOnce: 2, simple: { driver: 'codex' } }, p2: { atOnce: 2, simple: { driver: 'codex' } } }))
+    await pick(menu('Hard tasks'), 'Codex · its own default')
+    await waitFor(() => expect(showing(menu('Hard tasks'))).toBe('Codex · its own default'))
+    expect(files['p2']).toEqual({ atOnce: 2, simple: { driver: 'codex' }, hard: { driver: 'codex' } })
+  })
+
+  test('one project: its own settings, saved to it alone', async () => {
+    const { host, runCommand } = fakeHost({ atOnce: 5 })
+    show(host, [PROJECTS[1]!])
+    await waitFor(() => expect(showing(menu('At once'))).toBe('5'))
+    await pick(menu('At once'), '3')
+    await waitFor(() => expect(runCommand).toHaveBeenCalledWith('p2', ['settings', JSON.stringify({ atOnce: 3 })]))
+    expect(runCommand.mock.calls.some(([projectId]) => projectId === 'p1')).toBe(false)
+  })
+
+  test('nothing saved reads as the main agent\'s own and 4 at once; a project that cannot be read leaves the others shown', async () => {
     const { host } = fakeHost({}, projectId => (projectId === 'p1' ? 'orchestration: command not found' : undefined))
     show(host)
     await waitFor(() => expect(host.runCommand).toHaveBeenCalledWith('p2', ['settings']))

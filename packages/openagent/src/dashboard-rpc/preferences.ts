@@ -4,7 +4,7 @@ import { readProjectPresets, writeProjectPresets } from '../project-presets.js'
 import type { CustomPreset, Preferences } from '../registry.js'
 
 // The user-preferences surface behind the new dashboard (#410): the driver and model the Start
-// form uses, and the rest of the Settings page. Persisted daemon-side in the same `openagent.json` as the
+// form uses, and the rest of Settings. Persisted daemon-side in the same `openagent.json` as the
 // project list, so they survive restarts with no localStorage. The store is wired into the
 // dashboard context, which the one host always wires in full (D3) — there is no second host left
 // to degrade for.

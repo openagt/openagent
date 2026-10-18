@@ -12,9 +12,9 @@
 // id from its start time), so the segments are still encoded/decoded — a URL typed by hand is input.
 
 /**
- * The one first segment that names a view rather than a project (#958): the dashboard's own
- * settings. Every other bare word is a module's page (#1774): the dashboard reserves nothing else,
- * not even for the tickets, whose pages are their package's module's.
+ * The one first segment the dashboard keeps for itself: `/settings` (#958), where Settings was a
+ * page. Settings is a dialog over the page you are on now, carried as `?settings=`; the old
+ * address still opens it, over the Overview. Every other bare word is a module's page (#1774).
  *
  * Safe to reserve because a project id is never this word: the registry builds one as
  * `<slugified basename>-<hash in base36>`, so every real id carries a `-<hash>` suffix.
@@ -34,8 +34,11 @@ export function isPageSegment(segment: string): boolean {
 
 /** What the dashboard is looking at, as carried by the URL. */
 export interface Route {
-  /** A top-level view belonging to no project (#958). */
-  view?: 'settings'
+  /**
+   * The Settings dialog, open over the page the rest of the route names: the entry it shows, or
+   * `''` for its first one. Absent when it is closed. Carried as `?settings=<entry>`.
+   */
+  settings?: string
   /** The selected project, or null for the Overview. */
   projectId: string | null
   /** The selected session (agent id), or null for the project's home/launcher. */
@@ -54,44 +57,54 @@ export interface Route {
 /** The query parameter that carries {@link Route.scope}. */
 const SCOPE_PARAM = 'project'
 
+/** The query parameter that carries {@link Route.settings}. */
+const SETTINGS_PARAM = 'settings'
+
 /**
  * Read the route out of a URL's path and query. Anything unparseable is the Overview, and extra
  * segments are ignored. A project's own page scoped to another project is scoped to its own.
  */
 export function parseRoute(url: string): Route {
   const [pathname = '', search = ''] = url.split('?')
-  const scoped = new URLSearchParams(search).get(SCOPE_PARAM)
+  const params = new URLSearchParams(search)
+  const scoped = params.get(SCOPE_PARAM)
   const scope = scoped ? { scope: scoped } : {}
+  const entry = params.get(SETTINGS_PARAM)
+  const settings = entry !== null ? { settings: entry } : {}
   const segments = pathname.split('/').filter(Boolean).map(decodeSegment)
   const [first, second] = segments
-  if (first === SETTINGS_SEGMENT) return { view: 'settings', projectId: null, agentId: null, ...scope }
-  if (!first) return { projectId: null, agentId: null, ...scope }
-  if (isPageSegment(first)) return { projectId: null, agentId: null, page: first, pagePath: segments.slice(1), ...scope }
-  return { projectId: first, agentId: second ?? null, ...(scoped ? { scope: first } : {}) }
+  // The old page's address, `/settings/<entry>` included: the dialog over the Overview.
+  if (first === SETTINGS_SEGMENT) return { projectId: null, agentId: null, settings: entry ?? second ?? '', ...scope }
+  if (!first) return { projectId: null, agentId: null, ...scope, ...settings }
+  if (isPageSegment(first)) return { projectId: null, agentId: null, page: first, pagePath: segments.slice(1), ...scope, ...settings }
+  return { projectId: first, agentId: second ?? null, ...(scoped ? { scope: first } : {}), ...settings }
 }
 
 /** The URL for a route, its path and its query — the inverse of {@link parseRoute}. */
 export function formatRoute(route: Route): string {
-  const ownProject = !route.view && !route.page ? route.projectId : null
+  const ownProject = !route.page ? route.projectId : null
   const scope = route.scope ? (ownProject ?? route.scope) : null
-  return formatPath(route) + (scope ? `?${SCOPE_PARAM}=${encodeURIComponent(scope)}` : '')
+  const params: [string, string][] = [...(scope ? [[SCOPE_PARAM, scope] as [string, string]] : []), ...(route.settings !== undefined ? [[SETTINGS_PARAM, route.settings] as [string, string]] : [])]
+  const query = params.map(([name, value]) => `${name}=${encodeURIComponent(value)}`).join('&')
+  return formatPath(route) + (query ? `?${query}` : '')
 }
 
 /**
  * `url` with the query parameters of `search` that are not the route's own added to it: what a
- * module's page mirrored there (a list's filters) stays when only the picked project changes.
+ * module's page mirrored there (a list's filters) stays when only the picked project changes, or
+ * when Settings opens or closes over the page.
  */
 export function keepPageQuery(url: string, search: string): string {
   const [path = '', own = ''] = url.split('?')
   const params = new URLSearchParams(search)
   params.delete(SCOPE_PARAM)
+  params.delete(SETTINGS_PARAM)
   for (const [name, value] of new URLSearchParams(own)) params.set(name, value)
   const query = params.toString()
   return query ? `${path}?${query}` : path
 }
 
-function formatPath({ view, projectId, agentId, page, pagePath }: Route): string {
-  if (view === 'settings') return `/${SETTINGS_SEGMENT}`
+function formatPath({ projectId, agentId, page, pagePath }: Route): string {
   if (page) return ['', page, ...(pagePath ?? [])].map(encodeURIComponent).join('/')
   if (!projectId) return '/'
   const project = encodeURIComponent(projectId)

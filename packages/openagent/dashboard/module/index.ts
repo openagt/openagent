@@ -128,23 +128,32 @@ export interface ModuleCard {
   Card: ComponentType<ModuleCardProps>
 }
 
-/** What a Settings section is rendered with: the projects that have its package. */
+/** What a Settings section is rendered with: the projects whose settings it shows and saves. */
 export interface ModuleSettingsProps {
-  /** The registered projects whose dependencies include the module's package, in the registry's order; none for a package that is the computer's. */
+  /**
+   * The projects the section is for, in the registry's order: the one picked in Settings, or every
+   * project that has the package when "All projects" is picked; none for a package that is the
+   * computer's. A save goes to each of them.
+   */
   projects: ModuleProject[]
 }
 
 /**
- * A section a module adds to the Settings page: the package's own settings, read and written
- * through its own command, drawn after the dashboard's own sections. A project's package with no
- * project registered shows none; a package that is the computer's shows its own with no project.
+ * An entry a module adds to Settings: the package's own settings, read and written through its
+ * own command. Settings lists it with the dashboard's own entries and draws its title and icon
+ * there. A package that is the computer's is listed under "You and this computer"; any other
+ * under the project picked in Settings, when that project has the package.
  */
 export interface ModuleSettings {
-  /** Which section this is, for the shell's key and its error line; the section draws its own title. */
+  /** Which entry this is: the shell's key, and its name in the address (`?settings=<id>`). */
   id: string
-  /** Its place among every installed package's sections, lower first; 50 when unsaid, ties by package name. */
+  /** The entry's name in the list and over its settings. */
+  title: string
+  /** The entry's icon in the list. */
+  icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>
+  /** Its place among every installed package's entries, lower first; 50 when unsaid, ties by package name. */
   order?: number
-  /** The section itself, usually a {@link SettingsSection} of rows. */
+  /** The settings themselves, a {@link SettingsSection} of rows. */
   Section: ComponentType<ModuleSettingsProps>
 }
 
@@ -277,7 +286,7 @@ export interface ModuleDefinition {
   panels?: ModulePanel[]
   /** What the module adds to a run's page. */
   run?: ModuleRunSlots
-  /** The sections the module adds to the Settings page. */
+  /** The entries the module adds to Settings. */
   settings?: ModuleSettings[]
   /** The stop line the module puts on the usage bar. */
   usageLimit?: ModuleUsageLimit
