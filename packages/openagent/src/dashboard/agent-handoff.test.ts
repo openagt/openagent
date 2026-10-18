@@ -174,17 +174,30 @@ test('the PR is looked up for the session branch (#799), and a gone branch still
 const agent = (over: Partial<AgentMeta> = {}): AgentMeta => ({ id: 'r1', status: 'done', startedAt: '2026-07-26T00:00:00Z', updatedAt: '2026-07-26T01:00:00Z', branch: 'openagent/work', intent: 'fix it', ...over })
 const { branch: _branch, ...unbranched } = agent()
 
-test('the Open PR button pushes the branch through the branches provider, then opens its pull request through the git host, with the title and body the run gives it', async () => {
+test('the Open PR button pushes the branch through the branches provider, then opens its pull request through the git host, saying what its commits did, oldest first', async () => {
   const { branches, gitHost, calls } = fakeBranches({ 'openagent/work': state() })
   const result = await openAgentPullRequest('/repo', agent(), { branches, gitHost })
   assert.deepEqual(result, { ok: true, url: 'https://github.com/o/r/pull/9', number: 9 })
+  const body = '- first\n- second: with spaces\n\nOpened from OpenAgent session `r1`.'
   assert.deepEqual(calls.slice(-2), [
     ['push', 'openagent/work'],
-    ['open', 'openagent/work', { title: 'openagent/work', body: 'fix it\n\nOpened from OpenAgent session `r1`.' }],
+    ['open', 'openagent/work', { title: 'openagent/work', body }],
   ])
   // A caller not asking for review opens a draft.
   await openAgentPullRequest('/repo', agent(), { branches, gitHost, draft: true })
-  assert.deepEqual((calls.at(-1) as unknown[])[2], { title: 'openagent/work', body: 'fix it\n\nOpened from OpenAgent session `r1`.', draft: true })
+  assert.deepEqual((calls.at(-1) as unknown[])[2], { title: 'openagent/work', body, draft: true })
+})
+
+test('a branch of one commit is that commit: its subject the title, the rest of its message the body, less its co-authors; what the run was asked is not said', async () => {
+  const { branches, gitHost, calls } = fakeBranches({ 'openagent/work': state({ commits: [{ sha: 'abc1234567', subject: 'New automation: write the shell line' }] }) })
+  const asked: string[][] = []
+  const git = async (args: string[]) => (asked.push(args), 'New automation: write the shell line\n\nA button asks the agent.\n\nCloses #2040\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n')
+  await openAgentPullRequest('/repo', agent({ intent: '/work-queue' }), { branches, gitHost, git })
+  assert.deepEqual(asked, [['log', '-1', '--format=%B', 'abc1234567']])
+  assert.deepEqual((calls.at(-1) as unknown[])[2], { title: 'New automation: write the shell line', body: 'A button asks the agent.\n\nCloses #2040\n\nOpened from OpenAgent session `r1`.' })
+  // A message git cannot read leaves the subject alone.
+  await openAgentPullRequest('/repo', agent(), { branches, gitHost, git: async () => Promise.reject(new Error('no such commit')) })
+  assert.deepEqual((calls.at(-1) as unknown[])[2], { title: 'New automation: write the shell line', body: 'Opened from OpenAgent session `r1`.' })
 })
 
 test('a run started from another branch is read from the commit its own work begins at; a subagent is never opened a pull request', async () => {
