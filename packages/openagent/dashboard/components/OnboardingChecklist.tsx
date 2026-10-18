@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import type { DashboardData, OnboardingSuggestion } from '../../src/index.js'
-import { Square, SquareCheckBig, X } from 'lucide-react'
+import { ChevronRight, FolderPlus, Square, SquareCheckBig, X } from 'lucide-react'
 import { onDashboard } from '../rpc/reads.js'
 import { onOnboarding } from '../rpc/projects.js'
 import { usePolled } from '../lib/use-async.js'
@@ -26,6 +26,31 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 
 /** What the ✕ says it does. */
 const HIDE = 'Hide; Settings › Appearance brings it back'
+
+/** A folder's own name, the last part of its path. */
+const folderName = (path: string): string => path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path
+
+/**
+ * What adding a project does to the folder, folded under one line: the step reads in a glance,
+ * and the whole of it is a press away. The Add dialog says all of it again before anything is done.
+ */
+function WhatAddingDoes() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground">Agents work in the project's folder, each in its own copy and on its own branch. Your files and your branch stay as they are.</p>
+      <button type="button" aria-expanded={open} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground" onClick={() => setOpen(!open)}>
+        <ChevronRight aria-hidden className={open ? 'h-3 w-3 rotate-90' : 'h-3 w-3'} />
+        What adding a project does
+      </button>
+      {open && (
+        <div className="pl-4">
+          <AddProjectEffects />
+        </div>
+      )}
+    </div>
+  )
+}
 
 /** One checklist row: what it is, whether it is done, and what to do about it. */
 interface Step {
@@ -102,25 +127,33 @@ export function OnboardingChecklist({
       // Said before the button is pressed: what adding does to the folder. Once a project is
       // added the step is done, and one sentence says what a project is. Until the first read
       // lands nobody knows which, so the tall text does not flash at a person who has projects.
-      description: data && projectCount === 0 ? <AddProjectEffects /> : 'A project is a git repo OpenAgent may work in.',
+      description: data && projectCount === 0 ? <WhatAddingDoes /> : 'A project is a git repo OpenAgent may work in.',
       done: projectCount > 0,
       action: (
-        <div className="flex flex-wrap justify-end gap-2">
+        <div className="space-y-2">
           {here && (
-            // A folder's path can be longer than the card: the button then takes more lines, not more width.
-            <Button size="sm" className="h-auto min-h-8 max-w-full whitespace-normal py-1 text-left [overflow-wrap:anywhere]" onClick={() => setAddingProject({ folder: here })}>
-              {`Add ${here} as project…`}
-            </Button>
+            <div className="min-w-0 space-y-1">
+              <Button size="sm" onClick={() => setAddingProject({ folder: here })}>
+                <FolderPlus className="h-3.5 w-3.5" aria-hidden />
+                {`Add “${folderName(here)}”`}
+              </Button>
+              {/* The whole path under the button, never in it: a long one made the button the card's width. */}
+              <p className="truncate font-mono text-[11px] text-muted-foreground" title={here}>
+                {`The folder OpenAgent runs in: ${here}`}
+              </p>
+            </div>
           )}
-          {/* Not on a computer with no screen: the folder dialog has nowhere to open. */}
-          {suggestion?.canPickFolder !== false && (
-            <Button size="sm" variant="outline" onClick={() => setAddingProject({})}>
-              Select &amp; add project directory
+          <div className="flex flex-wrap gap-2">
+            {/* Not on a computer with no screen: the folder dialog has nowhere to open. */}
+            {suggestion?.canPickFolder !== false && (
+              <Button size="sm" variant={here ? 'outline' : 'default'} onClick={() => setAddingProject({})}>
+                {here ? 'Choose another folder…' : 'Choose a folder…'}
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={() => setAddingProject({ fromAddress: true })}>
+              Add from a GitHub address
             </Button>
-          )}
-          <Button size="sm" variant="outline" onClick={() => setAddingProject({ fromAddress: true })}>
-            Add from a GitHub address
-          </Button>
+          </div>
         </div>
       ),
     },
@@ -148,7 +181,7 @@ export function OnboardingChecklist({
             done: hasTickets,
             optional: true,
             action: (
-              <div className="flex flex-col items-end gap-1">
+              <div className="flex flex-col items-start gap-1">
                 <UpdateTicketsButton
                   variant="default"
                   busy={starting}
@@ -192,6 +225,9 @@ export function OnboardingChecklist({
           <p className="text-xs text-muted-foreground">
             {doneCount} of {steps.length} set up.
           </p>
+          <div aria-hidden className="mt-2 h-1 w-40 overflow-hidden rounded-full bg-muted-foreground/15">
+            <div className="h-full rounded-full bg-[var(--color-primary)]" style={{ width: `${(doneCount / Math.max(1, steps.length)) * 100}%` }} />
+          </div>
         </div>
         <Tooltip>
           <TooltipTrigger
@@ -212,20 +248,19 @@ export function OnboardingChecklist({
       <CardContent>
         <ul className="divide-y divide-border">
           {steps.map(step => (
-            // The action drops under the text when the row cannot hold both at a readable width:
-            // a long folder name on the first step's button would squeeze its text to a strip.
-            // It is never wider than the row, so on a phone its buttons go one under the other.
-            <li key={step.key} className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0">
-              <div className="flex min-w-0 grow basis-96 items-start gap-3">
-                {/* A checkbox, not a circle: an outlined circle reads as a radio button, i.e. as
-                    one of a set you pick between, when these are independent things to tick (#1139). */}
-                {step.done ? (
-                  <SquareCheckBig className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-primary)]" aria-label="Done" />
-                ) : (
-                  <Square className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-label="Not done" />
-                )}
-                <div className="min-w-0">
-                  <p className={step.done ? 'text-sm text-muted-foreground line-through' : 'text-sm'}>
+            // The action is under the words, where the eye already is: at the row's far end it was
+            // a long way from what it does, and a long folder name squeezed the words to a strip.
+            <li key={step.key} className="flex items-start gap-3 py-4 first:pt-0 last:pb-0">
+              {/* A checkbox, not a circle: an outlined circle reads as a radio button, i.e. as
+                  one of a set you pick between, when these are independent things to tick (#1139). */}
+              {step.done ? (
+                <SquareCheckBig className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-primary)]" aria-label="Done" />
+              ) : (
+                <Square className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-label="Not done" />
+              )}
+              <div className="min-w-0 flex-1 space-y-2">
+                <div>
+                  <p className={step.done ? 'text-sm text-muted-foreground line-through' : 'text-sm font-medium'}>
                     {step.label}
                     {step.optional && (
                       <span className="ml-2 rounded-full border border-border px-1.5 py-0.5 align-middle text-[10px] font-normal uppercase tracking-wide text-muted-foreground">
@@ -235,8 +270,8 @@ export function OnboardingChecklist({
                   </p>
                   {typeof step.description === 'string' ? <p className="text-xs text-muted-foreground">{step.description}</p> : <div className="mt-1">{step.description}</div>}
                 </div>
+                {!step.done && step.action && <div className="max-w-full">{step.action}</div>}
               </div>
-              {!step.done && step.action && <div className="max-w-full shrink-0">{step.action}</div>}
             </li>
           ))}
         </ul>

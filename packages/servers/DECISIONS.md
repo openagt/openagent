@@ -48,10 +48,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   server's logins.
 
 ## A device gets in
-- A phone or a browser gets into a server with a code this computer asks the server for,
-  over SSH: the server's row has an "Add device" button, which shows the code as a QR code
-  and a link. Picked over letting this computer's browser in by itself at the end of the
-  install and adding the phone from the server's own Settings, one more step for the
+- A person, a phone or a browser gets into a server with a code this computer asks the
+  server for, over SSH: one press on the server's row, "Invite", shows the code as a QR code
+  and a link to send. Picked over letting this computer's browser in by itself at the end of
+  the install and adding the phone from the server's own Settings, one more step for the
   phone.
 
 ## In Settings
@@ -63,6 +63,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   over the server's page alone, a second place to go to for every set-up; and over this
   computer alone, where a lost phone stays in while that computer is away.
 
-## An update
+## An install or an update
+- Each step shows its own state while it runs: waiting, running, done or failed. Picked over
+  one wait for the whole install.
 - When the server falls behind this computer, its row says so and has an "Update" button.
   Picked over a server that updates by itself, which can come later.

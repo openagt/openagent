@@ -155,12 +155,12 @@ describe('the tickets import lands on the session it starts (#1169)', () => {
     expect(takePendingDraft()).toBe('/update-tickets')
   })
 
-  test('"Add <folder> as project\u2026" adds nothing itself: it opens the Add dialog on that folder, which asks first', async () => {
+  test('"Add “<folder>”" adds nothing itself: it opens the Add dialog on that folder, which asks first', async () => {
     onDashboard.mockResolvedValue(EMPTY)
     onOnboarding.mockResolvedValue({ cwd: '/Users/dev/here', cwdProjectId: null })
     sendAddProject.mockResolvedValue({ ok: true, alreadyActivated: false })
     render(<OnboardingChecklist onAgentStarted={vi.fn()} onSelectProject={vi.fn()} />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Add /Users/dev/here as project\u2026' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add “here”' }))
     // The dialog, on the folder the dashboard runs in: no system dialog, and nothing added yet.
     expect(screen.getByRole('dialog', { name: 'Add project' })).toBeTruthy()
     expect(screen.getByText('/Users/dev/here')).toBeTruthy()
@@ -175,7 +175,12 @@ describe('the tickets import lands on the session it starts (#1169)', () => {
     onDashboard.mockResolvedValue(EMPTY)
     onOnboarding.mockResolvedValue({ cwd: '/Users/dev/here', cwdProjectId: null })
     const { container } = render(<OnboardingChecklist onAgentStarted={vi.fn()} onSelectProject={vi.fn()} />)
-    await screen.findByRole('button', { name: 'Add /Users/dev/here as project\u2026' })
+    await screen.findByRole('button', { name: 'Add “here”' })
+    // The button names the folder, and the whole path is said under it.
+    expect(screen.getByText('The folder OpenAgent runs in: /Users/dev/here')).toBeTruthy()
+    // What adding does is one press away, folded so the step reads in a glance.
+    expect(container.textContent).not.toContain('makes no commit on your branch')
+    fireEvent.click(screen.getByRole('button', { name: 'What adding a project does' }))
     await waitFor(() => expect(container.textContent).toContain('makes no commit on your branch and pushes nothing'))
     expect(container.textContent).toContain('A folder with no git, or a repository with no commit yet, gets one empty first commit.')
     expect(sendAddProject).not.toHaveBeenCalled()
@@ -193,7 +198,7 @@ describe('the tickets import lands on the session it starts (#1169)', () => {
     onOnboarding.mockResolvedValue({ cwd: '/Users/dev/here', cwdProjectId: 'p1' })
     render(<OnboardingChecklist onAgentStarted={vi.fn()} onSelectProject={vi.fn()} />)
     await waitFor(() => expect(screen.getByText('Add a project')).toBeTruthy())
-    expect(screen.queryByRole('button', { name: /as project/ })).toBeNull()
+    expect(screen.queryByText(/^The folder OpenAgent runs in/)).toBeNull()
   })
 
   test('with no project yet, there is no import to offer: no project provides tickets', async () => {
@@ -209,8 +214,8 @@ describe('the tickets import lands on the session it starts (#1169)', () => {
     onOnboarding.mockResolvedValue({ cwd: null, cwdProjectId: null, canPickFolder: false })
     const { unmount } = render(<OnboardingChecklist onAgentStarted={vi.fn()} onSelectProject={() => {}} />)
     const byAddress = await screen.findByRole('button', { name: 'Add from a GitHub address' })
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Select & add project directory' })).toBeNull())
-    expect(screen.queryByRole('button', { name: /as project…$/ })).toBeNull()
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^Choose (a|another) folder…$/ })).toBeNull())
+    expect(screen.queryByText(/^The folder OpenAgent runs in/)).toBeNull()
     fireEvent.click(byAddress)
     expect(screen.getByRole('dialog', { name: 'Add project' }).textContent).toContain('Add project from a GitHub address')
     expect(sendPickProjectDirectory).not.toHaveBeenCalled()
@@ -218,8 +223,8 @@ describe('the tickets import lands on the session it starts (#1169)', () => {
 
     onOnboarding.mockResolvedValue({ cwd: '/Users/dev/app', cwdProjectId: null, canPickFolder: true })
     render(<OnboardingChecklist onAgentStarted={vi.fn()} onSelectProject={() => {}} />)
-    expect(await screen.findByRole('button', { name: 'Add /Users/dev/app as project…' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Select & add project directory' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Add “app”' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Choose another folder…' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Add from a GitHub address' })).toBeTruthy()
   })
 })

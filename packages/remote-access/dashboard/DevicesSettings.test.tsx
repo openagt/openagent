@@ -42,17 +42,20 @@ function show(host: ModuleHost) {
 
 const ok = (output: unknown): ModuleCommandResult => ({ ok: true, output })
 const theSwitch = (): Promise<HTMLElement> => screen.findByRole('switch', { name: 'Phone on Wi-Fi' })
+/** Add device, there whether a device can be added now or not: disabled, it says what to do first. */
+const addButton = (): HTMLButtonElement => screen.getByRole('button', { name: 'Add device' }) as HTMLButtonElement
 const qrPath = (): string => screen.getByRole('img', { name: 'The code a new device scans' }).querySelector('path')!.getAttribute('d')!
 
 afterEach(cleanup)
 
 describe('Settings → Devices', () => {
-  test('off: the switch alone, no Add device, and the command is asked in no project', async () => {
+  test('off: Add device waits for the switch and says so, and the command is asked in no project', async () => {
     const { host, runComputerCommand } = door(() => ok(OFF))
     show(host)
     await waitFor(async () => expect((await theSwitch()).getAttribute('aria-checked')).toBe('false'))
     await waitFor(() => expect((screen.getByRole('switch', { name: 'Phone on Wi-Fi' }) as HTMLButtonElement).hasAttribute('data-disabled')).toBe(false))
-    expect(screen.queryByRole('button', { name: 'Add device' })).toBeNull()
+    expect(addButton().disabled).toBe(true)
+    expect(screen.getByText('Turn on Phone on Wi-Fi first: a device gets in on the same Wi-Fi as this computer.')).toBeTruthy()
     expect(runComputerCommand).toHaveBeenCalledWith(['status'])
     expect(host.runCommand).not.toHaveBeenCalled()
   })
@@ -75,7 +78,7 @@ describe('Settings → Devices', () => {
     fireEvent.click(await theSwitch())
     fireEvent.click(screen.getByRole('button', { name: 'Turn on' }))
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['on']))
-    expect(await screen.findByRole('button', { name: 'Add device' })).toBeTruthy()
+    await waitFor(() => expect(addButton().disabled).toBe(false))
     expect((await theSwitch()).getAttribute('aria-checked')).toBe('true')
   })
 
@@ -86,10 +89,10 @@ describe('Settings → Devices', () => {
       return ok(state)
     })
     show(host)
-    await screen.findByRole('button', { name: 'Add device' })
+    await waitFor(() => expect(addButton().disabled).toBe(false))
     fireEvent.click(await theSwitch())
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['off']))
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Add device' })).toBeNull())
+    await waitFor(() => expect(addButton().disabled).toBe(true))
     expect(screen.queryByText(WARNING)).toBeNull()
   })
 
@@ -99,19 +102,20 @@ describe('Settings → Devices', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Add device' }))
     await screen.findByRole('img', { name: 'The code a new device scans' })
     const byName = qrPath()
-    expect(screen.getByText(/The code works once, for five minutes\./)).toBeTruthy()
+    expect(screen.getByRole('timer').textContent).toMatch(/^Works once, for [45]:\d\d more\.$/)
     // The same link as text, for another computer to paste where a phone scans.
-    const pasted = (): string => (screen.getByRole('textbox', { name: 'The link another computer pastes' }) as HTMLInputElement).value
+    expect(screen.getByText('Another computer that runs OpenAgent? Paste the link there, in Settings › Machines › Add machine.')).toBeTruthy()
+    const pasted = (): string => (screen.getByRole('textbox', { name: 'The link' }) as HTMLInputElement).value
     expect(pasted()).toBe(LINK.url)
     fireEvent.click(screen.getByRole('button', { name: 'Phone does not open it? Use the number.' }))
     expect(qrPath()).not.toBe(byName)
     expect(pasted()).toBe(LINK.numberUrl)
     expect(screen.queryByRole('button', { name: 'Phone does not open it? Use the number.' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
-    expect(screen.queryByRole('img', { name: 'The code a new device scans' })).toBeNull()
+    await waitFor(() => expect(screen.queryByRole('img', { name: 'The code a new device scans' })).toBeNull())
   })
 
-  test('the code leaves the page once a new device got in with it, and not for a read that tells an older list', async () => {
+  test('once a new device got in with the code the dialog says which, in place of the code; not for a read that tells an older list', async () => {
     let devices: object[] = [PHONE]
     const { host } = door(args => (args[0] === 'add' ? ok(LINK) : ok({ ...OPEN, devices })))
     show(host)
@@ -123,15 +127,15 @@ describe('Settings → Devices', () => {
     expect(screen.getByRole('img', { name: 'The code a new device scans' })).toBeTruthy()
     devices = [{ id: 'new000new000', name: 'Android phone, Chrome', added: new Date().toISOString() }]
     expect(await screen.findByText('Android phone, Chrome', undefined)).toBeTruthy()
-    // The code leaves in the render after the one that shows the new device.
-    await waitFor(() => expect(screen.queryByRole('img', { name: 'The code a new device scans' })).toBeNull())
-    expect(screen.getByRole('button', { name: 'Add device' })).toBeTruthy()
+    expect(await screen.findByText('Android phone, Chrome is in.')).toBeTruthy()
+    expect(screen.queryByRole('img', { name: 'The code a new device scans' })).toBeNull()
 
     // A computer that gets in again is a new id under the row it had, and no new row: the code is spent all the same.
-    fireEvent.click(screen.getByRole('button', { name: 'Add device' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add another' }))
     await screen.findByRole('img', { name: 'The code a new device scans' })
     devices = [{ id: 'new000new000', name: 'Android phone, Chrome', added: new Date().toISOString(), also: ['again0again0'] }]
-    await waitFor(() => expect(screen.queryByRole('img', { name: 'The code a new device scans' })).toBeNull())
+    expect(await screen.findByText('Android phone, Chrome is in.')).toBeTruthy()
+    expect(screen.queryByRole('img', { name: 'The code a new device scans' })).toBeNull()
   })
 
   test('a removed device does not come back from a read that was on its way before the removal', async () => {
@@ -169,15 +173,15 @@ describe('Settings → Devices', () => {
     expect(screen.queryByRole('switch')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Add device' }))
     await screen.findByRole('img', { name: 'The code a new device scans' })
-    expect(screen.getByText(/^Scan it with the device's camera\. The code works once/)).toBeTruthy()
-    expect((screen.getByRole('textbox', { name: 'The link another computer pastes' }) as HTMLInputElement).value).toBe(link.url)
+    expect(screen.getByText("Scan it with the device's camera: it opens OpenAgent here, from anywhere.")).toBeTruthy()
+    expect((screen.getByRole('textbox', { name: 'The link' }) as HTMLInputElement).value).toBe(link.url)
     expect(screen.queryByRole('button', { name: 'Phone does not open it? Use the number.' })).toBeNull()
     unmount()
 
     const waiting = { on: false, listening: false, problem: 'No certificate for 203.0.113.5 yet: port 80 cannot be reached', https: { address: '203.0.113.5' }, devices: [] }
     show(door(() => ok(waiting)).host)
     expect((await screen.findByRole('alert')).textContent).toBe('No certificate for 203.0.113.5 yet: port 80 cannot be reached')
-    expect(screen.queryByRole('button', { name: 'Add device' })).toBeNull()
+    expect(addButton().disabled).toBe(true)
   })
 
   test('a computer with no name offers no second code', async () => {
@@ -204,7 +208,7 @@ describe('Settings → Devices', () => {
     })
     show(host)
     expect(await screen.findByText('iPhone, Safari')).toBeTruthy()
-    expect(screen.getByText('Added 3m ago, last seen 1m ago')).toBeTruthy()
+    expect(screen.getByText('Last seen 1m ago, added 3m ago')).toBeTruthy()
     expect(screen.getByText('Added 3m ago')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Remove Mac, Chrome' }))
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['remove', 'fff000fff000']))
@@ -216,14 +220,14 @@ describe('Settings → Devices', () => {
     const { host } = door(() => ok({ ...OFF, devices: [PHONE] }))
     show(host)
     expect(await screen.findByRole('button', { name: 'Remove iPhone, Safari' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Add device' })).toBeNull()
+    expect(addButton().disabled).toBe(true)
   })
 
   test('a door that could not open says why, and a command that failed says so', async () => {
     const { host } = door(args => (args[0] === 'status' ? ok({ on: true, listening: false, problem: 'Port 4201 is taken by another program on this computer.', devices: [PHONE] }) : { ok: false, error: 'no device has the id abc123def456' }))
     show(host)
     expect(await screen.findByText('Port 4201 is taken by another program on this computer.')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Add device' })).toBeNull()
+    expect(addButton().disabled).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Remove iPhone, Safari' }))
     expect(await screen.findByText('no device has the id abc123def456')).toBeTruthy()
   })

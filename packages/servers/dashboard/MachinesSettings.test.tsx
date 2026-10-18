@@ -65,6 +65,8 @@ function show(host: ModuleHost) {
 }
 
 const ok = (output: unknown): ModuleCommandResult => ({ ok: true, output })
+/** Open the Connect dialog, as a person does from the empty list or the section's own button. */
+const openConnect = async (): Promise<void> => void fireEvent.click(await screen.findByRole('button', { name: 'Connect a server' }))
 const stepNames = (): string[] => within(screen.getByRole('list', { name: 'The install on 203.0.113.5' })).getAllByRole('listitem').map(item => item.getAttribute('aria-label')!)
 
 afterEach(cleanup)
@@ -73,18 +75,20 @@ describe('Settings → Machines', () => {
   test('an address and a user name, root unless said: Connect installs this computer\'s own OpenAgent there, in no project', async () => {
     const { host, ran } = dashboard(() => ok({ servers: [] }))
     show(host)
-    // The section is there once this computer said it is no server itself.
+    // The section is there once this computer said it is no server itself, and Connect a server opens the form.
+    await openConnect()
     const connect = (await screen.findByRole('button', { name: 'Connect' })) as HTMLButtonElement
     expect(connect.disabled).toBe(true)
     expect((screen.getByLabelText('User name') as HTMLInputElement).value).toBe('root')
-    await waitFor(() => expect(host.machines).toHaveBeenCalled())
     fireEvent.change(screen.getByLabelText("The server's address"), { target: { value: ' 203.0.113.5 ' } })
     await waitFor(() => expect(connect.disabled).toBe(false))
     fireEvent.click(connect)
     await waitFor(() => expect(ran()).toContain('connect 203.0.113.5 root 1.2.3'))
     expect(host.runCommand).not.toHaveBeenCalled()
-    // The server is in the list from here on: the field is free for the next one.
-    await waitFor(() => expect((screen.getByLabelText("The server's address") as HTMLInputElement).value).toBe(''))
+    // The server is in the list from here on, its steps running there: the dialog has done its part.
+    await waitFor(() => expect(screen.queryByLabelText("The server's address")).toBeNull())
+    await openConnect()
+    expect((screen.getByLabelText("The server's address") as HTMLInputElement).value).toBe('')
   })
 
   test('Connect waits until this computer has said which OpenAgent it runs: that is the one the server gets', async () => {
@@ -92,18 +96,20 @@ describe('Settings → Machines', () => {
     let say: (saved: ModuleMachines) => void = () => {}
     machines.mockImplementation(() => new Promise<ModuleMachines>(resolve => (say = resolve)))
     show(host)
-    fireEvent.change(await screen.findByLabelText("The server's address"), { target: { value: '203.0.113.5' } })
     await waitFor(() => expect(ran()).toContain('status'))
-    const connect = screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement
-    expect(connect.disabled).toBe(true)
+    // Nothing to press before then: the list is not known to be empty, and the server would get no version.
+    await new Promise(resolve => setTimeout(resolve, 100))
+    expect(screen.queryByRole('button', { name: 'Connect a server' })).toBeNull()
     say({ version: '1.2.3', machines: [] })
-    await waitFor(() => expect(connect.disabled).toBe(false))
+    await openConnect()
+    fireEvent.change(await screen.findByLabelText("The server's address"), { target: { value: '203.0.113.5' } })
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement).disabled).toBe(false))
   })
 
   test('an install at work lists its steps with their state, and shows the key the server was first met with', async () => {
     const { host } = dashboard(() => ok({ servers: [server(['done', 'done', 'running'], { working: true, fingerprint: 'SHA256:abc' })] }))
     show(host)
-    expect(await screen.findByText('OpenAgent is being installed.')).toBeTruthy()
+    expect(await screen.findByText('Installing: step 3 of 8')).toBeTruthy()
     expect(stepNames()).toEqual(['Log in: done', 'The user openagent: done', 'git, gh, Node and Chrome: running', 'Your name and email for git: not started', 'OpenAgent: not started', 'Claude Code: not started', 'The service: not started', 'The door: not started'])
     expect(screen.getByText("The server's key: SHA256:abc")).toBeTruthy()
     // Nothing to press on a server that is being installed.
@@ -160,25 +166,35 @@ describe('Settings → Machines', () => {
     let link: ModuleCommandResult = ok(LINK)
     const { host, ran } = dashboard(args => (args[0] === 'link' ? link : ok({ servers: [server(ALL_DONE, { adding: false })] })), saved)
     show(host)
-    const code = () => screen.queryByRole('img', { name: 'The code a new device scans to get into 203.0.113.5' })
-    fireEvent.click(await screen.findByRole('button', { name: 'Add a device to 203.0.113.5' }))
+    const code = () => screen.queryByRole('img', { name: 'The code a new device scans' })
+    // One press on the server's row: the dialog asks the door for a code as it opens.
+    fireEvent.click(await screen.findByRole('button', { name: 'Invite to 203.0.113.5' }))
+    expect(await screen.findByText('Invite to 203.0.113.5')).toBeTruthy()
     await waitFor(() => expect(code()).toBeTruthy())
     expect(ran().filter(line => line === 'link 203.0.113.5')).toHaveLength(1)
-    expect(screen.getByText(/it opens OpenAgent on the server, from anywhere\. The code works once, for five minutes\./)).toBeTruthy()
+    expect(screen.getByText(/it opens OpenAgent on the server, from anywhere\./)).toBeTruthy()
+    expect((screen.getByLabelText('The link') as HTMLInputElement).value).toBe(LINK.url)
+    expect(screen.getByRole('timer').textContent).toMatch(/^Works once, for [45]:\d\d more\.$/)
     // A new tab that knows nothing of this page: the code is the server's to take, not this page's to hand on.
     const opens = screen.getByRole('link', { name: 'Let this browser in instead' }) as HTMLAnchorElement
     expect([opens.href, opens.target, opens.rel]).toEqual([LINK.url, '_blank', 'noreferrer'])
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
-    expect(code()).toBeNull()
-
-    link = ok({ ...LINK, expires: new Date(Date.now() + 80).toISOString() })
-    fireEvent.click(screen.getByRole('button', { name: 'Add a device to 203.0.113.5' }))
-    await waitFor(() => expect(code()).toBeTruthy())
     await waitFor(() => expect(code()).toBeNull())
 
+    // A code that runs out says so, and a new one is a press away.
+    link = ok({ ...LINK, expires: new Date(Date.now() + 80).toISOString() })
+    fireEvent.click(screen.getByRole('button', { name: 'Invite to 203.0.113.5' }))
+    expect(await screen.findByText('The code ran out. A new one works for five minutes more.', {}, { timeout: 2500 })).toBeTruthy()
+    expect(code()).toBeNull()
+    link = ok(LINK)
+    fireEvent.click(screen.getByRole('button', { name: 'New code' }))
+    await waitFor(() => expect(code()).toBeTruthy())
+    expect(ran().filter(line => line === 'link 203.0.113.5')).toHaveLength(3)
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+
     link = { ok: false, error: 'The server did not answer.' }
-    fireEvent.click(screen.getByRole('button', { name: 'Add a device to 203.0.113.5' }))
-    expect((await screen.findByRole('alert')).textContent).toBe('The server did not answer.')
+    fireEvent.click(await screen.findByRole('button', { name: 'Invite to 203.0.113.5' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('No code: The server did not answer.')
     expect(code()).toBeNull()
   })
 
@@ -212,7 +228,7 @@ describe('Settings → Machines', () => {
     const { host } = dashboard(() => ok({ servers: [server(['done', 'done', 'failed'])] }))
     show(host)
     await screen.findByRole('button', { name: 'Try 203.0.113.5 again' })
-    expect(screen.queryByRole('button', { name: 'Add a device to 203.0.113.5' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Invite to 203.0.113.5' })).toBeNull()
   })
 
   test('a server that could not be saved says why, and is tried again on a press, not by itself', async () => {
@@ -258,7 +274,12 @@ describe('Settings → Machines', () => {
     const same = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false })] }), saved('1.2.3'))
     show(same.host)
     expect(await screen.findByText('OpenAgent 1.2.3.')).toBeTruthy()
+    // All set up: the steps fold into one line, and open on a press.
+    expect(screen.queryByRole('list', { name: 'The install on 203.0.113.5' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Installed, as root' }))
     expect(stepNames().at(-1)).toBe('Runs can be sent to it: done')
+    fireEvent.click(screen.getByRole('button', { name: 'Hide the steps' }))
+    expect(screen.queryByRole('list', { name: 'The install on 203.0.113.5' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Update 203.0.113.5' })).toBeNull()
     expect(same.addMachine).not.toHaveBeenCalled()
     cleanup()
@@ -273,6 +294,32 @@ describe('Settings → Machines', () => {
     const silent = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false })] }), saved())
     show(silent.host)
     expect(await screen.findByText('Does not answer right now.')).toBeTruthy()
+  })
+
+  test('an update shows each step on its own as it runs: the folded steps open, the row says which step runs, and they fold again once all is done', async () => {
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5', version: '1.2.0' }] }
+    let now: ServerRow = server(ALL_DONE, { adding: false })
+    const { host, ran } = dashboard(args => {
+      // The press starts the same steps over, each waiting until the install comes to it.
+      if (args[0] === 'connect') now = server([], { adding: false, working: true })
+      return ok({ servers: [now] })
+    }, saved)
+    show(host)
+    expect(await screen.findByText('OpenAgent 1.2.0: behind this computer, which runs 1.2.3.')).toBeTruthy()
+    expect(screen.queryByRole('list', { name: 'The install on 203.0.113.5' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Update 203.0.113.5' }))
+    await waitFor(() => expect(ran()).toContain('connect 203.0.113.5 root 1.2.3'))
+    expect(await screen.findByText('Updating: step 1 of 8')).toBeTruthy()
+    expect(stepNames().slice(0, 2)).toEqual(['Log in: not started', 'The user openagent: not started'])
+    now = server(['done', 'done', 'running'], { adding: false, working: true })
+    expect(await screen.findByText('Updating: step 3 of 8')).toBeTruthy()
+    expect(stepNames().slice(0, 4)).toEqual(['Log in: done', 'The user openagent: done', 'git, gh, Node and Chrome: running', 'Your name and email for git: not started'])
+    // Nothing to press while it runs.
+    expect(screen.queryByRole('button', { name: 'Update 203.0.113.5' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Remove 203.0.113.5' })).toBeNull()
+    now = server(ALL_DONE, { adding: false })
+    expect(await screen.findByRole('button', { name: 'Installed, as root' })).toBeTruthy()
+    expect(screen.queryByRole('list', { name: 'The install on 203.0.113.5' })).toBeNull()
   })
 
   test('on a computer that is itself a server the section lists its machines and offers no server to connect: servers are connected from a person\'s own computer', async () => {
@@ -372,7 +419,8 @@ describe('Settings → Machines', () => {
     let say: (saved: ModuleMachines) => void = () => {}
     machines.mockImplementationOnce(() => new Promise<ModuleMachines>(resolve => (say = resolve)))
     show(host)
-    await screen.findByRole('button', { name: 'Connect' })
+    await waitFor(() => expect(machines).toHaveBeenCalled())
+    await new Promise(resolve => setTimeout(resolve, 100))
     expect(screen.queryByText(/No machines saved/)).toBeNull()
     say({ version: '1.2.3', machines: [] })
     expect(await screen.findByText('No machines saved. To add one that already runs OpenAgent, use the link it gives: its Settings, Devices, Add device.')).toBeTruthy()
@@ -482,7 +530,7 @@ describe('Settings → Machines', () => {
     let answer: ModuleCommandResult = ok({ devices: [] })
     const { host } = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false })] }), saved, { ok: true }, NO_GH, () => answer)
     show(host)
-    expect(await screen.findByText('No device is in on the server. Add device gives a code for a phone or a browser.')).toBeTruthy()
+    expect(await screen.findByText('Nobody yet. Invite gives a code for a person, a phone or a browser.')).toBeTruthy()
     answer = ok({ devices: [{ id: 'a1b2c3d4e5f6', name: 'iPhone, Safari', added: new Date().toISOString() }] })
     expect(await screen.findByText('iPhone, Safari')).toBeTruthy()
     answer = { ok: false, error: 'ssh: connect to host 203.0.113.5 port 22: Connection refused' }
@@ -583,7 +631,7 @@ describe('Settings → Machines', () => {
     expect(await screen.findByText('The servers could not be read: servers printed no JSON')).toBeTruthy()
     // Still the server's own row, with all that is on it, and not a machine with a Remove of another kind.
     expect(screen.getByText('OpenAgent 1.2.3.')).toBeTruthy()
-    expect(screen.getByRole('list', { name: 'The install on 203.0.113.5' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Installed, as root' })).toBeTruthy()
     expect(screen.getAllByText('203.0.113.5')).toHaveLength(1)
   })
 
@@ -594,34 +642,37 @@ describe('Settings → Machines', () => {
     const { host } = dashboard(args => (args[0] === 'link' ? ok(LINK) : ok({ servers: [server(ALL_DONE, { adding: false })] })), saved, { ok: true }, NO_GH, () => ok({ devices: listed }))
     show(host)
     await screen.findByText('OpenAgent on MacBook')
-    const code = () => screen.queryByRole('img', { name: 'The code a new device scans to get into 203.0.113.5' })
-    fireEvent.click(screen.getByRole('button', { name: 'Add a device to 203.0.113.5' }))
+    const code = () => screen.queryByRole('img', { name: 'The code a new device scans' })
+    fireEvent.click(screen.getByRole('button', { name: 'Invite to 203.0.113.5' }))
     await waitFor(() => expect(code()).toBeTruthy())
     // The devices that were in when the code came on the page are no reason for it to leave.
     await new Promise(resolve => setTimeout(resolve, 200))
     expect(code()).toBeTruthy()
     listed = [LAPTOP, { id: 'a1b2c3d4e5f6', name: 'iPhone, Safari', added: new Date().toISOString() }]
-    await waitFor(() => expect(code()).toBeNull())
-    expect(screen.getByText('iPhone, Safari')).toBeTruthy()
+    // The dialog says who got in, in place of the code.
+    expect(await screen.findByText('iPhone, Safari is in.')).toBeTruthy()
+    expect(code()).toBeNull()
 
     // A computer that gets in again is a new id under the row it had, and no new row: the code is spent all the same.
-    fireEvent.click(screen.getByRole('button', { name: 'Add a device to 203.0.113.5' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add another' }))
     await waitFor(() => expect(code()).toBeTruthy())
     await new Promise(resolve => setTimeout(resolve, 200))
     expect(code()).toBeTruthy()
     listed = [{ ...LAPTOP, also: ['c1b2c3d4e5f6'] }, listed[1]!]
-    await waitFor(() => expect(code()).toBeNull())
+    expect(await screen.findByText('OpenAgent on MacBook is in.')).toBeTruthy()
+    expect(code()).toBeNull()
   })
 
   test('a command that refuses says why; servers that cannot be read say so', async () => {
     const refusing = dashboard(args => (args[0] === 'connect' ? { ok: false, error: 'nope is not a server\'s number or name' } : ok({ servers: [] })))
     show(refusing.host)
+    await openConnect()
     fireEvent.change(await screen.findByLabelText("The server's address"), { target: { value: 'nope' } })
     await waitFor(() => expect((screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement).disabled).toBe(false))
     await waitFor(() => expect(refusing.machines).toHaveBeenCalled())
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
     expect(await screen.findByText("nope is not a server's number or name")).toBeTruthy()
-    // What was refused stays in the field, to be corrected.
+    // What was refused stays in the field, in the dialog that stays open, to be corrected.
     expect((screen.getByLabelText("The server's address") as HTMLInputElement).value).toBe('nope')
     cleanup()
 
@@ -633,6 +684,7 @@ describe('Settings → Machines', () => {
   test('the tick names whose GitHub login would be copied, and Connect then asks for the copy; with no login on this computer there is nothing to tick', async () => {
     const { host, ran } = dashboard(() => ok({ servers: [] }), undefined, undefined, OCTOCAT)
     show(host)
+    await openConnect()
     expect(await screen.findByText('Copy my GitHub login (octocat) to the server.')).toBeTruthy()
     const tick = screen.getByRole('checkbox', { name: 'Copy my GitHub login to the server' })
     // Set by the person, never for them.
@@ -647,6 +699,7 @@ describe('Settings → Machines', () => {
 
     const none = dashboard(() => ok({ servers: [] }))
     show(none.host)
+    await openConnect()
     expect(await screen.findByText('There is no GitHub login to copy from this computer. `gh` is not on this computer.')).toBeTruthy()
     expect(screen.getByRole('checkbox', { name: 'Copy my GitHub login to the server' }).hasAttribute('data-disabled')).toBe(true)
     fireEvent.change(screen.getByLabelText("The server's address"), { target: { value: '203.0.113.5' } })
@@ -658,7 +711,7 @@ describe('Settings → Machines', () => {
   test('a server that is being installed has no logins to press yet; a GitHub login that was ticked waits in the list', async () => {
     const { host } = dashboard(() => ok({ servers: [server(['done', 'running'], { working: true, logins: { github: { there: false, working: true }, claude: NONE } })] }))
     show(host)
-    expect(await screen.findByText('OpenAgent is being installed.')).toBeTruthy()
+    expect(await screen.findByText('Installing: step 2 of 8')).toBeTruthy()
     expect(stepNames().at(-1)).toBe('Your GitHub login: not copied yet')
     expect(screen.queryByRole('list', { name: 'The logins on 203.0.113.5' })).toBeNull()
   })
