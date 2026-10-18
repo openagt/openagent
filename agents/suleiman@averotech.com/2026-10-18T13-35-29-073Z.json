@@ -7,7 +7,6 @@
   "title": "Work queue setup",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-10-18T13-35-29-073Z",
   "cost": 0.2652444,
   "contextTokens": 30392,
   "caller": {
