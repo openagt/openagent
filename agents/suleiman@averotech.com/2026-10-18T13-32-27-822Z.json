@@ -7,7 +7,6 @@
   "title": "Work queue",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-10-18T13-32-27-822Z",
   "cost": 0.48401239999999995,
   "contextTokens": 42778,
   "caller": {
