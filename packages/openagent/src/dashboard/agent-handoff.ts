@@ -497,14 +497,14 @@ async function commitsPastPr(cwd: string, pr: LinkedPr | undefined, commits: Han
  * Open a PR for a finished session, deciding from what the agent recorded which cases should not
  * open one. Reads the branch's handoff first: a branch that no longer exists, or a session that
  * changed nothing, is a clear error rather than an empty PR, and a branch that already has a PR
- * returns that one. Title is its branch, else the id; body is the intent, plus which session did it. This is the handoff decision the
+ * returns that one. Title and body say what its commits did ({@link commitsPrText}). This is the handoff decision the
  * dashboard's open-PR button offers; the RPC layer only resolves which run it is about, and the
  * two providers do the pushing and the opening.
  */
 export async function openAgentPullRequest(
   cwd: string,
   agent: AgentMeta,
-  options: { draft?: boolean; branches?: BranchesFor; gitHost?: GitHostFor; pr?: BranchPrLookup } = {},
+  options: { draft?: boolean; branches?: BranchesFor; gitHost?: GitHostFor; pr?: BranchPrLookup; git?: GitRunner } = {},
 ): Promise<HandoffResult> {
   // A subagent's work goes to its main agent's branch, and that one opens the pull request.
   if (agent.parent !== undefined) return { ok: false, error: 'this run is a subagent: its main agent lands its work and opens the pull request' }
@@ -526,7 +526,8 @@ export async function openAgentPullRequest(
   if (handoff?.empty) return { ok: false, error: 'this session produced no commits to open a PR for' }
   // Its commits are still counted once the default branch has them, from where its work began: nothing is left to open one for.
   if (handoff?.merged) return { ok: false, error: 'this session’s work is already merged' }
-  return publishBranch(cwd, branch, { title: agentPrTitle(agent, handoff?.name), body: agentPrBody(agent), ...(options.draft ? { draft: true } : {}) }, branches, gitHost)
+  const text = handoff ? await commitsPrText(cwd, agent, handoff.commits, handoff.name, options.git) : { title: agentPrTitle(agent), body: agentPrBody(agent) }
+  return publishBranch(cwd, branch, { ...text, ...(options.draft ? { draft: true } : {}) }, branches, gitHost)
 }
 
 /**
@@ -554,8 +555,8 @@ function agentPrTitle(agent: Pick<HandoffAgent, 'id' | 'branch'>, name?: string)
 }
 
 /**
- * The PR body: what was asked for, which is all OpenAgent knows on its own, and which session
- * did it.
+ * The PR body where none of the branch's commits can be read, a branch only on the remote: what
+ * was asked for, and which session did it.
  */
 function agentPrBody(agent: HandoffAgent): string {
   const lines: string[] = []
@@ -563,4 +564,30 @@ function agentPrBody(agent: HandoffAgent): string {
   if (opening) lines.push(opening, '')
   lines.push(`Opened from OpenAgent session \`${agent.id}\`.`)
   return lines.join('\n')
+}
+
+/**
+ * The PR title and body for a session's commits (newest first), saying what the pull request does
+ * rather than what the session was asked: a scheduled run is asked `/work-queue`, which a reviewer
+ * cannot read anything from. One commit is the pull request, as the git host fills one in itself:
+ * its subject the title, the rest of its message the body, which carries the `Closes …` lines the
+ * agent wrote. Several are listed, oldest first, under the branch's name. A message git cannot read
+ * leaves the subject alone.
+ */
+async function commitsPrText(cwd: string, agent: HandoffAgent, commits: HandoffCommit[], name: string | undefined, git: GitRunner = nodeGitRunner()): Promise<{ title: string; body: string }> {
+  const footer = `Opened from OpenAgent session \`${agent.id}\`.`
+  const only = commits.length === 1 ? commits[0]! : undefined
+  if (!only) {
+    const listed = [...commits].reverse().map(commit => `- ${commit.subject}`)
+    return { title: agentPrTitle(agent, name), body: [...listed, '', footer].join('\n') }
+  }
+  const message = await git(['log', '-1', '--format=%B', only.sha], cwd).catch(() => '')
+  // Past the subject, less the co-author lines: the pull request names its author itself.
+  const rest = message
+    .split('\n')
+    .slice(1)
+    .filter(line => !/^co-authored-by:/i.test(line))
+    .join('\n')
+    .trim()
+  return { title: only.subject, body: [...(rest ? [rest, ''] : []), footer].join('\n') }
 }
