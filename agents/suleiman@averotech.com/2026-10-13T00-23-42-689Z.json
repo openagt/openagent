@@ -6,7 +6,6 @@
   "intent": "ask me some question",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-10-13T00-23-42-689Z",
   "cost": 0.2246554,
   "contextTokens": 19335,
   "caller": {
