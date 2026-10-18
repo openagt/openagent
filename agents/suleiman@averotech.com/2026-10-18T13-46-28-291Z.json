@@ -1,15 +1,27 @@
 {
   "id": "2026-10-18T13-46-28-291Z",
   "startedAt": "2026-10-18T13:46:18.961Z",
-  "status": "running",
+  "endedAt": "2026-10-18T13:53:41.615Z",
+  "status": "done",
   "intent": "/work-queue",
+  "title": "Work Queue Command",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "branch": "agent-2026-10-18T13-46-28-291Z",
+  "cost": 1.7012451999999998,
+  "contextTokens": 98718,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
-      "publish": "commit"
+      "pid": 31825,
+      "publish": "commit",
+      "baseCommit": "5ac306b4860521f54d66d09ff19d8f024627a8ce"
     },
-    "host": "Suleimans-MacBook-Pro.local"
+    "pid": 31825,
+    "host": "Suleimans-MacBook-Pro.local",
+    "baseCommit": "5ac306b4860521f54d66d09ff19d8f024627a8ce",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/gemstack/.branches/agent-2026-10-18T13-46-28-291Z",
+    "sessionId": "b380458f-47e4-49d2-b8c5-eb7705a11cc2"
   }
 }
