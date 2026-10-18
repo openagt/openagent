@@ -11,7 +11,7 @@ import { projectGitHost, type GitHost, type MergeOutcome } from './git-host.js'
 import { basicSkills } from './basic-skills.js'
 import { acquireRunLock, isPidAlive, releaseRunLock } from './run-lock.js'
 import { runEndedLine } from './ended.js'
-import { nameRun } from './title.js'
+import { isBareCommand, nameRun } from './title.js'
 import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
 
 /**
@@ -62,6 +62,9 @@ import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
  * apart once it is merged. A run given a branch that exists (a follow-up's) writes none: that
  * branch's work began with another run.
  */
+
+/** How long naming a run from its report may hold its end up: the small model answers in a few seconds. */
+const REPORT_NAMING_TIMEOUT_MS = 15_000
 
 /** The detail a stopped run's record carries. */
 export const STOPPED_DETAIL = 'stopped by a signal to its process'
@@ -528,8 +531,11 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
   // orchestration of a dozen of them would pay for a dozen namings for rows nobody looks for.
   // `OPENAGENT_NAME_RUN=0` is the person's setting, put in this process's environment by whoever
   // started it: naming costs money for something only a person looks at, so it can be declined.
+  // A bare command is named later, from its agent's report (`title.ts`).
+  const mayName = process.env.OPENAGENT_NAME_RUN !== '0' && driverSession !== undefined && !run.continued && run.card.title === undefined && runnerMark(run.card)?.parent === undefined
+  let nameFromReport = mayName && isBareCommand(run.prompt)
   const naming =
-    process.env.OPENAGENT_NAME_RUN !== '0' && driverSession && !run.continued && run.card.title === undefined && runnerMark(run.card)?.parent === undefined
+    mayName && !nameFromReport
       ? nameRun(run.driver, { prompt: run.prompt, signal: stopped }).then(
           async title => {
             if (title !== undefined) await driverSession?.log?.title(title)
@@ -575,6 +581,15 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
         // keeps its checkout for the answer to resume it.
         question = parseQuestion(lastText)?.title
         if (question !== undefined) status = 'waiting'
+      }
+      // Named from its first report once its status is settled, before it is said ended, so the
+      // name's line in the diary comes before the ended one; a stop meanwhile only cuts the naming
+      // short. A question is no report of the work, and a few seconds is all a name may hold the
+      // end up.
+      if (nameFromReport && status === 'done' && lastText.trim() !== '') {
+        nameFromReport = false
+        const title = await nameRun(run.driver, { prompt: lastText, from: 'report', signal: stopped, timeoutMs: REPORT_NAMING_TIMEOUT_MS })
+        if (title !== undefined) await driverSession.log?.title(title)
       }
 
       // Where the work ended up: the agent renames its branch itself, and the pull request it
