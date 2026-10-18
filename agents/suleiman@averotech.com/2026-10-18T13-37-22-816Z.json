@@ -7,7 +7,6 @@
   "title": "Triage quick command",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-10-18T13-37-22-816Z",
   "cost": 0.12415919999999998,
   "contextTokens": 22640,
   "caller": {
