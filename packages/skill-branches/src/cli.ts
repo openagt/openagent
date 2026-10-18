@@ -56,7 +56,7 @@ export const USAGE = `usage: branches <command>
                                what each branch holds and where it stands: its commits and files beyond the base, whether it is pushed, merged, and what its checkout left uncommitted;
                                measured from <commit>, the one the branches started from, in place of the default branch; a full commit id in place of a branch is read as a branch that ends there
   ahead [--from <commit>] <branch>...
-                               how many commits of its own each branch has beyond the base, whether it is pushed or was and is gone from origin, whether it is merged: no files, every branch in one read
+                               how many commits of its own each branch has beyond the base, whether it is pushed or was and is gone from origin, whether it is merged, how many paths its checkout left uncommitted: no file lists, every branch in one read
   push [--branch <b>]          push this checkout's branch, or branch <b>, to origin; a dirty checkout is refused
   merge <branch>               merge branch <branch> into the default branch, in the project's folder, then delete it; a conflict changes nothing and names the files
   list [--sizes]               every agent checkout under .branches/

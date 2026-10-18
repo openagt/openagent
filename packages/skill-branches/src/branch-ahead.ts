@@ -1,7 +1,6 @@
-import { basename, dirname } from 'node:path'
-import { BRANCHES_DIR, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 import { isAgentBranch } from './branch-names.js'
-import { commitOf, detectBase, parsePorcelain } from './branch-state.js'
+import { checkoutsByBranch, commitOf, detectBase, parsePorcelain } from './branch-state.js'
 import { repoHasRemote } from './worktree.js'
 
 /**
@@ -44,7 +43,7 @@ export async function readBranchesAhead(repo: string, branches: readonly string[
   const ask = (args: string[]): Promise<string> => git(args, repo).catch(() => '')
   const [hasRemote, base, start] = await Promise.all([repoHasRemote(repo, git), detectBase(ask), from !== undefined ? commitOf(ask, from) : undefined])
   const bases = [base, start].flatMap(rev => (rev === undefined ? [] : [rev]))
-  const [refs, checkouts] = await Promise.all([readRefs(ask, bases), checkoutsOf(ask)])
+  const [refs, checkouts] = await Promise.all([readRefs(ask, bases), checkoutsByBranch(ask)])
   // A git older than the `ahead-behind` atom (2.41) refuses it: the branches asked, and only those,
   // are then counted by a `rev-list` each, side by side.
   await Promise.all(
@@ -104,18 +103,4 @@ async function readRefs(ask: (args: string[]) => Promise<string>, bases: readonl
     refs.set(name, { tip, gone: track === '[gone]', ...(counted ? { past: counts.map(count => Number(count.split(' ')[0])) } : {}) })
   }
   return refs
-}
-
-/**
- * The checkouts under `.branches/`, by the branch each is on: one `git worktree list`. The
- * project's own folder is not one of them, whatever it has out.
- */
-async function checkoutsOf(ask: (args: string[]) => Promise<string>): Promise<Map<string, string>> {
-  const checkouts = new Map<string, string>()
-  for (const block of (await ask(['worktree', 'list', '--porcelain'])).split('\n\n')) {
-    const path = /^worktree (.+)$/m.exec(block)?.[1]
-    const branch = /^branch refs\/heads\/(.+)$/m.exec(block)?.[1]
-    if (path && branch && basename(dirname(path)) === BRANCHES_DIR && !checkouts.has(branch)) checkouts.set(branch, path)
-  }
-  return checkouts
 }

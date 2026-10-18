@@ -287,13 +287,14 @@ test('every finished run is asked, the oldest too, in one read (#860)', async ()
   assert.equal(items.length, 12)
 })
 
-test('a run started from another branch is counted from the commit its own work begins at', async () => {
+test('a run started from another branch is counted from the commit its own work begins at; the runs started from the default branch share one read', async () => {
   // Measured from the default branch, its branch holds the other branch's commits too: "2 commits" for 1.
   const asked: string[][] = []
   const askedFrom: (string | undefined)[] = []
   const agents = [
-    doneMeta({ id: 'r1', branch: 'agent-based', baseCommit: 'c0ffee', startedAt: '2026-07-16T02:00:00Z' }),
-    doneMeta({ id: 'r2', branch: 'agent-plain-1', startedAt: '2026-07-16T01:00:00Z' }),
+    doneMeta({ id: 'r1', branch: 'agent-based', base: 'feature', baseCommit: 'c0ffee', startedAt: '2026-07-16T02:00:00Z' }),
+    // Started from the default branch: the commit it started at changes nothing, so it shares the one read.
+    doneMeta({ id: 'r2', branch: 'agent-plain-1', baseCommit: 'beef', startedAt: '2026-07-16T01:00:00Z' }),
     doneMeta({ id: 'r3', branch: 'agent-plain-2', startedAt: '2026-07-16T00:00:00Z' }),
   ]
   const { items } = await buildInterventions(
@@ -339,6 +340,20 @@ test('the projects are read at once, not one after the other', async () => {
   const read = buildInterventions([project('a', '/a'), project('b', '/b')], { prs, liveAgents: noAgents, agents: async () => [] })
   await Promise.race([read, new Promise((_, reject) => setTimeout(() => reject(new Error('the second project waited for the first')), 1000))])
   assert.equal(started, 2)
+})
+
+test('a checkout\'s uncommitted files are the newest run\'s on its branch: a run continued on an earlier one\'s branch does not charge the earlier one', async () => {
+  const earlier = doneMeta({ id: 'r1', startedAt: '2026-07-16T00:00:00Z' })
+  const later = (status: AgentMeta['status']) => doneMeta({ id: 'r2', status, startedAt: '2026-07-16T02:00:00Z' })
+  const read = (agents: AgentMeta[]) => buildInterventions([project('a', '/a')], onlyUnpushed(agents, counting(branch => waiting({ branch, ahead: 0, uncommitted: 2 }))))
+  assert.deepEqual((await read([earlier, later('running')])).items, [], 'the later run is still working in it')
+  assert.deepEqual((await read([earlier, later('done')])).items.map(i => [i.kind, i.agentId]), [['uncommitted', 'r2']])
+})
+
+test('a provider that does not answer for every branch asked is a read that failed, never "nothing waits"', async () => {
+  const { items, whole } = await buildInterventions([project('a', '/a')], onlyUnpushed([doneMeta()], counting(() => undefined)))
+  assert.deepEqual(items, [])
+  assert.deepEqual(whole, [], 'so the notifier does not take it for a baseline')
 })
 
 test('unpushed items key on the run, so each notifies once (#860)', () => {

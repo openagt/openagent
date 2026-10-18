@@ -110,7 +110,8 @@ async function projectInterventions(project: ProjectSummary, deps: Interventions
     (deps.agents ?? listAgents)(project.path).catch(() => undefined),
     liveAgents(project.path).catch(() => undefined),
   ])
-  const runs = [...(recorded ?? []), ...(live ?? [])]
+  // Newest first: a branch name reused by a later run, or a run continued on it, is that run's now.
+  const runs = [...(live ?? []), ...(recorded ?? [])].sort((a, b) => b.startedAt.localeCompare(a.startedAt))
   const items: Intervention[] = []
   for (const pr of open) {
     // The run that opened it, by the request its record names, else by the branch a run's record or

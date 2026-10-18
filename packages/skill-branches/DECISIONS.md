@@ -128,7 +128,9 @@ ending.
   branch, so what it took in from there by a merge or a rebase is not counted as its own.
 - `ahead` answers many branches in one read: how many commits of its own each has beyond
   the base, whether origin has it, whether it was pushed and origin's copy is gone since,
-  whether the default branch has it; no files. Picked over `show` for every run's branch,
+  whether the default branch has it, how many paths its checkout left uncommitted; no file
+  lists, and a `git status` only for a branch whose checkout is still there. Picked over
+  `show` for every run's branch,
   which lists files and took seconds over branches made before a history rewrite. A branch
   whose copy on origin was deleted, as a merged pull request's is, was pushed: it is not
   work that never left this machine.

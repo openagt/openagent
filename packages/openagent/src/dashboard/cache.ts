@@ -91,7 +91,9 @@ export function clearCache(): void {
 function refresh<T>(key: string, load: () => Promise<T>, now: Now): Promise<T> {
   const inflight = load()
     .then(value => {
-      entries.set(key, { value, has: true, at: now() })
+      // Kept only while it is still the read the key waits for: one forgotten on its way (a PR merged
+      // here while the list was being read) answers its own caller and leaves the next read to say.
+      if ((entries.get(key) as Entry<T> | undefined)?.inflight === inflight) entries.set(key, { value, has: true, at: now() })
       return value
     })
     .catch(error => {
