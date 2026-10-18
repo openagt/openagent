@@ -119,7 +119,7 @@ test('a Start hands the line the branch to start from, and refuses a word that i
 test('adding a project writes the runner\'s start, resume and check lines, an empty folder included, and keeps a line already there', async () => {
   const folder = await realpath(await mkdtemp(join(tmpdir(), 'openagent-add-')))
   const cfg = await realpath(await mkdtemp(join(tmpdir(), 'openagent-add-cfg-')))
-  // The add registers through the process's own environment, and a new folder's first commit needs an author.
+  // The add's git reads the process's own environment, and a new folder's first commit needs an author.
   const env = { XDG_CONFIG_HOME: cfg, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' }
   const before = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]))
   Object.assign(process.env, env)

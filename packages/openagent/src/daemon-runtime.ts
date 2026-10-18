@@ -295,7 +295,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject }: Project
     const publish = publishLevelOf(publishPickIn(options.publish, (await projectGitHost(projectCwd).catch(() => undefined)) !== undefined, await hasRemote(projectCwd)))
     // Named unless the person turned naming off: read here rather than sent from the page, so a
     // run a schedule starts is named exactly as one a person starts is.
-    const nameRun = (await readPreferences(undefined, process.env).catch((): Preferences => ({}))).nameRuns !== false
+    const nameRun = (await readPreferences(undefined, env).catch((): Preferences => ({}))).nameRuns !== false
     const started = await runStartHook(projectCwd, {
       prompt,
       ...(nameRun ? {} : { nameRun: false }),
@@ -334,7 +334,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject }: Project
     // check among them), so the new project starts an agent with nothing typed by hand. A writer
     // keeps every line already there, so adding a project again only fills what is missing.
     for (const failed of await writeHookLines(abs)) console.log(`[openagent] hook lines (${abs}): ${failed}`)
-    await addProject(abs, new Date().toISOString()).catch(() => {})
+    await addProject(abs, new Date().toISOString(), undefined, env).catch(() => {})
     // The project's open hooks (#1774): a project added while the daemon runs is a project the
     // boot never saw, so its open lines run now, the way they would have at boot.
     await runProjectHooks(abs, 'open', { log: console.log })

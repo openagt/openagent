@@ -1,6 +1,7 @@
 import { checkForUpdate, formatUpdateStatus, nodeVersionFetcher, type VersionFetcher } from './update-check.js'
 import { runDaemon, DEFAULT_DAEMON_PORT } from '@openagt/dashboard/serve'
 import { handDownSkills } from './skills.js'
+import { repositoryOf } from './project.js'
 import { openagentVersion } from './version.js'
 
 /** Where the CLI writes. Injectable so tests capture output. */
@@ -18,7 +19,8 @@ const HELP = `OpenAgent — turnkey AI orchestration that wraps a coding agent (
 
 Usage:
   openagent              Serve the dashboard in the foreground. Ctrl+C closes it; the server
-                         logs stream to this terminal.
+                         logs stream to this terminal. Typed inside a Git repository, it adds
+                         that repository to the dashboard's projects.
 
 Options:
   --port <n>             Dashboard port (default: 4200).
@@ -105,9 +107,11 @@ async function runForegroundDaemonCmd(args: CliArgs, io: CliIO): Promise<number>
   try {
     // Set in this process's own environment, so everything the dashboard starts inherits it.
     await handDownSkills(process.env)
+    const project = await repositoryOf(cwd)
     await runDaemon(cwd, {
       port,
       version: openagentVersion(),
+      ...(project !== undefined ? { project, onProjectAdded: (path: string) => io.out(`◆ project added: ${path}`) } : {}),
       onListening: state => {
         io.out(`◆ dashboard running: ${state.url}`)
         io.out('  Ctrl+C to stop the dashboard. Server logs stream below.')

@@ -227,7 +227,7 @@ test('a Start runs the project\'s own start hook with the prompt and the picks, 
   }
 })
 
-test('a folder is on the list only when a person adds it: the daemon does not add its own start folder, so a removed project stays removed', async () => {
+test('the dashboard adds no folder by itself, not even its own start folder, so a removed project stays removed', async () => {
   const cwd = await tmpWorkspace() // activated, as a project that was added and then removed still is
   const env = await configEnv(cwd)
   const ac = new AbortController()
@@ -242,3 +242,32 @@ test('a folder is on the list only when a person adds it: the daemon does not ad
   }
 })
 
+test('the folder the caller names is added once the dashboard listens, as Add project adds it; started again inside it, nothing is added', async () => {
+  const folder = await realpath(await mkdtemp(join(tmpdir(), 'openagent-daemon-add-')))
+  const cfg = await realpath(await mkdtemp(join(tmpdir(), 'openagent-daemon-add-cfg-')))
+  // The add's git reads the process's own environment, and a new folder's first commit needs an author.
+  const env = { XDG_CONFIG_HOME: cfg, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' }
+  const before = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]))
+  Object.assign(process.env, env)
+  await mkdir(join(folder, 'src'))
+  const added: string[] = []
+  try {
+    // Aborted as soon as it listens: the add comes before the daemon waits, so it has run once it is done.
+    for (const project of [folder, join(folder, 'src')]) {
+      const ac = new AbortController()
+      const { done } = await startDaemon(cfg, { port: 0, signal: ac.signal, env, project, onProjectAdded: path => added.push(path) })
+      ac.abort()
+      await done
+    }
+    assert.deepEqual(added, [folder])
+    assert.deepEqual((await listProjects(undefined, env)).map(project => project.path), [folder])
+    assert.match(await readFile(join(folder, OPENAGENT_DIR, 'hooks.yml'), 'utf8'), /^start: agent-runner /m, 'added with the hook lines Add project writes')
+  } finally {
+    for (const [key, value] of Object.entries(before)) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+    await rm(folder, { recursive: true, force: true })
+    await rm(cfg, { recursive: true, force: true })
+  }
+})
