@@ -17,6 +17,7 @@
 - Create tickets/2026-10-18_base-ui-rename-warnings.plan.md
 - Create tickets/2026-10-18_people-on-shared-computer.plan.md
 - Create tickets/2026-10-18_project-select-same-names-first-reads.plan.md
+- Create tickets/2026-10-18_skills-card-as-plugin.plan.md
 
 
 ## Priority 4
