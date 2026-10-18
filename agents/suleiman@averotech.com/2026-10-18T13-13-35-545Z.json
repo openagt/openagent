@@ -1,15 +1,27 @@
 {
   "id": "2026-10-18T13-13-35-545Z",
   "startedAt": "2026-10-18T13:13:18.412Z",
-  "status": "running",
+  "endedAt": "2026-10-18T13:16:08.996Z",
+  "status": "done",
   "intent": "/update-tickets",
+  "title": "Update Tickets Command",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "branch": "agent-2026-10-18T13-13-35-545Z",
+  "cost": 0.35324500000000003,
+  "contextTokens": 35152,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
-      "publish": "commit"
+      "pid": 63615,
+      "publish": "commit",
+      "baseCommit": "5ac306b4860521f54d66d09ff19d8f024627a8ce"
     },
-    "host": "Suleimans-MacBook-Pro.local"
+    "pid": 63615,
+    "host": "Suleimans-MacBook-Pro.local",
+    "baseCommit": "5ac306b4860521f54d66d09ff19d8f024627a8ce",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/gemstack/.branches/agent-2026-10-18T13-13-35-545Z",
+    "sessionId": "73afccc5-fc63-47b5-8aad-13e344096da6"
   }
 }
