@@ -259,7 +259,7 @@ describe('the project select (#1513)', () => {
     expect(url()).toBe(`/logs?project=${OTHER.id}`)
     expect(screen.queryByText(/the settings dialog/)).toBeNull()
     fireEvent.click(await screen.findByText('site ran'))
-    expect(url()).toBe(`/${OTHER.id}/s3?project=${OTHER.id}`)
+    expect(url()).toBe(`/${OTHER.id}/s3`)
   })
 
   test("a jump to another project's agent names it at once, before that project's agents are read", async () => {
@@ -268,7 +268,8 @@ describe('the project select (#1513)', () => {
     answers.set('onAgents', (id: unknown) => (id === OTHER.id ? new Promise(() => {}) : []))
     render(<App />)
     fireEvent.click(await screen.findByText('site ran'))
-    expect(url()).toBe(`/${OTHER.id}/s3`)
+    // All projects stay shown there.
+    expect(url()).toBe(`/${OTHER.id}/s3?all`)
     await waitFor(() => expect(document.querySelector('button[aria-label="Session actions"][title="site ran"]')).toBeTruthy())
   })
 
@@ -277,17 +278,22 @@ describe('the project select (#1513)', () => {
     window.history.replaceState(null, '', `/?project=${OTHER.id}`)
     render(<App />)
     fireEvent.click(await screen.findByText('New agent'))
-    expect(url()).toBe(`/${OTHER.id}?project=${OTHER.id}`)
+    expect(url()).toBe(`/${OTHER.id}`)
     expect(await screen.findByText('the launcher of site')).toBeTruthy()
     await pick('site', /app/)
-    expect(url()).toBe(`/${PROJECT.id}?project=${PROJECT.id}`)
+    expect(url()).toBe(`/${PROJECT.id}`)
     await pick('app', /All projects/)
+    expect(url()).toBe(`/${PROJECT.id}?all`)
+    expect(await screen.findByRole('button', { name: 'Project: All projects' })).toBeTruthy()
+    // Back returns to the launcher with its project picked.
+    window.history.back()
+    expect(await screen.findByRole('button', { name: 'Project: app' })).toBeTruthy()
     expect(url()).toBe(`/${PROJECT.id}`)
   })
 
   test('picking another project on an agent\'s page goes to the Overview; on a module page it drops the page\'s own path', async () => {
     answerTwo()
-    window.history.replaceState(null, '', `/${OTHER.id}/s3`)
+    window.history.replaceState(null, '', `/${OTHER.id}/s3?all`)
     render(<App />)
     // All projects show, on a project's own page too: the agent list is every project's.
     expect(await screen.findByText('app ran')).toBeTruthy()

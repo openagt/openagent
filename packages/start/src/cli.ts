@@ -128,9 +128,8 @@ async function runForegroundDaemonCmd(args: CliArgs, io: CliIO): Promise<number>
         ? {
             project,
             onProject: (started: { id: string; path: string; added: boolean }) => {
-              // Its page, with the project picked in the sidebar too.
-              const id = encodeURIComponent(started.id)
-              const page = `${url}/${id}?project=${id}`
+              // Its page, which picks the project in the sidebar too.
+              const page = `${url}/${encodeURIComponent(started.id)}`
               if (started.added) io.out(`◆ project added: ${started.path}`)
               io.out(`◆ project: ${page}`)
               openInBrowser(page)

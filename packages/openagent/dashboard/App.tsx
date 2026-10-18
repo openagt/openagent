@@ -70,9 +70,10 @@ const EMPTY_RECENT: RecentAgent[] = []
 // bookmark it, open two side by side. A refresh returns to the same project for free, which is
 // what the remembered-project state (#475) was for.
 //
-// The project select at the top of the sidebar (#1513) is in the URL too, as `?project=`: the one
-// project every page shows, or none for all of them. It filters what the pages show; it is not a
-// page of its own, so it rides along on every navigation.
+// The project select at the top of the sidebar (#1513) is in the URL too: the one project every page
+// shows, or none for all of them. It filters what the pages show; it is not a page of its own, so it
+// rides along on every navigation. A project's own pages pick their project unless `?all` is there;
+// every other page names the pick as `?project=`.
 export function App() {
   const { route, go: navigate } = useRoute()
   const { projectId, agentId } = route
@@ -391,10 +392,11 @@ export function App() {
           toggleContext={toggleContext}
           onOpenAgent={selectAgentInProject}
           errors={project?.errors}
-          // The project is off the list: read the list again and leave its page for the Overview.
+          // The project is off the list: read the list again and leave its page for the Overview of
+          // every project, since the one it was picked as is gone.
           onProjectRemoved={() => {
             setProjectsKey(k => k + 1)
-            showDashboard()
+            navigate({ projectId: null, agentId: null })
           }}
           // A skill written or deleted gives or takes a page: read the projects and their modules again now.
           onSkillsChanged={() => setProjectsKey(k => k + 1)}
