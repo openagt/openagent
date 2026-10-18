@@ -1,12 +1,14 @@
 {
   "id": "2026-10-13T00-23-42-689Z",
   "startedAt": "2026-10-13T00:23:42.769Z",
-  "status": "running",
+  "endedAt": "2026-10-18T13:16:33.198Z",
+  "status": "done",
   "intent": "ask me some question",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
   "branch": "agent-2026-10-13T00-23-42-689Z",
-  "cost": 0.07623780000000001,
+  "cost": 0.2246554,
+  "contextTokens": 19335,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
