@@ -19,6 +19,7 @@
 
 
 ## Priority 3
+- [Project dropdown](tickets/2026-08-05_project-dropdown-multiselect.md)
 
 
 ## Priority 2
