@@ -687,6 +687,16 @@ describe('where the agent runs, for the chip beside its name', () => {
     expect(screen.getByTestId('bar-runs-on').textContent).toBe('rom-thinkpad-x280')
   })
 
+  test('a run of a computer that is no saved machine is only read: in place of the message box, a line says where to continue it', () => {
+    const { rerender } = render(view({ card: { status: 'done' as const, host: 'rom-thinkpad-x280', otherHost: true } }))
+    expect(screen.getByRole('note').textContent).toBe('This run is on rom-thinkpad-x280. Continue it there.')
+    expect(screen.queryByTestId('composer-live')).toBeNull()
+    // This computer's own run, and one on a saved machine, keep their box.
+    rerender(view({ card: { status: 'done' as const, host: 'this-mac' } }))
+    expect(screen.getByTestId('composer-live')).toBeTruthy()
+    expect(screen.queryByRole('note')).toBeNull()
+  })
+
   test('on a page opened from somewhere else, this machine goes by the name the page was reached at', () => {
     const page = (globalThis as unknown as { jsdom: { reconfigure(to: { url: string }): void } }).jsdom
     const own = window.location.href

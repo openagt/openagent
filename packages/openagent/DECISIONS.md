@@ -342,6 +342,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   can be answered, and the agent reads words, not ids.
 - Stop is a signal to the process the run's card names, whoever runs it. Picked over a
   message to the run: a stop that has to be read is not a stop.
+- A run another computer started, which is no saved machine, is only read here: in place
+  of the message box a line says where it runs. Picked over a box that continued it here,
+  which moved the run to this computer under its id, with this computer's logins and none
+  of its conversation. A press that continues it as a new run here can come later.
 
 ## A run's record
 - One place: a run's card and diary in its own checkout while it works, and, once it has
