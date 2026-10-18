@@ -8,6 +8,10 @@
   "driver": "claude-code",
   "model": "claude-opus-5-5",
   "branch": "agent-2026-10-18T13-46-28-291Z",
+  "pr": {
+    "number": 2145,
+    "url": "https://github.com/openagt/openagent/pull/2145"
+  },
   "cost": 1.7012451999999998,
   "contextTokens": 98718,
   "caller": {
