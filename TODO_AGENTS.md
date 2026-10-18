@@ -8,7 +8,6 @@
 
 
 ## Priority 5
-- Create tickets/2026-10-09_pr-comment-resumes-agent.plan.md
 - Create tickets/2026-10-11_reach-local-machine-without-vps.plan.md
 - Create tickets/2026-10-18_base-ui-rename-warnings.plan.md
 - Create tickets/2026-10-18_people-on-shared-computer.plan.md
