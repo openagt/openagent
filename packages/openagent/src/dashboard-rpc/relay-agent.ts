@@ -14,6 +14,9 @@ export function asArrived<T>(call: () => Promise<T>): Promise<T> {
   return arrived.run(true, call)
 }
 
+/** Whether the call being run came in from another computer. */
+export const isArrived = (): boolean => arrived.getStore() === true
+
 /** A call that only reads: answered from what this computer holds when the machine cannot be asked. */
 const isRead = (fn: string): boolean => fn.startsWith('on') || fn === 'readModule'
 /** What a read answers of a run it does not know: nothing, or an empty list. */

@@ -418,6 +418,14 @@ export function AgentView({
             show={say}
             state={workState}
           />
+          {card?.otherHost && card.host ? (
+            // A run another computer started, which is no saved machine, is only read here: a
+            // message would continue it on this computer, under its id, with this computer's
+            // logins and none of its conversation.
+            <p role="note" className="rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground">
+              {`This run is on ${card.host}. Continue it there.`}
+            </p>
+          ) : (
           <AgentComposer
             projectId={projectId}
             agentId={agentId}
@@ -430,6 +438,7 @@ export function AgentView({
             model={underBox}
             {...(window !== undefined ? { context: <ContextCircle used={card?.contextTokens ?? 0} size={window} /> } : {})}
           />
+          )}
         </>
       }
     >

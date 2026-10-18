@@ -4,7 +4,7 @@ import { bridgeQuestions } from '../dashboard/bridge-store.js'
 import { openInApp, type OpenTarget, type OpenResult } from '../dashboard/open-in-app.js'
 import { contextBridgeBrowser, contextPreferences, contextStartAgent, resolveProjectPath, resolveAgentPath } from './context.js'
 import type { BridgeBrowserAction } from '../bridge-browser.js'
-import { relayOr } from './relay-agent.js'
+import { isArrived, relayOr } from './relay-agent.js'
 import { hostname } from 'node:os'
 import { findAgent, isPidAlive, isRunId, loadAgentEvents, projectRuns, readLiveMetas, type AgentMeta } from '../store/index.js'
 import { withAgentLock } from '../agent-locks.js'
@@ -59,6 +59,18 @@ export async function sendStop(projectId: string, agentId?: string): Promise<voi
 }
 
 /**
+ * Why a run is not continued from here: one another computer started, which is no saved machine,
+ * is only read. Continued here it would move to this computer under its id, with this
+ * computer's logins and none of its conversation. A call another computer passed on was sent
+ * to the run's own computer already, and is not asked.
+ */
+async function startedElsewhere(cwd: string, agentId: string): Promise<SteerResult | undefined> {
+  if (isArrived()) return undefined
+  const host = (await findAgent(cwd, agentId).catch(() => undefined))?.host
+  return host !== undefined && host !== hostname() ? { ok: false, error: `This run is on ${host}. Continue it there.` } : undefined
+}
+
+/**
  * Answer the question a run stopped on (#304, #1774). `pick` is one option id, or the chosen
  * subset of a multi-select; the answer handed to the run is the chosen labels, read off the
  * question as the run's own diary holds it, so only what the agent offered can be answered.
@@ -73,6 +85,8 @@ export async function sendChoice(projectId: string, id: string, pick: string | s
     const labels = question.options.filter(option => picked.includes(option.id)).map(option => option.label)
     if (labels.length !== picked.length) return { ok: false, error: 'every pick must be one of the question\'s options' }
     if (!question.multi && labels.length !== 1) return { ok: false, error: 'pick exactly one option' }
+    const elsewhere = await startedElsewhere(cwd, agentId)
+    if (elsewhere) return elsewhere
     return sayToRun(cwd, agentId, { kind: 'answer', question: question.title, answer: labels.length ? labels.join(', ') : '(none)' })
   }, { ok: false, error: 'could not reach the machine' })
 }
@@ -111,7 +125,7 @@ export async function sendMessage(projectId: string, text: string, agentId?: str
   return relayOr(agentId, 'sendMessage', [projectId, text, agentId], async (): Promise<SteerResult> => {
     const cwd = await resolveProjectPath(projectId)
     if (!cwd || !agentId || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
-    return sayToRun(cwd, agentId, { kind: 'message', text: message })
+    return (await startedElsewhere(cwd, agentId)) ?? sayToRun(cwd, agentId, { kind: 'message', text: message })
   }, { ok: false, error: 'could not reach the machine' })
 }
 
