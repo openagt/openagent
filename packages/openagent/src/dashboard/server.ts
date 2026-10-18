@@ -49,7 +49,7 @@ export interface DashboardOptions {
   models: ModelsSource
   /** What a project currently suffers from (#1500), for the project list to carry. */
   projectErrors: ProjectErrorsReader
-  /** The daemon's own bridge browser (#1332): its status, and the show/hide/restart the settings page asks for. */
+  /** The daemon's own bridge browser (#1332): its status, and the show/hide/restart Settings asks for. */
   bridgeBrowser: BridgeBrowserOwner
   /**
    * Serve the new dashboard bundle (#405) from this directory — the built SPA

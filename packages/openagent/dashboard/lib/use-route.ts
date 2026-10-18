@@ -34,7 +34,8 @@ export function useRoute(): {
   route: Route
   /** Navigate to `next`. Replaces the current history entry when `replace` is set — for a
    *  correction, not a step you should be able to go Back to. Keeps what the page mirrored into
-   *  the query when `keepQuery` is set — for a change of the picked project alone (#1513). */
+   *  the query when `keepQuery` is set — for a change of the picked project alone (#1513), or
+   *  Settings opening or closing over the page. */
   go: (next: Route, options?: { replace?: boolean; keepQuery?: boolean }) => void
 } {
   const current = useSyncExternalStore(subscribe, currentUrl, () => '/')

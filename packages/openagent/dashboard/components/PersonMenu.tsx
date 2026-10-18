@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Settings } from 'lucide-react'
 import { onPerson, type Person } from '../rpc/person.js'
 import { useLoaded } from '../lib/use-async.js'
-import { cn } from '../lib/utils.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { ThemeSubmenu } from './ThemeSubmenu.js'
 import { NotificationsSubmenu } from './NotificationsSubmenu.js'
@@ -34,17 +33,13 @@ function Avatar({ person }: { person: Person | null }) {
   )
 }
 
-export function PersonMenu({ atSettings, onSettings }: { atSettings?: boolean | undefined; onSettings: () => void }) {
+export function PersonMenu({ onSettings }: { onSettings: () => void }) {
   const person = useLoaded<Person | null>(() => onPerson().catch(() => null), null, [])
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={person ? `${person.name}: settings` : 'Settings'}
-        aria-current={atSettings ? 'page' : undefined}
-        className={cn(
-          'flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring data-[popup-open]:bg-sidebar-accent',
-          atSettings && 'bg-sidebar-accent text-sidebar-accent-foreground',
-        )}
+        className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring data-[popup-open]:bg-sidebar-accent"
       >
         <Avatar person={person} />
         <span className="min-w-0 flex-1 truncate">{person ? firstName(person.name) : ''}</span>

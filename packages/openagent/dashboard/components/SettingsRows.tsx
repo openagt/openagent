@@ -1,27 +1,27 @@
 import type { ReactNode } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
 import { cn } from '../lib/utils.js'
 
-// The Settings page's building blocks (#958): a section, a row, a row picked from a list. The page's
-// own sections are made of them, and so is a section a module brings (`@openagt/dashboard/module` exports
-// them), so every section of the page looks alike.
+// Settings' building blocks (#958): an entry's settings, a row, a row picked from a list. The
+// dashboard's own entries are made of them, and so is an entry a module brings (`@openagt/dashboard/module`
+// exports them), so every entry looks alike.
 
-/** One section of the Settings page: a titled card of rows, with what it offers as a whole (`action`, a button) beside its title. */
-export function SettingsSection({ title, description, action, children }: { title: string; description?: string; action?: ReactNode; children: ReactNode }) {
+/**
+ * An entry's settings: what they are about as a whole (`description`) and what the entry offers as
+ * a whole (`action`, a button) over its rows, a line between each. No card around them: the dialog
+ * is their frame. The entry's title is Settings' own, over it.
+ */
+export function SettingsSection({ description, action, children }: { description?: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <Card>
-      <CardHeader className={cn(action !== undefined && 'flex flex-row items-start justify-between gap-3')}>
-        <div className="flex min-w-0 flex-col gap-1">
-          <CardTitle>{title}</CardTitle>
-          {description && <p className="text-sm text-muted-foreground">{description}</p>}
+    <div className="space-y-4">
+      {(description !== undefined || action !== undefined) && (
+        <div className="flex items-start justify-between gap-3">
+          {description !== undefined && <p className="text-sm text-muted-foreground">{description}</p>}
+          {action !== undefined && <div className="ml-auto shrink-0">{action}</div>}
         </div>
-        {action !== undefined && <div className="shrink-0">{action}</div>}
-      </CardHeader>
-      <CardContent>
-        <div className="divide-y divide-border">{children}</div>
-      </CardContent>
-    </Card>
+      )}
+      <div className="divide-y divide-border">{children}</div>
+    </div>
   )
 }
 

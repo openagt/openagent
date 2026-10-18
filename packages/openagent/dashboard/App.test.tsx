@@ -19,7 +19,10 @@ vi.mock('./lib/rpc.js', () => ({
 
 // Settings and a project's launcher read a dozen things of their own; these tests are about the
 // shell around them, so each is a line naming itself.
-vi.mock('./components/SettingsPage.js', () => ({ SettingsPage: () => createElement('p', null, 'the settings page') }))
+vi.mock('./components/SettingsDialog.js', () => ({
+  SettingsDialog: ({ entry, onEntry, onClose }: { entry: string; onEntry: (id: string) => void; onClose: () => void }) =>
+    createElement('div', null, createElement('p', null, `the settings dialog on '${entry}'`), createElement('button', { onClick: () => onEntry('agent') }, 'to Agent'), createElement('button', { onClick: onClose }, 'shut the dialog')),
+}))
 vi.mock('./components/ProjectHome.js', () => ({
   ProjectHome: ({ projectName, onProjectRemoved }: { projectName?: string; onProjectRemoved?: () => void }) =>
     createElement('p', null, `the launcher of ${projectName}`, createElement('button', { onClick: onProjectRemoved }, 'remove the project')),
@@ -229,22 +232,32 @@ describe('the project select (#1513)', () => {
     expect(document.title).toBe('(1) site — OpenAgent')
   })
 
-  test('the pick rides along to a module page and Settings, and its row opens that project\'s agent', async () => {
+  test('the pick rides along to a module page and Settings over it, and its row opens that project\'s agent', async () => {
     answerTwo()
     window.history.replaceState(null, '', `/?project=${OTHER.id}`)
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'Logs' }))
     expect(url()).toBe(`/logs?project=${OTHER.id}`)
     expect(await screen.findByText('runs of site')).toBeTruthy()
-    // The sidebar marks the page that is open: the module's row, then the person's row that opens
-    // Settings, never both. The Overview row's name carries its Human Queue count here, and the
-    // person's row ends in "settings", hence the patterns.
+    // The sidebar marks the page that is open, also with Settings open over it. The Overview row's
+    // name carries its Human Queue count here, and the person's row ends in "settings", hence the patterns.
     const marked = () => ['Overview', 'Logs', 'Settings'].filter(name => screen.getByRole('button', { name: name === 'Settings' ? /settings$/i : new RegExp(`^${name}`) }).getAttribute('aria-current') === 'page')
     expect(marked()).toEqual(['Logs'])
     fireEvent.click(screen.getByRole('button', { name: /settings$/i }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }))
-    expect(url()).toBe(`/settings?project=${OTHER.id}`)
-    expect(marked()).toEqual(['Settings'])
+    expect(url()).toBe(`/logs?project=${OTHER.id}&settings=`)
+    expect(await screen.findByText("the settings dialog on ''")).toBeTruthy()
+    expect(screen.getByText('runs of site')).toBeTruthy()
+    expect(marked()).toEqual(['Logs'])
+    // Another entry replaces the address, so Back leaves Settings rather than stepping through it.
+    const steps = window.history.length
+    fireEvent.click(screen.getByRole('button', { name: 'to Agent' }))
+    expect(url()).toBe(`/logs?project=${OTHER.id}&settings=agent`)
+    expect(window.history.length).toBe(steps)
+    // Closed, the page under it is as it was.
+    fireEvent.click(screen.getByRole('button', { name: 'shut the dialog' }))
+    expect(url()).toBe(`/logs?project=${OTHER.id}`)
+    expect(screen.queryByText(/the settings dialog/)).toBeNull()
     fireEvent.click(await screen.findByText('site ran'))
     expect(url()).toBe(`/${OTHER.id}/s3?project=${OTHER.id}`)
   })
@@ -429,9 +442,8 @@ describe('the shell on a phone', () => {
       // Settings is in the person's menu at the sidebar's foot.
       fireEvent.click(await screen.findByRole('button', { name: /settings$/i }))
       fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }))
-      expect(await screen.findByText('the settings page')).toBeTruthy()
+      expect(await screen.findByText("the settings dialog on ''")).toBeTruthy()
       await waitFor(() => expect(screen.queryByRole('button', { name: 'Overview' })).toBeNull())
-      expect(screen.getByText('Settings').tagName).toBe('SPAN')
 
       // The launcher has a top row of its own, which keeps its corner free for the button.
       fireEvent.click(screen.getByRole('button', { name: 'Open the menu' }))

@@ -65,7 +65,7 @@ test('settings written in the dashboard read back, and only what the dashboard k
   const world = await makeWorld()
   const rpc = world.rpc
   try {
-    // The Settings page: patch your settings and read them back. The picks a Start hands to the
+    // Settings: patch your settings and read them back. The picks a Start hands to the
     // project's start hook (the coding agent, the model) are among them.
     const patched = await rpc(patchPreferences)({ driver: 'codex', model: 'gpt-5-e2e' })
     assert.equal(patched.ok, true)

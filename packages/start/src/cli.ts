@@ -26,7 +26,7 @@ Options:
   -v, --version          Print the version.
 
 The dashboard listens on this computer only. A phone, or another computer's OpenAgent, gets in
-from its Settings page: Devices.
+from Settings › Devices.
 
 Everything else is the dashboard: it shows a project's runs from their files, and starts one
 through the project's own start hook (.openagent/hooks.yml), which names the tool that runs it.`

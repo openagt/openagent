@@ -40,11 +40,17 @@ describe('parseRoute', () => {
     expect(parseRoute('/my-repo-a1b2/tickets')).toEqual({ projectId: 'my-repo-a1b2', agentId: 'tickets' })
   })
 
-  it('reads the settings page, which belongs to no project (#958)', () => {
-    expect(parseRoute('/settings')).toEqual({ view: 'settings', projectId: null, agentId: null })
-    // Trailing slash and stray segments are the same page, like every other route.
-    expect(parseRoute('/settings/')).toEqual({ view: 'settings', projectId: null, agentId: null })
-    expect(parseRoute('/settings/anything')).toEqual({ view: 'settings', projectId: null, agentId: null })
+  it('reads the Settings dialog over any page, by its entry', () => {
+    expect(parseRoute('/?settings=agent')).toEqual({ projectId: null, agentId: null, settings: 'agent' })
+    expect(parseRoute('/?settings=')).toEqual({ projectId: null, agentId: null, settings: '' })
+    expect(parseRoute('/app-a1/run-1?settings=machines')).toEqual({ projectId: 'app-a1', agentId: 'run-1', settings: 'machines' })
+    expect(parseRoute('/logs/x?settings=agent')).toEqual({ projectId: null, agentId: null, page: 'logs', pagePath: ['x'], settings: 'agent' })
+  })
+
+  it('reads the old Settings page\'s address as the dialog over the Overview (#958)', () => {
+    expect(parseRoute('/settings')).toEqual({ projectId: null, agentId: null, settings: '' })
+    expect(parseRoute('/settings/')).toEqual({ projectId: null, agentId: null, settings: '' })
+    expect(parseRoute('/settings/machines')).toEqual({ projectId: null, agentId: null, settings: 'machines' })
   })
 
   it('leaves every other first segment a project, so only the reserved word is taken (#958)', () => {
@@ -70,9 +76,9 @@ describe('formatRoute', () => {
     expect(formatRoute({ projectId: 'a b', agentId: 'c/d' })).toBe('/a%20b/c%2Fd')
   })
 
-  it('writes the settings page, and it outranks a stale project id (#958)', () => {
-    expect(formatRoute({ view: 'settings', projectId: null, agentId: null })).toBe('/settings')
-    expect(formatRoute({ view: 'settings', projectId: 'my-repo', agentId: 'run-1' })).toBe('/settings')
+  it('writes the Settings dialog after the page it is open over', () => {
+    expect(formatRoute({ projectId: null, agentId: null, settings: '' })).toBe('/?settings=')
+    expect(formatRoute({ projectId: 'my-repo', agentId: 'run-1', settings: 'agent' })).toBe('/my-repo/run-1?settings=agent')
   })
 
   it('round-trips', () => {
@@ -81,7 +87,8 @@ describe('formatRoute', () => {
       { projectId: 'my-repo', agentId: null },
       { projectId: 'my-repo', agentId: 'run-1' },
       { projectId: 'a b', agentId: 'c/d' },
-      { view: 'settings' as const, projectId: null, agentId: null },
+      { projectId: null, agentId: null, settings: '' },
+      { projectId: 'my-repo', agentId: 'run-1', settings: 'agent' },
       { projectId: null, agentId: null, page: 'tickets', pagePath: ['my-repo', '2026-07-20_thing.md', 'plan'] },
       { projectId: null, agentId: null, page: 'logs', pagePath: [] },
       { projectId: null, agentId: null, page: 'logs', pagePath: ['a b', 'c'] },
@@ -93,9 +100,9 @@ describe('formatRoute', () => {
   it('a first segment with no dash names a module\'s page, never a project (#1774)', () => {
     expect(parseRoute('/logs')).toEqual({ projectId: null, agentId: null, page: 'logs', pagePath: [] })
     expect(parseRoute('/logs/run-1')).toEqual({ projectId: null, agentId: null, page: 'logs', pagePath: ['run-1'] })
-    // A project id always has its `-<hash>`, and the one view word stays a view.
+    // A project id always has its `-<hash>`, and the one reserved word opens Settings.
     expect(parseRoute('/my-repo')).toEqual({ projectId: 'my-repo', agentId: null })
-    expect(parseRoute('/settings')).toEqual({ view: 'settings', projectId: null, agentId: null })
+    expect(parseRoute('/settings')).toEqual({ projectId: null, agentId: null, settings: '' })
     expect(formatRoute({ projectId: null, agentId: null, page: 'logs' })).toBe('/logs')
   })
 })
@@ -104,7 +111,8 @@ describe('the picked project (#1513)', () => {
   it('reads `?project=` on the Overview, a module\'s page and Settings', () => {
     expect(parseRoute('/?project=app-a1')).toEqual({ projectId: null, agentId: null, scope: 'app-a1' })
     expect(parseRoute('/logs/x?project=app-a1')).toEqual({ projectId: null, agentId: null, page: 'logs', pagePath: ['x'], scope: 'app-a1' })
-    expect(parseRoute('/settings?project=app-a1')).toEqual({ view: 'settings', projectId: null, agentId: null, scope: 'app-a1' })
+    expect(parseRoute('/settings?project=app-a1')).toEqual({ projectId: null, agentId: null, settings: '', scope: 'app-a1' })
+    expect(parseRoute('/?project=app-a1&settings=agent')).toEqual({ projectId: null, agentId: null, scope: 'app-a1', settings: 'agent' })
   })
 
   it('reads none when the parameter is absent or empty', () => {
@@ -120,7 +128,7 @@ describe('the picked project (#1513)', () => {
 
   it('writes it after the path, encoded, and round-trips', () => {
     expect(formatRoute({ projectId: null, agentId: null, scope: 'a b-1' })).toBe('/?project=a%20b-1')
-    expect(formatRoute({ view: 'settings', projectId: 'stale-1', agentId: null, scope: 'app-a1' })).toBe('/settings?project=app-a1')
+    expect(formatRoute({ projectId: null, agentId: null, scope: 'app-a1', settings: 'agent' })).toBe('/?project=app-a1&settings=agent')
     for (const route of [
       { projectId: null, agentId: null, scope: 'app-a1' },
       { projectId: 'app-a1', agentId: 'run-1', scope: 'app-a1' },
@@ -133,6 +141,9 @@ describe('the picked project (#1513)', () => {
     expect(keepPageQuery('/tickets?project=app-a1', '?q=races&project=old-b2')).toBe('/tickets?q=races&project=app-a1')
     expect(keepPageQuery('/tickets', '?q=races&project=old-b2')).toBe('/tickets?q=races')
     expect(keepPageQuery('/', '?project=old-b2')).toBe('/')
+    // Settings opening or closing over a page keeps the page's own query, and never a stale entry.
+    expect(keepPageQuery('/tickets?settings=agent', '?q=races')).toBe('/tickets?q=races&settings=agent')
+    expect(keepPageQuery('/tickets', '?q=races&settings=agent')).toBe('/tickets?q=races')
   })
 })
 

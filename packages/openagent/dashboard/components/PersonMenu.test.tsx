@@ -39,12 +39,6 @@ describe('PersonMenu', () => {
     expect(screen.getByText('AL')).toBeTruthy()
   })
 
-  test('the row is marked while Settings is the page open', async () => {
-    onPerson.mockResolvedValue({ name: 'Ada Lovelace' })
-    render(<PersonMenu atSettings onSettings={() => {}} />)
-    expect((await screen.findByRole('button', { name: 'Ada Lovelace: settings' })).getAttribute('aria-current')).toBe('page')
-  })
-
   test('the first name is the first word; a one-word name, a login say, is itself', () => {
     expect(firstName('Suleiman Shahbari')).toBe('Suleiman')
     expect(firstName('  Ada King Lovelace ')).toBe('Ada')

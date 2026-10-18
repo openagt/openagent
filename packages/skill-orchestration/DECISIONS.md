@@ -64,9 +64,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   project's root, hidden from git, written by `orchestration settings`. Picked over the
   dashboard's own settings file, which a skill would have to know, and over the tracked
   repository, where one person's models would be everyone's.
-- The settings are one section of the Settings page, the same on every project: a coding
-  agent and model for simple tasks and for hard tasks, and how many run at once. The section
-  saves them to every project that has the package. Picked over a setting per project.
+- The settings are one entry of Settings, Orchestration, and each project keeps its own: a
+  coding agent and model for simple tasks and for hard tasks, and how many run at once.
+  Settings shows the picked project's; with every project picked, a pick is saved to each
+  and a setting they hold differently reads "Mixed". Picked over one value saved to every
+  project, which hid that each project keeps its own file.
 
 ## The plan and the person's yes
 - The plan is one markdown file beside the main agent's run record on the data branch,

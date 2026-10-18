@@ -49,8 +49,7 @@ export function DashboardPage({
   scope: string | null
 }) {
   const { value: data } = usePolled<DashboardData | null>(onDashboard, null, 5000, [])
-  // Dismissing only hides it here (#958); the settings page keeps it, which is what the
-  // dismiss control says.
+  // Its ✕ hides it (#958), and a switch in Settings › Appearance shows it again.
   const onboardingDismissed = usePreferences().onboardingDismissed ?? false
   const working = (data?.active ?? []).filter(agent => scope === null || agent.projectId === scope)
   const shownProjects = scope === null ? projects : projects.filter(project => project.id === scope)
@@ -59,7 +58,7 @@ export function DashboardPage({
     <ScrollArea className="min-h-0 flex-1">
       <div className="mx-auto max-w-6xl space-y-6 p-6">
         {!onboardingDismissed && (
-          <OnboardingChecklist dismissible onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} />
+          <OnboardingChecklist onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} />
         )}
 
         {/* Usage first (#1139): the one figure that governs everything the agent may do next. */}

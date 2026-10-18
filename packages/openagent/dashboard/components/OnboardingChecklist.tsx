@@ -21,8 +21,11 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 // disk, a granted browser permission — so a step cannot be ticked by clicking it, and a step done
 // outside the dashboard shows up ticked anyway.
 //
-// It renders in two places: the Overview, where it can be dismissed, and the settings page, where
-// it cannot — that is what dismissing it promises you can come back to.
+// It renders at the top of the Overview. Its ✕ hides it, and the "Onboarding on the Overview"
+// switch in Settings › Appearance brings it back: what the ✕ promises.
+
+/** What the ✕ says it does. */
+const HIDE = 'Hide; Settings › Appearance brings it back'
 
 /** One checklist row: what it is, whether it is done, and what to do about it. */
 interface Step {
@@ -43,16 +46,12 @@ interface Step {
 }
 
 export function OnboardingChecklist({
-  dismissible = false,
   onAgentStarted,
   onSelectProject,
 }: {
-  /** The Overview offers to hide it; the settings page always shows it. */
-  dismissible?: boolean
   /**
    * Told about the session a step started, so the shell can land on it (#1169). The project
-   * travels with it: this renders on the Overview and the settings page, neither of which has
-   * one selected. Required, so a new mounting surface cannot quietly drop the navigation.
+   * travels with it: this renders on the Overview, which has none selected. Required, so a new mounting surface cannot quietly drop the navigation.
    */
   onAgentStarted: (projectId: string, intent: string, agentId: string) => void
   /** Where "Configure first, then run" lands (#1507): the launcher of the project the checklist
@@ -194,23 +193,21 @@ export function OnboardingChecklist({
             {doneCount} of {steps.length} set up.
           </p>
         </div>
-        {dismissible && (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => updatePreferences({ onboardingDismissed: true })}
-                  aria-label="Remove, you can resume the onboarding on the settings page"
-                />
-              }
-            >
-              <X className="h-4 w-4" aria-hidden />
-            </TooltipTrigger>
-            <TooltipContent>Remove, you can resume the onboarding on the settings page</TooltipContent>
-          </Tooltip>
-        )}
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => updatePreferences({ onboardingDismissed: true })}
+                aria-label={HIDE}
+              />
+            }
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </TooltipTrigger>
+          <TooltipContent>{HIDE}</TooltipContent>
+        </Tooltip>
       </CardHeader>
       <CardContent>
         <ul className="divide-y divide-border">

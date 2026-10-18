@@ -1,5 +1,5 @@
 // The scheduler's module for the dashboard: the package's `./dashboard` export. It adds the
-// Automations page, the Scheduler section of the Settings page, the Automations card of the Overview,
+// Automations page, the Scheduler entry of Settings, the Automations card of the Overview,
 // the stop line on the usage bar, and, for the pages of other packages, which commands start by themselves. Its data is the `agent-scheduler` command's own, run in each
 // project by the dashboard: `status` to read, `offset`, `switch`, `pace`, `agents` and `publish` to save.
 import { CalendarClock } from 'lucide-react'
@@ -13,7 +13,7 @@ import './dashboard.css'
 export default defineModule({
   pages: [{ segment: 'automations', label: 'Automations', icon: CalendarClock, Page: AutomationsPage }],
   cards: [{ id: 'scheduler', order: 90, Card: SchedulerCard }],
-  settings: [{ id: 'scheduler', order: 20, Section: SchedulerSettings }],
+  settings: [{ id: 'scheduler', title: 'Scheduler', icon: CalendarClock, order: 20, Section: SchedulerSettings }],
   usageLimit: {
     read: async (host, projects) => loosestSpendOffset(await readSchedulers(host, projects)),
     save: saveSpendOffset,

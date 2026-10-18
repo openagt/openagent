@@ -679,12 +679,9 @@ describe('the rail marks the page that is open', () => {
     expect(current()).toEqual([])
   })
 
-  test('with Settings open the person\'s row is the one marked, and the Overview row is not: Settings has no project and no page either', async () => {
+  test("the person's menu opens Settings", async () => {
     const onSettings = vi.fn()
-    renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} pages={PAGES} atSettings onSettings={onSettings} />)
-    expect(current()).toEqual(['Settings'])
-    expect(screen.getByRole('button', { name: 'Overview' }).hasAttribute('aria-current')).toBe(false)
-    // The person's menu still goes there, and the Overview row still goes home.
+    renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} pages={PAGES} onSettings={onSettings} />)
     await screen.findByRole('button', { name: 'Ada Lovelace: settings' })
     fireEvent.click(person())
     fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }))

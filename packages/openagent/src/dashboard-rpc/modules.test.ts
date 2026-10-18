@@ -56,8 +56,8 @@ test('the dashboard\'s modules are every registered project\'s, one per package,
 
     // The computer's modules (the Devices section, the Machines section) come first, and are no project's. Then the built-in modules (Changes, Files, the logs package's), which are every project's, from the first; then the projects' own.
     assert.deepEqual(await onModules(), [
-      { package: '@openagt/remote-access', url: '/_computer-modules/%40openagt%2Fremote-access/dashboard.js', projects: [] },
-      { package: '@openagt/servers', url: '/_computer-modules/%40openagt%2Fservers/dashboard.js', projects: [] },
+      { package: '@openagt/remote-access', url: '/_computer-modules/%40openagt%2Fremote-access/dashboard.js', projects: [], computer: true },
+      { package: '@openagt/servers', url: '/_computer-modules/%40openagt%2Fservers/dashboard.js', projects: [], computer: true },
       { package: '@openagt/changes', url: `/_modules/${projectId(a)}/%40openagt%2Fchanges/dashboard.js`, projects: [projectId(a), projectId(b)] },
       { package: '@openagt/files', url: `/_modules/${projectId(a)}/%40openagt%2Ffiles/dashboard.js`, projects: [projectId(a), projectId(b)] },
       { package: '@openagt/skill-logs', url: `/_modules/${projectId(a)}/%40openagt%2Fskill-logs/dashboard.js`, projects: [projectId(a), projectId(b)] },
@@ -87,8 +87,8 @@ test('with no project added, the computer\'s modules are there and run their own
   try {
     await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
     assert.deepEqual(await onModules(), [
-      { package: '@openagt/remote-access', url: '/_computer-modules/%40openagt%2Fremote-access/dashboard.js', projects: [] },
-      { package: '@openagt/servers', url: '/_computer-modules/%40openagt%2Fservers/dashboard.js', projects: [] },
+      { package: '@openagt/remote-access', url: '/_computer-modules/%40openagt%2Fremote-access/dashboard.js', projects: [], computer: true },
+      { package: '@openagt/servers', url: '/_computer-modules/%40openagt%2Fservers/dashboard.js', projects: [], computer: true },
     ])
     // The door's own command, answering what it keeps for this computer: nobody is in, and it is shut.
     assert.deepEqual(await runComputerCommand('@openagt/remote-access', ['status']), { ok: true, output: { on: false, listening: false, devices: [], lines: [] } })
