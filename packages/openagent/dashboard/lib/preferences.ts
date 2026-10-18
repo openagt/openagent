@@ -1,8 +1,7 @@
-import { useEffect, useSyncExternalStore } from 'react'
+import { createContext, useContext, useEffect, useSyncExternalStore } from 'react'
 import type { CustomPreset, Preferences } from '../../src/index.js'
 import { browserNotifyEnabled, notifyCategoryEnabled } from '../../src/client.js'
 import { onPreferences, patchPreferences, onProjectPresets, saveProjectPresets } from '../rpc/preferences.js'
-import { parseRoute } from './route.js'
 
 // The dashboard's Global options (#410), owned by the daemon and persisted in the same
 // `openagent.json` as the project list — no more localStorage. Loaded once over its RPC
@@ -42,7 +41,13 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-function ensureLoaded(projectId: string | null): void {
+/**
+ * The project whose own page is open (an agent's or its "New agent" page), by id, set by the shell
+ * from the route; null on every other page. Its committed presets are the ones offered.
+ */
+export const OpenProjectContext = createContext<string | null>(null)
+
+function ensureLoaded(): void {
   if (!cache && !loading) {
     loading = onPreferences()
       // `??=`, not `=`: a toggle made while this initial load was in flight already populated
@@ -58,7 +63,6 @@ function ensureLoaded(projectId: string | null): void {
         notify()
       })
   }
-  ensureProjectPresetsLoaded(projectId)
 }
 
 if (typeof window !== 'undefined') {
@@ -94,7 +98,7 @@ function ensureProjectPresetsLoaded(projectId: string | null): void {
  * read them from.
  */
 export function useProjectPresets(): CustomPreset[] {
-  const projectId = typeof window === 'undefined' ? null : parseRoute(window.location.pathname).projectId
+  const projectId = useContext(OpenProjectContext)
   const value = useSyncExternalStore(
     subscribe,
     () => (projectId ? (projectPresets.get(projectId) ?? EMPTY_PRESETS) : EMPTY_PRESETS),
@@ -105,26 +109,15 @@ export function useProjectPresets(): CustomPreset[] {
 }
 
 /**
- * Replace the open project's shared presets, write-through then persist into its `.openagent/`
+ * Replace the shared presets of `projectId`, the open project, write-through then persist into its `.openagent/`
  * (#1025). Best-effort like {@link updatePreferences}: a failed save is not worth surfacing over a
  * preset edit. A no-op when no project is open — there is no repo to commit them to.
  */
-export function saveProjectPresetList(next: CustomPreset[]): void {
-  const projectId = activeProjectId()
+export function saveProjectPresetList(projectId: string | null, next: CustomPreset[]): void {
   if (!projectId) return
   projectPresets.set(projectId, next)
   void saveProjectPresets(projectId, next).catch(() => {})
   notify()
-}
-
-/**
- * The project a write belongs to, read straight off the URL (#784 makes it the selection).
- * `updatePreferences` runs in an event handler rather than a render, so it reads the location
- * instead of a hook: no module state to fall out of step with what the user is looking at.
- */
-function activeProjectId(): string | null {
-  if (typeof window === 'undefined') return null
-  return parseRoute(window.location.pathname).projectId
 }
 
 /**
@@ -176,18 +169,17 @@ export function refreshPreferences(): void {
 
 /** The open project's id, or null on a view with none — for deciding a preset can be shared (#1025). */
 export function useActiveProjectId(): string | null {
-  return typeof window === 'undefined' ? null : parseRoute(window.location.pathname).projectId
+  return useContext(OpenProjectContext)
 }
 
 /** The user preferences in force: loaded once from the daemon and kept in sync across components. */
 export function usePreferences(): Preferences {
-  const projectId = typeof window === 'undefined' ? null : parseRoute(window.location.pathname).projectId
   const preferences = useSyncExternalStore(
     subscribe,
     () => cache ?? EMPTY,
     () => EMPTY,
   )
-  useEffect(() => ensureLoaded(projectId), [projectId])
+  useEffect(() => ensureLoaded(), [])
   return preferences
 }
 

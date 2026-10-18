@@ -15,6 +15,7 @@ export type HostServices = Omit<ModuleHostBase, 'package'>
 export const INERT_HOST_SERVICES: HostServices = {
   openAgent() {},
   openPage() {},
+  pageHref: segment => `/${segment}`,
   async startRun() {
     return { ok: false, error: 'no dashboard to start a run from' }
   },

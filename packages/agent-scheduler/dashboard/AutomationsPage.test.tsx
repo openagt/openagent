@@ -19,7 +19,7 @@ const OTHER = { id: 'p2', name: 'other', gitHost: false }
 function show(host: ModuleHost, projects: ModuleProject[] = [GEMSTACK]) {
   return render(
     <ModuleHostContext.Provider value={host}>
-      <AutomationsPage projects={projects} path={[]} />
+      <AutomationsPage projects={projects} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
 }

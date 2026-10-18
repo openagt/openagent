@@ -1,170 +1,192 @@
 import { describe, it, expect } from 'vitest'
-import { parseRoute, formatRoute, keepPageQuery, pageHref } from './route.js'
+import { parseRoute, formatRoute, keepPageQuery, projectAddresses, NO_PROJECTS, type Route } from './route.js'
+
+// Two projects named `shop` (the second one added gets its id as its address), one named `app`,
+// and one named as a page's word.
+const projects = projectAddresses(['shop-1abc', 'app-a1', 'shop-2def', 'logs-9zz'], ['logs', 'tickets'])
+const parse = (url: string): Route => parseRoute(url, projects)
+const format = (route: Route): string => formatRoute(route, projects)
+
+describe('projectAddresses', () => {
+  it("names a project by its folder's name: its id without the `-<hash>`", () => {
+    expect(projects.addressOf('app-a1')).toBe('app')
+    expect(projects.addressOf('shop-1abc')).toBe('shop')
+    expect(projectAddresses(['my-repo-a1b2'], []).addressOf('my-repo-a1b2')).toBe('my-repo')
+  })
+
+  it('gives the name to the first project added that has it, and its id to the next', () => {
+    expect(projects.addressOf('shop-2def')).toBe('shop-2def')
+    expect(projectAddresses(['shop-2def'], []).addressOf('shop-2def')).toBe('shop')
+  })
+
+  it("gives a name that is a page's word to the page, and its id to the project", () => {
+    expect(projects.addressOf('logs-9zz')).toBe('logs-9zz')
+    expect(projectAddresses(['overview-1a'], []).addressOf('overview-1a')).toBe('overview-1a')
+    expect(projectAddresses(['settings-2b'], []).addressOf('settings-2b')).toBe('settings-2b')
+  })
+
+  it('finds a project by its address and by its id', () => {
+    expect(projects.projectOf('shop')).toBe('shop-1abc')
+    expect(projects.projectOf('shop-1abc')).toBe('shop-1abc')
+    expect(projects.projectOf('shop-2def')).toBe('shop-2def')
+    expect(projects.projectOf('logs')).toBeUndefined()
+    expect(projects.projectOf('nope')).toBeUndefined()
+  })
+
+  it('writes an id it does not know as it is', () => {
+    expect(projects.addressOf('gone-7x')).toBe('gone-7x')
+  })
+})
 
 describe('parseRoute', () => {
-  it('reads the Overview from the root', () => {
-    expect(parseRoute('/')).toEqual({ projectId: null, agentId: null })
-    expect(parseRoute('')).toEqual({ projectId: null, agentId: null })
+  it('reads the Overview of every project from the root', () => {
+    expect(parse('/')).toEqual({ projectId: null, agentId: null })
+    expect(parse('')).toEqual({ projectId: null, agentId: null })
   })
 
-  it('reads a project home', () => {
-    expect(parseRoute('/my-repo-a1b2')).toEqual({ projectId: 'my-repo-a1b2', agentId: null, scope: 'my-repo-a1b2' })
+  it('reads a module page over every project', () => {
+    expect(parse('/logs')).toEqual({ projectId: null, agentId: null, page: 'logs', pagePath: [] })
+    expect(parse('/logs/a%20b/c')).toEqual({ projectId: null, agentId: null, page: 'logs', pagePath: ['a b', 'c'] })
   })
 
-  it('reads a session', () => {
-    expect(parseRoute('/my-repo-a1b2/2026-07-19-1200-ab')).toEqual({
-      projectId: 'my-repo-a1b2',
-      agentId: '2026-07-19-1200-ab',
-      scope: 'my-repo-a1b2',
-    })
+  it("reads a project's New agent page, with the project picked", () => {
+    expect(parse('/app')).toEqual({ projectId: 'app-a1', agentId: null, scope: 'app-a1' })
+    expect(parse('/shop-2def')).toEqual({ projectId: 'shop-2def', agentId: null, scope: 'shop-2def' })
+    expect(parse('/logs-9zz')).toEqual({ projectId: 'logs-9zz', agentId: null, scope: 'logs-9zz' })
   })
 
-  it('ignores a trailing slash and extra segments', () => {
-    expect(parseRoute('/my-repo/run-1/')).toEqual({ projectId: 'my-repo', agentId: 'run-1', scope: 'my-repo' })
-    expect(parseRoute('/my-repo/run-1/whatever')).toEqual({ projectId: 'my-repo', agentId: 'run-1', scope: 'my-repo' })
+  it("reads a project's agent: a second segment that starts with a digit", () => {
+    expect(parse('/app/2026-07-19T12-00-00-000Z')).toEqual({ projectId: 'app-a1', agentId: '2026-07-19T12-00-00-000Z', scope: 'app-a1' })
   })
 
-  it('decodes segments, and keeps a malformed one as typed', () => {
-    expect(parseRoute('/a%20b/c%2Fd')).toEqual({ projectId: 'a b', agentId: 'c/d', scope: 'a b' })
-    expect(parseRoute('/%E0%A4%A')).toEqual({ projectId: '%E0%A4%A', agentId: null, scope: '%E0%A4%A' })
-  })
-
-  it('reads no tickets view: `/tickets` is a module page like any other bare word (#1774)', () => {
-    expect(parseRoute('/tickets')).toEqual({ projectId: null, agentId: null, page: 'tickets', pagePath: [] })
-    expect(parseRoute('/tickets/my-repo-a1b2/2026-07-20_do-the-thing.md/plan')).toEqual({
+  it("reads a project's Overview and its module pages: a second segment that is a word", () => {
+    expect(parse('/app/overview')).toEqual({ projectId: null, agentId: null, scope: 'app-a1' })
+    expect(parse('/app/logs')).toEqual({ projectId: null, agentId: null, page: 'logs', pagePath: [], scope: 'app-a1' })
+    expect(parse('/app/tickets/2026-07-20_do-the-thing.md/plan')).toEqual({
       projectId: null,
       agentId: null,
       page: 'tickets',
-      pagePath: ['my-repo-a1b2', '2026-07-20_do-the-thing.md', 'plan'],
+      pagePath: ['2026-07-20_do-the-thing.md', 'plan'],
+      scope: 'app-a1',
     })
-    // Under a project, `tickets` is an agent id like any other second segment.
-    expect(parseRoute('/my-repo-a1b2/tickets')).toEqual({ projectId: 'my-repo-a1b2', agentId: 'tickets', scope: 'my-repo-a1b2' })
+  })
+
+  it('reads a project named by its id as that project', () => {
+    expect(parse('/app-a1')).toEqual({ projectId: 'app-a1', agentId: null, scope: 'app-a1' })
+    expect(parse('/shop-1abc/logs')).toEqual({ projectId: null, agentId: null, page: 'logs', pagePath: [], scope: 'shop-1abc' })
+  })
+
+  it('reads a first segment no project has and no page can be as a project nobody registered', () => {
+    expect(parse('/gone-7x/1-run')).toEqual({ projectId: 'gone-7x', agentId: '1-run', scope: 'gone-7x' })
+    // A word is a page's, even one no package adds: the page then says so.
+    expect(parse('/gone')).toEqual({ projectId: null, agentId: null, page: 'gone', pagePath: [] })
+  })
+
+  it('ignores a trailing slash and extra segments', () => {
+    expect(parse('/app/1-run/')).toEqual({ projectId: 'app-a1', agentId: '1-run', scope: 'app-a1' })
+    expect(parse('/app/1-run/whatever')).toEqual({ projectId: 'app-a1', agentId: '1-run', scope: 'app-a1' })
+    expect(parse('/app/overview/whatever')).toEqual({ projectId: null, agentId: null, scope: 'app-a1' })
+  })
+
+  it('decodes segments, and keeps a malformed one as typed', () => {
+    expect(parse('/a%20b-1/1%2Fd')).toEqual({ projectId: 'a b-1', agentId: '1/d', scope: 'a b-1' })
+    expect(parse('/%E0%A4%A')).toEqual({ projectId: '%E0%A4%A', agentId: null, scope: '%E0%A4%A' })
   })
 
   it('reads the Settings dialog over any page, by its entry', () => {
-    expect(parseRoute('/?settings=agent')).toEqual({ projectId: null, agentId: null, settings: 'agent' })
-    expect(parseRoute('/?settings=')).toEqual({ projectId: null, agentId: null, settings: '' })
-    expect(parseRoute('/app-a1/run-1?settings=machines')).toEqual({ projectId: 'app-a1', agentId: 'run-1', scope: 'app-a1', settings: 'machines' })
-    expect(parseRoute('/logs/x?settings=agent')).toEqual({ projectId: null, agentId: null, page: 'logs', pagePath: ['x'], settings: 'agent' })
+    expect(parse('/?settings=agent')).toEqual({ projectId: null, agentId: null, settings: 'agent' })
+    expect(parse('/?settings=')).toEqual({ projectId: null, agentId: null, settings: '' })
+    expect(parse('/app/1-run?settings=machines')).toEqual({ projectId: 'app-a1', agentId: '1-run', scope: 'app-a1', settings: 'machines' })
+    expect(parse('/app/logs/x?settings=agent')).toEqual({ projectId: null, agentId: null, page: 'logs', pagePath: ['x'], scope: 'app-a1', settings: 'agent' })
   })
 
-  it('reads the old Settings page\'s address as the dialog over the Overview (#958)', () => {
-    expect(parseRoute('/settings')).toEqual({ projectId: null, agentId: null, settings: '' })
-    expect(parseRoute('/settings/')).toEqual({ projectId: null, agentId: null, settings: '' })
-    expect(parseRoute('/settings/machines')).toEqual({ projectId: null, agentId: null, settings: 'machines' })
+  it("reads the old Settings page's address as the dialog over the Overview (#958)", () => {
+    expect(parse('/settings')).toEqual({ projectId: null, agentId: null, settings: '' })
+    expect(parse('/settings/')).toEqual({ projectId: null, agentId: null, settings: '' })
+    expect(parse('/settings/machines')).toEqual({ projectId: null, agentId: null, settings: 'machines' })
   })
 
-  it('leaves every other first segment a project, so only the reserved word is taken (#958)', () => {
-    // A generated project id is `<name>-<hash>`, so it can never be the bare reserved word —
-    // but anything merely starting with it still has to route to a project.
-    expect(parseRoute('/settings-a1b2')).toEqual({ projectId: 'settings-a1b2', agentId: null, scope: 'settings-a1b2' })
-    expect(parseRoute('/my-settings')).toEqual({ projectId: 'my-settings', agentId: null, scope: 'my-settings' })
+  it('reads `/overview` as the Overview of every project', () => {
+    expect(parse('/overview')).toEqual({ projectId: null, agentId: null })
+  })
+
+  it('names a project by its name only once the projects are known', () => {
+    expect(parseRoute('/app', NO_PROJECTS)).toEqual({ projectId: null, agentId: null, page: 'app', pagePath: [] })
+    expect(parseRoute('/app-a1', NO_PROJECTS)).toEqual({ projectId: 'app-a1', agentId: null, scope: 'app-a1' })
   })
 })
 
 describe('formatRoute', () => {
-  it('writes each route', () => {
-    expect(formatRoute({ projectId: null, agentId: null })).toBe('/')
-    expect(formatRoute({ projectId: 'my-repo', agentId: null, scope: 'my-repo' })).toBe('/my-repo')
-    expect(formatRoute({ projectId: 'my-repo', agentId: 'run-1', scope: 'my-repo' })).toBe('/my-repo/run-1')
+  it('writes each route, the project first by its address', () => {
+    expect(format({ projectId: null, agentId: null })).toBe('/')
+    expect(format({ projectId: null, agentId: null, page: 'logs' })).toBe('/logs')
+    expect(format({ projectId: 'app-a1', agentId: null, scope: 'app-a1' })).toBe('/app')
+    expect(format({ projectId: null, agentId: null, scope: 'app-a1' })).toBe('/app/overview')
+    expect(format({ projectId: null, agentId: null, page: 'logs', scope: 'app-a1' })).toBe('/app/logs')
+    expect(format({ projectId: null, agentId: null, page: 'tickets', pagePath: ['a.md', 'plan'], scope: 'app-a1' })).toBe('/app/tickets/a.md/plan')
+    expect(format({ projectId: 'app-a1', agentId: '1-run', scope: 'app-a1' })).toBe('/app/1-run')
+    expect(format({ projectId: 'shop-2def', agentId: null, scope: 'shop-2def' })).toBe('/shop-2def')
+    expect(format({ projectId: null, agentId: null, page: 'logs', scope: 'logs-9zz' })).toBe('/logs-9zz/logs')
   })
 
   it('has no session without a project', () => {
-    expect(formatRoute({ projectId: null, agentId: 'run-1' })).toBe('/')
+    expect(format({ projectId: null, agentId: '1-run' })).toBe('/')
   })
 
   it('encodes segments', () => {
-    expect(formatRoute({ projectId: 'a b', agentId: 'c/d', scope: 'a b' })).toBe('/a%20b/c%2Fd')
+    expect(format({ projectId: 'a b-1', agentId: '1/d', scope: 'a b-1' })).toBe('/a%20b-1/1%2Fd')
   })
 
   it('writes the Settings dialog after the page it is open over', () => {
-    expect(formatRoute({ projectId: null, agentId: null, settings: '' })).toBe('/?settings=')
-    expect(formatRoute({ projectId: 'my-repo', agentId: 'run-1', scope: 'my-repo', settings: 'agent' })).toBe('/my-repo/run-1?settings=agent')
+    expect(format({ projectId: null, agentId: null, settings: '' })).toBe('/?settings=')
+    expect(format({ projectId: 'app-a1', agentId: '1-run', scope: 'app-a1', settings: 'agent' })).toBe('/app/1-run?settings=agent')
+    expect(format({ projectId: null, agentId: null, scope: 'app-a1', settings: 'agent' })).toBe('/app/overview?settings=agent')
   })
 
   it('round-trips', () => {
     for (const route of [
       { projectId: null, agentId: null },
-      { projectId: 'my-repo', agentId: null, scope: 'my-repo' },
-      { projectId: 'my-repo', agentId: 'run-1', scope: 'my-repo' },
-      { projectId: 'a b', agentId: 'c/d', scope: 'a b' },
+      { projectId: 'app-a1', agentId: null, scope: 'app-a1' },
+      { projectId: 'app-a1', agentId: '1-run', scope: 'app-a1' },
+      { projectId: 'app-a1', agentId: '1-run' },
+      { projectId: 'shop-2def', agentId: '1-run', scope: 'shop-2def' },
+      { projectId: 'a b-1', agentId: '1/d', scope: 'a b-1' },
       { projectId: null, agentId: null, settings: '' },
-      { projectId: 'my-repo', agentId: 'run-1', scope: 'my-repo', settings: 'agent' },
-      { projectId: null, agentId: null, page: 'tickets', pagePath: ['my-repo', '2026-07-20_thing.md', 'plan'] },
+      { projectId: 'app-a1', agentId: '1-run', scope: 'app-a1', settings: 'agent' },
+      { projectId: null, agentId: null, scope: 'app-a1' },
+      { projectId: null, agentId: null, page: 'tickets', pagePath: ['2026-07-20_thing.md', 'plan'], scope: 'app-a1' },
       { projectId: null, agentId: null, page: 'logs', pagePath: [] },
       { projectId: null, agentId: null, page: 'logs', pagePath: ['a b', 'c'] },
+      { projectId: null, agentId: null, page: 'logs', pagePath: [], scope: 'logs-9zz' },
     ]) {
-      expect(parseRoute(formatRoute(route))).toEqual(route)
+      expect(parse(format(route))).toEqual(route)
     }
-  })
-
-  it('a first segment with no dash names a module\'s page, never a project (#1774)', () => {
-    expect(parseRoute('/logs')).toEqual({ projectId: null, agentId: null, page: 'logs', pagePath: [] })
-    expect(parseRoute('/logs/run-1')).toEqual({ projectId: null, agentId: null, page: 'logs', pagePath: ['run-1'] })
-    // A project id always has its `-<hash>`, and the one reserved word opens Settings.
-    expect(parseRoute('/my-repo')).toEqual({ projectId: 'my-repo', agentId: null, scope: 'my-repo' })
-    expect(parseRoute('/settings')).toEqual({ projectId: null, agentId: null, settings: '' })
-    expect(formatRoute({ projectId: null, agentId: null, page: 'logs' })).toBe('/logs')
   })
 })
 
 describe('the picked project (#1513)', () => {
-  it('reads `?project=` on the Overview, a module\'s page and Settings', () => {
-    expect(parseRoute('/?project=app-a1')).toEqual({ projectId: null, agentId: null, scope: 'app-a1' })
-    expect(parseRoute('/logs/x?project=app-a1')).toEqual({ projectId: null, agentId: null, page: 'logs', pagePath: ['x'], scope: 'app-a1' })
-    expect(parseRoute('/settings?project=app-a1')).toEqual({ projectId: null, agentId: null, settings: '', scope: 'app-a1' })
-    expect(parseRoute('/?project=app-a1&settings=agent')).toEqual({ projectId: null, agentId: null, scope: 'app-a1', settings: 'agent' })
+  it("on a project's own page, the picked project is that project unless `?all` says every project shows", () => {
+    expect(parse('/app/1-run?all')).toEqual({ projectId: 'app-a1', agentId: '1-run' })
+    expect(parse('/app?all&settings=agent')).toEqual({ projectId: 'app-a1', agentId: null, settings: 'agent' })
+    expect(format({ projectId: 'app-a1', agentId: null, scope: 'shop-1abc' })).toBe('/app')
+    expect(format({ projectId: 'app-a1', agentId: '1-run' })).toBe('/app/1-run?all')
+    expect(format({ projectId: 'app-a1', agentId: null, settings: 'agent' })).toBe('/app?all&settings=agent')
   })
 
-  it('reads none when the parameter is absent or empty', () => {
-    expect(parseRoute('/?other=1')).toEqual({ projectId: null, agentId: null })
-    expect(parseRoute('/logs?project=')).toEqual({ projectId: null, agentId: null, page: 'logs', pagePath: [] })
+  it('has no `?all` anywhere else, and no `?project=`', () => {
+    expect(parse('/logs?all')).toEqual({ projectId: null, agentId: null, page: 'logs', pagePath: [] })
+    expect(parse('/app/overview?all')).toEqual({ projectId: null, agentId: null, scope: 'app-a1' })
+    expect(parse('/?project=app-a1')).toEqual({ projectId: null, agentId: null })
   })
 
-  it('on a project\'s own page, the picked project is that project unless `?all` says every project shows', () => {
-    expect(parseRoute('/app-a1')).toEqual({ projectId: 'app-a1', agentId: null, scope: 'app-a1' })
-    expect(parseRoute('/app-a1/run-1?all')).toEqual({ projectId: 'app-a1', agentId: 'run-1' })
-    expect(parseRoute('/app-a1?all&settings=agent')).toEqual({ projectId: 'app-a1', agentId: null, settings: 'agent' })
-    // Its id is never written twice, and a `?project=` there names nothing.
-    expect(parseRoute('/app-a1/run-1?project=other-b2')).toEqual({ projectId: 'app-a1', agentId: 'run-1', scope: 'app-a1' })
-    expect(formatRoute({ projectId: 'app-a1', agentId: null, scope: 'other-b2' })).toBe('/app-a1')
-    expect(formatRoute({ projectId: 'app-a1', agentId: 'run-1' })).toBe('/app-a1/run-1?all')
-    expect(formatRoute({ projectId: 'app-a1', agentId: null, settings: 'agent' })).toBe('/app-a1?all&settings=agent')
-  })
-
-  it('writes it after the path, encoded, and round-trips', () => {
-    expect(formatRoute({ projectId: null, agentId: null, scope: 'a b-1' })).toBe('/?project=a%20b-1')
-    expect(formatRoute({ projectId: null, agentId: null, scope: 'app-a1', settings: 'agent' })).toBe('/?project=app-a1&settings=agent')
-    for (const route of [
-      { projectId: null, agentId: null, scope: 'app-a1' },
-      { projectId: 'app-a1', agentId: 'run-1', scope: 'app-a1' },
-      { projectId: 'app-a1', agentId: 'run-1' },
-      { projectId: null, agentId: null, page: 'logs', pagePath: ['x', 'y'], scope: 'app-a1' },
-    ])
-      expect(parseRoute(formatRoute(route))).toEqual(route)
-  })
-
-  it('keeps what a page mirrored into the query, and replaces only the picked project', () => {
-    expect(keepPageQuery('/tickets?project=app-a1', '?q=races&project=old-b2')).toBe('/tickets?q=races&project=app-a1')
-    expect(keepPageQuery('/tickets', '?q=races&project=old-b2')).toBe('/tickets?q=races')
-    expect(keepPageQuery('/', '?project=old-b2')).toBe('/')
+  it("keeps what a page mirrored into the query, and drops what is the route's own", () => {
+    expect(keepPageQuery('/app/tickets', '?q=races')).toBe('/app/tickets?q=races')
+    expect(keepPageQuery('/', '?all')).toBe('/')
     // Settings opening or closing over a page keeps the page's own query, and never a stale entry.
     expect(keepPageQuery('/tickets?settings=agent', '?q=races')).toBe('/tickets?q=races&settings=agent')
     expect(keepPageQuery('/tickets', '?q=races&settings=agent')).toBe('/tickets?q=races')
     // A project's own page says "every project" with a bare word, and drops it when one is picked.
-    expect(keepPageQuery('/app-a1?all', '?settings=agent')).toBe('/app-a1?all')
-    expect(keepPageQuery('/app-a1?settings=', '?all')).toBe('/app-a1?settings=')
-  })
-})
-
-describe('pageHref', () => {
-  it("a module page's address for a link, with the one project the dashboard shows when one is picked", () => {
-    expect(pageHref('queue', '/')).toBe('/queue')
-    expect(pageHref('queue', '/?project=shop-1abc')).toBe('/queue?project=shop-1abc')
-    // A project's own page picks its project unless every project shows.
-    expect(pageHref('queue', '/shop-1abc/run-1')).toBe('/queue?project=shop-1abc')
-    expect(pageHref('queue', '/shop-1abc/run-1?all')).toBe('/queue')
-    // What else the page mirrored in its address is that page's own, and is not carried to another.
-    expect(pageHref('automations', '/tickets?q=login&project=shop-1abc')).toBe('/automations?project=shop-1abc')
+    expect(keepPageQuery('/app?all', '?settings=agent')).toBe('/app?all')
+    expect(keepPageQuery('/app?settings=', '?all')).toBe('/app?settings=')
   })
 })

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { parseRoute, formatRoute, keepPageQuery, type Route } from './route.js'
+import { parseRoute, formatRoute, keepPageQuery, type ProjectAddresses, type Route } from './route.js'
 
 // The route as state (#784): read the current one, go to another. Back/Forward are free, and a
 // session is a link you can paste, reload, and open twice.
@@ -30,7 +30,8 @@ function subscribe(listener: () => void): () => void {
 
 const currentUrl = (): string => window.location.pathname + window.location.search
 
-export function useRoute(): {
+/** The route, with its projects named by `projects`: what the address names changes when they do. */
+export function useRoute(projects: ProjectAddresses): {
   route: Route
   /** Navigate to `next`. Replaces the current history entry when `replace` is set — for a
    *  correction, not a step you should be able to go Back to. Keeps what the page mirrored into
@@ -39,10 +40,10 @@ export function useRoute(): {
   go: (next: Route, options?: { replace?: boolean; keepQuery?: boolean }) => void
 } {
   const current = useSyncExternalStore(subscribe, currentUrl, () => '/')
-  const route = parseRoute(current)
+  const route = parseRoute(current, projects)
 
   const go = (next: Route, options?: { replace?: boolean; keepQuery?: boolean }) => {
-    const url = options?.keepQuery ? keepPageQuery(formatRoute(next), window.location.search) : formatRoute(next)
+    const url = options?.keepQuery ? keepPageQuery(formatRoute(next, projects), window.location.search) : formatRoute(next, projects)
     // Going where you already are is not a history entry.
     if (url === current) return
     if (options?.replace) window.history.replaceState(null, '', url)

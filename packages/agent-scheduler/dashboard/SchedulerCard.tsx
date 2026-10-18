@@ -1,5 +1,5 @@
 import { CalendarClock } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitleLink, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, pageHref, useModuleHost, usePolled, type ModuleCardProps } from '@openagt/dashboard/module'
+import { Card, CardContent, CardHeader, CardTitleLink, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, useModuleHost, usePolled, type ModuleCardProps } from '@openagt/dashboard/module'
 import { readSchedulers, rowTitle, schedulerStatus, schedulerStopped, startsNext, unlistedWords, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
 // The Overview's Automations card: what starts by itself in every project that has this package,
@@ -81,7 +81,7 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
                       {off}.{' '}
                       {on.length === 0 && (
                         <a
-                          href={pageHref('automations')}
+                          href={host.pageHref('automations')}
                           onClick={event => {
                             if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
                             event.preventDefault()

@@ -109,7 +109,7 @@ describe('TicketsPage (#1144)', () => {
     render()
     fireEvent.click(await screen.findByText('Do the thing'))
     // The module's own page for that ticket: where the dashboard's link convention sends a link to it.
-    expect(host.openPage).toHaveBeenCalledWith('tickets', ['p1', 't.md'])
+    expect(host.openPage).toHaveBeenCalledWith('tickets', ['t.md'], 'p1')
   })
 
   test('a project with no tickets still offers its own update, not a dead end', async () => {
@@ -311,7 +311,7 @@ describe('TicketsPage grouping (#1144)', () => {
     window.history.replaceState(null, '', '/tickets?group=none')
     render()
     fireEvent.click(await screen.findByText('Beta ticket'))
-    expect(host.openPage).toHaveBeenCalledWith('tickets', ['p2', 'b.md'])
+    expect(host.openPage).toHaveBeenCalledWith('tickets', ['b.md'], 'p2')
   })
 
   test("a flat row's start button spins up an agent in that row's own project (#1144)", async () => {

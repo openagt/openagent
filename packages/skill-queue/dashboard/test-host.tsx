@@ -37,6 +37,7 @@ export function fakeHost(answers: Answers = {}): FakeHost {
     read: vi.fn(async () => ({ ok: false as const, error: 'this module has no server part' })),
     openAgent: vi.fn<ModuleHost['openAgent']>(),
     openPage: vi.fn<ModuleHost['openPage']>(),
+    pageHref: (segment: string) => `/${segment}`,
     startRun: vi.fn(async () => ({ ok: true as const, agentId: `run-${++runs}` })),
     configureRun: vi.fn(),
     agents: vi.fn<ModuleHost['agents']>(async () => []),

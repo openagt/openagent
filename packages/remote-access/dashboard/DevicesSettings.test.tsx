@@ -20,6 +20,7 @@ function door(answer: (args: string[]) => ModuleCommandResult) {
     read: vi.fn(async () => ({ ok: false as const, error: 'no server part' })),
     openAgent: vi.fn(),
     openPage: vi.fn(),
+    pageHref: (segment: string) => `/${segment}`,
     startRun: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     configureRun: vi.fn(),
     agents: vi.fn(async () => []),

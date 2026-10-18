@@ -47,7 +47,7 @@ describe('useFileNames', () => {
     expect(names).toHaveBeenCalledTimes(1)
     expect(names).toHaveBeenCalledWith(expect.objectContaining({ package: 'a-tickets' }), 'p1', ['tickets/a.md'])
     name.click()
-    expect(openPage).toHaveBeenCalledWith('tickets', ['p1', 'a.md'])
+    expect(openPage).toHaveBeenCalledWith('tickets', ['a.md'], 'p1')
   })
 
   test('a name may open another path than the one asked about; a path no page names, or a page that fails, has no name', async () => {
@@ -67,7 +67,7 @@ describe('useFileNames', () => {
       </HostServicesContext.Provider>,
     )
     ;(await screen.findByRole('button', { name: 'Plan: A' })).click()
-    expect(openPage).toHaveBeenCalledWith('tickets', ['p1', 'a.md'])
+    expect(openPage).toHaveBeenCalledWith('tickets', ['a.md'], 'p1')
     for (const path of ['tickets/gone.md', 'docs/b.md']) {
       rerender(
         <HostServicesContext.Provider value={{ ...INERT_HOST_SERVICES, openPage }}>

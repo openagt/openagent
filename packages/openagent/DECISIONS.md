@@ -200,10 +200,15 @@ already made, and lists it in its pull request; for anything else it proposes an
   entry's settings on the right. The address carries it, so a reload or a link opens it
   again, and closing it leaves the page as it was. Picked over a page of its own, which took
   you away from what you were doing and put a second list beside the sidebar.
-- A project's own pages show that project picked in the sidebar, and `?all` in their
-  address shows every project instead. The Overview and a module's page name the picked
-  project as `?project=`. Picked over `?project=` on every page, which wrote a project's id
-  twice in the address of its own page.
+- The address starts with the project picked in the sidebar, by its folder's name:
+  `/gemstack` starts an agent there, `/gemstack/overview` and `/gemstack/logs` are the
+  Overview and a module's page with that project picked, `/gemstack/<agent>` one agent. With
+  every project picked the address has no project: `/`, `/logs`; only an agent's page and
+  the "New agent" page, which belong to a project, add `?all`. A name that cannot be an
+  address, because a project added before has it or a page has that word, is the project's
+  id with its hash. The id still opens the project, and stays what everything else knows
+  it by. Picked over `?project=` and over the id with its hash, which named the project in
+  a way a person neither reads nor types.
 - The list has two groups, by whose the settings are: first, with no title, OpenAgent's own
   and the packages that are the computer's; then "Project", the packages a project has, each
   saved in that project. The project group shows the project picked in the sidebar,

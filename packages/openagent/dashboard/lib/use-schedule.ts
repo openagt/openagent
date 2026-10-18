@@ -1,7 +1,6 @@
 import { useContext } from 'react'
 import { moduleHost, type ModuleProject, type ModuleScheduledCommand } from '../module/index.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from './host-services.js'
-import { pageHref } from './route.js'
 import { useMountedModules } from './use-modules.js'
 import { usePolled } from './use-async.js'
 
@@ -55,5 +54,5 @@ export function useSchedule(projects: readonly ModuleProject[]): Schedule {
   const asked = Object.fromEntries(projects.flatMap(project => (commands[project.id] ? [[project.id, commands[project.id]!]] : [])))
   if (!schedule) return { commands: asked, open: () => {} }
   const label = pages.find(page => page.segment === schedule.page)?.label ?? schedule.page
-  return { page: { segment: schedule.page, label, href: pageHref(schedule.page) }, commands: asked, open: () => services.openPage(schedule.page) }
+  return { page: { segment: schedule.page, label, href: services.pageHref(schedule.page) }, commands: asked, open: () => services.openPage(schedule.page) }
 }

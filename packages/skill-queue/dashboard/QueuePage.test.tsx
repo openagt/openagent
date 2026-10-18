@@ -23,7 +23,7 @@ let host: FakeHost
 function show(full: unknown[] = FULL, modules: MountedModules = NO_MODULES, services?: HostServices) {
   host = fakeHost({ p1: { '--local --full': full } })
   host.act.mockImplementation(async () => ({ ok: true, output: { ok: true } }))
-  const page = <QueuePage projects={[alpha]} path={[]} />
+  const page = <QueuePage projects={[alpha]} projectId={null} path={[]} />
   return renderWithHost(services ? <HostServicesContext.Provider value={services}>{page}</HostServicesContext.Provider> : page, host, modules)
 }
 
@@ -136,7 +136,7 @@ describe('QueuePage', () => {
         { id: 'run-7', status: 'running', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt('Urgent') },
         { id: 'run-6', status: 'done', startedAt: '2026-10-01T09:00:00.000Z', ask: workOnEntryPrompt('Later') },
       ])
-      renderWithHost(<QueuePage projects={[alpha]} path={[]} />, host)
+      renderWithHost(<QueuePage projects={[alpha]} projectId={null} path={[]} />, host)
       const on = await screen.findByRole('button', { name: 'An agent is on it' })
       expect(screen.getAllByRole('button', { name: 'An agent is on it' })).toHaveLength(1)
       expect(on.closest('li')?.textContent).toContain('Urgent')
@@ -243,7 +243,7 @@ describe('QueuePage', () => {
       expect(names).toHaveBeenCalledWith(expect.objectContaining({ package: 'a-tickets' }), 'p1', ['tickets/2026-08-01_login-page.plan.md'])
       expect(screen.getByText(PLAN)).toBeTruthy()
       fireEvent.click(title)
-      expect(openPage).toHaveBeenCalledWith('tickets', ['p1', '2026-08-01_login-page.md'])
+      expect(openPage).toHaveBeenCalledWith('tickets', ['2026-08-01_login-page.md'], 'p1')
       // What an agent is started with is still the line as written.
       fireEvent.click(screen.getByRole('button', { name: 'Start an agent on entry 1' }))
       await waitFor(() => expect(host.startRun.mock.calls).toEqual([['p1', workOnEntryPrompt(PLAN)]]))
@@ -263,13 +263,13 @@ describe('QueuePage', () => {
       const upstream = await screen.findByRole('link', { name: 'Upstream bug' })
       expect(upstream.getAttribute('href')).toBe('https://github.com/x/y/issues/1')
       fireEvent.click(await screen.findByRole('button', { name: 'Login page' }))
-      expect(openPage).toHaveBeenCalledWith('tickets', ['p1', '2026-08-01_login-page.md'])
+      expect(openPage).toHaveBeenCalledWith('tickets', ['2026-08-01_login-page.md'], 'p1')
     })
   })
 
   test('a project whose command fails is named with the reason, and has no field to add to', async () => {
     host = fakeHost({})
-    renderWithHost(<QueuePage projects={[alpha]} path={[]} />, host)
+    renderWithHost(<QueuePage projects={[alpha]} projectId={null} path={[]} />, host)
     expect((await screen.findByRole('alert')).textContent).toBe('Could not read the queue of alpha: no answer for p1: queue --local --full')
     expect(screen.queryByRole('textbox', { name: 'A task to add to the queue' })).toBeNull()
   })

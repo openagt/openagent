@@ -116,7 +116,7 @@ function Lane({ lane, tickets, showProject }: { lane: (typeof LANES)[number]; ti
               <li key={`${project.id}:${ticket.file}`} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent/60">
                 <Tooltip>
                   <TooltipTrigger
-                    render={<button type="button" onClick={() => host.openPage('tickets', [project.id, ticket.file])} className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:underline" />}
+                    render={<button type="button" onClick={() => host.openPage('tickets', [ticket.file], project.id)} className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:underline" />}
                   >
                     {ticket.title}
                   </TooltipTrigger>
