@@ -1,6 +1,4 @@
-import { mkdir } from 'node:fs/promises'
-import { join, resolve, sep } from 'node:path'
-import { OPENAGENT_DIR } from './openagent-dir.js'
+import { resolve, sep } from 'node:path'
 import { startDashboard, type Dashboard } from './dashboard/index.js'
 import { createProjectRuntime } from './daemon-runtime.js'
 import { defaultQuotaSource } from './dashboard/quota.js'
@@ -8,7 +6,7 @@ import { defaultModelsSource } from './dashboard/models.js'
 import { startBackgroundServices } from './daemon-services.js'
 import { projectErrorStore } from './project-errors.js'
 import { resolveDashboardBundle } from './dashboard/bundle.js'
-import { ensureBridgeToken, ensureComputerId, listProjects, nodeRegistryFs, readPreferences, registryPreferencesStore, type Preferences } from './registry.js'
+import { ensureBridgeToken, ensureComputerId, listProjects, nodeRegistryFs, projectId, readPreferences, registryPreferencesStore, type Preferences, type ProjectRecord } from './registry.js'
 import { sayComputer } from './dashboard/machine-call.js'
 import { bridgeSessionsFrom } from './dashboard/bridge-sessions.js'
 import { bridgeQuestions } from './dashboard/bridge-store.js'
@@ -49,11 +47,6 @@ export interface DaemonState {
   startedAt: string
 }
 
-/** The `.openagent/` directory for a workspace. */
-function daemonDir(cwd: string): string {
-  return join(cwd, OPENAGENT_DIR)
-}
-
 /** True when a process with this id is still running (best-effort, signal 0). The store's
  * {@link isPidAlive} under the daemon's historical public name -- the two were byte-identical. */
 export { isPidAlive as isProcessAlive } from './store/index.js'
@@ -76,8 +69,8 @@ export interface RunDaemonOptions {
    * The dashboard adds no folder by itself: this is the caller's.
    */
   project?: string
-  /** Called with {@link project}'s path once it was added. */
-  onProjectAdded?: (path: string) => void
+  /** Called once {@link project} is on the list, with its id for its page, and whether it was added now. */
+  onProject?: (project: { id: string; path: string; added: boolean }) => void
   /** How the bridge browser is launched (#1332); default the real Chrome for Testing. For tests. */
   bridgeBrowser?: (opts: BridgeBrowserOptions) => Promise<BridgeBrowser>
   /** How the services of OpenAgent's own packages are started; default each as its own process. For tests. */
@@ -102,22 +95,17 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   // a machine lists this computer once by it. A home file that cannot be written says nothing.
   const computer = await ensureComputerId(undefined, env).catch(() => undefined)
   sayComputer(computer)
-  // The project's own `.openagent/` — where its hooks file sits, and where a run's tool keeps
-  // the run's card and diary inside the run's checkout. Created up front so the daemon works as the
-  // very first command in a fresh workspace, before any run has made the directory.
-  await mkdir(daemonDir(cwd), { recursive: true })
-
   // Everything the dashboard drives per project (a run's start, project install, the machine
   // relay) lives in the runtime, so this body stays about the daemon's own lifecycle.
   const runtime = createProjectRuntime({ cwd, env })
-  // A folder the caller asked to add: left as it is when a listed project holds it, so starting
-  // again inside a project, or inside one of its folders, adds nothing.
-  const addFolder = async (folder: string): Promise<void> => {
+  // The folder the caller named: the listed project that holds it, so starting again inside a
+  // project, or inside one of its folders, adds nothing; else added, as Add project adds one.
+  const startedIn = async (folder: string, listed: readonly ProjectRecord[]): Promise<void> => {
     const path = resolve(folder)
-    const listed = await listProjects(undefined, env).catch(() => [])
-    if (listed.some(project => path === project.path || path.startsWith(project.path + sep))) return
+    const holding = listed.find(project => path === project.path || path.startsWith(project.path + sep))
+    if (holding) return opts.onProject?.({ id: holding.id, path: holding.path, added: false })
     const added = await runtime.onAddProject(path, false)
-    if (added.ok) opts.onProjectAdded?.(path)
+    if (added.ok) opts.onProject?.({ id: projectId(path), path, added: true })
     else console.log(`[openagent] could not add ${path}: ${added.error}`)
   }
   // Known only once the dashboard listens; the bridge browser is told it (#1332).
@@ -195,11 +183,13 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   // Each project's open hooks (#1774): the lines its own `.openagent/hooks.yml` names, run in
   // the project once the dashboard listens, so a slow line never delays the URL. The daemon names
   // no tool; the file does. Bounded and logged, never a reason the daemon did not come up.
-  for (const record of await listProjects(undefined, env).catch(() => [])) {
+  // The folder the caller named comes first, so its page opens before the other projects' lines
+  // have run. The list is read before it is added: adding runs the new project's own open lines.
+  const listed = await listProjects(undefined, env).catch(() => [])
+  if (opts.project !== undefined) await startedIn(opts.project, listed)
+  for (const record of listed) {
     await runProjectHooks(record.path, 'open', { log: console.log })
   }
-  // After the listed projects' open hooks: adding the folder runs its own, so they run once.
-  if (opts.project !== undefined) await addFolder(opts.project)
 
   // The services of OpenAgent's own packages: each runs for as long as the daemon does, and is
   // told the daemon's address.

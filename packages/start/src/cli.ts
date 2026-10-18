@@ -2,6 +2,7 @@ import { checkForUpdate, formatUpdateStatus, nodeVersionFetcher, type VersionFet
 import { runDaemon, DEFAULT_DAEMON_PORT } from '@openagt/dashboard/serve'
 import { handDownSkills } from './skills.js'
 import { repositoryOf } from './project.js'
+import { openInBrowser } from './browser.js'
 import { openagentVersion } from './version.js'
 
 /** Where the CLI writes. Injectable so tests capture output. */
@@ -20,7 +21,7 @@ const HELP = `OpenAgent — turnkey AI orchestration that wraps a coding agent (
 Usage:
   openagent              Serve the dashboard in the foreground. Ctrl+C closes it; the server
                          logs stream to this terminal. Typed inside a Git repository, it adds
-                         that repository to the dashboard's projects.
+                         that repository to the dashboard's projects and opens its page.
 
 Options:
   --port <n>             Dashboard port (default: 4200).
@@ -108,18 +109,34 @@ async function runForegroundDaemonCmd(args: CliArgs, io: CliIO): Promise<number>
     // Set in this process's own environment, so everything the dashboard starts inherits it.
     await handDownSkills(process.env)
     const project = await repositoryOf(cwd)
+    let url = ''
     await runDaemon(cwd, {
       port,
       version: openagentVersion(),
-      ...(project !== undefined ? { project, onProjectAdded: (path: string) => io.out(`◆ project added: ${path}`) } : {}),
       onListening: state => {
+        url = state.url
         io.out(`◆ dashboard running: ${state.url}`)
         io.out('  Ctrl+C to stop the dashboard. Server logs stream below.')
         // #312 asks bare `openagent` to print the commands + version too. onListening is sync and
         // runDaemon then blocks until signalled, so this is fire-and-forget by necessity: the
         // update line lands a moment later, above the server logs.
         void printStartupFooter(io)
+        // Outside a repository there is no project to open: the Overview, where one is added.
+        if (project === undefined) openInBrowser(state.url)
       },
+      ...(project !== undefined
+        ? {
+            project,
+            onProject: (started: { id: string; path: string; added: boolean }) => {
+              // Its page, with the project picked in the sidebar too.
+              const id = encodeURIComponent(started.id)
+              const page = `${url}/${id}?project=${id}`
+              if (started.added) io.out(`◆ project added: ${started.path}`)
+              io.out(`◆ project: ${page}`)
+              openInBrowser(page)
+            },
+          }
+        : {}),
     })
   } catch (err) {
     io.err(`could not start the dashboard (${err instanceof Error ? err.message : String(err)}).`)
