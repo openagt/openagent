@@ -91,8 +91,3 @@ export async function readProject(root: string, git: GitRunner = nodeGitRunner()
 export function held(state: ProjectState): string[] {
   return state.skills.filter(skill => skill.standing !== 'absent').map(skill => skill.name)
 }
-
-/** How many skills the project has in all: the ones it holds, and the basic ones every run gets (github only on a GitHub project). */
-export function skillCount(state: ProjectState): number {
-  return held(state).length + (state.github ? 4 : 3)
-}

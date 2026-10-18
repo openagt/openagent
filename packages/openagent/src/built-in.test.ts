@@ -3,7 +3,9 @@ import { test } from 'node:test'
 import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { createRequire } from 'node:module'
+import { basename, delimiter, dirname, join } from 'node:path'
+import { SKILLS_ENV } from '@openagt/agent-data'
 import { BUILT_IN_PACKAGES, COMPUTER_PACKAGES, OWN_PACKAGE_NAMES, PICKED_PACKAGES, builtInBinDirs, builtInPackages, builtInPackagesOf, computerPackages, lookupProvided, providedCommand, runCleanups } from './built-in.js'
 import { readComputerModules, readProjectModules } from './project-modules.js'
 import { providedGitHost } from './store/git-host.js'
@@ -63,6 +65,22 @@ test('a project has a skill\'s package, its data and its page once it holds the 
     await rm(join(root, '.claude/skills/queue'), { recursive: true })
     assert.deepEqual(await modules(), ['@openagt/changes', '@openagt/files', '@openagt/skill-logs', '@openagt/skill-orchestration'])
   } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('a skill every run gets by default gives every project its package, its data and its page, with no text in the project', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'openagent-built-in-default-')))
+  const before = process.env[SKILLS_ENV]
+  const require = createRequire(import.meta.url)
+  try {
+    process.env[SKILLS_ENV] = ['@openagt/skill-logs', '@openagt/skill-tickets', '@openagt/skill-orchestration'].map(name => dirname(require.resolve(`${name}/package.json`))).join(delimiter)
+    assert.equal((await providedCommand(root, 'tickets'))?.package, '@openagt/skill-tickets')
+    assert.deepEqual(await lookupProvided(root, 'queue'), {}, 'a pick that is no default still needs its text')
+    assert.deepEqual((await readProjectModules(root)).map(module => module.package), ['@openagt/changes', '@openagt/files', '@openagt/skill-logs', '@openagt/skill-orchestration', '@openagt/skill-tickets'])
+  } finally {
+    if (before === undefined) delete process.env[SKILLS_ENV]
+    else process.env[SKILLS_ENV] = before
     await rm(root, { recursive: true, force: true })
   }
 })

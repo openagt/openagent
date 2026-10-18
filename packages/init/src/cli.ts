@@ -2,9 +2,9 @@ import { spawn } from 'node:child_process'
 import { basename } from 'node:path'
 import { parseArgs } from 'node:util'
 import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
-import { carriedSkills, GROUPS, SCHEDULER, SCHEDULER_LINE, SKILL_NAMES, SKILLS_IN_ALL } from './catalogue.js'
+import { carriedSkills, GROUPS, SCHEDULER, SCHEDULER_LINE, SKILL_NAMES } from './catalogue.js'
 import { applyChange, commitChange, isKnown, type Change, type Changed } from './change.js'
-import { held, readProject, skillCount, type ProjectState, type Standing } from './project.js'
+import { held, readProject, type ProjectState, type Standing } from './project.js'
 import { askList, askYesNo, type Row, type Terminal } from './prompt.js'
 
 /**
@@ -161,7 +161,7 @@ const COMMANDS: Record<string, Command> = {
   async list(args, io, git) {
     if (args.length > 0) throw new Usage('list takes no argument')
     const state = await readProject(io.cwd, git)
-    return { ok: true, ...state, has: skillCount(state), of: SKILLS_IN_ALL }
+    return { ok: true, ...state }
   },
 }
 
@@ -202,7 +202,8 @@ async function converse(io: CliIo, terminal: Terminal, git: GitRunner): Promise<
   const state = await readProject(io.cwd, git)
   const has = held(state)
   say(`OpenAgent skills for ${basename(io.cwd)}`)
-  say(has.length > 0 ? `This project has ${skillCount(state)} of ${SKILLS_IN_ALL} skills. The ticks show what it has now.` : 'Every agent already gets the basic skills with nothing written here: branches, logs, question, and github on a GitHub project.')
+  say('Every agent OpenAgent starts already gets its default skills, with nothing written here. These are more.')
+  if (has.length > 0) say(`This project has ${has.length} of these ${SKILL_NAMES.length}. The ticks show what it has now.`)
   if (state.remote && !state.github) say('This project is not on GitHub: agents push their branch, and you open the request yourself. There is no skill for another git host yet.')
   say()
 

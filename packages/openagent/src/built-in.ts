@@ -1,10 +1,10 @@
 import { readFile, realpath, stat } from 'node:fs/promises'
 import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 import type { CleanupReport } from './dashboard/types.js'
 import { SKILLS_DIRS } from './project-commands.js'
 import { readProjectHooks } from './project-hooks.js'
-import { declaring, lineRuns, lookupProvidedCommand, packageBins, projectPackages, readManifest, runPackageCommand, type ProjectPackage, type ProvidedCommand, type ProvidedCommandLookup } from '@openagt/agent-data'
+import { declaring, lineRuns, SKILLS_ENV, lookupProvidedCommand, packageBins, projectPackages, readManifest, runPackageCommand, type ProjectPackage, type ProvidedCommand, type ProvidedCommandLookup } from '@openagt/agent-data'
 
 /**
  * The packages OpenAgent brings, by name: dependencies of OpenAgent itself, resolved from its
@@ -27,12 +27,13 @@ export const BUILT_IN_PACKAGES: readonly string[] = ['@openagt/changes', '@opena
 export const COMPUTER_PACKAGES: readonly string[] = ['@openagt/remote-access', '@openagt/servers']
 
 /**
- * The packages a project has once it picked them (#2023). A skill's package is the project's
- * when the project holds the skill's text where the coding agents read it
- * (`.claude/skills/<name>/SKILL.md`, `.agents/skills/<name>/SKILL.md`): the rule the launcher
- * already lists a project's commands by, so deleting the skill's folder takes its page away. A
- * tool with no skill text (the scheduler) is the project's when one of the project's hook lines
- * runs it.
+ * The packages a project has once it picked them (#2023). A skill's package is every project's
+ * when the skill is one every run gets by default (the package that started OpenAgent names those,
+ * {@link SKILLS_ENV}); else the project's when the project holds the skill's text where the coding
+ * agents read it (`.claude/skills/<name>/SKILL.md`, `.agents/skills/<name>/SKILL.md`): the rule
+ * the launcher already lists a project's commands by, so deleting the skill's folder takes its
+ * page away. A tool with no skill text (the scheduler) is the project's when one of the project's
+ * hook lines runs it.
  */
 export const PICKED_PACKAGES: readonly string[] = ['@openagt/skill-tickets', '@openagt/skill-queue', '@openagt/skill-orchestration', '@openagt/skill-browser', '@openagt/agent-scheduler']
 
@@ -85,12 +86,31 @@ export async function builtInPackagesOf(root: string): Promise<ProjectPackage[]>
   let lines: string[] | undefined
   for (const pkg of await (resolved ??= resolveOwn())) {
     if (pkg.of === 'the computer') continue
-    if (pkg.of === 'a pick') {
+    if (pkg.of === 'a pick' && !(await defaultSkills()).has(pkg.name)) {
       if (pkg.skill !== undefined ? !(await holdsSkill(root, pkg.skill)) : !runsOneOf((lines ??= await hookLines(root)), pkg)) continue
     }
     packages.push(pkg)
   }
   return packages
+}
+
+/** The default skills as read last, by the value they were read off. */
+let defaults: { from: string; names: Promise<Set<string>> } | undefined
+
+/** The names of the packages of the skills every run gets by default: see {@link SKILLS_ENV}. */
+function defaultSkills(): Promise<Set<string>> {
+  const from = process.env[SKILLS_ENV] ?? ''
+  if (defaults?.from !== from) defaults = { from, names: readDefaultSkills(from) }
+  return defaults.names
+}
+
+async function readDefaultSkills(from: string): Promise<Set<string>> {
+  const names = new Set<string>()
+  for (const dir of from.split(delimiter).filter(Boolean)) {
+    const name = (await readManifest(join(dir, 'package.json')))?.name
+    if (typeof name === 'string') names.add(name)
+  }
+  return names
 }
 
 /** Whether the project holds the text of the skill `name`, in one of the folders the coding agents read. */

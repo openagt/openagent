@@ -5,8 +5,9 @@ import { dirname, join } from 'node:path'
 /**
  * The skills `init` offers (#2023): the list a person ticks, in its groups, with what is ticked
  * the first time. Every group is ticked except the skills that are useless until something of
- * their own is set up. The four basic skills (branches, logs, question, github) are not here:
- * they come with every run, with nothing written in the project.
+ * their own is set up. The skills every run gets by default are not here (the branches skill,
+ * and the ones `@openagt/start` names): they come with every run, with nothing written in the
+ * project.
  *
  * Each skill's text is its own package's `SKILL.md`, read from this package's install, so `init`
  * carries the texts of the versions it was published with.
@@ -20,18 +21,14 @@ export interface SkillGroup {
 }
 
 export const GROUPS: readonly SkillGroup[] = [
-  { title: 'Tickets and queue', ticked: true, skills: ['tickets', 'queue', 'plan', 'plan-tickets', 'triage', 'update-tickets', 'work-queue', 'suggest-new-tickets', 'suggest-tickets-to-work-on'] },
+  { title: 'Tickets and queue', ticked: true, skills: ['plan', 'plan-tickets', 'triage', 'update-tickets', 'work-queue', 'suggest-new-tickets', 'suggest-tickets-to-work-on'] },
   { title: 'Reviews and research', ticked: true, skills: ['maintainability', 'maintenance', 'readability', 'security-audit', 'ux', 'research', 'market-research', 'suggest-new-features'] },
-  { title: 'Subagents', ticked: true, skills: ['orchestration'] },
   { title: 'After a merge', ticked: true, skills: ['post-merge-cleanup'] },
   { title: 'Needs its own setup', ticked: false, skills: ['browser', 'discord'] },
 ]
 
 /** Every skill `init` knows, in the order of the list. */
 export const SKILL_NAMES: readonly string[] = GROUPS.flatMap(group => group.skills)
-
-/** How many skills a project can have in all: the ones here, and the four that come with every run. */
-export const SKILLS_IN_ALL = SKILL_NAMES.length + 4
 
 /**
  * The scheduler's row in the list: no skill, a tool that starts the switched-on automations while
