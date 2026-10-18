@@ -6,7 +6,6 @@
   "intent": "ask me what color I prefer with choices",
   "driver": "claude-code",
   "model": "claude-sonnet-5-5",
-  "branch": "agent-2026-10-13T19-33-41-349Z",
   "cost": 0.08759050000000002,
   "contextTokens": 18184,
   "caller": {
