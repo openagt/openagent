@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { AddMachineDialog, Button, Checkbox, Input, QrCode, SettingsSection, Switch, formatDateTime, formatRelative, reachedByLine, useModuleHost, usePolled, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
+import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Laptop, Loader2, Plus, Server, UserPlus } from 'lucide-react'
+import { AddMachineDialog, Button, Checkbox, Dialog, Input, InviteDialog, SettingsSection, Switch, cn, formatDateTime, formatRelative, reachedByLine, useModuleHost, usePolled, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
 import { askLink, connect, forget, idsOf, loadDevices, loadServers, login, logout, markAdded, ownGithub, reach, removeDevice, type Answer, type DeviceRow, type DevicesRead, type DoorLink, type OwnGithub, type ServerRow, type ServersRead, type StepState } from './servers.js'
 
 // Settings → Machines: the other computers a run can be sent to, each listed once. A server this
@@ -18,15 +19,18 @@ import { askLink, connect, forget, idsOf, loadDevices, loadServers, login, logou
 // server: a press opens this computer's browser, and the person says yes there. Whatever goes to
 // the server goes over SSH, from the command's own process: no login ever comes to this page.
 //
-// An installed server also gives a code for a phone or a browser: a server has no screen to press
-// "Add device" on, so this computer asks the server's door for the link over SSH, and the row
-// shows it as the Devices section does, as a QR code and a link. The row also lists the devices
-// that are in on the server, asked of its door over SSH, each with a way to take it out: a
-// person sets a server up from here, and does not open the server's own page for it.
+// An installed server also lets a person, a phone or a browser in: a server has no screen to press
+// "Add device" on, so the row's Invite asks the server's door for a code over SSH, and shows it in
+// a dialog as the Devices section does, as a QR code and a link to send, until a device got in
+// with it. The row also lists the devices that are in on the server, asked of its door over SSH,
+// each with a way to take it out: a person sets a server up from here, and does not open the
+// server's own page for it.
+//
+// Each step of an install or an update has its own mark as it runs: waiting, a spinner, done or
+// failed. The steps show while there is something to see in them, and fold into one line once
+// the server is installed and runs can be sent to it.
 
 const NOT_READ: Answer<ServersRead> | undefined = undefined
-/** How long a door's code is good for. */
-const CODE_MS = 5 * 60_000
 const NO_MACHINES: ModuleMachines | undefined = undefined
 const NOT_ASKED: Answer<OwnGithub> | undefined = undefined
 const NOT_LISTED: Answer<DevicesRead> | undefined = undefined
@@ -45,11 +49,9 @@ const day = (iso: string | undefined): string => (iso === undefined ? '' : new D
 /** One login's line on a server's row: what is there, what a person can do about it, and why the last try failed. */
 function LoginLine({ label, words, said, children }: { label: string; words: string; said: string | undefined; children: ReactNode }) {
   return (
-    <li aria-label={label} className="space-y-1">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span>{words}</span>
-        <div className="flex gap-2">{children}</div>
-      </div>
+    <li aria-label={label} className="space-y-1.5">
+      <p>{words}</p>
+      <div className="flex flex-wrap items-center gap-2">{children}</div>
       {said !== undefined && (
         <pre role="alert" className="overflow-x-auto whitespace-pre-wrap rounded-md border border-border bg-background p-2 font-mono text-foreground">
           {said}
@@ -59,7 +61,51 @@ function LoginLine({ label, words, said, children }: { label: string; words: str
   )
 }
 
-const MARK: Record<StepState, string> = { waiting: '○', running: '…', done: '✓', failed: '✕' }
+/** A step's mark: its own spinner while it runs. */
+function StepMark({ state }: { state: StepState }) {
+  const className = 'h-3.5 w-3.5 shrink-0'
+  if (state === 'running') return <Loader2 aria-hidden className={cn(className, 'animate-spin text-primary')} />
+  if (state === 'done') return <CircleCheck aria-hidden className={cn(className, 'text-success')} />
+  if (state === 'failed') return <CircleX aria-hidden className={cn(className, 'text-danger')} />
+  return <Circle aria-hidden className={cn(className, 'text-muted-foreground/50')} />
+}
+
+/** One line of the steps: its mark, its name, and what the server said when it failed. */
+function StepLine({ label, state, said, children }: { label: string; state: StepState; said?: string | undefined; children?: ReactNode }) {
+  return (
+    <li aria-label={`${label}: ${STATE_WORD[state]}`}>
+      <span className={cn('flex items-center gap-2', state === 'failed' ? 'text-danger' : state === 'waiting' ? 'text-muted-foreground' : undefined)}>
+        <StepMark state={state} />
+        {label}
+      </span>
+      {children}
+      {said !== undefined && (
+        <pre role="alert" className="mt-1 ml-5.5 overflow-x-auto whitespace-pre-wrap rounded-md border border-border bg-background p-2 font-mono text-foreground">
+          {said}
+        </pre>
+      )}
+    </li>
+  )
+}
+
+/** Where a server is, in a few words with a mark: the first line under its address. */
+function ServerState({ tone, children }: { tone: 'working' | 'good' | 'warn' | 'bad' | 'quiet'; children: ReactNode }) {
+  return (
+    <p role="status" className={cn('flex items-center gap-1.5 text-xs', tone === 'bad' ? 'text-danger' : tone === 'warn' ? 'text-warning' : 'text-muted-foreground')}>
+      {tone === 'working' ? (
+        <Loader2 aria-hidden className="h-3 w-3 shrink-0 animate-spin text-primary" />
+      ) : tone === 'warn' ? (
+        <CircleArrowUp aria-hidden className="h-3 w-3 shrink-0" />
+      ) : tone === 'bad' ? (
+        <CircleX aria-hidden className="h-3 w-3 shrink-0" />
+      ) : (
+        <span aria-hidden className={cn('h-1.5 w-1.5 shrink-0 rounded-full', tone === 'good' ? 'bg-[var(--color-primary)]' : 'bg-muted-foreground/40')} />
+      )}
+      {children}
+    </p>
+  )
+}
+
 const STATE_WORD: Record<StepState, string> = { waiting: 'not started', running: 'running', done: 'done', failed: 'failed' }
 
 const without = (reasons: Record<string, string>, address: string): Record<string, string> => Object.fromEntries(Object.entries(reasons).filter(([at]) => at !== address))
@@ -103,7 +149,7 @@ function DeviceLine({ device, address, busy, ownKey, onRemove }: { device: Devic
   return (
     <li className="flex items-center justify-between gap-4">
       <div className="min-w-0">
-        <p className="truncate">{device.name}</p>
+        <p className="truncate text-sm">{device.name}</p>
         <p className="text-muted-foreground" title={formatDateTime(device.seen ?? device.added)}>
           {`Added ${formatRelative(device.added)}`}
           {device.seen !== undefined ? `, last seen ${formatRelative(device.seen)}` : ''}
@@ -119,7 +165,7 @@ function DeviceLine({ device, address, busy, ownKey, onRemove }: { device: Devic
         )}
       </div>
       {!own && (
-        <Button size="sm" variant="outline" disabled={busy} aria-label={`Remove ${device.name} from ${address}`} onClick={onRemove}>
+        <Button size="sm" variant="ghost" disabled={busy} aria-label={`Remove ${device.name} from ${address}`} onClick={onRemove}>
           Remove
         </Button>
       )}
@@ -152,8 +198,8 @@ function ServerDevices({
   busy: boolean
   /** The id the server lists this computer's OpenAgent under, when this computer said. */
   ownDevice: string | undefined
-  /** A device got in while a code was on the page. */
-  onGotIn: () => void
+  /** A device got in while a code was on the page: its name. */
+  onGotIn: (name: string) => void
   /** Told with each read whether the server said no to this computer's line. */
   onLine: (refused: boolean) => void
 }) {
@@ -198,7 +244,10 @@ function ServerDevices({
     if (ids === undefined) return
     const now = ids.split(',').filter(Boolean)
     if (before.current === undefined) before.current = now
-    else if (now.some(id => !before.current!.includes(id))) onGotIn()
+    else {
+      const fresh = devices?.find(device => idsOf(device).some(id => !before.current!.includes(id)))
+      if (fresh) onGotIn(fresh.name)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [awaited, ids])
 
@@ -221,10 +270,11 @@ function ServerDevices({
 
   if (read === undefined) return null
   return (
-    <div className="space-y-2 border-t border-border pt-2 text-xs">
-      <p>
-        {devices === undefined ? 'The devices that are in on the server could not be read.' : devices.length === 0 ? 'No device is in on the server. Add device gives a code for a phone or a browser.' : 'The devices that are in on the server:'}
-      </p>
+    <div className="space-y-2 text-xs">
+      <p className="text-sm">{devices !== undefined && devices.length > 0 ? `Who is in (${devices.length})` : 'Who is in'}</p>
+      {(devices === undefined || devices.length === 0) && (
+        <p className="text-muted-foreground">{devices === undefined ? 'The devices that are in on the server could not be read.' : 'Nobody yet. Invite gives a code for a person, a phone or a browser.'}</p>
+      )}
       {devices !== undefined && devices.length > 0 && (
         <ul aria-label={`The devices that are in on ${address}`} className="space-y-2">
           {devices.map(device => (
@@ -246,24 +296,22 @@ function MachineLine({ machine, known, busy, onRemove }: { machine: ModuleMachin
   const computer = reachedByLine(machine.url)
   const state = !known ? 'Checking…' : machine.version !== undefined ? 'Online' : 'Offline'
   return (
-    <li aria-label={machine.label} className="flex items-center justify-between gap-4 py-3">
-      <div className="min-w-0">
-        <p className="truncate text-sm">{machine.label}</p>
-        {computer ? (
-          <p className="text-xs text-muted-foreground">Your computer. It keeps a line open to this server. Removed here, it is back when it calls again: to take it out, remove it under Devices.</p>
-        ) : (
-          <p className="truncate text-xs text-muted-foreground">{machine.url}</p>
-        )}
+    <li aria-label={machine.label} className="flex items-start justify-between gap-4 py-4">
+      <div className="flex min-w-0 gap-3">
+        <Laptop aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 space-y-0.5">
+          <p className="truncate text-sm font-medium">{machine.label}</p>
+          <ServerState tone={state === 'Online' ? 'good' : 'quiet'}>{state}</ServerState>
+          {computer ? (
+            <p className="text-xs text-muted-foreground">Your computer. It keeps a line open to this server. Removed here, it is back when it calls again: to take it out, remove it under Devices.</p>
+          ) : (
+            <p className="truncate text-xs text-muted-foreground">{machine.url}</p>
+          )}
+        </div>
       </div>
-      <div className="flex shrink-0 items-center gap-3">
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${state === 'Online' ? 'bg-[var(--color-primary)]' : 'bg-muted-foreground/40'}`} />
-          {state}
-        </span>
-        <Button size="sm" variant="outline" disabled={busy} aria-label={`Remove ${machine.label}`} onClick={onRemove}>
-          Remove
-        </Button>
-      </div>
+      <Button size="sm" variant="ghost" className="shrink-0" disabled={busy} aria-label={`Remove ${machine.label}`} onClick={onRemove}>
+        Remove
+      </Button>
     </li>
   )
 }
@@ -288,8 +336,16 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
   const adding = useRef(new Set<string>())
   // The servers that said no to the key this computer asks for its line with, by address: the switch then reads off.
   const [refusedLines, setRefusedLines] = useState<Record<string, boolean>>({})
-  // The code on the page, and the server whose door made it.
+  // The server whose Invite dialog is open; the code on its page, which a device is about to get in
+  // with; and the name of the one that got in with it.
+  const [inviting, setInviting] = useState<string | undefined>()
   const [code, setCode] = useState<(DoorLink & { address: string }) | undefined>()
+  const [joined, setJoined] = useState<string | undefined>()
+  const [connecting, setConnecting] = useState(false)
+  // The server whose Update or Try again was pressed, until the command answered: its button spins.
+  const [pressed, setPressed] = useState<string | undefined>()
+  // The steps a person opened on a server whose steps are folded, by its address.
+  const [opened, setOpened] = useState<Record<string, boolean>>({})
 
   // The servers as last read: a read that fails once says so, and takes no row off the page.
   const lastServers = useRef<ServerRow[]>([])
@@ -317,7 +373,10 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
       return false
     }
     setNotAdded(reasons => without(reasons, at))
-    return act(() => connect(host, at, as, known.version, github))
+    setPressed(at)
+    const started = await act(() => connect(host, at, as, known.version, github))
+    setPressed(undefined)
+    return started
   }
 
   /**
@@ -360,25 +419,6 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
     for (const server of servers) if (server.adding && installed(server) && notAdded[server.address] === undefined) void addToMachines(server)
   })
 
-  // A code is good for five minutes: it leaves the page when its time is up.
-  useEffect(() => {
-    if (!code) return
-    // Never longer than a code lives, whatever the server said its time is.
-    const timer = setTimeout(() => setCode(undefined), Math.min(CODE_MS, Math.max(0, Date.parse(code.expires) - Date.now())))
-    return () => clearTimeout(timer)
-  }, [code])
-
-  /** Ask the server's door for a code a phone or a browser gets in with, and show it. */
-  const addDevice = async (server: ServerRow): Promise<void> => {
-    setBusy(true)
-    setError(undefined)
-    setCode(undefined)
-    const link = await askLink(host, server.address)
-    if (link.ok) setCode({ ...link.value, address: server.address })
-    else setError(link.error)
-    setBusy(false)
-  }
-
   /** Take a machine off the list, and this computer out of it; whether it went. */
   const takeOut = async (machine: ModuleMachine): Promise<boolean> => {
     const removed = await host.removeMachine(machine.id).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
@@ -414,60 +454,71 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
   const submit = (event: FormEvent): void => {
     event.preventDefault()
     if (!address.trim() || !user.trim()) return
-    // The server is in the list below from here on: the field is free for the next one.
-    void install(address.trim(), user.trim(), copy && account !== undefined).then(started => started && setAddress(''))
+    // The server is in the list from here on, its steps running: the dialog has done its part.
+    void install(address.trim(), user.trim(), copy && account !== undefined).then(started => {
+      if (!started) return
+      setAddress('')
+      setConnecting(false)
+    })
   }
+
+  const empty = known !== undefined && servers.length === 0 && others.length === 0
+  // The first thing to do on an empty list is the one filled button; with servers listed, a server's own Invite is.
+  const connectButton = (
+    <Button size="sm" variant={empty ? 'default' : 'outline'} className="whitespace-nowrap" onClick={() => setConnecting(true)}>
+      <Server className="h-3.5 w-3.5" aria-hidden />
+      Connect a server
+    </Button>
+  )
+  const addButton = (
+    <Button size="sm" variant="outline" className="whitespace-nowrap" onClick={() => setAddingByLink(true)}>
+      <Plus className="h-3.5 w-3.5" aria-hidden />
+      Add machine
+    </Button>
+  )
 
   return (
     <SettingsSection
       description={
         isServer
           ? 'The other computers that run OpenAgent, where a run can be sent from here.'
-          : "The other computers that run OpenAgent, where a run can be sent. Connect your VPS: give its address and a user name, and OpenAgent installs itself there over SSH, with this computer's own SSH keys. A computer that already runs OpenAgent is added with the link it gives."
+          : 'The other computers that run OpenAgent, where a run can be sent. Install OpenAgent on a server of yours (a VPS) from here, or add a computer that already runs it.'
       }
       action={
-        <Button size="sm" variant="outline" className="whitespace-nowrap" onClick={() => setAddingByLink(true)}>
-          Add machine
-        </Button>
+        // Nothing before the machines are known: a button that moved into the empty list as they came would close what it opened.
+        known === undefined ? undefined : isServer ? addButton : empty ? undefined : (
+          <div className="flex flex-wrap justify-end gap-2">
+            {connectButton}
+            {addButton}
+          </div>
+        )
       }
     >
-      {!isServer && (
-        <>
-          <form onSubmit={submit} className="flex flex-wrap items-end gap-2 py-3">
-            <label className="min-w-40 flex-1 space-y-1 text-xs text-muted-foreground">
-              <span>The server's address</span>
-              <Input aria-label="The server's address" placeholder="203.0.113.5" value={address} onChange={event => setAddress(event.target.value)} />
-            </label>
-            <label className="w-32 space-y-1 text-xs text-muted-foreground">
-              <span>User name</span>
-              <Input aria-label="User name" value={user} onChange={event => setUser(event.target.value)} />
-            </label>
-            {/* Not before this computer has said which OpenAgent it runs: that is the one the server gets. */}
-            <Button size="sm" type="submit" disabled={busy || !known || !address.trim() || !user.trim()}>
-              Connect
-            </Button>
-          </form>
-          <div className="space-y-2 pb-3">
-            <label className="flex items-start gap-2 text-xs">
-              <Checkbox checked={copy && account !== undefined} onCheckedChange={checked => setCopy(checked === true)} disabled={busy || account === undefined} className="mt-0.5" aria-label="Copy my GitHub login to the server" />
-              <span>
-                {account !== undefined ? `Copy my GitHub login (${account}) to the server.` : 'Copy my GitHub login to the server.'}{' '}
-                <span className="text-muted-foreground">
-                  {noLogin ?? "It can do there all it can do here, and every agent that runs on the server works with it. It goes there at the install's end, to a server met for the first time too, whose key is taken as it is."}
-                </span>
-              </span>
-            </label>
-            <p className="text-xs text-muted-foreground">
-              The user is root, or one that becomes root without a password. It is only used to install, to update, to give the server its logins and to list its devices: what runs on the server afterwards runs as a user of its own, openagent.
-            </p>
-          </div>
-        </>
+      {empty && !isServer && (
+        <ul aria-label="Ways to add a machine" className="divide-y divide-border">
+          <li className="flex items-start justify-between gap-4 py-4 first:pt-0">
+            <div className="flex min-w-0 gap-3">
+              <Server aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Your own server</p>
+                <p className="text-xs text-muted-foreground">A VPS you can SSH into. OpenAgent installs itself there, then you reach it from your phone, from anywhere.</p>
+              </div>
+            </div>
+            {connectButton}
+          </li>
+          <li className="flex items-start justify-between gap-4 py-4 last:pb-0">
+            <div className="flex min-w-0 gap-3">
+              <Laptop aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium">A computer that runs OpenAgent</p>
+                <p className="text-xs text-muted-foreground">No machines saved. To add one that already runs OpenAgent, use the link it gives: its Settings, Devices, Add device.</p>
+              </div>
+            </div>
+            {addButton}
+          </li>
+        </ul>
       )}
-      {known !== undefined && servers.length === 0 && others.length === 0 && (
-        <p className="py-3 text-sm text-muted-foreground">
-          {isServer ? 'No machines saved.' : 'No machines saved. To add one that already runs OpenAgent, use the link it gives: its Settings, Devices, Add device.'}
-        </p>
-      )}
+      {empty && isServer && <p className="py-3 text-sm text-muted-foreground">No machines saved.</p>}
       {(servers.length > 0 || others.length > 0) && (
         <ul aria-label="Machines" className="divide-y divide-border">
           {servers.map(server => {
@@ -479,155 +530,148 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
             const reason = notAdded[server.address]
             const { github, claude } = server.logins
             const lineRefused = refusedLines[server.address] === true
+            const done = installed(server)
+            // An install that runs again on a server that is among the machines is an update.
+            const doing = machine ? 'Updating' : 'Installing'
+            const current = server.steps.findIndex(step => step.state !== 'done')
+            const sendable: StepState = machine ? 'done' : reason !== undefined ? 'failed' : server.adding ? 'running' : 'waiting'
+            // The steps fold into one line once there is nothing left to see in them.
+            const settled = done && machine !== undefined && !github.working
+            const showSteps = !settled || opened[server.address] === true
+            const spins = busy && pressed === server.address
             return (
-              <li key={server.address} aria-label={server.address} className="space-y-2 py-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm">{server.address}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {server.working
-                        ? 'OpenAgent is being installed.'
-                        : machine?.version !== undefined
-                          ? behind
-                            ? `OpenAgent ${machine.version}: behind this computer, which runs ${known!.version}.`
-                            : `OpenAgent ${machine.version}.`
-                          : machine
-                            ? 'Does not answer right now.'
-                            : installed(server) && !server.adding
-                              ? 'Installed. A run cannot be sent to it yet.'
-                              : `Logs in as ${server.user}.`}
-                    </p>
+              <li key={server.address} aria-label={server.address} className="space-y-4 py-4">
+                <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+                  <div className="flex min-w-0 gap-3">
+                    <Server aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0 space-y-0.5">
+                      <p className="truncate text-sm font-medium">{server.address}</p>
+                      {server.working ? (
+                        <ServerState tone="working">{current < 0 ? `${doing}…` : `${doing}: step ${current + 1} of ${server.steps.length}`}</ServerState>
+                      ) : failed ? (
+                        <ServerState tone="bad">{`${machine ? 'The update' : 'The install'} stopped at a step.`}</ServerState>
+                      ) : machine?.version !== undefined ? (
+                        behind ? (
+                          <ServerState tone="warn">{`OpenAgent ${machine.version}: behind this computer, which runs ${known!.version}.`}</ServerState>
+                        ) : (
+                          <ServerState tone="good">{`OpenAgent ${machine.version}.`}</ServerState>
+                        )
+                      ) : machine ? (
+                        <ServerState tone="quiet">Does not answer right now.</ServerState>
+                      ) : done && server.adding && reason === undefined ? (
+                        <ServerState tone="working">Connecting…</ServerState>
+                      ) : done ? (
+                        <ServerState tone={reason !== undefined ? 'bad' : 'quiet'}>Installed. A run cannot be sent to it yet.</ServerState>
+                      ) : (
+                        <ServerState tone="quiet">{`Logs in as ${server.user}.`}</ServerState>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {(behind || unfinished) && !server.working && !failed && (
                       <Button size="sm" disabled={busy || !known} aria-label={`Update ${server.address}`} onClick={() => void install(server.address, server.user)}>
+                        {spins && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
                         Update
                       </Button>
                     )}
                     {failed && (
                       // As Connect: not before this computer said which OpenAgent it runs, the one the server gets.
                       <Button size="sm" disabled={busy || !known} aria-label={`Try ${server.address} again`} onClick={() => void install(server.address, server.user, github.wanted === true)}>
+                        {spins && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
                         Try again
                       </Button>
                     )}
-                    {installed(server) && machine?.version === undefined && (reason !== undefined || !server.adding) && (
+                    {done && machine?.version === undefined && (reason !== undefined || !server.adding) && (
                       <Button size="sm" variant="outline" disabled={busy} aria-label={machine ? `Connect ${server.address} again` : `Finish connecting ${server.address}`} onClick={() => void addToMachines(server)}>
                         {machine ? 'Connect again' : 'Finish connecting'}
                       </Button>
                     )}
-                    {installed(server) && (
-                      <Button size="sm" variant="outline" disabled={busy} aria-label={`Add a device to ${server.address}`} onClick={() => void addDevice(server)}>
-                        Add device
-                      </Button>
-                    )}
-                    {!server.working && (
+                    {done && (
                       <Button
                         size="sm"
-                        variant="outline"
-                        // Not while one of its logins is being changed: the server is not forgotten then, and nothing of it is taken out before.
-                        disabled={busy || github.working || claude.working}
-                        aria-label={`Remove ${server.address}`}
-                        title={
-                          github.working || claude.working
-                            ? 'One of its logins is being changed right now: wait until that ends.'
-                            : 'Takes the server off this list, and this computer out of the server. Nothing else is changed on the server: OpenAgent goes on running there, and its logins stay there until you remove them.'
-                        }
-                        onClick={() => void removeServer(server)}
+                        variant={machine?.version !== undefined && !behind ? 'default' : 'outline'}
+                        disabled={busy}
+                        aria-label={`Invite to ${server.address}`}
+                        title="A code for a person, a phone or a browser: scanned or opened once, it lets them into OpenAgent on the server, from anywhere."
+                        onClick={() => {
+                          setJoined(undefined)
+                          setInviting(server.address)
+                        }}
                       >
-                        Remove
+                        <UserPlus className="h-3.5 w-3.5" aria-hidden />
+                        Invite
                       </Button>
                     )}
                   </div>
                 </div>
-                {installed(server) && machine && (
-                  <label className="flex items-start justify-between gap-4">
-                    <span className="min-w-0">
-                      <span className="block text-sm">Start runs on this computer from the phone</span>
-                      <span className="block text-xs text-muted-foreground">
-                        {lineRefused
-                          ? `Off: ${server.address} no longer lets this computer in for its line. Turn it on to set the line up again: "Run on" on ${server.address}'s page then offers this computer.`
-                          : server.reach === 'full'
-                          ? `On: on ${server.address}'s page, "Run on" offers this computer, and a run started there runs here. This computer must be on.`
-                          : server.reach === 'watch'
-                            ? `Off: ${server.address}'s page shows this computer's runs. It cannot start one here, or say anything to one.`
-                            : `Off. Turn it on to pick this computer under "Run on" on ${server.address}'s page, from your phone.`}
-                      </span>
-                    </span>
-                    <Switch
-                      aria-label={`Start runs on this computer from ${server.address}`}
-                      checked={server.reach === 'full' && !lineRefused}
-                      disabled={busy}
-                      onCheckedChange={on =>
-                        void act(() => reach(host, server.address, on ? 'full' : 'watch')).then(done => {
-                          // A line asked for anew is one the server lets in: said at once, not at the next look at its devices.
-                          if (done) setRefusedLines(lines => ({ ...lines, [server.address]: false }))
-                        })
-                      }
-                    />
-                  </label>
-                )}
-                {code?.address === server.address && (
-                  <div className="space-y-2">
-                    <QrCode text={code.url} label={`The code a new device scans to get into ${server.address}`} />
-                    <p className="text-xs text-muted-foreground">
-                      Scan it with the device's camera: it opens OpenAgent on the server, from anywhere. The code works once, for five minutes.
-                    </p>
-                    <div className="flex flex-wrap items-center gap-3">
-                      {/* The code is spent by the tab it opens: it leaves the page with the press. */}
-                      <a href={code.url} target="_blank" rel="noreferrer" className="text-xs underline" onClick={() => setCode(undefined)}>
-                        Let this browser in instead
-                      </a>
-                      <Button size="sm" variant="outline" onClick={() => setCode(undefined)}>
-                        Done
-                      </Button>
+                <div className="space-y-4 pl-7">
+                  {showSteps ? (
+                    <div className="space-y-1.5">
+                    <ol aria-label={`The install on ${server.address}`} className="space-y-1.5 text-xs">
+                      {server.steps.map(step => (
+                        <StepLine key={step.id} label={step.label} state={step.state} said={step.state === 'failed' ? step.said : undefined}>
+                          {step.id === 'login' && step.state === 'done' && server.fingerprint !== undefined && (
+                            <span className="ml-5.5 block break-all font-mono text-[11px] text-muted-foreground">{`The server's key: ${server.fingerprint}`}</span>
+                          )}
+                        </StepLine>
+                      ))}
+                      {github.working && (
+                        <li aria-label="Your GitHub login: not copied yet" className="flex items-center gap-2 text-muted-foreground">
+                          <StepMark state={server.steps.every(step => step.state === 'done') ? 'running' : 'waiting'} />
+                          Your GitHub login
+                        </li>
+                      )}
+                      {done && <StepLine label="Runs can be sent to it" state={sendable} said={machine ? undefined : reason} />}
+                    </ol>
+                      {settled && (
+                        <button type="button" className="ml-5.5 text-xs text-muted-foreground underline hover:text-foreground" onClick={() => setOpened(steps => ({ ...steps, [server.address]: false }))}>
+                          Hide the steps
+                        </button>
+                      )}
                     </div>
-                  </div>
-                )}
-                <ol aria-label={`The install on ${server.address}`} className="space-y-1 text-xs">
-                  {server.steps.map(step => (
-                    <li key={step.id} aria-label={`${step.label}: ${STATE_WORD[step.state]}`}>
-                      <span className={step.state === 'failed' ? 'text-danger' : step.state === 'waiting' ? 'text-muted-foreground' : undefined}>
-                        <span aria-hidden className="inline-block w-4">
-                          {MARK[step.state]}
-                        </span>
-                        {step.label}
-                      </span>
-                      {step.id === 'login' && step.state === 'done' && server.fingerprint !== undefined && (
-                        <span className="ml-2 break-all font-mono text-muted-foreground">{`The server's key: ${server.fingerprint}`}</span>
-                      )}
-                      {step.said !== undefined && step.state === 'failed' && (
-                        <pre role="alert" className="mt-1 ml-4 overflow-x-auto whitespace-pre-wrap rounded-md border border-border bg-background p-2 font-mono text-foreground">
-                          {step.said}
-                        </pre>
-                      )}
-                    </li>
-                  ))}
-                  {server.logins.github.working && (
-                    <li aria-label="Your GitHub login: not copied yet" className="text-muted-foreground">
-                      <span aria-hidden className="inline-block w-4">
-                        {MARK[server.steps.every(step => step.state === 'done') ? 'running' : 'waiting']}
-                      </span>
-                      Your GitHub login
-                    </li>
+                  ) : (
+                    <button
+                      type="button"
+                      aria-expanded={false}
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => setOpened(steps => ({ ...steps, [server.address]: true }))}
+                    >
+                      <CircleCheck aria-hidden className="h-3.5 w-3.5 text-success" />
+                      {`Installed, as ${server.user}`}
+                      <ChevronRight aria-hidden className="h-3 w-3" />
+                    </button>
                   )}
-                  {installed(server) && (
-                    <li aria-label={`Runs can be sent to it: ${machine ? 'done' : reason !== undefined ? 'failed' : server.adding ? 'running' : 'not started'}`}>
-                      <span className={machine ? undefined : reason !== undefined ? 'text-danger' : 'text-muted-foreground'}>
-                        <span aria-hidden className="inline-block w-4">
-                          {MARK[machine ? 'done' : reason !== undefined ? 'failed' : server.adding ? 'running' : 'waiting']}
+                  {done && machine && (
+                    <label className="flex items-start justify-between gap-4">
+                      <span className="min-w-0">
+                        <span className="block text-sm">Start runs on this computer from the phone</span>
+                        <span className="block text-xs text-muted-foreground">
+                          {lineRefused
+                            ? `Off: ${server.address} no longer lets this computer in for its line. Turn it on to set the line up again: "Run on" on ${server.address}'s page then offers this computer.`
+                            : server.reach === 'full'
+                              ? `On: on ${server.address}'s page, "Run on" offers this computer, and a run started there runs here. This computer must be on.`
+                              : server.reach === 'watch'
+                                ? `Off: ${server.address}'s page shows this computer's runs. It cannot start one here, or say anything to one.`
+                                : `Off. Turn it on to pick this computer under "Run on" on ${server.address}'s page, from your phone.`}
                         </span>
-                        Runs can be sent to it
                       </span>
-                      {reason !== undefined && !machine && (
-                        <pre role="alert" className="mt-1 ml-4 overflow-x-auto whitespace-pre-wrap rounded-md border border-border bg-background p-2 font-mono text-foreground">
-                          {reason}
-                        </pre>
-                      )}
-                    </li>
+                      <Switch
+                        aria-label={`Start runs on this computer from ${server.address}`}
+                        checked={server.reach === 'full' && !lineRefused}
+                        disabled={busy}
+                        onCheckedChange={on =>
+                          void act(() => reach(host, server.address, on ? 'full' : 'watch')).then(done => {
+                            // A line asked for anew is one the server lets in: said at once, not at the next look at its devices.
+                            if (done) setRefusedLines(lines => ({ ...lines, [server.address]: false }))
+                          })
+                        }
+                      />
+                    </label>
                   )}
-                </ol>
-                {installed(server) && (
-                  <ul aria-label={`The logins on ${server.address}`} className="space-y-2 border-t border-border pt-2 text-xs">
+                  {done && (
+                    <div className="space-y-2">
+                      <p className="text-sm">Logins on the server</p>
+                      <ul aria-label={`The logins on ${server.address}`} className="space-y-2 text-xs">
                     <LoginLine
                       label="GitHub"
                       words={
@@ -720,11 +764,43 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
                         </Button>
                       )}
                     </LoginLine>
-                  </ul>
-                )}
-                {installed(server) && (
-                  <ServerDevices host={host} address={server.address} everyMs={devicesEveryMs} awaited={code?.address === server.address} busy={busy || known === undefined} ownDevice={machine?.device} onGotIn={() => setCode(undefined)} onLine={refused => setRefusedLines(lines => (lines[server.address] === refused ? lines : { ...lines, [server.address]: refused }))} />
-                )}
+                      </ul>
+                    </div>
+                  )}
+                  {done && (
+                    <ServerDevices
+                      host={host}
+                      address={server.address}
+                      everyMs={devicesEveryMs}
+                      awaited={code?.address === server.address}
+                      busy={busy || known === undefined}
+                      ownDevice={machine?.device}
+                      onGotIn={name => {
+                        setJoined(name)
+                        setCode(undefined)
+                      }}
+                      onLine={refused => setRefusedLines(lines => (lines[server.address] === refused ? lines : { ...lines, [server.address]: refused }))}
+                    />
+                  )}
+                  {!server.working && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="-ml-2 text-muted-foreground"
+                      // Not while one of its logins is being changed: the server is not forgotten then, and nothing of it is taken out before.
+                      disabled={busy || github.working || claude.working}
+                      aria-label={`Remove ${server.address}`}
+                      title={
+                        github.working || claude.working
+                          ? 'One of its logins is being changed right now: wait until that ends.'
+                          : 'Takes the server off this list, and this computer out of the server. Nothing else is changed on the server: OpenAgent goes on running there, and its logins stay there until you remove them.'
+                      }
+                      onClick={() => void removeServer(server)}
+                    >
+                      Remove server
+                    </Button>
+                  )}
+                </div>
               </li>
             )
           })}
@@ -736,12 +812,74 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
       {!read.ok && !isServer && (
         <p role="alert" className="py-3 text-xs text-danger">{`The servers could not be read: ${read.error}`}</p>
       )}
-      {error !== undefined && (
+      {error !== undefined && !connecting && (
         <p role="alert" className="py-3 text-xs text-danger">
           {error}
         </p>
       )}
       {addingByLink && <AddMachineDialog onClose={() => setAddingByLink(false)} onAdded={() => void reloadMachines()} />}
+      {connecting && (
+        <Dialog open onOpenChange={open => !open && setConnecting(false)} title="Connect a server">
+          <form onSubmit={submit} className="space-y-4">
+            <p className="text-xs text-muted-foreground">OpenAgent installs itself on the server over SSH, with this computer's own SSH keys, and shows each step here as it runs. It takes a few minutes.</p>
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="min-w-40 flex-1 space-y-1 text-xs text-muted-foreground">
+                <span>The server's address</span>
+                <Input autoFocus aria-label="The server's address" placeholder="203.0.113.5" value={address} onChange={event => setAddress(event.target.value)} />
+              </label>
+              <label className="w-32 space-y-1 text-xs text-muted-foreground">
+                <span>User name</span>
+                <Input aria-label="User name" value={user} onChange={event => setUser(event.target.value)} />
+              </label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              The user is root, or one that becomes root without a password. It is only used to install, to update, to give the server its logins and to list its devices: what runs on the server afterwards runs as a user of its own, openagent.
+            </p>
+            <label className="flex items-start gap-2 text-xs">
+              <Checkbox checked={copy && account !== undefined} onCheckedChange={checked => setCopy(checked === true)} disabled={busy || account === undefined} className="mt-0.5" aria-label="Copy my GitHub login to the server" />
+              <span>
+                {account !== undefined ? `Copy my GitHub login (${account}) to the server.` : 'Copy my GitHub login to the server.'}{' '}
+                <span className="text-muted-foreground">
+                  {noLogin ?? "It can do there all it can do here, and every agent that runs on the server works with it. It goes there at the install's end, to a server met for the first time too, whose key is taken as it is."}
+                </span>
+              </span>
+            </label>
+            {error !== undefined && (
+              <p role="alert" className="text-xs text-danger">
+                {error}
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button size="sm" type="button" variant="ghost" onClick={() => setConnecting(false)}>
+                Cancel
+              </Button>
+              {/* Not before this computer has said which OpenAgent it runs: that is the one the server gets. */}
+              <Button size="sm" type="submit" disabled={busy || !known || !address.trim() || !user.trim()}>
+                {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
+                Connect
+              </Button>
+            </div>
+          </form>
+        </Dialog>
+      )}
+      {inviting !== undefined && (
+        <InviteDialog
+          title={`Invite to ${inviting}`}
+          ask={() => askLink(host, inviting)}
+          scan="Scan it with the phone's camera: it opens OpenAgent on the server, from anywhere."
+          openHere
+          joined={joined}
+          onCode={next => {
+            setJoined(undefined)
+            setCode(next && { ...next, address: inviting })
+          }}
+          onClose={() => {
+            setInviting(undefined)
+            setCode(undefined)
+            setJoined(undefined)
+          }}
+        />
+      )}
     </SettingsSection>
   )
 }
