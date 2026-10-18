@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cachedPrView, linkedPrOf, openPrOf, openPrs, prView, prsForBranch, prsForBranchOrThrow } from './pull-requests.js'
+import { cachedPrView, linkedPrOf, openPrOf, openPrs, prStates, prView, prsForBranch, prsForBranchOrThrow } from './pull-requests.js'
 import type { GitHostFor, GitHostRequest, RequestsOutcome } from '../store/git-host.js'
 
 // The dashboard's pull request reads (#1820), all through the git host provider: what is asked of it,
@@ -56,4 +56,15 @@ test('the open PRs are asked by state; a git host that could not answer is a fai
   assert.deepEqual(asked, [{ state: 'open' }])
   await assert.rejects(openPrs('/repo', fakeGitHost({ ok: false, error: 'gh: not authenticated' }).gitHost))
   assert.deepEqual(await openPrs('/repo', noGitHost), [])
+})
+
+test('how a project\'s PRs stand is one listing of every state, by number; an open draft reads as a draft; a git host that could not answer is a failure, so the last states are kept; no git host, no states', async () => {
+  const { gitHost, asked } = fakeGitHost({
+    ok: true,
+    requests: [REQUEST, { ...REQUEST, number: 3, draft: true }, { ...REQUEST, number: 4, state: 'merged' }, { ...REQUEST, number: 5, state: 'closed', draft: true }],
+  })
+  assert.deepEqual([...(await prStates('/repo', gitHost))], [[2, 'open'], [3, 'draft'], [4, 'merged'], [5, 'closed']])
+  assert.deepEqual(asked, [{ state: 'all' }])
+  await assert.rejects(prStates('/repo', fakeGitHost({ ok: false, error: 'gh: not authenticated' }).gitHost), /not authenticated/)
+  assert.equal((await prStates('/repo', noGitHost)).size, 0)
 })

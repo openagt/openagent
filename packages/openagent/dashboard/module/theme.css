@@ -34,6 +34,7 @@
   --color-warning: var(--warning);
   --color-danger: var(--danger);
   --color-info: var(--info);
+  --color-merged: var(--merged);
 
   /* The shadcn sidebar reads its own `--sidebar-*` family so a sidebar can be themed apart from
      the page. Its background is its own (`--sidebar`: in the dark theme a step below the page, as

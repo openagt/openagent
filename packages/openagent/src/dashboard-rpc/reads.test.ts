@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { onProjectFiles, onAgentWorktree, asRecorded, markCloudWaiting, markMachine, markOtherHost, markSaving, withFollowed } from './reads.js'
+import { onProjectFiles, onAgentWorktree, asRecorded, markCloudWaiting, markMachine, markOtherHost, markSaving, withFollowed, withPrStates } from './reads.js'
 import { bridgeQuestions, resetBridgeQuestions } from '../dashboard/bridge-store.js'
 import type { AgentMeta } from '../store/index.js'
 import { provideTestContext } from './test-context.js'
@@ -102,4 +102,19 @@ test('a followed run that has a record keeps the record\'s row, in its place, an
   assert.deepEqual(withFollowed(followed, [mine, record], sent), [followed[1], mine, { ...record, status: 'running', updatedAt: '2', sessionId: 's-2' }])
   // That the machine is a person's own computer, reached by its line, comes with the machine's name.
   assert.equal(withFollowed([{ ...followed[0]!, remoteByLine: true }], [record], sent)[0]!.remoteByLine, true)
+})
+
+test('each run with a pull request is marked with how it stands; one with no request, or one the git host did not list, is left as it was; no request among the runs, nothing is read', async () => {
+  const run = (id: string, pr?: number): AgentMeta => ({ id, status: 'done', startedAt: '2026-10-18T13:00:00.000Z', updatedAt: '2026-10-18T13:00:00.000Z', ...(pr !== undefined ? { pr: { number: pr, url: `https://example.com/pull/${pr}` } } : {}) })
+  const read: string[] = []
+  const states = async (cwd: string) => {
+    read.push(cwd)
+    return new Map([[7, 'merged' as const], [8, 'draft' as const]])
+  }
+  const marked = await withPrStates('/repo', [run('a', 7), run('b', 8), run('c'), run('d', 99)], states)
+  assert.deepEqual(marked.map(agent => [agent.id, agent.prState]), [['a', 'merged'], ['b', 'draft'], ['c', undefined], ['d', undefined]])
+  assert.ok(!('prState' in marked[2]!) && !('prState' in marked[3]!))
+  assert.deepEqual(read, ['/repo'])
+  await withPrStates('/repo', [run('e')], states)
+  assert.deepEqual(read, ['/repo'], 'no run has a request: the git host is not asked')
 })

@@ -13,6 +13,7 @@ import { buildActivity, type Activity } from '../dashboard/activity.js'
 import { buildDashboard, type DashboardData } from '../dashboard/dashboard.js'
 import { readGitStatus, type GitStatus } from '../dashboard/git-status.js'
 import { readRunHandoff, resolveAgentPr, type AgentHandoff } from '../dashboard/agent-handoff.js'
+import { cachedPrStates, type PrState } from '../dashboard/pull-requests.js'
 import type { AgentWorktree } from '../dashboard/types.js'
 import { crawlRepoFiles } from '../project.js'
 import { contextBridgeBrowser, contextProjects, contextRemote, resolveProjectPath, resolveAgentPath } from './context.js'
@@ -86,8 +87,21 @@ export async function onAgents(projectId: string): Promise<AgentMeta[]> {
   const remote = contextRemote()?.list(projectId) ?? []
   const cwd = await resolveProjectPath(projectId)
   const machineOf = await contextRemote().machineNames()
-  const local = cwd ? (await readAllAgents(cwd)).map(agent => forDashboard(agent, machineOf)) : []
+  const local = cwd ? await withPrStates(cwd, (await readAllAgents(cwd)).map(agent => forDashboard(agent, machineOf))) : []
   return withFollowed(remote, local, agentId => contextRemote().sent(agentId))
+}
+
+/**
+ * Each run that has a pull request, marked with how the request stands, so its row can show it:
+ * from one cached listing of the project's requests, read only when one of the runs has a request.
+ */
+export async function withPrStates(cwd: string, agents: AgentMeta[], states: (cwd: string) => Promise<Map<number, PrState>> = cachedPrStates): Promise<AgentMeta[]> {
+  if (!agents.some(agent => agent.pr !== undefined)) return agents
+  const known = await states(cwd)
+  return agents.map(agent => {
+    const prState = agent.pr && known.get(agent.pr.number)
+    return prState ? { ...agent, prState } : agent
+  })
 }
 
 /**
@@ -289,7 +303,7 @@ export async function onRecentAgents(): Promise<RecentAgent[]> {
     buildRecentAgents(projects, {
       agents: async path => {
         const followed = projects.filter(project => project.path === path).flatMap(project => remote.list(project.id))
-        return withFollowed(followed, (await readAllAgents(path)).map(agent => forDashboard(agent, machineOf)), agentId => remote.sent(agentId))
+        return withFollowed(followed, await withPrStates(path, (await readAllAgents(path)).map(agent => forDashboard(agent, machineOf))), agentId => remote.sent(agentId))
       },
     }),
   )

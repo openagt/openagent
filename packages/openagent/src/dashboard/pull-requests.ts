@@ -136,9 +136,33 @@ export async function cachedPrView(cwd: string, branch?: string): Promise<Cached
   return cachedRead(prCacheKey(cwd, branch), () => prView(cwd, branch))
 }
 
-/** Forget a branch's PR, after an action that changes whether it has one. */
+/** Forget a branch's PR, after an action that changes whether it has one, and with it how the project's PRs stand. */
 export function forgetPr(cwd: string, branch?: string): void {
   invalidate(prCacheKey(cwd, branch))
+  invalidate(prStatesCacheKey(cwd))
+}
+
+/** How a run's pull request stands, as its row in the list of runs shows it. */
+export type PrState = 'open' | 'draft' | 'merged' | 'closed'
+
+/**
+ * How each of a project's newest pull requests stands, by number: what the list of runs marks
+ * each run's PR with. One listing of the project's requests, whatever their state, rather than one
+ * per run; a request older than what the git host lists has no state here. A listing the git host
+ * cannot answer throws, so the cache keeps the states it last had.
+ */
+export async function prStates(cwd: string, gitHost: GitHostFor = projectGitHost): Promise<Map<number, PrState>> {
+  const source = await gitHost(cwd)
+  if (!source) return new Map()
+  const listed = await source.requests({ state: 'all' })
+  if (!listed.ok) throw new Error(listed.error)
+  return new Map(listed.requests.map(request => [request.number, request.state === 'open' && request.draft ? 'draft' : request.state]))
+}
+
+/** The cached form of {@link prStates} (#1028): the list of runs is polled, and a PR's state changes far less often. Nothing yet known reads as no states. */
+export async function cachedPrStates(cwd: string): Promise<Map<number, PrState>> {
+  const read = await cachedRead(prStatesCacheKey(cwd), () => prStates(cwd)).catch(() => undefined)
+  return read?.value ?? new Map()
 }
 
 /** The cached form of {@link prsForBranch}, shared through the same read-through cache (#1028). */
@@ -156,6 +180,10 @@ const KEY_SEP = String.fromCharCode(0)
 
 function prCacheKey(cwd: string, branch?: string): string {
   return ['pr', cwd, branch ?? ''].join(KEY_SEP)
+}
+
+function prStatesCacheKey(cwd: string): string {
+  return ['pr-states', cwd].join(KEY_SEP)
 }
 
 function branchPrsCacheKey(cwd: string, branch: string): string {

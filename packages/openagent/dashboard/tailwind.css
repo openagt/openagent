@@ -46,6 +46,8 @@
   --warning: #9a6b00;
   --danger: #d1403d;
   --info: #2b7ba5;
+  /* A merged pull request: Everforest's purple, darkened like the four above. */
+  --merged: #a24f8c;
 
   /* The brand mark's six strands (#757), darkest first, exactly as the brand ships them.
      Kept as variables so the mark can be re-ramped for a dark canvas without touching the SVG. */
@@ -83,6 +85,7 @@
   --warning: #dbbc7f;
   --danger: #e67e80;
   --info: #7fbbb3;
+  --merged: #d699b6;
 
   /* The ramp inverted for a dark canvas: the shipped one starts at near-black, which would sink
      the leading strands into the background. Same order (leading strand lightest against dark),

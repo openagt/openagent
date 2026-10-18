@@ -274,6 +274,34 @@ describe('AgentHistory rows', () => {
     expect(screen.queryByLabelText('Started on this-mac')).toBeNull()
   })
 
+  test('a run\'s pull request is a glyph before the logo, its shape and colour by how it stands, and the hover says which', async () => {
+    const agents = [
+      agent({ id: 'open', status: 'done', driver: 'claude-code', pr: { number: 12, url: 'u' }, prState: 'open' }),
+      agent({ id: 'draft', status: 'done', pr: { number: 13, url: 'u' }, prState: 'draft' }),
+      agent({ id: 'merged', status: 'done', pr: { number: 14, url: 'u' }, prState: 'merged' }),
+      agent({ id: 'closed', status: 'done', pr: { number: 15, url: 'u' }, prState: 'closed' }),
+      agent({ id: 'unread', status: 'done', pr: { number: 16, url: 'u' } }),
+      agent({ id: 'none', status: 'done' }),
+    ]
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={agents} selectedAgentId={null} onSelect={() => {}} />)
+    const glyph = (label: string) => screen.getByLabelText(label).querySelector('svg')!.getAttribute('class')
+    expect(glyph('PR #12 open')).toContain('lucide-git-pull-request')
+    expect(glyph('PR #12 open')).toContain('text-success')
+    expect(glyph('PR #13 draft')).toContain('lucide-git-pull-request-draft')
+    expect(glyph('PR #14 merged')).toContain('lucide-git-merge')
+    expect(glyph('PR #14 merged')).toContain('text-merged')
+    expect(glyph('PR #15 closed')).toContain('lucide-git-pull-request-closed')
+    expect(glyph('PR #15 closed')).toContain('text-danger')
+    // A request the git host did not list is still the run's: drawn plainly, with its number.
+    expect(glyph('PR #16')).toContain('text-muted-foreground')
+    expect(screen.getAllByLabelText(/^PR #/)).toHaveLength(5)
+    // Just before the logo, so the PR marks stand in one column.
+    const row = screen.getByLabelText('PR #12 open').closest('button')!
+    const marks = [...row.querySelectorAll('[aria-label]')].map(mark => mark.getAttribute('aria-label'))
+    expect(marks.slice(-2)).toEqual(['PR #12 open', 'Claude Code'])
+    expect(row.getAttribute('aria-label')).toContain('PR #12 open')
+  })
+
   test('a local run has no machine glyph (#1067)', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent()]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.queryByLabelText(/Runs on/)).toBeNull()
