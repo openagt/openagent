@@ -1,5 +1,5 @@
 import { checkForUpdate, formatUpdateStatus, nodeVersionFetcher, type VersionFetcher } from './update-check.js'
-import { runDaemon, DEFAULT_DAEMON_PORT } from '@openagt/dashboard/serve'
+import { runDaemon, joinRunningDashboard, DEFAULT_DAEMON_PORT, type StartedProject } from '@openagt/dashboard/serve'
 import { handDownSkills } from './skills.js'
 import { repositoryOf } from './project.js'
 import { openInBrowser } from './browser.js'
@@ -21,7 +21,8 @@ const HELP = `OpenAgent — turnkey AI orchestration that wraps a coding agent (
 Usage:
   openagent              Serve the dashboard in the foreground. Ctrl+C closes it; the server
                          logs stream to this terminal. Typed inside a Git repository, it adds
-                         that repository to the dashboard's projects and opens its page.
+                         that repository to the dashboard's projects and opens its page. With
+                         the dashboard running already, it hands the repository to that one.
 
 Options:
   --port <n>             Dashboard port (default: 4200).
@@ -105,10 +106,11 @@ export async function runCli(argv: string[], io: CliIO = defaultIO): Promise<num
 async function runForegroundDaemonCmd(args: CliArgs, io: CliIO): Promise<number> {
   const cwd = process.cwd()
   const port = args.port ?? DEFAULT_DAEMON_PORT
+  let project: string | undefined
   try {
     // Set in this process's own environment, so everything the dashboard starts inherits it.
     await handDownSkills(process.env)
-    const project = await repositoryOf(cwd)
+    project = await repositoryOf(cwd)
     let url = ''
     await runDaemon(cwd, {
       port,
@@ -124,24 +126,52 @@ async function runForegroundDaemonCmd(args: CliArgs, io: CliIO): Promise<number>
         // Outside a repository there is no project to open: the Overview, where one is added.
         if (project === undefined) openInBrowser(state.url)
       },
-      ...(project !== undefined
-        ? {
-            project,
-            onProject: (started: { id: string; path: string; added: boolean }) => {
-              // Its page, which picks the project in the sidebar too. Named by its id, which always
-              // opens it: the dashboard then writes the project's address, its name, in its place.
-              const page = `${url}/${encodeURIComponent(started.id)}`
-              if (started.added) io.out(`◆ project added: ${started.path}`)
-              io.out(`◆ project: ${page}`)
-              openInBrowser(page)
-            },
-          }
-        : {}),
+      ...(project !== undefined ? { project, onProject: (started: StartedProject) => openProject(url, started, io) } : {}),
     })
   } catch (err) {
+    // Another dashboard has the port (#2141): this one hands it the folder rather than failing.
+    // An ephemeral port never collides, so it never joins.
+    if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE' && port !== 0) return joinRunning(port, project, io)
     io.err(`could not start the dashboard (${err instanceof Error ? err.message : String(err)}).`)
     return 1
   }
+  return 0
+}
+
+/**
+ * Say where the project is and open its page, which picks it in the sidebar too. What is printed
+ * is the address the page shows; what is opened is its id, which always opens it, whatever the
+ * page's modules call their pages: the dashboard then writes the address in its place.
+ */
+function openProject(url: string, started: StartedProject, io: CliIO): void {
+  if (started.added) io.out(`◆ project added: ${started.path}`)
+  io.out(`◆ project: ${url}/${encodeURIComponent(started.address)}`)
+  openInBrowser(`${url}/${encodeURIComponent(started.id)}`)
+}
+
+/**
+ * A dashboard runs on the port already: hand it the repository this was typed in, open the page,
+ * and end, since this process serves nothing. What holds the port may be no dashboard at all.
+ */
+async function joinRunning(port: number, project: string | undefined, io: CliIO): Promise<number> {
+  const running = await joinRunningDashboard(port, project)
+  if (!running.joined) {
+    io.err(`could not start the dashboard: port ${port} is taken by another program. Pass --port <n> to use another one.`)
+    return 1
+  }
+  io.out(`◆ dashboard already running: ${running.url}`)
+  const version = openagentVersion()
+  if (running.version !== version) io.out(`  It runs OpenAgent v${running.version}; this is v${version}. Stop it and run this again to use v${version}.`)
+  if (!running.project) {
+    // Outside a repository there is no project to open: the Overview, where one is added.
+    openInBrowser(running.url)
+    return 0
+  }
+  if (!running.project.ok) {
+    io.err(`could not add ${project}: ${running.project.error}`)
+    return 1
+  }
+  openProject(running.url, running.project, io)
   return 0
 }
 

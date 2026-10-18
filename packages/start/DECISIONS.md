@@ -34,3 +34,7 @@ already made, and lists it in its pull request; for anything else it proposes an
 - Typed in a terminal, the command opens the dashboard in the browser, on the page of the
   project it was typed in, picked in the sidebar too; outside a repository, on the
   Overview. Picked over printing the address only, one more step for the person.
+- Typed while a dashboard already runs on the port, the command hands that dashboard the
+  repository it was typed in, opens the project's page and ends; it does not stop the
+  running one, even of another version, and says so when the versions differ (#2141).
+  Picked over failing because the port is taken, which made a second start look broken.

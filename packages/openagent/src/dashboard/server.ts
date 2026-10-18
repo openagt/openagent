@@ -9,7 +9,7 @@ import { serveClientBundle } from './static.js'
 import { makeRpcMount, RPC_PREFIX, isSameOriginRequest, isExpectedHost, isJsonRequest } from './rpc-serve.js'
 import { requestPathname } from '../request-path.js'
 import { COMPUTER_MODULES_PREFIX, MODULES_PREFIX, serveComputerModuleFile, serveModuleFile } from './module-serve.js'
-import type { AddProjectResult, RemoveProjectResult, StartAgentOptions, StartAgentResult } from './types.js'
+import type { AddProjectResult, RemoveProjectResult, StartAgentOptions, StartAgentResult, StartedInResult } from './types.js'
 import type { EventsSource, RemoteAgents } from './rpc-serve.js'
 import { handleRelayRequest, RELAY_PREFIX, type RelayHandlers } from './relay-endpoints.js'
 import { handleScreenRequest, kept, SCREEN_PREFIX, type ScreenHandlers } from './screen.js'
@@ -36,6 +36,8 @@ export interface DashboardOptions {
    * the wired dashboard context. Wire it to install the repo and register it.
    */
   onAddProject: (path: string, share: boolean) => Promise<AddProjectResult> | AddProjectResult
+  /** Called when a second `openagent` finds this dashboard running: the `sendStartedAgain` RPC reaches this through the wired dashboard context. */
+  onStartedIn: (folder: string) => Promise<StartedInResult> | StartedInResult
   /** Called when the browser removes a project: the `sendRemoveProject` RPC reaches this through the wired dashboard context. */
   onRemoveProject: (projectId: string, files: boolean) => Promise<RemoveProjectResult> | RemoveProjectResult
   /**
@@ -143,6 +145,7 @@ export function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
   const rpcMount = makeRpcMount({
     startAgent: opts.onStart,
     addProject: opts.onAddProject,
+    startedIn: opts.onStartedIn,
     removeProject: opts.onRemoveProject,
     eventsSource: opts.eventsSource,
     remote: opts.remote,

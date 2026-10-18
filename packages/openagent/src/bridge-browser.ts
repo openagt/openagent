@@ -437,6 +437,19 @@ export interface BridgeBrowserOptions {
   extension?: BridgeExtensionSource | undefined
   /** Progress, one line at a time, for the dashboard to show while the launch runs. */
   report?: ((detail: string) => void) | undefined
+  /** Gives the launch up: a step under way is not waited for, and a Chrome already spawned is killed. */
+  signal?: AbortSignal | undefined
+}
+
+/** `promise`, or a rejection as soon as `signal` aborts: a launch step a stop does not wait for. */
+function unlessAborted<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return promise
+  return new Promise<T>((resolve, reject) => {
+    const abort = (): void => reject(new Error('the launch was stopped'))
+    if (signal.aborted) return abort()
+    signal.addEventListener('abort', abort, { once: true })
+    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort))
+  })
 }
 
 /**
@@ -446,16 +459,17 @@ export interface BridgeBrowserOptions {
  */
 export async function startBridgeBrowser(opts: BridgeBrowserOptions, deps: BridgeBrowserDeps = bridgeBrowserDeps()): Promise<BridgeBrowser> {
   const report = opts.report ?? (() => {})
+  const step = <T>(promise: Promise<T>): Promise<T> => unlessAborted(promise, opts.signal)
   const extension = opts.extension ?? bridgeExtensionSource()
   if (!extension) throw new Error('the extension files are missing from this package (dist/chrome-extension)')
   const profileDir = join(opts.dir, 'profile')
-  await mkdir(profileDir, { recursive: true })
-  const binary = await deps.binary(join(opts.dir, 'chrome'), report)
-  if (await freeProfile(profileDir, deps)) report('stopped a browser an earlier daemon left behind')
-  const extensionDir = await installableExtensionDir(extension, opts.dir)
+  await step(mkdir(profileDir, { recursive: true }))
+  const binary = await step(deps.binary(join(opts.dir, 'chrome'), report))
+  if (await step(freeProfile(profileDir, deps))) report('stopped a browser an earlier daemon left behind')
+  const extensionDir = await step(installableExtensionDir(extension, opts.dir))
 
   report('starting Chrome for Testing')
-  const port = await deps.port()
+  const port = await step(deps.port())
   const browserUrl = `http://127.0.0.1:${port}`
   const child = deps.spawn(binary, bridgeBrowserLaunchArgs(port, profileDir))
 
@@ -471,21 +485,48 @@ export async function startBridgeBrowser(opts: BridgeBrowserOptions, deps: Bridg
   child.on('exit', (code, signal) => gone(`Chrome exited${signal ? ` on ${signal}` : code !== null ? ` with code ${code}` : ''}`))
   child.on('error', err => gone(`Chrome could not start: ${err.message}`))
 
-  if (!(await deps.ready(browserUrl))) {
+  // Waits for the browser to exit, a beat at a time, for up to `ms`.
+  const exitWithin = async (ms: number): Promise<void> => {
+    for (let beat = 0; beat < ms / BEAT_MS && !exited; beat++) await deps.sleep(BEAT_MS)
+  }
+  // Kill it, and kill it outright if it is still there a moment later: a browser left running
+  // keeps the profile held, and the next daemon has to stop it first.
+  const kill = async (): Promise<void> => {
     child.kill()
+    await exitWithin(STALE_EXIT_MS)
+    if (!exited) child.kill('SIGKILL')
+  }
+  let connected: BridgeBrowserCdp | undefined
+  // One close, however often it is asked: a stop and the launch's own failure may both ask.
+  let closed: Promise<void> | undefined
+  const close = (): Promise<void> =>
+    (closed ??= (async () => {
+      closing = true
+      if (!exited) {
+        // Asked, not awaited: a browser that is quitting already (it got the terminal's Ctrl+C
+        // too) may never answer, and the grace is all it gets either way.
+        void connected?.call('Browser.close').catch(() => {})
+        if (connected) await exitWithin(CLOSE_GRACE_MS)
+        if (!exited) await kill()
+      }
+      connected?.close()
+    })())
+  const giveUp = (): void => void close()
+  opts.signal?.addEventListener('abort', giveUp, { once: true })
+
+  const ready = await step(deps.ready(browserUrl)).catch(async (err: unknown) => {
+    await close()
+    throw err
+  })
+  if (!ready) {
+    await close()
     throw new Error(exited ?? 'Chrome never opened its debugging port')
   }
-  const cdp = await deps.connect(browserUrl)
-  const close = async (): Promise<void> => {
-    if (closing) return
-    closing = true
-    if (!exited) {
-      await cdp.call('Browser.close').catch(() => {})
-      for (let beat = 0; beat < CLOSE_GRACE_MS / BEAT_MS && !exited; beat++) await deps.sleep(BEAT_MS)
-      if (!exited) child.kill()
-    }
-    cdp.close()
-  }
+  const cdp = await step(deps.connect(browserUrl)).catch(async (err: unknown) => {
+    await close()
+    throw err
+  })
+  connected = cdp
   try {
     report('installing the extension')
     const extensionId = await installExtension(cdp, extensionDir)
@@ -514,6 +555,8 @@ export async function startBridgeBrowser(opts: BridgeBrowserOptions, deps: Bridg
   } catch (err) {
     await close()
     throw err
+  } finally {
+    opts.signal?.removeEventListener('abort', giveUp)
   }
 }
 
@@ -542,13 +585,13 @@ export interface BridgeBrowserOwner {
   act(action: BridgeBrowserAction): Promise<void>
 }
 
-/** How the owner launches a browser: the daemon's real launch, or a test's fake. */
-export type BridgeBrowserLauncher = (report: (detail: string) => void) => Promise<BridgeBrowser>
+/** How the owner launches a browser: the daemon's real launch, or a test's fake. `signal` aborts when a stop gives the launch up. */
+export type BridgeBrowserLauncher = (report: (detail: string) => void, signal: AbortSignal) => Promise<BridgeBrowser>
 
 /**
  * The one bridge browser a daemon runs. A launch is slow — the first one downloads Chrome — so
- * the status carries the step it is on, and a stop that lands mid-launch closes the browser the
- * launch then hands over rather than leaving it running unowned. A browser that exits on its own
+ * the status carries the step it is on, and a stop that lands mid-launch gives the launch up, and
+ * closes the browser a launch that went on regardless hands over, rather than leaving it unowned. A browser that exits on its own
  * (the user quit it) is reported as stopped with the reason, and not relaunched: quitting it was
  * an act, and the dashboard offers a restart.
  */
@@ -556,11 +599,13 @@ export function bridgeBrowserOwner(launch: BridgeBrowserLauncher, log: (line: st
   let current: BridgeBrowserStatus = { state: 'off' }
   let browser: BridgeBrowser | undefined
   let launching: Promise<void> | undefined
+  let aborting: AbortController | undefined
   let generation = 0
 
   const start = async (): Promise<void> => {
     if (browser || launching) return launching
     const mine = ++generation
+    const abort = (aborting = new AbortController())
     current = { state: 'starting', detail: 'preparing' }
     // A launcher that throws before it has anything to await — the bridge token it needs does not
     // exist — is a launch that failed, and goes the same way as one that failed later. Left as a
@@ -571,7 +616,7 @@ export function bridgeBrowserOwner(launch: BridgeBrowserLauncher, log: (line: st
       resolve(
         launch(detail => {
           if (generation === mine) current = { state: 'starting', detail }
-        }),
+        }, abort.signal),
       ),
     )
       .then(async launched => {
@@ -604,6 +649,9 @@ export function bridgeBrowserOwner(launch: BridgeBrowserLauncher, log: (line: st
   const stop = async (): Promise<void> => {
     generation++
     current = { state: 'off' }
+    // A launch under way is given up rather than waited out: the first one downloads Chrome,
+    // and a stop (the daemon's Ctrl+C) must not wait for that.
+    aborting?.abort()
     await launching
     const running = browser
     browser = undefined

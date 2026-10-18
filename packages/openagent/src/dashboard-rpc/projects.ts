@@ -1,9 +1,10 @@
-import { contextAddProject, contextProjectErrors, contextProjects, contextRemoveProject, resolveProjectPath } from './context.js'
+import { contextAddProject, contextProjectErrors, contextProjects, contextRemoveProject, contextStartedIn, resolveProjectPath } from './context.js'
 import { readProjectCommands, type ProjectCommand } from '../project-commands.js'
 import { DATA_BRANCH, branchReach, originDefaultBranch, pullFileBranch, writeSharing, type BranchReach } from '@openagt/agent-data'
 import { readProjectHooks, runCheckHook, startLineTakesBase, type StartReadiness } from '../project-hooks.js'
 import { isPublishPick, publishPickIn, type PublishPick } from '../publish-levels.js'
 import { hasRemote } from '../has-remote.js'
+import { openagentVersion } from '../version.js'
 import { repositoryAddress } from '../repository-address.js'
 import { currentBranch } from '../dashboard/git-status.js'
 import { waitingSkills } from '../dashboard/start-branch.js'
@@ -12,7 +13,7 @@ import { cloneProject, cloneTargetOf } from '../clone-project.js'
 import { canPickDirectory, pickDirectory, type PickDirectoryResult } from '../pick-directory.js'
 import { projectGitHost } from '../store/git-host.js'
 import type { ProjectSummary } from '../dashboard/projects.js'
-import type { AddProjectResult, OnboardingSuggestion, RemoveProjectResult } from '../dashboard/types.js'
+import type { AddProjectResult, OnboardingSuggestion, RemoveProjectResult, StartedInResult } from '../dashboard/types.js'
 
 // The Projects sidebar behind the new dashboard (#405): the global registry (#390) the
 // daemon and CLI write — id, path, name, activated, last activity. The per-agent
@@ -47,6 +48,19 @@ export async function sendAddProject(path: string, share: boolean): Promise<AddP
   const trimmed = path.trim()
   if (!trimmed) return { ok: false, error: 'a project path is required' }
   return addProject(trimmed, share === true)
+}
+
+/**
+ * A second `openagent` started while this dashboard listens on its port (#2141): it serves
+ * nothing itself, and hands over the folder it was started in, if it is in a repository. The
+ * answer says which OpenAgent runs here, and the project that holds the folder, else the folder,
+ * added. A page's own call is answered the same, and adds no more than Add project.
+ */
+export async function sendStartedAgain(folder: string | null): Promise<{ version: string; project?: StartedInResult }> {
+  const startedIn = contextStartedIn()
+  const version = openagentVersion()
+  if (typeof folder !== 'string' || !folder.trim()) return { version }
+  return { version, project: await startedIn(folder) }
 }
 
 /** Where the repository a person typed the address of would be cloned to on this computer, or why what was typed is no address: asked before anything is cloned. */

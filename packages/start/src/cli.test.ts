@@ -1,6 +1,10 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { createServer, type RequestListener } from 'node:http'
+import type { AddressInfo } from 'node:net'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { parseArgs, printStartupFooter, runCli, type CliIO } from './cli.js'
 import { openagentVersion } from './version.js'
 
@@ -119,3 +123,63 @@ test('an unreachable npm registry costs the footer nothing (#312)', async () => 
   assert.ok(!out.some(l => l.includes('Up to date') || l.includes('Update available')))
 })
 
+
+/** A server on an ephemeral port of this computer, answering with `listener`: what holds the port a second `openagent` is given. */
+async function holdPort(listener: RequestListener): Promise<{ port: number; close: () => Promise<void> }> {
+  const server = createServer(listener)
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+  return { port: (server.address() as AddressInfo).port, close: () => new Promise(resolve => server.close(() => resolve())) }
+}
+
+/** Run `body` with the registry in a throwaway folder: the dashboard's start reads and writes it before it binds. */
+async function withConfig(body: () => Promise<void>): Promise<void> {
+  const before = process.env.XDG_CONFIG_HOME
+  const dir = await mkdtemp(join(tmpdir(), 'openagent-cli-'))
+  process.env.XDG_CONFIG_HOME = dir
+  try {
+    await body()
+  } finally {
+    if (before === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = before
+    await rm(dir, { recursive: true, force: true })
+  }
+}
+
+test('a second run hands its repository to the dashboard on the port, prints the address the page shows, and ends (#2141)', async () => {
+  const asked: unknown[] = []
+  const running = await holdPort((req, res) => {
+    let body = ''
+    req.on('data', chunk => (body += chunk))
+    req.on('end', () => {
+      asked.push({ path: req.url, args: JSON.parse(body) })
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ ret: { version: openagentVersion(), project: { ok: true, id: 'gemstack-st99l0', path: '/code/gemstack', added: true, address: 'gemstack' } } }))
+    })
+  })
+  try {
+    await withConfig(async () => {
+      const { io, out, err } = capture()
+      assert.equal(await runCli(['--port', String(running.port)], io), 0, err.join('\n'))
+      const url = `http://127.0.0.1:${running.port}`
+      assert.deepEqual(out, [`◆ dashboard already running: ${url}`, '◆ project added: /code/gemstack', `◆ project: ${url}/gemstack`])
+      // Run from inside this repository: that is the folder handed over.
+      assert.equal(asked.length, 1)
+      assert.match(JSON.stringify(asked[0]), /"path":"\/_rpc\/sendStartedAgain","args":\["\/[^"]+"\]/)
+    })
+  } finally {
+    await running.close()
+  }
+})
+
+test('a port another program holds is said to be taken, with what to do (#2141)', async () => {
+  const other = await holdPort((_req, res) => res.writeHead(200, { 'content-type': 'text/html' }).end('<html>a dev server</html>'))
+  try {
+    await withConfig(async () => {
+      const { io, err } = capture()
+      assert.equal(await runCli(['--port', String(other.port)], io), 1)
+      assert.deepEqual(err, [`could not start the dashboard: port ${other.port} is taken by another program. Pass --port <n> to use another one.`])
+    })
+  } finally {
+    await other.close()
+  }
+})

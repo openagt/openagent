@@ -228,6 +228,30 @@ test('a Start runs the project\'s own start hook with the prompt and the picks, 
   }
 })
 
+test('a stop frees the port before the close hooks run, and ends at its deadline however long a step takes (#2141)', async () => {
+  const cwd = await realpath(await tmpWorkspace())
+  const env = await configEnv(cwd)
+  await addProject(cwd, new Date().toISOString(), undefined, env)
+  await writeFile(join(cwd, OPENAGENT_DIR, 'hooks.yml'), 'close:\n  - sleep 6\n')
+  const logged: string[] = []
+  const original = console.log
+  console.log = (...args: unknown[]) => void logged.push(args.map(String).join(' '))
+  const ac = new AbortController()
+  try {
+    const { done, state } = await startDaemon(cwd, { port: 0, signal: ac.signal, env, shutdownDeadlineMs: 2_000 })
+    const stopping = Date.now()
+    ac.abort()
+    await done
+    assert.ok(Date.now() - stopping < 4_000, 'not held by the close hook')
+    await assert.rejects(fetch(state.url), 'the port is free again')
+    assert.ok(logged.some(line => line.includes(`stopped without waiting for the close hooks of ${cwd}`)), logged.join('\n'))
+  } finally {
+    console.log = original
+    ac.abort()
+    await rm(cwd, { recursive: true, force: true })
+  }
+})
+
 test('the dashboard adds no folder by itself, not even its own start folder, so a removed project stays removed', async () => {
   const cwd = await tmpWorkspace() // activated, as a project that was added and then removed still is
   const env = await configEnv(cwd)
@@ -251,7 +275,7 @@ test('the folder the caller names is added once the dashboard listens, as Add pr
   const before = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]))
   Object.assign(process.env, env)
   await mkdir(join(folder, 'src'))
-  const told: { id: string; path: string; added: boolean }[] = []
+  const told: { id: string; path: string; added: boolean; address: string }[] = []
   try {
     // Aborted as soon as it listens: the add comes before the daemon waits, so it has run once it is done.
     for (const project of [folder, join(folder, 'src')]) {
@@ -261,7 +285,8 @@ test('the folder the caller names is added once the dashboard listens, as Add pr
       await done
     }
     const id = projectId(folder)
-    assert.deepEqual(told, [{ id, path: folder, added: true }, { id, path: folder, added: false }])
+    const address = id.slice(0, id.lastIndexOf('-')) // the folder's name, as the id writes it
+    assert.deepEqual(told, [{ id, path: folder, added: true, address }, { id, path: folder, added: false, address }])
     assert.deepEqual((await listProjects(undefined, env)).map(project => project.id), [id])
     assert.match(await readFile(join(folder, OPENAGENT_DIR, 'hooks.yml'), 'utf8'), /^start: agent-runner /m, 'added with the hook lines Add project writes')
   } finally {

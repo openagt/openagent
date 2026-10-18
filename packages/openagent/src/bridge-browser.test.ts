@@ -133,14 +133,14 @@ function fakeChrome(over: { targets?: () => CdpTarget[]; loadUnpacked?: unknown;
   return { cdp, calls, evaluated, extensionId }
 }
 
-/** A fake Chrome process: alive until `exit` is fired or it is killed. */
+/** A fake Chrome process: alive until `exit` is fired; a kill only records its signal. */
 function fakeProcess() {
   const listeners: Record<string, ((...args: never[]) => void)[]> = {}
   const child = {
     pid: 4242,
-    killed: 0,
-    kill() {
-      this.killed++
+    killed: [] as NodeJS.Signals[],
+    kill(signal: NodeJS.Signals = 'SIGTERM') {
+      this.killed.push(signal)
       return true
     },
     on(event: string, listener: (...args: never[]) => void) {
@@ -246,7 +246,7 @@ test('a browser that never listens is killed and the launch fails with the reaso
   const child = fakeProcess()
   const { deps } = fakeDeps(fakeChrome(), child, { ready: async () => false })
   await assert.rejects(startBridgeBrowser(options(dir), deps), /never opened its debugging port/)
-  assert.equal(child.killed, 1)
+  assert.deepEqual(child.killed, ['SIGTERM', 'SIGKILL'], 'killed outright when SIGTERM does not end it')
 })
 
 test('a setup step that fails closes the browser again rather than leaving it half set up', async () => {
@@ -256,7 +256,7 @@ test('a setup step that fails closes the browser again rather than leaving it ha
   const { deps } = fakeDeps(chrome, child)
   await assert.rejects(startBridgeBrowser(options(dir), deps), /developer mode/)
   assert.ok(chrome.calls.some(c => c.method === 'Browser.close'), 'asked to close itself')
-  assert.equal(child.killed, 1, 'and killed when it did not')
+  assert.deepEqual(child.killed, ['SIGTERM', 'SIGKILL'], 'and killed when it did not')
 })
 
 test('a worker that never takes the token fails the launch by name', async () => {
@@ -276,7 +276,7 @@ test('Chrome exiting on its own is reported once; a close asked for is not', asy
   child.exit(null, 'SIGKILL')
   assert.deepEqual(exits, ['Chrome exited on SIGKILL'])
   await browser.close()
-  assert.equal(child.killed, 0, 'nothing to kill once it is gone')
+  assert.deepEqual(child.killed, [], 'nothing to kill once it is gone')
 
   const child2 = fakeProcess()
   const chrome2 = fakeChrome()
@@ -288,6 +288,37 @@ test('Chrome exiting on its own is reported once; a close asked for is not', asy
   await closing
   assert.deepEqual(exits2, [], 'an exit the close caused is not an exit to report')
   assert.ok(chrome2.calls.some(c => c.method === 'Browser.close'))
+})
+
+test('a browser that never answers Browser.close is killed after the grace, not waited on (#2141)', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'agent-bridge-'))
+  const chrome = fakeChrome()
+  const call = chrome.cdp.call
+  chrome.cdp.call = (method, params) => (method === 'Browser.close' ? new Promise(() => {}) : call(method, params))
+  const child = fakeProcess()
+  const browser = await startBridgeBrowser(options(dir), fakeDeps(chrome, child).deps)
+  await browser.close()
+  assert.deepEqual(child.killed, ['SIGTERM', 'SIGKILL'])
+})
+
+test('an aborted launch stops waiting on its step, and kills a Chrome it spawned (#2141)', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'agent-bridge-'))
+  const downloading = new AbortController()
+  const never = fakeDeps(fakeChrome(), fakeProcess(), { binary: () => new Promise(() => {}) }).deps
+  const download = startBridgeBrowser({ ...options(dir), signal: downloading.signal }, never)
+  downloading.abort()
+  await assert.rejects(download, /stopped/)
+
+  const listening = new AbortController()
+  const child = fakeProcess()
+  let spawned!: () => void
+  const asked = new Promise<void>(resolve => (spawned = resolve))
+  const ready = (): Promise<boolean> => (spawned(), new Promise(() => {}))
+  const waiting = startBridgeBrowser({ ...options(dir), signal: listening.signal }, fakeDeps(fakeChrome(), child, { ready }).deps)
+  await asked
+  listening.abort()
+  await assert.rejects(waiting, /stopped/)
+  assert.deepEqual(child.killed, ['SIGTERM', 'SIGKILL'])
 })
 
 /** A launch that resolves when the test says so. */
@@ -383,6 +414,16 @@ test('a stop during a launch closes the browser the launch then hands over', asy
   await starting
   await stopping
   assert.equal(b.closed, 1, 'not left running unowned')
+  assert.deepEqual(await owner.status(), { state: 'off' })
+})
+
+test('a stop gives a launch under way up rather than waiting it out (#2141)', async () => {
+  let aborted = false
+  const owner = bridgeBrowserOwner((_report, signal) => new Promise<BridgeBrowser>((_resolve, reject) => signal.addEventListener('abort', () => ((aborted = true), reject(new Error('stopped'))))))
+  const starting = owner.start()
+  await owner.stop()
+  await starting
+  assert.equal(aborted, true)
   assert.deepEqual(await owner.status(), { state: 'off' })
 })
 

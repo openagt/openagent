@@ -1,4 +1,5 @@
-import { isPageSegment, type Route } from './route.js'
+import { isPageSegment } from '../../src/project-address.js'
+import type { Route } from './route.js'
 
 // A link into a project's files (#1774), and where the dashboard opens it. A queued entry, a hot
 // ticket, any page's link may point at a path inside the project's repository, such as
