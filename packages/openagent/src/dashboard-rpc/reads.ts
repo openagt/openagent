@@ -95,11 +95,11 @@ export async function onAgents(projectId: string): Promise<AgentMeta[]> {
  * Each run that has a pull request, marked with how the request stands, so its row can show it:
  * from one cached listing of the project's requests, read only when one of the runs has a request.
  */
-export async function withPrStates(cwd: string, agents: AgentMeta[], states: (cwd: string) => Promise<Map<number, PrState>> = cachedPrStates): Promise<AgentMeta[]> {
+export async function withPrStates(cwd: string, agents: AgentMeta[], states: (cwd: string) => Promise<Map<string, PrState>> = cachedPrStates): Promise<AgentMeta[]> {
   if (!agents.some(agent => agent.pr !== undefined)) return agents
   const known = await states(cwd)
   return agents.map(agent => {
-    const prState = agent.pr && known.get(agent.pr.number)
+    const prState = agent.pr && known.get(agent.pr.url)
     return prState ? { ...agent, prState } : agent
   })
 }

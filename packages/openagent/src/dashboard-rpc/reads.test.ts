@@ -109,7 +109,7 @@ test('each run with a pull request is marked with how it stands; one with no req
   const read: string[] = []
   const states = async (cwd: string) => {
     read.push(cwd)
-    return new Map([[7, 'merged' as const], [8, 'draft' as const]])
+    return new Map([['https://example.com/pull/7', 'merged' as const], ['https://example.com/pull/8', 'draft' as const]])
   }
   const marked = await withPrStates('/repo', [run('a', 7), run('b', 8), run('c'), run('d', 99)], states)
   assert.deepEqual(marked.map(agent => [agent.id, agent.prState]), [['a', 'merged'], ['b', 'draft'], ['c', undefined], ['d', undefined]])
