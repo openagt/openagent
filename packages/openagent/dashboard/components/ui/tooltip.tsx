@@ -1,6 +1,6 @@
 'use client'
 import type { ComponentProps } from 'react'
-import { Tooltip as TooltipPrimitive } from '@base-ui-components/react/tooltip'
+import { Tooltip as TooltipPrimitive } from '@base-ui/react/tooltip'
 import { cn } from '../../lib/utils.js'
 
 // A trimmed shadcn-style Tooltip on Base UI (already a dep across the ui/ kit — no Radix pulled

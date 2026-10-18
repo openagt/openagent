@@ -86,12 +86,18 @@ export function SettingsSelectRow({
   // A saved value the list does not hold (an editor that is no longer found, a list not read yet) is still what is saved: it gets a line of its own, by its text.
   const listed = options.some(o => o.value === value) ? options : [...options, { value, label: value }]
   const items = listed.map(o => ({ value: o.value === '' ? NO_VALUE : o.value, label: o.label, disabled: o.disabled === true }))
+  // Only a person's pick is saved. Base UI changes the value on its own too (reason `none`): when the
+  // list loses the line it holds, it falls back to the value it was first given, and in 1.9 it does
+  // so a render early, still holding the old value when a "Mixed" line leaves a list (#2143).
+  const picked = (next: unknown, details: { reason: string }): void => {
+    if (details.reason !== 'none') onChange(next === NO_VALUE ? '' : (next as string))
+  }
   return (
     <SettingsRow
       label={label}
       description={description}
       control={
-        <Select items={items} value={value === '' ? NO_VALUE : value} onValueChange={next => onChange(next === NO_VALUE ? '' : (next as string))}>
+        <Select items={items} value={value === '' ? NO_VALUE : value} onValueChange={picked}>
           <SelectTrigger size="sm" aria-label={label} className="max-w-[min(16rem,45vw)]">
             <SelectValue />
           </SelectTrigger>

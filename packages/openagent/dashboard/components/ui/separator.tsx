@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react'
-import { Separator as SeparatorPrimitive } from '@base-ui-components/react/separator'
+import { Separator as SeparatorPrimitive } from '@base-ui/react/separator'
 import { cn } from '../../lib/utils.js'
 
 // shadcn's separator on Base UI (no Radix). A thin divider; the sidebar uses it between sections.

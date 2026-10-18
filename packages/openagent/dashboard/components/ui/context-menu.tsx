@@ -1,4 +1,4 @@
-import { ContextMenu as BaseContextMenu } from '@base-ui-components/react/context-menu'
+import { ContextMenu as BaseContextMenu } from '@base-ui/react/context-menu'
 
 // A right-click menu: Base UI's, opened where the pointer is. Its contents are the dropdown menu's
 // own parts (`DropdownMenuContent`, `DropdownMenuItem`, a submenu), which are Base UI's menu parts

@@ -1,6 +1,6 @@
 'use client'
 import { useState, type ReactNode } from 'react'
-import { AlertDialog } from '@base-ui-components/react/alert-dialog'
+import { AlertDialog } from '@base-ui/react/alert-dialog'
 import { useAction } from '../../lib/use-action.js'
 import { Button } from './button.js'
 import { cn } from '../../lib/utils.js'

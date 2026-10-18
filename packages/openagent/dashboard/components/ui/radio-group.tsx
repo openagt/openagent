@@ -1,7 +1,7 @@
 'use client'
 import { useId, type ComponentProps, type ReactNode } from 'react'
-import { RadioGroup as RadioGroupPrimitive } from '@base-ui-components/react/radio-group'
-import { Radio } from '@base-ui-components/react/radio'
+import { RadioGroup as RadioGroupPrimitive } from '@base-ui/react/radio-group'
+import { Radio } from '@base-ui/react/radio'
 import { cn } from '../../lib/utils.js'
 
 // A shadcn-style RadioGroup on Base UI, beside the Checkbox and the Switch: for one pick among a
