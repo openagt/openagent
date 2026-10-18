@@ -78,12 +78,11 @@ export interface RecentAgentsDeps {
  */
 export async function buildRecentAgents(projects: ProjectSummary[], deps: RecentAgentsDeps = {}): Promise<RecentAgent[]> {
   const readAgents = deps.agents ?? readAllAgents
-  const all: RecentAgent[] = []
-  for (const project of projects) {
-    for (const agent of await readAgents(project.path).catch(() => [])) {
-      all.push({ projectId: project.id, projectName: project.name, agent })
-    }
-  }
+  // Every project at once: each one's read is a git read of its branches too (the rows' marks), and
+  // one after the other the list waited for all of them in turn. Kept in the projects' order, so
+  // the first project to list a run still keeps it below.
+  const read = await Promise.all(projects.map(project => readAgents(project.path).catch((): AgentMeta[] => [])))
+  const all: RecentAgent[] = projects.flatMap((project, at) => (read[at] ?? []).map(agent => ({ projectId: project.id, projectName: project.name, agent })))
   all.sort((a, b) => (b.agent.startedAt ?? '').localeCompare(a.agent.startedAt ?? ''))
   // One row per run (#1648): two checkouts of one repository share their archive, so every run
   // was listed once per checkout; the first project to list it keeps it.
