@@ -11,3 +11,4 @@ export { tick, startNow, runCheck, type TickDeps, type CheckResult } from './tic
 export { tickProject, runNow, startScheduler, stopScheduler, schedulerStatus, type Status, type StatusCommand } from './scheduler.js'
 export { runCli, USAGE, type CliIo, type CliRefusal } from './cli.js'
 export { initHooks, hasHooks, removeHooks, HOOK_LINES, type InitOutcome, type RemoveOutcome } from './init.js'
+export { WRITE_LINE_SYSTEM, writeLine, writeLinePrompt, writtenOf, lineOf, lineContext, type LineContext, type WrittenLine } from './write-line.js'

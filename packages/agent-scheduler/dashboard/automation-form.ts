@@ -189,6 +189,13 @@ export function triedLine(output: unknown): TriedLine {
   return answer['due'] === true ? { ...lastRun, printed, verdict: 'It printed something: an agent would start now.', tone: 'start' } : { ...lastRun, printed, verdict: 'It printed nothing to do: no agent would start.', tone: 'quiet' }
 }
 
+/** Read what `agent-scheduler write-line` printed: the line, or why no line can do it. Forgiving: an answer that is neither reads as a line not written. */
+export function writtenLine(output: unknown): { line: string } | { said: string } {
+  const answer = typeof output === 'object' && output !== null ? (output as Record<string, unknown>) : {}
+  if (typeof answer['line'] === 'string' && answer['line'] !== '') return { line: answer['line'] }
+  return { said: typeof answer['none'] === 'string' ? `No line can do that: ${answer['none']}` : 'The line was not written.' }
+}
+
 /** Read what `agent-scheduler add` or `edit` printed: the file it wrote, where a run's checkout starts, whether it is kept on this machine alone, and the tool's name for what the file says now, when it gives one. */
 export function savedFile(output: unknown): { file: string; startsFrom: string; onThisMachine: boolean; version?: string } {
   const answer = typeof output === 'object' && output !== null ? (output as Record<string, unknown>) : {}

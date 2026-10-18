@@ -220,3 +220,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   moment, which `status` reads: a row saved, changed or removed shows at once, also where
   no scheduler is running. Picked over listing what the scheduler last read, where a new
   row showed up to a minute later, and never without a scheduler.
+- An automation's shell line can be written from what it waits for, said in plain words:
+  `write-line` asks the coding agent the row is on (Claude Code for a new one) in one
+  session with no tools, in an empty folder, the way a run is named. The prompt hands it
+  the line's contract, the project's origin and whether `gh` is here, since it cannot look.
+  The line is only put in the form's box: the agent never runs it nor saves it; the person
+  reads it, tries it with "Try it" and saves the row. Picked over a full run in the project,
+  which takes far longer than the 30 seconds a dashboard waits for a command.

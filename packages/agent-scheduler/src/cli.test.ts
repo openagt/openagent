@@ -696,6 +696,17 @@ test('try runs a check once in the project and answers what it printed and wheth
   }
 })
 
+test('write-line needs the words and an agent it knows: a usage error, with no agent asked', async () => {
+  const repo = await testRepo()
+  try {
+    assert.equal((await run(repo, 'write-line')).code, 2)
+    assert.equal((await run(repo, 'write-line', '--words', '  ')).code, 2)
+    assert.equal((await run(repo, 'write-line', '--words', 'when someone comments', '--agent', 'nope')).code, 2)
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
 test('now starts nothing for a command no skill schedules, or one its coding agent cannot run, and says why: a refusal, with the decision in the tick\'s words', async () => {
   const repo = await testRepo()
   try {

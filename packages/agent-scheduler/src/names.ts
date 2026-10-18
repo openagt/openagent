@@ -113,3 +113,6 @@ export const NOW_CHECK_TIMEOUT_MS = 10_000
 
 /** How long a command's check may run before it counts as failed. */
 export const CHECK_TIMEOUT_MS = 60_000
+
+/** How long the coding agent may take to write a shell line from a person's words: one turn with no tools takes seconds, and a dashboard ends a command at 30. */
+export const WRITE_LINE_TIMEOUT_MS = 25_000
