@@ -69,6 +69,6 @@ export function useFileNames(asked: readonly { projectId: string; paths: readonl
   return (projectId, path) => {
     const name = names[`${projectId}\n${path}`]
     const parts = name && dataLinkParts(name.href)
-    return name && parts ? { title: name.title, open: () => services.openPage(parts.segment, [projectId, ...parts.rest]) } : undefined
+    return name && parts ? { title: name.title, open: () => services.openPage(parts.segment, parts.rest, projectId) } : undefined
   }
 }

@@ -24,6 +24,7 @@ function dashboard() {
     read: vi.fn(async () => ({ ok: false as const, error: 'no reads' })),
     openAgent: vi.fn(),
     openPage: vi.fn(),
+    pageHref: (segment: string) => `/${segment}`,
     startRun: vi.fn(async () => ({ ok: false as const, error: 'no runs' })),
     configureRun: vi.fn(),
     agents: vi.fn(async () => []),

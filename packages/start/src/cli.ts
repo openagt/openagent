@@ -128,7 +128,8 @@ async function runForegroundDaemonCmd(args: CliArgs, io: CliIO): Promise<number>
         ? {
             project,
             onProject: (started: { id: string; path: string; added: boolean }) => {
-              // Its page, which picks the project in the sidebar too.
+              // Its page, which picks the project in the sidebar too. Named by its id, which always
+              // opens it: the dashboard then writes the project's address, its name, in its place.
               const page = `${url}/${encodeURIComponent(started.id)}`
               if (started.added) io.out(`◆ project added: ${started.path}`)
               io.out(`◆ project: ${page}`)

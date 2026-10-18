@@ -151,7 +151,7 @@ describe('module cards on the Overview (#1818)', () => {
       )
     }
     answerOverview([{ package: '@acme/queue', url: moduleModule('__starterCard', { cards: [{ id: 'starter', Card: Starter }] }), projects: [PROJECT.id] }])
-    answers.set('sendStart', () => ({ ok: true, agentId: 'r9' }))
+    answers.set('sendStart', () => ({ ok: true, agentId: '9-r' }))
     window.history.replaceState(null, '', '/')
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'start and stay' }))
@@ -159,7 +159,7 @@ describe('module cards on the Overview (#1818)', () => {
     expect(calls.find(call => call.name === 'sendStart')?.args.slice(0, 2)).toEqual([PROJECT.id, 'work the queue'])
     expect(window.location.pathname).toBe('/')
     fireEvent.click(await screen.findByRole('button', { name: 'start and go' }))
-    await waitFor(() => expect(window.location.pathname).toBe(`/${PROJECT.id}/r9`))
+    await waitFor(() => expect(window.location.pathname).toBe('/app/9-r'))
   })
 })
 
@@ -198,11 +198,11 @@ describe('the project select (#1513)', () => {
       ],
     }))
     answers.set('onRecentAgents', () => [
-      { projectId: PROJECT.id, projectName: 'app', agent: { id: 'a3', status: 'done', startedAt: '2026-07-19T16:05:44.756Z', updatedAt: '2026-07-19T16:06:21.000Z', intent: 'app ran' } },
-      { projectId: OTHER.id, projectName: 'site', agent: { id: 's3', status: 'done', startedAt: '2026-07-19T15:05:44.756Z', updatedAt: '2026-07-19T15:06:21.000Z', intent: 'site ran' } },
+      { projectId: PROJECT.id, projectName: 'app', agent: { id: '3-a', status: 'done', startedAt: '2026-07-19T16:05:44.756Z', updatedAt: '2026-07-19T16:06:21.000Z', intent: 'app ran' } },
+      { projectId: OTHER.id, projectName: 'site', agent: { id: '3-s', status: 'done', startedAt: '2026-07-19T15:05:44.756Z', updatedAt: '2026-07-19T15:06:21.000Z', intent: 'site ran' } },
     ])
     answers.set('onAgents', (id: unknown) =>
-      id === OTHER.id ? [{ id: 's3', status: 'done', startedAt: '2026-07-19T15:05:44.756Z', updatedAt: '2026-07-19T15:06:21.000Z', intent: 'site ran' }] : [],
+      id === OTHER.id ? [{ id: '3-s', status: 'done', startedAt: '2026-07-19T15:05:44.756Z', updatedAt: '2026-07-19T15:06:21.000Z', intent: 'site ran' }] : [],
     )
   }
 
@@ -221,7 +221,7 @@ describe('the project select (#1513)', () => {
     expect(await screen.findByText('app ran')).toBeTruthy()
 
     await pick('All projects', /site/)
-    expect(url()).toBe(`/?project=${OTHER.id}`)
+    expect(url()).toBe('/site/overview')
     expect(await screen.findByText('card for site')).toBeTruthy()
     expect(screen.getByText('site asks')).toBeTruthy()
     expect(screen.queryByText('app asks')).toBeNull()
@@ -234,10 +234,10 @@ describe('the project select (#1513)', () => {
 
   test('the pick rides along to a module page and Settings over it, and its row opens that project\'s agent', async () => {
     answerTwo()
-    window.history.replaceState(null, '', `/?project=${OTHER.id}`)
+    window.history.replaceState(null, '', '/site/overview')
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'Logs' }))
-    expect(url()).toBe(`/logs?project=${OTHER.id}`)
+    expect(url()).toBe('/site/logs')
     expect(await screen.findByText('runs of site')).toBeTruthy()
     // The sidebar marks the page that is open, also with Settings open over it. The Overview row's
     // name carries its Human Queue count here, and the person's row ends in "settings", hence the patterns.
@@ -245,21 +245,21 @@ describe('the project select (#1513)', () => {
     expect(marked()).toEqual(['Logs'])
     fireEvent.click(screen.getByRole('button', { name: /settings$/i }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }))
-    expect(url()).toBe(`/logs?project=${OTHER.id}&settings=`)
+    expect(url()).toBe('/site/logs?settings=')
     expect(await screen.findByText("the settings dialog on ''")).toBeTruthy()
     expect(screen.getByText('runs of site')).toBeTruthy()
     expect(marked()).toEqual(['Logs'])
     // Another entry replaces the address, so Back leaves Settings rather than stepping through it.
     const steps = window.history.length
     fireEvent.click(screen.getByRole('button', { name: 'to Agent' }))
-    expect(url()).toBe(`/logs?project=${OTHER.id}&settings=agent`)
+    expect(url()).toBe('/site/logs?settings=agent')
     expect(window.history.length).toBe(steps)
     // Closed, the page under it is as it was.
     fireEvent.click(screen.getByRole('button', { name: 'shut the dialog' }))
-    expect(url()).toBe(`/logs?project=${OTHER.id}`)
+    expect(url()).toBe('/site/logs')
     expect(screen.queryByText(/the settings dialog/)).toBeNull()
     fireEvent.click(await screen.findByText('site ran'))
-    expect(url()).toBe(`/${OTHER.id}/s3`)
+    expect(url()).toBe('/site/3-s')
   })
 
   test("a jump to another project's agent names it at once, before that project's agents are read", async () => {
@@ -269,54 +269,61 @@ describe('the project select (#1513)', () => {
     render(<App />)
     fireEvent.click(await screen.findByText('site ran'))
     // All projects stay shown there.
-    expect(url()).toBe(`/${OTHER.id}/s3?all`)
+    expect(url()).toBe('/site/3-s?all')
     await waitFor(() => expect(document.querySelector('button[aria-label="Session actions"][title="site ran"]')).toBeTruthy())
   })
 
   test('New agent starts in the picked project; picking another on the launcher moves to its launcher, and all keeps the page', async () => {
     answerTwo()
-    window.history.replaceState(null, '', `/?project=${OTHER.id}`)
+    window.history.replaceState(null, '', '/site/overview')
     render(<App />)
+    // The name is a project's once the projects are read.
+    await screen.findByRole('button', { name: 'Project: site' })
     fireEvent.click(await screen.findByText('New agent'))
-    expect(url()).toBe(`/${OTHER.id}`)
+    expect(url()).toBe('/site')
     expect(await screen.findByText('the launcher of site')).toBeTruthy()
     await pick('site', /app/)
-    expect(url()).toBe(`/${PROJECT.id}`)
+    expect(url()).toBe('/app')
     await pick('app', /All projects/)
-    expect(url()).toBe(`/${PROJECT.id}?all`)
+    expect(url()).toBe('/app?all')
     expect(await screen.findByRole('button', { name: 'Project: All projects' })).toBeTruthy()
     // Back returns to the launcher with its project picked.
     window.history.back()
     expect(await screen.findByRole('button', { name: 'Project: app' })).toBeTruthy()
-    expect(url()).toBe(`/${PROJECT.id}`)
+    expect(url()).toBe('/app')
   })
 
   test('picking another project on an agent\'s page goes to the Overview; on a module page it drops the page\'s own path', async () => {
     answerTwo()
-    window.history.replaceState(null, '', `/${OTHER.id}/s3?all`)
+    window.history.replaceState(null, '', '/site/3-s?all')
     render(<App />)
     // All projects show, on a project's own page too: the agent list is every project's.
     expect(await screen.findByText('app ran')).toBeTruthy()
     await pick('All projects', /app/)
-    expect(url()).toBe(`/?project=${PROJECT.id}`)
+    expect(url()).toBe('/app/overview')
     cleanup()
-    window.history.replaceState(null, '', `/logs/${OTHER.id}/x`)
+    window.history.replaceState(null, '', '/site/logs/x')
     render(<App />)
-    await pick('All projects', /app/)
-    expect(url()).toBe(`/logs?project=${PROJECT.id}`)
+    await pick('site', /app/)
+    expect(url()).toBe('/app/logs')
+    cleanup()
+    window.history.replaceState(null, '', '/site/logs/x')
+    render(<App />)
+    await pick('site', /All projects/)
+    expect(url()).toBe('/logs')
     // What the page mirrored into the query stays when only the pick changes.
     cleanup()
-    window.history.replaceState(null, '', `/logs?q=races&project=${PROJECT.id}`)
+    window.history.replaceState(null, '', '/app/logs?q=races')
     render(<App />)
     await pick('app', /site/)
-    expect(url()).toBe(`/logs?q=races&project=${OTHER.id}`)
+    expect(url()).toBe('/site/logs?q=races')
     await pick('site', /All projects/)
     expect(url()).toBe('/logs?q=races')
   })
 
   test('a project that is not registered picks nothing', async () => {
     answerTwo()
-    window.history.replaceState(null, '', `/?project=gone-123`)
+    window.history.replaceState(null, '', '/gone-123/overview')
     render(<App />)
     expect(await screen.findByRole('button', { name: 'Project: All projects' })).toBeTruthy()
     expect(await screen.findByText('card for app, site')).toBeTruthy()
@@ -355,14 +362,14 @@ describe('the project select (#1513)', () => {
     render(<App />)
     expect(await screen.findByText('tickets of app')).toBeTruthy()
     await pick('All projects', /site/)
-    expect(url()).toBe(`/?project=${OTHER.id}`)
+    expect(url()).toBe('/site/overview')
     cleanup()
-    window.history.replaceState(null, '', `/tickets?project=${OTHER.id}`)
+    window.history.replaceState(null, '', '/site/tickets')
     render(<App />)
-    expect(await screen.findByText('The project "site" has no package that adds a page at "/tickets".')).toBeTruthy()
+    expect(await screen.findByText('The project "site" has no package that adds a page at "tickets".')).toBeTruthy()
     expect(screen.queryByText(/tickets of/)).toBeNull()
     cleanup()
-    window.history.replaceState(null, '', `/tickets?project=${PROJECT.id}`)
+    window.history.replaceState(null, '', '/app/tickets')
     render(<App />)
     expect(await screen.findByText('tickets of app')).toBeTruthy()
   })
@@ -404,7 +411,7 @@ describe('the project select (#1513)', () => {
 
   test('removing a project reads the modules again at once, and goes to the Overview', async () => {
     answerTwo()
-    window.history.replaceState(null, '', `/${OTHER.id}`)
+    window.history.replaceState(null, '', '/site')
     render(<App />)
     await screen.findByRole('button', { name: 'Logs' })
     const reads = () => calls.filter(call => call.name === 'onModules').length
@@ -414,16 +421,52 @@ describe('the project select (#1513)', () => {
     expect(url()).toBe('/')
   })
 
-  test('a link to a module page with a project picked shows nothing, not "No such page", while the projects are still being read', async () => {
+  test('a link to a project\'s page shows nothing, not "No such page", while the projects are still being read', async () => {
     answerTwo()
-    // The projects never answer: whether the picked project is a registered one is not known.
+    // The projects never answer: which project a name is, and whether one is registered, is not known.
     answers.set('onProjects', () => new Promise(() => {}))
-    window.history.replaceState(null, '', '/logs?project=gone-123')
+    for (const link of ['/gone-123/logs', '/app/logs', '/app']) {
+      window.history.replaceState(null, '', link)
+      render(<App />)
+      await waitFor(() => expect(calls.some(call => call.name === 'onModules')).toBe(true))
+      // Long enough for the modules to be imported and mounted.
+      await new Promise(resolve => setTimeout(resolve, 300))
+      expect(screen.queryByText('No such page')).toBeNull()
+      expect(url()).toBe(link)
+      cleanup()
+    }
+  })
+
+  test('a project named by its id opens, and the address names it by its name in the same entry', async () => {
+    answerTwo()
+    window.history.replaceState(null, '', `/${OTHER.id}/3-s?all`)
     render(<App />)
-    await waitFor(() => expect(calls.some(call => call.name === 'onModules')).toBe(true))
-    // Long enough for the modules to be imported and mounted.
-    await new Promise(resolve => setTimeout(resolve, 300))
-    expect(screen.queryByText('No such page')).toBeNull()
+    const steps = window.history.length
+    await waitFor(() => expect(url()).toBe('/site/3-s?all'))
+    expect(window.history.length).toBe(steps)
+    cleanup()
+    window.history.replaceState(null, '', `/${OTHER.id}/logs`)
+    render(<App />)
+    await waitFor(() => expect(url()).toBe('/site/logs'))
+    expect(await screen.findByText('runs of site')).toBeTruthy()
+  })
+
+  test("a page's word is the page's: a project with that name is addressed by its id, and a name nobody has says so", async () => {
+    answerTwo()
+    const LOGS = { id: 'logs-9zz', path: '/work/logs', name: 'logs', activated: true }
+    answers.set('onProjects', () => [PROJECT, OTHER, LOGS])
+    window.history.replaceState(null, '', '/logs')
+    render(<App />)
+    expect(await screen.findByText('runs of app, site')).toBeTruthy()
+    cleanup()
+    window.history.replaceState(null, '', '/logs-9zz')
+    render(<App />)
+    expect(await screen.findByRole('button', { name: 'Project: logs' })).toBeTruthy()
+    expect(url()).toBe('/logs-9zz')
+    cleanup()
+    window.history.replaceState(null, '', '/gone')
+    render(<App />)
+    expect(await screen.findByText('No project has the address "/gone", and no installed package adds a page there.')).toBeTruthy()
   })
 })
 

@@ -30,20 +30,22 @@ export interface ModuleProject {
  * link convention below.
  *
  * A link into a project's files (`ModuleLink.href` such as `tickets/2026-01-01_x.md`) opens the
- * mounted page named by its first segment, at `/<segment>/<projectId>/<rest…>`: the path a page
- * gets for it is `[projectId, ...rest]`. So a page that shows one project's file under its own
- * segment is where every such link in the dashboard lands, and the dashboard names no page.
+ * mounted page named by its first segment in that project, at `/<project>/<segment>/<rest…>`: the
+ * page gets `projectId` and `rest` as its path. So a page that shows one project's file under its
+ * own segment is where every such link in the dashboard lands, and the dashboard names no page.
  */
 export interface ModulePageProps {
-  /** The registered projects whose dependencies include the module's package, in the registry's order. */
+  /** The registered projects whose dependencies include the module's package, in the registry's order: only the picked one when one is. */
   projects: ModuleProject[]
+  /** The project the address starts with (`/<project>/<segment>`), picked in the sidebar; null when every project shows. */
+  projectId: string | null
   /** The URL's segments after the page's own, decoded: `/logs/a` gives `['a']`. */
   path: string[]
 }
 
 /** A page a module adds: its own URL segment and its row in the sidebar. */
 export interface ModulePage {
-  /** The page's URL, `/<segment>`: a lowercase letter, then lowercase letters and digits (never a project's id, which always has a dash). */
+  /** The page's URL, `/<segment>`, and `/<project>/<segment>` with a project picked: a lowercase letter, then lowercase letters and digits, never `overview` or `settings`. A project named as a page's word is addressed by its id. */
   segment: string
   /** The sidebar row's label. */
   label: string
@@ -349,8 +351,14 @@ export interface ModuleHost {
   read(projectId: string, name: string, input?: Record<string, unknown>): Promise<ModuleReadResult>
   /** Open one agent's page in the dashboard: its live feed while it runs, its record after. */
   openAgent(projectId: string, agentId: string): void
-  /** Open a page a module adds (this one's or another's), at a sub-path: `openPage('tickets', [projectId, file])`. With a project picked in the dashboard, a page that project's packages do not add shows "No such page". */
-  openPage(segment: string, path?: string[]): void
+  /**
+   * Open a page a module adds (this one's or another's), at a sub-path, in the project picked in
+   * the dashboard, or in `projectId`, which is then the one picked: `openPage('tickets', [file], projectId)`.
+   * A page the picked project's packages do not add shows "No such page".
+   */
+  openPage(segment: string, path?: string[], projectId?: string): void
+  /** The address of a page a module adds, with the project picked in the dashboard: a link's `href`, for a link that also opens in a new tab. */
+  pageHref(segment: string): string
   /**
    * Start a run in one project with this prompt, with the person's own picks (which tool, which
    * model, where it runs), and land on it, unless `land` is false: then the dashboard stays where
@@ -484,6 +492,5 @@ export { useNarrow } from '../lib/use-narrow.js'
 export { useHighlighted, Pieces, type Piece } from '../lib/highlight.js'
 export { useAction } from '../lib/use-action.js'
 export { useSchedule, type Schedule } from '../lib/use-schedule.js'
-export { pageHref } from '../lib/route.js'
 export { useFileNames, pathsIn, type FileNames, type NamedFile } from '../lib/use-file-names.js'
 export { ConfirmDialog } from '../components/ui/confirm-dialog.js'

@@ -43,12 +43,12 @@ export function projectsHaving(ids: readonly string[], projects: readonly Projec
   })
 }
 
-/** One module page in the main pane (#1774): the page, given the projects that have its package, in its slot. */
-export function ModulePageView({ page, projects, path }: { page: MountedPage; projects: ProjectSummary[]; path: string[] }) {
+/** One module page in the main pane (#1774): the page, given the projects that have its package and the picked one, in its slot. */
+export function ModulePageView({ page, projects, projectId, path }: { page: MountedPage; projects: ProjectSummary[]; projectId: string | null; path: string[] }) {
   const Page = page.Page
   return (
     <ModuleSlot key={page.segment} package={page.package} label={`${page.label} page`}>
-      <Page projects={projectsHaving(page.projects, projects)} path={path} />
+      <Page projects={projectsHaving(page.projects, projects)} projectId={projectId} path={path} />
     </ModuleSlot>
   )
 }

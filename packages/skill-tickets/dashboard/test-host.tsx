@@ -36,6 +36,7 @@ export function fakeHost(answers: Answers = {}, agents: Record<string, ModuleAge
     read: vi.fn(async () => ({ ok: false as const, error: 'this module has no server part' })),
     openAgent: vi.fn(),
     openPage: vi.fn(),
+    pageHref: (segment: string) => `/${segment}`,
     startRun: vi.fn(async (_projectId: string, _prompt: string) => ({ ok: true as const, agentId: 'started' })),
     configureRun: vi.fn(),
     agents: vi.fn(async (projectId: string) => agents[projectId] ?? []),

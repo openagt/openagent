@@ -17,6 +17,7 @@ export function fakeHost(): ModuleHost {
     read: vi.fn(async () => ({ ok: false as const, error: 'reads are mocked' })),
     openAgent: vi.fn(),
     openPage: vi.fn(),
+    pageHref: (segment: string) => `/${segment}`,
     startRun: vi.fn(async () => ({ ok: false as const, error: 'no runs' })),
     configureRun: vi.fn(),
     agents: vi.fn(async () => []),

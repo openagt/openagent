@@ -29,10 +29,10 @@ import { useLiveEvents } from './lib/use-live-events.js'
 import { useAgents } from './lib/use-agents.js'
 import { usePolled } from './lib/use-async.js'
 import { useRoute } from './lib/use-route.js'
-import { formatRoute, type Route } from './lib/route.js'
+import { formatRoute, projectAddresses, type Route } from './lib/route.js'
 import { dataLinkRoute } from './lib/data-link.js'
 import { useActivityNotifications, useInterventionNotifications } from './lib/use-notifications.js'
-import { usePreferences, notificationsEnabled, newActivityEnabled, humanInterventionEnabled } from './lib/preferences.js'
+import { usePreferences, notificationsEnabled, newActivityEnabled, humanInterventionEnabled, OpenProjectContext } from './lib/preferences.js'
 import { useDocumentTitle } from './lib/document-title.js'
 import { useWorking } from './lib/use-working.js'
 import { useFavicon } from './lib/favicon.js'
@@ -62,8 +62,8 @@ const EMPTY_RECENT: RecentAgent[] = []
 // either way (#1026). Everything over the wire is `POST /_rpc/<name>`. A projection of the files
 // each run's own tool writes: its card and its diary.
 //
-// The selection IS the URL (#784): `/` the Overview, `/{projectId}` the project home,
-// `/{projectId}/{sessionId}` one session. It used to be three pieces of React state — the
+// The selection IS the URL (#784): `/` the Overview, `/{project}` the project home,
+// `/{project}/{agentId}` one session. It used to be three pieces of React state — the
 // selected agent, the just-started agent, and a "follow the live feed" flag — reconciled at render,
 // and each of #761/#766/#768/#774 was a case where they disagreed about which run was in play.
 // A route cannot disagree with itself, and a session becomes a link: paste it, reload it,
@@ -72,14 +72,9 @@ const EMPTY_RECENT: RecentAgent[] = []
 //
 // The project select at the top of the sidebar (#1513) is in the URL too: the one project every page
 // shows, or none for all of them. It filters what the pages show; it is not a page of its own, so it
-// rides along on every navigation. A project's own pages pick their project unless `?all` is there;
-// every other page names the pick as `?project=`.
+// rides along on every navigation as the address's first segment (`/{project}/overview`,
+// `/{project}/logs`). A project's own pages pick their project unless `?all` is there.
 export function App() {
-  const { route, go: navigate } = useRoute()
-  const { projectId, agentId } = route
-  // A module's page (#1774): the route names it by its segment, with no project selected.
-  const pageSegment = route.page ?? null
-
   // The registered projects, for the browser-tab title (#695/U3) — the selected project's name
   // plus the needs-you count drive `document.title` so a backgrounded tab tells you which project
   // needs attention — and for the sidebar's project select. Polled rather than read once (#1500):
@@ -93,6 +88,23 @@ export function App() {
   // project has which module changes then.
   const modules = useModules(projectsKey)
   const { pages: modulePages, loaded: modulesLoaded } = modules
+  // A project's address is its name unless another project or a page has it: what the address
+  // names is known once both are read, and until then nothing is said to be missing.
+  const projectIds = projects.map(p => p.id).join('\n')
+  const pageWords = modulePages.map(page => page.segment).join('\n')
+  const addresses = useMemo(() => projectAddresses(projectIds ? projectIds.split('\n') : [], pageWords ? pageWords.split('\n') : []), [projectIds, pageWords])
+  const addressesRead = projectsLoaded && modulesLoaded
+  const { route, go: navigate } = useRoute(addresses)
+  const { projectId, agentId } = route
+  // A module's page (#1774): the route names it by its segment, with no project's own page open.
+  const pageSegment = route.page ?? null
+  // The address written as the route reads, once it can be read: a project named by its id, as
+  // `npx @openagt/start` opens it, shows its name, in place of the entry rather than as a new one.
+  useEffect(() => {
+    if (addressesRead) navigate(route, { replace: true, keepQuery: true })
+    // The route is what the address says; only what names projects changes it here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addressesRead, addresses])
   // The one project every page shows (#1513), or null for all of them. A project that is not
   // registered (removed, or a link from another machine) picks nothing.
   const scope = route.scope && (projects.length === 0 || projects.some(p => p.id === route.scope)) ? route.scope : null
@@ -102,24 +114,25 @@ export function App() {
   const shownPages = useMemo(() => (scope ? modulePages.filter(page => page.projects.includes(scope)) : modulePages), [modulePages, scope])
   const modulePage = pageSegment ? shownPages.find(page => page.segment === pageSegment) : undefined
 
-  // Every navigation keeps the picked project, and one into another project's page picks that
-  // project: the pages never show a project the select does not name.
-  const go = (next: Route, options?: { replace?: boolean }) => navigate({ ...next, ...(scope ? { scope: next.projectId ?? scope } : {}) }, options)
+  // Every navigation keeps the picked project, and one into another project's page, or into a
+  // page in a named project, picks that project: the pages never show a project the select does not name.
+  const go = (next: Route, options?: { replace?: boolean }) => navigate({ ...next, ...(scope ? { scope: next.scope ?? next.projectId ?? scope } : {}) }, options)
 
   // Pick the one project every page shows, or all of them. The page stays, with what it mirrored
   // into the query (a list's filters), unless it is another project's: its launcher becomes the
   // picked project's, and its agent's page the Overview. A module's page drops what follows its
-  // segment, which may name the project just left, and one the picked project does not have
-  // becomes the Overview.
+  // segment, which is the project just left's (a ticket of it), and one the picked project does
+  // not have becomes the Overview.
   const selectScope = (next: string | null) => {
     const { scope: _scope, ...here } = route
-    if (next === null) return navigate(here, { keepQuery: true })
-    if (here.projectId !== null && here.projectId !== next)
-      return navigate(here.agentId === null ? { projectId: next, agentId: null, scope: next } : { projectId: null, agentId: null, scope: next })
+    if (here.projectId !== null) {
+      if (next === null) return navigate(here, { keepQuery: true })
+      if (here.projectId !== next) return navigate(here.agentId === null ? { projectId: next, agentId: null, scope: next } : { projectId: null, agentId: null, scope: next })
+    }
     const mounted = modulePages.find(page => page.segment === here.page)
-    if (mounted && !mounted.projects.includes(next)) return navigate({ projectId: null, agentId: null, scope: next })
+    if (next !== null && mounted && !mounted.projects.includes(next)) return navigate({ projectId: null, agentId: null, scope: next })
     const { pagePath, ...page } = here
-    navigate({ ...page, scope: next }, { keepQuery: !pagePath?.length })
+    navigate({ ...page, ...(next !== null ? { scope: next } : {}) }, { keepQuery: !pagePath?.length })
   }
 
   // A just-started run: bump the tick so the Sessions rail shows an optimistic "starting…" row
@@ -256,14 +269,14 @@ export function App() {
     navigate(under, { keepQuery: true })
   }
 
-  // A module's page (#1774): its own segment, with no project selected, like the Overview.
+  // A module's page (#1774): its own segment, in the picked project, like the Overview.
   const showPage = (segment: string) => {
     go({ projectId: null, agentId: null, page: segment })
   }
 
   // A link into a project's files (#1774) — `tickets/<file>` — opens the mounted module page named
-  // by its first segment, at `/<segment>/<projectId>/<rest>`; the dashboard has no page of its own
-  // for any such path and names no module. Nothing opens when no page claims it.
+  // by its first segment in that project, at `/<project>/<segment>/<rest>`; the dashboard has no
+  // page of its own for any such path and names no module. Nothing opens when no page claims it.
   const openDataLink = (id: string, href: string) => {
     const target = dataLinkRoute(id, href, modulePages)
     if (target) go(target)
@@ -273,7 +286,8 @@ export function App() {
   // dashboard, none of it naming a skill. Bound to each module's package where its host is built.
   const hostServices: HostServices = {
       openAgent: selectAgentInProject,
-      openPage: (segment, path) => go({ projectId: null, agentId: null, page: segment, ...(path && path.length ? { pagePath: path } : {}) }),
+      openPage: (segment, path, inProject) => go({ projectId: null, agentId: null, page: segment, ...(path && path.length ? { pagePath: path } : {}), ...(inProject ? { scope: inProject } : {}) }),
+      pageHref: segment => formatRoute({ projectId: null, agentId: null, page: segment, ...(scope ? { scope } : {}) }, addresses),
       startRun: async (inProject, prompt, opts) => {
         const result = await sendStart(inProject, prompt, startPicks(preferences))
         if (!result.ok) return result
@@ -338,10 +352,10 @@ export function App() {
   const renderMain = () => {
     if (pageSegment) {
       if (modulePage)
-        return <ModulePageView page={modulePage} projects={scopedProjects} path={route.pagePath ?? []} />
-      // Not loaded yet is not "no such page": the modules are imported after the first read, and
-      // whether a picked project is a registered one is known once the projects are read.
-      if (!modulesLoaded || (scope !== null && !projectsLoaded)) return null
+        return <ModulePageView page={modulePage} projects={scopedProjects} projectId={scope} path={route.pagePath ?? []} />
+      // Not read yet is not "no such page": the modules are imported after the first read, and
+      // until the projects are read too a project's name reads as a page's word.
+      if (!addressesRead) return null
       // A page another project's package adds is not the picked project's.
       const elsewhere = scope !== null && modulePages.some(page => page.segment === pageSegment)
       return (
@@ -349,8 +363,10 @@ export function App() {
           title="No such page"
           detail={
             elsewhere
-              ? `The project "${projects.find(p => p.id === scope)?.name ?? scope}" has no package that adds a page at "/${pageSegment}".`
-              : `No installed package adds a page at "/${pageSegment}".`
+              ? `The project "${projects.find(p => p.id === scope)?.name ?? scope}" has no package that adds a page at "${pageSegment}".`
+              : route.scope === undefined
+                ? `No project has the address "/${pageSegment}", and no installed package adds a page there.`
+                : `No installed package adds a page at "${pageSegment}".`
           }
           actionLabel="Go to the Overview"
           onAction={showDashboard}
@@ -461,6 +477,7 @@ export function App() {
     // all, so the link actions they offer reach any page that shows a link.
     <ModulesContext.Provider value={modules}>
     <HostServicesContext.Provider value={hostServices}>
+    <OpenProjectContext.Provider value={projectId}>
     <SidebarProvider className="h-screen flex-col overflow-hidden" style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
       {/* The top navbar is gone (#772 follow-up): its brand, global nav and utility controls moved
           into the sidebar (AgentHistory), so the workspace and the panes get the full height. */}
@@ -482,7 +499,7 @@ export function App() {
           projectId={projectId}
           scope={scope}
           onScope={selectScope}
-          homeHref={formatRoute({ projectId: null, agentId: null, ...(scope ? { scope } : {}) })}
+          homeHref={formatRoute({ projectId: null, agentId: null, ...(scope ? { scope } : {}) }, addresses)}
           agents={agents}
           selectedAgentId={agentId}
           // A row of the picked project's list opens in that project, whichever page is showing.
@@ -534,6 +551,7 @@ export function App() {
       </div>
       {route.settings !== undefined && <SettingsDialog entry={route.settings} onEntry={showSettingsEntry} onClose={closeSettings} scope={scope} projects={projects} />}
     </SidebarProvider>
+    </OpenProjectContext.Provider>
     </HostServicesContext.Provider>
     </ModulesContext.Provider>
   )

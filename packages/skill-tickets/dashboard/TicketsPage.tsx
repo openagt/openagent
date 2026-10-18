@@ -63,8 +63,8 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
     [key],
   )
   const [view, setViewState] = useState<TicketsView>(initialView)
-  const onOpenTicket = (projectId: string, file: string) => host.openPage('tickets', [projectId, file])
-  const onOpenTicketPlan = (projectId: string, file: string) => host.openPage('tickets', [projectId, file, 'plan'])
+  const onOpenTicket = (projectId: string, file: string) => host.openPage('tickets', [file], projectId)
+  const onOpenTicketPlan = (projectId: string, file: string) => host.openPage('tickets', [file, 'plan'], projectId)
   const onOpenAgent = (projectId: string, agentId: string) => host.openAgent(projectId, agentId)
 
   // Every view change mirrors into the query string — replaceState, not a navigation: filters are

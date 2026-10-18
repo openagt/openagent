@@ -237,7 +237,7 @@ export const Composer = forwardRef<ComposerHandle, {
       onLoad={loadFromMenu}
       onNew={() => setAddingPreset(true)}
       onDelete={id => updatePreferences({ customPresets: customPresets.filter(p => p.id !== id) })}
-      onDeleteProject={id => saveProjectPresetList(projectPresets.filter(p => p.id !== id))}
+      onDeleteProject={id => saveProjectPresetList(activeProjectId, projectPresets.filter(p => p.id !== id))}
     />
   )
   // Where the next run starts (#1052/#1067): this machine or a saved machine. Launcher-only: a
@@ -393,7 +393,7 @@ export const Composer = forwardRef<ComposerHandle, {
             editorRef.current?.focus()
           }}
           onSave={(preset, scope) => {
-            if (scope === 'project') saveProjectPresetList([...projectPresets, preset])
+            if (scope === 'project') saveProjectPresetList(activeProjectId, [...projectPresets, preset])
             else updatePreferences({ customPresets: [...customPresets, preset] })
             setAddingPreset(false)
             editorRef.current?.focus()

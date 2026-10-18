@@ -117,6 +117,6 @@ describe('QueueCard', () => {
     const entry = await screen.findByRole('button', { name: 'Plan: Login page' })
     expect(entry.getAttribute('title')).toBe('Create tickets/2026-08-01_login-page.plan.md')
     fireEvent.click(entry)
-    expect(openPage).toHaveBeenCalledWith('tickets', ['p1', '2026-08-01_login-page.md'])
+    expect(openPage).toHaveBeenCalledWith('tickets', ['2026-08-01_login-page.md'], 'p1')
   })
 })

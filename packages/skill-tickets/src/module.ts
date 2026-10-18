@@ -60,19 +60,20 @@ export function holderAgent<A extends AgentLike>(agents: readonly A[], lockedBy:
   return lockedBy === undefined ? undefined : agents.find(agent => agent.id === lockedBy)
 }
 
-/** Where the module's URL points: the list of every project's tickets, one ticket, or its plan. */
+/** Where the module's URL points: the list of tickets, one ticket, or its plan. */
 export type ModuleRoute = { view: 'list' } | { view: 'ticket'; projectId: string; file: string } | { view: 'plan'; projectId: string; file: string } | { view: 'unknown' }
 
 /**
- * The module's page from the URL segments after its own: none is the list; a project then a
- * ticket filename is that ticket's page (the dashboard's link convention: `tickets/<file>` in a
- * project opens `/tickets/<project>/<file>`); `plan` after those is the ticket's plan. A filename
- * that is not a ticket's, or anything longer, names nothing.
+ * The module's page from the project the address starts with, if any, and the URL segments after
+ * its own: none is the list; a ticket filename in a project is that ticket's page (the dashboard's
+ * link convention: `tickets/<file>` in a project opens `/<project>/tickets/<file>`); `plan` after it
+ * is the ticket's plan. A ticket with no project, a filename that is not a ticket's, or anything
+ * longer, names nothing.
  */
-export function routeOf(path: readonly string[]): ModuleRoute {
-  const [projectId, file, plan, ...rest] = path
-  if (projectId === undefined) return { view: 'list' }
-  if (file === undefined || !isTicketFile(file) || rest.length > 0) return { view: 'unknown' }
+export function routeOf(projectId: string | null, path: readonly string[]): ModuleRoute {
+  const [file, plan, ...rest] = path
+  if (file === undefined) return { view: 'list' }
+  if (projectId === null || !isTicketFile(file) || rest.length > 0) return { view: 'unknown' }
   if (plan === undefined) return { view: 'ticket', projectId, file }
   return plan === 'plan' ? { view: 'plan', projectId, file } : { view: 'unknown' }
 }

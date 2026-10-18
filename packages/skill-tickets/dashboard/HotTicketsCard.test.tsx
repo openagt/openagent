@@ -68,7 +68,7 @@ describe('HotTicketsCard', () => {
       { p1: [{ id: 'run-1', name: 'login-page', status: 'running', startedAt: '2026-08-01T00:00:00.000Z' }] },
     )
     fireEvent.click(await screen.findByText('held'))
-    expect(host.openPage).toHaveBeenCalledWith('tickets', ['p1', 'held.md'])
+    expect(host.openPage).toHaveBeenCalledWith('tickets', ['held.md'], 'p1')
     fireEvent.click(screen.getByText('login-page'))
     expect(host.openAgent).toHaveBeenCalledWith('p1', 'run-1')
   })

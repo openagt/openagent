@@ -5,6 +5,7 @@ import { RadioGroup, RadioGroupItem, RadioGroupOption } from './radio-group.js'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select.js'
 import { CardTitleLink } from './card.js'
 import { openMenu } from '../../test-utils.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../../lib/host-services.js'
 
 // The form controls the pages share: the radio group and the select, on Base UI, and a card's
 // title that opens the card's page.
@@ -139,26 +140,14 @@ describe('CardTitleLink', () => {
     expect(onOpen).toHaveBeenCalledTimes(1)
   })
 
-  test('with one project picked in the dashboard, the link keeps it: a new tab shows that project too', () => {
-    window.history.replaceState(null, '', '/?project=shop-1abc')
-    try {
-      render(
+  test("its address is the dashboard's for the page, with the picked project: a new tab shows that project too", () => {
+    render(
+      <HostServicesContext.Provider value={{ ...INERT_HOST_SERVICES, pageHref: segment => `/shop/${segment}` }}>
         <CardTitleLink segment="queue" onOpen={() => {}}>
           AI Queue
-        </CardTitleLink>,
-      )
-      expect(screen.getByRole('link', { name: 'AI Queue' }).getAttribute('href')).toBe('/queue?project=shop-1abc')
-      cleanup()
-      // A project's own page picks its project without naming it twice.
-      window.history.replaceState(null, '', '/shop-1abc')
-      render(
-        <CardTitleLink segment="queue" onOpen={() => {}}>
-          AI Queue
-        </CardTitleLink>,
-      )
-      expect(screen.getByRole('link', { name: 'AI Queue' }).getAttribute('href')).toBe('/queue?project=shop-1abc')
-    } finally {
-      window.history.replaceState(null, '', '/')
-    }
+        </CardTitleLink>
+      </HostServicesContext.Provider>,
+    )
+    expect(screen.getByRole('link', { name: 'AI Queue' }).getAttribute('href')).toBe('/shop/queue')
   })
 })

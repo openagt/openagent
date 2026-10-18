@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { dataLinkParts, dataLinkRoute } from './data-link.js'
 
-// A link into a project's files opens the mounted page named by its first segment (#1774), at
-// `/<segment>/<projectId>/<rest…>`; with no such page mounted, it opens nothing.
+// A link into a project's files opens the mounted page named by its first segment (#1774) in that
+// project, at `/<project>/<segment>/<rest…>`; with no such page mounted, it opens nothing.
 describe('dataLinkRoute', () => {
   const pages = [{ segment: 'tickets' }, { segment: 'logs' }]
 
-  it('opens the mounted page named by the first segment, with the project and the rest as its path', () => {
-    expect(dataLinkRoute('p1', 'tickets/2026-01-01_x.md', pages)).toEqual({ projectId: null, agentId: null, page: 'tickets', pagePath: ['p1', '2026-01-01_x.md'] })
-    expect(dataLinkRoute('p1', 'tickets/2026-01-01_x.md/plan', pages)).toEqual({ projectId: null, agentId: null, page: 'tickets', pagePath: ['p1', '2026-01-01_x.md', 'plan'] })
+  it('opens the mounted page named by the first segment in the project, with the rest as its path', () => {
+    expect(dataLinkRoute('p1', 'tickets/2026-01-01_x.md', pages)).toEqual({ projectId: null, agentId: null, page: 'tickets', pagePath: ['2026-01-01_x.md'], scope: 'p1' })
+    expect(dataLinkRoute('p1', 'tickets/2026-01-01_x.md/plan', pages)).toEqual({ projectId: null, agentId: null, page: 'tickets', pagePath: ['2026-01-01_x.md', 'plan'], scope: 'p1' })
   })
 
   it('opens nothing when no page claims the segment, for an absolute URL, or for a bare file', () => {

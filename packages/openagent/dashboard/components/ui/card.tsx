@@ -1,7 +1,7 @@
-import type { HTMLAttributes, ReactNode } from 'react'
+import { useContext, type HTMLAttributes, type ReactNode } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { cn } from '../../lib/utils.js'
-import { pageHref } from '../../lib/route.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../../lib/host-services.js'
 
 // Minimal shadcn-style Card for the dashboard page (#471): a bordered surface with an
 // optional header. Just enough structure to keep the page's panels consistent.
@@ -25,10 +25,11 @@ export function CardTitle({ className, ...props }: HTMLAttributes<HTMLHeadingEle
  * phone, where nothing hovers.
  */
 export function CardTitleLink({ icon, children, segment, onOpen, className }: { icon?: ReactNode; children: ReactNode; /** The page the title opens, by its segment. */ segment: string; onOpen: () => void; className?: string }) {
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   return (
     <CardTitle className={cn('text-base', className)}>
       <a
-        href={pageHref(segment)}
+        href={services.pageHref(segment)}
         onClick={event => {
           if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
           event.preventDefault()
