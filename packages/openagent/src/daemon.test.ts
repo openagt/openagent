@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { mkdtemp, writeFile, rm, mkdir, readFile, realpath } from 'node:fs/promises'
+import { mkdtemp, writeFile, rm, mkdir, readFile, readdir, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import {
@@ -143,8 +143,8 @@ test("the services of OpenAgent's own packages run while the daemon does: told i
   }
 })
 
-test('runDaemon comes up on a fresh workspace with no .openagent yet', async () => {
-  const cwd = await mkdtemp(join(tmpdir(), 'openagent-daemon-')) // deliberately no mkdir
+test('runDaemon comes up in a folder that is no project, and leaves nothing in it', async () => {
+  const cwd = await mkdtemp(join(tmpdir(), 'openagent-daemon-'))
   const env = await configEnv(cwd)
   const ac = new AbortController()
   try {
@@ -152,6 +152,7 @@ test('runDaemon comes up on a fresh workspace with no .openagent yet', async () 
     assert.equal((await fetch(state.url)).status, 200)
     ac.abort()
     await done
+    assert.deepEqual(await readdir(cwd), ['cfg'], 'no .openagent of its own')
   } finally {
     ac.abort()
     await rm(cwd, { recursive: true, force: true })
@@ -242,7 +243,7 @@ test('the dashboard adds no folder by itself, not even its own start folder, so 
   }
 })
 
-test('the folder the caller names is added once the dashboard listens, as Add project adds it; started again inside it, nothing is added', async () => {
+test('the folder the caller names is added once the dashboard listens, as Add project adds it; started again inside it, it is the project already there', async () => {
   const folder = await realpath(await mkdtemp(join(tmpdir(), 'openagent-daemon-add-')))
   const cfg = await realpath(await mkdtemp(join(tmpdir(), 'openagent-daemon-add-cfg-')))
   // The add's git reads the process's own environment, and a new folder's first commit needs an author.
@@ -250,17 +251,18 @@ test('the folder the caller names is added once the dashboard listens, as Add pr
   const before = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]))
   Object.assign(process.env, env)
   await mkdir(join(folder, 'src'))
-  const added: string[] = []
+  const told: { id: string; path: string; added: boolean }[] = []
   try {
     // Aborted as soon as it listens: the add comes before the daemon waits, so it has run once it is done.
     for (const project of [folder, join(folder, 'src')]) {
       const ac = new AbortController()
-      const { done } = await startDaemon(cfg, { port: 0, signal: ac.signal, env, project, onProjectAdded: path => added.push(path) })
+      const { done } = await startDaemon(cfg, { port: 0, signal: ac.signal, env, project, onProject: started => told.push(started) })
       ac.abort()
       await done
     }
-    assert.deepEqual(added, [folder])
-    assert.deepEqual((await listProjects(undefined, env)).map(project => project.path), [folder])
+    const id = projectId(folder)
+    assert.deepEqual(told, [{ id, path: folder, added: true }, { id, path: folder, added: false }])
+    assert.deepEqual((await listProjects(undefined, env)).map(project => project.id), [id])
     assert.match(await readFile(join(folder, OPENAGENT_DIR, 'hooks.yml'), 'utf8'), /^start: agent-runner /m, 'added with the hook lines Add project writes')
   } finally {
     for (const [key, value] of Object.entries(before)) {

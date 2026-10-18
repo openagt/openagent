@@ -31,3 +31,6 @@ already made, and lists it in its pull request; for anything else it proposes an
   Picked over the person adding the folder they had just typed the command in, a second
   step before anything else; and over the dashboard adding its own start folder, which
   brought back at every start a project the person had removed.
+- Typed in a terminal, the command opens the dashboard in the browser, on the page of the
+  project it was typed in, picked in the sidebar too; outside a repository, on the
+  Overview. Picked over printing the address only, one more step for the person.
