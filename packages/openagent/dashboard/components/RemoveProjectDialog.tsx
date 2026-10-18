@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { AlertDialog } from '@base-ui-components/react/alert-dialog'
+import { AlertDialog } from '@base-ui/react/alert-dialog'
 import type { CleanupReport } from '../../src/index.js'
 import { sendRemoveProject } from '../rpc/projects.js'
 import { useAction } from '../lib/use-action.js'

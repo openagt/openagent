@@ -1,4 +1,4 @@
-import { Popover as BasePopover } from '@base-ui-components/react/popover'
+import { Popover as BasePopover } from '@base-ui/react/popover'
 import type { ComponentProps, ReactNode } from 'react'
 import { cn } from '../../lib/utils.js'
 import { ScrollArea } from './scroll-area.js'

@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react'
-import { ScrollArea as ScrollAreaPrimitive } from '@base-ui-components/react/scroll-area'
+import { ScrollArea as ScrollAreaPrimitive } from '@base-ui/react/scroll-area'
 import { cn } from '../../lib/utils.js'
 
 // shadcn's Base UI `scroll-area`, ported (#913) the same way `message-scroller` was (#712): there is

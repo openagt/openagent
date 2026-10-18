@@ -1,5 +1,5 @@
 import { useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
-import { Dialog as BaseDialog } from '@base-ui-components/react/dialog'
+import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import { ArrowLeft, Bell, Bot, ChevronRight, Globe, Palette, X } from 'lucide-react'
 import { DRIVERS } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'

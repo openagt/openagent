@@ -59,7 +59,7 @@
   "dependencies": {
     "@openagt/agent-driver-claude": "workspace:*",
     "@openagt/agent-driver-codex": "workspace:*",
-    "@base-ui-components/react": "1.0.0-rc.0",
+    "@base-ui/react": "1.9.0",
     "@openagt/agent-data": "workspace:*",
     "@openagt/changes": "workspace:*",
     "@openagt/files": "workspace:*",

@@ -1,6 +1,6 @@
 'use client'
 import type { ComponentProps } from 'react'
-import { Switch as SwitchPrimitive } from '@base-ui-components/react/switch'
+import { Switch as SwitchPrimitive } from '@base-ui/react/switch'
 import { cn } from '../../lib/utils.js'
 
 // A shadcn-style Switch on Base UI, beside the Checkbox: for a setting that is on or off and takes

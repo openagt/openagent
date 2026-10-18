@@ -1,6 +1,6 @@
 'use client'
 import * as React from 'react'
-import { useRender } from '@base-ui-components/react/use-render'
+import { useRender } from '@base-ui/react/use-render'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { PanelLeftIcon } from 'lucide-react'
 
