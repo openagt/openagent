@@ -8,7 +8,6 @@
 
 
 ## Priority 5
-- Create tickets/2026-10-03_pretty-dashboard-url.plan.md
 - Create tickets/2026-10-09_new-automation-shell-line-plain-words.plan.md
 - Create tickets/2026-10-09_pr-comment-resumes-agent.plan.md
 - Create tickets/2026-10-11_reach-local-machine-without-vps.plan.md
