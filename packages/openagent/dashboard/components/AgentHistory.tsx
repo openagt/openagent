@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Plus, ChevronDown, Bot, Cloud, Laptop, Server, LayoutDashboard, Blocks } from 'lucide-react'
+import { Plus, ChevronDown, Bot, Cloud, Laptop, Server, LayoutDashboard, Blocks, GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-react'
 import type { ComponentType } from 'react'
 import type { AgentMeta, AgentStatus, RecentAgent, ProjectSummary } from '../../src/index.js'
 import { DRIVER_LABELS, driverFromImpl, cloudRunState, type CloudRunState } from '../../src/client.js'
@@ -243,6 +243,7 @@ export function AgentHistory({
       cloudState={cloudRunState(row.agent, Date.now())}
       {...(row.agent.remoteLabel ? { remoteLabel: row.agent.remoteLabel } : {})}
       remoteByLine={row.agent.remoteByLine === true}
+      {...(row.agent.pr ? { pr: { number: row.agent.pr.number, ...(row.agent.prState ? { state: row.agent.prState } : {}) } } : {})}
       onClick={leave(row.onClick)}
       onNear={row.onNear}
     />
@@ -555,6 +556,23 @@ function RevealedTitle({ text, start }: { text: string; start: boolean }) {
   )
 }
 
+/** How a run's pull request stands, as the git host last said. */
+type PrState = NonNullable<AgentMeta['prState']>
+
+/**
+ * A run's pull request on its row, one glyph per state in the git host's own colours, so a list of
+ * runs says which have work waiting for review and which landed without opening one. Each state
+ * has its own shape too, for a reader who cannot tell the colours apart. A request whose state was
+ * not read (older than the git host lists) is drawn plainly.
+ */
+const PR_MARKS: Record<PrState | 'unknown', { Icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; tone: string; word?: string }> = {
+  open: { Icon: GitPullRequest, tone: 'text-success', word: 'open' },
+  draft: { Icon: GitPullRequestDraft, tone: 'text-muted-foreground', word: 'draft' },
+  merged: { Icon: GitMerge, tone: 'text-merged', word: 'merged' },
+  closed: { Icon: GitPullRequestClosed, tone: 'text-danger', word: 'closed' },
+  unknown: { Icon: GitPullRequest, tone: 'text-muted-foreground' },
+}
+
 // One agent row, one line: a small circle and the session's name, as Claude Code on the web lists
 // its sessions. The row used to be two lines — a status word, the project, the time and the agent's
 // logo above the name — which made the list a column of paragraphs and fitted half as many sessions
@@ -579,6 +597,7 @@ function AgentHistoryRow({
   remoteByLine = false,
   startedOn,
   fold,
+  pr,
 }: {
   status: AgentStatus
   /** The row's subagents, folded or open under it: a count at the row's end, so a row with subagents is no taller than one without. */
@@ -612,6 +631,8 @@ function AgentHistoryRow({
   remoteByLine?: boolean
   /** The machine whose daemon started the run, when that is another machine (#1648): a glyph names it. */
   startedOn?: string | undefined
+  /** The run's pull request, and how it stands when the git host said: a glyph before the agent's logo. */
+  pr?: { number: number; state?: PrState } | undefined
 }) {
   // A run that ended on its question waits on you (#785), and so does a web run whose cloud
   // session the bridge reports as parked (#1668).
@@ -648,6 +669,8 @@ function AgentHistoryRow({
   const working = status === 'running' || inCloud || savingNow
   const dotTone = savingNow ? STATUS_DOT['saving'] : parked ? STATUS_DOT['waiting'] : working ? STATUS_DOT['running'] : STATUS_DOT[status]
   const ringTone = (cloudWord ? STATUS_RING[cloudWord] : STATUS_RING[status]) ?? STATUS_RING['done']
+  const prMark = pr ? PR_MARKS[pr.state ?? 'unknown'] : undefined
+  const prSaid = pr && prMark ? `PR #${pr.number}${prMark.word ? ` ${prMark.word}` : ''}` : undefined
   // Everything the two-line row used to print, in one sentence on hover: the word, where the run
   // is and when it started, which coding agent ran it, and the machine or cloud it ran on.
   const said = [
@@ -658,6 +681,7 @@ function AgentHistoryRow({
     ...(startedOn ? [`started on ${startedOn}`] : []),
     ...(remote ? [remoteLabel ? `runs on ${remoteLabel}` : 'runs on another machine'] : []),
     ...(cloud ? ['a Claude Code cloud session'] : []),
+    ...(prSaid ? [prSaid] : []),
   ].join(' · ')
   // The hover says what the row no longer prints, and a name too long for the rail in full under it
   // (#1494) — the marquee it replaced forced reading at the animation's pace. The row itself is the
@@ -739,6 +763,13 @@ function AgentHistoryRow({
           <ChevronDown className={cn('h-3 w-3 shrink-0 transition-transform', fold.open || '-rotate-90')} aria-hidden />
           <Bot className="h-3 w-3 shrink-0" aria-hidden />
           {fold.count}
+        </span>
+      )}
+      {/* Its pull request, just before the logo, so the marks of the rows that have one stand in a
+          column too. */}
+      {prMark && prSaid && (
+        <span role="img" aria-label={prSaid} className="flex shrink-0 items-center">
+          <prMark.Icon className={cn('h-3 w-3', prMark.tone)} aria-hidden />
         </span>
       )}
       {/* Which coding agent ran it, as its own mark at the very end of the row (his pick): a

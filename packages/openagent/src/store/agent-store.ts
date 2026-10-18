@@ -149,6 +149,11 @@ export interface AgentMeta {
    */
   saving?: boolean
   /**
+   * How the run's pull request stands ({@link pr}), as the git host last said. Not stored: annotated
+   * on the way to the dashboard like {@link saving}, since it changes on the git host, not here.
+   */
+  prState?: 'open' | 'draft' | 'merged' | 'closed'
+  /**
    * The loopback port the agent's browser preview is listening on (#813), or absent when the agent
    * has no browser. What lets the daemon proxy the pane: the port is allocated per agent and the
    * dashboard is a different process, so meta is the only place it can learn it.

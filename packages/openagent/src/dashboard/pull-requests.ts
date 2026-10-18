@@ -136,9 +136,47 @@ export async function cachedPrView(cwd: string, branch?: string): Promise<Cached
   return cachedRead(prCacheKey(cwd, branch), () => prView(cwd, branch))
 }
 
-/** Forget a branch's PR, after an action that changes whether it has one. */
+/** Forget a branch's PR, after an action that changes whether it has one, and with it how the project's PRs stand. */
 export function forgetPr(cwd: string, branch?: string): void {
   invalidate(prCacheKey(cwd, branch))
+  invalidate(prStatesCacheKey(cwd))
+}
+
+/** How a run's pull request stands, as its row in the list of runs shows it. */
+export type PrState = 'open' | 'draft' | 'merged' | 'closed'
+
+/**
+ * How each of a project's newest pull requests stands, by its address: what the list of runs marks
+ * each run's PR with. One listing of the project's requests, whatever their state, rather than one
+ * per run; a request older than what the git host lists has no state here. A listing the git host
+ * cannot answer throws.
+ */
+export async function prStates(cwd: string, gitHost: GitHostFor = projectGitHost): Promise<Map<string, PrState>> {
+  const source = await gitHost(cwd)
+  if (!source) return new Map()
+  const listed = await source.requests({ state: 'all' })
+  if (!listed.ok) throw new Error(listed.error)
+  return new Map(listed.requests.map(request => [request.url, request.state === 'open' && request.draft ? 'draft' : request.state]))
+}
+
+/** The states each project last read, so a read that fails or is on its way shows those rather than none. */
+const lastStates = new Map<string, Map<string, PrState>>()
+
+/**
+ * The cached form of {@link prStates} (#1028): the list of runs is polled every few seconds, and a
+ * PR's state changes far less often. A listing that fails is kept like an answer, as the states
+ * last read, so a git host that cannot answer is asked again a minute later, not at every poll;
+ * and while a read is on its way, after a request was opened or merged here, the rows keep the
+ * states they had.
+ */
+export async function cachedPrStates(cwd: string, read: (cwd: string) => Promise<Map<string, PrState>> = prStates): Promise<Map<string, PrState>> {
+  const cached = await cachedRead(prStatesCacheKey(cwd), () =>
+    read(cwd).then(
+      states => (lastStates.set(cwd, states), states),
+      () => lastStates.get(cwd) ?? new Map<string, PrState>(),
+    ),
+  )
+  return cached.value ?? lastStates.get(cwd) ?? new Map()
 }
 
 /** The cached form of {@link prsForBranch}, shared through the same read-through cache (#1028). */
@@ -156,6 +194,10 @@ const KEY_SEP = String.fromCharCode(0)
 
 function prCacheKey(cwd: string, branch?: string): string {
   return ['pr', cwd, branch ?? ''].join(KEY_SEP)
+}
+
+function prStatesCacheKey(cwd: string): string {
+  return ['pr-states', cwd].join(KEY_SEP)
 }
 
 function branchPrsCacheKey(cwd: string, branch: string): string {

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cachedPrView, linkedPrOf, openPrOf, openPrs, prView, prsForBranch, prsForBranchOrThrow } from './pull-requests.js'
+import { cachedPrStates, cachedPrView, forgetPr, linkedPrOf, openPrOf, openPrs, prStates, prView, prsForBranch, prsForBranchOrThrow } from './pull-requests.js'
 import type { GitHostFor, GitHostRequest, RequestsOutcome } from '../store/git-host.js'
 
 // The dashboard's pull request reads (#1820), all through the git host provider: what is asked of it,
@@ -56,4 +56,39 @@ test('the open PRs are asked by state; a git host that could not answer is a fai
   assert.deepEqual(asked, [{ state: 'open' }])
   await assert.rejects(openPrs('/repo', fakeGitHost({ ok: false, error: 'gh: not authenticated' }).gitHost))
   assert.deepEqual(await openPrs('/repo', noGitHost), [])
+})
+
+test('how a project\'s PRs stand is one listing of every state, by number; an open draft reads as a draft; a git host that could not answer is a failure, so the last states are kept; no git host, no states', async () => {
+  const { gitHost, asked } = fakeGitHost({
+    ok: true,
+    requests: [REQUEST, { ...REQUEST, number: 3, url: 'https://github.com/o/r/pull/3', draft: true }, { ...REQUEST, number: 4, url: 'https://github.com/o/r/pull/4', state: 'merged' }, { ...REQUEST, number: 5, url: 'https://github.com/o/r/pull/5', state: 'closed', draft: true }],
+  })
+  const url = (n: number) => `https://github.com/o/r/pull/${n}`
+  assert.deepEqual([...(await prStates('/repo', gitHost))], [[url(2), 'open'], [url(3), 'draft'], [url(4), 'merged'], [url(5), 'closed']])
+  assert.deepEqual(asked, [{ state: 'all' }])
+  await assert.rejects(prStates('/repo', fakeGitHost({ ok: false, error: 'gh: not authenticated' }).gitHost), /not authenticated/)
+  assert.equal((await prStates('/repo', noGitHost)).size, 0)
+})
+
+test('the cached states: a failed listing is kept as the states last read, so the git host is not asked at every poll; after a request was opened here, the rows keep their states while the next read is on its way', async () => {
+  const cwd = '/repo-states'
+  let calls = 0
+  let answer: () => Promise<Map<string, 'open' | 'merged'>> = async () => new Map([['u/1', 'open' as const]])
+  const read = () => (calls++, answer())
+  assert.deepEqual([...(await cachedPrStates(cwd, read))], [['u/1', 'open']])
+  // Opened or merged here: the states are forgotten, and the next read is slow. The rows keep what they had.
+  forgetPr(cwd, 'agent-x')
+  answer = () => new Promise(resolve => setTimeout(() => resolve(new Map([['u/1', 'merged' as const]])), 400))
+  assert.deepEqual([...(await cachedPrStates(cwd, read))], [['u/1', 'open']])
+  await new Promise(resolve => setTimeout(resolve, 450))
+  assert.deepEqual([...(await cachedPrStates(cwd, read))], [['u/1', 'merged']])
+  // A git host that cannot answer: its failure is kept like an answer, as the last states, and not asked again at once.
+  forgetPr(cwd, 'agent-x')
+  answer = () => Promise.reject(new Error('gh: not authenticated'))
+  const before = calls
+  await new Promise(resolve => setTimeout(resolve, 10))
+  assert.deepEqual([...(await cachedPrStates(cwd, read))], [['u/1', 'merged']])
+  await cachedPrStates(cwd, read)
+  await cachedPrStates(cwd, read)
+  assert.equal(calls, before + 1, 'one ask, then the kept answer')
 })
