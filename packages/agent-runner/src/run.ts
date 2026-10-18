@@ -63,6 +63,9 @@ import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
  * branch's work began with another run.
  */
 
+/** How long naming a run from its report may hold its end up: the small model answers in a few seconds. */
+const REPORT_NAMING_TIMEOUT_MS = 15_000
+
 /** The detail a stopped run's record carries. */
 export const STOPPED_DETAIL = 'stopped by a signal to its process'
 
@@ -570,13 +573,6 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
         detail = errorMessage(err)
         failure = err
       }
-      // Named before the run is said ended, so the name is on the card and its line in the diary
-      // before the ended one; once, from the first report.
-      if (nameFromReport && !stopped.aborted && lastText.trim() !== '') {
-        nameFromReport = false
-        const title = await nameRun(run.driver, { prompt: lastText, from: 'report', signal: stopped })
-        if (title !== undefined) await driverSession.log?.title(title)
-      }
       if (stopped.aborted) {
         status = 'stopped'
         detail = STOPPED_DETAIL
@@ -585,6 +581,15 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
         // keeps its checkout for the answer to resume it.
         question = parseQuestion(lastText)?.title
         if (question !== undefined) status = 'waiting'
+      }
+      // Named from its first report once its status is settled, before it is said ended, so the
+      // name's line in the diary comes before the ended one; a stop meanwhile only cuts the naming
+      // short. A question is no report of the work, and a few seconds is all a name may hold the
+      // end up.
+      if (nameFromReport && status === 'done' && lastText.trim() !== '') {
+        nameFromReport = false
+        const title = await nameRun(run.driver, { prompt: lastText, from: 'report', signal: stopped, timeoutMs: REPORT_NAMING_TIMEOUT_MS })
+        if (title !== undefined) await driverSession.log?.title(title)
       }
 
       // Where the work ended up: the agent renames its branch itself, and the pull request it

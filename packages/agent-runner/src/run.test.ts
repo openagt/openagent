@@ -243,6 +243,12 @@ test('a run asked only a slash command keeps it while it works, and is named fro
     const kinds = (await readUntimedDiary(repo, run.id)).map(line => line.kind)
     assert.ok(kinds.indexOf('title') < kinds.indexOf('ended'))
     assert.equal(kinds.at(-1), 'ended')
+
+    // A run that ends on a question has not reported its work: it is not named from the question.
+    const asking: Driver = { id: 'claude-code', start: opts => new FakeDriver({ respond: prompt => (prompt.includes('Name this coding session') ? 'Ship it question' : QUESTION) }).start(opts) }
+    const waiting = await runCommand(repo, { prompt: '/work-queue', driver: asking, now: () => new Date(NOW.getTime() + 60_000), gitHost: noGitHost })
+    assert.equal(waiting.status, 'waiting')
+    assert.equal((await findRun(repo, waiting.id))?.title, undefined)
   } finally {
     await removeRepo(repo)
   }
