@@ -1,6 +1,6 @@
 {
   "name": "@openagt/skill-tickets",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Tickets for coding agents: markdown tickets with their plans and claims, kept on a branch of the project's repository and changed with the tickets command.",
   "license": "MIT",
   "repository": {
