@@ -163,6 +163,7 @@ export async function makeWorld(): Promise<StoryWorld> {
   const context = {
     startAgent: runtime.onStart,
     addProject: runtime.onAddProject,
+    startedIn: runtime.onStartedIn,
     removeProject: runtime.onRemoveProject,
     eventsSource: runtime.remoteEventsSource,
     remote: runtime.remoteAgents,

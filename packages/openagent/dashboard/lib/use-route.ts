@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
-import { parseRoute, formatRoute, keepPageQuery, type ProjectAddresses, type Route } from './route.js'
+import { parseRoute, formatRoute, keepPageQuery, type Route } from './route.js'
+import type { ProjectAddresses } from '../../src/project-address.js'
 
 // The route as state (#784): read the current one, go to another. Back/Forward are free, and a
 // session is a link you can paste, reload, and open twice.

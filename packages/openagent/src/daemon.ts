@@ -1,4 +1,3 @@
-import { resolve, sep } from 'node:path'
 import { startDashboard, type Dashboard } from './dashboard/index.js'
 import { createProjectRuntime } from './daemon-runtime.js'
 import { defaultQuotaSource } from './dashboard/quota.js'
@@ -6,7 +5,7 @@ import { defaultModelsSource } from './dashboard/models.js'
 import { startBackgroundServices } from './daemon-services.js'
 import { projectErrorStore } from './project-errors.js'
 import { resolveDashboardBundle } from './dashboard/bundle.js'
-import { ensureBridgeToken, ensureComputerId, listProjects, nodeRegistryFs, projectId, readPreferences, registryPreferencesStore, type Preferences, type ProjectRecord } from './registry.js'
+import { ensureBridgeToken, ensureComputerId, listProjects, nodeRegistryFs, readPreferences, registryPreferencesStore, type Preferences } from './registry.js'
 import { sayComputer } from './dashboard/machine-call.js'
 import { bridgeSessionsFrom } from './dashboard/bridge-sessions.js'
 import { bridgeQuestions } from './dashboard/bridge-store.js'
@@ -16,7 +15,7 @@ import { builtInServices } from './built-in.js'
 import { COMPUTER_ENV, startPackageServices, type PackageServices, type PackageServicesOptions } from './package-services.js'
 import { readAllAgents } from './store/index.js'
 import { setOpenagentVersion } from './version.js'
-import type { BridgeSession } from './dashboard/index.js'
+import type { BridgeSession, StartedProject } from './dashboard/index.js'
 
 /**
  * The dashboard process (#302). It is a pure projection of files: a run's tool keeps the run's
@@ -69,13 +68,18 @@ export interface RunDaemonOptions {
    * The dashboard adds no folder by itself: this is the caller's.
    */
   project?: string
-  /** Called once {@link project} is on the list, with its id for its page, and whether it was added now. */
-  onProject?: (project: { id: string; path: string; added: boolean }) => void
+  /** Called once {@link project} is on the list: its id, which always opens its page, the address the page shows, and whether it was added now. */
+  onProject?: (project: StartedProject) => void
   /** How the bridge browser is launched (#1332); default the real Chrome for Testing. For tests. */
   bridgeBrowser?: (opts: BridgeBrowserOptions) => Promise<BridgeBrowser>
   /** How the services of OpenAgent's own packages are started; default each as its own process. For tests. */
   packageServices?: (opts: PackageServicesOptions) => PackageServices
+  /** How long the teardown after Ctrl+C may take; default {@link SHUTDOWN_DEADLINE_MS}. For tests. */
+  shutdownDeadlineMs?: number
 }
+
+/** How long the teardown after Ctrl+C may take before the daemon ends without what is still running. */
+const SHUTDOWN_DEADLINE_MS = 10_000
 
 /**
  * The daemon body, run in the foreground by bare `openagent`. Serves the built dashboard bundle
@@ -98,16 +102,6 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   // Everything the dashboard drives per project (a run's start, project install, the machine
   // relay) lives in the runtime, so this body stays about the daemon's own lifecycle.
   const runtime = createProjectRuntime({ cwd, env })
-  // The folder the caller named: the listed project that holds it, so starting again inside a
-  // project, or inside one of its folders, adds nothing; else added, as Add project adds one.
-  const startedIn = async (folder: string, listed: readonly ProjectRecord[]): Promise<void> => {
-    const path = resolve(folder)
-    const holding = listed.find(project => path === project.path || path.startsWith(project.path + sep))
-    if (holding) return opts.onProject?.({ id: holding.id, path: holding.path, added: false })
-    const added = await runtime.onAddProject(path, false)
-    if (added.ok) opts.onProject?.({ id: projectId(path), path, added: true })
-    else console.log(`[openagent] could not add ${path}: ${added.error}`)
-  }
   // Known only once the dashboard listens; the bridge browser is told it (#1332).
   let daemonUrl: string | undefined
 
@@ -124,7 +118,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   // so a web run no longer needs the user's Chrome open. Created here, launched only once the
   // dashboard listens (the extension is told the daemon's address) and the preference says so.
   // It needs the bridge: without the token there is nothing to hand the extension.
-  const bridgeBrowser = bridgeBrowserOwner(async report => {
+  const bridgeBrowser = bridgeBrowserOwner(async (report, signal) => {
     if (!bridgeToken || !daemonUrl) {
       // The token is minted at boot, from the bridge preference as it stood then (above). A bridge
       // switched on since is a restart away; a bridge that is off wants switching on first.
@@ -135,7 +129,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
           : 'turn the browser bridge on, then restart the dashboard',
       )
     }
-    return (opts.bridgeBrowser ?? (o => startBridgeBrowser(o)))({ daemonUrl, token: bridgeToken, dir: bridgeBrowserDir(env), report })
+    return (opts.bridgeBrowser ?? (o => startBridgeBrowser(o)))({ daemonUrl, token: bridgeToken, dir: bridgeBrowserDir(env), report, signal })
   }, console.log)
   const dashboard: Dashboard = await startDashboard({
     port,
@@ -144,6 +138,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     models: defaultModelsSource(),
     onStart: runtime.onStart,
     onAddProject: runtime.onAddProject,
+    onStartedIn: runtime.onStartedIn,
     onRemoveProject: runtime.onRemoveProject,
     // Relay an agent to/from a saved machine (#1067): the events source streams an agent this daemon
     // is relaying, `remote` lets the read RPCs forward a remote agent's reads/steer/push to its machine
@@ -162,6 +157,12 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     projectErrors: projectErrors.read,
     bridgeBrowser,
     ...(clientBundleDir ? { clientBundleDir } : {}),
+  }).catch(async (err: unknown) => {
+    // The port is taken (another dashboard runs there, say): what was set up for it stops, or
+    // its timers keep the process alive.
+    quota.stop()
+    await runtime.dispose()
+    throw err
   })
 
   daemonUrl = dashboard.url
@@ -186,7 +187,11 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   // The folder the caller named comes first, so its page opens before the other projects' lines
   // have run. The list is read before it is added: adding runs the new project's own open lines.
   const listed = await listProjects(undefined, env).catch(() => [])
-  if (opts.project !== undefined) await startedIn(opts.project, listed)
+  if (opts.project !== undefined) {
+    const started = await runtime.onStartedIn(opts.project)
+    if (started.ok) opts.onProject?.({ id: started.id, path: started.path, added: started.added, address: started.address })
+    else console.log(`[openagent] could not add ${opts.project}: ${started.error}`)
+  }
   for (const record of listed) {
     await runProjectHooks(record.path, 'open', { log: console.log })
   }
@@ -205,21 +210,55 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
 
   await waitForShutdown(opts.signal)
 
-  await packageServices.stop()
-  await services.quiesce()
-  // Each project's close hooks (#1774), the counterpart of the open hooks above. A run in flight
-  // is not the daemon's process: it goes on to its end, and the next dashboard shows it.
-  for (const record of await listProjects(undefined, env).catch(() => [])) {
-    await runProjectHooks(record.path, 'close', { log: console.log })
+  // One Ctrl+C stops the dashboard (#2141): a step that hangs is logged and left behind once the
+  // deadline passes, and a second Ctrl+C stops at once.
+  const hurry = (): void => {
+    console.log('[openagent] stopping now')
+    process.exit(130)
   }
-  // Stopped here as well as by the dashboard: a broken install serves 503s without ever taking
-  // ownership of the source we handed in, and that poller would go on reading by itself.
-  quota.stop()
-  // The daemon's browser goes with the daemon (#1332): left running it would keep serving a
-  // daemon that is gone, and the next daemon would find its profile held.
-  await bridgeBrowser.stop()
-  await runtime.dispose()
-  await dashboard.close()
+  process.on('SIGINT', hurry)
+  process.on('SIGTERM', hurry)
+  let step = 'starting to stop'
+  const teardown = async (): Promise<void> => {
+    step = "the services of OpenAgent's own packages"
+    await packageServices.stop()
+    // The dashboard goes first after them: the port is free again, and an open tab sees the
+    // dashboard is gone, while what is left stops behind it.
+    step = 'the dashboard'
+    await dashboard.close()
+    step = 'the background services'
+    await services.quiesce()
+    // Each project's close hooks (#1774), the counterpart of the open hooks above. A run in flight
+    // is not the daemon's process: it goes on to its end, and the next dashboard shows it.
+    for (const record of await listProjects(undefined, env).catch(() => [])) {
+      step = `the close hooks of ${record.path}`
+      await runProjectHooks(record.path, 'close', { log: console.log })
+    }
+    // Stopped here as well as by the dashboard: a broken install serves 503s without ever taking
+    // ownership of the source we handed in, and that poller would go on reading by itself.
+    quota.stop()
+    // The daemon's browser goes with the daemon (#1332): left running it would keep serving a
+    // daemon that is gone, and the next daemon would find its profile held.
+    step = 'the bridge browser'
+    await bridgeBrowser.stop()
+    step = 'the relayed runs'
+    await runtime.dispose()
+  }
+  const deadlineMs = opts.shutdownDeadlineMs ?? SHUTDOWN_DEADLINE_MS
+  let deadline: NodeJS.Timeout | undefined
+  const late = new Promise<void>(resolvePromise => {
+    deadline = setTimeout(() => {
+      console.log(`[openagent] stopped without waiting for ${step}: stopping took longer than ${deadlineMs / 1000} s`)
+      resolvePromise()
+    }, deadlineMs).unref()
+  })
+  try {
+    await Promise.race([teardown(), late])
+  } finally {
+    clearTimeout(deadline)
+    process.off('SIGINT', hurry)
+    process.off('SIGTERM', hurry)
+  }
 }
 
 /** Resolve on SIGINT/SIGTERM, or when the optional abort signal fires. */

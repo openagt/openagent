@@ -1,42 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { parseRoute, formatRoute, keepPageQuery, projectAddresses, NO_PROJECTS, type Route } from './route.js'
+import { parseRoute, formatRoute, keepPageQuery, type Route } from './route.js'
+import { projectAddresses, NO_PROJECTS } from '../../src/project-address.js'
 
 // Two projects named `shop` (the second one added gets its id as its address), one named `app`,
 // and one named as a page's word.
 const projects = projectAddresses(['shop-1abc', 'app-a1', 'shop-2def', 'logs-9zz'], ['logs', 'tickets'])
 const parse = (url: string): Route => parseRoute(url, projects)
 const format = (route: Route): string => formatRoute(route, projects)
-
-describe('projectAddresses', () => {
-  it("names a project by its folder's name: its id without the `-<hash>`", () => {
-    expect(projects.addressOf('app-a1')).toBe('app')
-    expect(projects.addressOf('shop-1abc')).toBe('shop')
-    expect(projectAddresses(['my-repo-a1b2'], []).addressOf('my-repo-a1b2')).toBe('my-repo')
-  })
-
-  it('gives the name to the first project added that has it, and its id to the next', () => {
-    expect(projects.addressOf('shop-2def')).toBe('shop-2def')
-    expect(projectAddresses(['shop-2def'], []).addressOf('shop-2def')).toBe('shop')
-  })
-
-  it("gives a name that is a page's word to the page, and its id to the project", () => {
-    expect(projects.addressOf('logs-9zz')).toBe('logs-9zz')
-    expect(projectAddresses(['overview-1a'], []).addressOf('overview-1a')).toBe('overview-1a')
-    expect(projectAddresses(['settings-2b'], []).addressOf('settings-2b')).toBe('settings-2b')
-  })
-
-  it('finds a project by its address and by its id', () => {
-    expect(projects.projectOf('shop')).toBe('shop-1abc')
-    expect(projects.projectOf('shop-1abc')).toBe('shop-1abc')
-    expect(projects.projectOf('shop-2def')).toBe('shop-2def')
-    expect(projects.projectOf('logs')).toBeUndefined()
-    expect(projects.projectOf('nope')).toBeUndefined()
-  })
-
-  it('writes an id it does not know as it is', () => {
-    expect(projects.addressOf('gone-7x')).toBe('gone-7x')
-  })
-})
 
 describe('parseRoute', () => {
   it('reads the Overview of every project from the root', () => {

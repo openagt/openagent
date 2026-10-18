@@ -9,7 +9,7 @@ import type { QuotaSource } from './quota.js'
 import type { ModelsSource } from './models.js'
 import type { BridgeBrowserOwner } from '../bridge-browser.js'
 import type { ProjectErrorsReader } from '../project-errors.js'
-import type { AddProjectResult, RemoveProjectResult, StartAgentOptions, StartAgentResult } from './types.js'
+import type { AddProjectResult, RemoveProjectResult, StartAgentOptions, StartAgentResult, StartedInResult } from './types.js'
 import type { AgentMeta } from '../store/index.js'
 import type { RemoteTarget } from './remote-run.js'
 
@@ -22,6 +22,9 @@ export type StartAgentHandler = (
 
 /** Wired by the daemon so `sendAddProject` can install + register a repo (#433). */
 export type AddProjectHandler = (path: string, share: boolean) => AddProjectResult | Promise<AddProjectResult>
+
+/** Wired by the daemon so `sendStartedAgain` can find or add the project a second `openagent` was started in. */
+export type StartedInHandler = (folder: string) => StartedInResult | Promise<StartedInResult>
 
 /** Wired by the daemon so `sendRemoveProject` can take a project off the list, by its id, and with `files` remove what OpenAgent left in its folder. */
 export type RemoveProjectHandler = (projectId: string, files: boolean) => RemoveProjectResult | Promise<RemoveProjectResult>
@@ -78,6 +81,7 @@ export interface RemoteAgents {
 export interface DashboardContext {
   startAgent: StartAgentHandler
   addProject: AddProjectHandler
+  startedIn: StartedInHandler
   removeProject: RemoveProjectHandler
   /** The in-memory event stream for an agent relayed from a saved machine (#1067), else undefined. */
   eventsSource: EventsSource

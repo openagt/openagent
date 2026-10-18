@@ -42,10 +42,19 @@ export const connectCdp: CdpConnect = async (webSocketDebuggerUrl: string) => {
     pending.delete(msg.id)
     msg.error ? p.reject(new Error(msg.error.message ?? 'CDP error')) : p.resolve(msg.result)
   })
+  // A call Chrome never answers because the socket went (Chrome quit, or got the same Ctrl+C
+  // the daemon did) fails, rather than holding whoever awaits it forever.
+  const gone = (): void => {
+    for (const p of pending.values()) p.reject(new Error(`the connection to ${webSocketDebuggerUrl} closed`))
+    pending.clear()
+  }
+  ws.addEventListener('close', gone)
+  ws.addEventListener('error', gone)
 
   return {
     send: (method, params = {}) =>
       new Promise((resolve, reject) => {
+        if (ws.readyState !== WebSocket.OPEN) return reject(new Error(`the connection to ${webSocketDebuggerUrl} is closed`))
         const id = nextId++
         pending.set(id, { resolve, reject })
         try {

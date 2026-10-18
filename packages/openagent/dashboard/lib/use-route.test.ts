@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import { useRoute } from './use-route.js'
-import { projectAddresses } from './route.js'
+import { projectAddresses } from '../../src/project-address.js'
 
 // F1: this used to mock Vike's `usePageContext` and `navigate`. There is nothing to mock now —
 // the hook reads `window.location` and writes through `history`, both of which jsdom implements,

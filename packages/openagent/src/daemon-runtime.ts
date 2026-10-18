@@ -1,10 +1,10 @@
-import { basename, join, resolve } from 'node:path'
+import { basename, join, resolve, sep } from 'node:path'
 import { hostname } from 'node:os'
 import { stat } from 'node:fs/promises'
 import { findAgent, findCheckout, fromDiaryLine, isPidAlive, isRunId, projectBranches, readLiveMetas, resolveAgentDiary, type AgentMeta, type AnyDiaryLine } from './store/index.js'
 import { OPENAGENT_DIR } from './openagent-dir.js'
 import type { OpenAgentEvent } from './events.js'
-import type { StartAgentOptions, StartAgentResult, AddProjectResult, RemoveProjectResult } from './dashboard/index.js'
+import type { StartAgentOptions, StartAgentResult, AddProjectResult, RemoveProjectResult, StartedInResult } from './dashboard/index.js'
 import type { EventsSource, RemoteAgents, SavedMachine } from './dashboard/rpc-serve.js'
 import { RelayedAgents, remoteFacts, startRemoteAgent, type BringProject, type RelayProject, type RemoteTarget } from './dashboard/remote-run.js'
 import { cloneProject, cloneTarget } from './clone-project.js'
@@ -23,6 +23,7 @@ import { isBranchName } from './branch-name.js'
 import { hasRemote } from './has-remote.js'
 import { projectGitHost } from './store/git-host.js'
 import { providedDataChanged } from './store/provided.js'
+import { projectAddresses } from './project-address.js'
 
 /**
  * What the daemon does for a project (#393): start a run, add a project, and relay a run to and
@@ -69,6 +70,13 @@ export interface ProjectRuntimeOptions {
 export interface ProjectRuntime {
   onStart: (prompt: string, options?: StartAgentOptions, targetProjectId?: string) => Promise<StartAgentResult>
   onAddProject: (path: string, share: boolean) => Promise<AddProjectResult>
+  /**
+   * The folder `openagent` was started in: the listed project that holds it, so starting again
+   * inside a project, or inside one of its folders, adds nothing; else the folder, added as Add
+   * project adds one. Asked in-process by the daemon that starts there, and over RPC (`sendStartedAgain`) by
+   * a second `openagent` that finds the dashboard running already.
+   */
+  onStartedIn: (folder: string) => Promise<StartedInResult>
   onRemoveProject: (projectId: string, files?: boolean) => Promise<RemoveProjectResult>
   /** The live event stream for an agent this daemon is relaying from a machine (#1067), else undefined
    *  so `onEvents` falls back to tailing the on-disk log. Wired as the dashboard's events source. */
@@ -341,6 +349,22 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject }: Project
     return { ok: true, alreadyActivated: result.alreadyActivated === true, ...(share && !shared ? { noRemote: true as const } : {}) }
   }
 
+  const onStartedIn = async (folder: string): Promise<StartedInResult> => {
+    const path = resolve(folder)
+    const holding = (await listProjects(undefined, env).catch(() => [])).find(project => path === project.path || path.startsWith(project.path + sep))
+    if (!holding) {
+      const added = await onAddProject(path, false)
+      if (!added.ok) return added
+    }
+    const id = holding?.id ?? projectId(path)
+    // The address the page writes: by the projects it lists, those whose folder is there, in the
+    // registry's order. A module's page words are the browser's alone, so a folder named as one
+    // (`logs`) is printed by its name where the page shows its id; both open it.
+    const listed = await listProjects(undefined, env).catch(() => [])
+    const present = await Promise.all(listed.map(async project => ((await stat(project.path).then(s => s.isDirectory(), () => false)) ? [project.id] : [])))
+    return { ok: true, id, path: holding?.path ?? path, added: !holding, address: projectAddresses(present.flat(), []).addressOf(id) }
+  }
+
   // A project another machine asks for, to send a run here (the machine side of "Run on"): cloned
   // from its address with this computer's own logins and added like any other, once, by itself.
   // The asking machine is answered at once and asks again: a clone can take minutes, and no call
@@ -444,5 +468,5 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject }: Project
     relayedAgents.dispose()
   }
 
-  return { onStart, onAddProject, onRemoveProject, remoteEventsSource, projectAt, bringProject, tailRelayEvents, remoteAgents, onRelayRpc, screenOf, dispose }
+  return { onStart, onAddProject, onStartedIn, onRemoveProject, remoteEventsSource, projectAt, bringProject, tailRelayEvents, remoteAgents, onRelayRpc, screenOf, dispose }
 }

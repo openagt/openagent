@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { onModules, type DashboardModule } from '../rpc/modules.js'
 import type { LinkAction, ModuleCard, ModuleDefinition, ModulePage, ModulePanel, ModuleRunSlots, ModuleSchedule, ModuleSettings, ModuleUsageLimit } from '../module/index.js'
 import { usePolled } from './use-async.js'
-import { isPageSegment } from './route.js'
+import { isPageSegment } from '../../src/project-address.js'
 
 /** A module page as the shell mounts it: the page, plus the package it came from and the projects that have it. */
 export interface MountedPage extends ModulePage {

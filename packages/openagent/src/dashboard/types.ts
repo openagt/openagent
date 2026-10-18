@@ -21,6 +21,21 @@ export type AddProjectResult =
   | { ok: false; error: string }
 
 /**
+ * The project a folder `openagent` was started in is, on the dashboard's list: the listed project
+ * holding the folder, or the folder, added now. `id` always opens its page; `address` is the one
+ * the page writes (`src/project-address.ts`).
+ */
+export interface StartedProject {
+  id: string
+  path: string
+  added: boolean
+  address: string
+}
+
+/** The {@link StartedProject}, or why the folder could not be added. */
+export type StartedInResult = ({ ok: true } & StartedProject) | { ok: false; error: string }
+
+/**
  * What removing OpenAgent's files from a project's folder did: what went, what stayed with the
  * reason, and what could not be done, each line in words for a person. Paths are from the
  * project's root.
