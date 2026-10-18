@@ -22,6 +22,7 @@ import { discardWorktree, reclaimWorktree, type ReclaimOutcome, type ReclaimRefu
 import { pushBranchByName, pushCheckout, type PushOutcome } from './push.js'
 import { mergeBranch, type MergeOutcome } from './merge.js'
 import { readBranchStates } from './branch-state.js'
+import { readBranchesAhead } from './branch-ahead.js'
 import { cleanup } from './cleanup.js'
 
 /**
@@ -35,7 +36,7 @@ import { cleanup } from './cleanup.js'
  * on stderr so a person does.
  *
  * Where the project is comes from the working directory: for every command that acts on the
- * project (`create`, `attach`, `show`, `list`, `remove`, `prune`, and `push --branch`) it is
+ * project (`create`, `attach`, `show`, `ahead`, `list`, `remove`, `prune`, and `push --branch`) it is
  * the checkout whose `.branches/` the working directory is under, else the checkout itself — so
  * the same command works from inside an agent's checkout; the commands that act on one checkout
  * (`name`, `status`, a bare `push`) act on the one the working directory is in.
@@ -54,6 +55,8 @@ export const USAGE = `usage: branches <command>
   show [--from <commit>] <branch>...
                                what each branch holds and where it stands: its commits and files beyond the base, whether it is pushed, merged, and what its checkout left uncommitted;
                                measured from <commit>, the one the branches started from, in place of the default branch; a full commit id in place of a branch is read as a branch that ends there
+  ahead [--from <commit>] <branch>...
+                               how many commits of its own each branch has beyond the base, whether it is pushed or was and is gone from origin, whether it is merged, how many paths its checkout left uncommitted: no file lists, every branch in one read
   push [--branch <b>]          push this checkout's branch, or branch <b>, to origin; a dirty checkout is refused
   merge <branch>               merge branch <branch> into the default branch, in the project's folder, then delete it; a conflict changes nothing and names the files
   list [--sizes]               every agent checkout under .branches/
@@ -157,6 +160,13 @@ const COMMANDS: Record<string, Command> = {
     if (values.from !== undefined && !values.from.trim()) throw new Usage('--from names a commit')
     const repo = await project(cwd, git)
     return readBranchStates(repo, positionals, git, values.from)
+  },
+
+  async ahead(args, cwd, git) {
+    const { values, positionals } = parse(args, { from: { type: 'string' } }, 1, Infinity)
+    if (values.from !== undefined && !values.from.trim()) throw new Usage('--from names a commit')
+    const repo = await project(cwd, git)
+    return readBranchesAhead(repo, positionals, git, values.from)
   },
 
   async push(args, cwd, git) {

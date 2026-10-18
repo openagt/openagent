@@ -69,9 +69,10 @@ function useNewItemNotifications<T extends { projectId: string }>(
 const INTERVENTIONS: NotificationSpec<Intervention> = {
   keyOf: interventionKey,
   title: (first, count) => (count === 1 ? `Human Queue · ${first.projectName}` : `${count} items in your Human Queue`),
-  // A PR by number, a paused agent by its question (#636), a finished agent by what sits unpushed (#860).
+  // A PR by number, a paused agent by its question (#636), a finished agent by what sits uncommitted or unpushed (#860).
   label: item => {
     if (item.kind === 'awaiting') return item.title
+    if (item.kind === 'uncommitted') return `${item.title} — ${item.files === 1 ? '1 file' : `${item.files ?? 0} files`} not committed`
     if (item.kind === 'unpushed') {
       return item.commits === undefined || item.commits === 0
         ? `${item.title} — work not pushed`
@@ -79,9 +80,9 @@ const INTERVENTIONS: NotificationSpec<Intervention> = {
     }
     return `#${item.number} ${item.title}`
   },
-  // A PR opens on the git host; a paused agent and unpushed work both live in this dashboard, so those
-  // just bring the tab forward (project selection is client state, not a URL).
-  clickUrl: first => (first.kind === 'awaiting' || first.kind === 'unpushed' ? undefined : first.url),
+  // A PR opens on the git host; a paused agent and work left on this machine live in this dashboard, so
+  // those just bring the tab forward (project selection is client state, not a URL).
+  clickUrl: first => (first.kind === 'pr' ? first.url : undefined),
 }
 
 const ACTIVITY: NotificationSpec<Activity> = {

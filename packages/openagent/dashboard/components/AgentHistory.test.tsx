@@ -274,6 +274,28 @@ describe('AgentHistory rows', () => {
     expect(screen.queryByLabelText('Started on this-mac')).toBeNull()
   })
 
+  test('work that never left the machine is the Human Queue\'s blue mark, where a pull request would be: a branch for commits, a file for files left uncommitted', async () => {
+    const agents = [
+      agent({ id: 'waits', status: 'done', driver: 'claude-code', unpublished: 2 }),
+      agent({ id: 'one', status: 'done', unpublished: 1 }),
+      agent({ id: 'left', status: 'done', uncommitted: 1, unpublished: 3 }),
+      agent({ id: 'none', status: 'done' }),
+    ]
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={agents} selectedAgentId={null} onSelect={() => {}} />)
+    const glyph = screen.getByLabelText('Not published · 2 commits').querySelector('svg')!.getAttribute('class')
+    expect(glyph).toContain('lucide-git-branch')
+    expect(glyph).toContain('text-info')
+    expect(screen.getByLabelText('Not published · 1 commit')).toBeTruthy()
+    expect(screen.getAllByLabelText(/^Not published/)).toHaveLength(2)
+    // Files left uncommitted come first: committing them is the run's next step.
+    expect(screen.getByLabelText('Not committed · 1 file').querySelector('svg')!.getAttribute('class')).toContain('lucide-file-pen')
+    // Just before the logo, where a pull request's mark stands.
+    const row = screen.getByLabelText('Not published · 2 commits').closest('button')!
+    const marks = [...row.querySelectorAll('[aria-label]')].map(mark => mark.getAttribute('aria-label'))
+    expect(marks.slice(-2)).toEqual(['Not published · 2 commits', 'Claude Code'])
+    expect(row.getAttribute('aria-label')).toContain('Not published · 2 commits')
+  })
+
   test('a run\'s pull request is a glyph before the logo, its shape and colour by how it stands, and the hover says which', async () => {
     const agents = [
       agent({ id: 'open', status: 'done', driver: 'claude-code', pr: { number: 12, url: 'u' }, prState: 'open' }),
@@ -292,9 +314,9 @@ describe('AgentHistory rows', () => {
     expect(glyph('PR #14 merged')).toContain('text-merged')
     expect(glyph('PR #15 closed')).toContain('lucide-git-pull-request-closed')
     expect(glyph('PR #15 closed')).toContain('text-danger')
-    // A request the git host did not list is still the run's: drawn plainly, with its number.
-    expect(glyph('PR #16')).toContain('text-muted-foreground')
-    expect(screen.getAllByLabelText(/^PR #/)).toHaveLength(5)
+    // A request whose state is not known has no mark, which would read as one more state; its number stays in the row's sentence.
+    expect(screen.getAllByLabelText(/^PR #/)).toHaveLength(4)
+    expect(screen.getByRole('button', { name: /PR #16$/ })).toBeTruthy()
     // Just before the logo, so the PR marks stand in one column.
     const row = screen.getByLabelText('PR #12 open').closest('button')!
     const marks = [...row.querySelectorAll('[aria-label]')].map(mark => mark.getAttribute('aria-label'))

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Plus, ChevronDown, Bot, Cloud, Laptop, Server, LayoutDashboard, Blocks, GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-react'
+import { Plus, ChevronDown, Bot, Cloud, Laptop, Server, LayoutDashboard, Blocks, FilePen, GitBranch, GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-react'
 import type { ComponentType } from 'react'
 import type { AgentMeta, AgentStatus, RecentAgent, ProjectSummary } from '../../src/index.js'
 import { DRIVER_LABELS, driverFromImpl, cloudRunState, type CloudRunState } from '../../src/client.js'
@@ -244,6 +244,8 @@ export function AgentHistory({
       {...(row.agent.remoteLabel ? { remoteLabel: row.agent.remoteLabel } : {})}
       remoteByLine={row.agent.remoteByLine === true}
       {...(row.agent.pr ? { pr: { number: row.agent.pr.number, ...(row.agent.prState ? { state: row.agent.prState } : {}) } } : {})}
+      {...(row.agent.unpublished ? { unpublished: row.agent.unpublished } : {})}
+      {...(row.agent.uncommitted ? { uncommitted: row.agent.uncommitted } : {})}
       onClick={leave(row.onClick)}
       onNear={row.onNear}
     />
@@ -562,15 +564,15 @@ type PrState = NonNullable<AgentMeta['prState']>
 /**
  * A run's pull request on its row, one glyph per state in the git host's own colours, so a list of
  * runs says which have work waiting for review and which landed without opening one. Each state
- * has its own shape too, for a reader who cannot tell the colours apart. A request whose state was
- * not read (older than the git host lists) is drawn plainly.
+ * has its own shape too, for a reader who cannot tell the colours apart. A request whose state is
+ * not known, older than the git host lists or not read yet, has no mark: a plain one read as one
+ * more state. Its number is still in the row's sentence.
  */
-const PR_MARKS: Record<PrState | 'unknown', { Icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; tone: string; word?: string }> = {
+const PR_MARKS: Record<PrState, { Icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; tone: string; word: string }> = {
   open: { Icon: GitPullRequest, tone: 'text-success', word: 'open' },
   draft: { Icon: GitPullRequestDraft, tone: 'text-muted-foreground', word: 'draft' },
   merged: { Icon: GitMerge, tone: 'text-merged', word: 'merged' },
   closed: { Icon: GitPullRequestClosed, tone: 'text-danger', word: 'closed' },
-  unknown: { Icon: GitPullRequest, tone: 'text-muted-foreground' },
 }
 
 // One agent row, one line: a small circle and the session's name, as Claude Code on the web lists
@@ -598,6 +600,8 @@ function AgentHistoryRow({
   startedOn,
   fold,
   pr,
+  unpublished,
+  uncommitted,
 }: {
   status: AgentStatus
   /** The row's subagents, folded or open under it: a count at the row's end, so a row with subagents is no taller than one without. */
@@ -633,6 +637,10 @@ function AgentHistoryRow({
   startedOn?: string | undefined
   /** The run's pull request, and how it stands when the git host said: a glyph before the agent's logo. */
   pr?: { number: number; state?: PrState } | undefined
+  /** How many commits of its own wait on its branch, never pushed: the Human Queue's "Not published", marked where a pull request would be. */
+  unpublished?: number | undefined
+  /** How many files its checkout left uncommitted: the Human Queue's "Not committed", in the same place. */
+  uncommitted?: number | undefined
 }) {
   // A run that ended on its question waits on you (#785), and so does a web run whose cloud
   // session the bridge reports as parked (#1668).
@@ -669,8 +677,15 @@ function AgentHistoryRow({
   const working = status === 'running' || inCloud || savingNow
   const dotTone = savingNow ? STATUS_DOT['saving'] : parked ? STATUS_DOT['waiting'] : working ? STATUS_DOT['running'] : STATUS_DOT[status]
   const ringTone = (cloudWord ? STATUS_RING[cloudWord] : STATUS_RING[status]) ?? STATUS_RING['done']
-  const prMark = pr ? PR_MARKS[pr.state ?? 'unknown'] : undefined
-  const prSaid = pr && prMark ? `PR #${pr.number}${prMark.word ? ` ${prMark.word}` : ''}` : undefined
+  const prMark = pr?.state ? PR_MARKS[pr.state] : undefined
+  const prSaid = pr ? `PR #${pr.number}${prMark ? ` ${prMark.word}` : ''}` : undefined
+  // Work that never left the machine, in the Human Queue's words, icon and colour: files left
+  // uncommitted first, since committing them is the run's next step.
+  const left = uncommitted
+    ? { Icon: FilePen, said: `Not committed · ${uncommitted} file${uncommitted === 1 ? '' : 's'}` }
+    : unpublished
+      ? { Icon: GitBranch, said: `Not published · ${unpublished} commit${unpublished === 1 ? '' : 's'}` }
+      : undefined
   // Everything the two-line row used to print, in one sentence on hover: the word, where the run
   // is and when it started, which coding agent ran it, and the machine or cloud it ran on.
   const said = [
@@ -682,6 +697,7 @@ function AgentHistoryRow({
     ...(remote ? [remoteLabel ? `runs on ${remoteLabel}` : 'runs on another machine'] : []),
     ...(cloud ? ['a Claude Code cloud session'] : []),
     ...(prSaid ? [prSaid] : []),
+    ...(left ? [left.said] : []),
   ].join(' · ')
   // The hover says what the row no longer prints, and a name too long for the rail in full under it
   // (#1494) — the marquee it replaced forced reading at the animation's pace. The row itself is the
@@ -770,6 +786,11 @@ function AgentHistoryRow({
       {prMark && prSaid && (
         <span role="img" aria-label={prSaid} className="flex shrink-0 items-center">
           <prMark.Icon className={cn('h-3 w-3', prMark.tone)} aria-hidden />
+        </span>
+      )}
+      {left && (
+        <span role="img" aria-label={left.said} className="flex shrink-0 items-center">
+          <left.Icon className="h-3 w-3 text-info" aria-hidden />
         </span>
       )}
       {/* Which coding agent ran it, as its own mark at the very end of the row (his pick): a

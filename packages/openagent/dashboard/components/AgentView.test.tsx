@@ -271,6 +271,26 @@ describe('AgentView: when the bar above the message box is there', () => {
     await waitFor(() => expect(shown()).toBe('true'))
   })
 
+  test('on a first visit, a run whose pull request turns out merged never shows the bar while the request is read', async () => {
+    // Until the git host answers, the read calls the request open: the bar came up on that word
+    // and went the moment the request turned out merged.
+    onAgent.mockResolvedValue(ARCHIVED)
+    const pr = { number: 3, url: 'https://x/pull/3', title: '' }
+    onAgentWorktree.mockResolvedValueOnce({ branch: 'agent-x', pr: { ...pr, state: 'OPEN' }, prPending: true })
+    onAgentWorktree.mockResolvedValue({ branch: 'agent-x', pr: { ...pr, state: 'MERGED', title: 'T' } })
+    onAgentHandoff.mockResolvedValueOnce({ ...PUSHED, prPending: true })
+    onAgentHandoff.mockResolvedValue({ ...PUSHED, pr: { ...pr, state: 'MERGED', title: 'T' } })
+    render(view())
+    const seen = new Set<string | undefined>()
+    const watch = new MutationObserver(() => seen.add(shown()))
+    watch.observe(document.body, { attributes: true, subtree: true, childList: true })
+    await waitFor(() => expect(screen.getByTestId('work-checkout').textContent).toContain('MERGED'), { timeout: 3000 })
+    await new Promise(resolve => setTimeout(resolve, 20))
+    watch.disconnect()
+    seen.add(shown())
+    expect([...seen]).toEqual(['false'])
+  })
+
   test('as the agent ends, the bar stays while its branch is read, then says what the branch holds', async () => {
     onAgent.mockResolvedValue(ARCHIVED)
     onAgentWorktree.mockResolvedValue({ branch: 'agent-x', checkout: { path: '/w', dirty: true } })

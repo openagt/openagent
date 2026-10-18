@@ -1,5 +1,5 @@
 import type { BridgeBrowserStatus } from '../bridge-browser.js'
-import { findAgent, findCheckout, readLiveMetas, readAllAgents, readDoing, loadAgentEvents, type AgentDoing, startedAtFromAgentId, isPidAlive, type AgentMeta, type AgentStatus, isRunId, projectBranches } from '../store/index.js'
+import { findAgent, findCheckout, readLiveMetas, readAllAgents, readDoing, loadAgentEvents, type AgentDoing, startedAtFromAgentId, isPidAlive, type AgentMeta, type AgentStatus, isRunId, projectBranches, type BranchesFor } from '../store/index.js'
 import { listProjectWorktrees } from '../worktrees.js'
 import { projectGitHost, type GitHostHome } from '../store/git-host.js'
 import { repositoryOffer, type RepositoryOffer } from '../store/repository.js'
@@ -14,6 +14,7 @@ import { buildDashboard, type DashboardData } from '../dashboard/dashboard.js'
 import { readGitStatus, type GitStatus } from '../dashboard/git-status.js'
 import { readRunHandoff, resolveAgentPr, type AgentHandoff } from '../dashboard/agent-handoff.js'
 import { cachedPrStates, type PrState } from '../dashboard/pull-requests.js'
+import { unpublishedRuns, type Unpublished } from '../dashboard/unpublished.js'
 import type { AgentWorktree } from '../dashboard/types.js'
 import { crawlRepoFiles } from '../project.js'
 import { contextBridgeBrowser, contextProjects, contextRemote, resolveProjectPath, resolveAgentPath } from './context.js'
@@ -87,7 +88,7 @@ export async function onAgents(projectId: string): Promise<AgentMeta[]> {
   const remote = contextRemote()?.list(projectId) ?? []
   const cwd = await resolveProjectPath(projectId)
   const machineOf = await contextRemote().machineNames()
-  const local = cwd ? await withPrStates(cwd, (await readAllAgents(cwd)).map(agent => forDashboard(agent, machineOf))) : []
+  const local = cwd ? await withUnpublished(cwd, await withPrStates(cwd, (await readAllAgents(cwd)).map(agent => forDashboard(agent, machineOf)))) : []
   return withFollowed(remote, local, agentId => contextRemote().sent(agentId))
 }
 
@@ -101,6 +102,21 @@ export async function withPrStates(cwd: string, agents: AgentMeta[], states: (cw
   return agents.map(agent => {
     const prState = agent.pr && known.get(agent.pr.url)
     return prState ? { ...agent, prState } : agent
+  })
+}
+
+/**
+ * Each finished run whose work never left this machine, marked with how many files it left
+ * uncommitted and how many commits wait, so its row can say so as the Human Queue does: the same
+ * rule, {@link unpublishedRuns}. A provider that cannot be read marks nothing.
+ */
+export async function withUnpublished(cwd: string, agents: AgentMeta[], branches?: BranchesFor): Promise<AgentMeta[]> {
+  const found = await unpublishedRuns(cwd, agents, branches).catch(() => new Map<string, Unpublished>())
+  if (found.size === 0) return agents
+  return agents.map(agent => {
+    const work = found.get(agent.id)
+    if (!work) return agent
+    return { ...agent, ...(work.commits > 0 ? { unpublished: work.commits } : {}), ...(work.uncommitted > 0 ? { uncommitted: work.uncommitted } : {}) }
   })
 }
 

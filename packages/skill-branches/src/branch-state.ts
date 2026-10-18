@@ -1,7 +1,7 @@
-import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
-import { basename } from 'node:path'
+import { BRANCHES_DIR, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { basename, dirname } from 'node:path'
 import { agentIdFromWorktreeDir, sessionNameOf } from './branch-names.js'
-import { repoHasRemote, worktreeBranch, worktreeDirEntries } from './worktree.js'
+import { repoHasRemote } from './worktree.js'
 
 /**
  * What a branch holds and where it stands (#1774): the caller's read of a finished agent's
@@ -71,7 +71,7 @@ const SEP = String.fromCharCode(31)
  */
 export async function readBranchStates(repo: string, branches: readonly string[], git: GitRunner = nodeGitRunner(), from?: string): Promise<BranchState[]> {
   const ask = soft(git, repo)
-  const [hasRemote, base, checkouts, start] = await Promise.all([repoHasRemote(repo, git), detectBase(ask), checkoutsByBranch(repo, git), from !== undefined ? commitOf(ask, from) : undefined])
+  const [hasRemote, base, checkouts, start] = await Promise.all([repoHasRemote(repo, git), detectBase(ask), checkoutsByBranch(ask), from !== undefined ? commitOf(ask, from) : undefined])
   const states: BranchState[] = []
   for (const branch of branches) states.push(await readOne(repo, branch, { git, ask, hasRemote, base, from: start, checkouts }))
   return states
@@ -92,7 +92,7 @@ interface Reads {
 const COMMIT_ID = /^[0-9a-f]{40}$/
 
 /** The commit `rev` names, when this machine has it. */
-async function commitOf(ask: (args: string[]) => Promise<string>, rev: string): Promise<string | undefined> {
+export async function commitOf(ask: (args: string[]) => Promise<string>, rev: string): Promise<string | undefined> {
   return (await ask(['rev-parse', '--verify', '--quiet', `${rev}^{commit}`])).trim() || undefined
 }
 
@@ -151,7 +151,7 @@ function soft(git: GitRunner, cwd: string): (args: string[]) => Promise<string> 
 }
 
 /** The project's default branch: what the remote points HEAD at, else the first local conventional one. */
-async function detectBase(ask: (args: string[]) => Promise<string>): Promise<string | undefined> {
+export async function detectBase(ask: (args: string[]) => Promise<string>): Promise<string | undefined> {
   const head = (await ask(['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'])).trim()
   if (head) return head
   for (const name of ['main', 'master']) {
@@ -160,14 +160,18 @@ async function detectBase(ask: (args: string[]) => Promise<string>): Promise<str
   return undefined
 }
 
-/** Each checkout under `.branches/` that git knows, by the branch it is on. */
-async function checkoutsByBranch(repo: string, git: GitRunner): Promise<Map<string, string>> {
-  const map = new Map<string, string>()
-  for (const entry of await worktreeDirEntries(repo)) {
-    const branch = await worktreeBranch(entry.path, git)
-    if (branch && !map.has(branch)) map.set(branch, entry.path)
+/**
+ * The checkouts under `.branches/`, by the branch each is on: one `git worktree list`. The
+ * project's own folder is not one of them, whatever it has out.
+ */
+export async function checkoutsByBranch(ask: (args: string[]) => Promise<string>): Promise<Map<string, string>> {
+  const checkouts = new Map<string, string>()
+  for (const block of (await ask(['worktree', 'list', '--porcelain'])).split('\n\n')) {
+    const path = /^worktree (.+)$/m.exec(block)?.[1]
+    const branch = /^branch refs\/heads\/(.+)$/m.exec(block)?.[1]
+    if (path && branch && basename(dirname(path)) === BRANCHES_DIR && !checkouts.has(branch)) checkouts.set(branch, path)
   }
-  return map
+  return checkouts
 }
 
 /** The uncommitted paths of a checkout, as a spreadable field; absent when git could not answer. */

@@ -103,3 +103,20 @@ test('a cached answer says when it was read, for a caller that knows of somethin
   const fresh = await cachedRead('when', async () => 'third', { now })
   assert.deepEqual([fresh.value, fresh.at], ['third', 2_000])
 })
+
+test('a read forgotten on its way answers its own caller and is not kept: the next read says what is true now', async () => {
+  let now = 1000
+  const opts = { ttlMs: 100, budgetMs: 50, now: () => now }
+  assert.deepEqual(answer(await cachedRead('k', async () => 'before', opts)), { value: 'before', pending: false })
+  // Stale: a refresh starts behind the caller, and is slow.
+  now += 200
+  const slow = deferred<string>()
+  assert.deepEqual(answer(await cachedRead('k', () => slow.promise, opts)), { value: 'before', pending: false })
+  // A request merged here while that read is out: the key is forgotten, and a new read starts.
+  invalidate('k')
+  assert.deepEqual(answer(await cachedRead('k', async () => 'after', opts)), { value: 'after', pending: false })
+  // The old read lands last, with what it read before the merge: it must not take the key back.
+  slow.resolve('before')
+  await settle()
+  assert.deepEqual(answer(await cachedRead('k', async () => 'never asked', opts)), { value: 'after', pending: false })
+})

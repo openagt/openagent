@@ -2,9 +2,9 @@ import { listAgents, loadAgentEvents, readLiveMetas, type LiveAgent, type AgentM
 import { pendingChoices } from '../open-choices.js'
 import type { OpenAgentEvent } from '../events.js'
 import type { ProjectSummary, ProjectionRead } from './projects.js'
-import { agentBranchFor } from './agent-handoff.js'
-import { projectBranches, type BranchesFor, type BranchState } from '../store/branches.js'
-import { openPrs, type PrLister } from './pull-requests.js'
+import { projectBranches, type BranchesFor } from '../store/branches.js'
+import { unpublishedRuns, type Unpublished } from './unpublished.js'
+import { cachedOpenPrs, type PrLister } from './pull-requests.js'
 import { interventionKey } from './keys.js'
 
 // Pure identity + diff, in the leaf `keys.ts` so the dashboard shares them rather than copying.
@@ -27,22 +27,25 @@ export interface Intervention {
   projectName: string
   /**
    * `pr` = an open PR to review/merge or close; `awaiting` = a run waiting on the question it ended on (#636/#1774);
-   * `unpushed` = a finished agent whose branch has commits that were never pushed (#860).
+   * `uncommitted` = a finished run whose checkout holds files it never committed; `unpushed` = a finished
+   * run whose branch has commits that were never pushed (#860).
    */
-  kind: 'pr' | 'awaiting' | 'unpushed'
+  kind: 'pr' | 'awaiting' | 'uncommitted' | 'unpushed'
   title: string
-  /** The PR on the git host (`pr` only): where a click takes the user. */
+  /** The PR on the git host (`pr` only): where a click takes the user when no run of this dashboard opened it. */
   url?: string
   /** The PR number (`pr` only). */
   number?: number
   /** The question's id (`awaiting` only) — its stable identity, so it notifies exactly once. */
   awaitId?: string
-  /** Which run this is about (`awaiting` #738 / `unpushed`): a project has several agents. */
+  /** Which run this is about (every kind but a `pr` opened outside this dashboard's runs): a project has several agents. */
   agentId?: string
-  /** The branch the work is sitting on (`unpushed` only). */
+  /** The branch the work is sitting on (`uncommitted` and `unpushed` only). */
   branch?: string
   /** How many commits are waiting (`unpushed` only). */
   commits?: number
+  /** How many files were left uncommitted (`uncommitted` only). */
+  files?: number
   /** When the PR was opened (`pr`) or the agent last updated (the other two), ISO, for ordering. */
   createdAt?: string
 }
@@ -58,16 +61,7 @@ export interface InterventionsDeps {
   agents?: (cwd: string) => Promise<AgentMeta[]>
   /** The project's checkouts and branches (default the project's provider, {@link projectBranches}): where a branch's state is read; drives the `unpushed` source (#860). */
   branches?: BranchesFor
-  /**
-   * How many of a project's most recent finished agents to inspect for unpushed work. Each one costs
-   * a handful of git reads, and this runs on a poll, so old history is not re-walked every minute:
-   * work that has sat unpushed for dozens of agents is not news, and the agent list stays the record.
-   */
-  handoffLimit?: number
 }
-
-/** How many recent finished agents are inspected per project by default. */
-const HANDOFF_LIMIT = 5
 
 /**
  * Build the cross-project interventions queue: every registered project's open PRs, plus any run
@@ -85,76 +79,11 @@ export async function buildInterventions(
   projects: ProjectSummary[],
   deps: InterventionsDeps = {},
 ): Promise<ProjectionRead<Intervention>> {
-  const prs = deps.prs ?? openPrs
-  const liveAgents = deps.liveAgents ?? readLiveMetas
-  const events = deps.events ?? loadAgentEvents
-  const items: Intervention[] = []
-  const whole: string[] = []
-  for (const project of projects) {
-    // A project is read whole only when every one of its sources answered. Each `unread()` below is
-    // a source that did not, and contributed nothing for a reason other than nothing being there.
-    let sawEverything = true
-    const unread = () => {
-      sawEverything = false
-      return []
-    }
-    const open = await prs(project.path).catch(unread)
-    // The branches the project's runs are on, recorded or in a checkout (#1774): what tells a
-    // run's draft from one opened by hand. Read only when a draft asks.
-    let runBranches: Set<string> | undefined
-    const isRunBranch = async (branch: string): Promise<boolean> => {
-      runBranches ??= new Set(
-        [...(await (deps.agents ?? listAgents)(project.path).catch(() => [])), ...(await liveAgents(project.path).catch(() => []))].flatMap(agent => (agent.branch ? [agent.branch] : [])),
-      )
-      return runBranches.has(branch)
-    }
-    for (const pr of open) {
-      // A draft opened by hand is not asking for review, so it stays off the queue. A draft on a
-      // run's branch is the opposite (#1102): the agent, or cloud work adoption, opened it as a
-      // draft so it does not ping reviewers, and if the queue then dropped it too, nothing
-      // would tell anyone the work exists — which is the whole of #860 again.
-      if (pr.isDraft && !(pr.headRefName !== undefined && (await isRunBranch(pr.headRefName)))) continue
-      items.push({
-        projectId: project.id,
-        projectName: project.name,
-        kind: 'pr',
-        number: pr.number,
-        title: pr.title,
-        url: pr.url,
-        ...(pr.createdAt ? { createdAt: pr.createdAt } : {}),
-      })
-    }
-    // A run that ended on a question waits for the user, a "needs you" too (#636): it ended
-    // `waiting`, its checkout kept for the answer (#1774). The question is read off the run's own
-    // diary by the rule the run page and the open-questions list use, so the ping names the question
-    // they offer; a waiting run whose diary shows none is skipped. A project has several runs
-    // (#736), so each waiting run contributes its own item — keyed on the question's id, plus the
-    // agent id so two runs are told apart.
-    for (const meta of await liveAgents(project.path).catch(unread)) {
-      if (meta.status !== 'waiting') continue
-      const choice = pendingChoices((await events(project.path, meta.id).catch(() => undefined)) ?? []).at(-1)
-      if (!choice) continue
-      items.push({
-        projectId: project.id,
-        projectName: project.name,
-        kind: 'awaiting',
-        title: choice.title,
-        awaitId: choice.id,
-        agentId: meta.id,
-        ...(meta.updatedAt ? { createdAt: meta.updatedAt } : {}),
-      })
-    }
-    // A finished agent whose work never left the machine is a "needs you" too (#860). Until now the
-    // queue only knew about a PR that is *already on the git host* and an agent parked on a gate, so an agent
-    // that committed real code and stopped produced neither, and nothing told anyone: the overview
-    // drops it (it filters on `running`) and the handoff panel is behind clicking into that agent.
-    //
-    // Surfacing only: this says there is a decision waiting, it does not take it. A run publishes
-    // nothing by itself, so every finished run with work of its own reaches here until a person
-    // publishes it, or the agent does on their ask.
-    for (const item of await unpushedFor(project, deps, unread).catch(unread)) items.push(item)
-    if (sawEverything) whole.push(project.id)
-  }
+  // Every project at once, and each one's sources at once: a project's open requests are a git host
+  // read, and asking them one project after the other kept the queue waiting seconds.
+  const read = await Promise.all(projects.map(project => projectInterventions(project, deps)))
+  const items = read.flatMap(project => project.items)
+  const whole = read.flatMap(project => (project.whole ? [project.id] : []))
   items.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
   // The same repo can be registered under two projects (e.g. a monorepo root + a subdir), so a
   // PR would otherwise appear once per entry. Collapse by identity, keeping the first (newest-sorted).
@@ -163,69 +92,109 @@ export async function buildInterventions(
   return { items: unique, whole }
 }
 
-/**
- * The finished agents of a project whose branch still holds unpushed, unmerged commits (#860).
- *
- * Only the most recent {@link InterventionsDeps.handoffLimit} finished agents are inspected, and
- * their branches in one read of the project's branches provider: each read is a process, and
- * this runs on a poll. A run started from another branch is the exception: its branch is read on
- * its own, measured from the commit its own work begins at, as its page measures it; counted from
- * the default branch it would be credited that other branch's commits too. The provider answers git facts only, so the git host PR lookup the handoff
- * summary makes per branch is never paid here: an open PR means the branch was pushed, so
- * `pushed` already excludes it, and the `pr` kind above is what surfaces it.
- */
-async function unpushedFor(
-  project: ProjectSummary,
-  deps: InterventionsDeps,
-  unread: () => void,
-): Promise<Intervention[]> {
-  const agents = deps.agents ?? listAgents
-  const branches = deps.branches ?? projectBranches
-
-  const finished = (await agents(project.path))
-    // A subagent's branch is its main agent's to land, never a person's to push.
-    .filter(agent => agent.status !== 'running' && agent.parent === undefined)
-    .sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''))
-    .slice(0, deps.handoffLimit ?? HANDOFF_LIMIT)
-    .flatMap(agent => {
-      const branch = agentBranchFor(agent)
-      return branch === undefined ? [] : [{ agent, branch }]
+/** One project's items, and whether every one of its sources answered. */
+async function projectInterventions(project: ProjectSummary, deps: InterventionsDeps): Promise<{ id: string; items: Intervention[]; whole: boolean }> {
+  const prs = deps.prs ?? cachedOpenPrs
+  const liveAgents = deps.liveAgents ?? readLiveMetas
+  const events = deps.events ?? loadAgentEvents
+  // A project is read whole only when every one of its sources answered. Each `unread()` below is
+  // a source that did not, and contributed nothing for a reason other than nothing being there.
+  let sawEverything = true
+  const unread = () => {
+    sawEverything = false
+    return []
+  }
+  // The project's runs, recorded and live, read once for every source that asks.
+  const [open, recorded, live] = await Promise.all([
+    prs(project.path).catch(unread),
+    (deps.agents ?? listAgents)(project.path).catch(() => undefined),
+    liveAgents(project.path).catch(() => undefined),
+  ])
+  // Newest first: a branch name reused by a later run, or a run continued on it, is that run's now.
+  const runs = [...(live ?? []), ...(recorded ?? [])].sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+  const items: Intervention[] = []
+  for (const pr of open) {
+    // The run that opened it, by the request its record names, else by the branch a run's record or
+    // checkout names (#1774): what tells a run's draft from one opened by hand, and where a click on
+    // the row goes, the conversation rather than the git host.
+    const run = runs.find(agent => agent.pr?.url === pr.url) ?? (pr.headRefName !== undefined ? runs.find(agent => agent.branch === pr.headRefName) : undefined)
+    // A draft opened by hand is not asking for review, so it stays off the queue. A draft on a
+    // run's branch is the opposite (#1102): the agent, or cloud work adoption, opened it as a
+    // draft so it does not ping reviewers, and if the queue then dropped it too, nothing
+    // would tell anyone the work exists — which is the whole of #860 again.
+    if (pr.isDraft && !run) continue
+    items.push({
+      projectId: project.id,
+      projectName: project.name,
+      kind: 'pr',
+      number: pr.number,
+      title: pr.title,
+      url: pr.url,
+      ...(run ? { agentId: run.id } : {}),
+      ...(pr.createdAt ? { createdAt: pr.createdAt } : {}),
     })
-  if (finished.length === 0) return []
+  }
+  // A run that ended on a question waits for the user, a "needs you" too (#636): it ended
+  // `waiting`, its checkout kept for the answer (#1774). The question is read off the run's own
+  // diary by the rule the run page and the open-questions list use, so the ping names the question
+  // they offer; a waiting run whose diary shows none is skipped. A project has several runs
+  // (#736), so each waiting run contributes its own item — keyed on the question's id, plus the
+  // agent id so two runs are told apart.
+  if (live === undefined) unread()
+  const awaiting = await Promise.all(
+    (live ?? [])
+      .filter(meta => meta.status === 'waiting')
+      .map(async meta => {
+        const choice = pendingChoices((await events(project.path, meta.id).catch(() => undefined)) ?? []).at(-1)
+        return choice
+          ? [{ projectId: project.id, projectName: project.name, kind: 'awaiting' as const, title: choice.title, awaitId: choice.id, agentId: meta.id, ...(meta.updatedAt ? { createdAt: meta.updatedAt } : {}) }]
+          : []
+      }),
+  )
+  items.push(...awaiting.flat())
+  // A finished run whose work never left the machine is a "needs you" too (#860). Until then the
+  // queue only knew about a PR that is *already on the git host* and an agent parked on a gate, so an agent
+  // that committed real code and stopped produced neither, and nothing told anyone: the overview
+  // drops it (it filters on `running`) and the handoff panel is behind clicking into that agent.
+  //
+  // Surfacing only: this says there is a decision waiting, it does not take it. A run publishes
+  // nothing by itself, so every finished run with work of its own reaches here until a person
+  // publishes it, or the agent does on their ask.
+  if (recorded === undefined) unread()
+  items.push(...(await unpushedFor(project, recorded ?? [], deps.branches ?? projectBranches, unread)))
+  return { id: project.id, items, whole: sawEverything }
+}
 
-  // No provider: the project has no checkouts and no branch state to read; nothing is waiting.
-  const source = await branches(project.path).catch(() => undefined)
-  if (!source) return []
-  // One read per commit the branches are measured from; the runs that name none share one.
-  const asks = new Map<string | undefined, string[]>()
-  for (const { agent, branch } of finished) asks.set(agent.baseCommit, [...(asks.get(agent.baseCommit) ?? []), branch])
-  const states = new Map<string, BranchState>()
+/**
+ * The finished runs of a project whose work never left this machine (#860), as
+ * {@link unpublishedRuns} finds them for the list of runs too: files left uncommitted first, since
+ * committing them is the run's next step, else commits never pushed. The provider answers git
+ * facts only, so the git host PR lookup the handoff summary makes per branch is never paid here: an
+ * open PR means the branch was pushed, and the `pr` kind above is what surfaces it.
+ */
+async function unpushedFor(project: ProjectSummary, agents: AgentMeta[], branches: BranchesFor, unread: () => void): Promise<Intervention[]> {
+  let found: Map<string, Unpublished>
   try {
-    for (const shown of await Promise.all([...asks].map(([from, asked]) => source.show(asked, from)))) {
-      for (const state of shown) states.set(state.branch, state)
-    }
+    found = await unpublishedRuns(project.path, agents, branches)
   } catch {
     unread()
     return []
   }
-
-  const items: Intervention[] = []
-  for (const { agent, branch } of finished) {
-    const state = states.get(branch)
-    // Every condition is a reason this is *not* waiting on anyone: the branch is gone, the session
-    // wrote nothing, it already landed, it is already on the remote, or there is nowhere to push.
-    if (!state || !state.exists || state.commits.length === 0 || state.files.length === 0 || state.merged || state.pushed || !state.hasRemote) continue
-    items.push({
-      projectId: project.id,
-      projectName: project.name,
-      kind: 'unpushed',
-      // What was asked, else the name the provider gave the branch, else the branch: never a prefix cut off here.
-      title: agent.intent?.trim() || state.name || branch,
-      agentId: agent.id,
-      branch,
-      commits: state.commits.length,
-      ...(agent.updatedAt ? { createdAt: agent.updatedAt } : {}),
-    })
-  }
-  return items
+  return agents.flatMap(agent => {
+    const work = found.get(agent.id)
+    if (!work) return []
+    const left = work.uncommitted > 0 ? { kind: 'uncommitted' as const, files: work.uncommitted } : { kind: 'unpushed' as const, commits: work.commits }
+    return [
+      {
+        projectId: project.id,
+        projectName: project.name,
+        ...left,
+        // What was asked, else the run's own name, else the branch: never a prefix cut off here.
+        title: agent.intent?.trim() || agent.title?.trim() || work.branch,
+        agentId: agent.id,
+        branch: work.branch,
+        ...(agent.updatedAt ? { createdAt: agent.updatedAt } : {}),
+      },
+    ]
+  })
 }

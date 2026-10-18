@@ -15,6 +15,14 @@ export function testBranches(byProject: Record<string, Checkout[]> = {}, states:
     async show(branches) {
       return branches.flatMap(branch => states.filter(state => state.branch === branch))
     },
+    // The counts a real provider would give of the same states: a run's branch is `agent-*`.
+    async ahead(branches) {
+      return branches.flatMap(branch =>
+        states
+          .filter(state => state.branch === branch)
+          .map(state => ({ branch, exists: state.exists, agent: branch.startsWith('agent-'), ahead: state.commits.length, hasRemote: state.hasRemote, pushed: state.pushed, gone: false, merged: state.merged, uncommitted: state.pendingFiles?.length ?? 0 })),
+      )
+    },
     async push(branch) {
       writes.push(`push ${branch}`)
       return { ok: true, pushed: true }

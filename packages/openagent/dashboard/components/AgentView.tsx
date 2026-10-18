@@ -342,11 +342,17 @@ export function AgentView({
       ((onBranchNow?.merged === true || checkout?.pr?.state === 'MERGED') && !onBranchNow?.pendingFiles?.length && onBranchNow?.movedPastPr !== true))
   const lastSay = useRef<{ agentId: string | null; say: boolean }>({ agentId: null, say: false })
   const held = lastSay.current.agentId === agentId && lastSay.current.say
+  // Whether the run's pull request is merged is not known until the git host has answered, and
+  // until then the read calls the request open: a bar shown on that word, on a first visit, went
+  // again the moment the request turned out merged. So a bar not up yet waits for the answer; one
+  // already up stays while its request is read again. A run with no request waits for nothing.
+  const prUnknown = checkout?.pr !== undefined && checkout.prPending === true && !held
   const say =
     !landed &&
     (committing ||
-      checkout?.pr !== undefined ||
-      (live === false ? (handoff.loaded ? handoffSays(handoff.handoff) || held : held) : checkout?.checkout?.dirty === true || held))
+      (!prUnknown &&
+        (checkout?.pr !== undefined ||
+          (live === false ? (handoff.loaded ? handoffSays(handoff.handoff) || held : held) : checkout?.checkout?.dirty === true || held))))
   lastSay.current = { agentId, say }
   // What the bar is about right now, so the ✕ hides this and not the next thing the agent does:
   // the run, its branch, how much work is on it, and where that work has got to.
