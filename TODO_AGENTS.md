@@ -8,7 +8,6 @@
 
 
 ## Priority 5
-- Create tickets/2026-10-18_skills-card-as-plugin.plan.md
 - [`npx @openagt/start`: a second run, the link it prints, and Ctrl+C](tickets/2026-10-18_start-second-run-link-ctrl-c.md)
 - [New automation: say the shell line in plain words](tickets/2026-10-09_new-automation-shell-line-plain-words.md)
 - [base-ui rename warnings at install](tickets/2026-10-18_base-ui-rename-warnings.md)
