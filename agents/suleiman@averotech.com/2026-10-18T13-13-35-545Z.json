@@ -7,7 +7,6 @@
   "title": "Update Tickets Command",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-10-18T13-13-35-545Z",
   "cost": 0.35324500000000003,
   "contextTokens": 35152,
   "caller": {
