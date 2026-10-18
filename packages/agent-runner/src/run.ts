@@ -11,7 +11,7 @@ import { projectGitHost, type GitHost, type MergeOutcome } from './git-host.js'
 import { basicSkills } from './basic-skills.js'
 import { acquireRunLock, isPidAlive, releaseRunLock } from './run-lock.js'
 import { runEndedLine } from './ended.js'
-import { nameRun } from './title.js'
+import { isBareCommand, nameRun } from './title.js'
 import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
 
 /**
@@ -528,8 +528,11 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
   // orchestration of a dozen of them would pay for a dozen namings for rows nobody looks for.
   // `OPENAGENT_NAME_RUN=0` is the person's setting, put in this process's environment by whoever
   // started it: naming costs money for something only a person looks at, so it can be declined.
+  // A bare command is named later, from its agent's report (`title.ts`).
+  const mayName = process.env.OPENAGENT_NAME_RUN !== '0' && driverSession !== undefined && !run.continued && run.card.title === undefined && runnerMark(run.card)?.parent === undefined
+  let nameFromReport = mayName && isBareCommand(run.prompt)
   const naming =
-    process.env.OPENAGENT_NAME_RUN !== '0' && driverSession && !run.continued && run.card.title === undefined && runnerMark(run.card)?.parent === undefined
+    mayName && !nameFromReport
       ? nameRun(run.driver, { prompt: run.prompt, signal: stopped }).then(
           async title => {
             if (title !== undefined) await driverSession?.log?.title(title)
@@ -566,6 +569,13 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
         status = 'failed'
         detail = errorMessage(err)
         failure = err
+      }
+      // Named before the run is said ended, so the name is on the card and its line in the diary
+      // before the ended one; once, from the first report.
+      if (nameFromReport && !stopped.aborted && lastText.trim() !== '') {
+        nameFromReport = false
+        const title = await nameRun(run.driver, { prompt: lastText, from: 'report', signal: stopped })
+        if (title !== undefined) await driverSession.log?.title(title)
       }
       if (stopped.aborted) {
         status = 'stopped'

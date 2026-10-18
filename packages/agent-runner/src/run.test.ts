@@ -217,6 +217,37 @@ test('a run is named by the agent\'s small model: the name on its record, and a 
   }
 })
 
+test('a run asked only a slash command keeps it while it works, and is named from its agent\'s report', async () => {
+  const repo = await testRepo()
+  try {
+    const asked: string[] = []
+    const driver: Driver = {
+      id: 'claude-code',
+      start: opts =>
+        new FakeDriver({
+          respond: prompt => {
+            if (!prompt.includes('Name this coding session')) return 'I planned the ticket "base-ui rename warnings".'
+            asked.push(prompt)
+            return 'Base-ui rename plan'
+          },
+        }).start(opts),
+    }
+    const run = await runCommand(repo, { prompt: '/work-queue', driver, now: () => NOW, gitHost: noGitHost })
+    assert.equal(run.status, 'done')
+    assert.equal(asked.length, 1, 'named once, not also from the command')
+    assert.match(asked[0]!, /--------\nI planned the ticket "base-ui rename warnings"\.\n--------/)
+    const record = await findRun(repo, run.id)
+    assert.equal(record?.title, 'Base-ui rename plan')
+    assert.equal(record?.intent, '/work-queue')
+    // The name is said before the run ended, so the ended line stays the diary's last.
+    const kinds = (await readUntimedDiary(repo, run.id)).map(line => line.kind)
+    assert.ok(kinds.indexOf('title') < kinds.indexOf('ended'))
+    assert.equal(kinds.at(-1), 'ended')
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
 test('a run told how hard to think starts its agent that way and keeps it on its record', async () => {
   const repo = await testRepo()
   try {

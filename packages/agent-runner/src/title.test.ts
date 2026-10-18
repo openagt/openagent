@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { FakeDriver, type Driver, type DriverStartOptions } from '@openagt/agent-driver'
 import { readdir } from 'node:fs/promises'
-import { MAX_TITLE, nameRun, titleOf, titlePrompt, TITLE_MODELS, TITLE_SYSTEM } from './title.js'
+import { MAX_TITLE, isBareCommand, nameRun, titleOf, titlePrompt, TITLE_MODELS, TITLE_SYSTEM } from './title.js'
 
 // A run's short name: what the small model is asked, what is taken from its answer, and that the
 // asking is a session of its own that never touches the run's record.
@@ -50,6 +50,23 @@ test('a sentence is no name, and neither is an empty answer: the run keeps the p
   assert.equal(titleOf('a'.repeat(MAX_TITLE + 20)), undefined)
   assert.equal(titleOf('   \n  '), undefined)
   assert.equal(titleOf('""'), undefined)
+})
+
+test('a slash command with at most its mode word is bare: it names the command, not the work', () => {
+  assert.equal(isBareCommand('/work-queue'), true)
+  assert.equal(isBareCommand('/triage quick'), true)
+  assert.equal(isBareCommand('  /plan-tickets\n'), true)
+  assert.equal(isBareCommand('/plan add a dark mode toggle'), false)
+  assert.equal(isBareCommand('make readme.md shorter'), false)
+  assert.equal(isBareCommand('/work-queue\nthen tell me'), false)
+})
+
+test('from a report, the model is told it reads what the agent did, and names the work', () => {
+  const asked = titlePrompt('I fixed #2141: a second start joins the dashboard.', 'report')
+  assert.match(asked, /What the agent reported when it finished/)
+  assert.match(asked, /Name the work it did, not the report/)
+  assert.match(asked, /--------\nI fixed #2141: a second start joins the dashboard\.\n--------/)
+  assert.doesNotMatch(asked, /What the person asked/)
 })
 
 test('the agent is asked in a session of its own, on its small model', async () => {
