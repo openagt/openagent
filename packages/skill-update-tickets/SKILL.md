@@ -17,4 +17,4 @@ Bring the tickets up to date with the project's issue tracker and its merged pul
 4. Fetch every pull request merged since that time, past any page limit, with its body. Each line `Closes tickets/<file>` in a body has that ticket closed; a ticket already gone is nothing to do.
 5. Record the time you noted as the new import time.
 
-A ticket someone else holds is updated like any other but not closed: leave it open. If anything else fails once you started fetching, record no time: show an error to the user saying what failed, and stop.
+A ticket you close leaves the agent queue too, where the project has one: mark done every entry that links it. A ticket someone else holds is updated like any other but not closed: leave it open. If anything else fails once you started fetching, record no time: show an error to the user saying what failed, and stop.
