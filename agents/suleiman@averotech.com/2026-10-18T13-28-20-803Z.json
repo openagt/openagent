@@ -1,0 +1,15 @@
+{
+  "id": "2026-10-18T13-28-20-803Z",
+  "startedAt": "2026-10-18T13:28:20.912Z",
+  "status": "running",
+  "intent": "Use the `queue` skill: work on this one open queue entry only, and when the work is done and published run `queue done \"<the entry>\"`. Do not start any other entry. The entry:\n\nCreate tickets/2026-10-18_start-second-run-link-ctrl-c.plan.md",
+  "driver": "claude-code",
+  "model": "opus",
+  "caller": {
+    "runner": {
+      "host": "Suleimans-MacBook-Pro.local",
+      "pid": 78736
+    },
+    "host": "Suleimans-MacBook-Pro.local"
+  }
+}
