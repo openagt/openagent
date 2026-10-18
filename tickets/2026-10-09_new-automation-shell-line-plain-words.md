@@ -1,5 +1,6 @@
 Topics: automations, dashboard
 Issue: [#2040](https://github.com/openagt/openagent/issues/2040)
+PR: [#2145](https://github.com/openagt/openagent/pull/2145)
 
 # New automation: say the shell line in plain words
 
