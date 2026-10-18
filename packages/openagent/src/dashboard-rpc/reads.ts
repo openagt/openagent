@@ -88,8 +88,16 @@ export async function onAgents(projectId: string): Promise<AgentMeta[]> {
   const remote = contextRemote()?.list(projectId) ?? []
   const cwd = await resolveProjectPath(projectId)
   const machineOf = await contextRemote().machineNames()
-  const local = cwd ? await withUnpublished(cwd, await withPrStates(cwd, (await readAllAgents(cwd)).map(agent => forDashboard(agent, machineOf)))) : []
+  const local = cwd ? await withRowMarks(cwd, (await readAllAgents(cwd)).map(agent => forDashboard(agent, machineOf))) : []
   return withFollowed(remote, local, agentId => contextRemote().sent(agentId))
+}
+
+/**
+ * What a run's row marks beside its name, for both lists of runs, a project's and all projects'
+ * together: how its pull request stands, and the work it left on this machine.
+ */
+export async function withRowMarks(cwd: string, agents: AgentMeta[]): Promise<AgentMeta[]> {
+  return withUnpublished(cwd, await withPrStates(cwd, agents))
 }
 
 /**
@@ -319,7 +327,7 @@ export async function onRecentAgents(): Promise<RecentAgent[]> {
     buildRecentAgents(projects, {
       agents: async path => {
         const followed = projects.filter(project => project.path === path).flatMap(project => remote.list(project.id))
-        return withFollowed(followed, await withPrStates(path, (await readAllAgents(path)).map(agent => forDashboard(agent, machineOf))), agentId => remote.sent(agentId))
+        return withFollowed(followed, await withRowMarks(path, (await readAllAgents(path)).map(agent => forDashboard(agent, machineOf))), agentId => remote.sent(agentId))
       },
     }),
   )

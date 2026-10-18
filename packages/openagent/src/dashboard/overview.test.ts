@@ -154,3 +154,18 @@ test('buildOverview names the machine that started a run when it is not this one
     ],
   )
 })
+
+test('buildRecentAgents reads the projects at once, not one after the other', async () => {
+  let started = 0
+  let release: () => void = () => {}
+  const gate = new Promise<void>(resolve => (release = resolve))
+  const agents = async () => {
+    started++
+    if (started === 2) release()
+    await gate
+    return []
+  }
+  const read = buildRecentAgents([project('alpha', '/a'), project('beta', '/b')], { agents })
+  await Promise.race([read, new Promise((_, reject) => setTimeout(() => reject(new Error('the second project waited for the first')), 1000))])
+  assert.equal(started, 2)
+})
