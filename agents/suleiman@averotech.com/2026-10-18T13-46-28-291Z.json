@@ -1,8 +1,7 @@
 {
   "id": "2026-10-18T13-46-28-291Z",
   "startedAt": "2026-10-18T13:46:18.961Z",
-  "endedAt": "2026-10-18T13:53:41.615Z",
-  "status": "done",
+  "status": "running",
   "intent": "/work-queue",
   "title": "Work Queue Command",
   "driver": "claude-code",
@@ -17,11 +16,11 @@
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
-      "pid": 31825,
+      "pid": 604,
       "publish": "commit",
       "baseCommit": "5ac306b4860521f54d66d09ff19d8f024627a8ce"
     },
-    "pid": 31825,
+    "pid": 604,
     "host": "Suleimans-MacBook-Pro.local",
     "baseCommit": "5ac306b4860521f54d66d09ff19d8f024627a8ce",
     "kind": "prompt",
