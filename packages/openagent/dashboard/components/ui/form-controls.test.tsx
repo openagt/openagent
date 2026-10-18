@@ -148,6 +148,15 @@ describe('CardTitleLink', () => {
         </CardTitleLink>,
       )
       expect(screen.getByRole('link', { name: 'AI Queue' }).getAttribute('href')).toBe('/queue?project=shop-1abc')
+      cleanup()
+      // A project's own page picks its project without naming it twice.
+      window.history.replaceState(null, '', '/shop-1abc')
+      render(
+        <CardTitleLink segment="queue" onOpen={() => {}}>
+          AI Queue
+        </CardTitleLink>,
+      )
+      expect(screen.getByRole('link', { name: 'AI Queue' }).getAttribute('href')).toBe('/queue?project=shop-1abc')
     } finally {
       window.history.replaceState(null, '', '/')
     }

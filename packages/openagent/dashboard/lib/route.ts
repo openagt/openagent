@@ -1,6 +1,7 @@
 // The dashboard's address (#784): `/` is the Overview, `/{projectId}` a project's home/launcher,
-// `/{projectId}/{sessionId}` one session. `?project={projectId}` on any of them is the one project
-// every page shows (#1513). The URL is the selection — what used to be three pieces
+// `/{projectId}/{sessionId}` one session. The one project every page shows (#1513) is `?project={projectId}`
+// on the Overview and a module's page; a project's own pages show their project unless `?all` says
+// every project shows, so its id is never in the address twice. The URL is the selection — what used to be three pieces
 // of React state guessing at each other, which is where the #761/#766/#768/#774 bugs came from.
 //
 // `sessionId` is the agent id (`AgentMeta.id`), not the agent's conversation id with its driver:
@@ -49,20 +50,25 @@ export interface Route {
   pagePath?: string[]
   /**
    * The one project every page shows (#1513), by id; absent when every project shows. Carried as
-   * `?project=<id>`. On a project's own pages it is that project or absent, never another one.
+   * `?project=<id>` on the Overview and a module's page. On a project's own pages it is that
+   * project, or absent when `?all` is there: never another one.
    */
   scope?: string
 }
 
-/** The query parameter that carries {@link Route.scope}. */
+/** The query parameter that carries {@link Route.scope} off a project's own pages. */
 const SCOPE_PARAM = 'project'
+
+/** The query parameter, with no value, that says every project shows on a project's own pages. */
+const ALL_PARAM = 'all'
 
 /** The query parameter that carries {@link Route.settings}. */
 const SETTINGS_PARAM = 'settings'
 
 /**
  * Read the route out of a URL's path and query. Anything unparseable is the Overview, and extra
- * segments are ignored. A project's own page scoped to another project is scoped to its own.
+ * segments are ignored. A project's own page shows its project unless `?all` is there; a
+ * `?project=` on it is ignored.
  */
 export function parseRoute(url: string): Route {
   const [pathname = '', search = ''] = url.split('?')
@@ -77,15 +83,15 @@ export function parseRoute(url: string): Route {
   if (first === SETTINGS_SEGMENT) return { projectId: null, agentId: null, settings: entry ?? second ?? '', ...scope }
   if (!first) return { projectId: null, agentId: null, ...scope, ...settings }
   if (isPageSegment(first)) return { projectId: null, agentId: null, page: first, pagePath: segments.slice(1), ...scope, ...settings }
-  return { projectId: first, agentId: second ?? null, ...(scoped ? { scope: first } : {}), ...settings }
+  return { projectId: first, agentId: second ?? null, ...(params.has(ALL_PARAM) ? {} : { scope: first }), ...settings }
 }
 
 /** The URL for a route, its path and its query — the inverse of {@link parseRoute}. */
 export function formatRoute(route: Route): string {
   const ownProject = !route.page ? route.projectId : null
-  const scope = route.scope ? (ownProject ?? route.scope) : null
-  const params: [string, string][] = [...(scope ? [[SCOPE_PARAM, scope] as [string, string]] : []), ...(route.settings !== undefined ? [[SETTINGS_PARAM, route.settings] as [string, string]] : [])]
-  const query = params.map(([name, value]) => `${name}=${encodeURIComponent(value)}`).join('&')
+  const scope = ownProject ? (route.scope ? [] : [ALL_PARAM]) : route.scope ? [`${SCOPE_PARAM}=${encodeURIComponent(route.scope)}`] : []
+  const settings = route.settings !== undefined ? [`${SETTINGS_PARAM}=${encodeURIComponent(route.settings)}`] : []
+  const query = [...scope, ...settings].join('&')
   return formatPath(route) + (query ? `?${query}` : '')
 }
 
@@ -97,10 +103,8 @@ export function formatRoute(route: Route): string {
 export function keepPageQuery(url: string, search: string): string {
   const [path = '', own = ''] = url.split('?')
   const params = new URLSearchParams(search)
-  params.delete(SCOPE_PARAM)
-  params.delete(SETTINGS_PARAM)
-  for (const [name, value] of new URLSearchParams(own)) params.set(name, value)
-  const query = params.toString()
+  for (const name of [SCOPE_PARAM, ALL_PARAM, SETTINGS_PARAM, ...new URLSearchParams(own).keys()]) params.delete(name)
+  const query = [params.toString(), own].filter(Boolean).join('&')
   return query ? `${path}?${query}` : path
 }
 
@@ -116,8 +120,8 @@ function formatPath({ projectId, agentId, page, pagePath }: Route): string {
  * tab: the page's segment, with the one project the dashboard is showing when one is picked, so
  * the new tab shows that project too.
  */
-export function pageHref(segment: string, search: string = typeof window === 'undefined' ? '' : window.location.search): string {
-  const scope = new URLSearchParams(search).get(SCOPE_PARAM)
+export function pageHref(segment: string, url: string = typeof window === 'undefined' ? '' : window.location.pathname + window.location.search): string {
+  const { scope } = parseRoute(url)
   return formatRoute({ projectId: null, agentId: null, page: segment, ...(scope ? { scope } : {}) })
 }
 

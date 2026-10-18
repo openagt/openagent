@@ -200,6 +200,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   entry's settings on the right. The address carries it, so a reload or a link opens it
   again, and closing it leaves the page as it was. Picked over a page of its own, which took
   you away from what you were doing and put a second list beside the sidebar.
+- A project's own pages show that project picked in the sidebar, and `?all` in their
+  address shows every project instead. The Overview and a module's page name the picked
+  project as `?project=`. Picked over `?project=` on every page, which wrote a project's id
+  twice in the address of its own page.
 - The list has two groups, by whose the settings are: first, with no title, OpenAgent's own
   and the packages that are the computer's; then "Project", the packages a project has, each
   saved in that project. The project group shows the project picked in the sidebar,
