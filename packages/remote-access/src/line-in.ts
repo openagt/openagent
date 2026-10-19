@@ -16,6 +16,9 @@ import type { Store } from './store.js'
  * The address asks for no key: whatever runs on this server as the person can ask the computer
  * through it, as it can ask this server's own OpenAgent. A server is trusted with the computers
  * that keep a line to it, which is what the person turns off on the computer, not here.
+ *
+ * The door passes another computer's OpenAgent down a line too ({@link Lines.pass}), so a laptop
+ * reaches a computer at home through the server both are in at.
  */
 
 /** Where OpenAgent is let in at a machine, and takes itself out: answered here for a computer on a line. */
@@ -153,6 +156,10 @@ export interface Lines {
   follow(store: Store): Promise<void>
   /** The computers that have an address right now. */
   computers(): LineComputer[]
+  /** Whether the computer with this device id keeps its line open right now. */
+  connected(id: string): boolean
+  /** Ask the computer with this device id what `req` asks, at `path`, as its address here would; false when no computer has that id. */
+  pass(id: string, path: string, req: IncomingMessage, res: ServerResponse): boolean
   close(): Promise<void>
 }
 
@@ -169,12 +176,16 @@ export function openLines(opts: LinesOptions = {}): Lines {
   const refuse = (res: ServerResponse, status: number, text: string): void => void res.writeHead(status, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }).end(text)
   const json = (res: ServerResponse, value: unknown): void => void res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify(value))
 
-  const answer = ({ id, port }: LineComputer, req: IncomingMessage, res: ServerResponse): void => {
-    const path = req.url ?? '/'
+  const answer = (computer: LineComputer, req: IncomingMessage, res: ServerResponse): void => {
     // Asked by OpenAgent on this server, and by no page a browser on it opened: a page says where it
     // comes from, or reached this address under a name of its own, and is turned away either way.
     const site = req.headers['sec-fetch-site']
-    if (req.headers.host !== `127.0.0.1:${port}` || req.headers.origin !== undefined || site === 'cross-site' || site === 'same-site') return refuse(res, 403, 'forbidden')
+    if (req.headers.host !== `127.0.0.1:${computer.port}` || req.headers.origin !== undefined || site === 'cross-site' || site === 'same-site') return refuse(res, 403, 'forbidden')
+    ask(computer, req.url ?? '/', req, res)
+  }
+
+  /** What a computer is asked, at `path`, from here or from the door: down its line, or answered here for where a machine is added and removed. */
+  const ask = ({ id }: LineComputer, path: string, req: IncomingMessage, res: ServerResponse): void => {
     // OpenAgent adds this address as a machine, and removes it, the way it does any other. The
     // key it is answered opens nothing: only this server reaches the address.
     if (path.split('?')[0] === ENTER_PATH) {
@@ -281,6 +292,15 @@ export function openLines(opts: LinesOptions = {}): Lines {
     },
     computers() {
       return [...addresses.values()].map(held => held.computer)
+    },
+    connected(id) {
+      return sessions.has(id)
+    },
+    pass(id, path, req, res) {
+      const held = addresses.get(id)
+      if (!held) return false
+      ask(held.computer, path, req, res)
+      return true
     },
     async close() {
       for (const session of sessions.values()) session.close()

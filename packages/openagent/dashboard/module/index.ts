@@ -385,6 +385,13 @@ export interface ModuleHost {
    */
   removeMachine(id: string): Promise<MachineRemoved>
   /**
+   * The computers that keep a line open to a saved server: computers at home a run can be sent to
+   * through the server, and whether each is saved here already. None for a machine that is no server.
+   */
+  computersThrough(machineId: string): Promise<ModuleComputersThrough>
+  /** Save one of them as a machine of its own, reached through the server: it is in "Run on" from then on. */
+  addComputerThrough(machineId: string, computerId: string): Promise<MachineAdded>
+  /**
    * What the live screen of a run shows, as the screen's own stream of bytes, until `signal` ends
    * it; nothing when the run has no live screen. OpenAgent asks the computer the run is on, which
    * may be another machine: the bytes are that computer's, to read as data and never to run.
@@ -415,6 +422,20 @@ export interface ModuleMachines {
 
 /** How saving a machine went: done, or stopped, with the reason. */
 export type MachineAdded = { ok: true } | { ok: false; error: string }
+
+/** A computer that keeps a line open to a saved server, as {@link ModuleHost.computersThrough} answers it. */
+export interface ModuleComputerThrough {
+  /** The server's id for it. */
+  id: string
+  name: string
+  /** Its line is open right now. */
+  online: boolean
+  /** It is saved here, through the server. */
+  added: boolean
+}
+
+/** What {@link ModuleHost.computersThrough} answers. */
+export type ModuleComputersThrough = { ok: true; computers: ModuleComputerThrough[] } | { ok: false; error: string }
 
 /** How removing a machine went: done, or refused, with the reason. */
 export type MachineRemoved = { ok: true } | { ok: false; error: string }

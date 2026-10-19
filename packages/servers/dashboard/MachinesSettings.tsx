@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Laptop, Loader2, Plus, Server, UserPlus, UserRound } from 'lucide-react'
-import { AddMachineDialog, Button, Checkbox, Dialog, Input, InviteDialog, SettingsSection, Switch, cn, formatDateTime, formatRelative, reachedByLine, useModuleHost, usePolled, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
+import { AddMachineDialog, Button, Checkbox, Dialog, Input, InviteDialog, SettingsSection, Switch, cn, formatDateTime, formatRelative, reachedByLine, useModuleHost, usePolled, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
 import { askLink, connect, forget, idsOf, loadDevices, loadServers, login, logout, markAdded, nameOwner, ownGithub, reach, removeDevice, removePerson, type Answer, type DeviceRow, type DevicesRead, type DoorLink, type OwnGithub, type ServerRow, type ServersRead, type StepState } from './servers.js'
 
 // Settings → Machines: the other computers a run can be sent to, each listed once. A server this
@@ -319,9 +319,67 @@ function ServerDevices({
   )
 }
 
-/** A machine that is no server of this computer's: one added with a link, or a person's own computer that keeps a line open to this one. */
-function MachineLine({ machine, known, busy, onRemove }: { machine: ModuleMachine; /** The machines were asked whether they answer. */ known: boolean; busy: boolean; onRemove: () => void }) {
+/** Where a computer saved through a server is reached: the server's address, then this. */
+const THROUGH = '/_remote-access/via/'
+
+/**
+ * The computers that keep a line open to a server this computer is in at: computers at home a
+ * run can be sent to through the server. One press saves one, and it is in "Run on" from then on.
+ * Nothing at all for a server no computer keeps a line to.
+ */
+function ComputersThrough({ host, machine, busy, everyMs }: { host: ModuleHost; machine: ModuleMachine; busy: boolean; everyMs: number }) {
+  const { value: read, reload } = usePolled<ModuleComputersThrough | undefined>(() => host.computersThrough(machine.id), undefined, Math.max(everyMs, 10_000), [machine.id])
+  const [adding, setAdding] = useState<string | undefined>()
+  const [error, setError] = useState<string | undefined>()
+  if (read === undefined || (read.ok && read.computers.length === 0)) return null
+  const add = async (computerId: string): Promise<void> => {
+    setAdding(computerId)
+    setError(undefined)
+    const added = await host.addComputerThrough(machine.id, computerId)
+    if (!added.ok) setError(added.error)
+    await reload().catch(() => {})
+    setAdding(undefined)
+  }
+  return (
+    <div className="space-y-2 text-xs">
+      <p className="text-sm">Computers on this server</p>
+      {read.ok ? (
+        <ul aria-label={`The computers on ${machine.label}`} className="space-y-2">
+          {read.computers.map(computer => (
+            <li key={computer.id} className="flex items-center justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-2">
+                <Laptop aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate text-sm">{computer.name}</span>
+                <ServerState tone={computer.online ? 'good' : 'quiet'}>{computer.online ? 'Online' : 'Away'}</ServerState>
+              </div>
+              {computer.added ? (
+                <span className="shrink-0 text-muted-foreground">In "Run on"</span>
+              ) : (
+                <Button size="sm" variant="outline" className="shrink-0" disabled={busy || adding !== undefined} aria-label={`Add ${computer.name} through ${machine.label}`} onClick={() => void add(computer.id)}>
+                  {adding === computer.id && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
+                  Add
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-muted-foreground">{`Its computers could not be read: ${read.error}`}</p>
+      )}
+      {read.ok && read.computers.some(computer => !computer.added) && <p className="text-muted-foreground">Added, a computer is in "Run on" here: a run started on it goes through this server.</p>}
+      {error !== undefined && (
+        <p role="alert" className="text-danger">
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
+
+/** A machine that is no server of this computer's: one added with a link, a computer saved through a server, or a person's own computer that keeps a line open to this one. */
+function MachineLine({ host, machine, known, busy, everyMs, onRemove }: { host: ModuleHost; machine: ModuleMachine; /** The machines were asked whether they answer. */ known: boolean; busy: boolean; everyMs: number; onRemove: () => void }) {
   const computer = reachedByLine(machine.url)
+  const through = machine.url.includes(THROUGH)
   const state = !known ? 'Checking…' : machine.version !== undefined ? 'Online' : 'Offline'
   return (
     <li aria-label={machine.label} className="flex items-start justify-between gap-4 py-4">
@@ -332,8 +390,15 @@ function MachineLine({ machine, known, busy, onRemove }: { machine: ModuleMachin
           <ServerState tone={state === 'Online' ? 'good' : 'quiet'}>{state}</ServerState>
           {computer ? (
             <p className="text-xs text-muted-foreground">Your computer. It keeps a line open to this server. Removed here, it is back when it calls again: to take it out, remove it under Devices.</p>
+          ) : through ? (
+            <p className="text-xs text-muted-foreground">A computer reached through its server. Removed here, it is no longer in "Run on"; the server keeps it.</p>
           ) : (
             <p className="truncate text-xs text-muted-foreground">{machine.url}</p>
+          )}
+          {!computer && !through && known && (
+            <div className="pt-2">
+              <ComputersThrough host={host} machine={machine} busy={busy} everyMs={everyMs} />
+            </div>
           )}
         </div>
       </div>
@@ -813,6 +878,7 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
                       onOwner={owner => setOwners(named => (named[server.address] === owner ? named : { ...named, [server.address]: owner }))}
                     />
                   )}
+                  {done && machine && <ComputersThrough host={host} machine={machine} busy={busy} everyMs={devicesEveryMs} />}
                   {!server.working && (
                     <Button
                       size="sm"
@@ -836,7 +902,7 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
             )
           })}
           {others.map(machine => (
-            <MachineLine key={machine.id} machine={machine} known={known !== undefined} busy={busy} onRemove={() => void removeMachine(machine)} />
+            <MachineLine key={machine.id} host={host} machine={machine} known={known !== undefined} busy={busy} everyMs={devicesEveryMs} onRemove={() => void removeMachine(machine)} />
           ))}
         </ul>
       )}

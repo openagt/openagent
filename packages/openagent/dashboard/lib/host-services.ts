@@ -32,6 +32,12 @@ export const INERT_HOST_SERVICES: HostServices = {
   async removeMachine() {
     return { ok: false, error: 'no dashboard to remove a machine from' }
   },
+  async computersThrough() {
+    return { ok: true, computers: [] }
+  },
+  async addComputerThrough() {
+    return { ok: false, error: 'no dashboard to save a machine in' }
+  },
   async watchScreen() {
     return undefined
   },

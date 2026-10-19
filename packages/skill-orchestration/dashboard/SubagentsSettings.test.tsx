@@ -41,6 +41,8 @@ function fakeHost(saved: Record<string, unknown> = {}, refuse?: (projectId: stri
     machines: vi.fn(async () => ({ version: '0.0.0', machines: [] })),
     addMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     removeMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
+    computersThrough: vi.fn(async () => ({ ok: true as const, computers: [] })),
+    addComputerThrough: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     watchScreen: vi.fn(async () => undefined),
     sendToScreen: vi.fn(async () => false),
   }

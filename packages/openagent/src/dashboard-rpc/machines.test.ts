@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { onMachineVersions, onMachines, onMachinesReachable, onProjectOnMachine, sendAddMachine, sendProjectToMachine, sendRemoveMachine } from './machines.js'
+import { onComputersThrough, onMachineVersions, onMachines, onMachinesReachable, onProjectOnMachine, sendAddComputerThrough, sendAddMachine, sendProjectToMachine, sendRemoveMachine } from './machines.js'
 import { openagentVersion } from '../version.js'
 import { setDashboardContext } from './context.js'
 import { testDashboardContext } from './test-context.js'
@@ -39,13 +39,15 @@ const ENTER = '/_remote-access/enter'
  * computer in once and answers a key, a key takes its computer out again, and a ping is answered
  * only to a key that is in, with the OpenAgent the machine runs when it says.
  */
-async function machine(codes: string[] = [], version?: string): Promise<{ url: string; link: (code: string) => string; in: Map<string, string>; close: () => Promise<void> }> {
+async function machine(codes: string[] = [], version?: string, computers?: unknown[]): Promise<{ url: string; link: (code: string) => string; in: Map<string, string>; close: () => Promise<void> }> {
   const good = new Set(codes)
   const inside = new Map<string, string>()
   let made = 0
   const srv: Server = createServer((req, res) => {
     const key = /^Bearer (.+)$/.exec(req.headers.authorization ?? '')?.[1]
     if (req.url === '/_relay/ping') return void res.writeHead(key && inside.has(key) ? 200 : 401).end(version === undefined ? '' : JSON.stringify({ version }))
+    // A server's door lists the computers on a line there, to a key that is in.
+    if (req.url === '/_remote-access/computers' && computers) return void (key && inside.has(key) ? res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ computers })) : res.writeHead(401).end())
     if (req.url !== ENTER) return void res.writeHead(404).end()
     if (req.method === 'DELETE') {
       const was = key !== undefined && inside.delete(key)
@@ -287,6 +289,46 @@ test('a saved machine is asked to clone a project of this computer\'s, by the pr
       await new Promise<void>(r => srv.close(() => r()))
       await rm(shop, { recursive: true, force: true })
       await rm(notes, { recursive: true, force: true })
+    }
+  })
+})
+
+test('a saved server\'s computers on a line are listed, and one is saved as a machine reached through the server with this computer\'s key there; it follows the server when that is saved again or removed', async () => {
+  await withHome(async file => {
+    const server = await machine(['first', 'second'], undefined, [{ id: 'abc123def456', name: 'Studio', online: true }, { id: '../../_rpc', name: 'Sneaky', online: true }, { id: 'def456abc123', name: ' ', online: false }])
+    try {
+      await sendAddMachine(server.link('first'), 'Box')
+      assert.deepEqual(await onComputersThrough(server.url), { ok: true, computers: [{ id: 'abc123def456', name: 'Studio', online: true, added: false }] })
+      const through = `${server.url}/_remote-access/via/abc123def456`
+      assert.deepEqual(await sendAddComputerThrough(server.url, 'abc123def456'), { ok: true, machine: { id: through, label: 'Studio (through Box)', url: through } })
+      assert.deepEqual(await sendAddComputerThrough(server.url, 'nobody123456'), { ok: false, error: 'Box has no such computer on a line now.' })
+      assert.deepEqual((await onComputersThrough(server.url)).ok && (await onComputersThrough(server.url) as { computers: { added: boolean }[] }).computers.map(computer => computer.added), [true])
+      // A computer saved through a server is no server of its own.
+      assert.deepEqual(await onComputersThrough(through), { ok: true, computers: [] })
+      const keyOf = async (url: string): Promise<string> => (JSON.parse(await readFile(file, 'utf8')).machines as { url: string; key: string }[]).find(saved => saved.url === url)!.key
+      assert.equal(await keyOf(through), await keyOf(server.url))
+
+      // The server saved again, with a new key: the computer through it takes the new one.
+      await sendAddMachine(server.link('second'))
+      assert.equal(await keyOf(through), 'd2.key-second')
+      // The server removed: the computer reached through it goes with it.
+      assert.deepEqual(await sendRemoveMachine(server.url), { ok: true })
+      assert.deepEqual(await onMachines(), [])
+    } finally {
+      await server.close()
+    }
+  })
+})
+
+test('a machine that is no server has no computers through it, and one whose key is out says so', async () => {
+  await withHome(async () => {
+    const plain = await machine(['a'])
+    try {
+      await sendAddMachine(plain.link('a'))
+      assert.deepEqual(await onComputersThrough(plain.url), { ok: true, computers: [] })
+      assert.deepEqual(await onComputersThrough('http://10.9.9.9:4201'), { ok: false, error: 'That machine is no longer saved.' })
+    } finally {
+      await plain.close()
     }
   })
 })

@@ -61,3 +61,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   do more.
 - A line the server no longer lets in reads as off on the computer, which says why. Picked
   over a switch that goes on saying on over a line that carries nothing.
+- Another computer that is in at the server reaches a computer on a line there through the
+  server, so a laptop on any internet starts a run on a computer at home. Picked over opening
+  the computer at home to the internet first, which needs a port on its router and fails where
+  the internet provider shares one address between many homes.

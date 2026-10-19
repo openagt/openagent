@@ -15,3 +15,5 @@ export const onMachinesReachable = rpc<typeof impl.onMachinesReachable>('onMachi
 export const onMachineVersions = rpc<typeof impl.onMachineVersions>('onMachineVersions')
 export const sendProjectToMachine = rpc<typeof impl.sendProjectToMachine>('sendProjectToMachine')
 export const onProjectOnMachine = rpc<typeof impl.onProjectOnMachine>('onProjectOnMachine')
+export const onComputersThrough = rpc<typeof impl.onComputersThrough>('onComputersThrough')
+export const sendAddComputerThrough = rpc<typeof impl.sendAddComputerThrough>('sendAddComputerThrough')

@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react'
-import { onMachines, sendAddMachine, sendRemoveMachine, type AddMachineResult, type Machine, type RemoveMachineResult } from '../rpc/machines.js'
+import { onMachines, sendAddComputerThrough, sendAddMachine, sendRemoveMachine, type AddMachineResult, type Machine, type RemoveMachineResult } from '../rpc/machines.js'
 import { getSelectedMachineId, selectMachine } from './remote-target.js'
 
 // The saved machines: the other computers running OpenAgent that a run can be sent to. The list
@@ -55,6 +55,13 @@ export async function addMachine(pasted: string, label?: string): Promise<AddMac
   return result
 }
 
+/** Save a computer that keeps a line open to a saved server, reached through it; the list is read again once the daemon has it. */
+export async function addComputerThrough(machineId: string, computerId: string): Promise<AddMachineResult> {
+  const result = await sendAddComputerThrough(machineId, computerId)
+  if (result.ok) await refreshMachines()
+  return result
+}
+
 /**
  * Take a saved machine off the list, and answer whether the daemon did, with its reason when it
  * did not. The list is read again either way, so a machine the daemon did not remove is still shown.
@@ -63,8 +70,10 @@ export async function addMachine(pasted: string, label?: string): Promise<AddMac
  */
 export async function removeMachine(id: string): Promise<RemoveMachineResult> {
   const result = await sendRemoveMachine(id).catch((): RemoveMachineResult => ({ ok: false, error: 'The machine could not be removed.' }))
-  if (result.ok && getSelectedMachineId() === id) selectMachine(null)
   await refreshMachines()
+  // The machine, or a computer saved through it, which went with it.
+  const selected = getSelectedMachineId()
+  if (result.ok && selected !== null && !(cache ?? []).some(machine => machine.id === selected)) selectMachine(null)
   return result
 }
 
