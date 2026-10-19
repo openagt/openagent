@@ -68,3 +68,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   server, so a laptop on any internet starts a run on a computer at home. Picked over opening
   the computer at home to the internet first, which needs a port on its router and fails where
   the internet provider shares one address between many homes.
+- Whoever connects a computer to a server several people use picks who there may start runs on
+  it: nobody, only them, or everyone. A run of another person's there runs as that person's own
+  user on the computer, with their own logins, never its owner's.
+- When people can no longer reach a computer shared with everyone, its owner is asked whether
+  their users go, or stay switched off. Picked over always removing them, and over always
+  keeping them.
