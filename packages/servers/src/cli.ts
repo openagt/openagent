@@ -1,13 +1,13 @@
 import { spawn } from 'node:child_process'
-import { idsOf, isDeviceId, nameOwner, readDevices, removeDevice, removePerson, type Devices, type ServerDevice, type ServerPerson } from './devices.js'
+import { devicesIn, idsOf, isDeviceId, nameOwner, readDevices, removeDevice, removePerson, type Devices, type ServerDevice, type ServerPerson } from './devices.js'
 import { AlreadyWorking, askLink, install } from './install.js'
 import { AlreadyAtWork, changeLogin, ownGithubAccount, type Mint } from './logins.js'
 import { ownDoor, type OwnDoor } from './own-door.js'
 import { OwnAtWork, askOwnGithub, giveOwnClaude, giveOwnGithub, personHere, removeOwn, startOverSoon, startOwnGithubCode } from './own.js'
-import { copyGithub, forgetShared, isSharedUrl, lineTo, mintFor, setSharedReach, startMint } from './shared.js'
-import type { Exec } from './ssh.js'
-import { SERVER_MARK, STEPS } from './steps.js'
-import { LOGIN_KINDS, Unreadable, addressOf, isAccount, atWork, doorUrl, freshSteps, isUser, isVersion, readStore, update, working, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
+import { askOpenAgent, copyGithub, forgetShared, isSharedUrl, lineTo, mintFor, setSharedReach, startMint } from './shared.js'
+import { lastLines, openSession, withAdvice, type Exec } from './ssh.js'
+import { PERSON_TIMEOUT_MS, SERVER_MARK, SERVER_USER, devicesScript, stepLabel, stepsFor, whoScript, type Who } from './steps.js'
+import { LOGIN_KINDS, Unreadable, addressOf, isAccount, atWork, doorUrl, freshSteps, isMachineUrl, isUser, isVersion, readStore, throughUrl, update, working, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -19,12 +19,20 @@ export const USAGE = `usage: servers <command>
 
   status                               the servers this computer installed OpenAgent on, how far each install is, and
                                        which logins each was given; and whether this computer is itself such a server
-  connect <address> <user> <version> [github]
+  connect <address> <user> <version> [github] [--through <url>]
                                        install OpenAgent at this version on the server at this number or name, logging in
                                        over SSH as this user (root, or one that becomes root without a password) with this
                                        computer's own SSH keys; run again, it goes on where it failed, and brings a server
                                        that fell behind to this version; with "github", this computer's GitHub login is
-                                       copied to the server once it is installed
+                                       copied to the server once it is installed; with --through, the computer has no door
+                                       of its own on the internet (a computer at home): it keeps a line open to the server
+                                       at that address among OpenAgent's machines instead, as this computer's person's
+  add-through <address>                save a computer reached through a server among OpenAgent's machines, through that
+                                       server, once its install is done
+  who <address> nobody|me|everyone [remove]
+                                       say who on its server may start runs on a computer reached through it: nobody (the
+                                       server only shows its runs), only its own person, or every person there; with
+                                       "remove", the user each other person has on it is deleted, with everything in it
   link <address> [--for <account>]     a link the server's door gives for a new machine, once, for five minutes; with
                                        --for, for a person's device, by their GitHub account (the owner is named first)
   owner <address> <account>            name the server's owner at its door, once, by their GitHub account
@@ -87,6 +95,8 @@ export interface CliIO {
   stdin?: () => Promise<string>
   /** Starts this OpenAgent again a moment after the command answered, once a Claude login of its own changed; the computer's service when unsaid. */
   startOver?: () => void
+  /** How this computer's OpenAgent is asked; at the address it told this command when unsaid. */
+  ask?: (fn: string, args: unknown[]) => Promise<unknown>
 }
 
 /** All of the process's standard input, as text. */
@@ -151,6 +161,10 @@ export interface ServerStatus {
   adding: boolean
   /** Set once this computer keeps a line open to the server: what the server may do through it. */
   reach?: Reach
+  /** A computer reached through a server: that server's door, which the computer keeps its line to. */
+  through?: string
+  /** A computer reached through a server: who there may start runs on it. */
+  who?: Who
   steps: { id: string; label: string; state: StepState; said?: string }[]
   logins: Record<LoginKind, LoginStatus>
 }
@@ -185,13 +199,16 @@ function statusOf(store: Store, env: NodeJS.ProcessEnv): Status {
       const busy = working(server)
       return {
         address: server.address,
-        url: doorUrl(server.address),
+        // A computer reached through a server is among the machines by that server's door: until it is saved there, by an address that is no machine's.
+        url: throughUrl(server) ?? doorUrl(server.address),
         user: server.user,
         ...(server.fingerprint ? { fingerprint: server.fingerprint } : {}),
         working: busy,
         adding: server.adding,
         ...(server.reach ? { reach: server.reach } : {}),
-        steps: STEPS.map(({ id, label }) => {
+        ...(server.through !== undefined ? { through: server.through, who: server.who ?? 'me' } : {}),
+        steps: stepsFor(server.through !== undefined).map(def => {
+          const [id, label] = [def.id, stepLabel(def, server.through)]
           const step = server.steps.find(candidate => candidate.id === id)!
           // A step that still reads as running with no process behind it: the install died there.
           if (step.state === 'running' && !busy) return { id, label, state: 'failed' as const, said: 'The install stopped before this step ended.' }
@@ -213,18 +230,24 @@ function startWork(words: string[], env: NodeJS.ProcessEnv): number {
   return child.pid
 }
 
-async function connect(io: CliIO, said: { address: string; user: string; version: string; github: boolean }): Promise<Status> {
+/** Whether `said` is a server's door among OpenAgent's machines: the only kind a computer keeps its line to. */
+const isDoor = (said: string | undefined): said is string => said !== undefined && isMachineUrl(said) && said.startsWith('https://')
+
+async function connect(io: CliIO, said: { address: string; user: string; version: string; github: boolean; through?: string }): Promise<Status> {
   const address = addressOf(said.address)
   if (address === undefined) throw new Refused(`${said.address} is not a server's number or name`)
   if (!isUser(said.user)) throw new Refused(`${said.user} is not a user name`)
   if (!isVersion(said.version)) throw new Refused(`${said.version} is not a version of OpenAgent`)
+  if (said.through !== undefined && !isDoor(said.through)) throw new Refused(`${said.through} is not a server's address among OpenAgent's machines`)
   // Written before the install's process starts, which reads it; held under this command's own
   // name until that process has one, so two presses of the button are one install.
   await update(io.env, store => {
     const known = store.servers.find(server => server.address === address)
     if (known && working(known)) throw new Refused(`OpenAgent is being installed on ${address} right now`)
     if (known && changing(known)) throw new Refused(`A login of ${address} is being changed right now: wait until it ends`)
-    const fresh: Server = { address, user: said.user, ...(known?.fingerprint ? { fingerprint: known.fingerprint } : {}), steps: freshSteps(), worker: { pid: process.pid, seen: new Date().toISOString() }, adding: true }
+    // Reached the way it was first connected: an update says nothing of it.
+    const through = said.through ?? known?.through
+    const fresh: Server = { address, user: said.user, ...(known?.fingerprint ? { fingerprint: known.fingerprint } : {}), steps: freshSteps(through !== undefined), worker: { pid: process.pid, seen: new Date().toISOString() }, adding: true, ...(through !== undefined ? { through } : {}) }
     if (known) Object.assign(known, fresh)
     else store.servers.unshift(fresh)
     // The person's tick, as it is at this press, kept until the install's end, where the copy is made.
@@ -269,6 +292,7 @@ async function still(io: CliIO, said: string): Promise<Server> {
  */
 async function setReach(io: CliIO, said: string, mode: Reach): Promise<Status> {
   const server = await still(io, said)
+  if (server.through !== undefined) throw new Refused(`${server.address} is reached through a server: this computer keeps no line to it`)
   const door = io.door ?? ownDoor
   // A line this computer already keeps is told what the server may do. One it lost since is asked for anew.
   const kept = server.reach !== undefined && (await door(['line', mode, server.address], io.env)).ok
@@ -411,6 +435,82 @@ async function sharedStatusOf(io: CliIO, urls: string[]): Promise<{ shared: Shar
   }
 }
 
+/** The saved computer reached through a server at what a person typed, when nothing is being installed on it; a refusal for any other. */
+async function reachedThrough(io: CliIO, said: string): Promise<Server & { through: string }> {
+  const server = await still(io, said)
+  if (server.through === undefined) throw new Refused(`${server.address} is not reached through a server`)
+  return server as Server & { through: string }
+}
+
+/** How long a computer gets to answer who may start runs on it, and which lines it keeps: its door's own file, read at once. */
+const WHO_TIMEOUT_MS = 20_000
+
+/**
+ * Say who on its server may start runs on a computer reached through it. With `remove`, each
+ * person whose user its line made there is taken away with all of it: their logins, their copies
+ * of projects, and work they did not push. Answers its persons as they are after.
+ */
+async function setWho(io: CliIO, said: string, who: Who, remove: boolean): Promise<DevicesStatus> {
+  const server = await reachedThrough(io, said)
+  const over = io.exec ? { exec: io.exec } : {}
+  let others: string[] = []
+  if (remove) {
+    const listed = await readDevices(server, over)
+    if (!listed.ok) throw new Refused(listed.error)
+    others = listed.persons.filter(person => !person.owner && person.from === server.through).map(person => person.account)
+  }
+  const session = await openSession(server, over)
+  let answered: Devices
+  try {
+    const ran = await session.run(SERVER_USER, whoScript(server.through, who, others), others.length ? PERSON_TIMEOUT_MS : WHO_TIMEOUT_MS)
+    const listed = ran.code === 0 ? devicesIn(ran.out) : undefined
+    answered = ran.code !== 0 ? { ok: false, error: withAdvice(server, lastLines(ran) || 'The computer did not answer.') } : listed ? { ok: true, ...listed } : { ok: false, error: 'The computer answered something else than its devices.' }
+  } finally {
+    await session.close()
+  }
+  if (answered.ok)
+    await update(io.env, store => {
+      const saved = store.servers.find(candidate => candidate.address === server.address)
+      if (saved) saved.who = who
+    })
+  return devicesOf(answered, undefined)
+}
+
+/**
+ * Save a computer reached through a server among OpenAgent's machines, through that server: its
+ * door lists the computer by its line, and this computer's OpenAgent, which is in at that server,
+ * reaches it down that line from then on. Nothing is entered on the computer itself.
+ */
+async function addThrough(io: CliIO, said: string): Promise<Status> {
+  const server = await reachedThrough(io, said)
+  const session = await openSession(server, io.exec ? { exec: io.exec } : {})
+  let id: string | undefined
+  try {
+    const ran = await session.run(SERVER_USER, devicesScript(), WHO_TIMEOUT_MS)
+    if (ran.code !== 0) throw new Refused(withAdvice(server, lastLines(ran) || 'The computer did not answer.'))
+    try {
+      const { lines } = JSON.parse(ran.out.trim().split('\n').at(-1) ?? '') as { lines?: unknown }
+      const line = Array.isArray(lines) ? (lines as Record<string, unknown>[]).find(candidate => candidate?.url === server.through) : undefined
+      if (typeof line?.id === 'string' && isDeviceId(line.id)) id = line.id
+    } catch {
+      // Told below, as a computer that keeps no line there.
+    }
+  } finally {
+    await session.close()
+  }
+  const host = new URL(server.through).host
+  if (id === undefined) throw new Refused(`${server.address} keeps no line to ${host} yet: press Update on its row.`)
+  const added = (await (io.ask ?? ((fn, args) => askOpenAgent(io.env, fn, args)))('sendAddComputerThrough', [server.through, id])) as { ok?: boolean; error?: unknown } | undefined
+  if (!added?.ok) throw new Refused(typeof added?.error === 'string' ? added.error : `${host} did not save ${server.address}.`)
+  await update(io.env, store => {
+    const saved = store.servers.find(candidate => candidate.address === server.address)
+    if (!saved) return
+    saved.line = id
+    saved.adding = false
+  })
+  return statusOf(await readStore(io.env), io.env)
+}
+
 export async function runCli(args: string[], io: CliIO): Promise<number> {
   const [command, ...rest] = args
   const print = (value: unknown): number => {
@@ -424,9 +524,22 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         if (rest.length) break
         return print(statusOf(await readStore(io.env), io.env))
       case 'connect': {
-        const [address, user, version, github] = rest
-        if (rest.length < 3 || rest.length > 4 || !address || !user || !version || (rest.length === 4 && github !== 'github')) break
-        return print(await connect(io, { address, user, version, github: github === 'github' }))
+        // The through server's address comes last, after its flag.
+        const flagged = rest.at(-2) === '--through'
+        const words = flagged ? rest.slice(0, -2) : rest
+        const [address, user, version, github] = words
+        if (words.length < 3 || words.length > 4 || !address || !user || !version || (words.length === 4 && github !== 'github')) break
+        return print(await connect(io, { address, user, version, github: github === 'github', ...(flagged ? { through: rest.at(-1)! } : {}) }))
+      }
+      case 'add-through': {
+        const [address] = rest
+        if (rest.length !== 1 || !address) break
+        return print(await addThrough(io, address))
+      }
+      case 'who': {
+        const [address, who, remove] = rest
+        if (!address || (who !== 'nobody' && who !== 'me' && who !== 'everyone') || !(rest.length === 2 || (rest.length === 3 && remove === 'remove'))) break
+        return print(await setWho(io, address, who, remove === 'remove'))
       }
       case 'link': {
         const [address, flag, person] = rest

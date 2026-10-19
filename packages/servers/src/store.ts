@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { isIP } from 'node:net'
 import { dirname, join } from 'node:path'
-import { STEP_IDS, type StepId } from './steps.js'
+import { stepIdsFor, type StepId, type Who } from './steps.js'
 
 /**
  * The servers this computer installed OpenAgent on, in the person's home folder: where each is,
@@ -76,6 +76,15 @@ export interface Server {
    * the server's page: what the server may do through it, everything or only read.
    */
   reach?: Reach
+  /**
+   * Set for a computer reached through a server, with no door of its own on the internet: that
+   * server's door, as an origin, which the computer keeps its line to. A computer at home, say.
+   */
+  through?: string
+  /** For a computer reached through a server: who there may start runs on it, as this computer last said. */
+  who?: Who
+  /** For a computer reached through a server: the id its line has among that server's devices, once it is among OpenAgent's machines through it. */
+  line?: string
 }
 
 export type Reach = 'full' | 'watch'
@@ -182,8 +191,15 @@ export function doorUrl(address: string): string {
   return `https://${address.includes(':') ? `[${address}]` : address}`
 }
 
-/** Every step, not started. */
-export const freshSteps = (): Step[] => STEP_IDS.map(id => ({ id, state: 'waiting' }))
+/** Every step, not started: a computer reached through a server has its line where a server has its door. */
+export const freshSteps = (through = false): Step[] => stepIdsFor(through).map(id => ({ id, state: 'waiting' }))
+
+/** Where a computer reached through a server is among OpenAgent's machines: through that server's door, down its line. */
+export function throughUrl(server: Pick<Server, 'through' | 'line'>): string | undefined {
+  return server.through !== undefined && server.line !== undefined ? `${server.through}/_remote-access/via/${server.line}` : undefined
+}
+
+const WHO: readonly Who[] = ['nobody', 'me', 'everyone']
 
 const STATES: readonly StepState[] = ['waiting', 'running', 'done', 'failed']
 
@@ -215,7 +231,7 @@ export function sanitize(value: unknown): Store {
   for (const entry of Array.isArray(obj.servers) ? obj.servers : []) {
     if (servers.length >= MAX_SERVERS) break
     if (!entry || typeof entry !== 'object') continue
-    const { address, user, fingerprint, steps, worker, adding, github, claude, reach } = entry as Record<string, unknown>
+    const { address, user, fingerprint, steps, worker, adding, github, claude, reach, through, who, line } = entry as Record<string, unknown>
     const [githubLogin, claudeLogin] = [readLogin(github), readLogin(claude)]
     if (typeof address !== 'string' || addressOf(address) !== address || !isUser(user)) continue
     if (servers.some(server => server.address === address)) continue
@@ -227,14 +243,17 @@ export function sanitize(value: unknown): Store {
       if (typeof id !== 'string' || !STATES.includes(state as StepState)) continue
       known.set(id, { id: id as StepId, state: state as StepState, ...(typeof said === 'string' && said ? { said: said.slice(-MAX_SAID) } : {}) })
     }
+    // Only a server's door on the internet is one a computer keeps its line to.
+    const via = typeof through === 'string' && isMachineUrl(through) && through.startsWith('https://') ? through : undefined
     servers.push({
       address,
       user,
       ...(typeof fingerprint === 'string' && /^SHA256:[A-Za-z0-9+/=]{20,64}$/.test(fingerprint) ? { fingerprint } : {}),
-      steps: STEP_IDS.map(id => known.get(id) ?? { id, state: 'waiting' }),
+      steps: stepIdsFor(via !== undefined).map(id => known.get(id) ?? { id, state: 'waiting' }),
       ...(readWorker(worker) ?? {}),
       adding: adding === true,
       ...(reach === 'full' || reach === 'watch' ? { reach } : {}),
+      ...(via !== undefined ? { through: via, ...(WHO.includes(who as Who) ? { who: who as Who } : {}), ...(typeof line === 'string' && /^[a-z0-9]{6,32}$/.test(line) ? { line } : {}) } : {}),
       ...(githubLogin ? { github: githubLogin } : {}),
       ...(claudeLogin ? { claude: claudeLogin } : {}),
     })

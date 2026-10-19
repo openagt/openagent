@@ -977,3 +977,92 @@ describe('Settings → Machines', () => {
     expect(runComputerCommandOn).not.toHaveBeenCalled()
   })
 })
+
+describe('Settings → Machines: a computer reached through a server', () => {
+  const VPS = 'https://165.245.244.10'
+  const VIA = `${VPS}/_remote-access/via/line12345678`
+  const THROUGH_LABELS = { ...LABELS, door: undefined, line: 'Its line to 165.245.244.10' }
+  /** Rom's computer at home, set up as a server through the server he is in at. */
+  function box(over: Partial<ServerRow> = {}): ServerRow {
+    const steps = Object.entries(THROUGH_LABELS)
+      .filter((entry): entry is [string, string] => entry[1] !== undefined)
+      .map(([id, label]) => ({ id, label, state: 'done' as const }))
+    return { address: '192.168.1.20', url: VIA, user: 'rom', working: false, adding: false, through: VPS, who: 'me', steps, logins: { github: NONE, claude: NONE }, ...over }
+  }
+  const SAVED: ModuleMachines = { version: '1.2.3', machines: [{ id: VPS, label: '165.245.244.10', url: VPS, version: '1.2.3' }, { id: VIA, label: 'rom-box (through 165.245.244.10)', url: VIA, version: '1.2.3' }] }
+
+  test('Connect offers to reach the computer through a server this computer is in at, and only then', async () => {
+    const { host, ran } = dashboard(() => ok({ servers: [] }), { version: '1.2.3', machines: [{ id: VPS, label: '165.245.244.10', url: VPS }] })
+    show(host)
+    await openConnect()
+    expect(screen.queryByText("SSH must be on at the computer, with this computer's key. The user name is your own user on it.")).toBeNull()
+    fireEvent.click(await screen.findByRole('radio', { name: /through a server/ }))
+    expect(await screen.findByText("SSH must be on at the computer, with this computer's key. The user name is your own user on it.")).toBeTruthy()
+    fireEvent.change(screen.getByLabelText("The server's address"), { target: { value: '192.168.1.20' } })
+    fireEvent.change(screen.getByLabelText('User name'), { target: { value: 'rom' } })
+    const connect = screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement
+    await waitFor(() => expect(connect.disabled).toBe(false))
+    fireEvent.click(connect)
+    await waitFor(() => expect(ran()).toContain(`connect 192.168.1.20 rom 1.2.3 --through ${VPS}`))
+    cleanup()
+
+    // A computer that is in at no server on the internet has nothing to reach one through.
+    show(dashboard(() => ok({ servers: [] })).host)
+    await openConnect()
+    expect(screen.queryByRole('radiogroup', { name: 'How the server is reached' })).toBeNull()
+  })
+
+  test('its row is a server reached through another: who may start runs on it in place of an Invite, and no line from this computer', async () => {
+    const { host, ran, machinePerson } = dashboard(() => ok({ servers: [box()] }), SAVED)
+    machinePerson.mockImplementation(async id => (id === VPS ? { ok: true, said: { account: 'rom', owner: false, devices: [], persons: ['suleimansh', 'rom', 'dani'] } } : { ok: false, error: 'not said', unknown: true }))
+    show(host)
+    const row = await screen.findByRole('listitem', { name: '192.168.1.20' })
+    expect(within(row).getByText('Server')).toBeTruthy()
+    expect(within(row).getByText('Reached through 165.245.244.10')).toBeTruthy()
+    const group = within(row).getByRole('radiogroup', { name: 'Who can start runs on 192.168.1.20' })
+    expect(within(group).getByRole('radio', { name: /Only me/ }).getAttribute('aria-checked')).toBe('true')
+    expect(within(group).getByRole('radio', { name: /Nobody: its runs only show there/ })).toBeTruthy()
+    await waitFor(() => expect(within(group).getByRole('radio', { name: /Everyone on 165\.245\.244\.10 \(3 people\)/ })).toBeTruthy())
+    expect(group.textContent).toContain("Each person's runs use their own logins, never yours.")
+    expect(group.textContent).toContain('Their agents run on your home network.')
+    expect(within(row).queryByRole('button', { name: 'Invite to 192.168.1.20' })).toBeNull()
+    expect(within(row).queryByRole('switch')).toBeNull()
+    expect(within(row).queryByText('Who is in')).toBeNull()
+    // Its logins are a server's, over SSH.
+    expect(within(row).getByRole('list', { name: 'The logins on 192.168.1.20' })).toBeTruthy()
+
+    fireEvent.click(within(group).getByRole('radio', { name: /Everyone/ }))
+    await waitFor(() => expect(ran()).toContain('who 192.168.1.20 everyone'))
+  })
+
+  test('from everyone to fewer, it asks first what becomes of the others\' users there: they go, or stay switched off', async () => {
+    const persons = [{ account: 'rom', owner: true }, { account: 'suleimansh', from: VPS }, { account: 'dani', from: VPS }]
+    const { host, ran } = dashboard(() => ok({ servers: [box({ who: 'everyone' })] }), SAVED, undefined, undefined, () => ok({ devices: [], persons }))
+    show(host)
+    const row = await screen.findByRole('listitem', { name: '192.168.1.20' })
+    fireEvent.click(within(row).getByRole('radio', { name: /Only me/ }))
+    expect(await screen.findByText('@suleimansh and @dani have their own users on 192.168.1.20.')).toBeTruthy()
+    expect(screen.getByText('Work they did not push goes with them.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Keep them, switched off' }))
+    await waitFor(() => expect(ran()).toContain('who 192.168.1.20 me'))
+    expect(ran()).not.toContain('who 192.168.1.20 me remove')
+
+    fireEvent.click(within(row).getByRole('radio', { name: /Nobody/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove them, with their logins and projects' }))
+    await waitFor(() => expect(ran()).toContain('who 192.168.1.20 nobody remove'))
+
+    // Cancel changes nothing.
+    fireEvent.click(within(row).getByRole('radio', { name: /Only me/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByText(/have their own users/)).toBeNull())
+    expect(ran().filter(line => line.startsWith('who '))).toEqual(['who 192.168.1.20 me', 'who 192.168.1.20 nobody remove'])
+  })
+
+  test('once installed it is saved through its server, by its line, and no link is asked of it', async () => {
+    const { host, ran, addMachine } = dashboard(() => ok({ servers: [box({ adding: true, url: 'https://192.168.1.20' })] }), { version: '1.2.3', machines: [{ id: VPS, label: '165.245.244.10', url: VPS }] })
+    show(host)
+    await waitFor(() => expect(ran()).toContain('add-through 192.168.1.20'))
+    expect(ran().some(line => line.startsWith('link '))).toBe(false)
+    expect(addMachine).not.toHaveBeenCalled()
+  })
+})
