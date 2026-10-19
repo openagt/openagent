@@ -1,6 +1,6 @@
 import { giveGithub, noteGithub } from './logins.js'
 import { exec as realExec, lastLines, openSession, withAdvice, type Exec, type Session } from './ssh.js'
-import { SERVER_USER, STEPS, linkScript, type StepId } from './steps.js'
+import { PERSON_TIMEOUT_MS, SERVER_USER, STEPS, linkScript, type StepId } from './steps.js'
 import { BEAT_MS, changeServer, doorUrl, heartbeat, working, type Server, type StepState } from './store.js'
 
 /**
@@ -110,7 +110,10 @@ export type Link = { ok: true; url: string; expires: string } | { ok: false; err
 /** How long a link may be: a door's link is its address, a code and a key's mark, and a page draws it as a QR code. */
 const LINK_MAX = 512
 
-/** How long the server gets to answer with a link: less than a page's command has, so the line is always hung up. */
+/**
+ * How long the server gets to answer with a link: less than a page's command has, so the line is
+ * always hung up. A link for a person waits longer: the person's user and OpenAgent are made first.
+ */
 const LINK_TIMEOUT_MS = 20_000
 
 /**
@@ -121,7 +124,7 @@ const LINK_TIMEOUT_MS = 20_000
 export async function askLink(server: Pick<Server, 'address' | 'user'>, opts: { exec?: Exec } = {}, person?: string): Promise<Link> {
   const session = await openSession(server, opts)
   try {
-    const said = await session.run(SERVER_USER, linkScript(person), LINK_TIMEOUT_MS)
+    const said = await session.run(SERVER_USER, linkScript(person), person === undefined ? LINK_TIMEOUT_MS : PERSON_TIMEOUT_MS)
     if (said.code !== 0) return { ok: false, error: withAdvice(server, lastLines(said) || 'The server did not answer.') }
     try {
       const { url, expires } = JSON.parse(said.out.trim().split('\n').at(-1) ?? '') as Record<string, unknown>

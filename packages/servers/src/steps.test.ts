@@ -45,7 +45,7 @@ test('a script is a function called with nothing to read: a program it starts ca
 test('root installs, and what runs afterwards runs as the server\'s own user', () => {
   assert.deepEqual(
     STEPS.map(step => [step.id, step.as]),
-    [['login', 'root'], ['user', 'root'], ['tools', 'root'], ['name', 'openagent'], ['openagent', 'root'], ['agent', 'openagent'], ['service', 'root'], ['door', 'openagent']],
+    [['login', 'root'], ['user', 'root'], ['tools', 'root'], ['name', 'openagent'], ['openagent', 'root'], ['agent', 'openagent'], ['people', 'root'], ['service', 'root'], ['door', 'openagent']],
   )
   assert.match(SERVICE_UNIT, /^User=openagent$/m)
   // The OpenAgent the service starts is told it runs on a server: its own page offers no servers to connect.

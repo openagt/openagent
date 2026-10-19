@@ -7,7 +7,7 @@
  * the programs are root's, so an agent that works there cannot change OpenAgent itself.
  */
 
-export const STEP_IDS = ['login', 'user', 'tools', 'name', 'openagent', 'agent', 'service', 'door'] as const
+export const STEP_IDS = ['login', 'user', 'tools', 'name', 'openagent', 'agent', 'people', 'service', 'door'] as const
 export type StepId = (typeof STEP_IDS)[number]
 
 /** What a script is written for. */
@@ -105,10 +105,31 @@ const NOT_STARTED = 'fail "OpenAgent did not start on this server."'
  */
 export const SERVER_MARK = 'OPENAGENT_SERVER'
 
+/**
+ * The helper that makes a user and an OpenAgent of their own for a person the owner invites,
+ * and takes them away again. Root's program: the server's user may run it as root, and nothing
+ * else as root.
+ */
+export const PERSON_HELPER = `${ROOT}/bin/openagent-person`
+/** How the door is told where the helper is. A computer with none gives nobody a user of their own: a laptop, a computer at home. */
+export const PERSON_HELPER_ENV = 'OPENAGENT_PERSON_HELPER'
+/** How a person's OpenAgent is told whose it is: their GitHub account. */
+export const PERSON_MARK = 'OPENAGENT_PERSON'
+/** Root's folder of the persons: a file each, `<user>.env`, which their OpenAgent's service reads. */
+export const PERSONS_DIR = '/etc/openagent/persons'
+/** The rule that lets the server's user run the helper as root. */
+export const SUDOERS_FILE = '/etc/sudoers.d/openagent-person'
+/** The service a person's OpenAgent runs as, one for each person's user: `openagent-person@<user>.service`. */
+export const PERSON_UNIT_FILE = '/etc/systemd/system/openagent-person@.service'
+/** The service that puts the firewall's rules in place as the server starts, before OpenAgent does. */
+export const FIREWALL_UNIT_FILE = '/etc/systemd/system/openagent-firewall.service'
+/** How long the server gets for what makes or takes away a person's user: the first one installs Claude Code for them. */
+export const PERSON_TIMEOUT_MS = 5 * MINUTE
+
 /** What the service file holds. `KillMode=process`: a run is a process of its own and goes on when OpenAgent starts again, as on a laptop. */
 export const SERVICE_UNIT = `[Unit]
 Description=OpenAgent
-After=network-online.target
+After=network-online.target openagent-firewall.service
 Wants=network-online.target
 
 [Service]
@@ -116,15 +137,208 @@ User=${SERVER_USER}
 WorkingDirectory=/home/${SERVER_USER}
 Environment=PATH=/home/${SERVER_USER}/.local/bin:${ROOT}/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=${SERVER_MARK}=1
+Environment=${PERSON_HELPER_ENV}=${PERSON_HELPER}
 EnvironmentFile=-${CLAUDE_FILE}
 ExecStart=${ROOT}/node/bin/openagent
 Restart=always
 RestartSec=5
 KillMode=process
 AmbientCapabilities=CAP_NET_BIND_SERVICE
+ProtectProc=invisible
 
 [Install]
 WantedBy=multi-user.target`
+
+/**
+ * What a person's OpenAgent runs as: their own user, on the first port of their block, with the
+ * Claude login their own user keeps. Root's file comes last, so what it says (the port, whose it
+ * is) is what counts, whatever the person's own file says. Each OpenAgent sees only its own
+ * user's programs: a run's prompt is on its command line.
+ */
+export const PERSON_UNIT = `[Unit]
+Description=OpenAgent of %i
+After=network-online.target openagent-firewall.service
+Wants=network-online.target
+
+[Service]
+User=%i
+WorkingDirectory=/home/%i
+Environment=PATH=/home/%i/.local/bin:${ROOT}/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=${SERVER_MARK}=1
+EnvironmentFile=-/home/%i/.config/openagent/claude.env
+EnvironmentFile=${PERSONS_DIR}/%i.env
+ExecStart=${ROOT}/node/bin/openagent --port \${PORT}
+Restart=always
+RestartSec=2
+KillMode=process
+ProtectProc=invisible
+
+[Install]
+WantedBy=multi-user.target`
+
+/** What puts the firewall's rules in place at every start: after the system's own firewall, which empties all rules as it starts, and before any OpenAgent. */
+export const FIREWALL_UNIT = `[Unit]
+Description=OpenAgent's firewall: each person's agents reach only their own OpenAgent
+After=nftables.service
+Before=openagent.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=${PERSON_HELPER} firewall
+
+[Install]
+WantedBy=multi-user.target`
+
+/** The one thing the server's user may run as root. */
+export const SUDOERS = `${SERVER_USER} ALL=(root) NOPASSWD: ${PERSON_HELPER}`
+
+/**
+ * The helper itself, a script root runs:
+ *
+ * - `add <account> <port>` makes the person's user (`oa-<account>`), puts Claude Code in its home,
+ *   and starts the person's OpenAgent on `<port>`, the first of a block of 100 ports that are
+ *   theirs: their OpenAgent, and the lines of their computers. It answers the user's name once
+ *   that OpenAgent answers. Asked again, it does only what is not done yet.
+ * - `remove <account>` stops it all and deletes the user with everything in its home.
+ * - `firewall` puts the rules in place anew.
+ *
+ * The rules: a call on this server to the owner's ports (4200–4299) is made only by the server's
+ * own user or root, and a call to a person's block only by that person's user, the server's
+ * user (the door, which passes the person's calls on) or root. Root stays let in everywhere:
+ * the install itself asks OpenAgent whether it answers. And only those users answer from those
+ * ports: a person's program that took a port the owner's OpenAgent let go of a moment is heard
+ * by nobody.
+ *
+ * Every word it is given is checked before anything is done with it: a person's user writes
+ * nothing root runs or reads as a script, and the files root writes are written whole.
+ */
+export const HELPER = `#!/bin/bash
+# OpenAgent's helper for the people a server's owner invites, written by OpenAgent's install.
+set -euo pipefail
+umask 022
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+PERSONS=${PERSONS_DIR}
+
+fail() { echo "$1" >&2; exit 1; }
+usage() { echo "usage: openagent-person add <github account> <port> | remove <github account> | firewall" >&2; exit 2; }
+
+# A GitHub account as the door keeps it: letters, digits and single dashes, at most 39.
+account_ok() { [ \${#1} -le 39 ] && [[ $1 =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; }
+# The first port of a block of 100 a person has, never the owner's: 4300, 4400, up to 9900.
+port_ok() { [[ $1 =~ ^[4-9][0-9]00$ ]] && [ "$1" -ge 4300 ]; }
+user_ok() { [[ $1 =~ ^oa-[a-z0-9-]{1,29}$ ]]; }
+is_user() { id -u "$1" >/dev/null 2>&1; }
+# A person's user: their account after "oa-", and when that is too long for a user name, its start and a mark of all of it.
+user_of() {
+  if [ \${#1} -le 29 ]; then echo "oa-$1"; else echo "oa-\${1:0:20}-$(printf %s "$1" | sha256sum | cut -c1-8)"; fi
+}
+# The port a person's file names; nothing for a file that names none.
+port_in() { sed -n 's/^PORT=\\([4-9][0-9]00\\)$/\\1/p' "$1" | head -n 1; }
+# One at a time: two invites at once would give one port twice.
+lock() { exec 9>/run/openagent-person.lock; flock -w 600 9 || fail "Another change of the people on this server is still at work."; }
+
+# Two rules for a block of ports: who may call them, and who may answer from them.
+block() {
+  printf '    oifname "lo" tcp dport %s meta skuid != { %s } reject with tcp reset\\n' "$1" "$2"
+  printf '    oifname "lo" tcp sport %s meta skuid != { %s } drop\\n' "$1" "$2"
+}
+rules() {
+  local file user port
+  block 4200-4299 '"${SERVER_USER}", "root"'
+  for file in "$PERSONS"/*.env; do
+    [ -e "$file" ] || continue
+    user=$(basename "$file" .env)
+    port=$(port_in "$file")
+    # Only what this helper wrote names a user it made: anything else in the folder is no person.
+    if user_ok "$user" && [ -n "$port" ] && port_ok "$port" && is_user "$user"; then block "$port-$((port + 99))" "\\"$user\\", \\"${SERVER_USER}\\", \\"root\\""; fi
+  done
+}
+apply_firewall() {
+  local said
+  said=$(rules)
+  # Taken away and put back in one go: there is no moment without the rules.
+  nft -f - <<EOF
+table inet openagent
+delete table inet openagent
+table inet openagent {
+  chain out {
+    type filter hook output priority 0; policy accept;
+$said
+  }
+}
+EOF
+}
+
+add() {
+  local account=$1 port=$2 user file home unit before tmp other
+  account_ok "$account" || fail "$account is not a GitHub account."
+  port_ok "$port" || fail "$port is not the first port of a person's block."
+  user=$(user_of "$account")
+  file=$PERSONS/$user.env
+  unit=openagent-person@$user.service
+  lock
+  install -d -m 755 /etc/openagent "$PERSONS"
+  for other in "$PERSONS"/*.env; do
+    [ -e "$other" ] && [ "$other" != "$file" ] || continue
+    [ "$(port_in "$other")" != "$port" ] || fail "Port $port is another person's on this server."
+  done
+  # A user of that name that this helper did not make is someone else's, and is not taken over.
+  if is_user "$user" && [ ! -e "$file" ]; then fail "This server has a user $user that OpenAgent did not make."; fi
+  before=$(cat "$file" 2>/dev/null || true)
+  tmp=$(mktemp "$PERSONS/.new.XXXXXX")
+  printf 'OPENAGENT_PERSON=%s\\nPORT=%s\\n' "$account" "$port" > "$tmp"
+  chmod 644 "$tmp"
+  mv -f "$tmp" "$file"
+  is_user "$user" || useradd --create-home --shell /bin/bash "$user"
+  home=$(getent passwd "$user" | cut -d: -f6)
+  [ "$home" = "/home/$user" ] || fail "The user $user has no home of its own."
+  # Claude Code's own installer, into the person's home, as for the server's own user: it keeps itself up to date there.
+  if [ ! -e "$home/.local/bin/claude" ]; then
+    runuser -u "$user" -- env -i HOME="$home" USER="$user" LOGNAME="$user" PATH=/usr/local/bin:/usr/bin:/bin bash -c 'cd && curl -fsSL https://claude.ai/install.sh | bash' </dev/null >/dev/null 2>&1 ||
+      fail "Claude Code could not be installed for @$account."
+  fi
+  systemctl enable --quiet "$unit"
+  apply_firewall
+  if [ "$before" != "$(cat "$file")" ] || ! systemctl is-active --quiet "$unit"; then systemctl restart "$unit"; fi
+  for _ in $(seq 30); do
+    if curl -fsS -o /dev/null "http://127.0.0.1:$port/" 2>/dev/null; then echo "$user"; return 0; fi
+    sleep 1
+  done
+  journalctl -u "$unit" -n 20 --no-pager >&2 || true
+  fail "@$account's OpenAgent did not start on this server."
+}
+
+remove() {
+  local account=$1 user file
+  account_ok "$account" || fail "$account is not a GitHub account."
+  user=$(user_of "$account")
+  file=$PERSONS/$user.env
+  lock
+  # Only a user this helper made is taken away: one it keeps a file of.
+  if [ ! -e "$file" ]; then
+    if is_user "$user"; then fail "This server has a user $user that OpenAgent did not make: it is left as it is."; fi
+    return 0
+  fi
+  systemctl disable --now --quiet "openagent-person@$user.service" 2>/dev/null || true
+  if is_user "$user"; then
+    # Its runs too: they go on by themselves when only its OpenAgent stops.
+    pkill -KILL -u "$user" 2>/dev/null || true
+    for _ in $(seq 20); do pgrep -u "$user" >/dev/null || break; sleep 0.5; done
+    userdel --remove "$user" >/dev/null 2>&1 || true
+    if is_user "$user"; then fail "The user $user could not be removed."; fi
+  fi
+  rm -rf --one-file-system "/home/$user"
+  rm -f "$file"
+  apply_firewall
+}
+
+case "\${1:-}" in
+  add) [ $# -eq 3 ] || usage; add "$2" "$3" ;;
+  remove) [ $# -eq 2 ] || usage; remove "$2" ;;
+  firewall) [ $# -eq 1 ] || usage; lock; apply_firewall ;;
+  *) usage ;;
+esac`
 
 export const STEPS: readonly StepDef[] = [
   {
@@ -148,7 +362,8 @@ export const STEPS: readonly StepDef[] = [
   esac
   [ -d /run/systemd/system ] || fail "This server does not start its programs with systemd, which OpenAgent's service needs."
   # Nothing is changed under an agent at work: its own programs would be replaced while it runs.
-  if pgrep -u ${SERVER_USER} -f 'agent-runner/bin/agent-runner run' >/dev/null 2>&1; then
+  # Any person's agent: every OpenAgent on the server runs the Node and the OpenAgent the install brought.
+  if pgrep -f 'agent-runner/bin/agent-runner run' >/dev/null 2>&1; then
     fail "An agent is working on this server. Stop it, or wait until it ends, then try again."
   fi
   echo "\${PRETTY_NAME:-$ID}, $(uname -m)"
@@ -183,7 +398,7 @@ export const STEPS: readonly StepDef[] = [
   # A server that was just made often installs its own updates in its first minutes: the install waits its turn.
   apt() { apt-get -y -q -o DPkg::Lock::Timeout=600 "$@"; }
   apt update
-  apt install git curl ca-certificates xz-utils procps
+  apt install git curl ca-certificates xz-utils procps nftables sudo
   dir=$(mktemp -d)
   trap 'rm -rf "$dir"' EXIT
 
@@ -297,6 +512,51 @@ export const STEPS: readonly StepDef[] = [
       ),
   },
   {
+    id: 'people',
+    label: 'Users for invited people',
+    as: 'root',
+    timeoutMs: 3 * MINUTE,
+    script: () =>
+      script(
+        'root',
+        { HELPER, SUDOERS, PERSON_UNIT, FIREWALL_UNIT },
+        `
+  install -d -m 755 ${ROOT}/bin /etc/openagent ${PERSONS_DIR}
+  # Each file root's, written whole and moved in, and only when it changed.
+  changed() { [ "$(cat "$1" 2>/dev/null || true)" != "$2" ]; }
+  put() {
+    tmp=$(mktemp "$(dirname "$1")/.openagent.XXXXXX")
+    printf '%s\\n' "$3" > "$tmp"
+    chmod "$2" "$tmp"
+    mv -f "$tmp" "$1"
+  }
+  helper=0 units=0 persons=0
+  if changed ${PERSON_HELPER} "$HELPER"; then put ${PERSON_HELPER} 755 "$HELPER"; helper=1; fi
+  if changed ${SUDOERS_FILE} "$SUDOERS"; then
+    # Checked before it is in place: a rule sudo cannot read would leave nobody able to use sudo. A name with a dot is not read by sudo meanwhile.
+    tmp=$(mktemp /etc/sudoers.d/.openagent.XXXXXX)
+    printf '%s\\n' "$SUDOERS" > "$tmp"
+    chmod 440 "$tmp"
+    visudo -cf "$tmp" >/dev/null || { rm -f "$tmp"; fail "sudo does not take the rule that lets OpenAgent make a user for each person."; }
+    mv -f "$tmp" ${SUDOERS_FILE}
+  fi
+  if changed ${PERSON_UNIT_FILE} "$PERSON_UNIT"; then put ${PERSON_UNIT_FILE} 644 "$PERSON_UNIT"; units=1; persons=1; fi
+  if changed ${FIREWALL_UNIT_FILE} "$FIREWALL_UNIT"; then put ${FIREWALL_UNIT_FILE} 644 "$FIREWALL_UNIT"; units=1; fi
+  [ "$units" = 0 ] || systemctl daemon-reload
+  systemctl enable --quiet openagent-firewall
+  if [ "$helper" = 1 ] || [ "$units" = 1 ] || ! systemctl is-active --quiet openagent-firewall; then
+    systemctl restart openagent-firewall || fail "The firewall's rules could not be put in place."
+  fi
+  # A person's OpenAgent runs the Node and the OpenAgent the install brought: when they changed, or how it is started did, it starts again. Its runs go on.
+  if [ "$persons" = 1 ] || [ -e ${ROOT}/restart ]; then
+    for unit in $(systemctl list-units --type=service --state=active --plain --no-legend 'openagent-person@*' | awk '{print $1}'); do
+      systemctl restart "$unit"
+    done
+  fi
+`,
+      ),
+  },
+  {
     id: 'service',
     label: 'The service',
     as: 'root',
@@ -351,9 +611,18 @@ export const STEPS: readonly StepDef[] = [
   },
 ]
 
-/** The script that asks the server's door for a link a new machine gets in with, for a person when one is named. Run as the server's own user. */
+/**
+ * The door is told where the helper is when it lets a person in or takes one out over SSH, as
+ * the service tells it: a shell that logs in has nothing of the service's.
+ */
+const WITH_HELPER = `${PERSON_HELPER_ENV}=${PERSON_HELPER}`
+
+/**
+ * The script that asks the server's door for a link a new machine gets in with, for a person when
+ * one is named: that person then gets a user and an OpenAgent of their own first. Run as the server's own user.
+ */
 export function linkScript(person?: string): string {
-  return person === undefined ? script(SERVER_USER, {}, `\n  ${DOOR} add\n`) : script(SERVER_USER, { FOR: person }, `\n  ${DOOR} add --for "$FOR"\n`)
+  return person === undefined ? script(SERVER_USER, {}, `\n  ${DOOR} add\n`) : script(SERVER_USER, { FOR: person }, `\n  ${WITH_HELPER} ${DOOR} add --for "$FOR"\n`)
 }
 
 /** The script that names the server's owner at its door, and answers the devices and persons. Run as the server's own user. */
@@ -361,9 +630,9 @@ export function ownerScript(account: string): string {
   return script(SERVER_USER, { ACCOUNT: account }, `\n  ${DOOR} owner "$ACCOUNT"\n`)
 }
 
-/** The script that takes a person out at the server's door, with their devices, and answers the ones still in. Run as the server's own user. */
+/** The script that takes a person out at the server's door, with their devices, their user and all it holds, and answers the ones still in. Run as the server's own user. */
 export function removePersonScript(account: string): string {
-  return script(SERVER_USER, { ACCOUNT: account }, `\n  ${DOOR} remove-person "$ACCOUNT"\n`)
+  return script(SERVER_USER, { ACCOUNT: account }, `\n  ${WITH_HELPER} ${DOOR} remove-person "$ACCOUNT"\n`)
 }
 
 /** The script that asks the server's door which devices are in. Run as the server's own user. */
