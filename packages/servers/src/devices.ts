@@ -1,5 +1,5 @@
 import { lastLines, openSession, withAdvice, type Exec } from './ssh.js'
-import { SERVER_USER, devicesScript, ownerScript, removeDeviceScript, removePersonScript } from './steps.js'
+import { PERSON_TIMEOUT_MS, SERVER_USER, devicesScript, ownerScript, removeDeviceScript, removePersonScript } from './steps.js'
 import { isAccount, type Server } from './store.js'
 
 /**
@@ -102,10 +102,10 @@ export function devicesIn(out: string): { devices: ServerDevice[]; persons: Serv
   return { devices, persons }
 }
 
-async function ask(server: Pick<Server, 'address' | 'user'>, script: string, opts: { exec?: Exec }): Promise<Devices> {
+async function ask(server: Pick<Server, 'address' | 'user'>, script: string, opts: { exec?: Exec }, timeoutMs = DEVICES_TIMEOUT_MS): Promise<Devices> {
   const session = await openSession(server, opts)
   try {
-    const said = await session.run(SERVER_USER, script, DEVICES_TIMEOUT_MS)
+    const said = await session.run(SERVER_USER, script, timeoutMs)
     if (said.code !== 0) return { ok: false, error: withAdvice(server, lastLines(said).slice(-MAX_SAID) || 'The server did not answer.') }
     const listed = devicesIn(said.out)
     return listed ? { ok: true, ...listed } : { ok: false, error: 'The server answered something else than the devices that are in.' }
@@ -126,7 +126,8 @@ export function nameOwner(server: Pick<Server, 'address' | 'user'>, account: str
 /** Take a person out at the server's door, with every device of theirs. Answers the ones still in. */
 export function removePerson(server: Pick<Server, 'address' | 'user'>, account: string, opts: { exec?: Exec } = {}): Promise<Devices> {
   if (!isAccount(account)) return Promise.resolve({ ok: false, error: `${account} is not a GitHub account` })
-  return ask(server, removePersonScript(account.toLowerCase()), opts)
+  // Longer than the others: the person's user is taken away, with their programs and their home.
+  return ask(server, removePersonScript(account.toLowerCase()), opts, PERSON_TIMEOUT_MS)
 }
 
 /** Take one device out at the server's door: it is out at once. Answers the ones still in. */
