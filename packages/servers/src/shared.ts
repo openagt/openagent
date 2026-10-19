@@ -43,8 +43,12 @@ type Answered = { ok: true; output: unknown } | { ok: false; error: string }
 
 /** Run one of this package's commands on the server, as this person's OpenAgent there runs it, with `input` on its standard input. */
 async function onServer(env: NodeJS.ProcessEnv, machine: string, args: string[], input?: string): Promise<Answered> {
-  const said = (await askOpenAgent(env, 'runComputerCommandOn', [PACKAGE, machine, args, null, input ?? null])) as Answered | undefined
-  return said && typeof said === 'object' && typeof said.ok === 'boolean' ? said : { ok: false, error: 'OpenAgent answered something else than expected.' }
+  try {
+    const said = (await askOpenAgent(env, 'runComputerCommandOn', [PACKAGE, machine, args, null, input ?? null])) as Answered | undefined
+    return said && typeof said === 'object' && typeof said.ok === 'boolean' ? said : { ok: false, error: 'OpenAgent answered something else than expected.' }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
 }
 
 /** What this computer keeps for a shared server, by its address; a fresh one when it keeps nothing. */
