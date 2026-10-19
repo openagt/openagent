@@ -35,6 +35,7 @@ import { dataLinkRoute } from './lib/data-link.js'
 import { useActivityNotifications, useInterventionNotifications } from './lib/use-notifications.js'
 import { usePreferences, notificationsEnabled, newActivityEnabled, humanInterventionEnabled, OpenProjectContext } from './lib/preferences.js'
 import { useDocumentTitle } from './lib/document-title.js'
+import { projectLabels, ProjectLabelsContext } from './lib/project-labels.js'
 import { useWorking } from './lib/use-working.js'
 import { useFavicon } from './lib/favicon.js'
 import { useDaemonHealth } from './lib/use-daemon-health.js'
@@ -95,6 +96,8 @@ export function App() {
   const pageWords = modulePages.map(page => page.segment).join('\n')
   const addresses = useMemo(() => projectAddresses(projectIds ? projectIds.split('\n') : [], pageWords ? pageWords.split('\n') : []), [projectIds, pageWords])
   const addressesRead = projectsLoaded && modulesLoaded
+  // How each project is named where it is listed: two clones called `shop` say which folder each is in.
+  const labels = useMemo(() => projectLabels(projects), [projects])
   const { route, go: navigate } = useRoute(addresses)
   const { projectId, agentId } = route
   // A module's page (#1774): the route names it by its segment, with no project's own page open.
@@ -108,7 +111,11 @@ export function App() {
   }, [addressesRead, addresses])
   // The one project every page shows (#1513), or null for all of them. A project that is not
   // registered (removed, or a link from another machine) picks nothing.
-  const scope = route.scope && (projects.length === 0 || projects.some(p => p.id === route.scope)) ? route.scope : null
+  const scope = route.scope && projects.some(p => p.id === route.scope) ? route.scope : null
+  // The address may name a project, and what it names is not read yet: until it is, the address's
+  // word is no project's id, so nothing is read for it, and nothing says every project shows either.
+  // A page's word counts: before the projects are read, a project's name reads as one.
+  const scopePending = scope === null && (route.scope !== undefined || pageSegment !== null) && !addressesRead
   const scopedProjects = useMemo(() => (scope ? projects.filter(p => p.id === scope) : projects), [projects, scope])
   // The modules' pages the dashboard has: every one, or with a project picked only the pages of the
   // packages that project has. The sidebar lists these, and a URL names a page only among these.
@@ -144,8 +151,10 @@ export function App() {
   // mark where it runs and degrade the panels that are local-only. Undefined for a local agent.
   const [agentStart, setAgentStart] = useState<{ tick: number; intent: string; id: string | null; projectId: string | null; runsOn?: string }>({ tick: 0, intent: '', id: null, projectId: null })
   // The agents of the project on screen, for its pages, or of the picked project, for the sidebar:
-  // the same project whenever both are set.
-  const { agents: agents, reload, loaded: agentsLoaded } = useAgents(projectId ?? scope, agentStart.id !== null && agentStart.projectId === (projectId ?? scope) ? agentStart.id : null)
+  // the same project whenever both are set. Read once the address is: before, it names the project
+  // by its address, not by its id.
+  const agentsOf = addressesRead ? (projectId ?? scope) : null
+  const { agents: agents, reload, loaded: agentsLoaded } = useAgents(agentsOf, agentStart.id !== null && agentStart.projectId === agentsOf ? agentStart.id : null)
 
   // The Context set lives in the shell (#492/#504) so the two surfaces that feed it share one
   // source of truth: the launcher's `@`/`#` chips and Context picker, and the Files pane's tree.
@@ -179,10 +188,10 @@ export function App() {
   const { value: interventionsRead } = usePolled<ProjectionRead<Intervention>>(onInterventions, EMPTY_INTERVENTIONS, 15000, [])
 
   const project = projectId ? projects.find(p => p.id === projectId) : undefined
-  const projectName = project?.name ?? null
+  const projectName = project ? (labels.get(project.id) ?? project.name) : null
   // The Human Queue as the pages show it: the picked project's items, or every project's.
   const interventions = scope ? interventionsRead.items.filter(item => item.projectId === scope) : interventionsRead.items
-  useDocumentTitle(interventions.length, projectName ?? projects.find(p => p.id === scope)?.name ?? null)
+  useDocumentTitle(interventions.length, projectName ?? (scope ? (labels.get(scope) ?? null) : null))
   // A URL naming a project that is not registered (renamed, removed, mistyped). A non-empty list
   // is the answer, so this never fires while the first read is still out.
   const unknownProject = projectId !== null && projects.length > 0 && !projects.some(p => p.id === projectId)
@@ -203,7 +212,8 @@ export function App() {
 
   // The shared sidebar's recents when all projects show (#shared-shell): the rail pools every
   // project's sessions here. Polled only then — a picked project's own agents (above) carry its rail.
-  const { value: recentAgents, reload: reloadRecent } = usePolled<RecentAgent[]>(scope === null ? onRecentAgents : null, EMPTY_RECENT, 10_000, [scope])
+  const allShow = scope === null && !scopePending
+  const { value: recentAgents, reload: reloadRecent, loaded: recentLoaded } = usePolled<RecentAgent[]>(allShow ? onRecentAgents : null, EMPTY_RECENT, 10_000, [allShow])
 
   // An agent just started in `inProject`, which is not always the selected one: the onboarding
   // checklist starts one from the Overview, where nothing is selected (#1169).
@@ -374,7 +384,9 @@ export function App() {
         />
       )
     }
-    if (!projectId)
+    if (!projectId) {
+      // A project's Overview whose project is not read yet: not every project's.
+      if (scopePending) return null
       return (
         <DashboardPage
           onSelectProject={selectProject}
@@ -385,6 +397,7 @@ export function App() {
           scope={scope}
         />
       )
+    }
     if (unknownProject)
       return (
         <NotFound
@@ -479,6 +492,7 @@ export function App() {
     <ModulesContext.Provider value={modules}>
     <HostServicesContext.Provider value={hostServices}>
     <OpenProjectContext.Provider value={projectId}>
+    <ProjectLabelsContext.Provider value={labels}>
     <SidebarProvider className="h-screen flex-col overflow-hidden" style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
       {/* The top navbar is gone (#772 follow-up): its brand, global nav and utility controls moved
           into the sidebar (AgentHistory), so the workspace and the panes get the full height. */}
@@ -499,6 +513,8 @@ export function App() {
         <AgentHistory
           projectId={projectId}
           scope={scope}
+          scopePending={scopePending}
+          listLoaded={scope === null ? recentLoaded : agentsLoaded}
           onScope={selectScope}
           homeHref={formatRoute({ projectId: null, agentId: null, ...(scope ? { scope } : {}) }, addresses)}
           agents={agents}
@@ -516,7 +532,7 @@ export function App() {
           startTick={agentStart.tick}
           startIntent={agentStart.intent}
           startId={agentStart.id}
-          startProjectName={projects.find(p => p.id === agentStart.projectId)?.name}
+          startProjectName={agentStart.projectId !== null ? labels.get(agentStart.projectId) : undefined}
           working={working}
           onDashboard={showDashboard}
           onSettings={showSettings}
@@ -552,6 +568,7 @@ export function App() {
       </div>
       {route.settings !== undefined && <SettingsDialog entry={route.settings} onEntry={showSettingsEntry} onClose={closeSettings} scope={scope} projects={projects} />}
     </SidebarProvider>
+    </ProjectLabelsContext.Provider>
     </OpenProjectContext.Provider>
     </HostServicesContext.Provider>
     </ModulesContext.Provider>

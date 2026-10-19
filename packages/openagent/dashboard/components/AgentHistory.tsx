@@ -7,6 +7,7 @@ import { Button, buttonVariants } from './ui/button.js'
 import { cn } from '../lib/utils.js'
 import { formatRelative } from '../lib/format-date.js'
 import { usePreferences } from '../lib/preferences.js'
+import { useProjectLabel } from '../lib/project-labels.js'
 import { STATUS_DOT, STATUS_RING } from '../lib/status-tone.js'
 import { DriverLogo } from './driver-logos.js'
 import { agentLabel, awaitingName } from '../lib/agent-label.js'
@@ -58,6 +59,8 @@ function near(projectId: string | null, agent: AgentMeta): { onNear?: () => void
 export function AgentHistory({
   projectId,
   scope = null,
+  scopePending = false,
+  listLoaded = true,
   onScope = () => {},
   homeHref = '/',
   agents,
@@ -84,6 +87,10 @@ export function AgentHistory({
   projectId: string | null
   /** The one project every page shows (#1513), picked at the top of the rail; null when all show. */
   scope?: string | null
+  /** The address names a project that is not read yet: the select names none, and nothing says all show. */
+  scopePending?: boolean
+  /** Whether the list of agents shown is read: until it is, an empty list is not "No agents yet." */
+  listLoaded?: boolean
   /** Pick the one project every page shows, or null for all of them. */
   onScope?: (projectId: string | null) => void
   /** The Overview's address, which keeps the picked project: where the brand links to. */
@@ -121,7 +128,7 @@ export function AgentHistory({
   startIntent?: string
   /** The id the start reported for its run: the row the stand-in waits for. */
   startId?: string | null
-  /** The project that run was started in, by name: the stand-in row names it as the run's own row will. */
+  /** The project that run was started in, by its label: the stand-in row names it as the run's own row will. */
   startProjectName?: string | undefined
   /** Just started an agent that reported no id, so there is nothing selected to highlight yet (#705):
    *  put the highlight on the running/optimistic row rather than the New row until the shell adopts
@@ -138,6 +145,7 @@ export function AgentHistory({
     }
   // The coding agent picked for the next start: the stand-in row's logo.
   const preferences = usePreferences()
+  const label = useProjectLabel()
   // The optimistic row, and the id of the run it stands in for.
   const [optimistic, setOptimistic] = useState<{ intent: string; id: string | null } | null>(null)
 
@@ -193,7 +201,7 @@ export function AgentHistory({
     ? recentAgents!.map(rr => ({
         key: `${rr.projectId}:${rr.agent.id}`,
         agent: rr.agent,
-        project: rr.projectName,
+        project: label(rr.projectId, rr.projectName),
         active: rr.projectId === projectId && rr.agent.id === selectedAgentId,
         onClick: () => onSelectRecent?.(rr.projectId, rr.agent.id),
         ...near(rr.projectId, rr.agent),
@@ -264,7 +272,7 @@ export function AgentHistory({
         <div className="px-1 pt-1">
           <BrandLink working={working} href={homeHref} onNavigate={leave(onDashboard)} />
         </div>
-        <ProjectSelect projects={projects} scope={scope} onScope={onScope} onProjectAdded={onProjectAdded} />
+        <ProjectSelect projects={projects} scope={scope} pending={scopePending} onScope={onScope} onProjectAdded={onProjectAdded} />
       </SidebarHeader>
       {/* New/Overview/the modules' pages stack tight as one nav group (gap-0.5), close under the
           project select (no top padding: the select's own section has its room below it), with a
@@ -359,7 +367,8 @@ export function AgentHistory({
                   )
                 })}
               </SidebarMenu>
-              {!hasRecents && (
+              {/* Nothing while the list is read: it takes a moment, and "No agents yet." would not be true yet. */}
+              {!hasRecents && listLoaded && (
                 <p className="whitespace-nowrap px-2 py-1 text-sm text-muted-foreground">No agents yet.</p>
               )}
             </SidebarGroupContent>
@@ -456,6 +465,7 @@ function NewButton({
   onProjectAdded?: (() => void) | undefined
 }) {
   const [adding, setAdding] = useState(false)
+  const label = useProjectLabel()
   // Same box as the Overview row (px-2 py-1.5 gap-2) so their icons and labels align; h-auto/px-2/
   // py-1.5 override the button size's default h-9/px-4/py-2. The active fill (same tokens as
   // Overview) only on this project's launcher; otherwise plain, since New is an action, not a place.
@@ -508,7 +518,7 @@ function NewButton({
               aria-hidden
               className={cn('h-2 w-2 shrink-0 rounded-full', p.activated ? 'bg-primary' : 'bg-muted-foreground')}
             />
-            <span className="flex-1 truncate">{p.name}</span>
+            <span className="flex-1 truncate">{label(p.id, p.name)}</span>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

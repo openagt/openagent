@@ -437,6 +437,30 @@ describe('the project select (#1513)', () => {
     }
   })
 
+  test('a link to a project says neither "All projects" nor "No agents yet." while the projects are read, and reads no agents under its address', async () => {
+    for (const link of ['/app', '/app/overview']) {
+      answerTwo()
+      // Held back until answered, every read of them: the shell is not the only one making one.
+      const held: ((projects: unknown) => void)[] = []
+      answers.set('onProjects', () => new Promise(resolve => held.push(resolve)))
+      window.history.replaceState(null, '', link)
+      render(<App />)
+      await waitFor(() => expect(calls.some(call => call.name === 'onModules')).toBe(true))
+      await new Promise(resolve => setTimeout(resolve, 100))
+      expect(screen.getByRole('button', { name: 'Project: loading' })).toBeTruthy()
+      expect(screen.queryByText('All projects')).toBeNull()
+      expect(screen.queryByText('No agents yet.')).toBeNull()
+      // The address's word is no project's id, and every project's agents are not what the page shows.
+      expect(calls.filter(call => call.name === 'onAgents' || call.name === 'onRecentAgents')).toEqual([])
+      for (const answer of held) answer([PROJECT, OTHER])
+      expect(await screen.findByRole('button', { name: 'Project: app' })).toBeTruthy()
+      await waitFor(() => expect(calls.some(call => call.name === 'onAgents' && call.args[0] === PROJECT.id)).toBe(true))
+      expect(calls.filter(call => call.name === 'onAgents').map(call => call.args[0])).not.toContain('app')
+      cleanup()
+      calls.length = 0
+    }
+  })
+
   test('a project named by its id opens, and the address names it by its name in the same entry', async () => {
     answerTwo()
     window.history.replaceState(null, '', `/${OTHER.id}/3-s?all`)
