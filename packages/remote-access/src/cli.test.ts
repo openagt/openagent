@@ -256,6 +256,89 @@ test('a line the server said no to is told as refused, and is not told what the 
   }
 })
 
+test('where the helper is named, add --for answers at once and has the person\'s user made on its own; remove-person removes it first', async () => {
+  const home = await testHome()
+  const stop = new AbortController()
+  const env = { ...home.env, OPENAGENT_URL: 'http://127.0.0.1:1', OPENAGENT_REMOTE_ACCESS_PORT: '0', OPENAGENT_PERSON_HELPER: '/opt/openagent/bin/openagent-person' }
+  const serving = run(env, ['serve'], { signal: stop.signal })
+  const asked: string[] = []
+  // The helper as the test says: each call waits for the test's word, and answers it.
+  const answers: ((answer: { ok: true } | { ok: false; error: string }) => void)[] = []
+  const helper = (path: string, args: string[]): Promise<{ ok: true } | { ok: false; error: string }> => {
+    asked.push(`${path} ${args.join(' ')}`)
+    return new Promise(resolve => answers.push(resolve))
+  }
+  const works: Promise<Ran>[] = []
+  // The making, run here as the detached process would run it.
+  const startWork = (workEnv: NodeJS.ProcessEnv, account: string): number => {
+    works.push(run(workEnv, ['person-work', account], { helper }))
+    return process.pid
+  }
+  const until = async (what: string, ok: () => Promise<boolean> | boolean): Promise<void> => {
+    const deadline = Date.now() + 5_000
+    while (!(await ok())) {
+      if (Date.now() > deadline) assert.fail(`never: ${what}`)
+      await new Promise(resolve => setTimeout(resolve, 10))
+    }
+  }
+  const persons = async (): Promise<unknown> => ((await run(env, ['status'])).out as { persons: unknown }).persons
+  try {
+    await run(env, ['on'], { followMs: 5_000 })
+    await run(env, ['owner', 'ada'])
+
+    const link = await run(env, ['add', '--for', 'rom'], { helper, startWork })
+    assert.equal(link.code, 0, 'answered while the user is still being made')
+    await until('the helper is asked', () => asked.length === 1)
+    assert.deepEqual(asked, ['/opt/openagent/bin/openagent-person add rom 4300'])
+    assert.deepEqual(await persons(), [{ account: 'ada', owner: true }, { account: 'rom', working: true }])
+    answers.shift()!({ ok: true })
+    await Promise.all(works)
+    assert.deepEqual(await persons(), [{ account: 'ada', owner: true }, { account: 'rom', ready: true }])
+    // Asked again for a person whose user is made: nothing is started.
+    await run(env, ['add', '--for', 'rom'], { helper, startWork })
+    assert.equal(works.length, 1)
+
+    // A user that could not be made is said, and tried again at the next code for that person.
+    await run(env, ['add', '--for', 'kim'], { helper, startWork })
+    await until('the helper is asked for kim', () => answers.length === 1)
+    answers.shift()!({ ok: false, error: 'This server has no room for another user.' })
+    await Promise.all(works)
+    assert.deepEqual(await persons(), [{ account: 'ada', owner: true }, { account: 'rom', ready: true }, { account: 'kim', problem: 'This server has no room for another user.' }])
+    await run(env, ['add', '--for', 'kim'], { helper, startWork })
+    await until('the helper is asked for kim again', () => answers.length === 1)
+    assert.equal(asked.at(-1), '/opt/openagent/bin/openagent-person add kim 4400', 'the same block as before')
+    answers.shift()!({ ok: true })
+    await Promise.all(works)
+
+    // remove-person removes the user first; one that could not be removed keeps the person, to be removed again.
+    const refusing = run(env, ['remove-person', 'rom'], { helper })
+    await until('the helper is asked to remove', () => answers.length === 1)
+    answers.shift()!({ ok: false, error: 'userdel failed.' })
+    const refused = await refusing
+    assert.deepEqual([refused.code, refused.err], [1, ['@rom\'s user on this computer could not be removed: userdel failed.']])
+    const removing = run(env, ['remove-person', 'rom'], { helper })
+    await until('the helper is asked to remove again', () => answers.length === 1)
+    answers.shift()!({ ok: true })
+    assert.equal((await removing).code, 0)
+    assert.deepEqual(asked.slice(-2), ['/opt/openagent/bin/openagent-person remove rom', '/opt/openagent/bin/openagent-person remove rom'])
+    assert.deepEqual(await persons(), [{ account: 'ada', owner: true }, { account: 'kim', ready: true }])
+  } finally {
+    stop.abort()
+    await serving
+    await home.remove()
+  }
+})
+
+test('a person\'s own OpenAgent says whose it is', async () => {
+  const home = await testHome()
+  try {
+    assert.equal(((await run({ ...home.env, OPENAGENT_PERSON: 'Rom' }, ['status'])).out as { person?: string }).person, 'rom')
+    assert.equal(((await run({ ...home.env, OPENAGENT_PERSON: 'not an account' }, ['status'])).out as { person?: string }).person, undefined)
+  } finally {
+    await home.remove()
+  }
+})
+
 test('owner, add --for and remove-person: the owner is named first, a link is made for a person, and a person goes with their devices', async () => {
   const home = await testHome()
   const stop = new AbortController()
