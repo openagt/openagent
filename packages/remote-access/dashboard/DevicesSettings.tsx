@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Laptop, Monitor, Plus, Smartphone, Tablet, UserRound } from 'lucide-react'
 import { Button, ConfirmDialog, InviteDialog, SettingsRow, SettingsSection, Switch, formatDateTime, formatRelative, useModuleHost, usePolled, type InviteCode } from '@openagt/dashboard/module'
-import { addDevice, idsOf, loadMine, loadStatus, nameOwner, ownGithub, removeDevice, removeMine, removePerson, setSwitch, type Answer, type DeviceRow, type DoorStatus, type Mine } from './devices.js'
+import { addDevice, idsOf, keepPerson, loadMine, loadStatus, nameOwner, ownGithub, removeDevice, removeMine, removePerson, setSwitch, type Answer, type DeviceRow, type DoorStatus, type Mine } from './devices.js'
 
 // Settings → Devices: the phones and browsers that are in, and the one switch that lets them
 // reach this computer on the Wi-Fi it is on. Read with `remote-access status`; the switch, a new
@@ -25,6 +25,33 @@ function DeviceIcon({ device }: { device: DeviceRow }) {
 }
 
 const MINE_NOT_READ: Answer<Mine> | undefined = undefined
+
+/** A server's door as a person reads it: its number or name. */
+const hostOf = (door: string): string => {
+  try {
+    return new URL(door).host
+  } catch {
+    return door
+  }
+}
+
+/** Removing a person, asked first: everything of theirs on this computer goes. */
+function RemovePerson({ account, label, busy, onConfirm }: { account: string; label: string; busy: boolean; onConfirm: () => Promise<void> }) {
+  return (
+    <ConfirmDialog
+      trigger={
+        <Button size="sm" variant="ghost" disabled={busy} aria-label={`Remove @${account}`}>
+          {label}
+        </Button>
+      }
+      title={`Remove @${account}?`}
+      body={`Their devices are taken out, and their own user on this computer is deleted with everything in it: their GitHub and Claude logins, their copies of projects, and any work they did not push to GitHub. Their finished runs stay on GitHub. @${account} can be invited again later.`}
+      confirmLabel="Remove person"
+      confirmBusyLabel="Removing…"
+      onConfirm={onConfirm}
+    />
+  )
+}
 
 /**
  * Devices on the OpenAgent of one person on a computer several people use: the devices that are
@@ -212,27 +239,30 @@ export function DevicesSettings({ everyMs = 5_000 }: { /** How often the status 
                       <UserRound className="h-3.5 w-3.5 shrink-0" aria-hidden />
                       <span className="truncate">{person.owner ? `@${person.account}, the owner` : `@${person.account}`}</span>
                     </p>
-                    {!person.owner && (
-                      <ConfirmDialog
-                        trigger={
-                          <Button size="sm" variant="ghost" disabled={busy} aria-label={`Remove @${person.account}`}>
-                            Remove person
-                          </Button>
-                        }
-                        title={`Remove @${person.account}?`}
-                        body={`Their devices are taken out, and their own user on this computer is deleted with everything in it: their GitHub and Claude logins, their copies of projects, and any work they did not push to GitHub. Their finished runs stay on GitHub. @${person.account} can be invited again later.`}
-                        confirmLabel="Remove person"
-                        confirmBusyLabel="Removing…"
-                        onConfirm={() => act(() => removePerson(host, person.account))}
-                      />
-                    )}
+                    {!person.owner && !(person.removed && !person.kept) && <RemovePerson account={person.account} label="Remove person" busy={busy} onConfirm={() => act(() => removePerson(host, person.account))} />}
+                  </div>
+                )}
+                {/* A person of a server whose line lets everyone there start runs here: where they come from, and whether that server still has them. */}
+                {person?.from !== undefined && !(person.removed && !person.kept) && (
+                  <p className="pt-1 text-xs text-muted-foreground">{person.removed ? `Removed from ${hostOf(person.from)}. Kept here, switched off.` : `Uses this computer through ${hostOf(person.from)}.`}</p>
+                )}
+                {person?.from !== undefined && person.removed && !person.kept && (
+                  <div role="group" aria-label={`@${person.account} was removed from ${hostOf(person.from)}`} className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                    <p className="text-xs text-warning">{`Removed from ${hostOf(person.from)}.`}</p>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" disabled={busy} onClick={() => void act(() => keepPerson(host, person.account))}>
+                        Keep, switched off
+                      </Button>
+                      <RemovePerson account={person.account} label="Remove" busy={busy} onConfirm={() => act(() => removePerson(host, person.account))} />
+                    </div>
                   </div>
                 )}
                 {person?.working && <p className="pt-1 text-xs text-muted-foreground">{`Making @${person.account}'s own user on this computer, with their own OpenAgent. This takes a minute or two.`}</p>}
                 {person?.problem !== undefined && !person.working && (
                   <p role="alert" className="pt-1 text-xs text-danger">{`@${person.account}'s own user on this computer could not be made: ${person.problem.replace(/\.?$/, '.')} Add a device for them again to try again.`}</p>
                 )}
-                {person !== undefined && theirs.length === 0 && <p className="py-2 text-xs text-muted-foreground">No device yet.</p>}
+                {/* A person of a server has their devices at that server: none here is none missing. */}
+                {person !== undefined && person.from === undefined && theirs.length === 0 && <p className="py-2 text-xs text-muted-foreground">No device yet.</p>}
                 <ul aria-label={person !== undefined ? `Devices of @${person.account}` : 'Devices that are in'} className="divide-y divide-border">
                   {theirs.map(device => (
                     <li key={device.id} className="flex items-center justify-between gap-3 py-3">

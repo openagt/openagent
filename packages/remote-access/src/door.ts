@@ -7,9 +7,9 @@ import type { Duplex } from 'node:stream'
 import { onOwnNetwork, urlHost } from './address.js'
 import { doorFingerprint, type Secured } from './certificate.js'
 import { deviceName } from './device-name.js'
-import { LINE_PATH, LINE_PROTOCOL } from './line-out.js'
+import { LINE_FOR_HEADER, LINE_PATH, LINE_PROTOCOL } from './line-out.js'
 import { enterPage, notInPage } from './pages.js'
-import { COMPUTER_HEADER, PERSON_HEADER, addCode, enter, isComputerId, isIn, listedDevices, personOf, portOf, readStore, removeComputer, removeDevice, sha256, storePath, update, type Entry, type ListedDevice, type Store } from './store.js'
+import { COMPUTER_HEADER, PERSON_HEADER, addCode, enter, isComputerId, isIn, listedDevices, personOf, portOf, readStore, removeComputer, removeDevice, sha256, shareLine, storePath, update, type Entry, type ListedDevice, type Store } from './store.js'
 
 /**
  * The door: the one thing that lets anything in from the network. A request from a device that is in is
@@ -35,7 +35,11 @@ import { COMPUTER_HEADER, PERSON_HEADER, addCode, enter, isComputerId, isIn, lis
  * lists them at `COMPUTERS_PATH`, and asks one at `VIA_PREFIX/<id>/…`, which goes down that
  * computer's line as this server's own OpenAgent would ask it. So a laptop starts a run on a
  * computer at home that nothing on a network reaches, through the server both are in at. A
- * person reaches the computers of their own person there, and no one else's.
+ * person reaches the computers of their own person there, and the computers whose line is for
+ * everyone here, and no one else's.
+ *
+ * A computer says as it asks for its line whether everyone here may start runs on it
+ * (`LINE_FOR_HEADER`): it is then given an address for each person, each in that person's block.
  *
  * A device that is in also asks the door who it is here (`ME_PATH`): its person, whether that is
  * the owner, and that person's devices, one of which it may take out. A computer of a person asks
@@ -93,8 +97,8 @@ export interface DoorOptions {
     ports: { from: number; count: number }
     /** Whether a computer keeps its line open right now. */
     connected(id: string): boolean
-    /** Ask a computer down its line; false when no computer on a line has that id. */
-    pass(id: string, path: string, req: IncomingMessage, res: ServerResponse): boolean
+    /** Ask a computer down its line, at its own person's address or the one it has for `person`; false when it has no such address. */
+    pass(id: string, person: string | undefined, path: string, req: IncomingMessage, res: ServerResponse): boolean
   }
   now?: () => number
 }
@@ -204,15 +208,22 @@ export interface Me {
   owner: boolean
   /** That person's devices, as `status` lists them: a computer once. */
   devices: ListedDevice[]
+  /** To a computer whose line is for everyone here: every person here, the owner first, by their GitHub account. */
+  persons?: string[]
 }
 
-/** What `person`'s device is told of itself: their account, whether they own the computer, and their devices. */
-export function me(store: Store, person: string | undefined): Me {
+/**
+ * What `person`'s device is told of itself: their account, whether they own the computer, and
+ * their devices. A computer whose line is for everyone is told who everyone is, so it knows who
+ * of those it gave a user of their own is no longer here.
+ */
+export function me(store: Store, person: string | undefined, forEveryone = false): Me {
   const owner = store.persons.find(candidate => candidate.owner)?.account
   return {
     ...(person !== undefined ? { account: person } : {}),
     owner: person === undefined || person === owner,
     devices: listedDevices(store).filter(device => device.person === person),
+    ...(forEveryone ? { persons: store.persons.map(candidate => candidate.account) } : {}),
   }
 }
 
@@ -416,20 +427,28 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     const caller = bearer && isIn(store, bearer) ? store.devices.find(device => device.id === bearer.id) : undefined
     if (!caller) return refuse(res, 401, 'this device is not in')
     seen.set(caller.id, now())
-    // The computers of the caller's own person, never another's: a person's computer at home runs their runs only.
+    // The computers of the caller's own person, and those whose line is for everyone here with an
+    // address for them: a person's computer at home runs their runs, and its person's own choice
+    // of whose else.
     const person = personOf(store, caller)
-    const others = store.devices.filter(device => device.line && personOf(store, device) === person && (caller.computer === undefined || device.computer !== caller.computer))
+    const own = (device: Store['devices'][number]): boolean => personOf(store, device) === person
+    const others = store.devices.filter(device => device.line && (own(device) || (person !== undefined && device.line.others?.[person] !== undefined)) && (caller.computer === undefined || device.computer !== caller.computer))
     if (path === COMPUTERS_PATH) {
       if (req.method !== 'GET') return refuse(res, 405, 'method not allowed')
-      const computers = others.map(device => ({ id: device.id, name: device.name, online: opts.lines!.connected(device.id) }))
+      const computers = others.map(device => {
+        const whose = own(device) ? undefined : personOf(store, device)
+        return { id: device.id, name: device.name, online: opts.lines!.connected(device.id), ...(whose !== undefined ? { owner: whose } : {}) }
+      })
       return void res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify({ computers }))
     }
     const rest = path.slice(VIA_PREFIX.length + 1)
     const slash = rest.indexOf('/')
     const id = slash === -1 ? rest : rest.slice(0, slash)
-    if (!others.some(device => device.id === id) || slash === -1) return refuse(res, 404, 'no computer on a line here has that id')
+    const computer = others.find(device => device.id === id)
+    if (!computer || slash === -1) return refuse(res, 404, 'no computer on a line here has that id')
     const query = (req.url ?? '').slice((req.url ?? '').split('?')[0]!.length)
-    if (!opts.lines!.pass(id, `${rest.slice(slash)}${query}`, req, res)) refuse(res, 404, 'no computer on a line here has that id')
+    // Asked at the address the computer has for the caller's person: what goes down the line says it is for them.
+    if (!opts.lines!.pass(id, own(computer) ? undefined : person, `${rest.slice(slash)}${query}`, req, res)) refuse(res, 404, 'no computer on a line here has that id')
   }
 
   /**
@@ -447,7 +466,9 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     const whose = { person: who.person }
     if (path === ME_PATH) {
       if (req.method !== 'GET') return refuse(res, 405, 'method not allowed')
-      return json(200, me(await currentStore(), who.person))
+      const store = await currentStore()
+      const forEveryone = store.devices.find(device => device.id === who.entry.id)?.line?.others !== undefined
+      return json(200, me(store, who.person, forEveryone))
     }
     if (req.method !== 'POST') return refuse(res, 405, 'method not allowed')
     if (path === ME_REMOVE_PATH) {
@@ -494,6 +515,22 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       const device = bearer && isIn(store, bearer) ? store.devices.find(candidate => candidate.id === bearer.id) : undefined
       if (!device) return no(401, 'Unauthorized')
       if (!device.line) return no(403, 'Forbidden')
+      // For everyone here, or for its own person only, as the computer says each time it asks: an
+      // address for each other person, or none. Written before the line is taken, so the addresses
+      // are there by the time OpenAgent is told of the line.
+      const everyone = req.headers[LINE_FOR_HEADER] === 'everyone'
+      const ports = opts.lines.ports
+      // Looked at on a copy first: a line that calls again as it was changes nothing, and writes nothing.
+      const looked = structuredClone(store)
+      const changes = everyone ? shareLine(looked, looked.devices.find(candidate => candidate.id === device.id)!, ports) : device.line.others !== undefined
+      if (changes) {
+        await update(env, kept => {
+          const line = kept.devices.find(candidate => candidate.id === device.id)
+          if (!line?.line) return
+          if (everyone) shareLine(kept, line, ports)
+          else delete line.line.others
+        })
+      }
       // Gone while the file was read: there is no line to give.
       if (socket.destroyed) return
       seen.set(device.id, now())

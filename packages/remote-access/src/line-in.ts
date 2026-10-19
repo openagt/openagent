@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { PassThrough, Readable, type Duplex } from 'node:stream'
 import { DATA, END, HEAD, Link, RESET, carriedHeaders, carriedPath, carriedValue, readHead, sendBody, type Frame } from './frames.js'
-import { personLinePorts, type Store } from './store.js'
+import { PERSON_HEADER, personLinePorts, personOf, type Store } from './store.js'
 
 /**
  * The server's end of the lines. A computer that keeps a line open here is asked through it, and
@@ -21,6 +21,12 @@ import { personLinePorts, type Store } from './store.js'
  * that person's block of ports, and that person's own OpenAgent is told of it, not the owner's.
  * Which user may call which port is the server's firewall's to say: the owner's ports answer the
  * owner's user, a person's ports that person's.
+ *
+ * A computer whose line is for everyone here has an address in each person's block too, and each
+ * person's OpenAgent is told of its own. So the firewall says as before who calls which, and each
+ * call down the line says whom it is for (`PERSON_HEADER`): the person whose address it came to,
+ * as this server says, never as the caller does. The computer sends it on to that person's own
+ * OpenAgent there.
  *
  * The door passes another computer's OpenAgent down a line too ({@link Lines.pass}), so a laptop
  * reaches a computer at home through the server both are in at.
@@ -145,28 +151,44 @@ export interface LinesOptions {
   onChange?: () => void
 }
 
-/** A computer that keeps a line here, as OpenAgent is told of it. */
+/** One address of a computer that keeps a line here, as OpenAgent is told of it. */
 export interface LineComputer {
   /** Its device id at the door. */
   id: string
+  /** Which of its addresses this is: its id for its own person's, `<id>@<account>` for the one it has for another person. */
+  key: string
   name: string
-  /** Its address on this server: `http://127.0.0.1:<port>`. */
+  /** The address on this server: `http://127.0.0.1:<port>`. */
   port: number
-  /** Whose computer it is, when it is not the owner's: the person whose own OpenAgent, when they have one, is told of it. */
+  /** Whose computer it is, when it is not the owner's. */
   person?: string
+  /**
+   * Whom of the persons here the address is for, by their GitHub account: the person whose own
+   * OpenAgent, when they have one, is told of it, and whom each call through it is for. The
+   * computer's own person at its own address; absent while this server has no persons.
+   */
+  viewer?: string
+  /** At an address for another person: whose computer it is, by their GitHub account, the owner's too. */
+  owner?: string
 }
+
+/** Which address of a computer is asked: its own person's, or the one it has for `person`. */
+const addressKey = (id: string, person?: string): string => (person === undefined ? id : `${id}@${person}`)
 
 export interface Lines {
   /** A computer's line arrived: it is asked through this one from now on, and the one it had is dropped. */
   take(id: string, socket: Duplex, head: Buffer): void
   /** Follow the file: an address for each computer that keeps a line, none for one that was taken out. */
   follow(store: Store): Promise<void>
-  /** The computers that have an address right now. */
+  /** The addresses the computers have right now. */
   computers(): LineComputer[]
   /** Whether the computer with this device id keeps its line open right now. */
   connected(id: string): boolean
-  /** Ask the computer with this device id what `req` asks, at `path`, as its address here would; false when no computer has that id. */
-  pass(id: string, path: string, req: IncomingMessage, res: ServerResponse): boolean
+  /**
+   * Ask the computer with this device id what `req` asks, at `path`, as its address here would:
+   * its own person's, or the one it has for `person`. False when it has no such address.
+   */
+  pass(id: string, person: string | undefined, path: string, req: IncomingMessage, res: ServerResponse): boolean
   close(): Promise<void>
 }
 
@@ -192,7 +214,7 @@ export function openLines(opts: LinesOptions = {}): Lines {
   }
 
   /** What a computer is asked, at `path`, from here or from the door: down its line, or answered here for where a machine is added and removed. */
-  const ask = ({ id }: LineComputer, path: string, req: IncomingMessage, res: ServerResponse): void => {
+  const ask = ({ id, viewer }: LineComputer, path: string, req: IncomingMessage, res: ServerResponse): void => {
     // OpenAgent adds this address as a machine, and removes it, the way it does any other. The
     // key it is answered opens nothing: only this server reaches the address.
     if (path.split('?')[0] === ENTER_PATH) {
@@ -212,6 +234,8 @@ export function openLines(opts: LinesOptions = {}): Lines {
       const value = carriedValue(req.headers[name])
       if (value !== undefined) headers[name] = value
     }
+    // Whom the call is for: by the address it came to, never by what the caller says.
+    if (viewer !== undefined) headers[PERSON_HEADER] = viewer
     const gone = new AbortController()
     const connection = req.socket
     // A caller that left before the answer ended is no longer answered: the computer is told.
@@ -277,19 +301,27 @@ export function openLines(opts: LinesOptions = {}): Lines {
     },
     async follow(store) {
       const wanted = new Map<string, LineComputer>()
-      for (const device of store.devices) if (device.line) wanted.set(device.id, { id: device.id, name: device.name, port: device.line.port, ...(device.person !== undefined ? { person: device.person } : {}) })
+      for (const device of store.devices) {
+        if (!device.line) continue
+        const whose = personOf(store, device)
+        const of = { id: device.id, name: device.name, ...(device.person !== undefined ? { person: device.person } : {}) }
+        wanted.set(device.id, { ...of, key: device.id, port: device.line.port, ...(whose !== undefined ? { viewer: whose } : {}) })
+        for (const [account, port] of Object.entries(device.line.others ?? {})) wanted.set(addressKey(device.id, account), { ...of, key: addressKey(device.id, account), port, viewer: account, ...(whose !== undefined ? { owner: whose } : {}) })
+      }
       let changed = false
-      for (const [id, held] of addresses) {
-        if (wanted.get(id)?.port === held.computer.port) continue
-        addresses.delete(id)
-        sessions.get(id)?.close()
+      for (const [key, held] of addresses) {
+        const still = wanted.get(key)
+        if (still?.port === held.computer.port && still.viewer === held.computer.viewer && still.owner === held.computer.owner) continue
+        addresses.delete(key)
+        // Its own address gone is the computer gone: an address for another person is only that person's way to it.
+        if (key === held.computer.id) sessions.get(held.computer.id)?.close()
         await shut(held.server)
         changed = true
       }
       for (const computer of wanted.values()) {
-        if (addresses.has(computer.id)) continue
+        if (addresses.has(computer.key)) continue
         try {
-          addresses.set(computer.id, { computer, server: await open(computer) })
+          addresses.set(computer.key, { computer, server: await open(computer) })
           changed = true
         } catch (err) {
           log(`remote-access: ${computer.name} cannot be asked on this server: port ${computer.port} could not be opened (${(err as NodeJS.ErrnoException).code ?? String(err)})`)
@@ -303,8 +335,8 @@ export function openLines(opts: LinesOptions = {}): Lines {
     connected(id) {
       return sessions.has(id)
     },
-    pass(id, path, req, res) {
-      const held = addresses.get(id)
+    pass(id, person, path, req, res) {
+      const held = addresses.get(addressKey(id, person))
       if (!held) return false
       ask(held.computer, path, req, res)
       return true
@@ -338,17 +370,17 @@ export interface ToTell {
 }
 
 /**
- * Which OpenAgent on this server is told of which computers: the owner's of the owner's and of
- * every computer whose person has no OpenAgent of their own, and each person's own of theirs.
- * Every person with an OpenAgent of their own is in the list, with no computer too: a computer
- * taken out is then taken off their machines.
+ * Which OpenAgent on this server is told of which addresses: each person's own of those for
+ * them, and the owner's of the rest, those for the owner and for every person with no OpenAgent
+ * of their own. Every person with an OpenAgent of their own is in the list, with no computer too:
+ * a computer taken out is then taken off their machines.
  */
 export function whomToTell(store: Store, target: string, ports: { from: number; count: number }, computers: readonly LineComputer[]): ToTell[] {
   const persons = store.persons.filter(person => !person.owner && person.port !== undefined)
   const theirs = (account: string | undefined): boolean => account !== undefined && persons.some(person => person.account === account)
   return [
-    { target, ports, computers: computers.filter(computer => !theirs(computer.person)) },
-    ...persons.map(({ account, port }) => ({ person: account, target: `http://127.0.0.1:${port}`, ports: personLinePorts(port!), computers: computers.filter(computer => computer.person === account) })),
+    { target, ports, computers: computers.filter(computer => !theirs(computer.viewer)) },
+    ...persons.map(({ account, port }) => ({ person: account, target: `http://127.0.0.1:${port}`, ports: personLinePorts(port!), computers: computers.filter(computer => computer.viewer === account) })),
   ]
 }
 
@@ -360,7 +392,9 @@ interface SavedMachine {
 /**
  * Tell OpenAgent on this server which computers keep a line here, as its own page would: each
  * is added to its saved machines at its address, and an address in the lines' ports that no
- * computer has any more is taken off. Throws when OpenAgent does not answer; the caller tells again.
+ * computer has any more is taken off. Another person's computer is saved with whose it is, so
+ * OpenAgent says so where a run is started. Throws when OpenAgent does not answer; the caller
+ * tells again.
  */
 export async function tellOpenAgent(target: string, computers: readonly LineComputer[], ports: { from: number; count: number }, timeoutMs = 10_000): Promise<void> {
   const origin = new URL(target).origin
@@ -386,7 +420,7 @@ export async function tellOpenAgent(target: string, computers: readonly LineComp
   for (const computer of computers) {
     const address = lineAddress(computer.port)
     if (saved.some(machine => machine.url === address)) continue
-    const added = (await call('sendAddMachine', [`${address}${ENTER_PATH}#line`, computer.name])) as { ok?: boolean; error?: string } | undefined
+    const added = (await call('sendAddMachine', [`${address}${ENTER_PATH}#line`, computer.name, ...(computer.owner !== undefined ? [computer.owner] : [])])) as { ok?: boolean; error?: string } | undefined
     if (!added?.ok) throw new Error(`OpenAgent did not save ${computer.name}: ${added?.error ?? 'no reason said'}`)
   }
 }
