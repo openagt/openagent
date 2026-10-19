@@ -1,6 +1,6 @@
 {
   "name": "@openagt/skill-update-tickets",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The update-tickets command for coding agents: bring the project's tickets up to date with its issue tracker and its merged pull requests, unattended. A skill file only, no code.",
   "license": "MIT",
   "repository": {
