@@ -1,7 +1,7 @@
 {
   "name": "@openagt/skill-github",
   "version": "0.1.1",
-  "description": "GitHub as a skill for coding agents: the project's pull requests and issues through gh, and the one command OpenAgent and the scheduler run for the git host: requests, open, merge, home.",
+  "description": "GitHub as a skill for coding agents: the project's pull requests and issues through gh, and the one command OpenAgent and the scheduler run for the git host: requests, open, merge, home, and replies, what came on the pull requests this machine's agents opened since each ended.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -43,7 +43,8 @@
     "clean": "rm -rf dist dist-test"
   },
   "dependencies": {
-    "@openagt/agent-data": "workspace:*"
+    "@openagt/agent-data": "workspace:*",
+    "@openagt/skill-logs": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

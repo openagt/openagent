@@ -49,6 +49,7 @@
     "@openagt/skill-plan-tickets": "workspace:*",
     "@openagt/skill-post-merge-cleanup": "workspace:*",
     "@openagt/skill-readability": "workspace:*",
+    "@openagt/skill-reply": "workspace:*",
     "@openagt/skill-research": "workspace:*",
     "@openagt/skill-security-audit": "workspace:*",
     "@openagt/skill-suggest-new-features": "workspace:*",

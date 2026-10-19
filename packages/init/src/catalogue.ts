@@ -23,6 +23,7 @@ export interface SkillGroup {
 export const GROUPS: readonly SkillGroup[] = [
   { title: 'Tickets and queue', ticked: true, skills: ['plan', 'plan-tickets', 'triage', 'update-tickets', 'work-queue', 'suggest-new-tickets', 'suggest-tickets-to-work-on'] },
   { title: 'Reviews and research', ticked: true, skills: ['maintainability', 'maintenance', 'readability', 'security-audit', 'ux', 'research', 'market-research', 'suggest-new-features'] },
+  { title: 'Pull requests', ticked: true, skills: ['reply'] },
   { title: 'After a merge', ticked: true, skills: ['post-merge-cleanup'] },
   { title: 'Needs its own setup', ticked: false, skills: ['browser', 'discord'] },
 ]

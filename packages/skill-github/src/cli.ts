@@ -8,6 +8,7 @@ import { watchAndMerge } from './merge-watch.js'
 import { GIT_HOST_NAME, homeUrlFor } from './home.js'
 import { createRepository, offerRepository, type CreateOffer, type CreateOutcome } from './create.js'
 import { signedIn } from './me.js'
+import { listReplies } from './replies.js'
 
 /**
  * The command line over the package (#1820): the same functions for an agent in a shell, and for
@@ -28,6 +29,9 @@ export const USAGE = `usage: github <command>
 
   requests [--branch <b>] [--state open|merged|all] [--since <iso>]
                                the project's pull requests, newest first: number, url, state, title, draft, branch, head, createdAt, mergedAt, mergeCommit
+  replies                      what came on the open pull requests this machine's agents opened, since each agent ended: maintainers' comments
+                               and reviews, checks that turned red, a conflict once the base branch moved; [{ run, text }], one per run, read
+                               from the project's run records; the check of a scheduler's row that resumes runs
   open [--branch <b>] --title <t> [--body <text>] [--draft] [--merge]
                                open the pull request of branch <b> (default: the current branch; it must be on the remote already); an open one is answered as it is; --merge lands it on green
   merge <number>               land pull request <number>: a draft is marked ready, then the merge is armed as --merge arms it
@@ -113,6 +117,16 @@ const COMMANDS: Record<string, Command> = {
     if (state !== 'open' && state !== 'merged' && state !== 'all') throw new Usage(`--state is open, merged or all, not ${state}`)
     try {
       return await listRequests(cwd, { ...(values.branch ? { branch: values.branch } : {}), state, ...(values.since ? { since: values.since } : {}) }, gh)
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err)
+      throw new Refused({ ok: false, reason: 'git-host-failed', detail }, `the pull requests could not be read: ${detail}`)
+    }
+  },
+
+  async replies(args, { cwd, gh }) {
+    parse(args, {}, 0)
+    try {
+      return await listReplies(cwd, { gh })
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err)
       throw new Refused({ ok: false, reason: 'git-host-failed', detail }, `the pull requests could not be read: ${detail}`)
