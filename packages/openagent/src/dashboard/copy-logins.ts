@@ -16,6 +16,9 @@ import { isServerName, loginsOfOwn, loginsToCopy, type MachineLogins } from './m
  * On that computer, the person's own OpenAgent there takes them as the servers package takes a
  * login handed over on standard input (`own login …`), which keeps them in that person's user's
  * home and says whose and where from.
+ *
+ * A laptop that sends a run there, through the server, copies nothing: it only looks that the
+ * logins are there, and says how they get there when they are not.
  */
 
 /** The package that keeps a person's own logins on a computer several people use. */
@@ -110,4 +113,16 @@ export async function copyLoginsTo(machine: MachineAccess & { label: string }, o
     await new Promise(resolve => setTimeout(resolve, pollMs))
   }
   return { ok: false, error: `${machine.label} did not answer again after your Claude login was copied there. Try again in a moment.` }
+}
+
+/**
+ * On a laptop, before a run is sent to a computer of another person's: whether this person's
+ * logins are there. Only their server copies them, at a run started from its page, or they make
+ * them there themselves. Answers why not, in words the person acts on.
+ */
+export async function loginsAreThere(machine: MachineAccess & { label: string }): Promise<{ ok: true } | { ok: false; error: string }> {
+  const there = await remoteLogins(machine)
+  if (!there.ok) return { ok: false, error: `${machine.label}: ${there.error}` }
+  if (there.logins.github !== undefined && there.logins.claude !== undefined) return { ok: true }
+  return { ok: false, error: `Your GitHub and Claude logins are not on ${machine.label} yet. Start your first run there from your page on its server, which copies them, or log in there under Settings, Machines.` }
 }

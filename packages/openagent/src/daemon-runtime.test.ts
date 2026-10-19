@@ -534,7 +534,7 @@ test('a run started on another machine is followed only under an id that is a ru
   }
 })
 
-test('a run sent to another person\'s computer first has the server\'s logins copied there, and stops with the computer\'s words when it cannot; a laptop copies nothing', async () => {
+test('a run sent to another person\'s computer first has the server\'s logins copied there, and stops with the computer\'s words when it cannot; a laptop copies nothing, and sends none before they are there', async () => {
   const base = await realpath(await mkdtemp(join(tmpdir(), 'openagent-other-')))
   const env = { XDG_CONFIG_HOME: join(base, 'cfg'), OPENAGENT_SERVER: '1', CLAUDE_CODE_OAUTH_TOKEN: 'sk-ant-oat01-mine' }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
@@ -543,12 +543,13 @@ test('a run sent to another person\'s computer first has the server\'s logins co
   // Another person's computer, as its line's address on this server: it says which logins it has, and takes them.
   const asked: string[] = []
   let place: 'ready' | 'making' = 'making'
+  let has: Record<string, unknown> = {}
   const machine = createServer((req, res) => {
     const path = new URL(req.url ?? '/', 'http://x').pathname
     asked.push(`${req.method} ${path}`)
     req.resume()
     if (path === '/_relay/logins' && place === 'making') return void res.writeHead(503, { 'content-type': 'text/plain' }).end("@sul's place on this computer is being made. Try again in a minute.")
-    if (path === '/_relay/logins') return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(req.method === 'GET' ? {} : { claude: { source: 'copied', from: 'vps-1' } }))
+    if (path === '/_relay/logins') return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(req.method === 'GET' ? has : { claude: { source: 'copied', from: 'vps-1' } }))
     if (path === '/_relay/start') return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true, agentId: '2026-07-19T10-00-00-000Z' }))
     res.writeHead(200, { 'content-type': 'application/x-ndjson' }).end()
   })
@@ -572,8 +573,13 @@ test('a run sent to another person\'s computer first has the server\'s logins co
     assert.ok(asked.includes('POST /_relay/start'))
 
     asked.length = 0
+    assert.deepEqual(await laptop.onStart('go', { machine: url }), { ok: false, error: 'Your GitHub and Claude logins are not on rom-desktop yet. Start your first run there from your page on its server, which copies them, or log in there under Settings, Machines.' })
+    // The run the server sent is still read meanwhile: only what this start asked counts.
+    assert.deepEqual(asked.filter(call => call !== 'GET /_relay/events'), ['GET /_relay/logins'], 'a laptop copies nothing, and sends no run before the logins are there')
+    has = { github: { account: 'sul', source: 'copied', from: 'vps-1' }, claude: { source: 'made' } }
+    asked.length = 0
     assert.equal((await laptop.onStart('go', { machine: url })).ok, true)
-    assert.equal(asked.includes('GET /_relay/logins'), false, 'a laptop copies nothing')
+    assert.equal(asked.includes('POST /_relay/logins'), false, 'a laptop copies nothing')
   } finally {
     await runtime.dispose()
     await laptop.dispose()

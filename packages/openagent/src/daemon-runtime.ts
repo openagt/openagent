@@ -8,7 +8,7 @@ import type { StartAgentOptions, StartAgentResult, AddProjectResult, RemoveProje
 import type { EventsSource, RemoteAgents, SavedMachine } from './dashboard/rpc-serve.js'
 import { RelayedAgents, remoteFacts, startRemoteAgent, type BringProject, type RelayProject, type RemoteTarget } from './dashboard/remote-run.js'
 import { cloneProject, cloneTarget } from './clone-project.js'
-import { copyLoginsTo, ownLogins, type OwnLogins } from './dashboard/copy-logins.js'
+import { copyLoginsTo, loginsAreThere, ownLogins, type OwnLogins } from './dashboard/copy-logins.js'
 import { screenInDiary } from './dashboard/screen.js'
 import { dispatchRelayRpc } from './dashboard-rpc/relay-dispatch.js'
 import { asRecorded, onMachine } from './dashboard-rpc/reads.js'
@@ -268,10 +268,11 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
       if (!project) return { ok: false, error: 'This project has no repository address, so it cannot be sent to another machine.' }
       const target = { url: machine.url, key: machine.key, ...(machine.pin ? { pin: machine.pin } : {}), project }
       // Another person's computer: a run there uses this person's own logins, which this server
-      // copies there first. Only a server's OpenAgent copies: a laptop's logins are made for it alone.
-      if (machine.owner !== undefined && env.OPENAGENT_SERVER === '1') {
-        const copied = await copyLoginsTo({ ...target, label: machine.label }, { own: () => logins(env) })
-        if (!copied.ok) return copied
+      // copies there first. Only a server's OpenAgent copies: a laptop's logins are made for it
+      // alone, so a laptop only looks that they are there.
+      if (machine.owner !== undefined) {
+        const there = env.OPENAGENT_SERVER === '1' ? await copyLoginsTo({ ...target, label: machine.label }, { own: () => logins(env) }) : await loginsAreThere({ ...target, label: machine.label })
+        if (!there.ok) return there
       }
       const result = await startRemoteAgent(target, { prompt, options: forwarded })
       if (!result.ok) {
