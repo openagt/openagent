@@ -3,10 +3,10 @@ import { test } from 'node:test'
 import { carriedSkills, GROUPS, SKILL_NAMES } from './catalogue.js'
 import { olderThan, stamped, unstamped } from './skill-file.js'
 
-test('the list holds 18 skills in four groups, everything ticked but the two that need a setup of their own, and none every run gets by default', async () => {
-  assert.equal(SKILL_NAMES.length, 18)
-  assert.equal(new Set(SKILL_NAMES).size, 18, 'no skill twice')
-  assert.equal(GROUPS.length, 4)
+test('the list holds 19 skills in five groups, everything ticked but the two that need a setup of their own, and none every run gets by default', async () => {
+  assert.equal(SKILL_NAMES.length, 19)
+  assert.equal(new Set(SKILL_NAMES).size, 19, 'no skill twice')
+  assert.equal(GROUPS.length, 5)
   assert.deepEqual(GROUPS.filter(group => !group.ticked).flatMap(group => group.skills), ['browser', 'discord'])
   for (const basic of ['branches', 'logs', 'question', 'github', 'orchestration', 'tickets', 'queue']) assert.ok(!SKILL_NAMES.includes(basic), `${basic} comes with every run`)
 })

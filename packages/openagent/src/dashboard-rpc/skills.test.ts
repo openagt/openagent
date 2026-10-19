@@ -61,7 +61,7 @@ test('a project\'s skills: none yet; written, they are in the folder and wait to
   try {
     const empty = (await onProjectSkills(id))!
     assert.deepEqual({ scheduler: empty.scheduler, startBranch: empty.startBranch, uncommitted: empty.uncommitted, git: empty.git, remote: empty.remote, local: empty.local }, { scheduler: false, startBranch: 'main', uncommitted: [], git: true, remote: undefined, local: false })
-    assert.deepEqual(empty.groups.map(group => [group.title, group.skills.length]), [['Tickets and queue', 7], ['Reviews and research', 8], ['After a merge', 1], ['Needs its own setup', 2]])
+    assert.deepEqual(empty.groups.map(group => [group.title, group.skills.length]), [['Tickets and queue', 7], ['Reviews and research', 8], ['Pull requests', 1], ['After a merge', 1], ['Needs its own setup', 2]])
     assert.ok(flat(empty).every(skill => skill.standing === 'absent' && !skill.waiting && skill.description.length > 10))
 
     const written = await sendChangeSkills(id, { write: ['browser', 'plan'] })

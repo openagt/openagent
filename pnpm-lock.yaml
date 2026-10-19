@@ -342,6 +342,9 @@ importers:
       '@openagt/skill-readability':
         specifier: workspace:*
         version: link:../skill-readability
+      '@openagt/skill-reply':
+        specifier: workspace:*
+        version: link:../skill-reply
       '@openagt/skill-research':
         specifier: workspace:*
         version: link:../skill-research
@@ -731,6 +734,9 @@ importers:
       '@openagt/agent-data':
         specifier: workspace:*
         version: link:../agent-data
+      '@openagt/skill-logs':
+        specifier: workspace:*
+        version: link:../skill-logs
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -895,6 +901,8 @@ importers:
         version: 4.1.10(@types/node@20.19.43)(jsdom@29.1.1)(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
   packages/skill-readability: {}
+
+  packages/skill-reply: {}
 
   packages/skill-research: {}
 

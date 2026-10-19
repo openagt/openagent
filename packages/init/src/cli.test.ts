@@ -183,12 +183,12 @@ test('in a terminal, a new project: Enter takes the default picks, the files are
     assert.match(shown, /Every agent OpenAgent starts already gets its default skills, with nothing written here\. These are more\./)
     assert.doesNotMatch(shown, /not on GitHub/, 'a project with no remote is told nothing about a git host')
     assert.match(shown, /\[ \] browser/)
-    assert.match(shown, /Wrote 16 skills in \.agents\/skills, each linked in \.claude\/skills: plan, plan-tickets, /)
+    assert.match(shown, /Wrote 17 skills in \.agents\/skills, each linked in \.claude\/skills: plan, plan-tickets, /)
     assert.match(shown, /The scheduler starts with the dashboard, on this machine\. Every automation starts switched off\./)
     assert.match(shown, /Committed as [0-9a-f]{7,}, these files alone\. Nothing was pushed/)
     assert.equal((await run(root, 'log', '--format=%s')).trim(), 'Add OpenAgent skills\ninit')
     assert.equal(await run(root, 'status', '--porcelain'), '', 'the hooks file is outside git, and every skill file is committed')
-    assert.equal((await run(root, 'show', '--format=', '--name-only', 'HEAD')).trim().split('\n').length, 32, '16 texts and 16 links')
+    assert.equal((await run(root, 'show', '--format=', '--name-only', 'HEAD')).trim().split('\n').length, 34, '17 texts and 17 links')
   } finally {
     await gone(root)
   }
@@ -201,7 +201,7 @@ test('run again, the ticks show what the project has; a tick removed deletes, a 
     await cli(root, 'add', 'maintenance', 'readability', '--commit')
     const left = await converse(root, [{ after: LIST_KEYS, keys: 'q' }])
     assert.equal(left.code, 0)
-    assert.match(left.shown, /This project has 2 of these 18\. The ticks show what it has now\./)
+    assert.match(left.shown, /This project has 2 of these 19\. The ticks show what it has now\./)
     assert.doesNotMatch(left.shown, /not on GitHub/)
     await run(root, 'remote', 'set-url', 'origin', 'https://gitlab.com/someone/project.git')
     const elsewhere = await converse(root, [{ after: LIST_KEYS, keys: 'q' }])

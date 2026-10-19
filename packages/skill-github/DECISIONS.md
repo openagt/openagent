@@ -48,6 +48,19 @@ already made, and lists it in its pull request; for anything else it proposes an
   merged since a time), in one shape; a read `gh` cannot answer is a refusal, never an
   empty list, so "none" and "could not tell" never look alike to a caller.
 
+## Flow: replies
+- `replies` is the check of the scheduler's row that resumes runs: what came on the open
+  pull requests this machine's agents opened, since each agent ended, one item per run.
+  Picked over a watcher of its own that wakes the agent: the scheduler asks, as every row
+  does.
+- New is after the run last ended; no time is kept. Picked over a time kept since the last
+  look, where something that came while the run worked was lost, and a red check the agent
+  chose to leave woke it again and again.
+- Only maintainers' comments and reviews count, red checks and a conflict with the base
+  branch too. Only this machine's runs: only it holds the conversation. A pull request
+  with no run behind it gets nothing.
+- About one GitHub call a minute, not one per pull request.
+
 ## The command
 - Every command prints one JSON document on stdout: the result or the refusal. A refusal
   adds one line for a person on stderr and exits 1. A malformed command line: the usage on
