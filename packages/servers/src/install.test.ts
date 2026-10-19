@@ -42,7 +42,7 @@ test('the install stops at the step that fails, with the last of what the server
     // Words that would read as a failed login at the first step are only the server's own here.
     const { exec, calls } = pretendServer(call => (call.script === tools ? { code: 100, out: 'Reading package lists...', err: 'E: Permission denied' } : undefined))
     await install({ env: home.env, address: SERVER.address, version: '1.2.3', exec })
-    assert.deepEqual(await stepsOf(home.env), ['login:done', 'user:done', 'tools:failed', 'name:waiting', 'openagent:waiting', 'agent:waiting', 'service:waiting', 'door:waiting'])
+    assert.deepEqual(await stepsOf(home.env), ['login:done', 'user:done', 'tools:failed', 'name:waiting', 'openagent:waiting', 'agent:waiting', 'people:waiting', 'service:waiting', 'door:waiting'])
     assert.equal((await readStore(home.env)).servers[0]!.steps[2]!.said, 'Reading package lists...\nE: Permission denied')
     assert.equal(calls.length, 4)
     assert.equal((await readStore(home.env)).servers[0]!.worker, undefined)
@@ -174,7 +174,7 @@ test('a computer whose git has no name leaves the step to say so: the install st
     const step = STEPS.find(candidate => candidate.id === 'name')!
     const { exec, calls } = pretendServer(call => (call.script === step.script({ address: SERVER.address, version: '1.2.3' }) ? { code: 1, err: 'The server\'s git has no name and email' } : undefined), undefined, {})
     await install({ env: home.env, address: SERVER.address, version: '1.2.3', exec })
-    assert.deepEqual(await stepsOf(home.env), ['login:done', 'user:done', 'tools:done', 'name:failed', 'openagent:waiting', 'agent:waiting', 'service:waiting', 'door:waiting'])
+    assert.deepEqual(await stepsOf(home.env), ['login:done', 'user:done', 'tools:done', 'name:failed', 'openagent:waiting', 'agent:waiting', 'people:waiting', 'service:waiting', 'door:waiting'])
     // Written with nothing to give.
     assert.match(calls.at(-1)!.script, /^NAME=''\nEMAIL=''$/m)
   } finally {

@@ -157,11 +157,12 @@ export const COMMAND_MAX_OUTPUT = 16 * 1024 * 1024
  * package's commands are Node scripts), in the project root, never through a shell, bounded in
  * time and output. A command that exits non-zero answers its last stderr line; one that prints no
  * JSON says so. `more` is what the command is started with beside what this process itself has.
+ * `input` is what it reads on standard input: a login handed to it there is on no command line.
  */
-export async function runPackageCommand(root: string, command: { name: string; bin: string }, args: readonly string[], more?: NodeJS.ProcessEnv): Promise<PackageCommandResult> {
+export async function runPackageCommand(root: string, command: { name: string; bin: string }, args: readonly string[], more?: NodeJS.ProcessEnv, input?: string): Promise<PackageCommandResult> {
   const { name, bin } = command
   const run = await new Promise<{ failed?: string; stdout: string }>(resolvePromise => {
-    execFile(
+    const child = execFile(
       process.execPath,
       [bin, ...args],
       { cwd: root, timeout: COMMAND_TIMEOUT_MS, maxBuffer: COMMAND_MAX_OUTPUT, encoding: 'utf8', ...(more ? { env: { ...process.env, ...more } } : {}) },
@@ -177,6 +178,9 @@ export async function runPackageCommand(root: string, command: { name: string; b
         resolvePromise({ failed, stdout })
       },
     )
+    // A command that reads nothing finds its input ended, never waiting for what does not come.
+    child.stdin?.on('error', () => {})
+    child.stdin?.end(input ?? '')
   })
   if (run.failed !== undefined) return { ok: false, error: run.failed }
   try {

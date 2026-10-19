@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Laptop, Monitor, Plus, Smartphone, Tablet, UserRound } from 'lucide-react'
-import { Button, InviteDialog, SettingsRow, SettingsSection, Switch, formatDateTime, formatRelative, useModuleHost, usePolled, type InviteCode } from '@openagt/dashboard/module'
-import { addDevice, idsOf, loadStatus, nameOwner, ownGithub, removeDevice, removePerson, setSwitch, type Answer, type DeviceRow, type DoorStatus } from './devices.js'
+import { Button, ConfirmDialog, InviteDialog, SettingsRow, SettingsSection, Switch, formatDateTime, formatRelative, useModuleHost, usePolled, type InviteCode } from '@openagt/dashboard/module'
+import { addDevice, idsOf, loadMine, loadStatus, nameOwner, ownGithub, removeDevice, removeMine, removePerson, setSwitch, type Answer, type DeviceRow, type DoorStatus, type Mine } from './devices.js'
 
 // Settings → Devices: the phones and browsers that are in, and the one switch that lets them
 // reach this computer on the Wi-Fi it is on. Read with `remote-access status`; the switch, a new
@@ -22,6 +22,71 @@ const NOT_READ: Answer<DoorStatus> | undefined = undefined
 function DeviceIcon({ device }: { device: DeviceRow }) {
   const Icon = device.line ? Laptop : /iphone|android|phone/i.test(device.name) ? Smartphone : /ipad|tablet/i.test(device.name) ? Tablet : Monitor
   return <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+}
+
+const MINE_NOT_READ: Answer<Mine> | undefined = undefined
+
+/**
+ * Devices on the OpenAgent of one person on a computer several people use: the devices that are
+ * theirs, as the computer's door lists them, each removable. Nothing more: only the computer's
+ * owner invites, the door is the owner's, and the other persons' devices are theirs.
+ */
+function PersonDevices({ person, everyMs }: { person: string; everyMs: number }) {
+  const { value: read, reload } = usePolled<Answer<Mine> | undefined>(() => loadMine(), MINE_NOT_READ, everyMs, [])
+  const [changed, setChanged] = useState<Mine | undefined>()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | undefined>()
+  const mine = changed ?? (read?.ok ? read.value : undefined)
+
+  const remove = async (id: string): Promise<void> => {
+    setBusy(true)
+    setError(undefined)
+    const answer = await removeMine(id)
+    if (answer.ok) setChanged(answer.value)
+    else setError(answer.error)
+    await reload().catch(() => {})
+    setChanged(undefined)
+    setBusy(false)
+  }
+
+  const devices = mine?.devices ?? []
+  return (
+    <SettingsSection description={`This computer is shared, and you are on it as @${person}. Your devices are in until you remove them. A new device gets in with a code from the computer's owner.`}>
+      {mine !== undefined && (
+        <div className="space-y-1 py-3">
+          <p className="text-sm">{devices.length > 0 ? `Your devices (${devices.length})` : 'Your devices'}</p>
+          {devices.length === 0 && <p className="text-xs text-muted-foreground">None.</p>}
+          <ul aria-label="Your devices" className="divide-y divide-border">
+            {devices.map(device => (
+              <li key={device.id} className="flex items-center justify-between gap-3 py-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <DeviceIcon device={device} />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm">{device.name}</p>
+                    <p className="text-xs text-muted-foreground" title={formatDateTime(device.seen ?? device.added)}>
+                      {device.seen !== undefined ? `Last seen ${formatRelative(device.seen)}, added ${formatRelative(device.added)}` : `Added ${formatRelative(device.added)}`}
+                    </p>
+                    {device.line && <p className="text-xs text-muted-foreground">A computer of yours: your runs can be started on it from here. Remove it and it is no longer in "Run on".</p>}
+                  </div>
+                </div>
+                <Button size="sm" variant="ghost" disabled={busy} aria-label={`Remove ${device.name}`} onClick={() => void remove(device.id)}>
+                  Remove
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {read !== undefined && !read.ok && (
+        <p role="alert" className="py-3 text-xs text-danger">{`Your devices could not be read: ${read.error}`}</p>
+      )}
+      {error !== undefined && (
+        <p role="alert" className="py-3 text-xs text-danger">
+          {error}
+        </p>
+      )}
+    </SettingsSection>
+  )
 }
 
 export function DevicesSettings({ everyMs = 5_000 }: { /** How often the status is read again. */ everyMs?: number }) {
@@ -73,6 +138,9 @@ export function DevicesSettings({ everyMs = 5_000 }: { /** How often the status 
     setJoined(undefined)
     setWaiting(code ? (status?.devices.flatMap(idsOf) ?? []) : undefined)
   }
+
+  // One person's own OpenAgent on a computer several people use: their devices are the door's, and only they are shown.
+  if (status?.person !== undefined) return <PersonDevices person={status.person} everyMs={everyMs} />
 
   const devices = status?.devices ?? []
   const persons = status?.persons ?? []
@@ -145,11 +213,24 @@ export function DevicesSettings({ everyMs = 5_000 }: { /** How often the status 
                       <span className="truncate">{person.owner ? `@${person.account}, the owner` : `@${person.account}`}</span>
                     </p>
                     {!person.owner && (
-                      <Button size="sm" variant="ghost" disabled={busy} aria-label={`Remove @${person.account}`} onClick={() => void act(() => removePerson(host, person.account))}>
-                        Remove person
-                      </Button>
+                      <ConfirmDialog
+                        trigger={
+                          <Button size="sm" variant="ghost" disabled={busy} aria-label={`Remove @${person.account}`}>
+                            Remove person
+                          </Button>
+                        }
+                        title={`Remove @${person.account}?`}
+                        body={`Their devices are taken out, and their own user on this computer is deleted with everything in it: their GitHub and Claude logins, their copies of projects, and any work they did not push to GitHub. Their finished runs stay on GitHub. @${person.account} can be invited again later.`}
+                        confirmLabel="Remove person"
+                        confirmBusyLabel="Removing…"
+                        onConfirm={() => act(() => removePerson(host, person.account))}
+                      />
                     )}
                   </div>
+                )}
+                {person?.working && <p className="pt-1 text-xs text-muted-foreground">{`Making @${person.account}'s own user on this computer, with their own OpenAgent. This takes a minute or two.`}</p>}
+                {person?.problem !== undefined && !person.working && (
+                  <p role="alert" className="pt-1 text-xs text-danger">{`@${person.account}'s own user on this computer could not be made: ${person.problem.replace(/\.?$/, '.')} Add a device for them again to try again.`}</p>
                 )}
                 {person !== undefined && theirs.length === 0 && <p className="py-2 text-xs text-muted-foreground">No device yet.</p>}
                 <ul aria-label={person !== undefined ? `Devices of @${person.account}` : 'Devices that are in'} className="divide-y divide-border">

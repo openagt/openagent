@@ -296,7 +296,7 @@ function ForWhom({ title, persons, onPicked, onClose }: { title: string; persons
           <RadioGroupOption value="other" className="flex-nowrap items-start [&>[data-slot=radio-group-item]]:mt-0.5">
             <span>
               Someone else
-              <span className="block text-xs text-muted-foreground">By their GitHub account. For now they can do everything this page can: start runs here, with this computer's logins.</span>
+              <span className="block text-xs text-muted-foreground">By their GitHub account. On a server they get a user of their own, and their runs use their own GitHub and Claude logins. On any other computer they use this computer's.</span>
             </span>
           </RadioGroupOption>
         </RadioGroup>

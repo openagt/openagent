@@ -11,4 +11,5 @@ export type * from '../../src/dashboard-rpc/modules.js'
 export const onModules = rpc<typeof impl.onModules>('onModules')
 export const runModuleCommand = rpc<typeof impl.runModuleCommand>('runModuleCommand')
 export const runComputerCommand = rpc<typeof impl.runComputerCommand>('runComputerCommand')
+export const runComputerCommandOn = rpc<typeof impl.runComputerCommandOn>('runComputerCommandOn')
 export const readModule = rpc<typeof impl.readModule>('readModule')

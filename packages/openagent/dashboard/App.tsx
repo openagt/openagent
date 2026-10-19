@@ -3,7 +3,7 @@ import type { Intervention, Activity, ProjectionRead, ProjectSummary, RecentAgen
 import { onProjectFiles, onInterventions, onActivity, onRecentAgents, onAgents } from './rpc/reads.js'
 import { sendStart } from './rpc/control.js'
 import { onProjects } from './rpc/projects.js'
-import { onComputersThrough, onMachineVersions } from './rpc/machines.js'
+import { onComputersThrough, onMachinePerson, onMachineVersions, sendRemoveMachineDevice } from './rpc/machines.js'
 import { addComputerThrough, addMachine, removeMachine } from './lib/machines.js'
 import { AgentHistory } from './components/AgentHistory.js'
 import { SidebarProvider } from './components/ui/sidebar.js'
@@ -323,6 +323,8 @@ export function App() {
       },
       removeMachine,
       computersThrough: onComputersThrough,
+      machinePerson: onMachinePerson,
+      removeMachineDevice: sendRemoveMachineDevice,
       addComputerThrough: async (machineId, computerId) => {
         const added = await addComputerThrough(machineId, computerId)
         return added.ok ? { ok: true } : added

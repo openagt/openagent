@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { readFile, stat, writeFile } from 'node:fs/promises'
-import { CODE_LIFETIME_MS, MAX_DEVICES, Unreadable, accountOf, addCode, addPerson, computerWordFor, enter, isComputerId, isIn, nameOwner, personOf, readStore, readStoreStrict, removeComputer, removeDevice, removePerson, sanitize, sha256, storePath, update } from './store.js'
+import { CODE_LIFETIME_MS, MAX_DEVICES, Unreadable, accountOf, addCode, addPerson, computerWordFor, enter, isComputerId, isIn, nameOwner, personLinePorts, personOf, portOf, readStore, readStoreStrict, removeComputer, removeDevice, removePerson, sanitize, sha256, storePath, update } from './store.js'
 import { testHome } from './test-home.js'
 
 test('no file reads as a closed door with nobody in', async () => {
@@ -303,7 +303,7 @@ test('the owner is named once, then persons are added; the devices in before are
   const home = await testHome()
   try {
     const mine = (await enter(home.env, (await addCode(home.env)).code, 'my phone'))!
-    assert.equal(await addPerson(home.env, 'rom'), false, 'no person before the owner')
+    assert.equal(await addPerson(home.env, 'rom'), undefined, 'no person before the owner')
     assert.equal(personOf(await readStore(home.env), (await readStore(home.env)).devices[0]!), undefined)
 
     assert.ok(await nameOwner(home.env, 'ada'))
@@ -334,4 +334,68 @@ test('persons edited by hand are read forgivingly: no owner means no persons, an
   const read = sanitize({ persons: [{ account: 'rom', added }, { account: 'ada', owner: true, added }, { account: 'Bad Name', added }], devices: [{ ...device, person: 'eve' }, { ...device, id: 'def456', person: 'rom' }, { ...device, id: 'ghi789', person: 'ada' }] })
   assert.deepEqual(read.persons.map(person => person.account), ['ada', 'rom'])
   assert.deepEqual(read.devices.map(entry => entry.person), [undefined, 'rom', undefined])
+})
+
+test('on a computer with users per person, each person gets the first free block of ports and keeps it; elsewhere none', async () => {
+  const home = await testHome()
+  try {
+    await nameOwner(home.env, 'ada')
+    assert.deepEqual(await addPerson(home.env, 'eve'), { account: 'eve', added: (await readStore(home.env)).persons[1]!.added }, 'no block where nobody gets a user')
+    assert.equal((await addPerson(home.env, 'rom', Date.now(), true))?.port, 4300)
+    assert.equal((await addPerson(home.env, 'kim', Date.now(), true))?.port, 4400)
+    assert.equal((await addPerson(home.env, 'rom', Date.now(), true))?.port, 4300, 'kept')
+    assert.equal((await addPerson(home.env, 'eve', Date.now(), true))?.port, 4500, 'one who had none gets one once they get a user')
+    assert.equal((await addPerson(home.env, 'ada', Date.now(), true))?.port, undefined, 'never the owner: the owner\'s OpenAgent is the one that started the door')
+    assert.ok(await removePerson(home.env, 'rom'))
+    assert.equal((await addPerson(home.env, 'lee', Date.now(), true))?.port, 4300, 'a block that was freed is given again')
+    const store = await readStore(home.env)
+    assert.equal(portOf(store, 'kim'), 4400)
+    assert.equal(portOf(store, 'ada'), undefined)
+    assert.equal(portOf(store, undefined), undefined)
+    assert.deepEqual(personLinePorts(4400), { from: 4410, count: 50 })
+  } finally {
+    await home.remove()
+  }
+})
+
+test('a block of ports edited by hand is one person\'s: a second person naming it has none, and the owner never has one', () => {
+  const added = new Date().toISOString()
+  const read = sanitize({ persons: [{ account: 'ada', owner: true, added, port: 4300 }, { account: 'rom', added, port: 4300 }, { account: 'kim', added, port: 4300 }, { account: 'eve', added, port: 'x' }] })
+  assert.deepEqual(read.persons.map(person => [person.account, person.port]), [['ada', undefined], ['rom', 4300], ['kim', undefined], ['eve', undefined]])
+})
+
+test('a code made for a line lets in a line of that person, in their block of ports, and nothing else; what it does not let in does not spend it', async () => {
+  const home = await testHome()
+  try {
+    await nameOwner(home.env, 'ada')
+    await addPerson(home.env, 'rom', Date.now(), true)
+    const owners = { from: 4210, count: 50 }
+    const { code } = await addCode(home.env, Date.now(), 'rom', true)
+    assert.equal(await enter(home.env, code, 'a browser'), undefined, 'not a browser')
+    const line = await enter(home.env, code, 'rom-laptop', Date.now(), owners)
+    assert.equal(line?.person, 'rom')
+    assert.equal((await readStore(home.env)).devices.find(device => device.id === line!.id)?.line?.port, 4310, 'in rom\'s block, not the owner\'s')
+    assert.equal(await enter(home.env, code, 'again', Date.now(), owners), undefined, 'once')
+    // The owner's line, and a person with no block, are in the owner's ports as before.
+    const own = await enter(home.env, (await addCode(home.env, Date.now(), undefined, true)).code, 'ada-laptop', Date.now(), owners)
+    assert.equal((await readStore(home.env)).devices.find(device => device.id === own!.id)?.line?.port, 4210)
+  } finally {
+    await home.remove()
+  }
+})
+
+test('a person takes out only devices of their own, and a computer\'s other entry only when it is theirs too', async () => {
+  const home = await testHome()
+  try {
+    await nameOwner(home.env, 'ada')
+    await addPerson(home.env, 'rom')
+    const computer = sha256('one computer')
+    const adas = (await enter(home.env, (await addCode(home.env)).code, 'ada laptop', Date.now(), undefined, computer))!
+    const romsLine = (await enter(home.env, (await addCode(home.env, Date.now(), 'rom')).code, 'rom line', Date.now(), { from: 4210, count: 50 }, computer))!
+    assert.equal(await removeComputer(home.env, adas.id, { person: 'rom' }), false, 'not rom\'s')
+    assert.ok(await removeComputer(home.env, romsLine.id, { person: 'rom' }))
+    assert.deepEqual((await readStore(home.env)).devices.map(device => device.id), [adas.id], 'the owner\'s entry of the same computer stays')
+  } finally {
+    await home.remove()
+  }
 })

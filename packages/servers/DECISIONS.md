@@ -32,6 +32,20 @@ already made, and lists it in its pull request; for anything else it proposes an
   own, which ties its commits to nobody on GitHub.
 - A server's own Settings offers no server to connect: servers are connected from the
   person's own computer. Picked over a server that connects other servers.
+- Each person invited to a server has a user of their own there, with an OpenAgent of their
+  own, and that user holds their GitHub and Claude logins: a run uses the logins of the person
+  who started it. Picked over one OpenAgent that starts each run as the user of whoever started
+  it, where a check in every page would keep people apart instead of the system.
+- The owner stays the server's own user, `openagent`; only an invited person gets a new one.
+  Picked over moving the owner to a user of their own too.
+- An agent on the server reaches only its own person's OpenAgent and lines: the server's
+  firewall says so. Picked over a check in OpenAgent's code, which every new port would need
+  again.
+- Each person sees only their own programs running on the server: a run's prompt is on its
+  command line.
+- Removing a person removes everything of theirs on the server: their user, their logins, their
+  copies of projects, and work they did not push. Picked over taking only their access away,
+  which left their files on the server.
 
 ## The server's logins
 - The GitHub login is this computer's own, copied to the server when the person ticks it,
@@ -43,9 +57,10 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The Claude login is made new for the server by one press on this computer, with
   `claude setup-token`, and lasts a year. This computer's own Claude login is never copied:
   used on two computers, it logs one of them out.
-- A login goes to the server over SSH, as the install does. Picked over the server's door,
-  which is open to the internet: every device that is let in could then change the
-  server's logins.
+- The owner's logins go to the server over SSH, as the install does. An invited person's go
+  through the server's door, with their own computer's key there, and only to their own
+  OpenAgent: a device changes its own person's logins and nobody else's. Picked over SSH alone,
+  which an invited person has no way into.
 
 ## A device gets in
 - A person, a phone or a browser gets into a server with a code this computer asks the
@@ -62,6 +77,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   last seen and a way to take it out. The server's own Settings lists them too. Picked
   over the server's page alone, a second place to go to for every set-up; and over this
   computer alone, where a lost phone stays in while that computer is away.
+
+- An invited person sees the server on their own computer as the owner does: their own logins
+  there, their own devices, their own line. What only the owner does is not there: the
+  install, an update, an invite.
 
 ## An install or an update
 - Each step shows its own state while it runs: waiting, running, done or failed. Picked over

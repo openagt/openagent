@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ModuleHostContext, type ModuleCommandResult, type ModuleHost } from '@openagt/dashboard/module'
 import { DevicesSettings, WARNING } from './DevicesSettings.js'
 
@@ -17,6 +17,7 @@ function door(answer: (args: string[]) => ModuleCommandResult) {
     runCommand: inProject,
     act: inProject,
     runComputerCommand,
+    runComputerCommandOn: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     read: vi.fn(async () => ({ ok: false as const, error: 'no server part' })),
     openAgent: vi.fn(),
     openPage: vi.fn(),
@@ -28,6 +29,8 @@ function door(answer: (args: string[]) => ModuleCommandResult) {
     addMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     removeMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     computersThrough: vi.fn(async () => ({ ok: true as const, computers: [] })),
+    machinePerson: vi.fn(async () => ({ ok: false as const, error: 'not here', unknown: true as const })),
+    removeMachineDevice: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     addComputerThrough: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     watchScreen: vi.fn(async () => undefined),
     sendToScreen: vi.fn(async () => false),
@@ -297,6 +300,9 @@ describe('Settings → Devices', () => {
     expect(screen.getByText('No device yet.')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Remove @ada' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Remove @rom' }))
+    // Said first: their user on this computer goes with everything in it.
+    expect((await screen.findByRole('alertdialog')).textContent).toContain('their own user on this computer is deleted with everything in it')
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Remove person' }))
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['remove-person', 'rom']))
 
     await addForMe()
@@ -307,5 +313,39 @@ describe('Settings → Devices', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
     expect(await screen.findByText('For @eve. Send them the link.')).toBeTruthy()
     expect(runComputerCommand.mock.calls.some(([args]) => args[0] === 'github' || args[0] === 'owner')).toBe(false)
+  })
+
+  test('a person whose own user is being made, or could not be made, is said so under their name', async () => {
+    const persons = [{ account: 'ada', owner: true }, { account: 'rom', working: true }, { account: 'eve', problem: 'This server has no room for another user' }]
+    const { host } = door(() => ok({ ...OPEN, persons, devices: [] }))
+    show(host)
+    expect(await screen.findByText("Making @rom's own user on this computer, with their own OpenAgent. This takes a minute or two.")).toBeTruthy()
+    expect(screen.getByRole('alert').textContent).toBe("@eve's own user on this computer could not be made: This server has no room for another user. Add a device for them again to try again.")
+  })
+
+  test('on one person\'s own OpenAgent: only their devices, asked of the door, each removable; no switch, no Add device, no other person', async () => {
+    const mine = { account: 'rom', owner: false, devices: [{ ...PHONE, person: 'rom' }, { ...PHONE, id: 'fed654cba321', name: 'OpenAgent on rom-laptop', line: true, person: 'rom' }] }
+    const fetched = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === '/_remote-access/me/remove') {
+        expect([init?.method, init?.body]).toEqual(['POST', JSON.stringify({ id: 'fed654cba321' })])
+        return new Response(JSON.stringify({ ...mine, devices: mine.devices.slice(0, 1) }), { status: 200 })
+      }
+      return new Response(JSON.stringify(mine), { status: 200 })
+    })
+    vi.stubGlobal('fetch', fetched)
+    try {
+      const { host } = door(() => ok({ ...OFF, persons: [], person: 'rom' }))
+      show(host)
+      const list = await screen.findByRole('list', { name: 'Your devices' })
+      expect(list.textContent).toContain('iPhone, Safari')
+      expect(list.textContent).toContain('A computer of yours: your runs can be started on it from here.')
+      expect(screen.getByText(/you are on it as @rom/)).toBeTruthy()
+      expect(screen.queryByRole('switch')).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Add device' })).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'Remove OpenAgent on rom-laptop' }))
+      await waitFor(() => expect(fetched).toHaveBeenCalledWith('/_remote-access/me/remove', expect.anything()))
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

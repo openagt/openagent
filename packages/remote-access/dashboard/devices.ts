@@ -22,6 +22,12 @@ export interface DeviceRow {
 export interface PersonRow {
   account: string
   owner?: true
+  /** On a computer that gives each person a user of their own: theirs is made. */
+  ready?: true
+  /** Theirs is being made right now. */
+  working?: true
+  /** Why theirs could not be made. */
+  problem?: string
 }
 
 /** Every id a row is listed under. */
@@ -37,6 +43,11 @@ export interface DoorStatus {
   devices: DeviceRow[]
   /** None until the owner is named. */
   persons: PersonRow[]
+  /**
+   * Set on the OpenAgent of one person on a computer several people use, to their GitHub account:
+   * their devices are the door's, asked of it with {@link loadMine}, and this OpenAgent has none of its own.
+   */
+  person?: string
 }
 
 /** The link a new device gets in with: what the QR code holds. */
@@ -53,8 +64,24 @@ const text = (value: unknown): string | undefined => (typeof value === 'string' 
 
 export function readStatus(output: unknown): DoorStatus | undefined {
   if (!output || typeof output !== 'object') return undefined
-  const { on, listening, problem, https, devices, persons } = output as Record<string, unknown>
+  const { on, listening, problem, https, devices, persons, person } = output as Record<string, unknown>
   if (typeof on !== 'boolean' || !Array.isArray(devices)) return undefined
+  const rows = readDevices(devices)
+  const people: PersonRow[] = []
+  for (const entry of Array.isArray(persons) ? persons : []) {
+    const { account, owner, ready, working, problem } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
+    const [known, why] = [text(account), text(problem)]
+    if (known && !people.some(person => person.account === known))
+      people.push({ account: known, ...(owner === true ? { owner: true as const } : {}), ...(ready === true ? { ready: true as const } : {}), ...(working === true ? { working: true as const } : {}), ...(why ? { problem: why } : {}) })
+  }
+  const why = text(problem)
+  const address = https && typeof https === 'object' ? text((https as Record<string, unknown>).address) : undefined
+  const own = text(person)
+  return { on, listening: listening === true, ...(why ? { problem: why } : {}), ...(address ? { https: { address } } : {}), devices: rows, persons: people, ...(own ? { person: own } : {}) }
+}
+
+/** The devices of a list, read forgivingly: an entry that is not one is left out. */
+function readDevices(devices: unknown[]): DeviceRow[] {
   const rows: DeviceRow[] = []
   for (const entry of devices) {
     if (!entry || typeof entry !== 'object') continue
@@ -63,16 +90,46 @@ export function readStatus(output: unknown): DoorStatus | undefined {
     const others = Array.isArray(also) ? also.filter((other): other is string => typeof other === 'string' && other !== '') : []
     if (deviceId && deviceName && addedAt) rows.push({ id: deviceId, name: deviceName, added: addedAt, ...(seenAt ? { seen: seenAt } : {}), ...(line === true ? { line: true } : {}), ...(others.length ? { also: others } : {}), ...(whose ? { person: whose } : {}) })
   }
-  const people: PersonRow[] = []
-  for (const entry of Array.isArray(persons) ? persons : []) {
-    const { account, owner } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
-    const known = text(account)
-    if (known && !people.some(person => person.account === known)) people.push({ account: known, ...(owner === true ? { owner: true as const } : {}) })
-  }
-  const why = text(problem)
-  const address = https && typeof https === 'object' ? text((https as Record<string, unknown>).address) : undefined
-  return { on, listening: listening === true, ...(why ? { problem: why } : {}), ...(address ? { https: { address } } : {}), devices: rows, persons: people }
+  return rows
 }
+
+/** What the door tells a device of itself: its person, whether that is the owner, and that person's devices. */
+export interface Mine {
+  account?: string
+  owner: boolean
+  devices: DeviceRow[]
+}
+
+export function readMine(output: unknown): Mine | undefined {
+  if (!output || typeof output !== 'object') return undefined
+  const { account, owner, devices } = output as Record<string, unknown>
+  if (typeof owner !== 'boolean' || !Array.isArray(devices)) return undefined
+  const who = text(account)
+  return { ...(who ? { account: who } : {}), owner, devices: readDevices(devices) }
+}
+
+/** Where the door answers a device about itself: on the page's own address, which the door serves. */
+const ME_PATH = '/_remote-access/me'
+
+/**
+ * Ask the door, from the page it serves, what this device's person has there. Asked by the page
+ * itself and not by a command: the devices are in the door's file, the owner's, which this
+ * person's OpenAgent cannot read; the door answers the device by its own cookie.
+ */
+async function askDoor(path: string, init?: RequestInit, fetchFn: typeof fetch = fetch): Promise<Answer<Mine>> {
+  try {
+    const res = await fetchFn(path, { credentials: 'same-origin', cache: 'no-store', ...init })
+    if (!res.ok) return { ok: false, error: (await res.text().catch(() => '')).trim() || `the door answered ${res.status}` }
+    const mine = readMine(await res.json())
+    return mine ? { ok: true, value: mine } : { ok: false, error: 'the door answered something else than expected' }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+export const loadMine = (fetchFn?: typeof fetch): Promise<Answer<Mine>> => askDoor(ME_PATH, undefined, fetchFn)
+/** Take one of this person's devices out, a computer with all it holds there. */
+export const removeMine = (id: string, fetchFn?: typeof fetch): Promise<Answer<Mine>> => askDoor(`${ME_PATH}/remove`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id }) }, fetchFn)
 
 function readLink(output: unknown): AddLink | undefined {
   if (!output || typeof output !== 'object') return undefined

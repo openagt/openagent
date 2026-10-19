@@ -1,5 +1,5 @@
 import { lastLines, openSession, withAdvice, type Exec } from './ssh.js'
-import { SERVER_USER, devicesScript, ownerScript, removeDeviceScript, removePersonScript } from './steps.js'
+import { PERSON_TIMEOUT_MS, SERVER_USER, devicesScript, ownerScript, removeDeviceScript, removePersonScript } from './steps.js'
 import { isAccount, type Server } from './store.js'
 
 /**
@@ -30,6 +30,10 @@ export interface ServerDevice {
 export interface ServerPerson {
   account: string
   owner?: true
+  /** Their own user and OpenAgent on the server are being made right now. */
+  working?: true
+  /** Why their own user could not be made, in the server's words. */
+  problem?: string
 }
 
 /** Every id a row is listed under: its own, and those of what else the computer holds there. */
@@ -75,13 +79,15 @@ export function devicesIn(out: string): { devices: ServerDevice[]; persons: Serv
   const persons: ServerPerson[] = []
   for (const entry of Array.isArray(answer?.persons) ? answer.persons : []) {
     if (persons.length >= MAX_DEVICES) break
-    const { account, owner } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
+    const { account, owner, working, problem } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
     const known = accountIn(account)
     if (known === undefined || persons.some(person => person.account === known)) continue
     // A door lists its owner first: a list that does not start with one is no list of persons.
     if (!persons.length && owner !== true) break
+    // What the server said is shown as words, with nothing in it that moves a line or turns its letters around.
+    const said = typeof problem === 'string' ? problem.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, ' ').trim().slice(0, 400) : ''
     if (!persons.length) persons.push({ account: known, owner: true })
-    else if (owner !== true) persons.push({ account: known })
+    else if (owner !== true) persons.push({ account: known, ...(working === true ? { working: true as const } : {}), ...(said ? { problem: said } : {}) })
   }
   const devices: ServerDevice[] = []
   for (const entry of listed) {
@@ -102,10 +108,10 @@ export function devicesIn(out: string): { devices: ServerDevice[]; persons: Serv
   return { devices, persons }
 }
 
-async function ask(server: Pick<Server, 'address' | 'user'>, script: string, opts: { exec?: Exec }): Promise<Devices> {
+async function ask(server: Pick<Server, 'address' | 'user'>, script: string, opts: { exec?: Exec }, timeoutMs = DEVICES_TIMEOUT_MS): Promise<Devices> {
   const session = await openSession(server, opts)
   try {
-    const said = await session.run(SERVER_USER, script, DEVICES_TIMEOUT_MS)
+    const said = await session.run(SERVER_USER, script, timeoutMs)
     if (said.code !== 0) return { ok: false, error: withAdvice(server, lastLines(said).slice(-MAX_SAID) || 'The server did not answer.') }
     const listed = devicesIn(said.out)
     return listed ? { ok: true, ...listed } : { ok: false, error: 'The server answered something else than the devices that are in.' }
@@ -126,7 +132,8 @@ export function nameOwner(server: Pick<Server, 'address' | 'user'>, account: str
 /** Take a person out at the server's door, with every device of theirs. Answers the ones still in. */
 export function removePerson(server: Pick<Server, 'address' | 'user'>, account: string, opts: { exec?: Exec } = {}): Promise<Devices> {
   if (!isAccount(account)) return Promise.resolve({ ok: false, error: `${account} is not a GitHub account` })
-  return ask(server, removePersonScript(account.toLowerCase()), opts)
+  // Longer than the others: the person's user is taken away, with their programs and their home.
+  return ask(server, removePersonScript(account.toLowerCase()), opts, PERSON_TIMEOUT_MS)
 }
 
 /** Take one device out at the server's door: it is out at once. Answers the ones still in. */

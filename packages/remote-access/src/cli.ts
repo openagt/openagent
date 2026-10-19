@@ -1,11 +1,12 @@
 import { nameAddress, numberAddress, urlHost, type AddressDeps } from './address.js'
 import { doorFingerprint } from './certificate.js'
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { hostname } from 'node:os'
+import { fileURLToPath } from 'node:url'
 import { ENTER_PATH, readKeyWord } from './door.js'
 import { enterForLine, leaveLine, readLineLink } from './line-out.js'
 import { HTTPS_PORT, serve } from './serve.js'
-import { MAX_LINES, Unreadable, accountOf, addCode, addPerson, addressOf, computerWordFor, isComputerId, nameOwner, personOf, pidAlive, readStore, removeComputer, removePerson, update, type Line, type Store } from './store.js'
+import { MAX_LINES, Unreadable, accountOf, addCode, addPerson, addressOf, computerWordFor, isComputerId, listedDevices, nameOwner, pidAlive, readStore, removeComputer, removePerson, update, type Line, type ListedDevice, type Store } from './store.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -20,13 +21,14 @@ export const USAGE = `usage: remote-access <command>
   off            Phone on Wi-Fi off: nothing listens on the network; the devices stay in the list
   add [--for <account>]
                  a link a new device gets in with, once, for five minutes: the address a QR code holds; with --for,
-                 the device is that person's, by their GitHub account (the owner is named first)
+                 the device is that person's, by their GitHub account (the owner is named first); where
+                 OPENAGENT_PERSON_HELPER names the helper, the person gets a user and an OpenAgent of their own
   remove <id>    take one device out, by its id as status names it; it is out at once, a computer with all it holds here
   github         the GitHub account gh is logged in to on this computer: who the owner would be
   owner <account>
                  name this computer's owner, once, by their GitHub account: the devices already in are theirs
   remove-person <account>
-                 take a person out, with every device of theirs; the owner stays
+                 take a person out, with every device of theirs, and their user with all it holds; the owner stays
   https <at>     this computer is a server, reached at this number or name: the door is open to every network,
                  over HTTPS, with a certificate it asks for and renews itself (ports 80 and 443 must be reachable)
   https off      no longer a server: Phone on Wi-Fi decides again
@@ -60,6 +62,10 @@ export interface CliIO {
   leaveLine?: typeof leaveLine
   /** The GitHub account `gh` is logged in to here; asked of `gh` when unsaid. */
   github?: () => Promise<{ ok: true; account: string } | { ok: false; error: string }>
+  /** How the helper at `path` is run as root with `args`; with `sudo -n` when unsaid. */
+  helper?: (path: string, args: string[]) => Promise<HelperAnswer>
+  /** How the making of a person's user is started on its own, answering its process; this command again, detached, when unsaid. */
+  startWork?: (env: NodeJS.ProcessEnv, account: string) => number | undefined
 }
 
 class Refused extends Error {}
@@ -74,13 +80,27 @@ export interface Status {
   /** On a server: the address the door is open at. */
   https?: { address: string }
   /**
+   * Set on the OpenAgent of one person on a computer several people use, to their GitHub account:
+   * that person's devices are in the owner's door, and this one's own file is not theirs.
+   */
+  person?: string
+  /**
    * The devices that are in, a computer once: its key for OpenAgent and its line are one row,
    * under the first one's id, with the other's in `also`. A device with `line` is a computer that
    * keeps a line open here.
    */
-  devices: { id: string; name: string; added: string; seen?: string; line?: true; also?: string[]; person?: string }[]
+  devices: ListedDevice[]
   /** The persons on this computer, by their GitHub account, the owner first; none until the owner is named. */
-  persons: { account: string; owner?: true }[]
+  persons: {
+    account: string
+    owner?: true
+    /** On a computer that gives each person a user of their own: theirs is made, with their own OpenAgent. */
+    ready?: true
+    /** Theirs is being made right now. */
+    working?: true
+    /** Why theirs could not be made: asking for a code for them again tries again. */
+    problem?: string
+  }[]
   /**
    * The servers this computer keeps a line open to, what each may do through it, the id this
    * computer has among that server's devices, and whether the server said no to its key.
@@ -94,47 +114,33 @@ const isListening = (store: Store): boolean => (store.on || store.https !== unde
 const NOT_RUNNING = 'The door opens once OpenAgent runs on this computer.'
 
 /**
- * The devices as a person reads them: a computer is one row, its key for OpenAgent and its line
- * together. The row is the first entry's; the line's name is the computer's own, and when it was
- * added and last seen are the earliest and the latest of the two. Never more than one of each
- * kind in a row: every other key is a row of its own, so the list names every key that is in.
+ * Whose OpenAgent this is, when it is one person's on a computer several people use: the person's
+ * own, started for them beside the owner's. Their devices are in the owner's door, not here.
  */
-function listed(store: Store): Status['devices'] {
-  const rows: (Status['devices'][number] & { computer?: string; kinds: boolean[] })[] = []
-  for (const device of store.devices) {
-    const { id, name, added, seen, line, computer } = device
-    const person = personOf(store, device)
-    const isLine = line !== undefined
-    // One computer's two entries are one row only when they are the same person's.
-    const row = computer !== undefined ? rows.find(candidate => candidate.computer === computer && candidate.person === person && !candidate.kinds.includes(isLine)) : undefined
-    if (!row) {
-      rows.push({ id, name, added, ...(seen ? { seen } : {}), ...(line ? { line: true as const } : {}), ...(computer !== undefined ? { computer } : {}), ...(person !== undefined ? { person } : {}), kinds: [isLine] })
-      continue
-    }
-    row.kinds.push(isLine)
-    row.also = [...(row.also ?? []), id]
-    if (added < row.added) row.added = added
-    if (seen && (row.seen === undefined || seen > row.seen)) row.seen = seen
-    if (line) {
-      row.line = true
-      row.name = name
-    }
-  }
-  // Which computer an entry says it is stays in the file: a page that knew it could say it too.
-  return rows.map(({ computer: _computer, kinds: _kinds, ...row }) => row)
+function ownPerson(env: NodeJS.ProcessEnv): string | undefined {
+  return env.OPENAGENT_PERSON ? accountOf(env.OPENAGENT_PERSON) : undefined
 }
 
-function statusOf(store: Store): Status {
+function statusOf(store: Store, env: NodeJS.ProcessEnv): Status {
   const listening = isListening(store)
   const wanted = store.on || store.https !== undefined
   const problem = !wanted ? undefined : listening ? (store.https ? store.problem : undefined) : (store.problem ?? NOT_RUNNING)
+  const person = ownPerson(env)
   return {
     on: store.on,
     listening,
     ...(problem ? { problem } : {}),
     ...(store.https ? { https: { address: store.https.address } } : {}),
-    devices: listed(store),
-    persons: store.persons.map(({ account, owner }) => ({ account, ...(owner ? { owner } : {}) })),
+    ...(person !== undefined ? { person } : {}),
+    devices: listedDevices(store),
+    persons: store.persons.map(({ account, owner, port, ready, problem, worker }) => ({
+      account,
+      ...(owner ? { owner } : {}),
+      // Only where the person gets a user of their own: how its making goes.
+      ...(port !== undefined && ready ? { ready } : {}),
+      ...(port !== undefined && worker !== undefined && pidAlive(worker) ? { working: true as const } : {}),
+      ...(port !== undefined && problem !== undefined ? { problem } : {}),
+    })),
     lines: store.lines.map(({ url, mode, key, refused }) => {
       const id = readKeyWord(key)?.id
       return { url, mode, ...(id ? { id } : {}), ...(refused ? { refused: true as const } : {}) }
@@ -151,7 +157,7 @@ async function setSwitch(io: CliIO, on: boolean): Promise<Status> {
   for (;;) {
     const store = await readStore(io.env)
     const settled = on ? isListening(store) || store.problem !== undefined : store.listening === undefined || !pidAlive(store.listening.pid)
-    if (settled || Date.now() > deadline) return statusOf(store)
+    if (settled || Date.now() > deadline) return statusOf(store, io.env)
     await new Promise(resolve => setTimeout(resolve, 100))
   }
 }
@@ -170,19 +176,21 @@ async function setHttps(io: CliIO, address: string | undefined): Promise<Status>
     const store = await readStore(io.env)
     // A certificate takes longer than this waits for: the answer then says it is being asked for.
     const settled = address === undefined ? !isListening(store) || store.on : isListening(store) || store.problem !== undefined
-    if (settled || Date.now() > deadline) return statusOf(store)
+    if (settled || Date.now() > deadline) return statusOf(store, io.env)
     await new Promise(resolve => setTimeout(resolve, 100))
   }
 }
 
 async function addDevice(io: CliIO, said?: string): Promise<{ url: string; numberUrl?: string; expires: string; person?: string }> {
   const store = await readStore(io.env)
-  const status = statusOf(store)
-  const person = said === undefined ? undefined : await forPerson(io, store, said)
+  const status = statusOf(store, io.env)
+  // Asked once the door can give a link: a person's user is made on the way, which takes a while and is not undone.
+  const whose = (): Promise<string | undefined> => (said === undefined ? Promise.resolve(undefined) : forPerson(io, store, said))
   if (store.https) {
     if (!status.listening) throw new Refused(status.problem ?? 'the door is not open')
     const fingerprint = await doorFingerprint(io.env)
     if (!fingerprint) throw new Refused('the door has no key yet')
+    const person = await whose()
     const { code, expires } = await addCode(io.env, Date.now(), person)
     const port = store.listening!.port
     // After the code, what the door's key is known by: a computer that pastes the link knows the door again by it.
@@ -195,6 +203,7 @@ async function addDevice(io: CliIO, said?: string): Promise<{ url: string; numbe
   const number = numberAddress(io.address)
   const first = name ?? number
   if (!first) throw new Refused('this computer is on no network a device could reach it on')
+  const person = await whose()
   const { code, expires } = await addCode(io.env, Date.now(), person)
   const link = (host: string): string => `http://${urlHost(host)}:${port}${ENTER_PATH}#${code}`
   // The number beside the name, for the phone that cannot open a name on the network.
@@ -204,6 +213,13 @@ async function addDevice(io: CliIO, said?: string): Promise<{ url: string; numbe
 /**
  * The person a code is for, by the GitHub account given: put among the persons when they are not
  * yet. `undefined` for the owner's own account: the device is the owner's, as with no `--for`.
+ *
+ * On a computer that gives each person a user of their own, the person gets a block of ports, and
+ * the helper is started on its own to make their user, with their own OpenAgent on the first port
+ * of the block. That takes a minute or two, longer than a page waits for a command, so the code is
+ * answered at once and the file says how the making goes (`ready`, `problem`). Whoever gets in
+ * with the code reaches that person's OpenAgent and no other, once it is up. Asked again for a
+ * person whose user could not be made, the helper is started again.
  */
 async function forPerson(io: CliIO, store: Store, said: string): Promise<string | undefined> {
   const account = accountOf(said)
@@ -211,8 +227,103 @@ async function forPerson(io: CliIO, store: Store, said: string): Promise<string 
   const owner = store.persons.find(person => person.owner)
   if (!owner) throw new Refused('Name the owner first: remote-access owner <your GitHub account>')
   if (owner.account === account) return undefined
-  if (!(await addPerson(io.env, account))) throw new Refused('This computer has as many persons as it can: remove one first.')
+  const helper = helperOf(io)
+  const person = await addPerson(io.env, account, Date.now(), helper !== undefined)
+  if (!person) throw new Refused('This computer has as many persons as it can: remove one first.')
+  if (helper && person.port !== undefined && !person.ready && !(person.worker !== undefined && pidAlive(person.worker))) {
+    const worker = (io.startWork ?? startWork)(io.env, account)
+    await update(io.env, kept => {
+      const known = kept.persons.find(candidate => candidate.account === account && !candidate.owner)
+      if (!known) return
+      delete known.problem
+      if (worker !== undefined) known.worker = worker
+    })
+  }
   return account
+}
+
+/** Start making a person's user, as a process of its own that outlives this command: this command again, with `person-work`. */
+function startWork(env: NodeJS.ProcessEnv, account: string): number | undefined {
+  const child = spawn(process.execPath, [fileURLToPath(new URL('../bin/remote-access', import.meta.url)), 'person-work', account], { env, detached: true, stdio: 'ignore' })
+  child.on('error', () => {})
+  child.unref()
+  return child.pid
+}
+
+/**
+ * Make a person's user: the helper's work, run by the process {@link forPerson} started, which
+ * writes in the file how it ended. Its words are written only while the file still names this
+ * process as the person's: a person removed meanwhile, or asked for anew, is another's to say.
+ */
+async function personWork(io: CliIO, account: string): Promise<void> {
+  const helper = helperOf(io)
+  if (!helper) throw new Refused('OPENAGENT_PERSON_HELPER does not name the helper here')
+  const person = (await readStore(io.env)).persons.find(candidate => candidate.account === account && !candidate.owner)
+  if (person?.port === undefined) throw new Refused(`@${account} is no person here with a user to make`)
+  // Another process at it already: it says how it ended.
+  if (person.worker !== undefined && person.worker !== process.pid && pidAlive(person.worker)) return
+  const mine = await update(io.env, kept => {
+    const known = kept.persons.find(candidate => candidate.account === account && candidate.port === person.port)
+    if (known) known.worker = process.pid
+    return known !== undefined
+  })
+  if (!mine) return
+  const made = await helper(['add', account, String(person.port)])
+  await update(io.env, kept => {
+    const known = kept.persons.find(candidate => candidate.account === account && candidate.worker === process.pid)
+    if (!known) return
+    delete known.worker
+    if (made.ok) {
+      known.ready = true
+      delete known.problem
+    } else {
+      delete known.ready
+      known.problem = made.error
+    }
+  })
+}
+
+/** End the process that makes a person's user, when one is at it, with the helper it started: their user is about to be removed. */
+function stopWork(worker: number | undefined): void {
+  if (worker === undefined || worker === process.pid || !pidAlive(worker)) return
+  try {
+    process.kill(-worker, 'SIGTERM')
+  } catch {
+    try {
+      process.kill(worker, 'SIGTERM')
+    } catch {
+      // Gone already.
+    }
+  }
+}
+
+/** What the helper answered: done, or why not in its own last words. */
+export type HelperAnswer = { ok: true } | { ok: false; error: string }
+
+/** How long the helper may take: making a person's user installs Claude Code for them. */
+const HELPER_TIMEOUT_MS = 10 * 60_000
+
+/**
+ * The helper that makes and removes each person's user on a computer that gives each person a
+ * user of their own: a program of root's that this computer's user may run as root, and nothing
+ * else (`OPENAGENT_PERSON_HELPER` names it). `undefined` on any other computer: there nothing is
+ * made, and every person's calls go to the one OpenAgent, as before.
+ */
+function helperOf(io: CliIO): ((args: string[]) => Promise<HelperAnswer>) | undefined {
+  const path = io.env.OPENAGENT_PERSON_HELPER
+  if (!path) return undefined
+  return io.helper ? args => io.helper!(path, args) : args => runHelper(path, args)
+}
+
+/** Run the helper as root, without a password: `sudo -n` says no at once where it would ask for one. */
+function runHelper(path: string, args: string[]): Promise<HelperAnswer> {
+  return new Promise(resolve => {
+    execFile('sudo', ['-n', path, ...args], { timeout: HELPER_TIMEOUT_MS }, (err, _out, said) => {
+      if (!err) return resolve({ ok: true })
+      const last = String(said).trim().split('\n').at(-1)?.trim()
+      resolve({ ok: false, error: (err as NodeJS.ErrnoException).code === 'ENOENT' ? 'sudo is not on this computer.' : err.killed ? 'it took too long.' : last || `it ended with ${err.code ?? 'an error'}.` })
+    })
+  })
 }
 
 /** The GitHub account `gh` is logged in to on this computer. */
@@ -266,7 +377,7 @@ async function addLine(io: CliIO, pasted: string, mode: Line['mode']): Promise<S
   })
   // Waited for: the command ends with its answer, and the key the old line was asked for with must not stay on the server.
   if (old) await (io.leaveLine ?? leaveLine)(old, link.door)
-  return statusOf(await readStore(io.env))
+  return statusOf(await readStore(io.env), io.env)
 }
 
 async function setLineMode(io: CliIO, at: string, mode: Line['mode']): Promise<Status> {
@@ -279,7 +390,7 @@ async function setLineMode(io: CliIO, at: string, mode: Line['mode']): Promise<S
   })
   if (!found) throw new Refused(`This computer keeps no line to ${at}.`)
   if (found.refused) throw new Refused(`The server at ${at} no longer lets this computer in for its line. Ask for the line anew, with a new link.`)
-  return statusOf(await readStore(io.env))
+  return statusOf(await readStore(io.env), io.env)
 }
 
 async function removeLine(io: CliIO, at: string): Promise<Status> {
@@ -291,7 +402,7 @@ async function removeLine(io: CliIO, at: string): Promise<Status> {
   if (!removed) throw new Refused(`This computer keeps no line to ${at}.`)
   // A server that cannot be reached right now keeps the key until this computer is removed there, among its devices.
   if (!(await (io.leaveLine ?? leaveLine)(removed, `${removed.url}${ENTER_PATH}`))) io.stderr(`The server could not be told: it still lists this computer among its devices. Remove it there.`)
-  return statusOf(await readStore(io.env))
+  return statusOf(await readStore(io.env), io.env)
 }
 
 async function runServe(io: CliIO): Promise<void> {
@@ -340,7 +451,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
     switch (command) {
       case 'status':
         if (rest.length) break
-        return print(statusOf(await readStore(io.env)))
+        return print(statusOf(await readStore(io.env), io.env))
       case 'on':
       case 'off':
         if (rest.length) break
@@ -363,20 +474,31 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         const account = accountOf(said)
         if (account === undefined) throw new Refused(`${said} is not a GitHub account`)
         if (!(await nameOwner(io.env, account))) throw new Refused(`This computer's owner is @${(await readStore(io.env)).persons[0]?.account}.`)
-        return print(statusOf(await readStore(io.env)))
+        return print(statusOf(await readStore(io.env), io.env))
       }
       case 'remove-person': {
         const [said] = rest
         if (rest.length !== 1 || !said) break
         const account = accountOf(said)
-        if (account === undefined || !(await removePerson(io.env, account))) throw new Refused(`${said} is no person here that can be removed: the owner stays.`)
-        return print(statusOf(await readStore(io.env)))
+        const refused = `${said} is no person here that can be removed: the owner stays.`
+        const person = account === undefined ? undefined : (await readStore(io.env)).persons.find(candidate => candidate.account === account && !candidate.owner)
+        if (account === undefined || !person) throw new Refused(refused)
+        // Their user first, with all it holds: a person whose user could not be removed stays listed, to be removed again.
+        // A making still at work is ended first, so it does not make the user again once it is gone.
+        stopWork(person.worker)
+        const helper = helperOf(io)
+        if (helper && person.port !== undefined) {
+          const gone = await helper(['remove', account])
+          if (!gone.ok) throw new Refused(`@${account}'s user on this computer could not be removed: ${gone.error}`)
+        }
+        if (!(await removePerson(io.env, account))) throw new Refused(refused)
+        return print(statusOf(await readStore(io.env), io.env))
       }
       case 'remove': {
         const [id] = rest
         if (rest.length !== 1 || !id) break
         if (!(await removeComputer(io.env, id))) throw new Refused(`no device has the id ${id}`)
-        return print(statusOf(await readStore(io.env)))
+        return print(statusOf(await readStore(io.env), io.env))
       }
       case 'https': {
         const [address] = rest
@@ -397,6 +519,14 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         if (rest.length) break
         await runServe(io)
         return 0
+      // Not for a person: the process `add --for` starts to make a person's user.
+      case 'person-work': {
+        const [said] = rest
+        const account = said === undefined ? undefined : accountOf(said)
+        if (rest.length !== 1 || account === undefined) break
+        await personWork(io, account)
+        return print({ ok: true })
+      }
       default:
     }
   } catch (err) {

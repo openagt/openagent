@@ -18,7 +18,8 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A device that is already in shows the code for the next one.
 - Each device has its own key, and is removed alone. Picked over one key shared by every
   device, where taking one phone out meant a new key for all.
-- A device that is in sees and does what the computer's own browser does. Picked over a
+- A device that is in sees and does what the computer's own browser does; on a server, a
+  device of an invited person does so on that person's own OpenAgent there. Picked over a
   device that only watches.
 - Another computer's OpenAgent gets in as a device does: with the same code, pasted as a
   link where a phone scans it, and a key of its own that is removed alone. Picked over a
@@ -37,6 +38,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   allow others to invite can come later.
 - A computer only one person uses is unchanged: OpenAgent asks who the owner is only the first
   time a device is let in for someone else. Picked over asking every computer who its person is.
+- Removing a person removes everything of theirs on a server: their user, their logins, their
+  copies of projects, and work they did not push. Picked over taking only their access away.
 
 ## Phone on Wi-Fi
 - The link on the Wi-Fi is plain HTTP, behind a switch that is off until a person turns it

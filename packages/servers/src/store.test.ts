@@ -42,7 +42,7 @@ test('a file is read forgivingly: what is malformed is left out, and every step 
   assert.deepEqual(first!.worker, { pid: 42, seen: '2026-10-11T12:00:00.000Z' })
   assert.equal(first!.adding, true)
   assert.deepEqual(second, { address: '203.0.113.7', user: 'ada', steps: freshSteps(), adding: false })
-  assert.deepEqual(sanitize('nonsense'), { servers: [] })
+  assert.deepEqual(sanitize('nonsense'), { servers: [], shared: [] })
 })
 
 test('an install runs while its process is there and said so a moment ago: a number alone, which another program may hold by now, is no proof', () => {
@@ -66,7 +66,7 @@ test('a server\'s door answers at its address over HTTPS, a number of the long k
 test('a change is written whole, for the owner alone; no file reads as no server; a file that cannot be read is not written over', async () => {
   const home = await testHome()
   try {
-    assert.deepEqual(await readStore(home.env), { servers: [] })
+    assert.deepEqual(await readStore(home.env), { servers: [], shared: [] })
     await update(home.env, store => void store.servers.push({ address: '203.0.113.5', user: 'root', steps: freshSteps(), adding: true }))
     assert.equal((await readStore(home.env)).servers[0]!.address, '203.0.113.5')
     assert.equal((await stat(storePath(home.env))).mode & 0o777, 0o600)

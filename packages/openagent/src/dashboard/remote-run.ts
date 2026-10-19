@@ -558,3 +558,59 @@ export function foldRelayedEvent(meta: AgentMeta, event: OpenAgentEvent, at: str
   }
   return next
 }
+
+/** How long a computer's command on a machine may take: as long as the machine gives it, and the way there and back. */
+const COMMAND_TIMEOUT_MS = 45_000
+
+/**
+ * Run one of a computer package's own commands on a machine, as that machine's own page runs it:
+ * a module on this computer reads and changes what the same package keeps over there. `input` is
+ * what the command reads on standard input there; it travels in the call's body, never in an
+ * address. The machine answers as its page is answered.
+ */
+export async function remoteComputerCommand(machine: MachineAccess, pkg: string, args: readonly string[], command?: string, input?: string): Promise<{ ok: true; output: unknown } | { ok: false; error: string }> {
+  try {
+    const res = await machineFetch(`${trimSlashes(machine.url)}/_rpc/runComputerCommand`, machine.pin, {
+      method: 'POST',
+      headers: relayHeaders(machine.key),
+      body: JSON.stringify([pkg, args, command ?? null, input ?? null]),
+      signal: AbortSignal.timeout(COMMAND_TIMEOUT_MS),
+    })
+    if (res.status === 401) return { ok: false, error: NOT_IN }
+    if (!res.ok) return { ok: false, error: (await refusalOf(res)) ?? `the machine answered ${res.status}` }
+    const said = ((await res.json()) as { ret?: unknown }).ret
+    const { ok, output, error } = (said && typeof said === 'object' ? said : {}) as Record<string, unknown>
+    if (ok === true) return { ok: true, output }
+    return { ok: false, error: typeof error === 'string' && error ? error.slice(0, MAX_SAID) : 'the machine answered something else than expected' }
+  } catch (err) {
+    return { ok: false, error: errorMessage(err) }
+  }
+}
+
+/** What a machine's door is asked about this computer's person there: who they are and their devices, one of those devices out, or a link for this computer's line. */
+export type DoorAsk = { what: 'me' } | { what: 'remove'; id: string } | { what: 'line' }
+
+/**
+ * Ask a machine's door about the person this computer is in as there: the door answers it
+ * itself, from its own file, and passes nothing on to the OpenAgent behind it. Answers what the
+ * door said, as it said it: the caller reads it as the data of another computer.
+ */
+export async function remoteDoor(machine: MachineAccess, ask: DoorAsk): Promise<{ ok: true; said: unknown } | { ok: false; error: string; unknown?: true }> {
+  const path = ask.what === 'me' ? '/_remote-access/me' : `/_remote-access/me/${ask.what}`
+  try {
+    const res = await machineFetch(`${trimSlashes(machine.url)}${path}`, machine.pin, {
+      method: ask.what === 'me' ? 'GET' : 'POST',
+      headers: ask.what === 'me' ? { authorization: `Bearer ${machine.key}` } : relayHeaders(machine.key),
+      ...(ask.what === 'remove' ? { body: JSON.stringify({ id: ask.id }) } : ask.what === 'line' ? { body: '{}' } : {}),
+      signal: AbortSignal.timeout(PING_TIMEOUT_MS * 3),
+    })
+    // A door that knows of no persons: an OpenAgent from before them, or no door at all.
+    if (res.status === 404 && ask.what === 'me') return { ok: false, error: 'the machine does not say who this computer is there', unknown: true }
+    if (res.status === 401) return { ok: false, error: NOT_IN }
+    // The door says why in words of its own, for the person to read: a device that is not theirs, a door that gives no line.
+    if (!res.ok) return { ok: false, error: (await res.text().catch(() => '')).trim().slice(0, MAX_SAID) || `the machine answered ${res.status}` }
+    return { ok: true, said: await res.json() }
+  } catch (err) {
+    return { ok: false, error: errorMessage(err) }
+  }
+}
