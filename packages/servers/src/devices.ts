@@ -1,6 +1,6 @@
 import { lastLines, openSession, withAdvice, type Exec } from './ssh.js'
 import { PERSON_TIMEOUT_MS, SERVER_USER, devicesScript, ownerScript, removeDeviceScript, removePersonScript } from './steps.js'
-import { isAccount, type Server } from './store.js'
+import { isAccount, isMachineUrl, type Server } from './store.js'
 
 /**
  * The devices that are in on a server, as its door lists them: asked over SSH, so a person sees
@@ -34,6 +34,12 @@ export interface ServerPerson {
   working?: true
   /** Why their own user could not be made, in the server's words. */
   problem?: string
+  /** On a computer reached through a server: the server whose line made this person's user here. */
+  from?: string
+  /** That server no longer has the person, and the computer's owner has not said to keep their user. */
+  removed?: true
+  /** The computer's owner said to keep their user, switched off, though that server no longer has them. */
+  kept?: true
 }
 
 /** Every id a row is listed under: its own, and those of what else the computer holds there. */
@@ -79,7 +85,7 @@ export function devicesIn(out: string): { devices: ServerDevice[]; persons: Serv
   const persons: ServerPerson[] = []
   for (const entry of Array.isArray(answer?.persons) ? answer.persons : []) {
     if (persons.length >= MAX_DEVICES) break
-    const { account, owner, working, problem } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
+    const { account, owner, working, problem, from, removed, kept } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
     const known = accountIn(account)
     if (known === undefined || persons.some(person => person.account === known)) continue
     // A door lists its owner first: a list that does not start with one is no list of persons.
@@ -87,7 +93,10 @@ export function devicesIn(out: string): { devices: ServerDevice[]; persons: Serv
     // What the server said is shown as words, with nothing in it that moves a line or turns its letters around.
     const said = typeof problem === 'string' ? problem.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, ' ').trim().slice(0, 400) : ''
     if (!persons.length) persons.push({ account: known, owner: true })
-    else if (owner !== true) persons.push({ account: known, ...(working === true ? { working: true as const } : {}), ...(said ? { problem: said } : {}) })
+    else if (owner !== true) {
+      const via = typeof from === 'string' && isMachineUrl(from) && from.startsWith('https://') ? from : undefined
+      persons.push({ account: known, ...(working === true ? { working: true as const } : {}), ...(said ? { problem: said } : {}), ...(via !== undefined ? { from: via, ...(removed === true && kept !== true ? { removed: true as const } : {}), ...(kept === true ? { kept: true as const } : {}) } : {}) })
+    }
   }
   const devices: ServerDevice[] = []
   for (const entry of listed) {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Laptop, Loader2, Plus, Server, UserPlus, UserRound } from 'lucide-react'
-import { AddMachineDialog, Button, Checkbox, ConfirmDialog, Dialog, Input, InviteDialog, SettingsSection, Switch, cn, formatDateTime, formatRelative, reachedByLine, useModuleHost, usePolled, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
-import { askLink, connect, forget, idsOf, loadDevices, loadOwn, loadServers, loadShared, login, logout, markAdded, nameOwner, ownCodeLogin, ownGithub, ownLogout, reach, readPersonThere, removeDevice, removePerson, sharedClaude, sharedForget, sharedGithub, sharedReach, type Answer, type DeviceRow, type DevicesRead, type DoorLink, type OwnGithub, type OwnRead, type PersonThere, type ServerRow, type ServersRead, type SharedRow, type StepState } from './servers.js'
+import { AddMachineDialog, Badge, Button, Checkbox, ConfirmDialog, Dialog, Input, InviteDialog, RadioGroup, RadioGroupOption, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SettingsSection, Switch, cn, formatDateTime, formatRelative, reachedByLine, useModuleHost, usePolled, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
+import { addThrough, askLink, connect, forget, idsOf, loadDevices, loadOwn, loadServers, loadShared, login, logout, markAdded, nameOwner, ownCodeLogin, ownGithub, ownLogout, reach, readPersonThere, removeDevice, removePerson, setWho, sharedClaude, sharedForget, sharedGithub, sharedReach, type Answer, type DeviceRow, type DevicesRead, type DoorLink, type OwnGithub, type OwnRead, type PersonThere, type ServerRow, type ServersRead, type SharedRow, type StepState, type Who } from './servers.js'
 
 // Settings → Machines: the other computers a run can be sent to, each listed once. A server this
 // computer installed OpenAgent on is listed with all that is set up on it; a machine added with a
@@ -29,6 +29,11 @@ import { askLink, connect, forget, idsOf, loadDevices, loadOwn, loadServers, loa
 // Each step of an install or an update has its own mark as it runs: waiting, a spinner, done or
 // failed. The steps show while there is something to see in them, and fold into one line once
 // the server is installed and runs can be sent to it.
+//
+// A computer at home, which nothing on the internet reaches, is set up as a server the same way,
+// "through" a server this computer is in at: it gets no door of its own, and keeps a line to that
+// server instead. Its row says who there may start runs on it, in place of an Invite: it is
+// reached from that server's page, and from this computer through that server.
 
 const NOT_READ: Answer<ServersRead> | undefined = undefined
 const NO_MACHINES: ModuleMachines | undefined = undefined
@@ -339,6 +344,91 @@ function ServerDevices({
 /** Where a computer saved through a server is reached: the server's address, then this. */
 const THROUGH = '/_remote-access/via/'
 
+/** A server's address as a person reads it: its host, without the scheme. */
+const hostOf = (url: string): string => new URL(url).host
+
+/** Names as a sentence says them: `@a`, `@a and @b`, `@a, @b and @c`. */
+const named = (accounts: readonly string[]): string => {
+  const said = accounts.map(account => `@${account}`)
+  return said.length < 2 ? (said[0] ?? '') : `${said.slice(0, -1).join(', ')} and ${said.at(-1)}`
+}
+
+/**
+ * Who on its server may start runs on a computer reached through it: nobody, its own person, or
+ * every person there. Going from everyone to fewer asks first what becomes of the users the others
+ * have on the computer: they go with all of it, or stay, switched off.
+ */
+function WhoCanStart({ host, server, busy, onChange }: { host: ModuleHost; server: ServerRow & { through: string }; busy: boolean; onChange: (change: () => Promise<Answer<unknown>>) => Promise<boolean> }) {
+  const at = hostOf(server.through)
+  // How many people that server has, when its door says: a person's computer only hears of them through a line for everyone.
+  const { value: people } = usePolled<number | undefined>(
+    async () => {
+      const asked = await host.machinePerson(server.through)
+      const persons = asked.ok && asked.said && typeof asked.said === 'object' ? (asked.said as Record<string, unknown>).persons : undefined
+      return Array.isArray(persons) ? persons.length : undefined
+    },
+    undefined,
+    60_000,
+    [server.through],
+    'previous',
+  )
+  // The others whose users the computer holds, and what the person picked, while the question is open.
+  const [asking, setAsking] = useState<{ who: Who; others: string[] } | undefined>()
+  const who = server.who ?? 'me'
+  const pick = async (next: Who): Promise<void> => {
+    if (next === who) return
+    if (who === 'everyone') {
+      const listed = await loadDevices(host, server.address)
+      const others = listed.ok ? listed.value.persons.filter(person => !person.owner && person.from === server.through).map(person => person.account) : []
+      if (others.length) return setAsking({ who: next, others })
+    }
+    await onChange(() => setWho(host, server.address, next))
+  }
+  const answer = (remove: boolean): void => {
+    const asked = asking!
+    setAsking(undefined)
+    void onChange(() => setWho(host, server.address, asked.who, remove))
+  }
+  return (
+    <div className="space-y-2">
+      <p className="text-sm">Who can start runs on it</p>
+      <RadioGroup aria-label={`Who can start runs on ${server.address}`} value={who} disabled={busy} onValueChange={next => void pick(next as Who)}>
+        <RadioGroupOption value="nobody">Nobody: its runs only show there</RadioGroupOption>
+        <RadioGroupOption value="me">Only me</RadioGroupOption>
+        <RadioGroupOption value="everyone">
+          {`Everyone on ${at}${people !== undefined ? ` (${people} ${people === 1 ? 'person' : 'people'})` : ''}`}
+          <span className="block w-full pl-6 text-xs text-muted-foreground">
+            Each person's runs use their own logins, never yours.
+            <br />
+            Their agents run on your home network.
+          </span>
+        </RadioGroupOption>
+      </RadioGroup>
+      {asking !== undefined && (
+        <Dialog open onOpenChange={open => !open && setAsking(undefined)} title={`Who can start runs on ${server.address}`}>
+          <div className="space-y-4 text-sm">
+            <p>{`${named(asking.others)} ${asking.others.length === 1 ? 'has a user of their own' : 'have their own users'} on ${server.address}.`}</p>
+            <div className="space-y-1">
+              <Button size="sm" variant="destructive" onClick={() => answer(true)}>
+                Remove them, with their logins and projects
+              </Button>
+              <p className="text-xs text-muted-foreground">Work they did not push goes with them.</p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button size="sm" variant="ghost" onClick={() => setAsking(undefined)}>
+                Cancel
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => answer(false)}>
+                Keep them, switched off
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+    </div>
+  )
+}
+
 /**
  * The computers that keep a line open to a server this computer is in at: computers at home a
  * run can be sent to through the server. One press saves one, and it is in "Run on" from then on.
@@ -635,6 +725,9 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
   const [address, setAddress] = useState('')
   const [user, setUser] = useState('root')
   const [copy, setCopy] = useState(false)
+  // How the server to connect is reached: at its own address, or through a server this computer is in at, by that server's address.
+  const [reached, setReached] = useState<'internet' | 'through'>('internet')
+  const [via, setVia] = useState<string | undefined>()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
   // Why a server whose install ended is not among the machines, by its address.
@@ -662,6 +755,9 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
   const servers = isServer ? [] : lastServers.current
   // The machines that are no server's row: each machine is listed once.
   const others = (known?.machines ?? []).filter(machine => !servers.some(server => server.url === machine.url))
+  // The servers a computer can be reached through: those with a door of their own on the internet.
+  const doors = (known?.machines ?? []).filter(machine => machine.url.startsWith('https://') && !machine.url.includes(THROUGH))
+  const through = reached === 'through' ? (via ?? doors[0]?.url) : undefined
   const inMachines = (server: ServerRow, among = known) => among?.machines.find(machine => machine.url === server.url)
   const installed = (server: ServerRow): boolean => !server.working && server.steps.every(step => step.state === 'done')
 
@@ -675,14 +771,14 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
     return answer.ok
   }
 
-  const install = async (at: string, as: string, github = false): Promise<boolean> => {
+  const install = async (at: string, as: string, github = false, through?: string): Promise<boolean> => {
     if (!known || known.version === 'unknown') {
       setError('This computer could not say which OpenAgent it runs.')
       return false
     }
     setNotAdded(reasons => without(reasons, at))
     setPressed(at)
-    const started = await act(() => connect(host, at, as, known.version, github))
+    const started = await act(() => connect(host, at, as, known.version, github, through))
     setPressed(undefined)
     return started
   }
@@ -699,6 +795,13 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
     setNotAdded(reasons => without(reasons, server.address))
     const stopped = (why: string): void => setNotAdded(reasons => ({ ...reasons, [server.address]: why }))
     try {
+      // A computer reached through a server is saved through that server, by its line: it has no door to give a link.
+      if (server.through !== undefined) {
+        const added = await addThrough(host, server.address)
+        if (!added.ok) return stopped(added.error)
+        await Promise.all([reload(), reloadMachines()]).catch(() => {})
+        return
+      }
       // Read now, not as the page last saw them: the machines change from the launcher, too.
       if (inMachines(server, await host.machines())?.version === undefined) {
         const link = await askLink(host, server.address)
@@ -763,7 +866,7 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
     event.preventDefault()
     if (!address.trim() || !user.trim()) return
     // The server is in the list from here on, its steps running: the dialog has done its part.
-    void install(address.trim(), user.trim(), copy && account !== undefined).then(started => {
+    void install(address.trim(), user.trim(), copy && account !== undefined, through).then(started => {
       if (!started) return
       setAddress('')
       setConnecting(false)
@@ -853,7 +956,10 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
                   <div className="flex min-w-0 gap-3">
                     <Server aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 space-y-0.5">
-                      <p className="truncate text-sm font-medium">{server.address}</p>
+                      <p className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                        <span className="truncate">{server.address}</span>
+                        {server.through !== undefined && <Badge>Server</Badge>}
+                      </p>
                       {server.working ? (
                         <ServerState tone="working">{current < 0 ? `${doing}…` : `${doing}: step ${current + 1} of ${server.steps.length}`}</ServerState>
                       ) : failed ? (
@@ -873,6 +979,7 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
                       ) : (
                         <ServerState tone="quiet">{`Logs in as ${server.user}.`}</ServerState>
                       )}
+                      {server.through !== undefined && <p className="text-xs text-muted-foreground">{`Reached through ${hostOf(server.through)}`}</p>}
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -894,7 +1001,8 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
                         {machine ? 'Connect again' : 'Finish connecting'}
                       </Button>
                     )}
-                    {done && (
+                    {/* A computer reached through a server lets nobody in by itself: it is reached from that server. */}
+                    {done && server.through === undefined && (
                       <Button
                         size="sm"
                         variant={machine?.version !== undefined && !behind ? 'default' : 'outline'}
@@ -949,7 +1057,9 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
                       <ChevronRight aria-hidden className="h-3 w-3" />
                     </button>
                   )}
-                  {done && machine && (
+                  {done && server.through !== undefined && <WhoCanStart host={host} server={{ ...server, through: server.through }} busy={busy} onChange={act} />}
+                  {/* This computer keeps no line to a computer reached through a server: that one keeps its line to its server. */}
+                  {done && machine && server.through === undefined && (
                     <label className="flex items-start justify-between gap-4">
                       <span className="min-w-0">
                         <span className="block text-sm">Start runs on this computer from the phone</span>
@@ -1075,7 +1185,7 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
                       </ul>
                     </div>
                   )}
-                  {done && (
+                  {done && server.through === undefined && (
                     <ServerDevices
                       host={host}
                       address={server.address}
@@ -1091,7 +1201,7 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
                       onOwner={owner => setOwners(named => (named[server.address] === owner ? named : { ...named, [server.address]: owner }))}
                     />
                   )}
-                  {done && machine && <ComputersThrough host={host} machine={machine} busy={busy} everyMs={devicesEveryMs} />}
+                  {done && machine && server.through === undefined && <ComputersThrough host={host} machine={machine} busy={busy} everyMs={devicesEveryMs} />}
                   {!server.working && (
                     <Button
                       size="sm"
@@ -1145,6 +1255,32 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
             <p className="text-xs text-muted-foreground">
               The user is root, or one that becomes root without a password. It is only used to install, to update, to give the server its logins and to list its devices: what runs on the server afterwards runs as a user of its own, openagent.
             </p>
+            {doors.length > 0 && (
+              <div className="space-y-2 text-xs">
+                <p className="text-muted-foreground">Reached:</p>
+                <RadioGroup aria-label="How the server is reached" value={reached} disabled={busy} onValueChange={next => setReached(next as 'internet' | 'through')}>
+                  <RadioGroupOption value="internet" className="text-xs">
+                    on the internet, at its own address
+                  </RadioGroupOption>
+                  <RadioGroupOption value="through" className="text-xs">
+                    through a server:
+                    <Select items={doors.map(door => ({ value: door.url, label: door.label }))} value={through ?? doors[0]!.url} disabled={busy || reached !== 'through'} onValueChange={next => setVia(next as string)}>
+                      <SelectTrigger size="sm" aria-label="The server it is reached through" className="w-48">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {doors.map(door => (
+                          <SelectItem key={door.url} value={door.url}>
+                            {door.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </RadioGroupOption>
+                </RadioGroup>
+                {reached === 'through' && <p className="text-muted-foreground">SSH must be on at the computer, with this computer's key. The user name is your own user on it.</p>}
+              </div>
+            )}
             <label className="flex items-start gap-2 text-xs">
               <Checkbox checked={copy && account !== undefined} onCheckedChange={checked => setCopy(checked === true)} disabled={busy || account === undefined} className="mt-0.5" aria-label="Copy my GitHub login to the server" />
               <span>

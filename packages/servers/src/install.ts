@@ -1,7 +1,8 @@
 import { giveGithub, noteGithub } from './logins.js'
+import { askOpenAgent } from './shared.js'
 import { exec as realExec, lastLines, openSession, withAdvice, type Exec, type Session } from './ssh.js'
-import { PERSON_TIMEOUT_MS, SERVER_USER, STEPS, linkScript, type StepId } from './steps.js'
-import { BEAT_MS, changeServer, doorUrl, heartbeat, working, type Server, type StepState } from './store.js'
+import { PERSON_TIMEOUT_MS, SERVER_USER, devicesScript, linkScript, stepsFor, type Facts, type StepId } from './steps.js'
+import { BEAT_MS, changeServer, doorUrl, heartbeat, isAccount, working, type Server, type StepState } from './store.js'
 
 /**
  * The install itself: the steps, one after the other, on one server, each written to the file
@@ -10,6 +11,11 @@ import { BEAT_MS, changeServer, doorUrl, heartbeat, working, type Server, type S
  * minutes, and a command a page runs has seconds.
  *
  * Once the steps are done, the GitHub login is copied when the person asked for that.
+ *
+ * A computer reached through a server (a computer at home, which nothing on the internet reaches)
+ * gets no door of its own. Its last step gives it its line to that server instead, as this
+ * computer's person's: this computer's OpenAgent, which is in at that server, says who the person
+ * is there and asks it for a link that lets the line in.
  */
 
 export interface InstallOptions {
@@ -22,6 +28,45 @@ export interface InstallOptions {
   signal?: AbortSignal
   /** How often the file is told the install still runs. */
   beatMs?: number
+  /** How this computer's OpenAgent is asked, for a computer reached through a server; its own address when unsaid. */
+  ask?: (fn: string, args: unknown[]) => Promise<unknown>
+}
+
+/** How long a computer gets to say which lines it keeps: it is its door's own file, read at once. */
+const LINES_TIMEOUT_MS = 20_000
+
+/** Whether the computer keeps a line to the server at `url` that the server still lets in, as its own door says. */
+async function keepsLine(session: Session, url: string): Promise<boolean> {
+  const said = await session.run(SERVER_USER, devicesScript(), LINES_TIMEOUT_MS)
+  if (said.code !== 0) return false
+  try {
+    const { lines } = JSON.parse(said.out.trim().split('\n').at(-1) ?? '') as { lines?: unknown }
+    return Array.isArray(lines) && (lines as Record<string, unknown>[]).some(line => line?.url === url && line.refused !== true)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * What the line step of a computer reached through a server is written for: who the person is at
+ * that server, and a link for the line when the computer has none there. Words for the person
+ * when that server does not say.
+ */
+async function lineFacts(session: Session, server: Required<Pick<Server, 'through'>> & Pick<Server, 'who'>, ask: (fn: string, args: unknown[]) => Promise<unknown>): Promise<{ ok: true; through: NonNullable<Facts['through']> } | { ok: false; said: string }> {
+  const host = new URL(server.through).host
+  try {
+    // OpenAgent's machines are named by their address.
+    const person = (await ask('onMachinePerson', [server.through])) as { ok?: boolean; said?: { account?: unknown }; error?: unknown } | undefined
+    const account = person?.ok ? person.said?.account : undefined
+    if (!isAccount(account)) return { ok: false, said: person?.ok || person?.error === undefined ? `${host} does not say who you are there. Press Invite on its row once: it names you its owner.` : `${host} did not say who you are there: ${String(person.error)}` }
+    const through = { url: server.through, owner: account.toLowerCase(), who: server.who ?? 'me' }
+    if (await keepsLine(session, server.through)) return { ok: true, through }
+    const link = (await ask('sendMachineLineLink', [server.through])) as { ok?: boolean; url?: unknown; error?: unknown } | undefined
+    if (!link?.ok || typeof link.url !== 'string') return { ok: false, said: `${host} gave no link for the line: ${typeof link?.error === 'string' ? link.error : 'it did not say why'}` }
+    return { ok: true, through: { ...through, link: link.url } }
+  } catch (err) {
+    return { ok: false, said: `This computer's OpenAgent did not answer: ${err instanceof Error ? err.message : String(err)}` }
+  }
 }
 
 /** Refused: the server's install already runs, in another process. */
@@ -65,16 +110,24 @@ export async function install(opts: InstallOptions): Promise<void> {
   const server = await change(kept => {
     if (working(kept) && !mine(kept) && kept.worker!.pid !== process.ppid) throw new AlreadyWorking(address)
     kept.worker = { pid: process.pid, seen: new Date().toISOString() }
-    return { address: kept.address, user: kept.user }
+    return { address: kept.address, user: kept.user, ...(kept.through !== undefined ? { through: kept.through } : {}), ...(kept.who !== undefined ? { who: kept.who } : {}) }
   })
   if (!server) throw new Error(`no server at ${address}`)
+  const ask = opts.ask ?? ((fn: string, args: unknown[]) => askOpenAgent(env, fn, args))
   const beating = heartbeat(beat, opts.beatMs ?? BEAT_MS)
   let session: Session | undefined
   try {
     session = await openSession(server, { ...(opts.exec ? { exec: opts.exec } : {}), ...(opts.signal ? { signal: opts.signal } : {}) })
-    const facts = { address, version, ...(await ownGitIdentity(opts.exec)) }
-    for (const step of STEPS) {
+    // The person logs in as their own user on a computer reached through a server: the one at its screen.
+    const facts: Facts = { address, version, ...(await ownGitIdentity(opts.exec)), ...(server.through !== undefined && server.user !== 'root' ? { desktop: server.user } : {}) }
+    for (const step of stepsFor(server.through !== undefined)) {
       await set(step.id, 'running')
+      if (step.id === 'line' && server.through !== undefined) {
+        // Asked only now: a link lets the line in for five minutes, and the steps before take longer.
+        const asked = await lineFacts(session, { through: server.through, ...(server.who !== undefined ? { who: server.who } : {}) }, ask)
+        if (!asked.ok) return void (await set(step.id, 'failed', asked.said))
+        facts.through = asked.through
+      }
       const login = step.id === 'login'
       if (login) {
         const met = await session.meet()
