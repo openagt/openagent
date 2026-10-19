@@ -387,6 +387,8 @@ export function whomToTell(store: Store, target: string, ports: { from: number; 
 interface SavedMachine {
   id: string
   url: string
+  label?: unknown
+  owner?: unknown
 }
 
 /**
@@ -419,7 +421,8 @@ export async function tellOpenAgent(target: string, computers: readonly LineComp
   }
   for (const computer of computers) {
     const address = lineAddress(computer.port)
-    if (saved.some(machine => machine.url === address)) continue
+    // Saved again when its address now stands for another computer, or for another person's: a port given anew.
+    if (saved.some(machine => machine.url === address && machine.label === computer.name && machine.owner === computer.owner)) continue
     const added = (await call('sendAddMachine', [`${address}${ENTER_PATH}#line`, computer.name, ...(computer.owner !== undefined ? [computer.owner] : [])])) as { ok?: boolean; error?: string } | undefined
     if (!added?.ok) throw new Error(`OpenAgent did not save ${computer.name}: ${added?.error ?? 'no reason said'}`)
   }

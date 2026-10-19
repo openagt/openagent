@@ -41,9 +41,13 @@ const MIRROR_MS = 60_000
  * Where a call down `line` goes, by whom of the server's persons it is for. Its own person, or a
  * call that names nobody, reaches this computer's own OpenAgent. Anyone else only on a line for
  * everyone, on a computer that gives each person a user of their own: their own OpenAgent, once
- * their user is made; until then the call is answered that it is being made (`make`).
+ * their user is made; until then the call is answered that it is being made.
+ *
+ * A user is made (`make`) only for a call that needs one: a run started, or logins handed over. A
+ * page that only looks whether the computer is there, or which logins it has, makes nobody a user:
+ * it asks for every machine it lists, every few seconds, whether its person ever runs one there.
  */
-export function routeFor(line: Line, store: Store, target: string, env: NodeJS.ProcessEnv, person: string | undefined, make: (account: string) => void): Route {
+export function routeFor(line: Line, store: Store, target: string, env: NodeJS.ProcessEnv, person: string | undefined, call: { method: string; path: string }, make: (account: string) => void): Route {
   const owner = store.persons.find(candidate => candidate.owner)?.account
   // A line that never heard who its person is takes every call as theirs, as before persons; a line for everyone does not.
   if (person === undefined || person === line.account || person === owner || (line.account === undefined && line.for !== 'everyone')) return { target }
@@ -52,10 +56,16 @@ export function routeFor(line: Line, store: Store, target: string, env: NodeJS.P
   if (owner === undefined) return { status: 503, text: NO_OWNER }
   const theirs = store.persons.find(candidate => candidate.account === person && !candidate.owner)
   if (theirs?.ready && theirs.port !== undefined) return { target: `http://127.0.0.1:${theirs.port}` }
+  const route = call.path.split('?')[0]
+  // Whether the computer is there: its own OpenAgent says so, with its version and name and nothing else.
+  if (call.method === 'GET' && route === '/_relay/ping') return { target }
+  // No logins here yet: a server that is to copy them hands them over next, and that makes the user.
+  if (call.method === 'GET' && route === '/_relay/logins') return { status: 200, text: '{}', type: 'application/json' }
   const working = theirs?.worker !== undefined && pidAlive(theirs.worker)
-  if (!working) make(person)
-  // One that could not be made says why, and is tried again.
-  return { status: 503, text: theirs?.problem !== undefined && !working ? `@${person}'s place on this computer could not be made: ${theirs.problem.replace(/\.?$/, '.')} It is tried again.` : making(person) }
+  const needed = call.method === 'POST' && (route === '/_relay/start' || route === '/_relay/logins')
+  if (needed && !working) make(person)
+  // One that could not be made says why, and is tried again at the next run.
+  return { status: 503, text: theirs?.problem !== undefined && !working ? `@${person}'s place on this computer could not be made: ${theirs.problem.replace(/\.?$/, '.')} It is tried again at the next run.` : making(person) }
 }
 
 /** The door's port on a server, and the port the certificate office reads the proof on. */
@@ -234,9 +244,9 @@ export async function serve(opts: ServeOptions): Promise<void> {
         onAnswer: letIn => void noteAnswer(line, letIn),
         everyone: line.for === 'everyone',
         // The line as the file says it now: who its person is may have been heard since it was asked for.
-        route: person => {
+        route: (person, call) => {
           const now = latest ?? store
-          return routeFor(now.lines.find(candidate => candidate.url === line.url) ?? line, now, opts.target, env, person, account => make(account, line.url))
+          return routeFor(now.lines.find(candidate => candidate.url === line.url) ?? line, now, opts.target, env, person, call, account => make(account, line.url))
         },
         watch: () => modes.get(line.url) !== 'full',
         signal: controller.signal,
@@ -287,10 +297,11 @@ export async function serve(opts: ServeOptions): Promise<void> {
   }
 
   // A line for everyone asks its server now and then who is there: who of those given a user here left it.
+  // Any other line asks too until it has heard whose it is: a call for anyone else is refused only by that.
   const heardAt = new Map<string, number>()
   const mirror = (): void => {
     for (const line of latest?.lines ?? []) {
-      if (line.for !== 'everyone' || line.refused || Date.now() - (heardAt.get(line.key) ?? -Infinity) < (opts.mirrorMs ?? MIRROR_MS)) continue
+      if ((line.for !== 'everyone' && line.account !== undefined) || line.refused || Date.now() - (heardAt.get(line.key) ?? -Infinity) < (opts.mirrorMs ?? MIRROR_MS)) continue
       // Asked once in a while, whatever came of the last time: a server that is away is not asked in a hurry.
       heardAt.set(line.key, Date.now())
       void (opts.askMe ?? askMe)(line)

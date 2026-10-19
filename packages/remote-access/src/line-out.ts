@@ -115,15 +115,15 @@ export function knock(socket: Duplex, url: string, key: string, computer?: strin
   })
 }
 
-/** Where one call down a line goes: an OpenAgent on this computer, or nowhere, with the answer the server is given instead. */
-export type Route = { target: string } | { status: number; text: string }
+/** Where one call down a line goes: an OpenAgent on this computer, or nowhere, with the answer the server is given instead (plain words, unless it says its type). */
+export type Route = { target: string } | { status: number; text: string; type?: string }
 
 export interface CarryOptions {
   /**
    * Where a call goes, by whom of the server's persons it is for (`undefined` when the server
-   * said no one): asked for each call, at once.
+   * said no one), and what it asks: asked for each call, at once.
    */
-  route: (person: string | undefined) => Route
+  route: (person: string | undefined, call: { method: string; path: string }) => Route
   /** Whether the server may only read right now: asked for each call. */
   watch: () => boolean
   pingMs?: number
@@ -134,8 +134,8 @@ export interface CarryOptions {
 export function carry(socket: Duplex, rest: Buffer, opts: CarryOptions): Promise<void> {
   return new Promise(resolve => {
     const calls = new Map<number, ClientRequest>()
-    const say = (call: number, status: number, text: string): void => {
-      link.send(HEAD, call, Buffer.from(JSON.stringify({ status, headers: { 'content-type': 'text/plain; charset=utf-8' } })))
+    const say = (call: number, status: number, text: string, type = 'text/plain; charset=utf-8'): void => {
+      link.send(HEAD, call, Buffer.from(JSON.stringify({ status, headers: { 'content-type': type } })))
       link.send(DATA, call, Buffer.from(text))
       link.send(END, call)
     }
@@ -151,8 +151,8 @@ export function carry(socket: Duplex, rest: Buffer, opts: CarryOptions): Promise
       const said = (headers && typeof headers === 'object' ? headers : {}) as Record<string, unknown>
       // For whom the server says it is; a word that is no GitHub account is no one's.
       const person = carriedValue(said[PERSON_HEADER])
-      const route = opts.route(person === undefined ? undefined : accountOf(person))
-      if (!('target' in route)) return say(call, route.status, route.text)
+      const route = opts.route(person === undefined ? undefined : accountOf(person), { method, path })
+      if (!('target' in route)) return say(call, route.status, route.text, route.type)
       const target = new URL(route.target)
       const passed: Record<string, string> = { host: target.host }
       for (const name of CARRIED_HEADERS) {
