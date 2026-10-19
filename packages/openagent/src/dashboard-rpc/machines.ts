@@ -1,11 +1,12 @@
 import { hostname } from 'node:os'
 import { basename } from 'node:path'
 import { readSharing } from '@openagt/agent-data'
-import { THROUGH_PATH, deviceIdOf, enterRemote, leaveRemote, pingRemote, remoteComputers, remoteDoor, remoteProject, remoteVersion } from '../dashboard/remote-run.js'
+import { THROUGH_PATH, deviceIdOf, enterRemote, giveRemoteLogins, leaveRemote, pingRemote, remoteComputers, remoteDoor, remoteLogins, remoteProject, remoteVersion } from '../dashboard/remote-run.js'
+import { isLoginWord, type MachineLogins } from '../dashboard/machine-logins.js'
 import { errorMessage } from '../error-message.js'
 import { repositoryAddress, repositorySpelling } from '../repository-address.js'
 import { contextRemote, resolveProjectPath } from './context.js'
-import { addMachine, listMachines, removeMachine, type MachineRecord } from '../registry.js'
+import { addMachine, isAccount, listMachines, removeMachine, tellMachine, type MachineRecord } from '../registry.js'
 import { parseMachineLink } from '../machine-link.js'
 import { openagentVersion } from '../version.js'
 
@@ -19,13 +20,22 @@ export interface Machine {
   id: string
   label: string
   url: string
+  /** Whose computer it is, when it is another person's: a run there uses this person's own logins, copied there. */
+  owner?: string
+  /** The person was told so, once. */
+  told?: true
+}
+
+/** A saved machine as the browser is handed it. */
+function shown({ id, label, url, owner, told }: MachineRecord): Machine {
+  return { id, label, url, ...(owner !== undefined ? { owner } : {}), ...(told ? { told } : {}) }
 }
 
 export type AddMachineResult = { ok: true; machine: Machine } | { ok: false; error: string }
 
 /** The saved machines, newest first. */
 export async function onMachines(): Promise<Machine[]> {
-  return (await listMachines()).map(({ id, label, url }) => ({ id, label, url }))
+  return (await listMachines()).map(shown)
 }
 
 /** The machines saved through a server: computers at home it keeps a line to, reached at its address with this computer's key there. */
@@ -43,8 +53,11 @@ function ownName(): string {
  * computer is let in there with the link's code, once, and keeps the key it is answered. Adding
  * a machine again, with a new link, replaces its name and the key, and the key it had there
  * before is taken out.
+ *
+ * `owner` is said for a computer of another person's that keeps a line to this server for
+ * everyone: the door says whose it is when it tells this OpenAgent of it.
  */
-export async function sendAddMachine(pasted: string, label?: string): Promise<AddMachineResult> {
+export async function sendAddMachine(pasted: string, label?: string, owner?: string): Promise<AddMachineResult> {
   const link = typeof pasted === 'string' ? parseMachineLink(pasted) : null
   if (!link) return { ok: false, error: 'That is not a link another OpenAgent gives: on the other machine, open Settings, find Devices, and press Add device.' }
   // Asked before the link is spent: the key a run at work is read with is not replaced under it.
@@ -55,7 +68,7 @@ export async function sendAddMachine(pasted: string, label?: string): Promise<Ad
   const access = { url: link.url, key: entered.key, door: link.door, ...(link.pin ? { pin: link.pin } : {}) }
   let added: Awaited<ReturnType<typeof addMachine>>
   try {
-    added = await addMachine({ ...access, ...(typeof label === 'string' ? { label } : {}) })
+    added = await addMachine({ ...access, ...(typeof label === 'string' ? { label } : {}), ...(isAccount(owner) ? { owner } : {}) })
   } catch (err) {
     // A key nobody holds is not left on the machine.
     void leaveRemote(access)
@@ -69,8 +82,7 @@ export async function sendAddMachine(pasted: string, label?: string): Promise<Ad
     contextRemote().rekey(through.url, entered.key, link.pin)
   }
   for (const old of added.displaced) void leaveRemote(old)
-  const { id, url, label: name } = added.record
-  return { ok: true, machine: { id, label: name, url } }
+  return { ok: true, machine: shown(added.record) }
 }
 
 export type RemoveMachineResult = { ok: true } | { ok: false; error: string }
@@ -100,6 +112,8 @@ export interface ComputerThrough {
   name: string
   online: boolean
   added: boolean
+  /** Whose computer it is, when it is another person's that keeps its line there for everyone. */
+  owner?: string
 }
 
 export type ComputersThrough = { ok: true; computers: ComputerThrough[] } | { ok: false; error: string }
@@ -133,8 +147,39 @@ export async function sendAddComputerThrough(machineId: string, computerId: stri
   const computer = asked.computers.find(candidate => candidate.id === computerId)
   if (!computer) return { ok: false, error: `${server.label} has no such computer on a line now.` }
   const url = `${server.url}${THROUGH_PATH}${computer.id}`
-  const { record } = await addMachine({ url, key: server.key, door: `${url}/_remote-access/enter`, label: `${computer.name} (through ${server.label})`, ...(server.pin ? { pin: server.pin } : {}) })
-  return { ok: true, machine: { id: record.id, label: record.label, url: record.url } }
+  const { record } = await addMachine({ url, key: server.key, door: `${url}/_remote-access/enter`, label: `${computer.name} (through ${server.label})`, ...(server.pin ? { pin: server.pin } : {}), ...(computer.owner !== undefined ? { owner: computer.owner } : {}) })
+  return { ok: true, machine: shown(record) }
+}
+
+/** Write down that the person was told their logins are copied to a saved machine of another person's: the page says it once. */
+export async function sendMachineTold(machineId: string): Promise<{ ok: boolean }> {
+  return { ok: typeof machineId === 'string' && (await tellMachine(machineId)) }
+}
+
+export type MachineLoginsResult = { ok: true; logins: MachineLogins } | { ok: false; error: string }
+
+/**
+ * This person's logins on a saved machine of another person's, as that machine says: copied from
+ * a server, or made there. Read through the server when the machine is reached through one.
+ */
+export async function onMachineLogins(machineId: string): Promise<MachineLoginsResult> {
+  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  if (!machine) return { ok: false, error: 'That machine is no longer saved.' }
+  if (machine.owner === undefined) return { ok: false, error: 'That machine is no other person\'s computer.' }
+  return remoteLogins(machine)
+}
+
+/**
+ * Hand this person's own logins to a saved machine of another person's: the person made them for
+ * it, here, so they are no copies, and no server's copy takes their place later.
+ */
+export async function sendMachineLogins(machineId: string, given: { github?: unknown; claude?: unknown }): Promise<MachineLoginsResult> {
+  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  if (!machine) return { ok: false, error: 'That machine is no longer saved.' }
+  if (machine.owner === undefined) return { ok: false, error: 'That machine is no other person\'s computer.' }
+  const { github, claude } = given && typeof given === 'object' ? given : {}
+  if ((github !== undefined && !isLoginWord(github)) || (claude !== undefined && !isLoginWord(claude)) || (github === undefined && claude === undefined)) return { ok: false, error: 'That is no login.' }
+  return giveRemoteLogins(machine, { ...(github !== undefined ? { github } : {}), ...(claude !== undefined ? { claude } : {}) })
 }
 
 /**
@@ -201,7 +246,7 @@ export async function onMachineVersions(): Promise<MachineVersions> {
     (await listMachines()).map(async machine => {
       const version = await remoteVersion(machine)
       const device = deviceIdOf(machine.key)
-      return { id: machine.id, label: machine.label, url: machine.url, ...(version !== undefined ? { version } : {}), ...(device !== undefined ? { device } : {}) }
+      return { ...shown(machine), ...(version !== undefined ? { version } : {}), ...(device !== undefined ? { device } : {}) }
     }),
   )
   return { version: openagentVersion(), machines }

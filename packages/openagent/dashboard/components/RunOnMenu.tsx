@@ -22,6 +22,9 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
  * server (reached-by-line.ts). It is drawn as a computer and described as one, not by the
  * address that stands for it here, and it has no remove: it goes when the computer is taken out,
  * under Devices.
+ *
+ * A machine can also be another person's computer, set up as a server and shared with everyone on
+ * this one: it says whose it is, and that a run there uses this person's own logins.
  */
 export type ConnectionControl = {
   /** The saved machines a run can be sent to. */
@@ -106,14 +109,17 @@ export function RunOnMenu({ connection, busy, inRow = false }: { connection: Con
           const status = connection.status[machine.id]
           const offline = status === 'offline'
           const computer = reachedByLine(machine.url)
-          const MachineIcon = computer ? Laptop : Server
-          const description = computer
-            ? offline
+          // Another person's computer, set up as a server and shared with everyone: drawn and described as theirs.
+          const MachineIcon = computer && machine.owner === undefined ? Laptop : Server
+          const description = offline
+            ? computer
               ? 'Not connected. It must be on, with OpenAgent running.'
-              : 'Your computer. The run starts there.'
-            : offline
-              ? `${machine.url} (offline)`
-              : machine.url
+              : `${machine.url} (offline)`
+            : machine.owner !== undefined
+              ? `@${machine.owner}'s server. The run starts there, with your own logins.`
+              : computer
+                ? 'Your computer. The run starts there.'
+                : machine.url
           return (
             <DropdownMenuItem
               key={machine.id}

@@ -976,6 +976,36 @@ describe('Settings → Machines', () => {
     expect(screen.queryByText(/You are in as/)).toBeNull()
     expect(runComputerCommandOn).not.toHaveBeenCalled()
   })
+
+  test('another person\'s computer on a server says whose it is in the server\'s list, and its row says which of this person\'s logins are there, each made here in place of a copy', async () => {
+    const SERVER = 'https://203.0.113.5'
+    const BOX = `${SERVER}/_remote-access/via/b0x1d2`
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: SERVER, label: '203.0.113.5', url: SERVER, version: '1.2.3' }, { id: BOX, label: 'rom-desktop (through 203.0.113.5)', url: BOX, version: '1.2.3', owner: 'rom' }] }
+    let logins: unknown = { github: { source: 'copied', from: 'vps-1', account: 'sul' } }
+    const { host, runComputerCommand, computersThrough } = dashboard(
+      args => (args[0] === 'status' ? ok({ servers: [] }) : args[0] === 'other' || args[0] === 'other-login' ? ok({ other: [{ url: BOX, logins, claude: NONE }] }) : ok({})),
+      saved,
+      { ok: true },
+      OCTOCAT,
+    )
+    computersThrough.mockImplementation(async () => ({ ok: true, computers: [{ id: 'b0x1d2', name: 'rom-desktop', online: true, added: true, owner: 'rom' }] }))
+    show(host)
+    const list = await screen.findByRole('list', { name: 'The computers on 203.0.113.5' })
+    expect(list.textContent).toContain("rom-desktop· @rom's · for everyone")
+
+    const row = await screen.findByRole('listitem', { name: 'rom-desktop (through 203.0.113.5)' })
+    expect(row.textContent).toContain("@rom's server, for everyone on 203.0.113.5. Your runs there use your own GitHub and Claude logins.")
+    const logins_ = await within(row).findByRole('list', { name: 'Your logins on rom-desktop (through 203.0.113.5)' })
+    await waitFor(() => expect(logins_.textContent).toContain('GitHub: copied from vps-1.'))
+    expect(logins_.textContent).toContain('Claude: not on rom-desktop (through 203.0.113.5) yet: it is copied from 203.0.113.5 at your first run there.')
+
+    logins = { github: { source: 'made', account: 'sul' } }
+    fireEvent.click(within(row).getByRole('button', { name: 'Log in to GitHub on rom-desktop (through 203.0.113.5) instead' }))
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['other-login', BOX, 'github']))
+    await waitFor(() => expect(logins_.textContent).toContain('GitHub: made here.'))
+    fireEvent.click(within(row).getByRole('button', { name: 'Log in to Claude on rom-desktop (through 203.0.113.5) instead' }))
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['other-login', BOX, 'claude']))
+  })
 })
 
 describe('Settings → Machines: a computer reached through a server', () => {

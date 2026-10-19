@@ -53,6 +53,13 @@ export interface Login {
   asking?: boolean
   /** GitHub: the code the person types at github.com/login/device while the server waits for it. It is no login: it says which waiting server a person's yes is for. */
   code?: string
+  /**
+   * A login of this OpenAgent's own that another OpenAgent of the same person copied here: the
+   * name of the server it came from. Absent for one the person made here themselves.
+   */
+  from?: string
+  /** The start of the login's SHA-256: whoever copied it tells by it whether its own is still the same, and never learns the login from it. */
+  mark?: string
 }
 
 export interface Server {
@@ -209,9 +216,16 @@ function readWorker(value: unknown): { worker: Worker } | undefined {
   return Number.isInteger(pid) && (pid as number) > 0 && typeof seen === 'string' && !Number.isNaN(Date.parse(seen)) ? { worker: { pid: pid as number, seen } } : undefined
 }
 
+/** A server's name as a copied login says where it came from: its host or its address, and nothing a page could not show. */
+export const isServerName = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9.:\-[\]]{0,252}$/.test(value)
+
+/** How long a login's mark is: enough to tell two logins apart, far too little to tell either. */
+export const MARK_LENGTH = 16
+const isMark = (value: unknown): value is string => typeof value === 'string' && new RegExp(`^[0-9a-f]{${MARK_LENGTH}}$`).test(value)
+
 function readLogin(value: unknown): Login | undefined {
   if (!value || typeof value !== 'object') return undefined
-  const { since, account, wanted, failed, worker, asking, code } = value as Record<string, unknown>
+  const { since, account, wanted, failed, worker, asking, code, from, mark } = value as Record<string, unknown>
   const login: Login = {
     ...(typeof since === 'string' && !Number.isNaN(Date.parse(since)) ? { since } : {}),
     ...(isAccount(account) ? { account } : {}),
@@ -220,6 +234,8 @@ function readLogin(value: unknown): Login | undefined {
     ...(readWorker(worker) ?? {}),
     ...(asking === true ? { asking } : {}),
     ...(isGithubCode(code) ? { code } : {}),
+    ...(isServerName(from) ? { from } : {}),
+    ...(isMark(mark) ? { mark } : {}),
   }
   return Object.keys(login).length ? login : undefined
 }
@@ -268,7 +284,7 @@ export function sanitize(value: unknown): Store {
   for (const entry of Array.isArray(obj.shared) ? obj.shared : []) {
     if (shared.length >= MAX_SERVERS) break
     const { url, claude } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
-    if (typeof url !== 'string' || !isMachineUrl(url) || shared.some(kept => kept.url === url)) continue
+    if (typeof url !== 'string' || !(isMachineUrl(url) || isThroughUrl(url)) || shared.some(kept => kept.url === url)) continue
     const login = readLogin(claude)
     shared.push({ url, ...(login ? { claude: login } : {}) })
   }
@@ -276,6 +292,14 @@ export function sanitize(value: unknown): Store {
 }
 
 /** Whether `said` is a saved machine's address as OpenAgent keeps it: an origin, over HTTPS or on this computer's own network. */
+/**
+ * Whether `said` names a computer saved through a server, the way OpenAgent's machines do: the
+ * server's door, then where it passes a call down that computer's line.
+ */
+export function isThroughUrl(said: string): boolean {
+  return /^https:\/\/[^/?#\s]+\/_remote-access\/via\/[a-z0-9]{6,32}$/.test(said) && isMachineUrl(new URL(said).origin)
+}
+
 export function isMachineUrl(said: string): boolean {
   try {
     const url = new URL(said)

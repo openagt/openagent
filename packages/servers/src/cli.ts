@@ -4,10 +4,10 @@ import { AlreadyWorking, askLink, install } from './install.js'
 import { AlreadyAtWork, changeLogin, ownGithubAccount, type Mint } from './logins.js'
 import { ownDoor, type OwnDoor } from './own-door.js'
 import { OwnAtWork, askOwnGithub, giveOwnClaude, giveOwnGithub, personHere, removeOwn, startOverSoon, startOwnGithubCode } from './own.js'
-import { askOpenAgent, copyGithub, forgetShared, isSharedUrl, lineTo, mintFor, setSharedReach, startMint } from './shared.js'
+import { askOpenAgent, copyGithub, copyGithubToOther, forgetShared, isOtherUrl, isSharedUrl, lineTo, mintFor, otherLogins, setSharedReach, startMint } from './shared.js'
 import { lastLines, openSession, withAdvice, type Exec } from './ssh.js'
-import { PERSON_TIMEOUT_MS, SERVER_MARK, SERVER_USER, devicesScript, stepLabel, stepsFor, whoScript, type Who } from './steps.js'
-import { LOGIN_KINDS, Unreadable, addressOf, isAccount, atWork, doorUrl, freshSteps, isMachineUrl, isUser, isVersion, readStore, throughUrl, update, working, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
+import { PERSON_TIMEOUT_MS, SERVER_MARK, SERVER_USER, STEPS, devicesScript, stepLabel, stepsFor, whoScript, type Who } from './steps.js'
+import { LOGIN_KINDS, Unreadable, addressOf, isAccount, isServerName, atWork, doorUrl, freshSteps, isMachineUrl, isUser, isVersion, readStore, throughUrl, update, working, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -62,10 +62,11 @@ export const USAGE = `usage: servers <command>
 
 On a computer several people use, where this OpenAgent is one person's (OPENAGENT_PERSON names them):
   own                                  this OpenAgent's own GitHub and Claude logins
-  own login github                     log in to GitHub with the login given on standard input; it must be the person's own
+  own login github [--from <server>]   log in to GitHub with the login given on standard input; it must be the person's own;
+                                       --from names the server whose OpenAgent of the same person copied it
   own login github own                 log in to GitHub with a code GitHub gives: own tells it, and the person types it at
                                        github.com/login/device
-  own login claude                     log in to Claude with the login given on standard input; OpenAgent starts again with it
+  own login claude [--from <server>]   log in to Claude with the login given on standard input; OpenAgent starts again with it
   own logout github|claude             delete that login here
   own-work github                      the process that waits for the code to be typed, started by own login github own
 
@@ -75,7 +76,13 @@ On this computer, for a server someone invited this computer's person to (by its
   shared-login <url> claude            make a Claude login for it in this computer's browser, and hand it over
   shared-reach <url> full|watch|off    keep a line open to the server as this person's, and say what it may do; or none
   shared-forget <url>                  forget the server here, and the line to it
-  shared-work <url>                    the process that makes the Claude login, started by shared-login`
+  shared-work <url>                    the process that makes the Claude login, started by shared-login
+
+On this computer, for another person's computer shared with everyone on a server this computer's person is in at:
+  other <url>...                       the person's logins there, as it says, and the Claude login this computer makes for it
+  other-login <url> github             copy this computer's GitHub login there, in place of the server's copy
+  other-login <url> claude             make a Claude login for it in this computer's browser, and hand it over
+  other-work <url>                     the process that makes the Claude login, started by other-login`
 
 export interface CliIO {
   env: NodeJS.ProcessEnv
@@ -113,6 +120,16 @@ export interface OwnStatus {
 }
 
 /** What `shared` answers of one server: the line this computer keeps there, and the Claude login it makes for it. */
+/** What `other` answers of another person's computer: the person's logins there, as it says them, and the Claude login this computer makes for it. */
+export interface OtherStatus {
+  url: string
+  /** What that computer said of the logins there; nothing when it could not be asked. */
+  logins?: unknown
+  /** Why it could not be asked. */
+  error?: string
+  claude: LoginStatus
+}
+
 export interface SharedStatus {
   url: string
   reach?: Reach
@@ -145,6 +162,10 @@ export interface LoginStatus {
   ends?: string
   /** Why the last try ended without a login. */
   said?: string
+  /** A login of this OpenAgent's own that was copied here: the server it came from. */
+  from?: string
+  /** The start of the login's SHA-256, for whoever copied it to tell whether its own is still the same. */
+  mark?: string
 }
 
 /** A server as `status` tells it. */
@@ -189,6 +210,8 @@ function loginOf(kind: LoginKind, login: Login | undefined, installing: boolean)
     ...(there ? { since: login!.since! } : {}),
     ...(there && kind === 'claude' ? { ends: new Date(Date.parse(login!.since!) + CLAUDE_LASTS_MS).toISOString() } : {}),
     ...(login?.failed ? { said: login.failed } : {}),
+    ...(there && login!.from ? { from: login!.from } : {}),
+    ...(there && login!.mark ? { mark: login!.mark } : {}),
   }
 }
 
@@ -511,6 +534,19 @@ async function addThrough(io: CliIO, said: string): Promise<Status> {
   return statusOf(await readStore(io.env), io.env)
 }
 
+async function otherStatusOf(io: CliIO, urls: string[]): Promise<{ other: OtherStatus[] }> {
+  const store = await readStore(io.env)
+  return {
+    other: await Promise.all(
+      urls.map(async url => {
+        const said = await otherLogins(io.env, url)
+        const { there: _there, since: _since, ends: _ends, ...making } = loginOf('claude', store.shared.find(kept => kept.url === url)?.claude, false)
+        return { url, ...(said.ok ? { logins: said.output } : { error: said.error }), claude: { there: false, ...making } }
+      }),
+    ),
+  }
+}
+
 export async function runCli(args: string[], io: CliIO): Promise<number> {
   const [command, ...rest] = args
   const print = (value: unknown): number => {
@@ -627,12 +663,15 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
       case 'own': {
         const account = person(io)
         const own = { env: io.env, person: account, ...(io.exec ? { exec: io.exec } : {}) }
-        const [what, kind, how] = rest
+        const [what, kind, how, from] = rest
         if (rest.length === 0) return print(ownStatusOf(await readStore(io.env), account))
+        // A login handed over may be a copy from the person's own OpenAgent on a server, which names that server.
+        const copy = rest.length === 2 || (rest.length === 4 && how === '--from' && isServerName(from))
+        const copiedFrom = rest.length === 4 ? from : undefined
         if (what === 'login' && kind === 'github' && rest.length === 3 && how === 'own') await startOwnGithubCode(own, io.startWork ?? (words => startWork(words, io.env)))
-        else if (what === 'login' && kind === 'github' && rest.length === 2) await giveOwnGithub(own, await (io.stdin ?? ownStdin)())
-        else if (what === 'login' && kind === 'claude' && rest.length === 2) {
-          if (await giveOwnClaude(own, await (io.stdin ?? ownStdin)())) (io.startOver ?? startOverSoon)()
+        else if (what === 'login' && kind === 'github' && copy) await giveOwnGithub(own, await (io.stdin ?? ownStdin)(), copiedFrom)
+        else if (what === 'login' && kind === 'claude' && copy) {
+          if (await giveOwnClaude(own, await (io.stdin ?? ownStdin)(), copiedFrom)) (io.startOver ?? startOverSoon)()
         } else if (what === 'logout' && isKind(kind) && rest.length === 2) {
           if (await removeOwn(own, kind)) (io.startOver ?? startOverSoon)()
         } else break
@@ -681,6 +720,26 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         const [url] = rest
         if (rest.length !== 1 || !isSharedUrl(url)) break
         await untilStopped(io, signal => mintFor({ env: io.env, machine: url, signal, ...(io.mint ? { mint: io.mint } : {}) }))
+        return 0
+      }
+      case 'other': {
+        if (rest.length === 0 || !rest.every(isOtherUrl)) break
+        return print(await otherStatusOf(io, rest))
+      }
+      case 'other-login': {
+        const [url, kind] = rest
+        if (rest.length !== 2 || !isOtherUrl(url) || !isKind(kind)) break
+        if (kind === 'claude') await startMint(io.env, url, io.startWork ?? (words => startWork(words, io.env)), 'other')
+        else {
+          const copied = await copyGithubToOther(io.env, url, io.exec)
+          if (!copied.ok) throw new Refused(copied.error)
+        }
+        return print(await otherStatusOf(io, [url]))
+      }
+      case 'other-work': {
+        const [url] = rest
+        if (rest.length !== 1 || !isOtherUrl(url)) break
+        await untilStopped(io, signal => mintFor({ env: io.env, machine: url, to: 'other', signal, ...(io.mint ? { mint: io.mint } : {}) }))
         return 0
       }
       case 'work': {

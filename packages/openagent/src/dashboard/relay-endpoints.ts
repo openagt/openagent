@@ -3,6 +3,7 @@ import { hostname } from 'node:os'
 import type { OpenAgentEvent } from '../events.js'
 import type { StartAgentOptions, StartAgentResult } from './types.js'
 import type { BringProject, RelayProject, RelayStartResult } from './remote-run.js'
+import { isLoginWord, isServerName, type GivenLogins, type MachineLogins } from './machine-logins.js'
 import { end, readJsonBody, requireGet, sendJson } from './http.js'
 import { passToScreen, screenCallOf, type ScreenCall } from './screen.js'
 import { isRunId } from '../store/index.js'
@@ -29,6 +30,9 @@ import { isRelayRead } from '../dashboard-rpc/relay-dispatch.js'
  *   once and the clone goes on by itself, so the caller asks again until the project is there.
  * - `GET /_relay/screen/stream?run=<id>&project=<address>` and `POST /_relay/screen/input?…` pass
  *   one call on to the live screen of a run here (screen.ts), for the daemon whose person watches it.
+ * - `GET /_relay/logins` says which logins this OpenAgent's person has here, and `POST /_relay/logins`
+ *   `{github?, claude?, from?}` hands them over (machine-logins.ts). Only an OpenAgent that is one
+ *   person's, on another person's computer, answers it.
  *
  * All but the ping name their project by its repository's address, and work in this machine's own
  * project cloned from it. A call that names none, or one this machine does not have, starts and
@@ -64,6 +68,11 @@ export interface RelayHandlers {
   screen?: (projectId: string, agentId: string) => Promise<string | undefined>
   /** Where this machine's copy of the project at `address` stands; with `bring`, clone and add it when there is none. */
   bring?: (address: string, bring?: BringProject) => Promise<RelayProject>
+  /** The logins of this OpenAgent's person here, and handing them over: only on an OpenAgent that is one person's. */
+  logins?: {
+    read: () => Promise<MachineLogins>
+    give: (given: GivenLogins) => Promise<{ ok: true; logins: MachineLogins } | { ok: false; error: string }>
+  }
 }
 
 /** The body `POST /_relay/start` accepts: what a local Start needs, and the project's address. */
@@ -99,6 +108,7 @@ export async function handleRelayRequest(
   if (pathname === `${RELAY_PREFIX}/events`) return handleEvents(req, res, handlers)
   if (pathname === `${RELAY_PREFIX}/rpc`) return handleRpc(req, res, handlers, watch)
   if (pathname === `${RELAY_PREFIX}/project`) return handleProject(req, res, handlers)
+  if (pathname === `${RELAY_PREFIX}/logins`) return handleLogins(req, res, handlers)
   const screenCall = screenCallOf(pathname, `${RELAY_PREFIX}/screen`)
   if (screenCall) return handleScreen(req, res, handlers, screenCall)
   end(res, 404, 'not found')
@@ -210,6 +220,31 @@ async function handleProject(req: IncomingMessage, res: ServerResponse, handlers
     said = { state: 'failed', error: err instanceof Error ? err.message : String(err) }
   }
   sendJson(res, said)
+}
+
+const MAX_LOGINS_BODY = 16 * 1024
+
+/**
+ * `GET /_relay/logins` and `POST /_relay/logins` `{github?, claude?, from?}`: the logins of this
+ * OpenAgent's person here, and logins handed over to it. A login with `from` is a copy from that
+ * server; one without is the person's own, made for here. Each is a word and nothing else.
+ */
+async function handleLogins(req: IncomingMessage, res: ServerResponse, handlers: RelayHandlers): Promise<void> {
+  if (!handlers.logins) return end(res, 404, 'this OpenAgent is no person\'s on another person\'s computer')
+  if (req.method === 'GET') return sendJson(res, await handlers.logins.read())
+  if (req.method !== 'POST') return end(res, 405, 'method not allowed', { allow: 'GET, POST' })
+  let body: { github?: unknown; claude?: unknown; from?: unknown } | null
+  try {
+    body = (await readJsonBody(req, MAX_LOGINS_BODY)) as typeof body
+  } catch {
+    return end(res, 400, 'invalid request body')
+  }
+  const { github, claude, from } = body ?? {}
+  if ((github !== undefined && !isLoginWord(github)) || (claude !== undefined && !isLoginWord(claude)) || (from !== undefined && !isServerName(from))) return end(res, 400, 'that is no login')
+  if (github === undefined && claude === undefined) return end(res, 400, 'no login was handed over')
+  const given = await handlers.logins.give({ ...(github !== undefined ? { github } : {}), ...(claude !== undefined ? { claude } : {}), ...(from !== undefined ? { from } : {}) })
+  if (!given.ok) return end(res, 422, given.error)
+  sendJson(res, given.logins)
 }
 
 const MAX_RPC_BODY = 256 * 1024

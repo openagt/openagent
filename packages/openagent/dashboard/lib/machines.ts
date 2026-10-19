@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react'
-import { onMachines, sendAddComputerThrough, sendAddMachine, sendRemoveMachine, type AddMachineResult, type Machine, type RemoveMachineResult } from '../rpc/machines.js'
+import { onMachines, sendAddComputerThrough, sendAddMachine, sendMachineTold, sendRemoveMachine, type AddMachineResult, type Machine, type RemoveMachineResult } from '../rpc/machines.js'
 import { getSelectedMachineId, selectMachine } from './remote-target.js'
 
 // The saved machines: the other computers running OpenAgent that a run can be sent to. The list
@@ -60,6 +60,12 @@ export async function addComputerThrough(machineId: string, computerId: string):
   const result = await sendAddComputerThrough(machineId, computerId)
   if (result.ok) await refreshMachines()
   return result
+}
+
+/** Say the person was told their logins are copied to another person's computer; the list is read again once the daemon has it. */
+export async function tellMachine(id: string): Promise<void> {
+  await sendMachineTold(id).catch(() => {})
+  await refreshMachines()
 }
 
 /**
