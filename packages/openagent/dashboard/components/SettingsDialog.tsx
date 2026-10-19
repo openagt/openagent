@@ -19,6 +19,7 @@ import { RadioGroup, RadioGroupItem } from './ui/radio-group.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
 import { cn } from '../lib/utils.js'
+import { useProjectLabel } from '../lib/project-labels.js'
 import { SettingsRow as Row, SettingsSection as Section, SettingsSelectRow as SelectRow, type SettingsOption as SelectOption } from './SettingsRows.js'
 
 // Settings (#958): a dialog over the page you are on, a list of entries on the left and the
@@ -72,6 +73,7 @@ export function SettingsDialog({
   const [picked, setPicked] = useState(scope ?? ALL_PROJECTS)
   // A project removed while the dialog is open is no longer one to show.
   const project = projects.find(p => p.id === picked) ?? null
+  const label = useProjectLabel()
   const own = useOwnEntries()
   const moduleEntry = (section: MountedSettings, of: ProjectSummary[]): Entry => {
     const Body = section.Section
@@ -174,7 +176,7 @@ export function SettingsDialog({
                   )}
                   {inProject && (
                     <>
-                      <span className="truncate text-muted-foreground">{project?.name ?? 'All projects'}</span>
+                      <span className="truncate text-muted-foreground">{project ? label(project.id, project.name) : 'All projects'}</span>
                       <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
                     </>
                   )}
@@ -188,7 +190,7 @@ export function SettingsDialog({
                 <div className="mx-auto max-w-2xl space-y-3 px-4 pb-6">
                   {savedTo.length > 0 && (
                     <p className="text-xs text-muted-foreground">
-                      Saved to {savedTo.length === 1 ? 'one project' : `${savedTo.length} projects`}: {savedTo.map(p => p.name).join(', ')}.
+                      Saved to {savedTo.length === 1 ? 'one project' : `${savedTo.length} projects`}: {savedTo.map(p => label(p.id, p.name)).join(', ')}.
                     </p>
                   )}
                   {/* Keyed by the projects too: an entry's reads and picks are of the projects it was drawn for. */}
@@ -205,7 +207,8 @@ export function SettingsDialog({
 
 /** The "Project" group's select: every project, or one. */
 function ProjectSelect({ projects, value, onChange }: { projects: ProjectSummary[]; value: string; onChange: (id: string) => void }) {
-  const items = [{ value: ALL_PROJECTS, label: 'All projects' }, ...projects.map(p => ({ value: p.id, label: p.name }))]
+  const label = useProjectLabel()
+  const items = [{ value: ALL_PROJECTS, label: 'All projects' }, ...projects.map(p => ({ value: p.id, label: label(p.id, p.name) }))]
   return (
     <Select items={items} value={value} onValueChange={next => onChange(String(next ?? ALL_PROJECTS))}>
       <SelectTrigger size="sm" aria-label="Project" className="h-6 min-w-0 flex-1 border-transparent bg-transparent px-1.5 text-xs shadow-none">

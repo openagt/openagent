@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { SidebarProvider } from './ui/sidebar.js'
 import { hoverTooltip, openMenu, phoneScreen } from '../test-utils.js'
 import { MenuButton } from './PhoneBar.js'
+import { projectLabels, ProjectLabelsContext } from '../lib/project-labels.js'
 
 // AgentHistory pulls in AddProjectPanel, which imports the projects RPC stubs; stub them so
 // nothing fetches a daemon that is not there. Import AgentHistory after the mock is in place.
@@ -649,6 +650,38 @@ describe('the project select (#1513)', () => {
     unmount()
     renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} projects={[stranded, idle]} />)
     expect(screen.getByRole('button', { name: 'Project: All projects' })).toBeTruthy()
+  })
+
+  test('two projects with the same name say which folder each is in, on the button, in the menus and on the rows', async () => {
+    const work: ProjectSummary = { id: 'shop-1', path: '/home/me/work/shop', name: 'shop', activated: true, gitHost: false }
+    const clients: ProjectSummary = { id: 'shop-2', path: '/home/me/clients/shop', name: 'shop', activated: true, gitHost: false }
+    const projects = [work, clients, idle]
+    const recentAgents = [{ projectId: 'shop-2', projectName: 'shop', agent: agent({ id: 'b1', status: 'done', intent: 'second' }) }]
+    const rail = (scope: string | null) => (
+      <ProjectLabelsContext.Provider value={projectLabels(projects)}>
+        <AgentHistory projectId={null} scope={scope} agents={[]} recentAgents={recentAgents} selectedAgentId={null} onSelect={() => {}} projects={projects} />
+      </ProjectLabelsContext.Provider>
+    )
+    const { unmount } = renderRail(rail('shop-1'))
+    await openMenu(screen.getByRole('button', { name: 'Project: work/shop' }))
+    // The folder is muted, the name as any other's.
+    expect(within(screen.getByRole('menuitem', { name: /clients\/shop/ })).getByText('clients/').className).toContain('text-muted-foreground')
+    expect(screen.getByRole('menuitem', { name: /beta/ })).toBeTruthy()
+    unmount()
+    renderRail(rail(null))
+    // The Overview's rows name their project the same way.
+    expect(screen.getByText('clients/shop')).toBeTruthy()
+    await openMenu(screen.getByRole('button', { name: 'New agent' }))
+    expect(screen.getByRole('menuitem', { name: 'work/shop' })).toBeTruthy()
+  })
+
+  test('while the project the address names is not read, neither "All projects" nor "No agents yet." shows', () => {
+    renderRail(<AgentHistory projectId={null} scopePending listLoaded={false} agents={[]} recentAgents={[]} selectedAgentId={null} onSelect={() => {}} />)
+    expect(screen.getByRole('button', { name: 'Project: loading' })).toBeTruthy()
+    expect(screen.queryByText('All projects')).toBeNull()
+    expect(screen.queryByText('No agents yet.')).toBeNull()
+    // The heading stays, so the column does not jump once the list lands.
+    expect(screen.getByText('Recent agents')).toBeTruthy()
   })
 
   test('picking a project, or all of them, reports the pick and marks the current one', async () => {
