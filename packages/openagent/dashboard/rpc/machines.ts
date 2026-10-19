@@ -19,3 +19,5 @@ export const onComputersThrough = rpc<typeof impl.onComputersThrough>('onCompute
 export const sendAddComputerThrough = rpc<typeof impl.sendAddComputerThrough>('sendAddComputerThrough')
 export const onMachinePerson = rpc<typeof impl.onMachinePerson>('onMachinePerson')
 export const sendRemoveMachineDevice = rpc<typeof impl.sendRemoveMachineDevice>('sendRemoveMachineDevice')
+export const sendMachineTold = rpc<typeof impl.sendMachineTold>('sendMachineTold')
+export const onMachineLogins = rpc<typeof impl.onMachineLogins>('onMachineLogins')

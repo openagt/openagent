@@ -14,6 +14,7 @@ import {
   readPreferences,
   removeMachine,
   removeProject,
+  tellMachine,
   readRegistry,
   registryPreferencesStore,
   registryPath,
@@ -635,6 +636,27 @@ test('a hand-edited machines list keeps only well-formed entries, one per addres
   const fs = memFs({ [FILE]: JSON.stringify({ projects: [], preferences: {}, machines }) })
   assert.deepEqual(await listMachines(fs, ENV), [{ id: STUDIO, label: 'Studio', url: STUDIO, key: 'aaa', door: DOOR }])
   assert.deepEqual(await listMachines(memFs({ [FILE]: JSON.stringify({ projects: [], preferences: {}, machines: 'x' }) }), ENV), [])
+})
+
+test('another person\'s computer is saved with whose it is, and that the person was told once; anything else under those names is left out', async () => {
+  const fs = memFs()
+  const line = 'http://127.0.0.1:4311'
+  const saved = await addMachine({ url: line, key: 'line', door: `${line}/_remote-access/enter`, label: 'rom-desktop', owner: 'rom' }, fs, ENV)
+  assert.equal(saved.record.owner, 'rom')
+  assert.equal(saved.record.told, undefined)
+  assert.equal(await tellMachine(line, fs, ENV), true)
+  assert.equal(await tellMachine(line, fs, ENV), true, 'told twice is told')
+  assert.equal(await tellMachine(STUDIO, fs, ENV), false, 'no such machine')
+  const [kept] = await listMachines(fs, ENV)
+  assert.equal(kept!.owner, 'rom')
+  assert.equal(kept!.told, true)
+  // Saved anew, it is told anew: the record is the new one.
+  await addMachine({ url: line, key: 'line', door: `${line}/_remote-access/enter`, owner: 'Not an account!' }, fs, ENV)
+  const [again] = await listMachines(fs, ENV)
+  assert.equal('owner' in again!, false)
+  assert.equal('told' in again!, false)
+  const edited = memFs({ [FILE]: JSON.stringify({ projects: [], preferences: {}, machines: [{ label: 'x', url: STUDIO, key: 'k', door: DOOR, owner: '-x', told: 'yes' }] }) })
+  assert.deepEqual(await listMachines(edited, ENV), [{ id: STUDIO, label: 'x', url: STUDIO, key: 'k', door: DOOR }])
 })
 
 test('the saved machines survive the other registry mutators, and an emptied list is not written', async () => {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Laptop, Loader2, Plus, Server, UserPlus, UserRound } from 'lucide-react'
 import { AddMachineDialog, Button, Checkbox, ConfirmDialog, Dialog, Input, InviteDialog, SettingsSection, Switch, cn, formatDateTime, formatRelative, reachedByLine, useModuleHost, usePolled, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
-import { askLink, connect, forget, idsOf, loadDevices, loadOwn, loadServers, loadShared, login, logout, markAdded, nameOwner, ownCodeLogin, ownGithub, ownLogout, reach, readPersonThere, removeDevice, removePerson, sharedClaude, sharedForget, sharedGithub, sharedReach, type Answer, type DeviceRow, type DevicesRead, type DoorLink, type OwnGithub, type OwnRead, type PersonThere, type ServerRow, type ServersRead, type SharedRow, type StepState } from './servers.js'
+import { askLink, connect, forget, idsOf, loadDevices, loadOther, loadOwn, loadServers, loadShared, login, logout, markAdded, nameOwner, otherLogin, ownCodeLogin, ownGithub, ownLogout, reach, readPersonThere, removeDevice, removePerson, sharedClaude, sharedForget, sharedGithub, sharedReach, type Answer, type DeviceRow, type DevicesRead, type DoorLink, type OtherLogin, type OtherRow, type OwnGithub, type OwnRead, type PersonThere, type ServerRow, type ServersRead, type SharedRow, type StepState } from './servers.js'
 
 // Settings → Machines: the other computers a run can be sent to, each listed once. A server this
 // computer installed OpenAgent on is listed with all that is set up on it; a machine added with a
@@ -365,8 +365,10 @@ function ComputersThrough({ host, machine, busy, everyMs }: { host: ModuleHost; 
           {read.computers.map(computer => (
             <li key={computer.id} className="flex items-center justify-between gap-4">
               <div className="flex min-w-0 items-center gap-2">
-                <Laptop aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                {computer.owner !== undefined ? <Server aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> : <Laptop aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
                 <span className="truncate text-sm">{computer.name}</span>
+                {/* Another person's, set up as a server and shared with everyone on this one. */}
+                {computer.owner !== undefined && <span className="shrink-0 text-muted-foreground">{`· @${computer.owner}'s · for everyone`}</span>}
                 <ServerState tone={computer.online ? 'good' : 'quiet'}>{computer.online ? 'Online' : 'Away'}</ServerState>
               </div>
               {computer.added ? (
@@ -439,7 +441,91 @@ function OtherMachine({ host, machine, known, busy, everyMs, workingMs, ownGithu
     return asked.ok ? readPersonThere(asked.said) : undefined
   } : null, undefined, Math.max(everyMs, 30_000), [machine.id, asks], 'previous')
   if (said && !said.owner && said.account !== undefined) return <SharedServer host={host} machine={machine} person={said} busy={busy} everyMs={everyMs} workingMs={workingMs} ownGithub={account} noLogin={noLogin} onRemove={onRemove} />
+  if (machine.owner !== undefined) return <OtherComputer host={host} machine={machine} owner={machine.owner} known={known} busy={busy} everyMs={everyMs} workingMs={workingMs} ownGithub={account} noLogin={noLogin} onRemove={() => void onRemove()} />
   return <MachineLine host={host} machine={machine} known={known} busy={busy} everyMs={everyMs} onRemove={() => void onRemove()} />
+}
+
+/** The words for one of this person's logins on another person's computer: a copy, one made there, or none yet. */
+function otherWords(label: 'GitHub' | 'Claude', login: OtherLogin | undefined, name: string, server: string): string {
+  if (login?.source === 'copied') return `${label}: copied from ${login.from ?? server}.`
+  if (login?.source === 'made') return `${label}: made here.`
+  return `${label}: not on ${name} yet: it is copied from ${server} at your first run there.`
+}
+
+/**
+ * Another person's computer, set up as a server and shared with everyone on a server this
+ * computer's person is in at. This person has an OpenAgent of their own there, as a user of their
+ * own, and their runs there use their own logins: copies from their OpenAgent on the server, made
+ * the first time they start a run there. This row says which logins it has, and makes one here in
+ * place of a copy: GitHub's copied from this computer, Claude's made in this computer's browser.
+ * A login made here is no copy, and no copy from the server takes its place.
+ */
+function OtherComputer({ host, machine, owner, known, busy: pageBusy, everyMs, workingMs, ownGithub: account, noLogin, onRemove }: { host: ModuleHost; machine: ModuleMachine; owner: string; known: boolean; busy: boolean; everyMs: number; workingMs: number; ownGithub: string | undefined; noLogin: string | undefined; onRemove: () => void }) {
+  const [working, setWorking] = useState(false)
+  const pace = working ? workingMs : everyMs
+  const { value: read, reload } = usePolled<Answer<OtherRow[]> | undefined>(() => loadOther(host, [machine.url]), undefined, pace, [machine.url, pace], 'previous')
+  const [busyHere, setBusy] = useState(false)
+  const [error, setError] = useState<string | undefined>()
+  const busy = pageBusy || busyHere
+  const row = read?.ok ? read.value.find(candidate => candidate.url === machine.url) : undefined
+  const making = row?.making ?? { there: false, working: false }
+  useEffect(() => setWorking(making.working), [making.working])
+  const name = machine.label
+  // The server both computers are in at: where the copies come from.
+  const server = machine.url.includes(THROUGH) ? new URL(machine.url).host : 'this server'
+
+  const act = async (change: () => Promise<Answer<unknown>>): Promise<void> => {
+    setBusy(true)
+    setError(undefined)
+    const answer = await change()
+    if (!answer.ok) setError(answer.error)
+    await reload().catch(() => {})
+    setBusy(false)
+  }
+  const state = !known ? 'Checking…' : machine.version !== undefined ? 'Online' : 'Offline'
+  return (
+    <li aria-label={name} className="space-y-4 py-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 gap-3">
+          <Server aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 space-y-0.5">
+            <p className="truncate text-sm font-medium">{name}</p>
+            <ServerState tone={state === 'Online' ? 'good' : 'quiet'}>{state}</ServerState>
+            <p className="text-xs text-muted-foreground">{`@${owner}'s server, for everyone on ${server}. Your runs there use your own GitHub and Claude logins.`}</p>
+          </div>
+        </div>
+        <Button size="sm" variant="ghost" className="shrink-0" disabled={busy} aria-label={`Remove ${name}`} onClick={onRemove}>
+          Remove
+        </Button>
+      </div>
+      <div className="space-y-2 pl-7">
+        <p className="text-sm">Logins on the server</p>
+        {row?.error !== undefined && <p className="text-xs text-muted-foreground">{`${name} did not say: ${row.error}`}</p>}
+        {read !== undefined && !read.ok && <p className="text-xs text-muted-foreground">{`${name} did not say: ${read.error}`}</p>}
+        <ul aria-label={`Your logins on ${name}`} className="space-y-2 text-xs">
+          <LoginLine label="GitHub" words={otherWords('GitHub', row?.github, name, server)} said={undefined}>
+            <Button size="sm" variant="outline" disabled={busy || account === undefined} aria-label={`Log in to GitHub on ${name} instead`} title={account !== undefined ? `Copies the login of ${account} from this computer to your own OpenAgent on ${name}. A copy from ${server} no longer takes its place.` : noLogin} onClick={() => void act(() => otherLogin(host, machine.url, 'github'))}>
+              Log in here instead
+            </Button>
+          </LoginLine>
+          <LoginLine
+            label="Claude"
+            words={making.asking ? "Claude: say yes in the page this computer's browser opened." : making.working ? `Claude: one moment, ${name} is being told.` : otherWords('Claude', row?.claude, name, server)}
+            said={making.working ? undefined : making.said}
+          >
+            <Button size="sm" variant="outline" disabled={busy || (making.working && making.asking !== true)} aria-label={`Log in to Claude on ${name} instead`} title={`Opens this computer's browser, where you say yes once. The login is made for your OpenAgent on ${name} alone and lasts a year. A copy from ${server} no longer takes its place.`} onClick={() => void act(() => otherLogin(host, machine.url, 'claude'))}>
+              {making.asking ? 'Start over' : 'Log in here instead'}
+            </Button>
+          </LoginLine>
+        </ul>
+        {error !== undefined && (
+          <p role="alert" className="text-xs text-danger">
+            {error}
+          </p>
+        )}
+      </div>
+    </li>
+  )
 }
 
 /**

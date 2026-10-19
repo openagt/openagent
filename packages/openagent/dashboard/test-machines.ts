@@ -28,6 +28,11 @@ export const machinesRpc = {
     return { ok: true }
   }),
   onMachinesReachable: vi.fn(async (): Promise<Record<string, boolean>> => ({ ...daemon.reachable })),
+  sendMachineTold: vi.fn(async (id: string): Promise<{ ok: boolean }> => {
+    const told = daemon.machines.some(saved => saved.id === id)
+    daemon.machines = daemon.machines.map(saved => (saved.id === id ? { ...saved, told: true as const } : saved))
+    return { ok: told }
+  }),
 }
 
 /** Set what the pretend daemon has saved, and have the page read it. Call with none to empty it. */

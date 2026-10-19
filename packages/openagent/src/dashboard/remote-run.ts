@@ -4,7 +4,8 @@ import type { AgentMeta } from '../store/index.js'
 import type { StartAgentOptions, StartAgentResult } from './types.js'
 import { errorMessage } from '../error-message.js'
 import { machineFetch } from './machine-call.js'
-import { isHostName } from '../registry.js'
+import { isAccount, isHostName } from '../registry.js'
+import { readLogins, type GivenLogins, type MachineLogins } from './machine-logins.js'
 
 /**
  * The server-side half of "run on a saved machine" (#1067). The local daemon holds this computer's
@@ -190,6 +191,8 @@ export interface ComputerOnServer {
   name: string
   /** Its line is open right now. */
   online: boolean
+  /** Whose computer it is, when it is another person's that keeps its line there for everyone: their GitHub account. */
+  owner?: string
 }
 
 /** The computers that keep a line open to a server this computer is in at, or why they could not be asked. */
@@ -203,9 +206,9 @@ export async function remoteComputers(machine: MachineAccess): Promise<{ ok: tru
     const listed = ((await res.json()) as { computers?: unknown }).computers
     const computers: ComputerOnServer[] = []
     for (const entry of Array.isArray(listed) ? listed : []) {
-      const { id, name, online } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
+      const { id, name, online, owner } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
       // An id is a word a door makes: it goes into an address, so nothing else is taken.
-      if (typeof id === 'string' && /^[a-z0-9]{6,32}$/.test(id) && typeof name === 'string' && name.trim()) computers.push({ id, name: name.trim().slice(0, 80), online: online === true })
+      if (typeof id === 'string' && /^[a-z0-9]{6,32}$/.test(id) && typeof name === 'string' && name.trim()) computers.push({ id, name: name.trim().slice(0, 80), online: online === true, ...(isAccount(owner) ? { owner } : {}) })
     }
     return { ok: true, computers }
   } catch (err) {
@@ -582,6 +585,38 @@ export async function remoteComputerCommand(machine: MachineAccess, pkg: string,
     const { ok, output, error } = (said && typeof said === 'object' ? said : {}) as Record<string, unknown>
     if (ok === true) return { ok: true, output }
     return { ok: false, error: typeof error === 'string' && error ? error.slice(0, MAX_SAID) : 'the machine answered something else than expected' }
+  } catch (err) {
+    return { ok: false, error: errorMessage(err) }
+  }
+}
+
+/** How long a machine gets to say, or take, the logins there: handing a GitHub login over has it asked of GitHub. */
+const LOGINS_TIMEOUT_MS = 60_000
+
+/** A machine's refusal of a call about logins, in its own words: a person's place there still being made, a login it did not take. */
+async function loginsRefusal(res: Response): Promise<string> {
+  if (res.status === 401) return NOT_IN
+  if (res.status === 404) return 'the machine keeps no logins for this computer\'s person'
+  return (await res.text().catch(() => '')).trim().slice(0, MAX_SAID) || `the machine answered ${res.status}`
+}
+
+/** The logins this computer's person has on a machine of another person's, as that machine says (machine-logins.ts). */
+export async function remoteLogins(machine: MachineAccess): Promise<{ ok: true; logins: MachineLogins } | { ok: false; error: string }> {
+  try {
+    const res = await machineFetch(`${trimSlashes(machine.url)}/_relay/logins`, machine.pin, { headers: { authorization: `Bearer ${machine.key}` }, signal: AbortSignal.timeout(LOGINS_TIMEOUT_MS) })
+    if (!res.ok) return { ok: false, error: await loginsRefusal(res) }
+    return { ok: true, logins: readLogins(await res.json()) }
+  } catch (err) {
+    return { ok: false, error: errorMessage(err) }
+  }
+}
+
+/** Hand logins over to this computer's person on a machine of another person's; answers what it says of them after. */
+export async function giveRemoteLogins(machine: MachineAccess, given: GivenLogins): Promise<{ ok: true; logins: MachineLogins } | { ok: false; error: string }> {
+  try {
+    const res = await machineFetch(`${trimSlashes(machine.url)}/_relay/logins`, machine.pin, { method: 'POST', headers: relayHeaders(machine.key), body: JSON.stringify(given), signal: AbortSignal.timeout(LOGINS_TIMEOUT_MS) })
+    if (!res.ok) return { ok: false, error: await loginsRefusal(res) }
+    return { ok: true, logins: readLogins(await res.json()) }
   } catch (err) {
     return { ok: false, error: errorMessage(err) }
   }

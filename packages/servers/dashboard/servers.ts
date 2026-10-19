@@ -298,3 +298,50 @@ async function runOn<T>(host: ModuleHost, machine: string, args: string[], read:
   const value = read(result.output)
   return value !== undefined ? { ok: true, value } : { ok: false, error: 'the server answered something else than expected' }
 }
+
+/** One login of this person's on another person's computer, as that computer says it: a copy from a server, or made there. */
+export interface OtherLogin {
+  source: 'copied' | 'made'
+  /** For a copy: the server it came from. */
+  from?: string
+  /** GitHub: whose it is. */
+  account?: string
+}
+
+/** What this computer reads of another person's computer shared with everyone: the person's logins there, and the Claude login it makes for it in this browser. */
+export interface OtherRow {
+  url: string
+  github?: OtherLogin
+  claude?: OtherLogin
+  /** Why that computer could not be asked. */
+  error?: string
+  /** The Claude login this computer makes for it right now, or why the last try failed. */
+  making: LoginRow
+}
+
+function readOtherLogin(value: unknown): OtherLogin | undefined {
+  const { source, from, account } = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
+  if (source !== 'copied' && source !== 'made') return undefined
+  const [where, who] = [text(from), text(account)]
+  return { source, ...(where ? { from: where } : {}), ...(who ? { account: who } : {}) }
+}
+
+function readOther(output: unknown): OtherRow[] | undefined {
+  if (!output || typeof output !== 'object') return undefined
+  const { other } = output as Record<string, unknown>
+  if (!Array.isArray(other)) return undefined
+  const rows: OtherRow[] = []
+  for (const entry of other) {
+    const { url, logins, error, claude } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
+    const { github: githubThere, claude: claudeThere } = (logins && typeof logins === 'object' ? logins : {}) as Record<string, unknown>
+    const [at, why] = [text(url), text(error)]
+    const [github, claudeLogin] = [readOtherLogin(githubThere), readOtherLogin(claudeThere)]
+    if (at) rows.push({ url: at, ...(github ? { github } : {}), ...(claudeLogin ? { claude: claudeLogin } : {}), ...(why ? { error: why } : {}), making: readLogin(claude) })
+  }
+  return rows
+}
+
+/** What other persons' computers say of this person's logins there, and the Claude login this computer makes for each. */
+export const loadOther = (host: ModuleHost, urls: string[]): Promise<Answer<OtherRow[]>> => run(host, ['other', ...urls], readOther)
+/** Hand a login made here to this person's own OpenAgent on another person's computer: GitHub's copied from this computer, Claude's made in this browser. */
+export const otherLogin = (host: ModuleHost, url: string, kind: LoginKind): Promise<Answer<OtherRow[]>> => run(host, ['other-login', url, kind], readOther)

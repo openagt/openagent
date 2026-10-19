@@ -425,6 +425,8 @@ export interface ModuleMachine {
   version?: string
   /** The id the machine lists this computer under, among the devices that are in there. */
   device?: string
+  /** Whose computer it is, by their GitHub account, when it is another person's shared with everyone on a server. */
+  owner?: string
 }
 
 /** What {@link ModuleHost.machines} answers. */
@@ -446,6 +448,8 @@ export interface ModuleComputerThrough {
   online: boolean
   /** It is saved here, through the server. */
   added: boolean
+  /** Whose computer it is, when it is another person's that keeps its line there for everyone. */
+  owner?: string
 }
 
 /** What {@link ModuleHost.computersThrough} answers. */
