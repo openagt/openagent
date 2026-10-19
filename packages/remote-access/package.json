@@ -1,6 +1,6 @@
 {
   "name": "@openagt/remote-access",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "Open OpenAgent on a phone or another browser: a device gets in by scanning a QR code once, each device has its own key and is removed alone, and one switch, Phone on Wi-Fi, opens the door on the network the computer is on. On a server the door is open over HTTPS, with a certificate it asks for and renews itself. It brings the Devices section of the dashboard's Settings page.",
   "license": "MIT",
   "repository": {
