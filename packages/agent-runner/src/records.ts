@@ -37,15 +37,18 @@ export interface RunnerMark {
   base?: string
   /** The commit this run's own branch was made at: where the run's own work begins. Absent for a run given a branch that existed. */
   baseCommit?: string
+  /** Who resumed the run last, and when (`run --resume --by`): a scheduler's row, which counts the run as its own from then on. Not kept past the next resume. */
+  resumed?: { by: string; at: string }
 }
 
 /** The mark a card carries, or `undefined` for a run this tool did not start. */
 export function runnerMark(card: RunCard): RunnerMark | undefined {
   const mark = card.caller?.['runner']
   if (!mark || typeof mark !== 'object') return undefined
-  const { host, pid, then, publish, parent, base, baseCommit } = mark as Record<string, unknown>
+  const { host, pid, then, publish, parent, base, baseCommit, resumed } = mark as Record<string, unknown>
   if (typeof host !== 'string') return undefined
-  return { host, ...(typeof pid === 'number' ? { pid } : {}), ...lasting({ then, publish, parent, base, baseCommit }) }
+  const by = resumed && typeof resumed === 'object' ? (resumed as Record<string, unknown>) : {}
+  return { host, ...(typeof pid === 'number' ? { pid } : {}), ...lasting({ then, publish, parent, base, baseCommit }), ...(typeof by['by'] === 'string' && typeof by['at'] === 'string' ? { resumed: { by: by['by'], at: by['at'] } } : {}) }
 }
 
 /** What a mark keeps for the run's whole life, a resume included: its follow-up, its publish level, its parent, where it started. */

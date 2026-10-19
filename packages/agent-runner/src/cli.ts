@@ -29,6 +29,8 @@ export const USAGE = `usage: agent-runner <command>
   run --resume <id> [<text>] [--answer <label>]
                                 continue an ended run: the same record, its session resumed; the text as the next prompt, or the answer to the question it ended on
   run --detach --resume <id> …  the same continuing in its own process, answered at once: what a dashboard's resume hook runs
+  run --resume <id> … --by <who>
+                                kept on the run's record with the time, until its next resume: a scheduler's row that resumed it, which counts the run as its own
   check [--driver <claude-code|codex>]
                                 whether a run can start here: the coding agent's CLI installed and logged in, and its warnings; what a dashboard's check hook runs
   init                          this tool's lines in the dashboard's .openagent/hooks.yml, so its Start works; a line already there is kept
@@ -100,7 +102,7 @@ type Command = (args: string[], io: CliIo, git: GitRunner) => Promise<unknown>
 
 const COMMANDS: Record<string, Command> = {
   async run(args, io, git) {
-    const { positionals, values } = parse(args, { id: { type: 'string' }, model: { type: 'string' }, effort: { type: 'string' }, resume: { type: 'string' }, answer: { type: 'string' }, detach: { type: 'boolean' }, mark: { type: 'boolean' }, driver: { type: 'string' }, then: { type: 'string' }, publish: { type: 'string' }, attach: { type: 'string' }, started: { type: 'string' }, parent: { type: 'string' }, base: { type: 'string' } }, 0, 1)
+    const { positionals, values } = parse(args, { id: { type: 'string' }, model: { type: 'string' }, effort: { type: 'string' }, resume: { type: 'string' }, answer: { type: 'string' }, detach: { type: 'boolean' }, mark: { type: 'boolean' }, driver: { type: 'string' }, then: { type: 'string' }, publish: { type: 'string' }, attach: { type: 'string' }, started: { type: 'string' }, parent: { type: 'string' }, base: { type: 'string' }, by: { type: 'string' } }, 0, 1)
     const repo = await project(io.cwd, git)
     const driver = values.driver
     if (driver !== undefined && !isDriverName(driver)) throw new Usage(`unknown driver "${driver}"; the drivers are ${DRIVER_NAMES.join(' and ')}`)
@@ -117,6 +119,7 @@ const COMMANDS: Record<string, Command> = {
       if (values.base !== undefined) throw new Usage('--resume takes no --base: a run continues on its own branch')
       if (positionals[0] === undefined && values.answer === undefined) throw new Usage('a text or --answer is needed to resume a run')
     }
+    if (values.by !== undefined && (values.resume === undefined || !values.by.trim())) throw new Usage('--by names who resumes a run, with --resume')
     if (values.then !== undefined && !values.then.trim()) throw new Usage('--then needs a prompt')
     if (values.attach !== undefined && !values.attach.trim()) throw new Usage('--attach needs a text')
     if (values.started !== undefined && (values.id === undefined || Number.isNaN(Date.parse(values.started)))) throw new Usage('--started is the time a run spawned with --id was asked for, like 2026-10-09T10:00:00.000Z')
@@ -139,6 +142,7 @@ const COMMANDS: Record<string, Command> = {
         ...(values.answer !== undefined ? { answer: values.answer } : {}),
         ...(values.model !== undefined ? { model: values.model } : {}),
         ...(values.effort !== undefined ? { effort: values.effort } : {}),
+        ...(values.by !== undefined ? { by: values.by } : {}),
       })
       return { ok: true, detached: true, ...resumed }
     }
@@ -155,6 +159,7 @@ const COMMANDS: Record<string, Command> = {
         ...(values.answer !== undefined ? { answer: values.answer } : {}),
         ...(values.model !== undefined ? { model: values.model } : {}),
         ...(values.effort !== undefined ? { effort: values.effort } : {}),
+        ...(values.by !== undefined ? { by: values.by } : {}),
         log: io.stderr,
       })
       return { ok: outcome.status === 'done' || outcome.status === 'waiting', ...outcome }

@@ -744,3 +744,21 @@ test('tick on a project with the scheduler off: the branch is pulled, nothing is
     await removeRepo(repo)
   }
 })
+
+test('a row that resumes takes no coding agent, model or publish level of this machine: each run goes on with its own; its pace, its number at once and its switch are set like any row\'s', async () => {
+  const repo = await testRepo()
+  try {
+    await writeSkill(repo, 'reply', 'schedule:\n  resumes: true\n  when: npx replies\n')
+    for (const [args, what] of [[['agent', 'reply', 'codex'], 'coding agent'], [['model', 'reply', 'sonnet'], 'model'], [['publish', 'reply', 'pr'], 'publish level']] as const) {
+      const refused = await run(repo, ...args)
+      assert.equal(refused.code, 1)
+      assert.deepEqual(refused.out, { ok: false, reason: 'resumes', command: 'reply' })
+      assert.equal(refused.err, `reply resumes runs, and each goes on with the ${what} its own record names`)
+    }
+    for (const args of [['switch', 'reply', 'on'], ['pace', 'reply', '10m'], ['agents', 'reply', '2']]) assert.equal((await run(repo, ...args)).code, 0)
+    const status = (await run(repo, 'status')).out as { schedule: { command: string; resumes?: true }[] }
+    assert.deepEqual(status.schedule.map(c => [c.command, c.resumes]), [['reply', true]])
+  } finally {
+    await removeRepo(repo)
+  }
+})

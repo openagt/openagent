@@ -23,7 +23,7 @@ export interface TickDecision {
   command: string
   /** One line, for a person: `started`, `not due`, `cap reached (…)`, `quota: …`, … */
   outcome: string
-  /** The run's id, when one was started. */
+  /** The run's id, when one was started or resumed. */
   run?: string
 }
 
@@ -38,6 +38,8 @@ export interface ListedCommand {
   waitsFor?: string
   /** What the command's skill does, in the skill's own words, when it says. */
   description?: string
+  /** Whether the row resumes the runs its check names, each on its own coding agent and model, and starts none. */
+  resumes?: true
   /** How many runs of the command its skill lets be in flight at once, when it is more than one. */
   agents?: number
   /** Whether the command is an automation a person keeps on this machine alone, not a skill of the project. */

@@ -44,6 +44,13 @@ import { parseInterval, type Interval } from './pace.js'
  * sentence. `agents` is how many runs of the command may be in flight at once, across every
  * machine that shares the repository, from 1 to 99.
  *
+ * A row with `resumes: true` starts no run: it continues runs that ended. Its check prints which,
+ * each with its words: `[{ "run": "<id>", "text": "…" }]`, and each run named is resumed with the
+ * command and its words, on the coding agent, model and publish level its own record names; so
+ * such a row names no `agent` and no `model`. Only a run this machine started is resumed: only
+ * this machine holds its conversation. What the words are about is the check's and the skill's:
+ * the scheduler knows nothing of it.
+ *
  * Whether a command runs, and how far its runs publish, is not the skill's to say: each person
  * sets both on their own machine, in the tool's state. The pace and the number of agents are
  * where the skill starts: each person may set their own there too.
@@ -78,6 +85,8 @@ export interface ScheduledCommand {
   model?: string
   /** What the skill does, in its own words: the `description` of its front matter, when it has one. */
   description?: string
+  /** Whether the row resumes the runs its check names, and starts none: each goes on with its own coding agent, model and publish level. */
+  resumes?: true
   /**
    * The text of a command that is no skill: an automation a person keeps on this machine alone.
    * Its text is in no checkout, so a run of it is handed the text with its prompt, which is the
@@ -105,7 +114,7 @@ export interface Schedule {
 
 const SKILL = /^[a-z0-9][a-z0-9-]*$/
 const WORD = SKILL
-const ROW_KEYS = ['word', 'every', 'when', 'waits-for', 'agents', 'agent', 'model']
+const ROW_KEYS = ['word', 'every', 'when', 'waits-for', 'agents', 'agent', 'model', 'resumes']
 
 /**
  * The commands a skill schedules, out of its `SKILL.md` in the skills folder `dir`: none when the
@@ -143,17 +152,18 @@ export function skillSchedule(skill: string, md: string, dir: string): Schedule 
 
 /**
  * One row: `every: <N><m|h|d|w|mo>`, `when: <shell line>`, `waits-for: <one line>`, `agents: <N>`,
- * `word: <the skill's argument>`. At least one of `every` and `when`, else nothing says when.
+ * `word: <the skill's argument>`, `resumes: true`. At least one of `every` and `when`, else nothing says when.
  * `every: 0m` is refused rather than read as "always", which is the key being absent. A key the
  * reader does not know is refused too: it is a typo, or a rule this tool would not follow.
- * `waits-for` says what the check waits for, so a row without `when` has none.
+ * `waits-for` says what the check waits for, so a row without `when` has none. A row that resumes
+ * needs `when`, which names the runs, and takes no `agent` and no `model`: each run names its own.
  * Answers the command, or why the row cannot be read.
  */
 function parseRow(skill: string, row: unknown, dir: string): ScheduledCommand | string {
   if (!isMap(row)) return 'a row is a list of keys'
   const unknown = Object.keys(row).find(key => !ROW_KEYS.includes(key))
   if (unknown !== undefined) return `unknown key ${unknown}`
-  const { word, every, when, agents, agent, model } = row
+  const { word, every, when, agents, agent, model, resumes } = row
   const waitsFor = row['waits-for']
   if (word !== undefined && !(typeof word === 'string' && WORD.test(word))) return 'word is one word of lower-case letters, digits and dashes'
   const asEvery = every === undefined ? undefined : parseInterval(String(every))
@@ -165,6 +175,9 @@ function parseRow(skill: string, row: unknown, dir: string): ScheduledCommand | 
   if (model !== undefined && !(typeof model === 'string' && /^\S+$/.test(model))) return 'model is one word, the id its coding agent knows the model by'
   if (when === undefined && every === undefined) return 'neither every nor when says when'
   if (waitsFor !== undefined && when === undefined) return 'waits-for says what when waits for, and there is no when'
+  if (resumes !== undefined && resumes !== true) return 'resumes is true, or left out'
+  if (resumes === true && when === undefined) return 'a row that resumes needs when, the check that names the runs to resume'
+  if (resumes === true && (agent !== undefined || model !== undefined)) return `a row that resumes takes no ${agent !== undefined ? 'agent' : 'model'}: each run goes on with the coding agent and model its record names`
   return {
     name: word === undefined ? skill : `${skill} ${word}`,
     ...(typeof when === 'string' ? { when: when.trim() } : {}),
@@ -175,6 +188,7 @@ function parseRow(skill: string, row: unknown, dir: string): ScheduledCommand | 
     dirs: [dir],
     ...(isAgent(agent) ? { agent } : {}),
     ...(typeof model === 'string' ? { model } : {}),
+    ...(resumes === true ? { resumes: true as const } : {}),
   }
 }
 
@@ -360,6 +374,47 @@ export function foundOutput(stdout: string, lastRun: string): string {
  * output is, and that the command, not the output, says what the work is.
  */
 export const FOUND_OPENING = 'The scheduler starts this command when its check prints something, and this time the check printed what is below. It says why this run started; what the work is, the command says.'
+
+/**
+ * What a row that resumes printed: each run it names with its words, a run named twice once with
+ * its words joined. Nothing for output that says no work ({@link isDue}); a reason for output that
+ * is not `[{ "run": "<id>", "text": "…" }]`.
+ */
+export function runsToResume(stdout: string): { run: string; text: string }[] | string {
+  if (!isDue(stdout)) return []
+  let value: unknown
+  try {
+    value = JSON.parse(stdout)
+  } catch {
+    return 'the check printed no JSON'
+  }
+  if (!Array.isArray(value)) return 'the check printed no list'
+  const runs = new Map<string, string[]>()
+  for (const item of value) {
+    if (!isMap(item) || typeof item['run'] !== 'string' || !item['run'].trim() || typeof item['text'] !== 'string' || !item['text'].trim()) return 'an item of the list is no { "run": "<id>", "text": "…" }'
+    const id = item['run'].trim()
+    runs.set(id, [...(runs.get(id) ?? []), item['text'].trim()])
+  }
+  return [...runs].map(([run, texts]) => ({ run, text: texts.join('\n\n') }))
+}
+
+/**
+ * What a run a row resumes is told: the command, as a run it starts is sent, then
+ * {@link RESUMED_OPENING} and the check's words for that run; for an automation kept on this
+ * machine, its name, its text, then the opening and the words. One text: a resume takes no
+ * attached text.
+ */
+export function resumeText(command: Pick<ScheduledCommand, 'name' | 'text'>, words: string, lastRun: string): string {
+  const found = foundOutput(words, lastRun)
+  const said = command.text !== undefined ? `${command.text}\n\n${RESUMED_OPENING_OWN}\n${found}` : `${RESUMED_OPENING}\n${found}`
+  return `${commandPrompt(command)}\n\n${said}`
+}
+
+/** What is said before the check's words to a run a row resumes: the run has never seen the check, and the command, not the words, says what the work is. */
+export const RESUMED_OPENING = 'The scheduler continues this run with this command when its check names the run, and this time the check said what is below for it. It says why the run continues; what the work is, the command says.'
+
+/** The same for a run an automation kept on this machine resumes: its work is said by the text above. */
+export const RESUMED_OPENING_OWN = 'The scheduler continues this run with this when its check names the run, and this time the check said what is below for it. It says why the run continues; what the work is, the text above says.'
 
 /**
  * The command a run's prompt is counted under, so a run a person started counts against that

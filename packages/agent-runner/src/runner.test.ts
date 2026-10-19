@@ -49,6 +49,7 @@ test('run --detach --resume spawns the resume of a recorded run and answers its 
     assert.equal(spawned.length, 1)
     assert.deepEqual(resumeArgs({ id: 'r1', text: 'go on' }), ['run', '--resume', 'r1', 'go on'])
     assert.deepEqual(resumeArgs({ id: 'r1', answer: 'Yes', model: 'opus' }), ['run', '--resume', 'r1', '--answer', 'Yes', '--model', 'opus'])
+    assert.deepEqual(resumeArgs({ id: 'r1', text: '/reply', by: 'reply' }), ['run', '--resume', 'r1', '/reply', '--by', 'reply'])
   } finally {
     await removeRepo(repo)
   }

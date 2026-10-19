@@ -50,6 +50,8 @@ export interface SchedulerCommand {
   agents?: number
   /** What the command's skill does, in the skill's own words, when it says. */
   description?: string
+  /** Whether the row resumes the runs its check names, each on its own coding agent, model and publish level: it has none of them to pick. */
+  resumes?: true
   /** Whether the command is an automation the person keeps on this machine alone, not a skill of the project. */
   onThisMachine?: true
   /** Whether the command is a person's own automation as the tool wrote it: the page can open it to be saved again, and remove it. */
@@ -102,8 +104,12 @@ export function modelLabel(agents: readonly AgentModels[], agent: AgentName, id:
   return agents.find(a => a.value === agent)?.models.find(m => m.value === id)?.label ?? id
 }
 
-/** What a row's runs are on, for its line: the agent, and the model when one is named ("Claude Code, Opus 5.5"; "Codex"). */
+/** What a row that resumes runs on, in the place where another row picks its agent and model: each run's own. */
+export const RESUMES_ON = 'Answers on the coding agent and model that opened the pull request'
+
+/** What a row's runs are on, for its line: the agent, and the model when one is named ("Claude Code, Opus 5.5"; "Codex"); each run's own for a row that resumes. */
 export function runsOnWords(command: SchedulerCommand, schedulerModel: string | undefined, agents: readonly AgentModels[]): string {
+  if (command.resumes) return RESUMES_ON
   const agent = agentOf(command)
   const model = modelOf(command, schedulerModel, agent)
   return model === undefined ? AGENT_LABELS[agent] : `${AGENT_LABELS[agent]}, ${modelLabel(agents, agent, model)}`
@@ -236,6 +242,7 @@ export function schedulerRow(project: ModuleProject, output: unknown): Scheduler
       ...(on !== home ? { runsOn: on } : {}),
       ...(modelPick['agent'] === on && typeof modelPick['model'] === 'string' && modelPick['model'].trim() !== '' ? { model: modelPick['model'] } : {}),
       ...(typeof row['description'] === 'string' ? { description: row['description'] } : {}),
+      ...(row['resumes'] === true ? { resumes: true as const } : {}),
       ...(row['onThisMachine'] === true ? { onThisMachine: true as const } : {}),
       ...(row['editable'] === true ? { editable: true as const } : {}),
       ...(lastRunOf(row['lastRun']) ? { lastRun: lastRunOf(row['lastRun'])! } : {}),
@@ -481,8 +488,9 @@ function waitingWords(command: SchedulerCommand, now: Date): string | undefined 
   return nextStart(command, now)
 }
 
-/** That the coding agent a row's runs are on cannot run it at all, for a person: its skill is not in that agent's own skills folder. Nothing for a row it can run. */
-export function cannotRun(command: Pick<SchedulerCommand, 'home' | 'runsOn' | 'able'>): string | undefined {
+/** That the coding agent a row's runs are on cannot run it at all, for a person: its skill is not in that agent's own skills folder. Nothing for a row it can run, and for a row that resumes: each run is on its own agent, and the scheduler says so of a run whose agent cannot. */
+export function cannotRun(command: Pick<SchedulerCommand, 'home' | 'runsOn' | 'able' | 'resumes'>): string | undefined {
+  if (command.resumes) return undefined
   const agent = agentOf(command)
   return command.able.includes(agent) ? undefined : notThere(AGENT_LABELS[agent], AGENT_SKILLS_DIR[agent])
 }
@@ -491,7 +499,10 @@ const notThere = (agent: string, dir: string): string => `Cannot start on ${agen
 
 /** One decision of the scheduler, a tick's or the answer to "Run now", for a person; nothing for one the row already says in another place: that it is switched off, that it started. A wait that is not over is said by {@link decided}, which knows the row. */
 export function outcomeWords(outcome: string | undefined): string | undefined {
-  if (outcome === undefined || outcome === 'switched off on this machine' || outcome.startsWith('started ')) return undefined
+  if (outcome === undefined || outcome === 'switched off on this machine' || outcome.startsWith('started ') || outcome.startsWith('resumed ')) return undefined
+  // A row that resumes says why of each run it did not: the reason is said as any other.
+  const notResumed = /^run \S+ not resumed: (.*)$/.exec(outcome)
+  if (notResumed) return outcomeWords(notResumed[1]!)
   const elsewhere = /^not a command of (.+?): its skill is only under .+, not (\S+)$/.exec(outcome)
   if (elsewhere) return notThere(elsewhere[1]!, elsewhere[2]!)
   if (outcome === 'not due') return 'No work'
