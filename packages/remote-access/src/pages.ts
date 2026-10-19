@@ -59,9 +59,13 @@ export function enterPage(path: string, nonce: string, server: boolean): string 
     const code = location.hash.slice(1).split('.')[0]
     history.replaceState(null, '', location.pathname)
     fetch(${JSON.stringify(path)}, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) })
-      .then(answer => {
-        if (answer.ok) location.replace('/')
-        else say('This code no longer works', 'A code works once, for five minutes. ' + ${JSON.stringify(howToGetIn(server))})
+      .then(async answer => {
+        if (!answer.ok) return say('This code no longer works', 'A code works once, for five minutes. ' + ${JSON.stringify(howToGetIn(server))})
+        // Whose device it is now, said a moment before OpenAgent opens.
+        const person = (await answer.json().catch(() => ({}))).person
+        if (typeof person !== 'string') return location.replace('/')
+        say('You are in as @' + person, 'on ' + location.hostname + '. Opening OpenAgent…')
+        setTimeout(() => location.replace('/'), 1500)
       })
       .catch(() => say('The computer did not answer', ${JSON.stringify(unreachable)}))
   `

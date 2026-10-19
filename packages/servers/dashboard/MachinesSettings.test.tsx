@@ -168,9 +168,10 @@ describe('Settings → Machines', () => {
     const { host, ran } = dashboard(args => (args[0] === 'link' ? link : ok({ servers: [server(ALL_DONE, { adding: false })] })), saved)
     show(host)
     const code = () => screen.queryByRole('img', { name: 'The code a new device scans' })
-    // One press on the server's row: the dialog asks the door for a code as it opens.
+    // The server's row, then "Me": the dialog asks the door for a code.
     fireEvent.click(await screen.findByRole('button', { name: 'Invite to 203.0.113.5' }))
     expect(await screen.findByText('Invite to 203.0.113.5')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
     await waitFor(() => expect(code()).toBeTruthy())
     expect(ran().filter(line => line === 'link 203.0.113.5')).toHaveLength(1)
     expect(screen.getByText(/it opens OpenAgent on the server, from anywhere\./)).toBeTruthy()
@@ -185,6 +186,7 @@ describe('Settings → Machines', () => {
     // A code that runs out says so, and a new one is a press away.
     link = ok({ ...LINK, expires: new Date(Date.now() + 80).toISOString() })
     fireEvent.click(screen.getByRole('button', { name: 'Invite to 203.0.113.5' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }))
     expect(await screen.findByText('The code ran out. A new one works for five minutes more.', {}, { timeout: 2500 })).toBeTruthy()
     expect(code()).toBeNull()
     link = ok(LINK)
@@ -195,6 +197,7 @@ describe('Settings → Machines', () => {
 
     link = { ok: false, error: 'The server did not answer.' }
     fireEvent.click(await screen.findByRole('button', { name: 'Invite to 203.0.113.5' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }))
     expect((await screen.findByRole('alert')).textContent).toBe('No code: The server did not answer.')
     expect(code()).toBeNull()
   })
@@ -645,6 +648,7 @@ describe('Settings → Machines', () => {
     await screen.findByText('OpenAgent on MacBook')
     const code = () => screen.queryByRole('img', { name: 'The code a new device scans' })
     fireEvent.click(screen.getByRole('button', { name: 'Invite to 203.0.113.5' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }))
     await waitFor(() => expect(code()).toBeTruthy())
     // The devices that were in when the code came on the page are no reason for it to leave.
     await new Promise(resolve => setTimeout(resolve, 200))
@@ -849,4 +853,38 @@ describe('Settings → Machines', () => {
     expect(olderThan('2.0.0', '1.9.9')).toBe(false)
     expect(olderThan('unknown', '1.2.3')).toBe(false)
   })
+
+  test('a server\'s Invite for someone else names the owner first, by this computer\'s GitHub account, and its devices are listed by person', async () => {
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5', version: '1.2.3' }] }
+    let persons: unknown[] = []
+    const PHONE = { id: 'a1b2c3d4e5f6', name: 'Pixel, Chrome', added: new Date().toISOString() }
+    const { host, runComputerCommand } = dashboard(
+      args => {
+        if (args[0] === 'link') return ok(LINK)
+        if (args[0] === 'owner') return (persons = [{ account: args[2], owner: true }, { account: 'rom' }]), ok({ devices: [{ ...PHONE, person: 'rom' }], persons })
+        if (args[0] === 'remove-person') return ok({ devices: [], persons: [persons[0]] })
+        return ok({ servers: [server(ALL_DONE, { adding: false })] })
+      },
+      saved,
+      { ok: true },
+      ok({ account: 'ada' }),
+      () => ok({ devices: persons.length ? [{ ...PHONE, person: 'rom' }] : [], persons }),
+    )
+    show(host)
+    fireEvent.click(await screen.findByRole('button', { name: 'Invite to 203.0.113.5' }))
+    fireEvent.click(await screen.findByRole('radio', { name: /Someone else/ }))
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Their GitHub account' }), { target: { value: 'rom' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    fireEvent.click(await screen.findByRole('button', { name: "Yes, that's me" }))
+    expect(await screen.findByText('For @rom. Send them the link.')).toBeTruthy()
+    expect(runComputerCommand).toHaveBeenCalledWith(['owner', '203.0.113.5', 'ada'])
+    expect(runComputerCommand).toHaveBeenCalledWith(['link', '203.0.113.5', '--for', 'rom'])
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+
+    expect(await screen.findByText('@ada, the owner')).toBeTruthy()
+    expect((await screen.findByRole('list', { name: 'Devices of @rom on 203.0.113.5' })).textContent).toContain('Pixel, Chrome')
+    fireEvent.click(screen.getByRole('button', { name: 'Remove @rom from 203.0.113.5' }))
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['remove-person', '203.0.113.5', 'rom']))
+  })
 })
+

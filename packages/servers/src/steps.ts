@@ -351,9 +351,19 @@ export const STEPS: readonly StepDef[] = [
   },
 ]
 
-/** The script that asks the server's door for a link a new machine gets in with. Run as the server's own user. */
-export function linkScript(): string {
-  return script(SERVER_USER, {}, `\n  ${DOOR} add\n`)
+/** The script that asks the server's door for a link a new machine gets in with, for a person when one is named. Run as the server's own user. */
+export function linkScript(person?: string): string {
+  return person === undefined ? script(SERVER_USER, {}, `\n  ${DOOR} add\n`) : script(SERVER_USER, { FOR: person }, `\n  ${DOOR} add --for "$FOR"\n`)
+}
+
+/** The script that names the server's owner at its door, and answers the devices and persons. Run as the server's own user. */
+export function ownerScript(account: string): string {
+  return script(SERVER_USER, { ACCOUNT: account }, `\n  ${DOOR} owner "$ACCOUNT"\n`)
+}
+
+/** The script that takes a person out at the server's door, with their devices, and answers the ones still in. Run as the server's own user. */
+export function removePersonScript(account: string): string {
+  return script(SERVER_USER, { ACCOUNT: account }, `\n  ${DOOR} remove-person "$ACCOUNT"\n`)
 }
 
 /** The script that asks the server's door which devices are in. Run as the server's own user. */

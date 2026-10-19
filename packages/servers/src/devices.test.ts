@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { devicesIn, isDeviceId, readDevices, removeDevice } from './devices.js'
+import { devicesIn, isDeviceId, nameOwner, readDevices, removeDevice, removePerson } from './devices.js'
 import { pretendServer } from './test-home.js'
 
 const SERVER = { address: '203.0.113.5', user: 'root' }
@@ -11,11 +11,11 @@ const status = (devices: unknown): string => JSON.stringify({ on: false, listeni
 
 test('the server\'s door is asked which devices are in, as the server\'s own user', async () => {
   const server = pretendServer(() => ({ out: status([PHONE, LAPTOP]) }))
-  assert.deepEqual(await readDevices(SERVER, { exec: server.exec }), { ok: true, devices: [PHONE, LAPTOP] })
+  assert.deepEqual(await readDevices(SERVER, { exec: server.exec }), { ok: true, devices: [PHONE, LAPTOP], persons: [] })
   assert.deepEqual(server.calls.map(call => call.remote), ["runuser -l openagent -c 'bash -s'"])
   assert.match(server.calls[0]!.script, /remote-access\/bin\/remote-access status\n/)
 
-  assert.deepEqual(await readDevices(SERVER, { exec: pretendServer(() => ({ out: status([]) })).exec }), { ok: true, devices: [] })
+  assert.deepEqual(await readDevices(SERVER, { exec: pretendServer(() => ({ out: status([]) })).exec }), { ok: true, devices: [], persons: [] })
   const NOT_DEVICES = { ok: false, error: 'The server answered something else than the devices that are in.' }
   for (const out of ['Welcome to Debian\n', '{}\n', JSON.stringify({ devices: 'none' }), 'null\n']) assert.deepEqual(await readDevices(SERVER, { exec: pretendServer(() => ({ out })).exec }), NOT_DEVICES, out)
   assert.deepEqual(await readDevices(SERVER, { exec: pretendServer(() => ({ code: 1, err: 'the door is not installed' })).exec }), { ok: false, error: 'the door is not installed' })
@@ -41,7 +41,7 @@ test('what a server lists is read as data: only what a device is, as many as a d
       // Letters that turn a line around or break it, and a time written another way: the name is plain words, the time is written anew.
       { id: 'f1b2c3d4e5f6', name: 'evil\u202Egnp\u2028.exe', added: '2026-10-12T17:50:00Z', seen: '2026-10-13 (<img src=x>)' },
     ]),
-  )!
+  )!.devices
   assert.deepEqual(listed.slice(0, 4), [
     PHONE,
     { id: 'c1b2c3d4e5f6', name: 'Mac [31m, Chrome', added: PHONE.added },
@@ -61,19 +61,19 @@ test('what a server lists is read as data: only what a device is, as many as a d
       { id: 'e1b2c3d4e5f6', name: 'Mac', added: PHONE.added, also: [LAPTOP.id, 'bbbbbbbbbbb1'] },
       { ...PHONE, id: 'f1b2c3d4e5f6', also: 'none' },
     ]),
-  )!
+  )!.devices
   assert.deepEqual(rows.map(row => [row.id, row.also]), [
     [PHONE.id, [LAPTOP.id, 'aaaaaaaaaaa1', 'aaaaaaaaaaa2', 'aaaaaaaaaaa3']],
     ['e1b2c3d4e5f6', ['bbbbbbbbbbb1']],
     ['f1b2c3d4e5f6', undefined],
   ])
   const many = Array.from({ length: 80 }, (_, index) => ({ ...PHONE, id: `device${String(index).padStart(3, '0')}` }))
-  assert.equal(devicesIn(status(many))!.length, 50)
+  assert.equal(devicesIn(status(many))!.devices.length, 50)
 })
 
 test('a device is taken out by its id, which goes to the server as one word of the script; what is no id never reaches a server', async () => {
   const server = pretendServer(() => ({ out: status([LAPTOP]) }))
-  assert.deepEqual(await removeDevice(SERVER, PHONE.id, { exec: server.exec }), { ok: true, devices: [LAPTOP] })
+  assert.deepEqual(await removeDevice(SERVER, PHONE.id, { exec: server.exec }), { ok: true, devices: [LAPTOP], persons: [] })
   assert.match(server.calls[0]!.script, /^ID='a1b2c3d4e5f6'$/m)
   assert.match(server.calls[0]!.script, /remote-access\/bin\/remote-access remove "\$ID"\n/)
 
@@ -85,4 +85,25 @@ test('a device is taken out by its id, which goes to the server as one word of t
   assert.deepEqual(untouched.calls, [])
   // The door's own words for an id it does not have.
   assert.deepEqual(await removeDevice(SERVER, PHONE.id, { exec: pretendServer(() => ({ code: 1, err: `no device has the id ${PHONE.id}` })).exec }), { ok: false, error: `no device has the id ${PHONE.id}` })
+})
+
+test('a server\'s persons are read as data: the owner first and once, each account as a door writes it, and a device is a person\'s only when that person is listed', () => {
+  const said = (persons: unknown, devices: unknown[] = []): string => JSON.stringify({ on: false, listening: true, devices, lines: [], persons }) + '\n'
+  assert.deepEqual(devicesIn(said([{ account: 'rom' }, { account: 'ada', owner: true }]))!.persons, [], 'no owner first, no persons')
+  const read = devicesIn(said([{ account: 'ada', owner: true }, { account: 'ada' }, { account: 'Rom' }, { account: '$(reboot)' }, { account: 'eve', owner: true }, { account: 'rom' }], [{ ...PHONE, person: 'rom' }, { ...LAPTOP, person: 'mallory' }]))!
+  assert.deepEqual(read.persons, [{ account: 'ada', owner: true }, { account: 'rom' }])
+  assert.deepEqual(read.devices.map(device => device.person), ['rom', undefined])
+})
+
+test('the owner is named and a person removed at the server\'s door, each account one word of the script; what is no account never reaches a server', async () => {
+  const server = pretendServer(() => ({ out: JSON.stringify({ on: false, listening: true, devices: [PHONE], lines: [], persons: [{ account: 'ada', owner: true }] }) }))
+  assert.deepEqual(await nameOwner(SERVER, 'Ada', { exec: server.exec }), { ok: true, devices: [PHONE], persons: [{ account: 'ada', owner: true }] })
+  assert.match(server.calls[0]!.script, /^ACCOUNT='ada'$/m)
+  assert.match(server.calls[0]!.script, /remote-access owner "\$ACCOUNT"\n/)
+  await removePerson(SERVER, 'rom', { exec: server.exec })
+  assert.match(server.calls[1]!.script, /remote-access remove-person "\$ACCOUNT"\n/)
+  const untouched = pretendServer()
+  assert.deepEqual(await nameOwner(SERVER, "x'; reboot", { exec: untouched.exec }), { ok: false, error: "x'; reboot is not a GitHub account" })
+  assert.deepEqual(await removePerson(SERVER, '-rf', { exec: untouched.exec }), { ok: false, error: '-rf is not a GitHub account' })
+  assert.deepEqual(untouched.calls, [])
 })

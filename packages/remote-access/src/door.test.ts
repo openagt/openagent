@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { DEVICE_COOKIE, ENTER_PATH, openDoor, readBearer, readEntry, type Door } from './door.js'
-import { COMPUTER_HEADER, addCode, enter, readStore, removeDevice, sha256, type Entry } from './store.js'
+import { COMPUTER_HEADER, PERSON_HEADER, addCode, addPerson, enter, nameOwner, readStore, removeDevice, sha256, type Entry } from './store.js'
 import { testHome } from './test-home.js'
 
 // The door in front of a stand-in for OpenAgent: a real server on this machine that records what
@@ -454,4 +454,40 @@ test('readBearer reads a computer\'s key off its header, and nothing else', () =
   assert.deepEqual(readBearer('Bearer ab12cd.s3cret'), { id: 'ab12cd', key: 's3cret' })
   assert.deepEqual(readBearer('bearer   ab12cd.s3.cret'), { id: 'ab12cd', key: 's3.cret' })
   for (const not of [undefined, '', 'Bearer', 'Bearer nodot', 'Bearer .key', 'Bearer id.', 'Basic ab12cd.s3cret', 'Bearer a.b c']) assert.equal(readBearer(not), undefined, String(not))
+})
+
+test('on a computer with persons, each call says whose device made it, and a header a request brings is never passed on', async () => {
+  const r = await rig()
+  try {
+    // No owner named: nobody's, and a forged one goes nowhere.
+    const before = await r.letIn('a browser')
+    await fetch(`${r.at}/`, { headers: { cookie: before.cookie, [PERSON_HEADER]: 'mallory' } })
+    assert.equal(r.asked.at(-1)!.headers[PERSON_HEADER], undefined)
+
+    assert.ok(await nameOwner(r.env, 'ada'))
+    assert.ok(await addPerson(r.env, 'rom'))
+    const roms = (await enter(r.env, (await addCode(r.env, Date.now(), 'rom')).code, 'a phone'))!
+    assert.equal(roms.person, 'rom')
+
+    // The device that was in before the owner was named is the owner's.
+    await fetch(`${r.at}/`, { headers: { cookie: before.cookie, [PERSON_HEADER]: 'rom' } })
+    assert.equal(r.asked.at(-1)!.headers[PERSON_HEADER], 'ada')
+    await fetch(`${r.at}/`, { headers: { cookie: `${DEVICE_COOKIE}=${roms.id}.${roms.key}`, [PERSON_HEADER]: 'ada' } })
+    assert.equal(r.asked.at(-1)!.headers[PERSON_HEADER], 'rom')
+  } finally {
+    await r.close()
+  }
+})
+
+test('a browser let in for a person is told whose it is, so the page can say it', async () => {
+  const r = await rig()
+  try {
+    await nameOwner(r.env, 'ada')
+    await addPerson(r.env, 'rom')
+    const { code } = await addCode(r.env, Date.now(), 'rom')
+    const entered = await fetch(`${r.at}${ENTER_PATH}`, { method: 'POST', body: JSON.stringify({ code }) })
+    assert.deepEqual(await entered.json(), { ok: true, person: 'rom' })
+  } finally {
+    await r.close()
+  }
 })

@@ -75,11 +75,21 @@ export interface DeviceRow {
   also?: string[]
   /** That computer is this one, by the line it keeps open to the server. */
   own?: true
+  /** Whose device it is, by their GitHub account, once the server has persons. */
+  person?: string
+}
+
+/** A person on a server, by their GitHub account; the owner first. */
+export interface PersonRow {
+  account: string
+  owner?: true
 }
 
 /** What a server's door lists, and what this computer's own door says of its line there. */
 export interface DevicesRead {
   devices: DeviceRow[]
+  /** None until the server's owner is named. */
+  persons: PersonRow[]
   /** The server said no to the key this computer asks for its line with. */
   lineRefused: boolean
 }
@@ -123,18 +133,24 @@ export function readServers(output: unknown): ServerRow[] | undefined {
 
 export function readDevices(output: unknown): DevicesRead | undefined {
   if (!output || typeof output !== 'object') return undefined
-  const { devices, lineRefused } = output as Record<string, unknown>
+  const { devices, lineRefused, persons } = output as Record<string, unknown>
   if (!Array.isArray(devices)) return undefined
   const rows: DeviceRow[] = []
   for (const entry of devices) {
     if (!entry || typeof entry !== 'object') continue
-    const { id, name, added, seen, line, also, own } = entry as Record<string, unknown>
-    const [deviceId, deviceName, addedAt, seenAt] = [text(id), text(name), text(added), text(seen)]
+    const { id, name, added, seen, line, also, own, person } = entry as Record<string, unknown>
+    const [deviceId, deviceName, addedAt, seenAt, whose] = [text(id), text(name), text(added), text(seen), text(person)]
     const others = Array.isArray(also) ? also.filter((other): other is string => typeof other === 'string' && other !== '') : []
     if (deviceId && deviceName && addedAt)
-      rows.push({ id: deviceId, name: deviceName, added: addedAt, ...(seenAt ? { seen: seenAt } : {}), ...(line === true ? { line: true } : {}), ...(others.length ? { also: others } : {}), ...(own === true ? { own: true } : {}) })
+      rows.push({ id: deviceId, name: deviceName, added: addedAt, ...(seenAt ? { seen: seenAt } : {}), ...(line === true ? { line: true } : {}), ...(others.length ? { also: others } : {}), ...(own === true ? { own: true } : {}), ...(whose ? { person: whose } : {}) })
   }
-  return { devices: rows, lineRefused: lineRefused === true }
+  const people: PersonRow[] = []
+  for (const entry of Array.isArray(persons) ? persons : []) {
+    const { account, owner } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
+    const known = text(account)
+    if (known && !people.some(person => person.account === known)) people.push({ account: known, ...(owner === true ? { owner: true as const } : {}) })
+  }
+  return { devices: rows, persons: people, lineRefused: lineRefused === true }
 }
 
 function readLink(output: unknown): DoorLink | undefined {
@@ -188,7 +204,11 @@ export const ownGithub = (host: ModuleHost): Promise<Answer<OwnGithub>> => run(h
 export const login = (host: ModuleHost, address: string, kind: LoginKind, own = false): Promise<Answer<ServerRow[]>> => run(host, ['login', address, kind, ...(own ? ['own'] : [])], readServers)
 /** Take a login off the server. */
 export const logout = (host: ModuleHost, address: string, kind: LoginKind): Promise<Answer<ServerRow[]>> => run(host, ['logout', address, kind], readServers)
-export const askLink = (host: ModuleHost, address: string): Promise<Answer<DoorLink>> => run(host, ['link', address], readLink)
+export const askLink = (host: ModuleHost, address: string, person?: string): Promise<Answer<DoorLink>> => run(host, ['link', address, ...(person !== undefined ? ['--for', person] : [])], readLink)
+/** Name the server's owner at its door, by their GitHub account. */
+export const nameOwner = (host: ModuleHost, address: string, account: string): Promise<Answer<DevicesRead>> => run(host, ['owner', address, account], readDevices)
+/** Take a person out on the server, with every device of theirs. */
+export const removePerson = (host: ModuleHost, address: string, account: string): Promise<Answer<DevicesRead>> => run(host, ['remove-person', address, account], readDevices)
 export const markAdded = (host: ModuleHost, address: string): Promise<Answer<ServerRow[]>> => run(host, ['added', address], readServers)
 export const forget = (host: ModuleHost, address: string): Promise<Answer<ServerRow[]>> => run(host, ['forget', address], readServers)
 /** Keep a line open from this computer to the server, and say what the server may do through it. */

@@ -9,7 +9,7 @@ import type { Secured } from './certificate.js'
 import { deviceName } from './device-name.js'
 import { LINE_PATH, LINE_PROTOCOL } from './line-out.js'
 import { enterPage, notInPage } from './pages.js'
-import { COMPUTER_HEADER, enter, isComputerId, isIn, readStore, removeDevice, sha256, storePath, update, type Entry, type Store } from './store.js'
+import { COMPUTER_HEADER, PERSON_HEADER, enter, isComputerId, isIn, personOf, readStore, removeDevice, sha256, storePath, update, type Entry, type Store } from './store.js'
 
 /**
  * The door: the one thing that lets anything in from the network. A request from a device that is in is
@@ -24,6 +24,9 @@ import { COMPUTER_HEADER, enter, isComputerId, isIn, readStore, removeDevice, sh
  * On a server, a computer may also get in to keep a line open: one connection it holds from its
  * side, down which this server asks its OpenAgent things (line-in.ts). It says so as it gets in,
  * and only a computer that did is given a line.
+ *
+ * On a computer with persons, every call passed on says whose device made it (`PERSON_HEADER`):
+ * the door sets it, and a request never brings its own.
  */
 
 /** Every path of the door's own; never passed on. */
@@ -238,19 +241,26 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     // A computer is answered its key; a browser gets it as a cookie its pages cannot read.
     if (byComputer) return void res.writeHead(200, headers).end(JSON.stringify({ ok: true, key: keyWord(entry) }))
     cookieSent.set(entry.id, now())
-    res.writeHead(200, { ...headers, 'set-cookie': cookieHeader(entry, secure) }).end('{"ok":true}')
+    // Whose device it is, for the page to say: the owner's when no person is named.
+    const person = entry.person ?? (await currentStore()).persons[0]?.account
+    res.writeHead(200, { ...headers, 'set-cookie': cookieHeader(entry, secure) }).end(JSON.stringify({ ok: true, ...(person !== undefined ? { person } : {}) }))
   }
 
   /**
    * Who a request comes from, when it is in: a computer by the key its header carries, a device
    * by its cookie. A header that is no key of the door's is the page's own, to pass on.
    */
-  const whoIsIn = async (req: IncomingMessage): Promise<{ entry: Entry; byBearer: boolean } | undefined> => {
+  const whoIsIn = async (req: IncomingMessage): Promise<{ entry: Entry; byBearer: boolean; person?: string } | undefined> => {
     const store = await currentStore()
+    const whose = (entry: Entry): { person?: string } => {
+      const device = store.devices.find(candidate => candidate.id === entry.id)
+      const person = device && personOf(store, device)
+      return person !== undefined ? { person } : {}
+    }
     const bearer = readBearer(req.headers.authorization)
-    if (bearer && isIn(store, bearer)) return { entry: bearer, byBearer: true }
+    if (bearer && isIn(store, bearer)) return { entry: bearer, byBearer: true, ...whose(bearer) }
     const cookie = readEntry(req.headers.cookie)
-    return cookie && isIn(store, cookie) ? { entry: cookie, byBearer: false } : undefined
+    return cookie && isIn(store, cookie) ? { entry: cookie, byBearer: false, ...whose(cookie) } : undefined
   }
 
   /** A device that is in takes itself out: what a computer does when it is removed from the other's list of machines. */
@@ -262,12 +272,15 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end('{"ok":true}')
   }
 
-  const passOn = (req: IncomingMessage, res: ServerResponse, entry: Entry, byBearer: boolean): void => {
+  const passOn = (req: IncomingMessage, res: ServerResponse, entry: Entry, byBearer: boolean, person: string | undefined): void => {
     const headers: OutgoingHttpHeaders = { ...req.headers }
     for (const name of HOP_HEADERS) delete headers[name]
     // OpenAgent never sees a key, a computer's no more than a device's, nor what a computer says it is to this door.
     if (byBearer) delete headers.authorization
     delete headers[COMPUTER_HEADER]
+    // Who the call is from is the door's to say, never the request's.
+    delete headers[PERSON_HEADER]
+    if (person !== undefined) headers[PERSON_HEADER] = person
     // OpenAgent is asked as its own browser asks it: at its own address, from its own page.
     headers.host = target.host
     if (headers.origin) headers.origin = target.origin
@@ -316,7 +329,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       }
       if (!fromOwnPage(req, secure)) return refuse(res, 403, 'forbidden')
 
-      const { entry, byBearer } = who
+      const { entry, byBearer, person } = who
       seen.set(entry.id, now())
       // Only a computer says which one it is: a page's word for it is not taken.
       const computer = byBearer ? saidComputer(req) : undefined
@@ -329,7 +342,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
         held.add(socket)
         socket.once('close', () => held.delete(socket))
       }
-      passOn(req, res, entry, byBearer)
+      passOn(req, res, entry, byBearer, person)
     })().catch(() => {
       if (!res.headersSent) refuse(res, 500, 'the door failed')
       else res.destroy()

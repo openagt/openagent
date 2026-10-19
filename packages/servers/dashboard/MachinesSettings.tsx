@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Laptop, Loader2, Plus, Server, UserPlus } from 'lucide-react'
+import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Laptop, Loader2, Plus, Server, UserPlus, UserRound } from 'lucide-react'
 import { AddMachineDialog, Button, Checkbox, Dialog, Input, InviteDialog, SettingsSection, Switch, cn, formatDateTime, formatRelative, reachedByLine, useModuleHost, usePolled, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
-import { askLink, connect, forget, idsOf, loadDevices, loadServers, login, logout, markAdded, ownGithub, reach, removeDevice, type Answer, type DeviceRow, type DevicesRead, type DoorLink, type OwnGithub, type ServerRow, type ServersRead, type StepState } from './servers.js'
+import { askLink, connect, forget, idsOf, loadDevices, loadServers, login, logout, markAdded, nameOwner, ownGithub, reach, removeDevice, removePerson, type Answer, type DeviceRow, type DevicesRead, type DoorLink, type OwnGithub, type ServerRow, type ServersRead, type StepState } from './servers.js'
 
 // Settings → Machines: the other computers a run can be sent to, each listed once. A server this
 // computer installed OpenAgent on is listed with all that is set up on it; a machine added with a
@@ -186,6 +186,7 @@ function ServerDevices({
   ownDevice,
   onGotIn,
   onLine,
+  onOwner,
   answerMs = DEVICES_ANSWER_MS,
 }: {
   host: ModuleHost
@@ -202,6 +203,8 @@ function ServerDevices({
   onGotIn: (name: string) => void
   /** Told with each read whether the server said no to this computer's line. */
   onLine: (refused: boolean) => void
+  /** Told with each read who the server's owner is, once named. */
+  onOwner: (account: string | undefined) => void
 }) {
   // One read at a time, and none for a page nobody looks at: a read that takes long is not joined by the next.
   const asking = useRef<Promise<Answer<DevicesRead>> | undefined>(undefined)
@@ -221,17 +224,22 @@ function ServerDevices({
   }
   const { value: read, reload } = usePolled<Answer<DevicesRead> | undefined>(ask, NOT_LISTED, awaited ? Math.min(everyMs, WITH_A_CODE_MS) : everyMs, [address, awaited], 'previous')
   // The answer of the last removal, shown until the read made after it has landed.
-  const [changed, setChanged] = useState<DeviceRow[] | undefined>()
+  const [changed, setChanged] = useState<Pick<DevicesRead, 'devices' | 'persons'> | undefined>()
   const [removing, setRemoving] = useState(false)
   const [error, setError] = useState<string | undefined>()
   // The last list the server gave: a read that fails once says why, and takes nothing off the page.
-  const listed = useRef<DeviceRow[] | undefined>(undefined)
-  if (read?.ok) listed.current = read.value.devices
-  const devices = changed ?? listed.current
+  const listed = useRef<Pick<DevicesRead, 'devices' | 'persons'> | undefined>(undefined)
+  if (read?.ok) listed.current = read.value
+  const devices = (changed ?? listed.current)?.devices
+  const persons = (changed ?? listed.current)?.persons ?? []
+  // By person, the owner first; one list with no heading while nobody else is invited.
+  const groups = persons.length ? persons.map(person => ({ person, devices: (devices ?? []).filter(device => (device.person ?? persons[0]!.account) === person.account) })) : [{ person: undefined, devices: devices ?? [] }]
 
   // What this computer's own door says of its line to the server comes with the list: told at every read, so what a press said meanwhile is put right by the next one.
   useEffect(() => {
-    if (read?.ok) onLine(read.value.lineRefused)
+    if (!read?.ok) return
+    onLine(read.value.lineRefused)
+    onOwner(read.value.persons.find(person => person.owner)?.account)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [read])
 
@@ -251,15 +259,15 @@ function ServerDevices({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [awaited, ids])
 
-  const remove = async (device: DeviceRow): Promise<void> => {
+  const remove = async (taken: () => Promise<Answer<DevicesRead>>): Promise<void> => {
     setRemoving(true)
     setError(undefined)
-    const answer = await removeDevice(host, address, device.id)
+    const answer = await taken()
     if (answer.ok) {
       // What the server said after the removal is the list from here on, also when the next read fails or is not made.
-      listed.current = answer.value.devices
+      listed.current = answer.value
       answered.current = answer
-      setChanged(answer.value.devices)
+      setChanged(answer.value)
     } else setError(answer.error)
     // A read that was on its way when the device went tells the list before: the next one is asked once it has landed.
     await asking.current?.catch(() => {})
@@ -272,16 +280,36 @@ function ServerDevices({
   return (
     <div className="space-y-2 text-xs">
       <p className="text-sm">{devices !== undefined && devices.length > 0 ? `Who is in (${devices.length})` : 'Who is in'}</p>
-      {(devices === undefined || devices.length === 0) && (
+      {(devices === undefined || (devices.length === 0 && persons.length < 2)) && (
         <p className="text-muted-foreground">{devices === undefined ? 'The devices that are in on the server could not be read.' : 'Nobody yet. Invite gives a code for a person, a phone or a browser.'}</p>
       )}
-      {devices !== undefined && devices.length > 0 && (
-        <ul aria-label={`The devices that are in on ${address}`} className="space-y-2">
-          {devices.map(device => (
-            <DeviceLine key={device.id} device={device} address={address} busy={busy || removing} ownKey={ownDevice !== undefined && idsOf(device).includes(ownDevice)} onRemove={() => void remove(device)} />
-          ))}
-        </ul>
-      )}
+      {devices !== undefined &&
+        (devices.length > 0 || persons.length > 1) &&
+        groups.map(({ person, devices: theirs }) => (
+          <div key={person?.account ?? ''} className="space-y-2">
+            {person !== undefined && (
+              <div className="flex items-center justify-between gap-4 pt-1">
+                <p className="flex min-w-0 items-center gap-2 font-medium text-muted-foreground">
+                  <UserRound className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  <span className="truncate">{person.owner ? `@${person.account}, the owner` : `@${person.account}`}</span>
+                </p>
+                {!person.owner && (
+                  <Button size="sm" variant="ghost" disabled={busy || removing} aria-label={`Remove @${person.account} from ${address}`} onClick={() => void remove(() => removePerson(host, address, person.account))}>
+                    Remove person
+                  </Button>
+                )}
+              </div>
+            )}
+            {person !== undefined && theirs.length === 0 && <p className="text-muted-foreground">No device yet.</p>}
+            {theirs.length > 0 && (
+              <ul aria-label={person !== undefined ? `Devices of @${person.account} on ${address}` : `The devices that are in on ${address}`} className="space-y-2">
+                {theirs.map(device => (
+                  <DeviceLine key={device.id} device={device} address={address} busy={busy || removing} ownKey={ownDevice !== undefined && idsOf(device).includes(ownDevice)} onRemove={() => void remove(() => removeDevice(host, address, device.id))} />
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
       {(error ?? (read.ok ? undefined : read.error)) !== undefined && (
         <pre role="alert" className="overflow-x-auto whitespace-pre-wrap rounded-md border border-border bg-background p-2 font-mono text-foreground">
           {error ?? (read.ok ? undefined : read.error)}
@@ -336,6 +364,8 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
   const adding = useRef(new Set<string>())
   // The servers that said no to the key this computer asks for its line with, by address: the switch then reads off.
   const [refusedLines, setRefusedLines] = useState<Record<string, boolean>>({})
+  // Each server's owner, by address, once its door names one.
+  const [owners, setOwners] = useState<Record<string, string | undefined>>({})
   // The server whose Invite dialog is open; the code on its page, which a device is about to get in
   // with; and the name of the one that got in with it.
   const [inviting, setInviting] = useState<string | undefined>()
@@ -780,6 +810,7 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
                         setCode(undefined)
                       }}
                       onLine={refused => setRefusedLines(lines => (lines[server.address] === refused ? lines : { ...lines, [server.address]: refused }))}
+                      onOwner={owner => setOwners(named => (named[server.address] === owner ? named : { ...named, [server.address]: owner }))}
                     />
                   )}
                   {!server.working && (
@@ -865,7 +896,21 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
       {inviting !== undefined && (
         <InviteDialog
           title={`Invite to ${inviting}`}
-          ask={() => askLink(host, inviting)}
+          ask={person => askLink(host, inviting, person)}
+          persons={{
+            owner: owners[inviting],
+            // The server's owner is the person at this computer: the GitHub account its gh is logged in to.
+            whoAmI: async () => {
+              const me = await ownGithub(host)
+              if (!me.ok) return me
+              return 'account' in me.value ? { ok: true, account: me.value.account } : { ok: false, error: me.value.problem }
+            },
+            nameOwner: async account => {
+              const named = await nameOwner(host, inviting, account)
+              if (named.ok) setOwners(known => ({ ...known, [inviting]: named.value.persons.find(person => person.owner)?.account }))
+              return named.ok ? { ok: true } : named
+            },
+          }}
           scan="Scan it with the phone's camera: it opens OpenAgent on the server, from anywhere."
           openHere
           joined={joined}

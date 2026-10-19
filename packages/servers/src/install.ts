@@ -118,10 +118,10 @@ const LINK_TIMEOUT_MS = 20_000
  * Only a link to that very server is one: what a server answers is not trusted to say where
  * this computer goes to be let in.
  */
-export async function askLink(server: Pick<Server, 'address' | 'user'>, opts: { exec?: Exec } = {}): Promise<Link> {
+export async function askLink(server: Pick<Server, 'address' | 'user'>, opts: { exec?: Exec } = {}, person?: string): Promise<Link> {
   const session = await openSession(server, opts)
   try {
-    const said = await session.run(SERVER_USER, linkScript(), LINK_TIMEOUT_MS)
+    const said = await session.run(SERVER_USER, linkScript(person), LINK_TIMEOUT_MS)
     if (said.code !== 0) return { ok: false, error: withAdvice(server, lastLines(said) || 'The server did not answer.') }
     try {
       const { url, expires } = JSON.parse(said.out.trim().split('\n').at(-1) ?? '') as Record<string, unknown>
