@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Laptop, Monitor, Plus, Smartphone, Tablet, UserRound } from 'lucide-react'
-import { Button, InviteDialog, SettingsRow, SettingsSection, Switch, formatDateTime, formatRelative, useModuleHost, usePolled, type InviteCode } from '@openagt/dashboard/module'
+import { Button, ConfirmDialog, InviteDialog, SettingsRow, SettingsSection, Switch, formatDateTime, formatRelative, useModuleHost, usePolled, type InviteCode } from '@openagt/dashboard/module'
 import { addDevice, idsOf, loadMine, loadStatus, nameOwner, ownGithub, removeDevice, removeMine, removePerson, setSwitch, type Answer, type DeviceRow, type DoorStatus, type Mine } from './devices.js'
 
 // Settings → Devices: the phones and browsers that are in, and the one switch that lets them
@@ -213,9 +213,18 @@ export function DevicesSettings({ everyMs = 5_000 }: { /** How often the status 
                       <span className="truncate">{person.owner ? `@${person.account}, the owner` : `@${person.account}`}</span>
                     </p>
                     {!person.owner && (
-                      <Button size="sm" variant="ghost" disabled={busy} aria-label={`Remove @${person.account}`} onClick={() => void act(() => removePerson(host, person.account))}>
-                        Remove person
-                      </Button>
+                      <ConfirmDialog
+                        trigger={
+                          <Button size="sm" variant="ghost" disabled={busy} aria-label={`Remove @${person.account}`}>
+                            Remove person
+                          </Button>
+                        }
+                        title={`Remove @${person.account}?`}
+                        body={`Their devices are taken out, and their own user on this computer is deleted with everything in it: their GitHub and Claude logins, their copies of projects, and any work they did not push to GitHub. Their finished runs stay on GitHub. @${person.account} can be invited again later.`}
+                        confirmLabel="Remove person"
+                        confirmBusyLabel="Removing…"
+                        onConfirm={() => act(() => removePerson(host, person.account))}
+                      />
                     )}
                   </div>
                 )}

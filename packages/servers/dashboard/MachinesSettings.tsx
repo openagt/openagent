@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Laptop, Loader2, Plus, Server, UserPlus, UserRound } from 'lucide-react'
-import { AddMachineDialog, Button, Checkbox, Dialog, Input, InviteDialog, SettingsSection, Switch, cn, formatDateTime, formatRelative, reachedByLine, useModuleHost, usePolled, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
-import { askLink, connect, forget, idsOf, loadDevices, loadServers, login, logout, markAdded, nameOwner, ownGithub, reach, removeDevice, removePerson, type Answer, type DeviceRow, type DevicesRead, type DoorLink, type OwnGithub, type ServerRow, type ServersRead, type StepState } from './servers.js'
+import { AddMachineDialog, Button, Checkbox, ConfirmDialog, Dialog, Input, InviteDialog, SettingsSection, Switch, cn, formatDateTime, formatRelative, reachedByLine, useModuleHost, usePolled, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
+import { askLink, connect, forget, idsOf, loadDevices, loadOwn, loadServers, loadShared, login, logout, markAdded, nameOwner, ownCodeLogin, ownGithub, ownLogout, reach, readPersonThere, removeDevice, removePerson, sharedClaude, sharedForget, sharedGithub, sharedReach, type Answer, type DeviceRow, type DevicesRead, type DoorLink, type OwnGithub, type OwnRead, type PersonThere, type ServerRow, type ServersRead, type SharedRow, type StepState } from './servers.js'
 
 // Settings → Machines: the other computers a run can be sent to, each listed once. A server this
 // computer installed OpenAgent on is listed with all that is set up on it; a machine added with a
@@ -141,6 +141,10 @@ export function MachinesSettings({
   if (read === undefined) return null
   return <Machines read={read} reload={reload} everyMs={everyMs} devicesEveryMs={devicesEveryMs} isServer={isServer.current === true} />
 }
+
+/** What removing a person does, said before it is done: it cannot be taken back. */
+export const REMOVE_PERSON = (account: string): string =>
+  `Their devices are taken out, and their own user on the server is deleted with everything in it: their GitHub and Claude logins, their copies of projects, and any work they did not push to GitHub. Their finished runs stay on GitHub. @${account} can be invited again later.`
 
 /** A device that is in on a server: what it is, when it was last there, and a way to take it out. */
 function DeviceLine({ device, address, busy, ownKey, onRemove }: { device: DeviceRow; address: string; busy: boolean; /** The device is this computer's OpenAgent, by the key it has on the server. */ ownKey: boolean; onRemove: () => void }) {
@@ -294,11 +298,24 @@ function ServerDevices({
                   <span className="truncate">{person.owner ? `@${person.account}, the owner` : `@${person.account}`}</span>
                 </p>
                 {!person.owner && (
-                  <Button size="sm" variant="ghost" disabled={busy || removing} aria-label={`Remove @${person.account} from ${address}`} onClick={() => void remove(() => removePerson(host, address, person.account))}>
-                    Remove person
-                  </Button>
+                  <ConfirmDialog
+                    trigger={
+                      <Button size="sm" variant="ghost" disabled={busy || removing} aria-label={`Remove @${person.account} from ${address}`}>
+                        Remove person
+                      </Button>
+                    }
+                    title={`Remove @${person.account} from ${address}?`}
+                    body={REMOVE_PERSON(person.account)}
+                    confirmLabel="Remove person"
+                    confirmBusyLabel="Removing…"
+                    onConfirm={() => remove(() => removePerson(host, address, person.account))}
+                  />
                 )}
               </div>
+            )}
+            {person?.working && <p className="text-muted-foreground">{`Making @${person.account}'s own user on the server, with their own OpenAgent. This takes a minute or two.`}</p>}
+            {person?.problem !== undefined && !person.working && (
+              <p role="alert" className="text-danger">{`@${person.account}'s own user on the server could not be made: ${person.problem.replace(/\.?$/, '.')} Invite them again to try again.`}</p>
             )}
             {person !== undefined && theirs.length === 0 && <p className="text-muted-foreground">No device yet.</p>}
             {theirs.length > 0 && (
@@ -405,6 +422,202 @@ function MachineLine({ host, machine, known, busy, everyMs, onRemove }: { host: 
       <Button size="sm" variant="ghost" className="shrink-0" disabled={busy} aria-label={`Remove ${machine.label}`} onClick={onRemove}>
         Remove
       </Button>
+    </li>
+  )
+}
+
+/**
+ * A saved machine, as it is listed: a server someone invited this computer's person to is shown as
+ * a server, with what that person has there; any other machine by its name. Which one it is, its
+ * door says: a computer several people use answers who this computer's person is there.
+ */
+function OtherMachine({ host, machine, known, busy, everyMs, workingMs, ownGithub: account, noLogin, onRemove }: { host: ModuleHost; machine: ModuleMachine; known: boolean; busy: boolean; everyMs: number; /** How often while a login is being changed there. */ workingMs: number; ownGithub: string | undefined; noLogin: string | undefined; onRemove: () => Promise<void> }) {
+  // Only a machine with a door of its own on the internet can be a computer several people use.
+  const asks = machine.url.startsWith('https://') && !machine.url.includes(THROUGH)
+  const { value: said } = usePolled<PersonThere | undefined>(asks ? async () => {
+    const asked = await host.machinePerson(machine.id)
+    return asked.ok ? readPersonThere(asked.said) : undefined
+  } : null, undefined, Math.max(everyMs, 30_000), [machine.id, asks], 'previous')
+  if (said && !said.owner && said.account !== undefined) return <SharedServer host={host} machine={machine} person={said} busy={busy} everyMs={everyMs} workingMs={workingMs} ownGithub={account} noLogin={noLogin} onRemove={onRemove} />
+  return <MachineLine host={host} machine={machine} known={known} busy={busy} everyMs={everyMs} onRemove={() => void onRemove()} />
+}
+
+/**
+ * A server someone invited this computer's person to: that person has an OpenAgent of their own
+ * there, as a user of their own, and their runs there use their own logins. This row gives that
+ * OpenAgent its logins, keeps this computer's line to it, and lists the person's own devices,
+ * all through the server's door with this computer's key there: the person has no way in over SSH.
+ * What only the server's owner does (the install, an update, an invite) is not here.
+ */
+function SharedServer({ host, machine, person, busy: pageBusy, everyMs, workingMs, ownGithub: account, noLogin, onRemove }: { host: ModuleHost; machine: ModuleMachine; person: PersonThere; busy: boolean; everyMs: number; workingMs: number; ownGithub: string | undefined; noLogin: string | undefined; onRemove: () => Promise<void> }) {
+  // Read often only while a login is being changed: each read of the server's side is a call through its door.
+  const [working, setWorking] = useState(false)
+  const pace = working ? workingMs : everyMs
+  const { value: own, reload: reloadOwn } = usePolled<Answer<OwnRead> | undefined>(() => loadOwn(host, machine.id), undefined, pace, [machine.id, pace], 'previous')
+  const { value: kept, reload: reloadKept } = usePolled<Answer<SharedRow[]> | undefined>(() => loadShared(host, [machine.url]), undefined, pace, [machine.url, pace], 'previous')
+  const [devices, setDevices] = useState<DeviceRow[] | undefined>()
+  const [busyHere, setBusy] = useState(false)
+  const [error, setError] = useState<string | undefined>()
+  const busy = pageBusy || busyHere
+  const here = kept?.ok ? kept.value.find(row => row.url === machine.url) : undefined
+  const logins = own?.ok ? own.value.logins : undefined
+  const github = logins?.github ?? { there: false, working: false }
+  // Whether the login is there is the server's to say; this computer only makes it, in its browser.
+  const claudeThere = logins?.claude ?? { there: false, working: false }
+  const making = here?.claude ?? { there: false, working: false }
+  const claude = { ...claudeThere, working: making.working, ...(making.asking ? { asking: true } : {}), said: making.working ? undefined : (making.said ?? claudeThere.said) }
+  const listed = devices ?? person.devices
+  const name = machine.label
+  const nowWorking = github.working || claude.working
+  useEffect(() => setWorking(nowWorking), [nowWorking])
+
+  const act = async (change: () => Promise<Answer<unknown>>): Promise<void> => {
+    setBusy(true)
+    setError(undefined)
+    const answer = await change()
+    if (!answer.ok) setError(answer.error)
+    await Promise.all([reloadOwn(), reloadKept()]).catch(() => {})
+    setBusy(false)
+  }
+  const state = machine.version !== undefined ? 'good' : 'quiet'
+  return (
+    <li aria-label={name} className="space-y-4 py-4">
+      <div className="flex min-w-0 gap-3">
+        <Server aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 space-y-0.5">
+          <p className="truncate text-sm font-medium">{name}</p>
+          <ServerState tone={state}>{machine.version !== undefined ? `OpenAgent ${machine.version}.` : 'Does not answer right now.'}</ServerState>
+          <p className="text-xs text-muted-foreground">{`You are in as @${person.account}. Your runs there are yours: they use your own GitHub and Claude logins.`}</p>
+        </div>
+      </div>
+      <div className="space-y-4 pl-7">
+        {(!github.there || !claude.there) && own?.ok && (
+          <p className="text-xs text-warning">Before your first run there: log in to GitHub and Claude below.</p>
+        )}
+        <label className="flex items-start justify-between gap-4">
+          <span className="min-w-0">
+            <span className="block text-sm">Start runs on this computer from the phone</span>
+            <span className="block text-xs text-muted-foreground">
+              {here?.lineRefused
+                ? `Off: ${name} no longer lets this computer in for its line. Turn it on to set the line up again.`
+                : here?.reach === 'full'
+                  ? `On: on your page at ${name}, "Run on" offers this computer, and a run started there runs here. This computer must be on.`
+                  : here?.reach === 'watch'
+                    ? `Off: your page at ${name} shows this computer's runs. It cannot start one here.`
+                    : `Off. Turn it on to pick this computer under "Run on" on your page at ${name}, from your phone.`}
+            </span>
+          </span>
+          <Switch aria-label={`Start runs on this computer from ${name}`} checked={here?.reach === 'full' && !here.lineRefused} disabled={busy || !kept} onCheckedChange={on => void act(() => sharedReach(host, machine.url, on ? 'full' : 'watch'))} />
+        </label>
+        <div className="space-y-2">
+          <p className="text-sm">Your logins on the server</p>
+          {own !== undefined && !own.ok && <p className="text-xs text-muted-foreground">{`Your OpenAgent on ${name} did not say: ${own.error}`}</p>}
+          <ul aria-label={`Your logins on ${name}`} className="space-y-2 text-xs">
+            <LoginLine
+              label="GitHub"
+              words={
+                github.asking && github.code !== undefined
+                  ? `GitHub: type the code ${github.code} at github.com/login/device, and say yes there.`
+                  : github.working
+                    ? 'GitHub: one moment, the server is being told.'
+                    : github.there
+                      ? `GitHub: logged in as ${github.account ?? person.account} since ${day(github.since)}.`
+                      : github.said !== undefined
+                        ? 'GitHub: the last try did not go through.'
+                        : 'GitHub: not logged in on the server.'
+              }
+              said={github.working ? undefined : github.said}
+            >
+              <Button size="sm" variant="outline" disabled={busy || github.working || account === undefined} aria-label={`Copy my GitHub login to ${name}`} title={account !== undefined ? `Copies the login of ${account} from this computer to your own OpenAgent on the server. It must be @${person.account}'s.` : noLogin} onClick={() => void act(() => sharedGithub(host, machine.url))}>
+                {github.there ? 'Copy again' : 'Copy my login'}
+              </Button>
+              <Button size="sm" variant="outline" disabled={busy || (github.working && github.asking !== true)} aria-label={`Log in to GitHub for ${name}`} title={`The server asks GitHub for a login of your own. GitHub gives a short code: you type it at github.com/login/device, logged in as @${person.account}, and say yes there.`} onClick={() => void act(() => ownCodeLogin(host, machine.id))}>
+                {github.asking ? 'Start over' : 'Log in to GitHub'}
+              </Button>
+              {github.asking && github.code !== undefined && (
+                <a href="https://github.com/login/device" target="_blank" rel="noreferrer" className="self-center underline">
+                  Open GitHub
+                </a>
+              )}
+              {(github.there || github.said !== undefined) && !github.working && (
+                <Button size="sm" variant="outline" disabled={busy} aria-label={`Remove my GitHub login from ${name}`} onClick={() => void act(() => ownLogout(host, machine.id, 'github'))}>
+                  Remove
+                </Button>
+              )}
+            </LoginLine>
+            <LoginLine
+              label="Claude"
+              words={
+                claude.asking
+                  ? "Claude: say yes in the page this computer's browser opened."
+                  : claude.working
+                    ? 'Claude: one moment, the server is being told.'
+                    : claude.there
+                      ? `Claude: logged in since ${day(claude.since)}, good until about ${day(claude.ends)}.`
+                      : claude.said !== undefined
+                        ? 'Claude: the last try did not go through.'
+                        : 'Claude: not logged in on the server.'
+              }
+              said={claude.said}
+            >
+              <Button size="sm" variant={claude.there || claude.working ? 'outline' : 'default'} disabled={busy || (claude.working && claude.asking !== true)} aria-label={`Log in to Claude for ${name}`} title="Opens this computer's browser, where you say yes once. The login is made for your OpenAgent on the server alone and lasts a year." onClick={() => void act(() => sharedClaude(host, machine.url))}>
+                {claude.asking ? 'Start over' : claude.there ? 'Log in again' : 'Log in to Claude'}
+              </Button>
+              {(claude.there || claude.said !== undefined) && !claude.working && (
+                <Button size="sm" variant="outline" disabled={busy} aria-label={`Remove my Claude login from ${name}`} onClick={() => void act(() => ownLogout(host, machine.id, 'claude'))}>
+                  Remove
+                </Button>
+              )}
+            </LoginLine>
+          </ul>
+        </div>
+        <div className="space-y-2">
+          <p className="text-sm">{`Your devices on ${name} (${listed.length})`}</p>
+          <ul aria-label={`Your devices on ${name}`} className="space-y-2">
+            {listed.map(device => (
+              <DeviceLine
+                key={device.id}
+                device={here?.line !== undefined && idsOf(device).includes(here.line) ? { ...device, own: true } : device}
+                address={name}
+                busy={busy}
+                ownKey={machine.device !== undefined && idsOf(device).includes(machine.device)}
+                onRemove={() =>
+                  void act(async () => {
+                    const removed = await host.removeMachineDevice(machine.id, device.id)
+                    if (!removed.ok) return removed
+                    const after = readPersonThere(removed.said)
+                    if (after) setDevices(after.devices)
+                    return { ok: true, value: undefined }
+                  })
+                }
+              />
+            ))}
+          </ul>
+        </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="-ml-2 text-muted-foreground"
+          disabled={busy}
+          aria-label={`Remove ${name}`}
+          title="Takes the server off this list, and this computer out of it. Your user, your logins and your projects on the server stay until its owner removes you."
+          onClick={() =>
+            void act(async () => {
+              const forgotten = await sharedForget(host, machine.url)
+              if (!forgotten.ok) return forgotten
+              await onRemove()
+              return { ok: true, value: undefined }
+            })
+          }
+        >
+          Remove server
+        </Button>
+        {error !== undefined && (
+          <p role="alert" className="text-xs text-danger">
+            {error}
+          </p>
+        )}
+      </div>
     </li>
   )
 }
@@ -902,7 +1115,7 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
             )
           })}
           {others.map(machine => (
-            <MachineLine key={machine.id} host={host} machine={machine} known={known !== undefined} busy={busy} everyMs={devicesEveryMs} onRemove={() => void removeMachine(machine)} />
+            <OtherMachine key={machine.id} host={host} machine={machine} known={known !== undefined} busy={busy} everyMs={devicesEveryMs} workingMs={everyMs} ownGithub={account} noLogin={noLogin} onRemove={() => removeMachine(machine)} />
           ))}
         </ul>
       )}

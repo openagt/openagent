@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { ModuleHostContext, type MachineAdded, type MachineRemoved, type ModuleCommandResult, type ModuleComputersThrough, type ModuleHost, type ModuleMachines } from '@openagt/dashboard/module'
+import { ModuleHostContext, type MachineAdded, type MachineRemoved, type ModuleCommandResult, type ModuleComputersThrough, type ModuleHost, type ModuleMachinePerson, type ModuleMachines } from '@openagt/dashboard/module'
 import { MachinesSettings, olderThan } from './MachinesSettings.js'
 import type { DeviceRow, LoginRow, ServerRow, StepState } from './servers.js'
 
@@ -36,11 +36,16 @@ function dashboard(
   const removeMachine = vi.fn(async (_id: string): Promise<MachineRemoved> => ({ ok: true }))
   const computersThrough = vi.fn(async (_id: string): Promise<ModuleComputersThrough> => ({ ok: true, computers: [] }))
   const addComputerThrough = vi.fn(async (_id: string, _computer: string): Promise<MachineAdded> => ({ ok: true }))
+  // No machine says who this computer's person is there, unless a test says otherwise.
+  const machinePerson = vi.fn(async (_id: string): Promise<ModuleMachinePerson> => ({ ok: false, error: 'not said', unknown: true }))
+  const removeMachineDevice = vi.fn(async (_id: string, _device: string): Promise<ModuleMachinePerson> => ({ ok: false, error: 'not said' }))
+  const runComputerCommandOn = vi.fn(async (_machine: string, _args: string[]): Promise<ModuleCommandResult> => ({ ok: false, error: 'not there' }))
   const host: ModuleHost = {
     package: '@openagt/servers',
     runCommand: inProject,
     act: inProject,
     runComputerCommand,
+    runComputerCommandOn,
     read: vi.fn(async () => ({ ok: false as const, error: 'no server part' })),
     openAgent: vi.fn(),
     openPage: vi.fn(),
@@ -53,12 +58,14 @@ function dashboard(
     removeMachine,
     computersThrough,
     addComputerThrough,
+    machinePerson,
+    removeMachineDevice,
     watchScreen: vi.fn(async () => undefined),
     sendToScreen: vi.fn(async () => false),
   }
   // What was asked of the `servers` command, without the reads a row makes again and again by itself.
   const ran = (): string[] => runComputerCommand.mock.calls.map(([args]) => args.join(' ')).filter(line => !line.startsWith('devices '))
-  return { host, runComputerCommand, machines, addMachine, removeMachine, computersThrough, addComputerThrough, ran }
+  return { host, runComputerCommand, runComputerCommandOn, machines, addMachine, removeMachine, computersThrough, addComputerThrough, machinePerson, removeMachineDevice, ran }
 }
 
 function show(host: ModuleHost) {
@@ -888,6 +895,10 @@ describe('Settings → Machines', () => {
     expect(await screen.findByText('@ada, the owner')).toBeTruthy()
     expect((await screen.findByRole('list', { name: 'Devices of @rom on 203.0.113.5' })).textContent).toContain('Pixel, Chrome')
     fireEvent.click(screen.getByRole('button', { name: 'Remove @rom from 203.0.113.5' }))
+    // Said first: their user on the server goes with everything in it.
+    expect((await screen.findByRole('alertdialog')).textContent).toContain('their own user on the server is deleted with everything in it')
+    expect(runComputerCommand).not.toHaveBeenCalledWith(['remove-person', '203.0.113.5', 'rom'])
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Remove person' }))
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['remove-person', '203.0.113.5', 'rom']))
   })
 
@@ -915,5 +926,54 @@ describe('Settings → Machines', () => {
     await waitFor(() => expect(computersThrough).toHaveBeenCalledWith('https://203.0.113.5'))
     expect(screen.queryByText('Computers on this server')).toBeNull()
   })
-})
 
+  test('a server someone invited this computer\'s person to shows as a server with that person\'s own logins, line and devices, all through its door; nothing only its owner does', async () => {
+    const SHARED = 'https://198.51.100.7'
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: SHARED, label: '198.51.100.7', url: SHARED, version: '1.2.3', device: 'k1abcd' }] }
+    const own = { person: 'rom', logins: { github: NONE, claude: NONE } }
+    const kept = { shared: [{ url: SHARED, claude: NONE }] }
+    const { host, runComputerCommand, runComputerCommandOn, machinePerson, removeMachineDevice, removeMachine } = dashboard(args => (args[0] === 'status' ? ok({ servers: [] }) : args[0] === 'github' ? OCTOCAT : args[0] === 'shared-login' && args[2] === 'github' ? ok({ ...own, logins: { github: { there: true, working: false, account: 'rom', since: '2026-10-19T00:00:00.000Z' }, claude: NONE } }) : ok(kept)), saved, { ok: true }, OCTOCAT)
+    const PHONE = { id: 'p1abcd', name: 'iPhone, Safari', added: '2026-10-19T00:00:00.000Z' }
+    machinePerson.mockImplementation(async () => ({ ok: true, said: { account: 'rom', owner: false, devices: [{ id: 'k1abcd', name: 'OpenAgent on Roms-Mac', added: '2026-10-19T00:00:00.000Z' }, PHONE] } }))
+    removeMachineDevice.mockImplementation(async () => ({ ok: true, said: { account: 'rom', owner: false, devices: [] } }))
+    runComputerCommandOn.mockImplementation(async (_machine, args) => ok(args[0] === 'own' ? own : {}))
+    show(host)
+    expect(await screen.findByText('You are in as @rom. Your runs there are yours: they use your own GitHub and Claude logins.')).toBeTruthy()
+    expect(await screen.findByText('Before your first run there: log in to GitHub and Claude below.')).toBeTruthy()
+    // What only the owner does is not there.
+    expect(screen.queryByRole('button', { name: /^Invite/ })).toBeNull()
+    expect(screen.queryByText(/Installed, as/)).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy my GitHub login to 198.51.100.7' }))
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['shared-login', SHARED, 'github']))
+    fireEvent.click(await screen.findByRole('button', { name: 'Log in to GitHub for 198.51.100.7' }))
+    await waitFor(() => expect(runComputerCommandOn).toHaveBeenCalledWith(SHARED, ['own', 'login', 'github', 'own']))
+    fireEvent.click(await screen.findByRole('button', { name: 'Log in to Claude for 198.51.100.7' }))
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['shared-login', SHARED, 'claude']))
+    fireEvent.click(await screen.findByRole('switch', { name: 'Start runs on this computer from 198.51.100.7' }))
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['shared-reach', SHARED, 'full']))
+
+    // The person's own devices, this computer's OpenAgent among them with no Remove.
+    const devices = await screen.findByRole('list', { name: 'Your devices on 198.51.100.7' })
+    expect(devices.textContent).toContain('iPhone, Safari')
+    expect(within(devices).queryByRole('button', { name: 'Remove OpenAgent on Roms-Mac from 198.51.100.7' })).toBeNull()
+    fireEvent.click(within(devices).getByRole('button', { name: 'Remove iPhone, Safari from 198.51.100.7' }))
+    await waitFor(() => expect(removeMachineDevice).toHaveBeenCalledWith(SHARED, 'p1abcd'))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove 198.51.100.7' }))
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['shared-forget', SHARED]))
+    await waitFor(() => expect(removeMachine).toHaveBeenCalledWith(SHARED))
+  })
+
+  test('a machine whose door does not say, or says this computer\'s person is its owner, is a machine like any other', async () => {
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://198.51.100.7', label: 'Box', url: 'https://198.51.100.7', version: '1.2.3' }, { id: 'https://198.51.100.8', label: 'Mine', url: 'https://198.51.100.8', version: '1.2.3' }] }
+    const { host, machinePerson, runComputerCommandOn } = dashboard(() => ok({ servers: [] }), saved)
+    machinePerson.mockImplementation(async id => (id === 'https://198.51.100.8' ? { ok: true, said: { account: 'ada', owner: true, devices: [] } } : { ok: false, error: 'not said', unknown: true }))
+    show(host)
+    await waitFor(() => expect(machinePerson).toHaveBeenCalledWith('https://198.51.100.8'))
+    expect(await screen.findByRole('button', { name: 'Remove Box' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Remove Mine' })).toBeTruthy()
+    expect(screen.queryByText(/You are in as/)).toBeNull()
+    expect(runComputerCommandOn).not.toHaveBeenCalled()
+  })
+})

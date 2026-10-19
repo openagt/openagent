@@ -51,7 +51,7 @@ async function door(opts: { old?: boolean } = {}): Promise<{ url: string; asked:
       if (req.url === '/_remote-access/me' && req.method === 'GET') return json(ME)
       if (req.url === '/_remote-access/me/remove' && req.method === 'POST') {
         const { id } = JSON.parse(body) as { id: string }
-        return id === 'd1abcd' ? json({ ...ME, devices: [] }) : void res.writeHead(403).end('That device is not yours.')
+        return id === 'd1abcd' ? json({ ...ME, devices: [] }) : void res.writeHead(404).end('That device is not yours.')
       }
       if (req.url === '/_remote-access/me/line' && req.method === 'POST') return json({ url: 'https://203.0.113.9/_remote-access/enter#c0de.pin', expires: '2026-10-19T00:05:00.000Z' })
       if (req.url === '/_rpc/runComputerCommand' && req.method === 'POST') {

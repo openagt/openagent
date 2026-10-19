@@ -30,6 +30,10 @@ export interface ServerDevice {
 export interface ServerPerson {
   account: string
   owner?: true
+  /** Their own user and OpenAgent on the server are being made right now. */
+  working?: true
+  /** Why their own user could not be made, in the server's words. */
+  problem?: string
 }
 
 /** Every id a row is listed under: its own, and those of what else the computer holds there. */
@@ -75,13 +79,15 @@ export function devicesIn(out: string): { devices: ServerDevice[]; persons: Serv
   const persons: ServerPerson[] = []
   for (const entry of Array.isArray(answer?.persons) ? answer.persons : []) {
     if (persons.length >= MAX_DEVICES) break
-    const { account, owner } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
+    const { account, owner, working, problem } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
     const known = accountIn(account)
     if (known === undefined || persons.some(person => person.account === known)) continue
     // A door lists its owner first: a list that does not start with one is no list of persons.
     if (!persons.length && owner !== true) break
+    // What the server said is shown as words, with nothing in it that moves a line or turns its letters around.
+    const said = typeof problem === 'string' ? problem.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, ' ').trim().slice(0, 400) : ''
     if (!persons.length) persons.push({ account: known, owner: true })
-    else if (owner !== true) persons.push({ account: known })
+    else if (owner !== true) persons.push({ account: known, ...(working === true ? { working: true as const } : {}), ...(said ? { problem: said } : {}) })
   }
   const devices: ServerDevice[] = []
   for (const entry of listed) {

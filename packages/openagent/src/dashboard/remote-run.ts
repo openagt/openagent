@@ -605,9 +605,10 @@ export async function remoteDoor(machine: MachineAccess, ask: DoorAsk): Promise<
       signal: AbortSignal.timeout(PING_TIMEOUT_MS * 3),
     })
     // A door that knows of no persons: an OpenAgent from before them, or no door at all.
-    if (res.status === 404) return { ok: false, error: 'the machine does not say who this computer is there', unknown: true }
+    if (res.status === 404 && ask.what === 'me') return { ok: false, error: 'the machine does not say who this computer is there', unknown: true }
     if (res.status === 401) return { ok: false, error: NOT_IN }
-    if (!res.ok) return { ok: false, error: (await refusalOf(res)) ?? `the machine answered ${res.status}` }
+    // The door says why in words of its own, for the person to read: a device that is not theirs, a door that gives no line.
+    if (!res.ok) return { ok: false, error: (await res.text().catch(() => '')).trim().slice(0, MAX_SAID) || `the machine answered ${res.status}` }
     return { ok: true, said: await res.json() }
   } catch (err) {
     return { ok: false, error: errorMessage(err) }

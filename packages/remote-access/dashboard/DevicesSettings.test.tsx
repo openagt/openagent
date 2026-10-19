@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ModuleHostContext, type ModuleCommandResult, type ModuleHost } from '@openagt/dashboard/module'
 import { DevicesSettings, WARNING } from './DevicesSettings.js'
 
@@ -17,6 +17,7 @@ function door(answer: (args: string[]) => ModuleCommandResult) {
     runCommand: inProject,
     act: inProject,
     runComputerCommand,
+    runComputerCommandOn: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     read: vi.fn(async () => ({ ok: false as const, error: 'no server part' })),
     openAgent: vi.fn(),
     openPage: vi.fn(),
@@ -28,6 +29,8 @@ function door(answer: (args: string[]) => ModuleCommandResult) {
     addMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     removeMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     computersThrough: vi.fn(async () => ({ ok: true as const, computers: [] })),
+    machinePerson: vi.fn(async () => ({ ok: false as const, error: 'not here', unknown: true as const })),
+    removeMachineDevice: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     addComputerThrough: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     watchScreen: vi.fn(async () => undefined),
     sendToScreen: vi.fn(async () => false),
@@ -297,6 +300,9 @@ describe('Settings → Devices', () => {
     expect(screen.getByText('No device yet.')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Remove @ada' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Remove @rom' }))
+    // Said first: their user on this computer goes with everything in it.
+    expect((await screen.findByRole('alertdialog')).textContent).toContain('their own user on this computer is deleted with everything in it')
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Remove person' }))
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['remove-person', 'rom']))
 
     await addForMe()

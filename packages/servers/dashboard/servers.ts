@@ -83,6 +83,10 @@ export interface DeviceRow {
 export interface PersonRow {
   account: string
   owner?: true
+  /** Their own user and OpenAgent on the server are being made right now. */
+  working?: true
+  /** Why their own user could not be made. */
+  problem?: string
 }
 
 /** What a server's door lists, and what this computer's own door says of its line there. */
@@ -146,9 +150,9 @@ export function readDevices(output: unknown): DevicesRead | undefined {
   }
   const people: PersonRow[] = []
   for (const entry of Array.isArray(persons) ? persons : []) {
-    const { account, owner } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
-    const known = text(account)
-    if (known && !people.some(person => person.account === known)) people.push({ account: known, ...(owner === true ? { owner: true as const } : {}) })
+    const { account, owner, working, problem } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
+    const [known, why] = [text(account), text(problem)]
+    if (known && !people.some(person => person.account === known)) people.push({ account: known, ...(owner === true ? { owner: true as const } : {}), ...(working === true ? { working: true as const } : {}), ...(why ? { problem: why } : {}) })
   }
   return { devices: rows, persons: people, lineRefused: lineRefused === true }
 }
@@ -217,3 +221,80 @@ export const reach = (host: ModuleHost, address: string, mode: Reach): Promise<A
 export const loadDevices = (host: ModuleHost, address: string): Promise<Answer<DevicesRead>> => run(host, ['devices', address], readDevices)
 /** Take one device out on the server, a computer with all it holds there; answers the ones still in. */
 export const removeDevice = (host: ModuleHost, address: string, id: string): Promise<Answer<DevicesRead>> => run(host, ['remove-device', address, id], readDevices)
+
+/** A person's own OpenAgent on a computer several people use: whose it is, and the logins it holds for that person's runs. */
+export interface OwnRead {
+  person: string
+  logins: Record<LoginKind, LoginRow>
+}
+
+function readOwnLogins(output: unknown): OwnRead | undefined {
+  if (!output || typeof output !== 'object') return undefined
+  const { person, logins } = output as Record<string, unknown>
+  const { github, claude } = (logins && typeof logins === 'object' ? logins : {}) as Record<string, unknown>
+  const who = text(person)
+  return who ? { person: who, logins: { github: readLogin(github), claude: readLogin(claude) } } : undefined
+}
+
+/** What this computer keeps for a server someone invited its person to: its line there, and the Claude login it makes for it in this browser. */
+export interface SharedRow {
+  url: string
+  reach?: Reach
+  lineRefused: boolean
+  /** The id the line has among the server's devices. */
+  line?: string
+  claude: LoginRow
+}
+
+function readShared(output: unknown): SharedRow[] | undefined {
+  if (!output || typeof output !== 'object') return undefined
+  const { shared } = output as Record<string, unknown>
+  if (!Array.isArray(shared)) return undefined
+  const rows: SharedRow[] = []
+  for (const entry of shared) {
+    const { url, reach, lineRefused, line, claude } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
+    const [at, id] = [text(url), text(line)]
+    if (at) rows.push({ url: at, ...(reach === 'full' || reach === 'watch' ? { reach } : {}), lineRefused: lineRefused === true, ...(id ? { line: id } : {}), claude: readLogin(claude) })
+  }
+  return rows
+}
+
+/** What a server's door says of this computer's person there: who they are, whether they are its owner, and their devices. */
+export interface PersonThere {
+  account?: string
+  owner: boolean
+  devices: DeviceRow[]
+}
+
+/** The door's answer, read as another computer's data: anything that is not what it should be is left out. */
+export function readPersonThere(said: unknown): PersonThere | undefined {
+  if (!said || typeof said !== 'object') return undefined
+  const { account, owner } = said as Record<string, unknown>
+  const listed = readDevices(said)
+  const who = text(account)
+  return listed && typeof owner === 'boolean' ? { ...(who ? { account: who } : {}), owner, devices: listed.devices } : undefined
+}
+
+/** What this person's own OpenAgent on the server says of its logins. */
+export const loadOwn = (host: ModuleHost, machine: string): Promise<Answer<OwnRead>> => runOn(host, machine, ['own'], readOwnLogins)
+/** The server asks GitHub for a login of this person's own, with a code typed at GitHub. */
+export const ownCodeLogin = (host: ModuleHost, machine: string): Promise<Answer<OwnRead>> => runOn(host, machine, ['own', 'login', 'github', 'own'], readOwnLogins)
+/** Take one of this person's logins off the server. */
+export const ownLogout = (host: ModuleHost, machine: string, kind: LoginKind): Promise<Answer<OwnRead>> => runOn(host, machine, ['own', 'logout', kind], readOwnLogins)
+/** What this computer keeps for servers someone invited its person to, by their addresses. */
+export const loadShared = (host: ModuleHost, urls: string[]): Promise<Answer<SharedRow[]>> => run(host, ['shared', ...urls], readShared)
+/** Copy this computer's GitHub login to this person's own OpenAgent on the server; answers what that one says of its logins. */
+export const sharedGithub = (host: ModuleHost, url: string): Promise<Answer<OwnRead>> => run(host, ['shared-login', url, 'github'], readOwnLogins)
+/** Make a Claude login for this person's own OpenAgent on the server, in this computer's browser. */
+export const sharedClaude = (host: ModuleHost, url: string): Promise<Answer<SharedRow[]>> => run(host, ['shared-login', url, 'claude'], readShared)
+/** Keep a line open to the server as this person's, and say what it may do through it; or none. */
+export const sharedReach = (host: ModuleHost, url: string, mode: Reach | 'off'): Promise<Answer<SharedRow[]>> => run(host, ['shared-reach', url, mode], readShared)
+/** Forget the server here, and the line to it. */
+export const sharedForget = (host: ModuleHost, url: string): Promise<Answer<SharedRow[]>> => run(host, ['shared-forget', url], readShared)
+
+async function runOn<T>(host: ModuleHost, machine: string, args: string[], read: (output: unknown) => T | undefined): Promise<Answer<T>> {
+  const result = await host.runComputerCommandOn(machine, args).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
+  if (!result.ok) return result
+  const value = read(result.output)
+  return value !== undefined ? { ok: true, value } : { ok: false, error: 'the server answered something else than expected' }
+}
