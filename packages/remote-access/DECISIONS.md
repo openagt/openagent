@@ -31,6 +31,13 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A computer that gets in again takes the place of what it had there. Picked over a new
   entry each time, which left the old ones to be removed by hand.
 
+## Persons
+- A person on a computer is their GitHub account. Picked over a name typed at each invite.
+- Only the computer's owner invites. Picked over anyone who is in inviting; letting the owner
+  allow others to invite can come later.
+- A computer only one person uses is unchanged: OpenAgent asks who the owner is only the first
+  time a device is let in for someone else. Picked over asking every computer who its person is.
+
 ## Phone on Wi-Fi
 - The link on the Wi-Fi is plain HTTP, behind a switch that is off until a person turns it
   on, and turning it on says first what plain HTTP means. A lock of its own comes later.

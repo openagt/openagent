@@ -1,10 +1,11 @@
 import { nameAddress, numberAddress, urlHost, type AddressDeps } from './address.js'
 import { doorFingerprint } from './certificate.js'
+import { execFile } from 'node:child_process'
 import { hostname } from 'node:os'
 import { ENTER_PATH, readKeyWord } from './door.js'
 import { enterForLine, leaveLine, readLineLink } from './line-out.js'
 import { HTTPS_PORT, serve } from './serve.js'
-import { MAX_LINES, Unreadable, addCode, addressOf, computerWordFor, isComputerId, pidAlive, readStore, removeComputer, update, type Device, type Line, type Store } from './store.js'
+import { MAX_LINES, Unreadable, accountOf, addCode, addPerson, addressOf, computerWordFor, isComputerId, nameOwner, personOf, pidAlive, readStore, removeComputer, removePerson, update, type Line, type Store } from './store.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -17,8 +18,15 @@ export const USAGE = `usage: remote-access <command>
   status         whether Phone on Wi-Fi is on, whether the door listens, and the devices that are in
   on             Phone on Wi-Fi on: the door opens on the network this computer is on, over plain HTTP
   off            Phone on Wi-Fi off: nothing listens on the network; the devices stay in the list
-  add            a link a new device gets in with, once, for five minutes: the address a QR code holds
+  add [--for <account>]
+                 a link a new device gets in with, once, for five minutes: the address a QR code holds; with --for,
+                 the device is that person's, by their GitHub account (the owner is named first)
   remove <id>    take one device out, by its id as status names it; it is out at once, a computer with all it holds here
+  github         the GitHub account gh is logged in to on this computer: who the owner would be
+  owner <account>
+                 name this computer's owner, once, by their GitHub account: the devices already in are theirs
+  remove-person <account>
+                 take a person out, with every device of theirs; the owner stays
   https <at>     this computer is a server, reached at this number or name: the door is open to every network,
                  over HTTPS, with a certificate it asks for and renews itself (ports 80 and 443 must be reachable)
   https off      no longer a server: Phone on Wi-Fi decides again
@@ -50,6 +58,8 @@ export interface CliIO {
   /** How this computer gets in at a server for a line, and takes itself out; the real ones when unsaid. */
   enterForLine?: typeof enterForLine
   leaveLine?: typeof leaveLine
+  /** The GitHub account `gh` is logged in to here; asked of `gh` when unsaid. */
+  github?: () => Promise<{ ok: true; account: string } | { ok: false; error: string }>
 }
 
 class Refused extends Error {}
@@ -68,7 +78,9 @@ export interface Status {
    * under the first one's id, with the other's in `also`. A device with `line` is a computer that
    * keeps a line open here.
    */
-  devices: { id: string; name: string; added: string; seen?: string; line?: true; also?: string[] }[]
+  devices: { id: string; name: string; added: string; seen?: string; line?: true; also?: string[]; person?: string }[]
+  /** The persons on this computer, by their GitHub account, the owner first; none until the owner is named. */
+  persons: { account: string; owner?: true }[]
   /**
    * The servers this computer keeps a line open to, what each may do through it, the id this
    * computer has among that server's devices, and whether the server said no to its key.
@@ -87,13 +99,16 @@ const NOT_RUNNING = 'The door opens once OpenAgent runs on this computer.'
  * added and last seen are the earliest and the latest of the two. Never more than one of each
  * kind in a row: every other key is a row of its own, so the list names every key that is in.
  */
-function listed(devices: readonly Device[]): Status['devices'] {
+function listed(store: Store): Status['devices'] {
   const rows: (Status['devices'][number] & { computer?: string; kinds: boolean[] })[] = []
-  for (const { id, name, added, seen, line, computer } of devices) {
+  for (const device of store.devices) {
+    const { id, name, added, seen, line, computer } = device
+    const person = personOf(store, device)
     const isLine = line !== undefined
-    const row = computer !== undefined ? rows.find(candidate => candidate.computer === computer && !candidate.kinds.includes(isLine)) : undefined
+    // One computer's two entries are one row only when they are the same person's.
+    const row = computer !== undefined ? rows.find(candidate => candidate.computer === computer && candidate.person === person && !candidate.kinds.includes(isLine)) : undefined
     if (!row) {
-      rows.push({ id, name, added, ...(seen ? { seen } : {}), ...(line ? { line: true as const } : {}), ...(computer !== undefined ? { computer } : {}), kinds: [isLine] })
+      rows.push({ id, name, added, ...(seen ? { seen } : {}), ...(line ? { line: true as const } : {}), ...(computer !== undefined ? { computer } : {}), ...(person !== undefined ? { person } : {}), kinds: [isLine] })
       continue
     }
     row.kinds.push(isLine)
@@ -118,7 +133,8 @@ function statusOf(store: Store): Status {
     listening,
     ...(problem ? { problem } : {}),
     ...(store.https ? { https: { address: store.https.address } } : {}),
-    devices: listed(store.devices),
+    devices: listed(store),
+    persons: store.persons.map(({ account, owner }) => ({ account, ...(owner ? { owner } : {}) })),
     lines: store.lines.map(({ url, mode, key, refused }) => {
       const id = readKeyWord(key)?.id
       return { url, mode, ...(id ? { id } : {}), ...(refused ? { refused: true as const } : {}) }
@@ -159,17 +175,18 @@ async function setHttps(io: CliIO, address: string | undefined): Promise<Status>
   }
 }
 
-async function addDevice(io: CliIO): Promise<{ url: string; numberUrl?: string; expires: string }> {
+async function addDevice(io: CliIO, said?: string): Promise<{ url: string; numberUrl?: string; expires: string; person?: string }> {
   const store = await readStore(io.env)
   const status = statusOf(store)
+  const person = said === undefined ? undefined : await forPerson(io, store, said)
   if (store.https) {
     if (!status.listening) throw new Refused(status.problem ?? 'the door is not open')
     const fingerprint = await doorFingerprint(io.env)
     if (!fingerprint) throw new Refused('the door has no key yet')
-    const { code, expires } = await addCode(io.env)
+    const { code, expires } = await addCode(io.env, Date.now(), person)
     const port = store.listening!.port
     // After the code, what the door's key is known by: a computer that pastes the link knows the door again by it.
-    return { url: `https://${urlHost(store.https.address)}${port === HTTPS_PORT ? '' : `:${port}`}${ENTER_PATH}#${code}.${fingerprint}`, expires }
+    return { url: `https://${urlHost(store.https.address)}${port === HTTPS_PORT ? '' : `:${port}`}${ENTER_PATH}#${code}.${fingerprint}`, expires, ...(person !== undefined ? { person } : {}) }
   }
   if (!status.on) throw new Refused('Phone on Wi-Fi is off: turn it on first')
   if (!status.listening) throw new Refused(status.problem ?? 'the door is not open')
@@ -178,10 +195,36 @@ async function addDevice(io: CliIO): Promise<{ url: string; numberUrl?: string; 
   const number = numberAddress(io.address)
   const first = name ?? number
   if (!first) throw new Refused('this computer is on no network a device could reach it on')
-  const { code, expires } = await addCode(io.env)
+  const { code, expires } = await addCode(io.env, Date.now(), person)
   const link = (host: string): string => `http://${urlHost(host)}:${port}${ENTER_PATH}#${code}`
   // The number beside the name, for the phone that cannot open a name on the network.
-  return { url: link(first), ...(name && number ? { numberUrl: link(number) } : {}), expires }
+  return { url: link(first), ...(name && number ? { numberUrl: link(number) } : {}), expires, ...(person !== undefined ? { person } : {}) }
+}
+
+/**
+ * The person a code is for, by the GitHub account given: put among the persons when they are not
+ * yet. `undefined` for the owner's own account: the device is the owner's, as with no `--for`.
+ */
+async function forPerson(io: CliIO, store: Store, said: string): Promise<string | undefined> {
+  const account = accountOf(said)
+  if (account === undefined) throw new Refused(`${said} is not a GitHub account`)
+  const owner = store.persons.find(person => person.owner)
+  if (!owner) throw new Refused('Name the owner first: remote-access owner <your GitHub account>')
+  if (owner.account === account) return undefined
+  if (!(await addPerson(io.env, account))) throw new Refused('This computer has as many persons as it can: remove one first.')
+  return account
+}
+
+/** The GitHub account `gh` is logged in to on this computer. */
+function ghAccount(): Promise<{ ok: true; account: string } | { ok: false; error: string }> {
+  return new Promise(resolve => {
+    execFile('gh', ['api', '--hostname', 'github.com', 'user', '--jq', '.login'], { timeout: 15_000 }, (err, out) => {
+      const account = accountOf(String(out))
+      if (!err && account !== undefined) return resolve({ ok: true, account })
+      const missing = (err as NodeJS.ErrnoException | null)?.code === 'ENOENT'
+      resolve({ ok: false, error: missing ? 'GitHub\'s command, gh, is not on this computer: install it, then run gh auth login.' : 'gh is not logged in to github.com here: run gh auth login.' })
+    })
+  })
 }
 
 /** All of the process's standard input, as text. */
@@ -302,9 +345,33 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
       case 'off':
         if (rest.length) break
         return print(await setSwitch(io, command === 'on'))
-      case 'add':
+      case 'add': {
+        const [flag, account] = rest
+        if (rest.length === 0) return print(await addDevice(io))
+        if (rest.length !== 2 || flag !== '--for' || !account) break
+        return print(await addDevice(io, account))
+      }
+      case 'github': {
         if (rest.length) break
-        return print(await addDevice(io))
+        // Nobody's is an answer too, with why: a page asks this to know whom to name.
+        const own = await (io.github ?? ghAccount)()
+        return print(own.ok ? { account: own.account } : { problem: own.error })
+      }
+      case 'owner': {
+        const [said] = rest
+        if (rest.length !== 1 || !said) break
+        const account = accountOf(said)
+        if (account === undefined) throw new Refused(`${said} is not a GitHub account`)
+        if (!(await nameOwner(io.env, account))) throw new Refused(`This computer's owner is @${(await readStore(io.env)).persons[0]?.account}.`)
+        return print(statusOf(await readStore(io.env)))
+      }
+      case 'remove-person': {
+        const [said] = rest
+        if (rest.length !== 1 || !said) break
+        const account = accountOf(said)
+        if (account === undefined || !(await removePerson(io.env, account))) throw new Refused(`${said} is no person here that can be removed: the owner stays.`)
+        return print(statusOf(await readStore(io.env)))
+      }
       case 'remove': {
         const [id] = rest
         if (rest.length !== 1 || !id) break

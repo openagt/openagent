@@ -1,11 +1,11 @@
 import { spawn } from 'node:child_process'
-import { idsOf, isDeviceId, readDevices, removeDevice, type Devices, type ServerDevice } from './devices.js'
+import { idsOf, isDeviceId, nameOwner, readDevices, removeDevice, removePerson, type Devices, type ServerDevice, type ServerPerson } from './devices.js'
 import { AlreadyWorking, askLink, install } from './install.js'
 import { AlreadyAtWork, changeLogin, ownGithubAccount, type Mint } from './logins.js'
 import { ownDoor, type OwnDoor } from './own-door.js'
 import type { Exec } from './ssh.js'
 import { SERVER_MARK, STEPS } from './steps.js'
-import { LOGIN_KINDS, Unreadable, addressOf, atWork, doorUrl, freshSteps, isUser, isVersion, readStore, update, working, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
+import { LOGIN_KINDS, Unreadable, addressOf, isAccount, atWork, doorUrl, freshSteps, isUser, isVersion, readStore, update, working, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -23,11 +23,14 @@ export const USAGE = `usage: servers <command>
                                        computer's own SSH keys; run again, it goes on where it failed, and brings a server
                                        that fell behind to this version; with "github", this computer's GitHub login is
                                        copied to the server once it is installed
-  link <address>                       a link the server's door gives for a new machine, once, for five minutes
+  link <address> [--for <account>]     a link the server's door gives for a new machine, once, for five minutes; with
+                                       --for, for a person's device, by their GitHub account (the owner is named first)
+  owner <address> <account>            name the server's owner at its door, once, by their GitHub account
   added <address>                      the server is among OpenAgent's machines: nothing is left to add
   devices <address>                    the devices that are in on the server, as its door lists them, asked over SSH; the
                                        line this computer keeps open to the server is marked as its own
   remove-device <address> <id>         take one device out on the server, by its id as devices names it: it is out at once
+  remove-person <address> <account>    take a person out on the server, with every device of theirs; the owner stays
   github                               the GitHub account gh is logged in to on this computer: whose login a copy would be,
                                        or why there is none to copy
   login <address> github               copy this computer's GitHub login to the server, over SSH
@@ -257,6 +260,8 @@ async function ownLine(io: CliIO, server: Server): Promise<{ id?: string; refuse
 /** What `devices` and `remove-device` answer. */
 export interface DevicesStatus {
   devices: ServerDevice[]
+  /** The persons on the server, the owner first; none until the owner is named. */
+  persons: ServerPerson[]
   /** The server said no to the key this computer asks for its line with: the line is to be asked for anew. */
   lineRefused?: true
 }
@@ -267,6 +272,7 @@ function devicesOf(answer: Devices, line: { id?: string; refused: boolean } | un
   const own = line?.id
   return {
     devices: answer.devices.map(device => (device.line && own !== undefined && idsOf(device).includes(own) ? { ...device, own: true as const } : device)),
+    persons: answer.persons,
     ...(line?.refused ? { lineRefused: true as const } : {}),
   }
 }
@@ -349,11 +355,20 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         return print(await connect(io, { address, user, version, github: github === 'github' }))
       }
       case 'link': {
-        const [address] = rest
-        if (rest.length !== 1 || !address) break
-        const link = await askLink(await still(io, address), io.exec ? { exec: io.exec } : {})
+        const [address, flag, person] = rest
+        if (!address || !(rest.length === 1 || (rest.length === 3 && flag === '--for' && person))) break
+        if (person !== undefined && !isAccount(person)) throw new Refused(`${person} is not a GitHub account`)
+        const link = await askLink(await still(io, address), io.exec ? { exec: io.exec } : {}, person?.toLowerCase())
         if (!link.ok) throw new Refused(link.error)
         return print({ url: link.url, expires: link.expires })
+      }
+      case 'owner':
+      case 'remove-person': {
+        const [address, account] = rest
+        if (rest.length !== 2 || !address || !account) break
+        const server = await still(io, address)
+        const over = io.exec ? { exec: io.exec } : {}
+        return print(devicesOf(await (command === 'owner' ? nameOwner : removePerson)(server, account, over), await ownLine(io, server)))
       }
       case 'devices': {
         const [address] = rest

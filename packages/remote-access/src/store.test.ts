@@ -1,13 +1,13 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { readFile, stat, writeFile } from 'node:fs/promises'
-import { CODE_LIFETIME_MS, MAX_DEVICES, Unreadable, addCode, computerWordFor, enter, isComputerId, isIn, readStore, readStoreStrict, removeComputer, removeDevice, sanitize, sha256, storePath, update } from './store.js'
+import { CODE_LIFETIME_MS, MAX_DEVICES, Unreadable, accountOf, addCode, addPerson, computerWordFor, enter, isComputerId, isIn, nameOwner, personOf, readStore, readStoreStrict, removeComputer, removeDevice, removePerson, sanitize, sha256, storePath, update } from './store.js'
 import { testHome } from './test-home.js'
 
 test('no file reads as a closed door with nobody in', async () => {
   const home = await testHome()
   try {
-    assert.deepEqual(await readStore(home.env), { on: false, devices: [], codes: [], lines: [] })
+    assert.deepEqual(await readStore(home.env), { on: false, persons: [], devices: [], codes: [], lines: [] })
   } finally {
     await home.remove()
   }
@@ -111,7 +111,7 @@ test('a file edited by hand is read forgivingly', async () => {
       storePath(home.env),
       JSON.stringify({ on: 'yes', devices: [good, { ...good }, { id: 'x', key: 'short', added: 'never' }, null], codes: [{ code: 'nope', expires: 'never' }], listening: { pid: 'a' }, extra: 1 }),
     )
-    assert.deepEqual(await readStore(home.env), { on: false, devices: [{ ...good, name: 'My phone' }], codes: [], lines: [] })
+    assert.deepEqual(await readStore(home.env), { on: false, persons: [], devices: [{ ...good, name: 'My phone' }], codes: [], lines: [] })
   } finally {
     await home.remove()
   }
@@ -292,4 +292,46 @@ test('a computer says another word to each door, made from the word it keeps and
   assert.equal(computerWordFor(word, 'http://studio.local:4201/x'), 'c72e4164c235580bb030ea4b32ffb51b')
   assert.notEqual(computerWordFor('b'.repeat(32), 'https://203.0.113.5'), computerWordFor(word, 'https://203.0.113.5'))
   assert.equal(isComputerId(computerWordFor(word, 'https://203.0.113.5')), true)
+})
+
+test('a person is a GitHub account, written in small letters', () => {
+  assert.deepEqual(['Rom', '@rom-b', ' ada ', 'a'.repeat(39)].map(accountOf), ['rom', 'rom-b', 'ada', 'a'.repeat(39)])
+  assert.deepEqual(['-rom', 'rom-', 'r--m', 'a'.repeat(40), 'ro m', ''].map(accountOf), [undefined, undefined, undefined, undefined, undefined, undefined])
+})
+
+test('the owner is named once, then persons are added; the devices in before are the owner\'s; removing a person takes their devices and codes', async () => {
+  const home = await testHome()
+  try {
+    const mine = (await enter(home.env, (await addCode(home.env)).code, 'my phone'))!
+    assert.equal(await addPerson(home.env, 'rom'), false, 'no person before the owner')
+    assert.equal(personOf(await readStore(home.env), (await readStore(home.env)).devices[0]!), undefined)
+
+    assert.ok(await nameOwner(home.env, 'ada'))
+    assert.ok(await nameOwner(home.env, 'ada'), 'the same owner again changes nothing')
+    assert.equal(await nameOwner(home.env, 'eve'), false, 'never a second owner')
+    assert.ok(await addPerson(home.env, 'rom'))
+    assert.ok(await addPerson(home.env, 'rom'), 'once')
+
+    const roms = (await enter(home.env, (await addCode(home.env, Date.now(), 'rom')).code, 'rom\'s phone'))!
+    await addCode(home.env, Date.now(), 'rom')
+    let store = await readStore(home.env)
+    assert.deepEqual(store.persons.map(person => [person.account, person.owner === true]), [['ada', true], ['rom', false]])
+    assert.deepEqual(store.devices.map(device => [device.id, personOf(store, device)]), [[mine.id, 'ada'], [roms.id, 'rom']])
+
+    assert.equal(await removePerson(home.env, 'ada'), false, 'the owner stays')
+    assert.ok(await removePerson(home.env, 'rom'))
+    store = await readStore(home.env)
+    assert.deepEqual([store.persons.map(person => person.account), store.devices.map(device => device.id), store.codes.length], [['ada'], [mine.id], 0])
+  } finally {
+    await home.remove()
+  }
+})
+
+test('persons edited by hand are read forgivingly: no owner means no persons, and a device for nobody known is the owner\'s', () => {
+  const added = new Date().toISOString()
+  const device = { id: 'abc123', name: 'x', key: 'a'.repeat(64), added }
+  assert.deepEqual(sanitize({ persons: [{ account: 'rom', added }], devices: [{ ...device, person: 'rom' }] }).persons, [])
+  const read = sanitize({ persons: [{ account: 'rom', added }, { account: 'ada', owner: true, added }, { account: 'Bad Name', added }], devices: [{ ...device, person: 'eve' }, { ...device, id: 'def456', person: 'rom' }, { ...device, id: 'ghi789', person: 'ada' }] })
+  assert.deepEqual(read.persons.map(person => person.account), ['ada', 'rom'])
+  assert.deepEqual(read.devices.map(entry => entry.person), [undefined, 'rom', undefined])
 })

@@ -37,7 +37,35 @@ export interface Device {
    * else say it. Absent for a phone or a browser, and for a computer that never said.
    */
   computer?: string
+  /** The person the device is theirs, by their GitHub account; absent for the owner's. */
+  person?: string
 }
+
+/**
+ * A person on this computer: their GitHub account. The owner is named once, the first time a
+ * device is let in for someone else; until then the computer has no persons and every device is
+ * the owner's, as on a computer one person uses.
+ */
+export interface Person {
+  /** Their GitHub account, in small letters. */
+  account: string
+  /** The computer's owner: the one who invites. */
+  owner?: true
+  /** ISO 8601. */
+  added: string
+}
+
+/** What a GitHub account is: letters, digits and single dashes, at most 39, not starting or ending with a dash. */
+export function accountOf(said: string): string | undefined {
+  const account = said.trim().replace(/^@/, '').toLowerCase()
+  return /^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,38}$/.test(account) ? account : undefined
+}
+
+/**
+ * How the door tells OpenAgent who a call is from: the person's GitHub account. The door sets it
+ * on every call it passes on, and takes it off any request that brings one of its own.
+ */
+export const PERSON_HEADER = 'x-openagent-person'
 
 /**
  * How a computer says which one it is, when it gets in and with every call it makes with its
@@ -77,6 +105,8 @@ export interface Code {
   code: string
   /** ISO 8601. */
   expires: string
+  /** The person the device that gets in with it is for; absent for the owner's own. */
+  person?: string
 }
 
 /** Where the door listens, written by its process while it does. */
@@ -96,6 +126,8 @@ export interface Store {
   on: boolean
   /** Set on a server: the door is always open there, and the switch is not looked at. */
   https?: Https
+  /** The persons on this computer, the owner first; none until the owner is named. */
+  persons: Person[]
   devices: Device[]
   codes: Code[]
   /** The servers this computer keeps a line open to. */
@@ -111,6 +143,7 @@ export const CODE_LIFETIME_MS = 5 * 60 * 1000
 export const MAX_DEVICES = 50
 export const MAX_CODES = 20
 export const MAX_LINES = 20
+export const MAX_PERSONS = 50
 const MAX_NAME = 80
 
 const FILE = 'openagent-remote-access.json'
@@ -157,6 +190,7 @@ export function addressOf(said: string): string | undefined {
 
 const isIso = (value: unknown): value is string => typeof value === 'string' && !Number.isNaN(Date.parse(value))
 const isDigest = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value)
+const isAccount = (value: unknown): value is string => typeof value === 'string' && accountOf(value) === value
 const isPort = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value > 0 && value < 65536
 /** A server's door as a line is kept under: an HTTPS origin, written the one way. */
 export function isLineUrl(value: unknown): value is string {
@@ -172,17 +206,31 @@ export function isLineUrl(value: unknown): value is string {
 /** Read what a file holds, forgivingly: anything malformed is left out, never a reason to fail. */
 export function sanitize(value: unknown): Store {
   const obj = value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
+  const persons: Person[] = []
+  for (const entry of Array.isArray(obj.persons) ? obj.persons : []) {
+    if (persons.length >= MAX_PERSONS) break
+    if (!entry || typeof entry !== 'object') continue
+    const { account, owner, added } = entry as Record<string, unknown>
+    if (!isAccount(account) || !isIso(added) || persons.some(person => person.account === account)) continue
+    // One owner, listed first.
+    if (owner === true && !persons.some(person => person.owner)) persons.unshift({ account, owner: true, added })
+    else persons.push({ account, added })
+  }
+  // Persons with no owner are no persons: the owner is named first, then the others.
+  if (!persons[0]?.owner) persons.length = 0
+  // A device or a code for someone who is not among the persons, or for the owner, is the owner's.
+  const someoneElse = (said: unknown): string | undefined => (isAccount(said) && persons.some(person => person.account === said && !person.owner) ? said : undefined)
   const devices: Device[] = []
   for (const entry of Array.isArray(obj.devices) ? obj.devices : []) {
     if (devices.length >= MAX_DEVICES) break
     if (!entry || typeof entry !== 'object') continue
-    const { id, name, key, added, seen, line, computer } = entry as Record<string, unknown>
+    const { id, name, key, added, seen, line, computer, person } = entry as Record<string, unknown>
     if (typeof id !== 'string' || !/^[a-z0-9]{6,32}$/.test(id) || !isDigest(key) || !isIso(added)) continue
     if (devices.some(device => device.id === id)) continue
     const port = line && typeof line === 'object' ? (line as Record<string, unknown>).port : undefined
     // One port for one computer: a second entry that names a port already given is in without a line.
     const own = isPort(port) && !devices.some(device => device.line?.port === port)
-    devices.push({ id, name: typeof name === 'string' && name.trim() ? name.trim().slice(0, MAX_NAME) : 'A device', key, added, ...(isIso(seen) ? { seen } : {}), ...(own ? { line: { port } } : {}), ...(isDigest(computer) ? { computer } : {}) })
+    devices.push({ id, name: typeof name === 'string' && name.trim() ? name.trim().slice(0, MAX_NAME) : 'A device', key, added, ...(isIso(seen) ? { seen } : {}), ...(own ? { line: { port } } : {}), ...(isDigest(computer) ? { computer } : {}), ...(someoneElse(person) ? { person: person as string } : {}) })
   }
   const lines: Line[] = []
   for (const entry of Array.isArray(obj.lines) ? obj.lines : []) {
@@ -196,14 +244,15 @@ export function sanitize(value: unknown): Store {
   const codes: Code[] = []
   for (const entry of Array.isArray(obj.codes) ? obj.codes : []) {
     if (!entry || typeof entry !== 'object') continue
-    const { code, expires } = entry as Record<string, unknown>
-    if (isDigest(code) && isIso(expires)) codes.push({ code, expires })
+    const { code, expires, person } = entry as Record<string, unknown>
+    if (isDigest(code) && isIso(expires)) codes.push({ code, expires, ...(someoneElse(person) ? { person: person as string } : {}) })
   }
   const listening = obj.listening && typeof obj.listening === 'object' ? (obj.listening as Record<string, unknown>) : undefined
   const https = obj.https && typeof obj.https === 'object' ? (obj.https as Record<string, unknown>).address : undefined
   return {
     on: obj.on === true,
     ...(isAddress(https) ? { https: { address: https } } : {}),
+    persons,
     devices,
     codes: codes.slice(-MAX_CODES),
     lines,
@@ -314,13 +363,16 @@ export function liveCodes(codes: readonly Code[], now: number): Code[] {
   return codes.filter(code => Date.parse(code.expires) > now)
 }
 
-/** Make a code a new device gets in with; answers the code itself, which the file does not keep. */
-export async function addCode(env: NodeJS.ProcessEnv, now = Date.now()): Promise<{ code: string; expires: string }> {
+/**
+ * Make a code a new device gets in with; answers the code itself, which the file does not keep.
+ * With `person`, the device is that person's: one of the persons, not the owner.
+ */
+export async function addCode(env: NodeJS.ProcessEnv, now = Date.now(), person?: string): Promise<{ code: string; expires: string }> {
   // Half the length of a device's key: it lives five minutes and works once, and a shorter link is a QR code a camera reads more easily.
   const code = randomBytes(16).toString('base64url')
   const expires = new Date(now + CODE_LIFETIME_MS).toISOString()
   await update(env, store => {
-    store.codes = [...liveCodes(store.codes, now), { code: sha256(code), expires }].slice(-MAX_CODES)
+    store.codes = [...liveCodes(store.codes, now), { code: sha256(code), expires, ...(person !== undefined ? { person } : {}) }].slice(-MAX_CODES)
   })
   return { code, expires }
 }
@@ -329,6 +381,11 @@ export async function addCode(env: NodeJS.ProcessEnv, now = Date.now()): Promise
 export interface Entry {
   id: string
   key: string
+}
+
+/** A device let in: what it holds, and whose it is when it is not the owner's. */
+export interface Entered extends Entry {
+  person?: string
 }
 
 /**
@@ -340,7 +397,7 @@ export interface Entry {
  * not listed a second time, and a line keeps the port it had, so the address OpenAgent saved the
  * computer under stays good.
  */
-export async function enter(env: NodeJS.ProcessEnv, code: string, name: string, now = Date.now(), line?: { from: number; count: number }, computer?: string): Promise<Entry | undefined> {
+export async function enter(env: NodeJS.ProcessEnv, code: string, name: string, now = Date.now(), line?: { from: number; count: number }, computer?: string): Promise<Entered | undefined> {
   const digest = sha256(code)
   // Looked up before the file is locked: a flood of wrong codes from the network changes nothing and holds no writer up.
   if (!liveCodes((await readStore(env)).codes, now).some(candidate => sameDigest(candidate.code, digest))) return undefined
@@ -358,8 +415,8 @@ export async function enter(env: NodeJS.ProcessEnv, code: string, name: string, 
     const had = before.find(device => device.line !== undefined)?.line?.port
     const port = line && (had !== undefined && had >= line.from && had < line.from + line.count ? had : Array.from({ length: line.count }, (_, at) => line.from + at).find(candidate => !taken.has(candidate)))
     if (line && port === undefined) return undefined
-    const entry: Entry = { id: randomBytes(6).toString('hex'), key: newSecret() }
-    store.devices = [...others, { id: entry.id, name, key: sha256(entry.key), added: new Date(now).toISOString(), ...(port !== undefined ? { line: { port } } : {}), ...(computer !== undefined ? { computer } : {}) }]
+    const entry: Entered = { id: randomBytes(6).toString('hex'), key: newSecret(), ...(match.person !== undefined ? { person: match.person } : {}) }
+    store.devices = [...others, { id: entry.id, name, key: sha256(entry.key), added: new Date(now).toISOString(), ...(port !== undefined ? { line: { port } } : {}), ...(computer !== undefined ? { computer } : {}), ...(match.person !== undefined ? { person: match.person } : {}) }]
     return entry
   })
 }
@@ -393,5 +450,46 @@ export async function removeDevice(env: NodeJS.ProcessEnv, id: string): Promise<
     const removed = kept.length !== store.devices.length
     store.devices = kept
     return removed
+  })
+}
+
+/** Whose a device is, by its GitHub account: its person's, else the owner's; `undefined` while no owner is named. */
+export function personOf(store: Store, device: Device): string | undefined {
+  return device.person ?? store.persons.find(person => person.owner)?.account
+}
+
+/**
+ * Name the computer's owner, once: the devices already in are theirs. False when another owner
+ * is named already, or when the account is one of the persons invited here.
+ */
+export async function nameOwner(env: NodeJS.ProcessEnv, account: string, now = Date.now()): Promise<boolean> {
+  return update(env, store => {
+    const owner = store.persons.find(person => person.owner)
+    if (owner) return owner.account === account
+    store.persons = [{ account, owner: true, added: new Date(now).toISOString() }]
+    return true
+  })
+}
+
+/** Put a person among the persons, when they are not yet: the owner must be named first. False when not named, or the list is full. */
+export async function addPerson(env: NodeJS.ProcessEnv, account: string, now = Date.now()): Promise<boolean> {
+  return update(env, store => {
+    if (!store.persons[0]?.owner) return false
+    if (store.persons.some(person => person.account === account)) return true
+    if (store.persons.length >= MAX_PERSONS) return false
+    store.persons = [...store.persons, { account, added: new Date(now).toISOString() }]
+    return true
+  })
+}
+
+/** Take a person out, with every device of theirs and every code made for them. False for the owner and for no such person. */
+export async function removePerson(env: NodeJS.ProcessEnv, account: string): Promise<boolean> {
+  return update(env, store => {
+    const person = store.persons.find(candidate => candidate.account === account)
+    if (!person || person.owner) return false
+    store.persons = store.persons.filter(candidate => candidate !== person)
+    store.devices = store.devices.filter(device => device.person !== account)
+    store.codes = store.codes.filter(code => code.person !== account)
+    return true
   })
 }

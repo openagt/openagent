@@ -14,6 +14,14 @@ export interface DeviceRow {
   line?: true
   /** A computer is one row: the ids of what else it holds here, its line beside its key for OpenAgent. */
   also?: string[]
+  /** Whose device it is, by their GitHub account, once this computer has persons. */
+  person?: string
+}
+
+/** A person on this computer, by their GitHub account; the owner first. */
+export interface PersonRow {
+  account: string
+  owner?: true
 }
 
 /** Every id a row is listed under. */
@@ -27,6 +35,8 @@ export interface DoorStatus {
   /** On a server: the address its door is open at, over HTTPS, to every network. */
   https?: { address: string }
   devices: DeviceRow[]
+  /** None until the owner is named. */
+  persons: PersonRow[]
 }
 
 /** The link a new device gets in with: what the QR code holds. */
@@ -43,19 +53,25 @@ const text = (value: unknown): string | undefined => (typeof value === 'string' 
 
 export function readStatus(output: unknown): DoorStatus | undefined {
   if (!output || typeof output !== 'object') return undefined
-  const { on, listening, problem, https, devices } = output as Record<string, unknown>
+  const { on, listening, problem, https, devices, persons } = output as Record<string, unknown>
   if (typeof on !== 'boolean' || !Array.isArray(devices)) return undefined
   const rows: DeviceRow[] = []
   for (const entry of devices) {
     if (!entry || typeof entry !== 'object') continue
-    const { id, name, added, seen, line, also } = entry as Record<string, unknown>
-    const [deviceId, deviceName, addedAt, seenAt] = [text(id), text(name), text(added), text(seen)]
+    const { id, name, added, seen, line, also, person } = entry as Record<string, unknown>
+    const [deviceId, deviceName, addedAt, seenAt, whose] = [text(id), text(name), text(added), text(seen), text(person)]
     const others = Array.isArray(also) ? also.filter((other): other is string => typeof other === 'string' && other !== '') : []
-    if (deviceId && deviceName && addedAt) rows.push({ id: deviceId, name: deviceName, added: addedAt, ...(seenAt ? { seen: seenAt } : {}), ...(line === true ? { line: true } : {}), ...(others.length ? { also: others } : {}) })
+    if (deviceId && deviceName && addedAt) rows.push({ id: deviceId, name: deviceName, added: addedAt, ...(seenAt ? { seen: seenAt } : {}), ...(line === true ? { line: true } : {}), ...(others.length ? { also: others } : {}), ...(whose ? { person: whose } : {}) })
+  }
+  const people: PersonRow[] = []
+  for (const entry of Array.isArray(persons) ? persons : []) {
+    const { account, owner } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
+    const known = text(account)
+    if (known && !people.some(person => person.account === known)) people.push({ account: known, ...(owner === true ? { owner: true as const } : {}) })
   }
   const why = text(problem)
   const address = https && typeof https === 'object' ? text((https as Record<string, unknown>).address) : undefined
-  return { on, listening: listening === true, ...(why ? { problem: why } : {}), ...(address ? { https: { address } } : {}), devices: rows }
+  return { on, listening: listening === true, ...(why ? { problem: why } : {}), ...(address ? { https: { address } } : {}), devices: rows, persons: people }
 }
 
 function readLink(output: unknown): AddLink | undefined {
@@ -74,5 +90,15 @@ async function run<T>(host: ModuleHost, args: string[], read: (output: unknown) 
 
 export const loadStatus = (host: ModuleHost): Promise<Answer<DoorStatus>> => run(host, ['status'], readStatus)
 export const setSwitch = (host: ModuleHost, on: boolean): Promise<Answer<DoorStatus>> => run(host, [on ? 'on' : 'off'], readStatus)
-export const addDevice = (host: ModuleHost): Promise<Answer<AddLink>> => run(host, ['add'], readLink)
+export const addDevice = (host: ModuleHost, person?: string): Promise<Answer<AddLink>> => run(host, ['add', ...(person !== undefined ? ['--for', person] : [])], readLink)
+export const nameOwner = (host: ModuleHost, account: string): Promise<Answer<DoorStatus>> => run(host, ['owner', account], readStatus)
+export const removePerson = (host: ModuleHost, account: string): Promise<Answer<DoorStatus>> => run(host, ['remove-person', account], readStatus)
+
+/** The GitHub account `gh` is logged in to on this computer, or why there is none. */
+export async function ownGithub(host: ModuleHost): Promise<{ ok: true; account: string } | { ok: false; error: string }> {
+  const answer = await run(host, ['github'], output => (output && typeof output === 'object' ? (output as Record<string, unknown>) : undefined))
+  if (!answer.ok) return answer
+  const account = text(answer.value.account)
+  return account ? { ok: true, account } : { ok: false, error: text(answer.value.problem) ?? 'GitHub did not say who is logged in here.' }
+}
 export const removeDevice = (host: ModuleHost, id: string): Promise<Answer<DoorStatus>> => run(host, ['remove', id], readStatus)

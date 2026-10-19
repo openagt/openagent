@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Laptop, Monitor, Plus, Smartphone, Tablet } from 'lucide-react'
+import { Laptop, Monitor, Plus, Smartphone, Tablet, UserRound } from 'lucide-react'
 import { Button, InviteDialog, SettingsRow, SettingsSection, Switch, formatDateTime, formatRelative, useModuleHost, usePolled, type InviteCode } from '@openagt/dashboard/module'
-import { addDevice, idsOf, loadStatus, removeDevice, setSwitch, type Answer, type DeviceRow, type DoorStatus } from './devices.js'
+import { addDevice, idsOf, loadStatus, nameOwner, ownGithub, removeDevice, removePerson, setSwitch, type Answer, type DeviceRow, type DoorStatus } from './devices.js'
 
 // Settings → Devices: the phones and browsers that are in, and the one switch that lets them
 // reach this computer on the Wi-Fi it is on. Read with `remote-access status`; the switch, a new
@@ -9,7 +9,8 @@ import { addDevice, idsOf, loadStatus, removeDevice, setSwitch, type Answer, typ
 // there is no switch: its door is open to every network, over HTTPS, and the section says where.
 //
 // Add device is always in sight, so what to do first is plain: with the switch off it says to turn
-// it on. It opens a dialog with the code, which says so once a device got in with it.
+// it on. It opens a dialog that asks who the device is for, then shows the code, and says so once
+// a device got in with it. Once the computer has persons, the devices are listed by person.
 
 /** What turning the switch on says first: the link is not locked, and what that means. */
 export const WARNING =
@@ -74,6 +75,9 @@ export function DevicesSettings({ everyMs = 5_000 }: { /** How often the status 
   }
 
   const devices = status?.devices ?? []
+  const persons = status?.persons ?? []
+  // The devices by person, the owner first; one list with no heading while nobody else is invited.
+  const groups = persons.length ? persons.map(person => ({ person, devices: devices.filter(device => (device.person ?? persons[0]!.account) === person.account) })) : [{ person: undefined, devices }]
   const where = status?.https ? `https://${status.https.address.includes(':') ? `[${status.https.address}]` : status.https.address}` : undefined
   return (
     <SettingsSection description="Open OpenAgent on your phone or in another browser, or let another computer's OpenAgent send its runs here. A device gets in once with a code, and stays in until you remove it.">
@@ -129,28 +133,46 @@ export function DevicesSettings({ everyMs = 5_000 }: { /** How often the status 
               {where !== undefined ? 'The door is not open yet: a device can be added once it is.' : 'Turn on Phone on Wi-Fi first: a device gets in on the same Wi-Fi as this computer.'}
             </p>
           )}
-          {devices.length === 0 ? (
+          {devices.length === 0 && persons.length < 2 ? (
             status.listening && <p className="text-xs text-muted-foreground">None yet. Add device gives a code: scan it with your phone's camera.</p>
           ) : (
-            <ul aria-label="Devices that are in" className="divide-y divide-border">
-              {devices.map(device => (
-                <li key={device.id} className="flex items-center justify-between gap-3 py-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <DeviceIcon device={device} />
-                    <div className="min-w-0">
-                      <p className="truncate text-sm">{device.name}</p>
-                      <p className="text-xs text-muted-foreground" title={formatDateTime(device.seen ?? device.added)}>
-                        {device.seen !== undefined ? `Last seen ${formatRelative(device.seen)}, added ${formatRelative(device.added)}` : `Added ${formatRelative(device.added)}`}
-                      </p>
-                      {device.line && <p className="text-xs text-muted-foreground">A computer of yours: runs can be started on it from here. Remove it and it is no longer in "Run on".</p>}
-                    </div>
+            groups.map(({ person, devices: theirs }) => (
+              <div key={person?.account ?? ''} className={person !== undefined ? 'pt-2' : undefined}>
+                {person !== undefined && (
+                  <div className="flex items-center justify-between gap-3 pt-2">
+                    <p className="flex min-w-0 items-center gap-2 text-xs font-medium text-muted-foreground">
+                      <UserRound className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      <span className="truncate">{person.owner ? `@${person.account}, the owner` : `@${person.account}`}</span>
+                    </p>
+                    {!person.owner && (
+                      <Button size="sm" variant="ghost" disabled={busy} aria-label={`Remove @${person.account}`} onClick={() => void act(() => removePerson(host, person.account))}>
+                        Remove person
+                      </Button>
+                    )}
                   </div>
-                  <Button size="sm" variant="ghost" disabled={busy} aria-label={`Remove ${device.name}`} onClick={() => void act(() => removeDevice(host, device.id))}>
-                    Remove
-                  </Button>
-                </li>
-              ))}
-            </ul>
+                )}
+                {person !== undefined && theirs.length === 0 && <p className="py-2 text-xs text-muted-foreground">No device yet.</p>}
+                <ul aria-label={person !== undefined ? `Devices of @${person.account}` : 'Devices that are in'} className="divide-y divide-border">
+                  {theirs.map(device => (
+                    <li key={device.id} className="flex items-center justify-between gap-3 py-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <DeviceIcon device={device} />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm">{device.name}</p>
+                          <p className="text-xs text-muted-foreground" title={formatDateTime(device.seen ?? device.added)}>
+                            {device.seen !== undefined ? `Last seen ${formatRelative(device.seen)}, added ${formatRelative(device.added)}` : `Added ${formatRelative(device.added)}`}
+                          </p>
+                          {device.line && <p className="text-xs text-muted-foreground">{`${device.person !== undefined && !person?.owner ? `A computer of @${device.person}` : 'A computer of yours'}: runs can be started on it from here. Remove it and it is no longer in "Run on".`}</p>}
+                        </div>
+                      </div>
+                      <Button size="sm" variant="ghost" disabled={busy} aria-label={`Remove ${device.name}`} onClick={() => void act(() => removeDevice(host, device.id))}>
+                        Remove
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))
           )}
         </div>
       )}
@@ -165,7 +187,17 @@ export function DevicesSettings({ everyMs = 5_000 }: { /** How often the status 
       {adding && (
         <InviteDialog
           title="Add a device"
-          ask={() => addDevice(host)}
+          ask={person => addDevice(host, person)}
+          persons={{
+            owner: persons.find(person => person.owner)?.account,
+            whoAmI: () => ownGithub(host),
+            nameOwner: async account => {
+              const named = await nameOwner(host, account)
+              // Read again, so the list shows the owner from here on.
+              await reload().catch(() => {})
+              return named.ok ? { ok: true } : named
+            },
+          }}
           scan={where !== undefined ? "Scan it with the device's camera: it opens OpenAgent here, from anywhere." : "Scan it with the device's camera, on the same Wi-Fi as this computer."}
           note="Another computer that runs OpenAgent? Paste the link there, in Settings › Machines › Add machine."
           joined={joined}

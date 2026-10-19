@@ -131,6 +131,14 @@ test('link asks the server\'s door; added says nothing is left to add; forget ta
     assert.deepEqual((await run(home.env, ['link', 'BOX.example.com'], { exec })).out, link)
     assert.deepEqual(calls[0]!.args.slice(-5, -1), ['-l', 'root', '--', 'box.example.com'])
 
+    // For a person: the account goes to the server as one word of the script, in small letters.
+    const forRom = pretendServer(() => ({ out: JSON.stringify(link) }))
+    assert.deepEqual((await run(home.env, ['link', 'box.example.com', '--for', 'Rom'], { exec: forRom.exec })).out, link)
+    assert.match(forRom.calls[0]!.script, /^FOR='rom'$/m)
+    assert.match(forRom.calls[0]!.script, /remote-access add --for "\$FOR"\n/)
+    const notAccount = await run(home.env, ['link', 'box.example.com', '--for', "x'; reboot"], { exec: forRom.exec })
+    assert.deepEqual([notAccount.code, notAccount.err, forRom.calls.length], [1, ["x'; reboot is not a GitHub account"], 1])
+
     const elsewhere = await run(home.env, ['link', 'box.example.com'], { exec: pretendServer(() => ({ out: JSON.stringify({ ...link, url: 'https://evil.example/_remote-access/enter#code.pin' }) })).exec })
     assert.equal(elsewhere.code, 1)
     assert.deepEqual(elsewhere.err, ['The server answered something else than a link to its own door at https://box.example.com.'])
@@ -166,16 +174,16 @@ test('devices asks the server\'s door who is in, and marks the line this compute
     const door: CliIO['door'] = async args => (asked.push(args.join(' ')), { ok: true, out: JSON.stringify({ on: false, listening: false, devices: [], lines }) })
 
     // The door is asked which line is this computer's, whatever this package's own file says of one: the door keeps the line.
-    assert.deepEqual((await run(home.env, ['devices', 'BOX.example.com'], { exec, door })).out, { devices: [PHONE, { ...LINE, own: true }, OTHER] })
+    assert.deepEqual((await run(home.env, ['devices', 'BOX.example.com'], { exec, door })).out, { devices: [PHONE, { ...LINE, own: true }, OTHER], persons: [] })
     assert.deepEqual(asked, ['status'])
     assert.deepEqual(calls[0]!.args.slice(-5, -1), ['-l', 'root', '--', 'box.example.com'])
     // A device that says it keeps no line is not this computer's line, whatever id it has.
     listed = [PHONE, { ...LINE, line: undefined }, OTHER]
-    assert.deepEqual((await run(home.env, ['devices', 'box.example.com'], { exec, door })).out, { devices: [PHONE, { id: LINE.id, name: LINE.name, added: LINE.added }, OTHER] })
+    assert.deepEqual((await run(home.env, ['devices', 'box.example.com'], { exec, door })).out, { devices: [PHONE, { id: LINE.id, name: LINE.name, added: LINE.added }, OTHER], persons: [] })
     listed = [PHONE, LINE, OTHER]
     // A door that does not say, or says something else, marks nothing: the list is still told.
     for (const silent of [{ ok: false as const, error: 'the door of this computer did not answer' }, { ok: true as const }, { ok: true as const, out: 'not JSON' }, { ok: true as const, out: JSON.stringify({ lines: [{ url: 'https://box.example.com', id: '$(reboot)' }] }) }]) {
-      assert.deepEqual((await run(home.env, ['devices', 'box.example.com'], { exec, door: async () => silent })).out, { devices: [PHONE, LINE, OTHER] })
+      assert.deepEqual((await run(home.env, ['devices', 'box.example.com'], { exec, door: async () => silent })).out, { devices: [PHONE, LINE, OTHER], persons: [] })
     }
 
     // The line this computer keeps there is not taken out as a device is: it would go on asking with a key that opens nothing.
@@ -193,7 +201,7 @@ test('devices asks the server\'s door who is in, and marks the line this compute
     // and no id of that row takes it out, since the server takes a computer out whole.
     const KEY = { id: 'c1b2c3d4e5f6', name: 'Studio', added: '2026-10-13T19:00:00.000Z', seen: '2026-10-13T19:30:00.000Z', line: true, also: [LINE.id] }
     listed = [PHONE, KEY, OTHER]
-    assert.deepEqual((await run(home.env, ['devices', 'box.example.com'], { exec, door })).out, { devices: [PHONE, { ...KEY, own: true }, OTHER] })
+    assert.deepEqual((await run(home.env, ['devices', 'box.example.com'], { exec, door })).out, { devices: [PHONE, { ...KEY, own: true }, OTHER], persons: [] })
     for (const id of [KEY.id, LINE.id]) {
       const whole = await run(home.env, ['remove-device', 'box.example.com', id], { exec, door })
       assert.equal(whole.code, 1, id)
@@ -204,9 +212,9 @@ test('devices asks the server\'s door who is in, and marks the line this compute
 
     // The door says when the server said no to the key this computer asks for its line with: told with the list.
     const refusedDoor: CliIO['door'] = async () => ({ ok: true, out: JSON.stringify({ lines: [{ url: 'https://box.example.com', mode: 'full', id: LINE.id, refused: true }] }) })
-    assert.deepEqual((await run(home.env, ['devices', 'box.example.com'], { exec, door: refusedDoor })).out, { devices: [PHONE, { ...LINE, own: true }, OTHER], lineRefused: true })
+    assert.deepEqual((await run(home.env, ['devices', 'box.example.com'], { exec, door: refusedDoor })).out, { devices: [PHONE, { ...LINE, own: true }, OTHER], persons: [], lineRefused: true })
 
-    assert.deepEqual((await run(home.env, ['remove-device', 'box.example.com', PHONE.id], { exec, door })).out, { devices: [{ ...LINE, own: true }, OTHER] })
+    assert.deepEqual((await run(home.env, ['remove-device', 'box.example.com', PHONE.id], { exec, door })).out, { devices: [{ ...LINE, own: true }, OTHER], persons: [] })
     assert.match(calls.at(-1)!.script, /remote-access remove "\$ID"\n/)
 
     const refused = await run(home.env, ['devices', 'box.example.com'], { exec: pretendServer(() => ({ code: 1, err: 'the door is not installed' })).exec, door })

@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { homedir, userInfo } from 'node:os'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { projectGitHost, type GitHostFor } from '../store/git-host.js'
@@ -15,6 +16,29 @@ export interface Person {
   login?: string
   /** A picture of them: an https address. */
   avatar?: string
+}
+
+/**
+ * Who a call came from, when the door in front of OpenAgent says (remote-access): the GitHub
+ * account of the person whose device made it. Said only on a computer several persons use.
+ */
+export const PERSON_HEADER = 'x-openagent-person'
+
+const caller = new AsyncLocalStorage<string>()
+
+/** Run `call` as one a person's device made, by their GitHub account, when the request said one. */
+export function asCaller<T>(header: string | string[] | undefined, call: () => Promise<T>): Promise<T> {
+  const account = typeof header === 'string' && /^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,38}$/.test(header) ? header : undefined
+  return account === undefined ? call() : caller.run(account, call)
+}
+
+/**
+ * The person at the page: the one this computer knows, or, for a call another person's device
+ * made, that person by their GitHub account and its picture.
+ */
+export function personAtPage(own: Person, account = caller.getStore()): Person {
+  if (account === undefined || own.login?.toLowerCase() === account) return own
+  return { name: account, login: account, avatar: `https://github.com/${account}.png` }
 }
 
 /** `projects` are the listed projects' folders, in the list's order. */

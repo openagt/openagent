@@ -3,6 +3,7 @@ import { hostnameFromHostHeader, isLoopbackHost } from '../loopback-host.js'
 import { setDashboardContext } from '../dashboard-rpc/context.js'
 import { RPC_HANDLERS, RPC_EVENT_STREAM } from '../dashboard-rpc/index.js'
 import { errorMessage } from '../error-message.js'
+import { PERSON_HEADER, asCaller } from './person.js'
 import type { OpenAgentEvent } from '../events.js'
 import type { PreferencesStore } from '../registry.js'
 import type { QuotaSource } from './quota.js'
@@ -273,7 +274,7 @@ export function makeRpcMount(context: DashboardContext): (req: IncomingMessage, 
         sendJson(res, 400, { error: 'the request body must be a JSON array of arguments' })
         return true
       }
-      sendJson(res, 200, { ret: await handler(...(args as never[])) })
+      sendJson(res, 200, { ret: await asCaller(req.headers[PERSON_HEADER], () => Promise.resolve(handler(...(args as never[])))) })
     } catch (err) {
       // An RPC that throws is a failed call, not a dead daemon: answer it and stay up. Without
       // this a rejected promise inside the mount became an unhandled rejection.
