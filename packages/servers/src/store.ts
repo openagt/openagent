@@ -80,8 +80,23 @@ export interface Server {
 
 export type Reach = 'full' | 'watch'
 
+/**
+ * A computer several people use that this computer is in at as one of them, not as its owner:
+ * saved among OpenAgent's machines, by the address it answers at. What is kept here is only
+ * what this computer does for it itself: the Claude login it makes in its browser for that
+ * person's OpenAgent there, while it does.
+ */
+export interface Shared {
+  /** The machine's address, as OpenAgent's machines know it. */
+  url: string
+  claude?: Login
+}
+
 export interface Store {
   servers: Server[]
+  /** On a computer several people use, where this OpenAgent is one person's: the logins it was given for itself. */
+  own?: { github?: Login; claude?: Login }
+  shared: Shared[]
 }
 
 /** A cap, so a file edited by hand cannot bloat it. */
@@ -224,7 +239,31 @@ export function sanitize(value: unknown): Store {
       ...(claudeLogin ? { claude: claudeLogin } : {}),
     })
   }
-  return { servers }
+  const own: NonNullable<Store['own']> = {}
+  const ownSaid = obj.own && typeof obj.own === 'object' ? (obj.own as Record<string, unknown>) : {}
+  for (const kind of LOGIN_KINDS) {
+    const login = readLogin(ownSaid[kind])
+    if (login) own[kind] = login
+  }
+  const shared: Shared[] = []
+  for (const entry of Array.isArray(obj.shared) ? obj.shared : []) {
+    if (shared.length >= MAX_SERVERS) break
+    const { url, claude } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
+    if (typeof url !== 'string' || !isMachineUrl(url) || shared.some(kept => kept.url === url)) continue
+    const login = readLogin(claude)
+    shared.push({ url, ...(login ? { claude: login } : {}) })
+  }
+  return { servers, ...(Object.keys(own).length ? { own } : {}), shared }
+}
+
+/** Whether `said` is a saved machine's address as OpenAgent keeps it: an origin, over HTTPS or on this computer's own network. */
+export function isMachineUrl(said: string): boolean {
+  try {
+    const url = new URL(said)
+    return (url.protocol === 'https:' || url.protocol === 'http:') && url.origin === said
+  } catch {
+    return false
+  }
 }
 
 /** The file is there and cannot be read as what it should hold: a typo made by hand, a disk that failed. */

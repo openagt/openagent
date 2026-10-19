@@ -13,6 +13,21 @@ import type { ProvidedCommand } from '@openagt/agent-data'
 /** How a package of this computer is told which computer this is: the name of the word in what it is started with. */
 export const COMPUTER_ENV = 'OPENAGENT_COMPUTER'
 
+/** How a package of this computer is told where OpenAgent answers on it. */
+export const URL_ENV = 'OPENAGENT_URL'
+
+let ownUrl: string | undefined
+
+/** Say where this OpenAgent answers, once it listens: what its packages' commands are told too. */
+export function sayOwnUrl(url: string | undefined): void {
+  ownUrl = url
+}
+
+/** Where this OpenAgent answers, as it was said; nothing before it listens. */
+export function ownUrlSaid(): string | undefined {
+  return ownUrl
+}
+
 export interface PackageServicesOptions {
   /** The commands to run, each a package's declared service. */
   commands: readonly ProvidedCommand[]
@@ -36,7 +51,7 @@ const STOP_GRACE_MS = 3_000
 
 export function startPackageServices(opts: PackageServicesOptions): PackageServices {
   const spawn = opts.spawn ?? ((bin, env) => nodeSpawn(process.execPath, [bin, 'serve'], { env, stdio: ['ignore', 'ignore', 'pipe'], detached: true }))
-  const env = { ...opts.env, OPENAGENT_URL: opts.url }
+  const env = { ...opts.env, [URL_ENV]: opts.url }
   let stopping = false
   const running = new Map<string, ChildProcess>()
   const timers = new Set<NodeJS.Timeout>()

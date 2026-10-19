@@ -12,7 +12,7 @@ import { bridgeQuestions } from './dashboard/bridge-store.js'
 import { bridgeBrowserDir, bridgeBrowserOwner, startBridgeBrowser, type BridgeBrowser, type BridgeBrowserOptions } from './bridge-browser.js'
 import { runProjectHooks } from './project-hooks.js'
 import { builtInServices } from './built-in.js'
-import { COMPUTER_ENV, startPackageServices, type PackageServices, type PackageServicesOptions } from './package-services.js'
+import { COMPUTER_ENV, sayOwnUrl, startPackageServices, type PackageServices, type PackageServicesOptions } from './package-services.js'
 import { readAllAgents } from './store/index.js'
 import { setOpenagentVersion } from './version.js'
 import type { BridgeSession, StartedProject } from './dashboard/index.js'
@@ -166,6 +166,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   })
 
   daemonUrl = dashboard.url
+  sayOwnUrl(dashboard.url)
   try {
     const actualPort = Number(new URL(dashboard.url).port) || port
     opts.onListening?.({ pid: process.pid, port: actualPort, url: dashboard.url, startedAt: new Date().toISOString() })

@@ -1,7 +1,7 @@
 import { hostname } from 'node:os'
 import { basename } from 'node:path'
 import { readSharing } from '@openagt/agent-data'
-import { THROUGH_PATH, deviceIdOf, enterRemote, leaveRemote, pingRemote, remoteComputers, remoteProject, remoteVersion } from '../dashboard/remote-run.js'
+import { THROUGH_PATH, deviceIdOf, enterRemote, leaveRemote, pingRemote, remoteComputers, remoteDoor, remoteProject, remoteVersion } from '../dashboard/remote-run.js'
 import { errorMessage } from '../error-message.js'
 import { repositoryAddress, repositorySpelling } from '../repository-address.js'
 import { contextRemote, resolveProjectPath } from './context.js'
@@ -135,6 +135,44 @@ export async function sendAddComputerThrough(machineId: string, computerId: stri
   const url = `${server.url}${THROUGH_PATH}${computer.id}`
   const { record } = await addMachine({ url, key: server.key, door: `${url}/_remote-access/enter`, label: `${computer.name} (through ${server.label})`, ...(server.pin ? { pin: server.pin } : {}) })
   return { ok: true, machine: { id: record.id, label: record.label, url: record.url } }
+}
+
+/**
+ * What a saved machine's door says of the person this computer is in as there: their GitHub
+ * account, whether they are that computer's owner, and their devices, as the door lists them. A
+ * computer several people use answers it; `unknown` is a machine that does not say (one from
+ * before persons, or reached through a server). What it said is another computer's data: the page
+ * reads it as such.
+ */
+export type MachinePerson = { ok: true; said: unknown } | { ok: false; error: string; unknown?: true }
+
+export async function onMachinePerson(machineId: string): Promise<MachinePerson> {
+  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  if (!machine) return { ok: false, error: 'That machine is no longer saved.' }
+  if (machine.url.includes(THROUGH_PATH)) return { ok: false, error: 'A computer reached through a server says nothing of persons.', unknown: true }
+  return remoteDoor(machine, { what: 'me' })
+}
+
+/** Take one of this person's devices out at a saved machine, by its id there; answers what {@link onMachinePerson} does, as it is after. */
+export async function sendRemoveMachineDevice(machineId: string, deviceId: string): Promise<MachinePerson> {
+  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  if (!machine || machine.url.includes(THROUGH_PATH)) return { ok: false, error: 'That machine is no longer saved.' }
+  if (typeof deviceId !== 'string' || !/^[a-z0-9]{6,32}$/.test(deviceId)) return { ok: false, error: 'That is no device id.' }
+  return remoteDoor(machine, { what: 'remove', id: deviceId })
+}
+
+/**
+ * A link that lets this computer's line in at a saved machine, as this person's: what keeping a
+ * line open to a computer several people use starts from, for a person who cannot ask for one
+ * over SSH. The link works once, and only for a line.
+ */
+export async function sendMachineLineLink(machineId: string): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  if (!machine || machine.url.includes(THROUGH_PATH)) return { ok: false, error: 'That machine is no longer saved.' }
+  const asked = await remoteDoor(machine, { what: 'line' })
+  if (!asked.ok) return asked
+  const url = (asked.said as { url?: unknown } | null)?.url
+  return typeof url === 'string' && url.startsWith('https://') ? { ok: true, url } : { ok: false, error: 'The machine gave no link.' }
 }
 
 /** Whether each saved machine answers right now, by id: one short call to each, with this computer's key. */

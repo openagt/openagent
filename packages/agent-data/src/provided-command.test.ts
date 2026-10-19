@@ -102,6 +102,10 @@ test('a package command runs with Node in the project and answers its JSON, its 
     assert.deepEqual(await runPackageCommand(root, { name: 'tool', bin: join(dir, 'said.cjs') }, [], { OPENAGENT_TEST_SAID: 'a word' }), { ok: true, output: ['a word', 'string'] })
     assert.deepEqual(await runPackageCommand(root, { name: 'tool', bin: join(dir, 'said.cjs') }, []), { ok: true, output: [null, 'string'] })
     assert.equal(process.env.OPENAGENT_TEST_SAID, undefined)
+    // What it is handed it reads on standard input; a command handed nothing reads an input that ended, and waits for nothing.
+    await writeFile(join(dir, 'read.cjs'), `let s = ''; process.stdin.on('data', d => (s += d)).on('end', () => process.stdout.write(JSON.stringify(s)))`)
+    assert.deepEqual(await runPackageCommand(root, { name: 'tool', bin: join(dir, 'read.cjs') }, [], undefined, 'a login'), { ok: true, output: 'a login' })
+    assert.deepEqual(await runPackageCommand(root, { name: 'tool', bin: join(dir, 'read.cjs') }, []), { ok: true, output: '' })
   } finally {
     await rm(root, { recursive: true, force: true })
   }

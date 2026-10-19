@@ -3,6 +3,8 @@ import { idsOf, isDeviceId, nameOwner, readDevices, removeDevice, removePerson, 
 import { AlreadyWorking, askLink, install } from './install.js'
 import { AlreadyAtWork, changeLogin, ownGithubAccount, type Mint } from './logins.js'
 import { ownDoor, type OwnDoor } from './own-door.js'
+import { OwnAtWork, askOwnGithub, giveOwnClaude, giveOwnGithub, personHere, removeOwn, startOverSoon, startOwnGithubCode } from './own.js'
+import { copyGithub, forgetShared, isSharedUrl, lineTo, mintFor, setSharedReach, startMint } from './shared.js'
 import type { Exec } from './ssh.js'
 import { SERVER_MARK, STEPS } from './steps.js'
 import { LOGIN_KINDS, Unreadable, addressOf, isAccount, atWork, doorUrl, freshSteps, isUser, isVersion, readStore, update, working, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
@@ -48,7 +50,24 @@ export const USAGE = `usage: servers <command>
   work <address> <version>             the install's own process, started by connect
   login-work <address> github|claude [own]
                                        the process that gives the server a login, started by login
-  logout-work <address> github|claude  the process that takes a login off the server, started by logout`
+  logout-work <address> github|claude  the process that takes a login off the server, started by logout
+
+On a computer several people use, where this OpenAgent is one person's (OPENAGENT_PERSON names them):
+  own                                  this OpenAgent's own GitHub and Claude logins
+  own login github                     log in to GitHub with the login given on standard input; it must be the person's own
+  own login github own                 log in to GitHub with a code GitHub gives: own tells it, and the person types it at
+                                       github.com/login/device
+  own login claude                     log in to Claude with the login given on standard input; OpenAgent starts again with it
+  own logout github|claude             delete that login here
+  own-work github                      the process that waits for the code to be typed, started by own login github own
+
+On this computer, for a server someone invited this computer's person to (by its address among the machines):
+  shared <url>...                      what this computer keeps for each: its line there, and the Claude login it makes
+  shared-login <url> github            copy this computer's GitHub login to the person's own OpenAgent there
+  shared-login <url> claude            make a Claude login for it in this computer's browser, and hand it over
+  shared-reach <url> full|watch|off    keep a line open to the server as this person's, and say what it may do; or none
+  shared-forget <url>                  forget the server here, and the line to it
+  shared-work <url>                    the process that makes the Claude login, started by shared-login`
 
 export interface CliIO {
   env: NodeJS.ProcessEnv
@@ -64,6 +83,34 @@ export interface CliIO {
   startWork?: (words: string[]) => number
   /** Ends `work` and `login-work`; SIGINT and SIGTERM when unsaid. */
   signal?: AbortSignal
+  /** What was handed to the command on standard input; the process's own when unsaid. */
+  stdin?: () => Promise<string>
+  /** Starts this OpenAgent again a moment after the command answered, once a Claude login of its own changed; the computer's service when unsaid. */
+  startOver?: () => void
+}
+
+/** All of the process's standard input, as text. */
+async function ownStdin(): Promise<string> {
+  let said = ''
+  for await (const chunk of process.stdin.setEncoding('utf8')) said += chunk
+  return said
+}
+
+/** What `own` answers: whose OpenAgent this is, and its own logins. */
+export interface OwnStatus {
+  person: string
+  logins: Record<LoginKind, LoginStatus>
+}
+
+/** What `shared` answers of one server: the line this computer keeps there, and the Claude login it makes for it. */
+export interface SharedStatus {
+  url: string
+  reach?: Reach
+  /** The server said no to the key the line is asked for with. */
+  lineRefused?: true
+  /** The id the line has among the server's devices. */
+  line?: string
+  claude: LoginStatus
 }
 
 class Refused extends Error {}
@@ -337,6 +384,33 @@ async function untilStopped(io: CliIO, work: (signal: AbortSignal) => Promise<vo
   }
 }
 
+function ownStatusOf(store: Store, person: string): OwnStatus {
+  return { person, logins: { github: loginOf('github', store.own?.github, false), claude: loginOf('claude', store.own?.claude, false) } }
+}
+
+/** The person this OpenAgent is; a refusal on any other computer. */
+function person(io: CliIO): string {
+  const account = personHere(io.env)
+  if (account === undefined) throw new Refused('This OpenAgent is no person\'s on a computer several people use.')
+  return account
+}
+
+async function sharedStatusOf(io: CliIO, urls: string[]): Promise<{ shared: SharedStatus[] }> {
+  const store = await readStore(io.env)
+  const door = io.door ?? ownDoor
+  return {
+    shared: await Promise.all(
+      urls.map(async url => {
+        const line = await lineTo(io.env, url, door)
+        const claude = store.shared.find(kept => kept.url === url)?.claude
+        // Only what this computer does here: whether the login is there is the server's to say.
+        const { there: _there, since: _since, ends: _ends, ...making } = loginOf('claude', claude, false)
+        return { url, ...(line ? { reach: line.mode, ...(line.refused ? { lineRefused: true as const } : {}), ...(line.id ? { line: line.id } : {}) } : {}), claude: { there: false, ...making } }
+      }),
+    ),
+  }
+}
+
 export async function runCli(args: string[], io: CliIO): Promise<number> {
   const [command, ...rest] = args
   const print = (value: unknown): number => {
@@ -437,6 +511,65 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         if (reached) await (io.door ?? ownDoor)(['line', 'remove', at], io.env)
         return print(statusOf(await readStore(io.env), io.env))
       }
+      case 'own': {
+        const account = person(io)
+        const own = { env: io.env, person: account, ...(io.exec ? { exec: io.exec } : {}) }
+        const [what, kind, how] = rest
+        if (rest.length === 0) return print(ownStatusOf(await readStore(io.env), account))
+        if (what === 'login' && kind === 'github' && rest.length === 3 && how === 'own') await startOwnGithubCode(own, io.startWork ?? (words => startWork(words, io.env)))
+        else if (what === 'login' && kind === 'github' && rest.length === 2) await giveOwnGithub(own, await (io.stdin ?? ownStdin)())
+        else if (what === 'login' && kind === 'claude' && rest.length === 2) {
+          if (await giveOwnClaude(own, await (io.stdin ?? ownStdin)())) (io.startOver ?? startOverSoon)()
+        } else if (what === 'logout' && isKind(kind) && rest.length === 2) {
+          if (await removeOwn(own, kind)) (io.startOver ?? startOverSoon)()
+        } else break
+        return print(ownStatusOf(await readStore(io.env), account))
+      }
+      case 'own-work': {
+        const [kind] = rest
+        if (rest.length !== 1 || kind !== 'github') break
+        const account = person(io)
+        await untilStopped(io, signal => askOwnGithub({ env: io.env, person: account, signal, ...(io.exec ? { exec: io.exec } : {}) }))
+        return 0
+      }
+      case 'shared': {
+        if (rest.length === 0 || !rest.every(isSharedUrl)) break
+        return print(await sharedStatusOf(io, rest))
+      }
+      case 'shared-login': {
+        const [url, kind] = rest
+        if (rest.length !== 2 || !isSharedUrl(url) || !isKind(kind)) break
+        if (kind === 'claude') {
+          await startMint(io.env, url, io.startWork ?? (words => startWork(words, io.env)))
+          return print(await sharedStatusOf(io, [url]))
+        }
+        // What the server's OpenAgent said of its logins, after the copy.
+        const copied = await copyGithub(io.env, url, io.exec)
+        if (!copied.ok) throw new Refused(copied.error)
+        return print(copied.output)
+      }
+      case 'shared-reach': {
+        const [url, mode] = rest
+        if (rest.length !== 2 || !isSharedUrl(url) || (mode !== 'full' && mode !== 'watch' && mode !== 'off')) break
+        await setSharedReach(io.env, url, mode, io.door ?? ownDoor).catch((err: unknown) => {
+          throw new Refused(err instanceof Error ? err.message : String(err))
+        })
+        return print(await sharedStatusOf(io, [url]))
+      }
+      case 'shared-forget': {
+        const [url] = rest
+        if (rest.length !== 1 || !isSharedUrl(url)) break
+        await forgetShared(io.env, url, io.door ?? ownDoor).catch((err: unknown) => {
+          throw new Refused(err instanceof Error ? err.message : String(err))
+        })
+        return print({ shared: [] })
+      }
+      case 'shared-work': {
+        const [url] = rest
+        if (rest.length !== 1 || !isSharedUrl(url)) break
+        await untilStopped(io, signal => mintFor({ env: io.env, machine: url, signal, ...(io.mint ? { mint: io.mint } : {}) }))
+        return 0
+      }
       case 'work': {
         const [address, version] = rest
         if (rest.length !== 2 || !address || !version) break
@@ -457,7 +590,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
       default:
     }
   } catch (err) {
-    if (!(err instanceof Refused || err instanceof Unreadable || err instanceof AlreadyWorking || err instanceof AlreadyAtWork)) throw err
+    if (!(err instanceof Refused || err instanceof Unreadable || err instanceof AlreadyWorking || err instanceof AlreadyAtWork || err instanceof OwnAtWork)) throw err
     io.stderr(err.message)
     return 1
   }

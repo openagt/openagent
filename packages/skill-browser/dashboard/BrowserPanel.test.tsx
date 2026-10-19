@@ -21,6 +21,7 @@ function dashboard() {
     runCommand: vi.fn(async () => ({ ok: false as const, error: 'no commands' })),
     act: vi.fn(async () => ({ ok: false as const, error: 'no commands' })),
     runComputerCommand: vi.fn(async () => ({ ok: false as const, error: 'not the computer\'s' })),
+    runComputerCommandOn: vi.fn(async () => ({ ok: false as const, error: 'not the computer\'s' })),
     read: vi.fn(async () => ({ ok: false as const, error: 'no reads' })),
     openAgent: vi.fn(),
     openPage: vi.fn(),
@@ -32,6 +33,8 @@ function dashboard() {
     addMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     removeMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     computersThrough: vi.fn(async () => ({ ok: true as const, computers: [] })),
+    machinePerson: vi.fn(async () => ({ ok: false as const, error: 'no person there', unknown: true as const })),
+    removeMachineDevice: vi.fn(async () => ({ ok: false as const, error: 'no person there' })),
     addComputerThrough: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     watchScreen: vi.fn(async (_project: string, _agent: string, signal: AbortSignal) => {
       watched.push(signal)

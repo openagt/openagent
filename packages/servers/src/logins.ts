@@ -33,12 +33,15 @@ export async function ownGithubAccount(run: Exec = ownExec): Promise<{ ok: true;
   return said.code === 0 && isAccount(account) ? { ok: true, account } : noGh(said, '`gh` is not logged in to github.com here, or GitHub does not answer: see `gh auth status`.')
 }
 
+/** What a GitHub login reads as, as GitHub hands them out. */
+const GITHUB_LOGIN = /^[A-Za-z0-9_]{20,255}$/
+
 /** This computer's GitHub login, as `gh` keeps it. */
-async function ownGithubLogin(run: Exec): Promise<{ ok: true; login: string } | Failed> {
+export async function ownGithubLogin(run: Exec = ownExec): Promise<{ ok: true; login: string } | Failed> {
   const said = await run('gh', ['auth', 'token', '--hostname', 'github.com'], '', { timeoutMs: OWN_TIMEOUT_MS })
   const login = said.out.trim()
   // What it reads as is what GitHub hands out; anything else is not sent anywhere.
-  return said.code === 0 && /^[A-Za-z0-9_]{20,255}$/.test(login) ? { ok: true, login } : noGh(said, '`gh` is not logged in to github.com here: run `gh auth login`.')
+  return said.code === 0 && GITHUB_LOGIN.test(login) ? { ok: true, login } : noGh(said, '`gh` is not logged in to github.com here: run `gh auth login`.')
 }
 
 /** `text` without the login it may repeat. */
@@ -66,7 +69,14 @@ export type GithubGiven =
 export async function giveGithub(session: Session, run: Exec = ownExec): Promise<GithubGiven> {
   const own = await ownGithubLogin(run)
   if (!own.ok) return { ...own, reached: false }
-  const sent = await send(session, githubLoginScript(own.login), own.login)
+  return giveGithubLogin(session, own.login)
+}
+
+/** Give the other end of a line that is already open this GitHub login, and answer whose it is. */
+export async function giveGithubLogin(session: Session, login: string): Promise<GithubGiven> {
+  // What it reads as is what GitHub hands out; anything else is not sent anywhere.
+  if (!GITHUB_LOGIN.test(login)) return { ok: false, error: 'What was sent is no GitHub login.', reached: false }
+  const sent = await send(session, githubLoginScript(login), login)
   if (!sent.ok) return { ...sent, reached: true }
   const account = sent.out.trim().split('\n').at(-1)?.trim()
   return isAccount(account) ? { ok: true, account } : { ok: false, error: 'The server took the login and did not say whose it is.', reached: true }

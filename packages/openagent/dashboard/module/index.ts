@@ -11,7 +11,7 @@
 // sharing every chunk with the dashboard itself. Nothing here names a skill.
 import { createContext, useContext, type ComponentType } from 'react'
 import type { AgentStatus } from '../../src/index.js'
-import { readModule, runComputerCommand, runModuleCommand } from '../rpc/modules.js'
+import { readModule, runComputerCommand, runComputerCommandOn, runModuleCommand } from '../rpc/modules.js'
 import type { ModuleCommandResult, ModuleReadResult } from '../rpc/modules.js'
 
 export type { ModuleCommandResult, ModuleReadResult, AgentStatus }
@@ -344,6 +344,12 @@ export interface ModuleHost {
    */
   runComputerCommand(args: string[], command?: string): Promise<ModuleCommandResult>
   /**
+   * The same, on a saved machine whose package of the same name is that computer's: what the
+   * package keeps over there, read and changed with this computer's key there, as that machine's
+   * own page would. Not for a computer reached through a server.
+   */
+  runComputerCommandOn(machineId: string, args: string[], command?: string): Promise<ModuleCommandResult>
+  /**
    * Call one of the module's own server reads (its package's `./server`) in one project, with
    * `input`, a JSON object; `input.agentId` names the run the read is about, when it is about one.
    * Answered in the daemon's own process, so it suits a read made every few seconds.
@@ -392,6 +398,14 @@ export interface ModuleHost {
   /** Save one of them as a machine of its own, reached through the server: it is in "Run on" from then on. */
   addComputerThrough(machineId: string, computerId: string): Promise<MachineAdded>
   /**
+   * What a saved machine's door says of the person this computer is in as there, on a computer
+   * several people use: their GitHub account, whether they are its owner, and their devices. What
+   * it said is another computer's data, to read as such; `unknown` for a machine that does not say.
+   */
+  machinePerson(machineId: string): Promise<ModuleMachinePerson>
+  /** Take one of that person's devices out at the machine, by its id there; answers as {@link machinePerson} does, after. */
+  removeMachineDevice(machineId: string, deviceId: string): Promise<ModuleMachinePerson>
+  /**
    * What the live screen of a run shows, as the screen's own stream of bytes, until `signal` ends
    * it; nothing when the run has no live screen. OpenAgent asks the computer the run is on, which
    * may be another machine: the bytes are that computer's, to read as data and never to run.
@@ -437,11 +451,14 @@ export interface ModuleComputerThrough {
 /** What {@link ModuleHost.computersThrough} answers. */
 export type ModuleComputersThrough = { ok: true; computers: ModuleComputerThrough[] } | { ok: false; error: string }
 
+/** What {@link ModuleHost.machinePerson} answers: what the machine's door said, or why there is nothing. */
+export type ModuleMachinePerson = { ok: true; said: unknown } | { ok: false; error: string; unknown?: true }
+
 /** How removing a machine went: done, or refused, with the reason. */
 export type MachineRemoved = { ok: true } | { ok: false; error: string }
 
 /** What the dashboard knows about the module it is serving: every service but the commands and the reads, which it binds to the package. */
-export type ModuleHostBase = Omit<ModuleHost, 'runCommand' | 'act' | 'runComputerCommand' | 'read'>
+export type ModuleHostBase = Omit<ModuleHost, 'runCommand' | 'act' | 'runComputerCommand' | 'runComputerCommandOn' | 'read'>
 
 /**
  * The host for one module: the dashboard's services, and its commands bound to the module's own
@@ -454,6 +471,7 @@ export function moduleHost(base: ModuleHostBase, opts: { acts?: boolean } = {}):
     runCommand: (projectId, args, command) => runModuleCommand(projectId, base.package, args, command, opts.acts ?? false),
     act: (projectId, args, command) => runModuleCommand(projectId, base.package, args, command, true),
     runComputerCommand: (args, command) => runComputerCommand(base.package, args, command),
+    runComputerCommandOn: (machineId, args, command) => runComputerCommandOn(base.package, machineId, args, command),
     read: (projectId, name, input = {}) => readModule(projectId, base.package, name, input),
   }
 }
