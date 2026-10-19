@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { PassThrough, Readable, type Duplex } from 'node:stream'
 import { DATA, END, HEAD, Link, RESET, carriedHeaders, carriedPath, carriedValue, readHead, sendBody, type Frame } from './frames.js'
-import type { Store } from './store.js'
+import { personLinePorts, type Store } from './store.js'
 
 /**
  * The server's end of the lines. A computer that keeps a line open here is asked through it, and
@@ -16,6 +16,11 @@ import type { Store } from './store.js'
  * The address asks for no key: whatever runs on this server as the person can ask the computer
  * through it, as it can ask this server's own OpenAgent. A server is trusted with the computers
  * that keep a line to it, which is what the person turns off on the computer, not here.
+ *
+ * On a server that gives each person a user of their own, a person's computer has its address in
+ * that person's block of ports, and that person's own OpenAgent is told of it, not the owner's.
+ * Which user may call which port is the server's firewall's to say: the owner's ports answer the
+ * owner's user, a person's ports that person's.
  *
  * The door passes another computer's OpenAgent down a line too ({@link Lines.pass}), so a laptop
  * reaches a computer at home through the server both are in at.
@@ -147,6 +152,8 @@ export interface LineComputer {
   name: string
   /** Its address on this server: `http://127.0.0.1:<port>`. */
   port: number
+  /** Whose computer it is, when it is not the owner's: the person whose own OpenAgent, when they have one, is told of it. */
+  person?: string
 }
 
 export interface Lines {
@@ -270,7 +277,7 @@ export function openLines(opts: LinesOptions = {}): Lines {
     },
     async follow(store) {
       const wanted = new Map<string, LineComputer>()
-      for (const device of store.devices) if (device.line) wanted.set(device.id, { id: device.id, name: device.name, port: device.line.port })
+      for (const device of store.devices) if (device.line) wanted.set(device.id, { id: device.id, name: device.name, port: device.line.port, ...(device.person !== undefined ? { person: device.person } : {}) })
       let changed = false
       for (const [id, held] of addresses) {
         if (wanted.get(id)?.port === held.computer.port) continue
@@ -319,6 +326,30 @@ export function linePorts(target: string, env: NodeJS.ProcessEnv): { from: numbe
   const said = env.OPENAGENT_REMOTE_ACCESS_LINE_PORT ? Number(env.OPENAGENT_REMOTE_ACCESS_LINE_PORT) : undefined
   const from = said !== undefined && Number.isInteger(said) && said > 0 && said + LINE_PORTS <= 65536 ? said : (Number(new URL(target).port) || 80) + 10
   return { from, count: LINE_PORTS }
+}
+
+/** One OpenAgent on this server to tell of its computers on a line: where it is, the ports its lines are in, and its computers. */
+export interface ToTell {
+  /** The person whose OpenAgent it is; absent for the owner's. */
+  person?: string
+  target: string
+  ports: { from: number; count: number }
+  computers: LineComputer[]
+}
+
+/**
+ * Which OpenAgent on this server is told of which computers: the owner's of the owner's and of
+ * every computer whose person has no OpenAgent of their own, and each person's own of theirs.
+ * Every person with an OpenAgent of their own is in the list, with no computer too: a computer
+ * taken out is then taken off their machines.
+ */
+export function whomToTell(store: Store, target: string, ports: { from: number; count: number }, computers: readonly LineComputer[]): ToTell[] {
+  const persons = store.persons.filter(person => !person.owner && person.port !== undefined)
+  const theirs = (account: string | undefined): boolean => account !== undefined && persons.some(person => person.account === account)
+  return [
+    { target, ports, computers: computers.filter(computer => !theirs(computer.person)) },
+    ...persons.map(({ account, port }) => ({ person: account, target: `http://127.0.0.1:${port}`, ports: personLinePorts(port!), computers: computers.filter(computer => computer.person === account) })),
+  ]
 }
 
 interface SavedMachine {

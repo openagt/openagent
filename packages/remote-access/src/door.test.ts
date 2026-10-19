@@ -2,8 +2,8 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { DEVICE_COOKIE, ENTER_PATH, openDoor, readBearer, readEntry, type Door } from './door.js'
-import { COMPUTER_HEADER, PERSON_HEADER, addCode, addPerson, enter, nameOwner, readStore, removeDevice, sha256, type Entry } from './store.js'
+import { DEVICE_COOKIE, ENTER_PATH, ME_LINE_PATH, ME_PATH, ME_REMOVE_PATH, openDoor, readBearer, readEntry, type Door } from './door.js'
+import { COMPUTER_HEADER, PERSON_HEADER, addCode, addPerson, enter, nameOwner, readStore, removeDevice, sha256, update, type Entry } from './store.js'
 import { testHome } from './test-home.js'
 
 // The door in front of a stand-in for OpenAgent: a real server on this machine that records what
@@ -474,6 +474,110 @@ test('on a computer with persons, each call says whose device made it, and a hea
     assert.equal(r.asked.at(-1)!.headers[PERSON_HEADER], 'ada')
     await fetch(`${r.at}/`, { headers: { cookie: `${DEVICE_COOKIE}=${roms.id}.${roms.key}`, [PERSON_HEADER]: 'ada' } })
     assert.equal(r.asked.at(-1)!.headers[PERSON_HEADER], 'rom')
+  } finally {
+    await r.close()
+  }
+})
+
+/** A second stand-in for an OpenAgent: one person's own, recording what it was asked. */
+async function standIn(): Promise<{ port: number; asked: Asked[]; close(): Promise<void> }> {
+  const asked: Asked[] = []
+  const server = createServer((req, res) => {
+    let body = ''
+    req.setEncoding('utf8').on('data', chunk => (body += chunk))
+    req.on('end', () => {
+      asked.push({ method: req.method ?? '', url: req.url ?? '', headers: req.headers, body })
+      res.writeHead(200, { 'content-type': 'text/plain' }).end('a person\'s own OpenAgent')
+    })
+  })
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+  return {
+    port: (server.address() as AddressInfo).port,
+    asked,
+    async close() {
+      server.closeAllConnections()
+      await new Promise<void>(resolve => server.close(() => resolve()))
+    },
+  }
+}
+
+test('a person with an OpenAgent of their own reaches it and no other; the owner, and a person with none, reach the one that started the door', async () => {
+  const r = await rig()
+  const roms = await standIn()
+  try {
+    await nameOwner(r.env, 'ada')
+    await addPerson(r.env, 'eve')
+    await addPerson(r.env, 'rom')
+    await update(r.env, store => void (store.persons.find(person => person.account === 'rom')!.port = roms.port))
+    const cookieOf = async (person?: string): Promise<string> => {
+      const entry = (await enter(r.env, (await addCode(r.env, Date.now(), person)).code, 'a phone'))!
+      return `${DEVICE_COOKIE}=${entry.id}.${entry.key}`
+    }
+    const [ada, eve, rom] = [await cookieOf(), await cookieOf('eve'), await cookieOf('rom')]
+
+    const answered = await fetch(`${r.at}/_rpc/onProjects`, { method: 'POST', headers: { cookie: rom, [PERSON_HEADER]: 'ada', 'content-type': 'application/json' }, body: '[]' })
+    assert.equal(await answered.text(), 'a person\'s own OpenAgent')
+    const asked = roms.asked.at(-1)!
+    assert.deepEqual([asked.url, asked.headers[PERSON_HEADER], asked.headers.host, asked.headers.cookie], ['/_rpc/onProjects', 'rom', `127.0.0.1:${roms.port}`, undefined])
+    assert.equal(r.asked.length, 0, 'the owner\'s OpenAgent heard nothing of it')
+
+    await fetch(`${r.at}/`, { headers: { cookie: ada } })
+    await fetch(`${r.at}/`, { headers: { cookie: eve } })
+    assert.deepEqual(r.asked.map(one => one.headers[PERSON_HEADER]), ['ada', 'eve'])
+    assert.equal(roms.asked.length, 1)
+  } finally {
+    await roms.close()
+    await r.close()
+  }
+})
+
+test('a device asks who it is here, and takes out a device of its own person and of nobody else', async () => {
+  const r = await rig()
+  try {
+    // A computer with no persons: the one person's, all of its devices.
+    const phone = await r.letIn('a phone')
+    const alone = await fetch(`${r.at}${ME_PATH}`, { headers: { cookie: phone.cookie } })
+    assert.deepEqual(await alone.json(), { owner: true, devices: [{ id: phone.entry.id, name: 'a phone', added: (await readStore(r.env)).devices[0]!.added }] })
+
+    await nameOwner(r.env, 'ada')
+    await addPerson(r.env, 'rom')
+    const romsPhone = (await enter(r.env, (await addCode(r.env, Date.now(), 'rom')).code, 'rom phone'))!
+    const romsLaptop = (await enter(r.env, (await addCode(r.env, Date.now(), 'rom')).code, 'rom laptop', Date.now(), undefined, undefined))!
+    const romCookie = `${DEVICE_COOKIE}=${romsPhone.id}.${romsPhone.key}`
+    const romBearer = { authorization: `Bearer ${romsLaptop.id}.${romsLaptop.key}` }
+
+    const mine = (await (await fetch(`${r.at}${ME_PATH}`, { headers: romBearer })).json()) as { account: string; owner: boolean; devices: { id: string; person: string }[] }
+    assert.deepEqual([mine.account, mine.owner, mine.devices.map(device => [device.id, device.person])], ['rom', false, [[romsPhone.id, 'rom'], [romsLaptop.id, 'rom']]])
+    const owners = (await (await fetch(`${r.at}${ME_PATH}`, { headers: { cookie: phone.cookie } })).json()) as { account: string; owner: boolean; devices: { id: string }[] }
+    assert.deepEqual([owners.account, owners.owner, owners.devices.map(device => device.id)], ['ada', true, [phone.entry.id]])
+
+    // Not another person's device, not without being in, not from a page of another site, not a read with a body.
+    const remove = (id: string, headers: Record<string, string>): Promise<Response> => fetch(`${r.at}${ME_REMOVE_PATH}`, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify({ id }) })
+    assert.equal((await remove(phone.entry.id, { cookie: romCookie })).status, 404)
+    assert.equal((await remove(romsLaptop.id, {})).status, 401)
+    assert.equal((await remove(romsLaptop.id, { cookie: romCookie, origin: 'https://evil.example' })).status, 403)
+    assert.equal((await fetch(`${r.at}${ME_REMOVE_PATH}`, { headers: { cookie: romCookie } })).status, 405)
+    assert.equal((await fetch(`${r.at}${ME_PATH}`, { method: 'POST', headers: { cookie: romCookie } })).status, 405)
+    assert.equal((await remove('', { cookie: romCookie })).status, 400)
+
+    const left = await remove(romsLaptop.id, { cookie: romCookie, origin: r.at })
+    assert.deepEqual(((await left.json()) as { devices: { id: string }[] }).devices.map(device => device.id), [romsPhone.id])
+    assert.deepEqual((await readStore(r.env)).devices.map(device => device.id).sort(), [phone.entry.id, romsPhone.id].sort())
+    // Nothing of it was passed on.
+    assert.equal(r.asked.length, 0)
+  } finally {
+    await r.close()
+  }
+})
+
+test('a code for a line is asked for by a computer only, and only at a door that gives lines', async () => {
+  const r = await rig()
+  try {
+    const phone = await r.letIn('a phone')
+    const laptop = (await enter(r.env, (await addCode(r.env)).code, 'a laptop'))!
+    assert.equal((await fetch(`${r.at}${ME_LINE_PATH}`, { method: 'POST', headers: { cookie: phone.cookie, origin: r.at } })).status, 403, 'not a page')
+    assert.equal((await fetch(`${r.at}${ME_LINE_PATH}`, { method: 'POST', headers: { authorization: `Bearer ${laptop.id}.${laptop.key}` } })).status, 403, 'this door gives no line')
+    assert.equal((await fetch(`${r.at}${ME_LINE_PATH}`, { method: 'POST' })).status, 401)
   } finally {
     await r.close()
   }

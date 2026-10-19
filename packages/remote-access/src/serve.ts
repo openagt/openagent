@@ -4,9 +4,9 @@ import { CHALLENGE_PREFIX, LETS_ENCRYPT } from './acme.js'
 import { onOwnNetwork, urlHost, type AddressDeps } from './address.js'
 import { keepCertificate, type KeepOptions, type Keeper, type Secured } from './certificate.js'
 import { openDoor, type Door } from './door.js'
-import { linePorts, openLines, tellOpenAgent } from './line-in.js'
+import { linePorts, openLines, tellOpenAgent, whomToTell } from './line-in.js'
 import { keepLine } from './line-out.js'
-import { computerWordFor, isComputerId, pidAlive, readStoreStrict, storePath, update, type Line, type Store } from './store.js'
+import { computerWordFor, isComputerId, pidAlive, readStore, readStoreStrict, storePath, update, type Line, type Store } from './store.js'
 
 /**
  * The door's process: it runs for as long as OpenAgent runs, and follows the file. With the
@@ -179,7 +179,10 @@ export async function serve(opts: ServeOptions): Promise<void> {
     // Cleared before the telling: a computer that calls while OpenAgent is being told is told of next.
     untold = false
     try {
-      await tellOpenAgent(opts.target, lines.computers(), ports)
+      // Each OpenAgent on this server of its own computers: one that does not answer (a person's that is starting) holds no other up.
+      const told = await Promise.allSettled(whomToTell(await readStore(env), opts.target, ports, lines.computers()).map(async ({ person, target, ports: theirs, computers }) => tellOpenAgent(target, computers, theirs).catch((err: unknown) => Promise.reject(new Error(`${person !== undefined ? `@${person}'s OpenAgent: ` : ''}${err instanceof Error ? err.message : String(err)}`)))))
+      const failed = told.find((result): result is PromiseRejectedResult => result.status === 'rejected')
+      if (failed) throw failed.reason
       whyUntold = undefined
     } catch (err) {
       untold = true
