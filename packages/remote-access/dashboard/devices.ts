@@ -28,6 +28,12 @@ export interface PersonRow {
   working?: true
   /** Why theirs could not be made. */
   problem?: string
+  /** The server whose line made them here, by its door: they start runs on this computer through it. */
+  from?: string
+  /** That server no longer has them: the owner says whether they stay. */
+  removed?: true
+  /** The owner said they stay. */
+  kept?: true
 }
 
 /** Every id a row is listed under. */
@@ -69,10 +75,19 @@ export function readStatus(output: unknown): DoorStatus | undefined {
   const rows = readDevices(devices)
   const people: PersonRow[] = []
   for (const entry of Array.isArray(persons) ? persons : []) {
-    const { account, owner, ready, working, problem } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
-    const [known, why] = [text(account), text(problem)]
+    const { account, owner, ready, working, problem, from, removed, kept } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
+    const [known, why, came] = [text(account), text(problem), text(from)]
     if (known && !people.some(person => person.account === known))
-      people.push({ account: known, ...(owner === true ? { owner: true as const } : {}), ...(ready === true ? { ready: true as const } : {}), ...(working === true ? { working: true as const } : {}), ...(why ? { problem: why } : {}) })
+      people.push({
+        account: known,
+        ...(owner === true ? { owner: true as const } : {}),
+        ...(ready === true ? { ready: true as const } : {}),
+        ...(working === true ? { working: true as const } : {}),
+        ...(why ? { problem: why } : {}),
+        ...(came ? { from: came } : {}),
+        ...(removed === true ? { removed: true as const } : {}),
+        ...(kept === true ? { kept: true as const } : {}),
+      })
   }
   const why = text(problem)
   const address = https && typeof https === 'object' ? text((https as Record<string, unknown>).address) : undefined
@@ -150,6 +165,8 @@ export const setSwitch = (host: ModuleHost, on: boolean): Promise<Answer<DoorSta
 export const addDevice = (host: ModuleHost, person?: string): Promise<Answer<AddLink>> => run(host, ['add', ...(person !== undefined ? ['--for', person] : [])], readLink)
 export const nameOwner = (host: ModuleHost, account: string): Promise<Answer<DoorStatus>> => run(host, ['owner', account], readStatus)
 export const removePerson = (host: ModuleHost, account: string): Promise<Answer<DoorStatus>> => run(host, ['remove-person', account], readStatus)
+/** Keep a person a server's line made here, though that server no longer has them. */
+export const keepPerson = (host: ModuleHost, account: string): Promise<Answer<DoorStatus>> => run(host, ['keep', account], readStatus)
 
 /** The GitHub account `gh` is logged in to on this computer, or why there is none. */
 export async function ownGithub(host: ModuleHost): Promise<{ ok: true; account: string } | { ok: false; error: string }> {

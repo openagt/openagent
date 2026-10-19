@@ -16,6 +16,8 @@ import { COMPUTER_ENV, sayOwnUrl, startPackageServices, type PackageServices, ty
 import { readAllAgents } from './store/index.js'
 import { setOpenagentVersion } from './version.js'
 import type { BridgeSession, StartedProject } from './dashboard/index.js'
+import { personLogins } from './dashboard/copy-logins.js'
+import { runComputerCommand } from './dashboard-rpc/modules.js'
 
 /**
  * The dashboard process (#302). It is a pure projection of files: a run's tool keeps the run's
@@ -145,7 +147,9 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     // (slice 2), and the `/_relay/*` endpoints let another daemon run + read + steer a session here.
     eventsSource: runtime.remoteEventsSource,
     remote: runtime.remoteAgents,
-    relay: { project: runtime.projectAt, tailEvents: runtime.tailRelayEvents, rpc: runtime.onRelayRpc, bring: runtime.bringProject },
+    // A person's own OpenAgent on a computer several people use keeps their logins there: another
+    // OpenAgent of theirs hands them over through the relay.
+    relay: { project: runtime.projectAt, tailEvents: runtime.tailRelayEvents, rpc: runtime.onRelayRpc, bring: runtime.bringProject, ...(env.OPENAGENT_PERSON ? { logins: personLogins(runComputerCommand) } : {}) },
     screen: runtime.screenOf,
     // The browser bridge (#1237): absent unless the preference is on, which 404s every route.
     ...(bridgeToken ? { bridgeToken, bridgeSessions: () => listBridgeSessions(env) } : {}),

@@ -7,8 +7,9 @@ import { Duplex, PassThrough } from 'node:stream'
 import { connect as connectTls } from 'node:tls'
 import { openDoor } from './door.js'
 import { DATA, END, FrameReader, HEAD, Link, MAX_PAYLOAD, PING, PONG, RESET, carriedHeaders, carriedPath, frame } from './frames.js'
-import { carry, dial, enterForLine, knock, readLineLink, unchunked, WATCH_HEADER } from './line-out.js'
-import { serve } from './serve.js'
+import { carry, dial, enterForLine, knock, readLineLink, unchunked, WATCH_HEADER, type Route } from './line-out.js'
+import { tellOpenAgent } from './line-in.js'
+import { NOT_A_SERVER, NO_OWNER, ONLY_ITS_OWN, making, routeFor, serve, type ServeOptions } from './serve.js'
 import { addCode, computerWordFor, enter, readStore, sha256, update, type Store } from './store.js'
 import { testHome } from './test-home.js'
 import { testOffice } from './test-office.js'
@@ -83,6 +84,69 @@ test('a body in pieces is put together, and a length that is none ends the readi
   for (const none of ['-6\r\nabc', 'zz\r\nabc', '', '5']) assert.equal(unchunked(Buffer.from(none)).length, 0, none)
 })
 
+test('a call down a line goes to this computer\'s own OpenAgent for its own person, and to another person\'s own only on a line for everyone, on a computer set up as a server', () => {
+  const added = new Date().toISOString()
+  const target = 'http://127.0.0.1:4200'
+  const helper = { OPENAGENT_PERSON_HELPER: '/opt/openagent/bin/openagent-person' }
+  const line = { url: 'https://203.0.113.7', pin: 'p', key: 'id.k', mode: 'full' as const, account: 'rom' }
+  const everyone = { ...line, for: 'everyone' as const }
+  const store: Store = { on: false, persons: [{ account: 'rom', owner: true, added }, { account: 'ada', added, port: 4300, ready: true }, { account: 'kim', added, port: 4400, problem: 'useradd failed' }], devices: [], codes: [], lines: [] }
+  const asked: string[] = []
+  const start = { method: 'POST', path: '/_relay/start' }
+  const route = (on: typeof line, person: string | undefined, env: NodeJS.ProcessEnv = helper, kept: Store = store, call = start): Route => routeFor(on, kept, target, env, person, call, account => asked.push(account))
+  // Its own person, the computer's owner, a call for nobody: this computer's own OpenAgent.
+  for (const person of ['rom', undefined]) assert.deepEqual(route(line, person), { target })
+  assert.deepEqual(route({ ...line, account: 'someone' }, 'rom'), { target }, 'the owner here')
+  // A line for only its person: nobody else, whatever the server says.
+  assert.deepEqual(route(line, 'ada'), { status: 403, text: ONLY_ITS_OWN })
+  // A line that never heard who its person is takes every call as theirs, as before persons; one for everyone does not.
+  const { account: _account, ...unheard } = line
+  assert.deepEqual(route(unheard as typeof line, 'ada', {}), { target })
+  assert.deepEqual(route(everyone, 'ada', {}), { status: 403, text: NOT_A_SERVER })
+  assert.deepEqual(route(everyone, 'ada', helper, { ...store, persons: [] }), { status: 503, text: NO_OWNER })
+  assert.deepEqual(route(everyone, 'ada'), { target: 'http://127.0.0.1:4300' })
+  // Someone with no user here yet has one made; one whose making failed says why, and is tried again.
+  assert.deepEqual(route(everyone, 'lee'), { status: 503, text: making('lee') })
+  assert.match((route(everyone, 'kim') as { text: string }).text, /^@kim's place on this computer could not be made: useradd failed\. It is tried again at the next run\.$/)
+  assert.deepEqual(asked, ['lee', 'kim'])
+  // A page that only looks makes nobody a user: the computer is there, and has no logins of theirs yet.
+  asked.length = 0
+  assert.deepEqual(route(everyone, 'lee', helper, store, { method: 'GET', path: '/_relay/ping' }), { target })
+  assert.deepEqual(route(everyone, 'lee', helper, store, { method: 'GET', path: '/_relay/logins' }), { status: 200, text: '{}', type: 'application/json' })
+  assert.deepEqual(route(everyone, 'lee', helper, store, { method: 'GET', path: '/_relay/events?run=x' }), { status: 503, text: making('lee') })
+  assert.deepEqual(route(everyone, 'kim', helper, store, { method: 'GET', path: '/_relay/ping' }), { target })
+  assert.deepEqual(asked, [], 'no user is made for a look')
+  // Logins handed over make one, as a run does.
+  assert.deepEqual(route(everyone, 'lee', helper, store, { method: 'POST', path: '/_relay/logins' }), { status: 503, text: making('lee') })
+  assert.deepEqual(asked, ['lee'])
+})
+
+test('an address that stands for another computer now, or for another person\'s, is saved again: a port given anew keeps no old name or owner', async () => {
+  const added: unknown[][] = []
+  const saved = [{ id: 'http://127.0.0.1:4310', url: 'http://127.0.0.1:4310', label: 'studio', owner: 'rom' }]
+  const agent = createServer((req, res) => {
+    void (async () => {
+      const args = JSON.parse((await bodyOf(req)) || '[]') as unknown[]
+      const answer = (ret: unknown): void => void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ret }))
+      if (req.url === '/_rpc/onMachines') return answer(saved)
+      if (req.url === '/_rpc/sendAddMachine') return (added.push(args), answer({ ok: true }))
+      res.writeHead(404).end()
+    })()
+  })
+  const target = await listen(agent)
+  const ports = { from: 4310, count: 50 }
+  const studio = { id: 'abcdefgh', key: 'abcdefgh@ada', name: 'studio', port: 4310, person: 'rom', viewer: 'ada', owner: 'rom' }
+  try {
+    await tellOpenAgent(target, [studio], ports)
+    assert.deepEqual(added, [], 'the same computer and person: nothing to save')
+    await tellOpenAgent(target, [{ ...studio, owner: 'kim', person: 'kim' }], ports)
+    await tellOpenAgent(target, [{ ...studio, name: 'den' }], ports)
+    assert.deepEqual(added, [['http://127.0.0.1:4310/_remote-access/enter#line', 'studio', 'kim'], ['http://127.0.0.1:4310/_remote-access/enter#line', 'den', 'rom']])
+  } finally {
+    await shut(agent)
+  }
+})
+
 test('only a server gives a line: its link is HTTPS and names its key', () => {
   assert.deepEqual(readLineLink(' https://203.0.113.7/_remote-access/enter#code.pin '), { url: 'https://203.0.113.7', door: 'https://203.0.113.7/_remote-access/enter', code: 'code', pin: 'pin' })
   assert.equal(readLineLink('http://studio.local:4201/_remote-access/enter#code'), undefined)
@@ -130,7 +194,7 @@ async function command<T>(env: NodeJS.ProcessEnv, ...args: string[]): Promise<T>
 }
 
 /** A stand-in for an OpenAgent on the server: it keeps the machines it is told of, in `machines`. */
-function keeper(machines: { id: string; url: string; label: string }[]): Server {
+function keeper(machines: { id: string; url: string; label: string; owner?: string }[]): Server {
   return createServer((req, res) => {
     void (async () => {
       const args = JSON.parse((await bodyOf(req)) || '[]') as unknown[]
@@ -141,7 +205,9 @@ function keeper(machines: { id: string; url: string; label: string }[]): Server 
         const entered = await fetch(link.origin + link.pathname, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: link.hash.slice(1), computer: 'the server' }) })
         const { key } = (await entered.json()) as { key?: string }
         if (!key) return answer({ ok: false, error: 'no key' })
-        machines.push({ id: link.origin, url: link.origin, label: String(args[1]) })
+        // Saved again under the same address, as OpenAgent does: the one it replaces goes.
+        machines.splice(0, machines.length, ...machines.filter(machine => machine.id !== link.origin))
+        machines.push({ id: link.origin, url: link.origin, label: String(args[1]), ...(args[2] !== undefined ? { owner: String(args[2]) } : {}) })
         return answer({ ok: true })
       }
       if (req.url === '/_rpc/sendRemoveMachine') {
@@ -158,7 +224,7 @@ interface Rig {
   server: NodeJS.ProcessEnv
   computer: NodeJS.ProcessEnv
   /** The machines the server's OpenAgent has saved, as the door told it. */
-  machines: { id: string; url: string; label: string }[]
+  machines: { id: string; url: string; label: string; owner?: string }[]
   /** What the computer's OpenAgent was asked, with what each call said. */
   asked: { line: string; watch: boolean; body: string; headers: IncomingMessage['headers'] }[]
   /** The feeds of the computer's OpenAgent that their reader left. */
@@ -168,7 +234,7 @@ interface Rig {
   stop: () => Promise<void>
 }
 
-async function rig(): Promise<Rig> {
+async function rig(computerServe: Pick<ServeOptions, 'startWork' | 'mirrorMs'> = {}): Promise<Rig> {
   const [serverHome, computerHome] = [await testHome(), await testHome()]
   // The door's port is its own for the whole test, as 443 is a server's: a door that starts anew is found where it was.
   const [proofPort, doorPort] = [await freePort(), await freePort()]
@@ -212,7 +278,7 @@ async function rig(): Promise<Rig> {
   const line = { retryMs: [30, 60], pingMs: 40, quietMs: 400 }
   const running = [
     serve({ env: serverHome.env, target: serverTarget, port: doorPort, proofPort, host: '127.0.0.1', directory: office.directory, signal: abort.signal, pollMs: 20, retryMs: 100, keep: { lookMs: 30, retryMs: 60, pollMs: 10 }, line }),
-    serve({ env: computerHome.env, target: computerTarget, signal: abort.signal, pollMs: 20, retryMs: 100, line }),
+    serve({ env: computerHome.env, target: computerTarget, signal: abort.signal, pollMs: 20, retryMs: 100, line, ...computerServe }),
   ]
   await update(serverHome.env, store => void (store.https = { address: '127.0.0.1' }))
   await until('the door is open', async () => ((await readStore(serverHome.env)).listening !== undefined ? true : undefined))
@@ -530,7 +596,7 @@ test('whatever a server sends down a line, this computer passes on one checked c
   const got: { kind: number; call: number; text: string }[] = []
   far.on('data', (chunk: Buffer) => got.push(...answers.push(chunk).map(one => ({ kind: one.kind, call: one.call, text: one.payload.toString() }))))
   const statusOf = (call: number): Promise<number> => until(`call ${call} is answered`, () => got.filter(one => one.call === call && one.kind === HEAD).map(one => (JSON.parse(one.text) as { status: number }).status)[0])
-  const carried = carry(near, Buffer.alloc(0), { target, watch: () => true, pingMs: 60_000, quietMs: 60_000 })
+  const carried = carry(near, Buffer.alloc(0), { route: () => ({ target }), watch: () => true, pingMs: 60_000, quietMs: 60_000 })
   try {
     // A read with a body: the body is a second call in disguise, and is never written.
     const hidden = 'POST /_rpc/sendStart HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n[]'
@@ -786,5 +852,100 @@ test('on a server with a user per person, a person\'s computer has its line in t
   } finally {
     await shut(romsAgent)
     await r.stop()
+  }
+})
+
+test('a computer whose line is for everyone at its server has an address for each person there, and each call goes to the OpenAgent of that person\'s own user on the computer, made the first time', async () => {
+  // Ada's own OpenAgent on Rom's computer, once her user there is made: the helper's work, which the test does itself.
+  const adasThere: IncomingMessage['headers'][] = []
+  const adasAgent = createServer((req, res) => {
+    adasThere.push(req.headers)
+    req.resume()
+    res.writeHead(200, { 'content-type': 'application/json' }).end('{"host":"ada on the computer"}')
+  })
+  const adasPort = Number(new URL(await listen(adasAgent)).port)
+  const made: string[] = []
+  const r = await rig({
+    mirrorMs: 50,
+    startWork: (env, account) => {
+      made.push(account)
+      void update(env, store => {
+        const person = store.persons.find(candidate => candidate.account === account)!
+        Object.assign(person, { port: adasPort, ready: true })
+      })
+      return undefined
+    },
+  })
+  const romsMachines: Rig['machines'] = []
+  const romsAgent = keeper(romsMachines)
+  const romsTarget = await listen(romsAgent)
+  try {
+    // The server: ada owns it, rom is invited and has his own OpenAgent there.
+    const block = Number(new URL(romsTarget).port)
+    await command(r.server, 'owner', 'ada')
+    await update(r.server, store => void store.persons.push({ account: 'rom', added: new Date().toISOString(), port: block }))
+    // Rom's computer is set up as a server, with rom as its owner, and keeps its line to the server as his.
+    r.computer.OPENAGENT_PERSON_HELPER = '/opt/openagent/bin/openagent-person'
+    await command(r.computer, 'owner', 'rom')
+    await command(r.computer, 'line', 'add', (await command<{ url: string }>(r.server, 'add', '--for', 'rom')).url)
+    assert.equal((await readStore(r.computer)).lines[0]!.account, 'rom', 'the server said who this computer\'s person is there')
+    const own = await until('rom’s own OpenAgent saved his computer', () => romsMachines[0])
+    assert.equal(own.owner, undefined)
+
+    // Everyone at the server: ada's OpenAgent there is told of an address of the computer for her, with whose it is.
+    await command(r.computer, 'line', 'everyone', '127.0.0.1')
+    const forAda = await until('ada’s OpenAgent saved rom’s computer', () => r.machines.find(machine => machine.owner === 'rom'))
+    const studio = (await readStore(r.server)).devices.find(device => device.line)!
+    assert.deepEqual(studio.line!.others, { ada: Number(new URL(forAda.url).port) })
+
+    // Her page only looking makes her no user there: the computer's own OpenAgent says it is there.
+    await until('the line carries for ada', async () => (await fetch(`${forAda.url}/_relay/ping`)).status === 200)
+    assert.equal(r.asked.at(-1)!.line, 'GET /_relay/ping')
+    assert.deepEqual(made, [])
+    // Her first run there has her user made, and is answered that it is being made; then her calls reach her own OpenAgent there.
+    const first = await fetch(`${forAda.url}/_relay/start`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+    if (first.status === 503) assert.match(await first.text(), /@ada's place on this computer is being made/)
+    else assert.equal(first.status, 200)
+    const ping = await until('ada’s own OpenAgent there answers', async () => {
+      const res = await fetch(`${forAda.url}/_relay/ping`)
+      const said = res.status === 200 ? ((await res.json()) as { host?: string }) : undefined
+      return said?.host === 'ada on the computer' ? said : undefined
+    })
+    assert.deepEqual(ping, { host: 'ada on the computer' })
+    assert.deepEqual(made, ['ada'])
+    const there = (await readStore(r.computer)).persons.find(person => person.account === 'ada')!
+    assert.equal(there.from, new URL(await r.link()).origin)
+    // Whom a call is for is the server's word, used here and never passed on.
+    assert.equal(adasThere.at(-1)!['x-openagent-person'], undefined)
+
+    // Rom's own address reaches his own OpenAgent on the computer, whatever the caller says it is for.
+    const before = adasThere.length
+    assert.equal((await fetch(`${own.url}/_relay/ping`, { headers: { 'x-openagent-person': 'ada' } })).status, 200)
+    assert.equal(r.asked.at(-1)!.line, 'GET /_relay/ping')
+    assert.equal(r.asked.at(-1)!.headers['x-openagent-person'], undefined)
+    assert.equal(adasThere.length, before)
+
+    // Through the server, ada's laptop lists rom's computer with whose it is, and reaches her own OpenAgent there.
+    const link = new URL(await r.link())
+    const entered = await doorCall(link.origin + link.pathname, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: link.hash.slice(1).split('.')[0], computer: 'ada laptop' }) })
+    const adasLaptop = { authorization: `Bearer ${(JSON.parse(entered.text) as { key: string }).key}` }
+    assert.deepEqual(JSON.parse((await doorCall(`${link.origin}/_remote-access/computers`, { headers: adasLaptop })).text), { computers: [{ id: studio.id, name: studio.name, online: true, owner: 'rom' }] })
+    const via = await doorCall(`${link.origin}/_remote-access/via/${studio.id}/_relay/ping`, { headers: adasLaptop })
+    assert.deepEqual([via.status, JSON.parse(via.text)], [200, { host: 'ada on the computer' }])
+    assert.equal(adasThere.length, before + 1)
+
+    // The computer hears from its server who is there.
+    await until('the computer heard who is at the server', async () => (JSON.stringify((await readStore(r.computer)).lines[0]!.persons) === JSON.stringify(['ada', 'rom']) ? true : undefined))
+
+    // Only rom again: the address for ada goes, and her OpenAgent there drops the computer.
+    await command(r.computer, 'line', 'full', '127.0.0.1')
+    await until('the server took the address for ada away', async () => ((await readStore(r.server)).devices.find(device => device.line)!.line!.others === undefined ? true : undefined))
+    await until('ada’s OpenAgent dropped rom’s computer', () => (r.machines.some(machine => machine.owner === 'rom') ? undefined : true))
+    assert.deepEqual(JSON.parse((await doorCall(`${link.origin}/_remote-access/computers`, { headers: adasLaptop })).text), { computers: [] })
+    assert.equal((await fetch(`${own.url}/_relay/ping`)).status, 200, 'rom’s own address carries on')
+  } finally {
+    await shut(romsAgent)
+    await r.stop()
+    await shut(adasAgent)
   }
 })

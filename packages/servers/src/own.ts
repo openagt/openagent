@@ -1,8 +1,9 @@
 import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { askGithub, giveGithubLogin, scrubbed, type Failed, type GithubGiven } from './logins.js'
 import { exec as ownExec, lastLines, type Exec, type Session } from './ssh.js'
 import { LOGIN_TIMEOUT_MS, SERVER_USER, githubLogoutScript, quoted, type LoginScript } from './steps.js'
-import { BEAT_MS, atWork, heartbeat, update, type Login, type LoginKind, type Store } from './store.js'
+import { BEAT_MS, MARK_LENGTH, atWork, heartbeat, update, type Login, type LoginKind, type Store } from './store.js'
 
 /**
  * The logins of one person's own OpenAgent, on a computer several people use. There, each person
@@ -18,7 +19,17 @@ import { BEAT_MS, atWork, heartbeat, update, type Login, type LoginKind, type St
  * GitHub's login is `gh`'s, in the user's own home, as on the owner's server; it must be the
  * person's own account. Claude's is a file in the user's home that the computer's service reads
  * as it starts that OpenAgent, so OpenAgent is started again once it was written.
+ *
+ * A login handed over may be a copy: the person's own OpenAgent on a server copies its logins to
+ * their OpenAgent on another person's computer, the first time it starts a run there. Such a login
+ * says the server it came from, and every login handed over keeps a mark of itself, so the copier
+ * tells whether the copy is still its own login. A login the person made here is never a copy.
  */
+
+/** A login's mark: the start of its SHA-256. */
+export function markOf(login: string): string {
+  return createHash('sha256').update(login).digest('hex').slice(0, MARK_LENGTH)
+}
 
 /** What tells an OpenAgent it is one person's on a computer several people use: their GitHub account. */
 export const PERSON_ENV = 'OPENAGENT_PERSON'
@@ -136,16 +147,26 @@ async function theirs(session: Session, person: string, given: GithubGiven): Pro
   return named.ok ? given : { ok: false, error: `The login is there; git could not be given its name: ${named.error}`, reached: true }
 }
 
-/** Write down how a GitHub login went, for this OpenAgent's own user. */
-function noteOwnGithub(store: Store, given: GithubGiven): void {
+/** Write down how a GitHub login went, for this OpenAgent's own user; `copied` says what was handed over, and from where when it is a copy. */
+function noteOwnGithub(store: Store, given: GithubGiven, copied?: { login: string; from?: string }): void {
   const own = (store.own ??= {})
-  if (given.ok) own.github = { since: new Date().toISOString(), account: given.account }
+  if (given.ok) own.github = { since: new Date().toISOString(), account: given.account, ...handedOver(copied) }
   // One that was sent and did not arrive replaced what was there: no login is counted on.
   else own.github = { ...(given.reached ? {} : known(own.github)), failed: given.error }
 }
 
+/** What a login handed over says of itself: its mark, and the server it was copied from. */
+function handedOver(copied: { login: string; from?: string } | undefined): Pick<Login, 'from' | 'mark'> {
+  return copied ? { mark: markOf(copied.login), ...(copied.from !== undefined ? { from: copied.from } : {}) } : {}
+}
+
 /** What is known of a login beyond a try: since when it is there, and whose it is. */
-const known = (login: Login | undefined): Login => ({ ...(login?.since ? { since: login.since } : {}), ...(login?.account ? { account: login.account } : {}) })
+const known = (login: Login | undefined): Login => ({
+  ...(login?.since ? { since: login.since } : {}),
+  ...(login?.account ? { account: login.account } : {}),
+  ...(login?.from ? { from: login.from } : {}),
+  ...(login?.mark ? { mark: login.mark } : {}),
+})
 
 /** Refused: the login is already being changed, in another process. */
 export class OwnAtWork extends Error {
@@ -183,15 +204,16 @@ export interface OwnOptions {
   exec?: Exec
 }
 
-/** Copy a GitHub login handed over on standard input to this OpenAgent's user. */
-export async function giveOwnGithub(opts: OwnOptions, login: string): Promise<void> {
+/** Copy a GitHub login handed over on standard input to this OpenAgent's user; `from` names the server it is a copy from. */
+export async function giveOwnGithub(opts: OwnOptions, login: string, from?: string): Promise<void> {
   endWaiting(await take(opts.env, 'github'))
   const session = localSession(opts.exec)
+  const word = login.trim()
   let given: GithubGiven = { ok: false, error: 'The work stopped before it ended.', reached: false }
   try {
-    given = await theirs(session, opts.person, await giveGithubLogin(session, login.trim()))
+    given = await theirs(session, opts.person, await giveGithubLogin(session, word))
   } finally {
-    await update(opts.env, store => noteOwnGithub(store, given))
+    await update(opts.env, store => noteOwnGithub(store, given, { login: word, ...(from !== undefined ? { from } : {}) }))
   }
 }
 
@@ -231,8 +253,8 @@ export async function startOwnGithubCode(opts: OwnOptions, startWork: (words: st
   }
 }
 
-/** Give this OpenAgent's user the Claude login handed over on standard input. Answers whether OpenAgent is to be started again with it. */
-export async function giveOwnClaude(opts: OwnOptions, login: string): Promise<boolean> {
+/** Give this OpenAgent's user the Claude login handed over on standard input; `from` names the server it is a copy from. Answers whether OpenAgent is to be started again with it. */
+export async function giveOwnClaude(opts: OwnOptions, login: string, from?: string): Promise<boolean> {
   await take(opts.env, 'claude')
   const word = login.trim()
   let given: { ok: true } | Failed = { ok: false, error: 'The work stopped before it ended.' }
@@ -243,7 +265,7 @@ export async function giveOwnClaude(opts: OwnOptions, login: string): Promise<bo
     await update(opts.env, store => {
       const own = (store.own ??= {})
       // One that failed half-way left the file as it was: what was there before is still there.
-      own.claude = after.ok ? { since: new Date().toISOString() } : { ...known(own.claude), failed: after.error }
+      own.claude = after.ok ? { since: new Date().toISOString(), ...handedOver({ login: word, ...(from !== undefined ? { from } : {}) }) } : { ...known(own.claude), failed: after.error }
     })
   }
   return given.ok

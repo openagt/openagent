@@ -6,8 +6,8 @@ import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { runCli, type CliIO, type OwnStatus, type SharedStatus } from './cli.js'
-import { OWN_CLAUDE_FILE, ownClaudeLoginScript, ownClaudeLogoutScript, ownIdentityScript } from './own.js'
+import { runCli, type CliIO, type OtherStatus, type OwnStatus, type SharedStatus } from './cli.js'
+import { OWN_CLAUDE_FILE, markOf, ownClaudeLoginScript, ownClaudeLogoutScript, ownIdentityScript } from './own.js'
 import type { OwnDoor } from './own-door.js'
 import type { Exec } from './ssh.js'
 import { readStore, storePath } from './store.js'
@@ -277,6 +277,63 @@ test('a line to a shared server is asked for with a link its door gives this per
     const off = await run(env, ['shared-reach', SERVER_URL, 'off'], { door })
     assert.equal((off.out as { shared: SharedStatus[] }).shared[0]!.reach, undefined)
     assert.deepEqual(asked.at(-2)?.args, ['line', 'remove', SERVER_URL])
+  } finally {
+    await agent.close()
+    await home.remove()
+  }
+})
+
+test('a login copied here from the person\'s own OpenAgent on a server says that server and keeps a mark of itself; one made here says none, and a name that is none is refused', async () => {
+  const home = await testHome()
+  try {
+    const env = { ...home.env, OPENAGENT_PERSON: 'rom' }
+    const shell = pretendShell(script => (GH_GIVEN.test(script) ? { out: 'rom\n' } : undefined))
+    const copied = await run(env, ['own', 'login', 'github', '--from', 'vps-1'], { exec: shell.exec, stdin: async () => GH_LOGIN })
+    const github = (copied.out as OwnStatus).logins.github
+    assert.equal(github.from, 'vps-1')
+    assert.equal(github.mark, markOf(GH_LOGIN))
+    assert.equal(github.mark!.length, 16)
+    const claude = await run(env, ['own', 'login', 'claude', '--from', 'vps-1'], { exec: shell.exec, stdin: async () => CLAUDE_LOGIN })
+    assert.deepEqual([(claude.out as OwnStatus).logins.claude.from, (claude.out as OwnStatus).logins.claude.mark], ['vps-1', markOf(CLAUDE_LOGIN)])
+    // Made here, by the person: no server, and the mark of what was handed over.
+    const made = await run(env, ['own', 'login', 'claude'], { exec: shell.exec, stdin: async () => CLAUDE_LOGIN })
+    assert.equal((made.out as OwnStatus).logins.claude.from, undefined)
+    assert.equal((made.out as OwnStatus).logins.claude.mark, markOf(CLAUDE_LOGIN))
+    assert.equal((await readFile(storePath(env), 'utf8')).includes(CLAUDE_LOGIN), false)
+    assert.equal((await run(env, ['own', 'login', 'github', '--from', 'not a name'], { exec: shell.exec, stdin: async () => GH_LOGIN })).code, 2)
+    assert.equal((await run(env, ['own', 'login', 'github', '--to', 'vps-1'], { exec: shell.exec, stdin: async () => GH_LOGIN })).code, 2)
+  } finally {
+    await home.remove()
+  }
+})
+
+const BOX_URL = `${SERVER_URL}/_remote-access/via/b0x1d2`
+
+test('for another person\'s computer, the logins there are read through OpenAgent, and one made here is handed over through it as no copy', async () => {
+  const home = await testHome()
+  let logins: unknown = { github: { source: 'copied', from: 'vps-1', account: 'rom' } }
+  const agent = await openAgent(fn => (fn === 'onMachineLogins' ? { ok: true, logins } : fn === 'sendMachineLogins' ? ((logins = { github: { source: 'made', account: 'rom' } }), { ok: true, logins }) : undefined))
+  try {
+    const env = { ...home.env, OPENAGENT_URL: agent.url }
+    const read = await run(env, ['other', BOX_URL])
+    assert.deepEqual(read.out, { other: [{ url: BOX_URL, logins: { github: { source: 'copied', from: 'vps-1', account: 'rom' } }, claude: { there: false, working: false } }] } satisfies { other: OtherStatus[] })
+    const gh: Exec = async bin => (bin === 'gh' ? { code: 0, out: `${GH_LOGIN}\n`, err: '' } : { code: 1, out: '', err: '' })
+    const given = await run(env, ['other-login', BOX_URL, 'github'], { exec: gh })
+    assert.equal(given.code, 0)
+    assert.deepEqual(agent.asked.find(call => call.fn === 'sendMachineLogins')?.args, [BOX_URL, { github: GH_LOGIN }])
+    assert.deepEqual((given.out as { other: OtherStatus[] }).other[0]!.logins, { github: { source: 'made', account: 'rom' } })
+
+    // A Claude login is made by a process of its own, and goes the same way.
+    const started: string[][] = []
+    await run(env, ['other-login', BOX_URL, 'claude'], { startWork: words => (started.push(words), 4242) })
+    assert.deepEqual(started, [['other-work', BOX_URL]])
+    assert.equal((await run(env, ['other-work', BOX_URL], { mint: async () => ({ ok: true, login: CLAUDE_LOGIN }) })).code, 0)
+    assert.deepEqual(agent.asked.at(-1), { fn: 'sendMachineLogins', args: [BOX_URL, { claude: CLAUDE_LOGIN }], origin: agent.url })
+    assert.equal((await readFile(storePath(env), 'utf8')).includes(CLAUDE_LOGIN), false)
+
+    // What names no computer of another person's is not one.
+    assert.equal((await run(env, ['other', SERVER_URL])).code, 2)
+    assert.equal((await run(env, ['other', `${SERVER_URL}/_remote-access/via/../x`])).code, 2)
   } finally {
     await agent.close()
     await home.remove()

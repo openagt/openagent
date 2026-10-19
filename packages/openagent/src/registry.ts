@@ -47,6 +47,19 @@ export interface MachineRecord {
    * machine that later says another name does not get another computer's runs by it.
    */
   host?: string
+  /**
+   * Whose computer it is, by their GitHub account, when it is another person's: a computer that
+   * keeps a line to a server for everyone there. A run started on it uses this person's own logins
+   * there, which reach it as copies.
+   */
+  owner?: string
+  /** The person was told, once, that their logins are copied to that other person's computer. */
+  told?: true
+}
+
+/** A GitHub account as a person on a computer is known by: letters, digits and single dashes, at most 39. */
+export function isAccount(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,38}$/.test(value)
 }
 
 /** The cap on saved machines and on a name's length, so a hand-edited file cannot bloat. */
@@ -402,11 +415,11 @@ function sanitizeMachines(value: unknown): MachineRecord[] {
   for (const raw of value) {
     if (machines.length >= MACHINE_LIMITS.count) break
     if (typeof raw !== 'object' || raw === null) continue
-    const { label, url, key, door, pin, host } = raw as Record<string, unknown>
+    const { label, url, key, door, pin, host, owner, told } = raw as Record<string, unknown>
     if (typeof label !== 'string' || typeof url !== 'string' || typeof key !== 'string' || typeof door !== 'string') continue
     if (!url || !key || !door || seen.has(url)) continue
     seen.add(url)
-    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, key, door, ...(typeof pin === 'string' && pin ? { pin } : {}), ...(isHostName(host) ? { host } : {}) })
+    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, key, door, ...(typeof pin === 'string' && pin ? { pin } : {}), ...(isHostName(host) ? { host } : {}), ...(isAccount(owner) ? { owner } : {}), ...(told === true ? { told: true as const } : {}) })
   }
   return machines
 }
@@ -659,7 +672,7 @@ export async function listMachines(
  * each still holds a key the caller takes out of its machine.
  */
 export async function addMachine(
-  machine: { url: string; key: string; door: string; pin?: string; label?: string },
+  machine: { url: string; key: string; door: string; pin?: string; label?: string; owner?: string },
   fs: RegistryFs = nodeRegistryFs(),
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<{ record: MachineRecord; displaced: MachineRecord[] }> {
@@ -672,6 +685,7 @@ export async function addMachine(
       key: machine.key,
       door: machine.door,
       ...(machine.pin ? { pin: machine.pin } : {}),
+      ...(isAccount(machine.owner) ? { owner: machine.owner } : {}),
     }
     const before = registry.machines ?? []
     const machines = [record, ...before.filter(saved => saved.id !== record.id)].slice(0, MACHINE_LIMITS.count)
@@ -694,6 +708,18 @@ export async function nameMachine(machine: { id: string; key: string }, host: st
     const saved = (registry.machines ?? []).find(candidate => candidate.id === id)
     if (!saved || saved.key !== key || saved.host !== undefined) return false
     await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(machine => (machine.id === id ? { ...machine, host } : machine)) }, fs, env)
+    return true
+  })
+}
+
+/** Write down that the person was told their logins are copied to a saved machine of another person's. Answers whether it is saved. */
+export async function tellMachine(id: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<boolean> {
+  return serialize(async () => {
+    const registry = await readRegistry(fs, env)
+    const saved = (registry.machines ?? []).find(candidate => candidate.id === id)
+    if (!saved) return false
+    if (saved.told) return true
+    await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(machine => (machine.id === id ? { ...machine, told: true as const } : machine)) }, fs, env)
     return true
   })
 }

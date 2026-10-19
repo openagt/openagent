@@ -8,6 +8,7 @@ import type { StartAgentOptions, StartAgentResult, AddProjectResult, RemoveProje
 import type { EventsSource, RemoteAgents, SavedMachine } from './dashboard/rpc-serve.js'
 import { RelayedAgents, remoteFacts, startRemoteAgent, type BringProject, type RelayProject, type RemoteTarget } from './dashboard/remote-run.js'
 import { cloneProject, cloneTarget } from './clone-project.js'
+import { copyLoginsTo, loginsAreThere, ownLogins, type OwnLogins } from './dashboard/copy-logins.js'
 import { screenInDiary } from './dashboard/screen.js'
 import { dispatchRelayRpc } from './dashboard-rpc/relay-dispatch.js'
 import { asRecorded, onMachine } from './dashboard-rpc/reads.js'
@@ -64,6 +65,8 @@ export interface ProjectRuntimeOptions {
   env: NodeJS.ProcessEnv
   /** How a project another machine asks for is cloned; `cloneProject` when unsaid. */
   clone?: (address: string) => ReturnType<typeof cloneProject>
+  /** The logins this OpenAgent copies to another person's computer; its user's `gh` and its own Claude login when unsaid. */
+  logins?: (env: NodeJS.ProcessEnv) => Promise<OwnLogins>
 }
 
 /** The per-project surface the dashboard drives, plus its teardown. */
@@ -110,7 +113,7 @@ export interface ProjectRuntime {
  * The daemon's per-project runtime (#393). The home `cwd` is the default target: a request with
  * no project id (or the home id) resolves to it without a registry lookup.
  */
-export function createProjectRuntime({ cwd, env, clone = cloneProject }: ProjectRuntimeOptions): ProjectRuntime {
+export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = ownLogins }: ProjectRuntimeOptions): ProjectRuntime {
   const homeId = projectId(resolve(cwd))
   // Runs this daemon is relaying to/from a saved machine (#1067): the local half of a remote agent.
   const relayedAgents = new RelayedAgents()
@@ -264,6 +267,15 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject }: Project
       const project = await repositoryAddress(projectCwd)
       if (!project) return { ok: false, error: 'This project has no repository address, so it cannot be sent to another machine.' }
       const target = { url: machine.url, key: machine.key, ...(machine.pin ? { pin: machine.pin } : {}), project }
+      // Another person's computer: a run there uses this person's own logins, which this server
+      // copies there first. Only a server's OpenAgent copies: a laptop's logins are made for it
+      // alone, so a laptop only looks that they are there.
+      if (machine.owner !== undefined) {
+        // Copied only once the person read that they are, and said OK: the page says so before a first run there.
+        if (env.OPENAGENT_SERVER === '1' && machine.told !== true) return { ok: false, error: `Your logins are copied to @${machine.owner}'s server for a run there: say OK to that above the message box first.` }
+        const there = env.OPENAGENT_SERVER === '1' ? await copyLoginsTo({ ...target, label: machine.label }, { own: () => logins(env) }) : await loginsAreThere({ ...target, label: machine.label })
+        if (!there.ok) return there
+      }
       const result = await startRemoteAgent(target, { prompt, options: forwarded })
       if (!result.ok) {
         // The one refusal the page can do something about: it has the machine clone the project, and starts again.

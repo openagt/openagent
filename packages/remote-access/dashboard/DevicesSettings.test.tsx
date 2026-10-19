@@ -323,6 +323,30 @@ describe('Settings → Devices', () => {
     expect(screen.getByRole('alert').textContent).toBe("@eve's own user on this computer could not be made: This server has no room for another user. Add a device for them again to try again.")
   })
 
+  test('a person of a server that starts runs here through its line says so; one that server no longer has is marked, kept switched off, or removed', async () => {
+    const from = 'https://165.245.244.10'
+    let persons: object[] = [{ account: 'rom', owner: true }, { account: 'ada', ready: true, from }, { account: 'kim', ready: true, from, removed: true }]
+    const { host, runComputerCommand } = door(args => {
+      if (args[0] === 'keep') persons = persons.map(person => ((person as { account: string }).account === args[1] ? { ...person, kept: true } : person))
+      return ok({ ...OPEN, persons, devices: [] })
+    })
+    show(host)
+    expect(await screen.findByText('Uses this computer through 165.245.244.10.')).toBeTruthy()
+    // Their devices are the server's: none here is none missing. The owner's own none is said.
+    expect(screen.getAllByText('No device yet.')).toHaveLength(1)
+    const marked = screen.getByRole('group', { name: '@kim was removed from 165.245.244.10' })
+    expect(marked.textContent).toContain('Removed from 165.245.244.10.')
+    // Remove asks first, as Remove person does.
+    fireEvent.click(within(marked).getByRole('button', { name: 'Remove @kim' }))
+    expect((await screen.findByRole('alertdialog')).textContent).toContain('their own user on this computer is deleted with everything in it')
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Cancel' }))
+    fireEvent.click(within(screen.getByRole('group', { name: '@kim was removed from 165.245.244.10' })).getByRole('button', { name: 'Keep, switched off' }))
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['keep', 'kim']))
+    expect(await screen.findByText('Removed from 165.245.244.10. Kept here, switched off.')).toBeTruthy()
+    expect(screen.queryByRole('group', { name: '@kim was removed from 165.245.244.10' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Remove @kim' }).textContent).toBe('Remove person')
+  })
+
   test('on one person\'s own OpenAgent: only their devices, asked of the door, each removable; no switch, no Add device, no other person', async () => {
     const mine = { account: 'rom', owner: false, devices: [{ ...PHONE, person: 'rom' }, { ...PHONE, id: 'fed654cba321', name: 'OpenAgent on rom-laptop', line: true, person: 'rom' }] }
     const fetched = vi.fn(async (url: string, init?: RequestInit) => {

@@ -256,6 +256,63 @@ test('a line the server said no to is told as refused, and is not told what the 
   }
 })
 
+test('line everyone, full and watch say who at the server may start runs here; only a computer set up as a server lets everyone; a person a line made here is said to be removed once that server no longer has them, until the owner keeps them', async () => {
+  const home = await testHome()
+  const server = { ...home.env, OPENAGENT_PERSON_HELPER: '/opt/openagent/bin/openagent-person' }
+  try {
+    const url = 'https://203.0.113.7'
+    const added = new Date().toISOString()
+    await update(home.env, store => {
+      store.persons = [
+        { account: 'rom', owner: true, added },
+        { account: 'ada', added, port: 4300, ready: true, from: url },
+        { account: 'kim', added, port: 4400, ready: true, from: url },
+      ]
+      store.lines = [{ url, pin: 'p'.repeat(43), key: '0f9e8d7c6b5a.the-secret', mode: 'full', account: 'rom' }]
+    })
+    type Said = { lines: { mode: string; for?: string; account?: string }[]; persons: { account: string; from?: string; removed?: true; kept?: true }[] }
+    const linesOf = (said: unknown): unknown => (said as Said).lines.map(({ mode, for: who, account }) => ({ mode, for: who, account }))
+
+    const notServer = await run(home.env, ['line', 'everyone', '203.0.113.7'])
+    assert.equal(notServer.code, 1)
+    assert.match(notServer.err.join(''), /not set up as a server/)
+    assert.equal((await readStore(home.env)).lines[0]!.for, undefined)
+
+    assert.deepEqual(linesOf((await run(server, ['line', 'everyone', '203.0.113.7'])).out), [{ mode: 'full', for: 'everyone', account: 'rom' }])
+    assert.deepEqual(linesOf((await run(server, ['line', 'watch', '203.0.113.7'])).out), [{ mode: 'watch', for: undefined, account: 'rom' }], 'nobody: only what reads, and for nobody else')
+    assert.deepEqual(linesOf((await run(server, ['line', 'everyone', '203.0.113.7'])).out), [{ mode: 'full', for: 'everyone', account: 'rom' }])
+
+    // The server has not said yet who is there: nobody is taken for gone.
+    const persons = async (): Promise<Said['persons']> => ((await run(home.env, ['status'])).out as Said).persons
+    assert.deepEqual((await persons()).map(({ account, from, removed }) => ({ account, from, removed })), [
+      { account: 'rom', from: undefined, removed: undefined },
+      { account: 'ada', from: url, removed: undefined },
+      { account: 'kim', from: url, removed: undefined },
+    ])
+    await update(home.env, store => void (store.lines[0]!.persons = ['ada', 'rom']))
+    assert.deepEqual((await persons()).filter(person => person.removed).map(person => person.account), ['kim'])
+
+    // Only me: the others are switched off here, not gone there, and who is there is heard anew once it is for everyone again.
+    await run(server, ['line', 'full', '203.0.113.7'])
+    assert.deepEqual((await persons()).filter(person => person.removed), [])
+    await run(server, ['line', 'everyone', '203.0.113.7'])
+    assert.deepEqual((await persons()).filter(person => person.removed), [])
+    await update(home.env, store => void (store.lines[0]!.persons = ['ada', 'rom']))
+
+    const kept = await run(home.env, ['keep', 'kim'])
+    assert.equal(kept.code, 0)
+    assert.deepEqual((kept.out as Said).persons.find(person => person.account === 'kim'), { account: 'kim', ready: true, from: url, removed: true, kept: true })
+    assert.equal((await run(home.env, ['keep', 'rom'])).code, 1, 'the owner is no person to keep')
+    assert.equal((await run(home.env, ['keep', 'nobody'])).code, 1)
+
+    // No line to that server any more: everyone it made here is removed from it.
+    await update(home.env, store => void (store.lines = []))
+    assert.deepEqual((await persons()).filter(person => person.removed).map(person => person.account), ['ada', 'kim'])
+  } finally {
+    await home.remove()
+  }
+})
+
 test('where the helper is named, add --for answers at once and has the person\'s user made on its own; remove-person removes it first', async () => {
   const home = await testHome()
   const stop = new AbortController()

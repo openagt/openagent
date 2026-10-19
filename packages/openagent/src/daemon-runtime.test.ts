@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { createProjectRuntime } from './daemon-runtime.js'
 import { PROJECT_HOOKS_FILE } from './project-hooks.js'
 import { OPENAGENT_DIR } from './openagent-dir.js'
-import { addMachine, addProject, listMachines, listProjects, projectId, removeProject } from './registry.js'
+import { addMachine, addProject, listMachines, listProjects, projectId, removeProject, tellMachine } from './registry.js'
 import type { OpenAgentEvent } from './events.js'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { addWorktree, agentBranchName, worktreePath } from '@openagt/skill-branches'
@@ -528,6 +528,65 @@ test('a run started on another machine is followed only under an id that is a ru
     assert.equal(runtime.remoteAgents.target('../../etc'), undefined)
   } finally {
     await runtime.dispose()
+    machine.closeAllConnections()
+    machine.close()
+    await rm(base, { recursive: true, force: true })
+  }
+})
+
+test('a run sent to another person\'s computer first has the server\'s logins copied there, and stops with the computer\'s words when it cannot; a laptop copies nothing, and sends none before they are there', async () => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'openagent-other-')))
+  const env = { XDG_CONFIG_HOME: join(base, 'cfg'), OPENAGENT_SERVER: '1', CLAUDE_CODE_OAUTH_TOKEN: 'sk-ant-oat01-mine' }
+  await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
+  const shop = await clone(base, 'shop', 'https://github.com/acme/shop.git')
+  await addProject(shop, new Date().toISOString(), undefined, env)
+  // Another person's computer, as its line's address on this server: it says which logins it has, and takes them.
+  const asked: string[] = []
+  let place: 'ready' | 'making' = 'making'
+  let has: Record<string, unknown> = {}
+  const machine = createServer((req, res) => {
+    const path = new URL(req.url ?? '/', 'http://x').pathname
+    asked.push(`${req.method} ${path}`)
+    req.resume()
+    if (path === '/_relay/logins' && place === 'making') return void res.writeHead(503, { 'content-type': 'text/plain' }).end("@sul's place on this computer is being made. Try again in a minute.")
+    if (path === '/_relay/logins') return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(req.method === 'GET' ? has : { claude: { source: 'copied', from: 'vps-1' } }))
+    if (path === '/_relay/start') return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true, agentId: '2026-07-19T10-00-00-000Z' }))
+    res.writeHead(200, { 'content-type': 'application/x-ndjson' }).end()
+  })
+  await new Promise<void>(resolve => machine.listen(0, '127.0.0.1', resolve))
+  const url = `http://127.0.0.1:${(machine.address() as AddressInfo).port}`
+  await addMachine({ url, key: 'line', door: `${url}/_remote-access/enter`, label: 'rom-desktop', owner: 'rom' }, undefined, env)
+  // This server's own logins, as its user's gh and its service say them: never this test computer's.
+  const logins = async (said: NodeJS.ProcessEnv) => ({ github: 'gho_mine123', ...(said.CLAUDE_CODE_OAUTH_TOKEN ? { claude: said.CLAUDE_CODE_OAUTH_TOKEN } : {}) })
+  const runtime = createProjectRuntime({ cwd: shop, env, logins })
+  const laptop = createProjectRuntime({ cwd: shop, env: { ...env, OPENAGENT_SERVER: '' }, logins })
+  try {
+    // Nothing is copied before the person said OK to the line that says it is.
+    assert.deepEqual(await runtime.onStart('go', { machine: url }), { ok: false, error: "Your logins are copied to @rom's server for a run there: say OK to that above the message box first." })
+    assert.equal(asked.length, 0)
+    await tellMachine(url, undefined, env)
+    assert.deepEqual(await runtime.onStart('go', { machine: url }), { ok: false, error: "rom-desktop: @sul's place on this computer is being made. Try again in a minute." })
+    assert.deepEqual(asked, ['GET /_relay/logins'], 'no run is sent before the logins are there')
+    place = 'ready'
+    asked.length = 0
+    const started = await runtime.onStart('go', { machine: url })
+    assert.equal(started.ok, true)
+    assert.deepEqual(asked.slice(0, 2), ['GET /_relay/logins', 'POST /_relay/logins'])
+    // A Claude login starts that OpenAgent again: the run waits until it answers.
+    assert.ok(asked.indexOf('GET /_relay/ping') > 1 && asked.indexOf('GET /_relay/ping') < asked.indexOf('POST /_relay/start'))
+    assert.ok(asked.includes('POST /_relay/start'))
+
+    asked.length = 0
+    assert.deepEqual(await laptop.onStart('go', { machine: url }), { ok: false, error: 'Your GitHub and Claude logins are not on rom-desktop yet. Start your first run there from your page on its server, which copies them, or log in there under Settings, Machines.' })
+    // The run the server sent is still read meanwhile: only what this start asked counts.
+    assert.deepEqual(asked.filter(call => call !== 'GET /_relay/events'), ['GET /_relay/logins'], 'a laptop copies nothing, and sends no run before the logins are there')
+    has = { github: { account: 'sul', source: 'copied', from: 'vps-1' }, claude: { source: 'made' } }
+    asked.length = 0
+    assert.equal((await laptop.onStart('go', { machine: url })).ok, true)
+    assert.equal(asked.includes('POST /_relay/logins'), false, 'a laptop copies nothing')
+  } finally {
+    await runtime.dispose()
+    await laptop.dispose()
     machine.closeAllConnections()
     machine.close()
     await rm(base, { recursive: true, force: true })

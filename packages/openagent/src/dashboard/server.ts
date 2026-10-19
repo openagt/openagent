@@ -85,6 +85,8 @@ export interface DashboardOptions {
     rpc?: (projectId: string, fn: string, args: unknown[]) => Promise<unknown>
     /** Where this machine's copy of a project stands, and with `bring` clone it when there is none. */
     bring?: RelayHandlers['bring']
+    /** The logins of this OpenAgent's person here, on an OpenAgent that is one person's. */
+    logins?: RelayHandlers['logins']
   }
   /**
    * Where the live screen of a run on this computer answers (screen.ts): what the `/_screen/*`
@@ -159,7 +161,7 @@ export function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
   // The machine-to-daemon relay endpoints (#1067): wired only when an events tail is supplied.
   const localScreen = opts.screen ? kept(opts.screen) : undefined
   const relayHandlers: RelayHandlers | undefined = opts.relay
-    ? { project: opts.relay.project, start: opts.onStart, tailEvents: opts.relay.tailEvents, ...(opts.relay.rpc ? { rpc: opts.relay.rpc } : {}), ...(opts.relay.bring ? { bring: opts.relay.bring } : {}), ...(localScreen ? { screen: localScreen } : {}) }
+    ? { project: opts.relay.project, start: opts.onStart, tailEvents: opts.relay.tailEvents, ...(opts.relay.rpc ? { rpc: opts.relay.rpc } : {}), ...(opts.relay.bring ? { bring: opts.relay.bring } : {}), ...(opts.relay.logins ? { logins: opts.relay.logins } : {}), ...(localScreen ? { screen: localScreen } : {}) }
     : undefined
   const screenHandlers: ScreenHandlers | undefined = localScreen ? { local: localScreen, remote: (projectId, agentId) => opts.remote.target(agentId, projectId) } : undefined
 

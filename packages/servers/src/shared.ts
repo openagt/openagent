@@ -1,7 +1,7 @@
 import { mintClaude, ownGithubLogin, type Mint } from './logins.js'
 import { ownDoor, type OwnDoor } from './own-door.js'
 import type { Exec } from './ssh.js'
-import { BEAT_MS, atWork, heartbeat, isMachineUrl, update, type Login, type Reach, type Shared, type Store } from './store.js'
+import { BEAT_MS, atWork, heartbeat, isMachineUrl, isThroughUrl, update, type Login, type Reach, type Shared, type Store } from './store.js'
 
 /**
  * A computer several people use, from the side of one of them who is not its owner: the server
@@ -11,6 +11,12 @@ import { BEAT_MS, atWork, heartbeat, isMachineUrl, update, type Login, type Reac
  *
  * So this computer's OpenAgent is asked to make each call: it holds the key, and this package
  * never sees it. A login made or read here is handed over in the call's body, and is not kept.
+ *
+ * The same goes for another person's computer, set up as a server and shared with everyone on a
+ * server this person is in at: this person has an OpenAgent of their own there too, which keeps
+ * their logins for their runs there. Those are copies from their OpenAgent on the server, made
+ * the first time they start a run there; a login made here for it instead is no copy, and no copy
+ * takes its place. It is reached through the server, at the address OpenAgent saved it at.
  */
 
 /** This package, as OpenAgent knows it: what is run on the other side under the same name. */
@@ -65,12 +71,45 @@ export async function copyGithub(env: NodeJS.ProcessEnv, machine: string, run?: 
   return onServer(env, machine, ['own', 'login', 'github'], own.login)
 }
 
+/** Hand a login made here to the person's own OpenAgent on another person's computer: no copy, so no server's copy takes its place. */
+async function toOther(env: NodeJS.ProcessEnv, machine: string, given: { github?: string; claude?: string }): Promise<Answered> {
+  try {
+    const said = (await askOpenAgent(env, 'sendMachineLogins', [machine, given])) as { ok?: unknown; logins?: unknown; error?: unknown } | undefined
+    if (said?.ok === true) return { ok: true, output: said.logins }
+    return { ok: false, error: typeof said?.error === 'string' ? said.error : 'OpenAgent answered something else than expected.' }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+/** What the person's own OpenAgent on another person's computer says of their logins there, through OpenAgent. */
+export async function otherLogins(env: NodeJS.ProcessEnv, machine: string): Promise<Answered> {
+  try {
+    const said = (await askOpenAgent(env, 'onMachineLogins', [machine])) as { ok?: unknown; logins?: unknown; error?: unknown } | undefined
+    if (said?.ok === true) return { ok: true, output: said.logins }
+    return { ok: false, error: typeof said?.error === 'string' ? said.error : 'OpenAgent answered something else than expected.' }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+/** Copy this computer's GitHub login to the person's own OpenAgent on another person's computer; answers what it says of the logins there. */
+export async function copyGithubToOther(env: NodeJS.ProcessEnv, machine: string, run?: Exec): Promise<Answered> {
+  const own = await ownGithubLogin(run)
+  if (!own.ok) return own
+  return toOther(env, machine, { github: own.login })
+}
+
+/** Where a Claude login made here goes: the person's own OpenAgent on a shared server, or on another person's computer. */
+export type MintFor = 'shared' | 'other'
+
 /**
- * Make a Claude login for the person's own OpenAgent on the server, with Claude Code's
- * `setup-token` in this computer's browser, and hand it over. Run as a process of its own: the
- * person's yes in the browser takes a while. How it ended is written to the file, for the page.
+ * Make a Claude login for the person's own OpenAgent on the server, or on another person's
+ * computer, with Claude Code's `setup-token` in this computer's browser, and hand it over. Run as
+ * a process of its own: the person's yes in the browser takes a while. How it ended is written to
+ * the file, for the page.
  */
-export async function mintFor(opts: { env: NodeJS.ProcessEnv; machine: string; mint?: Mint; signal?: AbortSignal; beatMs?: number }): Promise<void> {
+export async function mintFor(opts: { env: NodeJS.ProcessEnv; machine: string; to?: MintFor; mint?: Mint; signal?: AbortSignal; beatMs?: number }): Promise<void> {
   const { env, machine } = opts
   const mine = (login: Login | undefined): boolean => login?.worker?.pid === process.pid
   const change = (apply: (login: Login) => void): Promise<unknown> =>
@@ -85,7 +124,7 @@ export async function mintFor(opts: { env: NodeJS.ProcessEnv; machine: string; m
     const minted = await (opts.mint ?? mintClaude)(opts.signal ? { signal: opts.signal } : {})
     await change(login => void delete login.asking)
     if (!minted.ok) return void (after = login => void (login.failed = minted.error))
-    const given = await onServer(env, machine, ['own', 'login', 'claude'], minted.login)
+    const given = opts.to === 'other' ? await toOther(env, machine, { claude: minted.login }) : await onServer(env, machine, ['own', 'login', 'claude'], minted.login)
     after = given.ok ? login => void delete login.failed : login => void (login.failed = given.error)
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err)
@@ -101,7 +140,7 @@ export async function mintFor(opts: { env: NodeJS.ProcessEnv; machine: string; m
 }
 
 /** Start the process that makes a Claude login; a second press while the browser waits starts over. */
-export async function startMint(env: NodeJS.ProcessEnv, machine: string, startWork: (words: string[]) => number): Promise<void> {
+export async function startMint(env: NodeJS.ProcessEnv, machine: string, startWork: (words: string[]) => number, to: MintFor = 'shared'): Promise<void> {
   const before = await update(env, store => {
     const kept = sharedIn(store, machine)
     const busy = atWork(kept.claude?.worker)
@@ -119,7 +158,7 @@ export async function startMint(env: NodeJS.ProcessEnv, machine: string, startWo
   }
   let worker: number | undefined
   try {
-    worker = startWork(['shared-work', machine])
+    worker = startWork([to === 'other' ? 'other-work' : 'shared-work', machine])
   } finally {
     await update(env, store => {
       const login = store.shared.find(candidate => candidate.url === machine)?.claude
@@ -170,6 +209,9 @@ export async function forgetShared(env: NodeJS.ProcessEnv, machine: string, door
   await setSharedReach(env, machine, 'off', door)
   await update(env, store => void (store.shared = store.shared.filter(kept => kept.url !== machine)))
 }
+
+/** Whether `said` names another person's computer the way OpenAgent's machines do: through a server, or at its line's address on one. */
+export const isOtherUrl = (said: string | undefined): said is string => said !== undefined && (isThroughUrl(said) || (isMachineUrl(said) && said.startsWith('http://127.0.0.1:')))
 
 /** Whether `said` names a shared server the way OpenAgent's machines do. */
 export const isSharedUrl = (said: string | undefined): said is string => said !== undefined && isMachineUrl(said) && said.startsWith('https://')

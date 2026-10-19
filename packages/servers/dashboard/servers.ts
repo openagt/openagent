@@ -50,9 +50,18 @@ export interface ServerRow {
   adding: boolean
   /** Set once this computer keeps a line open to the server: what the server may do through it. */
   reach?: Reach
+  /** A computer reached through a server, with no door of its own on the internet: that server's door, which it keeps its line to. */
+  through?: string
+  /** For a computer reached through a server: who there may start runs on it. */
+  who?: Who
   steps: StepRow[]
   logins: Record<LoginKind, LoginRow>
 }
+
+/** Who on its server may start runs on a computer reached through it: nobody, its own person, or every person there. */
+export type Who = 'nobody' | 'me' | 'everyone'
+
+const WHO: readonly string[] = ['nobody', 'me', 'everyone']
 
 /** What a server may do on this computer through the line this computer keeps to it: everything a machine is asked, or only read. */
 export type Reach = 'full' | 'watch'
@@ -87,6 +96,12 @@ export interface PersonRow {
   working?: true
   /** Why their own user could not be made. */
   problem?: string
+  /** On a computer reached through a server: the server whose line made this person's user there. */
+  from?: string
+  /** That server no longer has the person, and nobody said to keep their user. */
+  removed?: true
+  /** Their user is kept, switched off, though that server no longer has them. */
+  kept?: true
 }
 
 /** What a server's door lists, and what this computer's own door says of its line there. */
@@ -119,10 +134,10 @@ export function readServers(output: unknown): ServerRow[] | undefined {
   const rows: ServerRow[] = []
   for (const entry of servers) {
     if (!entry || typeof entry !== 'object') continue
-    const { address, url, user, fingerprint, working, adding, reach, steps, logins } = entry as Record<string, unknown>
+    const { address, url, user, fingerprint, working, adding, reach, through, who, steps, logins } = entry as Record<string, unknown>
     const { github, claude } = (logins && typeof logins === 'object' ? logins : {}) as Record<string, unknown>
-    const [at, door, who, known] = [text(address), text(url), text(user), text(fingerprint)]
-    if (!at || !door || !who || !Array.isArray(steps)) continue
+    const [at, door, by, known] = [text(address), text(url), text(user), text(fingerprint)]
+    if (!at || !door || !by || !Array.isArray(steps)) continue
     const list: StepRow[] = []
     for (const step of steps) {
       if (!step || typeof step !== 'object') continue
@@ -130,7 +145,8 @@ export function readServers(output: unknown): ServerRow[] | undefined {
       const [stepId, name, words] = [text(id), text(label), text(said)]
       if (stepId && name && STATES.includes(state as string)) list.push({ id: stepId, label: name, state: state as StepState, ...(words ? { said: words } : {}) })
     }
-    rows.push({ address: at, url: door, user: who, ...(known ? { fingerprint: known } : {}), working: working === true, adding: adding === true, ...(reach === 'full' || reach === 'watch' ? { reach } : {}), steps: list, logins: { github: readLogin(github), claude: readLogin(claude) } })
+    const via = text(through)
+    rows.push({ address: at, url: door, user: by, ...(known ? { fingerprint: known } : {}), working: working === true, adding: adding === true, ...(reach === 'full' || reach === 'watch' ? { reach } : {}), ...(via ? { through: via, who: WHO.includes(who as string) ? (who as Who) : 'me' } : {}), steps: list, logins: { github: readLogin(github), claude: readLogin(claude) } })
   }
   return rows
 }
@@ -150,9 +166,10 @@ export function readDevices(output: unknown): DevicesRead | undefined {
   }
   const people: PersonRow[] = []
   for (const entry of Array.isArray(persons) ? persons : []) {
-    const { account, owner, working, problem } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
-    const [known, why] = [text(account), text(problem)]
-    if (known && !people.some(person => person.account === known)) people.push({ account: known, ...(owner === true ? { owner: true as const } : {}), ...(working === true ? { working: true as const } : {}), ...(why ? { problem: why } : {}) })
+    const { account, owner, working, problem, from, removed, kept } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
+    const [known, why, via] = [text(account), text(problem), text(from)]
+    if (known && !people.some(person => person.account === known))
+      people.push({ account: known, ...(owner === true ? { owner: true as const } : {}), ...(working === true ? { working: true as const } : {}), ...(why ? { problem: why } : {}), ...(via ? { from: via } : {}), ...(removed === true ? { removed: true as const } : {}), ...(kept === true ? { kept: true as const } : {}) })
   }
   return { devices: rows, persons: people, lineRefused: lineRefused === true }
 }
@@ -185,10 +202,15 @@ export function readStatus(output: unknown): ServersRead | undefined {
 export const loadServers = (host: ModuleHost): Promise<Answer<ServersRead>> => run(host, ['status'], readStatus)
 /**
  * Install OpenAgent at `version` on the server, or go on where the install failed, or bring a server that fell behind to it.
- * With `github`, this computer's GitHub login is copied to the server once it is installed.
+ * With `github`, this computer's GitHub login is copied to the server once it is installed. With
+ * `through`, the computer has no door of its own on the internet: it keeps a line to that server instead.
  */
-export const connect = (host: ModuleHost, address: string, user: string, version: string, github = false): Promise<Answer<ServerRow[]>> =>
-  run(host, ['connect', address, user, version, ...(github ? ['github'] : [])], readServers)
+export const connect = (host: ModuleHost, address: string, user: string, version: string, github = false, through?: string): Promise<Answer<ServerRow[]>> =>
+  run(host, ['connect', address, user, version, ...(github ? ['github'] : []), ...(through !== undefined ? ['--through', through] : [])], readServers)
+/** Save a computer reached through a server among the machines, through that server, once its install is done. */
+export const addThrough = (host: ModuleHost, address: string): Promise<Answer<ServerRow[]>> => run(host, ['add-through', address], readServers)
+/** Say who on its server may start runs on a computer reached through it; with `remove`, the users of the others there go. */
+export const setWho = (host: ModuleHost, address: string, who: Who, remove = false): Promise<Answer<DevicesRead>> => run(host, ['who', address, who, ...(remove ? ['remove'] : [])], readDevices)
 /** Whose GitHub login a copy would be: the account this computer's `gh` is logged in to, or why there is none to copy. */
 export type OwnGithub = { account: string } | { problem: string }
 
@@ -298,3 +320,50 @@ async function runOn<T>(host: ModuleHost, machine: string, args: string[], read:
   const value = read(result.output)
   return value !== undefined ? { ok: true, value } : { ok: false, error: 'the server answered something else than expected' }
 }
+
+/** One login of this person's on another person's computer, as that computer says it: a copy from a server, or made there. */
+export interface OtherLogin {
+  source: 'copied' | 'made'
+  /** For a copy: the server it came from. */
+  from?: string
+  /** GitHub: whose it is. */
+  account?: string
+}
+
+/** What this computer reads of another person's computer shared with everyone: the person's logins there, and the Claude login it makes for it in this browser. */
+export interface OtherRow {
+  url: string
+  github?: OtherLogin
+  claude?: OtherLogin
+  /** Why that computer could not be asked. */
+  error?: string
+  /** The Claude login this computer makes for it right now, or why the last try failed. */
+  making: LoginRow
+}
+
+function readOtherLogin(value: unknown): OtherLogin | undefined {
+  const { source, from, account } = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
+  if (source !== 'copied' && source !== 'made') return undefined
+  const [where, who] = [text(from), text(account)]
+  return { source, ...(where ? { from: where } : {}), ...(who ? { account: who } : {}) }
+}
+
+function readOther(output: unknown): OtherRow[] | undefined {
+  if (!output || typeof output !== 'object') return undefined
+  const { other } = output as Record<string, unknown>
+  if (!Array.isArray(other)) return undefined
+  const rows: OtherRow[] = []
+  for (const entry of other) {
+    const { url, logins, error, claude } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
+    const { github: githubThere, claude: claudeThere } = (logins && typeof logins === 'object' ? logins : {}) as Record<string, unknown>
+    const [at, why] = [text(url), text(error)]
+    const [github, claudeLogin] = [readOtherLogin(githubThere), readOtherLogin(claudeThere)]
+    if (at) rows.push({ url: at, ...(github ? { github } : {}), ...(claudeLogin ? { claude: claudeLogin } : {}), ...(why ? { error: why } : {}), making: readLogin(claude) })
+  }
+  return rows
+}
+
+/** What other persons' computers say of this person's logins there, and the Claude login this computer makes for each. */
+export const loadOther = (host: ModuleHost, urls: string[]): Promise<Answer<OtherRow[]>> => run(host, ['other', ...urls], readOther)
+/** Hand a login made here to this person's own OpenAgent on another person's computer: GitHub's copied from this computer, Claude's made in this browser. */
+export const otherLogin = (host: ModuleHost, url: string, kind: LoginKind): Promise<Answer<OtherRow[]>> => run(host, ['other-login', url, kind], readOther)

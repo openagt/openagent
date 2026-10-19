@@ -4,7 +4,7 @@ import type { Duplex } from 'node:stream'
 import { connect } from 'node:tls'
 import { keyFingerprint } from './der.js'
 import { DATA, END, HEAD, Link, RESET, carriedHeaders, carriedPath, carriedValue, readHead, sendBody, type Frame } from './frames.js'
-import { COMPUTER_HEADER } from './store.js'
+import { COMPUTER_HEADER, PERSON_HEADER, accountOf } from './store.js'
 
 /**
  * This computer's end of a line: it calls its server, says who it is with the key it has there,
@@ -15,6 +15,11 @@ import { COMPUTER_HEADER } from './store.js'
  *
  * Only what a machine is asked (`/_relay/…`) is passed on. When the person lets the server only
  * watch, every call says so to OpenAgent, which then answers what reads and refuses what acts.
+ *
+ * The server says with each call whom of its persons it is for (`PERSON_HEADER`), and this
+ * computer decides where the call goes by it ({@link Route}): to its own OpenAgent for its own
+ * person, and, on a line for everyone there, to the OpenAgent of that person's own user here.
+ * The word is the server's, which this computer trusts with its line; it is not passed on.
  */
 
 /** Where a computer asks the door for a line, and what it asks to speak there. */
@@ -22,6 +27,10 @@ export const LINE_PATH = '/_remote-access/line'
 export const LINE_PROTOCOL = 'openagent-line'
 /** Said to OpenAgent with a call that may only read. */
 export const WATCH_HEADER = 'x-openagent-watch'
+/** Said by a computer as it asks for its line, when everyone at the server may start runs on it: the server then gives it an address for each of its persons. */
+export const LINE_FOR_HEADER = 'x-openagent-line-for'
+/** Where the door tells a device who it is there: the door's own `ME_PATH`. */
+const ME_PATH = '/_remote-access/me'
 const CARRIED_HEADERS: readonly string[] = ['content-type', 'accept']
 
 /** How often this computer asks whether the line still carries, and after how long with no answer it calls again. */
@@ -68,10 +77,11 @@ export function dial(url: string, pin: string, signal?: AbortSignal): Promise<Du
 }
 
 /**
- * Ask the door for a line with this computer's key there. Answers what arrived after the door's
- * yes, which is already the line's. Throws {@link NotLetIn} on the door's no.
+ * Ask the door for a line with this computer's key there, saying whether everyone there may start
+ * runs through it. Answers what arrived after the door's yes, which is already the line's. Throws
+ * {@link NotLetIn} on the door's no.
  */
-export function knock(socket: Duplex, url: string, key: string, computer?: string): Promise<Buffer> {
+export function knock(socket: Duplex, url: string, key: string, computer?: string, everyone = false): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     let heard = Buffer.alloc(0)
     const timer = setTimeout(() => done(new Error('the server did not answer')), DIAL_MS)
@@ -101,13 +111,19 @@ export function knock(socket: Duplex, url: string, key: string, computer?: strin
     socket.on('data', onData)
     socket.once('close', onClose)
     socket.once('error', onClose)
-    socket.write(`GET ${LINE_PATH} HTTP/1.1\r\nHost: ${new URL(url).host}\r\nConnection: Upgrade\r\nUpgrade: ${LINE_PROTOCOL}\r\nAuthorization: Bearer ${key}\r\n${computer !== undefined ? `${COMPUTER_HEADER}: ${computer}\r\n` : ''}\r\n`)
+    socket.write(`GET ${LINE_PATH} HTTP/1.1\r\nHost: ${new URL(url).host}\r\nConnection: Upgrade\r\nUpgrade: ${LINE_PROTOCOL}\r\nAuthorization: Bearer ${key}\r\n${computer !== undefined ? `${COMPUTER_HEADER}: ${computer}\r\n` : ''}${everyone ? `${LINE_FOR_HEADER}: everyone\r\n` : ''}\r\n`)
   })
 }
 
+/** Where one call down a line goes: an OpenAgent on this computer, or nowhere, with the answer the server is given instead (plain words, unless it says its type). */
+export type Route = { target: string } | { status: number; text: string; type?: string }
+
 export interface CarryOptions {
-  /** OpenAgent's own address on this computer. */
-  target: string
+  /**
+   * Where a call goes, by whom of the server's persons it is for (`undefined` when the server
+   * said no one), and what it asks: asked for each call, at once.
+   */
+  route: (person: string | undefined, call: { method: string; path: string }) => Route
   /** Whether the server may only read right now: asked for each call. */
   watch: () => boolean
   pingMs?: number
@@ -116,11 +132,10 @@ export interface CarryOptions {
 
 /** Pass what comes down the line to OpenAgent on this computer, until the line ends. */
 export function carry(socket: Duplex, rest: Buffer, opts: CarryOptions): Promise<void> {
-  const target = new URL(opts.target)
   return new Promise(resolve => {
     const calls = new Map<number, ClientRequest>()
-    const say = (call: number, status: number, text: string): void => {
-      link.send(HEAD, call, Buffer.from(JSON.stringify({ status, headers: { 'content-type': 'text/plain; charset=utf-8' } })))
+    const say = (call: number, status: number, text: string, type = 'text/plain; charset=utf-8'): void => {
+      link.send(HEAD, call, Buffer.from(JSON.stringify({ status, headers: { 'content-type': type } })))
       link.send(DATA, call, Buffer.from(text))
       link.send(END, call)
     }
@@ -134,6 +149,11 @@ export function carry(socket: Duplex, rest: Buffer, opts: CarryOptions): Promise
       if (method !== 'GET' && method !== 'POST') return say(call, 405, 'method not allowed')
       if (calls.size >= MAX_CALLS) return say(call, 503, 'too many calls at once')
       const said = (headers && typeof headers === 'object' ? headers : {}) as Record<string, unknown>
+      // For whom the server says it is; a word that is no GitHub account is no one's.
+      const person = carriedValue(said[PERSON_HEADER])
+      const route = opts.route(person === undefined ? undefined : accountOf(person), { method, path })
+      if (!('target' in route)) return say(call, route.status, route.text, route.type)
+      const target = new URL(route.target)
       const passed: Record<string, string> = { host: target.host }
       for (const name of CARRIED_HEADERS) {
         const value = carriedValue(said[name])
@@ -216,7 +236,9 @@ export interface KeepLineOptions {
   computer?: string
   /** Told each time the server answered the key: let in, or no longer. */
   onAnswer?: (letIn: boolean) => void
-  target: string
+  /** Everyone at the server may start runs here through the line: said as the line is asked for. */
+  everyone?: boolean
+  route: CarryOptions['route']
   watch: () => boolean
   /** Ends the line for good. */
   signal: AbortSignal
@@ -242,7 +264,7 @@ export async function keepLine(opts: KeepLineOptions): Promise<void> {
     const began = Date.now()
     try {
       const socket = await dial(opts.url, opts.pin, opts.signal)
-      const rest = await knock(socket, opts.url, opts.key, opts.computer)
+      const rest = await knock(socket, opts.url, opts.key, opts.computer, opts.everyone === true)
       if (opts.signal.aborted) return void socket.destroy()
       opts.onAnswer?.(true)
       log(`remote-access: a line is open to ${host}`)
@@ -351,6 +373,27 @@ export async function enterForLine(link: LineLink, name: string, computer?: stri
     return typeof key === 'string' && key ? { ok: true, key } : { ok: false, error: 'the server answered no key' }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+/** What a server's door says of this computer's person there: their GitHub account, and, to a line for everyone, the server's persons. */
+export interface MeThere {
+  account?: string
+  persons?: string[]
+}
+
+/** Ask a server's door, with the key of this computer's line there, who this computer's person is there. Nothing when it did not say. */
+export async function askMe(line: { url: string; pin: string; key: string }): Promise<MeThere | undefined> {
+  try {
+    const socket = await dial(line.url, line.pin)
+    const answer = await exchange(socket, 'GET', new URL(`${line.url}${ME_PATH}`), { Authorization: `Bearer ${line.key}` })
+    if (answer.status !== 200) return undefined
+    const { account, persons } = JSON.parse(answer.body) as Record<string, unknown>
+    const known = typeof account === 'string' ? accountOf(account) : undefined
+    const theirs = Array.isArray(persons) ? persons.flatMap(person => (typeof person === 'string' && accountOf(person) === person ? [person] : [])) : undefined
+    return { ...(known !== undefined ? { account: known } : {}), ...(theirs ? { persons: theirs } : {}) }
+  } catch {
+    return undefined
   }
 }
 

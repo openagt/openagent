@@ -47,6 +47,15 @@ already made, and lists it in its pull request; for anything else it proposes an
   copies of projects, and work they did not push. Picked over taking only their access away,
   which left their files on the server.
 
+## A computer shared from home
+- A computer at home or in an office is shared by setting it up as a server, as one on the
+  internet is: from a laptop over SSH; it then starts on its own, and Update keeps it current.
+  It has no door of its own: it is reached through its line to a server. Picked over a command
+  pasted once on it, the system's password window, and sandboxes in place of users.
+- A computer is personal or a server: only a server offers "Everyone", and a personal computer
+  keeps its one switch. Linux first; a Mac later. Picked over three choices on every computer,
+  with "Everyone" greyed where it cannot work.
+
 ## The server's logins
 - The GitHub login is this computer's own, copied to the server when the person ticks it,
   or one the server gets for itself with a "Log in to GitHub" button. Picked over the copy
@@ -61,6 +70,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   through the server's door, with their own computer's key there, and only to their own
   OpenAgent: a device changes its own person's logins and nobody else's. Picked over SSH alone,
   which an invited person has no way into.
+- A person's logins reach another person's computer copied from their own server, before their
+  first run there; they can make a login of its own there instead, and a copy never replaces it.
+  The Claude login copied is the one made for the server, never a laptop's own. Picked over a
+  copy alone, and over a login made on each computer alone.
 
 ## A device gets in
 - A person, a phone or a browser gets into a server with a code this computer asks the

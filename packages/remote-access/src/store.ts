@@ -28,8 +28,13 @@ export interface Device {
    * Set for a computer that got in to keep a line open here: the port on this server where its
    * OpenAgent is asked through that line. Its own from the day it got in, so the address
    * OpenAgent saved it under stays good.
+   *
+   * A computer whose line is for everyone here has an address for each other person too
+   * (`others`, by their GitHub account, the owner's among them): each in the block of ports of
+   * that person's own OpenAgent, which asks it there. An empty `others` is a line for everyone on
+   * a computer that has nobody else yet.
    */
-  line?: { port: number }
+  line?: { port: number; others?: Record<string, number> }
   /**
    * Which computer the entry is: the SHA-256 of the word that computer says, hex. Its OpenAgent
    * and its line say the same word, so a computer is listed once, and one that gets in again
@@ -67,6 +72,13 @@ export interface Person {
   problem?: string
   /** The process that makes their user right now. */
   worker?: number
+  /**
+   * The server whose line made them here, by its door: a person there who started a run on this
+   * computer, which that server's line lets everyone there do. Absent for one invited here.
+   */
+  from?: string
+  /** The owner keeps them, though the server they came from no longer has them: nobody is asked about them again. */
+  kept?: true
 }
 
 /**
@@ -81,6 +93,39 @@ export const PERSON_LINES = { offset: 10, count: 50 } as const
 /** The ports the lines of a person's computers are given, in the block that starts at `port`. */
 export function personLinePorts(port: number): { from: number; count: number } {
   return { from: port + PERSON_LINES.offset, count: PERSON_LINES.count }
+}
+
+/** Every port a device's line has here: its own, and those it has for the other persons. */
+export function portsOf(device: Device): number[] {
+  return device.line ? [device.line.port, ...Object.values(device.line.others ?? {})] : []
+}
+
+/**
+ * Give a computer whose line is for everyone an address for each person here who is not its own:
+ * one among the lines' ports of that person's own OpenAgent, the owner's in `ownerPorts`. A person
+ * with no OpenAgent of their own is asked through the owner's, and has no address of their own. A
+ * port given is kept for as long as the person is here; a person gone loses theirs. Answers
+ * whether anything changed.
+ */
+export function shareLine(store: Store, device: Device, ownerPorts: { from: number; count: number }): boolean {
+  if (!device.line) return false
+  const own = personOf(store, device)
+  const had = device.line.others ?? {}
+  const taken = new Set(store.devices.filter(other => other !== device).flatMap(portsOf))
+  taken.add(device.line.port)
+  const others: Record<string, number> = {}
+  for (const person of store.persons) {
+    if (person.account === own || (!person.owner && person.port === undefined)) continue
+    const block = person.owner ? ownerPorts : personLinePorts(person.port!)
+    const kept = had[person.account]
+    const port = kept !== undefined && kept >= block.from && kept < block.from + block.count && !taken.has(kept) ? kept : Array.from({ length: block.count }, (_, at) => block.from + at).find(candidate => !taken.has(candidate))
+    if (port === undefined) continue
+    taken.add(port)
+    others[person.account] = port
+  }
+  const same = device.line.others !== undefined && JSON.stringify(Object.entries(others).sort()) === JSON.stringify(Object.entries(had).sort())
+  device.line.others = others
+  return !same
 }
 
 /**
@@ -132,6 +177,15 @@ export interface Line {
   key: string
   /** What the server may do through the line: everything a machine is asked, or only what reads. */
   mode: 'full' | 'watch'
+  /**
+   * Who on the server may start runs here through the line: everyone there, each as a user of
+   * their own on this computer. Absent: only this computer's own person.
+   */
+  for?: 'everyone'
+  /** This computer's person at the server, by their GitHub account, as its door said. */
+  account?: string
+  /** For a line for everyone: the server's persons, as its door last said them. */
+  persons?: string[]
   /** The server said no to this computer's key when the line was last asked for: nothing changes that but the person. */
   refused?: true
 }
@@ -253,39 +307,56 @@ export function sanitize(value: unknown): Store {
   for (const entry of Array.isArray(obj.persons) ? obj.persons : []) {
     if (persons.length >= MAX_PERSONS) break
     if (!entry || typeof entry !== 'object') continue
-    const { account, owner, added, port, ready, problem, worker } = entry as Record<string, unknown>
+    const { account, owner, added, port, ready, problem, worker, from, kept } = entry as Record<string, unknown>
     if (!isAccount(account) || !isIso(added) || persons.some(person => person.account === account)) continue
+    const came = { ...(isLineUrl(from) ? { from } : {}), ...(kept === true ? { kept: true as const } : {}) }
     // One owner, listed first.
     if (owner === true && !persons.some(person => person.owner)) persons.unshift({ account, owner: true, added })
     // One block for one person: a second person that names a port already given has none, and no user to make.
     else if (isPort(port) && !persons.some(person => person.port === port))
-      persons.push({ account, added, port, ...(ready === true ? { ready: true as const } : {}), ...(typeof problem === 'string' && problem.trim() ? { problem: problem.trim().slice(0, MAX_PROBLEM) } : {}), ...(Number.isInteger(worker) && (worker as number) > 0 ? { worker: worker as number } : {}) })
-    else persons.push({ account, added })
+      persons.push({ account, added, port, ...(ready === true ? { ready: true as const } : {}), ...(typeof problem === 'string' && problem.trim() ? { problem: problem.trim().slice(0, MAX_PROBLEM) } : {}), ...(Number.isInteger(worker) && (worker as number) > 0 ? { worker: worker as number } : {}), ...came })
+    else persons.push({ account, added, ...came })
   }
   // Persons with no owner are no persons: the owner is named first, then the others.
   if (!persons[0]?.owner) persons.length = 0
   // A device or a code for someone who is not among the persons, or for the owner, is the owner's.
   const someoneElse = (said: unknown): string | undefined => (isAccount(said) && persons.some(person => person.account === said && !person.owner) ? said : undefined)
   const devices: Device[] = []
+  // Every port a line has here, its own and those it has for others: one port is one address.
+  const taken = new Set<number>()
   for (const entry of Array.isArray(obj.devices) ? obj.devices : []) {
     if (devices.length >= MAX_DEVICES) break
     if (!entry || typeof entry !== 'object') continue
     const { id, name, key, added, seen, line, computer, person } = entry as Record<string, unknown>
     if (typeof id !== 'string' || !/^[a-z0-9]{6,32}$/.test(id) || !isDigest(key) || !isIso(added)) continue
     if (devices.some(device => device.id === id)) continue
-    const port = line && typeof line === 'object' ? (line as Record<string, unknown>).port : undefined
+    const { port, others } = (line && typeof line === 'object' ? line : {}) as Record<string, unknown>
     // One port for one computer: a second entry that names a port already given is in without a line.
-    const own = isPort(port) && !devices.some(device => device.line?.port === port)
-    devices.push({ id, name: typeof name === 'string' && name.trim() ? name.trim().slice(0, MAX_NAME) : 'A device', key, added, ...(isIso(seen) ? { seen } : {}), ...(own ? { line: { port } } : {}), ...(isDigest(computer) ? { computer } : {}), ...(someoneElse(person) ? { person: person as string } : {}) })
+    const own = isPort(port) && !taken.has(port)
+    if (own) taken.add(port)
+    const whose = someoneElse(person)
+    // Its addresses for others: each for a person here who is not its own, at a port nobody else has.
+    let shared: Record<string, number> | undefined
+    if (own && others && typeof others === 'object' && !Array.isArray(others)) {
+      shared = {}
+      for (const [account, at] of Object.entries(others as Record<string, unknown>)) {
+        if (!isAccount(account) || !isPort(at) || taken.has(at) || account === (whose ?? persons[0]?.account) || !persons.some(candidate => candidate.account === account)) continue
+        taken.add(at)
+        shared[account] = at
+      }
+    }
+    devices.push({ id, name: typeof name === 'string' && name.trim() ? name.trim().slice(0, MAX_NAME) : 'A device', key, added, ...(isIso(seen) ? { seen } : {}), ...(own ? { line: { port, ...(shared ? { others: shared } : {}) } } : {}), ...(isDigest(computer) ? { computer } : {}), ...(whose ? { person: whose } : {}) })
   }
   const lines: Line[] = []
   for (const entry of Array.isArray(obj.lines) ? obj.lines : []) {
     if (lines.length >= MAX_LINES) break
     if (!entry || typeof entry !== 'object') continue
-    const { url, pin, key, mode, refused } = entry as Record<string, unknown>
+    const { url, pin, key, mode, refused, for: who, account, persons: theirs } = entry as Record<string, unknown>
     if (!isLineUrl(url) || typeof pin !== 'string' || !pin || typeof key !== 'string' || !key) continue
     if (lines.some(line => line.url === url)) continue
-    lines.push({ url, pin, key, mode: mode === 'watch' ? 'watch' : 'full', ...(refused === true ? { refused: true } : {}) })
+    const everyone = who === 'everyone'
+    const heard = everyone && Array.isArray(theirs) ? [...new Set(theirs.filter(isAccount))].slice(0, MAX_PERSONS) : undefined
+    lines.push({ url, pin, key, mode: mode === 'watch' ? 'watch' : 'full', ...(everyone ? { for: 'everyone' as const } : {}), ...(isAccount(account) ? { account } : {}), ...(heard ? { persons: heard } : {}), ...(refused === true ? { refused: true } : {}) })
   }
   const codes: Code[] = []
   for (const entry of Array.isArray(obj.codes) ? obj.codes : []) {
@@ -465,7 +536,7 @@ export async function enter(env: NodeJS.ProcessEnv, code: string, name: string, 
     // A computer that got in for a line gets the port it had, or the first of the lines' ports no other computer has.
     const own = portOf(store, match.person)
     const ports = line && (own !== undefined ? personLinePorts(own) : line)
-    const taken = new Set(others.map(device => device.line?.port))
+    const taken = new Set(others.flatMap(portsOf))
     const had = before.find(device => device.line !== undefined)?.line?.port
     const port = ports && (had !== undefined && had >= ports.from && had < ports.from + ports.count ? had : Array.from({ length: ports.count }, (_, at) => ports.from + at).find(candidate => !taken.has(candidate)))
     if (ports && port === undefined) return undefined

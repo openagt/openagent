@@ -8,7 +8,29 @@
  */
 
 export const STEP_IDS = ['login', 'user', 'tools', 'name', 'openagent', 'agent', 'people', 'service', 'door'] as const
-export type StepId = (typeof STEP_IDS)[number]
+/** The steps of a computer reached through a server: its line to that server in place of a door of its own. */
+export const THROUGH_STEP_IDS = ['login', 'user', 'tools', 'name', 'openagent', 'agent', 'people', 'service', 'line'] as const
+export type StepId = (typeof STEP_IDS)[number] | (typeof THROUGH_STEP_IDS)[number]
+
+/** The steps of a server, by whether it is reached through another server. */
+export const stepIdsFor = (through: boolean): readonly StepId[] => (through ? THROUGH_STEP_IDS : STEP_IDS)
+
+/** Who may start runs on a computer reached through a server, from that server: nobody, its own person, or every person there. */
+export type Who = 'nobody' | 'me' | 'everyone'
+
+/** What the computer's door is told for each: the server only watches, its person starts runs, or every person there does. */
+export const LINE_MODE: Record<Who, 'watch' | 'full' | 'everyone'> = { nobody: 'watch', me: 'full', everyone: 'everyone' }
+
+/** A computer reached through a server, as its install knows it. */
+export interface Through {
+  /** The server's door, as an origin: what the computer keeps its line to. */
+  url: string
+  /** The person who connects it, by their GitHub account there: the computer's owner. */
+  owner: string
+  who: Who
+  /** A link that lets the computer's line in at the server, once; none when the computer keeps its line there already. */
+  link?: string
+}
 
 /** What a script is written for. */
 export interface Facts {
@@ -20,6 +42,13 @@ export interface Facts {
   name?: string
   /** This computer's own email in git, when it has one. */
   email?: string
+  /** Set for a computer reached through a server, with no door of its own on the internet. */
+  through?: Through
+  /**
+   * The user the person logs in over SSH as, on a computer reached through a server: the person
+   * at that computer, who opens its OpenAgent in its own browser. Never set for a server on the internet.
+   */
+  desktop?: string
 }
 
 export interface StepDef {
@@ -190,6 +219,13 @@ ExecStart=${PERSON_HELPER} firewall
 [Install]
 WantedBy=multi-user.target`
 
+/**
+ * Root's file that names the person's own user on a computer reached through a server: the firewall
+ * lets that user call the owner's OpenAgent too, from the computer's own browser. None on a server
+ * on the internet, which nobody sits at.
+ */
+export const DESKTOP_FILE = '/etc/openagent/desktop-user'
+
 /** The one thing the server's user may run as root. */
 export const SUDOERS = `${SERVER_USER} ALL=(root) NOPASSWD: ${PERSON_HELPER}`
 
@@ -204,8 +240,9 @@ export const SUDOERS = `${SERVER_USER} ALL=(root) NOPASSWD: ${PERSON_HELPER}`
  * - `firewall` puts the rules in place anew.
  *
  * The rules: a call on this server to the owner's ports (4200–4299) is made only by the server's
- * own user or root, and a call to a person's block only by that person's user, the server's
- * user (the door, which passes the person's calls on) or root. Root stays let in everywhere:
+ * own user or root, and on a computer reached through a server also by the person's own user
+ * there ({@link DESKTOP_FILE}); a call to a person's block only by that person's user, the
+ * server's user (the door, which passes the person's calls on) or root. Root stays let in everywhere:
  * the install itself asks OpenAgent whether it answers. And only those users answer from those
  * ports: a person's program that took a port the owner's OpenAgent let go of a moment is heard
  * by nobody.
@@ -244,8 +281,11 @@ block() {
   printf '    oifname "lo" tcp sport %s meta skuid != { %s } drop\\n' "$1" "$2"
 }
 rules() {
-  local file user port
-  block 4200-4299 '"${SERVER_USER}", "root"'
+  local file user port desktop owners='"${SERVER_USER}", "root"'
+  desktop=$(head -n 1 ${DESKTOP_FILE} 2>/dev/null || true)
+  # The person at a computer reached through a server opens its OpenAgent in their own browser, as their own user.
+  if [[ $desktop =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] && [ "$desktop" != ${SERVER_USER} ] && [ "$desktop" != root ] && is_user "$desktop"; then owners="$owners, \\"$desktop\\""; fi
+  block 4200-4299 "$owners"
   for file in "$PERSONS"/*.env; do
     [ -e "$file" ] || continue
     user=$(basename "$file" .env)
@@ -516,10 +556,10 @@ export const STEPS: readonly StepDef[] = [
     label: 'Users for invited people',
     as: 'root',
     timeoutMs: 3 * MINUTE,
-    script: () =>
+    script: ({ desktop = '' }) =>
       script(
         'root',
-        { HELPER, SUDOERS, PERSON_UNIT, FIREWALL_UNIT },
+        { HELPER, SUDOERS, PERSON_UNIT, FIREWALL_UNIT, DESKTOP: desktop },
         `
   install -d -m 755 ${ROOT}/bin /etc/openagent ${PERSONS_DIR}
   # Each file root's, written whole and moved in, and only when it changed.
@@ -530,7 +570,7 @@ export const STEPS: readonly StepDef[] = [
     chmod "$2" "$tmp"
     mv -f "$tmp" "$1"
   }
-  helper=0 units=0 persons=0
+  helper=0 units=0 persons=0 desk=0
   if changed ${PERSON_HELPER} "$HELPER"; then put ${PERSON_HELPER} 755 "$HELPER"; helper=1; fi
   if changed ${SUDOERS_FILE} "$SUDOERS"; then
     # Checked before it is in place: a rule sudo cannot read would leave nobody able to use sudo. A name with a dot is not read by sudo meanwhile.
@@ -542,9 +582,17 @@ export const STEPS: readonly StepDef[] = [
   fi
   if changed ${PERSON_UNIT_FILE} "$PERSON_UNIT"; then put ${PERSON_UNIT_FILE} 644 "$PERSON_UNIT"; units=1; persons=1; fi
   if changed ${FIREWALL_UNIT_FILE} "$FIREWALL_UNIT"; then put ${FIREWALL_UNIT_FILE} 644 "$FIREWALL_UNIT"; units=1; fi
+  # The person at a computer reached through a server, by the user they log in as: no other user is ever named here.
+  if [ -n "$DESKTOP" ]; then
+    { [[ $DESKTOP =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] && id -u "$DESKTOP" >/dev/null 2>&1; } || fail "This computer has no user $DESKTOP to let open OpenAgent in its browser."
+    if changed ${DESKTOP_FILE} "$DESKTOP"; then put ${DESKTOP_FILE} 644 "$DESKTOP"; desk=1; fi
+  elif [ -e ${DESKTOP_FILE} ]; then
+    rm -f ${DESKTOP_FILE}
+    desk=1
+  fi
   [ "$units" = 0 ] || systemctl daemon-reload
   systemctl enable --quiet openagent-firewall
-  if [ "$helper" = 1 ] || [ "$units" = 1 ] || ! systemctl is-active --quiet openagent-firewall; then
+  if [ "$helper" = 1 ] || [ "$units" = 1 ] || [ "$desk" = 1 ] || ! systemctl is-active --quiet openagent-firewall; then
     systemctl restart openagent-firewall || fail "The firewall's rules could not be put in place."
   fi
   # A person's OpenAgent runs the Node and the OpenAgent the install brought: when they changed, or how it is started did, it starts again. Its runs go on.
@@ -561,7 +609,7 @@ export const STEPS: readonly StepDef[] = [
     label: 'The service',
     as: 'root',
     timeoutMs: 3 * MINUTE,
-    script: () =>
+    script: ({ through }) =>
       script(
         'root',
         { UNIT: SERVICE_UNIT },
@@ -571,12 +619,17 @@ export const STEPS: readonly StepDef[] = [
     printf '%s\\n' "$UNIT" > "$file"
     systemctl daemon-reload
     touch ${ROOT}/restart
-  fi
+  fi${
+    // A computer reached through a server opens no door to the internet: its own firewall is left as it is.
+    through
+      ? ''
+      : `
   # A firewall that is on lets the door's two ports through; one that is off is left off.
   if command -v ufw >/dev/null && ufw status | grep '^Status: active' >/dev/null; then
     ufw allow 80/tcp >/dev/null
     ufw allow 443/tcp >/dev/null
-  fi
+  fi`
+  }
   systemctl enable --quiet openagent
   if [ -e ${ROOT}/restart ] || ! systemctl is-active --quiet openagent; then
     systemctl restart openagent
@@ -616,6 +669,56 @@ export const STEPS: readonly StepDef[] = [
  * the service tells it: a shell that logs in has nothing of the service's.
  */
 const WITH_HELPER = `${PERSON_HELPER_ENV}=${PERSON_HELPER}`
+
+/**
+ * The last step of a computer reached through a server, in place of a door of its own: the
+ * person who connects it is named its owner, it keeps a line open to the server as theirs, and
+ * the line says who there may start runs on it.
+ */
+export const LINE_STEP: StepDef = {
+  id: 'line',
+  label: 'Its line to the server',
+  as: 'openagent',
+  timeoutMs: 2 * MINUTE,
+  script: ({ through }) => {
+    if (!through) throw new Error('only a computer reached through a server has a line step')
+    return script(
+      'openagent',
+      { URL: through.url, OWNER: through.owner, LINK: through.link ?? '', MODE: LINE_MODE[through.who] },
+      `
+  # Named once, as a server's owner is at its first Invite; the same person again changes nothing.
+  ${DOOR} owner "$OWNER" >/dev/null
+  # A line it already keeps there is kept: a link comes only for a computer that has none, or lost it.
+  # On standard input, never on a command line: it lets a computer in.
+  [ -z "$LINK" ] || printf '%s\n' "$LINK" | ${DOOR} line add - >/dev/null
+  ${WITH_HELPER} ${DOOR} line "$MODE" "$URL" >/dev/null
+`,
+    )
+  },
+}
+
+/** The steps of a server, in order: a computer reached through a server has its line where a server on the internet has its door. */
+export function stepsFor(through: boolean): readonly StepDef[] {
+  return through ? [...STEPS.filter(step => step.id !== 'door'), LINE_STEP] : STEPS
+}
+
+/** The label a step is shown with on a server's row: the line names the server it goes to. */
+export function stepLabel(step: StepDef, through: string | undefined): string {
+  return step.id === 'line' && through !== undefined ? `Its line to ${new URL(through).host}` : step.label
+}
+
+/**
+ * The script that tells the door of a computer reached through a server who there may start runs
+ * on it, and with `remove`, takes away the user of each person its line made, with everything in it.
+ * Run as the server's own user.
+ */
+export function whoScript(url: string, who: Who, remove: readonly string[] = []): string {
+  return script(SERVER_USER, { URL: url, MODE: LINE_MODE[who] }, `
+  ${WITH_HELPER} ${DOOR} line "$MODE" "$URL" >/dev/null
+${remove.map(account => `  ${WITH_HELPER} ${DOOR} remove-person ${quoted(account)} >/dev/null
+`).join('')}  ${DOOR} status
+`)
+}
 
 /**
  * The script that asks the server's door for a link a new machine gets in with, for a person when

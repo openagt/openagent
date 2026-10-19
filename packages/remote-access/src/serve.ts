@@ -5,8 +5,9 @@ import { onOwnNetwork, urlHost, type AddressDeps } from './address.js'
 import { keepCertificate, type KeepOptions, type Keeper, type Secured } from './certificate.js'
 import { openDoor, type Door } from './door.js'
 import { linePorts, openLines, tellOpenAgent, whomToTell } from './line-in.js'
-import { keepLine } from './line-out.js'
-import { computerWordFor, isComputerId, pidAlive, readStore, readStoreStrict, storePath, update, type Line, type Store } from './store.js'
+import { askMe, keepLine, type MeThere, type Route } from './line-out.js'
+import { startPersonWork } from './persons.js'
+import { addPerson, computerWordFor, isComputerId, pidAlive, readStore, readStoreStrict, shareLine, storePath, update, type Line, type Store } from './store.js'
 
 /**
  * The door's process: it runs for as long as OpenAgent runs, and follows the file. With the
@@ -21,7 +22,51 @@ import { computerWordFor, isComputerId, pidAlive, readStore, readStoreStrict, st
  * The lines are kept here too. To each server the file names, this computer keeps a line open,
  * whatever its own door does. And on a server, each computer that keeps a line here gets its
  * address, and OpenAgent is told of it.
+ *
+ * A call down a line goes where its person's runs here are ({@link routeFor}): this computer's
+ * own OpenAgent for its own person, and, on a line for everyone at that server, the OpenAgent of
+ * the user of their own that each other person has here, made the first time they need it.
  */
+
+/** Said down a line for a call this computer does not take. */
+export const ONLY_ITS_OWN = "This computer is only its own person's: it starts no run of anyone else's."
+export const NOT_A_SERVER = 'This computer is not set up as a server: it gives nobody a user of their own.'
+export const NO_OWNER = "This computer's owner is not named yet."
+export const making = (account: string): string => `@${account}'s place on this computer is being made. Try again in a minute.`
+
+/** How often a line for everyone asks its server who is there. */
+const MIRROR_MS = 60_000
+
+/**
+ * Where a call down `line` goes, by whom of the server's persons it is for. Its own person, or a
+ * call that names nobody, reaches this computer's own OpenAgent. Anyone else only on a line for
+ * everyone, on a computer that gives each person a user of their own: their own OpenAgent, once
+ * their user is made; until then the call is answered that it is being made.
+ *
+ * A user is made (`make`) only for a call that needs one: a run started, or logins handed over. A
+ * page that only looks whether the computer is there, or which logins it has, makes nobody a user:
+ * it asks for every machine it lists, every few seconds, whether its person ever runs one there.
+ */
+export function routeFor(line: Line, store: Store, target: string, env: NodeJS.ProcessEnv, person: string | undefined, call: { method: string; path: string }, make: (account: string) => void): Route {
+  const owner = store.persons.find(candidate => candidate.owner)?.account
+  // A line that never heard who its person is takes every call as theirs, as before persons; a line for everyone does not.
+  if (person === undefined || person === line.account || person === owner || (line.account === undefined && line.for !== 'everyone')) return { target }
+  if (line.for !== 'everyone') return { status: 403, text: ONLY_ITS_OWN }
+  if (!env.OPENAGENT_PERSON_HELPER) return { status: 403, text: NOT_A_SERVER }
+  if (owner === undefined) return { status: 503, text: NO_OWNER }
+  const theirs = store.persons.find(candidate => candidate.account === person && !candidate.owner)
+  if (theirs?.ready && theirs.port !== undefined) return { target: `http://127.0.0.1:${theirs.port}` }
+  const route = call.path.split('?')[0]
+  // Whether the computer is there: its own OpenAgent says so, with its version and name and nothing else.
+  if (call.method === 'GET' && route === '/_relay/ping') return { target }
+  // No logins here yet: a server that is to copy them hands them over next, and that makes the user.
+  if (call.method === 'GET' && route === '/_relay/logins') return { status: 200, text: '{}', type: 'application/json' }
+  const working = theirs?.worker !== undefined && pidAlive(theirs.worker)
+  const needed = call.method === 'POST' && (route === '/_relay/start' || route === '/_relay/logins')
+  if (needed && !working) make(person)
+  // One that could not be made says why, and is tried again at the next run.
+  return { status: 503, text: theirs?.problem !== undefined && !working ? `@${person}'s place on this computer could not be made: ${theirs.problem.replace(/\.?$/, '.')} It is tried again at the next run.` : making(person) }
+}
 
 /** The door's port on a server, and the port the certificate office reads the proof on. */
 export const HTTPS_PORT = 443
@@ -49,6 +94,11 @@ export interface ServeOptions {
   retryMs?: number
   /** How a line is kept, for a test that cannot wait: its retries, its questions, its patience. */
   line?: { retryMs?: readonly number[]; pingMs?: number; quietMs?: number }
+  /** How often a line for everyone asks its server who is there, and how it asks; for a test. */
+  mirrorMs?: number
+  askMe?: typeof askMe
+  /** How the making of a person's user is started on its own; this package's own command, detached, when unsaid. */
+  startWork?: (env: NodeJS.ProcessEnv, account: string) => number | undefined
 }
 
 /** The door's port for an OpenAgent at `target`. */
@@ -135,8 +185,42 @@ export async function serve(opts: ServeOptions): Promise<void> {
     }).catch(() => false)
     if (written) answers.set(asked.key, letIn)
   }
+  // The file as the last look read it: where each call down a line goes is read off it, at once.
+  let latest: Store | undefined
+  // The persons whose user this process started making: one call after another while it is made starts it once.
+  const asked = new Set<string>()
+  const make = (account: string, from: string): void => {
+    if (asked.has(account)) return
+    asked.add(account)
+    void (async () => {
+      const person = await addPerson(env, account, Date.now(), true)
+      if (!person?.port) return log(`remote-access: @${account} could not be given a place on this computer: it has as many persons as it can, or no owner`)
+      // Started again only when it is not made and no making of it is at work, as the file says now: a
+      // call that read the file a moment earlier may ask for one that was made since. One that failed is asked again.
+      const working = person.ready === true || (person.worker !== undefined && pidAlive(person.worker))
+      const known = (kept: Store): Store['persons'][number] | undefined => kept.persons.find(candidate => candidate.account === account && !candidate.owner)
+      // Which server they came from, written before their user is made: whoever reads that it is made reads where they came from too.
+      await update(env, kept => {
+        const them = known(kept)
+        if (!them) return
+        them.from ??= from
+        if (!working) delete them.problem
+      })
+      if (working) return
+      const worker = (opts.startWork ?? startPersonWork)(env, account)
+      if (worker === undefined) return
+      await update(env, kept => {
+        const them = known(kept)
+        if (them) them.worker = worker
+      })
+    })()
+      .catch(err => log(`remote-access: @${account}'s place on this computer could not be made: ${err instanceof Error ? err.message : String(err)}`))
+      .finally(() => asked.delete(account))
+  }
   const followLines = (store: Store): void => {
-    const wanted = new Map(store.lines.map(line => [`${line.url}\n${line.pin}\n${line.key}`, line]))
+    latest = store
+    // A line asked for again when who may use it changed: the server is told as the line is asked for.
+    const wanted = new Map(store.lines.map(line => [`${line.url}\n${line.pin}\n${line.key}\n${line.for ?? ''}`, line]))
     modes.clear()
     for (const line of store.lines) modes.set(line.url, line.mode)
     for (const [id, controller] of kept) {
@@ -158,7 +242,12 @@ export async function serve(opts: ServeOptions): Promise<void> {
         ...(computer !== undefined ? { computer } : {}),
         // Written down, so the person is told: a line the server said no to stays so until it is asked for anew.
         onAnswer: letIn => void noteAnswer(line, letIn),
-        target: opts.target,
+        everyone: line.for === 'everyone',
+        // The line as the file says it now: who its person is may have been heard since it was asked for.
+        route: (person, call) => {
+          const now = latest ?? store
+          return routeFor(now.lines.find(candidate => candidate.url === line.url) ?? line, now, opts.target, env, person, call, account => make(account, line.url))
+        },
         watch: () => modes.get(line.url) !== 'full',
         signal: controller.signal,
         log,
@@ -194,6 +283,43 @@ export async function serve(opts: ServeOptions): Promise<void> {
     }
   }
 
+  /**
+   * On a server: each computer whose line is for everyone has an address for each person here,
+   * also for one invited after its line was asked for, and none for one who left. Written only
+   * when something is missing or left over.
+   */
+  const shareLines = async (store: Store): Promise<void> => {
+    const looked = structuredClone(store)
+    if (!looked.devices.some(device => device.line?.others !== undefined && shareLine(looked, device, ports))) return
+    await update(env, kept => {
+      for (const device of kept.devices) if (device.line?.others !== undefined) shareLine(kept, device, ports)
+    })
+  }
+
+  // A line for everyone asks its server now and then who is there: who of those given a user here left it.
+  // Any other line asks too until it has heard whose it is: a call for anyone else is refused only by that.
+  const heardAt = new Map<string, number>()
+  const mirror = (): void => {
+    for (const line of latest?.lines ?? []) {
+      if ((line.for !== 'everyone' && line.account !== undefined) || line.refused || Date.now() - (heardAt.get(line.key) ?? -Infinity) < (opts.mirrorMs ?? MIRROR_MS)) continue
+      // Asked once in a while, whatever came of the last time: a server that is away is not asked in a hurry.
+      heardAt.set(line.key, Date.now())
+      void (opts.askMe ?? askMe)(line)
+        .then(async (said: MeThere | undefined) => {
+          if (!said) return
+          const same = (kept: Line): boolean => (said.account === undefined || kept.account === said.account) && (said.persons === undefined || JSON.stringify(kept.persons) === JSON.stringify(said.persons))
+          if (same(line)) return
+          await update(env, store => {
+            const kept = store.lines.find(candidate => candidate.url === line.url && candidate.key === line.key)
+            if (!kept || same(kept)) return
+            if (said.account !== undefined) kept.account = said.account
+            if (said.persons !== undefined && kept.for === 'everyone') kept.persons = said.persons
+          })
+        })
+        .catch(err => log(`remote-access: ${new URL(line.url).host} could not be asked who is there: ${err instanceof Error ? err.message : String(err)}`))
+    }
+  }
+
   const closeServed = async (): Promise<void> => {
     if (!served) return
     await lines.close()
@@ -208,6 +334,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
 
   /** The door on a server at `address`: the proof, the certificate, then the door itself. */
   const reconcileServed = async (store: Store, address: string): Promise<void> => {
+    await shareLines(store)
     // What is written to the file once this look knows how far the door is.
     let problem: string | undefined
     if (!served) {
@@ -358,6 +485,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
     looking = looking
       .then(reconcile)
       .then(tell)
+      .then(mirror)
       .catch(err => log(`remote-access: ${err instanceof Error ? err.message : String(err)}`))
   }
   look()
