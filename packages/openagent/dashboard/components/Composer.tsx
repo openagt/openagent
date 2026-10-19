@@ -138,9 +138,11 @@ export const Composer = forwardRef<ComposerHandle, {
   const selectedMachine = selectedMachineId && !onlyHere ? machines.find(m => m.id === selectedMachineId) : undefined
   // #1073: block Start when the target machine is known-offline; an absent/unknown status must not block.
   const targetOffline = !!selectedMachine && machineStatus[selectedMachine.id] === 'offline'
-  // Another person's computer: the person is told once that their logins are copied there. Gone at once on OK, before the list is read again.
+  // Another person's computer: the person is told once that their logins are copied there, and
+  // starts nothing there until they said OK. Gone at once on OK, before the list is read again.
   const [toldNow, setToldNow] = useState<string | null>(null)
   const owner = selectedMachine?.owner
+  const untold = !inAgent && !!selectedMachine && owner !== undefined && !selectedMachine.told && toldNow !== selectedMachine.id
 
   useImperativeHandle(ref, () => ({
     clear: () => {
@@ -171,7 +173,7 @@ export const Composer = forwardRef<ComposerHandle, {
     e?.preventDefault()
     const text = prompt.trim()
     // #1073: a keyboard submit must be blocked too when the target machine is offline.
-    if (!text || busy || submittingRef.current || targetOffline || !canSubmit) return
+    if (!text || busy || submittingRef.current || targetOffline || untold || !canSubmit) return
     submittingRef.current = true
     void Promise.resolve(onSubmit(text)).finally(() => {
       submittingRef.current = false
@@ -284,7 +286,7 @@ export const Composer = forwardRef<ComposerHandle, {
             type="submit"
             size="icon-sm"
             onClick={submit}
-            disabled={busy || !hasPrompt || targetOffline || !canSubmit}
+            disabled={busy || !hasPrompt || targetOffline || untold || !canSubmit}
             aria-hidden={!hasPrompt}
             tabIndex={hasPrompt ? undefined : -1}
             aria-label={submitLabel}
@@ -317,7 +319,7 @@ export const Composer = forwardRef<ComposerHandle, {
       {`${selectedMachine?.label ?? 'The selected machine'} is offline. Pick another place to run, then start.`}
     </p>
   )
-  const loginsNote = !inAgent && selectedMachine && owner !== undefined && !selectedMachine.told && toldNow !== selectedMachine.id && (
+  const loginsNote = untold && (
     <div role="note" className="mb-1 flex items-start gap-2 text-xs text-muted-foreground">
       <p className="min-w-0 flex-1 pt-1">{`Your GitHub and Claude logins are copied to @${owner}'s server. @${owner} can see what is on it.`}</p>
       <Button
@@ -325,8 +327,8 @@ export const Composer = forwardRef<ComposerHandle, {
         size="xs"
         variant="ghost"
         onClick={() => {
-          setToldNow(selectedMachine.id)
-          void tellMachine(selectedMachine.id)
+          setToldNow(selectedMachine!.id)
+          void tellMachine(selectedMachine!.id)
         }}
       >
         OK

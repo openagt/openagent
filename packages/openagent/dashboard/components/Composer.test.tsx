@@ -244,15 +244,22 @@ describe('Composer (#721)', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
-  test('another person\'s computer as the "Run on" pick says once that the person\'s logins are copied there; OK ends it for good', async () => {
+  test('another person\'s computer as the "Run on" pick says once that the person\'s logins are copied there, and starts nothing before OK; OK ends it for good', async () => {
     const box = { id: 'box', url: 'http://127.0.0.1:4311', label: 'rom-desktop', owner: 'rom' }
     await saveMachines(box)
     selectMachine(box.id)
-    renderComposer()
+    const { onSubmit } = renderComposer()
     const words = "Your GitHub and Claude logins are copied to @rom's server. @rom can see what is on it."
     await waitFor(() => expect(screen.getByText(words)).toBeTruthy())
+    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'ship it' } })
+    const submit = screen.getByRole('button', { name: 'Send' })
+    expect(submit.hasAttribute('disabled')).toBe(true)
+    fireEvent.click(submit)
+    fireEvent.click(screen.getByText('editor-submit'))
+    expect(onSubmit).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'OK' }))
     expect(screen.queryByText(words)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')).toBe(false)
     await waitFor(() => expect(machinesRpc.sendMachineTold).toHaveBeenCalledWith('box'))
     cleanup()
     // Told: the next page says nothing.

@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { createProjectRuntime } from './daemon-runtime.js'
 import { PROJECT_HOOKS_FILE } from './project-hooks.js'
 import { OPENAGENT_DIR } from './openagent-dir.js'
-import { addMachine, addProject, listMachines, listProjects, projectId, removeProject } from './registry.js'
+import { addMachine, addProject, listMachines, listProjects, projectId, removeProject, tellMachine } from './registry.js'
 import type { OpenAgentEvent } from './events.js'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { addWorktree, agentBranchName, worktreePath } from '@openagt/skill-branches'
@@ -561,6 +561,10 @@ test('a run sent to another person\'s computer first has the server\'s logins co
   const runtime = createProjectRuntime({ cwd: shop, env, logins })
   const laptop = createProjectRuntime({ cwd: shop, env: { ...env, OPENAGENT_SERVER: '' }, logins })
   try {
+    // Nothing is copied before the person said OK to the line that says it is.
+    assert.deepEqual(await runtime.onStart('go', { machine: url }), { ok: false, error: "Your logins are copied to @rom's server for a run there: say OK to that above the message box first." })
+    assert.equal(asked.length, 0)
+    await tellMachine(url, undefined, env)
     assert.deepEqual(await runtime.onStart('go', { machine: url }), { ok: false, error: "rom-desktop: @sul's place on this computer is being made. Try again in a minute." })
     assert.deepEqual(asked, ['GET /_relay/logins'], 'no run is sent before the logins are there')
     place = 'ready'

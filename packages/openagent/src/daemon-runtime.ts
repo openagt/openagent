@@ -271,6 +271,8 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
       // copies there first. Only a server's OpenAgent copies: a laptop's logins are made for it
       // alone, so a laptop only looks that they are there.
       if (machine.owner !== undefined) {
+        // Copied only once the person read that they are, and said OK: the page says so before a first run there.
+        if (env.OPENAGENT_SERVER === '1' && machine.told !== true) return { ok: false, error: `Your logins are copied to @${machine.owner}'s server for a run there: say OK to that above the message box first.` }
         const there = env.OPENAGENT_SERVER === '1' ? await copyLoginsTo({ ...target, label: machine.label }, { own: () => logins(env) }) : await loginsAreThere({ ...target, label: machine.label })
         if (!there.ok) return there
       }
