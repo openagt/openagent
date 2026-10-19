@@ -673,3 +673,64 @@ test('one call that is slow, or whose caller left, does not hold the other calls
     await r.stop()
   }
 })
+
+/** One HTTPS call to the server's door, whose certificate is the test office's. */
+async function doorCall(url: string, opts: { method?: string; headers?: Record<string, string>; body?: string } = {}): Promise<{ status: number; text: string }> {
+  const { request } = await import('node:https')
+  return new Promise((resolve, reject) => {
+    const req = request(url, { method: opts.method ?? 'GET', rejectUnauthorized: false, agent: false, headers: opts.headers ?? {} }, res => {
+      let text = ''
+      res.setEncoding('utf8').on('data', chunk => (text += chunk))
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, text }))
+    })
+    req.on('error', reject)
+    req.end(opts.body)
+  })
+}
+
+test('another computer that is in at the server lists the computers on a line there, and asks one through the server, with its key and nothing else', async () => {
+  const r = await rig()
+  try {
+    await command(r.computer, 'line', 'add', await r.link())
+    const machine = await until('the server’s OpenAgent saved the computer', () => r.machines[0])
+    await until('the line carries', async () => ((await fetch(`${machine.url}/_relay/ping`)).status === 200 ? true : undefined))
+
+    // A laptop gets in at the server as another computer's OpenAgent does: with a code, for a key of its own.
+    const link = new URL(await r.link())
+    const entered = await doorCall(link.origin + link.pathname, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: link.hash.slice(1).split('.')[0], computer: 'a laptop' }) })
+    const key = (JSON.parse(entered.text) as { key: string }).key
+    const bearer = { authorization: `Bearer ${key}` }
+
+    const computers = await doorCall(`${link.origin}/_remote-access/computers`, { headers: bearer })
+    const studio = (await readStore(r.server)).devices.find(device => device.line)!
+    assert.deepEqual(JSON.parse(computers.text), { computers: [{ id: studio.id, name: studio.name, online: true }] })
+
+    // Asked through the server, the computer answers as it answers its server.
+    const via = `${link.origin}/_remote-access/via/${studio.id}`
+    const ping = await doorCall(`${via}/_relay/ping`, { headers: bearer })
+    assert.deepEqual([ping.status, JSON.parse(ping.text)], [200, { heard: '', host: 'the-computer' }])
+    const started = await doorCall(`${via}/_relay/start`, { method: 'POST', headers: { ...bearer, 'content-type': 'application/json' }, body: '{"prompt":"hi"}' })
+    assert.deepEqual([started.status, (JSON.parse(started.text) as { heard: string }).heard], [200, '{"prompt":"hi"}'])
+    const start = r.asked.filter(one => one.line === 'POST /_relay/start').at(-1)!
+    // The laptop's key never goes down the line.
+    assert.equal(start.headers.authorization, undefined)
+    // A query goes with the call; where a machine is added and removed is answered by the server.
+    await doorCall(`${via}/_relay/events?run=a&project=b`, { headers: bearer }).catch(() => undefined)
+    assert.equal((await doorCall(`${via}/_remote-access/enter`, { method: 'DELETE', headers: bearer })).status, 200)
+
+    // Nobody without a key, no page, nothing a line does not carry, and no computer that is not on a line.
+    assert.equal((await doorCall(`${via}/_relay/ping`)).status, 401)
+    assert.equal((await doorCall(`${link.origin}/_remote-access/computers`)).status, 401)
+    assert.equal((await doorCall(`${via}/_relay/ping`, { headers: { ...bearer, origin: link.origin } })).status, 403)
+    assert.equal((await doorCall(`${via}/_rpc/onProjects`, { method: 'POST', headers: bearer })).status, 404)
+    assert.equal((await doorCall(`${link.origin}/_remote-access/via/0123456789ab/_relay/ping`, { headers: bearer })).status, 404)
+    assert.equal((await doorCall(`${link.origin}/_remote-access/via/${studio.id}`, { headers: bearer })).status, 404)
+
+    // The computer away: listed as such, and a call through the server says so.
+    await update(r.computer, store => void (store.lines = []))
+    await until('the computer is away', async () => ((await doorCall(`${via}/_relay/ping`, { headers: bearer })).status === 503 ? true : undefined))
+    assert.deepEqual(JSON.parse((await doorCall(`${link.origin}/_remote-access/computers`, { headers: bearer })).text), { computers: [{ id: studio.id, name: studio.name, online: false }] })
+  } finally {
+    await r.stop()
+  }
+})

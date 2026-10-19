@@ -249,7 +249,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
     if (served && !door && secured) {
       try {
         const using = secured
-        door = await openDoor({ env, target: opts.target, port: httpsPort, ...(opts.host !== undefined ? { host: opts.host } : {}), knocks: () => true, secured: using, lines: { take: lines.take, ports } })
+        door = await openDoor({ env, target: opts.target, port: httpsPort, ...(opts.host !== undefined ? { host: opts.host } : {}), knocks: () => true, secured: using, lines: { take: lines.take, ports, connected: lines.connected, pass: lines.pass } })
         // OpenAgent may have started anew since it was last told.
         untold = true
         // A certificate renewed while the door was being opened is the one it speaks with.

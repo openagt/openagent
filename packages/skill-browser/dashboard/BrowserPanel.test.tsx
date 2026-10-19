@@ -31,6 +31,8 @@ function dashboard() {
     machines: vi.fn(async () => ({ version: '0.0.0', machines: [] })),
     addMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     removeMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
+    computersThrough: vi.fn(async () => ({ ok: true as const, computers: [] })),
+    addComputerThrough: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     watchScreen: vi.fn(async (_project: string, _agent: string, signal: AbortSignal) => {
       watched.push(signal)
       if (!open) return undefined

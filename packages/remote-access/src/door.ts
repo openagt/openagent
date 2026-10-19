@@ -27,12 +27,21 @@ import { COMPUTER_HEADER, PERSON_HEADER, enter, isComputerId, isIn, personOf, re
  *
  * On a computer with persons, every call passed on says whose device made it (`PERSON_HEADER`):
  * the door sets it, and a request never brings its own.
+ *
+ * Another computer's OpenAgent that is in also reaches the computers that keep a line here: it
+ * lists them at `COMPUTERS_PATH`, and asks one at `VIA_PREFIX/<id>/…`, which goes down that
+ * computer's line as this server's own OpenAgent would ask it. So a laptop starts a run on a
+ * computer at home that nothing on a network reaches, through the server both are in at.
  */
 
 /** Every path of the door's own; never passed on. */
 export const DOOR_PREFIX = '/_remote-access'
 /** Where a scanned code lands, and where its page sends the code. */
 export const ENTER_PATH = `${DOOR_PREFIX}/enter`
+/** The computers that keep a line open here, for another computer's OpenAgent that is in. */
+export const COMPUTERS_PATH = `${DOOR_PREFIX}/computers`
+/** Where another computer's OpenAgent asks a computer on a line: `<VIA_PREFIX>/<its device id>/_relay/…`. */
+export const VIA_PREFIX = `${DOOR_PREFIX}/via`
 /** The cookie a device that is in carries: its id, a dot, its key. */
 export const DEVICE_COOKIE = 'oa_device'
 
@@ -64,7 +73,14 @@ export interface DoorOptions {
   /** The key and certificate the door speaks HTTPS with; plain HTTP when unsaid. */
   secured?: Secured
   /** What takes a computer's line, and the ports such computers are given; a door with none gives no line. */
-  lines?: { take(id: string, socket: Duplex, head: Buffer): void; ports: { from: number; count: number } }
+  lines?: {
+    take(id: string, socket: Duplex, head: Buffer): void
+    ports: { from: number; count: number }
+    /** Whether a computer keeps its line open right now. */
+    connected(id: string): boolean
+    /** Ask a computer down its line; false when no computer on a line has that id. */
+    pass(id: string, path: string, req: IncomingMessage, res: ServerResponse): boolean
+  }
   now?: () => number
 }
 
@@ -320,6 +336,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       if (!knocks(req.socket.remoteAddress)) return refuse(res, 403, 'only a device on the same network as this computer gets in')
       const path = (req.url ?? '/').split('?')[0] ?? '/'
       if (path === ENTER_PATH) return req.method === 'DELETE' ? leave(req, res) : letIn(req, res)
+      if (opts.lines && (path === COMPUTERS_PATH || path.startsWith(`${VIA_PREFIX}/`))) return throughLine(req, res, path)
       if (path === DOOR_PREFIX || path.startsWith(`${DOOR_PREFIX}/`)) return refuse(res, 404, 'not found')
 
       const who = await whoIsIn(req)
@@ -348,6 +365,32 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       else res.destroy()
     })
   }
+  /**
+   * Another computer's OpenAgent reaches the computers on a line here: their list, or one call to
+   * one of them. Only a computer that is in with its key, never a page: a browser has no business
+   * here. A computer is not offered itself.
+   */
+  const throughLine = async (req: IncomingMessage, res: ServerResponse, path: string): Promise<void> => {
+    if (req.headers.origin !== undefined || req.headers.cookie !== undefined) return refuse(res, 403, 'forbidden')
+    const store = await currentStore()
+    const bearer = readBearer(req.headers.authorization)
+    const caller = bearer && isIn(store, bearer) ? store.devices.find(device => device.id === bearer.id) : undefined
+    if (!caller) return refuse(res, 401, 'this device is not in')
+    seen.set(caller.id, now())
+    const others = store.devices.filter(device => device.line && (caller.computer === undefined || device.computer !== caller.computer))
+    if (path === COMPUTERS_PATH) {
+      if (req.method !== 'GET') return refuse(res, 405, 'method not allowed')
+      const computers = others.map(device => ({ id: device.id, name: device.name, online: opts.lines!.connected(device.id) }))
+      return void res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify({ computers }))
+    }
+    const rest = path.slice(VIA_PREFIX.length + 1)
+    const slash = rest.indexOf('/')
+    const id = slash === -1 ? rest : rest.slice(0, slash)
+    if (!others.some(device => device.id === id) || slash === -1) return refuse(res, 404, 'no computer on a line here has that id')
+    const query = (req.url ?? '').slice((req.url ?? '').split('?')[0]!.length)
+    if (!opts.lines!.pass(id, `${rest.slice(slash)}${query}`, req, res)) refuse(res, 404, 'no computer on a line here has that id')
+  }
+
   /**
    * A computer asks for its line: it is given one when its key lets it in and it got in for a
    * line. The connection is then the line's, and nothing of the door's is said on it again.

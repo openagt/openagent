@@ -178,6 +178,42 @@ export async function leaveRemote(machine: MachineAccess & { door: string }): Pr
 }
 
 /**
+ * Where a server's door passes a call down the line of a computer that keeps one open there: a
+ * computer at home that nothing on a network reaches is asked at this address, through the
+ * server, with this computer's key at the server. To this computer it is one more machine.
+ */
+export const THROUGH_PATH = '/_remote-access/via/'
+
+/** A computer that keeps a line open to a server, as the server's door lists it. */
+export interface ComputerOnServer {
+  id: string
+  name: string
+  /** Its line is open right now. */
+  online: boolean
+}
+
+/** The computers that keep a line open to a server this computer is in at, or why they could not be asked. */
+export async function remoteComputers(machine: MachineAccess): Promise<{ ok: true; computers: ComputerOnServer[] } | { ok: false; error: string }> {
+  try {
+    const res = await machineFetch(`${trimSlashes(machine.url)}/_remote-access/computers`, machine.pin, { headers: { authorization: `Bearer ${machine.key}` }, signal: AbortSignal.timeout(PING_TIMEOUT_MS) })
+    // A machine that is no server has no lines, and its door says it has no such page.
+    if (res.status === 404) return { ok: true, computers: [] }
+    if (res.status === 401) return { ok: false, error: NOT_IN }
+    if (!res.ok) return { ok: false, error: `the machine answered ${res.status}` }
+    const listed = ((await res.json()) as { computers?: unknown }).computers
+    const computers: ComputerOnServer[] = []
+    for (const entry of Array.isArray(listed) ? listed : []) {
+      const { id, name, online } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
+      // An id is a word a door makes: it goes into an address, so nothing else is taken.
+      if (typeof id === 'string' && /^[a-z0-9]{6,32}$/.test(id) && typeof name === 'string' && name.trim()) computers.push({ id, name: name.trim().slice(0, 80), online: online === true })
+    }
+    return { ok: true, computers }
+  } catch (err) {
+    return { ok: false, error: errorMessage(err) }
+  }
+}
+
+/**
  * Start an agent on the remote daemon, in its project cloned from `target.project`, and return
  * what it answered (with the remote's own run id). A non-2xx or a transport failure surfaces as an
  * `ok: false` result the dashboard shows, the same shape a local refusal has, so the caller does

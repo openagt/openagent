@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { ModuleHostContext, type MachineAdded, type MachineRemoved, type ModuleCommandResult, type ModuleHost, type ModuleMachines } from '@openagt/dashboard/module'
+import { ModuleHostContext, type MachineAdded, type MachineRemoved, type ModuleCommandResult, type ModuleComputersThrough, type ModuleHost, type ModuleMachines } from '@openagt/dashboard/module'
 import { MachinesSettings, olderThan } from './MachinesSettings.js'
 import type { DeviceRow, LoginRow, ServerRow, StepState } from './servers.js'
 
@@ -34,6 +34,8 @@ function dashboard(
   const machines = vi.fn(async () => saved)
   const addMachine = vi.fn(async (_link: string, _label?: string) => added)
   const removeMachine = vi.fn(async (_id: string): Promise<MachineRemoved> => ({ ok: true }))
+  const computersThrough = vi.fn(async (_id: string): Promise<ModuleComputersThrough> => ({ ok: true, computers: [] }))
+  const addComputerThrough = vi.fn(async (_id: string, _computer: string): Promise<MachineAdded> => ({ ok: true }))
   const host: ModuleHost = {
     package: '@openagt/servers',
     runCommand: inProject,
@@ -49,12 +51,14 @@ function dashboard(
     machines,
     addMachine,
     removeMachine,
+    computersThrough,
+    addComputerThrough,
     watchScreen: vi.fn(async () => undefined),
     sendToScreen: vi.fn(async () => false),
   }
   // What was asked of the `servers` command, without the reads a row makes again and again by itself.
   const ran = (): string[] => runComputerCommand.mock.calls.map(([args]) => args.join(' ')).filter(line => !line.startsWith('devices '))
-  return { host, runComputerCommand, machines, addMachine, removeMachine, ran }
+  return { host, runComputerCommand, machines, addMachine, removeMachine, computersThrough, addComputerThrough, ran }
 }
 
 function show(host: ModuleHost) {
@@ -885,6 +889,31 @@ describe('Settings → Machines', () => {
     expect((await screen.findByRole('list', { name: 'Devices of @rom on 203.0.113.5' })).textContent).toContain('Pixel, Chrome')
     fireEvent.click(screen.getByRole('button', { name: 'Remove @rom from 203.0.113.5' }))
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['remove-person', '203.0.113.5', 'rom']))
+  })
+
+  test('a server lists the computers that keep a line to it; Add saves one, reached through the server, and a computer saved so says how it is reached', async () => {
+    const through = { id: 'https://203.0.113.5/_remote-access/via/abc123def456', label: 'Studio (through 203.0.113.5)', url: 'https://203.0.113.5/_remote-access/via/abc123def456', version: '1.2.3' }
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5', version: '1.2.3' }] }
+    const { host, computersThrough, addComputerThrough } = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false })] }), saved)
+    let added = false
+    computersThrough.mockImplementation(async () => ({ ok: true, computers: [{ id: 'abc123def456', name: 'Studio', online: true, added }] }))
+    addComputerThrough.mockImplementation(async () => ((added = true), saved.machines.push(through), { ok: true }))
+    show(host)
+    const list = await screen.findByRole('list', { name: 'The computers on 203.0.113.5' })
+    expect(list.textContent).toContain('Studio')
+    expect(list.textContent).toContain('Online')
+    fireEvent.click(screen.getByRole('button', { name: 'Add Studio through 203.0.113.5' }))
+    await waitFor(() => expect(addComputerThrough).toHaveBeenCalledWith('https://203.0.113.5', 'abc123def456'))
+    expect(await screen.findByText('In "Run on"')).toBeTruthy()
+    expect(await screen.findByText('A computer reached through its server. Removed here, it is no longer in "Run on"; the server keeps it.', {}, { timeout: 15_000 })).toBeTruthy()
+  })
+
+  test('a server no computer keeps a line to shows no such list', async () => {
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5', version: '1.2.3' }] }
+    const { host, computersThrough } = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false })] }), saved)
+    show(host)
+    await waitFor(() => expect(computersThrough).toHaveBeenCalledWith('https://203.0.113.5'))
+    expect(screen.queryByText('Computers on this server')).toBeNull()
   })
 })
 

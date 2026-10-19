@@ -1,11 +1,11 @@
 import { hostname } from 'node:os'
 import { basename } from 'node:path'
 import { readSharing } from '@openagt/agent-data'
-import { deviceIdOf, enterRemote, leaveRemote, pingRemote, remoteProject, remoteVersion } from '../dashboard/remote-run.js'
+import { THROUGH_PATH, deviceIdOf, enterRemote, leaveRemote, pingRemote, remoteComputers, remoteProject, remoteVersion } from '../dashboard/remote-run.js'
 import { errorMessage } from '../error-message.js'
 import { repositoryAddress, repositorySpelling } from '../repository-address.js'
 import { contextRemote, resolveProjectPath } from './context.js'
-import { addMachine, listMachines, removeMachine } from '../registry.js'
+import { addMachine, listMachines, removeMachine, type MachineRecord } from '../registry.js'
 import { parseMachineLink } from '../machine-link.js'
 import { openagentVersion } from '../version.js'
 
@@ -26,6 +26,11 @@ export type AddMachineResult = { ok: true; machine: Machine } | { ok: false; err
 /** The saved machines, newest first. */
 export async function onMachines(): Promise<Machine[]> {
   return (await listMachines()).map(({ id, label, url }) => ({ id, label, url }))
+}
+
+/** The machines saved through a server: computers at home it keeps a line to, reached at its address with this computer's key there. */
+function throughOf(server: Pick<MachineRecord, 'url'>, saved: readonly MachineRecord[]): MachineRecord[] {
+  return saved.filter(machine => machine.url.startsWith(`${server.url}${THROUGH_PATH}`))
 }
 
 /** This computer's name as the other machine lists it, among the devices that are in there. */
@@ -58,6 +63,11 @@ export async function sendAddMachine(pasted: string, label?: string): Promise<Ad
   }
   // The runs that ended there before go on being read, with the new key; the old keys are of no use any more.
   contextRemote().rekey(link.url, entered.key, link.pin)
+  // The computers saved through this server are reached with its key: they take the new one too.
+  for (const through of throughOf(added.record, await listMachines())) {
+    await addMachine({ url: through.url, key: entered.key, door: through.door, label: through.label, ...(link.pin ? { pin: link.pin } : {}) })
+    contextRemote().rekey(through.url, entered.key, link.pin)
+  }
   for (const old of added.displaced) void leaveRemote(old)
   const { id, url, label: name } = added.record
   return { ok: true, machine: { id, label: name, url } }
@@ -74,9 +84,57 @@ export type RemoveMachineResult = { ok: true } | { ok: false; error: string }
 export async function sendRemoveMachine(id: string): Promise<RemoveMachineResult> {
   const saved = (await listMachines()).find(machine => machine.id === id)
   if (saved && contextRemote().working(saved.url)) return { ok: false, error: `An agent is working on ${saved.label}. Stop it, or wait until it ends, then remove the machine.` }
+  // The computers saved through it go with it: they are reached with its key, which is taken out there.
+  const through = saved ? throughOf(saved, await listMachines()) : []
+  const busy = through.find(machine => contextRemote().working(machine.url))
+  if (busy) return { ok: false, error: `An agent is working on ${busy.label}, through ${saved!.label}. Stop it, or wait until it ends, then remove the machine.` }
+  for (const machine of through) await removeMachine(machine.id)
   const removed = await removeMachine(id)
   if (removed) void leaveRemote(removed)
   return { ok: true }
+}
+
+/** A computer that keeps a line open to a saved server, and whether it is saved here, through that server. */
+export interface ComputerThrough {
+  id: string
+  name: string
+  online: boolean
+  added: boolean
+}
+
+export type ComputersThrough = { ok: true; computers: ComputerThrough[] } | { ok: false; error: string }
+
+/**
+ * The computers that keep a line open to a saved server: computers at home that a run can be
+ * sent to through the server, from here, as the server's own page does. None for a machine that
+ * is no server, and for one saved through a server.
+ */
+export async function onComputersThrough(machineId: string): Promise<ComputersThrough> {
+  const saved = await listMachines()
+  const server = saved.find(machine => machine.id === machineId)
+  if (!server) return { ok: false, error: 'That machine is no longer saved.' }
+  if (server.url.includes(THROUGH_PATH)) return { ok: true, computers: [] }
+  const asked = await remoteComputers(server)
+  if (!asked.ok) return asked
+  const through = new Set(throughOf(server, saved).map(machine => machine.url))
+  return { ok: true, computers: asked.computers.map(computer => ({ ...computer, added: through.has(`${server.url}${THROUGH_PATH}${computer.id}`) })) }
+}
+
+/**
+ * Save a computer that keeps a line open to a saved server, as a machine of its own: reached
+ * through the server, with this computer's key there. Nothing is entered anywhere: the server
+ * already lets this computer in, and passes its calls down the computer's line.
+ */
+export async function sendAddComputerThrough(machineId: string, computerId: string): Promise<AddMachineResult> {
+  const server = (await listMachines()).find(machine => machine.id === machineId)
+  if (!server || server.url.includes(THROUGH_PATH)) return { ok: false, error: 'That server is no longer saved.' }
+  const asked = await remoteComputers(server)
+  if (!asked.ok) return { ok: false, error: `${server.label} could not be asked for its computers: ${asked.error}` }
+  const computer = asked.computers.find(candidate => candidate.id === computerId)
+  if (!computer) return { ok: false, error: `${server.label} has no such computer on a line now.` }
+  const url = `${server.url}${THROUGH_PATH}${computer.id}`
+  const { record } = await addMachine({ url, key: server.key, door: `${url}/_remote-access/enter`, label: `${computer.name} (through ${server.label})`, ...(server.pin ? { pin: server.pin } : {}) })
+  return { ok: true, machine: { id: record.id, label: record.label, url: record.url } }
 }
 
 /** Whether each saved machine answers right now, by id: one short call to each, with this computer's key. */
