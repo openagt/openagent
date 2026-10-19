@@ -676,13 +676,17 @@ test('a run with a publish level: its agent is told the sentence, the record kee
     assert.equal(started?.['added'], PUBLISH_LINES.pr, 'and the sentence apart from it')
     assert.deepEqual(recorded?.caller?.['runner'], { host: 'this-box', pid: 4242, publish: 'pr', baseCommit: (await git(['rev-parse', 'origin/main'], repo)).trim() })
 
-    const resumed = await resumeRun(repo, { id: first.id, text: 'Go on.', driver: listening('Done.'), host: 'this-box', pid: 4243, now: ticking(), gitHost: noGitHost })
+    const resumed = await resumeRun(repo, { id: first.id, text: 'Go on.', by: 'reply', driver: listening('Done.'), host: 'this-box', pid: 4243, now: () => new Date('2026-09-16T18:00:00.000Z'), gitHost: noGitHost })
     assert.equal(resumed.status, 'done')
     assert.equal(prompts[1], `Go on.\n\n${PUBLISH_LINES.pr}`, 'the resumed run is told its level again')
     assert.equal(runnerMark((await findRun(repo, first.id))!)?.publish, 'pr', 'and the record still names it')
+    // Who resumed it is on the record with the time, and gone with the next resume that names nobody.
+    assert.deepEqual(runnerMark((await findRun(repo, first.id))!)?.resumed, { by: 'reply', at: '2026-09-16T18:00:00.000Z' })
+    await resumeRun(repo, { id: first.id, text: 'And this.', driver: listening('Done.'), host: 'this-box', pid: 4244, now: ticking(), gitHost: noGitHost })
+    assert.equal(runnerMark((await findRun(repo, first.id))!)?.resumed, undefined)
 
     const plain = await runCommand(repo, { prompt: 'Fix the typo', driver: listening('Done.'), host: 'this-box', pid: 4242, now: ticking(), gitHost: noGitHost })
-    assert.equal(prompts[2], 'Fix the typo', 'no level: the prompt as written')
+    assert.equal(prompts[3], 'Fix the typo', 'no level: the prompt as written')
     assert.deepEqual((await findRun(repo, plain.id))?.caller?.['runner'], { host: 'this-box', pid: 4242, baseCommit: (await git(['rev-parse', 'origin/main'], repo)).trim() })
   } finally {
     await removeRepo(repo)

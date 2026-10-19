@@ -5,11 +5,11 @@ import { MAX_AGENTS, OWN_AUTOMATIONS_DIR, type AgentName } from '../src/names.js
 import { parseInterval, parseTimeOfDay } from '../src/pace.js'
 import { atRowsPace, draftProblem, draftRow, editArgs, editedWords, keptWhereHint, ownPaceArgs, removeWarning, removedWords, savedFile, saysTheSame, type AutomationDraft, type OpenedAutomation, type OwnPace } from './automation-form.js'
 import { AgentsFields, PaceFields, PublishField, RunsOnFields, SaidFields, SaidShown, Section, type ModelDraft } from './fields.js'
-import { agentOf, agentsArgs, agentsDraftOf, atOnce, atOnceWords, draftOf, isOwn, pace, runsOnWords, paceArgs, paceProblem, publishes, rowTitle, saysAtOnce, spelled, withDraft, type AgentModels, type AgentsDraft, type PaceDraft, type SchedulerCommand } from './schedulers.js'
+import { RESUMES_ON, agentOf, agentsArgs, agentsDraftOf, atOnce, atOnceWords, draftOf, isOwn, pace, runsOnWords, paceArgs, paceProblem, publishes, rowTitle, saysAtOnce, spelled, withDraft, type AgentModels, type AgentsDraft, type PaceDraft, type SchedulerCommand } from './schedulers.js'
 
 // The Edit panel of the Automations page: one panel, with the same parts in the same order, for
 // every row. What it does; when it runs: what it waits for, and how long it waits after a start; how many agents at once; what it runs on, a coding agent
-// and a model; what its runs publish.
+// and a model; what its runs publish. A row that resumes runs has no agent, model or publish level to pick: each run goes on with its own, and the panel says so.
 //
 // A row that comes from a skill of the project shows what it does greyed, since its words are the
 // skill's, and its picks are this machine's: `agent-scheduler pace`, `agents`, `agent`, `model` and
@@ -138,7 +138,7 @@ export function EditPanel({
     const { runsOn: _runsOn, model: _model, ...unpicked } = { ...rest, ...(count !== 'skill' ? { agents: Number(count) } : {}), publish }
     return { ...unpicked, ...(runsOn.agent !== scheduled.home ? { runsOn: runsOn.agent } : {}), ...(runsOn.model !== 'skill' ? { model: runsOn.model } : {}) }
   })()
-  const sentence = would && `${pace(would)}. ${saysAtOnce(would) ? `${atOnceWords(atOnce(would))}. ` : ''}${runsOnWords(would, schedulerModel, codingAgents)}. ${publishes(would)}.`
+  const sentence = would && `${pace(would)}. ${saysAtOnce(would) ? `${atOnceWords(atOnce(would))}. ` : ''}${runsOnWords(would, schedulerModel, codingAgents)}.${would.resumes ? '' : ` ${publishes(would)}.`}`
 
   const save = async (): Promise<void> => {
     if (problem !== undefined || paced === undefined || count === undefined) return
@@ -311,11 +311,18 @@ export function EditPanel({
         />
       </Section>
       <Section title="What it runs on">
-        <RunsOnFields command={scheduled} schedulerModel={schedulerModel} agents={codingAgents} agent={runsOn.agent} model={runsOn.model} disabled={saving} onChange={next => (setRunsOn(next), setFailed(undefined))} />
+        {/* A row that resumes has no agent, model or publish level to pick: each run goes on with its own. */}
+        {scheduled.resumes ? (
+          <p className="text-sm text-muted-foreground">{RESUMES_ON}.</p>
+        ) : (
+          <RunsOnFields command={scheduled} schedulerModel={schedulerModel} agents={codingAgents} agent={runsOn.agent} model={runsOn.model} disabled={saving} onChange={next => (setRunsOn(next), setFailed(undefined))} />
+        )}
       </Section>
-      <Section title="What its runs publish">
-        <PublishField gitHost={project.gitHost} own={isOwn(scheduled)} pick={publish} disabled={saving} onChange={next => (setPublish(next), setFailed(undefined))} />
-      </Section>
+      {!scheduled.resumes && (
+        <Section title="What its runs publish">
+          <PublishField gitHost={project.gitHost} own={isOwn(scheduled)} pick={publish} disabled={saving} onChange={next => (setPublish(next), setFailed(undefined))} />
+        </Section>
+      )}
       <p className="rounded-md border border-border bg-background px-3 py-2 text-sm">{problem ?? (dirty ? sentence : `${sentence} Nothing is changed yet.`)}</p>
       {failed !== undefined && (
         <p role="alert" className="text-xs text-danger">

@@ -90,13 +90,25 @@ export interface SpawnedRun {
   base?: string
 }
 
+/** A resume spawned in its own process: the text or the answer it continues with, and who resumes it, when that is a scheduler's row. */
+export interface SpawnedResume {
+  id: string
+  text?: string
+  answer?: string
+  model?: string
+  effort?: string
+  /** Who resumes the run (`run --resume --by`), kept on its mark. */
+  by?: string
+}
+
 /** The command line of a spawned resume: the text as the argument, or the answer. */
-export function resumeArgs(run: { id: string; text?: string; answer?: string; model?: string; effort?: string }): string[] {
+export function resumeArgs(run: SpawnedResume): string[] {
   const args = ['run', '--resume', run.id]
   if (run.text !== undefined) args.push(run.text)
   if (run.answer !== undefined) args.push('--answer', run.answer)
   if (run.model !== undefined) args.push('--model', run.model)
   if (run.effort !== undefined) args.push('--effort', run.effort)
+  if (run.by !== undefined) args.push('--by', run.by)
   return args
 }
 
@@ -117,7 +129,7 @@ export async function spawnRun(repo: string, run: SpawnedRun): Promise<void> {
 }
 
 /** A resumed run's process, detached the same way: `agent-runner run --resume <id> …`. */
-export async function spawnResume(repo: string, run: { id: string; text?: string; answer?: string; model?: string; effort?: string }): Promise<void> {
+export async function spawnResume(repo: string, run: SpawnedResume): Promise<void> {
   await spawnDetached(repo, run.id, resumeArgs(run))
 }
 
@@ -167,7 +179,7 @@ export async function detachRun(
  */
 export async function detachResume(
   repo: string,
-  opts: { id: string; text?: string; answer?: string; model?: string; effort?: string },
+  opts: SpawnedResume,
   deps: { spawn?: typeof spawnResume } = {},
 ): Promise<{ id: string }> {
   if (!(await findRun(repo, opts.id))) throw new Error(`no run ${opts.id} in this project`)
@@ -217,7 +229,7 @@ export function resumeDetached(repo: string): (id: string, line: { text: string 
  */
 export async function resumeProject(
   repo: string,
-  opts: { id: string; text?: string; answer?: string; model?: string; effort?: string; log?: (line: string) => void },
+  opts: SpawnedResume & { log?: (line: string) => void },
   deps: { driverFor?: typeof driverFor } = {},
 ): Promise<RunOutcome> {
   const card = await findRun(repo, opts.id)
@@ -230,6 +242,7 @@ export async function resumeProject(
     ...(opts.answer !== undefined ? { answer: opts.answer } : {}),
     ...(opts.model !== undefined ? { model: opts.model } : {}),
     ...(opts.effort !== undefined ? { effort: opts.effort } : {}),
+    ...(opts.by !== undefined ? { by: opts.by } : {}),
     driver: (deps.driverFor ?? driverFor)(recorded, opts.id, setup),
     nextDriver: next => (deps.driverFor ?? driverFor)(recorded, next, setup),
     resume: resumeDetached(repo),

@@ -125,3 +125,26 @@ test("a run counts for the skill's command its prompt names with a slash, else f
   assert.equal(of('/triage quick', NONE), undefined)
   assert.equal(commandOf({ id: 'd1', startedAt: '2026-09-16T13:00:00.000Z', status: 'running', intent: '/triage quick' }, schedule, 'this-box'), undefined)
 })
+
+test('a run a row resumed counts for that row from its resume on, on the machine that resumed it: in flight while it runs, its resume as the row\'s last start and last run; it still counts for the command it was started for', async () => {
+  const repo = await testRepo()
+  try {
+    const schedule = skills('work-queue', 'reply')
+    const resumed = (by: string, at: string, host = 'this-box') => ({ runner: { host, resumed: { by, at } } })
+    await recordRun(repo, { id: 'w1', startedAt: '2026-09-16T09:00:00.000Z', status: 'running', intent: '/work-queue', caller: resumed('reply', '2026-09-16T12:00:00.000Z') }, [])
+    await recordRun(repo, { id: 'w2', startedAt: '2026-09-16T10:00:00.000Z', status: 'failed', intent: '/work-queue', caller: resumed('reply', '2026-09-16T11:00:00.000Z') }, [])
+    // Resumed on another machine, and resumed by hand since (no row on its mark): neither is this row's.
+    await recordRun(repo, { id: 'w3', startedAt: '2026-09-16T10:30:00.000Z', status: 'running', intent: '/work-queue', caller: resumed('reply', '2026-09-16T13:00:00.000Z', 'their-box') }, [])
+    await recordRun(repo, { id: 'w4', startedAt: '2026-09-16T10:40:00.000Z', status: 'running', intent: '/work-queue', caller: { runner: { host: 'this-box' } } }, [])
+    assert.deepEqual((await inFlight(repo, 'reply', schedule, 'this-box')).map(c => c.id), ['w1'])
+    assert.equal(await lastStart(repo, 'reply', schedule, 'this-box'), '2026-09-16T12:00:00.000Z')
+    const last = await lastRuns(repo, schedule, 'this-box')
+    assert.deepEqual(last['reply'], { id: 'w1', at: '2026-09-16T12:00:00.000Z' })
+    // The command it was started for keeps counting it, by its own start.
+    assert.deepEqual(last['work-queue'], { id: 'w4', at: '2026-09-16T10:40:00.000Z' })
+    assert.deepEqual((await inFlight(repo, 'work-queue', schedule, 'this-box')).map(c => c.id).sort(), ['w1', 'w3', 'w4'])
+    assert.equal(await lastStart(repo, 'reply', schedule, 'their-box'), '2026-09-16T13:00:00.000Z')
+  } finally {
+    await removeRepo(repo)
+  }
+})

@@ -294,6 +294,8 @@ export interface ResumeOptions {
   text?: string
   /** The chosen label or labels, answering the question the run's last turn asked. */
   answer?: string
+  /** Who resumes the run, kept on its mark with the time: a scheduler's row, which counts the run as its own from then on. */
+  by?: string
   driver: Driver
   /** The coding agent a follow-up run is on, given its id, when the run's record names a follow-up; this run's own when absent. */
   nextDriver?: (id: string) => Driver
@@ -381,7 +383,7 @@ async function resumeOnce(repo: string, opts: ResumeOptions): Promise<{ outcome:
     const restarted = checkout.again ? await startCommit(checkout.path, git) : {}
 
     // The record is written running again over the ended one, so every reader sees the run in flight.
-    const mark: RunnerMark = { host, pid, ...lasting(previous), ...restarted }
+    const mark: RunnerMark = { host, pid, ...lasting(previous), ...restarted, ...(opts.by !== undefined ? { resumed: { by: opts.by, at: clock() } } : {}) }
     const runningCard: RunCard = { ...card, status: 'running', caller: { ...card.caller, runner: mark, pid, host, ...forReaders(mark), workspace: checkout.path } }
     delete runningCard.endedAt
     // A record that says its work was landed lost its branch to that. On a branch made again the

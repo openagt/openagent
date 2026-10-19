@@ -4,7 +4,7 @@ import type { DriverQuota } from '@openagt/agent-driver'
 import type { RunCard } from '@openagt/skill-logs'
 import { DEFAULT_STATE, type State } from './state.js'
 import { parseInterval, type Interval } from './pace.js'
-import { FOUND_OPENING, FOUND_OPENING_OWN, type ScheduledCommand } from './schedule.js'
+import { FOUND_OPENING, FOUND_OPENING_OWN, RESUMED_OPENING, skillSchedule, type ScheduledCommand } from './schedule.js'
 import { runCheck, startNow, tick, type TickDeps } from './tick.js'
 
 // The tick's decisions with every reading injected: what it reads, in which order, and the one
@@ -51,11 +51,13 @@ interface Seen {
   checks: string[]
   /** What each check was given as `$LAST_RUN`, in the order of `checks`. */
   since: string[]
+  /** The runs a row resumed: which, what it was told, and the row. */
+  resumed: { id: string; text: string; by: string }[]
 }
 
 /** Every command switched on on this machine, unless the state says otherwise: a command nobody switched on starts nothing. */
 function deps(over: Partial<TickDeps> & { stateOver?: Partial<State>; commands?: ScheduledCommand[]; inFlightCards?: RunCard[]; seen?: Seen } = {}): { deps: TickDeps; seen: Seen } {
-  const seen: Seen = over.seen ?? { markers: [], withdrawn: [], spawned: [], checks: [], since: [] }
+  const seen: Seen = over.seen ?? { markers: [], withdrawn: [], spawned: [], checks: [], since: [], resumed: [] }
   let ids = 0
   const cards = over.inFlightCards ?? []
   const commands = over.commands ?? [command('work-queue')]
@@ -91,6 +93,11 @@ function deps(over: Partial<TickDeps> & { stateOver?: Partial<State>; commands?:
     },
     spawn: async run => {
       seen.spawned.push(run)
+    },
+    findRun: async () => undefined,
+    busy: async () => false,
+    resume: async run => {
+      seen.resumed.push(run)
     },
     ...over,
   }
@@ -781,4 +788,132 @@ test('a command switched off, or removed, while the tick ran its check and its r
   // Asked only when a run would start: a command that is not due is not asked about.
   const quiet = deps({ check: async () => ({ ok: true, stdout: '[]', stderr: '' }), stillOn: async () => assert.fail('asked for a command that is not due') })
   assert.deepEqual((await tick(quiet.deps)).decisions, [{ command: 'work-queue', outcome: 'not due' }])
+})
+
+// A row that resumes, read from a pretend skill whose check prints the runs to continue.
+
+/** The pretend skill: one row that resumes, its check printing what it is given in `printed`. */
+function replyRow(over: Partial<ScheduledCommand> = {}): ScheduledCommand {
+  const md = ['---', 'name: reply', 'disable-model-invocation: true', 'schedule:', '  resumes: true', '  when: npx pretend replies', '  waits-for: when someone answered on a run\'s pull request', '---', 'Answer them.'].join('\n')
+  const read = skillSchedule('reply', md, CLAUDE)
+  assert.deepEqual(read.unreadable, [])
+  return { ...read.commands[0]!, ...over }
+}
+
+/** An ended run of this machine, on Claude Code unless said otherwise. */
+function ended(id: string, over: Partial<RunCard> = {}, host = 'this-box'): RunCard {
+  return { id, startedAt: '2026-09-16T10:00:00.000Z', endedAt: '2026-09-16T11:00:00.000Z', status: 'done', intent: '/work-queue', driver: 'claude-code', model: 'opus', caller: { runner: { host } }, ...over }
+}
+
+/** What the pretend check prints: each run with its words. */
+const printing = (...runs: [run: string, text: string][]): Pick<TickDeps, 'check'> => ({ check: async () => ({ ok: true, stdout: JSON.stringify(runs.map(([run, text]) => ({ run, text }))), stderr: '' }) })
+
+const records = (...cards: RunCard[]): Pick<TickDeps, 'findRun'> => ({ findRun: async id => cards.find(c => c.id === id) })
+
+test('a row that resumes continues the run its check names: the command and the words, the row named as who resumed it; nothing is marked or spawned, and the run is the decision\'s', async () => {
+  const reply = replyRow()
+  const { deps: d, seen } = deps({ commands: [reply], ...printing(['r1', 'Someone asked: why this name?']), ...records(ended('r1')) })
+  const record = await tick(d)
+  assert.deepEqual(record.decisions, [{ command: 'reply', outcome: 'resumed r1', run: 'r1' }])
+  assert.deepEqual(seen.resumed, [{ id: 'r1', text: `/reply\n\n${RESUMED_OPENING}\nSomeone asked: why this name?`, by: 'reply' }])
+  assert.deepEqual([seen.markers, seen.spawned], [[], []])
+  // Listed as a row that resumes, with no agent or model of its own to say.
+  assert.equal(record.schedule[0]!.resumes, true)
+  assert.equal(record.schedule[0]!.model, undefined)
+})
+
+test('a row that resumes asks each run\'s own coding agent whether it can start, and Claude\'s quota for the run\'s own model: a run that cannot go now says why, and the others go', async () => {
+  const both = replyRow({ dirs: [CLAUDE, CODEX], cap: 3 })
+  const asked: string[] = []
+  const week = quota(10)
+  const sonnetSpent: DriverQuota = { available: true, windows: [...(week.available ? week.windows : []), { label: 'Current week (Sonnet)', kind: 'week-model', percentUsed: 99 }] }
+  const { deps: d, seen } = deps({
+    commands: [both],
+    ...printing(['on-sonnet', 'a'], ['on-codex', 'b'], ['on-opus', 'c']),
+    ...records(ended('on-sonnet', { model: 'sonnet' }), ended('on-codex', { driver: 'codex', model: 'gpt-5' }), ended('on-opus')),
+    ready: async agent => (asked.push(agent), { problems: [], warnings: [] }),
+    quota: async () => sonnetSpent,
+  })
+  const record = await tick(d)
+  assert.deepEqual(record.decisions.map(x => x.outcome.replace(/^(.*quota: Current week \(Sonnet\) is 99% used).*/, '$1')), ['run on-sonnet not resumed: quota: Current week (Sonnet) is 99% used', 'resumed on-codex', 'resumed on-opus'])
+  assert.deepEqual(seen.resumed.map(r => r.id), ['on-codex', 'on-opus'])
+  // Each agent asked once per tick.
+  assert.deepEqual(asked, ['claude-code', 'codex'])
+
+  const codexDown = deps({ commands: [both], ...printing(['on-codex', 'b'], ['on-opus', 'c']), ...records(ended('on-codex', { driver: 'codex' }), ended('on-opus')), ready: async agent => ({ problems: agent === 'codex' ? ['codex is not logged in.'] : [], warnings: [] }) })
+  assert.deepEqual((await tick(codexDown.deps)).decisions.map(x => x.outcome), ['run on-codex not resumed: not ready: codex is not logged in.', 'resumed on-opus'])
+})
+
+test('a row that resumes leaves alone a run of another machine, one still running or whose process holds its lock, one it has no record of, one agent-runner did not start, and one on an agent its skill is not there for', async () => {
+  const { deps: d, seen } = deps({
+    commands: [replyRow({ cap: 3 })],
+    ...printing(['elsewhere', 'x'], ['going', 'x'], ['locked', 'x'], ['unknown', 'x'], ['by-hand', 'x'], ['on-codex', 'x'], ['fine', 'x']),
+    ...records(ended('elsewhere', {}, 'other-box'), { ...ended('going'), status: 'running' }, ended('locked'), { ...ended('by-hand'), caller: {} }, ended('on-codex', { driver: 'codex' }), ended('fine')),
+    busy: async id => id === 'locked',
+  })
+  const record = await tick(d)
+  assert.deepEqual(
+    record.decisions.map(x => x.outcome),
+    [
+      'run elsewhere not resumed: it ran on other-box, which alone holds its conversation',
+      'run going not resumed: it is still running',
+      'run locked not resumed: it is still running',
+      'run unknown not resumed: no record of it',
+      'run by-hand not resumed: agent-runner did not start it',
+      'run on-codex not resumed: not a command of Codex: its skill is only under .claude/skills, not .agents/skills',
+      'resumed fine',
+    ],
+  )
+  assert.deepEqual(seen.resumed.map(r => r.id), ['fine'])
+})
+
+test("a row that resumes is held by its cap: the runs it resumed that are still running, those it resumed in this tick with them; a run of another row does not count", async () => {
+  const resumedEarlier: RunCard = { ...ended('earlier'), status: 'running', caller: { runner: { host: 'this-box', resumed: { by: 'reply', at: '2026-09-16T13:00:00.000Z' } } } }
+  const inFlight: TickDeps['inFlight'] = async command => (command === 'reply' ? [resumedEarlier] : [])
+  const full = deps({ commands: [replyRow()], ...printing(['r1', 'x']), ...records(ended('r1')), inFlight })
+  assert.deepEqual((await tick(full.deps)).decisions.map(x => x.outcome), ['run r1 not resumed: cap reached (1 in flight: earlier on this-box)'])
+  assert.deepEqual(full.seen.resumed, [])
+
+  const two = deps({ commands: [replyRow({ cap: 2 })], ...printing(['r1', 'x'], ['r2', 'y'], ['r3', 'z']), ...records(ended('r1'), ended('r2'), ended('r3')), inFlight: async () => [] })
+  assert.deepEqual((await tick(two.deps)).decisions.map(x => x.outcome), ['resumed r1', 'resumed r2', 'run r3 not resumed: cap reached (2 in flight: r1, r2)'])
+})
+
+test('a row that resumes: a run named twice is resumed once with both its words; a check that prints no runs to resume says why; one that prints nothing is not due', async () => {
+  const twice = deps({ commands: [replyRow()], check: async () => ({ ok: true, stdout: '[{"run":"r1","text":"first"},{"run":"r1","text":"second"}]', stderr: '' }), ...records(ended('r1')) })
+  await tick(twice.deps)
+  assert.deepEqual(twice.seen.resumed.map(r => r.text), [`/reply\n\n${RESUMED_OPENING}\nfirst\n\nsecond`])
+
+  const odd = deps({ commands: [replyRow()], check: async () => ({ ok: true, stdout: '{"r1":"hello"}', stderr: '' }) })
+  assert.deepEqual((await tick(odd.deps)).decisions.map(x => x.outcome), ['check printed no runs to resume: the check printed no list'])
+  const half = deps({ commands: [replyRow()], check: async () => ({ ok: true, stdout: '[{"run":"r1"}]', stderr: '' }) })
+  assert.deepEqual((await tick(half.deps)).decisions.map(x => x.outcome), ['check printed no runs to resume: an item of the list is no { "run": "<id>", "text": "…" }'])
+  const quiet = deps({ commands: [replyRow()], check: async () => ({ ok: true, stdout: '[]', stderr: '' }) })
+  assert.deepEqual((await tick(quiet.deps)).decisions.map(x => x.outcome), ['not due'])
+})
+
+test('a row that resumes is switched like any row: off, its check is not run; switched off while the tick ran, nothing is resumed; a stop starts nothing', async () => {
+  const off = deps({ commands: [replyRow()], stateOver: { switches: {} }, ...printing(['r1', 'x']), ...records(ended('r1')) })
+  assert.deepEqual((await tick(off.deps)).decisions.map(x => x.outcome), ['switched off on this machine'])
+  assert.deepEqual(off.seen.checks, [])
+
+  const flipped = deps({ commands: [replyRow()], stillOn: async () => false, ...printing(['r1', 'x']), ...records(ended('r1')) })
+  assert.deepEqual((await tick(flipped.deps)).decisions.map(x => x.outcome), ['run r1 not resumed: switched off on this machine'])
+  const stopped = deps({ commands: [replyRow()], stopped: () => true, ...printing(['r1', 'x']), ...records(ended('r1')) })
+  assert.deepEqual((await tick(stopped.deps)).decisions.map(x => x.outcome), ['run r1 not resumed: not started: the scheduler was stopped'])
+  assert.deepEqual([...flipped.seen.resumed, ...stopped.seen.resumed], [])
+})
+
+test('a row that resumes, asked by hand: whatever its switch and the quota; the answer is the first run it resumed, or every reason none went', async () => {
+  const over = { commands: [replyRow()], stateOver: { switches: {} }, quota: async () => quota(100), stillOn: async () => false }
+  const asked = deps({ ...over, ...printing(['gone', 'x'], ['r1', 'y']), ...records(ended('r1')) })
+  assert.deepEqual(await startNow(asked.deps, replyRow()), { ok: true, run: { id: 'r1', at: NOW.toISOString() } })
+  const none = deps({ ...over, ...printing(['gone', 'x'], ['going', 'y']), ...records({ ...ended('going'), status: 'running' }) })
+  assert.deepEqual(await startNow(none.deps, replyRow()), { ok: false, outcome: 'run gone not resumed: no record of it; run going not resumed: it is still running' })
+})
+
+test('a row that resumes runs its real check through the shell: the run id it prints is the run resumed', async () => {
+  const reply = replyRow({ when: `printf '[{"run":"%s","text":"since %s"}]' r1 "$LAST_RUN"` })
+  const { deps: d, seen } = deps({ commands: [reply], check: (shell, lastRun) => runCheck(process.cwd(), shell, 10_000, lastRun), ...records(ended('r1')) })
+  await tick(d)
+  assert.deepEqual(seen.resumed, [{ id: 'r1', text: `/reply\n\n${RESUMED_OPENING}\nsince 2026-09-16T12:00:00Z`, by: 'reply' }])
 })

@@ -10,6 +10,9 @@ import { promptCommand, type Schedule } from './schedule.js'
  * here when the records are counted: the scheduled command the prompt names, else the prompt's first
  * word without its slash. A run a person started from a dashboard counts like a scheduled one.
  * Only runs `agent-runner` started, which carry its mark, are counted.
+ *
+ * A run a row resumed counts for that row too, from its resume on: its record keeps who resumed it
+ * and when, and the row counts the resume as its start.
  */
 
 /**
@@ -27,6 +30,19 @@ export function commandOf(card: RunCard, schedule: Schedule, host: string): stri
   return own && mark.host !== host ? undefined : command
 }
 
+/** The row that last resumed a run, and when, as the machine `host` counts: only its own runs are resumed here. */
+function resumedBy(card: RunCard, host: string): { by: string; at: string } | undefined {
+  const mark = runnerMark(card)
+  return mark?.host === host && mark.resumed !== undefined && isTime(mark.resumed.at) ? mark.resumed : undefined
+}
+
+/** When a run started for a command, as `host` counts: its own start for the command it was started for, its last resume for the row that resumed it; nothing for any other command. */
+function startFor(card: RunCard, command: string, schedule: Schedule, host: string): string | undefined {
+  const resumed = resumedBy(card, host)
+  if (resumed?.by === command) return resumed.at
+  return commandOf(card, schedule, host) === command && isTime(card.startedAt) ? card.startedAt : undefined
+}
+
 /**
  * When one command last started, whatever became of the run; nothing when it never did. A skill's
  * command counts every machine's runs; an automation kept on this machine, this machine's. A
@@ -37,7 +53,8 @@ export async function lastStart(repo: string, command: string, schedule: Schedul
   const cards = await listRuns(repo, {}, deps)
   let latest: string | undefined
   for (const card of cards) {
-    if (commandOf(card, schedule, host) === command && isTime(card.startedAt) && (latest === undefined || card.startedAt > latest)) latest = card.startedAt
+    const at = startFor(card, command, schedule, host)
+    if (at !== undefined && (latest === undefined || at > latest)) latest = at
   }
   return latest
 }
@@ -58,18 +75,20 @@ export interface LastRun {
  * starts: every machine's runs for a skill's command, this machine's for an automation kept here.
  */
 export async function lastRuns(repo: string, schedule: Schedule, host: string, deps: LogsDeps = {}): Promise<Record<string, LastRun>> {
-  const latest = new Map<string, RunCard>()
+  const latest = new Map<string, LastRun>()
   for (const card of await listRuns(repo, {}, deps)) {
-    const command = commandOf(card, schedule, host)
-    if (command === undefined || !isTime(card.startedAt)) continue
-    const known = latest.get(command)
-    if (!known || card.startedAt > known.startedAt) latest.set(command, card)
+    for (const command of new Set([commandOf(card, schedule, host), resumedBy(card, host)?.by])) {
+      const at = command === undefined ? undefined : startFor(card, command, schedule, host)
+      if (command === undefined || at === undefined) continue
+      const known = latest.get(command)
+      if (!known || at > known.at) latest.set(command, { id: card.id, at, ...(card.status === 'failed' ? { failed: true as const } : {}) })
+    }
   }
-  return Object.fromEntries([...latest].map(([command, card]): [string, LastRun] => [command, { id: card.id, at: card.startedAt, ...(card.status === 'failed' ? { failed: true as const } : {}) }]))
+  return Object.fromEntries(latest)
 }
 
-/** The runs of one command still in flight: on any machine for a skill's command, on this one for an automation kept here. */
+/** The runs of one command still in flight: on any machine for a skill's command, on this one for an automation kept here and for a row that resumed them. */
 export async function inFlight(repo: string, command: string, schedule: Schedule, host: string, deps: LogsDeps = {}): Promise<RunCard[]> {
   const cards = await listRuns(repo, {}, deps)
-  return cards.filter(card => card.status === 'running' && commandOf(card, schedule, host) === command)
+  return cards.filter(card => card.status === 'running' && (commandOf(card, schedule, host) === command || resumedBy(card, host)?.by === command))
 }

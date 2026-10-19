@@ -4,7 +4,8 @@ import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readClaudeQuota } from '@openagt/agent-driver-claude'
-import { isPidAlive, markerCard, readyToRun, resumeDetached, runIdFrom, spawnRun, sweep, withdrawMarker, writeMarker } from '@openagt/agent-runner'
+import { isPidAlive, lockHolder, markerCard, readyToRun, resumeDetached, runIdFrom, spawnResume, spawnRun, sweep, withdrawMarker, writeMarker } from '@openagt/agent-runner'
+import { findRun } from '@openagt/skill-logs'
 import { DATA_BRANCH, nodeGitRunner, pullFileBranch, type GitRunner } from '@openagt/agent-data'
 import { CHECK_TIMEOUT_MS, NOW_CHECK_TIMEOUT_MS, SCHEDULER_LOG, TICK_MS } from './names.js'
 import { inFlight, lastRuns, lastStart, type LastRun } from './records.js'
@@ -39,12 +40,15 @@ function projectDeps(repo: string, state: State, schedule: Schedule, opts: { git
     stillOn: async command => isSwitchedOn(await readState(repo), command),
     lastStart: command => lastStart(repo, command, schedule, host),
     inFlight: command => inFlight(repo, command, schedule, host),
+    findRun: id => findRun(repo, id),
+    busy: async id => (await lockHolder(repo, id, isPidAlive)) !== undefined,
     ready: agent => readyToRun(repo, agent),
     quota: () => readClaudeQuota({ cwd: repo }),
     mint: () => runIdFrom(now().toISOString()),
     writeMarker: card => writeMarker(repo, card),
     withdrawMarker: id => withdrawMarker(repo, id),
     spawn: run => spawnRun(repo, run),
+    resume: run => spawnResume(repo, run),
     ...(opts.stopped ? { stopped: opts.stopped } : {}),
     log,
   }

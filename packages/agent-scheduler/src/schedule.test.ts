@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseInterval } from './pace.js'
-import { ableAgents, checkFound, commandPrompt, FOUND_OPENING, homeAgent, isDue, lastRunValue, promptCommand, readSchedule, skillFile, skillSchedule, FOUND_OPENING_OWN, ownAttached, skillText } from './schedule.js'
+import { ableAgents, checkFound, commandPrompt, FOUND_OPENING, homeAgent, isDue, lastRunValue, promptCommand, readSchedule, skillFile, skillSchedule, FOUND_OPENING_OWN, ownAttached, skillText, resumeText, runsToResume, RESUMED_OPENING, RESUMED_OPENING_OWN } from './schedule.js'
 import { AGENTS as AGENT_NAMES, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, FOUND_MAX, RUN_SKILLS_DIR, isAgent } from './names.js'
 
 const CLAUDE = '.claude/skills'
@@ -317,4 +317,34 @@ test('the time a check is given: UTC to the whole second, the fraction dropped a
   assert.equal(lastRunValue('2026-10-09T10:00:00.000Z'), '2026-10-09T10:00:00Z')
   assert.equal(lastRunValue('2026-10-09T10:00:00.999Z'), '2026-10-09T10:00:00Z', 'a thing of that same second is found twice rather than never')
   assert.equal(lastRunValue('2026-10-09T13:00:00+03:00'), '2026-10-09T10:00:00Z')
+})
+
+test('a row may resume the runs its check names: it needs the check, and names no coding agent and no model, since each run goes on with its own', () => {
+  assert.deepEqual(read('reply', skill('reply', 'schedule:\n  resumes: true\n  when: npx replies\n  agents: 3\n')), { commands: [{ name: 'reply', when: 'npx replies', cap: 3, dir: CLAUDE, dirs: [CLAUDE], resumes: true }], unreadable: [] })
+  // A pace beside the check holds as on any row, counted from the row's last resume.
+  assert.equal(read('reply', skill('reply', 'schedule:\n  resumes: true\n  when: npx replies\n  every: 10m\n')).commands[0]!.every?.text, '10m')
+  const refused = (frontMatter: string): string | undefined => read('reply', skill('reply', frontMatter)).unreadable[0]?.reason
+  assert.equal(refused('schedule:\n  resumes: true\n  every: 1h\n'), 'a row that resumes needs when, the check that names the runs to resume')
+  assert.equal(refused('schedule:\n  resumes: true\n  when: npx replies\n  agent: codex\n'), 'a row that resumes takes no agent: each run goes on with the coding agent and model its record names')
+  assert.equal(refused('schedule:\n  resumes: true\n  when: npx replies\n  model: opus\n'), 'a row that resumes takes no model: each run goes on with the coding agent and model its record names')
+  assert.equal(refused('schedule:\n  resumes: yes please\n  when: npx replies\n'), 'resumes is true, or left out')
+  assert.equal(refused('schedule:\n  resumes: false\n  when: npx replies\n'), 'resumes is true, or left out')
+})
+
+test('the runs a row resumes, out of what its check printed: each run with its words, a run named twice once with both; nothing for no work; why for anything else', () => {
+  assert.deepEqual(runsToResume('[{"run":"r1","text":" one "},{"run":"r2","text":"two"},{"run":"r1","text":"three"}]\n'), [{ run: 'r1', text: 'one\n\nthree' }, { run: 'r2', text: 'two' }])
+  assert.deepEqual(runsToResume(''), [])
+  assert.deepEqual(runsToResume('[]'), [])
+  assert.deepEqual(runsToResume('null'), [])
+  assert.equal(runsToResume('r1'), 'the check printed no JSON')
+  assert.equal(runsToResume('{"run":"r1","text":"x"}'), 'the check printed no list')
+  assert.equal(runsToResume('[{"run":"r1","text":""}]'), 'an item of the list is no { "run": "<id>", "text": "…" }')
+  assert.equal(runsToResume('[{"run":7,"text":"x"}]'), 'an item of the list is no { "run": "<id>", "text": "…" }')
+  assert.equal(runsToResume('["r1"]'), 'an item of the list is no { "run": "<id>", "text": "…" }')
+})
+
+test("what a resumed run is told: the command, then the opening words and the check's words for it; an automation kept on this machine, its name, its text, then the same; long words are cut as a check's output is", () => {
+  assert.equal(resumeText({ name: 'reply' }, 'Someone asked why.', '2026-10-19T10:00:00Z'), `/reply\n\n${RESUMED_OPENING}\nSomeone asked why.`)
+  assert.equal(resumeText({ name: 'answer', text: 'Answer in two lines.' }, 'Someone asked why.', '2026-10-19T10:00:00Z'), `answer\n\nAnswer in two lines.\n\n${RESUMED_OPENING_OWN}\nSomeone asked why.`)
+  assert.match(resumeText({ name: 'reply' }, 'x'.repeat(FOUND_MAX + 1), '2026-10-19T10:00:00Z'), /\(cut: the check printed 8001 characters, these are the first 8000; it asked what is new since 2026-10-19T10:00:00Z\)$/)
 })
