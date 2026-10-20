@@ -549,6 +549,37 @@ test("the person's ended line runs when a run ends waiting and when it ends done
   }
 })
 
+test('a run that opens another pull request keeps the one before among its earlier ones, once', async () => {
+  const repo = await testRepo()
+  try {
+    // Whatever the run's branch, the request the git host has for it now.
+    let request = { number: 12, url: 'https://example.com/x/y/pull/12' }
+    const gitHost: GitHost = { requestOfBranch: async () => request, mergeRequest: async () => ({ outcome: 'failed', error: 'nothing to merge' }) }
+    const first = await runCommand(repo, { prompt: 'fix it', driver: committingDriver(), now: () => NOW, gitHost })
+    assert.equal(first.status, 'done')
+    assert.equal((await findRun(repo, first.id))?.caller?.['earlierPrs'], undefined, 'one request has no earlier one')
+
+    request = { number: 13, url: 'https://example.com/x/y/pull/13' }
+    await resumeRun(repo, { id: first.id, text: 'move it to a new branch', driver: new FakeDriver({ turns: [{ text: 'Moved.' }] }), now: () => NOW, gitHost })
+    const moved = await findRun(repo, first.id)
+    assert.deepEqual(moved?.pr, request)
+    assert.deepEqual(moved?.caller?.['earlierPrs'], [{ number: 12, url: 'https://example.com/x/y/pull/12' }])
+
+    // The same request again: nothing new among the earlier ones.
+    await resumeRun(repo, { id: first.id, text: 'one more thing', driver: new FakeDriver({ turns: [{ text: 'Done.' }] }), now: () => NOW, gitHost })
+    assert.deepEqual((await findRun(repo, first.id))?.caller?.['earlierPrs'], [{ number: 12, url: 'https://example.com/x/y/pull/12' }])
+
+    // The work moved back to the first branch: its request is the run's again, and no earlier one.
+    request = { number: 12, url: 'https://example.com/x/y/pull/12' }
+    await resumeRun(repo, { id: first.id, text: 'back to the first branch', driver: new FakeDriver({ turns: [{ text: 'Back.' }] }), now: () => NOW, gitHost })
+    const back = await findRun(repo, first.id)
+    assert.deepEqual(back?.pr, request)
+    assert.deepEqual(back?.caller?.['earlierPrs'], [{ number: 13, url: 'https://example.com/x/y/pull/13' }])
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
 test('a line already in the inbox when the turn ends becomes the next turn of the same run, told the run\'s sentence like the first', async () => {
   const repo = await testRepo()
   try {

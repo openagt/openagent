@@ -13,7 +13,8 @@ import { cn } from '../../lib/utils.js'
 //
 // #710 still stands for everything not converted: no `::-webkit-scrollbar` rule comes back.
 //
-// The scrollbar unmounts when the content fits, so a short list has no bar at all.
+// The scrollbar unmounts when the content fits, so a short list has no bar at all, and a list that
+// grows or shrinks is measured again (the Content part).
 //
 // Vertical only: nothing here scrolls sideways, and upstream's horizontal branch would ship
 // untested. Add it with its first use.
@@ -43,7 +44,13 @@ export function ScrollArea({
           viewportClassName ?? 'h-full',
         )}
       >
-        {children}
+        {/* The part that watches the content's own height: without it the bar was measured only
+            when the viewport resized or scrolled, so a list that got shorter in the same box (the
+            sidebar on another project) kept the old bar. Never wider than the viewport: its own
+            `fit-content` let a long row widen it, and the rows truncate against its width. */}
+        <ScrollAreaPrimitive.Content data-slot="scroll-area-content" style={{ minWidth: 0 }}>
+          {children}
+        </ScrollAreaPrimitive.Content>
       </ScrollAreaPrimitive.Viewport>
       <ScrollBar />
       <ScrollAreaPrimitive.Corner />

@@ -6,7 +6,7 @@ import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 import { agentBranchName, attachCheckout, createCheckout, reclaimWorktree, relinkCheckout, worktreeBranch, worktreePath, type SkillLink } from '@openagt/skill-branches'
 import { findRun, readDiary, type AnyDiaryLine, type LogsDeps, type RunCard, type RunStatus } from '@openagt/skill-logs'
 import { hideLiveDir, inboxPath, liveDir, readLiveCard, readLiveDiary } from './live-card.js'
-import { forReaders, lasting, markerCard, publishChange, recordBranchGone, recordRun, runnerMark, startOf, writeMarker, type Publish, type RunnerMark } from './records.js'
+import { earlierPrs, forReaders, lasting, markerCard, publishChange, recordBranchGone, recordRun, runnerMark, startOf, writeMarker, type Publish, type RunnerMark } from './records.js'
 import { projectGitHost, type GitHost, type MergeOutcome } from './git-host.js'
 import { basicSkills } from './basic-skills.js'
 import { acquireRunLock, isPidAlive, releaseRunLock } from './run-lock.js'
@@ -557,6 +557,11 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
   let detail: string | undefined
   let branch = run.checkout.branch
   let pr: RunOutcome['pr']
+  // The request the card names, and the ones the run opened before it: a turn that opens another,
+  // on a branch the work moved to, puts the one before it among the earlier ones.
+  let named = run.card.pr
+  let earlier = earlierPrs(run.card)
+  let saidEarlier = earlier.length > 0
   let question: string | undefined
   let lastWords = ''
   let driverSession: DriverSession | undefined
@@ -683,9 +688,15 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
       // opened, if any, is read back off the branch through the project's git host.
       branch = (await worktreeBranch(run.checkout.path, run.git).catch(() => undefined)) ?? run.checkout.branch
       pr = await run.gitHost.requestOfBranch(repo, branch).catch(() => undefined)
+      if (pr && named && pr.url !== named.url) earlier = [...earlier, { number: named.number, url: named.url }]
+      if (pr) named = pr
+      // Each once, and never the one the card names: work moved back to a branch takes its request back.
+      earlier = earlier.filter((one, at) => one.url !== named?.url && earlier.findIndex(other => other.url === one.url) === at)
       const live = driverSession.log
       if (!live) break
-      await live.patch({ branch, ...(pr ? { pr } : {}) })
+      // Written whenever the run has had one, so a list emptied by the work moving back is said too.
+      saidEarlier ||= earlier.length > 0
+      await live.patch({ branch, ...(pr ? { pr } : {}), ...(saidEarlier ? { caller: { earlierPrs: earlier } } : {}) })
       // The ended line leaves out a reason the diary already holds: the agent's error line, written
       // just before its process exited, says it, so the ended line says only that the agent exited.
       await live.end(status, status === 'failed' && failure instanceof AgentExitError ? failure.exit : detail)
@@ -708,7 +719,7 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
   await naming
   // The record: the two files the session kept, copied onto the branch unchanged.
   const live = driverSession?.log
-  const card = (await readLiveCard(run.checkout.path, run.id)) ?? { ...run.card, status, endedAt: run.clock(), branch, ...(pr ? { pr } : {}) }
+  const card = (await readLiveCard(run.checkout.path, run.id)) ?? { ...run.card, status, endedAt: run.clock(), branch, ...(pr ? { pr } : {}), ...(saidEarlier ? { caller: { ...run.card.caller, earlierPrs: earlier } } : {}) }
   const diary = live ? await readLiveDiary(run.checkout.path, run.id) : [...(run.priorDiary ?? []), { kind: 'ended', status, ...(detail !== undefined ? { detail } : {}), at: card.endedAt ?? run.clock() }]
   await run.marking
   const recorded = await recordRun(repo, card, diary, run.logs)

@@ -4,10 +4,8 @@ import type { ChoiceRequest } from '../../src/index.js'
 import { sendChoice, sendMessage } from '../rpc/control.js'
 import { useAction } from '../lib/use-action.js'
 import { cn } from '../lib/utils.js'
+import { answerPrompt, skipPrompt } from '../lib/answered-question.js'
 import { Button } from './ui/button.js'
-
-/** What Skip says to the agent: the person's own message, shown in the chat like any other. */
-export const SKIP_MESSAGE = 'I skip this question.'
 
 /** The pick that is no option: the person's own words, typed in the "Other" row. */
 const OTHER = Symbol('other')
@@ -23,8 +21,10 @@ function Key({ n }: { n: number }) {
 // The question an agent's turn ended on, as a panel above the message box, the way Claude Code on
 // the web asks: the title, one row per option (its label, its description, the number key that
 // picks it), an "Other" row to answer in one's own words, and Skip / Submit. An option's pick goes
-// over the control RPC, which hands the chosen labels to the agent; "Other" and Skip go as the
-// person's own message, which continues the agent like any message. A caller whose agent is not
+// over the control RPC, which hands the chosen labels to the agent; "Other" and Skip go as a
+// message in the same sentence's shape, so the chat draws every answer, a skip too, as the question
+// and what was said to it. The panel goes the moment the answer is taken, and the chat shows it
+// then: the agent's own line comes seconds later, once it is going again. A caller whose agent is not
 // reached that way (a cloud session) gives `send`: the pick goes through it, and the panel offers
 // the options only.
 // Mount it with `key={choice.id}` so a question asked again starts fresh. `active` binds the keys.
@@ -41,7 +41,7 @@ export function QuestionPanel({
   choice: ChoiceRequest
   /** The one question the keys answer: the number keys pick, Ctrl+Enter submits. */
   active?: boolean
-  /** Told the message "Other" or Skip sent, so the chat can show it at once. */
+  /** Told what the answer said to the agent, so the chat can show it at once. */
   onSaid?: ((text: string) => void) | undefined
   /**
    * Where the pick goes instead of the usual call: the picked option, or the checked ones. With
@@ -51,8 +51,8 @@ export function QuestionPanel({
   send?: ((pick: string | string[]) => Promise<unknown>) | undefined
 }) {
   const { busy, error, run } = useAction()
-  // Sent and accepted by the daemon: the panel stays, its controls off, until the agent going on
-  // takes it away. A refusal is shown in the daemon's own words, and the controls come back.
+  // Sent and accepted by the daemon: the panel goes, and the chat shows the answer. A refusal is
+  // shown in the daemon's own words, and the controls come back.
   const [sent, setSent] = useState(false)
   const [picked, setPicked] = useState<string | typeof OTHER | undefined>(() => (choice.multi ? undefined : (choice.recommended ?? choice.options[0]?.id)))
   const [checked, setChecked] = useState<Set<string>>(() => new Set(choice.multi ? choice.options.filter(o => o.default).map(o => o.id) : []))
@@ -62,32 +62,36 @@ export function QuestionPanel({
   const [folded, setFolded] = useState(false)
   const [hidden, setHidden] = useState(false)
   const otherInput = useRef<HTMLInputElement>(null)
-  const parked = busy || sent
   const words = other.trim()
 
-  const deliver = (fn: () => Promise<unknown>) => void run(fn, 'Could not send your answer — try again.').then(outcome => outcome.ok && setSent(true))
-  const answer = (pick: string | string[]) => deliver(() => (send ? send(pick) : sendChoice(projectId, choice.id, pick, agentId)))
-  const say = (text: string) =>
-    deliver(async () => {
-      const result = await sendMessage(projectId, text, agentId)
-      if (result.ok) onSaid?.(text)
-      return result
+  // Taken, the panel goes and the chat is told what the agent was sent, to show it at once.
+  const deliver = (fn: () => Promise<unknown>, said?: string) =>
+    void run(fn, 'Could not send your answer — try again.').then(outcome => {
+      if (!outcome.ok) return
+      setSent(true)
+      if (said !== undefined) onSaid?.(said)
     })
+  const answer = (pick: string | string[]) => {
+    if (send) return deliver(() => send(pick))
+    const labels = choice.options.filter(o => [pick].flat().includes(o.id)).map(o => o.label)
+    deliver(() => sendChoice(projectId, choice.id, pick, agentId), answerPrompt(choice.title, labels.length ? labels.join(', ') : '(none)'))
+  }
+  const say = (text: string) => deliver(() => sendMessage(projectId, text, agentId), text)
 
   // A single pick with "Other" chosen needs its words; everything else can always be sent.
   const ready = choice.multi || picked !== OTHER || words !== ''
   const submit = () => {
-    if (parked || !ready) return
+    if (busy || !ready) return
     if (choice.multi) {
       // Words in "Other" go with the checked options' labels, as one message: the agent reads both.
-      if (words !== '') return say([...choice.options.filter(o => checked.has(o.id)).map(o => o.label), words].join(', '))
+      if (words !== '') return say(answerPrompt(choice.title, [...choice.options.filter(o => checked.has(o.id)).map(o => o.label), words].join(', ')))
       return answer([...checked])
     }
-    if (picked === OTHER) return say(words)
+    if (picked === OTHER) return say(answerPrompt(choice.title, words))
     if (picked !== undefined) answer(picked)
   }
   const pick = (id: string) => {
-    if (parked) return
+    if (busy) return
     if (!choice.multi) return setPicked(id)
     setChecked(prev => {
       const next = new Set(prev)
@@ -100,7 +104,8 @@ export function QuestionPanel({
   const keys = useRef({ submit, pick })
   keys.current = { submit, pick }
   useEffect(() => {
-    if (!active) return
+    // Answered: the panel is gone, and its keys with it.
+    if (!active || sent) return
     const onKey = (e: KeyboardEvent) => {
       // Keys typed into a text field are that field's, except this panel's own "Other" row.
       const target = e.target as HTMLElement | null
@@ -121,13 +126,13 @@ export function QuestionPanel({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [active, choice.options, send])
+  }, [active, sent, choice.options, send])
 
   // A row is a filled block, not an outlined one, as Claude Code on the web draws its options: the
   // card already has the only border, and five outlines inside one made the panel read as a stack
   // of boxes. The one picked is a lighter fill in its place.
   const row = (on: boolean) => cn('flex w-full items-start gap-3 rounded-[5px] p-2 text-left', on ? 'bg-accent' : 'bg-muted/60 hover:bg-muted')
-  if (hidden) return null
+  if (hidden || sent) return null
   return (
     <section role="region" aria-label={choice.title} className="mx-auto w-full max-w-3xl px-2 pt-2">
       <div className="rounded-[10px] border border-border bg-background p-3">
@@ -159,7 +164,7 @@ export function QuestionPanel({
             const on = choice.multi ? checked.has(o.id) : picked === o.id
             return (
               <li key={o.id}>
-                <button type="button" role={choice.multi ? 'checkbox' : 'radio'} aria-checked={on} disabled={parked} onClick={() => pick(o.id)} className={cn(row(on), 'disabled:opacity-60')}>
+                <button type="button" role={choice.multi ? 'checkbox' : 'radio'} aria-checked={on} disabled={busy} onClick={() => pick(o.id)} className={cn(row(on), 'disabled:opacity-60')}>
                   {choice.multi && (
                     <span className={cn('mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border', on ? 'border-primary bg-primary text-primary-foreground' : 'border-border')} aria-hidden>
                       {on && <Check className="h-3 w-3" />}
@@ -183,7 +188,7 @@ export function QuestionPanel({
                 <input
                   ref={otherInput}
                   value={other}
-                  disabled={parked}
+                  disabled={busy}
                   onFocus={() => !choice.multi && setPicked(OTHER)}
                   onChange={e => setOther(e.target.value)}
                   onKeyDown={e => {
@@ -207,15 +212,15 @@ export function QuestionPanel({
         <div className="mt-3 flex items-center gap-2">
           {/* One line in every state, so the buttons never move. What the keys do is not written
               out: the number beside each option says it, and the key that submits is on the button. */}
-          <span role={parked ? 'status' : undefined} className="min-w-0 flex-1 truncate px-1 text-xs text-muted-foreground">
-            {busy ? 'Sending your answer…' : sent ? 'Answer sent — waiting for the agent to pick it up…' : ''}
+          <span role={busy ? 'status' : undefined} className="min-w-0 flex-1 truncate px-1 text-xs text-muted-foreground">
+            {busy ? 'Sending your answer…' : ''}
           </span>
           {!send && (
-            <Button variant="ghost" size="sm" disabled={parked} onClick={() => say(SKIP_MESSAGE)}>
+            <Button variant="ghost" size="sm" disabled={busy} onClick={() => say(skipPrompt(choice.title))}>
               Skip
             </Button>
           )}
-          <Button size="sm" disabled={parked || !ready} onClick={submit}>
+          <Button size="sm" disabled={busy || !ready} onClick={submit}>
             Submit
             {active && <kbd className="font-sans text-[11px] opacity-70" aria-hidden>⌃⏎</kbd>}
           </Button>

@@ -1,3 +1,5 @@
+import { stat } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { BridgeBrowserStatus } from '../bridge-browser.js'
 import { findAgent, findCheckout, readLiveMetas, readAllAgents, readDoing, loadAgentEvents, type AgentDoing, startedAtFromAgentId, isPidAlive, type AgentMeta, type AgentStatus, isRunId, projectBranches, type BranchesFor } from '../store/index.js'
 import { listProjectWorktrees } from '../worktrees.js'
@@ -104,11 +106,15 @@ export async function withRowMarks(cwd: string, agents: AgentMeta[]): Promise<Ag
  * from one cached listing of the project's requests, read only when one of the runs has a request.
  */
 export async function withPrStates(cwd: string, agents: AgentMeta[], states: (cwd: string) => Promise<Map<string, PrState>> = cachedPrStates): Promise<AgentMeta[]> {
-  if (!agents.some(agent => agent.pr !== undefined)) return agents
+  if (!agents.some(agent => agent.pr !== undefined || agent.earlierPrs?.length)) return agents
   const known = await states(cwd)
   return agents.map(agent => {
     const prState = agent.pr && known.get(agent.pr.url)
-    return prState ? { ...agent, prState } : agent
+    const earlierPrs = agent.earlierPrs?.map(pr => {
+      const state = known.get(pr.url)
+      return state ? { ...pr, state } : pr
+    })
+    return prState || earlierPrs ? { ...agent, ...(prState ? { prState } : {}), ...(earlierPrs ? { earlierPrs } : {}) } : agent
   })
 }
 
@@ -251,8 +257,22 @@ export async function onAgentWorktree(projectId: string, agentId: string): Promi
     const root = await resolveProjectPath(projectId)
     if (!root || !isRunId(agentId)) return null
     const checkout = await findCheckout(root, agentId, projectBranches)
-    if (!checkout) {
-      // The checkout's branch was the agent's; with no checkout the record is the only witness.
+    // Since-filtered like every run-scoped PR read (#1255): the checkout's branch is the agent's,
+    // but a reused pinned branch has a predecessor's PR history.
+    const since = startedAtFromAgentId(agentId)
+    // Read only while the checkout's own `.git` is there: without it git reads the project's
+    // checkout the run's folder sits in, and answered with the person's branch as the run's.
+    const linked = checkout ? await stat(join(checkout.path, '.git')).then(() => true, () => false) : false
+    const [status, live] = checkout && linked
+      ? await Promise.all([
+          readGitStatus(checkout.path, { prRoot: root, ...(since !== undefined ? { since } : {}) }).catch(() => undefined),
+          readLiveMetas(root).catch(() => []),
+        ])
+      : [undefined, []]
+    if (!checkout || !status) {
+      // The checkout's branch was the agent's; with no checkout the record is the only witness. So
+      // it is for a checkout git cannot read: the run's clean-up is removing it, and an answer
+      // without its branch put the bar above the message box away until the next read.
       const agent = await findAgent(root, agentId).catch(() => undefined)
       if (!agent) return null
       const pr = await resolveAgentPr(root, agent).catch(() => ({ value: undefined, pending: false }))
@@ -262,26 +282,19 @@ export async function onAgentWorktree(projectId: string, agentId: string): Promi
         ...(pr.pending ? { prPending: true } : {}),
       }
     }
-    // Since-filtered like every run-scoped PR read (#1255): the checkout's branch is the agent's,
-    // but a reused pinned branch has a predecessor's PR history.
-    const since = startedAtFromAgentId(agentId)
-    const [status, live] = await Promise.all([
-      readGitStatus(checkout.path, { prRoot: root, ...(since !== undefined ? { since } : {}) }).catch(() => undefined),
-      readLiveMetas(root).catch(() => []),
-    ])
     // Size is only read for a checkout nothing is writing to: a live agent's tree changes under the
     // poll, and a size over a build directory mid-build is a cost with no answer worth having. The
     // provider's sized listing is where a checkout's size comes from (#1774).
     const running = live.some(agent => agent.id === agentId && agent.status === 'running')
     const size = running ? undefined : (await (await projectBranches(root).catch(() => undefined))?.list({ sizes: true }).catch(() => []))?.find(row => row.id === agentId)?.sizeBytes
     return {
-      checkout: { path: checkout.path, dirty: status?.dirty ?? false, ...(size !== undefined ? { sizeBytes: size } : {}) },
-      ...(status?.branch ? { branch: status.branch } : {}),
+      checkout: { path: checkout.path, dirty: status.dirty, ...(size !== undefined ? { sizeBytes: size } : {}) },
+      branch: status.branch,
       // A session's branch is exactly the thing that has a PR (#809), so the bar can show it
       // like the project's does.
-      ...(status?.pr ? { pr: status.pr } : {}),
+      ...(status.pr ? { pr: status.pr } : {}),
       // Still being looked up rather than absent (#1028), so the bar can ask again shortly.
-      ...(status?.prPending ? { prPending: true } : {}),
+      ...(status.prPending ? { prPending: true } : {}),
     }
   }, null)
 }

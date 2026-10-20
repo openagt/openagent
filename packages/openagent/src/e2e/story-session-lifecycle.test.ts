@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { rm } from 'node:fs/promises'
+import { readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { makeWorld, waitFor, release, git } from './harness.js'
 import { onAgent, onAgents, onAgentHandoff, onAgentWorktree, onRetainedWorktrees, onActivity, onRecentAgents } from '../dashboard-rpc/reads.js'
@@ -104,6 +104,34 @@ test('two runs at once, each in its own checkout (#736)', async () => {
       await release(project, agentId)
       assert.equal((await world.waitAgent(project, agentId, 'done')).status, 'done')
     }
+  } finally {
+    await world.close()
+  }
+})
+
+test('a checkout git can no longer read, as one being removed, still answers with the run\'s branch', async () => {
+  const world = await makeWorld()
+  const rpc = world.rpc
+  try {
+    const project = await world.addProject()
+    const agentId = await world.startAgent(project, 'hold: a change')
+    await world.waitAgent(project, agentId, 'running')
+    const path = (await rpc(onAgentWorktree)(project.id, agentId))?.checkout?.path
+    assert.ok(path, 'the run has a checkout')
+    // What the run's clean-up leaves for a moment: the folder is there, git cannot read it. An
+    // answer without the branch put the bar above the message box away until the next read.
+    // A checkout's `.git` is a file naming where its repository is: pointed nowhere, git fails
+    // there rather than reading the project's own checkout above it.
+    const gitFile = join(path, '.git')
+    const was = await readFile(gitFile, 'utf8')
+    await writeFile(gitFile, 'gitdir: /nowhere\n')
+    assert.deepEqual(await rpc(onAgentWorktree)(project.id, agentId), { branch: `agent-${agentId}` })
+    // Gone first, as a removal may take it: never the project's own branch, which git reads then.
+    await rm(gitFile)
+    assert.deepEqual(await rpc(onAgentWorktree)(project.id, agentId), { branch: `agent-${agentId}` })
+    await writeFile(gitFile, was)
+    await release(project, agentId)
+    await world.waitAgent(project, agentId, 'done')
   } finally {
     await world.close()
   }

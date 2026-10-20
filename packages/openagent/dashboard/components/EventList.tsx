@@ -226,29 +226,36 @@ function Reply({ text }: { text: string }) {
   )
 }
 
-/**
- * Under the last thing the agent said: a button that copies it, and how long ago it said it, as
- * Claude Code on the web puts them under its last message. Only the last one has it — a row of
- * controls under every reply would be a row of controls down the whole chat.
- */
-function ReplyFooter({ text, at }: { text: string; at?: string | undefined }) {
+/** A button that copies a message, as Claude Code on the web has one under each message. */
+function CopyMessage({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
   return (
-    <div className="flex items-center gap-1 font-sans text-muted-foreground">
-      <button
-        type="button"
-        aria-label={copied ? 'Copied' : 'Copy this message'}
-        title={copied ? 'Copied' : 'Copy this message'}
-        onClick={() => {
-          void navigator.clipboard?.writeText(text).then(
-            () => setCopied(true),
-            () => undefined,
-          )
-        }}
-        className="flex h-6 w-6 items-center justify-center rounded hover:bg-accent hover:text-accent-foreground"
-      >
-        {copied ? <Check className="h-3.5 w-3.5" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
-      </button>
+    <button
+      type="button"
+      aria-label={copied ? 'Copied' : 'Copy this message'}
+      title={copied ? 'Copied' : 'Copy this message'}
+      onClick={() => {
+        void navigator.clipboard?.writeText(text).then(
+          () => setCopied(true),
+          () => undefined,
+        )
+      }}
+      className="flex h-6 w-6 items-center justify-center rounded hover:bg-accent hover:text-accent-foreground"
+    >
+      {copied ? <Check className="h-3.5 w-3.5" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
+    </button>
+  )
+}
+
+/**
+ * Under the agent's last message of a turn it finished: a button that copies it, and how long ago
+ * it was said, as Claude Code on the web puts them under its messages. Shown while the pointer is
+ * on the message, or a key is in the footer; its line is always there, so nothing moves when it shows.
+ */
+function ReplyFooter({ text, at }: { text: string; at?: string | undefined }) {
+  return (
+    <div className="flex h-6 items-center gap-1 font-sans text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 group-hover/row:opacity-100">
+      <CopyMessage text={text} />
       {at !== undefined && (
         <time dateTime={at} title={new Date(at).toLocaleString()} className="px-1 text-[11px]">
           {formatAge(at)}
@@ -293,12 +300,13 @@ function Asking({ choice }: { choice: ChoiceRequest }) {
 }
 
 // A question and the answer the person gave it: a small box on the left, the question in grey and
-// the answer under it, in place of the sentence the agent was resumed with.
-function Answer({ question, answer }: { question: string; answer: string }) {
+// the answer under it, in place of the sentence the agent was resumed with. A skipped one says so
+// where the answer would be.
+function Answer({ question, answer }: { question: string; answer?: string | undefined }) {
   return (
     <div role="group" aria-label="Your answer" className="min-w-[min(100%,20rem)] max-w-[85%] rounded-lg border border-border p-2.5 font-sans text-sm">
       <div className="text-muted-foreground">{question}</div>
-      <div className="text-foreground">{answer}</div>
+      {answer !== undefined ? <div className="text-foreground">{answer}</div> : <div className="italic text-muted-foreground">Skipped</div>}
     </div>
   )
 }
@@ -328,15 +336,17 @@ function Prompt({ text, at, queued = false, attached, fresh = false }: { text: s
       </div>
       {attached !== undefined && <Attached text={attached} />}
       {queued ? (
-        <span className="h-4 pr-1 text-[10px] text-muted-foreground">Queued</span>
+        <span className="h-6 pr-1 text-[11px] leading-6 text-muted-foreground">Queued</span>
       ) : (
-      <time
-        dateTime={at}
-        title={at === undefined ? undefined : new Date(at).toLocaleString()}
-        className="h-4 pr-1 text-[10px] tabular-nums text-muted-foreground opacity-0 transition-opacity group-hover/prompt:opacity-100"
-      >
-        {at === undefined ? '' : formatTime(at)}
-      </time>
+        // When it was sent and a copy of it, as Claude Code on the web shows under a message.
+        <div className="flex h-6 items-center gap-1 text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 group-hover/prompt:opacity-100">
+          {at !== undefined && (
+            <time dateTime={at} title={new Date(at).toLocaleString()} className="px-1 text-[11px]">
+              {formatAge(at)}
+            </time>
+          )}
+          <CopyMessage text={text} />
+        </div>
       )}
     </div>
   )
@@ -707,13 +717,17 @@ export function EventList({
   const viewport = useRef<HTMLDivElement>(null)
   const endRoom = useRef<HTMLDivElement>(null)
   useEndKept(viewport, endRoom)
-  // The last thing the agent said, once its turn is over: what the footer under the turn copies.
-  const lastShown = shown[shown.length - 1]
-  const lastText = lastShown ? textOf(lastShown) : null
-  const lastSaid =
-    !working && sending === undefined && lastShown !== undefined && lastText !== null && !isTurnBoundary(lastShown) && !ends.has(lastShown)
-      ? { text: lastText, at: lastShown.at }
-      : undefined
+  // The agent's last message of each turn it finished: the one with the footer under it. The turn
+  // going on has none until it ends: the agent has not finished saying it.
+  const turnEnds = new Set<OpenAgentEvent>()
+  let lastSaid: OpenAgentEvent | undefined
+  for (const e of shown) {
+    if (isTurnBoundary(e)) {
+      if (!ends.has(e) && lastSaid) turnEnds.add(lastSaid)
+      if (!ends.has(e)) lastSaid = undefined
+    } else if (textOf(e) !== null) lastSaid = e
+  }
+  if (lastSaid && !working && sending === undefined) turnEnds.add(lastSaid)
 
   return (
     <MessageScrollerProvider autoScroll={stick} defaultScrollPosition={openAt ?? (stick ? 'end' : 'start')}>
@@ -721,7 +735,7 @@ export function EventList({
       {/* A layer of its own: "Jump to latest" stays under the message box's bar. */}
       <MessageScroller className="isolate flex-1">
         <MessageScrollerViewport ref={viewport} aria-label="Agent output" className="scroll-pb-(--chat-bottom)">
-          <MessageScrollerContent spacerClassName="order-last" className="mx-auto w-full max-w-3xl gap-2 px-4 pt-4 font-mono text-xs">
+          <MessageScrollerContent spacerClassName="order-last" className="mx-auto w-full max-w-3xl gap-3 px-4 pt-4 font-mono text-xs">
             <div ref={endRoom} data-testid="log-end-room" className="order-9998 h-[calc(var(--chat-bottom,0px)+0.5rem)] shrink-0" aria-hidden />
             {shown.map((e, i, rows) => {
               const message = textOf(e)
@@ -757,7 +771,7 @@ export function EventList({
                 {startedRows(i)}
                 {/* Every row carries the same -mx/px pair so a washed row's band and a plain row's
                     text share the exact same columns; only the background differs. */}
-                <MessageScrollerItem messageId={idOf(e)} className={`group/row -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${own || answer ? 'mt-5 first:mt-0' : ''} ${end ? '' : rowWash(e)}`}>
+                <MessageScrollerItem messageId={idOf(e)} className={`group/row -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${own || answer ? 'mt-4 first:mt-0' : ''} ${end ? '' : rowWash(e)}`}>
                   {answer ? (
                     <Answer {...answer} />
                   ) : own && message !== null ? (
@@ -773,8 +787,15 @@ export function EventList({
                       )}
                     </div>
                   ) : message !== null ? (
-                    // The agent's reply, shown whole.
-                    <Reply text={message} />
+                    // The agent's reply, shown whole, and the last of a finished turn with its footer.
+                    turnEnds.has(e) ? (
+                      <div className="flex min-w-0 flex-1 flex-col gap-1">
+                        <Reply text={message} />
+                        <ReplyFooter text={message} at={at} />
+                      </div>
+                    ) : (
+                      <Reply text={message} />
+                    )
                   ) : steps.has(e) ? (
                     <ToolCalls steps={steps.get(e)!} lead={setupInSteps && i === setupAt ? setupLine : undefined} />
                   ) : choiceRow && choiceRow.pick === undefined ? (
@@ -793,7 +814,7 @@ export function EventList({
                       {(formatOpenAgentEvent(e) ?? '').trim()}
                     </span>
                   )}
-                  {!own && chunkHead && at !== undefined && (
+                  {!own && chunkHead && at !== undefined && !turnEnds.has(e) && (
                     <Tooltip>
                       <TooltipTrigger
                         render={<span className={TIME} />}
@@ -820,14 +841,6 @@ export function EventList({
               <MessageScrollerItem messageId="changes-last" className="-mx-1.5 flex items-start gap-2 rounded-sm px-1.5">
                 <ChangedFiles files={changes.last} onOpen={onOpenChange} />
               </MessageScrollerItem>
-            )}
-            {/* Under everything the turn left behind, once it has ended: the reply copied, and how
-                long ago it was said. Claude Code on the web puts the pair under its last message;
-                here the turn's files come between, and the footer closes the turn under them. */}
-            {lastSaid && (
-              <div className="-mx-1.5 flex items-start gap-2 rounded-sm px-1.5">
-                <ReplyFooter text={lastSaid.text} at={lastSaid.at} />
-              </div>
             )}
             {/* The live line's place is kept when it has nothing to say (a message being written,
                 the agent's turn over): nothing under it moves up when it goes, nor down when it comes. */}

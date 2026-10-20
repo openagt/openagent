@@ -160,6 +160,12 @@ export interface AgentMeta {
    */
   prState?: 'open' | 'draft' | 'merged' | 'closed'
   /**
+   * The pull requests the run opened before {@link pr}, oldest first: a run that moved its work to a
+   * new branch opened one for each. Kept by the tool that ran it, under its `caller` key; each one
+   * marked with how it stands like {@link prState}.
+   */
+  earlierPrs?: { number: number; url: string; state?: 'open' | 'draft' | 'merged' | 'closed' }[]
+  /**
    * How many commits of the run's own wait on its branch, never pushed: its work has not left this
    * machine. Not stored: annotated on the way to the dashboard like {@link prState}, since a push
    * changes it, not the run.

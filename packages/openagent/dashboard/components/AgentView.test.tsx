@@ -28,7 +28,7 @@ vi.mock('../rpc/control.js', () => ({
   sendBridgeAnswer: vi.fn(async () => null),
   sendBridgeAnswerCancel: vi.fn(async () => null),
   sendStart: vi.fn(async () => null),
-  sendChoice: vi.fn(async () => null),
+  sendChoice: vi.fn(async () => ({ ok: true })),
 }))
 // The page's parts read the preferences module, whose RPC reads must not fetch a daemon that is
 // not there.
@@ -62,8 +62,9 @@ vi.mock('./AgentWorkBar.js', () => ({
 }))
 // The composer shows only what the view tells it about the run going: the one fact of it under test here.
 vi.mock('./AgentComposer.js', () => ({
-  AgentComposer: ({ live, outcome, model, context, onQueued }: { live: boolean; outcome?: unknown; model?: string; context?: ReactNode; onQueued?: (text: string) => void }) => (
+  AgentComposer: ({ live, outcome, model, context, controls, onQueued }: { live: boolean; outcome?: unknown; model?: string; context?: ReactNode; controls?: ReactNode; onQueued?: (text: string) => void }) => (
     <>
+      <span data-testid="composer-controls">{controls}</span>
       <button type="button" onClick={() => onQueued?.('and then this')}>queue-one</button>
       <span data-testid="composer-model">{model ?? ''}</span>
       <span data-testid="composer-context">{context}</span>
@@ -590,14 +591,24 @@ describe('a question the agent stopped on', () => {
     expect(chat.textContent).not.toContain('Postgres')
   })
 
-  test('an answer in one\'s own words shows in the chat at once, as the message it is', async () => {
+  test('an answer in one\'s own words shows in the chat at once, as the question and the words, and the panel goes', async () => {
     onAgent.mockResolvedValue(asked)
     render(view({ events: asked }))
     fireEvent.change(await screen.findByLabelText('Other'), { target: { value: 'MySQL' } })
     fireEvent.focus(screen.getByLabelText('Other'))
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
-    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', 'MySQL', 'run-1'))
-    await waitFor(() => expect(screen.getAllByLabelText('Your message').at(-1)!.textContent).toBe('MySQL'))
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', 'You paused to ask: "Which database?". The user chose: MySQL. Continue with that decision.', 'run-1'))
+    await waitFor(() => expect(screen.getByRole('group', { name: 'Your answer' }).textContent).toBe('Which database?MySQL'))
+    expect(screen.queryByRole('region', { name: 'Which database?' })).toBeNull()
+  })
+
+  test('a picked option shows in the chat at once, before the agent is going again', async () => {
+    onAgent.mockResolvedValue(asked)
+    render(view({ events: asked }))
+    fireEvent.click(await screen.findByRole('radio', { name: /SQLite/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+    await waitFor(() => expect(screen.getByRole('group', { name: 'Your answer' }).textContent).toBe('Which database?SQLite'))
+    expect(screen.queryByRole('region', { name: 'Which database?' })).toBeNull()
   })
 
   test('once the agent has gone on, the panel is gone', async () => {
@@ -934,6 +945,34 @@ describe('AgentView: the bar when the work is landed', () => {
     await waitFor(() => expect(onAgentHandoff).toHaveBeenCalledWith('p1', 'run-m'))
     await new Promise(resolve => setTimeout(resolve, 30))
     expect(screen.getByTestId('work-bar').dataset.show).toBe('false')
+  })
+
+  test('a closed pull request takes the bar away too', async () => {
+    onAgent.mockResolvedValue(ENDED)
+    onAgentWorktree.mockResolvedValue({ branch: 'agent-c', pr: { number: 3, url: 'https://x/pull/3', state: 'CLOSED', title: 'T' } })
+    onAgentHandoff.mockResolvedValue({ ...PUSHED, pushed: true })
+    render(view({ agentId: 'run-c', events: ENDED }))
+    await waitFor(() => expect(onAgentHandoff).toHaveBeenCalledWith('p1', 'run-c'))
+    await new Promise(resolve => setTimeout(resolve, 30))
+    expect(screen.getByTestId('work-bar').dataset.show).toBe('false')
+  })
+
+  test('a checkout read with no branch, as one taken while the checkout is removed, leaves the bar its branch and request from the branch read', async () => {
+    onAgent.mockResolvedValue(ENDED)
+    onAgentWorktree.mockResolvedValue({ checkout: { path: '/w', dirty: false } })
+    onAgentHandoff.mockResolvedValue({ ...PUSHED, pr: { number: 7, url: 'https://x/pull/7', state: 'OPEN', title: 'T' } })
+    render(view({ agentId: 'run-g', events: ENDED }))
+    await waitFor(() => expect(screen.getByTestId('work-bar').dataset.show).toBe('true'))
+    const checkout = JSON.parse(screen.getByTestId('work-checkout').textContent!) as { branch?: string; pr?: { number: number } }
+    expect([checkout.branch, checkout.pr?.number]).toEqual(['agent-add-hello2', 7])
+  })
+
+  test('every pull request the run opened is a label under the box, the earlier ones first', async () => {
+    onAgent.mockResolvedValue(ENDED)
+    onAgentWorktree.mockResolvedValue({ branch: 'agent-b', pr: { number: 5, url: 'https://x/pull/5', state: 'OPEN', title: 'T' } })
+    onAgentHandoff.mockResolvedValue({ ...PUSHED, pushed: true })
+    render(view({ agentId: 'run-two', events: ENDED, card: { status: 'done', earlierPrs: [{ number: 4, url: 'https://x/pull/4', state: 'merged' }] } as never }))
+    await waitFor(() => expect(within(screen.getByTestId('composer-controls')).getAllByRole('link').map(link => link.getAttribute('aria-label'))).toEqual(['PR #4 merged, on the git host', 'PR #5 open, on the git host']))
   })
 
   test('work left uncommitted after the merge keeps the bar: that work is not landed', async () => {
