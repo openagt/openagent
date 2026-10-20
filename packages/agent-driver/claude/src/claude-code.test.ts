@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { Readable, Writable } from 'node:stream'
 import { existsSync, readFileSync } from 'node:fs'
-import { ClaudeCodeDriver, StreamJsonParser, claudeCodeReady } from './claude-code.js'
+import { ClaudeCodeDriver, settingsEffort, StreamJsonParser, claudeCodeReady } from './claude-code.js'
 import { ConversationGoneError, runCliSession, type SpawnLike, type SpawnedProcess, type DriverEvent } from '@openagt/agent-driver'
 
 test('StreamJsonParser surfaces assistant text + tool names, keeps the result', () => {
@@ -344,6 +344,41 @@ test('a logged session\'s card names the model Claude Code ran, not the alias it
     assert.ok(!kinds.includes('model'), kinds.join(' '))
   } finally {
     await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test("a logged session's card says how hard the model thinks: the effort picked, else the one Claude Code's settings set, the checkout's before the person's, whose own are left out with skills off; none when no file sets one", async () => {
+  const { mkdtemp, mkdir, readFile, rm, writeFile } = await import('node:fs/promises')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const root = await mkdtemp(join(tmpdir(), 'claude-effort-'))
+  const cwd = join(root, 'ws')
+  const home = join(root, 'home')
+  const settings = async (dir: string, file: string, level: string) => {
+    await mkdir(join(dir, '.claude'), { recursive: true })
+    await writeFile(join(dir, '.claude', file), JSON.stringify({ effortLevel: level }))
+  }
+  try {
+    assert.equal(await settingsEffort(cwd, home, true), undefined, 'no file sets one: Claude Code does not say its default')
+    await settings(home, 'settings.json', 'high')
+    assert.equal(await settingsEffort(cwd, home, true), 'high')
+    assert.equal(await settingsEffort(cwd, home, false), undefined, "skills off leaves the person's own settings out")
+    await settings(cwd, 'settings.json', 'low')
+    assert.equal(await settingsEffort(cwd, home, true), 'low', "the project's before the person's")
+    await settings(cwd, 'settings.local.json', 'max')
+    assert.equal(await settingsEffort(cwd, home, false), 'max', 'the local before the project')
+
+    const lines = [JSON.stringify({ type: 'system', subtype: 'init', session_id: 's1', model: 'claude-opus-5-5' }), JSON.stringify({ type: 'result', result: 'ok', session_id: 's1' })]
+    const logged = async (id: string, effort?: string) => {
+      const session = await new ClaudeCodeDriver({ spawn: fakeSpawn(lines), env: { HOME: home } }).start({ cwd, ...(effort !== undefined ? { effort } : {}), log: { dir: root, card: { id } } })
+      await session.prompt('go')
+      await session.log!.settled()
+      return JSON.parse(await readFile(join(root, `${id}.json`), 'utf8')).effort as string | undefined
+    }
+    assert.equal(await logged('r1'), 'max', 'none picked: the settings')
+    assert.equal(await logged('r2', 'medium'), 'medium', 'the one picked')
+  } finally {
+    await rm(root, { recursive: true, force: true })
   }
 })
 

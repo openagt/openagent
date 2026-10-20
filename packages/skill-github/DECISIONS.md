@@ -68,9 +68,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   (ETag): "not modified" costs no call of the hour's, and then nothing is read, so the row
   can look every few seconds. Reviews, checks and conflicts have no such question: the
   whole read is made at least once a minute. Picked over the whole read at every look.
-- A comment `comment` writes ends with a hidden mark, and `replies` never counts one that
-  carries it: it is posted with a person's account, and an agent's own words must never wake
-  it, even words that lost their 🤖 line. Picked over the 🤖 line alone.
+- A comment `comment` writes opens with the coding agent's logo, the model and the effort,
+  as the agent's run record names them (`<logo> sonnet-5-5 · high effort`), else the 🤖
+  line. Picked over the 🤖 line on every comment, and over the agent's name beside its logo.
+- It ends with a hidden mark, and `replies` never counts one that carries it: it is posted
+  with a person's account, and an agent's own words must never wake it.
 - Each comment and review a look hands a run gets 👀 from the look itself, so who wrote sees
   within seconds that an agent saw it. Picked over the agent putting it once it started.
 

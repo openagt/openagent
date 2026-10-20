@@ -9,7 +9,7 @@ import { GIT_HOST_NAME, homeUrlFor } from './home.js'
 import { createRepository, offerRepository, type CreateOffer, type CreateOutcome } from './create.js'
 import { signedIn } from './me.js'
 import { listReplies } from './replies.js'
-import { writeComment } from './comment.js'
+import { DIARY_ENV, byline, writeComment } from './comment.js'
 
 /**
  * The command line over the package (#1820): the same functions for an agent in a shell, and for
@@ -34,7 +34,8 @@ export const USAGE = `usage: github <command>
                                and reviews, checks that turned red, a conflict once the base branch moved; [{ run, text }], one per run, read
                                from the project's run records; the check of a scheduler's row that resumes runs
   comment <number> --body <text>
-                               post a comment on pull request <number>, a hidden mark after the text so replies never counts it: its id and url
+                               post a comment on pull request <number>: its id and url. It opens with the coding agent's logo, the model and the effort, as the agent's
+                               run record says (found through AGENT_DIARY, which its runner sets), else the line 🤖 automated; a hidden mark after the text, so replies never counts it
   open [--branch <b>] --title <t> [--body <text>] [--draft] [--merge]
                                open the pull request of branch <b> (default: the current branch; it must be on the remote already); an open one is answered as it is; --merge lands it on green
   merge <number>               land pull request <number>: a draft is marked ready, then the merge is armed as --merge arms it
@@ -59,6 +60,8 @@ export interface CliDeps {
   git?: GitRunner
   /** Start the merge watcher for a request; the default starts this package's own process. */
   watch?: (repo: string, number: number) => Promise<void>
+  /** The environment the command runs in; the default is this process's. */
+  env?: NodeJS.ProcessEnv
 }
 
 /** A refusal: a rule said no, and the caller learns which. */
@@ -82,7 +85,7 @@ export async function runCli(argv: string[], io: CliIo, deps: CliDeps = {}): Pro
     io.stderr(USAGE)
     return 2
   }
-  const context: Context = { cwd: io.cwd, gh: deps.gh ?? nodeGhRunner(), git: deps.git ?? nodeGitRunner(), ...(deps.watch ? { watch: deps.watch } : {}), stderr: io.stderr }
+  const context: Context = { cwd: io.cwd, gh: deps.gh ?? nodeGhRunner(), git: deps.git ?? nodeGitRunner(), ...(deps.watch ? { watch: deps.watch } : {}), env: deps.env ?? process.env, stderr: io.stderr }
   try {
     io.stdout(JSON.stringify(await run(rest, context)))
     return 0
@@ -108,6 +111,7 @@ interface Context {
   gh: GhRunner
   git: GitRunner
   watch?: (repo: string, number: number) => Promise<void>
+  env: NodeJS.ProcessEnv
   stderr: (line: string) => void
 }
 
@@ -136,12 +140,12 @@ const COMMANDS: Record<string, Command> = {
     }
   },
 
-  async comment(args, { cwd, gh }) {
+  async comment(args, { cwd, gh, env }) {
     const { values, positionals } = parse(args, { body: { type: 'string' } }, 1)
     if (values.body === undefined || !values.body.trim()) throw new Usage('--body is required: the text of the comment')
     const number = numberArg(positionals[0]!)
     try {
-      return { ok: true, ...(await writeComment(cwd, number, values.body, gh)) }
+      return { ok: true, ...(await writeComment(cwd, number, values.body, await byline(env[DIARY_ENV]), gh)) }
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err)
       throw new Refused({ ok: false, reason: 'git-host-failed', detail }, `the comment could not be written: ${detail}`)

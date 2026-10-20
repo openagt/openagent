@@ -18,7 +18,8 @@
   "files": [
     "dist",
     "bin/github",
-    "SKILL.md"
+    "SKILL.md",
+    "assets"
   ],
   "bin": {
     "github": "bin/github"

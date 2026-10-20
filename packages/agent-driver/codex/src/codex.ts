@@ -147,7 +147,7 @@ export class CodexDriver implements Driver {
       sessionEnv = { ...env, CODEX_HOME: home }
     }
     const extraArgs = [...args, ...(this.opts.extraArgs ?? [])]
-    return new CodexSession({ ...this.opts, env: sessionEnv, ...(extraArgs.length > 0 ? { extraArgs } : {}) }, opts)
+    return new CodexSession({ ...this.opts, env: sessionEnv, ...(extraArgs.length > 0 ? { extraArgs } : {}) }, opts, () => this.listModels())
   }
 
   /**
@@ -215,11 +215,13 @@ export function parseCodexModels(stdout: string): { models: DriverModel[] } | { 
       ? (entry['supported_reasoning_levels'] as Record<string, unknown>[]).map(level => level?.['effort']).filter((level): level is string => typeof level === 'string')
       : []
     const window = entry['context_window']
+    const defaultEffort = entry['default_reasoning_level']
     listed.push({
       model: {
         id,
         name: typeof name === 'string' ? name : id,
         ...(efforts.length > 0 ? { efforts } : {}),
+        ...(typeof defaultEffort === 'string' && defaultEffort !== '' ? { defaultEffort } : {}),
         ...(typeof window === 'number' && window > 0 ? { contextWindow: window } : {}),
       },
       priority,
@@ -246,10 +248,14 @@ export class CodexSession implements DriverSession {
    * messages chain.
    */
   private lastSessionId: string | undefined
+  /** Codex's model list, read once for the session the first time it is needed. */
+  private listed: Promise<DriverModel[]> | undefined
 
   constructor(
     private readonly config: CodexDriverOptions,
     startOpts: DriverStartOptions,
+    /** Codex's models, for the effort one thinks at when none was picked and Codex did not say. */
+    private readonly models?: () => Promise<DriverModel[]>,
   ) {
     const attached = attachLog(startOpts)
     this.startOpts = attached.opts
@@ -265,7 +271,7 @@ export class CodexSession implements DriverSession {
     const framing = resumeId === undefined ? combineFraming(this.startOpts.system, opts.system) : ''
     // Resolved every turn, not at start: the agent may `git init` in turn 1.
     const gitDir = await gitCommonDir(this.cwd)
-    const emit = makeEmit(this.startOpts.onEvent, 'codex')
+    const emit = this.withDefaultEffort(makeEmit(this.startOpts.onEvent, 'codex'))
     const agent = (emitFn: (event: DriverEvent) => void): Promise<DriverTurn> =>
       runCliSession({
         bin: this.config.bin ?? 'codex',
@@ -293,6 +299,27 @@ export class CodexSession implements DriverSession {
     const turn = resumeId === undefined ? await agent(emit) : await continuingTurn('codex', resumeId, emit, isConversationGone, agent)
     if (turn.sessionId) this.lastSessionId = turn.sessionId
     return finishTurn(this, turn, opts, emit)
+  }
+
+  /**
+   * The model said again with the effort it thinks at, when none was picked and Codex said none:
+   * its model's default, as Codex's model list gives it, once the list is read. A list that cannot
+   * be read leaves the model as it was said.
+   */
+  private withDefaultEffort(emit: (event: DriverEvent) => void): (event: DriverEvent) => void {
+    if (this.startOpts.effort || !this.models) return emit
+    const models = this.models
+    return event => {
+      emit(event)
+      if (event.type !== 'model' || event.effort !== undefined) return
+      void (this.listed ??= models()).then(
+        listed => {
+          const effort = listed.find(m => m.id === event.model)?.defaultEffort
+          if (effort !== undefined) emit({ type: 'model', model: event.model, effort })
+        },
+        () => {},
+      )
+    }
   }
 
   readCode(path: string): Promise<string> {
@@ -608,9 +635,11 @@ export class CodexAppServerParser implements AgentCliParser {
     this.sessionId = threadId
     this.request('turn/start', { threadId, input: [{ type: 'text', text: this.turn.text, text_elements: [] }] }, started => this.onTurn(started['turn']))
     const events: DriverEvent[] = [{ type: 'session', sessionId: threadId }]
-    // The model the conversation runs on, by Codex's own id, even when none was picked.
+    // The model the conversation runs on, by Codex's own id, even when none was picked, and how
+    // hard it thinks when that was set: picked, or in the person's config; none for the model's own.
     const model = result['model']
-    if (typeof model === 'string' && model !== '') events.push({ type: 'model', model })
+    const effort = result['reasoningEffort']
+    if (typeof model === 'string' && model !== '') events.push({ type: 'model', model, ...(typeof effort === 'string' && effort !== '' ? { effort } : {}) })
     return events
   }
 

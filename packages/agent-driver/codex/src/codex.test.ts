@@ -52,6 +52,8 @@ interface FakeServer {
   stderr?: string
   /** Raw lines it writes before anything else. */
   noise?: string[]
+  /** The effort its answer to `thread/start` says the conversation thinks at. */
+  reasoningEffort?: string
 }
 
 /** What a {@link fakeAppServer} was asked: the arguments, the environment, and every message it read. */
@@ -86,7 +88,7 @@ function fakeAppServer(server: FakeServer = {}, seen?: (s: Seen) => void): Spawn
       if (msg.method === 'initialize') return send({ id: msg.id, result: { userAgent: 'fake' } })
       if (msg.method === 'thread/start' || msg.method === 'thread/resume') {
         const threadId = msg.method === 'thread/resume' ? msg.params?.['threadId'] : 'thread-1'
-        send({ id: msg.id, result: { thread: { id: threadId }, model: 'gpt-5.6-terra' } })
+        send({ id: msg.id, result: { thread: { id: threadId }, model: 'gpt-5.6-terra', ...(server.reasoningEffort !== undefined ? { reasoningEffort: server.reasoningEffort } : { reasoningEffort: null }) } })
         if (msg.method === 'thread/resume') for (const m of server.afterResume ?? []) send(m)
         return
       }
@@ -518,7 +520,7 @@ const CATALOG = JSON.stringify({
   models: [
     { slug: 'gpt-reserve', display_name: 'GPT-Reserve', visibility: 'hide', priority: 3 },
     { slug: 'gpt-5.5', display_name: 'GPT-5.5', visibility: 'list', priority: 12 },
-    { slug: 'gpt-5.6-terra', display_name: 'GPT-5.6-Terra', visibility: 'list', priority: 7, context_window: 272_000, max_context_window: 872_000, supported_reasoning_levels: [{ effort: 'low' }, { effort: 'medium' }, { effort: 'high' }] },
+    { slug: 'gpt-5.6-terra', display_name: 'GPT-5.6-Terra', visibility: 'list', priority: 7, context_window: 272_000, max_context_window: 872_000, supported_reasoning_levels: [{ effort: 'low' }, { effort: 'medium' }, { effort: 'high' }], default_reasoning_level: 'medium' },
     { slug: 'gpt-5.6-luna', display_name: 'GPT-5.6-Luna', visibility: 'list', priority: 8 },
   ],
 })
@@ -526,8 +528,8 @@ const CATALOG = JSON.stringify({
 test('parseCodexModels keeps the models Codex lists, in its own order', () => {
   assert.deepEqual(parseCodexModels(CATALOG), {
     models: [
-      // Codex says both of these itself: what the model may think at, and how much it holds.
-      { id: 'gpt-5.6-terra', name: 'GPT-5.6-Terra', efforts: ['low', 'medium', 'high'], contextWindow: 272_000 },
+      // Codex says these itself: what the model may think at, what it thinks at when none is picked, and how much it holds.
+      { id: 'gpt-5.6-terra', name: 'GPT-5.6-Terra', efforts: ['low', 'medium', 'high'], defaultEffort: 'medium', contextWindow: 272_000 },
       { id: 'gpt-5.6-luna', name: 'GPT-5.6-Luna' },
       { id: 'gpt-5.5', name: 'GPT-5.5' },
     ],
@@ -552,6 +554,28 @@ function fakeSpawn(lines: string[], onSpawn?: (args: readonly string[]) => void,
     return proc
   }
 }
+
+test("the model a Codex conversation runs on is said with its effort: the one Codex reports, else its model's default from Codex's list, read once a session; with one picked the list is not read", async () => {
+  const run = async (server: FakeServer, effort?: string) => {
+    const events: DriverEvent[] = []
+    const asked: string[] = []
+    const app = fakeAppServer(server)
+    const spawn: SpawnLike = (command, args, opts) => (args[0] === 'debug' ? (asked.push(args.join(' ')), fakeSpawn([CATALOG])(command, args, opts)) : app(command, args, opts))
+    const session = await new CodexDriver({ spawn }).start({ cwd: '/ws', onEvent: e => events.push(e), ...(effort !== undefined ? { effort } : {}) })
+    await session.prompt('go')
+    await session.prompt('again', { resume: true })
+    // The list's answer comes on its own time, after the model was first said.
+    for (let i = 0; i < 50 && server.reasoningEffort === undefined && effort === undefined && events.filter(e => e.type === 'model' && e.effort !== undefined).length < 2; i++) await new Promise(r => setTimeout(r, 10))
+    return { models: events.filter(e => e.type === 'model'), asked }
+  }
+  const reported = await run({ reasoningEffort: 'high' })
+  assert.deepEqual(reported.models, [{ type: 'model', model: 'gpt-5.6-terra', effort: 'high' }, { type: 'model', model: 'gpt-5.6-terra', effort: 'high' }])
+  assert.deepEqual(reported.asked, [], 'Codex said it: its list is not read')
+  const defaulted = await run({})
+  assert.deepEqual(defaulted.models.filter(e => e.type === 'model' && e.effort !== undefined), [{ type: 'model', model: 'gpt-5.6-terra', effort: 'medium' }, { type: 'model', model: 'gpt-5.6-terra', effort: 'medium' }])
+  assert.deepEqual(defaulted.asked, ['debug models'], 'read once for the session')
+  assert.deepEqual((await run({}, 'low')).asked, [], 'picked: its list is not read')
+})
 
 test('CodexDriver.listModels asks `codex debug models`, and says why when Codex fails', async () => {
   let asked: readonly string[] = []

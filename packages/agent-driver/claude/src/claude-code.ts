@@ -1,6 +1,7 @@
 import { spawn as nodeSpawn } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readFile } from 'node:fs/promises'
+import { homedir, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { readClaudeQuota } from './claude-code-quota.js'
 import { readClaudeModels } from './claude-code-models.js'
@@ -103,6 +104,28 @@ function withPersonal(opts: ClaudeCodeDriverOptions): ClaudeCodeDriverOptions {
   return { ...opts, env, ...(extraArgs.length > 0 ? { extraArgs } : {}) }
 }
 
+/**
+ * The effort Claude Code's settings set (`effortLevel`), as it reads them when none is passed: the
+ * checkout's local settings, its project settings, then the person's own, which `skills` off
+ * leaves out (`--setting-sources project,local`). None when no file sets one: Claude Code does not
+ * say which default it then uses.
+ */
+export async function settingsEffort(cwd: string, home: string, user: boolean): Promise<string | undefined> {
+  const files = [join(cwd, '.claude', 'settings.local.json'), join(cwd, '.claude', 'settings.json'), ...(user ? [join(home, '.claude', 'settings.json')] : [])]
+  for (const file of files) {
+    const settings = await readFile(file, 'utf8').then(text => JSON.parse(text) as unknown, () => undefined)
+    const level = typeof settings === 'object' && settings !== null ? (settings as Record<string, unknown>)['effortLevel'] : undefined
+    if (typeof level === 'string' && level !== '') return level
+  }
+  return undefined
+}
+
+/** The model said with `effort`, when there is one. */
+function withEffort(emit: (event: DriverEvent) => void, effort: string | undefined): (event: DriverEvent) => void {
+  if (effort === undefined) return emit
+  return event => emit(event.type === 'model' ? { ...event, effort } : event)
+}
+
 let sessionCounter = 0
 
 /** One workspace-bound Claude Code session. `prompt` is a fresh CLI invocation. */
@@ -119,6 +142,8 @@ export class ClaudeCodeSession implements DriverSession {
   private lastSessionId: string | undefined
   readonly log?: SessionLog
   private readonly startOpts: DriverStartOptions
+  /** How hard the model thinks: the one picked, else the one Claude Code's settings set, read once for the session. */
+  private effort: Promise<string | undefined> | undefined
 
   constructor(
     private readonly config: ClaudeCodeDriverOptions,
@@ -137,7 +162,8 @@ export class ClaudeCodeSession implements DriverSession {
   async prompt(text: string, opts: DriverPromptOptions = {}): Promise<DriverTurn> {
     const system = combineFraming(this.startOpts.system, opts.system)
     const resumeId = opts.resume ? this.lastSessionId : undefined
-    const emit = makeEmit(this.startOpts.onEvent, 'claude-code')
+    const effort = await (this.effort ??= this.startOpts.effort !== undefined ? Promise.resolve(this.startOpts.effort) : settingsEffort(this.cwd, (this.config.env ?? process.env)['HOME'] ?? homedir(), this.config.personal?.skills !== false))
+    const emit = withEffort(makeEmit(this.startOpts.onEvent, 'claude-code'), effort)
     const signals = combineSignals(this.startOpts.signal, opts.signal)
     const agent = (id: string | undefined, emitFn: (event: DriverEvent) => void): Promise<DriverTurn> =>
       runCliSession({

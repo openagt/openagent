@@ -40,6 +40,8 @@ export interface LogCard {
   title?: string
   driver?: string
   model?: string
+  /** How hard the model thinks, by its agent's names: the one picked, or the one in force when the driver can tell. */
+  effort?: string
   branch?: string
   pr?: { number: number; url: string }
   /** How much of the model's context the conversation filled at the last turn ({@link DriverUsage.contextTokens}). */
@@ -137,6 +139,7 @@ export class SessionLog {
   record(event: DriverEvent): Promise<void> {
     if (event.type === 'model') {
       this.card.model = event.model
+      if (event.effort !== undefined) this.card.effort = event.effort
       return this.queue(() => this.writeCard())
     }
     if (event.type === 'partial') return this.writePartial(event.text)

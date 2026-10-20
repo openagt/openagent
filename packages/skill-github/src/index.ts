@@ -8,4 +8,4 @@ export { runCli, USAGE, type CliIo, type CliDeps, type CliRefusal } from './cli.
 export { createRepository, offerRepository, type CreateOffer, type CreateOutcome } from './create.js'
 export { signedIn, type MeOutcome } from './me.js'
 export { listReplies, parseOpenRequests, repliesArgs, repliesFor, seenArgs, watchedRequests, REPLIES_LIMIT, WHOLE_READ_EVERY_MS, type OpenRequest, type Reply, type Watched } from './replies.js'
-export { writeComment, commentArgs, COMMENT_MARK, type Comment } from './comment.js'
+export { writeComment, commentArgs, byline, COMMENT_MARK, DIARY_ENV, ASSETS_URL, type Comment } from './comment.js'

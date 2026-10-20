@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 import type { GhRunner } from './gh.js'
-import { runCli, USAGE } from './cli.js'
+import { runCli, USAGE, type CliDeps } from './cli.js'
+import { ASSETS_URL, byline } from './comment.js'
 
 // The command line OpenAgent, the scheduler and an agent run: JSON on stdout, a line for a
 // person on stderr, an exit code that says refusal or usage error. gh is scripted throughout.
@@ -16,7 +17,7 @@ interface Ran {
   err: string
 }
 
-async function run(cwd: string, argv: string[], deps: { gh?: GhRunner; git?: GitRunner; watch?: (repo: string, number: number) => Promise<void> } = {}): Promise<Ran> {
+async function run(cwd: string, argv: string[], deps: CliDeps = {}): Promise<Ran> {
   const outLines: string[] = []
   const errLines: string[] = []
   const code = await runCli(argv, { cwd, stdout: line => outLines.push(line), stderr: line => errLines.push(line) }, deps)
@@ -189,10 +190,21 @@ test('comment: a new one on a pull request; GitHub answers its id and url; the u
     asked.push(args)
     return JSON.stringify({ id: 99, url: 'https://github.com/o/r/pull/7#issuecomment-99' })
   }
-  const posted = await run('/r', ['comment', '7', '--body', 'Working on it'], { gh })
+  const posted = await run('/r', ['comment', '7', '--body', 'Working on it'], { gh, env: {} })
   assert.equal(posted.code, 0)
   assert.deepEqual(posted.out, { ok: true, id: 99, url: 'https://github.com/o/r/pull/7#issuecomment-99' })
-  assert.deepEqual(asked[0]!.slice(0, 4), ['api', 'repos/{owner}/{repo}/issues/7/comments', '-f', 'body=Working on it\n\n<!-- openagent -->'], 'the hidden mark after the text')
+  assert.deepEqual(asked[0]!.slice(0, 4), ['api', 'repos/{owner}/{repo}/issues/7/comments', '-f', 'body=🤖 *automated*\n\nWorking on it\n\n<!-- openagent -->'], 'no run record: the 🤖 line first; the hidden mark after the text')
+
+  // An agent a runner started: the run record beside its log says the coding agent, the model and the effort.
+  const dir = await mkdtemp(join(tmpdir(), 'comment-byline-'))
+  try {
+    await writeFile(join(dir, 'r1.json'), JSON.stringify({ id: 'r1', driver: 'claude-code', model: 'claude-sonnet-5-5', effort: 'high' }))
+    await run('/r', ['comment', '7', '--body', 'Done'], { gh, env: { AGENT_DIARY: join(dir, 'r1.jsonl') } })
+    assert.equal(asked[1]![3], `body=<img src="${ASSETS_URL}/claude.svg" width="16" height="16" align="top" alt="Claude Code"> sonnet-5-5 · high effort\n\nDone\n\n<!-- openagent -->`)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+  asked.length = 1
 
   assert.equal((await run('/r', ['comment', '7'], { gh })).code, 2, '--body is required')
   assert.equal((await run('/r', ['comment', '--body', 'x'], { gh })).code, 2, 'no pull request number')
@@ -202,4 +214,19 @@ test('comment: a new one on a pull request; GitHub answers its id and url; the u
   const failed = await run('/r', ['comment', '7', '--body', 'x'], { gh: async () => JSON.stringify({ message: 'Not Found' }) })
   assert.equal(failed.code, 1)
   assert.deepEqual(failed.out, { ok: false, reason: 'git-host-failed', detail: 'GitHub answered no comment' })
+})
+
+test("a comment's first line: Codex's logo, light and dark, with its model as Codex names it; the model alone with no effort on the record; the 🤖 line for a coding agent with no logo, a record that cannot be read, or no log at all", async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'comment-byline-'))
+  try {
+    const record = async (id: string, card: Record<string, unknown>) => (await writeFile(join(dir, `${id}.json`), JSON.stringify({ id, ...card })), join(dir, `${id}.jsonl`))
+    assert.equal(await byline(await record('c', { driver: 'codex', model: 'gpt-5.6-terra', effort: 'medium' })), `<picture><source media="(prefers-color-scheme: dark)" srcset="${ASSETS_URL}/codex-dark.svg"><img src="${ASSETS_URL}/codex-light.svg" width="16" height="16" align="top" alt="Codex"></picture> gpt-5.6-terra · medium effort`)
+    assert.match(await byline(await record('n', { driver: 'claude-code', model: 'claude-opus-5-5' })), /alt="Claude Code"> opus-5-5$/)
+    assert.equal(await byline(await record('o', { driver: 'other-agent', model: 'x' })), '🤖 *automated*')
+    assert.equal(await byline(join(dir, 'missing.jsonl')), '🤖 *automated*')
+    assert.equal(await byline(undefined), '🤖 *automated*')
+    assert.match(ASSETS_URL, /^https:\/\/cdn\.jsdelivr\.net\/npm\/@openagt\/skill-github@\d+\.\d+\.\d+\/assets$/, "this package's own version")
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
 })
