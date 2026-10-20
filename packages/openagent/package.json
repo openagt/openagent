@@ -73,7 +73,7 @@
     "@openagt/skill-orchestration": "workspace:*",
     "@openagt/skill-queue": "workspace:*",
     "@openagt/skill-tickets": "workspace:*",
-    "@openagt/agent-scheduler": "workspace:*",
+    "@openagt/skill-scheduler": "workspace:*",
     "@puppeteer/browsers": "3.2.1",
     "@shadcn/react": "^0.2.1",
     "@tiptap/core": "^2.10.0",

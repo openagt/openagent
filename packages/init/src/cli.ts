@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { basename } from 'node:path'
 import { parseArgs } from 'node:util'
 import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
-import { carriedSkills, GROUPS, SCHEDULER, SCHEDULER_LINE, SKILL_NAMES } from './catalogue.js'
+import { carriedSkills, GROUPS, SKILL_NAMES } from './catalogue.js'
 import { applyChange, commitChange, isKnown, type Change, type Changed } from './change.js'
 import { held, readProject, type ProjectState, type Standing } from './project.js'
 import { askList, askYesNo, type Row, type Terminal } from './prompt.js'
@@ -25,8 +25,9 @@ export const USAGE = `usage: npx @openagt/init [command]
                           and deletes the unticked, then asks "Commit these files now?" and
                           "Open the dashboard?". Run it again to add or remove a skill later.
   add <name>…             write these skills, asking nothing; one the project already holds is left
-                          as it is; \`scheduler\` switches the scheduler on
-  remove <name>…          delete these skills, asking nothing; \`scheduler\` switches the scheduler off
+                          as it is; \`scheduler\` also starts the scheduler with the dashboard, on this machine
+  remove <name>…          delete these skills, asking nothing; \`scheduler\` also takes the scheduler out
+                          of the dashboard's start, on this machine, and stops it
   update [<name>…]        write again every skill that has a newer text; a skill named is written again
                           whatever it holds now, a text changed by hand included
   list                    what the project has, and what there is to add
@@ -119,7 +120,7 @@ function parse(args: string[], needsName: boolean): { names: string[]; commit: b
   }
   if (needsName && parsed.positionals.length === 0) throw new Usage('name at least one skill')
   const unknown = parsed.positionals.find(name => !isKnown(name))
-  if (unknown !== undefined) throw new Refused({ ok: false, reason: 'unknown-skill', name: unknown }, `no skill ${unknown}: the skills are ${SKILL_NAMES.join(', ')}, and ${SCHEDULER}`)
+  if (unknown !== undefined) throw new Refused({ ok: false, reason: 'unknown-skill', name: unknown }, `no skill ${unknown}: the skills are ${SKILL_NAMES.join(', ')}`)
   return { names: [...new Set(parsed.positionals)], commit: parsed.values.commit === true }
 }
 
@@ -139,18 +140,17 @@ const COMMANDS: Record<string, Command> = {
     // A skill the project already holds is left as it is, a text changed by hand included: `update <name>` writes over one.
     const has = held(await readProject(io.cwd, git))
     const already = names.filter(name => has.includes(name))
-    const changed = (await changeByName(io, git, { write: names.filter(name => name !== SCHEDULER && !has.includes(name)), ...(names.includes(SCHEDULER) ? { scheduler: true } : {}) }, commit)) as object
+    const changed = (await changeByName(io, git, { write: names.filter(name => !has.includes(name)) }, commit)) as object
     return { ...changed, already }
   },
 
   async remove(args, io, git) {
     const { names, commit } = parse(args, true)
-    return changeByName(io, git, { remove: names.filter(name => name !== SCHEDULER), ...(names.includes(SCHEDULER) ? { scheduler: false } : {}) }, commit)
+    return changeByName(io, git, { remove: names }, commit)
   },
 
   async update(args, io, git) {
     const { names, commit } = parse(args, false)
-    if (names.includes(SCHEDULER)) throw new Usage('the scheduler has no text to update')
     const state = await readProject(io.cwd, git)
     const missing = names.find(name => !held(state).includes(name))
     if (missing !== undefined) throw new Refused({ ok: false, reason: 'not-here', name: missing }, `this project does not have ${missing}: add it first`)
@@ -172,11 +172,11 @@ const NOTES: Partial<Record<Standing, string>> = {
   own: 'your own text',
 }
 
-/** The rows of the list: each group's title and its skills, then the scheduler. */
+/** The rows of the list: each group's title and its skills. */
 async function rows(state: ProjectState): Promise<Row[]> {
   const carried = await carriedSkills()
   const standing = new Map(state.skills.map(skill => [skill.name, skill.standing]))
-  const width = Math.max(...SKILL_NAMES.map(name => name.length), SCHEDULER.length)
+  const width = Math.max(...SKILL_NAMES.map(name => name.length))
   const list: Row[] = []
   for (const group of GROUPS) {
     list.push({ label: group.title })
@@ -185,15 +185,14 @@ async function rows(state: ProjectState): Promise<Row[]> {
       list.push({ name, label: name.padEnd(width), hint: `${note ? `(${note}) ` : ''}${carried.get(name)!.description}` })
     }
   }
-  list.push({ label: 'The scheduler' }, { name: SCHEDULER, label: SCHEDULER.padEnd(width), hint: SCHEDULER_LINE })
   return list
 }
 
 /** What is ticked when the list opens: what the project has; in a project with nothing yet, the default picks. */
 function ticks(state: ProjectState): string[] {
   const has = held(state)
-  if (has.length > 0 || state.scheduler) return [...has, ...(state.scheduler ? [SCHEDULER] : [])]
-  return [...GROUPS.filter(group => group.ticked).flatMap(group => group.skills), SCHEDULER]
+  if (has.length > 0) return has
+  return GROUPS.filter(group => group.ticked).flatMap(group => group.skills)
 }
 
 /** The conversation in a terminal. */
@@ -221,12 +220,11 @@ async function converse(io: CliIo, terminal: Terminal, git: GitRunner): Promise<
   if (newer.length > 0 && (await ask(`${count(newer.length, 'skill has', 'skills have')} a newer text: ${newer.join(', ')}. Update ${newer.length === 1 ? 'it' : 'them'}?`, false, terminal))) write.push(...newer)
   if (byHand.length > 0) say(`Changed by hand, left as ${byHand.length === 1 ? 'it is' : 'they are'}: ${byHand.join(', ')}. \`npx @openagt/init update <name>\` writes the text over yours.`)
 
-  const scheduler = picked.has(SCHEDULER) !== state.scheduler ? { scheduler: picked.has(SCHEDULER) } : {}
-  if (write.length === 0 && remove.length === 0 && scheduler.scheduler === undefined) {
+  if (write.length === 0 && remove.length === 0) {
     say('Nothing to change.')
     return openDashboard(io, terminal, say)
   }
-  const changed = await applyChange(io.cwd, { write, remove, ...scheduler }, git)
+  const changed = await applyChange(io.cwd, { write, remove }, git)
   report(changed, say)
 
   if (changed.paths.length > 0) {

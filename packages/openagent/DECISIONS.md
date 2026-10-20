@@ -151,11 +151,10 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A project has a skill when every run gets it by default (`@openagt/start` names those), or
   when the skill's text is in the project, where the coding agents read it
   (`.claude/skills/<name>/SKILL.md`, `.agents/skills/<name>/SKILL.md`). OpenAgent brings the
-  packages of the skills that have pages itself (tickets, queue, orchestration, browser) and
-  gives each, with its page, its cards and its data, to every project where the skill is a
-  default, else to the projects that hold its text; deleting the folder of a skill that is no
-  default takes them away. The scheduler, a tool
-  with no text, is a project's when one of the project's hook lines runs it. Picked over
+  packages of the skills that have pages itself (tickets, queue, orchestration, browser,
+  scheduler) and gives each, with its page, its cards and its data, to every project where
+  the skill is a default, else to the projects that hold its text; deleting the folder of a
+  skill that is no default takes them away. Picked over
   a project's pages coming from its own `package.json`, which needed an install in every
   project, and which a project without Node could not have.
 - Three lists name the packages OpenAgent brings, the ones every project has, the ones

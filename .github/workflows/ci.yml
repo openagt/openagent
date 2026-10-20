@@ -23,10 +23,10 @@ jobs:
           - name: dashboard node tests
             run: pnpm -C packages/openagent test:node
           - name: agent packages tests
-            run: pnpm -r --workspace-concurrency=1 --filter @openagt/agent-runner --filter @openagt/agent-scheduler --filter @openagt/skill-orchestration run test
+            run: pnpm -r --workspace-concurrency=1 --filter @openagt/agent-runner --filter @openagt/skill-scheduler --filter @openagt/skill-orchestration run test
           # Every other package, named by what it is not: a new package's tests run here.
           - name: other packages tests
-            run: pnpm -r --workspace-concurrency=1 --filter '!@openagt/dashboard' --filter '!@openagt/agent-runner' --filter '!@openagt/agent-scheduler' --filter '!@openagt/skill-orchestration' run test
+            run: pnpm -r --workspace-concurrency=1 --filter '!@openagt/dashboard' --filter '!@openagt/agent-runner' --filter '!@openagt/skill-scheduler' --filter '!@openagt/skill-orchestration' run test
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

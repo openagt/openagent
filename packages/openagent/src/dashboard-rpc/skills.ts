@@ -1,5 +1,5 @@
 import { nodeGitRunner } from '@openagt/agent-data'
-import { applyChange, carriedSkills, GROUPS, isKnown, readProject, SCHEDULER, skillsOn, uncommittedSkills, type Standing } from '@openagt/init'
+import { applyChange, carriedSkills, GROUPS, isKnown, readProject, skillsOn, uncommittedSkills, type Standing } from '@openagt/init'
 import { cachedPrView } from '../dashboard/pull-requests.js'
 import { sendSkills, SKILLS_BRANCH, type SendSkillsResult } from '../dashboard/send-skills.js'
 import { waitingSkills } from '../dashboard/start-branch.js'
@@ -30,8 +30,6 @@ export interface ProjectSkill {
 export interface ProjectSkills {
   /** The list's groups; `ticked` says whether a group's skills are ticked in a project that has none yet. */
   groups: { title: string; ticked: boolean; skills: ProjectSkill[] }[]
-  /** Whether the scheduler starts with the dashboard for this project, on this machine. */
-  scheduler: boolean
   /** The branch agents start from, by its name: the remote's default branch, else the branch the folder is on. Absent where there is none. */
   startBranch?: string
   /** The skills whose files stand written, changed or deleted in the folder with no commit yet. */
@@ -68,7 +66,6 @@ export async function onProjectSkills(projectId: string): Promise<ProjectSkills 
       ticked: group.ticked,
       skills: group.skills.map(name => ({ name, description: carried.get(name)!.description, standing: standing.get(name) ?? 'absent', waiting: waiting.has(name) })),
     })),
-    scheduler: state.scheduler,
     ...(start ? { startBranch: start.name } : {}),
     uncommitted,
     git: state.git,
@@ -101,24 +98,25 @@ export type ChangeSkillsResult =
   | { ok: false; error: string }
 
 /** A list of the list's own skill names, each once; nothing for anything else. */
-const names = (value: unknown): string[] | undefined => (value === undefined ? [] : Array.isArray(value) && value.every(name => typeof name === 'string' && name !== SCHEDULER && isKnown(name)) ? [...new Set(value as string[])] : undefined)
+const names = (value: unknown): string[] | undefined => (value === undefined ? [] : Array.isArray(value) && value.every(name => typeof name === 'string' && isKnown(name)) ? [...new Set(value as string[])] : undefined)
 
 /**
- * Write and delete skills in a project's folder, and switch its scheduler: what the "Add skills"
- * screen saves. Only the names of the list are taken; anything else is refused whole. A scheduler
- * switched on starts at once, by its own line, as it would have at this dashboard's opening.
+ * Write and delete skills in a project's folder: what the "Add skills" screen saves. Only the names
+ * of the list are taken; anything else is refused whole. The scheduler's skill written switches the
+ * scheduler on for this machine, and it starts at once, by its own line, as it would have at this
+ * dashboard's opening.
  * Nothing is committed here: `sendCommitSkills` is the person's next press.
  */
-export async function sendChangeSkills(projectId: string, change: { write?: string[]; remove?: string[]; scheduler?: boolean }): Promise<ChangeSkillsResult> {
+export async function sendChangeSkills(projectId: string, change: { write?: string[]; remove?: string[] }): Promise<ChangeSkillsResult> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return { ok: false, error: 'this project has no local path on this server' }
   const asked = change && typeof change === 'object' && !Array.isArray(change) ? change : undefined
   const write = names(asked?.write)
   const remove = names(asked?.remove)
-  if (!asked || !write || !remove || (asked.scheduler !== undefined && typeof asked.scheduler !== 'boolean')) return { ok: false, error: 'not a list of skills' }
+  if (!asked || !write || !remove) return { ok: false, error: 'not a list of skills' }
   try {
     const opened = (await readProjectHooks(cwd).catch(() => undefined))?.open ?? []
-    const changed = await applyChange(cwd, { write, remove, ...(asked.scheduler !== undefined ? { scheduler: asked.scheduler } : {}) })
+    const changed = await applyChange(cwd, { write, remove })
     providedDataChanged(cwd)
     const scheduler = changed.scheduler
     // The lines the change added run when the dashboard opens, and this dashboard is open: they run now, the way they would have.

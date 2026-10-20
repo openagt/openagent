@@ -14,8 +14,6 @@ export interface Change {
   write?: readonly string[]
   /** Skills to delete. */
   remove?: readonly string[]
-  /** The scheduler, switched on or off for this machine; left as it is when absent. */
-  scheduler?: boolean
 }
 
 export interface Changed {
@@ -25,13 +23,13 @@ export interface Changed {
   paths: string[]
   /** What was left as it is, and why. */
   left: { path: string; reason: string }[]
-  /** The scheduler after the change, when the change touched it; `error` when it could not be switched. */
+  /** The scheduler after the change, when the change wrote or deleted its skill; `error` when it could not be switched. */
   scheduler?: { on: boolean; changed: boolean; madeRepository?: true } | { on: boolean; error: string }
 }
 
-/** Whether `name` is something `init` writes: a skill of its list, or the scheduler. */
+/** Whether `name` is a skill of the list `init` writes. */
 export function isKnown(name: string): boolean {
-  return name === SCHEDULER || SKILL_NAMES.includes(name)
+  return SKILL_NAMES.includes(name)
 }
 
 export async function applyChange(root: string, change: Change, git: GitRunner = nodeGitRunner()): Promise<Changed> {
@@ -48,9 +46,10 @@ export async function applyChange(root: string, change: Change, git: GitRunner =
     changed.paths.push(...touched.paths)
     changed.left.push(...touched.left)
   }
-  if (change.scheduler !== undefined) {
-    const outcome = await setScheduler(root, change.scheduler, git)
-    changed.scheduler = outcome.ok ? { on: change.scheduler, changed: outcome.changed, ...(outcome.madeRepository ? { madeRepository: true as const } : {}) } : { on: change.scheduler, error: outcome.error }
+  const scheduler = change.write?.includes(SCHEDULER) ? true : change.remove?.includes(SCHEDULER) ? false : undefined
+  if (scheduler !== undefined) {
+    const outcome = await setScheduler(root, scheduler, git)
+    changed.scheduler = outcome.ok ? { on: scheduler, changed: outcome.changed, ...(outcome.madeRepository ? { madeRepository: true as const } : {}) } : { on: scheduler, error: outcome.error }
   }
   return changed
 }

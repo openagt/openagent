@@ -3,10 +3,10 @@ import { test } from 'node:test'
 import { carriedSkills, GROUPS, SKILL_NAMES } from './catalogue.js'
 import { olderThan, stamped, unstamped } from './skill-file.js'
 
-test('the list holds 19 skills in five groups, everything ticked but the two that need a setup of their own, and none every run gets by default', async () => {
-  assert.equal(SKILL_NAMES.length, 19)
-  assert.equal(new Set(SKILL_NAMES).size, 19, 'no skill twice')
-  assert.equal(GROUPS.length, 5)
+test('the list holds 20 skills in six groups, everything ticked but the two that need a setup of their own, and none every run gets by default', async () => {
+  assert.equal(SKILL_NAMES.length, 20)
+  assert.equal(new Set(SKILL_NAMES).size, 20, 'no skill twice')
+  assert.equal(GROUPS.length, 6)
   assert.deepEqual(GROUPS.filter(group => !group.ticked).flatMap(group => group.skills), ['browser', 'discord'])
   for (const basic of ['branches', 'logs', 'question', 'github', 'orchestration', 'tickets', 'queue']) assert.ok(!SKILL_NAMES.includes(basic), `${basic} comes with every run`)
 })
@@ -20,7 +20,7 @@ test('every skill is carried with its own package\'s text: its name, a descripti
     assert.match(skill.version, /^\d+\.\d+\.\d+$/)
     assert.equal(skill.package, `@openagt/skill-${skill.name}`)
     // A short name would run whatever package holds it on npm in a project with nothing installed.
-    assert.doesNotMatch(skill.text, /npx (tickets|queue|logs|github|branches|browser|discord|orchestration)\b/, `${skill.name} calls no command by a short name`)
+    assert.doesNotMatch(skill.text, /npx (tickets|queue|logs|github|branches|browser|discord|orchestration|scheduler)\b/, `${skill.name} calls no command by a short name`)
     assert.ok(!/^metadata:/m.test(skill.text.slice(0, skill.text.indexOf('\n---\n'))), `${skill.name}'s own text has no metadata key: the stamp is init's`)
   }
 })

@@ -55,7 +55,7 @@ test('add, remove, update and list for a script: JSON, no question, no commit un
   const root = await folder(true)
   try {
     const empty = await cli(root, 'list')
-    assert.deepEqual({ code: empty.code, skills: empty.out.skills.filter((skill: { standing: string }) => skill.standing !== 'absent'), scheduler: empty.out.scheduler }, { code: 0, skills: [], scheduler: false })
+    assert.deepEqual({ code: empty.code, skills: empty.out.skills.filter((skill: { standing: string }) => skill.standing !== 'absent') }, { code: 0, skills: [] })
 
     const added = await cli(root, 'add', 'plan', 'ux', 'plan')
     assert.deepEqual({ code: added.code, written: added.out.written, already: added.out.already, commit: added.out.commit }, { code: 0, written: ['plan', 'ux'], already: [], commit: undefined })
@@ -92,13 +92,13 @@ test('add, remove, update and list for a script: JSON, no question, no commit un
     const absent = await cli(root, 'update', 'readability')
     assert.deepEqual({ code: absent.code, reason: absent.out.reason }, { code: 1, reason: 'not-here' })
 
-    // The scheduler by name: its lines, this machine's, nothing for git to see.
+    // The scheduler by name: its text, to commit, and its lines, this machine's, outside git.
     const on = await cli(root, 'add', 'scheduler')
-    assert.deepEqual(on.out.scheduler, { on: true, changed: true })
-    assert.equal((await cli(root, 'list')).out.scheduler, true)
-    assert.deepEqual(on.out.paths, [], 'nothing to commit')
-    assert.deepEqual((await cli(root, 'remove', 'scheduler')).out.scheduler, { on: false, changed: true })
-    assert.equal((await cli(root, 'list')).out.scheduler, false)
+    assert.deepEqual({ scheduler: on.out.scheduler, paths: on.out.paths }, { scheduler: { on: true, changed: true }, paths: ['.agents/skills/scheduler/SKILL.md', '.claude/skills/scheduler'] })
+    assert.match(await readFile(join(root, '.openagent/hooks.yml'), 'utf8'), /^open:\n {2}- scheduler start\n/)
+    const off = await cli(root, 'remove', 'scheduler')
+    assert.deepEqual({ removed: off.out.removed, scheduler: off.out.scheduler }, { removed: ['scheduler'], scheduler: { on: false, changed: true } })
+    assert.equal(await readFile(join(root, '.openagent/hooks.yml'), 'utf8').catch(() => 'gone'), 'gone', 'its lines went with it')
   } finally {
     await gone(root)
   }
@@ -179,16 +179,16 @@ test('in a terminal, a new project: Enter takes the default picks, the files are
     assert.deepEqual(opened, [root])
     const defaults = GROUPS.filter(group => group.ticked).flatMap(group => group.skills)
     assert.deepEqual(held(await readProject(root)), defaults)
-    assert.equal((await readProject(root)).scheduler, true, 'the scheduler is ticked by default')
+    assert.match(await readFile(join(root, '.openagent/hooks.yml'), 'utf8'), /- scheduler start\n/, 'the scheduler is ticked by default')
     assert.match(shown, /Every agent OpenAgent starts already gets its default skills, with nothing written here\. These are more\./)
     assert.doesNotMatch(shown, /not on GitHub/, 'a project with no remote is told nothing about a git host')
     assert.match(shown, /\[ \] browser/)
-    assert.match(shown, /Wrote 17 skills in \.agents\/skills, each linked in \.claude\/skills: plan, plan-tickets, /)
+    assert.match(shown, /Wrote 18 skills in \.agents\/skills, each linked in \.claude\/skills: plan, plan-tickets, /)
     assert.match(shown, /The scheduler starts with the dashboard, on this machine\. Every automation starts switched off\./)
     assert.match(shown, /Committed as [0-9a-f]{7,}, these files alone\. Nothing was pushed/)
     assert.equal((await run(root, 'log', '--format=%s')).trim(), 'Add OpenAgent skills\ninit')
     assert.equal(await run(root, 'status', '--porcelain'), '', 'the hooks file is outside git, and every skill file is committed')
-    assert.equal((await run(root, 'show', '--format=', '--name-only', 'HEAD')).trim().split('\n').length, 34, '17 texts and 17 links')
+    assert.equal((await run(root, 'show', '--format=', '--name-only', 'HEAD')).trim().split('\n').length, 36, '18 texts and 18 links')
   } finally {
     await gone(root)
   }
@@ -201,7 +201,7 @@ test('run again, the ticks show what the project has; a tick removed deletes, a 
     await cli(root, 'add', 'maintenance', 'readability', '--commit')
     const left = await converse(root, [{ after: LIST_KEYS, keys: 'q' }])
     assert.equal(left.code, 0)
-    assert.match(left.shown, /This project has 2 of these 19\. The ticks show what it has now\./)
+    assert.match(left.shown, /This project has 2 of these 20\. The ticks show what it has now\./)
     assert.doesNotMatch(left.shown, /not on GitHub/)
     await run(root, 'remote', 'set-url', 'origin', 'https://gitlab.com/someone/project.git')
     const elsewhere = await converse(root, [{ after: LIST_KEYS, keys: 'q' }])

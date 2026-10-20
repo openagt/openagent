@@ -26,8 +26,8 @@ function skills(over: Partial<ProjectSkills> = {}): ProjectSkills {
     groups: [
       { title: 'Tickets and queue', ticked: true, skills: [skill('tickets'), skill('queue')] },
       { title: 'Needs its own setup', ticked: false, skills: [skill('browser')] },
+      { title: 'Automations', ticked: true, skills: [skill('scheduler')] },
     ],
-    scheduler: false,
     startBranch: 'main',
     uncommitted: [],
     git: true,
@@ -191,7 +191,7 @@ describe('ProjectSkillsLine', () => {
 describe('Add skills', () => {
   test('in a project with no skills yet the default picks are ticked: every group but the one that needs a setup of its own, and the scheduler', async () => {
     onProjectSkills.mockResolvedValue(skills())
-    sendChangeSkills.mockResolvedValue({ ok: true, written: ['tickets', 'queue'], removed: [], left: [], scheduler: 'on' })
+    sendChangeSkills.mockResolvedValue({ ok: true, written: ['tickets', 'queue', 'scheduler'], removed: [], left: [], scheduler: 'on' })
     sendProjectSkills.mockResolvedValue({ ok: true, sent: 'pushed', branch: 'main' })
     const onChanged = vi.fn()
     render(<WithDoor projectId="p1" onChanged={onChanged} />)
@@ -200,20 +200,20 @@ describe('Add skills', () => {
     expect(within(dialog).getByText('Tickets and queue')).toBeTruthy()
     expect(within(dialog).getByText('What tickets does.')).toBeTruthy()
     expect([isTicked('tickets'), isTicked('queue'), isTicked('browser'), isTicked('scheduler')]).toEqual([true, true, false, true])
-    expect(within(dialog).getByText('2 skills to write, the scheduler on.')).toBeTruthy()
+    expect(within(dialog).getByText('3 skills to write.')).toBeTruthy()
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save and send to GitHub' }))
-    await waitFor(() => expect(sendChangeSkills).toHaveBeenCalledWith('p1', { write: ['tickets', 'queue'], remove: [], scheduler: true }))
-    expect(await within(dialog).findByText(/Wrote 2 skills in/)).toBeTruthy()
-    expect(dialog.textContent).toContain('tickets, queue')
+    await waitFor(() => expect(sendChangeSkills).toHaveBeenCalledWith('p1', { write: ['tickets', 'queue', 'scheduler'], remove: [] }))
+    expect(await within(dialog).findByText(/Wrote 3 skills in/)).toBeTruthy()
+    expect(dialog.textContent).toContain('tickets, queue, scheduler')
     // The same press sends what it wrote, and nothing else.
-    await waitFor(() => expect(sendProjectSkills).toHaveBeenCalledWith('p1', ['tickets', 'queue']))
+    await waitFor(() => expect(sendProjectSkills).toHaveBeenCalledWith('p1', ['tickets', 'queue', 'scheduler']))
     expect(await within(dialog).findByText('Sent to GitHub, on main. Your agents get this change from their next start.')).toBeTruthy()
     expect(dialog.textContent).toContain('The scheduler is on for this project, on this machine. Every automation starts switched off.')
     await waitFor(() => expect(onChanged).toHaveBeenCalled())
   })
 
-  test('opened again the ticks show what the project has; a tick removed deletes, a tick added writes, and the scheduler is left alone', async () => {
+  test('opened again the ticks show what the project has; a tick removed deletes, a tick added writes', async () => {
     onProjectSkills.mockResolvedValue(
       skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current'), skill('queue', 'changed'), skill('plan')] }, { title: 'Needs its own setup', ticked: false, skills: [skill('browser')] }] }),
     )
@@ -222,7 +222,7 @@ describe('Add skills', () => {
     render(<WithDoor projectId="p1" />)
     fireEvent.click(await screen.findByRole('button', { name: 'Skills…' }))
     const dialog = await screen.findByRole('dialog')
-    expect([isTicked('tickets'), isTicked('queue'), isTicked('plan'), isTicked('browser'), isTicked('scheduler')]).toEqual([true, true, false, false, false])
+    expect([isTicked('tickets'), isTicked('queue'), isTicked('plan'), isTicked('browser')]).toEqual([true, true, false, false])
     expect(dialog.textContent).toContain('queue (changed by hand)')
     expect(within(dialog).getByText('Nothing to change.')).toBeTruthy()
     expect((within(dialog).getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true)
@@ -300,11 +300,11 @@ describe('the skills line, over time', () => {
       render(<WithDoor projectId="p1" />)
       fireEvent.click(await screen.findByRole('button', { name: 'Skills…' }))
       const dialog = await screen.findByRole('dialog')
-      expect(within(dialog).getByText('2 skills to write, the scheduler on.')).toBeTruthy()
+      expect(within(dialog).getByText('3 skills to write.')).toBeTruthy()
       // The next read lands while the list is open: the project now holds tickets (written in a terminal, say).
       await vi.advanceTimersByTimeAsync(16_000)
       await waitFor(() => expect(onProjectSkills.mock.calls.length).toBeGreaterThanOrEqual(2))
-      expect(within(dialog).getByText('2 skills to write, the scheduler on.')).toBeTruthy()
+      expect(within(dialog).getByText('3 skills to write.')).toBeTruthy()
       expect(within(dialog).queryByText(/to delete/)).toBeNull()
     } finally {
       vi.useRealTimers()

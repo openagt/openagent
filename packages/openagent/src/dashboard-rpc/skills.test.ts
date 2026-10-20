@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { readState, stopScheduler } from '@openagt/agent-scheduler'
+import { readState, stopScheduler } from '@openagt/skill-scheduler'
 import { addProject, listProjects } from '../registry.js'
 import { readProjectModules } from '../project-modules.js'
 import { provideTestContext } from './test-context.js'
@@ -60,8 +60,8 @@ test('a project\'s skills: none yet; written, they are in the folder and wait to
   const { dir, id, git, restore } = await project()
   try {
     const empty = (await onProjectSkills(id))!
-    assert.deepEqual({ scheduler: empty.scheduler, startBranch: empty.startBranch, uncommitted: empty.uncommitted, git: empty.git, remote: empty.remote, local: empty.local }, { scheduler: false, startBranch: 'main', uncommitted: [], git: true, remote: undefined, local: false })
-    assert.deepEqual(empty.groups.map(group => [group.title, group.skills.length]), [['Tickets and queue', 7], ['Reviews and research', 8], ['Pull requests', 1], ['After a merge', 1], ['Needs its own setup', 2]])
+    assert.deepEqual({ startBranch: empty.startBranch, uncommitted: empty.uncommitted, git: empty.git, remote: empty.remote, local: empty.local }, { startBranch: 'main', uncommitted: [], git: true, remote: undefined, local: false })
+    assert.deepEqual(empty.groups.map(group => [group.title, group.skills.length]), [['Tickets and queue', 7], ['Reviews and research', 8], ['Pull requests', 1], ['After a merge', 1], ['Automations', 1], ['Needs its own setup', 2]])
     assert.ok(flat(empty).every(skill => skill.standing === 'absent' && !skill.waiting && skill.description.length > 10))
 
     const written = await sendChangeSkills(id, { write: ['browser', 'plan'] })
@@ -150,23 +150,21 @@ test('a skill that reached the remote\'s branch elsewhere, a pull request merged
   }
 })
 
-test('the scheduler is switched on and off for the project, and only names of the list are taken', async () => {
+test('the scheduler\'s skill written switches the scheduler on for the project and starts it, deleted it stops it, and only names of the list are taken', async () => {
   const { dir, id, restore } = await project()
   try {
-    assert.deepEqual(await sendChangeSkills(id, { scheduler: true }), { ok: true, written: [], removed: [], left: [], scheduler: 'on' })
-    assert.equal((await onProjectSkills(id))!.scheduler, true)
-    assert.match(await readFile(join(dir, '.openagent/hooks.yml'), 'utf8'), /agent-scheduler start/)
+    assert.deepEqual(await sendChangeSkills(id, { write: ['scheduler'] }), { ok: true, written: ['scheduler'], removed: [], left: [], scheduler: 'on' })
+    assert.match(await readFile(join(dir, '.openagent/hooks.yml'), 'utf8'), /scheduler start/)
     // The dashboard is open, so the scheduler runs from this moment, not from the next opening: its own line was run.
-    assert.deepEqual(await sendChangeSkills(id, { scheduler: true }), { ok: true, written: [], removed: [], left: [] }, 'asked again: nothing to switch')
+    assert.deepEqual(await sendChangeSkills(id, { write: ['scheduler'] }), { ok: true, written: ['scheduler'], removed: [], left: [] }, 'written again: nothing to switch')
     const running = await readState(dir)
     assert.ok(running.on && running.pid !== undefined && alive(running.pid), 'its process is ticking')
-    assert.deepEqual(await sendChangeSkills(id, { scheduler: false }), { ok: true, written: [], removed: [], left: [], scheduler: 'off' })
-    assert.equal((await onProjectSkills(id))!.scheduler, false)
-    assert.equal((await readState(dir)).on, false, 'and switched off, it is stopped')
+    assert.deepEqual(await sendChangeSkills(id, { remove: ['scheduler'] }), { ok: true, written: [], removed: ['scheduler'], left: [], scheduler: 'off' })
+    assert.equal((await readState(dir)).on, false, 'and its skill deleted, it is stopped')
     for (let waited = 0; alive(running.pid!) && waited < 5000; waited += 50) await new Promise(resolve => setTimeout(resolve, 50))
     assert.equal(alive(running.pid!), false, 'its process ended')
 
-    for (const change of [{ write: ['../../etc'] }, { write: ['scheduler'] }, { remove: ['logs'] }, { write: ['tickets'] }, { write: 'tickets' }, { scheduler: 'yes' }, null, 7, ['tickets']] as never[]) {
+    for (const change of [{ write: ['../../etc'] }, { remove: ['logs'] }, { write: ['tickets'] }, { write: 'tickets' }, null, 7, ['tickets']] as never[]) {
       assert.deepEqual(await sendChangeSkills(id, change), { ok: false, error: 'not a list of skills' }, JSON.stringify(change))
     }
     assert.equal(held((await onProjectSkills(id))!), 0, 'nothing of a refused change was written')

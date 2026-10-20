@@ -16,7 +16,7 @@ function mainFigureTrigger(): HTMLElement {
 const sendSpendOffset = vi.fn(async (_points: number): Promise<{ ok: true } | { ok: false; error: string }> => ({ ok: true }))
 let savedOffset = 0
 const readOffset = vi.fn(async (_host: ModuleHost, _projects: ModuleProject[]): Promise<number | undefined> => savedOffset)
-const usageLimit: MountedUsageLimit = { package: '@openagt/agent-scheduler', projects: ['p1'], read: readOffset, save: (_host, _projects, points) => sendSpendOffset(points) }
+const usageLimit: MountedUsageLimit = { package: '@openagt/skill-scheduler', projects: ['p1'], read: readOffset, save: (_host, _projects, points) => sendSpendOffset(points) }
 const NOTHING: MountedModules = { pages: [], cards: [], linkActions: [], panels: [], runSlots: [], settings: [], loaded: true }
 const PROJECTS: ProjectSummary[] = [
   { id: 'p1', path: '/p1', name: 'gemstack', activated: true, gitHost: true },
