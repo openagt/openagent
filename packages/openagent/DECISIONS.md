@@ -95,11 +95,14 @@ already made, and lists it in its pull request; for anything else it proposes an
   starts (the machine, the project, the branch) is a row above the box, in the same plain
   words. Picked over bordered chips above the box, over every item in one row under it, and
   over the effort as a menu of its own.
-- A session's box has the launcher's Context and Auto menus too, and its pull request, a
-  link with its number and state. What the Context picks and a changed Auto go with the next
+- A session's box has the launcher's Context and Auto menus too, and its pull requests, every
+  one the run opened, each a label with its number and state. Picked over the last one alone:
+  a run that moved its work to a new branch opened another. What the Context picks and a changed Auto go with the next
   message: the Context as the line at its end, Auto as how far the run takes its work from that
   message on. Picked over a session bound for its whole life to the level it started at, where a
   person who liked the work had no way to have it published but a new run.
+- The bar above a session's box goes once its pull request is merged or closed. Picked over the
+  bar staying with the request as a label: the labels under the box already say it.
 - The foot of the sidebar is the person: their picture and first name, as one row that opens
   one menu with their whole name, the theme, the notifications and Settings. The name is git's, the picture the
   git host's, asked through the project's git host package. The project select stays at the

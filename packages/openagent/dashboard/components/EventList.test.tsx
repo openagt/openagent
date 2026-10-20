@@ -1,6 +1,6 @@
 import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 
 // The session line names the model as the daemon lists it; no daemon here, so the list never answers.
 vi.mock('../rpc/models.js', () => ({ onModels: () => new Promise(() => {}) }))
@@ -88,22 +88,26 @@ describe('EventList conversation rows', () => {
     expect(column.className).toContain('max-w-3xl')
   })
 
-  test("a prompt's time sits under its box, shown while the pointer is on the message, and is no column beside it", () => {
+  test("a prompt's time and a copy of it sit under its box, shown while the pointer is on the message, and are no column beside it", () => {
     const at = '2026-09-25T10:04:05.000Z'
     render(<EventList events={[{ kind: 'driver', event: { type: 'start', prompt: 'hello' }, at }]} stick={false} />)
-    const time = screen.getByText(new Date(at).toLocaleTimeString())
-    expect(time.tagName).toBe('TIME')
-    expect(time.className).toContain('opacity-0')
-    expect(time.className).toContain('group-hover/prompt:opacity-100')
+    // How long ago, as under the agent's messages; the date and time whole on a hover.
+    const time = screen.getByLabelText('Your message').parentElement!.querySelector('time')!
+    expect(time.getAttribute('datetime')).toBe(at)
+    expect(time.textContent).toMatch(/ago$/)
     expect(time.getAttribute('title')).toBe(new Date(at).toLocaleString())
+    const footer = time.parentElement!
+    expect(footer.className).toContain('opacity-0')
+    expect(footer.className).toContain('group-hover/prompt:opacity-100')
+    expect(within(footer).getByRole('button', { name: 'Copy this message' })).toBeTruthy()
     expect(screen.getByLabelText('Your message').parentElement!.contains(time)).toBe(true)
   })
 
-  test('a message with no time keeps the empty line under its box, so nothing moves when its time comes', () => {
+  test('a message with no time keeps the line under its box, so nothing moves when its time comes', () => {
     render(<EventList events={[]} sending="hello" stick={false} />)
-    const time = screen.getByLabelText('Your message').parentElement!.querySelector('time')!
-    expect(time.textContent).toBe('')
-    expect(time.className).toContain('h-4')
+    const copy = within(screen.getByLabelText('Your message').parentElement!).getByRole('button', { name: 'Copy this message' })
+    expect(copy.parentElement!.className).toContain('h-6')
+    expect(copy.parentElement!.querySelector('time')).toBeNull()
   })
 
   test('the first of a run of rows holds the time its line was written, shown while the pointer is on the row; a line with no time holds none', () => {
@@ -113,7 +117,8 @@ describe('EventList conversation rows', () => {
       { kind: 'driver', event: { type: 'text', text: 'hi' } },
     ]
     render(<EventList events={events} stick={false} />)
-    expect(screen.getAllByText(new Date(at).toLocaleTimeString())).toHaveLength(1)
+    // My message says how long ago under its box; the reply, with no time of its own, holds none.
+    expect(screen.queryAllByText(new Date(at).toLocaleTimeString())).toHaveLength(0)
     cleanup()
     render(<EventList events={[{ kind: 'driver', event: { type: 'text', text: 'hi' }, at }, { kind: 'driver', event: { type: 'text', text: 'there' }, at }]} stick={false} />)
     const times = screen.getAllByText(new Date(at).toLocaleTimeString())
@@ -226,7 +231,8 @@ describe('EventList tool calls', () => {
   test('the turn that ended closes with a footer: the reply copied, and how long ago it was said', async () => {
     const at = new Date(Date.now() - 5000).toISOString()
     const { rerender } = render(<EventList events={[prompt, { ...said('All done.'), at }]} stick={false} />)
-    const copy = screen.getByRole('button', { name: 'Copy this message' })
+    // The reply's own, not the one under my message.
+    const copy = screen.getAllByRole('button', { name: 'Copy this message' }).at(-1)!
     expect(screen.getByText('5s ago')).toBeTruthy()
     const writeText = vi.fn(async () => {})
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
@@ -235,7 +241,15 @@ describe('EventList tool calls', () => {
     expect(writeText).toHaveBeenCalledWith('All done.')
     // While the agent works there is no footer: it has not finished saying it.
     rerender(<EventList events={[prompt, { ...said('All done.'), at }]} working stick={false} />)
-    expect(screen.queryByRole('button', { name: /Copy this message|Copied/ })).toBeNull()
+    expect(screen.getAllByRole('button', { name: /Copy this message|Copied/ })).toHaveLength(1)
+  })
+
+  test('every turn the agent finished has the footer under its last message, and only there', () => {
+    render(<EventList events={[prompt, said('Looking.'), call('Bash', 'ls'), said('First done.'), { kind: 'driver', event: { type: 'start', prompt: 'again' } }, said('Second done.')]} stick={false} />)
+    const footers = screen.getAllByRole('button', { name: 'Copy this message' }).map(button => button.closest('[data-message-id]')?.textContent ?? '')
+    // My two messages' own, then the end of each of the agent's turns.
+    expect(footers.filter(text => /done\./.test(text))).toEqual([expect.stringContaining('First done.'), expect.stringContaining('Second done.')])
+    expect(footers.some(text => text.includes('Looking.'))).toBe(false)
   })
 
   test('what a call printed is no row: it is inside its call, by the call\'s id, also across a message', () => {
@@ -355,6 +369,15 @@ describe('EventList question and answer', () => {
     expect(screen.getAllByRole('group', { name: 'Your answer' }).map(n => n.textContent)).toEqual(['Which color do you prefer?Red', 'Which size?Small'])
     expect(screen.queryByText(/\? Which/)).toBeNull()
     expect(screen.queryByRole('button', { name: /^Asking/ })).toBeNull()
+  })
+
+  test('skipped, the box says the question was skipped, and the question is not left in the chat as text', () => {
+    render(<EventList events={resumed('You paused to ask: "Which color do you prefer?". The user skipped it. Continue without an answer.')} projectId="p1" stick={false} />)
+    const box = screen.getByRole('group', { name: 'Your answer' })
+    expect(Array.from(box.children).map(n => n.textContent)).toEqual(['Which color do you prefer?', 'Skipped'])
+    expect(screen.queryByText(/You paused to ask/)).toBeNull()
+    expect(screen.queryByText(/○ Red/)).toBeNull()
+    expect(screen.getAllByRole('group', { name: 'Your message' })).toHaveLength(1)
   })
 
   test('an answer in my own words stays my message', () => {
@@ -730,8 +753,8 @@ describe('EventList subagent rows', () => {
     const text = container.textContent ?? ''
     expect(text.indexOf('npx orchestration start')).toBeLessThan(text.indexOf('Validate the form'))
     expect(text.indexOf('Validate the form')).toBeLessThan(text.indexOf('I started one subagent.'))
-    // The agent's reply after the row holds its time again: the row broke the agent's run of rows.
-    expect(screen.getByText(new Date('2026-10-01T10:01:05.000Z').toLocaleTimeString())).toBeTruthy()
+    // The agent's reply after the row ends its turn: its time is in the footer under it.
+    expect(container.querySelector('time[datetime="2026-10-01T10:01:05.000Z"]')).toBeTruthy()
   })
 
   test('the row of an ended subagent says how it ended and how long it took, and a click opens the subagent', () => {

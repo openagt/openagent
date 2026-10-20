@@ -11,6 +11,7 @@ import { RECENTS_SORT_LABELS, sortRuns, type RecentsSort } from '../lib/recents-
 import { useProjectLabel } from '../lib/project-labels.js'
 import { STATUS_DOT, STATUS_RING } from '../lib/status-tone.js'
 import { DriverLogo } from './driver-logos.js'
+import { modelName, useModels } from '../lib/models.js'
 import { PR_MARKS, type PrState } from '../lib/pr-marks.js'
 import { agentLabel, awaitingName } from '../lib/agent-label.js'
 import { holdsMainAgent, isOpenSubagent, nestRows, taskLabel } from '../lib/subagents.js'
@@ -235,6 +236,7 @@ export function AgentHistory({
 
   const hasRecents = rows.length > 0 || showOptimistic
 
+  const models = useModels()
   const renderRow = (row: Row, subagent: boolean, status: AgentStatus = row.agent.status, fold?: SubagentsFold) => (
     <AgentHistoryRow
       status={status}
@@ -247,6 +249,7 @@ export function AgentHistory({
       // swapping it for the name a moment later.
       naming={!subagent && awaitingName(row.agent, preferences.nameRuns !== false)}
       driver={row.agent.driver}
+      {...(row.agent.model ? { model: modelName(models?.[driverFromImpl(row.agent.driver) ?? 'claude-code'], row.agent.model) } : {})}
       // On the Overview the project is what tells the rows apart, so the row still names it; a
       // project's own rail already knows its project, and a subagent is in its main agent's.
       {...(row.project && !subagent ? { project: row.project } : {})}
@@ -632,6 +635,7 @@ function AgentHistoryRow({
   onClick,
   onNear,
   driver,
+  model,
   standIn = false,
   saving = false,
   remote = false,
@@ -657,6 +661,8 @@ function AgentHistoryRow({
   subtitle: string
   /** The agent that ran it, so the row can show whose session it was. */
   driver?: string | undefined
+  /** The model it ran on, by the name its coding agent gives it: said when the agent's logo is pointed at. */
+  model?: string | undefined
   active: boolean
   onClick: () => void
   /** The pointer or the keyboard reached the row, before any click. */
@@ -702,8 +708,8 @@ function AgentHistoryRow({
   // "In cloud" outranks "saving…": a web agent's local half is over either way, and the cloud
   // side owns its own push/PR, so the cloud word is the truer one for that row.
   const savingNow = saving && !cloud
-  // The title only fades + carries a tooltip when it actually overflows the fixed-width rail; a
-  // short one shows plainly. Measured here since CSS cannot tell. Measured again once the page's
+  // The title only fades, and shows whole when pointed at, when it actually overflows the
+  // fixed-width rail; a short one shows plainly. Measured here since CSS cannot tell. Measured again once the page's
   // font has loaded, and whenever the title's room changes: read before the font, a long title
   // measured short, and kept no fade until the next reload.
   const titleRef = useRef<HTMLSpanElement>(null)
@@ -744,8 +750,9 @@ function AgentHistoryRow({
     : unpublished
       ? { Icon: GitBranch, said: `${needsWord('unpushed', gitHost)} · ${unpublished} commit${unpublished === 1 ? '' : 's'}` }
       : undefined
-  // Everything the two-line row used to print, in one sentence on hover: the word, where the run
-  // is and when it started, which coding agent ran it, and the machine or cloud it ran on.
+  // Everything the two-line row used to print, in one sentence, for a reader that cannot see the
+  // marks: the word, where the run is and when it started, which coding agent ran it, and the
+  // machine or cloud it ran on.
   const said = [
     word,
     ...(project ? [project] : []),
@@ -757,30 +764,23 @@ function AgentHistoryRow({
     ...(prSaid ? [prSaid] : []),
     ...(left ? [left.said] : []),
   ].join(' · ')
-  // The hover says what the row no longer prints, and a name too long for the rail in full under it
-  // (#1494) — the marquee it replaced forced reading at the animation's pace. The row itself is the
-  // trigger, so there is no wrapper between the list and its rows.
+  // The row is a circle, a name and its marks. Pointed at, a name too long for the rail shows whole
+  // beside it, as Claude Code on the web shows one, and each mark says what it is; the sentence the
+  // two-line row used to print is the row's name for a reader that cannot see the marks.
+  const agentSaid = picked ? [DRIVER_LABELS[picked], ...(model ? [model] : [])].join(' · ') : undefined
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            variant="ghost"
-            // The row prints its name and a circle; what it no longer prints is still its name
-            // here, so a reader who cannot see the row's colour, or cannot hover it, is told the
-            // same sentence.
-            aria-label={`${naming ? 'Naming this session' : titleText} · ${said}`}
-            className={cn(
-              'rail-row h-8 w-full items-center gap-2 px-2 text-left',
-              active && 'bg-accent text-accent-foreground',
-            )}
-            {...(standIn ? { 'data-stand-in': '' } : {})}
-            onClick={onClick}
-            onPointerEnter={onNear}
-            onFocus={onNear}
-          />
-        }
-      >
+    <Button
+      variant="ghost"
+      aria-label={`${naming ? 'Naming this session' : titleText} · ${said}`}
+      className={cn(
+        'rail-row h-8 w-full items-center gap-2 px-2 text-left',
+        active && 'bg-accent text-accent-foreground',
+      )}
+      {...(standIn ? { 'data-stand-in': '' } : {})}
+      onClick={onClick}
+      onPointerEnter={onNear}
+      onFocus={onNear}
+    >
       {/* The circle stands where the status word stood, and carries that word for a reader who
           cannot see a colour. */}
       <span
@@ -792,22 +792,34 @@ function AgentHistoryRow({
           working && 'animate-pulse',
         )}
       />
-      <span ref={titleRef} className={titleClass}>
-        {/* Nothing yet, and something coming: a bar where the name goes, rather than a blank row or
-            the prompt it is about to replace. */}
-        {naming ? <span aria-hidden className="block h-3.5 w-2/3 animate-pulse rounded bg-muted-foreground/20" /> : <RevealedTitle text={titleText} start={standIn} />}
-      </span>
+      <Tooltip disabled={!overflowing}>
+        <TooltipTrigger render={<span ref={titleRef} className={titleClass} />}>
+          {/* Nothing yet, and something coming: a bar where the name goes, rather than a blank row or
+              the prompt it is about to replace. */}
+          {naming ? <span aria-hidden className="block h-3.5 w-2/3 animate-pulse rounded bg-muted-foreground/20" /> : <RevealedTitle text={titleText} start={standIn} />}
+        </TooltipTrigger>
+        <TooltipContent side="right" className="max-w-96 whitespace-pre-wrap break-words text-sm">
+          {titleText}
+        </TooltipContent>
+      </Tooltip>
       {/* What is unusual about where the run is, kept on the row as one small glyph: another
           machine, a person's own computer, a cloud session. Rare, so the row stays a circle and a
-          name nearly always; the coding agent's own logo was on every row and is now in the
-          sentence instead. */}
+          name nearly always. */}
       {startedOn && (
-        <Laptop className="h-3 w-3 shrink-0 text-muted-foreground" role="img" aria-label={`Started on ${startedOn}`} />
+        <RowMark said={`Started on ${startedOn}`}>
+          <Laptop className="h-3 w-3 text-muted-foreground" />
+        </RowMark>
       )}
       {remote && (
-        <MachineIcon className="h-3 w-3 shrink-0 text-muted-foreground" role="img" aria-label={remoteLabel ? `Runs on ${remoteLabel}` : 'Runs on another machine'} />
+        <RowMark said={remoteLabel ? `Runs on ${remoteLabel}` : 'Runs on another machine'}>
+          <MachineIcon className="h-3 w-3 text-muted-foreground" />
+        </RowMark>
       )}
-      {cloud && <Cloud className="h-3 w-3 shrink-0 text-muted-foreground" role="img" aria-label="Runs as a Claude Code cloud session" />}
+      {cloud && (
+        <RowMark said="Runs as a Claude Code cloud session">
+          <Cloud className="h-3 w-3 text-muted-foreground" />
+        </RowMark>
+      )}
       {/* Where the sessions of several projects are listed together, the project is what tells one
           row from the next, so it stays on the row: small, after the marks, and the first to give
           up width. A project's own rail knows its project and shows none. */}
@@ -842,28 +854,34 @@ function AgentHistoryRow({
       {/* Its pull request, just before the logo, so the marks of the rows that have one stand in a
           column too. */}
       {prMark && prSaid && (
-        <span role="img" aria-label={prSaid} className="flex shrink-0 items-center">
-          <prMark.Icon className={cn('h-3 w-3', prMark.tone)} aria-hidden />
-        </span>
+        <RowMark said={prSaid}>
+          <prMark.Icon className={cn('h-3 w-3', prMark.tone)} />
+        </RowMark>
       )}
       {left && (
-        <span role="img" aria-label={left.said} className="flex shrink-0 items-center">
-          <left.Icon className="h-3 w-3 text-muted-foreground" aria-hidden />
-        </span>
+        <RowMark said={left.said}>
+          <left.Icon className="h-3 w-3 text-muted-foreground" />
+        </RowMark>
       )}
       {/* Which coding agent ran it, as its own mark at the very end of the row (his pick): a
           session is told from the next by its agent as much as by its words, and a logo reads
           faster than a word. Last, after every other mark, so the logos of all rows stand in one
-          column. */}
-      {picked && (
-        <span role="img" aria-label={DRIVER_LABELS[picked]} className="flex shrink-0 items-center">
+          column. Pointed at, it says the model too. */}
+      {picked && agentSaid && (
+        <RowMark said={agentSaid}>
           <DriverLogo driver={picked} className="h-3 w-3 text-muted-foreground" />
-        </span>
+        </RowMark>
       )}
-      </TooltipTrigger>
-      <TooltipContent side="right" className="max-w-96 whitespace-pre-wrap break-words">
-        {overflowing ? `${titleText}\n${said}` : said}
-      </TooltipContent>
+    </Button>
+  )
+}
+
+/** One small mark at a row's end, which says what it is when pointed at. */
+function RowMark({ said, children }: { said: string; children: ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span role="img" aria-label={said} className="flex shrink-0 items-center" />}>{children}</TooltipTrigger>
+      <TooltipContent>{said}</TooltipContent>
     </Tooltip>
   )
 }

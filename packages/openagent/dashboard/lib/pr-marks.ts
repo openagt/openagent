@@ -20,8 +20,8 @@ export const PR_MARKS: Record<PrState, { Icon: ComponentType<{ className?: strin
   closed: { Icon: GitPullRequestClosed, tone: 'text-danger', word: 'closed' },
 }
 
-/** A request's state as the git host spells it (`OPEN`, `MERGED`, `CLOSED`), as a mark's; none for one not known. */
+/** A request's state as the git host spells it (`OPEN`, `MERGED`, `CLOSED`) or as a mark names it (`draft`), as a mark's; none for one not known. */
 export function prStateOf(hostState: string): PrState | undefined {
   const state = hostState.toLowerCase()
-  return state === 'open' || state === 'merged' || state === 'closed' ? state : undefined
+  return state === 'open' || state === 'draft' || state === 'merged' || state === 'closed' ? state : undefined
 }

@@ -47,4 +47,26 @@ describe('useCheckoutStatus', () => {
     rerender(<Probe agentId="run-t" turn={false} />)
     await waitFor(() => expect(onAgentWorktree).toHaveBeenCalledTimes(2))
   })
+
+  test('after a turn ends it is read every second for a while, then at rest again', async () => {
+    onAgentWorktree.mockResolvedValue({ branch: 'agent-run-s' })
+    const { rerender } = render(<Probe agentId="run-s" turn />)
+    await waitFor(() => expect(branch()).toBe('agent-run-s'))
+    vi.useFakeTimers()
+    try {
+      rerender(<Probe agentId="run-s" turn={false} />)
+      await vi.advanceTimersByTimeAsync(10)
+      const atEnd = onAgentWorktree.mock.calls.length
+      // Every second, not every ten.
+      await vi.advanceTimersByTimeAsync(3_000)
+      expect(onAgentWorktree.mock.calls.length - atEnd).toBeGreaterThanOrEqual(3)
+      // The while over, back to every ten seconds.
+      await vi.advanceTimersByTimeAsync(10_000)
+      const rested = onAgentWorktree.mock.calls.length
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(onAgentWorktree.mock.calls.length).toBe(rested)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

@@ -5,7 +5,8 @@ const sendChoice = vi.hoisted(() => vi.fn())
 const sendMessage = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/control.js', () => ({ sendChoice, sendMessage }))
 
-const { QuestionPanel, SKIP_MESSAGE } = await import('./QuestionPanel.js')
+const { QuestionPanel } = await import('./QuestionPanel.js')
+const { answerPrompt, skipPrompt } = await import('../lib/answered-question.js')
 
 afterEach(() => {
   cleanup()
@@ -60,14 +61,23 @@ describe('QuestionPanel', () => {
     expect(option(/Postgres/).getAttribute('aria-checked')).toBe('true')
   })
 
-  test('a sent answer parks the panel: its controls are off and it says it waits for the agent', async () => {
-    sendChoice.mockResolvedValue({ ok: true })
-    render(panel())
+  test('while the answer goes its controls are off; once it is taken the panel goes and the chat is told the answer', async () => {
+    let taken!: (result: { ok: boolean }) => void
+    sendChoice.mockReturnValue(new Promise(resolve => (taken = resolve)))
+    const onSaid = vi.fn()
+    render(panel({ onSaid, active: true }))
+    fireEvent.click(option(/SQLite/))
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
-    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Answer sent/))
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Sending your answer…'))
     for (const name of ['Submit', 'Skip']) expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true)
-    expect((option(/SQLite/) as HTMLButtonElement).disabled).toBe(true)
+    expect((option(/Postgres/) as HTMLButtonElement).disabled).toBe(true)
     expect((screen.getByLabelText('Other') as HTMLInputElement).disabled).toBe(true)
+    taken({ ok: true })
+    await waitFor(() => expect(screen.queryByRole('region')).toBeNull())
+    expect(onSaid).toHaveBeenCalledWith(answerPrompt('Which database?', 'SQLite'))
+    // Its keys went with it: Ctrl+Enter does not send it again.
+    fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true })
+    expect(sendChoice).toHaveBeenCalledTimes(1)
   })
 
   test("a refused answer says why in the daemon's words, and the question stays answerable", async () => {
@@ -119,10 +129,10 @@ describe('QuestionPanel', () => {
     expect((screen.getByRole('button', { name: 'Submit' }) as HTMLButtonElement).disabled).toBe(true)
     fireEvent.change(other, { target: { value: '  MySQL, we already pay for it  ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
-    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', 'MySQL, we already pay for it', 'r1'))
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', answerPrompt('Which database?', 'MySQL, we already pay for it'), 'r1'))
     expect(sendChoice).not.toHaveBeenCalled()
-    await waitFor(() => expect(onSaid).toHaveBeenCalledWith('MySQL, we already pay for it'))
-    expect(screen.getByRole('status').textContent).toMatch(/Answer sent/)
+    await waitFor(() => expect(onSaid).toHaveBeenCalledWith(answerPrompt('Which database?', 'MySQL, we already pay for it')))
+    expect(screen.queryByRole('region')).toBeNull()
   })
 
   test('Enter in the "Other" row submits it', async () => {
@@ -132,20 +142,20 @@ describe('QuestionPanel', () => {
     fireEvent.focus(other)
     fireEvent.change(other, { target: { value: 'MySQL' } })
     fireEvent.keyDown(other, { key: 'Enter' })
-    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', 'MySQL', 'r1'))
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', answerPrompt('Which database?', 'MySQL'), 'r1'))
   })
 
-  test('Skip says so to the agent as the person\'s own message, and a refused one is not shown as said', async () => {
+  test('Skip says so to the agent, in the shape the chat draws as the question skipped, and a refused one is not shown as said', async () => {
     sendMessage.mockResolvedValue({ ok: false, error: 'unknown session' })
     const onSaid = vi.fn()
     render(panel({ onSaid }))
     fireEvent.click(screen.getByRole('button', { name: 'Skip' }))
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('unknown session'))
-    expect(sendMessage).toHaveBeenCalledWith('p1', SKIP_MESSAGE, 'r1')
+    expect(sendMessage).toHaveBeenCalledWith('p1', skipPrompt('Which database?'), 'r1')
     expect(onSaid).not.toHaveBeenCalled()
     sendMessage.mockResolvedValue({ ok: true })
     fireEvent.click(screen.getByRole('button', { name: 'Skip' }))
-    await waitFor(() => expect(onSaid).toHaveBeenCalledWith(SKIP_MESSAGE))
+    await waitFor(() => expect(onSaid).toHaveBeenCalledWith(skipPrompt('Which database?')))
   })
 
   test('a question with several answers: rows are checked on and off, starting from its defaults, and Submit sends the checked ones', async () => {
@@ -165,7 +175,7 @@ describe('QuestionPanel', () => {
     render(panel({ choice: several }))
     fireEvent.change(screen.getByLabelText('Other'), { target: { value: 'and the type check' } })
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
-    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', 'Lint, and the type check', 'r1'))
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', answerPrompt('Which checks?', 'Lint, and the type check'), 'r1'))
     expect(sendChoice).not.toHaveBeenCalled()
   })
 
@@ -181,7 +191,7 @@ describe('QuestionPanel', () => {
       fireEvent.click(option(/SQLite/))
       expect(send).not.toHaveBeenCalled()
       fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
-      await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Answer sent/))
+      await waitFor(() => expect(screen.queryByRole('region')).toBeNull())
       expect(send.mock.calls).toEqual([['lite']])
       usualCallsNotMade()
     })
@@ -191,7 +201,7 @@ describe('QuestionPanel', () => {
       render(panel({ choice: several, send }))
       fireEvent.click(screen.getByRole('checkbox', { name: /Tests/ }))
       fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
-      await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Answer sent/))
+      await waitFor(() => expect(screen.queryByRole('region')).toBeNull())
       expect(send.mock.calls).toEqual([[['lint', 'tests']]])
       usualCallsNotMade()
     })

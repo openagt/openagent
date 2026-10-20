@@ -263,8 +263,8 @@ describe('AgentHistory rows', () => {
   test('a run on a person\'s own computer, reached by its line, shows a computer where a server\'s run shows a server, with the same words', () => {
     const agents = [agent({ id: 'on-computer', target: 'remote', remoteLabel: 'MacBook', remoteByLine: true }), agent({ id: 'on-server', target: 'remote', remoteLabel: 'Server' })]
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={agents} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.getByLabelText('Runs on MacBook').getAttribute('class')).toContain('lucide-laptop')
-    expect(screen.getByLabelText('Runs on Server').getAttribute('class')).toContain('lucide-server')
+    expect(screen.getByLabelText('Runs on MacBook').querySelector('svg')!.getAttribute('class')).toContain('lucide-laptop')
+    expect(screen.getByLabelText('Runs on Server').querySelector('svg')!.getAttribute('class')).toContain('lucide-server')
   })
 
   test('a run another machine started says whose it is; this daemon\'s own does not (#1067, #1648)', () => {
@@ -608,30 +608,39 @@ describe('cloud sessions on the rail (#1263/#1264)', () => {
   })
 })
 
-describe('AgentHistory title tooltip (#1494)', () => {
+describe('AgentHistory row hover', () => {
   // jsdom gives every element zero widths, so the overflow measure needs stubbed getters to see
   // a title wider than its rail slot.
-  test('a title that overflows the rail shows its full prompt in a tooltip', async () => {
+  test('a title that overflows the rail shows whole beside it, and nothing else', async () => {
     const long = 'refactor the queue promotion sweep so drains claim tickets through lock files'
     const scrollSpy = vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockReturnValue(240)
     const clientSpy = vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(120)
     try {
       renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ intent: long })]} selectedAgentId={null} onSelect={() => {}} />)
-      const row = (await screen.findByText(long)).closest('button')!
-      const tip = await hoverTooltip(row)
-      expect(tip.textContent).toContain(long)
+      const title = (await screen.findByText(long)).closest('.rail-title')!
+      const tip = await hoverTooltip(title as HTMLElement)
+      expect(tip.textContent).toBe(long)
     } finally {
       scrollSpy.mockRestore()
       clientSpy.mockRestore()
     }
   })
 
-  test('a title that fits is not repeated in the hover: the hover says what the row no longer prints', async () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent()]} selectedAgentId={null} onSelect={() => {}} />)
-    const row = screen.getByText("replace 'Hello, world!' with 'Welcome!'").closest('button')!
-    const tip = await hoverTooltip(row)
-    expect(tip.textContent).toContain('running')
-    expect(tip.textContent).not.toContain("replace 'Hello, world!'")
+  test('a title that fits has no hover; each mark at the row\'s end says what it is', async () => {
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done', driver: 'claude-code', pr: { number: 5, url: 'https://x/pull/5' }, prState: 'open' })]} selectedAgentId={null} onSelect={() => {}} />)
+    const title = screen.getByText("replace 'Hello, world!' with 'Welcome!'").closest('.rail-title') as HTMLElement
+    fireEvent.mouseEnter(title)
+    fireEvent.mouseMove(title)
+    await new Promise(resolve => setTimeout(resolve, 100))
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    fireEvent.mouseLeave(title)
+    expect((await hoverTooltip(screen.getByLabelText('PR #5 open'))).textContent).toBe('PR #5 open')
+  })
+
+  test('the coding agent\'s logo says the agent and the model it ran on', async () => {
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done', driver: 'claude-code', model: 'claude-opus-5-5' })]} selectedAgentId={null} onSelect={() => {}} />)
+    // No list of models read here: the model is said by its id.
+    expect((await hoverTooltip(screen.getByLabelText('Claude Code · claude-opus-5-5'))).textContent).toBe('Claude Code · claude-opus-5-5')
   })
 })
 

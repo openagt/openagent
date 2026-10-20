@@ -64,6 +64,17 @@ export function runnerMark(card: RunCard): RunnerMark | undefined {
   return { host, ...(typeof pid === 'number' ? { pid } : {}), ...lasting({ then, publish, parent, base, baseCommit, for: started }), ...(typeof by['by'] === 'string' && typeof by['at'] === 'string' ? { resumed: { by: by['by'], at: by['at'] } } : {}) }
 }
 
+/**
+ * The pull requests the run opened before the one its card names, oldest first, under
+ * `caller.earlierPrs`: a run that moved its work to a new branch opened a request for each, and
+ * the card's own `pr` is only the last.
+ */
+export function earlierPrs(card: RunCard): { number: number; url: string }[] {
+  const prs = card.caller?.['earlierPrs']
+  if (!Array.isArray(prs)) return []
+  return prs.flatMap(pr => (pr && typeof pr === 'object' && typeof pr.number === 'number' && typeof pr.url === 'string' ? [{ number: pr.number as number, url: pr.url as string }] : []))
+}
+
 /** What a mark keeps for the run's whole life, a resume included: its follow-up, its publish level, its parent, where it started, what it was started for. */
 export function lasting(mark: { then?: unknown; publish?: unknown; parent?: unknown; base?: unknown; baseCommit?: unknown; for?: unknown }): Pick<RunnerMark, 'then' | 'publish' | 'parent' | 'base' | 'baseCommit' | 'for'> {
   return {

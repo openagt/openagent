@@ -118,6 +118,9 @@ test('each run with a pull request is marked with how it stands; one with no req
   assert.deepEqual(read, ['/repo'])
   await withPrStates('/repo', [run('e')], states)
   assert.deepEqual(read, ['/repo'], 'no run has a request: the git host is not asked')
+  // The requests a run opened before its last one are marked the same way.
+  const [moved] = await withPrStates('/repo', [{ ...run('f', 8), earlierPrs: [{ number: 7, url: 'https://example.com/pull/7' }, { number: 99, url: 'https://example.com/pull/99' }] }], states)
+  assert.deepEqual(moved!.earlierPrs, [{ number: 7, url: 'https://example.com/pull/7', state: 'merged' }, { number: 99, url: 'https://example.com/pull/99' }])
 })
 
 test('each finished run whose work never left the machine is marked with its commits, by the Human Queue\'s rule; a provider that cannot be read marks none', async () => {
