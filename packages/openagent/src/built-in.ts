@@ -3,8 +3,7 @@ import { createRequire } from 'node:module'
 import { delimiter, dirname, join } from 'node:path'
 import type { CleanupReport } from './dashboard/types.js'
 import { SKILLS_DIRS } from './project-commands.js'
-import { readProjectHooks } from './project-hooks.js'
-import { declaring, lineRuns, SKILLS_ENV, lookupProvidedCommand, packageBins, projectPackages, readManifest, runPackageCommand, type ProjectPackage, type ProvidedCommand, type ProvidedCommandLookup } from '@openagt/agent-data'
+import { declaring, SKILLS_ENV, lookupProvidedCommand, packageBins, projectPackages, readManifest, runPackageCommand, type ProjectPackage, type ProvidedCommand, type ProvidedCommandLookup } from '@openagt/agent-data'
 
 /**
  * The packages OpenAgent brings, by name: dependencies of OpenAgent itself, resolved from its
@@ -32,10 +31,9 @@ export const COMPUTER_PACKAGES: readonly string[] = ['@openagt/remote-access', '
  * {@link SKILLS_ENV}); else the project's when the project holds the skill's text where the coding
  * agents read it (`.claude/skills/<name>/SKILL.md`, `.agents/skills/<name>/SKILL.md`): the rule
  * the launcher already lists a project's commands by, so deleting the skill's folder takes its
- * page away. A tool with no skill text (the scheduler) is the project's when one of the project's
- * hook lines runs it.
+ * page away.
  */
-export const PICKED_PACKAGES: readonly string[] = ['@openagt/skill-tickets', '@openagt/skill-queue', '@openagt/skill-orchestration', '@openagt/skill-browser', '@openagt/agent-scheduler']
+export const PICKED_PACKAGES: readonly string[] = ['@openagt/skill-tickets', '@openagt/skill-queue', '@openagt/skill-orchestration', '@openagt/skill-browser', '@openagt/skill-scheduler']
 
 /** Every name OpenAgent brings itself. */
 export const OWN_PACKAGE_NAMES: readonly string[] = [...BUILT_IN_PACKAGES, ...COMPUTER_PACKAGES, ...PICKED_PACKAGES]
@@ -83,12 +81,9 @@ async function resolveOwn(): Promise<OwnPackage[]> {
  */
 export async function builtInPackagesOf(root: string): Promise<ProjectPackage[]> {
   const packages: ProjectPackage[] = []
-  let lines: string[] | undefined
   for (const pkg of await (resolved ??= resolveOwn())) {
     if (pkg.of === 'the computer') continue
-    if (pkg.of === 'a pick' && !(await defaultSkills()).has(pkg.name)) {
-      if (pkg.skill !== undefined ? !(await holdsSkill(root, pkg.skill)) : !runsOneOf((lines ??= await hookLines(root)), pkg)) continue
-    }
+    if (pkg.of === 'a pick' && !(await defaultSkills()).has(pkg.name) && !(pkg.skill !== undefined && (await holdsSkill(root, pkg.skill)))) continue
     packages.push(pkg)
   }
   return packages
@@ -117,19 +112,6 @@ async function readDefaultSkills(from: string): Promise<Set<string>> {
 async function holdsSkill(root: string, name: string): Promise<boolean> {
   for (const dir of SKILLS_DIRS) if (await stat(join(root, dir, name, 'SKILL.md')).then(s => s.isFile(), () => false)) return true
   return false
-}
-
-/** Every line of the project's hooks file. */
-async function hookLines(root: string): Promise<string[]> {
-  const hooks = await readProjectHooks(root).catch(() => undefined)
-  if (!hooks) return []
-  return [...hooks.open, ...hooks.close, hooks.start, hooks.resume, hooks.check].filter((line): line is string => typeof line === 'string')
-}
-
-/** Whether one of `lines` runs the package: see `lineRuns`. */
-function runsOneOf(lines: readonly string[], pkg: ProjectPackage): boolean {
-  const tool = { name: pkg.name, commands: Object.keys(packageBins(pkg.name, pkg.manifest.bin, pkg.dir)) }
-  return lines.some(line => lineRuns(line, tool))
 }
 
 /** The project's own installed packages, less the names OpenAgent brings itself. */

@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { spawn } from 'node:child_process'
 import { mkdir, readFile, readlink, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { readState, updateState } from '@openagt/agent-scheduler'
+import { readState, updateState } from '@openagt/skill-scheduler'
 import { removeSkill, setScheduler, writeSkill } from './apply.js'
 import { carriedSkills } from './catalogue.js'
 import { held, readProject, standingOf } from './project.js'
@@ -39,7 +39,7 @@ test('a skill written is one tracked file and one relative link; written again i
     const state = await readProject(root)
     assert.deepEqual(held(state), ['maintenance'])
     assert.deepEqual(state.skills.find(s => s.name === 'maintenance'), { name: 'maintenance', standing: 'current', file: '.agents/skills/maintenance/SKILL.md' })
-    assert.deepEqual({ git: state.git, activated: state.activated, scheduler: state.scheduler, remote: state.remote, github: state.github }, { git: true, activated: false, scheduler: false, remote: false, github: false })
+    assert.deepEqual({ git: state.git, activated: state.activated, remote: state.remote, github: state.github }, { git: true, activated: false, remote: false, github: false })
     // Nothing but the two paths: no package.json, no install.
     assert.equal(await run(root, 'status', '--porcelain', '-uall'), '?? .agents/skills/maintenance/SKILL.md\n?? .claude/skills/maintenance\n')
   } finally {
@@ -106,10 +106,10 @@ test('the scheduler switched on makes a folder a project first, as a dashboard d
   try {
     assert.deepEqual(await setScheduler(root, true), { ok: true, changed: true, madeRepository: true })
     assert.equal((await run(root, 'log', '--format=%s')).trim(), '[OpenAgent] first commit')
-    assert.equal(await readFile(join(root, '.openagent/hooks.yml'), 'utf8'), 'open:\n  - agent-scheduler start\nclose:\n  - agent-scheduler stop --unless-keep-alive\n')
+    assert.equal(await readFile(join(root, '.openagent/hooks.yml'), 'utf8'), 'open:\n  - scheduler start\nclose:\n  - scheduler stop --unless-keep-alive\n')
     assert.equal(await run(root, 'status', '--porcelain', '-uall'), '', 'the hooks file is outside git')
     const on = await readProject(root)
-    assert.deepEqual({ scheduler: on.scheduler, activated: on.activated, git: on.git }, { scheduler: true, activated: true, git: true })
+    assert.deepEqual({ activated: on.activated, git: on.git }, { activated: true, git: true })
     assert.deepEqual(await setScheduler(root, true), { ok: true, changed: false }, 'already on')
 
     // A scheduler that is running is stopped with it: the line that would stop it at the dashboard's close just went.
@@ -119,7 +119,7 @@ test('the scheduler switched on makes a folder a project first, as a dashboard d
     assert.deepEqual(await setScheduler(root, false), { ok: true, changed: true })
     assert.equal(await ended, 'SIGINT', 'the running scheduler was asked to stop')
     assert.equal((await readState(root)).on, false)
-    assert.equal((await readProject(root)).scheduler, false)
+    assert.equal(await readFile(join(root, '.openagent/hooks.yml'), 'utf8').catch(() => 'gone'), 'gone', 'a file left with nothing goes')
     assert.deepEqual(await setScheduler(root, false), { ok: true, changed: false })
 
     // A file that cannot be read is said, and not written over.

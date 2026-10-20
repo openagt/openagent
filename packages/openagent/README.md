@@ -51,9 +51,9 @@ runs it. From there the agent belongs to whatever that
 line started. Adding a project writes these three lines into the file, so a new project, an
 empty folder included, starts an agent with nothing typed by hand. They are a default: a line
 already there is kept, and any of them can be changed or deleted. A line finds its tools in the
-packages the dashboard brings first, `agent-runner` and `agent-scheduler` among them, then in the project's installed ones;
+packages the dashboard brings first, `agent-runner` and `scheduler` among them, then in the project's installed ones;
 nothing is downloaded to run a line. A project with no `start` line cannot start an agent from
-the dashboard, and the dashboard says so. `npx @openagt/agent-scheduler@0.1 init`, run in the project, writes
+the dashboard, and the dashboard says so. `npx @openagt/skill-scheduler@0.1 init`, run in the project, writes
 the scheduler's `open` and `close` lines (they start it when the dashboard opens and stop it
 when it closes), keeping any line already there. The file's keys are `open`, `close`, `start`, `resume` and `check`; any other key
 is refused and the whole file ignored.
@@ -80,7 +80,7 @@ A package's own settings are no hook. The scheduler's are the scheduler package'
 the dashboard: its Automations page holds a switch, a pace, a number of agents at once and a
 publish pick per scheduled command, its Settings entry holds how far past the quota boundary
 it may start unattended work, and the handle on the usage bar is its stop line. That part reads
-them with `agent-scheduler status` and saves them with `agent-scheduler offset`, `switch`,
+them with `scheduler status` and saves them with `scheduler offset`, `switch`,
 `pace`, `agents` and `publish`.
 
 The dashboard is a **projection of the agent's own files**. The agent's tool keeps the

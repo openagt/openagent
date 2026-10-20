@@ -38,7 +38,7 @@
   },
   "dependencies": {
     "@openagt/agent-data": "workspace:*",
-    "@openagt/agent-scheduler": "workspace:*",
+    "@openagt/skill-scheduler": "workspace:*",
     "@openagt/skill-browser": "workspace:*",
     "@openagt/skill-discord": "workspace:*",
     "@openagt/skill-github": "workspace:*",

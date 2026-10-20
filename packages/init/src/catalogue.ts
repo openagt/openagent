@@ -25,6 +25,7 @@ export const GROUPS: readonly SkillGroup[] = [
   { title: 'Reviews and research', ticked: true, skills: ['maintainability', 'maintenance', 'readability', 'security-audit', 'ux', 'research', 'market-research', 'suggest-new-features'] },
   { title: 'Pull requests', ticked: true, skills: ['reply'] },
   { title: 'After a merge', ticked: true, skills: ['post-merge-cleanup'] },
+  { title: 'Automations', ticked: true, skills: ['scheduler'] },
   { title: 'Needs its own setup', ticked: false, skills: ['browser', 'discord'] },
 ]
 
@@ -32,13 +33,12 @@ export const GROUPS: readonly SkillGroup[] = [
 export const SKILL_NAMES: readonly string[] = GROUPS.flatMap(group => group.skills)
 
 /**
- * The scheduler's row in the list: no skill, a tool that starts the switched-on automations while
- * the dashboard is open. Ticking it writes two lines into the project's hooks file, which is this
- * machine's and outside git, so this one tick is per person and per machine. Ticked by default:
- * every automation starts switched off, so the scheduler starts no agent until a person says so.
+ * The scheduler's skill: written, it also gets the two lines that start the scheduler while the
+ * dashboard is open, in the project's hooks file, which is this machine's and outside git; deleted,
+ * it takes them out. Ticked by default: every automation starts switched off, so the scheduler
+ * starts no agent until a person says so.
  */
 export const SCHEDULER = 'scheduler'
-export const SCHEDULER_LINE = 'Starts the automations you switch on, while the dashboard is open. This machine only, nothing to commit.'
 
 /** One skill as `init` carries it. */
 export interface CarriedSkill {

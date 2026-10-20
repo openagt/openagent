@@ -11,9 +11,6 @@ importers:
       '@openagt/agent-runner':
         specifier: workspace:*
         version: link:packages/agent-runner
-      '@openagt/agent-scheduler':
-        specifier: workspace:*
-        version: link:packages/agent-scheduler
       '@openagt/skill-branches':
         specifier: workspace:*
         version: link:packages/skill-branches
@@ -35,6 +32,9 @@ importers:
       '@openagt/skill-queue':
         specifier: workspace:*
         version: link:packages/skill-queue
+      '@openagt/skill-scheduler':
+        specifier: workspace:*
+        version: link:packages/skill-scheduler
       '@openagt/skill-tickets':
         specifier: workspace:*
         version: link:packages/skill-tickets
@@ -139,73 +139,6 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
 
-  packages/agent-scheduler:
-    dependencies:
-      '@openagt/agent-data':
-        specifier: workspace:*
-        version: link:../agent-data
-      '@openagt/agent-driver':
-        specifier: workspace:*
-        version: link:../agent-driver/core
-      '@openagt/agent-driver-claude':
-        specifier: workspace:*
-        version: link:../agent-driver/claude
-      '@openagt/agent-runner':
-        specifier: workspace:*
-        version: link:../agent-runner
-      '@openagt/skill-branches':
-        specifier: workspace:*
-        version: link:../skill-branches
-      '@openagt/skill-logs':
-        specifier: workspace:*
-        version: link:../skill-logs
-      yaml:
-        specifier: ^2.5.0
-        version: 2.9.0
-    devDependencies:
-      '@tailwindcss/vite':
-        specifier: ^4.0.0
-        version: 4.3.2(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
-      '@testing-library/dom':
-        specifier: ^10.4.1
-        version: 10.4.1
-      '@testing-library/react':
-        specifier: ^16.3.2
-        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@types/node':
-        specifier: ^20.0.0
-        version: 20.19.43
-      '@types/react':
-        specifier: ^19.2.0
-        version: 19.2.17
-      '@vitejs/plugin-react':
-        specifier: ^6.0.3
-        version: 6.0.3(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
-      jsdom:
-        specifier: ^29.1.1
-        version: 29.1.1
-      lucide-react:
-        specifier: ^0.469.0
-        version: 0.469.0(react@19.2.7)
-      react:
-        specifier: ^19.2.0
-        version: 19.2.7
-      react-dom:
-        specifier: ^19.2.0
-        version: 19.2.7(react@19.2.7)
-      tailwindcss:
-        specifier: ^4.0.0
-        version: 4.3.2
-      typescript:
-        specifier: ^7.0.2
-        version: 7.0.2
-      vite:
-        specifier: ^8.0.0
-        version: 8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
-      vitest:
-        specifier: ^4.1.10
-        version: 4.1.10(@types/node@20.19.43)(jsdom@29.1.1)(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
-
   packages/changes:
     dependencies:
       '@openagt/agent-data':
@@ -309,9 +242,6 @@ importers:
       '@openagt/agent-data':
         specifier: workspace:*
         version: link:../agent-data
-      '@openagt/agent-scheduler':
-        specifier: workspace:*
-        version: link:../agent-scheduler
       '@openagt/skill-browser':
         specifier: workspace:*
         version: link:../skill-browser
@@ -348,6 +278,9 @@ importers:
       '@openagt/skill-research':
         specifier: workspace:*
         version: link:../skill-research
+      '@openagt/skill-scheduler':
+        specifier: workspace:*
+        version: link:../skill-scheduler
       '@openagt/skill-security-audit':
         specifier: workspace:*
         version: link:../skill-security-audit
@@ -400,9 +333,6 @@ importers:
       '@openagt/agent-runner':
         specifier: workspace:*
         version: link:../agent-runner
-      '@openagt/agent-scheduler':
-        specifier: workspace:*
-        version: link:../agent-scheduler
       '@openagt/changes':
         specifier: workspace:*
         version: link:../changes
@@ -436,6 +366,9 @@ importers:
       '@openagt/skill-queue':
         specifier: workspace:*
         version: link:../skill-queue
+      '@openagt/skill-scheduler':
+        specifier: workspace:*
+        version: link:../skill-scheduler
       '@openagt/skill-tickets':
         specifier: workspace:*
         version: link:../skill-tickets
@@ -905,6 +838,73 @@ importers:
   packages/skill-reply: {}
 
   packages/skill-research: {}
+
+  packages/skill-scheduler:
+    dependencies:
+      '@openagt/agent-data':
+        specifier: workspace:*
+        version: link:../agent-data
+      '@openagt/agent-driver':
+        specifier: workspace:*
+        version: link:../agent-driver/core
+      '@openagt/agent-driver-claude':
+        specifier: workspace:*
+        version: link:../agent-driver/claude
+      '@openagt/agent-runner':
+        specifier: workspace:*
+        version: link:../agent-runner
+      '@openagt/skill-branches':
+        specifier: workspace:*
+        version: link:../skill-branches
+      '@openagt/skill-logs':
+        specifier: workspace:*
+        version: link:../skill-logs
+      yaml:
+        specifier: ^2.5.0
+        version: 2.9.0
+    devDependencies:
+      '@tailwindcss/vite':
+        specifier: ^4.0.0
+        version: 4.3.2(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+      '@testing-library/dom':
+        specifier: ^10.4.1
+        version: 10.4.1
+      '@testing-library/react':
+        specifier: ^16.3.2
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.2.17
+      '@vitejs/plugin-react':
+        specifier: ^6.0.3
+        version: 6.0.3(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+      jsdom:
+        specifier: ^29.1.1
+        version: 29.1.1
+      lucide-react:
+        specifier: ^0.469.0
+        version: 0.469.0(react@19.2.7)
+      react:
+        specifier: ^19.2.0
+        version: 19.2.7
+      react-dom:
+        specifier: ^19.2.0
+        version: 19.2.7(react@19.2.7)
+      tailwindcss:
+        specifier: ^4.0.0
+        version: 4.3.2
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vite:
+        specifier: ^8.0.0
+        version: 8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@20.19.43)(jsdom@29.1.1)(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
   packages/skill-security-audit: {}
 

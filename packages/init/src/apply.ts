@@ -1,7 +1,7 @@
 import { lstat, mkdir, realpath, rm, rmdir, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { gitReason, installProject, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
-import { initHooks, removeHooks, stopScheduler } from '@openagt/agent-scheduler'
+import { initHooks, removeHooks, stopScheduler } from '@openagt/skill-scheduler'
 import { carriedSkills } from './catalogue.js'
 import { LINKS_DIR, TEXTS_DIR } from './project.js'
 import { stamped } from './skill-file.js'

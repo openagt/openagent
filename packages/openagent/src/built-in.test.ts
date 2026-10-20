@@ -85,28 +85,16 @@ test('a skill every run gets by default gives every project its package, its dat
   }
 })
 
-test('the scheduler is a project\'s once one of the project\'s hook lines runs it, by its command or by its package\'s full name', async () => {
+test('the scheduler is a project\'s once it holds the scheduler\'s skill text, and not by a hook line that runs it', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'openagent-built-in-tool-')))
-  const has = async (): Promise<boolean> => (await builtInPackagesOf(root)).some(pkg => pkg.name === '@openagt/agent-scheduler')
-  const hooks = async (text: string): Promise<void> => writeFile(join(root, '.openagent', 'hooks.yml'), text)
+  const has = async (): Promise<boolean> => (await builtInPackagesOf(root)).some(pkg => pkg.name === '@openagt/skill-scheduler')
   try {
     await mkdir(join(root, '.openagent'))
-    assert.equal(await has(), false, 'no hooks file')
-    await hooks('start: npx agent-runner run --detach "$PROMPT"\n')
-    assert.equal(await has(), false, 'no line runs it')
-    await hooks('open:\n  - npx my-agent-scheduler-wrapper start\n  - echo agent-scheduler-is-not-here\n')
-    assert.equal(await has(), false, 'its name inside another word is not it')
-    await hooks('open:\n  - npx agent-scheduler start\nclose:\n  - npx agent-scheduler stop --unless-keep-alive\n')
+    await writeFile(join(root, '.openagent', 'hooks.yml'), 'open:\n  - scheduler start\nclose:\n  - scheduler stop --unless-keep-alive\n')
+    assert.equal(await has(), false, 'its lines alone')
+    await skillText(root, '.agents/skills', 'scheduler')
     assert.equal(await has(), true)
-    assert.ok((await readProjectModules(root)).some(module => module.package === '@openagt/agent-scheduler'), 'its page comes with it')
-    await hooks('open:\n  - npx @openagt/agent-scheduler@0.1 start\n')
-    assert.equal(await has(), true, 'the full name with a range')
-    await hooks('open:\n  - agent-scheduler start\nclose:\n  - agent-scheduler stop --unless-keep-alive\n')
-    assert.equal(await has(), true, 'the bare lines its own init writes')
-    await hooks('open:\n  - FOO=1 ./node_modules/.bin/agent-scheduler start\n')
-    assert.equal(await has(), true, 'by a path')
-    await hooks('open: [')
-    assert.equal(await has(), false, 'a hooks file that cannot be read runs nothing')
+    assert.ok((await readProjectModules(root)).some(module => module.package === '@openagt/skill-scheduler'), 'its page comes with it')
   } finally {
     await rm(root, { recursive: true, force: true })
   }

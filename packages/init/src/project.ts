@@ -1,7 +1,6 @@
 import { lstat, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { nodeGitRunner, OPENAGENT_DIR, type GitRunner } from '@openagt/agent-data'
-import { hasHooks } from '@openagt/agent-scheduler'
 import { homeUrlFromRemote } from '@openagt/skill-github'
 import { carriedSkills, SKILL_NAMES, type CarriedSkill } from './catalogue.js'
 import { olderThan, unstamped } from './skill-file.js'
@@ -36,8 +35,6 @@ export interface SkillState {
 
 export interface ProjectState {
   skills: SkillState[]
-  /** Whether the project's hooks start the scheduler with the dashboard. */
-  scheduler: boolean
   /** Whether the folder is a git repository. */
   git: boolean
   /** Whether a dashboard knows the folder as a project: its `.openagent/` is there. */
@@ -79,7 +76,6 @@ export async function readProject(root: string, git: GitRunner = nodeGitRunner()
   const remote = inRepo ? await git(['remote', 'get-url', 'origin'], root).then(out => out.trim(), () => '') : ''
   return {
     skills,
-    scheduler: await hasHooks(root),
     git: inRepo,
     activated: await lstat(join(root, OPENAGENT_DIR)).then(entry => entry.isDirectory(), () => false),
     remote: remote !== '',

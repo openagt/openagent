@@ -20,9 +20,9 @@ async function project(hooks?: string): Promise<string> {
 
 test('the file: open and close lists of shell lines; missing means none; the wrong shape is refused and named', async () => {
   assert.deepEqual(parseProjectHooks(''), { open: [], close: [] })
-  assert.deepEqual(parseProjectHooks('open:\n  - npx agent-scheduler start\nclose:\n  - npx agent-scheduler stop --unless-keep-alive\n'), {
-    open: ['npx agent-scheduler start'],
-    close: ['npx agent-scheduler stop --unless-keep-alive'],
+  assert.deepEqual(parseProjectHooks('open:\n  - npx scheduler start\nclose:\n  - npx scheduler stop --unless-keep-alive\n'), {
+    open: ['npx scheduler start'],
+    close: ['npx scheduler stop --unless-keep-alive'],
   })
   assert.deepEqual(parseProjectHooks('open:\n  - echo one\n  - echo two\n'), { open: ['echo one', 'echo two'], close: [] })
   assert.deepEqual(parseProjectHooks('open:\nclose:\n'), { open: [], close: [] })

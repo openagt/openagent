@@ -47,8 +47,6 @@ const NOTES: Partial<Record<ProjectSkill['standing'], string>> = {
   own: 'your own text',
 }
 
-export const SCHEDULER_LINE = 'Starts the automations you switch on, while the dashboard is open. This machine only, nothing to commit.'
-
 /** The words of the one press that takes skills to agents: a send where there is a remote, a commit where there is none. */
 const sendWord = (skills: ProjectSkills): string => (skills.remote ? `Send to ${skills.remote}` : 'Commit')
 
@@ -168,10 +166,10 @@ export function ProjectSkillsLine({
 }
 
 /** What is ticked when the list opens: what the project has; in a project with nothing yet, the default picks. */
-function firstTicks(skills: ProjectSkills): { ticked: Set<string>; scheduler: boolean } {
+function firstTicks(skills: ProjectSkills): Set<string> {
   const has = all(skills).filter(held)
-  if (has.length > 0 || skills.scheduler) return { ticked: new Set(has.map(skill => skill.name)), scheduler: skills.scheduler }
-  return { ticked: new Set(skills.groups.filter(group => group.ticked).flatMap(group => group.skills.map(skill => skill.name))), scheduler: true }
+  if (has.length > 0) return new Set(has.map(skill => skill.name))
+  return new Set(skills.groups.filter(group => group.ticked).flatMap(group => group.skills.map(skill => skill.name)))
 }
 
 interface Saved {
@@ -183,9 +181,7 @@ interface Saved {
 }
 
 export function AddSkillsDialog({ projectId, skills, onClose, onSaved }: { projectId: string; skills: ProjectSkills; onClose: () => void; onSaved: () => void }) {
-  const [first] = useState(() => firstTicks(skills))
-  const [ticked, setTicked] = useState(first.ticked)
-  const [scheduler, setScheduler] = useState(first.scheduler)
+  const [ticked, setTicked] = useState(() => firstTicks(skills))
   const [saved, setSaved] = useState<Saved | null>(null)
   const [sent, setSent] = useState<SendSkillsResult | null>(null)
   const { busy, error, run } = useAction()
@@ -199,9 +195,9 @@ export function AddSkillsDialog({ projectId, skills, onClose, onSaved }: { proje
     })
   const write = all(skills).filter(skill => ticked.has(skill.name) && !held(skill)).map(skill => skill.name)
   const remove = all(skills).filter(skill => !ticked.has(skill.name) && held(skill)).map(skill => skill.name)
-  const nothing = write.length === 0 && remove.length === 0 && scheduler === skills.scheduler
+  const nothing = write.length === 0 && remove.length === 0
 
-  // A change of skills goes on to where agents start from in the same press; the scheduler alone is this machine's, and nothing is sent.
+  // A change of skills goes on to where agents start from in the same press.
   const send = async (names: string[]): Promise<void> => {
     setSent(null)
     const outcome = await run(() => sendProjectSkills(projectId, names), 'Could not send the skills.')
@@ -209,14 +205,14 @@ export function AddSkillsDialog({ projectId, skills, onClose, onSaved }: { proje
     onSaved()
   }
   const save = async (): Promise<void> => {
-    const outcome = await run(() => sendChangeSkills(projectId, { write, remove, ...(scheduler !== skills.scheduler ? { scheduler } : {}) }), 'Could not change the skills.')
+    const outcome = await run(() => sendChangeSkills(projectId, { write, remove }), 'Could not change the skills.')
     if (!outcome.ok) return
     setSaved(outcome.value)
     onSaved()
     const changed = [...outcome.value.written, ...outcome.value.removed]
     if (changed.length > 0 && skills.git) await send(changed)
   }
-  const saveWord = nothing || write.length + remove.length === 0 || !skills.git ? 'Save' : skills.remote ? `Save and send to ${skills.remote}` : 'Save and commit'
+  const saveWord = nothing || !skills.git ? 'Save' : skills.remote ? `Save and send to ${skills.remote}` : 'Save and commit'
   const branch = skills.startBranch ?? 'the default branch'
 
   return (
@@ -297,21 +293,11 @@ export function AddSkillsDialog({ projectId, skills, onClose, onSaved }: { proje
                 ))}
               </fieldset>
             ))}
-            <fieldset>
-              <legend className="mb-1 font-medium text-foreground">The scheduler</legend>
-              <label className="flex cursor-pointer items-start gap-2 py-0.5">
-                <Checkbox checked={scheduler} onCheckedChange={checked => setScheduler(checked === true)} disabled={busy} className="mt-0.5" aria-label="scheduler" />
-                <span className="min-w-0">
-                  <span className="text-foreground">scheduler</span>
-                  <span className="block text-muted-foreground">{SCHEDULER_LINE}</span>
-                </span>
-              </label>
-            </fieldset>
           </div>
           {error && <p className="mt-2 text-danger">{error}</p>}
           <div className="mt-3 flex items-center justify-end gap-2">
             <span className="mr-auto text-muted-foreground">
-              {nothing ? 'Nothing to change.' : [write.length > 0 ? `${count(write.length, 'skill', 'skills')} to write` : '', remove.length > 0 ? `${count(remove.length, 'skill', 'skills')} to delete` : '', scheduler !== skills.scheduler ? `the scheduler ${scheduler ? 'on' : 'off'}` : ''].filter(Boolean).join(', ') + '.'}
+              {nothing ? 'Nothing to change.' : [write.length > 0 ? `${count(write.length, 'skill', 'skills')} to write` : '', remove.length > 0 ? `${count(remove.length, 'skill', 'skills')} to delete` : ''].filter(Boolean).join(', ') + '.'}
             </span>
             <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onClose}>
               Cancel

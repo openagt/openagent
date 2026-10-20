@@ -31,7 +31,7 @@
     "@openagt/skill-discord": "workspace:*",
     "@openagt/skill-orchestration": "workspace:*",
     "@openagt/agent-runner": "workspace:*",
-    "@openagt/agent-scheduler": "workspace:*",
+    "@openagt/skill-scheduler": "workspace:*",
     "typescript": "^7.0.2"
   }
 }

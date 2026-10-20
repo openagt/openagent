@@ -34,11 +34,14 @@ already made, and lists it in its pull request; for anything else it proposes an
   now, a tick added writes a skill, a tick removed deletes it. `add` and `remove` by
   name do the same without the list, for scripts, and ask nothing. Picked over separate
   commands only, which need every skill's name known.
-- The scheduler is one more tick in the list, ticked by default. It is no skill: ticking
-  it writes its two lines into the project's hooks file, which is this machine's and
-  outside git, so this one tick is per person and per machine. Every automation starts
-  switched off, so a ticked scheduler starts no agent by itself. Picked over a scheduler
-  that comes with the dashboard for every project.
+- The scheduler is one more skill in the list, ticked by default. Writing its text also
+  writes its two lines into the project's hooks file, which is this machine's and outside
+  git; deleting it takes them out and stops it. Its text is in the project, so an agent in
+  a terminal can start the scheduler with no dashboard. Every automation starts switched
+  off, so a ticked scheduler starts no agent by itself. Picked over a tick that wrote the
+  lines alone, which left no way to the scheduler but the dashboard; over a skill every run
+  gets by default, which an agent in a terminal does not get; and over a scheduler that
+  comes with the dashboard for every project.
 
 ## The commit
 - After writing, init asks "Commit these files now?". On a yes it makes one commit on

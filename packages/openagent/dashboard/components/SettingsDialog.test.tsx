@@ -302,7 +302,7 @@ describe('the Settings list', () => {
   const MODULES = mounted([
     { id: 'devices', title: 'Devices', icon: Smartphone, Section: Given, package: '@openagt/remote-access', projects: [], computer: true },
     { id: 'orchestration', title: 'Orchestration', icon: Network, Section: Given, package: '@openagt/skill-orchestration', projects: ['p1', 'p2', 'gone'], computer: false },
-    { id: 'scheduler', title: 'Scheduler', icon: CalendarClock, Section: Broken, package: '@openagt/agent-scheduler', projects: ['p2'], computer: false },
+    { id: 'scheduler', title: 'Scheduler', icon: CalendarClock, Section: Broken, package: '@openagt/skill-scheduler', projects: ['p2'], computer: false },
   ])
   const show = (entry: string, scope: string | null = null) =>
     render(
