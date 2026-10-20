@@ -386,20 +386,12 @@ export function foundOutput(stdout: string, lastRun: string): string {
  */
 export const FOUND_OPENING = 'The scheduler starts this command when its check prints something, and this time the check printed what is below. It says why this run started; what the work is, the command says.'
 
-/** A run a row resumes, its words, and the people whose words they are, by their logins, when the check names them. */
-export interface RunToResume {
-  run: string
-  text: string
-  from?: string[]
-}
-
 /**
  * What a row that resumes printed: each run it names with its words, a run named twice once with
- * its words joined and its people with them. Nothing for output that says no work ({@link isDue});
- * a reason for output that is not `[{ "run": "<id>", "text": "…", "from": ["<login>"] }]`, `from`
- * left out when the words are nobody's.
+ * its words joined. Nothing for output that says no work ({@link isDue}); a reason for output that
+ * is not `[{ "run": "<id>", "text": "…" }]`.
  */
-export function runsToResume(stdout: string): RunToResume[] | string {
+export function runsToResume(stdout: string): { run: string; text: string }[] | string {
   if (!isDue(stdout)) return []
   let value: unknown
   try {
@@ -408,16 +400,13 @@ export function runsToResume(stdout: string): RunToResume[] | string {
     return 'the check printed no JSON'
   }
   if (!Array.isArray(value)) return 'the check printed no list'
-  const runs = new Map<string, { texts: string[]; from: string[] }>()
+  const runs = new Map<string, string[]>()
   for (const item of value) {
     if (!isMap(item) || typeof item['run'] !== 'string' || !item['run'].trim() || typeof item['text'] !== 'string' || !item['text'].trim()) return 'an item of the list is no { "run": "<id>", "text": "…" }'
-    const from = item['from']
-    if (from !== undefined && (!Array.isArray(from) || !from.every(login => typeof login === 'string' && login.trim() !== ''))) return 'the from of an item is no list of logins'
     const id = item['run'].trim()
-    const named = runs.get(id) ?? { texts: [], from: [] }
-    runs.set(id, { texts: [...named.texts, item['text'].trim()], from: [...new Set([...named.from, ...((from as string[] | undefined) ?? []).map(login => login.trim())])] })
+    runs.set(id, [...(runs.get(id) ?? []), item['text'].trim()])
   }
-  return [...runs].map(([run, { texts, from }]) => ({ run, text: texts.join('\n\n'), ...(from.length > 0 ? { from } : {}) }))
+  return [...runs].map(([run, texts]) => ({ run, text: texts.join('\n\n') }))
 }
 
 /**

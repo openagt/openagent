@@ -14,8 +14,7 @@
   },
   "files": [
     "dist",
-    "bin/agent-runner",
-    "assets"
+    "bin/agent-runner"
   ],
   "bin": {
     "agent-runner": "bin/agent-runner"

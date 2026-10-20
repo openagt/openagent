@@ -73,6 +73,8 @@ export interface DriverModel {
    * in the order the agent lists them. Empty or absent: this model takes no effort.
    */
   efforts?: string[]
+  /** The effort it thinks at when none is picked, when its agent says: Codex's list does, Claude Code's does not. */
+  defaultEffort?: string
   /** How many tokens of conversation it holds, when the agent says; absent when it does not. */
   contextWindow?: number
 }
@@ -362,12 +364,6 @@ export type DriverQuota =
  * One file a tool call changed, as the call's own CLI reports it: the path as the CLI names it,
  * how many lines the call added and how many it removed, and `created` when the call made the file.
  */
-/** One task of an agent's plan. */
-export interface PlanTask {
-  text: string
-  status: 'pending' | 'in_progress' | 'completed'
-}
-
 export interface FileChange {
   path: string
   added: number
@@ -393,9 +389,11 @@ export type DriverEvent =
   /**
    * The model the turn runs on, as the agent's CLI names it once it has started: its full id
    * (`claude-opus-5-5` for `opus`, or for no model picked), so a run says which model ran even
-   * after the alias moves on. A driver whose CLI does not say omits it.
+   * after the alias moves on. A driver whose CLI does not say omits it. `effort` is how hard it
+   * thinks, the one picked or else the one in force, when the driver can tell; a driver may say
+   * the model again once it can.
    */
-  | { type: 'model'; model: string }
+  | { type: 'model'; model: string; effort?: string }
   /**
    * An assistant text chunk streamed out. `subagent`, here and on `action`, `output` and `thought`,
    * is the id of the {@link DriverEvent subagent} the CLI says wrote it, when it was not the agent
@@ -457,12 +455,6 @@ export type DriverEvent =
   | { type: 'subagent'; id: string; status: 'working' | 'ended' | 'failed'; name?: string; role?: string; model?: string; prompt?: string }
   /** What the agent thought before it acted, as its CLI summarizes it. */
   | { type: 'thought'; text: string; subagent?: string }
-  /**
-   * The agent's own plan, whole, each time it changes it: its tasks in order, each pending, in
-   * progress or completed. Claude Code keeps it with its TodoWrite tool, Codex sends it as its
-   * turn's plan; an agent that made none sends nothing. Live only: a log keeps no line of it.
-   */
-  | { type: 'plan'; tasks: PlanTask[] }
   /**
    * The turn settled with this final text. `sessionLink` is the real URL of the session,
    * for a driver whose session has one of its own (#1317) — a cloud session, say — so a

@@ -32,8 +32,6 @@ export const USAGE = `usage: agent-runner <command>
   run --detach --resume <id> …  the same continuing in its own process, answered at once: what a dashboard's resume hook runs
   run --resume <id> … --by <who>
                                 kept on the run's record with the time, until its next resume: a scheduler's row that resumed it, which counts the run as its own
-  run --resume <id> … --by <who> --from <login> [--from <login>]…
-                                the people whose words resume it, by their logins on its pull request: the comment the run keeps there says whose task it finished
   check [--driver <claude-code|codex>]
                                 whether a run can start here: the coding agent's CLI installed and logged in, and its warnings; what a dashboard's check hook runs
   init                          this tool's lines in the dashboard's .openagent/hooks.yml, so its Start works; a line already there is kept
@@ -105,7 +103,7 @@ type Command = (args: string[], io: CliIo, git: GitRunner) => Promise<unknown>
 
 const COMMANDS: Record<string, Command> = {
   async run(args, io, git) {
-    const { positionals, values } = parse(args, { id: { type: 'string' }, model: { type: 'string' }, effort: { type: 'string' }, resume: { type: 'string' }, answer: { type: 'string' }, detach: { type: 'boolean' }, mark: { type: 'boolean' }, driver: { type: 'string' }, then: { type: 'string' }, publish: { type: 'string' }, attach: { type: 'string' }, started: { type: 'string' }, parent: { type: 'string' }, base: { type: 'string' }, by: { type: 'string' }, from: { type: 'string', multiple: true } }, 0, 1)
+    const { positionals, values } = parse(args, { id: { type: 'string' }, model: { type: 'string' }, effort: { type: 'string' }, resume: { type: 'string' }, answer: { type: 'string' }, detach: { type: 'boolean' }, mark: { type: 'boolean' }, driver: { type: 'string' }, then: { type: 'string' }, publish: { type: 'string' }, attach: { type: 'string' }, started: { type: 'string' }, parent: { type: 'string' }, base: { type: 'string' }, by: { type: 'string' } }, 0, 1)
     const repo = await project(io.cwd, git)
     const driver = values.driver
     if (driver !== undefined && !isDriverName(driver)) throw new Usage(`unknown driver "${driver}"; the drivers are ${DRIVER_NAMES.join(' and ')}`)
@@ -124,8 +122,6 @@ const COMMANDS: Record<string, Command> = {
       if (positionals[0] === undefined && values.answer === undefined) throw new Usage('a text or --answer is needed to resume a run')
     }
     if (values.by !== undefined && (values.resume === undefined || !values.by.trim())) throw new Usage('--by names who resumes a run, with --resume')
-    const from = values.from === undefined ? undefined : ([] as string[]).concat(values.from)
-    if (from !== undefined && (values.by === undefined || from.some(login => !login.trim()))) throw new Usage('--from names a login whose words resume a run, with --by')
     if (values.then !== undefined && !values.then.trim()) throw new Usage('--then needs a prompt')
     if (values.attach !== undefined && !values.attach.trim()) throw new Usage('--attach needs a text')
     if (values.started !== undefined && (values.id === undefined || Number.isNaN(Date.parse(values.started)))) throw new Usage('--started is the time a run spawned with --id was asked for, like 2026-10-09T10:00:00.000Z')
@@ -149,7 +145,6 @@ const COMMANDS: Record<string, Command> = {
         ...(values.model !== undefined ? { model: values.model } : {}),
         ...(values.effort !== undefined ? { effort: values.effort } : {}),
         ...(values.by !== undefined ? { by: values.by } : {}),
-        ...(from !== undefined ? { from } : {}),
         ...(publish !== undefined ? { publish } : noLevel ? { publish: NO_PUBLISH } : {}),
       })
       return { ok: true, detached: true, ...resumed }
@@ -168,7 +163,6 @@ const COMMANDS: Record<string, Command> = {
         ...(values.model !== undefined ? { model: values.model } : {}),
         ...(values.effort !== undefined ? { effort: values.effort } : {}),
         ...(values.by !== undefined ? { by: values.by } : {}),
-        ...(from !== undefined ? { from } : {}),
         ...(publish !== undefined ? { publish } : noLevel ? { publish: NO_PUBLISH } : {}),
         log: io.stderr,
       })
@@ -229,7 +223,7 @@ async function project(cwd: string, git: GitRunner): Promise<string> {
   }
 }
 
-type Options = Record<string, { type: 'string' | 'boolean'; multiple?: boolean }>
+type Options = Record<string, { type: 'string' | 'boolean' }>
 
 /**
  * The arguments with every text made safe for the reader of options: a text may open with a dash

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { RunCard } from '@openagt/skill-logs'
 import type { GhRunner } from './gh.js'
-import { WHOLE_READ_EVERY_MS, listReplies, parseOpenRequests, repliesArgs, repliesFor, watchedRequests } from './replies.js'
+import { WHOLE_READ_EVERY_MS, listReplies, parseOpenRequests, repliesArgs, repliesFor, seenArgs, watchedRequests } from './replies.js'
 
 // What came on this machine's agents' pull requests since each ended: which pull requests are
 // watched, what of GitHub's answer counts, and the one read.
@@ -26,7 +26,7 @@ function pr(number: number, over: Record<string, unknown> = {}): Record<string, 
 
 const answer = (...prs: Record<string, unknown>[]): unknown => ({ data: { repository: { pullRequests: { nodes: prs } } } })
 
-const comment = (login: string, body: string, createdAt: string, association = 'OWNER') => ({ author: { login }, authorAssociation: association, body, createdAt, url: `https://github.com/o/r/pull/1#c-${login}` })
+const comment = (login: string, body: string, createdAt: string, association = 'OWNER', id = `C-${login}`) => ({ id, author: { login }, authorAssociation: association, body, createdAt, url: `https://github.com/o/r/pull/1#c-${login}` })
 
 test("a branch is watched for the run that last worked on it, when that run is this machine's and has ended; one a run still works on is left to it; a run with no branch is none", () => {
   const cards = [
@@ -101,34 +101,44 @@ test('a run is told only what came after it ended, oldest first, under the pull 
     {
       run: 'r1',
       text: ['On your pull request #1 (https://github.com/o/r/pull/1), since you ended:', '- @rom commented (https://github.com/o/r/pull/1#c-rom):\nFirst.', '- @rom commented (https://github.com/o/r/pull/1#c-rom):\nSecond.'].join('\n'),
-      from: ['rom'],
+      seen: ['C-rom', 'C-rom'],
     },
   ])
 })
 
-test('whose words a run is told: each person once, in the order they came; a red check is nobody\'s', () => {
+test('the comments and reviews a run is told, by their ids, for their 👀: a line comment and a review too; a red check is none', () => {
   const open = parseOpenRequests(
     answer(
-      pr(1, { comments: { nodes: [comment('rom', 'First.', AFTER), comment('dani', 'Me too.', '2026-10-19T12:00:00Z', 'COLLABORATOR'), comment('rom', 'Again.', '2026-10-19T13:00:00Z')] } }),
+      pr(1, {
+        comments: { nodes: [comment('rom', 'First.', AFTER, 'OWNER', 'IC_1'), comment('dani', 'Seen before it ended.', BEFORE, 'COLLABORATOR', 'IC_0')] },
+        reviews: { nodes: [{ id: 'PRR_1', author: { login: 'dani' }, authorAssociation: 'COLLABORATOR', body: 'One thing.', state: 'COMMENTED', submittedAt: AFTER, url: 'u-r', comments: { nodes: [{ ...comment('dani', 'Off by one.', AFTER, 'COLLABORATOR', 'PRRC_1'), path: 'a.ts', line: 3 }] } }] },
+      }),
       pr(2, { commits: { nodes: [{ commit: { statusCheckRollup: { contexts: { nodes: [{ __typename: 'CheckRun', name: 'test', conclusion: 'FAILURE', completedAt: AFTER, detailsUrl: 'u-test' }] } } } }] } }),
     ),
   )
   const replies = repliesFor([{ branch: 'b1', run: 'r1', endedAt: ENDED }, { branch: 'b2', run: 'r2', endedAt: ENDED }], open)
-  assert.deepEqual(replies.map(r => [r.run, r.from]), [['r1', ['rom', 'dani']], ['r2', undefined]])
+  assert.deepEqual(replies.map(r => [r.run, r.seen]), [['r1', ['IC_1', 'PRR_1', 'PRRC_1']], ['r2', []]])
+  assert.deepEqual(seenArgs(['IC_1', 'PRR_1']), ['api', 'graphql', '-f', 'query=mutation { r0: addReaction(input: { subjectId: "IC_1", content: EYES }) { clientMutationId } r1: addReaction(input: { subjectId: "PRR_1", content: EYES }) { clientMutationId } }'])
 })
 
-test('a look asks first whether a comment changed, then reads every pull request in one GitHub call, in the repository the working directory is in; nothing to watch asks GitHub nothing; GitHub that cannot answer throws', async () => {
+test('a look asks first whether a comment changed, then reads every pull request in one GitHub call, in the repository the working directory is in, and gives what it hands a run 👀 in one more; nothing to watch asks GitHub nothing; GitHub that cannot answer throws', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'replies-cache-'))
   try {
     const cache = join(dir, 'replies.json')
     const calls: string[][] = []
     const gh: GhRunner = async args => {
       calls.push(args)
+      if (args[1] === 'graphql' && args[3]!.startsWith('query=mutation')) return '{}'
       return args[1] === 'graphql' ? JSON.stringify(answer(pr(1, { comments: { nodes: [comment('rom', 'Why?', AFTER)] } }))) : 'HTTP/2.0 200 OK\nEtag: W/"e1"\n\n[]'
     }
     const replies = await listReplies('/repo', { gh, host: 'this-box', runs: async () => [card('r1', 1), card('r2', 2)], cache })
-    assert.deepEqual(replies.map(r => r.run), ['r1'])
-    assert.deepEqual(calls.map(c => c.slice(0, 3)), [['api', '--include', 'repos/{owner}/{repo}/issues/comments?sort=updated&direction=desc&per_page=1'], ['api', '--include', 'repos/{owner}/{repo}/pulls/comments?sort=updated&direction=desc&per_page=1'], repliesArgs().slice(0, 3)])
+    assert.deepEqual(replies, [{ run: 'r1', text: 'On your pull request #1 (https://github.com/o/r/pull/1), since you ended:\n- @rom commented (https://github.com/o/r/pull/1#c-rom):\nWhy?' }], 'the run and its words, as the scheduler reads them')
+    assert.deepEqual(calls.map(c => c.slice(0, 3)), [['api', '--include', 'repos/{owner}/{repo}/issues/comments?sort=updated&direction=desc&per_page=1'], ['api', '--include', 'repos/{owner}/{repo}/pulls/comments?sort=updated&direction=desc&per_page=1'], repliesArgs().slice(0, 3), seenArgs(['C-rom']).slice(0, 3)])
+    assert.deepEqual(calls[3], seenArgs(['C-rom']))
+
+    // A 👀 that could not be put leaves the answer to come.
+    const noReaction: GhRunner = async args => (args[1] === 'graphql' && args[3]!.startsWith('query=mutation') ? Promise.reject(new Error('gh: Forbidden')) : gh(args, '/repo'))
+    assert.deepEqual((await listReplies('/repo', { gh: noReaction, host: 'this-box', runs: async () => [card('r1', 1)], cache: join(dir, 'other.json') })).map(r => r.run), ['r1'])
     assert.deepEqual(repliesArgs().slice(0, 6), ['api', 'graphql', '-F', 'owner={owner}', '-F', 'name={repo}'])
 
     calls.length = 0

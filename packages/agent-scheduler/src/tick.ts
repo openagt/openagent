@@ -63,7 +63,7 @@ export interface TickDeps {
   /** Start the run's process, detached; resolves once it is spawned. `startedAt` is the start its record keeps, `attached` what the agent is handed with the prompt. */
   spawn: (run: { id: string; prompt: string; startedAt: string; driver: AgentName; model?: string; publish?: Publish; attached?: string }) => Promise<void>
   /** Continue an ended run in its own process, with the text it is told and the row that resumes it; resolves once it is spawned. */
-  resume: (run: { id: string; text: string; by: string; from?: string[] }) => Promise<void>
+  resume: (run: { id: string; text: string; by: string }) => Promise<void>
   /** Whether the scheduler was told to stop while this tick runs: then nothing more is started. */
   stopped?: () => boolean
   log?: (line: string) => void
@@ -265,14 +265,14 @@ async function resumeNamed(deps: TickDeps, command: ScheduledCommand, { now, fou
   const cap = capInForce(deps.state, command)
   const running = (await deps.inFlight(command.name)).map(describe)
   const decided: Decided[] = []
-  for (const { run, text, from } of named) {
+  for (const { run, text } of named) {
     const why = await whyNot(run)
     if (why !== undefined) {
       decided.push({ outcome: `run ${run} not resumed: ${why}` })
       continue
     }
     try {
-      await deps.resume({ id: run, text: resumeText(command, text, found!.lastRun), by: command.name, ...(from !== undefined ? { from } : {}) })
+      await deps.resume({ id: run, text: resumeText(command, text, found!.lastRun), by: command.name })
       running.push(run)
       decided.push({ outcome: `resumed ${run}`, started: { id: run, at: now.toISOString() } })
     } catch (err) {

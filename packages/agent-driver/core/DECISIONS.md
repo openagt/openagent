@@ -41,6 +41,10 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A session that keeps a log names its diary in the agent's environment (`AGENT_DIARY`),
   so a command the agent runs can add a line of its own to the run's chat. Picked over
   the scheduler letting each package hook into a run's start.
+- The card says how hard the model thought: the effort picked, else the one in force when
+  the driver can tell (Codex says it, or its model list gives the model's default; Claude
+  Code's settings may set one, and with none set it says nothing). Picked over the card
+  naming only a picked effort.
 
 ## The adapters
 - Each driver is its own package, `@openagt/agent-driver-<name>`, on the contract `@openagt/agent-driver`

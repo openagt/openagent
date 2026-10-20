@@ -2,7 +2,7 @@ import { execFile, spawn as nodeSpawn } from 'node:child_process'
 import { copyFile, lstat, mkdir, readlink, readdir, realpath, rename, rm, stat, symlink } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { runCliSession, continuingTurn, finishTurn, agentEnv, attachLog, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, checkCliReady, type AgentCliParser, type CliIo, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type PlanTask, type DriverModel, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
+import { runCliSession, continuingTurn, finishTurn, agentEnv, attachLog, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, checkCliReady, type AgentCliParser, type CliIo, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
 
 /**
  * Codex's sandbox policy for the shell commands the model writes.
@@ -147,7 +147,7 @@ export class CodexDriver implements Driver {
       sessionEnv = { ...env, CODEX_HOME: home }
     }
     const extraArgs = [...args, ...(this.opts.extraArgs ?? [])]
-    return new CodexSession({ ...this.opts, env: sessionEnv, ...(extraArgs.length > 0 ? { extraArgs } : {}) }, opts)
+    return new CodexSession({ ...this.opts, env: sessionEnv, ...(extraArgs.length > 0 ? { extraArgs } : {}) }, opts, () => this.listModels())
   }
 
   /**
@@ -189,19 +189,6 @@ export class CodexDriver implements Driver {
   }
 }
 
-/** The plan of a `turn/plan/updated`, `plan` of `{ step, status }`; none when it holds no list. */
-function codexPlan(plan: unknown): DriverEvent[] {
-  if (!Array.isArray(plan)) return []
-  const status = { pending: 'pending', inProgress: 'in_progress', completed: 'completed' } as const
-  const tasks: PlanTask[] = []
-  for (const item of plan) {
-    const step = field(item, 'step')
-    const said = field(item, 'status')
-    if (typeof step === 'string' && step.trim() !== '' && typeof said === 'string' && Object.hasOwn(status, said)) tasks.push({ text: oneLine(step), status: status[said as keyof typeof status] })
-  }
-  return [{ type: 'plan', tasks }]
-}
-
 /** How long {@link CodexDriver.listModels} waits for Codex's answer. */
 const MODELS_TIMEOUT_MS = 30_000
 
@@ -228,11 +215,13 @@ export function parseCodexModels(stdout: string): { models: DriverModel[] } | { 
       ? (entry['supported_reasoning_levels'] as Record<string, unknown>[]).map(level => level?.['effort']).filter((level): level is string => typeof level === 'string')
       : []
     const window = entry['context_window']
+    const defaultEffort = entry['default_reasoning_level']
     listed.push({
       model: {
         id,
         name: typeof name === 'string' ? name : id,
         ...(efforts.length > 0 ? { efforts } : {}),
+        ...(typeof defaultEffort === 'string' && defaultEffort !== '' ? { defaultEffort } : {}),
         ...(typeof window === 'number' && window > 0 ? { contextWindow: window } : {}),
       },
       priority,
@@ -259,10 +248,14 @@ export class CodexSession implements DriverSession {
    * messages chain.
    */
   private lastSessionId: string | undefined
+  /** Codex's model list, read once for the session the first time it is needed. */
+  private listed: Promise<DriverModel[]> | undefined
 
   constructor(
     private readonly config: CodexDriverOptions,
     startOpts: DriverStartOptions,
+    /** Codex's models, for the effort one thinks at when none was picked and Codex did not say. */
+    private readonly models?: () => Promise<DriverModel[]>,
   ) {
     const attached = attachLog(startOpts)
     this.startOpts = attached.opts
@@ -278,7 +271,7 @@ export class CodexSession implements DriverSession {
     const framing = resumeId === undefined ? combineFraming(this.startOpts.system, opts.system) : ''
     // Resolved every turn, not at start: the agent may `git init` in turn 1.
     const gitDir = await gitCommonDir(this.cwd)
-    const emit = makeEmit(this.startOpts.onEvent, 'codex')
+    const emit = this.withDefaultEffort(makeEmit(this.startOpts.onEvent, 'codex'))
     const agent = (emitFn: (event: DriverEvent) => void): Promise<DriverTurn> =>
       runCliSession({
         bin: this.config.bin ?? 'codex',
@@ -306,6 +299,27 @@ export class CodexSession implements DriverSession {
     const turn = resumeId === undefined ? await agent(emit) : await continuingTurn('codex', resumeId, emit, isConversationGone, agent)
     if (turn.sessionId) this.lastSessionId = turn.sessionId
     return finishTurn(this, turn, opts, emit)
+  }
+
+  /**
+   * The model said again with the effort it thinks at, when none was picked and Codex said none:
+   * its model's default, as Codex's model list gives it, once the list is read. A list that cannot
+   * be read leaves the model as it was said.
+   */
+  private withDefaultEffort(emit: (event: DriverEvent) => void): (event: DriverEvent) => void {
+    if (this.startOpts.effort || !this.models) return emit
+    const models = this.models
+    return event => {
+      emit(event)
+      if (event.type !== 'model' || event.effort !== undefined) return
+      void (this.listed ??= models()).then(
+        listed => {
+          const effort = listed.find(m => m.id === event.model)?.defaultEffort
+          if (effort !== undefined) emit({ type: 'model', model: event.model, effort })
+        },
+        () => {},
+      )
+    }
   }
 
   readCode(path: string): Promise<string> {
@@ -621,9 +635,11 @@ export class CodexAppServerParser implements AgentCliParser {
     this.sessionId = threadId
     this.request('turn/start', { threadId, input: [{ type: 'text', text: this.turn.text, text_elements: [] }] }, started => this.onTurn(started['turn']))
     const events: DriverEvent[] = [{ type: 'session', sessionId: threadId }]
-    // The model the conversation runs on, by Codex's own id, even when none was picked.
+    // The model the conversation runs on, by Codex's own id, even when none was picked, and how
+    // hard it thinks when that was set: picked, or in the person's config; none for the model's own.
     const model = result['model']
-    if (typeof model === 'string' && model !== '') events.push({ type: 'model', model })
+    const effort = result['reasoningEffort']
+    if (typeof model === 'string' && model !== '') events.push({ type: 'model', model, ...(typeof effort === 'string' && effort !== '' ? { effort } : {}) })
     return events
   }
 
@@ -663,8 +679,6 @@ export class CodexAppServerParser implements AgentCliParser {
         const message = field(field(params['turn'], 'error'), 'message')
         return this.end(typeof message === 'string' && message.trim() !== '' ? codexErrorMessage(message.trim()) : `Codex's turn ended ${typeof status === 'string' ? status : 'without finishing'}`)
       }
-      case 'turn/plan/updated':
-        return codexPlan(params['plan'])
       case 'item/started':
       case 'item/completed':
         return this.onItem(method === 'item/completed', params['item'])
