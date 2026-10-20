@@ -1,8 +1,11 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { RunCard } from '@openagt/skill-logs'
 import type { GhRunner } from './gh.js'
-import { listReplies, parseOpenRequests, repliesArgs, repliesFor, watchedRequests } from './replies.js'
+import { WHOLE_READ_EVERY_MS, listReplies, parseOpenRequests, repliesArgs, repliesFor, watchedRequests } from './replies.js'
 
 // What came on this machine's agents' pull requests since each ended: which pull requests are
 // watched, what of GitHub's answer counts, and the one read.
@@ -43,7 +46,7 @@ test("what counts on a pull request: a maintainer's comment, review and line com
       pr(1, {
         mergeable: 'CONFLICTING',
         baseRef: { name: 'main', target: { committedDate: AFTER } },
-        comments: { nodes: [comment('rom', 'Why this name?', AFTER), comment('passer-by', 'Nice!', AFTER, 'NONE'), comment('rom', '🤖 *automated*\nRenamed it.', AFTER)] },
+        comments: { nodes: [comment('rom', 'Why this name?', AFTER), comment('passer-by', 'Nice!', AFTER, 'NONE'), comment('rom', '🤖 *automated*\nRenamed it.', AFTER), comment('rom', '**Claude Code finished the task in 22s**\n\nRenamed it.\n\n<!-- openagent -->', AFTER)] },
         reviews: {
           nodes: [
             { author: { login: 'rom' }, authorAssociation: 'MEMBER', body: '', state: 'CHANGES_REQUESTED', submittedAt: AFTER, url: 'u-r1', comments: { nodes: [{ ...comment('rom', 'Off by one.', AFTER, 'MEMBER'), path: 'src/a.ts', line: 12 }] } },
@@ -86,20 +89,76 @@ test('a run is told only what came after it ended, oldest first, under the pull 
     {
       run: 'r1',
       text: ['On your pull request #1 (https://github.com/o/r/pull/1), since you ended:', '- @rom commented (https://github.com/o/r/pull/1#c-rom):\nFirst.', '- @rom commented (https://github.com/o/r/pull/1#c-rom):\nSecond.'].join('\n'),
+      from: ['rom'],
     },
   ])
 })
 
-test('the read is one GitHub call for every pull request, in the repository the working directory is in; nothing to watch asks GitHub nothing; GitHub that cannot answer throws', async () => {
-  const calls: string[][] = []
-  const gh: GhRunner = async args => (calls.push(args), JSON.stringify(answer(pr(1, { comments: { nodes: [comment('rom', 'Why?', AFTER)] } }))))
-  const replies = await listReplies('/repo', { gh, host: 'this-box', runs: async () => [card('r1', 1), card('r2', 2)] })
-  assert.deepEqual(replies.map(r => r.run), ['r1'])
-  assert.deepEqual(calls, [repliesArgs()])
-  assert.deepEqual(repliesArgs().slice(0, 6), ['api', 'graphql', '-F', 'owner={owner}', '-F', 'name={repo}'])
+test('whose words a run is told: each person once, in the order they came; a red check is nobody\'s', () => {
+  const open = parseOpenRequests(
+    answer(
+      pr(1, { comments: { nodes: [comment('rom', 'First.', AFTER), comment('dani', 'Me too.', '2026-10-19T12:00:00Z', 'COLLABORATOR'), comment('rom', 'Again.', '2026-10-19T13:00:00Z')] } }),
+      pr(2, { commits: { nodes: [{ commit: { statusCheckRollup: { contexts: { nodes: [{ __typename: 'CheckRun', name: 'test', conclusion: 'FAILURE', completedAt: AFTER, detailsUrl: 'u-test' }] } } } }] } }),
+    ),
+  )
+  const replies = repliesFor([{ number: 1, run: 'r1', endedAt: ENDED }, { number: 2, run: 'r2', endedAt: ENDED }], open)
+  assert.deepEqual(replies.map(r => [r.run, r.from]), [['r1', ['rom', 'dani']], ['r2', undefined]])
+})
 
-  calls.length = 0
-  assert.deepEqual(await listReplies('/repo', { gh, host: 'this-box', runs: async () => [card('r2', 2, {}, 'other-box')] }), [])
-  assert.deepEqual(calls, [])
-  await assert.rejects(listReplies('/repo', { gh: async () => { throw new Error('gh: not logged in') }, host: 'this-box', runs: async () => [card('r1', 1)] }), /not logged in/)
+test('a look asks first whether a comment changed, then reads every pull request in one GitHub call, in the repository the working directory is in; nothing to watch asks GitHub nothing; GitHub that cannot answer throws', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'replies-cache-'))
+  try {
+    const cache = join(dir, 'replies.json')
+    const calls: string[][] = []
+    const gh: GhRunner = async args => {
+      calls.push(args)
+      return args[1] === 'graphql' ? JSON.stringify(answer(pr(1, { comments: { nodes: [comment('rom', 'Why?', AFTER)] } }))) : 'HTTP/2.0 200 OK\nEtag: W/"e1"\n\n[]'
+    }
+    const replies = await listReplies('/repo', { gh, host: 'this-box', runs: async () => [card('r1', 1), card('r2', 2)], cache })
+    assert.deepEqual(replies.map(r => r.run), ['r1'])
+    assert.deepEqual(calls.map(c => c.slice(0, 3)), [['api', '--include', 'repos/{owner}/{repo}/issues/comments?sort=updated&direction=desc&per_page=1'], ['api', '--include', 'repos/{owner}/{repo}/pulls/comments?sort=updated&direction=desc&per_page=1'], repliesArgs().slice(0, 3)])
+    assert.deepEqual(repliesArgs().slice(0, 6), ['api', 'graphql', '-F', 'owner={owner}', '-F', 'name={repo}'])
+
+    calls.length = 0
+    assert.deepEqual(await listReplies('/repo', { gh, host: 'this-box', runs: async () => [card('r2', 2, {}, 'other-box')], cache }), [])
+    assert.deepEqual(calls, [])
+    await assert.rejects(listReplies('/repo', { gh: async () => { throw new Error('gh: not logged in') }, host: 'this-box', runs: async () => [card('r1', 1)], cache }), /not logged in/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('when no comment changed, a look reads nothing more, but for the whole read once a minute; a changed comment is read at once', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'replies-cache-'))
+  try {
+    const cache = join(dir, 'replies.json')
+    let changed = true
+    const calls: string[][] = []
+    const gh: GhRunner = async args => {
+      calls.push(args)
+      if (args[1] === 'graphql') return JSON.stringify(answer(pr(1, { comments: { nodes: [comment('rom', 'Why?', AFTER)] } })))
+      if (!changed && args.includes('If-None-Match: W/"e1"')) throw new Error('gh: HTTP 304')
+      return 'HTTP/2.0 200 OK\nEtag: W/"e1"\n\n[]'
+    }
+    let now = 1_000_000
+    const look = () => listReplies('/repo', { gh, host: 'this-box', runs: async () => [card('r1', 1)], cache, now: () => now })
+    assert.equal((await look()).length, 1, 'the first look reads it all')
+    changed = false
+    calls.length = 0
+    now += 15_000
+    assert.deepEqual(await look(), [], 'nothing changed: nothing read')
+    assert.deepEqual(calls.map(c => c[1]), ['--include', '--include'], 'two free questions, each with the answer it last had')
+    assert.ok(calls.every(c => c.includes('If-None-Match: W/"e1"')))
+    now += WHOLE_READ_EVERY_MS
+    calls.length = 0
+    assert.equal((await look()).length, 1, 'a minute on: the whole read, for reviews, checks and conflicts')
+    assert.equal(calls.at(-1)?.[1], 'graphql')
+    changed = true
+    now += 5_000
+    calls.length = 0
+    await look()
+    assert.equal(calls.at(-1)?.[1], 'graphql', 'a changed comment is read at once')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
 })

@@ -38,6 +38,8 @@ export interface SchedulerCommand {
   when?: string
   /** What the check waits for, in one plain line, when the skill gives one. */
   waitsFor?: string
+  /** How often the check runs between the minute's ticks, as written (`15s`), when the skill says. */
+  checkEvery?: string
   /** Whether it runs on this machine: off until a person switched it on here. */
   on: boolean
   /** How far a run of the command publishes on this machine: the pick made here, commit until one is made. */
@@ -230,6 +232,7 @@ export function schedulerRow(project: ModuleProject, output: unknown): Scheduler
       ...(typeof row['every'] === 'string' ? { every: row['every'] } : {}),
       ...(typeof row['when'] === 'string' ? { when: row['when'] } : {}),
       ...(typeof row['waitsFor'] === 'string' ? { waitsFor: row['waitsFor'] } : {}),
+      ...(typeof row['checkEvery'] === 'string' ? { checkEvery: row['checkEvery'] } : {}),
       on: isTime(switches[command]),
       publish: isPick(picked) ? picked : DEFAULT_PUBLISH,
       ...(isPace(paces[command]) ? { pace: paces[command] as PacePick } : {}),

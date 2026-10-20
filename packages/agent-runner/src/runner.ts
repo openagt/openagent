@@ -99,6 +99,8 @@ export interface SpawnedResume {
   effort?: string
   /** Who resumes the run (`run --resume --by`), kept on its mark. */
   by?: string
+  /** The people whose words resume it (`run --resume --from`), named by their git host logins on its pull request's comment. */
+  from?: string[]
   /** How far the run takes its work from here on (`run --resume --publish`): a level, or `nothing`; its record's level when absent. */
   publish?: Publish | typeof NO_PUBLISH
 }
@@ -111,6 +113,7 @@ export function resumeArgs(run: SpawnedResume): string[] {
   if (run.model !== undefined) args.push('--model', run.model)
   if (run.effort !== undefined) args.push('--effort', run.effort)
   if (run.by !== undefined) args.push('--by', run.by)
+  for (const login of run.from ?? []) args.push('--from', login)
   if (run.publish !== undefined) args.push('--publish', run.publish)
   return args
 }
@@ -246,6 +249,7 @@ export async function resumeProject(
     ...(opts.model !== undefined ? { model: opts.model } : {}),
     ...(opts.effort !== undefined ? { effort: opts.effort } : {}),
     ...(opts.by !== undefined ? { by: opts.by } : {}),
+    ...(opts.from !== undefined ? { from: opts.from } : {}),
     ...(opts.publish !== undefined ? { publish: publishChange(opts.publish) ?? null } : {}),
     driver: (deps.driverFor ?? driverFor)(recorded, opts.id, setup),
     nextDriver: next => (deps.driverFor ?? driverFor)(recorded, next, setup),

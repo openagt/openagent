@@ -90,6 +90,23 @@ already made, and lists it in its pull request; for anything else it proposes an
   read the run's record first, and its pull request's whole thread. Picked over a new run
   that reads the old one (two rows for one piece of work), and over the agent going on
   without knowing it forgot.
+- A run a row resumes keeps one comment on its pull request through the git host: posted
+  as the run begins, rewritten as it goes, at most every ten seconds, and the agent's last
+  message, its answer, in it at the end. This process writes it, not the agent, which would
+  spend turns on it and forget. Picked over the answer as a comment of its own: one comment a
+  round, though an edit notifies nobody.
+- While the run works: the coding agent's logo, "<agent> is working…" and OpenAgent's moving
+  logo, always spinning and breathing; then a checklist, the agent's own plan ticked as it
+  goes, else its steps ticked once over. Once it ended: "<agent> finished @<login>'s task in
+  <time>", the model, the effort and the run's branch, a rule, the checklist, the answer.
+  Picked over a plain ⏳ and the steps folded away.
+- Only the plan's and the steps' few words go on it, never the commands, paths or what the
+  agent said on the way: the pull request may be public.
+- It carries no 🤖 line: the coding agent's logo says an agent wrote it. Picked over the
+  visible line.
+- Its pictures are this package's own files at the version that wrote the comment, served
+  from the npm registry through jsDelivr, so an old comment never loses them. Picked over
+  files on the repository's main branch, which move with it.
 - A run is on Claude Code, or on Codex with `run --driver codex`. The person picks.
 - Either coding agent does the same: it works and, when asked to publish, pushes its
   branch and opens its pull request itself. For that, neither may be restricted: Claude Code runs with permissions

@@ -27,6 +27,19 @@ test('the message being written goes in the live file, never the diary, and goes
   }
 })
 
+test("the agent's plan is no diary line: the moment's view, said again whole at each change", async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'session-log-plan-'))
+  try {
+    const log = new SessionLog(dir, { id: 'r1' })
+    await log.open()
+    await log.record({ type: 'plan', tasks: [{ text: 'Read the PR', status: 'in_progress' }] })
+    await log.record({ type: 'text', text: 'Reading.' })
+    assert.deepEqual(await kinds(log), ['said'])
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('a run that ends mid-message leaves no live file', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'session-log-live-'))
   try {

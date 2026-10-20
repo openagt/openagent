@@ -10,8 +10,9 @@ import { basicGitHosts, basicPackageNames } from './basic-skills.js'
  * a git host or a package: a project with none has no pull requests to read back and nothing to
  * merge.
  *
- * Two questions this tool asks of it: which pull request a branch has, for the run's record, and
- * the merge of one, once a follow-up is done (`run.ts`).
+ * What this tool asks of it: which pull request a branch has, for the run's record; the merge of
+ * one, once a follow-up is done (`run.ts`); and a comment on one, written and rewritten, for a run
+ * a row resumed, with the page of the run's branch (`live-comment.ts`).
  */
 
 /** The pull request a branch has, as the record keeps it. */
@@ -29,6 +30,10 @@ export interface GitHost {
   requestOfBranch(repo: string, branch: string): Promise<BranchRequest | undefined>
   /** Land pull request `number`: armed to merge on green, or merged at once. */
   mergeRequest(repo: string, number: number): Promise<MergeOutcome>
+  /** Post `body` on pull request `number`, or with `edit` replace that comment's text: the comment's id, or why it could not. */
+  comment(repo: string, to: { number: number } | { edit: string }, body: string): Promise<{ id: string } | { error: string }>
+  /** The page of `branch` on the git host; none when there is no git host, or it could not tell. */
+  branchUrl(repo: string, branch: string): Promise<string | undefined>
 }
 
 const NO_GIT_HOST = 'this project has no git host package'
@@ -56,5 +61,22 @@ export const projectGitHost: GitHost = {
     if (!result.ok) return { outcome: 'failed', error: result.error }
     const outcome = (result.output as { outcome?: unknown } | null)?.outcome
     return outcome === 'auto-armed' || outcome === 'merged' || outcome === 'watching' ? { outcome } : { outcome: 'failed', error: `the git host answered no outcome for pull request ${number}` }
+  },
+
+  async comment(repo, to, body) {
+    const command = await gitHostCommand(repo)
+    if (!command) return { error: NO_GIT_HOST }
+    const result = await runPackageCommand(repo, command, ['comment', ...('edit' in to ? ['--edit', to.edit] : [String(to.number)]), '--body', body])
+    if (!result.ok) return { error: result.error }
+    const id = (result.output as { id?: unknown } | null)?.id
+    return typeof id === 'number' ? { id: String(id) } : { error: 'the git host answered no comment' }
+  },
+
+  async branchUrl(repo, branch) {
+    const command = await gitHostCommand(repo)
+    if (!command) return undefined
+    const result = await runPackageCommand(repo, command, ['home', '--branch', branch])
+    const url = result.ok ? (result.output as { url?: unknown } | null)?.url : undefined
+    return typeof url === 'string' ? url : undefined
   },
 }

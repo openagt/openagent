@@ -108,6 +108,8 @@ test('a schedule the reader cannot read gives no command and says why, the row n
   assert.deepEqual(why('schedule:\n  every: 1h\n  always: true\n'), refused('unknown key always'))
   assert.deepEqual(why('schedule:\n  waits-for: when there is work\n'), refused('neither every nor when says when'))
   assert.deepEqual(why('schedule:\n  every: 1d\n  waits-for: when there is work\n'), refused('waits-for says what when waits for, and there is no when'))
+  for (const often of ['5s', '60s', '15m', '15']) assert.deepEqual(why(`schedule:\n  when: npx replies\n  check-every: ${often}\n`), refused('check-every is a number of seconds from 10 to 59 and s (15s)'), often)
+  assert.deepEqual(why('schedule:\n  every: 1h\n  check-every: 15s\n'), refused('check-every says how often when runs, and there is no when'))
   assert.deepEqual(why('schedule:\n  when: ""\n'), refused('when is a shell command line'))
   assert.deepEqual(why('schedule:\n  when: [npx, queue]\n'), refused('when is a shell command line'))
   assert.deepEqual(why('schedule:\n  every: 1h\n  waits-for: |\n    one line\n    and another\n'), refused('waits-for is one line of text'))
@@ -341,10 +343,20 @@ test('the runs a row resumes, out of what its check printed: each run with its w
   assert.equal(runsToResume('[{"run":"r1","text":""}]'), 'an item of the list is no { "run": "<id>", "text": "…" }')
   assert.equal(runsToResume('[{"run":7,"text":"x"}]'), 'an item of the list is no { "run": "<id>", "text": "…" }')
   assert.equal(runsToResume('["r1"]'), 'an item of the list is no { "run": "<id>", "text": "…" }')
+  // Whose words they are, when the check says: each login once, a run named twice with both lists.
+  assert.deepEqual(runsToResume('[{"run":"r1","text":"one","from":["rom"]},{"run":"r1","text":"two","from":["dani","rom"]},{"run":"r2","text":"red"}]'), [{ run: 'r1', text: 'one\n\ntwo', from: ['rom', 'dani'] }, { run: 'r2', text: 'red' }])
+  assert.equal(runsToResume('[{"run":"r1","text":"x","from":"rom"}]'), 'the from of an item is no list of logins')
+  assert.equal(runsToResume('[{"run":"r1","text":"x","from":[""]}]'), 'the from of an item is no list of logins')
 })
 
 test("what a resumed run is told: the command, then the opening words and the check's words for it; an automation kept on this machine, its name, its text, then the same; long words are cut as a check's output is", () => {
   assert.equal(resumeText({ name: 'reply' }, 'Someone asked why.', '2026-10-19T10:00:00Z'), `/reply\n\n${RESUMED_OPENING}\nSomeone asked why.`)
   assert.equal(resumeText({ name: 'answer', text: 'Answer in two lines.' }, 'Someone asked why.', '2026-10-19T10:00:00Z'), `answer\n\nAnswer in two lines.\n\n${RESUMED_OPENING_OWN}\nSomeone asked why.`)
   assert.match(resumeText({ name: 'reply' }, 'x'.repeat(FOUND_MAX + 1), '2026-10-19T10:00:00Z'), /\(cut: the check printed 8001 characters, these are the first 8000; it asked what is new since 2026-10-19T10:00:00Z\)$/)
+})
+
+test('a row may let its check run more often than the minute\'s tick, in seconds, and the listing says how often', () => {
+  const [row] = read('reply', skill('reply', 'schedule:\n  resumes: true\n  when: npx replies\n  check-every: 15s\n')).commands
+  assert.deepEqual(row?.checkEvery, { ms: 15_000, text: '15s' })
+  assert.equal(read('a', skill('a', 'schedule:\n  when: npx queue\n')).commands[0]?.checkEvery, undefined, 'a row that says nothing is checked once a minute')
 })

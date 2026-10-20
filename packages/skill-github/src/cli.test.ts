@@ -131,6 +131,9 @@ test('home: the project page from origin, with the git host named; no origin, or
   const home = await run('/r', ['home'], { git: async () => 'git@github.com:o/r.git\n' })
   assert.equal(home.code, 0)
   assert.deepEqual(home.out, { ok: true, url: 'https://github.com/o/r', name: 'GitHub' })
+  const branch = await run('/r', ['home', '--branch', 'agent-fix/the footer'], { git: async () => 'git@github.com:o/r.git\n' })
+  assert.deepEqual(branch.out, { ok: true, url: 'https://github.com/o/r/tree/agent-fix/the%20footer', name: 'GitHub' }, "a branch's page, its slashes kept")
+  assert.equal((await run('/r', ['home', '--branch', ' '])).code, 2)
   const gitlab = await run('/r', ['home'], { git: async () => 'git@gitlab.com:o/r.git\n' })
   assert.equal(gitlab.code, 1)
   assert.deepEqual(gitlab.out, { ok: false, reason: 'no-remote' })
@@ -181,4 +184,30 @@ test('me: who is signed in to GitHub, with name and picture when GitHub has them
   const nobody = await run('/r', ['me'], { gh: async () => { throw new Error('You are not logged into any GitHub hosts') } })
   assert.equal(nobody.code, 1)
   assert.deepEqual(nobody.out, { ok: false, reason: 'not-logged-in', detail: 'You are not logged into any GitHub hosts' })
+})
+
+test('comment: a new one on a pull request, or --edit to replace one; GitHub answers its id and url; the usage errors and the refusal', async () => {
+  const asked: string[][] = []
+  const gh: GhRunner = async args => {
+    asked.push(args)
+    return JSON.stringify({ id: 99, url: 'https://github.com/o/r/pull/7#issuecomment-99' })
+  }
+  const posted = await run('/r', ['comment', '7', '--body', 'Working on it'], { gh })
+  assert.equal(posted.code, 0)
+  assert.deepEqual(posted.out, { ok: true, id: 99, url: 'https://github.com/o/r/pull/7#issuecomment-99' })
+  assert.deepEqual(asked[0]!.slice(0, 4), ['api', 'repos/{owner}/{repo}/issues/7/comments', '-f', 'body=Working on it\n\n<!-- openagent -->'], 'the hidden mark after the text')
+
+  const edited = await run('/r', ['comment', '--edit', '99', '--body', 'Done'], { gh })
+  assert.equal(edited.code, 0)
+  assert.deepEqual(asked[1]!.slice(0, 6), ['api', '-X', 'PATCH', 'repos/{owner}/{repo}/issues/comments/99', '-f', 'body=Done\n\n<!-- openagent -->'])
+
+  assert.equal((await run('/r', ['comment', '7'], { gh })).code, 2, '--body is required')
+  assert.equal((await run('/r', ['comment', '--body', 'x'], { gh })).code, 2, 'neither a number nor --edit')
+  assert.equal((await run('/r', ['comment', '7', '--edit', '99', '--body', 'x'], { gh })).code, 2, 'both')
+  assert.equal((await run('/r', ['comment', '--edit', 'abc', '--body', 'x'], { gh })).code, 2)
+  assert.equal(asked.length, 2, 'a usage error asks GitHub nothing')
+
+  const failed = await run('/r', ['comment', '7', '--body', 'x'], { gh: async () => JSON.stringify({ message: 'Not Found' }) })
+  assert.equal(failed.code, 1)
+  assert.deepEqual(failed.out, { ok: false, reason: 'git-host-failed', detail: 'GitHub answered no comment' })
 })

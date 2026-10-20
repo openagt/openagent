@@ -3,16 +3,17 @@ import { closeSync, mkdirSync, openSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import type { DriverQuota } from '@openagt/agent-driver'
 import { readClaudeQuota } from '@openagt/agent-driver-claude'
 import { isPidAlive, lockHolder, markerCard, readyToRun, resumeDetached, runIdFrom, spawnResume, spawnRun, sweep, withdrawMarker, writeMarker } from '@openagt/agent-runner'
 import { findRun } from '@openagt/skill-logs'
 import { DATA_BRANCH, nodeGitRunner, pullFileBranch, type GitRunner } from '@openagt/agent-data'
-import { CHECK_TIMEOUT_MS, NOW_CHECK_TIMEOUT_MS, SCHEDULER_LOG, TICK_MS } from './names.js'
+import { CHECK_TIMEOUT_MS, GLANCE_MS, NOW_CHECK_TIMEOUT_MS, QUOTA_KEPT_MS, SCHEDULER_LOG, TICK_MS } from './names.js'
 import { inFlight, lastRuns, lastStart, type LastRun } from './records.js'
 import { readSchedule, type Schedule, type ScheduledCommand } from './schedule.js'
 import { isSwitchedOn, namesGivenUp, readState, stateDir, updateState, withoutListed, withoutName, withoutPid, type ListedCommand, type State, type TickRecord } from './state.js'
 import { atStartOf } from './start-point.js'
-import { listed, runCheck, startNow, tick, type StartedNow, type TickDeps } from './tick.js'
+import { glance, listed, runCheck, startNow, tick, type StartedNow, type TickDeps } from './tick.js'
 
 /**
  * The tool's process side (#1774): a tick wired to the real project, and the scheduler's own small
@@ -23,6 +24,30 @@ import { listed, runCheck, startNow, tick, type StartedNow, type TickDeps } from
 
 /** This package's executable, for the scheduler's own process: the bin beside `dist/`. */
 const BIN = fileURLToPath(new URL('../bin/agent-scheduler', import.meta.url))
+
+/**
+ * Claude's quota for a project's ticks: a reading this process made less than {@link QUOTA_KEPT_MS}
+ * ago is used again, so a run waited for starts seconds sooner. A reading that could not be made
+ * is not kept: the next asks again.
+ */
+export function keepQuota(read: () => Promise<DriverQuota>, now: () => number = Date.now): () => Promise<DriverQuota> {
+  let kept: { at: number; quota: DriverQuota } | undefined
+  return async () => {
+    if (kept && now() - kept.at < QUOTA_KEPT_MS) return kept.quota
+    const quota = await read()
+    kept = quota.available ? { at: now(), quota } : undefined
+    return quota
+  }
+}
+
+const quotaKeepers = new Map<string, () => Promise<DriverQuota>>()
+
+/** This process's keeper of Claude's quota for the project. */
+function keptQuota(repo: string): () => Promise<DriverQuota> {
+  let keeper = quotaKeepers.get(repo)
+  if (!keeper) quotaKeepers.set(repo, (keeper = keepQuota(() => readClaudeQuota({ cwd: repo }))))
+  return keeper
+}
 
 /** A tick's hands on the real project: its records, its checks, the coding agent, and a run of `agent-runner` per start. */
 function projectDeps(repo: string, state: State, schedule: Schedule, opts: { git: GitRunner; log: (line: string) => void; now: () => Date; checkMs: number; stopped?: () => boolean }): TickDeps {
@@ -43,7 +68,7 @@ function projectDeps(repo: string, state: State, schedule: Schedule, opts: { git
     findRun: id => findRun(repo, id),
     busy: async id => (await lockHolder(repo, id, isPidAlive)) !== undefined,
     ready: agent => readyToRun(repo, agent),
-    quota: () => readClaudeQuota({ cwd: repo }),
+    quota: keptQuota(repo),
     mint: () => runIdFrom(now().toISOString()),
     writeMarker: card => writeMarker(repo, card),
     withdrawMarker: id => withdrawMarker(repo, id),
@@ -91,6 +116,18 @@ export async function tickProject(repo: string, opts: { git?: GitRunner; log?: (
   return record
 }
 
+/**
+ * Between the minute's ticks, the rows of the real project that may be checked more often and are
+ * due again by `due`; what one of them started or resumed is a log line.
+ */
+export async function glanceProject(repo: string, opts: { due: (command: ScheduledCommand) => boolean; git?: GitRunner; log?: (line: string) => void; now?: () => Date; stopped?: () => boolean }): Promise<void> {
+  const schedule = await readSchedule(repo)
+  if (!schedule.commands.some(command => command.checkEvery)) return
+  const log = opts.log ?? (() => {})
+  const decided = await glance(projectDeps(repo, await readState(repo), schedule, { git: opts.git ?? nodeGitRunner(), log, now: opts.now ?? (() => new Date()), checkMs: CHECK_TIMEOUT_MS, ...(opts.stopped ? { stopped: opts.stopped } : {}) }), opts.due)
+  for (const decision of decided) if (decision.run !== undefined) log(`[agent-scheduler] between ticks: ${decision.command}: ${decision.outcome}`)
+}
+
 /** `start`: the state on, and the scheduler's own process ticking until `stop`, unless this process is it. */
 export async function startScheduler(repo: string, opts: { foreground?: boolean; everyMs?: number; keepAlive?: boolean; log?: (line: string) => void } = {}): Promise<State> {
   const state = await updateState(repo, s => ({ ...s, on: true, ...(opts.keepAlive !== undefined ? { keepAlive: opts.keepAlive } : {}) }))
@@ -126,13 +163,35 @@ async function loop(repo: string, everyMs: number, log: (line: string) => void):
   const once = (): void => {
     inflight = inflight.then(() => tickProject(repo, { log, stopped: () => stopped })).catch(err => log(`[agent-scheduler] tick failed: ${err instanceof Error ? err.message : String(err)}`))
   }
+  // Between ticks, the rows that may be checked more often, each when its own interval is over;
+  // one look at a time, after the tick in flight, and none queued while one waits.
+  const glanced = new Map<string, number>()
+  const due = (command: ScheduledCommand): boolean => {
+    const at = glanced.get(command.name)
+    if (at !== undefined && Date.now() - at < command.checkEvery!.ms) return false
+    glanced.set(command.name, Date.now())
+    return true
+  }
+  let waiting = false
+  const look = (): void => {
+    if (waiting) return
+    waiting = true
+    inflight = inflight
+      .then(() => {
+        waiting = false
+        return stopped ? undefined : glanceProject(repo, { due, log, stopped: () => stopped })
+      })
+      .catch(err => log(`[agent-scheduler] look between ticks failed: ${err instanceof Error ? err.message : String(err)}`))
+  }
   const timer = setInterval(once, everyMs)
+  const glancer = setInterval(look, GLANCE_MS)
   once()
   await new Promise<void>(resolve => {
     const stop = (): void => {
       if (stopped) return
       stopped = true
       clearInterval(timer)
+      clearInterval(glancer)
       resolve()
     }
     process.once('SIGINT', stop)

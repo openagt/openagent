@@ -1,11 +1,15 @@
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
+import { dirname, join } from 'node:path'
 import { listRuns, type RunCard } from '@openagt/skill-logs'
 import { nodeGhRunner, type GhRunner } from './gh.js'
+import { COMMENT_MARK } from './comment.js'
 
 /**
  * What came on the pull requests this machine's agents opened, since each agent ended (#2042):
- * the check of a scheduler's row that resumes runs. It prints `[{ "run": "<id>", "text": "…" }]`,
- * one item per run with something new, and the scheduler resumes each run with its words.
+ * the check of a scheduler's row that resumes runs. It prints `[{ "run": "<id>", "text": "…", "from": ["<login>"] }]`,
+ * one item per run with something new, and the scheduler resumes each run with its words; `from`
+ * is whose words they are, when they are people's.
  *
  * New is after the run last ended: no time is kept anywhere. Something that comes while the run
  * still works is found at the first look after it ends; and what came before it ended, the run
@@ -13,14 +17,21 @@ import { nodeGhRunner, type GhRunner } from './gh.js'
  *
  * What counts:
  * - a comment or a review of a maintainer, a person who can write to the repository: GitHub's
- *   owner, member or collaborator. One that carries the 🤖 line is an agent's, posted with a
- *   person's account, and never counts;
+ *   owner, member or collaborator. One that carries the 🤖 line, or the hidden mark of a comment
+ *   `comment` wrote, is an agent's, posted with a person's account, and never counts;
  * - a check that turned red;
  * - a conflict with the base branch, once the base branch moved.
  *
  * Only the open pull requests whose last run was on this machine and has ended: only this machine
  * holds that run's conversation, and a pull request another run still works on is that run's.
  * One GitHub call a look, whatever the number of pull requests.
+ *
+ * A look can be every few seconds (a row's `check-every`), so it first asks GitHub whether any
+ * comment of the repository changed, a conversation's or a line's, by the answer it last had
+ * (its ETag): "not modified" is free, and then nothing is read. Reviews with no line comments, red
+ * checks and conflicts have no such question, so the whole read is made at least once a minute
+ * anyway. What the questions last answered and when the last whole read was are a cache in the
+ * clone's own `.git` folder, never what decides what is new.
  */
 
 /** A pull request a run opened, with the run that last worked on it and when that run ended. */
@@ -28,6 +39,21 @@ export interface Watched {
   number: number
   run: string
   endedAt: string
+}
+
+/** How long a whole read holds when no comment changed: reviews, checks and conflicts are seen at least this often. */
+export const WHOLE_READ_EVERY_MS = 60_000
+
+/** The two cheap questions: did a conversation's comment change, did a comment on a line. */
+const CHANGED = {
+  comments: 'repos/{owner}/{repo}/issues/comments?sort=updated&direction=desc&per_page=1',
+  lineComments: 'repos/{owner}/{repo}/pulls/comments?sort=updated&direction=desc&per_page=1',
+} as const
+
+/** What the cheap questions last answered, by their ETags, and when the last whole read was. */
+interface Looked {
+  etags: Partial<Record<keyof typeof CHANGED, string>>
+  wholeAt?: number
 }
 
 /** The open pull requests one GitHub call reads, newest change first. */
@@ -88,10 +114,11 @@ export function repliesArgs(): string[] {
   return ['api', 'graphql', '-F', 'owner={owner}', '-F', 'name={repo}', '-f', `query=${QUERY}`]
 }
 
-/** One thing that came on a pull request, as the run is told it. */
+/** One thing that came on a pull request, as the run is told it, and whose words it is when a person's. */
 interface Came {
   at: string
   line: string
+  by?: string
 }
 
 /** An open pull request as read: what came on it, each with when. */
@@ -113,7 +140,7 @@ const login = (node: Node): string => text((node['author'] as Node | null | unde
 /** A maintainer's words that are no agent's: what counts of a comment or a review. */
 function maintainers(node: Node): string | undefined {
   const body = text(node['body'])?.trim()
-  if (!body || body.includes(AGENT_MARK) || !MAINTAINERS.has(String(node['authorAssociation']))) return undefined
+  if (!body || body.includes(AGENT_MARK) || body.includes(COMMENT_MARK) || !MAINTAINERS.has(String(node['authorAssociation']))) return undefined
   return body
 }
 
@@ -127,19 +154,19 @@ export function parseOpenRequests(output: unknown): OpenRequest[] {
     for (const comment of nodes(pr['comments'])) {
       const body = maintainers(comment)
       const at = text(comment['createdAt'])
-      if (body && at) came.push({ at, line: `@${login(comment)} commented (${comment['url']}):\n${body}` })
+      if (body && at) came.push({ at, line: `@${login(comment)} commented (${comment['url']}):\n${body}`, by: login(comment) })
     }
     for (const review of nodes(pr['reviews'])) {
       const at = text(review['submittedAt'])
       const body = maintainers(review)
       // A request for changes counts with no words too; an approval with none asks nothing, and a review's comments count one by one.
       const changes = review['state'] === 'CHANGES_REQUESTED' && MAINTAINERS.has(String(review['authorAssociation'])) && !text(review['body'])?.includes(AGENT_MARK)
-      if (at && (body || changes)) came.push({ at, line: `@${login(review)} ${changes ? 'requested changes' : 'reviewed'} (${review['url']})${body ? `:\n${body}` : '.'}` })
+      if (at && (body || changes)) came.push({ at, line: `@${login(review)} ${changes ? 'requested changes' : 'reviewed'} (${review['url']})${body ? `:\n${body}` : '.'}`, by: login(review) })
       for (const comment of nodes(review['comments'])) {
         const words = maintainers(comment)
         const when = text(comment['createdAt'])
         const where = `${comment['path']}${typeof comment['line'] === 'number' ? ` line ${comment['line']}` : ''}`
-        if (words && when) came.push({ at: when, line: `@${login(comment)} on ${where} (${comment['url']}):\n${words}` })
+        if (words && when) came.push({ at: when, line: `@${login(comment)} on ${where} (${comment['url']}):\n${words}`, by: login(comment) })
       }
     }
     const commit = (nodes(pr['commits'])[0]?.['commit'] as Node | undefined)?.['statusCheckRollup'] as Node | null | undefined
@@ -157,24 +184,75 @@ export function parseOpenRequests(output: unknown): OpenRequest[] {
   return requests
 }
 
-/** For each watched pull request with something new since its run ended, the run and the words it is told. */
-export function repliesFor(watched: Watched[], open: OpenRequest[]): { run: string; text: string }[] {
-  const replies: { run: string; text: string }[] = []
+/** What a run is told, and the people whose words those are, by their logins: a red check or a conflict is nobody's. */
+export interface Reply {
+  run: string
+  text: string
+  from?: string[]
+}
+
+/** For each watched pull request with something new since its run ended, the run, the words it is told, and whose words they are. */
+export function repliesFor(watched: Watched[], open: OpenRequest[]): Reply[] {
+  const replies: Reply[] = []
   for (const { number, run, endedAt } of watched) {
     const request = open.find(r => r.number === number)
     // ISO times compare as text only in one shape: GitHub's have no fraction, a record's do.
     const after = Date.parse(endedAt)
     const came = request?.came.filter(c => Date.parse(c.at) > after).sort((a, b) => Date.parse(a.at) - Date.parse(b.at)) ?? []
-    if (request && came.length > 0) replies.push({ run, text: [`On your pull request #${number} (${request.url}), since you ended:`, ...came.map(c => `- ${c.line}`)].join('\n') })
+    const from = [...new Set(came.flatMap(c => (c.by !== undefined && c.by !== 'someone' ? [c.by] : [])))]
+    if (request && came.length > 0) replies.push({ run, text: [`On your pull request #${number} (${request.url}), since you ended:`, ...came.map(c => `- ${c.line}`)].join('\n'), ...(from.length > 0 ? { from } : {}) })
   }
   return replies
 }
 
+/**
+ * Whether what `path` answers changed since the answer whose ETag is `etag`, and the ETag now. gh
+ * says "not modified" as a failure, `HTTP 304`; any other failure throws.
+ */
+async function changedSince(gh: GhRunner, repo: string, path: string, etag: string | undefined): Promise<{ changed: boolean; etag?: string }> {
+  try {
+    const answered = await gh(['api', '--include', ...(etag !== undefined ? ['-H', `If-None-Match: ${etag}`] : []), path], repo)
+    const now = /^etag:\s*(.+?)\s*$/im.exec(answered)?.[1]
+    return { changed: true, ...(now !== undefined ? { etag: now } : {}) }
+  } catch (err) {
+    if (/\bHTTP 304\b/.test(err instanceof Error ? err.message : String(err))) return { changed: false, ...(etag !== undefined ? { etag } : {}) }
+    throw err
+  }
+}
+
+/** Where the cache is: the clone's own `.git` folder; none for a checkout whose `.git` is no folder. */
+async function lookedPath(repo: string): Promise<string | undefined> {
+  const git = join(repo, '.git')
+  return (await stat(git).then(s => s.isDirectory(), () => false)) ? join(git, 'openagent', 'replies.json') : undefined
+}
+
+async function readLooked(path: string | undefined): Promise<Looked> {
+  if (path === undefined) return { etags: {} }
+  const read = await readFile(path, 'utf8').then(text => JSON.parse(text) as Partial<Looked>, () => ({}) as Partial<Looked>)
+  return { etags: typeof read.etags === 'object' && read.etags !== null ? read.etags : {}, ...(typeof read.wholeAt === 'number' ? { wholeAt: read.wholeAt } : {}) }
+}
+
+async function writeLooked(path: string | undefined, looked: Looked): Promise<void> {
+  if (path === undefined) return
+  await mkdir(dirname(path), { recursive: true })
+  await writeFile(path, JSON.stringify(looked))
+}
+
 /** What came on this machine's agents' open pull requests since each ended, as a scheduler's row reads it. Throws when GitHub cannot answer. */
-export async function listReplies(repo: string, deps: { gh?: GhRunner; host?: string; runs?: () => Promise<RunCard[]> } = {}): Promise<{ run: string; text: string }[]> {
+export async function listReplies(repo: string, deps: { gh?: GhRunner; host?: string; runs?: () => Promise<RunCard[]>; now?: () => number; cache?: string } = {}): Promise<Reply[]> {
   const watched = watchedRequests(await (deps.runs ?? (() => listRuns(repo)))(), deps.host ?? hostname())
   // Nothing to watch asks GitHub nothing.
   if (watched.length === 0) return []
-  const answered = await (deps.gh ?? nodeGhRunner())(repliesArgs(), repo)
-  return repliesFor(watched, parseOpenRequests(JSON.parse(answered) as unknown))
+  const gh = deps.gh ?? nodeGhRunner()
+  const now = (deps.now ?? Date.now)()
+  const cache = deps.cache ?? (await lookedPath(repo))
+  const looked = await readLooked(cache)
+  const comments = await changedSince(gh, repo, CHANGED.comments, looked.etags.comments)
+  const lineComments = await changedSince(gh, repo, CHANGED.lineComments, looked.etags.lineComments)
+  const etags = { ...(comments.etag !== undefined ? { comments: comments.etag } : {}), ...(lineComments.etag !== undefined ? { lineComments: lineComments.etag } : {}) }
+  if (!comments.changed && !lineComments.changed && looked.wholeAt !== undefined && now - looked.wholeAt < WHOLE_READ_EVERY_MS) return []
+  const answered = await gh(repliesArgs(), repo)
+  const replies = repliesFor(watched, parseOpenRequests(JSON.parse(answered) as unknown))
+  await writeLooked(cache, { etags, wholeAt: now })
+  return replies
 }

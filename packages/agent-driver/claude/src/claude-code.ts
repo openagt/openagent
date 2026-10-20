@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { readClaudeQuota } from './claude-code-quota.js'
 import { readClaudeModels } from './claude-code-models.js'
-import { combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, cutOutput, callArgument, lineCount, patchSize, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, finishTurn, agentEnv, oneLine, attachLog, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverQuota, type DriverRateLimit, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
+import { combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, cutOutput, callArgument, lineCount, patchSize, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, finishTurn, agentEnv, oneLine, attachLog, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type PlanTask, type DriverModel, type DriverPromptOptions, type DriverQuota, type DriverRateLimit, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
 
 /** Claude Code permission modes we pass through to the CLI. */
 export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan'
@@ -272,6 +272,19 @@ function claudeSubagent(id: string, input: unknown, status: 'working' | 'ended' 
   }
 }
 
+/** The plan a TodoWrite call holds, `todos` of `{ content, status }`; none when its input has no list. */
+function claudePlan(input: unknown): DriverEvent[] {
+  const todos = typeof input === 'object' && input !== null ? (input as Record<string, unknown>)['todos'] : undefined
+  if (!Array.isArray(todos)) return []
+  const tasks: PlanTask[] = []
+  for (const todo of todos) {
+    const content = typeof todo === 'object' && todo !== null ? (todo as Record<string, unknown>)['content'] : undefined
+    const status = typeof todo === 'object' && todo !== null ? (todo as Record<string, unknown>)['status'] : undefined
+    if (typeof content === 'string' && content.trim() !== '' && (status === 'pending' || status === 'in_progress' || status === 'completed')) tasks.push({ text: oneLine(content), status })
+  }
+  return [{ type: 'plan', tasks }]
+}
+
 /**
  * What an edit or a write did to its file, off the CLI's own account of the call: a file it made
  * holds its content's lines, all added; a file it changed holds a patch, whose `+` and `-` lines
@@ -467,6 +480,8 @@ export class StreamJsonParser {
         events.push({ type: 'text', text: block['text'], ...tag })
       } else if (block['type'] === 'tool_use' && typeof block['name'] === 'string') {
         events.push({ type: 'action', label: block['name'], ...callArgument(toolArgument(block['input'])), ...callSummary(block['input']), ...(typeof block['id'] === 'string' ? { id: block['id'] } : {}), ...tag })
+        // The agent's own plan, whole at every change; a subagent's is its own.
+        if (within === undefined && block['name'] === 'TodoWrite') events.push(...claudePlan(block['input']))
         // An `Agent` call is a subagent of its own: said beside its row, never instead of it. The
         // call's id is the subagent's, so its result ends the same row; a call without one cannot
         // be paired with its result and is left as the plain row it always was. A subagent's own
