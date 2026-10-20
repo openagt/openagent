@@ -81,6 +81,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   carries, the diary continued. Picked over a new run per answer (two records for one
   piece of work, and the first left waiting for ever) and over a process that waits for
   the answer (nothing waits; state in files).
+- A run whose coding agent no longer has its conversation goes on as the same run, in a
+  fresh conversation: its record says where the fresh one starts, and its agent is told to
+  read the run's record first, and its pull request's whole thread. Picked over a new run
+  that reads the old one (two rows for one piece of work), and over the agent going on
+  without knowing it forgot.
 - A run is on Claude Code, or on Codex with `run --driver codex`. The person picks.
 - Either coding agent does the same: it works and, when asked to publish, pushes its
   branch and opens its pull request itself. For that, neither may be restricted: Claude Code runs with permissions

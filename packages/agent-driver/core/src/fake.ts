@@ -2,6 +2,7 @@ import type { Driver, DriverEvent, DriverPromptOptions, DriverSession, DriverSta
 import { makeEmit, promptSent, startEvent } from './session-support.js'
 import { finishTurn } from './inbox.js'
 import { attachLog, type SessionLog } from './session-log.js'
+import { ConversationGoneError } from './gone.js'
 
 /** One scripted turn the {@link FakeDriver} replays. */
 export interface FakeTurn {
@@ -29,6 +30,8 @@ export interface FakeDriverOptions {
   sessionId?: string
   /** The model each turn says it runs on, as a real coding agent names it once started; none said when absent. */
   model?: string
+  /** Conversations this agent no longer has: a `resume` prompt continuing one throws {@link ConversationGoneError}. */
+  gone?: readonly string[]
 }
 
 function asTurn(value: FakeTurn | string): FakeTurn {
@@ -76,6 +79,8 @@ export class FakeDriverSession implements DriverSession {
     if (this.startOpts.signal?.aborted || opts.signal?.aborted) {
       return Promise.reject(new Error('fake prompt aborted'))
     }
+    const resumed = opts.resume ? this.startOpts.resumeSessionId : undefined
+    if (resumed !== undefined && this.index === 0 && this.config.gone?.includes(resumed)) return Promise.reject(new ConversationGoneError('fake', resumed))
     const i = this.index++
     const sent = promptSent(text, opts)
     this.prompts.push(sent)

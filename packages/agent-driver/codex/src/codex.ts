@@ -2,7 +2,7 @@ import { execFile, spawn as nodeSpawn } from 'node:child_process'
 import { copyFile, lstat, mkdir, readlink, readdir, realpath, rename, rm, stat, symlink } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { runCliSession, finishTurn, agentEnv, attachLog, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, checkCliReady, type AgentCliParser, type CliIo, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
+import { runCliSession, continuingTurn, finishTurn, agentEnv, attachLog, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, checkCliReady, type AgentCliParser, type CliIo, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
 
 /**
  * Codex's sandbox policy for the shell commands the model writes.
@@ -266,27 +266,31 @@ export class CodexSession implements DriverSession {
     // Resolved every turn, not at start: the agent may `git init` in turn 1.
     const gitDir = await gitCommonDir(this.cwd)
     const emit = makeEmit(this.startOpts.onEvent, 'codex')
-    const turn = await runCliSession({
-      bin: this.config.bin ?? 'codex',
-      args: this.buildArgs(gitDir),
-      cwd: this.cwd,
-      env: agentEnv(this.config.env ?? process.env, this.log),
-      prompt: text,
-      ...(opts.added !== undefined ? { added: opts.added } : {}),
-      ...(opts.attached !== undefined ? { attached: opts.attached } : {}),
-      spawn: this.config.spawn ?? (nodeSpawn as unknown as SpawnLike),
-      emit,
-      signals: combineSignals(this.startOpts.signal, opts.signal),
-      parser: new CodexAppServerParser({
-        text: promptSent(text, opts),
+    const agent = (emitFn: (event: DriverEvent) => void): Promise<DriverTurn> =>
+      runCliSession({
+        bin: this.config.bin ?? 'codex',
+        args: this.buildArgs(gitDir),
         cwd: this.cwd,
-        sandbox: this.config.sandbox ?? 'workspace-write',
-        ...(framing ? { framing } : {}),
-        ...(this.startOpts.model ? { model: this.startOpts.model } : {}),
-        ...(resumeId !== undefined ? { resumeId } : {}),
-      }),
-      driver: 'codex',
-    })
+        env: agentEnv(this.config.env ?? process.env, this.log),
+        prompt: text,
+        ...(opts.added !== undefined ? { added: opts.added } : {}),
+        ...(opts.attached !== undefined ? { attached: opts.attached } : {}),
+        spawn: this.config.spawn ?? (nodeSpawn as unknown as SpawnLike),
+        emit: emitFn,
+        signals: combineSignals(this.startOpts.signal, opts.signal),
+        parser: new CodexAppServerParser({
+          text: promptSent(text, opts),
+          cwd: this.cwd,
+          sandbox: this.config.sandbox ?? 'workspace-write',
+          ...(framing ? { framing } : {}),
+          ...(this.startOpts.model ? { model: this.startOpts.model } : {}),
+          ...(resumeId !== undefined ? { resumeId } : {}),
+        }),
+        driver: 'codex',
+      })
+    // A conversation Codex no longer has (its rollout deleted, or never written on this machine) is
+    // refused before the turn starts: the caller's to go on without.
+    const turn = resumeId === undefined ? await agent(emit) : await continuingTurn('codex', resumeId, emit, isConversationGone, agent)
     if (turn.sessionId) this.lastSessionId = turn.sessionId
     return finishTurn(this, turn, opts, emit)
   }
@@ -486,6 +490,14 @@ export interface CodexTurnRequest {
   model?: string
   /** The conversation to continue; without it, a fresh one starts. */
   resumeId?: string
+}
+
+/** How Codex refuses a conversation it has no record of (codex-cli 0.144.4). */
+const CONVERSATION_GONE = /no rollout found for thread id/i
+
+/** Whether a failed turn failed because the conversation it continues is not there. */
+function isConversationGone(err: unknown): boolean {
+  return CONVERSATION_GONE.test(err instanceof Error ? err.message : String(err))
 }
 
 /** Items that are the conversation itself, not the agent using a tool. */

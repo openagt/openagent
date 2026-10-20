@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { readClaudeQuota } from './claude-code-quota.js'
 import { readClaudeModels } from './claude-code-models.js'
-import { combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, cutOutput, callArgument, lineCount, patchSize, runCliSession, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, finishTurn, agentEnv, oneLine, attachLog, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverQuota, type DriverRateLimit, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
+import { combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, cutOutput, callArgument, lineCount, patchSize, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, finishTurn, agentEnv, oneLine, attachLog, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverQuota, type DriverRateLimit, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
 
 /** Claude Code permission modes we pass through to the CLI. */
 export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan'
@@ -156,35 +156,10 @@ export class ClaudeCodeSession implements DriverSession {
         driver: 'claude-code',
       })
 
-    let turn: DriverTurn
-    // On a resume attempt, hold the failure's `error` event back until the conversation-gone
-    // case (#778) is ruled out: a turn that recovers on the retry must not show a failed row.
-    // Safe to hold — runCliSession emits `error` exactly once, right before it rejects.
-    let heldError: DriverEvent | undefined
-    try {
-      turn = await agent(resumeId, resumeId === undefined ? emit : event => {
-        if (event.type === 'error') heldError = event
-        else emit(event)
-      })
-    } catch (err) {
-      // The id we captured outlives what the CLI will resume (#778) — its retention, a
-      // cleared history, another machine. There is no way to ask first, so let it fail
-      // once and continue as a fresh conversation (which gets the system framing back)
-      // rather than losing the message the user already typed.
-      if (resumeId === undefined || !isConversationGone(err) || signals.some(s => s.aborted)) {
-        if (heldError) emit(heldError)
-        throw err
-      }
-      this.lastSessionId = undefined
-      emit({ type: 'notice', message: 'That conversation is no longer available; continuing without its history.' })
-      // The retry re-sends the same prompt; swallow its duplicate `start` so the user's
-      // message appears once in the transcript, not twice.
-      let startSeen = false
-      turn = await agent(undefined, event => {
-        if (event.type === 'start' && !startSeen) startSeen = true
-        else emit(event)
-      })
-    }
+    // The id we captured may outlive what the CLI will resume (#778): its retention, a cleared
+    // history, another machine. There is no way to ask first, so the turn tries, and a gone
+    // conversation is the caller's to go on without.
+    const turn = resumeId === undefined ? await agent(undefined, emit) : await continuingTurn('claude-code', resumeId, emit, isConversationGone, held => agent(resumeId, held))
     // Track the agent's session so a later resume continues this exact conversation.
     if (turn.sessionId) this.lastSessionId = turn.sessionId
     return finishTurn(this, turn, opts, emit)
