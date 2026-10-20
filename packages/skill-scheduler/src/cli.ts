@@ -41,7 +41,7 @@ export const USAGE = `usage: scheduler <command>
   switch <command> <on|off>     whether a scheduled command runs on this machine, the command as status names it (quoted when it has a word after it); every one starts off, and off is taken for any name
   publish <command> <nothing|commit|branch|pr|merge>
                                 how far this machine's runs of a scheduled command publish; commit until picked.
-                                Refused, like a command's agent and model, for a row that resumes runs: each goes on with its own
+                                Of a row that also resumes runs, as its agent and model, only for the runs it starts: one it resumes goes on with its own
   pace <command> <skill|work|N<m|h|d|w|mo>> [HH:MM]
                                 how often at most a scheduled command starts on this machine: an interval (15m, 6h, 2d, 2w, 1mo; 1 to 9999), with a time of day
                                 for days, weeks or months (2d 10:00, this machine's time); work for whenever its check finds work; skill for the skill's own pace again, taken for any name
@@ -186,7 +186,6 @@ const COMMANDS: Record<string, Command> = {
     if (to === 'skill') return { ok: true, ...(await updateState(repo, s => withModel(s, name, undefined), git)) }
     if (!to.trim()) throw new Usage('a model is the id its coding agent knows it by')
     const command = await scheduled(repo, name)
-    resumesOwn(command, 'model')
     // A model is one agent's: the pick is kept with the agent the command runs on here, and holds only while it does.
     return { ok: true, ...(await updateState(repo, s => withModel(s, name, { agent: agentInForce(s, command), model: to }), git)) }
   },
@@ -199,7 +198,6 @@ const COMMANDS: Record<string, Command> = {
     // Taking an agent back needs no scheduled command: one left for a skill that is gone can always be taken back.
     if (to === 'skill') return { ok: true, ...(await updateState(repo, s => withAgent(s, name, undefined), git)) }
     const command = await scheduled(repo, name)
-    resumesOwn(command, 'coding agent')
     if (!ableAgents(command).includes(to)) throw new Refused({ ok: false, reason: 'no-skill-there', command: name, agent: to }, `${AGENT_LABELS[to]} reads a project's skills from ${AGENT_SKILLS_DIR[to]}, and the skill of ${name} is only under ${command.dirs.join(' and ')}`)
     // The agent the command is made for is no pick to keep: the command then follows its skill again. The model picked for the command goes either way: a model is one agent's.
     return { ok: true, ...(await updateState(repo, s => withAgent(s, name, to === homeAgent(command) ? undefined : to), git)) }
@@ -232,7 +230,7 @@ const COMMANDS: Record<string, Command> = {
     const [name, to] = positionals as [string, string]
     if (!(PUBLISH_PICKS as readonly string[]).includes(to)) throw new Usage(`${to} is none of ${PUBLISH_PICKS.join(', ')}`)
     const repo = await project(io.cwd, git)
-    resumesOwn(await scheduled(repo, name), 'publish level')
+    await scheduled(repo, name)
     return { ok: true, ...(await updateState(repo, s => withPublish(s, name, to as PublishPick), git)) }
   },
 
@@ -322,7 +320,7 @@ const COMMANDS: Record<string, Command> = {
     const repo = await project(io.cwd, git)
     const command = await scheduled(repo, positionals[0]!)
     const started = await runNow(repo, command, { git, log: io.stderr })
-    if (started.ok) return { ok: true, command: command.name, run: started.run.id }
+    if (started.ok) return { ok: true, command: command.name, run: started.run.id, ...(started.resumed ? { resumed: true } : {}) }
     throw new Refused({ ok: false, reason: 'not-started', command: command.name, outcome: started.outcome }, started.outcome)
   },
 
@@ -384,11 +382,6 @@ async function scheduled(repo: string, name: string): Promise<ScheduledCommand> 
   if (unreadable?.own) throw new Refused({ ok: false, reason: 'unlisted-automation', automation: skill, detail: unreadable.reason }, `the automation ${skill}, kept on this machine, is not listed: ${unreadable.reason}`)
   if (unreadable) throw new Refused({ ok: false, reason: 'unreadable-schedule', skill, detail: unreadable.reason }, `the schedule of ${skill} cannot be read: ${unreadable.reason}`)
   throw new Refused({ ok: false, reason: 'not-scheduled', command: name }, `no skill of this project schedules ${name}`)
-}
-
-/** Refused for a row that resumes: each run it resumes goes on with its own coding agent, model and publish level, as its record names them. */
-function resumesOwn(command: ScheduledCommand, what: string): void {
-  if (command.resumes) throw new Refused({ ok: false, reason: 'resumes', command: command.name }, `${command.name} resumes runs, and each goes on with the ${what} its own record names`)
 }
 
 /** The project the working directory belongs to, even from inside a checkout under `.branches/`. */

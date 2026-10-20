@@ -165,6 +165,8 @@ export interface RunOptions {
   parent?: string
   /** The branch the run's fresh branch starts from; origin's default branch when absent. */
   base?: string
+  /** What the run is started for (`run --for`), kept on its mark: a thread on the git host, by its address. */
+  for?: string
   /** How an ended parent is continued, in its own process; absent, only a working parent is told. */
   resume?: ParentDeps['resume']
   host?: string

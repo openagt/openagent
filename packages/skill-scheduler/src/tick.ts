@@ -2,11 +2,11 @@ import type { DriverQuota, DriverReadiness } from '@openagt/agent-driver'
 import { markerCard, runnerMark, type Publish, type RunnerMark } from '@openagt/agent-runner'
 import type { FileBranchWrite } from '@openagt/agent-data'
 import type { RunCard } from '@openagt/skill-logs'
-import { AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, LAST_RUN_ENV, NEVER_STARTED_SINCE_MS, NOW_READY_MS, isAgent, type AgentName } from './names.js'
+import { AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, LAST_RUN_ENV, NEVER_STARTED_SINCE_MS, SWITCHED_ON_ENV, NOW_READY_MS, isAgent, type AgentName } from './names.js'
 import type { LastRun } from './records.js'
 import { dueFrom, localStamp, paceInForce, paceText } from './pace.js'
 import { quotaBoundaryStatus, quotaHeadroom } from './quota-boundary.js'
-import { ableAgents, checkFound, commandPrompt, homeAgent, isDue, lastRunValue, ownAttached, resumeText, runsToResume, skillFile, type Schedule, type ScheduledCommand } from './schedule.js'
+import { ableAgents, checkFound, commandPrompt, homeAgent, isDue, lastRunValue, ownAttached, resumeText, eachItems, skillFile, type Schedule, type ScheduledCommand, type StartItem } from './schedule.js'
 import type { StartPoint } from './start-point.js'
 import { agentInForce, capInForce, modelInForce, publishInForce, switchedOnAt, type ListedCommand, type State, type TickDecision, type TickRecord } from './state.js'
 
@@ -15,8 +15,8 @@ import { agentInForce, capInForce, modelInForce, publishInForce, switchedOnAt, t
  * the cheapest order — can the coding agent run it, is it switched on on this machine, is it due by its pace (this machine's, else its skill's), is its check
  * due, is its cap reached, is its skill where a run's checkout starts, can the coding agent start at all, is there quota — then mark and spawn one run. Every decision is one line in the state, so a
  * dashboard or a person reads why nothing started without a log. A run its check started is handed
- * what the check printed, with its prompt. A row that resumes starts no run: it resumes each run its
- * check names, a line for each.
+ * what the check printed, with its prompt. A row with `each` has a line for each item its check
+ * prints: a run it resumes, or a new one it starts for what the item names.
  *
  * The quota is read only when everything else says start: a read spawns the agent's CLI and the
  * agent's own usage fetch is refused upstream when asked too often.
@@ -42,14 +42,14 @@ export interface TickDeps {
   sweep: () => Promise<unknown>
   /** Where a run's checkout starts, brought up to date, and whether a file is there: a skill that is not is no command to the run's agent. */
   atStart: (file: string) => Promise<StartPoint & { there: boolean }>
-  /** Run a check, which reads `lastRun` as `$LAST_RUN`. */
-  check: (shell: string, lastRun: string) => Promise<CheckResult>
+  /** Run a check, which reads `lastRun` as `$LAST_RUN` and `switchedOn` as `$SWITCHED_ON`. */
+  check: (shell: string, lastRun: string, switchedOn: string) => Promise<CheckResult>
   /** Whether the command is switched on on this machine as of now: a person may have switched it off, or removed it, since the tick read the state. */
   stillOn: (command: string) => Promise<boolean>
   /** When the command last started on any machine, ISO; nothing when it never did. */
   lastStart: (command: string) => Promise<string | undefined>
   inFlight: (command: string) => Promise<RunCard[]>
-  /** A run's record, for a row that resumes runs; nothing for a run this project has no record of. */
+  /** A run's record, for a run a row resumes; nothing for a run this project has no record of. */
   findRun: (id: string) => Promise<RunCard | undefined>
   /** Whether a process of the run holds its lock: a resume spawned a moment ago, whose record does not say running yet. */
   busy: (id: string) => Promise<boolean>
@@ -60,8 +60,8 @@ export interface TickDeps {
   mint: () => string
   writeMarker: (card: RunCard) => Promise<FileBranchWrite>
   withdrawMarker: (id: string) => Promise<unknown>
-  /** Start the run's process, detached; resolves once it is spawned. `startedAt` is the start its record keeps, `attached` what the agent is handed with the prompt. */
-  spawn: (run: { id: string; prompt: string; startedAt: string; driver: AgentName; model?: string; publish?: Publish; attached?: string }) => Promise<void>
+  /** Start the run's process, detached; resolves once it is spawned. `startedAt` is the start its record keeps, `attached` what the agent is handed with the prompt, `branch` the existing branch it works on, `for` what it is for. */
+  spawn: (run: { id: string; prompt: string; startedAt: string; driver: AgentName; model?: string; publish?: Publish; attached?: string; branch?: string; for?: string }) => Promise<void>
   /** Continue an ended run in its own process, with the text it is told and the row that resumes it; resolves once it is spawned. */
   resume: (run: { id: string; text: string; by: string }) => Promise<void>
   /** Whether the scheduler was told to stop while this tick runs: then nothing more is started. */
@@ -104,7 +104,7 @@ export async function glance(deps: TickDeps, due: (command: ScheduledCommand) =>
 }
 
 /** What starting a command by hand answered: the run it started or resumed, or the decisions that started none, in the tick's own words. */
-export type StartedNow = { ok: true; run: LastRun } | { ok: false; outcome: string }
+export type StartedNow = { ok: true; run: LastRun; resumed?: true } | { ok: false; outcome: string }
 
 /**
  * Start one run of a command now, because a person asked: whatever its switch on this machine,
@@ -124,9 +124,9 @@ export async function startNow(deps: TickDeps, command: ScheduledCommand, clock:
   const pulled = await deps.pull()
   if (!pulled.ok) return { ok: false, outcome: `agent-data could not be pulled: ${pulled.error}` }
   const decided = await decide(deps, command, { readiness: {} }, { late: () => clock() > giveUpAt })
-  // A row that resumes may resume several: the first is the answer, and the rest are on their records.
-  const started = decided.find(d => d.started)?.started
-  return started ? { ok: true, run: started } : { ok: false, outcome: decided.map(d => d.outcome).join('; ') }
+  // A row with each may start or resume several: the first is the answer, and the rest are on their records.
+  const first = decided.find(d => d.started)
+  return first?.started ? { ok: true, run: first.started, ...(first.outcome.startsWith('resumed ') ? { resumed: true as const } : {}) } : { ok: false, outcome: decided.map(d => d.outcome).join('; ') }
 }
 
 /** What a tick reads once and holds for every command it decides: each reading spawns the agent's CLI. */
@@ -145,8 +145,8 @@ interface Decided {
 
 /**
  * Decide one command, and start its run when everything says so: one line, and the run when one
- * started, as the command's last run. A row that resumes has a line per run its check names, and
- * resumes each that can go now. `byHand` is a person asking for a run now: the switch, the
+ * started, as the command's last run. A row with `each` has a line per item its check prints, and
+ * resumes or starts each that can go now. `byHand` is a person asking for a run now: the switch, the
  * pace and the quota are not asked, a check asks what is new since a day ago when the command
  * never started and is switched off here, and a start that is `late` by the time it would be
  * written is given up.
@@ -154,7 +154,7 @@ interface Decided {
 async function decide(deps: TickDeps, command: ScheduledCommand, held: Readings, byHand?: { late: () => boolean }): Promise<Decided[]> {
   const asked = await ask(deps, command, byHand)
   if ('outcome' in asked) return [asked]
-  return command.resumes ? resumeNamed(deps, command, asked, held, byHand) : [await start(deps, command, asked, held, byHand)]
+  return command.each ? eachNamed(deps, command, asked, held, byHand) : [await start(deps, command, asked, held, byHand)]
 }
 
 /** Whether a command is due now, and what its check found when it has one: what a start and a resume both go on from. */
@@ -162,8 +162,8 @@ type Asked = { now: Date; found?: { stdout: string; lastRun: string } }
 
 /** The questions every command is asked first, in the cheapest order: can its coding agent run it, is it switched on here, is it due by its pace, does its check find work. */
 async function ask(deps: TickDeps, command: ScheduledCommand, byHand?: { late: () => boolean }): Promise<Asked | Decided> {
-  // A row that resumes is on each run's own coding agent, asked per run.
-  if (!command.resumes) {
+  // A row with each is asked per item: a run it resumes is on its own coding agent.
+  if (!command.each) {
     // The coding agent the run would be on: this machine's pick, else what the command's skill is made for.
     // An automation kept on this machine is no skill: a run is handed its text, so no folder and no commit has to hold it.
     const agent = agentInForce(deps.state, command)
@@ -187,21 +187,29 @@ async function ask(deps: TickDeps, command: ScheduledCommand, byHand?: { late: (
   if (command.when === undefined) return { now }
   // What is new for the check: since its command last started, or since it was switched on here when that is later.
   const since = lastRunValue(latest(last, switchedOn) ?? new Date(now.getTime() - NEVER_STARTED_SINCE_MS).toISOString())
-  const checked = await deps.check(command.when, since).catch((err): CheckResult => ({ ok: false, stdout: '', stderr: String(err) }))
+  // When the command was switched on here: a check that starts runs for what is new leaves what came before.
+  const on = lastRunValue(switchedOn ?? new Date(now.getTime() - NEVER_STARTED_SINCE_MS).toISOString())
+  const checked = await deps.check(command.when, since, on).catch((err): CheckResult => ({ ok: false, stdout: '', stderr: String(err) }))
   if (!checked.ok) return { outcome: `check failed: ${checked.stderr.trim().split('\n').at(-1) ?? ''}` }
   if (!isDue(checked.stdout)) return { outcome: 'not due' }
   return { now, found: { stdout: checked.stdout, lastRun: since } }
 }
 
-/** Start one run of a command that is due: its cap, where a run's checkout starts, its coding agent, the quota, then its marker and its process. */
-async function start(deps: TickDeps, command: ScheduledCommand, { now, found }: Asked, held: Readings, byHand?: { late: () => boolean }): Promise<Decided> {
+/**
+ * Start one run of a command that is due: its cap, where a run's checkout starts, its coding agent,
+ * the quota, then its marker and its process. For an item of a row with `each`, the run is handed
+ * the item's words, works on its branch when it names one, and its marker names what it is for:
+ * `resumed` are the row's runs resumed in this tick, in flight with the rest though no record says so yet.
+ */
+async function start(deps: TickDeps, command: ScheduledCommand, { now, found }: Asked, held: Readings, byHand?: { late: () => boolean }, item?: { start: StartItem; resumed: string[] }): Promise<Decided> {
   // The coding agent the run is on, and its model: this machine's picks, else what the command's skill is made for.
   const agent = agentInForce(deps.state, command)
   const model = modelInForce(deps.state, command, agent)
+  if (item && !ableAgents(command).includes(agent)) return { outcome: notACommandOf(command, agent) }
   // The cap in force: this machine's number for the command, else the skill's, held against every machine's runs.
   const cap = capInForce(deps.state, command)
-  const running = await deps.inFlight(command.name)
-  if (running.length >= cap) return { outcome: `cap reached (${running.length} in flight: ${running.map(describe).join(', ')})` }
+  const running = [...(await deps.inFlight(command.name)).map(describe), ...(item?.resumed ?? [])]
+  if (running.length >= cap) return { outcome: `cap reached (${running.length} in flight: ${running.join(', ')})` }
   // A run's checkout starts from the project's published commit, not from the files here: a skill
   // that is not there is no command to the agent. Asked only now, when a run would start: it fetches.
   if (command.text === undefined) {
@@ -215,12 +223,13 @@ async function start(deps: TickDeps, command: ScheduledCommand, { now, found }: 
   if (byHand?.late()) return { outcome: lateOutcome() }
   const id = deps.mint()
   const prompt = commandPrompt(command)
-  // A skill's run is handed what its check found; an automation kept on this machine, its text first.
-  const attached = command.text !== undefined ? ownAttached(command.text, found) : found ? checkFound(found.stdout, found.lastRun) : undefined
+  // A skill's run is handed what its check found, an item's run its words; an automation kept on this machine, its text first.
+  const said = item && found ? { ...found, stdout: item.start.text } : found
+  const attached = command.text !== undefined ? ownAttached(command.text, said) : said ? checkFound(said.stdout, said.lastRun) : undefined
   // The publish level in force, this machine's pick, goes on the marker and to the run: the agent is told it after its prompt.
   const level = publishInForce(deps.state, command.name)
   const publish = level !== undefined ? { publish: level } : {}
-  const mark: RunnerMark = { host: deps.host, ...publish }
+  const mark: RunnerMark = { host: deps.host, ...publish, ...(item ? { for: item.start.for } : {}) }
   const marked = await deps.writeMarker(markerCard({ id, startedAt: now.toISOString(), prompt, driver: agent, ...(model !== undefined ? { model } : {}), mark }))
   if (!marked.ok) {
     // The commit stayed local and would ride a later push: taken back, so no record says running for a run that never was.
@@ -236,13 +245,19 @@ async function start(deps: TickDeps, command: ScheduledCommand, { now, found }: 
     await deps.withdrawMarker(id)
     return { outcome: 'not started: its record was closed before the run began' }
   }
-  if (rank >= cap) {
+  if (rank + (item?.resumed.length ?? 0) >= cap) {
     await deps.withdrawMarker(id)
-    const others = after.filter(c => c.id !== id)
-    return { outcome: `cap reached (${others.length} in flight: ${others.map(describe).join(', ')})` }
+    const others = [...after.filter(c => c.id !== id).map(describe), ...(item?.resumed ?? [])]
+    return { outcome: `cap reached (${others.length} in flight: ${others.join(', ')})` }
+  }
+  // One run for what an item names, across every machine: the first marker in time order keeps it.
+  const first = item && after.filter(card => runnerMark(card)?.for === item.start.for).map(card => card.id).sort()[0]
+  if (first !== undefined && first !== id) {
+    await deps.withdrawMarker(id)
+    return { outcome: `another machine got there first: run ${first} is for ${item!.start.for}` }
   }
   try {
-    await deps.spawn({ id, prompt, startedAt: now.toISOString(), driver: agent, ...(model !== undefined ? { model } : {}), ...publish, ...(attached !== undefined ? { attached } : {}) })
+    await deps.spawn({ id, prompt, startedAt: now.toISOString(), driver: agent, ...(model !== undefined ? { model } : {}), ...publish, ...(attached !== undefined ? { attached } : {}), ...(item?.start.branch !== undefined ? { branch: item.start.branch } : {}), ...(item ? { for: item.start.for } : {}) })
     return { outcome: `started ${id}`, started: { id, at: now.toISOString() } }
   } catch (err) {
     // No record says running for a run that never was.
@@ -252,20 +267,22 @@ async function start(deps: TickDeps, command: ScheduledCommand, { now, found }: 
 }
 
 /**
- * Resume each run a row's check named, with its words: one line per run. A run goes on with the
- * coding agent, model and publish level its record names, so readiness and the quota are asked per
- * run, for its own agent and model; one that cannot go now says why, and its check names it again
- * at a later tick. Only this machine's runs, and none still running. The cap counts the row's
- * resumed runs in flight, those resumed in this tick with them: their records say running only
- * once their own process wrote them.
+ * Each item a row's check printed, one line each: the runs it names resumed first, then a run
+ * started for each new thing it names. A run goes on with the coding agent, model and publish
+ * level its record names, so readiness and the quota are asked per run, for its own agent and
+ * model; one that cannot go now says why, and its check names it again at a later tick. Only this
+ * machine's runs, and none still running. The cap counts the row's runs in flight, those resumed
+ * in this tick with them: their records say running only once their own process wrote them.
  */
-async function resumeNamed(deps: TickDeps, command: ScheduledCommand, { now, found }: Asked, held: Readings, byHand?: { late: () => boolean }): Promise<Decided[]> {
-  const named = runsToResume(found!.stdout)
-  if (typeof named === 'string') return [{ outcome: `check printed no runs to resume: ${named}` }]
+async function eachNamed(deps: TickDeps, command: ScheduledCommand, asked: Asked, held: Readings, byHand?: { late: () => boolean }): Promise<Decided[]> {
+  const { now, found } = asked
+  const named = eachItems(found!.stdout)
+  if (typeof named === 'string') return [{ outcome: `check printed no list of runs: ${named}` }]
   const cap = capInForce(deps.state, command)
   const running = (await deps.inFlight(command.name)).map(describe)
+  const resumed: string[] = []
   const decided: Decided[] = []
-  for (const { run, text } of named) {
+  for (const { run, text } of named.resumes) {
     const why = await whyNot(run)
     if (why !== undefined) {
       decided.push({ outcome: `run ${run} not resumed: ${why}` })
@@ -274,10 +291,15 @@ async function resumeNamed(deps: TickDeps, command: ScheduledCommand, { now, fou
     try {
       await deps.resume({ id: run, text: resumeText(command, text, found!.lastRun), by: command.name })
       running.push(run)
+      resumed.push(run)
       decided.push({ outcome: `resumed ${run}`, started: { id: run, at: now.toISOString() } })
     } catch (err) {
       decided.push({ outcome: `run ${run} not resumed: ${err instanceof Error ? err.message : String(err)}` })
     }
+  }
+  for (const item of named.starts) {
+    const outcome = await start(deps, command, asked, held, byHand, { start: item, resumed })
+    decided.push(outcome.started ? outcome : { outcome: `no run for ${item.for}: ${outcome.outcome}` })
   }
   return decided
 
@@ -336,7 +358,7 @@ function latest(a: string | undefined, b: string | undefined): string | undefine
 
 /** A command as a dashboard lists it: what its skill says; not this machine's switch or picks, which the state carries, nor its runs, which the records do. */
 export function listed(command: ScheduledCommand): ListedCommand {
-  return { command: command.name, ...(command.resumes ? { resumes: true as const } : {}), ...(command.every ? { every: command.every.text } : {}), ...(command.when !== undefined ? { when: command.when } : {}), ...(command.waitsFor !== undefined ? { waitsFor: command.waitsFor } : {}), ...(command.checkEvery ? { checkEvery: command.checkEvery.text } : {}), ...(command.description !== undefined ? { description: command.description } : {}), ...(command.cap > 1 ? { agents: command.cap } : {}), ...(command.text !== undefined ? { onThisMachine: true as const } : {}), ...(command.editable ? { editable: true as const } : {}), agent: homeAgent(command), ...(command.model !== undefined ? { model: command.model, modelAgent: command.agent ?? DEFAULT_AGENT } : {}), able: ableAgents(command) }
+  return { command: command.name, ...(command.each ? { each: true as const } : {}), ...(command.every ? { every: command.every.text } : {}), ...(command.when !== undefined ? { when: command.when } : {}), ...(command.waitsFor !== undefined ? { waitsFor: command.waitsFor } : {}), ...(command.checkEvery ? { checkEvery: command.checkEvery.text } : {}), ...(command.description !== undefined ? { description: command.description } : {}), ...(command.cap > 1 ? { agents: command.cap } : {}), ...(command.text !== undefined ? { onThisMachine: true as const } : {}), ...(command.editable ? { editable: true as const } : {}), agent: homeAgent(command), ...(command.model !== undefined ? { model: command.model, modelAgent: command.agent ?? DEFAULT_AGENT } : {}), able: ableAgents(command) }
 }
 
 /** An age for a decision line: `less than a minute`, `12m`, `3h`, `2d`, floored. */
@@ -354,11 +376,11 @@ function describe(card: RunCard): string {
   return host ? `${card.id} on ${host}` : card.id
 }
 
-/** Run a check at the repository root through the shell, within its budget; the check reads `lastRun` as `$LAST_RUN`. */
-export async function runCheck(repo: string, shell: string, timeoutMs: number, lastRun: string): Promise<CheckResult> {
+/** Run a check at the repository root through the shell, within its budget; the check reads `lastRun` as `$LAST_RUN`, and `switchedOn` as `$SWITCHED_ON` when given. */
+export async function runCheck(repo: string, shell: string, timeoutMs: number, lastRun: string, switchedOn?: string): Promise<CheckResult> {
   const { execFile } = await import('node:child_process')
   return new Promise<CheckResult>(resolve => {
-    const child = execFile('sh', ['-c', shell], { cwd: repo, timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, [LAST_RUN_ENV]: lastRun } }, (err, stdout, stderr) => {
+    const child = execFile('sh', ['-c', shell], { cwd: repo, timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, [LAST_RUN_ENV]: lastRun, ...(switchedOn !== undefined ? { [SWITCHED_ON_ENV]: switchedOn } : {}) } }, (err, stdout, stderr) => {
       // A check ended for running out of its time says so: what it had printed to then says nothing of why it failed.
       const why = err?.killed ? `it took longer than ${timeoutMs / 1000} seconds` : err && !String(stderr).trim() ? err.message : String(stderr)
       resolve({ ok: !err, stdout: String(stdout), stderr: why })

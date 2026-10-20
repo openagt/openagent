@@ -40,8 +40,8 @@ export interface ListedCommand {
   checkEvery?: string
   /** What the command's skill does, in the skill's own words, when it says. */
   description?: string
-  /** Whether the row resumes the runs its check names, each on its own coding agent and model, and starts none. */
-  resumes?: true
+  /** Whether the row's check prints one item per run: a run it resumes, on that run's own coding agent and model, or what a new run is for. */
+  each?: true
   /** How many runs of the command its skill lets be in flight at once, when it is more than one. */
   agents?: number
   /** Whether the command is an automation a person keeps on this machine alone, not a skill of the project. */

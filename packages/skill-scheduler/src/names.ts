@@ -73,6 +73,9 @@ export function isAgents(value: unknown): value is number {
 /** The name a check reads the time of its command's last start under (`$LAST_RUN`). */
 export const LAST_RUN_ENV = 'LAST_RUN'
 
+/** Where a check finds when its command was switched on on this machine: a check that starts runs for what is new leaves what came before. */
+export const SWITCHED_ON_ENV = 'SWITCHED_ON'
+
 /** Whether a value is a time as the tools write one: an ISO date and time a date reads (`2026-10-09T10:00:00.000Z`). What a switched-on command's switch holds, and a run record's start. */
 export function isTime(value: unknown): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value) && !Number.isNaN(Date.parse(value))

@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseInterval } from './pace.js'
-import { ableAgents, checkFound, commandPrompt, FOUND_OPENING, homeAgent, isDue, lastRunValue, promptCommand, readSchedule, skillFile, skillSchedule, FOUND_OPENING_OWN, ownAttached, skillText, resumeText, runsToResume, RESUMED_OPENING, RESUMED_OPENING_OWN } from './schedule.js'
+import { ableAgents, checkFound, commandPrompt, FOUND_OPENING, homeAgent, isDue, lastRunValue, promptCommand, readSchedule, skillFile, skillSchedule, FOUND_OPENING_OWN, ownAttached, skillText, resumeText, eachItems, RESUMED_OPENING, RESUMED_OPENING_OWN } from './schedule.js'
 import { AGENTS as AGENT_NAMES, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, FOUND_MAX, RUN_SKILLS_DIR, isAgent } from './names.js'
 
 const CLAUDE = '.claude/skills'
@@ -321,28 +321,29 @@ test('the time a check is given: UTC to the whole second, the fraction dropped a
   assert.equal(lastRunValue('2026-10-09T13:00:00+03:00'), '2026-10-09T10:00:00Z')
 })
 
-test('a row may resume the runs its check names: it needs the check, and names no coding agent and no model, since each run goes on with its own', () => {
-  assert.deepEqual(read('reply', skill('reply', 'schedule:\n  resumes: true\n  when: npx replies\n  agents: 3\n')), { commands: [{ name: 'reply', when: 'npx replies', cap: 3, dir: CLAUDE, dirs: [CLAUDE], resumes: true }], unreadable: [] })
-  // A pace beside the check holds as on any row, counted from the row's last resume.
-  assert.equal(read('reply', skill('reply', 'schedule:\n  resumes: true\n  when: npx replies\n  every: 10m\n')).commands[0]!.every?.text, '10m')
+test('a row may have its check print one item per run: it needs the check, and names a coding agent and a model as any row, for the runs it starts', () => {
+  assert.deepEqual(read('reply', skill('reply', 'schedule:\n  each: true\n  when: npx replies\n  agents: 3\n  agent: codex\n')), { commands: [{ name: 'reply', when: 'npx replies', cap: 3, dir: CLAUDE, dirs: [CLAUDE], agent: 'codex', each: true }], unreadable: [] })
+  // A pace beside the check holds as on any row, counted from the row's last start or resume.
+  assert.equal(read('reply', skill('reply', 'schedule:\n  each: true\n  when: npx replies\n  every: 10m\n')).commands[0]!.every?.text, '10m')
   const refused = (frontMatter: string): string | undefined => read('reply', skill('reply', frontMatter)).unreadable[0]?.reason
-  assert.equal(refused('schedule:\n  resumes: true\n  every: 1h\n'), 'a row that resumes needs when, the check that names the runs to resume')
-  assert.equal(refused('schedule:\n  resumes: true\n  when: npx replies\n  agent: codex\n'), 'a row that resumes takes no agent: each run goes on with the coding agent and model its record names')
-  assert.equal(refused('schedule:\n  resumes: true\n  when: npx replies\n  model: opus\n'), 'a row that resumes takes no model: each run goes on with the coding agent and model its record names')
-  assert.equal(refused('schedule:\n  resumes: yes please\n  when: npx replies\n'), 'resumes is true, or left out')
-  assert.equal(refused('schedule:\n  resumes: false\n  when: npx replies\n'), 'resumes is true, or left out')
+  assert.equal(refused('schedule:\n  each: true\n  every: 1h\n'), 'a row with each needs when, the check that names the runs')
+  assert.equal(refused('schedule:\n  each: yes please\n  when: npx replies\n'), 'each is true, or left out')
+  assert.equal(refused('schedule:\n  each: false\n  when: npx replies\n'), 'each is true, or left out')
 })
 
-test('the runs a row resumes, out of what its check printed: each run with its words, a run named twice once with both; nothing for no work; why for anything else', () => {
-  assert.deepEqual(runsToResume('[{"run":"r1","text":" one "},{"run":"r2","text":"two"},{"run":"r1","text":"three"}]\n'), [{ run: 'r1', text: 'one\n\nthree' }, { run: 'r2', text: 'two' }])
-  assert.deepEqual(runsToResume(''), [])
-  assert.deepEqual(runsToResume('[]'), [])
-  assert.deepEqual(runsToResume('null'), [])
-  assert.equal(runsToResume('r1'), 'the check printed no JSON')
-  assert.equal(runsToResume('{"run":"r1","text":"x"}'), 'the check printed no list')
-  assert.equal(runsToResume('[{"run":"r1","text":""}]'), 'an item of the list is no { "run": "<id>", "text": "…" }')
-  assert.equal(runsToResume('[{"run":7,"text":"x"}]'), 'an item of the list is no { "run": "<id>", "text": "…" }')
-  assert.equal(runsToResume('["r1"]'), 'an item of the list is no { "run": "<id>", "text": "…" }')
+test('the items a row with each printed: each run with its words, a run named twice once with both; each new run with what it is for and its branch, named twice once with both; nothing for no work; why for anything else', () => {
+  assert.deepEqual(eachItems('[{"run":"r1","text":" one "},{"run":"r2","text":"two"},{"run":"r1","text":"three"}]\n'), { resumes: [{ run: 'r1', text: 'one\n\nthree' }, { run: 'r2', text: 'two' }], starts: [] })
+  assert.deepEqual(eachItems('[{"for":"issue 5","text":"a"},{"for":"pr 6","text":"b","branch":" fix "},{"for":"issue 5","text":"c"},{"run":"r1","text":"d"}]'), {
+    resumes: [{ run: 'r1', text: 'd' }],
+    starts: [{ for: 'issue 5', text: 'a\n\nc' }, { for: 'pr 6', text: 'b', branch: 'fix' }],
+  })
+  // The first branch named holds, a later item's for the same thing too.
+  assert.deepEqual(eachItems('[{"for":"pr 6","text":"a"},{"for":"pr 6","text":"b","branch":"fix"},{"for":"pr 6","text":"c","branch":"other"}]'), { resumes: [], starts: [{ for: 'pr 6', text: 'a\n\nb\n\nc', branch: 'fix' }] })
+  for (const nothing of ['', '[]', 'null']) assert.deepEqual(eachItems(nothing), { resumes: [], starts: [] })
+  assert.equal(eachItems('r1'), 'the check printed no JSON')
+  assert.equal(eachItems('{"run":"r1","text":"x"}'), 'the check printed no list')
+  const odd = 'an item of the list is no { "run": "<id>", "text": "…" } and no { "for": "<what>", "text": "…" }, with "branch" only beside "for"'
+  for (const item of ['{"run":"r1","text":""}', '{"run":7,"text":"x"}', '"r1"', '{"text":"x"}', '{"run":"r1","for":"issue 5","text":"x"}', '{"run":"r1","text":"x","branch":"fix"}', '{"for":"issue 5","text":"x","branch":""}']) assert.equal(eachItems(`[${item}]`), odd, item)
 })
 
 test("what a resumed run is told: the command, then the opening words and the check's words for it; an automation kept on this machine, its name, its text, then the same; long words are cut as a check's output is", () => {
@@ -352,7 +353,7 @@ test("what a resumed run is told: the command, then the opening words and the ch
 })
 
 test('a row may let its check run more often than the minute\'s tick, in seconds, and the listing says how often', () => {
-  const [row] = read('reply', skill('reply', 'schedule:\n  resumes: true\n  when: npx replies\n  check-every: 15s\n')).commands
+  const [row] = read('reply', skill('reply', 'schedule:\n  each: true\n  when: npx replies\n  check-every: 15s\n')).commands
   assert.deepEqual(row?.checkEvery, { ms: 15_000, text: '15s' })
   assert.equal(read('a', skill('a', 'schedule:\n  when: npx queue\n')).commands[0]?.checkEvery, undefined, 'a row that says nothing is checked once a minute')
 })

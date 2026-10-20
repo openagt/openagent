@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { DATA_BRANCH } from '@openagt/agent-data'
 import { findRun, listRuns, readDiary } from '@openagt/skill-logs'
-import { markerCard, recordRun, runnerMark, withdrawMarker, writeMarker } from './records.js'
+import { lasting, markerCard, recordRun, runnerMark, withdrawMarker, writeMarker } from './records.js'
 import { git, removeRepo, testRepo } from './test-repo.js'
 
 // The marker is the logs skill's record, on the real branch: written before the agent exists,
@@ -61,6 +61,14 @@ test('a run told where to start names that branch beside the host, and a run tol
   assert.equal(card.caller?.['base'], 'my-branch')
   assert.equal(runnerMark(card)?.base, 'my-branch', 'and in the mark, as before')
   assert.equal(markerCard({ id: 'c4', startedAt: '2026-09-16T14:01:00.000Z', prompt: 'the task', driver: 'claude-code', mark }).caller?.['base'], undefined)
+})
+
+test('a run started for a thread names it beside the host, and keeps it for its whole life, a resume included', () => {
+  const card = markerCard({ id: 'c5', startedAt: '2026-09-16T14:01:00.000Z', prompt: '/reply', driver: 'claude-code', mark: { ...mark, for: 'https://github.com/o/r/issues/5' } })
+  assert.equal(card.caller?.['for'], 'https://github.com/o/r/issues/5')
+  assert.equal(runnerMark(card)?.for, 'https://github.com/o/r/issues/5')
+  assert.equal(lasting(runnerMark(card)!).for, 'https://github.com/o/r/issues/5')
+  assert.equal(markerCard({ id: 'c6', startedAt: '2026-09-16T14:01:00.000Z', prompt: '/reply', driver: 'claude-code', mark }).caller?.['for'], undefined)
 })
 
 test('the mark keeps the publish level a run was given, and drops a word that is no level', () => {

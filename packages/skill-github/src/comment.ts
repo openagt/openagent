@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import type { GhRunner } from './gh.js'
 
 /**
- * A comment on a pull request's thread: how an agent a row resumed answers there (#2042). Asked
+ * A comment on an issue's or a pull request's thread: how an agent a row woke answers there (#2042). Asked
  * of GitHub's REST API through `gh`, in the repository the working directory is in.
  *
  * It opens with what wrote it: the coding agent's logo, the model and how hard it thought, as the
@@ -55,12 +55,12 @@ export interface Comment {
   url: string
 }
 
-/** The gh command line of a new comment on pull request `number`: the first line, the text, the mark. */
+/** The gh command line of a new comment on issue or pull request `number`: the first line, the text, the mark. */
 export function commentArgs(number: number, body: string, first: string): string[] {
   return ['api', `repos/{owner}/{repo}/issues/${number}/comments`, '-f', `body=${first}\n\n${body}\n\n${COMMENT_MARK}`, '--jq', '{id: .id, url: .html_url}']
 }
 
-/** Post a comment on pull request `number`, opened with `first`: the comment as GitHub answered. Throws when GitHub cannot answer, or answers no comment. */
+/** Post a comment on issue or pull request `number`, opened with `first`: the comment as GitHub answered. Throws when GitHub cannot answer, or answers no comment. */
 export async function writeComment(cwd: string, number: number, body: string, first: string, gh: GhRunner): Promise<Comment> {
   const answer = JSON.parse(await gh(commentArgs(number, body, first), cwd)) as Partial<Comment> | null
   if (typeof answer?.id !== 'number' || typeof answer.url !== 'string') throw new Error('GitHub answered no comment')

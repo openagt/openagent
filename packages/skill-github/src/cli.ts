@@ -30,11 +30,12 @@ export const USAGE = `usage: github <command>
 
   requests [--branch <b>] [--state open|merged|all] [--since <iso>]
                                the project's pull requests, newest first: number, url, state, title, draft, branch, head, createdAt, mergedAt, mergeCommit
-  replies                      what came on the open pull requests this machine's agents opened, since each agent ended: maintainers' comments
-                               and reviews that call the agent with /agent, checks that turned red, a conflict once the base branch moved; [{ run, text }], one per run, read
-                               from the project's run records; the check of a scheduler's row that resumes runs
+  replies [--since <iso>]      what came on the open issues and pull requests this machine's agents worked on, since each agent ended: maintainers' words
+                               that call the agent with /agent, and on an agent's own pull request checks that turned red and a conflict once the base branch moved;
+                               [{ run, text }], one per run, read from the project's run records; with --since, also [{ for, text, branch? }] for each open issue or
+                               pull request no run was on, where a maintainer called the agent since then: the check of a scheduler's row with each
   comment <number> --body <text>
-                               post a comment on pull request <number>: its id and url. It opens with the coding agent's logo, the model and the effort, as the agent's
+                               post a comment on issue or pull request <number>: its id and url. It opens with the coding agent's logo, the model and the effort, as the agent's
                                run record says (found through AGENT_DIARY, which its runner sets), else the line 🤖 automated; a hidden mark after the text, so replies never counts it
   open [--branch <b>] --title <t> [--body <text>] [--draft] [--merge]
                                open the pull request of branch <b> (default: the current branch; it must be on the remote already); an open one is answered as it is; --merge lands it on green
@@ -131,9 +132,10 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async replies(args, { cwd, gh }) {
-    parse(args, {}, 0)
+    const { values } = parse(args, { since: { type: 'string' } }, 0)
+    if (values.since !== undefined && Number.isNaN(Date.parse(values.since))) throw new Usage(`--since is a time, like 2026-10-09T10:00:00Z, not "${values.since}"`)
     try {
-      return await listReplies(cwd, { gh })
+      return await listReplies(cwd, { gh, ...(values.since !== undefined ? { since: values.since } : {}) })
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err)
       throw new Refused({ ok: false, reason: 'git-host-failed', detail }, `the pull requests could not be read: ${detail}`)

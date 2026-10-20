@@ -86,6 +86,15 @@ test('usage errors exit 2 with the usage on stderr and nothing on stdout; outsid
     const rebased = await run(repo, 'run', '--resume', '2026-09-17T20-00-00-000Z', 'go on', '--base', 'main')
     assert.equal(rebased.code, 2)
     assert.match(rebased.err, /--resume takes no --base/)
+    for (const [flag, value] of [['--branch', 'dark-mode'], ['--for', 'https://github.com/o/r/issues/5']] as const) {
+      const again = await run(repo, 'run', '--resume', '2026-09-17T20-00-00-000Z', 'go on', flag, value)
+      assert.equal(again.code, 2)
+      assert.match(again.err, new RegExp(`--resume takes no ${flag}`))
+    }
+    // A branch that exists is worked on as it is: no other branch to start it from.
+    const both = await run(repo, 'run', 'Fix it', '--branch', 'dark-mode', '--base', 'main')
+    assert.equal(both.code, 2)
+    assert.match(both.err, /--branch takes no --base/)
     // A parent this project has no record of: refused before anything starts.
     const orphan = await run(repo, 'run', '--detach', 'Do task one', '--parent', 'no-such-run')
     assert.equal(orphan.code, 1)

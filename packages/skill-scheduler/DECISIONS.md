@@ -194,17 +194,23 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The daily heartbeat and the transport retry OpenAgent's daemon had are dropped: a
   failed run leaves its queue entry for the next tick.
 
-## A row that resumes
-- A row may resume runs instead of starting one (`resumes: true`). Its check prints which
-  runs, each with its words, and each run named goes on with the row's command and those
-  words. The scheduler knows nothing of what the words are about. Picked over a watcher
-  of its own that wakes the agent: the scheduler already has the clock, the records and
-  the resume.
+## A row with each
+- A row's check may print one item per run (`each: true`): a run to continue, with its
+  words, or what a new run is for, with its words. The scheduler knows nothing of what
+  either is about. Picked over a watcher of its own that wakes the agent: the scheduler
+  already has the clock, the records and the resume. One row, one switch, for both: picked
+  over a second row that starts the new runs, which a person had to switch on too.
 - A resumed run goes on with the coding agent, the model and the publish level its record
-  names: the row names none, and its page says so. Whether the agent can start, and the
-  quota, are asked per run, for its own agent and model; a run that cannot go now says
-  why in one line and is tried again at a later tick. Picked over the row's own agent and
-  model, which would answer on another agent than the one that holds the conversation.
+  names; the row's are for the runs it starts, and its page says so. Whether the agent can
+  start, and the quota, are asked per run, for its own agent and model; a run that cannot
+  go now says why in one line and is tried again at a later tick. Picked over the row's own
+  agent and model, which would answer on another agent than the one that holds the
+  conversation.
+- One run for what an item names, across every machine: the first marker naming it keeps
+  it, and a later one is withdrawn. Picked over each machine starting its own run for it.
+- The check is told when its command was switched on on this machine: what came before
+  starts no run. Picked over everything waiting when the switch goes on, which would start
+  all at once.
 - Only this machine's runs are resumed: only this machine holds the conversation. A run
   still running is left alone.
 - A row may let its check run more often than the minute's tick, `check-every: 15s`, for an

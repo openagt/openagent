@@ -61,7 +61,7 @@ function projectDeps(repo: string, state: State, schedule: Schedule, opts: { git
     pull: () => pullFileBranch(repo, DATA_BRANCH, { git, log }),
     sweep: () => sweep(repo, { host, isAlive: isPidAlive, now, git, log, resume: resumeDetached(repo) }),
     atStart: atStartOf(repo, git),
-    check: (shell, lastRun) => runCheck(repo, shell, opts.checkMs, lastRun),
+    check: (shell, lastRun, switchedOn) => runCheck(repo, shell, opts.checkMs, lastRun, switchedOn),
     stillOn: async command => isSwitchedOn(await readState(repo), command),
     lastStart: command => lastStart(repo, command, schedule, host),
     inFlight: command => inFlight(repo, command, schedule, host),
