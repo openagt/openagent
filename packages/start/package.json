@@ -1,6 +1,6 @@
 {
   "name": "@openagt/start",
-  "version": "0.28.0",
+  "version": "0.29.0",
   "description": "OpenAgent in one command: the dashboard, with the skills every agent gets by default. A project's own skill of the same name takes a default's place.",
   "license": "MIT",
   "repository": {
