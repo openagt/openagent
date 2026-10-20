@@ -5,7 +5,7 @@ import { listRequests } from './requests.js'
 import { openRequest, type OpenOutcome } from './open.js'
 import { mergeRequest } from './merge.js'
 import { watchAndMerge } from './merge-watch.js'
-import { GIT_HOST_NAME, branchUrl, homeUrlFor } from './home.js'
+import { GIT_HOST_NAME, homeUrlFor } from './home.js'
 import { createRepository, offerRepository, type CreateOffer, type CreateOutcome } from './create.js'
 import { signedIn } from './me.js'
 import { listReplies } from './replies.js'
@@ -34,14 +34,12 @@ export const USAGE = `usage: github <command>
                                and reviews, checks that turned red, a conflict once the base branch moved; [{ run, text }], one per run, read
                                from the project's run records; the check of a scheduler's row that resumes runs
   comment <number> --body <text>
-                               post a comment on pull request <number>: its id and url
-  comment --edit <id> --body <text>
-                               replace the text of comment <id>: what a run a row resumed keeps on its pull request while it works
+                               post a comment on pull request <number>, a hidden mark after the text so replies never counts it: its id and url
   open [--branch <b>] --title <t> [--body <text>] [--draft] [--merge]
                                open the pull request of branch <b> (default: the current branch; it must be on the remote already); an open one is answered as it is; --merge lands it on green
   merge <number>               land pull request <number>: a draft is marked ready, then the merge is armed as --merge arms it
   watch <number>               wait for pull request <number>'s checks and merge it once they pass; what --merge starts where the repository has no auto-merge
-  home [--branch <b>]          the project's page on GitHub, from its origin remote; with --branch, that branch's page
+  home                         the project's page on GitHub, from its origin remote
   me                           who is signed in to GitHub through gh: login, name, avatar (a picture's https address)
   create [--check]             create a private repository for a project with no origin, named <account>/<folder>, set it as origin and push;
                                --check only says which repository that would be
@@ -139,12 +137,11 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async comment(args, { cwd, gh }) {
-    const { values, positionals } = parse(args, { edit: { type: 'string' }, body: { type: 'string' } }, 0, 1)
+    const { values, positionals } = parse(args, { body: { type: 'string' } }, 1)
     if (values.body === undefined || !values.body.trim()) throw new Usage('--body is required: the text of the comment')
-    if ((values.edit === undefined) === (positionals.length === 0)) throw new Usage('name a pull request number, or --edit with a comment id')
-    const to = values.edit !== undefined ? { edit: idArg(values.edit) } : { number: numberArg(positionals[0]!) }
+    const number = numberArg(positionals[0]!)
     try {
-      return { ok: true, ...(await writeComment(cwd, to, values.body, gh)) }
+      return { ok: true, ...(await writeComment(cwd, number, values.body, gh)) }
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err)
       throw new Refused({ ok: false, reason: 'git-host-failed', detail }, `the comment could not be written: ${detail}`)
@@ -191,11 +188,10 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async home(args, { cwd, git }) {
-    const { values } = parse(args, { branch: { type: 'string' } }, 0)
-    if (values.branch !== undefined && !values.branch.trim()) throw new Usage('--branch names a branch')
+    parse(args, {}, 0)
     const url = await homeUrlFor(cwd, git)
     if (!url) throw new Refused({ ok: false, reason: 'no-remote' }, 'no origin remote on GitHub')
-    return { ok: true, url: values.branch !== undefined ? branchUrl(url, values.branch) : url, name: GIT_HOST_NAME }
+    return { ok: true, url, name: GIT_HOST_NAME }
   },
 
   async me(args, { cwd, gh }) {
@@ -234,12 +230,6 @@ function numberArg(arg: string): number {
   const number = Number(arg)
   if (!Number.isInteger(number) || number <= 0) throw new Usage(`${arg} is not a pull request number`)
   return number
-}
-
-function idArg(arg: string): number {
-  const id = Number(arg)
-  if (!Number.isInteger(id) || id <= 0) throw new Usage(`${arg} is not a comment id`)
-  return id
 }
 
 type Options = Record<string, { type: 'string' | 'boolean' }>

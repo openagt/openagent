@@ -343,10 +343,6 @@ test('the runs a row resumes, out of what its check printed: each run with its w
   assert.equal(runsToResume('[{"run":"r1","text":""}]'), 'an item of the list is no { "run": "<id>", "text": "…" }')
   assert.equal(runsToResume('[{"run":7,"text":"x"}]'), 'an item of the list is no { "run": "<id>", "text": "…" }')
   assert.equal(runsToResume('["r1"]'), 'an item of the list is no { "run": "<id>", "text": "…" }')
-  // Whose words they are, when the check says: each login once, a run named twice with both lists.
-  assert.deepEqual(runsToResume('[{"run":"r1","text":"one","from":["rom"]},{"run":"r1","text":"two","from":["dani","rom"]},{"run":"r2","text":"red"}]'), [{ run: 'r1', text: 'one\n\ntwo', from: ['rom', 'dani'] }, { run: 'r2', text: 'red' }])
-  assert.equal(runsToResume('[{"run":"r1","text":"x","from":"rom"}]'), 'the from of an item is no list of logins')
-  assert.equal(runsToResume('[{"run":"r1","text":"x","from":[""]}]'), 'the from of an item is no list of logins')
 })
 
 test("what a resumed run is told: the command, then the opening words and the check's words for it; an automation kept on this machine, its name, its text, then the same; long words are cut as a check's output is", () => {

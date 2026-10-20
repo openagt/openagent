@@ -11,7 +11,6 @@ import { projectGitHost, type GitHost, type MergeOutcome } from './git-host.js'
 import { basicSkills } from './basic-skills.js'
 import { acquireRunLock, isPidAlive, releaseRunLock } from './run-lock.js'
 import { runEndedLine } from './ended.js'
-import { openLiveComment, type LiveComment } from './live-comment.js'
 import { isBareCommand, nameRun } from './title.js'
 import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
 
@@ -318,8 +317,6 @@ export interface ResumeOptions {
   publish?: Publish | null
   /** Who resumes the run, kept on its mark with the time: a scheduler's row, which counts the run as its own from then on. */
   by?: string
-  /** The people whose words these are, by their git host logins: the live comment says whose task it finished. */
-  from?: string[]
   driver: Driver
   /** The coding agent a follow-up run is on, given its id, when the run's record names a follow-up; this run's own when absent. */
   nextDriver?: (id: string) => Driver
@@ -397,68 +394,57 @@ async function resumeOnce(repo: string, opts: ResumeOptions): Promise<{ outcome:
       throw new Error('a text or an answer is needed to resume a run')
     }
 
-    // A run a row resumed answers on its pull request: its comment there is posted first, before
-    // the checkout and the record, so who wrote sees an agent is on it as soon as can be.
-    const gitHost = opts.gitHost ?? projectGitHost
+    const branch = card.branch ?? agentBranchName(opts.id)
+    const path = worktreePath(repo, opts.id)
+    const kept = await stat(path).then(s => s.isDirectory(), () => false)
+    const skills = await (opts.skills ?? basicSkills)(repo).catch((): SkillLink[] => [])
+    const checkout: { path: string; branch: string; again?: true } = kept ? { path, branch } : await attachCheckout(repo, { agentId: opts.id, branch, skills, ...(previous.base !== undefined ? { base: previous.base } : {}) }, git)
+    // A checkout that stayed was made by whatever version ran then: its links are brought to what a new one gets.
+    if (kept) await relinkCheckout(repo, path, { skills }, git)
+    // A branch that was gone everywhere was just made again, from where it starts as that is now:
+    // that is where the run's own work begins. One still on origin came back with its work.
+    const restarted = checkout.again ? await startCommit(checkout.path, git) : {}
+
+    // The record is written running again over the ended one, so every reader sees the run in flight.
+    // The level its record names, or the one this resume gives it from here on. A level given
+    // takes the follow-up away: the person has said how far the run goes, and the follow-up was
+    // the merge's.
+    const { publish: recorded, then: owed, ...lasts } = lasting(previous)
+    const publish = opts.publish === undefined ? recorded : (opts.publish ?? undefined)
+    const then = opts.publish === undefined ? owed : undefined
+    const mark: RunnerMark = { host, pid, ...lasts, ...(publish !== undefined ? { publish } : {}), ...(then !== undefined ? { then } : {}), ...restarted, ...(opts.by !== undefined ? { resumed: { by: opts.by, at: clock() } } : {}) }
+    const runningCard: RunCard = { ...card, status: 'running', caller: { ...card.caller, runner: mark, pid, host, ...forReaders(mark), workspace: checkout.path } }
+    delete runningCard.endedAt
+    // A level taken away by this resume is no longer the run's, for its readers either.
+    if (mark.publish === undefined) delete runningCard.caller?.['publish']
+    // A record that says its work was landed lost its branch to that. On a branch made again the
+    // work is new and not landed: left on the record, every reader would go on saying it is.
+    if (checkout.again) delete runningCard.caller?.['landed']
+    const reopened = await recordRun(repo, runningCard, diary, logs)
+    if (!reopened.ok && !reopened.committed) log(`[agent-runner] the run's record could not be written: ${reopened.error}`)
+
     const model = opts.model ?? card.model
     const effort = opts.effort ?? card.effort
-    const on = { agent: opts.driver.id, ...modelOf(model), ...effortOf(effort), ...(opts.from !== undefined ? { from: opts.from } : {}) }
-    const live = opts.by !== undefined && card.pr ? openLiveComment(repo, card.pr.number, on, { gitHost, log, ...(opts.driver.listModels ? { models: opts.driver.listModels() } : {}), now: () => now().getTime() }) : undefined
-    try {
-      const branch = card.branch ?? agentBranchName(opts.id)
-      const path = worktreePath(repo, opts.id)
-      const kept = await stat(path).then(s => s.isDirectory(), () => false)
-      const skills = await (opts.skills ?? basicSkills)(repo).catch((): SkillLink[] => [])
-      const checkout: { path: string; branch: string; again?: true } = kept ? { path, branch } : await attachCheckout(repo, { agentId: opts.id, branch, skills, ...(previous.base !== undefined ? { base: previous.base } : {}) }, git)
-      // A checkout that stayed was made by whatever version ran then: its links are brought to what a new one gets.
-      if (kept) await relinkCheckout(repo, path, { skills }, git)
-      // A branch that was gone everywhere was just made again, from where it starts as that is now:
-      // that is where the run's own work begins. One still on origin came back with its work.
-      const restarted = checkout.again ? await startCommit(checkout.path, git) : {}
-
-      // The record is written running again over the ended one, so every reader sees the run in flight.
-      // The level its record names, or the one this resume gives it from here on. A level given
-      // takes the follow-up away: the person has said how far the run goes, and the follow-up was
-      // the merge's.
-      const { publish: recorded, then: owed, ...lasts } = lasting(previous)
-      const publish = opts.publish === undefined ? recorded : (opts.publish ?? undefined)
-      const then = opts.publish === undefined ? owed : undefined
-      const mark: RunnerMark = { host, pid, ...lasts, ...(publish !== undefined ? { publish } : {}), ...(then !== undefined ? { then } : {}), ...restarted, ...(opts.by !== undefined ? { resumed: { by: opts.by, at: clock() } } : {}) }
-      const runningCard: RunCard = { ...card, status: 'running', caller: { ...card.caller, runner: mark, pid, host, ...forReaders(mark), workspace: checkout.path } }
-      delete runningCard.endedAt
-      // A level taken away by this resume is no longer the run's, for its readers either.
-      if (mark.publish === undefined) delete runningCard.caller?.['publish']
-      // A record that says its work was landed lost its branch to that. On a branch made again the
-      // work is new and not landed: left on the record, every reader would go on saying it is.
-      if (checkout.again) delete runningCard.caller?.['landed']
-      const reopened = await recordRun(repo, runningCard, diary, logs)
-      if (!reopened.ok && !reopened.committed) log(`[agent-runner] the run's record could not be written: ${reopened.error}`)
-
-      const outcome = await session(repo, {
-        id: opts.id,
-        checkout,
-        card: { ...runningCard },
-        priorDiary: diary,
-        prompt,
-        ...addedOf(mark.publish, mark.then),
-        driver: opts.driver,
-        ...modelOf(model),
-        ...effortOf(effort),
-        continued: true,
-        ...(sessionId !== undefined ? { resumeSessionId: sessionId } : {}),
-        telling: { host, isAlive, ...(opts.resume ? { resume: opts.resume } : {}), log },
-        git,
-        gitHost,
-        ...(live ? { live } : {}),
-        logs,
-        log,
-        clock,
-      })
-      return { outcome, ...(then !== undefined && (await stillOwed(repo, opts.id, logs)) ? { then } : {}), ...modelOf(model) }
-    } catch (err) {
-      await live?.end({ status: 'failed', text: '', detail: errorMessage(err) })
-      throw err
-    }
+    const outcome = await session(repo, {
+      id: opts.id,
+      checkout,
+      card: { ...runningCard },
+      priorDiary: diary,
+      prompt,
+      ...addedOf(mark.publish, mark.then),
+      driver: opts.driver,
+      ...modelOf(model),
+      ...effortOf(effort),
+      continued: true,
+      ...(sessionId !== undefined ? { resumeSessionId: sessionId } : {}),
+      telling: { host, isAlive, ...(opts.resume ? { resume: opts.resume } : {}), log },
+      git,
+      gitHost: opts.gitHost ?? projectGitHost,
+      logs,
+      log,
+      clock,
+    })
+    return { outcome, ...(then !== undefined && (await stillOwed(repo, opts.id, logs)) ? { then } : {}), ...modelOf(model) }
   } finally {
     await releaseRunLock(repo, id, pid).catch(() => {})
   }
@@ -521,8 +507,6 @@ interface SessionRun {
   telling: ParentDeps
   git: GitRunner
   gitHost: GitHost
-  /** The comment the run keeps on its pull request while it works, when a row resumed it: told every event, and how the run ended. */
-  live?: LiveComment
   logs: LogsDeps
   log: (line: string) => void
   clock: () => string
@@ -581,7 +565,6 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
       ...(run.effort !== undefined ? { effort: run.effort } : {}),
       signal: stopped,
       ...(run.resumeSessionId !== undefined ? { resumeSessionId: run.resumeSessionId } : {}),
-      ...(run.live ? { onEvent: run.live.onEvent } : {}),
       log: { dir, card: { id: run.id, ...startCard }, continue: run.continued },
     })
   } catch (err) {
@@ -717,8 +700,6 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
   } finally {
     await driverSession?.dispose().catch(() => {})
   }
-  // The answer reaches the pull request before the record is written: that is what its people wait for.
-  await run.live?.end({ status, text: lastWords, ...(detail !== undefined ? { detail } : {}), branch })
 
   // The name lands on the card before the record is copied: a run named after that copy would be
   // named only in its checkout, which is removed with the run.

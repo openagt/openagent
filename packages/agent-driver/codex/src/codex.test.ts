@@ -162,14 +162,6 @@ test('a Codex turn streams its messages word by word, what each tool call did, a
   assert.ok(events.at(-1)?.type === 'result')
 })
 
-test("a Codex turn says its plan, whole, at each change, its statuses by OpenAgent's names; a step with no words or an unknown status is left out", async () => {
-  const plan = note('turn/plan/updated', { threadId: 'thread-1', turnId: 'turn-1', explanation: null, plan: [{ step: 'Read the PR', status: 'completed' }, { step: 'Change the line', status: 'inProgress' }, { step: 'Push', status: 'pending' }, { step: '', status: 'pending' }, { step: 'Odd', status: 'waiting' }] })
-  const events: DriverEvent[] = []
-  const session = await new CodexDriver({ spawn: fakeAppServer({ turn: [REAL_TURN[0]!, plan, ...REAL_TURN.slice(1)] }) }).start({ cwd: '/ws', onEvent: e => events.push(e) })
-  await session.prompt('go')
-  assert.deepEqual(events.filter(e => e.type === 'plan'), [{ type: 'plan', tasks: [{ text: 'Read the PR', status: 'completed' }, { text: 'Change the line', status: 'in_progress' }, { text: 'Push', status: 'pending' }] }])
-})
-
 test('a Codex turn reports its tokens, summed over its model calls, but never a price (#540)', async () => {
   const session = await new CodexDriver({ spawn: fakeAppServer() }).start({ cwd: '/ws' })
   const { usage } = await session.prompt('go')

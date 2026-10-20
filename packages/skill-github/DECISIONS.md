@@ -70,7 +70,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   whole read is made at least once a minute. Picked over the whole read at every look.
 - A comment `comment` writes ends with a hidden mark, and `replies` never counts one that
   carries it: it is posted with a person's account, and an agent's own words must never wake
-  it. Picked over the visible 🤖 line.
+  it, even words that lost their 🤖 line. Picked over the 🤖 line alone.
+- Each comment and review a look hands a run gets 👀 from the look itself, so who wrote sees
+  within seconds that an agent saw it. Picked over the agent putting it once it started.
 
 ## The command
 - Every command prints one JSON document on stdout: the result or the refusal. A refusal

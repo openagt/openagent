@@ -51,8 +51,8 @@ interface Seen {
   checks: string[]
   /** What each check was given as `$LAST_RUN`, in the order of `checks`. */
   since: string[]
-  /** The runs a row resumed: which, what it was told, the row, and whose words they were. */
-  resumed: { id: string; text: string; by: string; from?: string[] }[]
+  /** The runs a row resumed: which, what it was told, and the row. */
+  resumed: { id: string; text: string; by: string }[]
 }
 
 /** Every command switched on on this machine, unless the state says otherwise: a command nobody switched on starts nothing. */
@@ -818,10 +818,6 @@ test('a row that resumes continues the run its check names: the command and the 
   assert.deepEqual(seen.resumed, [{ id: 'r1', text: `/reply\n\n${RESUMED_OPENING}\nSomeone asked: why this name?`, by: 'reply' }])
   assert.deepEqual([seen.markers, seen.spawned], [[], []])
 
-  // Whose words they are goes with the resume, when the check names them.
-  const named = deps({ commands: [reply], check: async () => ({ ok: true, stdout: JSON.stringify([{ run: 'r1', text: 'Why?', from: ['rom'] }]), stderr: '' }), ...records(ended('r1')) })
-  await tick(named.deps)
-  assert.deepEqual(named.seen.resumed.map(r => r.from), [['rom']])
   // Listed as a row that resumes, with no agent or model of its own to say.
   assert.equal(record.schedule[0]!.resumes, true)
   assert.equal(record.schedule[0]!.model, undefined)

@@ -75,8 +75,6 @@ function formatDriverEvent(event: DriverEvent): string {
       return `    ${event.status === 'ended' ? '✓' : event.status === 'failed' ? '✗' : '·'} subagent ${truncate(event.name ?? event.role ?? event.id, 60)}`
     case 'thought':
       return `    💭 ${truncate(event.text, 140)}`
-    case 'plan':
-      return `    ☐ plan: ${event.tasks.filter(task => task.status === 'completed').length} of ${event.tasks.length} done`
     case 'result':
       return `  ‹ turn complete`
     case 'rate-limit':

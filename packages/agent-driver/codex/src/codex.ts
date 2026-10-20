@@ -2,7 +2,7 @@ import { execFile, spawn as nodeSpawn } from 'node:child_process'
 import { copyFile, lstat, mkdir, readlink, readdir, realpath, rename, rm, stat, symlink } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { runCliSession, continuingTurn, finishTurn, agentEnv, attachLog, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, checkCliReady, type AgentCliParser, type CliIo, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type PlanTask, type DriverModel, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
+import { runCliSession, continuingTurn, finishTurn, agentEnv, attachLog, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, checkCliReady, type AgentCliParser, type CliIo, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
 
 /**
  * Codex's sandbox policy for the shell commands the model writes.
@@ -187,19 +187,6 @@ export class CodexDriver implements Driver {
       })
     })
   }
-}
-
-/** The plan of a `turn/plan/updated`, `plan` of `{ step, status }`; none when it holds no list. */
-function codexPlan(plan: unknown): DriverEvent[] {
-  if (!Array.isArray(plan)) return []
-  const status = { pending: 'pending', inProgress: 'in_progress', completed: 'completed' } as const
-  const tasks: PlanTask[] = []
-  for (const item of plan) {
-    const step = field(item, 'step')
-    const said = field(item, 'status')
-    if (typeof step === 'string' && step.trim() !== '' && typeof said === 'string' && Object.hasOwn(status, said)) tasks.push({ text: oneLine(step), status: status[said as keyof typeof status] })
-  }
-  return [{ type: 'plan', tasks }]
 }
 
 /** How long {@link CodexDriver.listModels} waits for Codex's answer. */
@@ -663,8 +650,6 @@ export class CodexAppServerParser implements AgentCliParser {
         const message = field(field(params['turn'], 'error'), 'message')
         return this.end(typeof message === 'string' && message.trim() !== '' ? codexErrorMessage(message.trim()) : `Codex's turn ended ${typeof status === 'string' ? status : 'without finishing'}`)
       }
-      case 'turn/plan/updated':
-        return codexPlan(params['plan'])
       case 'item/started':
       case 'item/completed':
         return this.onItem(method === 'item/completed', params['item'])

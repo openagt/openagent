@@ -7,9 +7,10 @@ import { COMMENT_MARK } from './comment.js'
 
 /**
  * What came on the pull requests this machine's agents opened, since each agent ended (#2042):
- * the check of a scheduler's row that resumes runs. It prints `[{ "run": "<id>", "text": "…", "from": ["<login>"] }]`,
- * one item per run with something new, and the scheduler resumes each run with its words; `from`
- * is whose words they are, when they are people's.
+ * the check of a scheduler's row that resumes runs. It prints `[{ "run": "<id>", "text": "…" }]`,
+ * one item per run with something new, and the scheduler resumes each run with its words. Each
+ * comment and review it hands a run gets 👀 at once, so who wrote sees the agent saw it; the
+ * agent's answer comes later, a comment of its own.
  *
  * New is after the run last ended: no time is kept anywhere. Something that comes while the run
  * still works is found at the first look after it ends; and what came before it ended, the run
@@ -92,11 +93,11 @@ const QUERY = `query($owner: String!, $name: String!) {
       nodes {
         number url mergeable headRefName isCrossRepository
         baseRef { name target { ... on Commit { committedDate } } }
-        comments(last: 30) { nodes { author { login } authorAssociation body createdAt url } }
+        comments(last: 30) { nodes { id author { login } authorAssociation body createdAt url } }
         reviews(last: 30) {
           nodes {
-            author { login } authorAssociation body state submittedAt url
-            comments(first: 30) { nodes { author { login } authorAssociation body path line createdAt url } }
+            id author { login } authorAssociation body state submittedAt url
+            comments(first: 30) { nodes { id author { login } authorAssociation body path line createdAt url } }
           }
         }
         commits(last: 1) {
@@ -116,11 +117,11 @@ export function repliesArgs(): string[] {
   return ['api', 'graphql', '-F', 'owner={owner}', '-F', 'name={repo}', '-f', `query=${QUERY}`]
 }
 
-/** One thing that came on a pull request, as the run is told it, and whose words it is when a person's. */
+/** One thing that came on a pull request, as the run is told it, and the comment or review it is when a person's, by GitHub's id, for its 👀. */
 interface Came {
   at: string
   line: string
-  by?: string
+  seen?: string
 }
 
 /** An open pull request as read: its branch, and what came on it, each with when. */
@@ -139,6 +140,9 @@ const nodes = (value: unknown): Node[] => {
 }
 const text = (value: unknown): string | undefined => (typeof value === 'string' && value !== '' ? value : undefined)
 const login = (node: Node): string => text((node['author'] as Node | null | undefined)?.['login']) ?? 'someone'
+
+/** A comment's or a review's id, for its 👀. */
+const seen = (node: Node): { seen?: string } => (text(node['id']) !== undefined ? { seen: text(node['id'])! } : {})
 
 /** A maintainer's words that are no agent's: what counts of a comment or a review. */
 function maintainers(node: Node): string | undefined {
@@ -161,19 +165,19 @@ export function parseOpenRequests(output: unknown): OpenRequest[] {
     for (const comment of nodes(pr['comments'])) {
       const body = maintainers(comment)
       const at = text(comment['createdAt'])
-      if (body && at) came.push({ at, line: `@${login(comment)} commented (${comment['url']}):\n${body}`, by: login(comment) })
+      if (body && at) came.push({ at, line: `@${login(comment)} commented (${comment['url']}):\n${body}`, ...seen(comment) })
     }
     for (const review of nodes(pr['reviews'])) {
       const at = text(review['submittedAt'])
       const body = maintainers(review)
       // A request for changes counts with no words too; an approval with none asks nothing, and a review's comments count one by one.
       const changes = review['state'] === 'CHANGES_REQUESTED' && MAINTAINERS.has(String(review['authorAssociation'])) && !text(review['body'])?.includes(AGENT_MARK)
-      if (at && (body || changes)) came.push({ at, line: `@${login(review)} ${changes ? 'requested changes' : 'reviewed'} (${review['url']})${body ? `:\n${body}` : '.'}`, by: login(review) })
+      if (at && (body || changes)) came.push({ at, line: `@${login(review)} ${changes ? 'requested changes' : 'reviewed'} (${review['url']})${body ? `:\n${body}` : '.'}`, ...seen(review) })
       for (const comment of nodes(review['comments'])) {
         const words = maintainers(comment)
         const when = text(comment['createdAt'])
         const where = `${comment['path']}${typeof comment['line'] === 'number' ? ` line ${comment['line']}` : ''}`
-        if (words && when) came.push({ at: when, line: `@${login(comment)} on ${where} (${comment['url']}):\n${words}`, by: login(comment) })
+        if (words && when) came.push({ at: when, line: `@${login(comment)} on ${where} (${comment['url']}):\n${words}`, ...seen(comment) })
       }
     }
     const commit = (nodes(pr['commits'])[0]?.['commit'] as Node | undefined)?.['statusCheckRollup'] as Node | null | undefined
@@ -191,14 +195,14 @@ export function parseOpenRequests(output: unknown): OpenRequest[] {
   return requests
 }
 
-/** What a run is told, and the people whose words those are, by their logins: a red check or a conflict is nobody's. */
+/** What a run is told, and the comments and reviews among it, by GitHub's ids: a red check or a conflict is none. */
 export interface Reply {
   run: string
   text: string
-  from?: string[]
+  seen: string[]
 }
 
-/** For each open pull request of a watched branch with something new since its run ended, the run, the words it is told, and whose words they are. */
+/** For each open pull request of a watched branch with something new since its run ended, the run, the words it is told, and the comments and reviews among them. */
 export function repliesFor(watched: Watched[], open: OpenRequest[]): Reply[] {
   const replies: Reply[] = []
   for (const { branch, run, endedAt } of watched) {
@@ -206,8 +210,7 @@ export function repliesFor(watched: Watched[], open: OpenRequest[]): Reply[] {
     // ISO times compare as text only in one shape: GitHub's have no fraction, a record's do.
     const after = Date.parse(endedAt)
     const came = request?.came.filter(c => Date.parse(c.at) > after).sort((a, b) => Date.parse(a.at) - Date.parse(b.at)) ?? []
-    const from = [...new Set(came.flatMap(c => (c.by !== undefined && c.by !== 'someone' ? [c.by] : [])))]
-    if (request && came.length > 0) replies.push({ run, text: [`On your pull request #${request.number} (${request.url}), since you ended:`, ...came.map(c => `- ${c.line}`)].join('\n'), ...(from.length > 0 ? { from } : {}) })
+    if (request && came.length > 0) replies.push({ run, text: [`On your pull request #${request.number} (${request.url}), since you ended:`, ...came.map(c => `- ${c.line}`)].join('\n'), seen: came.flatMap(c => (c.seen !== undefined ? [c.seen] : [])) })
   }
   return replies
 }
@@ -245,8 +248,17 @@ async function writeLooked(path: string | undefined, looked: Looked): Promise<vo
   await writeFile(path, JSON.stringify(looked))
 }
 
-/** What came on this machine's agents' open pull requests since each ended, as a scheduler's row reads it. Throws when GitHub cannot answer. */
-export async function listReplies(repo: string, deps: { gh?: GhRunner; host?: string; runs?: () => Promise<RunCard[]>; now?: () => number; cache?: string } = {}): Promise<Reply[]> {
+/** The gh command line of 👀 on each comment and review of `ids`, by GitHub's ids, in one call. */
+export function seenArgs(ids: string[]): string[] {
+  const reactions = ids.map((id, i) => `r${i}: addReaction(input: { subjectId: ${JSON.stringify(id)}, content: EYES }) { clientMutationId }`)
+  return ['api', 'graphql', '-f', `query=mutation { ${reactions.join(' ')} }`]
+}
+
+/**
+ * What came on this machine's agents' open pull requests since each ended, as a scheduler's row
+ * reads it, each comment and review among it given 👀. Throws when GitHub cannot answer.
+ */
+export async function listReplies(repo: string, deps: { gh?: GhRunner; host?: string; runs?: () => Promise<RunCard[]>; now?: () => number; cache?: string } = {}): Promise<{ run: string; text: string }[]> {
   const watched = watchedRequests(await (deps.runs ?? (() => listRuns(repo)))(), deps.host ?? hostname())
   // Nothing to watch asks GitHub nothing.
   if (watched.length === 0) return []
@@ -260,6 +272,10 @@ export async function listReplies(repo: string, deps: { gh?: GhRunner; host?: st
   if (!comments.changed && !lineComments.changed && looked.wholeAt !== undefined && now - looked.wholeAt < WHOLE_READ_EVERY_MS) return []
   const answered = await gh(repliesArgs(), repo)
   const replies = repliesFor(watched, parseOpenRequests(JSON.parse(answered) as unknown))
+  // GitHub keeps one 👀 a person: one put again, at a look that finds the same comment while its
+  // run cannot start yet, is no second. One that could not be put leaves the answer to come.
+  const ids = replies.flatMap(r => r.seen)
+  if (ids.length > 0) await gh(seenArgs(ids), repo).catch(() => undefined)
   await writeLooked(cache, { etags, wholeAt: now })
-  return replies
+  return replies.map(({ run, text }) => ({ run, text }))
 }

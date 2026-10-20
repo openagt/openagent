@@ -17,7 +17,7 @@ import { git, readUntimedDiary, removeRepo, testRepo } from './test-repo.js'
 const NOW = new Date('2026-10-01T09:00:00.000Z')
 const LATER = new Date('2026-10-01T09:05:00.000Z')
 
-const noGitHost: GitHost = { requestOfBranch: async () => undefined, mergeRequest: async () => ({ outcome: 'failed', error: 'nothing to merge' }), comment: async () => ({ error: 'no git host' }), branchUrl: async () => undefined }
+const noGitHost: GitHost = { requestOfBranch: async () => undefined, mergeRequest: async () => ({ outcome: 'failed', error: 'nothing to merge' }) }
 
 /** A fake session with something done before each prompt. */
 function wrap(fake: FakeDriverSession, before: (text: string) => Promise<void>): DriverSession {

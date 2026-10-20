@@ -52,7 +52,6 @@ test('run --detach --resume spawns the resume of a recorded run and answers its 
     assert.deepEqual(resumeArgs({ id: 'r1', text: 'ship it', publish: 'pr' }), ['run', '--resume', 'r1', 'ship it', '--publish', 'pr'])
     assert.deepEqual(resumeArgs({ id: 'r1', text: 'keep it', publish: 'nothing' }), ['run', '--resume', 'r1', 'keep it', '--publish', 'nothing'])
     assert.deepEqual(resumeArgs({ id: 'r1', text: '/reply', by: 'reply' }), ['run', '--resume', 'r1', '/reply', '--by', 'reply'])
-    assert.deepEqual(resumeArgs({ id: 'r1', text: '/reply', by: 'reply', from: ['rom', 'dani'] }).slice(-4), ['--from', 'rom', '--from', 'dani'], 'each login its own flag')
   } finally {
     await removeRepo(repo)
   }
@@ -109,7 +108,7 @@ test('a resumed run continues on the tool its record names, and a Codex run with
         return new FakeDriver({ turns: [{ text: turn }], sessionId: 's-codex' }).start(opts)
       },
     })
-    const first = await runCommand(repo, { prompt: 'Read the docs', driver: codex('Read.'), host: 'this-box', pid: 4242, now: () => NOW, gitHost: { requestOfBranch: async () => undefined, mergeRequest: async () => ({ outcome: 'failed', error: 'none' }), comment: async () => ({ error: 'none' }), branchUrl: async () => undefined } })
+    const first = await runCommand(repo, { prompt: 'Read the docs', driver: codex('Read.'), host: 'this-box', pid: 4242, now: () => NOW, gitHost: { requestOfBranch: async () => undefined, mergeRequest: async () => ({ outcome: 'failed', error: 'none' }) } })
     assert.equal(first.status, 'done')
     const asked: string[] = []
     const second = await resumeProject(repo, { id: first.id, text: 'And the tests?' }, { driverFor: (name, _id, setup) => { asked.push(`${name} ${JSON.stringify(setup)}`); return codex('Read too.') } })
