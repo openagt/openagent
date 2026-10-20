@@ -1,6 +1,6 @@
 {
   "name": "@openagt/skill-reply",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The reply command for coding agents: an agent whose pull request got a maintainer's comment, a red check or a conflict after it ended is woken on its own conversation to answer it. A skill file only, no code.",
   "license": "MIT",
   "repository": {
