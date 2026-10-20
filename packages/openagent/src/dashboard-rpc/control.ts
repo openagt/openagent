@@ -20,6 +20,7 @@ import type {
   StartAgentResult,
 } from '../dashboard/types.js'
 import type { Preferences } from '../registry.js'
+import { isPublishPick, type PublishPick } from '../publish-levels.js'
 
 /**
  * The key every action on one run locks under (`agent-locks.ts`): a Remove, a Delete and an Open
@@ -117,15 +118,18 @@ export async function sendBridgeAnswerCancel(sessionId: string): Promise<void> {
 /**
  * Say something to a run (#714, #1774): the person's own words, the next prompt of the same
  * conversation. A run that is working takes them when its turn ends; an ended run is resumed
- * with them. Empty messages are dropped.
+ * with them. Empty messages are dropped. `publish`, when the person changed the session's "Auto"
+ * pick, is how far the run takes its work from these words on, `nothing` for no level; the run's
+ * tool reads it, from the inbox line or the resume line's `PUBLISH`.
  */
-export async function sendMessage(projectId: string, text: string, agentId?: string): Promise<SteerResult> {
+export async function sendMessage(projectId: string, text: string, agentId?: string, publish?: PublishPick): Promise<SteerResult> {
   const message = text.trim()
   if (!message) return { ok: true }
-  return relayOr(agentId, 'sendMessage', [projectId, text, agentId], async (): Promise<SteerResult> => {
+  if (publish !== undefined && !isPublishPick(publish)) return { ok: false, error: 'unknown publish level' }
+  return relayOr(agentId, 'sendMessage', [projectId, text, agentId, ...(publish !== undefined ? [publish] : [])], async (): Promise<SteerResult> => {
     const cwd = await resolveProjectPath(projectId)
     if (!cwd || !agentId || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
-    return (await startedElsewhere(cwd, agentId)) ?? sayToRun(cwd, agentId, { kind: 'message', text: message })
+    return (await startedElsewhere(cwd, agentId)) ?? sayToRun(cwd, agentId, { kind: 'message', text: message, ...(publish !== undefined ? { publish } : {}) })
   }, { ok: false, error: 'could not reach the machine' })
 }
 

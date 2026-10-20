@@ -69,9 +69,9 @@ function useNewItemNotifications<T extends { projectId: string }>(
 const INTERVENTIONS: NotificationSpec<Intervention> = {
   keyOf: interventionKey,
   title: (first, count) => (count === 1 ? `Human Queue · ${first.projectName}` : `${count} items in your Human Queue`),
-  // A PR by number, a paused agent by its question (#636), a finished agent by what sits uncommitted or unpushed (#860).
+  // Each by its run's name, as the queue's rows: a PR with its number, a paused agent with its question (#636), a finished agent with what sits uncommitted or unpushed (#860).
   label: item => {
-    if (item.kind === 'awaiting') return item.title
+    if (item.kind === 'awaiting') return item.question ? `${item.title} — ${item.question}` : item.title
     if (item.kind === 'uncommitted') return `${item.title} — ${item.files === 1 ? '1 file' : `${item.files ?? 0} files`} not committed`
     if (item.kind === 'unpushed') {
       return item.commits === undefined || item.commits === 0

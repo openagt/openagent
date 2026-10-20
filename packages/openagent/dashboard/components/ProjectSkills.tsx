@@ -6,8 +6,8 @@ import { Button, buttonVariants } from './ui/button.js'
 import { Checkbox } from './ui/checkbox.js'
 import { Dialog } from './ui/dialog.js'
 
-// A project's skills, on its own page (#2023). The door to them is "Skills…" in the project's ⋮
-// menu: it opens the same list with ticks `npx @openagt/init` shows in a terminal, the skills a
+// A project's skills, on its own page (#2023). The door to them is "Skills", after "Auto" under the
+// launcher's box: it opens the same list with ticks `npx @openagt/init` shows in a terminal, the skills a
 // project picks beyond the ones every run gets by default. The card under the agents that wait on
 // the person shows only while it has something to say: a newer version to take, and skills that
 // have not reached the branch agents start from, with the one press that sends them. Once agents
@@ -59,7 +59,7 @@ export function ProjectSkillsLine({
 }: {
   projectId: string
   onChanged?: (() => void) | undefined
-  /** The list as the project's menu opens it: `open` once "Skills…" was picked, `onClose` when the list is closed again. */
+  /** The list as its door opens it: `open` once "Skills" was pressed, `onClose` when the list is closed again. */
   door?: { open: boolean; onClose: () => void } | undefined
 }) {
   // A read that fails answers like a project unknown here: no skills to show. `loaded` then tells "not read yet" from "nothing to read".
@@ -68,7 +68,7 @@ export function ProjectSkillsLine({
   const [adding, setAdding] = useState<ProjectSkills | null>(null)
   const [pending, setPending] = useState<'update' | 'send' | null>(null)
   const { error, run } = useAction()
-  // "Skills…" in the menu opens the list on the project as it stands then; picked before the skills were read, it opens once they are.
+  // "Skills" opens the list on the project as it stands then; picked before the skills were read, it opens once they are.
   const asked = door?.open ?? false
   useEffect(() => {
     if (asked && skills) setAdding(current => current ?? skills)

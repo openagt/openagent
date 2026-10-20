@@ -162,7 +162,7 @@ export function startLineTakesBase(line: string): boolean {
 }
 
 /** What a `resume` line is given: the run, and the person's text or their answer to the question it ended on. */
-export type ResumeHookInput = { runId: string } & ({ text: string } | { answer: string })
+export type ResumeHookInput = { runId: string } & ({ text: string; publish?: string } | { answer: string })
 
 /** How a `start` or `resume` line went: the run it named, and the coding agent it said runs it, when it said one. */
 export type RunHookResult = { ok: true; id: string; driver?: string } | { ok: false; error: string }
@@ -191,10 +191,11 @@ export function runStartHook(cwd: string, input: StartHookInput, opts: Omit<RunH
 
 /**
  * Run the project's `resume` line: the run in `RUN_ID`, and the person's words in `TEXT` or their
- * answer in `ANSWER`. The line answers like a `start` line, naming the run it continued.
+ * answer in `ANSWER`; with words, in `PUBLISH` how far the run takes its work from them on, when
+ * the person changed it. The line answers like a `start` line, naming the run it continued.
  */
 export function runResumeHook(cwd: string, input: ResumeHookInput, opts: Omit<RunHooksOptions, 'log'> = {}): Promise<RunHookResult> {
-  return runRunHook(cwd, 'resume', { RUN_ID: input.runId, ...('text' in input ? { TEXT: input.text } : { ANSWER: input.answer }) }, opts)
+  return runRunHook(cwd, 'resume', { RUN_ID: input.runId, ...('text' in input ? { TEXT: input.text, ...(input.publish !== undefined ? { PUBLISH: input.publish } : {}) } : { ANSWER: input.answer }) }, opts)
 }
 
 async function runRunHook(cwd: string, kind: RunHookKind, vars: Record<string, string>, opts: Omit<RunHooksOptions, 'log'>): Promise<RunHookResult> {

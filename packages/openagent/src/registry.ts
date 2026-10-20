@@ -145,6 +145,12 @@ export interface Preferences {
    */
   nameRuns?: boolean
   /**
+   * How the sidebar orders its list of runs: `created` (newest started first), `updated` (the one
+   * that last did something first, as Claude Code's list does by default) or `name`. **Absent =
+   * `created`**: a run keeps its place while a person talks to it.
+   */
+  recentsSort?: 'created' | 'updated' | 'name'
+  /**
    * Show what the agent thought between its steps: a row of its own inside the panel a run of calls
    * opens, saying the thought's first words. Thinking is not a step the agent took, and Claude Code
    * on the web shows none of it, so it is off unless a person asks to read it. **Absent = off.**
@@ -363,6 +369,8 @@ function sanitizePreferences(value: unknown): Preferences {
     preferences.theme = input['theme'] as (typeof KNOWN_THEMES)[number]
   const customPresets = sanitizeCustomPresets(input['customPresets'])
   if (customPresets.length) preferences.customPresets = customPresets
+  // `recentsSort` is constrained to the known set; the default, `created`, is stored as nothing.
+  if (input['recentsSort'] === 'updated' || input['recentsSort'] === 'name') preferences.recentsSort = input['recentsSort']
   return preferences
 }
 

@@ -37,7 +37,7 @@ function skills(over: Partial<ProjectSkills> = {}): ProjectSkills {
   }
 }
 
-/** The line with the door the project's ⋮ menu holds: a button here stands in for the menu's "Skills…". */
+/** The line with its door: a button here stands in for "Skills" under the launcher's box. */
 function WithDoor(props: { projectId: string; onChanged?: () => void }) {
   const [open, setOpen] = useState(false)
   return (

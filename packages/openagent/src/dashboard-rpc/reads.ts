@@ -8,7 +8,6 @@ import { collectQueue, type ProjectQueue } from '../dashboard/queue.js'
 import { buildOverview, buildRecentAgents, type Overview, type RecentAgent } from '../dashboard/overview.js'
 import { buildInterventions, type Intervention } from '../dashboard/interventions.js'
 import type { ProjectionRead } from '../dashboard/projects.js'
-import { buildOpenQuestions, type OpenQuestion } from '../dashboard/open-questions.js'
 import { buildActivity, type Activity } from '../dashboard/activity.js'
 import { buildDashboard, type DashboardData } from '../dashboard/dashboard.js'
 import { readGitStatus, type GitStatus } from '../dashboard/git-status.js'
@@ -345,11 +344,6 @@ export async function onRecentAgents(): Promise<RecentAgent[]> {
  */
 export async function onInterventions(): Promise<ProjectionRead<Intervention>> {
   return withProjects(buildInterventions)
-}
-
-/** Every session's open question with its full gate (#1455), longest-waiting first: the launcher's hub. */
-export async function onOpenQuestions(): Promise<OpenQuestion[]> {
-  return withProjects(buildOpenQuestions)
 }
 
 /**

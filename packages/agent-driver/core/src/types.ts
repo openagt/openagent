@@ -1,5 +1,6 @@
 import type { Question } from './question.js'
 import type { SessionLog, SessionLogOptions } from './session-log.js'
+import type { InboxLine } from './inbox.js'
 
 /**
  * The **driver** seam: the one abstraction a coding-agent CLI is wrapped behind.
@@ -188,6 +189,13 @@ export interface DriverPromptOptions {
    * come: a later line is for a new session resumed by its id.
    */
   inbox?: string
+  /**
+   * What a line taken from the inbox changes for the prompts from it on, the caller's to say: it
+   * is handed each line before the line is sent, with the options the line would go with, and
+   * answers the ones it goes with instead (the sentence after it, say, when the line gives the run
+   * a new level). Absent, every line goes with this prompt's options.
+   */
+  onInboxLine?: (line: InboxLine, sent: DriverPromptOptions) => Promise<DriverPromptOptions>
   /**
    * A sentence the caller adds after the prompt, and after every inbox line this prompt goes on
    * to send: the agent reads the two as one message, the sentence after an empty line. The `start`

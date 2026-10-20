@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { makeWorld, waitFor, release } from './harness.js'
-import { onOpenQuestions, onAgents, onAgent, onRetainedWorktrees, onAgentWorktree } from '../dashboard-rpc/reads.js'
+import { onInterventions, onAgents, onAgent, onRetainedWorktrees, onAgentWorktree } from '../dashboard-rpc/reads.js'
 import { sendChoice, sendMessage, sendStop, sendDeleteAgent, sendRemoveWorktree } from '../dashboard-rpc/control.js'
 
 // The steering stories (README.md): everything the user does TO a run — answer its question, say
@@ -9,7 +9,7 @@ import { sendChoice, sendMessage, sendStop, sendDeleteAgent, sendRemoveWorktree 
 // run's checkout while it works, the project's resume hook once it has ended, a signal to the
 // pid on its card. The observable answer comes back through the run's own diary.
 
-test('answer a waiting run’s question from the questions hub; the answer resumes the same run (#304/#1455/#1774)', async () => {
+test('answer a waiting run’s question from the Human Queue; the answer resumes the same run (#304/#1455/#1774)', async () => {
   const world = await makeWorld()
   const rpc = world.rpc
   try {
@@ -18,21 +18,21 @@ test('answer a waiting run’s question from the questions hub; the answer resum
     const tail = await world.tailAgent(project, agentId)
 
     // The run's turn ends on a question, so the run ends `waiting`, its checkout kept: the full
-    // question (title, options, recommendation) is on the feed, and the cross-project questions
-    // hub lists it against this run.
+    // question (title, options, recommendation) is on the feed, and the Human Queue lists it
+    // against this run.
     const gate = await waitFor(() => tail.events.find(e => e.kind === 'choice'), 'the question')
     assert.equal(gate.kind, 'choice')
     if (gate.kind !== 'choice') return
     assert.deepEqual(gate.options.map(o => o.label), ['Left', 'Right'])
     await world.waitAgent(project, agentId, 'waiting')
     assert.equal((await rpc(onAgentWorktree)(project.id, agentId))?.checkout !== undefined, true, 'a waiting run keeps its checkout')
-    const question = await waitFor(
-      async () => (await rpc(onOpenQuestions)()).find(q => q.agentId === agentId),
-      'the questions hub to list the waiting run',
+    const waiting = await waitFor(
+      async () => (await rpc(onInterventions)()).items.find(item => item.kind === 'awaiting' && item.agentId === agentId),
+      'the Human Queue to list the waiting run',
     )
-    assert.equal(question.projectId, project.id)
-    assert.equal(question.choice.title, 'Which way?')
-    assert.deepEqual(question.choice.options.map(o => o.id), gate.options.map(o => o.id))
+    assert.equal(waiting.projectId, project.id)
+    assert.equal(waiting.question, 'Which way?')
+    assert.equal(waiting.awaitId, gate.id)
 
     // A pick that is not one of the question's options is refused, and nothing is resumed.
     assert.deepEqual(await rpc(sendChoice)(project.id, gate.id, 'no-such-option', agentId), { ok: false, error: 'every pick must be one of the question\'s options' })
@@ -47,8 +47,8 @@ test('answer a waiting run’s question from the questions hub; the answer resum
     const replay = await rpc(onAgent)(project.id, agentId)
     assert.ok(replay.some(e => e.kind === 'driver' && e.event.type === 'text' && e.event.text.includes('The user chose: Right')), 'the resumed turn carried the answer')
 
-    // Answered means gone from the hub, and the question no longer open to a second answer.
-    assert.equal((await rpc(onOpenQuestions)()).some(q => q.agentId === agentId), false)
+    // Answered means gone from the Human Queue, and the question no longer open to a second answer.
+    assert.equal((await rpc(onInterventions)()).items.some(item => item.kind === 'awaiting' && item.agentId === agentId), false)
     assert.deepEqual(await rpc(sendChoice)(project.id, gate.id, right.id, agentId), { ok: false, error: 'that question is no longer open' })
   } finally {
     await world.close()
@@ -80,6 +80,12 @@ test('say something to a working run: the message is its next turn; said to an e
       const events = await rpc(onAgent)(project.id, agentId)
       return events.some(e => e.kind === 'driver' && e.event.type === 'text' && e.event.text.includes('One more thing')) ? true : undefined
     }, 'the resumed turn to reach the run\'s diary')
+    // With the session's "Auto" changed, the new level goes with the words to the resume line.
+    await world.waitAgent(project, agentId, 'done')
+    await world.waitRetired(project, agentId)
+    assert.deepEqual(await rpc(sendMessage)(project.id, 'Ship it', agentId, 'pr'), { ok: true })
+    assert.deepEqual((await world.hookCalls()).at(-1), { hook: 'resume', id: agentId, text: 'Ship it', publish: 'pr' })
+    assert.deepEqual(await rpc(sendMessage)(project.id, 'Ship it', agentId, 'push' as never), { ok: false, error: 'unknown publish level' })
     assert.equal((await rpc(onAgents)(project.id)).filter(r => r.id === agentId).length, 1, 'one run, one row')
   } finally {
     await world.close()

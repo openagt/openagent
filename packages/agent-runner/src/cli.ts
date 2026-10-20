@@ -6,7 +6,7 @@ import { DRIVER_NAMES, detachResume, detachRun, isDriverName, readyToRun, resume
 import { initHooks } from './init.js'
 import { cleanup } from './cleanup.js'
 import { everyBasicSkill } from './basic-skills.js'
-import { isPublish, PUBLISH_LEVELS } from './records.js'
+import { isPublish, NO_PUBLISH, PUBLISH_LEVELS } from './records.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -26,8 +26,9 @@ export const USAGE = `usage: agent-runner <command>
                                 with --parent, the run <id> is told when this one ends: which run, how it ended, its last words, as its next prompt;
                                 with --base, the run's branch starts from <ref> instead of origin's default branch
   run --detach <prompt>         the same run in its own process, answered at once with its id: what a dashboard's start hook runs
-  run --resume <id> [<text>] [--answer <label>]
-                                continue an ended run: the same record, its session resumed; the text as the next prompt, or the answer to the question it ended on
+  run --resume <id> [<text>] [--answer <label>] [--publish <commit|branch|pr|merge|nothing>]
+                                continue an ended run: the same record, its session resumed; the text as the next prompt, or the answer to the question it ended on;
+                                with --publish, the run takes its work that far from here on, or, with nothing, only as far as its prompts ask; at its record's level without it
   run --detach --resume <id> …  the same continuing in its own process, answered at once: what a dashboard's resume hook runs
   run --resume <id> … --by <who>
                                 kept on the run's record with the time, until its next resume: a scheduler's row that resumed it, which counts the run as its own
@@ -108,13 +109,14 @@ const COMMANDS: Record<string, Command> = {
     const repo = await project(io.cwd, git)
     const driver = values.driver
     if (driver !== undefined && !isDriverName(driver)) throw new Usage(`unknown driver "${driver}"; the drivers are ${DRIVER_NAMES.join(' and ')}`)
-    const publish = values.publish
-    if (publish !== undefined && !isPublish(publish)) throw new Usage(`unknown publish level "${publish}"; the levels are ${PUBLISH_LEVELS.join(', ')}`)
+    const publish = isPublish(values.publish) ? values.publish : undefined
+    // A resume may also take the run's level away: from there on its prompts go as written.
+    const noLevel = values.resume !== undefined && values.publish === NO_PUBLISH
+    if (values.publish !== undefined && publish === undefined && !noLevel) throw new Usage(`unknown publish level "${values.publish}"; the levels are ${PUBLISH_LEVELS.join(', ')}${values.resume !== undefined ? `, or ${NO_PUBLISH}` : ''}`)
     if (values.resume !== undefined) {
       if (driver !== undefined) throw new Usage('--resume takes no --driver: a run continues on the coding agent its record names')
       if (values.id !== undefined) throw new Usage('--resume takes no --id: a run continues under its own')
       if (values.then !== undefined) throw new Usage('--resume takes no --then: a run continues with the follow-up its record names')
-      if (publish !== undefined) throw new Usage('--resume takes no --publish: a run continues at the publish level its record names')
       if (values.attach !== undefined) throw new Usage('--resume takes no --attach: a text is handed over with a run\'s first prompt only')
       if (values.started !== undefined) throw new Usage('--resume takes no --started: a run continues from the start its record names')
       if (values.parent !== undefined) throw new Usage('--resume takes no --parent: a run continues for the parent its record names')
@@ -148,6 +150,7 @@ const COMMANDS: Record<string, Command> = {
         ...(values.effort !== undefined ? { effort: values.effort } : {}),
         ...(values.by !== undefined ? { by: values.by } : {}),
         ...(from !== undefined ? { from } : {}),
+        ...(publish !== undefined ? { publish } : noLevel ? { publish: NO_PUBLISH } : {}),
       })
       return { ok: true, detached: true, ...resumed }
     }
@@ -166,6 +169,7 @@ const COMMANDS: Record<string, Command> = {
         ...(values.effort !== undefined ? { effort: values.effort } : {}),
         ...(values.by !== undefined ? { by: values.by } : {}),
         ...(from !== undefined ? { from } : {}),
+        ...(publish !== undefined ? { publish } : noLevel ? { publish: NO_PUBLISH } : {}),
         log: io.stderr,
       })
       return { ok: outcome.status === 'done' || outcome.status === 'waiting', ...outcome }

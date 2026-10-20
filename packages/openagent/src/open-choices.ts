@@ -5,7 +5,7 @@ type ChoiceEvent = { kind: 'choice' } & ChoiceRequest
 
 /**
  * Every question a run still waits on, in the order asked, read off the run's events. One rule
- * for every surface that offers an answer (the run page, the open-questions list, the write
+ * for every surface that offers an answer (the run page, the Human Queue, the write
  * that delivers the answer), so none offers what another would refuse.
  *
  * A `choice` event opens a question; asked again under the same id, the later one replaces it.

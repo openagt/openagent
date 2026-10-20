@@ -1,5 +1,7 @@
 import type { ProjectSummary } from '../../src/index.js'
 import { Layers } from 'lucide-react'
+import { onProjects } from '../rpc/projects.js'
+import { useLoaded } from '../lib/use-async.js'
 import { rowButtonClass } from './ui/row-item.js'
 import { ContextFiles } from './ContextFiles.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
@@ -12,6 +14,28 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuSeparator,
 } from './ui/dropdown-menu.js'
+
+/**
+ * The Context picker of one project's box, the launcher's and a session's alike: the other
+ * projects to tick, and the files a `#` mention or the file tree added. The Context mixes whole
+ * projects (registered paths) and single files (relative paths): the files are listed to be
+ * removed, and each kind is counted in the picker's summary. The current project is the run's own
+ * checkout, so only the other projects are offered (#665).
+ */
+export function ProjectContextMenu({ projectId, context, busy, onToggle }: { projectId: string; context: Set<string>; busy: boolean; onToggle: (path: string) => void }) {
+  const projects = useLoaded<ProjectSummary[]>(onProjects, [], [])
+  const projectPaths = new Set(projects.map(p => p.path))
+  const contextFiles = [...context].filter(path => !projectPaths.has(path))
+  const otherProjects = projects.filter(p => p.id !== projectId)
+  const pickedProjects = otherProjects.filter(p => context.has(p.path)).length
+  const summary = [
+    pickedProjects > 0 ? `${pickedProjects} project${pickedProjects > 1 ? 's' : ''}` : null,
+    contextFiles.length > 0 ? `${contextFiles.length} file${contextFiles.length > 1 ? 's' : ''}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  return <ContextMenu otherProjects={otherProjects} context={context} contextFiles={contextFiles} summary={summary} busy={busy} onToggle={onToggle} />
+}
 
 // The agent Context picker (#439/#314) as a dropdown on the launcher's "In play" row. It was an
 // inline disclosure that pushed the whole form down when opened; a dropdown keeps it folded away

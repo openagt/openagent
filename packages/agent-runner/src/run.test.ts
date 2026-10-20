@@ -224,6 +224,35 @@ test('a run is named by the agent\'s small model: the name on its record, and a 
   }
 })
 
+test('a fresh run is named while its checkout is made, not after its agent has started: the name is the first thing a person waits on', async () => {
+  const repo = await testRepo()
+  try {
+    let askedToName: () => void = () => {}
+    const naming = new Promise<void>(resolve => (askedToName = resolve))
+    const driver: Driver = {
+      id: 'claude-code',
+      start: async opts =>
+        wrap((await new FakeDriver({ respond: prompt => (prompt.includes('Name this coding session') ? 'Readme condensing' : 'Done.') }).start(opts)) as FakeDriverSession, async text => {
+          if (text.includes('Name this coding session')) askedToName()
+        }),
+    }
+    // The checkout waits on its skills: here, until the name was asked for, which only a run that
+    // asks first gets to before its checkout is made. A run that asked after its agent started
+    // would never get there, and the wait gives up.
+    let namedFirst = false
+    const skills = async () => {
+      namedFirst = await Promise.race([naming.then(() => true), new Promise<boolean>(resolve => setTimeout(() => resolve(false), 5_000))])
+      return []
+    }
+    const run = await runCommand(repo, { prompt: 'make readme.md shorter', driver, skills, now: () => NOW, gitHost: noGitHost })
+    assert.equal(run.status, 'done')
+    assert.equal(namedFirst, true)
+    assert.equal((await findRun(repo, run.id))?.title, 'Readme condensing')
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
 test('a run asked only a slash command keeps it while it works, and is named from its agent\'s report', async () => {
   const repo = await testRepo()
   try {
@@ -584,6 +613,60 @@ test('a line already in the inbox when the turn ends becomes the next turn of th
   }
 })
 
+test('a message that says how far to take the work changes the run\'s level from it on: the sentence after it and every later one, and the record', async () => {
+  const repo = await testRepo()
+  try {
+    const chatty: Driver = {
+      id: 'fake',
+      start: async opts => {
+        const fake = await new FakeDriver({ turns: [{ text: 'First turn done.' }, { text: 'Shipped.' }, { text: 'Kept local.' }] }).start(opts)
+        return wrap(fake, async () => {
+          if (fake.prompts.length > 0) return
+          // Both waiting when the first turn ends: each takes effect from its own message on.
+          await appendInbox(inboxPath(opts.cwd), { kind: 'message', text: 'ship it', publish: 'pr' })
+          await appendInbox(inboxPath(opts.cwd), { kind: 'message', text: 'and keep this one local', publish: 'nothing' })
+        })
+      },
+    }
+    const outcome = await runCommand(repo, { prompt: 'fix the typo', publish: 'commit', driver: chatty, now: () => NOW, gitHost: noGitHost })
+    assert.equal(outcome.status, 'done')
+    const starts = (await readUntimedDiary(repo, outcome.id)).filter(l => l.kind === 'start')
+    assert.deepEqual(starts.map(l => [l['prompt'], l['added']]), [
+      ['fix the typo', PUBLISH_LINES.commit],
+      ['ship it', PUBLISH_LINES.pr],
+      // `nothing` takes the level away: the words go as written.
+      ['and keep this one local', undefined],
+    ])
+    const record = await findRun(repo, outcome.id)
+    assert.equal(runnerMark(record!)?.publish, undefined, 'the record says the level it ended at')
+    assert.equal(record?.caller?.['publish'], undefined, 'for its readers too')
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
+test('a resume can give the run a new level, or take its level away; its record says so, for its readers too', async () => {
+  const repo = await testRepo()
+  try {
+    const prompts: string[] = []
+    const listening = (text: string): Driver => ({ id: 'fake', start: async opts => wrap(await new FakeDriver({ turns: [{ text }], sessionId: 's-1' }).start(opts), async prompt => void prompts.push(prompt)) })
+    const first = await runCommand(repo, { prompt: 'Fix the typo', publish: 'commit', driver: listening('Done.'), host: 'this-box', pid: 4242, now: ticking(), gitHost: noGitHost })
+    assert.equal((await findRun(repo, first.id))?.caller?.['publish'], 'commit', 'a reader finds the level beside the host')
+    await resumeRun(repo, { id: first.id, text: 'Ship it.', publish: 'pr', driver: listening('Done.'), host: 'this-box', pid: 4243, now: ticking(), gitHost: noGitHost })
+    assert.equal(prompts[1], `Ship it.\n\n${PUBLISH_LINES.pr}`)
+    assert.equal(runnerMark((await findRun(repo, first.id))!)?.publish, 'pr')
+    assert.equal((await findRun(repo, first.id))?.caller?.['publish'], 'pr')
+    await resumeRun(repo, { id: first.id, text: 'Go on.', driver: listening('Done.'), host: 'this-box', pid: 4244, now: ticking(), gitHost: noGitHost })
+    assert.equal(prompts[2], `Go on.\n\n${PUBLISH_LINES.pr}`, 'no level given: the one it was given last')
+    await resumeRun(repo, { id: first.id, text: 'Keep it local.', publish: null, driver: listening('Done.'), host: 'this-box', pid: 4245, now: ticking(), gitHost: noGitHost })
+    assert.equal(prompts[3], 'Keep it local.', 'its level taken away: the words as written')
+    assert.equal(runnerMark((await findRun(repo, first.id))!)?.publish, undefined)
+    assert.equal((await findRun(repo, first.id))?.caller?.['publish'], undefined)
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
 test('a line written after the last turn took the inbox, while the card still said running, is sent by the same process before the run ends', async () => {
   const repo = await testRepo()
   try {
@@ -675,6 +758,43 @@ function publishingDriver(gitHost: ReturnType<typeof fakeGitHost>, seen: { promp
     },
   }
 }
+
+test('a level a message gives a run with a follow-up takes the follow-up away: the agent is told the new level, and no fresh agent comes after it', async () => {
+  const repo = await testRepo()
+  try {
+    // The agent opens its pull request, so a follow-up would be owed but for the message.
+    const gitHost = fakeGitHost('agent-fix-it')
+    const driver: Driver = {
+      id: 'fake',
+      start: async opts => {
+        const fake = await new FakeDriver({ turns: [{ text: 'Fixed it.' }, { text: 'Committed it.' }], sessionId: 's-1' }).start(opts)
+        return wrap(fake, async () => {
+          if (fake.prompts.length > 0) return
+          await git(['config', 'user.email', 'agent@example.com'], opts.cwd)
+          await git(['config', 'user.name', 'agent'], opts.cwd)
+          await git(['branch', '-m', 'agent-fix-it'], opts.cwd)
+          await writeFile(join(opts.cwd, 'fixed.txt'), 'fixed\n')
+          await git(['add', '-A'], opts.cwd)
+          await git(['commit', '-q', '-m', 'Fix it'], opts.cwd)
+          await git(['push', '-q', 'origin', 'HEAD'], opts.cwd)
+          gitHost.open()
+          await appendInbox(inboxPath(opts.cwd), { kind: 'message', text: 'just commit it', publish: 'commit' })
+        })
+      },
+    }
+    let followed = false
+    const outcome = await runCommand(repo, { prompt: '/work-queue', then: '/post-merge-cleanup', driver, nextDriver: () => ((followed = true), driver), now: ticking(), gitHost })
+    assert.equal(outcome.status, 'done')
+    assert.deepEqual(outcome.pr, { number: 12, url: 'https://example.com/x/y/pull/12' })
+    const starts = (await readUntimedDiary(repo, outcome.id)).filter(l => l.kind === 'start')
+    assert.deepEqual(starts.map(l => l['added']), [HOLD_MERGE_LINE, PUBLISH_LINES.commit])
+    assert.equal(outcome.then, undefined)
+    assert.equal(followed, false)
+    assert.equal(runnerMark((await findRun(repo, outcome.id))!)?.then, undefined, 'the record no longer names it')
+  } finally {
+    await removeRepo(repo)
+  }
+})
 
 test('a run with a follow-up: its agent is told not to arm the merge, a fresh agent works its branch with the run\'s id, and the request is merged once that one ends done', async () => {
   const repo = await testRepo()

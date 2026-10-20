@@ -49,6 +49,23 @@ test('the start line names the branch to start from only when it is handed one',
   }
 })
 
+// The `resume` line as a shell runs it: a message's new level goes with it, and only then.
+test('the resume line hands a run its new level only when it is given one', async () => {
+  const bin = await realpath(await mkdtemp(join(tmpdir(), 'agent-runner-init-bin-')))
+  try {
+    await writeFile(join(bin, 'agent-runner'), '#!/bin/sh\nprintf "%s\\n" "$@"\n')
+    await chmod(join(bin, 'agent-runner'), 0o755)
+    const given = async (vars: Record<string, string>): Promise<string[]> => {
+      const { stdout } = await promisify(execFile)('sh', ['-c', HOOK_LINES['resume'] as string], { env: { PATH: `${bin}:${process.env['PATH']}`, RUN_ID: 'r1', TEXT: 'ship it', ...vars } })
+      return stdout.trimEnd().split('\n')
+    }
+    assert.deepEqual(await given({ PUBLISH: 'pr' }), ['run', '--detach', '--resume', 'r1', 'ship it', '--publish', 'pr'])
+    assert.deepEqual(await given({}), ['run', '--detach', '--resume', 'r1', 'ship it'], 'none given: the run keeps its own')
+  } finally {
+    await rm(bin, { recursive: true, force: true })
+  }
+})
+
 // Another tool's lines, a list among them, written through the same writer.
 const LINES = { open: ['npx a-tool start'], close: ['npx a-tool stop'], start: HOOK_LINES['start']!, resume: HOOK_LINES['resume']!, check: HOOK_LINES['check']! }
 
