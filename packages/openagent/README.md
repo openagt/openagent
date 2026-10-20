@@ -41,7 +41,7 @@ OpenAgent runs no coding agent and makes no model call. Starting an agent is run
 
 ```yaml
 start: agent-runner run --detach "$PROMPT" ${DRIVER:+--driver "$DRIVER"} ${MODEL:+--model "$MODEL"} ${EFFORT:+--effort "$EFFORT"} ${THEN:+--then "$THEN"} ${PUBLISH:+--publish "$PUBLISH"} ${BASE:+--base "$BASE"}
-resume: agent-runner run --detach --resume "$RUN_ID" ${TEXT:+"$TEXT"} ${ANSWER:+--answer "$ANSWER"}
+resume: agent-runner run --detach --resume "$RUN_ID" ${TEXT:+"$TEXT"} ${ANSWER:+--answer "$ANSWER"} ${PUBLISH:+--publish "$PUBLISH"}
 check: agent-runner check ${DRIVER:+--driver "$DRIVER"}
 ```
 

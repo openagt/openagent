@@ -29,20 +29,21 @@ test('a line written to a run that ended meanwhile is taken back out of the inbo
     await addWorktree(cwd, { agentId: RUN, branch: agentBranchName(RUN) }, git)
     await mkdir(join(checkout, OPENAGENT_DIR), { recursive: true })
     await mkdir(join(cwd, OPENAGENT_DIR), { recursive: true })
-    await writeFile(join(cwd, PROJECT_HOOKS_FILE), `resume: 'printf "%s|%s|%s\\n" "$RUN_ID" "\${TEXT-}" "\${ANSWER-}" >> resumed.txt; echo "{\\"id\\":\\"$RUN_ID\\"}"'\n`)
+    await writeFile(join(cwd, PROJECT_HOOKS_FILE), `resume: 'printf "%s|%s|%s|%s\\n" "$RUN_ID" "\${TEXT-}" "\${ANSWER-}" "\${PUBLISH-}" >> resumed.txt; echo "{\\"id\\":\\"$RUN_ID\\"}"'\n`)
     // An earlier line the run never took waits there too: it goes first, in order.
     await writeFile(inbox, JSON.stringify({ kind: 'answer', question: 'Which way?', answer: 'Left' }) + '\n')
 
     // Working when the line is written, ended when looked at again.
     const answers = [true, false]
-    const said = await sayToRun(cwd, RUN, { kind: 'message', text: 'also add tests' }, { isWorking: async () => answers.shift() ?? false })
+    // The message carries a new level, which goes with it to the resume line.
+    const said = await sayToRun(cwd, RUN, { kind: 'message', text: 'also add tests', publish: 'pr' }, { isWorking: async () => answers.shift() ?? false })
     assert.deepEqual(said, { ok: true })
-    assert.equal(await readFile(join(cwd, 'resumed.txt'), 'utf8'), `${RUN}||Left\n${RUN}|also add tests|\n`)
+    assert.equal(await readFile(join(cwd, 'resumed.txt'), 'utf8'), `${RUN}||Left|\n${RUN}|also add tests||pr\n`)
     assert.equal(await readFile(inbox, 'utf8').catch(() => ''), '', 'nothing is left in an inbox nobody reads')
 
     // Still working when looked at again: the line stays in the inbox, and nothing is resumed.
-    assert.deepEqual(await sayToRun(cwd, RUN, { kind: 'message', text: 'one more' }, { isWorking: async () => true }), { ok: true })
-    assert.deepEqual((await readFile(inbox, 'utf8')).trim().split('\n').map(line => JSON.parse(line) as unknown), [{ kind: 'message', text: 'one more' }])
+    assert.deepEqual(await sayToRun(cwd, RUN, { kind: 'message', text: 'one more', publish: 'nothing' }, { isWorking: async () => true }), { ok: true })
+    assert.deepEqual((await readFile(inbox, 'utf8')).trim().split('\n').map(line => JSON.parse(line) as unknown), [{ kind: 'message', text: 'one more', publish: 'nothing' }], 'the level goes in the line, for the run to read')
     assert.equal((await readFile(join(cwd, 'resumed.txt'), 'utf8')).split('\n').filter(Boolean).length, 2)
   } finally {
     await rm(cwd, { recursive: true, force: true })

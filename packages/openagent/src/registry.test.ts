@@ -260,6 +260,15 @@ test('sanitizePreferences reads only the current spellings', async () => {
   assert.equal(Object.keys((await stored({ startFrom: many })).startFrom ?? {}).length, 200, 'bounded, like the presets')
 })
 
+test('the sidebar\'s order keeps only the orders it offers; the default, by creation, is stored as nothing', async () => {
+  const stored = (preferences: Record<string, unknown>) =>
+    readPreferences(memFs({ [FILE]: JSON.stringify({ projects: [], preferences }) }), ENV)
+  assert.deepEqual(await stored({ recentsSort: 'updated' }), { recentsSort: 'updated' })
+  assert.deepEqual(await stored({ recentsSort: 'name' }), { recentsSort: 'name' })
+  assert.deepEqual(await stored({ recentsSort: 'created' }), {})
+  assert.deepEqual(await stored({ recentsSort: 'random' }), {})
+})
+
 test('patchPreferences merges only the keys it is given (#1148)', async () => {
   // The dashboard used to send its whole cached object, so a tab that had been open since before
   // someone else's change wrote the old value back over it. A patch touches only what it names.

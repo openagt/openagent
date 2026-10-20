@@ -1,10 +1,9 @@
 import type { DashboardData, Intervention } from '../../src/index.js'
-import { FilePen, GitBranch, GitPullRequest, Inbox, MessageCircleQuestion } from 'lucide-react'
+import { Inbox } from 'lucide-react'
 import { onDashboard } from '../rpc/reads.js'
-import { interventionKey } from '../../src/client.js'
 import { Quota } from './Quota.js'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
-import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
+import { HumanQueueList } from './HumanQueueList.js'
 import { usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { usePreferences } from '../lib/preferences.js'
@@ -83,18 +82,6 @@ export function DashboardPage({
   )
 }
 
-/** A pull request's row in the Human Queue: its number, its title and its project. */
-function PrRow({ item }: { item: Intervention }) {
-  return (
-    <>
-      <GitPullRequest className="h-4 w-4 shrink-0 text-success" />
-      <span className="shrink-0 text-xs font-medium tabular-nums text-muted-foreground">#{item.number}</span>
-      <span className="truncate text-sm font-medium">{item.title}</span>
-      <span className="ml-auto shrink-0 text-xs text-muted-foreground">{item.projectName}</span>
-    </>
-  )
-}
-
 // The Human Queue (#632/#1139): the cross-project things only a person can clear. Four kinds: open
 // PRs to review (proposals and finished work both surface as PRs) — merge to confirm, close to
 // reject — which open the session that made them, or the PR itself when no run here did; runs
@@ -109,11 +96,6 @@ function HumanQueue({
   onSelectProject: (id: string) => void
   onSelectAgent: (projectId: string, agentId: string) => void
 }) {
-  // Every kind names its agent (#636/#860), a PR when one of the runs opened it, so the row opens that
-  // session — which is what its "Open the session" promise says. Only if the id is somehow absent does it fall back to the
-  // project, rather than doing nothing.
-  const openAgent = (item: Intervention) =>
-    item.agentId ? onSelectAgent(item.projectId, item.agentId) : onSelectProject(item.projectId)
   return (
     <Card>
       <CardHeader>
@@ -132,110 +114,10 @@ function HumanQueue({
         {items.length === 0 ? (
           <p className="py-2 text-sm text-muted-foreground">AI doesn&apos;t need you.</p>
         ) : (
-          <ul className="divide-y divide-border">
-            {items.map(item => (
-              <li key={interventionKey(item)}>
-                {item.kind === 'awaiting' ? (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <button
-                          type="button"
-                          onClick={() => openAgent(item)}
-                          className="flex w-full items-center gap-2.5 py-2 text-left hover:opacity-80"
-                        />
-                      }
-                    >
-                      <MessageCircleQuestion className="h-4 w-4 shrink-0 text-warning" />
-                      <span className="shrink-0 text-xs font-medium text-warning">Awaiting</span>
-                      <span className="truncate text-sm font-medium">{item.title}</span>
-                      <span className="ml-auto shrink-0 text-xs text-muted-foreground">{item.projectName}</span>
-                    </TooltipTrigger>
-                    <TooltipContent>Open the agent to answer</TooltipContent>
-                  </Tooltip>
-                ) : item.kind === 'uncommitted' ? (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <button
-                          type="button"
-                          onClick={() => openAgent(item)}
-                          className="flex w-full items-center gap-2.5 py-2 text-left hover:opacity-80"
-                        />
-                      }
-                    >
-                      <FilePen className="h-4 w-4 shrink-0 text-info" />
-                      <span className="shrink-0 text-xs font-medium text-info">Not committed</span>
-                      <span className="truncate text-sm font-medium">{item.title}</span>
-                      {item.files !== undefined && item.files > 0 && (
-                        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{item.files === 1 ? '1 file' : `${item.files} files`}</span>
-                      )}
-                      <span className="ml-auto shrink-0 text-xs text-muted-foreground">{item.projectName}</span>
-                    </TooltipTrigger>
-                    <TooltipContent>Open the session: it left files uncommitted</TooltipContent>
-                  </Tooltip>
-                ) : item.kind === 'unpushed' ? (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <button
-                          type="button"
-                          onClick={() => openAgent(item)}
-                          className="flex w-full items-center gap-2.5 py-2 text-left hover:opacity-80"
-                        />
-                      }
-                    >
-                      <GitBranch className="h-4 w-4 shrink-0 text-info" />
-                      <span className="shrink-0 text-xs font-medium text-info">Not published</span>
-                      <span className="truncate text-sm font-medium">{item.title}</span>
-                      {/* An unknown count says nothing rather than the contradictory "0 commits". */}
-                      {item.commits !== undefined && item.commits > 0 && (
-                        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                          {item.commits === 1 ? '1 commit' : `${item.commits} commits`}
-                        </span>
-                      )}
-                      <span className="ml-auto shrink-0 text-xs text-muted-foreground">{item.projectName}</span>
-                    </TooltipTrigger>
-                    <TooltipContent>{`Open the session: work on ${item.branch ?? ''} is not published`}</TooltipContent>
-                  </Tooltip>
-                ) : item.agentId ? (
-                  // A request one of the project's runs opened: the conversation that made it, which
-                  // links the request itself.
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <button
-                          type="button"
-                          onClick={() => openAgent(item)}
-                          className="flex w-full items-center gap-2.5 py-2 text-left hover:opacity-80"
-                        />
-                      }
-                    >
-                      <PrRow item={item} />
-                    </TooltipTrigger>
-                    <TooltipContent>{`Open the session of PR #${item.number}`}</TooltipContent>
-                  </Tooltip>
-                ) : (
-                  // Opened anywhere else, by hand or by a session this dashboard never ran: the git host.
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <a
-                          href={item.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex items-center gap-2.5 py-2 hover:opacity-80"
-                        />
-                      }
-                    >
-                      <PrRow item={item} />
-                    </TooltipTrigger>
-                    <TooltipContent>{`Open PR #${item.number}`}</TooltipContent>
-                  </Tooltip>
-                )}
-              </li>
-            ))}
-          </ul>
+          // Pulled out by the rows' own inset, so their text starts where the card's title does.
+          <div className="-mx-2">
+            <HumanQueueList items={items} onOpenAgent={onSelectAgent} onOpenProject={onSelectProject} />
+          </div>
         )}
       </CardContent>
     </Card>

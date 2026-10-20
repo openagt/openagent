@@ -1,11 +1,14 @@
 import { listAgents, loadAgentEvents, readLiveMetas, type LiveAgent, type AgentMeta } from '../store/index.js'
 import { pendingChoices } from '../open-choices.js'
-import type { OpenAgentEvent } from '../events.js'
+import type { ChoiceRequest, OpenAgentEvent } from '../events.js'
 import type { ProjectSummary, ProjectionRead } from './projects.js'
 import { projectBranches, type BranchesFor } from '../store/branches.js'
 import { unpublishedRuns, type Unpublished } from './unpublished.js'
 import { cachedOpenPrs, type PrLister } from './pull-requests.js'
 import { interventionKey } from './keys.js'
+import { runName } from '../run-name.js'
+import { bridgeChoiceRequest, type BridgeQuestion } from './bridge-question.js'
+import { bridgeQuestions } from './bridge-store.js'
 
 // Pure identity + diff, in the leaf `keys.ts` so the dashboard shares them rather than copying.
 export { interventionKey } from './keys.js'
@@ -18,9 +21,10 @@ export { interventionKey } from './keys.js'
 // answers. #627 notifications ride this whole set.
 
 /**
- * One item awaiting the human. Two kinds: an open `pr` to review/merge or close, and an
- * `awaiting` run paused on a choice gate. The card and the browser hook both iterate the flat
- * list, branching on `kind` for the fields that differ.
+ * One item awaiting the human: an open `pr` to review and merge or close, a run `awaiting` the
+ * answer to its question, or a finished run's work left `uncommitted` or `unpushed`. The Human
+ * Queue, the launcher's "Waiting on you" and the browser hook all iterate the flat list, branching
+ * on `kind` for the fields that differ.
  */
 export interface Intervention {
   projectId: string
@@ -31,7 +35,10 @@ export interface Intervention {
    * run whose branch has commits that were never pushed (#860).
    */
   kind: 'pr' | 'awaiting' | 'uncommitted' | 'unpushed'
+  /** The run's name, as every list names it ({@link runName}); a request no run here opened goes by its own title. */
   title: string
+  /** What the run asks (`awaiting` only). */
+  question?: string
   /** The PR on the git host (`pr` only): where a click takes the user when no run of this dashboard opened it. */
   url?: string
   /** The PR number (`pr` only). */
@@ -44,6 +51,8 @@ export interface Intervention {
   branch?: string
   /** How many commits are waiting (`unpushed` only). */
   commits?: number
+  /** Whether the project can open a pull request (`unpushed` only): the work's next step is one, else a push. */
+  gitHost?: boolean
   /** How many files were left uncommitted (`uncommitted` only). */
   files?: number
   /** When the PR was opened (`pr`) or the agent last updated (the other two), ISO, for ordering. */
@@ -61,6 +70,14 @@ export interface InterventionsDeps {
   agents?: (cwd: string) => Promise<AgentMeta[]>
   /** The project's checkouts and branches (default the project's provider, {@link projectBranches}): where a branch's state is read; drives the `unpushed` source (#860). */
   branches?: BranchesFor
+  /** The questions Claude Code web sessions are parked on, as the browser bridge holds them, minus those with an answer on its way (default: the daemon's bridge store, #1554). */
+  bridged?: () => BridgeQuestion[]
+}
+
+/** The bridge store's questions still waiting for a pick. */
+function unansweredBridgeQuestions(): BridgeQuestion[] {
+  const store = bridgeQuestions()
+  return store.list().filter(question => !store.pendingAnswer(question.sessionId))
 }
 
 /**
@@ -81,19 +98,23 @@ export async function buildInterventions(
 ): Promise<ProjectionRead<Intervention>> {
   // Every project at once, and each one's sources at once: a project's open requests are a git host
   // read, and asking them one project after the other kept the queue waiting seconds.
-  const read = await Promise.all(projects.map(project => projectInterventions(project, deps)))
+  const bridged = (deps.bridged ?? unansweredBridgeQuestions)()
+  const read = await Promise.all(projects.map(project => projectInterventions(project, deps, bridged)))
   const items = read.flatMap(project => project.items)
   const whole = read.flatMap(project => (project.whole ? [project.id] : []))
   items.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
   // The same repo can be registered under two projects (e.g. a monorepo root + a subdir), so a
   // PR would otherwise appear once per entry. Collapse by identity, keeping the first (newest-sorted).
+  // A web session's question is one too: both entries share the repository's records, so each finds
+  // the run that asked it.
   const seen = new Set<string>()
-  const unique = items.filter(item => (seen.has(interventionKey(item)) ? false : (seen.add(interventionKey(item)), true)))
+  const identity = (item: Intervention) => (item.awaitId?.startsWith('bridge:') ? item.awaitId : interventionKey(item))
+  const unique = items.filter(item => (seen.has(identity(item)) ? false : (seen.add(identity(item)), true)))
   return { items: unique, whole }
 }
 
 /** One project's items, and whether every one of its sources answered. */
-async function projectInterventions(project: ProjectSummary, deps: InterventionsDeps): Promise<{ id: string; items: Intervention[]; whole: boolean }> {
+async function projectInterventions(project: ProjectSummary, deps: InterventionsDeps, bridged: BridgeQuestion[]): Promise<{ id: string; items: Intervention[]; whole: boolean }> {
   const prs = deps.prs ?? cachedOpenPrs
   const liveAgents = deps.liveAgents ?? readLiveMetas
   const events = deps.events ?? loadAgentEvents
@@ -128,7 +149,7 @@ async function projectInterventions(project: ProjectSummary, deps: Interventions
       projectName: project.name,
       kind: 'pr',
       number: pr.number,
-      title: pr.title,
+      title: (run && runName(run)) ?? pr.title,
       url: pr.url,
       ...(run ? { agentId: run.id } : {}),
       ...(pr.createdAt ? { createdAt: pr.createdAt } : {}),
@@ -136,7 +157,7 @@ async function projectInterventions(project: ProjectSummary, deps: Interventions
   }
   // A run that ended on a question waits for the user, a "needs you" too (#636): it ended
   // `waiting`, its checkout kept for the answer (#1774). The question is read off the run's own
-  // diary by the rule the run page and the open-questions list use, so the ping names the question
+  // diary by the rule the run page uses, so the ping names the question
   // they offer; a waiting run whose diary shows none is skipped. A project has several runs
   // (#736), so each waiting run contributes its own item — keyed on the question's id, plus the
   // agent id so two runs are told apart.
@@ -146,12 +167,16 @@ async function projectInterventions(project: ProjectSummary, deps: Interventions
       .filter(meta => meta.status === 'waiting')
       .map(async meta => {
         const choice = pendingChoices((await events(project.path, meta.id).catch(() => undefined)) ?? []).at(-1)
-        return choice
-          ? [{ projectId: project.id, projectName: project.name, kind: 'awaiting' as const, title: choice.title, awaitId: choice.id, agentId: meta.id, ...(meta.updatedAt ? { createdAt: meta.updatedAt } : {}) }]
-          : []
+        return choice ? [askedBy(project, meta, choice, meta.updatedAt)] : []
       }),
   )
   items.push(...awaiting.flat())
+  // A Claude Code web session's question lives in the bridge store, not its log (#1554): joined on
+  // the cloud session its run's record names. Waiting since the bridge saw it, not since the hand-off.
+  for (const question of bridged) {
+    const run = runs.find(agent => agent.target === 'web' && agent.sessionId === question.sessionId)
+    if (run) items.push(askedBy(project, run, bridgeChoiceRequest(question), question.receivedAt))
+  }
   // A finished run whose work never left the machine is a "needs you" too (#860). Until then the
   // queue only knew about a PR that is *already on the git host* and an agent parked on a gate, so an agent
   // that committed real code and stopped produced neither, and nothing told anyone: the overview
@@ -163,6 +188,20 @@ async function projectInterventions(project: ProjectSummary, deps: Interventions
   if (recorded === undefined) unread()
   items.push(...(await unpushedFor(project, recorded ?? [], deps.branches ?? projectBranches, unread)))
   return { id: project.id, items, whole: sawEverything }
+}
+
+/** A run waiting on its question, named as every list names it, the question beside it. */
+function askedBy(project: ProjectSummary, run: AgentMeta, choice: ChoiceRequest, since: string | undefined): Intervention {
+  return {
+    projectId: project.id,
+    projectName: project.name,
+    kind: 'awaiting',
+    title: runName(run) ?? run.id,
+    question: choice.title,
+    awaitId: choice.id,
+    agentId: run.id,
+    ...(since ? { createdAt: since } : {}),
+  }
 }
 
 /**
@@ -183,14 +222,13 @@ async function unpushedFor(project: ProjectSummary, agents: AgentMeta[], branche
   return agents.flatMap(agent => {
     const work = found.get(agent.id)
     if (!work) return []
-    const left = work.uncommitted > 0 ? { kind: 'uncommitted' as const, files: work.uncommitted } : { kind: 'unpushed' as const, commits: work.commits }
+    const left = work.uncommitted > 0 ? { kind: 'uncommitted' as const, files: work.uncommitted } : { kind: 'unpushed' as const, commits: work.commits, gitHost: project.gitHost }
     return [
       {
         projectId: project.id,
         projectName: project.name,
         ...left,
-        // What was asked, else the run's own name, else the branch: never a prefix cut off here.
-        title: agent.intent?.trim() || agent.title?.trim() || work.branch,
+        title: runName(agent) ?? work.branch,
         agentId: agent.id,
         branch: work.branch,
         ...(agent.updatedAt ? { createdAt: agent.updatedAt } : {}),

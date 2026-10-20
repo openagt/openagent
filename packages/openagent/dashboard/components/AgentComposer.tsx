@@ -6,6 +6,11 @@ import { useAction } from '../lib/use-action.js'
 import type { AgentOutcome } from '../lib/live-state.js'
 import { Button } from './ui/button.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
+import { ProjectContextMenu } from './ContextMenu.js'
+import { AutoMenu } from './AutoMenu.js'
+import { isPublishPick, offeredPublishPicks, type PublishPick } from '../../src/client.js'
+import { useProjectLauncher } from '../lib/use-project-launcher.js'
+import { promptWithContext, type ContextSet } from '../lib/use-context-set.js'
 
 /**
  * What a Resume press says to the agent (#1391). The resumed agent has its whole conversation
@@ -39,6 +44,9 @@ export function AgentComposer({
   outcome,
   model,
   context,
+  controls,
+  contextSet,
+  publish,
 }: {
   projectId: string
   /** Which run this addresses (#749). */
@@ -59,6 +67,12 @@ export function AgentComposer({
   model?: string | undefined
   /** How full the session's context is, as a circle beside the model. */
   context?: ReactNode
+  /** What stands at the left of the row under the box after the Context picker: the run's pull request. */
+  controls?: ReactNode
+  /** The shell's Context (#492), as the launcher's box has it (his pick): what is picked goes with the next message, said at its end, and is cleared once it went. */
+  contextSet?: ContextSet | undefined
+  /** How far the run takes its work, as its record says (`commit`, `branch`, `pr`, `merge`); absent, none. The "Auto" menu shows it and changes it from the next message on. */
+  publish?: string | undefined
 }) {
   const composerRef = useRef<ComposerHandle>(null)
   const { busy, error, run } = useAction()
@@ -83,19 +97,33 @@ export function AgentComposer({
     if (live) setResuming(false)
   }, [live])
   const stopping = stopBusy || (stopRequested && live)
+  // The "Auto" menu, as the launcher's (his pick): how far the run takes its work. A pick goes with
+  // the next message and holds from it on. Sent to a working run, it shows until the run's record
+  // says it, which is when its turn ends and it takes the message. Sent to an ended run, the menu
+  // goes back to what the record says at once: the project's resume line is what hands the level
+  // on, and one written before it did keeps the old level, which must not read as changed.
+  // Picked back to what the record says, there is nothing to send.
+  const launcher = useProjectLauncher(projectId)
+  const recorded: PublishPick = isPublishPick(publish) ? publish : 'nothing'
+  const [picked, setPicked] = useState<PublishPick | null>(null)
+  useEffect(() => setPicked(null), [agentId])
+  useEffect(() => {
+    if (picked === recorded) setPicked(null)
+  }, [picked, recorded])
   /** Say `text` to the run. Resolves whether it went through; a refusal's words are shown. */
   const say = async (text: string): Promise<boolean> => {
     const wasLive = live
     // An ended run's continuation takes seconds to write its first line; the message shows now.
     if (!wasLive) onSending?.(text)
     const outcome = await run(
-      () => sendMessage(projectId, text, agentId),
+      () => sendMessage(projectId, text, agentId, ...(picked !== null ? [picked] : [])),
       'Could not send. Your text is kept, try again.',
     )
     if (!outcome.ok) {
       if (!wasLive) onSending?.(null)
       return false
     }
+    if (!wasLive) setPicked(null)
     if (wasLive) onQueued?.(text)
     // An ended run goes live again under the same id: tell the shell, which keeps its feed (#762).
     else onAgentStarted?.(text, agentId)
@@ -104,7 +132,10 @@ export function AgentComposer({
 
   const send = async (text: string): Promise<void> => {
     if (busy) return
-    if (await say(text)) composerRef.current?.clear()
+    if (await say(contextSet ? promptWithContext(text, contextSet.context) : text)) {
+      composerRef.current?.clear()
+      contextSet?.reset()
+    }
     composerRef.current?.focus()
   }
 
@@ -175,6 +206,21 @@ export function AgentComposer({
         inAgent
         sessionModel={model}
         sessionContext={context}
+        {...(contextSet ? { addContext: contextSet.add, removeContext: contextSet.remove } : {})}
+        controls={
+          <>
+            {contextSet && <ProjectContextMenu projectId={projectId} context={contextSet.context} busy={busy} onToggle={contextSet.toggle} />}
+            <AutoMenu
+              publish={picked ?? recorded}
+              picks={offeredPublishPicks(launcher?.gitHost ?? true, launcher?.remote ?? true)}
+              onPublish={pick => setPicked(pick === recorded ? null : pick)}
+              cleanup={undefined}
+              onCleanup={() => {}}
+              busy={busy}
+            />
+            {controls}
+          </>
+        }
         idleControl={idleControl}
         // What the box can do, not what it is for: a working agent reads what is sent to it when
         // its turn ends, which is the one thing worth saying there, and Claude Code's box says the

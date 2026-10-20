@@ -6,6 +6,8 @@ import { handoffSays, useAgentHandoff } from '../lib/use-agent-handoff.js'
 import { useCheckoutStatus } from '../lib/use-checkout-status.js'
 import { isAgentActive, agentOutcome, cardOutcome, pendingChoices } from '../lib/live-state.js'
 import { AgentActionBar } from './AgentActionBar.js'
+import { RunPrLink } from './RunPrLink.js'
+import type { ContextSet } from '../lib/use-context-set.js'
 import { AgentComposer } from './AgentComposer.js'
 import { AgentWorkBar } from './AgentWorkBar.js'
 import { AgentFeed } from './AgentFeed.js'
@@ -66,6 +68,7 @@ export function AgentView({
   writing = '',
   startedWith,
   onAgentStarted,
+  contextSet,
   onDeleted,
   subagents = NO_SUBAGENTS,
 }: {
@@ -77,7 +80,7 @@ export function AgentView({
   /** Whether the agent is still running; `null` while the daemon's list of agents has not been read, so it is not known yet. */
   live: boolean | null
   /** What the run's card says, off the runs poll: what the feed cannot carry (the details strip's facts, how the agent was set up, whether it is a subagent, whether its record is being saved). Absent until the card is listed. */
-  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'saving' | 'parent' | 'workspace' | 'branch' | 'base' | 'host' | 'otherHost'>) | undefined
+  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'saving' | 'parent' | 'workspace' | 'branch' | 'base' | 'host' | 'otherHost' | 'publish'>) | undefined
   /** The session's own name — the same label the rail shows (#1030). It leads the action bar as
    * the stable identity, so the branch renaming itself near the end of an agent (#736) reads as a
    * detail changing rather than the whole view changing. */
@@ -98,6 +101,8 @@ export function AgentView({
   startedWith?: string | undefined
   /** Jump to the agent a preset or a continuation started (#959). */
   onAgentStarted?: ((intent: string, agentId: string) => void) | undefined
+  /** The shell's Context, for the message box to send with the next message. */
+  contextSet?: ContextSet | undefined
   /** Leave this session after it is deleted (#1032) — back to the project home. */
   onDeleted?: (() => void) | undefined
   /** The runs started for this run, oldest first: rows in its chat, and a line above the message box while any works. */
@@ -443,6 +448,9 @@ export function AgentView({
             outcome={outcome}
             model={underBox}
             {...(window !== undefined ? { context: <ContextCircle used={card?.contextTokens ?? 0} size={window} /> } : {})}
+            controls={checkout?.pr && <RunPrLink pr={checkout.pr} />}
+            contextSet={contextSet}
+            publish={card?.publish}
           />
           )}
         </>

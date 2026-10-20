@@ -23,10 +23,13 @@ test('the inbox: lines appended are taken once, in order, and a torn line is ski
     assert.deepEqual(await takeInbox(path), [], 'no inbox is no lines')
     await appendInbox(path, { kind: 'message', text: 'first' })
     await appendInbox(path, { kind: 'answer', question: 'Ship it?', answer: 'Approve' })
-    await (await import('node:fs/promises')).appendFile(path, '{ torn\n{"kind":"nope"}\n')
+    // A message may say how far the run takes its work from here on, for the tool that runs it.
+    await appendInbox(path, { kind: 'message', text: 'ship it', publish: 'pr' })
+    await (await import('node:fs/promises')).appendFile(path, '{ torn\n{"kind":"nope"}\n{"kind":"message","text":"x","publish":3}\n')
     assert.deepEqual(await takeInbox(path), [
       { kind: 'message', text: 'first' },
       { kind: 'answer', question: 'Ship it?', answer: 'Approve' },
+      { kind: 'message', text: 'ship it', publish: 'pr' },
     ])
     assert.deepEqual(await takeInbox(path), [], 'taken once')
     assert.equal(await stat(path).then(() => true, () => false), false, 'the file is gone until the next line')
@@ -89,6 +92,29 @@ test('a sentence added after a prompt follows every inbox line that prompt goes 
       { type: 'start', prompt: '/work-queue', added: 'Commit your work.' },
       { type: 'start', prompt: 'Also add a test.', added: 'Commit your work.' },
     ])
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('the caller says what an inbox line changes, for it and the lines after it: a new sentence after it, say', async () => {
+  const dir = await scratch()
+  try {
+    const inbox = join(dir, 'inbox.jsonl')
+    const session = await new FakeDriver({ turns: [{ text: 'Done.' }, { text: 'Shipped.' }, { text: 'Tested.' }] }).start({ cwd: dir })
+    await appendInbox(inbox, { kind: 'message', text: 'Ship it.', publish: 'pr' })
+    await appendInbox(inbox, { kind: 'message', text: 'Also add a test.' })
+    const seen: string[] = []
+    await session.prompt('Fix it.', {
+      inbox,
+      added: 'Commit your work.',
+      onInboxLine: async (line, sent) => {
+        seen.push(line.kind === 'message' ? line.text : line.answer)
+        return line.kind === 'message' && line.publish === 'pr' ? { ...sent, added: 'Open its pull request.' } : sent
+      },
+    })
+    assert.deepEqual(seen, ['Ship it.', 'Also add a test.'], 'handed each line, in order')
+    assert.deepEqual(session.prompts, ['Fix it.\n\nCommit your work.', 'Ship it.\n\nOpen its pull request.', 'Also add a test.\n\nOpen its pull request.'])
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

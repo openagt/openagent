@@ -5,6 +5,19 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 const sendMessage = vi.hoisted(() => vi.fn())
 const sendStop = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/control.js', () => ({ sendMessage, sendStop }))
+// The "Auto" menu is tested on its own; here a stand-in says the pick it shows and offers a pick.
+vi.mock('./AutoMenu.js', () => ({
+  AutoMenu: ({ publish, onPublish }: { publish: string; onPublish: (pick: string) => void }) => (
+    <span>
+      Auto: {publish}
+      <button type="button" onClick={() => onPublish('pr')}>pick Open PR</button>
+      <button type="button" onClick={() => onPublish('commit')}>pick Commit</button>
+    </span>
+  ),
+}))
+vi.mock('../lib/use-project-launcher.js', () => ({ useProjectLauncher: () => ({ gitHost: true, remote: true }) }))
+// The Context picker reads the projects; here it is a stand-in that says what it was given.
+vi.mock('./ContextMenu.js', () => ({ ProjectContextMenu: ({ context }: { context: Set<string> }) => <span>Context · {[...context].join(', ')}</span> }))
 
 // The Composer is exercised by its own tests; here it only has to hand back a submit and report
 // the props this component sets on it.
@@ -20,6 +33,7 @@ vi.mock('./Composer.js', async () => {
       </span>
       {/* The empty-box slot control (#1455), rendered so the Stop/Resume tests can press it. */}
       {props.idleControl}
+      {props.controls}
     </div>
   ))
   return { Composer }
@@ -249,5 +263,57 @@ describe('AgentComposer sending to an ended run', () => {
     fireEvent.click(screen.getByRole('button', { name: 'submit' }))
     await waitFor(() => expect(sendMessage).toHaveBeenCalled())
     expect(onSending).not.toHaveBeenCalled()
+  })
+
+  test('the Context picked goes with the next message, at its end, and is cleared once it went (his pick)', async () => {
+    sendMessage.mockResolvedValue({ ok: true })
+    const reset = vi.fn()
+    const contextSet = { context: new Set(['src/app.ts']), add: vi.fn(), remove: vi.fn(), toggle: vi.fn(), reset }
+    renderComposer({ contextSet })
+    expect(screen.getByText('Context · src/app.ts')).toBeTruthy()
+    fireEvent.click(screen.getByText('submit'))
+    await waitFor(() => expect(reset).toHaveBeenCalled())
+    expect(sendMessage).toHaveBeenCalledWith('p1', 'hello\n\nContext: src/app.ts', 'run-1')
+  })
+
+  test('a refused message keeps the Context picked', async () => {
+    sendMessage.mockResolvedValue({ ok: false, error: 'no' })
+    const reset = vi.fn()
+    renderComposer({ contextSet: { context: new Set(['a.ts']), add: vi.fn(), remove: vi.fn(), toggle: vi.fn(), reset } })
+    fireEvent.click(screen.getByText('submit'))
+    await screen.findByRole('alert')
+    expect(reset).not.toHaveBeenCalled()
+  })
+
+  test('"Auto" shows the run\'s level; a pick goes with the next message, and shows until the run\'s record says it (his pick)', async () => {
+    sendMessage.mockResolvedValue({ ok: true })
+    render(<AgentComposer projectId="p1" agentId="run-1" live files={[]} publish="commit" />)
+    expect(screen.getByText(/Auto: commit/)).toBeTruthy()
+    fireEvent.click(screen.getByText('submit'))
+    // No pick: the words alone.
+    await waitFor(() => expect(sendMessage).toHaveBeenLastCalledWith('p1', 'hello', 'run-1'))
+    fireEvent.click(screen.getByText('pick Open PR'))
+    expect(screen.getByText(/Auto: pr/)).toBeTruthy()
+    fireEvent.click(screen.getByText('submit'))
+    await waitFor(() => expect(sendMessage).toHaveBeenLastCalledWith('p1', 'hello', 'run-1', 'pr'))
+    expect(screen.getByText(/Auto: pr/), 'still shown while the run has not taken it').toBeTruthy()
+    // Picked back to what the record says: nothing to send.
+    fireEvent.click(screen.getByText('pick Commit'))
+    fireEvent.click(screen.getByText('submit'))
+    await waitFor(() => expect(sendMessage).toHaveBeenLastCalledWith('p1', 'hello', 'run-1'))
+  })
+
+  test('sent to an ended run, the menu goes back to what the record says: a resume line that cannot take the level must not read as changed', async () => {
+    sendMessage.mockResolvedValue({ ok: true })
+    render(<AgentComposer projectId="p1" agentId="run-1" live={false} files={[]} publish="commit" />)
+    fireEvent.click(screen.getByText('pick Open PR'))
+    fireEvent.click(screen.getByText('submit'))
+    await waitFor(() => expect(sendMessage).toHaveBeenLastCalledWith('p1', 'hello', 'run-1', 'pr'))
+    await waitFor(() => expect(screen.getByText(/Auto: commit/)).toBeTruthy())
+  })
+
+  test('a run with no level shows Off', () => {
+    render(<AgentComposer projectId="p1" agentId="run-1" live files={[]} />)
+    expect(screen.getByText(/Auto: nothing/)).toBeTruthy()
   })
 })

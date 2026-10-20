@@ -1,19 +1,21 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Plus, ChevronDown, Bot, Cloud, Laptop, Server, LayoutDashboard, Blocks, FilePen, GitBranch, GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-react'
+import { Plus, ChevronDown, Bot, ArrowDownUp, Check, Cloud, Laptop, Server, LayoutDashboard, Blocks, FilePen, GitBranch } from 'lucide-react'
 import type { ComponentType } from 'react'
 import type { AgentMeta, AgentStatus, RecentAgent, ProjectSummary } from '../../src/index.js'
 import { DRIVER_LABELS, driverFromImpl, cloudRunState, type CloudRunState } from '../../src/client.js'
 import { Button, buttonVariants } from './ui/button.js'
 import { cn } from '../lib/utils.js'
 import { formatRelative } from '../lib/format-date.js'
-import { usePreferences } from '../lib/preferences.js'
+import { updatePreferences, usePreferences } from '../lib/preferences.js'
+import { RECENTS_SORT_LABELS, sortRuns, type RecentsSort } from '../lib/recents-sort.js'
 import { useProjectLabel } from '../lib/project-labels.js'
 import { STATUS_DOT, STATUS_RING } from '../lib/status-tone.js'
 import { DriverLogo } from './driver-logos.js'
+import { PR_MARKS, type PrState } from '../lib/pr-marks.js'
 import { agentLabel, awaitingName } from '../lib/agent-label.js'
 import { holdsMainAgent, isOpenSubagent, nestRows, taskLabel } from '../lib/subagents.js'
 import { AddProjectPanel } from './AddProjectPanel.js'
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from './ui/dropdown-menu.js'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuGroup, DropdownMenuLabel } from './ui/dropdown-menu.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { ProjectSelect } from './ProjectSelect.js'
 import {
@@ -28,6 +30,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from './ui/sidebar.js'
+import { needsWord } from './HumanQueueList.js'
 import { ScrollArea } from './ui/scroll-area.js'
 // Global chrome relocated off the removed top navbar (#772 follow-up): the sidebar is the app's
 // chrome now, so the workspace keeps the full width.
@@ -39,7 +42,7 @@ import { readAgentLogAhead } from '../lib/agent-log.js'
 // One rendered row of the rail, from either source (a project's own run, or a pooled cross-project
 // recent): the AgentMeta to show, an optional project label (only on the Overview, where the rail
 // pools every project), whether it is the selected row, and what selecting it does.
-type Row = { key: string; agent: AgentMeta; project?: string; active: boolean; onClick: () => void; onNear?: () => void }
+type Row = { key: string; agent: AgentMeta; project?: string; projectId: string | null; active: boolean; onClick: () => void; onNear?: () => void }
 
 /** What a row does as the pointer or the keyboard reaches it: an ended agent's log is read before the click, so its page opens drawn. A working agent's page reads no saved log. */
 function near(projectId: string | null, agent: AgentMeta): { onNear?: () => void } {
@@ -197,11 +200,14 @@ export function AgentHistory({
   // just-started run (#705) counts too, before its id is known.
   const starting = selectedAgentId !== null && !listed.some(agent => agent.id === selectedAgentId)
 
-  const rows: Row[] = crossProject
+  // In the order the person picked from the button beside "Recent agents" (`recents-sort.ts`).
+  const order = preferences.recentsSort ?? 'created'
+  const rows: Row[] = sortRuns(crossProject
     ? recentAgents!.map(rr => ({
         key: `${rr.projectId}:${rr.agent.id}`,
         agent: rr.agent,
         project: label(rr.projectId, rr.projectName),
+        projectId: rr.projectId,
         active: rr.projectId === projectId && rr.agent.id === selectedAgentId,
         onClick: () => onSelectRecent?.(rr.projectId, rr.agent.id),
         ...near(rr.projectId, rr.agent),
@@ -209,12 +215,13 @@ export function AgentHistory({
     : agents.map(agent => ({
         key: agent.id,
         agent: agent,
+        projectId,
         // Following live highlights the newest running agent, not every one of them (#738):
         // `agents` is newest-first, so that is the first with a running status.
         active: agent.id === selectedAgentId,
         onClick: () => onSelect(agent.id),
         ...near(projectId, agent),
-      }))
+      })), order)
 
   // New is the active view when a project is open on its launcher (its "New" / Start-a-session
   // screen: a project selected, no run picked, not following a live one). On the Overview that role
@@ -254,6 +261,7 @@ export function AgentHistory({
       {...(row.agent.pr ? { pr: { number: row.agent.pr.number, ...(row.agent.prState ? { state: row.agent.prState } : {}) } } : {})}
       {...(row.agent.unpublished ? { unpublished: row.agent.unpublished } : {})}
       {...(row.agent.uncommitted ? { uncommitted: row.agent.uncommitted } : {})}
+      gitHost={projects.find(p => p.id === row.projectId)?.gitHost !== false}
       onClick={leave(row.onClick)}
       onNear={row.onNear}
     />
@@ -312,7 +320,10 @@ export function AgentHistory({
                 when the list is empty (#1147): the heading is what makes "No sessions yet." read as
                 the state of this list rather than a lonely line in the sidebar. */}
             <div className="sticky top-0 z-10">
-              <SidebarGroupLabel className="rounded-none bg-sidebar font-normal tracking-wide text-muted-foreground">Recent agents</SidebarGroupLabel>
+              <SidebarGroupLabel className="rounded-none bg-sidebar font-normal tracking-wide text-muted-foreground">
+                Recent agents
+                <RecentsSortMenu order={order} />
+              </SidebarGroupLabel>
               {/* Absolute (hanging just below the label) so it does not push the first row down; it
                   still overlays the rows scrolling up under it. `rail-fade` keeps it invisible at
                   the top of the scroll (so it never dims the first row) and fades it in on scroll. */}
@@ -526,6 +537,44 @@ function NewButton({
   )
 }
 
+/**
+ * The button beside "Recent agents" (his pick, after Claude Code's own beside its "Recents"): the
+ * order of the list, kept in the person's preferences. By creation unless picked otherwise, so a
+ * run does not move while a person talks to it.
+ */
+function RecentsSortMenu({ order }: { order: RecentsSort }) {
+  return (
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              type="button"
+              aria-label="Sort agents"
+              className="ml-auto flex h-5 w-5 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            />
+          }
+        >
+          <ArrowDownUp className="h-3.5 w-3.5" aria-hidden />
+        </TooltipTrigger>
+        <TooltipContent>Sort by: {RECENTS_SORT_LABELS[order]}</TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="end" className="min-w-40">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="font-normal">Sort by</DropdownMenuLabel>
+          {(Object.keys(RECENTS_SORT_LABELS) as RecentsSort[]).map(pick => (
+            // aria-current: the check mark is only drawn, so a screen reader is told the pick too.
+            <DropdownMenuItem key={pick} aria-current={pick === order} onClick={() => updatePreferences({ recentsSort: pick })}>
+              <Check className={cn('h-3.5 w-3.5 shrink-0', pick === order ? 'opacity-100' : 'opacity-0')} aria-hidden />
+              {RECENTS_SORT_LABELS[pick]}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 /** A main agent's list of subagents, as its row folds it: how many, how many work, and the fold. */
 type SubagentsFold = { count: number; working: number; open: boolean; onToggle: () => void }
 
@@ -568,23 +617,6 @@ function RevealedTitle({ text, start }: { text: string; start: boolean }) {
   )
 }
 
-/** How a run's pull request stands, as the git host last said. */
-type PrState = NonNullable<AgentMeta['prState']>
-
-/**
- * A run's pull request on its row, one glyph per state in the git host's own colours, so a list of
- * runs says which have work waiting for review and which landed without opening one. Each state
- * has its own shape too, for a reader who cannot tell the colours apart. A request whose state is
- * not known, older than the git host lists or not read yet, has no mark: a plain one read as one
- * more state. Its number is still in the row's sentence.
- */
-const PR_MARKS: Record<PrState, { Icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; tone: string; word: string }> = {
-  open: { Icon: GitPullRequest, tone: 'text-success', word: 'open' },
-  draft: { Icon: GitPullRequestDraft, tone: 'text-muted-foreground', word: 'draft' },
-  merged: { Icon: GitMerge, tone: 'text-merged', word: 'merged' },
-  closed: { Icon: GitPullRequestClosed, tone: 'text-danger', word: 'closed' },
-}
-
 // One agent row, one line: a small circle and the session's name, as Claude Code on the web lists
 // its sessions. The row used to be two lines — a status word, the project, the time and the agent's
 // logo above the name — which made the list a column of paragraphs and fitted half as many sessions
@@ -612,6 +644,7 @@ function AgentHistoryRow({
   pr,
   unpublished,
   uncommitted,
+  gitHost = true,
 }: {
   status: AgentStatus
   /** The row's subagents, folded or open under it: a count at the row's end, so a row with subagents is no taller than one without. */
@@ -647,10 +680,12 @@ function AgentHistoryRow({
   startedOn?: string | undefined
   /** The run's pull request, and how it stands when the git host said: a glyph before the agent's logo. */
   pr?: { number: number; state?: PrState } | undefined
-  /** How many commits of its own wait on its branch, never pushed: the Human Queue's "Not published", marked where a pull request would be. */
+  /** How many commits of its own wait on its branch, never pushed: the Human Queue's "Needs PR", marked where a pull request would be. */
   unpublished?: number | undefined
-  /** How many files its checkout left uncommitted: the Human Queue's "Not committed", in the same place. */
+  /** How many files its checkout left uncommitted: the Human Queue's "Needs commit", in the same place. */
   uncommitted?: number | undefined
+  /** Whether its project can open a pull request: commits never pushed need one, else a push. */
+  gitHost?: boolean
 }) {
   // A run that ended on its question waits on you (#785), and so does a web run whose cloud
   // session the bridge reports as parked (#1668).
@@ -668,14 +703,27 @@ function AgentHistoryRow({
   // side owns its own push/PR, so the cloud word is the truer one for that row.
   const savingNow = saving && !cloud
   // The title only fades + carries a tooltip when it actually overflows the fixed-width rail; a
-  // short one shows plainly. Measured here since CSS cannot tell. The rail width is fixed, so
-  // intent is the only thing that changes the answer.
+  // short one shows plainly. Measured here since CSS cannot tell. Measured again once the page's
+  // font has loaded, and whenever the title's room changes: read before the font, a long title
+  // measured short, and kept no fade until the next reload.
   const titleRef = useRef<HTMLSpanElement>(null)
   const [overflowing, setOverflowing] = useState(false)
   useEffect(() => {
     const el = titleRef.current
-    if (el) setOverflowing(el.scrollWidth > el.clientWidth + 1)
-  }, [intent])
+    if (!el) return
+    let gone = false
+    const measure = () => {
+      if (!gone) setOverflowing(el.scrollWidth > el.clientWidth + 1)
+    }
+    measure()
+    void document.fonts?.ready.then(measure)
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure)
+    observer?.observe(el)
+    return () => {
+      gone = true
+      observer?.disconnect()
+    }
+  }, [intent, naming])
   const titleText = naming ? '' : intent || 'New agent'
   const titleClass = cn('rail-title min-w-0 flex-1 text-sm font-normal', overflowing && 'is-overflowing')
   // What the row says in a word, the one the status badge used to print: it names the circle, and
@@ -689,12 +737,12 @@ function AgentHistoryRow({
   const ringTone = (cloudWord ? STATUS_RING[cloudWord] : STATUS_RING[status]) ?? STATUS_RING['done']
   const prMark = pr?.state ? PR_MARKS[pr.state] : undefined
   const prSaid = pr ? `PR #${pr.number}${prMark ? ` ${prMark.word}` : ''}` : undefined
-  // Work that never left the machine, in the Human Queue's words, icon and colour: files left
+  // Work that never left the machine, in the Human Queue's words and icon, gray (his pick): files left
   // uncommitted first, since committing them is the run's next step.
   const left = uncommitted
-    ? { Icon: FilePen, said: `Not committed · ${uncommitted} file${uncommitted === 1 ? '' : 's'}` }
+    ? { Icon: FilePen, said: `${needsWord('uncommitted')} · ${uncommitted} file${uncommitted === 1 ? '' : 's'}` }
     : unpublished
-      ? { Icon: GitBranch, said: `Not published · ${unpublished} commit${unpublished === 1 ? '' : 's'}` }
+      ? { Icon: GitBranch, said: `${needsWord('unpushed', gitHost)} · ${unpublished} commit${unpublished === 1 ? '' : 's'}` }
       : undefined
   // Everything the two-line row used to print, in one sentence on hover: the word, where the run
   // is and when it started, which coding agent ran it, and the machine or cloud it ran on.
@@ -800,7 +848,7 @@ function AgentHistoryRow({
       )}
       {left && (
         <span role="img" aria-label={left.said} className="flex shrink-0 items-center">
-          <left.Icon className="h-3 w-3 text-info" aria-hidden />
+          <left.Icon className="h-3 w-3 text-muted-foreground" aria-hidden />
         </span>
       )}
       {/* Which coding agent ran it, as its own mark at the very end of the row (his pick): a

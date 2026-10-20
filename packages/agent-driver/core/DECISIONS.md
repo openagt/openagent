@@ -12,7 +12,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   streams what it does, writes the log and reads the inbox, and says when the agent asked.
   Every other piece only passes paths or writes lines. Picked over the runner tailing the
   inbox and detecting the question itself (the session's protocol in two packages), and
-  over a steering library imported from OpenAgent (a tool depending on the product).
+  over a steering library imported from OpenAgent (a tool depending on the product). The
+  caller is handed each line it takes, and says what the line changes for the prompts from
+  it on (the sentence after them, when a message gives the run a new level).
 - Drain, then end. When a turn ends, every line already waiting in the inbox is sent as a
   further prompt of the same session, and the prompt returns when the inbox is empty; a
   line that comes later is for a new session resumed by its id. Picked over a session that

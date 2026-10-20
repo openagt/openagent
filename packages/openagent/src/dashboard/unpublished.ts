@@ -15,7 +15,7 @@ export interface Unpublished {
 
 /**
  * The finished runs of a project whose work never left this machine (#860), by run id: what the
- * Human Queue lists as "Not committed" and "Not published" and the list of runs marks on each row,
+ * Human Queue lists as "Needs commit" and "Needs PR" (or "Needs push") and the list of runs marks on each row,
  * read alike so the two never disagree.
  *
  * Only a branch the branches provider made for the run counts. A branch of the person's own is

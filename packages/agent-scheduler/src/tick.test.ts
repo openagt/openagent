@@ -179,7 +179,7 @@ test('a due command under its cap with quota to spare is marked on the branch, t
   // On Claude Code, on the scheduler's own model: neither its skill nor a person names another.
   assert.deepEqual([marker.driver, marker.model], ['claude-code', 'opus'])
   // Nobody picked a publish level on this machine: the run commits its work.
-  assert.deepEqual(marker.caller, { runner: { host: 'this-box', publish: 'commit' }, host: 'this-box' })
+  assert.deepEqual(marker.caller, { runner: { host: 'this-box', publish: 'commit' }, host: 'this-box', publish: 'commit' })
   // The run is handed what its check printed; its prompt stays the command alone, as the marker's does.
   assert.deepEqual(seen.spawned, [{ id: marker.id, prompt: '/work-queue', startedAt: NOW.toISOString(), driver: 'claude-code', model: 'opus', publish: 'commit', attached: `${FOUND_OPENING}\n["one entry"]` }])
 })
@@ -320,8 +320,8 @@ test("this machine's publish pick goes on the marker and to the spawned run: com
   const record = await tick(d)
   assert.deepEqual(seen.markers.map(m => m.caller), [
     { runner: { host: 'this-box' }, host: 'this-box' },
-    { runner: { host: 'this-box', publish: 'merge' }, host: 'this-box' },
-    { runner: { host: 'this-box', publish: 'commit' }, host: 'this-box' },
+    { runner: { host: 'this-box', publish: 'merge' }, host: 'this-box', publish: 'merge' },
+    { runner: { host: 'this-box', publish: 'commit' }, host: 'this-box', publish: 'commit' },
   ])
   assert.deepEqual(seen.spawned.map(s => [s.prompt, s.publish]), [['/work-queue', undefined], ['/triage quick', 'merge'], ['/plan-tickets', 'commit']])
   assert.deepEqual(record.schedule, [

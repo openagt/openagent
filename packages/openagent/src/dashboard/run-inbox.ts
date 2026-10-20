@@ -52,7 +52,7 @@ export async function sayToRun(
   for (const stranded of lines) {
     const resumed = await runResumeHook(cwd, {
       runId: agentId,
-      ...(stranded.kind === 'message' ? { text: stranded.text } : { answer: stranded.answer }),
+      ...(stranded.kind === 'message' ? { text: stranded.text, ...(stranded.publish !== undefined ? { publish: stranded.publish } : {}) } : { answer: stranded.answer }),
     })
     if (!resumed.ok) return resumed
   }

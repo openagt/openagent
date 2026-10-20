@@ -33,7 +33,6 @@ export {
   type Intervention,
   type InterventionsDeps,
 } from './interventions.js'
-export { buildOpenQuestions, type OpenQuestion, type OpenQuestionsDeps } from './open-questions.js'
 export { bridgeChoiceRequest, type BridgeOption, type BridgeQuestion } from './bridge-question.js'
 export { buildActivity, activityKey, type Activity, type ActivityDeps } from './activity.js'
 export { SeenTracker } from './keyed-watcher.js'

@@ -54,7 +54,7 @@ describe('the Overview', () => {
     expect(cards.className).toContain('[&>*]:break-inside-avoid')
   })
 
-  test('the Human Queue: work left uncommitted says so and opens its run; a request a run opened opens that run, one opened elsewhere links the git host', async () => {
+  test('the Human Queue: work left uncommitted asks for a commit and opens its run; a request a run opened opens that run, one opened elsewhere links the git host', async () => {
     onDashboard.mockResolvedValue({ active: [] })
     const onSelectAgent = vi.fn()
     const item = (over: Partial<Intervention>): Intervention => ({ projectId: 'p1', projectName: 'test-project', kind: 'pr', title: 't', ...over })
@@ -64,7 +64,7 @@ describe('the Overview', () => {
       item({ number: 8, title: 'Condense README', url: 'https://x/pull/8' }),
     ]
     render(<DashboardPage onSelectProject={() => {}} onSelectAgent={onSelectAgent} onAgentStarted={() => {}} interventions={interventions} projects={[]} scope={null} />)
-    expect(screen.getByText('Not committed')).toBeTruthy()
+    expect(screen.getByText('Needs commit')).toBeTruthy()
     expect(screen.getByText('1 file')).toBeTruthy()
     fireEvent.click(screen.getByText('Create test.md'))
     fireEvent.click(screen.getByText('Add DESCRIPTION.md'))

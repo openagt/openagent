@@ -147,12 +147,13 @@ test('a start line takes the branch to start from when it mentions BASE, in eith
   assert.equal(startLineTakesBase('./start.sh "$BASELINE" "${BASE_DIR}" --base main'), false)
 })
 
-test('the resume line gets the run and the text or the answer', async () => {
-  const cwd = await project(`resume: 'printf "%s|%s|%s" "$RUN_ID" "\${TEXT-unset}" "\${ANSWER-unset}" >> resumed.txt; echo "{\\"id\\":\\"$RUN_ID\\"}"'\n`)
+test('the resume line gets the run and the text or the answer, and a new level with the text when there is one', async () => {
+  const cwd = await project(`resume: 'printf "%s|%s|%s|%s" "$RUN_ID" "\${TEXT-unset}" "\${ANSWER-unset}" "\${PUBLISH-unset}" >> resumed.txt; echo "{\\"id\\":\\"$RUN_ID\\"}"'\n`)
   try {
     assert.deepEqual(await runResumeHook(cwd, { runId: 'run-1', text: 'go on' }), { ok: true, id: 'run-1' })
     assert.deepEqual(await runResumeHook(cwd, { runId: 'run-2', answer: 'Yes' }), { ok: true, id: 'run-2' })
-    assert.equal(await readFile(join(cwd, 'resumed.txt'), 'utf8'), 'run-1|go on|unsetrun-2|unset|Yes')
+    assert.deepEqual(await runResumeHook(cwd, { runId: 'run-3', text: 'ship it', publish: 'pr' }), { ok: true, id: 'run-3' })
+    assert.equal(await readFile(join(cwd, 'resumed.txt'), 'utf8'), 'run-1|go on|unset|unsetrun-2|unset|Yes|unsetrun-3|ship it|unset|pr')
   } finally {
     await rm(cwd, { recursive: true, force: true })
   }

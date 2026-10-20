@@ -80,12 +80,12 @@ describe('ChatPane', () => {
     expect(screen.getByTestId('chat-bottom').className.split(' ')).toEqual(expect.arrayContaining(['max-h-full', 'overflow-y-auto']))
   })
 
-  test('the chat fades out at each end of its room: under the top bar, and above the message box\'s bar', () => {
+  test('the chat fades out at each end of its room: under the top bar, and above the message box\'s bar, clear of the scroll bar', () => {
     render(<ChatPane top={<b>top bar</b>} bottom={<b>message box</b>}><p>chat</p></ChatPane>)
     const chatRoom = screen.getByText('chat').parentElement!
     const fades = [...chatRoom.querySelectorAll<HTMLElement>(':scope > [aria-hidden]')].filter(el => el.className.includes('to-transparent')).map(el => el.className.split(' '))
     expect(fades).toHaveLength(2)
-    for (const fade of fades) expect(fade).toEqual(expect.arrayContaining(['pointer-events-none', 'absolute', 'left-0', 'right-(--chat-scroll-bar)']))
+    for (const fade of fades) expect(fade).toEqual(expect.arrayContaining(['pointer-events-none', 'absolute', 'left-0', 'right-[max(var(--chat-scroll-bar),0.75rem)]']))
     expect(fades[0]).toEqual(expect.arrayContaining(['top-0', 'bg-gradient-to-b']))
     expect(fades[1]).toEqual(expect.arrayContaining(['bottom-(--chat-bottom)', 'bg-gradient-to-t']))
   })

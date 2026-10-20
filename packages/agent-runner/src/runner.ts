@@ -8,7 +8,7 @@ import { CodexDriver, codexReady } from '@openagt/agent-driver-codex'
 import { findRun } from '@openagt/skill-logs'
 import { readPersonal } from './config.js'
 import { resumeRun, runCommand, runIdFrom, type RunOutcome } from './run.js'
-import type { Publish } from './records.js'
+import { publishChange, type NO_PUBLISH, type Publish } from './records.js'
 import { acquireRunLock, handOverRunLock, isPidAlive, releaseRunLock, runStderrPath } from './run-lock.js'
 
 /**
@@ -99,6 +99,8 @@ export interface SpawnedResume {
   effort?: string
   /** Who resumes the run (`run --resume --by`), kept on its mark. */
   by?: string
+  /** How far the run takes its work from here on (`run --resume --publish`): a level, or `nothing`; its record's level when absent. */
+  publish?: Publish | typeof NO_PUBLISH
 }
 
 /** The command line of a spawned resume: the text as the argument, or the answer. */
@@ -109,6 +111,7 @@ export function resumeArgs(run: SpawnedResume): string[] {
   if (run.model !== undefined) args.push('--model', run.model)
   if (run.effort !== undefined) args.push('--effort', run.effort)
   if (run.by !== undefined) args.push('--by', run.by)
+  if (run.publish !== undefined) args.push('--publish', run.publish)
   return args
 }
 
@@ -243,6 +246,7 @@ export async function resumeProject(
     ...(opts.model !== undefined ? { model: opts.model } : {}),
     ...(opts.effort !== undefined ? { effort: opts.effort } : {}),
     ...(opts.by !== undefined ? { by: opts.by } : {}),
+    ...(opts.publish !== undefined ? { publish: publishChange(opts.publish) ?? null } : {}),
     driver: (deps.driverFor ?? driverFor)(recorded, opts.id, setup),
     nextDriver: next => (deps.driverFor ?? driverFor)(recorded, next, setup),
     resume: resumeDetached(repo),

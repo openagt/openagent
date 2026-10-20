@@ -95,6 +95,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   starts (the machine, the project, the branch) is a row above the box, in the same plain
   words. Picked over bordered chips above the box, over every item in one row under it, and
   over the effort as a menu of its own.
+- A session's box has the launcher's Context and Auto menus too, and its pull request, a
+  link with its number and state. What the Context picks and a changed Auto go with the next
+  message: the Context as the line at its end, Auto as how far the run takes its work from that
+  message on. Picked over a session bound for its whole life to the level it started at, where a
+  person who liked the work had no way to have it published but a new run.
 - The foot of the sidebar is the person: their picture and first name, as one row that opens
   one menu with their whole name, the theme, the notifications and Settings. The name is git's, the picture the
   git host's, asked through the project's git host package. The project select stays at the
@@ -164,13 +169,14 @@ already made, and lists it in its pull request; for anything else it proposes an
   and running their commands in the first one, which left a computer with no project, as
   a server is when it was just connected, with no way to let a phone in; and over a
   starter project made on every server, one nobody asked for.
-- "Add project" stays small: it writes no skill. The project's ⋮ menu then has
-  "Skills…", which opens the same list with ticks `npx @openagt/init` shows in a
+- "Add project" stays small: it writes no skill. The launcher's row under the box then has
+  "Skills", after Auto, which opens the same list with ticks `npx @openagt/init` shows in a
   terminal, through that package's own code, so the two cannot drift apart. Picked over
   "Add project" writing the skills itself, which put files into every project a person
-  adds, and over only pointing to the terminal. The menu was picked over a line of its
+  adds, and over only pointing to the terminal. The button was picked over a line of its
   own on the project's page ("This project has 4 of 25 skills", with an "Add skills"
-  button), which stood there also when it had nothing to offer.
+  button), which stood there also when it had nothing to offer, and over an item in the
+  project's ⋮ menu, where it was not seen.
 - A project is also added by its repository's address, for a computer that does not have
   its folder, as a server: OpenAgent clones it into `~/projects/<its name>` and says where
   it went. Picked over asking for the folder at every add, one more thing to read.
@@ -253,6 +259,22 @@ already made, and lists it in its pull request; for anything else it proposes an
   computer. Picked over framing the page that computer serves, which showed on that
   computer only; and over a `browser` kind the dashboard renders itself, which the next
   package showing something would have had to repeat.
+
+- A run goes by one name in every list: its short name, else what was asked, else its branch.
+  The Human Queue, the launcher's "Waiting on you" and the sidebar say it alike. Picked over
+  each list naming a run its own way (the prompt in one, the question or the pull request's
+  title in another), which made one run look like three.
+- What waits on the person is one list, said the same wherever it shows: the Human Queue on
+  the Overview, and "Waiting on you" on a project's launcher, that project's rows only. Each
+  row says what is needed in two words ("Needs answer", "Needs commit", "Needs PR" or "Needs
+  push", "Needs merge"), the run's name, then what it is about. The first five show, and a
+  line offers the rest. Picked over the launcher listing only the questions, and over words
+  that said what had not happened ("Not committed"), and over pages of rows.
+- The sidebar lists the runs by when they were started, unless the person picks the last
+  update or the name from the button beside "Recent agents". Picked over the runs that hold a
+  checkout first, which moved a run answered days later to the top and back once its checkout
+  went, and over the last update as the default, Claude Code's, which moves a row while a
+  person talks to it.
 
 ## Starting a run
 - A Start runs the project's own `start` line, in the project's hooks file, and the line
