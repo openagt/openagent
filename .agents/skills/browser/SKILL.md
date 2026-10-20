@@ -2,7 +2,7 @@
 name: browser
 description: A real browser you drive from the shell, to see or act on a web page (open it, read it, click, type, take a screenshot), such as checking that the app you changed works.
 metadata:
-  version: 0.1.1
+  version: 0.1.2
 ---
 
 # The browser
@@ -34,6 +34,8 @@ The browser belongs to the project the command runs in (its git root): run every
 
 A refusal exits 1 with the reason on stderr (no browser open, no such element, an address the server did not answer, a page that did not answer within 30 seconds; an error page such as a 404 prints like any page); a wrong command line exits 2 with the usage.
 
-A person watching your run sees this browser live, with its console, and can click and type in it too: if the page is not what your last print showed, read it again.
+A person watching your run sees this browser live, with its console, and can click, type and paste in it too: if the page is not what your last print showed, read it again.
 
-Close it when you are done (with none open, `close` says so and succeeds). It also closes after 30 minutes unused, and when your run ends if the tool running you keeps a diary of the run; stopping to ask a question does not close it.
+What a page asks of a person is theirs to give, not yours to get around: a sign-in, a "prove you are a human" check, a code from their phone, a card number. Never type someone's password, and never try to get past a check that is there to tell a person from a program. Say what the page is asking for, and ask the person for it (the `question` skill), ending your reply there. Your browser stays open while you wait and they do it themselves in the live view; their answer brings you back, and you read the page again and go on from where they left it. When nobody will answer you, say which page needs a person and stop there.
+
+Close it when the page is of no more use to anyone (with none open, `close` says so and succeeds) — but leave it open when the person may want to see what you saw: the browser is their view as much as your tool, and the end of your run is when they are most likely to look. Left open, it closes itself 10 minutes after your run ends, longer while someone is still watching it, and after 30 minutes unused while your run is still going. A run that stops to ask a question keeps it for the answer.

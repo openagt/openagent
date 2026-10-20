@@ -8,7 +8,7 @@ schedule:
   when: |-
     { gh issue list --state all --limit 1 --json number --search "updated:>=$(npx @openagt/skill-tickets@0.1 meta | jq -r .lastImportedAt)"; gh pr list --state merged --limit 100 --json number,body --search "merged:>=$(npx @openagt/skill-tickets@0.1 meta | jq -r .lastImportedAt)" | jq '[.[] | select(.body | test("(?m)^Closes tickets/\\w")) | {number}]'; npx @openagt/skill-tickets@0.1 meta | jq --argjson t "$(npx @openagt/skill-tickets@0.1 list)" '[select(.lastImportedAt == null and ($t | length) == 0) | "first import"]'; } | jq -s add
 metadata:
-  version: 0.1.0
+  version: 0.1.1
 ---
 
 Bring the tickets up to date with the project's issue tracker and its merged pull requests. Nobody will answer you: never ask, decide yourself.
@@ -19,4 +19,4 @@ Bring the tickets up to date with the project's issue tracker and its merged pul
 4. Fetch every pull request merged since that time, past any page limit, with its body. Each line `Closes tickets/<file>` in a body has that ticket closed; a ticket already gone is nothing to do.
 5. Record the time you noted as the new import time.
 
-A ticket someone else holds is updated like any other but not closed: leave it open. If anything else fails once you started fetching, record no time: show an error to the user saying what failed, and stop.
+A ticket you close leaves the agent queue too, where the project has one: mark done every entry naming its file or its plan's file, `tickets/<name>.md` or `tickets/<name>.plan.md`, by that exact path. A ticket someone else holds is updated like any other but not closed: leave it open. If anything else fails once you started fetching, record no time: show an error to the user saying what failed, and stop.
