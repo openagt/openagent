@@ -109,6 +109,22 @@ describe('useAgents', () => {
     expect(onAgents.mock.calls.length - read).toBeLessThanOrEqual(1)
   })
 
+  test('an agent just started is read every 400ms until its name has come too, then every 2s again', async () => {
+    const startedAt = new Date().toISOString()
+    onAgents.mockResolvedValue([{ id: 'new', status: 'running', branch: 'agent-new', startedAt } as AgentMeta])
+    renderHook(() => useAgents('a', 'new'))
+    await settle()
+    // Set up, but no name yet: the name is what the person waits on now.
+    await settle(400)
+    await settle(400)
+    expect(onAgents).toHaveBeenCalledTimes(3)
+    onAgents.mockResolvedValue([{ id: 'new', status: 'running', branch: 'agent-new', startedAt, title: 'Readme condensing' } as AgentMeta])
+    await settle(400)
+    const read = onAgents.mock.calls.length
+    await settle(1200)
+    expect(onAgents.mock.calls.length - read).toBeLessThanOrEqual(1)
+  })
+
   test('an agent that ended without a branch is not read more often', async () => {
     onAgents.mockResolvedValue([{ id: 'new', status: 'failed' } as AgentMeta])
     renderHook(() => useAgents('a', 'new'))

@@ -1,4 +1,5 @@
 import type { AgentMeta } from '../../src/index.js'
+import { runName } from '../../src/client.js'
 import { formatDateTimeShort } from './format-date.js'
 
 // What to call a session in a list, and when a list should wait for that name rather than show the
@@ -15,9 +16,10 @@ import { formatDateTimeShort } from './format-date.js'
 //
 // The fallbacks in order: the branch the agent named its work with (#326/#1725), then when nothing
 // describes the agent, the time it started. A date is a poor name but a real one, and it belongs
-// on the line that identifies the row.
+// on the line that identifies the row. All but the date are `runName`, the rule the Human Queue
+// names its runs by too, so a run goes by one name everywhere.
 export function agentLabel(agent: Pick<AgentMeta, 'id' | 'title' | 'intent' | 'branch' | 'startedAt'>): string {
-  return agent.title?.trim() || agent.intent?.trim() || agent.branch?.trim() || formatDateTimeShort(agent.startedAt)
+  return runName(agent) ?? formatDateTimeShort(agent.startedAt)
 }
 
 /**

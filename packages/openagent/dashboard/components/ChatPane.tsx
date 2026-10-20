@@ -44,9 +44,11 @@ export function ChatPane({ top, bottom, children }: { top: ReactNode; bottom: Re
         <div ref={bottomBar} data-testid="chat-bottom" className="absolute right-(--chat-scroll-bar) bottom-0 left-0 z-10 max-h-full overflow-y-auto bg-background">
           {bottom}
         </div>
-        {/* A short fade at each end, so a row passing out of view is not cut by a straight line. */}
-        <div className="pointer-events-none absolute top-0 right-(--chat-scroll-bar) left-0 z-10 h-4 bg-gradient-to-b from-background to-transparent" aria-hidden />
-        <div className="pointer-events-none absolute right-(--chat-scroll-bar) bottom-(--chat-bottom) left-0 z-10 h-4 bg-gradient-to-t from-background to-transparent" aria-hidden />
+        {/* A short fade at each end, so a row passing out of view is not cut by a straight line. They
+            stop short of the scroll bar, and of a strip as wide as one where the scroll bar lies over
+            the content and takes no room (a Mac's): there the bar would show up faded at either end. */}
+        <div className="pointer-events-none absolute top-0 right-[max(var(--chat-scroll-bar),0.75rem)] left-0 z-10 h-4 bg-gradient-to-b from-background to-transparent" aria-hidden />
+        <div className="pointer-events-none absolute right-[max(var(--chat-scroll-bar),0.75rem)] bottom-(--chat-bottom) left-0 z-10 h-4 bg-gradient-to-t from-background to-transparent" aria-hidden />
       </div>
     </div>
   )

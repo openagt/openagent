@@ -59,7 +59,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   push the branch, open its pull request, or set it to merge once its checks pass
   (`run --publish <commit|branch|pr|merge>`). Every level starts with the commit. With no
   level the prompt goes as written, and the agent commits and publishes only what the prompt
-  itself asks. The record keeps the level, so a resumed run says it again. The sentence follows
+  itself asks. The record keeps the level, so a resumed run says it again. A message, or a
+  resume, can give the run another level from there on, or take it away (`nothing`), and the
+  record names the new one: a person who liked the work has it published by saying so. A
+  level given part way also ends the run's follow-up, which was the merge's: the person has
+  said how far the run goes. The sentence follows
   every message the agent is sent, a queued one too, and the diary keeps it apart from the
   message, so a reader shows a person's words as the person wrote them. Picked over gluing
   it into the prompt, where it read as the person's own words and a queued message got none. Picked over the

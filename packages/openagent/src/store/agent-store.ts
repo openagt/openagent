@@ -63,6 +63,12 @@ export interface AgentMeta {
    */
   baseCommit?: string
   /**
+   * How far the run takes its work when its agent finishes: `commit`, `branch`, `pr` or `merge`,
+   * the level it was started at or last given. Written on the card by the tool that runs it;
+   * absent on a run with none, whose prompts go as written. The session's "Auto" pick shows it.
+   */
+  publish?: string
+  /**
    * The last commit of the run's work, written on the card when its main agent landed it: its
    * branch is gone, and its changes are read from this commit. Absent on a run that is not landed.
    */

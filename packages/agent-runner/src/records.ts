@@ -21,6 +21,17 @@ export function isPublish(value: unknown): value is Publish {
   return (PUBLISH_LEVELS as readonly unknown[]).includes(value)
 }
 
+/** The word that takes a run's level away on a resume or a message (`--publish nothing`): from there on its prompt goes as written. */
+export const NO_PUBLISH = 'nothing'
+
+/**
+ * A level a run is given part way, by a resume or a message (`--publish`, an inbox line's
+ * `publish`): one of the levels, or `null` for {@link NO_PUBLISH}; any other word is no change.
+ */
+export function publishChange(word: string | undefined): Publish | null | undefined {
+  return isPublish(word) ? word : word === NO_PUBLISH ? null : undefined
+}
+
 /** This tool's mark on a card, under `caller.runner`. */
 export interface RunnerMark {
   /** The machine that started it. */
@@ -78,11 +89,17 @@ export function markerCard(run: { id: string; startedAt: string; prompt: string;
 
 /**
  * What a reader of the card finds beside `host`, outside this tool's mark: the run's parent, the
- * branch it was started from when it was told one, and the commit its own work begins at, which
- * its changes are measured from.
+ * branch it was started from when it was told one, the commit its own work begins at, which its
+ * changes are measured from, and how far it takes its work, which a dashboard shows and offers to
+ * change.
  */
-export function forReaders(mark: Pick<RunnerMark, 'parent' | 'base' | 'baseCommit'>): { parent?: string; base?: string; baseCommit?: string } {
-  return { ...(mark.parent !== undefined ? { parent: mark.parent } : {}), ...(mark.base !== undefined ? { base: mark.base } : {}), ...(mark.baseCommit !== undefined ? { baseCommit: mark.baseCommit } : {}) }
+export function forReaders(mark: Pick<RunnerMark, 'parent' | 'base' | 'baseCommit' | 'publish'>): { parent?: string; base?: string; baseCommit?: string; publish?: Publish } {
+  return {
+    ...(mark.parent !== undefined ? { parent: mark.parent } : {}),
+    ...(mark.base !== undefined ? { base: mark.base } : {}),
+    ...(mark.baseCommit !== undefined ? { baseCommit: mark.baseCommit } : {}),
+    ...(mark.publish !== undefined ? { publish: mark.publish } : {}),
+  }
 }
 
 /** What the reclaim of a run's checkout is told: the commit its branch was made at, when its mark names one. */

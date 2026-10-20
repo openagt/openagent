@@ -17,8 +17,12 @@ import { continuationPrompt, parseQuestion } from './question.js'
 
 /** One line of the inbox. */
 export type InboxLine =
-  /** The user's own words to the agent. */
-  | { kind: 'message'; text: string }
+  /**
+   * The user's own words to the agent. `publish` is how far the run takes its work from this
+   * message on, in the words of the tool that runs it, which reads it (`agent-runner`'s levels, or
+   * `nothing`): a driver sends the words alone.
+   */
+  | { kind: 'message'; text: string; publish?: string }
   /** The user's answer to the question the agent stopped on: the question's title and the chosen label or labels. */
   | { kind: 'answer'; question: string; answer: string }
 
@@ -54,7 +58,7 @@ export async function takeInbox(path: string): Promise<InboxLine[]> {
 function isInboxLine(value: unknown): value is InboxLine {
   if (!value || typeof value !== 'object') return false
   const v = value as Record<string, unknown>
-  if (v['kind'] === 'message') return typeof v['text'] === 'string' && v['text'].trim().length > 0
+  if (v['kind'] === 'message') return typeof v['text'] === 'string' && v['text'].trim().length > 0 && (v['publish'] === undefined || typeof v['publish'] === 'string')
   if (v['kind'] === 'answer') return typeof v['question'] === 'string' && typeof v['answer'] === 'string'
   return false
 }
@@ -80,8 +84,11 @@ export async function finishTurn(
   if (!opts.inbox) return turn
   let last = turn
   // What was handed over with the prompt went with it alone: a line from the inbox carries none of it.
-  const { attached: _attached, ...further } = opts
+  const { attached: _attached, ...rest } = opts
+  let further: DriverPromptOptions = rest
   for (const line of await takeInbox(opts.inbox)) {
+    // The caller says what the line changes, for it and the lines after it.
+    if (opts.onInboxLine) further = await opts.onInboxLine(line, further)
     last = await session.prompt(promptOf(line), { ...further, resume: true })
   }
   return last

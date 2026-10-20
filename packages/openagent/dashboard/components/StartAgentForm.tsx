@@ -1,7 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { CircleAlert, Folder } from 'lucide-react'
-import { onProjects, onStartCheck } from '../rpc/projects.js'
-import type { ProjectSummary } from '../../src/index.js'
+import { CircleAlert, Folder, Puzzle } from 'lucide-react'
+import { onStartCheck } from '../rpc/projects.js'
 import { usePreferences, usePreferencesLoaded, updatePreferences } from '../lib/preferences.js'
 import { offeredPublishPicks, publishPickIn } from '../../src/client.js'
 import { useMachines } from '../lib/machines.js'
@@ -11,10 +10,10 @@ import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.j
 import { useLoaded } from '../lib/use-async.js'
 import { promptWithContext } from '../lib/use-context-set.js'
 import { AutoMenu } from './AutoMenu.js'
-import { ContextMenu } from './ContextMenu.js'
+import { ProjectContextMenu } from './ContextMenu.js'
 import { Composer, type ComposerHandle } from './Composer.js'
 import { StartFromMenu, type StartFrom } from './StartFromMenu.js'
-import { RowItem } from './ui/row-item.js'
+import { RowItem, rowButtonClass } from './ui/row-item.js'
 import { Dots } from './ToolCalls.js'
 
 /** The note while the start is asked for: what the chat's first line says next. */
@@ -56,6 +55,7 @@ export function StartAgentForm({
   addContext,
   removeContext,
   toggleContext,
+  onOpenSkills,
 }: {
   projectId: string
   /** The project's name, for the row above the box; absent until the projects are read. */
@@ -72,6 +72,8 @@ export function StartAgentForm({
   removeContext: (path: string) => void
   /** Toggle a path in the Context (a project's checkbox, a file's cross). */
   toggleContext: (path: string) => void
+  /** Open the list of the project's skills: given, the row under the box has "Skills" after "Auto". */
+  onOpenSkills?: (() => void) | undefined
 }) {
   const [note, setNote] = useState<string | null>(null)
   // The machine the last start was sent to, by its name: what the form says it is cloning on.
@@ -117,21 +119,6 @@ export function StartAgentForm({
   // another machine uses that machine's CLIs, so this one's say nothing about it.
   const driver = preferences.driver
   const readiness = useLoaded(machine ? null : () => onStartCheck(projectId, driver), null, [projectId, driver, machine === undefined])
-
-  // The Context mixes whole projects (registered paths) and single files (relative paths): the
-  // files are listed to be removed, and each kind is counted in the picker's summary. The current
-  // project is the run's own checkout, so only the other projects are offered (#665).
-  const projects = useLoaded<ProjectSummary[]>(onProjects, [], [])
-  const projectPaths = new Set(projects.map(p => p.path))
-  const contextFiles = [...context].filter(path => !projectPaths.has(path))
-  const otherProjects = projects.filter(p => p.id !== projectId)
-  const pickedProjects = otherProjects.filter(p => context.has(p.path)).length
-  const contextSummary = [
-    pickedProjects > 0 ? `${pickedProjects} project${pickedProjects > 1 ? 's' : ''}` : null,
-    contextFiles.length > 0 ? `${contextFiles.length} file${contextFiles.length > 1 ? 's' : ''}` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ')
 
   const submit = async (text: string) => {
     if (busy) return
@@ -181,17 +168,10 @@ export function StartAgentForm({
             </>
           ) : null
         }
-        // How it runs, under the box: the Context picker, then the "Auto" menu.
+        // How it runs, under the box: the Context picker, the "Auto" menu, then the project's skills (his pick).
         controls={
           <>
-            <ContextMenu
-              otherProjects={otherProjects}
-              context={context}
-              contextFiles={contextFiles}
-              summary={contextSummary}
-              busy={busy}
-              onToggle={toggleContext}
-            />
+            <ProjectContextMenu projectId={projectId} context={context} busy={busy} onToggle={toggleContext} />
             <AutoMenu
               publish={publishPick}
               picks={offeredPublishPicks(gitHost, remote)}
@@ -200,6 +180,12 @@ export function StartAgentForm({
               onCleanup={next => updatePreferences({ postMergeCleanup: next })}
               busy={busy}
             />
+            {onOpenSkills && (
+              <button type="button" onClick={onOpenSkills} className={rowButtonClass}>
+                <Puzzle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span className="truncate">Skills</span>
+              </button>
+            )}
           </>
         }
         onSubmit={submit}

@@ -114,7 +114,7 @@ async function main(): Promise<void> {
   }
   if (mode === 'resume') {
     const id = process.env['RUN_ID'] ?? ''
-    record({ hook: 'resume', id, text: process.env['TEXT'], answer: process.env['ANSWER'] })
+    record({ hook: 'resume', id, text: process.env['TEXT'], answer: process.env['ANSWER'], publish: process.env['PUBLISH'] })
     detach(['continue', id])
     process.stdout.write(JSON.stringify({ ok: true, id }) + '\n')
     return

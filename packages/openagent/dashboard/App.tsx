@@ -12,7 +12,7 @@ import { ProjectHome } from './components/ProjectHome.js'
 import { DashboardPage } from './components/DashboardPage.js'
 import { SettingsDialog } from './components/SettingsDialog.js'
 import { AgentView } from './components/AgentView.js'
-import { agentLabel } from './lib/agent-label.js'
+import { agentLabel, awaitingName } from './lib/agent-label.js'
 import { subagentsOf, taskLabel } from './lib/subagents.js'
 import { PaneLayout, PanesProvider } from './components/Panes.js'
 import { SubagentPanel } from './components/SubagentPanel.js'
@@ -26,7 +26,7 @@ import { sendToScreen, watchScreen } from './lib/screen.js'
 import { startPicks } from './lib/use-start-agent.js'
 import { stashPendingDraft } from './lib/draft-handoff.js'
 import { useLiveEvents } from './lib/use-live-events.js'
-import { useAgents } from './lib/use-agents.js'
+import { STARTING_AT_MOST_MS, useAgents } from './lib/use-agents.js'
 import { usePolled } from './lib/use-async.js'
 import { useRoute } from './lib/use-route.js'
 import { formatRoute, type Route } from './lib/route.js'
@@ -149,7 +149,7 @@ export function App() {
   // the main pane that a session missing from the list is starting, not gone.
   // `runsOn` names the machine a just-started remote agent executes on (#1067), so the live view can
   // mark where it runs and degrade the panels that are local-only. Undefined for a local agent.
-  const [agentStart, setAgentStart] = useState<{ tick: number; intent: string; id: string | null; projectId: string | null; runsOn?: string }>({ tick: 0, intent: '', id: null, projectId: null })
+  const [agentStart, setAgentStart] = useState<{ tick: number; intent: string; id: string | null; projectId: string | null; at: number; runsOn?: string }>({ tick: 0, intent: '', id: null, projectId: null, at: 0 })
   // The agents of the project on screen, for its pages, or of the picked project, for the sidebar:
   // the same project whenever both are set. Read once the address is: before, it names the project
   // by its address, not by its id.
@@ -158,15 +158,17 @@ export function App() {
 
   // The Context set lives in the shell (#492/#504) so the two surfaces that feed it share one
   // source of truth: the launcher's `@`/`#` chips and Context picker, and the Files pane's tree.
-  const { context, add: addContext, remove: removeContext, toggle: toggleContext, reset: resetContext } = useContextSet()
+  const contextSet = useContextSet()
+  const { context, add: addContext, remove: removeContext, toggle: toggleContext, reset: resetContext } = contextSet
 
-  // The picked Context is one project's, so changing projects starts fresh. Keyed off the route
-  // rather than the click, because Back/Forward change projects too.
+  // The picked Context is one project's, and a session's box sends it with its next message, so
+  // changing projects or sessions starts fresh. Keyed off the route rather than the click, because
+  // Back/Forward change them too.
   useEffect(() => {
     resetContext()
-    // `resetContext` is a fresh closure each render; the project is the trigger.
+    // `resetContext` is a fresh closure each render; the project and the session are the trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId])
+  }, [projectId, agentId])
 
   // The selected project's files (git ls-files), handed to both the `#` picker and the tree.
   // Empty when no project (no checkout). Scoped to the selected session's
@@ -179,13 +181,14 @@ export function App() {
     [projectId, agentId],
   )
 
-  // The cross-project "needs you" queue (#632): open PRs to review. Polled here in the shell so
-  // the sidebar badge and the Overview card share one poll. Slow cadence — PRs change rarely and
-  // each poll runs a git host read per project.
+  // The cross-project "needs you" queue (#632): open PRs to review, questions to answer, work left
+  // on this machine. Polled here in the shell so the sidebar badge, the Overview card and the
+  // launcher's "Waiting on you" share one poll. Every five seconds, so an answered question leaves
+  // the list soon; the git host is read no more often for it, its listing being cached.
   // The read as a whole goes to the notifier, which tells of every project's items whichever one
   // is picked, and also needs to know which projects the poll actually reached before it calls
   // anything "new" (#1625).
-  const { value: interventionsRead } = usePolled<ProjectionRead<Intervention>>(onInterventions, EMPTY_INTERVENTIONS, 15000, [])
+  const { value: interventionsRead } = usePolled<ProjectionRead<Intervention>>(onInterventions, EMPTY_INTERVENTIONS, 5000, [])
 
   const project = projectId ? projects.find(p => p.id === projectId) : undefined
   const projectName = project ? (labels.get(project.id) ?? project.name) : null
@@ -214,6 +217,22 @@ export function App() {
   // project's sessions here. Polled only then — a picked project's own agents (above) carry its rail.
   const allShow = scope === null && !scopePending
   const { value: recentAgents, reload: reloadRecent, loaded: recentLoaded } = usePolled<RecentAgent[]>(allShow ? onRecentAgents : null, EMPTY_RECENT, 10_000, [allShow])
+  // Every project's runs are read every ten seconds, but a run just started is read every second
+  // until its row and its name are in, as a project's own list reads it (`use-agents.ts`): the name
+  // is the first thing a person waits on. Only for a run just started: one that never shows in that
+  // list (it runs on another machine) is not read for again each time the list is shown.
+  const startedRecent = agentStart.id === null ? undefined : recentAgents.find(row => row.agent.id === agentStart.id && row.projectId === agentStart.projectId)
+  const recentAwaitsStart =
+    allShow && agentStart.id !== null && Date.now() - agentStart.at < STARTING_AT_MOST_MS && (startedRecent === undefined || awaitingName(startedRecent.agent, preferences.nameRuns !== false))
+  useEffect(() => {
+    if (!recentAwaitsStart) return
+    const timer = setInterval(() => void reloadRecent(), 1000)
+    const stop = setTimeout(() => clearInterval(timer), STARTING_AT_MOST_MS)
+    return () => {
+      clearInterval(timer)
+      clearTimeout(stop)
+    }
+  }, [recentAwaitsStart, reloadRecent])
 
   // An agent just started in `inProject`, which is not always the selected one: the onboarding
   // checklist starts one from the Overview, where nothing is selected (#1169).
@@ -222,7 +241,7 @@ export function App() {
     // nothing would re-replay after a reset. Bumping the tick here is what blanked the transcript
     // the moment a message resumed an ended session; a continuation keeps the feed instead.
     const continued = startedId === agentId && inProject === projectId
-    setAgentStart(prev => ({ tick: continued ? prev.tick : prev.tick + 1, intent, id: startedId, projectId: inProject, ...(runsOn ? { runsOn } : {}) }))
+    setAgentStart(prev => ({ tick: continued ? prev.tick : prev.tick + 1, intent, id: startedId, projectId: inProject, at: Date.now(), ...(runsOn ? { runsOn } : {}) }))
     // The picked Context went with that run; the next launch starts from a clean focus (#948).
     resetContext()
     // Go to the run we just started — a real history entry, so Back returns to where you launched
@@ -419,7 +438,7 @@ export function App() {
         <ProjectHome
           projectId={projectId}
           projectName={projectName}
-          scope={scope}
+          waiting={interventions}
           events={events}
           onAgentStarted={onAgentStarted}
           files={files}
@@ -445,7 +464,7 @@ export function App() {
       // list we have not read yet, where whether the agent runs is not known. Only a session that
       // is genuinely absent from a list we did read is gone.
       if (agentId === agentStart.id || !agentsLoaded)
-        return <AgentView projectId={projectId} agentId={agentId} events={events} live={agentId === agentStart.id ? true : null} label={agentStart.intent || undefined} projectName={projectName} remoteLabel={agentId === agentStart.id ? agentStart.runsOn : undefined} files={files} lost={lost} writing={writing} startedWith={agentId === agentStart.id ? agentStart.intent : undefined} onAgentStarted={onAgentStarted} />
+        return <AgentView projectId={projectId} agentId={agentId} events={events} live={agentId === agentStart.id ? true : null} label={agentStart.intent || undefined} projectName={projectName} remoteLabel={agentId === agentStart.id ? agentStart.runsOn : undefined} files={files} lost={lost} writing={writing} startedWith={agentId === agentStart.id ? agentStart.intent : undefined} onAgentStarted={onAgentStarted} contextSet={contextSet} />
       return (
         <NotFound
           title="This agent is gone"
@@ -475,6 +494,7 @@ export function App() {
         remoteLabel={selectedAgent.remoteLabel}
         subagents={subagents}
         onAgentStarted={onAgentStarted}
+        contextSet={contextSet}
         onDeleted={() => {
           // Its view is about to point at a session that no longer exists; go home and refresh
           // the rail so the row is gone (#1032).

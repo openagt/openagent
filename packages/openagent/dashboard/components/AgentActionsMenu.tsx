@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { GitHostHome, OpenAgentEvent, RepositoryOffer, RecordsReach } from '../../src/index.js'
 import { sessionInfo } from '../../src/client.js'
-import { MoreVertical, ChevronDown, FolderOpen, Code, Check, ExternalLink, Square, FolderX, Trash2, Copy, CloudUpload, CloudOff, Info, Puzzle } from 'lucide-react'
+import { MoreVertical, ChevronDown, FolderOpen, Code, Check, ExternalLink, Square, FolderX, Trash2, Copy, CloudUpload, CloudOff, Info } from 'lucide-react'
 import { onGitHostHome, onRepositoryOffer } from '../rpc/reads.js'
 import { onRecordsReach, sendShareRecords } from '../rpc/projects.js'
 import {
@@ -53,7 +53,6 @@ export function AgentActionsMenu({
   onWorktreeRemoved,
   onDeleted,
   onProjectRemoved,
-  onOpenSkills,
   details,
   size,
 }: {
@@ -67,8 +66,6 @@ export function AgentActionsMenu({
   onDeleted?: (() => void) | undefined
   /** Told once the project is off the list; given, the project's menu offers "Remove project". */
   onProjectRemoved?: (() => void) | undefined
-  /** Open the list of the project's skills; given, the project's menu offers "Skills…". */
-  onOpenSkills?: (() => void) | undefined
   /** The session's details strip under the bar (its coding agent, its spend): the session's menu shows and hides it. */
   details?: { open: boolean; onToggle: () => void } | undefined
   /** The size on disk of the session's worktree, said beside "Remove worktree". */
@@ -201,12 +198,6 @@ export function AgentActionsMenu({
             </DropdownMenuItem>
           )}
           {!session && homeItem}
-          {/* The door to the project's skills: which it has, and the list to add or remove some. */}
-          {onOpenSkills && !session && (
-            <DropdownMenuItem onClick={onOpenSkills}>
-              <Puzzle className="h-3.5 w-3.5 shrink-0" /> Skills…
-            </DropdownMenuItem>
-          )}
           {offer && (
             <DropdownMenuItem onClick={() => setConfirmCreate(true)}>
               <CloudUpload className="h-3.5 w-3.5 shrink-0" /> Create a repository on {offer.name}…

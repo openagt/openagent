@@ -25,10 +25,11 @@ vi.mock('./ThemeSubmenu.js', () => ({ ThemeSubmenu: () => null }))
 vi.mock('./NotificationsSubmenu.js', () => ({ NotificationsSubmenu: () => null }))
 vi.mock('../rpc/person.js', () => ({ onPerson: () => Promise.resolve({ name: 'Ada Lovelace' }) }))
 
-// The rail asks the person's preferences one thing: whether a run is named, which decides whether a
-// row waits for that name or prints the prompt.
+// The rail asks the person's preferences two things: whether a run is named, which decides whether a
+// row waits for that name or prints the prompt, and the order of the list, which it also writes.
 const preferences = vi.hoisted(() => ({ current: {} as Record<string, unknown> }))
-vi.mock('../lib/preferences.js', async importOriginal => ({ ...(await importOriginal<object>()), usePreferences: () => preferences.current }))
+const updatePreferences = vi.hoisted(() => vi.fn())
+vi.mock('../lib/preferences.js', async importOriginal => ({ ...(await importOriginal<object>()), usePreferences: () => preferences.current, updatePreferences }))
 
 const { AgentHistory } = await import('./AgentHistory.js')
 const { forgetRemembered } = await import('../lib/use-async.js')
@@ -36,6 +37,7 @@ const { forgetRemembered } = await import('../lib/use-async.js')
 afterEach(() => {
   cleanup()
   preferences.current = {}
+  updatePreferences.mockReset()
 })
 
 function agent(over: Partial<AgentMeta> = {}): AgentMeta {
@@ -275,7 +277,7 @@ describe('AgentHistory rows', () => {
     expect(screen.queryByLabelText('Started on this-mac')).toBeNull()
   })
 
-  test('work that never left the machine is the Human Queue\'s blue mark, where a pull request would be: a branch for commits, a file for files left uncommitted', async () => {
+  test('work that never left the machine is the Human Queue\'s mark in gray, where a pull request would be: a branch for commits, a file for files left uncommitted', async () => {
     const agents = [
       agent({ id: 'waits', status: 'done', driver: 'claude-code', unpublished: 2 }),
       agent({ id: 'one', status: 'done', unpublished: 1 }),
@@ -283,18 +285,18 @@ describe('AgentHistory rows', () => {
       agent({ id: 'none', status: 'done' }),
     ]
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={agents} selectedAgentId={null} onSelect={() => {}} />)
-    const glyph = screen.getByLabelText('Not published · 2 commits').querySelector('svg')!.getAttribute('class')
+    const glyph = screen.getByLabelText('Needs PR · 2 commits').querySelector('svg')!.getAttribute('class')
     expect(glyph).toContain('lucide-git-branch')
-    expect(glyph).toContain('text-info')
-    expect(screen.getByLabelText('Not published · 1 commit')).toBeTruthy()
-    expect(screen.getAllByLabelText(/^Not published/)).toHaveLength(2)
+    expect(glyph).toContain('text-muted-foreground')
+    expect(screen.getByLabelText('Needs PR · 1 commit')).toBeTruthy()
+    expect(screen.getAllByLabelText(/^Needs PR/)).toHaveLength(2)
     // Files left uncommitted come first: committing them is the run's next step.
-    expect(screen.getByLabelText('Not committed · 1 file').querySelector('svg')!.getAttribute('class')).toContain('lucide-file-pen')
+    expect(screen.getByLabelText('Needs commit · 1 file').querySelector('svg')!.getAttribute('class')).toContain('lucide-file-pen')
     // Just before the logo, where a pull request's mark stands.
-    const row = screen.getByLabelText('Not published · 2 commits').closest('button')!
+    const row = screen.getByLabelText('Needs PR · 2 commits').closest('button')!
     const marks = [...row.querySelectorAll('[aria-label]')].map(mark => mark.getAttribute('aria-label'))
-    expect(marks.slice(-2)).toEqual(['Not published · 2 commits', 'Claude Code'])
-    expect(row.getAttribute('aria-label')).toContain('Not published · 2 commits')
+    expect(marks.slice(-2)).toEqual(['Needs PR · 2 commits', 'Claude Code'])
+    expect(row.getAttribute('aria-label')).toContain('Needs PR · 2 commits')
   })
 
   test('a run\'s pull request is a glyph before the logo, its shape and colour by how it stands, and the hover says which', async () => {
@@ -841,5 +843,23 @@ describe('AgentHistory on a phone', () => {
   test('on a wide screen the rail is a column, always there', () => {
     renderRail(<AgentHistory projectId={null} scope="p1" agents={[]} selectedAgentId={null} onSelect={() => {}} pages={[{ segment: 'logs', label: 'Logs' }]} />)
     expect(screen.getByRole('button', { name: 'Logs' })).toBeTruthy()
+  })
+
+  test('the list is in the order picked beside "Recent agents": by creation unless picked otherwise, whatever order it was given in', async () => {
+    const agents = [
+      // The server lists a run that holds a checkout first: an old one just answered.
+      agent({ id: 'old', status: 'waiting', startedAt: '2026-10-18T10:00:00Z', updatedAt: '2026-10-20T09:00:00Z', title: 'Old question' }),
+      agent({ id: 'new', status: 'done', startedAt: '2026-10-20T08:00:00Z', updatedAt: '2026-10-20T08:01:00Z', title: 'New work' }),
+    ]
+    const names = () => screen.getAllByRole('button', { name: / · / }).map(row => row.getAttribute('aria-label')!.split(' · ')[0])
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={agents} selectedAgentId={null} onSelect={() => {}} />)
+    expect(names()).toEqual(['New work', 'Old question'])
+    cleanup()
+    preferences.current = { recentsSort: 'updated' }
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={agents} selectedAgentId={null} onSelect={() => {}} />)
+    expect(names()).toEqual(['Old question', 'New work'])
+    await openMenu(screen.getByRole('button', { name: 'Sort agents' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Name' }))
+    expect(updatePreferences).toHaveBeenCalledWith({ recentsSort: 'name' })
   })
 })

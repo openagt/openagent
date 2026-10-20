@@ -5,6 +5,8 @@
 export { DRIVERS, DRIVER_LABELS, isDriverName, driverFromImpl, type DriverName } from './driver-names.js'
 export { PUBLISH_LABELS, isPublishPick, offeredPublishPicks, publishPickIn, type PublishPick } from './publish-levels.js'
 export { formatOpenAgentEvent } from './terminal.js'
+// What every list calls a run, so the same run never goes by two names.
+export { runName } from './run-name.js'
 export { foldScreenRows } from './screens.js'
 export { formatBytes } from './format-bytes.js'
 export { errorMessage } from './error-message.js'
