@@ -42,7 +42,9 @@ import { parseInterval, type Interval } from './pace.js'
  * or both; with both, the command starts only when both hold. `waits-for` is one plain line
  * saying what the check waits for, for a person: a check is a shell line nothing can turn into a
  * sentence. `agents` is how many runs of the command may be in flight at once, across every
- * machine that shares the repository, from 1 to 99.
+ * machine that shares the repository, from 1 to 99. `check-every: <N>s`, from 10 to 59 seconds,
+ * lets the check run that often between the minute's ticks, for a row whose answer is waited for:
+ * its check must be cheap to run so often.
  *
  * A row with `resumes: true` starts no run: it continues runs that ended. Its check prints which,
  * each with its words: `[{ "run": "<id>", "text": "…" }]`, and each run named is resumed with the
@@ -73,6 +75,8 @@ export interface ScheduledCommand {
   every?: Interval
   /** What the check waits for, in one plain line for a person. */
   waitsFor?: string
+  /** How often the check may run between the minute's ticks, when the row says: its check is cheap and its answer waited for. */
+  checkEvery?: { ms: number; text: string }
   /** Runs in flight at once, across every machine, where no person set another number. */
   cap: number
   /** The skills folder the skill was read from (`.claude/skills`). */
@@ -114,7 +118,10 @@ export interface Schedule {
 
 const SKILL = /^[a-z0-9][a-z0-9-]*$/
 const WORD = SKILL
-const ROW_KEYS = ['word', 'every', 'when', 'waits-for', 'agents', 'agent', 'model', 'resumes']
+const ROW_KEYS = ['word', 'every', 'when', 'waits-for', 'check-every', 'agents', 'agent', 'model', 'resumes']
+
+/** `check-every`: a whole number of seconds from 10 to 59, and `s`. */
+const CHECK_EVERY = /^([1-5][0-9])s$/
 
 /**
  * The commands a skill schedules, out of its `SKILL.md` in the skills folder `dir`: none when the
@@ -151,7 +158,7 @@ export function skillSchedule(skill: string, md: string, dir: string): Schedule 
 }
 
 /**
- * One row: `every: <N><m|h|d|w|mo>`, `when: <shell line>`, `waits-for: <one line>`, `agents: <N>`,
+ * One row: `every: <N><m|h|d|w|mo>`, `when: <shell line>`, `waits-for: <one line>`, `check-every: <N>s`, `agents: <N>`,
  * `word: <the skill's argument>`, `resumes: true`. At least one of `every` and `when`, else nothing says when.
  * `every: 0m` is refused rather than read as "always", which is the key being absent. A key the
  * reader does not know is refused too: it is a typo, or a rule this tool would not follow.
@@ -165,6 +172,7 @@ function parseRow(skill: string, row: unknown, dir: string): ScheduledCommand | 
   if (unknown !== undefined) return `unknown key ${unknown}`
   const { word, every, when, agents, agent, model, resumes } = row
   const waitsFor = row['waits-for']
+  const checkEvery = row['check-every']
   if (word !== undefined && !(typeof word === 'string' && WORD.test(word))) return 'word is one word of lower-case letters, digits and dashes'
   const asEvery = every === undefined ? undefined : parseInterval(String(every))
   if (every !== undefined && !asEvery) return 'every is a number from 1 to 9999 and a unit, m, h, d, w or mo (15m, 6h, 7d, 2w, 1mo)'
@@ -175,6 +183,8 @@ function parseRow(skill: string, row: unknown, dir: string): ScheduledCommand | 
   if (model !== undefined && !(typeof model === 'string' && /^\S+$/.test(model))) return 'model is one word, the id its coding agent knows the model by'
   if (when === undefined && every === undefined) return 'neither every nor when says when'
   if (waitsFor !== undefined && when === undefined) return 'waits-for says what when waits for, and there is no when'
+  if (checkEvery !== undefined && !CHECK_EVERY.test(String(checkEvery))) return 'check-every is a number of seconds from 10 to 59 and s (15s)'
+  if (checkEvery !== undefined && when === undefined) return 'check-every says how often when runs, and there is no when'
   if (resumes !== undefined && resumes !== true) return 'resumes is true, or left out'
   if (resumes === true && when === undefined) return 'a row that resumes needs when, the check that names the runs to resume'
   if (resumes === true && (agent !== undefined || model !== undefined)) return `a row that resumes takes no ${agent !== undefined ? 'agent' : 'model'}: each run goes on with the coding agent and model its record names`
@@ -183,6 +193,7 @@ function parseRow(skill: string, row: unknown, dir: string): ScheduledCommand | 
     ...(typeof when === 'string' ? { when: when.trim() } : {}),
     ...(asEvery ? { every: asEvery } : {}),
     ...(typeof waitsFor === 'string' ? { waitsFor: waitsFor.trim() } : {}),
+    ...(checkEvery !== undefined ? { checkEvery: { ms: Number(CHECK_EVERY.exec(String(checkEvery))![1]) * 1000, text: String(checkEvery) } } : {}),
     cap: isAgents(agents) ? agents : DEFAULT_CAP,
     dir,
     dirs: [dir],
@@ -375,12 +386,20 @@ export function foundOutput(stdout: string, lastRun: string): string {
  */
 export const FOUND_OPENING = 'The scheduler starts this command when its check prints something, and this time the check printed what is below. It says why this run started; what the work is, the command says.'
 
+/** A run a row resumes, its words, and the people whose words they are, by their logins, when the check names them. */
+export interface RunToResume {
+  run: string
+  text: string
+  from?: string[]
+}
+
 /**
  * What a row that resumes printed: each run it names with its words, a run named twice once with
- * its words joined. Nothing for output that says no work ({@link isDue}); a reason for output that
- * is not `[{ "run": "<id>", "text": "…" }]`.
+ * its words joined and its people with them. Nothing for output that says no work ({@link isDue});
+ * a reason for output that is not `[{ "run": "<id>", "text": "…", "from": ["<login>"] }]`, `from`
+ * left out when the words are nobody's.
  */
-export function runsToResume(stdout: string): { run: string; text: string }[] | string {
+export function runsToResume(stdout: string): RunToResume[] | string {
   if (!isDue(stdout)) return []
   let value: unknown
   try {
@@ -389,13 +408,16 @@ export function runsToResume(stdout: string): { run: string; text: string }[] | 
     return 'the check printed no JSON'
   }
   if (!Array.isArray(value)) return 'the check printed no list'
-  const runs = new Map<string, string[]>()
+  const runs = new Map<string, { texts: string[]; from: string[] }>()
   for (const item of value) {
     if (!isMap(item) || typeof item['run'] !== 'string' || !item['run'].trim() || typeof item['text'] !== 'string' || !item['text'].trim()) return 'an item of the list is no { "run": "<id>", "text": "…" }'
+    const from = item['from']
+    if (from !== undefined && (!Array.isArray(from) || !from.every(login => typeof login === 'string' && login.trim() !== ''))) return 'the from of an item is no list of logins'
     const id = item['run'].trim()
-    runs.set(id, [...(runs.get(id) ?? []), item['text'].trim()])
+    const named = runs.get(id) ?? { texts: [], from: [] }
+    runs.set(id, { texts: [...named.texts, item['text'].trim()], from: [...new Set([...named.from, ...((from as string[] | undefined) ?? []).map(login => login.trim())])] })
   }
-  return [...runs].map(([run, texts]) => ({ run, text: texts.join('\n\n') }))
+  return [...runs].map(([run, { texts, from }]) => ({ run, text: texts.join('\n\n'), ...(from.length > 0 ? { from } : {}) }))
 }
 
 /**

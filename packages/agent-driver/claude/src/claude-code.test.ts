@@ -48,8 +48,27 @@ test('StreamJsonParser says what each tool call did, and passes thinking with te
     { type: 'action', label: 'Read', detail: '/repo/src/app.ts' },
     { type: 'action', label: 'WebFetch', detail: 'https://example.com' },
     { type: 'action', label: 'TodoWrite' },
+    // An emptied list is a plan too: the agent cleared it.
+    { type: 'plan', tasks: [] },
     { type: 'action', label: 'Bash', detail: 'x'.repeat(199) + '…', whole: 'x'.repeat(300) },
   ])
+})
+
+test("StreamJsonParser says the agent's plan, whole, at each TodoWrite: a task with no words or an unknown status is left out, and a subagent's list is its own", () => {
+  const p = new StreamJsonParser()
+  const todos = [
+    { content: 'Read the PR discussion', status: 'completed', activeForm: 'Reading' },
+    { content: 'Change the line\nin live-try.md', status: 'in_progress', activeForm: 'Changing' },
+    { content: 'Push and answer', status: 'pending', activeForm: 'Pushing' },
+    { content: '  ', status: 'pending' },
+    { content: 'Odd one', status: 'blocked' },
+  ]
+  const write = (extra: Record<string, unknown> = {}) => JSON.stringify({ type: 'assistant', ...extra, message: { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_7', name: 'TodoWrite', input: { todos } }] } })
+  assert.deepEqual(p.push(write()), [
+    { type: 'action', label: 'TodoWrite', id: 'toolu_7' },
+    { type: 'plan', tasks: [{ text: 'Read the PR discussion', status: 'completed' }, { text: 'Change the line in live-try.md', status: 'in_progress' }, { text: 'Push and answer', status: 'pending' }] },
+  ])
+  assert.deepEqual(p.push(write({ parent_tool_use_id: 'toolu_agent' })), [{ type: 'action', label: 'TodoWrite', id: 'toolu_7', subagent: 'toolu_agent' }])
 })
 
 test('StreamJsonParser gives each tool call its id, and what the call gave back as an output for that id', () => {

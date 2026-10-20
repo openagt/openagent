@@ -23,3 +23,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   checkout does not hold the command. Picked over sending the command's text in its place,
   and over every run carrying the command.
 - A pull request with no run behind it: nothing happens.
+- While the agent works, one comment on the pull request says an agent is on it and shows
+  its plan or its steps, rewritten as it goes; when it ends, the same comment says whose task
+  it finished, and holds its answer. Picked over a 👀 on each comment, which says nothing of
+  the work, and over the answer posted as a comment of its own (a new comment notifies, an
+  edit does not: that may come later).
+- The row's check runs every 15 seconds, so an answer starts within seconds of a comment.
+  Picked over the scheduler's minute.

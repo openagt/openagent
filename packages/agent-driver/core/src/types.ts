@@ -354,6 +354,12 @@ export type DriverQuota =
  * One file a tool call changed, as the call's own CLI reports it: the path as the CLI names it,
  * how many lines the call added and how many it removed, and `created` when the call made the file.
  */
+/** One task of an agent's plan. */
+export interface PlanTask {
+  text: string
+  status: 'pending' | 'in_progress' | 'completed'
+}
+
 export interface FileChange {
   path: string
   added: number
@@ -443,6 +449,12 @@ export type DriverEvent =
   | { type: 'subagent'; id: string; status: 'working' | 'ended' | 'failed'; name?: string; role?: string; model?: string; prompt?: string }
   /** What the agent thought before it acted, as its CLI summarizes it. */
   | { type: 'thought'; text: string; subagent?: string }
+  /**
+   * The agent's own plan, whole, each time it changes it: its tasks in order, each pending, in
+   * progress or completed. Claude Code keeps it with its TodoWrite tool, Codex sends it as its
+   * turn's plan; an agent that made none sends nothing. Live only: a log keeps no line of it.
+   */
+  | { type: 'plan'; tasks: PlanTask[] }
   /**
    * The turn settled with this final text. `sessionLink` is the real URL of the session,
    * for a driver whose session has one of its own (#1317) — a cloud session, say — so a

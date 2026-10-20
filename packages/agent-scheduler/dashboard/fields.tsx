@@ -166,7 +166,7 @@ export function SaidShown({ description, when, waitsFor, where }: { description?
 /**
  * "When it runs": the one place a row's pace is picked, in two parts that are not the same kind
  * of thing. First what the row waits for, which is no choice: a row with a shell line (`work`)
- * starts only when the line finds work, and the scheduler asks it every minute; a row without
+ * starts only when the line finds work, and the scheduler asks it every minute, or as often as its skill says; a row without
  * one runs by time alone. Then the one choice, "Wait after a start": how long the row leaves
  * between two starts. A row that follows something else has that as its first choice (`asSaid`,
  * its label with what it says: "As the skill says", "6 hours"); then a number and a unit, with a
@@ -190,8 +190,8 @@ export function PaceFields({
   /** What the choices are of, to tell this group from another's. */
   name: string
   draft: PaceDraft
-  /** The row has a shell line: what the line waits for, in plain words, when they are said. Absent for a row that runs by time alone. */
-  work?: { waitsFor?: string | undefined } | undefined
+  /** The row has a shell line: what the line waits for, in plain words, when they are said, and how often it is asked when its skill says (`15s`). Absent for a row that runs by time alone. */
+  work?: { waitsFor?: string | undefined; checkEvery?: string | undefined } | undefined
   asSaid?: { label: string; says: string } | undefined
   /** Whether "No wait" is offered: only where a shell line can say when alone. */
   noWait: boolean
@@ -253,7 +253,7 @@ export function PaceFields({
       <p className="text-sm">
         {work ? (
           <>
-            Only when there is work: {stopped(work.waitsFor ?? PRINTS_SOMETHING)} <span className="text-muted-foreground">The scheduler looks every minute.</span>
+            Only when there is work: {stopped(work.waitsFor ?? PRINTS_SOMETHING)} <span className="text-muted-foreground">The scheduler looks every {work.checkEvery !== undefined ? `${parseInt(work.checkEvery, 10)} seconds` : 'minute'}.</span>
           </>
         ) : (
           <>

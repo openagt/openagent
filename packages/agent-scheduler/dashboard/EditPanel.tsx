@@ -288,7 +288,7 @@ export function EditPanel({
           <PaceFields
             name={`How long ${title} waits after a start`}
             draft={paceDraft}
-            work={scheduled.when !== undefined ? { waitsFor: scheduled.waitsFor } : undefined}
+            work={scheduled.when !== undefined ? { waitsFor: scheduled.waitsFor, checkEvery: scheduled.checkEvery } : undefined}
             asSaid={{ label: asSaid, says: scheduled.every !== undefined ? spelled(scheduled.every) : 'no wait' }}
             noWait={scheduled.when !== undefined && scheduled.every !== undefined}
             start={{ count: skills?.count ?? 1, unit: skills?.unit ?? 'd' }}

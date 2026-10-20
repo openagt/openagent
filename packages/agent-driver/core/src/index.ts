@@ -6,6 +6,7 @@ export type {
   DriverTurn,
   DriverEvent,
   FileChange,
+  PlanTask,
   DriverImplId,
   DriverUsage,
   DriverRateLimit,

@@ -165,6 +165,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   checkout starts, then the quota, for a run on Claude Code. The quota is read
   only when everything else says start, because the reading spawns the agent's CLI and its
   usage fetch is refused upstream when asked too often.
+- A reading of the quota is used again for five minutes, by the scheduler's process that
+  made it: a reading takes seconds, and a run a person waits for starts that much sooner.
+  Picked over a fresh reading at every start; the quota moves slowly, and a run that meets
+  its limit is stopped by its coding agent.
 - A command whose skill is not on the commit a run's checkout starts from is not started,
   and says so. Asked only when a run would otherwise start, with origin's default branch
   fetched first as the run's own checkout does. Picked over starting it anyway, where the
@@ -199,6 +203,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   model, which would answer on another agent than the one that holds the conversation.
 - Only this machine's runs are resumed: only this machine holds the conversation. A run
   still running is left alone.
+- A row may let its check run more often than the minute's tick, `check-every: 15s`, for an
+  answer a person waits for. Between ticks, only such rows are decided, with no pull and no
+  sweep, which the tick does; every other row waits for the tick. Picked over a faster tick
+  for every row, which ran every check four times as often.
 
 ## The command line
 - Every command prints one JSON document on stdout, one line for a person on stderr, and

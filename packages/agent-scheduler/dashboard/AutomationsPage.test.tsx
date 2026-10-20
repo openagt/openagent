@@ -632,6 +632,14 @@ describe("the Edit panel of a skill's row", () => {
     await gone('/update-tickets')
   })
 
+  test('a row whose skill lets its check run more often says how often the scheduler looks', async () => {
+    const lines = [{ command: 'watch-prs', every: '1h', when: 'npx replies', waitsFor: 'when someone answered', checkEvery: '15s' }]
+    const { host } = hostAnswering((_, args) => (args[0] === 'status' ? { ok: true, output: { ...STATUS, schedule: [...STATUS.schedule, ...lines] } } : { ok: true, output: { ok: true } }))
+    show(host)
+    await screen.findByRole('region', { name: 'gemstack' })
+    expect(waitsFor(await edit('/watch-prs'))).toBe('Only when there is work: when someone answered. The scheduler looks every 15 seconds.')
+  })
+
   test('a row with a shell line says what it waits for in a plain line, which is no choice, and that the scheduler looks every minute; the one choice is how long it waits after a start, of three: as the skill says, a wait of one\'s own, or no wait', async () => {
     const lines = [
       { command: 'update-tickets', every: '15m', when: 'gh issue list', waitsFor: 'when an issue changed' },

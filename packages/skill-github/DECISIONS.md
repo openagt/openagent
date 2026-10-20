@@ -60,6 +60,13 @@ already made, and lists it in its pull request; for anything else it proposes an
   branch too. Only this machine's runs: only it holds the conversation. A pull request
   with no run behind it gets nothing.
 - About one GitHub call a minute, not one per pull request.
+- A look first asks whether any comment of the repository changed, by its last answer
+  (ETag): "not modified" costs no call of the hour's, and then nothing is read, so the row
+  can look every few seconds. Reviews, checks and conflicts have no such question: the
+  whole read is made at least once a minute. Picked over the whole read at every look.
+- A comment `comment` writes ends with a hidden mark, and `replies` never counts one that
+  carries it: it is posted with a person's account, and an agent's own words must never wake
+  it. Picked over the visible 🤖 line.
 
 ## The command
 - Every command prints one JSON document on stdout: the result or the refusal. A refusal

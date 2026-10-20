@@ -140,6 +140,8 @@ export class SessionLog {
       return this.queue(() => this.writeCard())
     }
     if (event.type === 'partial') return this.writePartial(event.text)
+    // A plan is said again whole at each change: the moment's view, as the calls that keep it are the steps.
+    if (event.type === 'plan') return this.tail
     // The whole message replaces its pieces: a write of them still queued is dropped.
     if (event.type === 'text') this.partial = undefined
     const line = { ...diaryLine(event), at: this.clock() }

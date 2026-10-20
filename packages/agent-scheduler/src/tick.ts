@@ -63,7 +63,7 @@ export interface TickDeps {
   /** Start the run's process, detached; resolves once it is spawned. `startedAt` is the start its record keeps, `attached` what the agent is handed with the prompt. */
   spawn: (run: { id: string; prompt: string; startedAt: string; driver: AgentName; model?: string; publish?: Publish; attached?: string }) => Promise<void>
   /** Continue an ended run in its own process, with the text it is told and the row that resumes it; resolves once it is spawned. */
-  resume: (run: { id: string; text: string; by: string }) => Promise<void>
+  resume: (run: { id: string; text: string; by: string; from?: string[] }) => Promise<void>
   /** Whether the scheduler was told to stop while this tick runs: then nothing more is started. */
   stopped?: () => boolean
   log?: (line: string) => void
@@ -85,6 +85,22 @@ export async function tick(deps: TickDeps): Promise<TickRecord> {
     for (const { outcome, started } of await decide(deps, command, held)) record.decisions.push({ command: command.name, outcome, ...(started ? { run: started.id } : {}) })
   }
   return record
+}
+
+/**
+ * Between the minute's ticks: the rows whose skill lets their check run more often (`check-every`)
+ * and that `due` says are due again, decided as a tick decides them, with no pull and no sweep,
+ * which the minute's tick does. Their decisions are no record: the next tick writes every row's.
+ */
+export async function glance(deps: TickDeps, due: (command: ScheduledCommand) => boolean): Promise<TickDecision[]> {
+  if (!deps.state.on) return []
+  const held: Readings = { readiness: {} }
+  const decisions: TickDecision[] = []
+  for (const command of deps.schedule.commands) {
+    if (!command.checkEvery || !due(command)) continue
+    for (const { outcome, started } of await decide(deps, command, held)) decisions.push({ command: command.name, outcome, ...(started ? { run: started.id } : {}) })
+  }
+  return decisions
 }
 
 /** What starting a command by hand answered: the run it started or resumed, or the decisions that started none, in the tick's own words. */
@@ -249,14 +265,14 @@ async function resumeNamed(deps: TickDeps, command: ScheduledCommand, { now, fou
   const cap = capInForce(deps.state, command)
   const running = (await deps.inFlight(command.name)).map(describe)
   const decided: Decided[] = []
-  for (const { run, text } of named) {
+  for (const { run, text, from } of named) {
     const why = await whyNot(run)
     if (why !== undefined) {
       decided.push({ outcome: `run ${run} not resumed: ${why}` })
       continue
     }
     try {
-      await deps.resume({ id: run, text: resumeText(command, text, found!.lastRun), by: command.name })
+      await deps.resume({ id: run, text: resumeText(command, text, found!.lastRun), by: command.name, ...(from !== undefined ? { from } : {}) })
       running.push(run)
       decided.push({ outcome: `resumed ${run}`, started: { id: run, at: now.toISOString() } })
     } catch (err) {
@@ -320,7 +336,7 @@ function latest(a: string | undefined, b: string | undefined): string | undefine
 
 /** A command as a dashboard lists it: what its skill says; not this machine's switch or picks, which the state carries, nor its runs, which the records do. */
 export function listed(command: ScheduledCommand): ListedCommand {
-  return { command: command.name, ...(command.resumes ? { resumes: true as const } : {}), ...(command.every ? { every: command.every.text } : {}), ...(command.when !== undefined ? { when: command.when } : {}), ...(command.waitsFor !== undefined ? { waitsFor: command.waitsFor } : {}), ...(command.description !== undefined ? { description: command.description } : {}), ...(command.cap > 1 ? { agents: command.cap } : {}), ...(command.text !== undefined ? { onThisMachine: true as const } : {}), ...(command.editable ? { editable: true as const } : {}), agent: homeAgent(command), ...(command.model !== undefined ? { model: command.model, modelAgent: command.agent ?? DEFAULT_AGENT } : {}), able: ableAgents(command) }
+  return { command: command.name, ...(command.resumes ? { resumes: true as const } : {}), ...(command.every ? { every: command.every.text } : {}), ...(command.when !== undefined ? { when: command.when } : {}), ...(command.waitsFor !== undefined ? { waitsFor: command.waitsFor } : {}), ...(command.checkEvery ? { checkEvery: command.checkEvery.text } : {}), ...(command.description !== undefined ? { description: command.description } : {}), ...(command.cap > 1 ? { agents: command.cap } : {}), ...(command.text !== undefined ? { onThisMachine: true as const } : {}), ...(command.editable ? { editable: true as const } : {}), agent: homeAgent(command), ...(command.model !== undefined ? { model: command.model, modelAgent: command.agent ?? DEFAULT_AGENT } : {}), able: ableAgents(command) }
 }
 
 /** An age for a decision line: `less than a minute`, `12m`, `3h`, `2d`, floored. */

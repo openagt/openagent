@@ -36,6 +36,8 @@ export interface ListedCommand {
   when?: string
   /** What the check waits for, in one plain line, when the skill gives one. */
   waitsFor?: string
+  /** How often the check runs between the minute's ticks, as written (`15s`), when the skill says. */
+  checkEvery?: string
   /** What the command's skill does, in the skill's own words, when it says. */
   description?: string
   /** Whether the row resumes the runs its check names, each on its own coding agent and model, and starts none. */

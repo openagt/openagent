@@ -35,3 +35,8 @@ export async function homeUrlFor(cwd: string, git: GitRunner = nodeGitRunner()):
     return undefined
   }
 }
+
+/** A branch's page under the repository's: its name's parts escaped, its slashes kept. */
+export function branchUrl(home: string, branch: string): string {
+  return `${home}/tree/${branch.split('/').map(encodeURIComponent).join('/')}`
+}

@@ -10,6 +10,7 @@ import { acquireRunLock, lockHolder, releaseRunLock } from './run-lock.js'
 import { addedLine, AFRESH_NOTICE, earlierWorkLine, HOLD_MERGE_LINE, PUBLISH_LINES, resumeRun, runCommand, STOPPED_DETAIL } from './run.js'
 import { markerCard, recordRun, runnerMark, writeMarker } from './records.js'
 import type { GitHost } from './git-host.js'
+import { liveBody } from './live-comment.js'
 import { sweep } from './sweep.js'
 import { git, handDownBasicSkills, readUntimedDiary, removeRepo, testRepo } from './test-repo.js'
 
@@ -23,16 +24,22 @@ handDownBasicSkills()
 const NOW = new Date('2026-09-16T14:01:00.000Z')
 
 /** A git host with no pull request for any branch: what a run whose agent opened none reads. */
-const noGitHost: GitHost = { requestOfBranch: async () => undefined, mergeRequest: async () => ({ outcome: 'failed', error: 'nothing to merge' }) }
+const noGitHost: GitHost = { requestOfBranch: async () => undefined, mergeRequest: async () => ({ outcome: 'failed', error: 'nothing to merge' }), comment: async () => ({ error: 'no git host' }), branchUrl: async () => undefined }
 
 /**
  * A git host holding one pull request for one branch, once the agent has opened it (`open()`): read
- * back by the run, merged by the follow-up's end. Every call is kept.
+ * back by the run, merged by the follow-up's end, commented on. Every call is kept, a comment's
+ * with its text.
  */
 function fakeGitHost(branch: string, hook?: () => Promise<void>): GitHost & { open(): void; calls: string[][] } {
   let opened = false
   const calls: string[][] = []
   return {
+    comment: async (_repo, to, body) => {
+      calls.push('edit' in to ? ['edit', to.edit, body] : ['comment', String(to.number), body])
+      return { id: '501' }
+    },
+    branchUrl: async (_repo, asked) => `https://example.com/x/y/tree/${asked}`,
     calls,
     open: () => (opened = true),
     requestOfBranch: async (_repo, asked) => {
@@ -457,6 +464,40 @@ test('a resumed run whose conversation its coding agent no longer has goes on in
     const card = await findRun(repo, first.id)
     assert.equal(card?.caller?.['sessionId'], 's-2', 'the next resume continues the fresh conversation')
     assert.equal(card?.pr?.number, 12)
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
+test('a run a row resumed keeps one comment on its pull request: posted before the agent works, then its answer with the steps; a resume by a person posts none', async () => {
+  const repo = await testRepo()
+  try {
+    const gitHost = fakeGitHost('agent-fix-it')
+    gitHost.open()
+    const first = await runCommand(repo, { prompt: '/fix-it', driver: committingDriver(), now: () => NOW, gitHost })
+    assert.equal((await findRun(repo, first.id))?.pr?.number, 12)
+
+    const comments = () => gitHost.calls.filter(call => call[0] === 'comment' || call[0] === 'edit')
+    let commentedBeforeTheAgent = false
+    const answering: Driver = {
+      id: 'fake',
+      start: async opts => {
+        commentedBeforeTheAgent = comments().length === 1
+        return new FakeDriver({ turns: [{ text: 'Made the footer grey, and answered why a <footer>.', actions: ['Bash', 'Edit'] }] }).start(opts)
+      },
+    }
+    const resumed = await resumeRun(repo, { id: first.id, text: '/reply a comment came', by: 'reply', from: ['rom'], driver: answering, now: () => NOW, gitHost })
+    assert.equal(resumed.status, 'done')
+    assert.ok(commentedBeforeTheAgent, 'the comment is posted before the agent starts')
+    const [posted, ...edits] = comments()
+    assert.deepEqual(posted, ['comment', '12', liveBody({ on: { agent: 'fake' }, models: [], steps: [] })])
+    assert.equal(edits.length, 1, 'the steps came faster than a rewrite: only the ending is written')
+    assert.deepEqual(edits[0]!.slice(0, 2), ['edit', '501'])
+    // The model the record names, the run's branch with its page, whose words woke it.
+    assert.equal(edits[0]![2], "**fake finished @rom's task in 0s** —— claude-opus-5-5 • [`agent-fix-it`](https://example.com/x/y/tree/agent-fix-it)\n\n---\n\n**Steps**\n- [x] Ran 2 commands\n\nMade the footer grey, and answered why a <footer>.")
+
+    await resumeRun(repo, { id: first.id, text: 'One more thing.', driver: new FakeDriver({ turns: [{ text: 'Done.' }] }), now: () => NOW, gitHost })
+    assert.equal(comments().length, 2, 'a person resuming the run is answered in the chat, not on the pull request')
   } finally {
     await removeRepo(repo)
   }

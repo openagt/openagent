@@ -96,6 +96,12 @@ export const START_POINT_FETCH_MS = 5_000
 /** How often a started scheduler ticks. */
 export const TICK_MS = 60_000
 
+/** How often the scheduler's process looks whether a row that may be checked between ticks is due again (`check-every`). */
+export const GLANCE_MS = 5_000
+
+/** How long a reading of Claude's quota is used again before it is read anew: a read spawns the CLI and takes seconds, and the quota moves slowly. */
+export const QUOTA_KEPT_MS = 5 * 60_000
+
 /** How much of what a check printed a run is handed, in characters: enough for a list of work, short of a prompt nobody can read. */
 export const FOUND_MAX = 8_000
 
