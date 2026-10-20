@@ -1,25 +1,27 @@
 ---
 name: reply
-description: "Answer what came on your pull request after you ended: maintainers' comments and reviews that call you with /agent, checks that turned red, a conflict with its base branch."
+description: "Answer where a maintainer calls you with /agent, on an issue or a pull request; and on your own pull request, checks that turned red and a conflict with its base branch."
 disable-model-invocation: true
 schedule:
-  resumes: true
-  when: npx @openagt/agent-runner@0.0 git-host replies
+  each: true
+  when: npx @openagt/agent-runner@0.0 git-host replies --since "$SWITCHED_ON"
   check-every: 15s
-  waits-for: when a maintainer wrote /agent on a pull request an agent of this machine opened, one of its checks turned red, or it conflicts with its base branch
+  waits-for: when a maintainer wrote /agent on an issue or a pull request, or a pull request an agent of this machine opened has a red check or a conflict
 metadata:
-  version: 0.1.1
+  version: 0.1.2
 ---
 
-You opened a pull request earlier in this conversation, then ended. What follows the command says what came on it since: maintainers' comments and reviews, checks that turned red, a conflict with its base branch. Nobody will answer you here: never ask, decide yourself.
+What follows the command says why you are here: a maintainer called you with /agent on an issue or a pull request, or a pull request of yours has a red check or conflicts with its base branch. Nobody will answer you here: never ask, decide yourself.
 
-First read the whole pull request again, its discussion and its changes, not only what is below: a comment may answer an earlier one, and one may already be answered. If the pull request cannot be read, show an error to the user saying why and stop.
+First read the whole issue or pull request again, its discussion and a pull request's changes, not only what is below: a comment may answer an earlier one, and one may already be answered. If it cannot be read, show an error to the user saying why and stop.
 
-Post on the pull request the way your git host skill says. Each time a new comment, never an edit of an earlier one: a new comment reaches people by email, an edit reaches nobody.
+Post on it the way your git host skill says. Each time a new comment, never an edit of an earlier one: a new comment reaches people by email, an edit reaches nobody.
 
 If what came will take you more than about 5 minutes, first post a short comment: what you are going to do, and that you will comment here when finished.
 
-For each comment or review: fix it and push, answer it, or leave it, and say which and why.
+On someone else's pull request you are on its branch: your changes go there, never in a pull request of your own. One from a fork you cannot push to: answer, and say that you cannot change it.
+
+For each call, comment or review: do what it asks, answer it, or leave it, and say which and why.
 
 A red check: read why it failed, fix it and push. One that fails for a reason outside your change: say so and leave it.
 
