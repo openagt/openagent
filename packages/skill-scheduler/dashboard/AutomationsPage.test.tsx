@@ -2085,69 +2085,66 @@ describe('a save held against what the panel opened', () => {
   })
 })
 
-describe('a row that resumes', () => {
-  /** A skill's row that resumes the runs its check names, switched on, beside a row that starts runs. */
-  const RESUMING = {
+describe('a row with each', () => {
+  /** A skill's row whose check resumes runs and starts new ones, switched on, beside a row that starts runs. */
+  const EACH = {
     ...STATUS,
     switches: { reply: '2026-10-03T08:00:00.000Z' },
-    schedule: [STATUS.schedule[1], { command: 'reply', when: 'npx replies', waitsFor: "when someone answered on a run's pull request", description: 'Answer on the pull request.', resumes: true, ...ON_CLAUDE }],
+    schedule: [STATUS.schedule[1], { command: 'reply', when: 'npx replies', waitsFor: 'when a maintainer wrote /agent', description: 'Answer /agent.', each: true, ...ON_CLAUDE }],
   }
-  const resuming = (over: object = {}, saved: (args: string[]) => ModuleCommandResult = () => ({ ok: true, output: { ok: true } })) =>
-    hostAnswering((_, args) => (args[0] === 'status' ? { ok: true, output: { ...RESUMING, ...over } } : saved(args)))
+  const each = (over: object = {}, saved: (args: string[]) => ModuleCommandResult = () => ({ ok: true, output: { ok: true } })) =>
+    hostAnswering((_, args) => (args[0] === 'status' ? { ok: true, output: { ...EACH, ...over } } : saved(args)))
 
-  test("its line says each run answers on its own agent and model, and nothing of a publish pick; another row's line is as before", async () => {
-    const { host } = resuming({ models: { reply: { agent: 'claude-code', model: 'haiku' } }, publishes: { reply: 'pr' } })
+  test('its line says its agent, model and publish level as any row\'s, a pick of this machine marked as one', async () => {
+    const { host } = each({ models: { reply: { agent: 'claude-code', model: 'haiku' } }, publishes: { reply: 'pr' } })
     show(host)
     await screen.findByRole('region', { name: 'gemstack' })
     const reply = row('/reply')
-    expect(within(reply).getByText('Answers on the coding agent and model that opened the pull request')).toBeTruthy()
-    expect(within(reply).queryByText('your pick')).toBeNull()
-    expect(within(reply).queryByText(/May (commit|open)|As its skill says/)).toBeNull()
-    expect(within(reply).getByText("When someone answered on a run's pull request")).toBeTruthy()
-    expect(within(row('/work-queue')).getByText('May commit, pushes nothing')).toBeTruthy()
+    expect(within(reply).getByText(/^Claude Code, /)).toBeTruthy()
+    expect(within(reply).getByText('May open a pull request')).toBeTruthy()
+    expect(within(reply).getByText('your pick')).toBeTruthy()
+    expect(within(reply).getByText('When a maintainer wrote /agent')).toBeTruthy()
   })
 
-  test('its panel picks no agent, model or publish level, and says why; how often it runs and how many at once are picked as on any row, and Save sends only those', async () => {
-    const { host, runCommand } = resuming()
+  test('its panel picks an agent, a model and a publish level, for the runs it starts, and says a run it continues keeps its own', async () => {
+    const { host, runCommand } = each()
     show(host)
     await screen.findByRole('region', { name: 'gemstack' })
     const panel = await edit('/reply')
-    const runsOn = part(panel, 'What it runs on')
-    expect(runsOn.textContent).toContain('Answers on the coding agent and model that opened the pull request.')
-    expect(within(runsOn).queryByLabelText('Agent')).toBeNull()
-    expect(within(runsOn).queryByLabelText('Model')).toBeNull()
-    expect(within(panel).queryByRole('combobox', { name: 'What its runs publish' })).toBeNull()
-    expect(within(panel).queryByRole('region', { name: 'What its runs publish' })).toBeNull()
-    expect(within(panel).getByText("When someone answered on a run's pull request. Answers on the coding agent and model that opened the pull request. Nothing is changed yet.")).toBeTruthy()
+    expect(within(part(panel, 'What it runs on')).getByLabelText('Agent')).toBeTruthy()
+    const publish = part(panel, 'What its runs publish')
+    expect(publish.textContent).toContain('A run it continues goes on with the coding agent, model and publish level that started it.')
     const many = part(panel, 'How many at once')
     fireEvent.click(radio(many, 'A number you set'))
     fireEvent.change(within(many).getByLabelText('How many agents'), { target: { value: '3' } })
-    expect(within(panel).getByText("When someone answered on a run's pull request. Up to 3 at once. Answers on the coding agent and model that opened the pull request.")).toBeTruthy()
     fireEvent.click(within(panel).getByRole('button', { name: 'Save' }))
     await gone('/reply')
     expect(saves(runCommand)).toEqual([['agents', 'reply', '3']])
   })
 
-  test("what the scheduler last decided says the reason of a run it did not resume in the page's words, and nothing of one it resumed; \"Run now\" says it resumed a run, which \"Open it\" opens", async () => {
-    const capped = resuming({ lastTick: { at: '2026-10-03T10:00:00.000Z', decisions: [{ command: 'reply', outcome: 'run r2 not resumed: cap reached (1 in flight: r1 on this-box)' }] } })
+  test("what the scheduler last decided says the reason of a run it did not resume or start in the page's words, and nothing of one it did; \"Run now\" says whether it resumed or started a run, which \"Open it\" opens", async () => {
+    const capped = each({ lastTick: { at: '2026-10-03T10:00:00.000Z', decisions: [{ command: 'reply', outcome: 'run r2 not resumed: cap reached (1 in flight: r1 on this-box)' }] } })
     show(capped.host)
     await screen.findByRole('region', { name: 'gemstack' })
     expect(within(row('/reply')).getByText('One is already running')).toBeTruthy()
     cleanup()
-    const quota = resuming({ lastTick: { at: '2026-10-03T10:00:00.000Z', decisions: [{ command: 'reply', outcome: 'run r2 not resumed: quota: Current week is 99% used' }] } })
+    const quota = each({ lastTick: { at: '2026-10-03T10:00:00.000Z', decisions: [{ command: 'reply', outcome: 'no run for https://github.com/o/r/issues/5: quota: Current week is 99% used' }] } })
     show(quota.host)
     await screen.findByRole('region', { name: 'gemstack' })
     expect(within(row('/reply')).getByText('Quota: Current week is 99% used')).toBeTruthy()
     cleanup()
-    const { host, runCommand } = resuming({ lastTick: { at: '2026-10-03T10:00:00.000Z', decisions: [{ command: 'reply', outcome: 'resumed r1', run: 'r1' }] } }, args => (args[0] === 'now' ? { ok: true, output: { ok: true, command: 'reply', run: 'r1' } } : { ok: true, output: { ok: true } }))
-    show(host)
-    await screen.findByRole('region', { name: 'gemstack' })
-    expect(within(row('/reply')).queryByText(/resumed/i)).toBeNull()
-    fireEvent.click(within(row('/reply')).getByRole('button', { name: 'Run /reply now' }))
-    const said = await within(row('/reply')).findByRole('status')
-    expect(said.textContent).toBe('Resumed a run. Open it')
-    fireEvent.click(within(said).getByRole('button', { name: 'Open it' }))
-    expect(host.openAgent).toHaveBeenCalledWith('p1', 'r1')
-    expect(saves(runCommand)).toEqual([['now', 'reply']])
+    for (const [answer, said] of [[{ run: 'r1', resumed: true }, 'Resumed a run. Open it'], [{ run: 'r2' }, 'Started a run. Open it']] as const) {
+      const { host, runCommand } = each({ lastTick: { at: '2026-10-03T10:00:00.000Z', decisions: [{ command: 'reply', outcome: 'resumed r1', run: 'r1' }] } }, args => (args[0] === 'now' ? { ok: true, output: { ok: true, command: 'reply', ...answer } } : { ok: true, output: { ok: true } }))
+      show(host)
+      await screen.findByRole('region', { name: 'gemstack' })
+      expect(within(row('/reply')).queryByText(/resumed/i)).toBeNull()
+      fireEvent.click(within(row('/reply')).getByRole('button', { name: 'Run /reply now' }))
+      const status = await within(row('/reply')).findByRole('status')
+      expect(status.textContent).toBe(said)
+      fireEvent.click(within(status).getByRole('button', { name: 'Open it' }))
+      expect(host.openAgent).toHaveBeenCalledWith('p1', answer.run)
+      expect(saves(runCommand)).toEqual([['now', 'reply']])
+      cleanup()
+    }
   })
 })

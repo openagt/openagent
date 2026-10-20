@@ -46,12 +46,16 @@ import { parseInterval, type Interval } from './pace.js'
  * lets the check run that often between the minute's ticks, for a row whose answer is waited for:
  * its check must be cheap to run so often.
  *
- * A row with `resumes: true` starts no run: it continues runs that ended. Its check prints which,
- * each with its words: `[{ "run": "<id>", "text": "…" }]`, and each run named is resumed with the
- * command and its words, on the coding agent, model and publish level its own record names; so
- * such a row names no `agent` and no `model`. Only a run this machine started is resumed: only
- * this machine holds its conversation. What the words are about is the check's and the skill's:
- * the scheduler knows nothing of it.
+ * A row with `each: true` has its check print a list, one item per run, each with its words. An
+ * item that names a run, `{ "run": "<id>", "text": "…" }`, continues that ended run with the
+ * command and its words, on the coding agent, model and publish level its own record names; only
+ * a run this machine started, as only this machine holds its conversation. An item that names what
+ * a new run is for, `{ "for": "<what>", "text": "…" }`, starts one, on the row's agent and model as
+ * any row's run, its record naming what it is for: one run for it, across every machine, so the
+ * check names it next time by its run. `"branch": "<name>"` beside it has the run work on that
+ * branch, one that exists, instead of a fresh one. Such a check is told `$SWITCHED_ON` too, when
+ * the command was switched on on this machine: what came before, it leaves. What the words and
+ * what a run is for are about is the check's and the skill's: the scheduler knows nothing of it.
  *
  * Whether a command runs, and how far its runs publish, is not the skill's to say: each person
  * sets both on their own machine, in the tool's state. The pace and the number of agents are
@@ -89,8 +93,8 @@ export interface ScheduledCommand {
   model?: string
   /** What the skill does, in its own words: the `description` of its front matter, when it has one. */
   description?: string
-  /** Whether the row resumes the runs its check names, and starts none: each goes on with its own coding agent, model and publish level. */
-  resumes?: true
+  /** Whether the row's check prints one item per run: a run it continues, on that run's own coding agent, model and publish level, or what a new run is for. */
+  each?: true
   /**
    * The text of a command that is no skill: an automation a person keeps on this machine alone.
    * Its text is in no checkout, so a run of it is handed the text with its prompt, which is the
@@ -118,7 +122,7 @@ export interface Schedule {
 
 const SKILL = /^[a-z0-9][a-z0-9-]*$/
 const WORD = SKILL
-const ROW_KEYS = ['word', 'every', 'when', 'waits-for', 'check-every', 'agents', 'agent', 'model', 'resumes']
+const ROW_KEYS = ['word', 'every', 'when', 'waits-for', 'check-every', 'agents', 'agent', 'model', 'each']
 
 /** `check-every`: a whole number of seconds from 10 to 59, and `s`. */
 const CHECK_EVERY = /^([1-5][0-9])s$/
@@ -159,18 +163,18 @@ export function skillSchedule(skill: string, md: string, dir: string): Schedule 
 
 /**
  * One row: `every: <N><m|h|d|w|mo>`, `when: <shell line>`, `waits-for: <one line>`, `check-every: <N>s`, `agents: <N>`,
- * `word: <the skill's argument>`, `resumes: true`. At least one of `every` and `when`, else nothing says when.
+ * `word: <the skill's argument>`, `each: true`. At least one of `every` and `when`, else nothing says when.
  * `every: 0m` is refused rather than read as "always", which is the key being absent. A key the
  * reader does not know is refused too: it is a typo, or a rule this tool would not follow.
- * `waits-for` says what the check waits for, so a row without `when` has none. A row that resumes
- * needs `when`, which names the runs, and takes no `agent` and no `model`: each run names its own.
+ * `waits-for` says what the check waits for, so a row without `when` has none. A row with `each`
+ * needs `when`, which names the runs.
  * Answers the command, or why the row cannot be read.
  */
 function parseRow(skill: string, row: unknown, dir: string): ScheduledCommand | string {
   if (!isMap(row)) return 'a row is a list of keys'
   const unknown = Object.keys(row).find(key => !ROW_KEYS.includes(key))
   if (unknown !== undefined) return `unknown key ${unknown}`
-  const { word, every, when, agents, agent, model, resumes } = row
+  const { word, every, when, agents, agent, model, each } = row
   const waitsFor = row['waits-for']
   const checkEvery = row['check-every']
   if (word !== undefined && !(typeof word === 'string' && WORD.test(word))) return 'word is one word of lower-case letters, digits and dashes'
@@ -185,9 +189,8 @@ function parseRow(skill: string, row: unknown, dir: string): ScheduledCommand | 
   if (waitsFor !== undefined && when === undefined) return 'waits-for says what when waits for, and there is no when'
   if (checkEvery !== undefined && !CHECK_EVERY.test(String(checkEvery))) return 'check-every is a number of seconds from 10 to 59 and s (15s)'
   if (checkEvery !== undefined && when === undefined) return 'check-every says how often when runs, and there is no when'
-  if (resumes !== undefined && resumes !== true) return 'resumes is true, or left out'
-  if (resumes === true && when === undefined) return 'a row that resumes needs when, the check that names the runs to resume'
-  if (resumes === true && (agent !== undefined || model !== undefined)) return `a row that resumes takes no ${agent !== undefined ? 'agent' : 'model'}: each run goes on with the coding agent and model its record names`
+  if (each !== undefined && each !== true) return 'each is true, or left out'
+  if (each === true && when === undefined) return 'a row with each needs when, the check that names the runs'
   return {
     name: word === undefined ? skill : `${skill} ${word}`,
     ...(typeof when === 'string' ? { when: when.trim() } : {}),
@@ -199,7 +202,7 @@ function parseRow(skill: string, row: unknown, dir: string): ScheduledCommand | 
     dirs: [dir],
     ...(isAgent(agent) ? { agent } : {}),
     ...(typeof model === 'string' ? { model } : {}),
-    ...(resumes === true ? { resumes: true as const } : {}),
+    ...(each === true ? { each: true as const } : {}),
   }
 }
 
@@ -386,13 +389,26 @@ export function foundOutput(stdout: string, lastRun: string): string {
  */
 export const FOUND_OPENING = 'The scheduler starts this command when its check prints something, and this time the check printed what is below. It says why this run started; what the work is, the command says.'
 
+/** An item a row with `each` printed: a run to continue, with its words. */
+export interface ResumeItem {
+  run: string
+  text: string
+}
+
+/** An item a row with `each` printed: what a new run is for, its words, and the branch it works on when one is named. */
+export interface StartItem {
+  for: string
+  text: string
+  branch?: string
+}
+
 /**
- * What a row that resumes printed: each run it names with its words, a run named twice once with
- * its words joined. Nothing for output that says no work ({@link isDue}); a reason for output that
- * is not `[{ "run": "<id>", "text": "…" }]`.
+ * What a row with `each` printed: each run it names with its words, a run named twice once with
+ * its words joined, and each new run it asks for, what it is for named twice once, the same way.
+ * Nothing for output that says no work ({@link isDue}); a reason for output that is no such list.
  */
-export function runsToResume(stdout: string): { run: string; text: string }[] | string {
-  if (!isDue(stdout)) return []
+export function eachItems(stdout: string): { resumes: ResumeItem[]; starts: StartItem[] } | string {
+  if (!isDue(stdout)) return { resumes: [], starts: [] }
   let value: unknown
   try {
     value = JSON.parse(stdout)
@@ -401,12 +417,24 @@ export function runsToResume(stdout: string): { run: string; text: string }[] | 
   }
   if (!Array.isArray(value)) return 'the check printed no list'
   const runs = new Map<string, string[]>()
+  const starts = new Map<string, { texts: string[]; branch?: string }>()
   for (const item of value) {
-    if (!isMap(item) || typeof item['run'] !== 'string' || !item['run'].trim() || typeof item['text'] !== 'string' || !item['text'].trim()) return 'an item of the list is no { "run": "<id>", "text": "…" }'
-    const id = item['run'].trim()
-    runs.set(id, [...(runs.get(id) ?? []), item['text'].trim()])
+    const field = (key: string): string | undefined => (isMap(item) && typeof item[key] === 'string' && item[key].trim() ? item[key].trim() : undefined)
+    const [text, run, what, branch] = [field('text'), field('run'), field('for'), field('branch')]
+    const named = isMap(item) && item['branch'] !== undefined
+    if (text === undefined || (run === undefined) === (what === undefined) || (named && (branch === undefined || run !== undefined))) return 'an item of the list is no { "run": "<id>", "text": "…" } and no { "for": "<what>", "text": "…" }, with "branch" only beside "for"'
+    if (run !== undefined) runs.set(run, [...(runs.get(run) ?? []), text])
+    else {
+      // What a run is for named twice: its words joined, on the first branch named.
+      const before = starts.get(what!)
+      const on = before?.branch ?? branch
+      starts.set(what!, { texts: [...(before?.texts ?? []), text], ...(on !== undefined ? { branch: on } : {}) })
+    }
   }
-  return [...runs].map(([run, texts]) => ({ run, text: texts.join('\n\n') }))
+  return {
+    resumes: [...runs].map(([run, texts]) => ({ run, text: texts.join('\n\n') })),
+    starts: [...starts].map(([what, { texts, branch }]) => ({ for: what, text: texts.join('\n\n'), ...(branch !== undefined ? { branch } : {}) })),
+  }
 }
 
 /**

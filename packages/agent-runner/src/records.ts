@@ -48,6 +48,8 @@ export interface RunnerMark {
   base?: string
   /** The commit this run's own branch was made at: where the run's own work begins. Absent for a run given a branch that existed. */
   baseCommit?: string
+  /** What the run was started for, as whoever started it names it (`run --for`): a thread on the git host, its address, so the next call there finds this run. */
+  for?: string
   /** Who resumed the run last, and when (`run --resume --by`): a scheduler's row, which counts the run as its own from then on. Not kept past the next resume. */
   resumed?: { by: string; at: string }
 }
@@ -56,20 +58,21 @@ export interface RunnerMark {
 export function runnerMark(card: RunCard): RunnerMark | undefined {
   const mark = card.caller?.['runner']
   if (!mark || typeof mark !== 'object') return undefined
-  const { host, pid, then, publish, parent, base, baseCommit, resumed } = mark as Record<string, unknown>
+  const { host, pid, then, publish, parent, base, baseCommit, for: started, resumed } = mark as Record<string, unknown>
   if (typeof host !== 'string') return undefined
   const by = resumed && typeof resumed === 'object' ? (resumed as Record<string, unknown>) : {}
-  return { host, ...(typeof pid === 'number' ? { pid } : {}), ...lasting({ then, publish, parent, base, baseCommit }), ...(typeof by['by'] === 'string' && typeof by['at'] === 'string' ? { resumed: { by: by['by'], at: by['at'] } } : {}) }
+  return { host, ...(typeof pid === 'number' ? { pid } : {}), ...lasting({ then, publish, parent, base, baseCommit, for: started }), ...(typeof by['by'] === 'string' && typeof by['at'] === 'string' ? { resumed: { by: by['by'], at: by['at'] } } : {}) }
 }
 
-/** What a mark keeps for the run's whole life, a resume included: its follow-up, its publish level, its parent, where it started. */
-export function lasting(mark: { then?: unknown; publish?: unknown; parent?: unknown; base?: unknown; baseCommit?: unknown }): Pick<RunnerMark, 'then' | 'publish' | 'parent' | 'base' | 'baseCommit'> {
+/** What a mark keeps for the run's whole life, a resume included: its follow-up, its publish level, its parent, where it started, what it was started for. */
+export function lasting(mark: { then?: unknown; publish?: unknown; parent?: unknown; base?: unknown; baseCommit?: unknown; for?: unknown }): Pick<RunnerMark, 'then' | 'publish' | 'parent' | 'base' | 'baseCommit' | 'for'> {
   return {
     ...(typeof mark.then === 'string' ? { then: mark.then } : {}),
     ...(isPublish(mark.publish) ? { publish: mark.publish } : {}),
     ...(typeof mark.parent === 'string' ? { parent: mark.parent } : {}),
     ...(typeof mark.base === 'string' ? { base: mark.base } : {}),
     ...(typeof mark.baseCommit === 'string' ? { baseCommit: mark.baseCommit } : {}),
+    ...(typeof mark.for === 'string' ? { for: mark.for } : {}),
   }
 }
 
@@ -91,14 +94,15 @@ export function markerCard(run: { id: string; startedAt: string; prompt: string;
  * What a reader of the card finds beside `host`, outside this tool's mark: the run's parent, the
  * branch it was started from when it was told one, the commit its own work begins at, which its
  * changes are measured from, and how far it takes its work, which a dashboard shows and offers to
- * change.
+ * change, and what it was started for, which a git host's check reads to find the run a thread has.
  */
-export function forReaders(mark: Pick<RunnerMark, 'parent' | 'base' | 'baseCommit' | 'publish'>): { parent?: string; base?: string; baseCommit?: string; publish?: Publish } {
+export function forReaders(mark: Pick<RunnerMark, 'parent' | 'base' | 'baseCommit' | 'publish' | 'for'>): { parent?: string; base?: string; baseCommit?: string; publish?: Publish; for?: string } {
   return {
     ...(mark.parent !== undefined ? { parent: mark.parent } : {}),
     ...(mark.base !== undefined ? { base: mark.base } : {}),
     ...(mark.baseCommit !== undefined ? { baseCommit: mark.baseCommit } : {}),
     ...(mark.publish !== undefined ? { publish: mark.publish } : {}),
+    ...(mark.for !== undefined ? { for: mark.for } : {}),
   }
 }
 

@@ -266,7 +266,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                             )}
                             {says?.started !== undefined && (
                               <p role="status" className="mt-2 text-xs text-success">
-                                {scheduled.resumes ? 'Resumed a run.' : 'Started a run.'}{' '}
+                                {says.resumed ? 'Resumed a run.' : 'Started a run.'}{' '}
                                 {says.started !== '' && (
                                   <button type="button" onClick={() => host.openAgent(row.project.id, says.started!)} className="underline">
                                     Open it
@@ -303,6 +303,8 @@ interface Answered {
   failed?: string
   note?: string
   started?: string
+  /** Whether the run started is one that went on, not a new one. */
+  resumed?: true
 }
 
 /**
@@ -312,8 +314,8 @@ interface Answered {
  */
 function startedNow(answer: ModuleCommandResult): Answered {
   if (answer.ok) {
-    const run = typeof answer.output === 'object' && answer.output !== null ? (answer.output as Record<string, unknown>)['run'] : undefined
-    return { started: typeof run === 'string' ? run : '' }
+    const output = typeof answer.output === 'object' && answer.output !== null ? (answer.output as Record<string, unknown>) : {}
+    return { started: typeof output['run'] === 'string' ? output['run'] : '', ...(output['resumed'] === true ? { resumed: true as const } : {}) }
   }
   if (answer.error === 'not due') return { note: 'Nothing started. No work: its shell line printed nothing.' }
   if (answer.error.startsWith('cap reached ')) return { note: `Nothing started. ${outcomeWords(answer.error)}.` }
@@ -362,7 +364,7 @@ function Stands({ host, project, scheduled }: { host: ModuleHost; project: Modul
   )
 }
 
-/** A row's picks, in one line: when it runs, how many agents at once when that is worth saying, which coding agent and model its runs are on, and how far they publish; a row that resumes, that each run answers on its own. A pick of the person's own, on a row that could follow its skill, says so. */
+/** A row's picks, in one line: when it runs, how many agents at once when that is worth saying, which coding agent and model its runs are on, and how far they publish. A pick of the person's own, on a row that could follow its skill, says so. */
 function Picks({ scheduled, schedulerModel, agents }: { scheduled: SchedulerCommand; schedulerModel: string | undefined; agents: readonly AgentModels[] }) {
   const follows = !isOwn(scheduled)
   return (
@@ -388,19 +390,14 @@ function Picks({ scheduled, schedulerModel, agents }: { scheduled: SchedulerComm
       )}
       <span aria-hidden>·</span>
       <span>{runsOnWords(scheduled, schedulerModel, agents)}</span>
-      {follows && !scheduled.resumes && (scheduled.runsOn !== undefined || scheduled.model !== undefined) && (
+      {follows && (scheduled.runsOn !== undefined || scheduled.model !== undefined) && (
         <>
           <span aria-hidden>·</span>
           <span className="text-info">your pick</span>
         </>
       )}
-      {/* A row that resumes publishes as each run's own record says: nothing of this machine's to say. */}
-      {!scheduled.resumes && (
-        <>
-          <span aria-hidden>·</span>
-          <span>{publishes(scheduled)}</span>
-        </>
-      )}
+      <span aria-hidden>·</span>
+      <span>{publishes(scheduled)}</span>
     </p>
   )
 }

@@ -23,13 +23,13 @@ It opens the pull request for the branch you are on and prints it in `request` (
 
 A pull request whose body has a line `Closes #<number>` closes that issue when it merges.
 
-## Commenting on a pull request
+## Commenting on an issue or a pull request
 
 ```
 npx @openagt/skill-github@0.1 comment <number> --body "<text>"
 ```
 
-It posts a new comment, opened with what you run on, so what you post is told apart from what people write.
+It posts a new comment, opened with what you run on, so what you post is told apart from what people write. Always comment this way, never with `gh`.
 
 ## Reading pull requests and issues
 
@@ -39,7 +39,7 @@ npx @openagt/skill-github@0.1 requests [--branch <b>] [--state open|merged|all] 
 
 The project's newest 50 pull requests, newest first, all states unless `--state`, only `<b>`'s with `--branch`; `--since` keeps those created since, or merged since with `--state merged`. Each has `number`, `url`, `state` (`open`, `merged`, `closed`), `title`, `draft`, `branch`, `head`, `createdAt`, and for a merged one `mergedAt` and `mergeCommit` (the commit it landed as).
 
-For a pull request's discussion and diff, and for the project's issues, use `gh` directly: `gh pr view <number> --comments`, `gh pr diff <number>`, `gh issue list`, `gh issue view <number> --comments`, `gh issue comment <number> --body "<text>"`. `gh` is installed and logged in where you run.
+For a pull request's discussion and diff, and for the project's issues, use `gh` directly: `gh pr view <number> --comments`, `gh pr diff <number>`, `gh issue list`, `gh issue view <number> --comments`. `gh` is installed and logged in where you run.
 
 ## Landing a pull request for a person
 
