@@ -14,30 +14,42 @@ const ENDED = '2026-10-19T10:00:00.250Z'
 const BEFORE = '2026-10-19T09:00:00Z'
 const AFTER = '2026-10-19T11:00:00Z'
 
-function card(id: string, pr: number | undefined, over: Partial<RunCard> = {}, host = 'this-box'): RunCard {
-  return { id, startedAt: '2026-10-19T08:00:00.000Z', endedAt: ENDED, status: 'done', ...(pr !== undefined ? { pr: { number: pr, url: `https://github.com/o/r/pull/${pr}` } } : {}), caller: { host, runner: { host } }, ...over }
+/** A run's record on branch `b<n>`, the branch of pull request n in {@link pr}; none with no number. */
+function card(id: string, branch: number | undefined, over: Partial<RunCard> = {}, host = 'this-box'): RunCard {
+  return { id, startedAt: '2026-10-19T08:00:00.000Z', endedAt: ENDED, status: 'done', ...(branch !== undefined ? { branch: `b${branch}` } : {}), caller: { host, runner: { host } }, ...over }
 }
 
 /** A pull request as GitHub answers it, with nothing on it unless said. */
 function pr(number: number, over: Record<string, unknown> = {}): Record<string, unknown> {
-  return { number, url: `https://github.com/o/r/pull/${number}`, mergeable: 'MERGEABLE', baseRef: { name: 'main', target: { committedDate: BEFORE } }, comments: { nodes: [] }, reviews: { nodes: [] }, commits: { nodes: [{ commit: { statusCheckRollup: null } }] }, ...over }
+  return { number, url: `https://github.com/o/r/pull/${number}`, headRefName: `b${number}`, isCrossRepository: false, mergeable: 'MERGEABLE', baseRef: { name: 'main', target: { committedDate: BEFORE } }, comments: { nodes: [] }, reviews: { nodes: [] }, commits: { nodes: [{ commit: { statusCheckRollup: null } }] }, ...over }
 }
 
 const answer = (...prs: Record<string, unknown>[]): unknown => ({ data: { repository: { pullRequests: { nodes: prs } } } })
 
 const comment = (login: string, body: string, createdAt: string, association = 'OWNER') => ({ author: { login }, authorAssociation: association, body, createdAt, url: `https://github.com/o/r/pull/1#c-${login}` })
 
-test("a pull request is watched for the run that last worked on it, when that run is this machine's and has ended; one a run still works on is left to it; a run with no pull request is none", () => {
+test("a branch is watched for the run that last worked on it, when that run is this machine's and has ended; one a run still works on is left to it; a run with no branch is none", () => {
   const cards = [
     card('r1', 1),
-    // A later run on the same pull request, a follow-up: it is the one told.
+    // A later run on the same branch, a follow-up: it is the one told.
     card('r1b', 1, { endedAt: '2026-10-19T10:30:00.000Z' }),
     card('r2', 2, {}, 'other-box'),
     card('r3', 3),
     (({ endedAt: _endedAt, ...going }) => ({ ...going, status: 'running' as const }))(card('r3b', 3, {}, 'other-box')),
     card('r4', undefined),
   ]
-  assert.deepEqual(watchedRequests(cards, 'this-box'), [{ number: 1, run: 'r1b', endedAt: '2026-10-19T10:30:00.000Z' }])
+  assert.deepEqual(watchedRequests(cards, 'this-box'), [{ branch: 'b1', run: 'r1b', endedAt: '2026-10-19T10:30:00.000Z' }])
+})
+
+test("a pull request is the run's whose branch it is: one the run's record never learned, opened by its agent with no git host behind the run, is answered; a fork's of the same branch name is not", () => {
+  const open = parseOpenRequests(
+    answer(
+      pr(8, { headRefName: 'agent-footer', isCrossRepository: true, comments: { nodes: [comment('rom', 'From a fork.', AFTER)] } }),
+      pr(7, { headRefName: 'agent-footer', comments: { nodes: [comment('rom', 'Make it bold.', AFTER)] } }),
+    ),
+  )
+  const watched = watchedRequests([card('r7', undefined, { branch: 'agent-footer' })], 'this-box')
+  assert.deepEqual(repliesFor(watched, open).map(r => r.text), ['On your pull request #7 (https://github.com/o/r/pull/7), since you ended:\n- @rom commented (https://github.com/o/r/pull/1#c-rom):\nMake it bold.'])
 })
 
 test("what counts on a pull request: a maintainer's comment, review and line comment, a request for changes with no words, a red check, a conflict; not someone else's words, not an agent's, not an approval with none, not a green check", () => {
@@ -73,7 +85,7 @@ test("what counts on a pull request: a maintainer's comment, review and line com
   assert.deepEqual(parseOpenRequests({ errors: [{ message: 'no' }] }), [])
 })
 
-test('a run is told only what came after it ended, oldest first, under the pull request it is on; a pull request with nothing new, or no longer open, tells nothing', () => {
+test('a run is told only what came after it ended, oldest first, under the pull request of its branch; a pull request with nothing new, or a branch with none open, tells nothing', () => {
   const open = parseOpenRequests(
     answer(
       pr(1, { comments: { nodes: [comment('rom', 'Second.', '2026-10-19T12:00:00Z'), comment('rom', 'Seen before it ended.', BEFORE), comment('rom', 'First.', AFTER)] } }),
@@ -81,9 +93,9 @@ test('a run is told only what came after it ended, oldest first, under the pull 
     ),
   )
   const watched = [
-    { number: 1, run: 'r1', endedAt: ENDED },
-    { number: 2, run: 'r2', endedAt: ENDED },
-    { number: 9, run: 'r9', endedAt: ENDED },
+    { branch: 'b1', run: 'r1', endedAt: ENDED },
+    { branch: 'b2', run: 'r2', endedAt: ENDED },
+    { branch: 'b9', run: 'r9', endedAt: ENDED },
   ]
   assert.deepEqual(repliesFor(watched, open), [
     {
@@ -101,7 +113,7 @@ test('whose words a run is told: each person once, in the order they came; a red
       pr(2, { commits: { nodes: [{ commit: { statusCheckRollup: { contexts: { nodes: [{ __typename: 'CheckRun', name: 'test', conclusion: 'FAILURE', completedAt: AFTER, detailsUrl: 'u-test' }] } } } }] } }),
     ),
   )
-  const replies = repliesFor([{ number: 1, run: 'r1', endedAt: ENDED }, { number: 2, run: 'r2', endedAt: ENDED }], open)
+  const replies = repliesFor([{ branch: 'b1', run: 'r1', endedAt: ENDED }, { branch: 'b2', run: 'r2', endedAt: ENDED }], open)
   assert.deepEqual(replies.map(r => [r.run, r.from]), [['r1', ['rom', 'dani']], ['r2', undefined]])
 })
 

@@ -59,6 +59,10 @@ already made, and lists it in its pull request; for anything else it proposes an
 - Only maintainers' comments and reviews count, red checks and a conflict with the base
   branch too. Only this machine's runs: only it holds the conversation. A pull request
   with no run behind it gets nothing.
+- A pull request is a run's when its branch is the run's branch, as the run's record keeps
+  it, so a run started with no dashboard and no git host behind it is answered too. Picked
+  over the pull request the record names, which only a run with a git host learns, and
+  over the runner handing every run the basic skills itself.
 - About one GitHub call a minute, not one per pull request.
 - A look first asks whether any comment of the repository changed, by its last answer
   (ETag): "not modified" costs no call of the hour's, and then nothing is read, so the row

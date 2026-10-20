@@ -24,7 +24,9 @@ import { COMMENT_MARK } from './comment.js'
  *
  * Only the open pull requests whose last run was on this machine and has ended: only this machine
  * holds that run's conversation, and a pull request another run still works on is that run's.
- * One GitHub call a look, whatever the number of pull requests.
+ * A pull request is a run's when its branch is the run's branch, as the run's record keeps it:
+ * whoever opened the request, the run's agent with any tool or a person, and whether the run
+ * could tell its pull request or not. One GitHub call a look, whatever the number of pull requests.
  *
  * A look can be every few seconds (a row's `check-every`), so it first asks GitHub whether any
  * comment of the repository changed, a conversation's or a line's, by the answer it last had
@@ -34,9 +36,9 @@ import { COMMENT_MARK } from './comment.js'
  * clone's own `.git` folder, never what decides what is new.
  */
 
-/** A pull request a run opened, with the run that last worked on it and when that run ended. */
+/** A branch runs worked on, with the run that last did and when that run ended. */
 export interface Watched {
-  number: number
+  branch: string
   run: string
   endedAt: string
 }
@@ -69,26 +71,26 @@ const AGENT_MARK = '🤖'
 const RED = new Set(['FAILURE', 'TIMED_OUT', 'STARTUP_FAILURE', 'ACTION_REQUIRED', 'ERROR', 'CANCELLED'])
 
 /**
- * Each pull request the runs worked on, with the run that last did, when that run is this
- * machine's and has ended. A pull request a run still works on, on any machine, is left to it.
+ * Each branch the runs worked on, with the run that last did, when that run is this machine's
+ * and has ended. A branch a run still works on, on any machine, is left to it.
  */
 export function watchedRequests(cards: RunCard[], host: string): Watched[] {
-  const byRequest = new Map<number, RunCard[]>()
-  for (const card of cards) if (card.pr) byRequest.set(card.pr.number, [...(byRequest.get(card.pr.number) ?? []), card])
+  const byBranch = new Map<string, RunCard[]>()
+  for (const card of cards) if (card.branch) byBranch.set(card.branch, [...(byBranch.get(card.branch) ?? []), card])
   const watched: Watched[] = []
-  for (const [number, runs] of byRequest) {
+  for (const [branch, runs] of byBranch) {
     if (runs.some(card => card.status === 'running')) continue
     const last = runs.filter(card => card.endedAt !== undefined).sort((a, b) => Date.parse(b.endedAt!) - Date.parse(a.endedAt!))[0]
-    if (last && last.caller?.['host'] === host) watched.push({ number, run: last.id, endedAt: last.endedAt! })
+    if (last && last.caller?.['host'] === host) watched.push({ branch, run: last.id, endedAt: last.endedAt! })
   }
-  return watched.sort((a, b) => a.number - b.number)
+  return watched.sort((a, b) => a.branch.localeCompare(b.branch))
 }
 
 const QUERY = `query($owner: String!, $name: String!) {
   repository(owner: $owner, name: $name) {
     pullRequests(states: OPEN, first: ${REPLIES_LIMIT}, orderBy: { field: UPDATED_AT, direction: DESC }) {
       nodes {
-        number url mergeable
+        number url mergeable headRefName isCrossRepository
         baseRef { name target { ... on Commit { committedDate } } }
         comments(last: 30) { nodes { author { login } authorAssociation body createdAt url } }
         reviews(last: 30) {
@@ -121,10 +123,11 @@ interface Came {
   by?: string
 }
 
-/** An open pull request as read: what came on it, each with when. */
+/** An open pull request as read: its branch, and what came on it, each with when. */
 export interface OpenRequest {
   number: number
   url: string
+  branch: string
   came: Came[]
 }
 
@@ -144,12 +147,16 @@ function maintainers(node: Node): string | undefined {
   return body
 }
 
-/** The pull requests GitHub answered, each with what came on it; one it answered in a shape not known is left out. */
+/**
+ * The pull requests GitHub answered, each with what came on it; one it answered in a shape not
+ * known is left out, and one from a fork too: a run's branch is on the project's repository, and
+ * a fork's branch of the same name is someone else's.
+ */
 export function parseOpenRequests(output: unknown): OpenRequest[] {
   const repository = ((output as Node | null)?.['data'] as Node | null | undefined)?.['repository'] as Node | null | undefined
   const requests: OpenRequest[] = []
   for (const pr of nodes(repository?.['pullRequests'])) {
-    if (typeof pr['number'] !== 'number' || typeof pr['url'] !== 'string') continue
+    if (typeof pr['number'] !== 'number' || typeof pr['url'] !== 'string' || typeof pr['headRefName'] !== 'string' || pr['isCrossRepository'] !== false) continue
     const came: Came[] = []
     for (const comment of nodes(pr['comments'])) {
       const body = maintainers(comment)
@@ -179,7 +186,7 @@ export function parseOpenRequests(output: unknown): OpenRequest[] {
     const base = pr['baseRef'] as Node | null | undefined
     const moved = text((base?.['target'] as Node | null | undefined)?.['committedDate'])
     if (pr['mergeable'] === 'CONFLICTING' && moved) came.push({ at: moved, line: `It conflicts with ${base?.['name']}, which moved since.` })
-    requests.push({ number: pr['number'], url: pr['url'], came })
+    requests.push({ number: pr['number'], url: pr['url'], branch: pr['headRefName'], came })
   }
   return requests
 }
@@ -191,16 +198,16 @@ export interface Reply {
   from?: string[]
 }
 
-/** For each watched pull request with something new since its run ended, the run, the words it is told, and whose words they are. */
+/** For each open pull request of a watched branch with something new since its run ended, the run, the words it is told, and whose words they are. */
 export function repliesFor(watched: Watched[], open: OpenRequest[]): Reply[] {
   const replies: Reply[] = []
-  for (const { number, run, endedAt } of watched) {
-    const request = open.find(r => r.number === number)
+  for (const { branch, run, endedAt } of watched) {
+    const request = open.find(r => r.branch === branch)
     // ISO times compare as text only in one shape: GitHub's have no fraction, a record's do.
     const after = Date.parse(endedAt)
     const came = request?.came.filter(c => Date.parse(c.at) > after).sort((a, b) => Date.parse(a.at) - Date.parse(b.at)) ?? []
     const from = [...new Set(came.flatMap(c => (c.by !== undefined && c.by !== 'someone' ? [c.by] : [])))]
-    if (request && came.length > 0) replies.push({ run, text: [`On your pull request #${number} (${request.url}), since you ended:`, ...came.map(c => `- ${c.line}`)].join('\n'), ...(from.length > 0 ? { from } : {}) })
+    if (request && came.length > 0) replies.push({ run, text: [`On your pull request #${request.number} (${request.url}), since you ended:`, ...came.map(c => `- ${c.line}`)].join('\n'), ...(from.length > 0 ? { from } : {}) })
   }
   return replies
 }
