@@ -23,6 +23,14 @@ It opens the pull request for the branch you are on and prints it in `request` (
 
 A pull request whose body has a line `Closes #<number>` closes that issue when it merges.
 
+## Commenting on a pull request
+
+```
+npx @openagt/skill-github@0.1 comment <number> --body "<text>"
+```
+
+It posts a new comment, opened with what you run on, so what you post is told apart from what people write.
+
 ## Reading pull requests and issues
 
 ```

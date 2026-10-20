@@ -1,19 +1,19 @@
 ---
 name: reply
-description: "Answer what came on your pull request after you ended: maintainers' comments and reviews, checks that turned red, a conflict with its base branch."
+description: "Answer what came on your pull request after you ended: maintainers' comments and reviews that call you with /agent, checks that turned red, a conflict with its base branch."
 disable-model-invocation: true
 schedule:
   resumes: true
-  when: npx @openagt/skill-github@0.1 replies
+  when: npx @openagt/agent-runner@0.0 git-host replies
   check-every: 15s
-  waits-for: when a maintainer answered on a pull request an agent of this machine opened, one of its checks turned red, or it conflicts with its base branch
+  waits-for: when a maintainer wrote /agent on a pull request an agent of this machine opened, one of its checks turned red, or it conflicts with its base branch
 ---
 
 You opened a pull request earlier in this conversation, then ended. What follows the command says what came on it since: maintainers' comments and reviews, checks that turned red, a conflict with its base branch. Nobody will answer you here: never ask, decide yourself.
 
 First read the whole pull request again, its discussion and its changes, not only what is below: a comment may answer an earlier one, and one may already be answered. If the pull request cannot be read, show an error to the user saying why and stop.
 
-Post on the pull request with `npx @openagt/skill-github@0.1 comment <number> --body "<text>"`: it opens your comment with what you run on, so what you post is told apart from what people write. Each time a new comment, never an edit of an earlier one: a new comment reaches people by email, an edit reaches nobody.
+Post on the pull request the way your git host skill says. Each time a new comment, never an edit of an earlier one: a new comment reaches people by email, an edit reaches nobody.
 
 If what came will take you more than about 5 minutes, first post a short comment: what you are going to do, and that you will comment here when finished.
 
