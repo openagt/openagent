@@ -56,8 +56,10 @@ already made, and lists it in its pull request; for anything else it proposes an
 - New is after the run last ended; no time is kept. Picked over a time kept since the last
   look, where something that came while the run worked was lost, and a red check the agent
   chose to leave woke it again and again.
-- Only maintainers' comments and reviews count, red checks and a conflict with the base
-  branch too. Only this machine's runs: only it holds the conversation. A pull request
+- Only maintainers' comments and reviews that call the agent with `/agent`, a word of its
+  own, count, on the agent's own pull request too; red checks and a conflict with the base
+  branch count with no word: nobody writes one. Picked over every maintainer's words waking
+  the agent, where people talking on the pull request woke it too. Only this machine's runs: only it holds the conversation. A pull request
   with no run behind it gets nothing.
 - A pull request is a run's when its branch is the run's branch, as the run's record keeps
   it, so a run started with no dashboard and no git host behind it is answered too. Picked

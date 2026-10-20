@@ -55,6 +55,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   through the command the project's git host package declares, never through a git host's
   own client. Picked over the run opening the
   request from the branch's commits, and over the agent leaving a title and body in a file.
+- `git-host <command>` runs a command of the project's git host package and prints what it
+  printed, so a skill's check reads pull requests with no git host named. Picked over a
+  skill naming the GitHub skill's command.
 - How far a run takes its work is one sentence after its prompt: commit it, and from there
   push the branch, open its pull request, or set it to merge once its checks pass
   (`run --publish <commit|branch|pr|merge>`). Every level starts with the commit. With no

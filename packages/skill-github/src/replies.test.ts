@@ -45,25 +45,36 @@ test("a pull request is the run's whose branch it is: one the run's record never
   const open = parseOpenRequests(
     answer(
       pr(8, { headRefName: 'agent-footer', isCrossRepository: true, comments: { nodes: [comment('rom', 'From a fork.', AFTER)] } }),
-      pr(7, { headRefName: 'agent-footer', comments: { nodes: [comment('rom', 'Make it bold.', AFTER)] } }),
+      pr(7, { headRefName: 'agent-footer', comments: { nodes: [comment('rom', '/agent Make it bold.', AFTER)] } }),
     ),
   )
   const watched = watchedRequests([card('r7', undefined, { branch: 'agent-footer' })], 'this-box')
-  assert.deepEqual(repliesFor(watched, open).map(r => r.text), ['On your pull request #7 (https://github.com/o/r/pull/7), since you ended:\n- @rom commented (https://github.com/o/r/pull/1#c-rom):\nMake it bold.'])
+  assert.deepEqual(repliesFor(watched, open).map(r => r.text), ['On your pull request #7 (https://github.com/o/r/pull/7), since you ended:\n- @rom commented (https://github.com/o/r/pull/1#c-rom):\n/agent Make it bold.'])
 })
 
-test("what counts on a pull request: a maintainer's comment, review and line comment, a request for changes with no words, a red check, a conflict; not someone else's words, not an agent's, not an approval with none, not a green check", () => {
+test("what counts on a pull request: a maintainer's comment, review and line comment that call the agent with /agent, a red check, a conflict; not words without it, not someone else's, not an agent's, not a green check", () => {
   const [read] = parseOpenRequests(
     answer(
       pr(1, {
         mergeable: 'CONFLICTING',
         baseRef: { name: 'main', target: { committedDate: AFTER } },
-        comments: { nodes: [comment('rom', 'Why this name?', AFTER), comment('passer-by', 'Nice!', AFTER, 'NONE'), comment('rom', '🤖 *automated*\nRenamed it.', AFTER), comment('rom', '**Claude Code finished the task in 22s**\n\nRenamed it.\n\n<!-- openagent -->', AFTER)] },
+        comments: {
+          nodes: [
+            comment('rom', '/agent Why this name?', AFTER),
+            comment('rom', 'Nice name, though.', AFTER),
+            comment('rom', 'See src/agent and the /agents folder, or foo/agent.', AFTER),
+            comment('rom', 'Ask `/agent`, it knows.', AFTER),
+            comment('passer-by', '/agent Nice!', AFTER, 'NONE'),
+            comment('rom', '🤖 *automated*\n/agent Renamed it.', AFTER),
+            comment('rom', '<logo> sonnet-5-5\n\n/agent Renamed it.\n\n<!-- openagent -->', AFTER),
+          ],
+        },
         reviews: {
           nodes: [
-            { author: { login: 'rom' }, authorAssociation: 'MEMBER', body: '', state: 'CHANGES_REQUESTED', submittedAt: AFTER, url: 'u-r1', comments: { nodes: [{ ...comment('rom', 'Off by one.', AFTER, 'MEMBER'), path: 'src/a.ts', line: 12 }] } },
-            { author: { login: 'rom' }, authorAssociation: 'MEMBER', body: '', state: 'APPROVED', submittedAt: AFTER, url: 'u-r2', comments: { nodes: [] } },
+            { author: { login: 'rom' }, authorAssociation: 'MEMBER', body: '/agent the loop is wrong', state: 'CHANGES_REQUESTED', submittedAt: AFTER, url: 'u-r1', comments: { nodes: [{ ...comment('rom', '/agent Off by one.', AFTER, 'MEMBER'), path: 'src/a.ts', line: 12 }, { ...comment('rom', 'Nit.', AFTER, 'MEMBER'), path: 'src/a.ts', line: 14 }] } },
+            { author: { login: 'rom' }, authorAssociation: 'MEMBER', body: '', state: 'CHANGES_REQUESTED', submittedAt: AFTER, url: 'u-r2', comments: { nodes: [] } },
             { author: { login: 'dani' }, authorAssociation: 'COLLABORATOR', body: 'Looks fine, one question.', state: 'COMMENTED', submittedAt: AFTER, url: 'u-r3', comments: { nodes: [] } },
+            { author: { login: 'dani' }, authorAssociation: 'COLLABORATOR', body: 'Looks fine. /agent, one question.', state: 'COMMENTED', submittedAt: AFTER, url: 'u-r4', comments: { nodes: [] } },
           ],
         },
         commits: { nodes: [{ commit: { statusCheckRollup: { contexts: { nodes: [{ __typename: 'CheckRun', name: 'test', conclusion: 'FAILURE', completedAt: AFTER, detailsUrl: 'u-test' }, { __typename: 'CheckRun', name: 'lint', conclusion: 'SUCCESS', completedAt: AFTER, detailsUrl: 'u-lint' }, { __typename: 'StatusContext', context: 'ci/old', state: 'ERROR', createdAt: AFTER, targetUrl: 'u-old' }] } } } }] },
@@ -73,10 +84,11 @@ test("what counts on a pull request: a maintainer's comment, review and line com
   assert.deepEqual(
     read!.came.map(c => c.line),
     [
-      '@rom commented (https://github.com/o/r/pull/1#c-rom):\nWhy this name?',
-      '@rom requested changes (u-r1).',
-      '@rom on src/a.ts line 12 (https://github.com/o/r/pull/1#c-rom):\nOff by one.',
-      '@dani reviewed (u-r3):\nLooks fine, one question.',
+      '@rom commented (https://github.com/o/r/pull/1#c-rom):\n/agent Why this name?',
+      '@rom commented (https://github.com/o/r/pull/1#c-rom):\nAsk `/agent`, it knows.',
+      '@rom requested changes (u-r1):\n/agent the loop is wrong',
+      '@rom on src/a.ts line 12 (https://github.com/o/r/pull/1#c-rom):\n/agent Off by one.',
+      '@dani reviewed (u-r4):\nLooks fine. /agent, one question.',
       'The check "test" failed (u-test).',
       'The check "ci/old" failed (u-old).',
       'It conflicts with main, which moved since.',
@@ -88,7 +100,7 @@ test("what counts on a pull request: a maintainer's comment, review and line com
 test('a run is told only what came after it ended, oldest first, under the pull request of its branch; a pull request with nothing new, or a branch with none open, tells nothing', () => {
   const open = parseOpenRequests(
     answer(
-      pr(1, { comments: { nodes: [comment('rom', 'Second.', '2026-10-19T12:00:00Z'), comment('rom', 'Seen before it ended.', BEFORE), comment('rom', 'First.', AFTER)] } }),
+      pr(1, { comments: { nodes: [comment('rom', '/agent Second.', '2026-10-19T12:00:00Z'), comment('rom', 'Seen before it ended.', BEFORE), comment('rom', '/agent First.', AFTER)] } }),
       pr(2, { comments: { nodes: [comment('rom', 'Old news.', BEFORE)] }, mergeable: 'CONFLICTING' }),
     ),
   )
@@ -100,7 +112,7 @@ test('a run is told only what came after it ended, oldest first, under the pull 
   assert.deepEqual(repliesFor(watched, open), [
     {
       run: 'r1',
-      text: ['On your pull request #1 (https://github.com/o/r/pull/1), since you ended:', '- @rom commented (https://github.com/o/r/pull/1#c-rom):\nFirst.', '- @rom commented (https://github.com/o/r/pull/1#c-rom):\nSecond.'].join('\n'),
+      text: ['On your pull request #1 (https://github.com/o/r/pull/1), since you ended:', '- @rom commented (https://github.com/o/r/pull/1#c-rom):\n/agent First.', '- @rom commented (https://github.com/o/r/pull/1#c-rom):\n/agent Second.'].join('\n'),
       seen: ['C-rom', 'C-rom'],
     },
   ])
@@ -110,8 +122,8 @@ test('the comments and reviews a run is told, by their ids, for their 👀: a li
   const open = parseOpenRequests(
     answer(
       pr(1, {
-        comments: { nodes: [comment('rom', 'First.', AFTER, 'OWNER', 'IC_1'), comment('dani', 'Seen before it ended.', BEFORE, 'COLLABORATOR', 'IC_0')] },
-        reviews: { nodes: [{ id: 'PRR_1', author: { login: 'dani' }, authorAssociation: 'COLLABORATOR', body: 'One thing.', state: 'COMMENTED', submittedAt: AFTER, url: 'u-r', comments: { nodes: [{ ...comment('dani', 'Off by one.', AFTER, 'COLLABORATOR', 'PRRC_1'), path: 'a.ts', line: 3 }] } }] },
+        comments: { nodes: [comment('rom', '/agent First.', AFTER, 'OWNER', 'IC_1'), comment('dani', 'Seen before it ended.', BEFORE, 'COLLABORATOR', 'IC_0')] },
+        reviews: { nodes: [{ id: 'PRR_1', author: { login: 'dani' }, authorAssociation: 'COLLABORATOR', body: '/agent One thing.', state: 'COMMENTED', submittedAt: AFTER, url: 'u-r', comments: { nodes: [{ ...comment('dani', '/agent Off by one.', AFTER, 'COLLABORATOR', 'PRRC_1'), path: 'a.ts', line: 3 }] } }] },
       }),
       pr(2, { commits: { nodes: [{ commit: { statusCheckRollup: { contexts: { nodes: [{ __typename: 'CheckRun', name: 'test', conclusion: 'FAILURE', completedAt: AFTER, detailsUrl: 'u-test' }] } } } }] } }),
     ),
@@ -129,10 +141,10 @@ test('a look asks first whether a comment changed, then reads every pull request
     const gh: GhRunner = async args => {
       calls.push(args)
       if (args[1] === 'graphql' && args[3]!.startsWith('query=mutation')) return '{}'
-      return args[1] === 'graphql' ? JSON.stringify(answer(pr(1, { comments: { nodes: [comment('rom', 'Why?', AFTER)] } }))) : 'HTTP/2.0 200 OK\nEtag: W/"e1"\n\n[]'
+      return args[1] === 'graphql' ? JSON.stringify(answer(pr(1, { comments: { nodes: [comment('rom', '/agent Why?', AFTER)] } }))) : 'HTTP/2.0 200 OK\nEtag: W/"e1"\n\n[]'
     }
     const replies = await listReplies('/repo', { gh, host: 'this-box', runs: async () => [card('r1', 1), card('r2', 2)], cache })
-    assert.deepEqual(replies, [{ run: 'r1', text: 'On your pull request #1 (https://github.com/o/r/pull/1), since you ended:\n- @rom commented (https://github.com/o/r/pull/1#c-rom):\nWhy?' }], 'the run and its words, as the scheduler reads them')
+    assert.deepEqual(replies, [{ run: 'r1', text: 'On your pull request #1 (https://github.com/o/r/pull/1), since you ended:\n- @rom commented (https://github.com/o/r/pull/1#c-rom):\n/agent Why?' }], 'the run and its words, as the scheduler reads them')
     assert.deepEqual(calls.map(c => c.slice(0, 3)), [['api', '--include', 'repos/{owner}/{repo}/issues/comments?sort=updated&direction=desc&per_page=1'], ['api', '--include', 'repos/{owner}/{repo}/pulls/comments?sort=updated&direction=desc&per_page=1'], repliesArgs().slice(0, 3), seenArgs(['C-rom']).slice(0, 3)])
     assert.deepEqual(calls[3], seenArgs(['C-rom']))
 
@@ -158,7 +170,7 @@ test('when no comment changed, a look reads nothing more, but for the whole read
     const calls: string[][] = []
     const gh: GhRunner = async args => {
       calls.push(args)
-      if (args[1] === 'graphql') return JSON.stringify(answer(pr(1, { comments: { nodes: [comment('rom', 'Why?', AFTER)] } })))
+      if (args[1] === 'graphql') return JSON.stringify(answer(pr(1, { comments: { nodes: [comment('rom', '/agent Why?', AFTER)] } })))
       if (!changed && args.includes('If-None-Match: W/"e1"')) throw new Error('gh: HTTP 304')
       return 'HTTP/2.0 200 OK\nEtag: W/"e1"\n\n[]'
     }

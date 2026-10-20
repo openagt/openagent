@@ -13,9 +13,12 @@ already made, and lists it in its pull request; for anything else it proposes an
   Picked over a new agent for each comment, which knew nothing of the work.
 - Its own package, a skill file only: its front matter is the scheduler's row. Picked over
   a row in the GitHub skill, whose skill is the agent's guide to GitHub, not a command.
-- Only maintainers' comments count: people who can write to the repository. An agent
-  posts with a person's account, so what it posts carries the 🤖 line, and is never
-  counted.
+- It names no git host: its check asks whichever package is the project's git host
+  (`agent-runner git-host replies`), and the agent posts the way its git host skill says.
+  Picked over the check and the text naming the GitHub skill.
+- Only maintainers' comments count, and only those that call the agent with `/agent`:
+  people who can write to the repository. An agent posts with a person's account, so what
+  it posts carries the 🤖 line, and is never counted.
 - Red checks and conflicts with the base branch wake the agent too. A conflict is
   resolved by merging the base branch in, never by a rebase or a forced push; one it
   cannot resolve with confidence is said on the pull request for a person.

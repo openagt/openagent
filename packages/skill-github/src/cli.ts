@@ -31,7 +31,7 @@ export const USAGE = `usage: github <command>
   requests [--branch <b>] [--state open|merged|all] [--since <iso>]
                                the project's pull requests, newest first: number, url, state, title, draft, branch, head, createdAt, mergedAt, mergeCommit
   replies                      what came on the open pull requests this machine's agents opened, since each agent ended: maintainers' comments
-                               and reviews, checks that turned red, a conflict once the base branch moved; [{ run, text }], one per run, read
+                               and reviews that call the agent with /agent, checks that turned red, a conflict once the base branch moved; [{ run, text }], one per run, read
                                from the project's run records; the check of a scheduler's row that resumes runs
   comment <number> --body <text>
                                post a comment on pull request <number>: its id and url. It opens with the coding agent's logo, the model and the effort, as the agent's

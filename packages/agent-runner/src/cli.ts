@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util'
-import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner, runPackageCommand, type GitRunner } from '@openagt/agent-data'
 import { liftSkillRules, projectRoot } from '@openagt/skill-branches'
 import { findRun } from '@openagt/skill-logs'
 import { DRIVER_NAMES, detachResume, detachRun, isDriverName, readyToRun, resumeProject, runProject } from './runner.js'
@@ -7,6 +7,7 @@ import { initHooks } from './init.js'
 import { cleanup } from './cleanup.js'
 import { everyBasicSkill } from './basic-skills.js'
 import { isPublish, NO_PUBLISH, PUBLISH_LEVELS } from './records.js'
+import { gitHostCommand } from './git-host.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -34,6 +35,8 @@ export const USAGE = `usage: agent-runner <command>
                                 kept on the run's record with the time, until its next resume: a scheduler's row that resumed it, which counts the run as its own
   check [--driver <claude-code|codex>]
                                 whether a run can start here: the coding agent's CLI installed and logged in, and its warnings; what a dashboard's check hook runs
+  git-host <command> [<arg>…]   run a command of the project's git host, whichever package is it, and print what it printed: a skill's check reads
+                                pull requests with no host named (git-host replies); refused where the project has no git host
   init                          this tool's lines in the dashboard's .openagent/hooks.yml, so its Start works; a line already there is kept
   cleanup                       remove what this tool left in the project: the runs' locks and stderr files, then .agent-runner/ and the rule hiding it from git once it is empty;
                                 config.yml is yours and stays; refused while a run's process is alive; the command a dashboard asks for when a project is removed with its files
@@ -189,6 +192,17 @@ const COMMANDS: Record<string, Command> = {
     if (!isDriverName(driver)) throw new Usage(`unknown driver "${driver}"; the drivers are ${DRIVER_NAMES.join(' and ')}`)
     const repo = await project(io.cwd, git)
     return { ok: true, ...(await readyToRun(repo, driver)) }
+  },
+
+  async 'git-host'(args, io, git) {
+    // What follows is the git host's own command line, read by it, not here.
+    if (args.length === 0) throw new Usage('git-host needs the command to run')
+    const repo = await project(io.cwd, git)
+    const command = await gitHostCommand(repo)
+    if (!command) throw new Refused({ ok: false, reason: 'no-git-host' }, 'this project has no git host package')
+    const result = await runPackageCommand(repo, command, args)
+    if (!result.ok) throw new Refused({ ok: false, reason: 'git-host', detail: result.error }, result.error)
+    return result.output
   },
 
   async init(args, io, git) {

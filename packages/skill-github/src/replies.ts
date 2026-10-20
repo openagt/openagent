@@ -18,9 +18,11 @@ import { COMMENT_MARK } from './comment.js'
  *
  * What counts:
  * - a comment or a review of a maintainer, a person who can write to the repository: GitHub's
- *   owner, member or collaborator. One that carries the 🤖 line, or the hidden mark of a comment
- *   `comment` wrote, is an agent's, posted with a person's account, and never counts;
- * - a check that turned red;
+ *   owner, member or collaborator, that calls the agent: `/agent`, a word of its own anywhere in
+ *   it. Other words on the pull request are people talking, the agent's own pull request too.
+ *   One that carries the 🤖 line, or the hidden mark of a comment `comment` wrote, is an agent's,
+ *   posted with a person's account, and never counts;
+ * - a check that turned red, with no word: nobody writes one;
  * - a conflict with the base branch, once the base branch moved.
  *
  * Only the open pull requests whose last run was on this machine and has ended: only this machine
@@ -67,6 +69,9 @@ const MAINTAINERS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR'])
 
 /** What an agent puts on what it posts. */
 const AGENT_MARK = '🤖'
+
+/** The word that calls the agent: `/agent` with nothing of a word or a path on either side. */
+export const MENTION = /(?<![\w/])\/agent(?![\w/-])/
 
 /** A check's ending that is red. */
 const RED = new Set(['FAILURE', 'TIMED_OUT', 'STARTUP_FAILURE', 'ACTION_REQUIRED', 'ERROR', 'CANCELLED'])
@@ -144,10 +149,10 @@ const login = (node: Node): string => text((node['author'] as Node | null | unde
 /** A comment's or a review's id, for its 👀. */
 const seen = (node: Node): { seen?: string } => (text(node['id']) !== undefined ? { seen: text(node['id'])! } : {})
 
-/** A maintainer's words that are no agent's: what counts of a comment or a review. */
+/** A maintainer's words that call the agent and are no agent's: what counts of a comment or a review. */
 function maintainers(node: Node): string | undefined {
   const body = text(node['body'])?.trim()
-  if (!body || body.includes(AGENT_MARK) || body.includes(COMMENT_MARK) || !MAINTAINERS.has(String(node['authorAssociation']))) return undefined
+  if (!body || !MENTION.test(body) || body.includes(AGENT_MARK) || body.includes(COMMENT_MARK) || !MAINTAINERS.has(String(node['authorAssociation']))) return undefined
   return body
 }
 
@@ -170,9 +175,8 @@ export function parseOpenRequests(output: unknown): OpenRequest[] {
     for (const review of nodes(pr['reviews'])) {
       const at = text(review['submittedAt'])
       const body = maintainers(review)
-      // A request for changes counts with no words too; an approval with none asks nothing, and a review's comments count one by one.
-      const changes = review['state'] === 'CHANGES_REQUESTED' && MAINTAINERS.has(String(review['authorAssociation'])) && !text(review['body'])?.includes(AGENT_MARK)
-      if (at && (body || changes)) came.push({ at, line: `@${login(review)} ${changes ? 'requested changes' : 'reviewed'} (${review['url']})${body ? `:\n${body}` : '.'}`, ...seen(review) })
+      // A review's comments count one by one, each by its own word.
+      if (at && body) came.push({ at, line: `@${login(review)} ${review['state'] === 'CHANGES_REQUESTED' ? 'requested changes' : 'reviewed'} (${review['url']}):\n${body}`, ...seen(review) })
       for (const comment of nodes(review['comments'])) {
         const words = maintainers(comment)
         const when = text(comment['createdAt'])
