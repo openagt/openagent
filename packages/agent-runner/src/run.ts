@@ -1,7 +1,7 @@
 import { hostname } from 'node:os'
 import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { AgentExitError, continuationPrompt, logDiaryFile, parseQuestion, promptOf, takeInbox, type Driver, type DriverSession, type LogEndStatus } from '@openagt/agent-driver'
+import { AgentExitError, ConversationGoneError, continuationPrompt, logDiaryFile, parseQuestion, promptOf, takeInbox, type Driver, type DriverPromptOptions, type DriverSession, type DriverTurn, type LogEndStatus } from '@openagt/agent-driver'
 import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 import { agentBranchName, attachCheckout, createCheckout, reclaimWorktree, relinkCheckout, worktreeBranch, worktreePath, type SkillLink } from '@openagt/skill-branches'
 import { findRun, readDiary, type AnyDiaryLine, type LogsDeps, type RunCard, type RunStatus } from '@openagt/skill-logs'
@@ -322,7 +322,9 @@ export interface ResumeOptions {
  * Continue an ended run: the same id, the same record, the same branch. The checkout is the one
  * the run kept, or a new one attached to its branch; a branch that went with the checkout, for
  * holding nothing, starts again from the base the record names, or origin's default branch. The session resumes by the id the
- * record carries; the diary goes on from where it stopped. The prompt is the user's text, or the
+ * record carries; the diary goes on from where it stopped. A conversation the coding agent no
+ * longer has, or a record that names none, is not the end of the run: it goes on in a fresh one,
+ * whose agent reads the run's record first (`afresh`). The prompt is the user's text, or the
  * continuation of the question the run ended on with the given answer. The sentence of the publish
  * level the record keeps is said again after it. A run whose work was landed, its branch gone
  * with that, is no longer recorded as landed once it is on a branch made again: what it does from
@@ -551,6 +553,8 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
     // them was told the run has them, so this process sends them before it lets the run go.
     let prompts = [run.prompt]
     let resume = run.continued
+    // A continued run whose record names no conversation has none to go on with: it starts afresh.
+    let fresh = run.continued && run.resumeSessionId === undefined
     // Handed over with the run's own prompt only: the first one this process sends.
     let attached = run.attached
     while (driverSession) {
@@ -565,7 +569,15 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
           const last = i === prompts.length - 1
           const handed = attached
           attached = undefined
-          const turn = await driverSession.prompt(prompt, { ...(last ? { inbox } : {}), ...(resume ? { resume: true } : {}), ...(handed !== undefined ? { attached: handed } : {}), ...(run.added !== undefined ? { added: run.added } : {}) })
+          const sent = { ...(last ? { inbox } : {}), ...(resume ? { resume: true } : {}), ...(handed !== undefined ? { attached: handed } : {}), ...(run.added !== undefined ? { added: run.added } : {}) }
+          const session = driverSession
+          const turn = fresh
+            ? await afresh(session, run, prompt, sent)
+            : await session.prompt(prompt, sent).catch((err: unknown) => {
+                if (err instanceof ConversationGoneError) return afresh(session, run, prompt, sent)
+                throw err
+              })
+          fresh = false
           lastText = turn.text
           lastWords = turn.text
           resume = true
@@ -657,6 +669,25 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
   }
   await tell(!(reclaimed.ok && reclaimed.branchesDeleted?.includes(branch)))
   return outcomeOf(run.id, status, branch, pr, card.cost, reclaimed.ok ? { reclaimed: true } : { reclaimed: false, reason: reclaimed.reason }, detail)
+}
+
+/** The line a continued run's record gets where its coding agent starts a fresh conversation. */
+export const AFRESH_NOTICE = "The coding agent no longer has this run's earlier conversation: a fresh one starts here, told to read this run's record first."
+
+/** What the agent of a run going on in a fresh conversation is handed after its prompt: where its earlier work is. */
+export function earlierWorkLine(id: string, pr: { url: string } | undefined): string {
+  return `Your earlier conversation in this run is gone, so this one starts without it. Before anything else, read what you did before: this run's record, \`npx @openagt/skill-logs@0.1 show ${id}\`${pr ? `, and the whole thread of its pull request, ${pr.url}` : ''}.`
+}
+
+/**
+ * A continued run's prompt in a fresh conversation (#2042): its agent no longer has the one the
+ * record names, or the record names none. The run stays the same run, its record and branch, and
+ * its record says where the fresh conversation starts; the agent reads its own record first, the
+ * diary that kept what it said, which outlives the agent's own copy of the conversation.
+ */
+async function afresh(session: DriverSession, run: SessionRun, prompt: string, sent: DriverPromptOptions): Promise<DriverTurn> {
+  await session.log?.record({ type: 'notice', message: AFRESH_NOTICE })
+  return session.prompt(prompt, { ...sent, resume: false, attached: earlierWorkLine(run.id, run.card.pr) })
 }
 
 /** The commit a checkout just made is at: where the run's own work begins. Nothing when git cannot say. */

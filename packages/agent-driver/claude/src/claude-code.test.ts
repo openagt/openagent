@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { Readable, Writable } from 'node:stream'
 import { existsSync, readFileSync } from 'node:fs'
 import { ClaudeCodeDriver, StreamJsonParser, claudeCodeReady } from './claude-code.js'
-import { runCliSession, type SpawnLike, type SpawnedProcess, type DriverEvent } from '@openagt/agent-driver'
+import { ConversationGoneError, runCliSession, type SpawnLike, type SpawnedProcess, type DriverEvent } from '@openagt/agent-driver'
 
 test('StreamJsonParser surfaces assistant text + tool names, keeps the result', () => {
   const p = new StreamJsonParser()
@@ -566,30 +566,19 @@ test('ClaudeCodeSession seeds a given session id so the opening prompt resumes i
   assert.ok(!captured.includes('--append-system-prompt')) // the resumed transcript already carries its framing
 })
 
-test('ClaudeCodeSession retries without --resume when the conversation is gone (#778)', async () => {
+test('ClaudeCodeSession says a conversation the CLI no longer has is gone, and sends nothing of the refused turn (#778)', async () => {
   const calls: string[][] = []
   const spawn: SpawnLike = (_cmd, args, options) => {
     calls.push([...args])
-    // First attempt: the CLI refuses the id it was asked to resume. Second: a normal turn.
-    return calls.length === 1
-      ? fakeSpawn([], 1, 'No conversation found with session ID: sess-42')(_cmd, args, options)
-      : fakeSpawn([JSON.stringify({ type: 'result', result: 'ok', session_id: 'sess-99' })])(_cmd, args, options)
+    // The CLI's own answer, as claude 2.1.304 gives it: the line on stderr, an error result on stdout.
+    return fakeSpawn([JSON.stringify({ type: 'result', subtype: 'error_during_execution', is_error: true, num_turns: 0, session_id: 'sess-42' })], 1, 'No conversation found with session ID: sess-42')(_cmd, args, options)
   }
   const events: DriverEvent[] = []
   const session = await new ClaudeCodeDriver({ spawn }).start({ cwd: '/ws', system: 'framing', resumeSessionId: 'sess-42', onEvent: e => events.push(e) })
 
-  const turn = await session.prompt('keep going', { resume: true })
-  assert.equal(turn.text, 'ok') // the message lands rather than failing the session
-  assert.equal(calls.length, 2)
-  assert.equal(calls[0]?.[calls[0].indexOf('--resume') + 1], 'sess-42')
-  // The retry is a fresh conversation, so it carries the system framing the resume skipped.
-  assert.ok(!calls[1]?.includes('--resume'))
-  assert.ok(calls[1]?.includes('--append-system-prompt'))
-  assert.ok(events.some(e => e.type === 'notice' && /no longer available/.test(e.message)))
-
-  // The dead id is dropped, so the next chat turn chains off the new conversation.
-  await session.prompt('and again', { resume: true })
-  assert.equal(calls[2]?.[calls[2].indexOf('--resume') + 1], 'sess-99')
+  await assert.rejects(session.prompt('keep going', { resume: true }), (err: unknown) => err instanceof ConversationGoneError && err.sessionId === 'sess-42')
+  assert.equal(calls.length, 1, 'no second try: going on without the conversation is the caller\'s')
+  assert.equal(events.length, 0, 'not the message, not the dead id, not the error')
 })
 
 test('ClaudeCodeSession does not retry a turn that failed for any other reason (#778)', async () => {

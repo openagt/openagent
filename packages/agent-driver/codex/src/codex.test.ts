@@ -7,7 +7,7 @@ import { createInterface } from 'node:readline'
 import { test } from 'node:test'
 import { PassThrough, Readable } from 'node:stream'
 import { CodexDriver, codexReady, defaultCodexHome, parseCodexModels, parseCodexUsage } from './codex.js'
-import { AgentExitError, type SpawnLike, type SpawnedProcess, type Driver, type DriverEvent } from '@openagt/agent-driver'
+import { AgentExitError, ConversationGoneError, type SpawnLike, type SpawnedProcess, type Driver, type DriverEvent } from '@openagt/agent-driver'
 
 type Message = { method: string; params: Record<string, unknown> }
 const note = (method: string, params: Record<string, unknown>): Message => ({ method, params })
@@ -306,6 +306,15 @@ test('CodexDriver continues its conversation on a resume prompt, and only then',
   assert.equal(thread(seen[2]!).method, 'thread/start', 'a prompt that does not ask to resume starts fresh')
 })
 
+test('CodexDriver says a conversation Codex has no record of is gone, and sends nothing of the refused turn', async () => {
+  const events: DriverEvent[] = []
+  // Codex's own refusal, as codex-cli 0.144.4 gives it.
+  const spawn = fakeAppServer({ refuse: { method: 'thread/resume', message: 'no rollout found for thread id thread-0' } })
+  const session = await new CodexDriver({ spawn }).start({ cwd: '/ws', resumeSessionId: 'thread-0', onEvent: e => events.push(e) })
+  await assert.rejects(session.prompt('go on', { resume: true }), (err: unknown) => err instanceof ConversationGoneError && err.sessionId === 'thread-0')
+  assert.equal(events.length, 0)
+})
+
 test('CodexDriver resumes the conversation a session was started for, under the sandbox given', async () => {
   let seen: Seen | undefined
   const driver = new CodexDriver({ sandbox: 'danger-full-access', spawn: fakeAppServer({}, s => (seen = s)) })
@@ -354,9 +363,11 @@ test('a Codex turn that failed fails with Codex\'s reason, though the app server
   await assert.rejects(() => interrupted.prompt('go'), /codex failed: Codex's turn ended interrupted/)
 })
 
-test('a request Codex refuses fails the turn with its reason: a conversation it cannot resume', async () => {
-  const session = await new CodexDriver({ spawn: fakeAppServer({ refuse: { method: 'thread/resume', message: 'no rollout found for thread id thread-0' } }) }).start({ cwd: '/ws', resumeSessionId: 'thread-0' })
-  await assert.rejects(() => session.prompt('go on', { resume: true }), /codex failed: no rollout found for thread id thread-0/)
+test('a request Codex refuses fails the turn with its reason, and says it', async () => {
+  const events: DriverEvent[] = []
+  const session = await new CodexDriver({ spawn: fakeAppServer({ refuse: { method: 'thread/resume', message: 'the thread is busy' } }) }).start({ cwd: '/ws', resumeSessionId: 'thread-0', onEvent: e => events.push(e) })
+  await assert.rejects(() => session.prompt('go on', { resume: true }), (err: unknown) => !(err instanceof ConversationGoneError) && /codex failed: the thread is busy/.test(String(err)))
+  assert.deepEqual(events.map(e => e.type), ['start', 'error'], 'held back until the turn failed, then sent')
 })
 
 test('a Codex app server that exits before its turn ends fails the turn', async () => {

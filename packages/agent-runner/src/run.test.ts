@@ -7,7 +7,7 @@ import { worktreePath } from '@openagt/skill-branches'
 import { findRun, patchRun, readDiary } from '@openagt/skill-logs'
 import { inboxPath, readLiveCard } from './live-card.js'
 import { acquireRunLock, lockHolder, releaseRunLock } from './run-lock.js'
-import { addedLine, HOLD_MERGE_LINE, PUBLISH_LINES, resumeRun, runCommand, STOPPED_DETAIL } from './run.js'
+import { addedLine, AFRESH_NOTICE, earlierWorkLine, HOLD_MERGE_LINE, PUBLISH_LINES, resumeRun, runCommand, STOPPED_DETAIL } from './run.js'
 import { markerCard, recordRun, runnerMark, writeMarker } from './records.js'
 import type { GitHost } from './git-host.js'
 import { sweep } from './sweep.js'
@@ -418,6 +418,75 @@ test('a run whose last turn asked ends waiting and keeps its checkout; the answe
     assert.deepEqual(after.at(-1), { kind: 'ended', status: 'done' })
     const resumePrompt = after.find((l, i) => l.kind === 'start' && i > 4)
     assert.equal(resumePrompt?.['prompt'], 'You paused to ask: "Ship it?". The user chose: Approve. Continue with that decision.')
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
+test('a resumed run whose conversation its coding agent no longer has goes on in a fresh one: the same run, its record saying where, its agent pointed at its record and pull request first', async () => {
+  const repo = await testRepo()
+  try {
+    const gitHost = fakeGitHost('agent-fix-it')
+    gitHost.open()
+    const first = await runCommand(repo, { prompt: '/fix-it', driver: committingDriver(), now: () => NOW, gitHost })
+    assert.equal(first.status, 'done')
+    assert.equal((await findRun(repo, first.id))?.caller?.['sessionId'], 's-1')
+
+    let sent: string[] = []
+    const forgetful: Driver = {
+      id: 'fake',
+      start: async opts => {
+        const fake = await new FakeDriver({ turns: [{ text: 'Answered the comment.' }], sessionId: 's-2', gone: ['s-1'] }).start(opts)
+        sent = fake.prompts
+        return fake
+      },
+    }
+    const second = await resumeRun(repo, { id: first.id, text: '/reply a comment came', driver: forgetful, now: () => NOW, gitHost })
+    assert.equal(second.id, first.id, 'the same run')
+    assert.equal(second.status, 'done')
+    const pointer = earlierWorkLine(first.id, { url: 'https://example.com/x/y/pull/12' })
+    assert.equal(pointer, "Your earlier conversation in this run is gone, so this one starts without it. Before anything else, read what you did before: this run's record, `npx @openagt/skill-logs@0.1 show 2026-09-16T14-01-00-000Z`, and the whole thread of its pull request, https://example.com/x/y/pull/12.")
+    assert.deepEqual(sent, [promptSent('/reply a comment came', { attached: pointer })], 'one prompt reached the agent: the words, then where its earlier work is')
+
+    const after = await readUntimedDiary(repo, first.id)
+    const resumed = after.slice(after.findIndex(l => l.kind === 'ended') + 1)
+    assert.deepEqual(resumed.map(l => l.kind), ['notice', 'start', 'said', 'result', 'ended'], 'nothing of the refused try is in the diary')
+    assert.equal(resumed[0]?.['message'], AFRESH_NOTICE)
+    assert.equal(resumed[1]?.['prompt'], '/reply a comment came', 'the words as they were said, the pointer apart')
+    assert.equal(resumed[1]?.['attached'], pointer)
+    const card = await findRun(repo, first.id)
+    assert.equal(card?.caller?.['sessionId'], 's-2', 'the next resume continues the fresh conversation')
+    assert.equal(card?.pr?.number, 12)
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
+test('a resumed run whose record names no conversation goes on in a fresh one the same way', async () => {
+  const repo = await testRepo()
+  try {
+    const first = await runCommand(repo, { prompt: '/work-queue', driver: new FakeDriver({ turns: [{ text: 'Done.' }] }), now: () => NOW, gitHost: noGitHost })
+    const card = await findRun(repo, first.id)
+    delete card!.caller!['sessionId']
+    await recordRun(repo, card!, (await readDiary(repo, first.id))!)
+
+    let resumedWith: string | undefined = 'unset'
+    let sent: string[] = []
+    const fresh: Driver = {
+      id: 'fake',
+      start: async opts => {
+        resumedWith = opts.resumeSessionId
+        const fake = await new FakeDriver({ turns: [{ text: 'Done again.' }] }).start(opts)
+        sent = fake.prompts
+        return fake
+      },
+    }
+    const second = await resumeRun(repo, { id: first.id, text: 'one more thing', driver: fresh, now: () => NOW, gitHost: noGitHost })
+    assert.equal(second.status, 'done')
+    assert.equal(resumedWith, undefined)
+    assert.deepEqual(sent, [promptSent('one more thing', { attached: earlierWorkLine(first.id, undefined) })])
+    const diary = await readUntimedDiary(repo, first.id)
+    assert.deepEqual(diary.filter(l => l.kind === 'notice').map(l => l['message']), [AFRESH_NOTICE])
   } finally {
     await removeRepo(repo)
   }

@@ -125,7 +125,8 @@ export interface DriverStartOptions {
    * prompt (with `resume`) continues that conversation instead of starting fresh.
    * This is how a finished agent is revived from a UI — its captured session
    * id is threaded here so the opening message lands with the full prior context.
-   * A driver that can't resume ignores it and runs fresh (the best-effort contract).
+   * A driver that can't resume ignores it and runs fresh (the best-effort contract). One that can,
+   * asked to continue a conversation its agent no longer has, throws `ConversationGoneError`.
    */
   resumeSessionId?: string
   /**
