@@ -760,7 +760,7 @@ export function EventList({
                 {startedRows(i)}
                 {/* Every row carries the same -mx/px pair so a washed row's band and a plain row's
                     text share the exact same columns; only the background differs. */}
-                <MessageScrollerItem messageId={idOf(e)} className={`group/row -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${answer ? 'my-3.5 first:mt-0' : own ? 'mt-4 first:mt-0' : ''} ${end ? '' : rowWash(e)}`}>
+                <MessageScrollerItem messageId={idOf(e)} className={`group/row -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${answer ? 'mt-1 mb-3.5' : own ? '-mb-1 mt-4 first:mt-0' : ''} ${end ? '' : rowWash(e)}`}>
                   {answer ? (
                     <Answer {...answer} />
                   ) : own && message !== null ? (
