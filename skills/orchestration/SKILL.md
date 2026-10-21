@@ -1,6 +1,7 @@
 ---
 name: orchestration
 description: "Split your task across subagents: plan it, get the person's yes, start other agents on the parts, each in its own checkout on a branch started from yours, and land their work on your branch."
+package: "@openagt/skill-orchestration@0.1"
 ---
 
 # Orchestration

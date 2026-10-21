@@ -1,6 +1,7 @@
 ---
 name: queue
 description: Where the project's agent queue lives, how to read it and change it, and its format.
+package: "@openagt/skill-queue@0.1"
 ---
 
 # The agent queue

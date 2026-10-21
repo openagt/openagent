@@ -66,6 +66,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   as the value; several and no line means nothing provides it, and the project's banner
   says why. Picked over the first in dependency order, taken silently, and over routing by
   the remote's host.
+- A skill's text names its package in its front matter, `package: "<name>@<range>"`, and a
+  project that holds the text with no package installed (`npx skills add` copies the text
+  alone) has the package fetched the way `npx` fetches one: what it declares comes through
+  the same `openagent` key as an installed one's. Picked over the text carrying the command
+  itself, which would have been a second way to declare, for the git host alone.
 - An Overview card belongs to the package whose data it shows: a module declares its cards
   and OpenAgent draws them, in the order the cards name, only where a project has the
   package. Picked over OpenAgent's own cards fed by the providers, which showed an empty

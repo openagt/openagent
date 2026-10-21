@@ -1,8 +1,8 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { lookupProvidedCommand, readProvidedCommand, runPackageCommand } from './provided-command.js'
 
 // Which package provides a kind (#1774, #1820), against real files: a throwaway project whose
@@ -82,6 +82,67 @@ test('packages the caller ships provide a kind only when none of the project\'s 
     assert.equal((await lookupProvidedCommand(own, 'runs', shipped, ['other'])).command?.package, 'logs', 'another name reserved changes nothing')
   } finally {
     for (const dir of [shippedRoot, bare, own]) await rm(dir, { recursive: true, force: true })
+  }
+})
+
+/** A skill's text in the project, as an installer copies it in: the folder named after the skill, with its `SKILL.md`. */
+async function skillText(root: string, name: string, frontMatter: string): Promise<void> {
+  await mkdir(join(root, '.agents/skills', name), { recursive: true })
+  await writeFile(join(root, '.agents/skills', name, 'SKILL.md'), `---\nname: ${name}\n${frontMatter}\n---\nThe ${name} skill.\n`)
+}
+
+test('a skill text naming its package provides through it, fetched with npx and kept an hour; never fetched for a name installed or reserved, and a fetch that failed is tried again', async () => {
+  // npx kept off the network: a stand-in on the PATH says what it was asked and runs the command
+  // the way npx does, its folder's `node_modules/.bin` first on the PATH.
+  const tools = await realpath(await mkdtemp(join(tmpdir(), 'provided-npx-')))
+  const cache = join(tools, '_npx', 'f00d', 'node_modules')
+  for (const [name, kind] of [['texthost', 'git-host'], ['@scope/textlogs', 'runs']] as const) {
+    await mkdir(join(cache, name), { recursive: true })
+    await writeFile(join(cache, name, 'package.json'), JSON.stringify({ name, bin: { cmd: 'cmd.cjs' }, openagent: { [kind]: 'cmd' } }))
+    await writeFile(join(cache, name, 'cmd.cjs'), ECHO)
+  }
+  await mkdir(join(cache, '.bin'), { recursive: true })
+  await mkdir(join(tools, 'bin'))
+  await writeFile(join(tools, 'bin', 'npx'), `#!/bin/sh\necho "$2" >> "${tools}/asked"\ncase "$2" in *missing*) exit 1;; esac\nPATH="${cache}/.bin:$PATH" exec "$4" "$5" "$6"\n`)
+  await chmod(join(tools, 'bin', 'npx'), 0o755)
+  const asked = async () => (await readFile(join(tools, 'asked'), 'utf8').catch(() => '')).split('\n').filter(Boolean)
+
+  const bare = await project({})
+  await skillText(bare, 'github', 'package: "texthost@0.1"')
+  await skillText(bare, 'logs', "package: '@scope/textlogs@0.2'")
+  await skillText(bare, 'plain', 'description: a skill with no package')
+  await mkdir(join(bare, '.claude/skills'), { recursive: true })
+  await symlink('../../.agents/skills/github', join(bare, '.claude/skills/github'))
+  const installed = await project({ texthost: { bin: { mine: 'cmd.cjs' }, openagent: { 'git-host': 'mine' } } })
+  await skillText(installed, 'github', 'package: "texthost@0.1"')
+  const missing = await project({})
+  await skillText(missing, 'github', 'package: "missing-host@1"')
+  const unranged = await project({})
+  await skillText(unranged, 'github', 'package: "texthost"')
+
+  const path = process.env.PATH
+  process.env.PATH = `${join(tools, 'bin')}${delimiter}${path}`
+  try {
+    const found = await lookupProvidedCommand(bare, 'git-host')
+    assert.deepEqual(found.command, { package: 'texthost', name: 'cmd', bin: join(cache, 'texthost', 'cmd.cjs') })
+    assert.equal((await readProvidedCommand(bare, 'runs'))?.package, '@scope/textlogs', 'a scoped name, quoted either way')
+    assert.deepEqual(await asked(), ['--package=texthost@0.1', '--package=@scope/textlogs@0.2'], 'each text once, its link in .claude/skills asking nothing more')
+    assert.deepEqual(await runPackageCommand(bare, found.command!, ['home']), { ok: true, output: ['home'] }, 'the fetched command runs')
+
+    assert.equal((await readProvidedCommand(bare, 'git-host'))?.package, 'texthost')
+    assert.equal((await asked()).length, 2, 'a fetched package is kept: npx is not asked again within the hour')
+
+    assert.deepEqual(await lookupProvidedCommand(bare, 'git-host', [], ['texthost']), {}, 'a reserved name is not read from the text')
+    assert.equal((await readProvidedCommand(installed, 'git-host'))?.name, 'mine', 'the installed package wins over the text naming it')
+    assert.equal((await readProvidedCommand(unranged, 'git-host')), undefined, 'a name with no range is no package line')
+    assert.equal((await asked()).length, 2, 'none of those fetched anything')
+
+    assert.deepEqual(await lookupProvidedCommand(missing, 'git-host'), {}, 'a fetch that failed provides nothing')
+    assert.deepEqual(await lookupProvidedCommand(missing, 'git-host'), {})
+    assert.deepEqual((await asked()).slice(2), ['--package=missing-host@1', '--package=missing-host@1'], 'and is not kept: the next ask tries again')
+  } finally {
+    process.env.PATH = path
+    for (const dir of [tools, bare, installed, missing, unranged]) await rm(dir, { recursive: true, force: true })
   }
 })
 

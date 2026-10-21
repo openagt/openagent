@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
-import { readFile, realpath } from 'node:fs/promises'
-import { join } from 'node:path'
+import { readdir, readFile, realpath } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { delimiter, join } from 'node:path'
 
 /**
  * Which of a project's packages provides one kind of OpenAgent's data, and how its command is
@@ -11,7 +12,15 @@ import { join } from 'node:path'
  * same key with the package's name as the value, `"openagent": { "<kind>": "<package>" }`; with
  * no such line nothing provides the kind, and the reason is said, never the first in dependency
  * order taken silently.
+ *
+ * A project's packages are the ones it installed, and the ones its skill texts name: a text an
+ * installer copied in (`npx skills add`) comes with no package, so its front matter names the one
+ * it is from, `package: "<name>@<range>"`, and that package is fetched the way `npx` fetches one,
+ * into npm's cache, never into the project.
  */
+
+/** Where coding agents read a project's skills: Claude Code's folder, and the shared one Codex reads. */
+export const SKILLS_DIRS = ['.claude/skills', '.agents/skills'] as const
 
 /** The fields of a package.json this module reads; anything else is ignored. */
 export interface PackageManifest {
@@ -41,13 +50,27 @@ export async function readManifest(path: string): Promise<PackageManifest | unde
 }
 
 /**
+ * The project's packages: its installed dependencies, then the packages its skill texts name, a
+ * name in `reserved` never read. A text's package is fetched only when no installed dependency
+ * and no reserved name is the one it names.
+ */
+export async function projectPackages(root: string, reserved: readonly string[] = []): Promise<ProjectPackage[]> {
+  const installed = await installedPackages(root)
+  const named = await packagesOfSkillTexts(root, new Set([...reserved, ...installed.map(pkg => pkg.name)]))
+  return [...installed.filter(pkg => !reserved.includes(pkg.name)), ...named]
+}
+
+/** A name that is a package name: never a path, never `..`. */
+const PACKAGE_NAME = /^(@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*$/i
+
+/**
  * The project's installed dependencies: each name its own package.json lists (both
  * `dependencies` and `devDependencies`, in that order, a name listed twice read once), resolved
  * from the project's `node_modules` with symlinks followed, so a pnpm workspace link reads like
  * any install. A project with no package.json, a name that is not a package name and an
  * uninstalled dependency contribute nothing.
  */
-export async function projectPackages(root: string): Promise<ProjectPackage[]> {
+async function installedPackages(root: string): Promise<ProjectPackage[]> {
   const manifest = await readManifest(join(root, 'package.json'))
   if (!manifest) return []
   const names = new Set<string>()
@@ -56,13 +79,80 @@ export async function projectPackages(root: string): Promise<ProjectPackage[]> {
   }
   const packages: ProjectPackage[] = []
   for (const name of names) {
-    // A name that is not a package name (a path, `..`) is never looked up.
-    if (!/^(@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*$/i.test(name)) continue
+    if (!PACKAGE_NAME.test(name)) continue
     const dir = await realpath(join(root, 'node_modules', name)).catch(() => undefined)
     const pkg = dir ? await readManifest(join(dir, 'package.json')) : undefined
     if (dir && pkg) packages.push({ name, dir, manifest: pkg })
   }
   return packages
+}
+
+/**
+ * The packages the project's skill texts name in their front matter, `package: "<name>@<range>"`,
+ * each once, fetched; a name in `skip`, and one that could not be fetched, contribute nothing.
+ */
+async function packagesOfSkillTexts(root: string, skip: ReadonlySet<string>): Promise<ProjectPackage[]> {
+  const specs = new Map<string, string>()
+  for (const dir of SKILLS_DIRS) {
+    for (const entry of await readdir(join(root, dir)).catch(() => [])) {
+      const named = packageOfSkillText(await readFile(join(root, dir, entry, 'SKILL.md'), 'utf8').catch(() => ''))
+      if (named && !skip.has(named.name) && !specs.has(named.name)) specs.set(named.name, named.spec)
+    }
+  }
+  const packages: ProjectPackage[] = []
+  for (const [name, spec] of specs) {
+    const dir = await fetchedPackage(spec, name)
+    const manifest = dir ? await readManifest(join(dir, 'package.json')) : undefined
+    if (dir && manifest?.name === name) packages.push({ name, dir, manifest })
+  }
+  return packages
+}
+
+/** The package a skill's text names in its front matter, with the range it asks for. */
+function packageOfSkillText(text: string): { name: string; spec: string } | undefined {
+  const frontMatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1]
+  const spec = frontMatter ? /^package:[ \t]*(["']?)(\S+?)\1[ \t]*$/m.exec(frontMatter)?.[2] : undefined
+  const at = spec?.lastIndexOf('@') ?? -1
+  if (!spec || at <= 0 || at === spec.length - 1) return undefined
+  const name = spec.slice(0, at)
+  return PACKAGE_NAME.test(name) ? { name, spec } : undefined
+}
+
+/** How long a fetched package's folder is used before `npx` is asked again: a newer version in the range arrives within it. */
+const FETCHED_FOR_MS = 60 * 60_000
+
+/** The folders fetched, by what was asked for; a fetch that failed is not kept, so the next ask tries again. */
+const fetched = new Map<string, { at: number; dir: Promise<string | undefined> }>()
+
+/** The folder of package `name` as `npx` fetches `spec`: npm's own cache, reused while it is fresh. */
+function fetchedPackage(spec: string, name: string): Promise<string | undefined> {
+  const known = fetched.get(spec)
+  if (known && Date.now() - known.at < FETCHED_FOR_MS) return known.dir
+  const dir = npxFolder(spec, name)
+  fetched.set(spec, { at: Date.now(), dir })
+  void dir.then(found => {
+    if (found === undefined) fetched.delete(spec)
+  })
+  return dir
+}
+
+/**
+ * Fetch `spec` with `npx` and answer the package's folder: `npx` puts the `node_modules/.bin` of
+ * the folder it installed into first on the PATH of what it runs, and the package sits beside it.
+ * Run from the temporary folder, so no project's own install is taken for it.
+ */
+function npxFolder(spec: string, name: string): Promise<string | undefined> {
+  return new Promise(resolvePromise => {
+    execFile(
+      'npx',
+      ['--yes', `--package=${spec}`, '--', 'node', '-p', 'process.env.PATH'],
+      { cwd: tmpdir(), timeout: COMMAND_TIMEOUT_MS, encoding: 'utf8', shell: process.platform === 'win32' },
+      (error, stdout) => {
+        const bin = error ? undefined : stdout.trim().split(delimiter).find(entry => /[\\/]_npx[\\/][^\\/]+[\\/]node_modules[\\/]\.bin$/.test(entry))
+        resolvePromise(bin ? realpath(join(bin, '..', name)).catch(() => undefined) : undefined)
+      },
+    )
+  })
 }
 
 /** A package's commands: `bin` as one path (named after the package) or as a name → path map. */
@@ -113,7 +203,7 @@ function declaredFor(manifest: PackageManifest, kind: string): unknown {
  * for which project has it are the only ones.
  */
 export async function lookupProvidedCommand(root: string, kind: string, shipped: readonly ProjectPackage[] = [], reserved: readonly string[] = []): Promise<ProvidedCommandLookup> {
-  let providers = declaring((await projectPackages(root)).filter(pkg => !reserved.includes(pkg.name)), kind)
+  let providers = declaring(await projectPackages(root, reserved), kind)
   if (providers.length === 0) providers = declaring(shipped, kind)
   const project = await readManifest(join(root, 'package.json'))
   const named = project ? declaredFor(project, kind) : undefined

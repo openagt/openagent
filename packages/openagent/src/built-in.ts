@@ -2,8 +2,7 @@ import { readFile, realpath, stat } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { delimiter, dirname, join } from 'node:path'
 import type { CleanupReport } from './dashboard/types.js'
-import { SKILLS_DIRS } from './project-commands.js'
-import { declaring, SKILLS_ENV, lookupProvidedCommand, packageBins, projectPackages, readManifest, runPackageCommand, type ProjectPackage, type ProvidedCommand, type ProvidedCommandLookup } from '@openagt/agent-data'
+import { declaring, SKILLS_DIRS, SKILLS_ENV, lookupProvidedCommand, packageBins, projectPackages, readManifest, runPackageCommand, type ProjectPackage, type ProvidedCommand, type ProvidedCommandLookup } from '@openagt/agent-data'
 
 /**
  * The packages OpenAgent brings, by name: dependencies of OpenAgent itself, resolved from its
@@ -116,7 +115,7 @@ async function holdsSkill(root: string, name: string): Promise<boolean> {
 
 /** The project's own installed packages, less the names OpenAgent brings itself. */
 export async function ownPackages(root: string): Promise<ProjectPackage[]> {
-  return (await projectPackages(root)).filter(pkg => !OWN_PACKAGE_NAMES.includes(pkg.name))
+  return projectPackages(root, OWN_PACKAGE_NAMES)
 }
 
 /** The packages that are this computer's: see {@link COMPUTER_PACKAGES}. */
