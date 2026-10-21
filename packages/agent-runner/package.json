@@ -1,6 +1,6 @@
 {
   "name": "@openagt/agent-runner",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "description": "Run one coding agent from start to end: its own checkout, one prompt, the agent's own loop, a run record on the project's agent-data branch; resume a run that ended on a question; and the sweep a scheduler runs to record the runs whose process died.",
   "license": "MIT",
   "repository": {
