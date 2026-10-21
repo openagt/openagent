@@ -7,6 +7,7 @@ import { callRow, callSubagents, runRow, subagentEnd, subagentEvents, subagentGr
 import { answeredQuestion } from '../lib/answered-question.js'
 import { rowWords, type RowWords } from '../lib/row-words.js'
 import { formatAge } from '../lib/format-date.js'
+import { cn } from '../lib/utils.js'
 import { AnsweredChoice } from './AnsweredChoice.js'
 import { QuestionPanel } from './QuestionPanel.js'
 import { Markdown } from './Markdown.js'
@@ -680,6 +681,7 @@ export function EventList({
   const firstPrompt = events.find(isTurnBoundary)
   const added = firstPrompt?.kind === 'driver' && firstPrompt.event.type === 'start' ? firstPrompt.event.added : undefined
   const setupLine = setup !== undefined && <SessionLine setup={setup} working={working} added={added} {...(settingUp ? { live: { since: turnStart } } : {})} />
+  const setupLead = setup !== undefined && <SessionLine setup={setup} working={working} added={added} nested />
   // Once set up, the line is the first row of the first turn's work, when that turn has some, as
   // Claude Code on the web opens its first "Ran 2 commands" with "Initialized session".
   const setupInSteps = setupLine !== false && !sessionLineEmpty(setup, working) && !settingUp && setupAt >= 0 && shown[setupAt] !== undefined && steps.has(shown[setupAt]!)
@@ -767,7 +769,7 @@ export function EventList({
                 {startedRows(i)}
                 {/* Every row carries the same -mx/px pair so a washed row's band and a plain row's
                     text share the exact same columns; only the background differs. */}
-                <MessageScrollerItem messageId={idOf(e)} className={`group/row -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${answer || inPlace ? 'mt-1 mb-3.5' : own ? '-mb-2.5 mt-4 first:mt-0' : ''} ${end ? '' : rowWash(e)}`}>
+                <MessageScrollerItem messageId={idOf(e)} className={`group/row relative -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${answer || inPlace ? 'mt-1 mb-3.5' : own ? '-mb-2.5 mt-4 first:mt-0' : ''} ${end ? '' : rowWash(e)}`}>
                   {answer ? (
                     <Answer {...answer} />
                   ) : inPlace && sentAnswer ? (
@@ -795,7 +797,7 @@ export function EventList({
                       <Reply text={message} />
                     )
                   ) : steps.has(e) ? (
-                    <ToolCalls steps={steps.get(e)!} lead={setupInSteps && i === setupAt ? setupLine : undefined} />
+                    <ToolCalls steps={steps.get(e)!} lead={setupInSteps && i === setupAt ? setupLead : undefined} />
                   ) : choiceRow && choiceRow.pick === undefined && projectId !== undefined && agentId !== undefined ? (
                     // The question the agent waits on, answered here, under what it said.
                     <div className="mt-1 flex min-w-0 flex-1 flex-col gap-1.5">
@@ -820,7 +822,9 @@ export function EventList({
                   {!own && chunkHead && at !== undefined && !footers.has(e) && (
                     <Tooltip>
                       <TooltipTrigger
-                        render={<span className={TIME} />}
+                        // A box of steps is as wide as the chat, as Claude Code's is: its time floats over the
+                        // corner its line leaves free, and takes no column beside the box.
+                        render={<span className={cn(TIME, steps.has(e) && 'absolute top-0 right-1.5')} />}
                       >
                         {formatTime(at)}
                       </TooltipTrigger>
