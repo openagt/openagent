@@ -186,11 +186,15 @@ ending.
   npm alone, which takes a second a call and fails where the network is down.
 - Each agent tool (Claude Code, Codex) looks for skills in its own folder at the
   checkout root: `.claude/skills`, `.agents/skills`. In every checkout it makes, the
-  package links its own folder, which holds `SKILL.md`, into both as `branches`, hidden
-  through the repository's exclude. An entry already there, a committed skill say, is
-  left alone. A caller may name further skills to link in beside it, each under its own
-  name and with its package and command when it has one, not from the command line: the
-  skills that come with every run, whatever the project committed.
+  package links its own folder, which holds `SKILL.md`, into both as `branches`. An entry
+  already there, a committed skill say, is left alone. A caller may name further skills to
+  link in beside it, each under its own name and with its package and command when it has
+  one, not from the command line: the skills that come with every run, whatever the
+  project committed.
+- A skill's link is hidden in that checkout alone, by a `.gitignore` beside it that names
+  itself too; where the project tracks a `.gitignore` there, by the repository's exclude.
+  Picked over a rule in the repository's exclude alone, which every checkout reads: a
+  skill of the same name a person added in their own checkout was hidden from them too.
 - `merge <branch>` merges a branch into the project's default branch, on this machine, in
   the project's folder, which must be on that branch. It is how a finished agent's work
   reaches the folder where there is no remote to push to and no pull request to merge. A

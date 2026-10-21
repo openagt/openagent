@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { join } from 'node:path'
-import { mkdtemp, readFile, readlink, realpath, rm, symlink, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readlink, realpath, rm, symlink, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { createCheckout, relinkCheckout } from './checkout.js'
@@ -82,11 +82,51 @@ test('a caller-named skill that has a command gets its package and its command l
     const { path } = await createCheckout(repo, { agentId: 'a3', skills: [skill] })
     for (const link of skillLinkPaths(skill)) assert.equal(await realpath(join(path, link)), link.endsWith('.bin/other') ? join(other, 'other-cli') : other, link)
     assert.equal((await git(['status', '--porcelain'], path)).trim(), '')
-    const hidden = await readFile(join(repo, '.git', 'info', 'exclude'), 'utf8')
-    for (const link of skillLinkPaths(skill)) assert.ok(hidden.split('\n').includes(`/${link}`), `/${link} is hidden`)
+    // The package's links by the repository's exclude file; the skill's, by the checkout's own (the next test).
+    const hidden = (await readFile(join(repo, '.git', 'info', 'exclude'), 'utf8')).split('\n')
+    for (const link of skillLinkPaths(skill)) assert.equal(hidden.includes(`/${link}`), link.startsWith('node_modules/'), `/${link}`)
   } finally {
     await rm(repo, { recursive: true, force: true })
     await rm(other, { recursive: true, force: true })
+  }
+})
+
+test('a skill\'s link is hidden in the agent\'s checkout only: a skill of that name a person adds in theirs shows in git', async () => {
+  const repo = await repoWithOneCommit()
+  const other = await realpath(await mkdtemp(join(tmpdir(), 'other-skill-')))
+  try {
+    await writeFile(join(other, 'SKILL.md'), '---\nname: other\n---\n# Other\n')
+    const { path } = await createCheckout(repo, { agentId: 'a6', skills: [{ name: 'other', dir: other }] })
+    for (const dir of HARNESS_SKILL_DIRS) assert.equal(await readFile(join(path, dir, '.gitignore'), 'utf8'), `/.gitignore\n/${SKILL_NAME}\n/other\n`)
+    await git(['add', '-A'], path)
+    assert.equal((await git(['diff', '--cached', '--name-only'], path)).trim(), '', 'a sweeping add takes nothing')
+    // The person's own copy, as `npx skills add` writes it: the text, and a link to it for Claude Code.
+    await mkdir(join(repo, '.agents', 'skills', 'other'), { recursive: true })
+    await writeFile(join(repo, '.agents', 'skills', 'other', 'SKILL.md'), '---\nname: other\n---\nMine.\n')
+    await mkdir(join(repo, '.claude', 'skills'), { recursive: true })
+    await symlink('../../.agents/skills/other', join(repo, '.claude', 'skills', 'other'))
+    assert.deepEqual((await git(['status', '--porcelain', '--untracked-files=all'], repo)).trim().split('\n'), ['?? .agents/skills/other/SKILL.md', '?? .claude/skills/other'])
+  } finally {
+    await rm(repo, { recursive: true, force: true })
+    await rm(other, { recursive: true, force: true })
+  }
+})
+
+test('a project that tracks its own .gitignore beside the links keeps it as it is, and the links are hidden by the repository\'s exclude file', async () => {
+  const repo = await repoWithOneCommit()
+  try {
+    await mkdir(join(repo, '.claude', 'skills'), { recursive: true })
+    await writeFile(join(repo, '.claude', 'skills', '.gitignore'), '*.tmp\n')
+    await git(['add', '-A'], repo)
+    await git(['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'ignore'], repo)
+    const { path } = await createCheckout(repo, { agentId: 'a7' })
+    assert.equal(await readFile(join(path, '.claude', 'skills', '.gitignore'), 'utf8'), '*.tmp\n')
+    assert.equal((await git(['status', '--porcelain'], path)).trim(), '')
+    const hidden = (await readFile(join(repo, '.git', 'info', 'exclude'), 'utf8')).split('\n')
+    assert.ok(hidden.includes(`/.claude/skills/${SKILL_NAME}`), 'the tracked folder\'s link, by the exclude file')
+    assert.ok(!hidden.includes(`/.agents/skills/${SKILL_NAME}`), 'the other folder\'s, by its own .gitignore')
+  } finally {
+    await rm(repo, { recursive: true, force: true })
   }
 })
 
