@@ -84,8 +84,8 @@ export async function uncommittedSkills(root: string, git: GitRunner = nodeGitRu
 
 /**
  * One commit of skill files that stand uncommitted, and nothing else. With `names`, the files of
- * those skills alone: what a dashboard commits after a change, the same commit `init` offers in a
- * terminal. Without, every uncommitted file of the list's skills. Never a push.
+ * those skills alone: what a dashboard commits after a change. Without, every uncommitted file of
+ * the list's skills. Never a push.
  */
 export async function commitSkills(root: string, names: readonly string[] = SKILL_NAMES, git: GitRunner = nodeGitRunner()): Promise<CommitOutcome> {
   return commitPaths(root, await skillPaths(root, names), 'Update OpenAgent skills\n', git)

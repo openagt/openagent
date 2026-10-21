@@ -1,7 +1,7 @@
 /**
- * A skill's text as `init` writes it into a project: the package's `SKILL.md`, with the version
- * it is from stamped into its front matter as `metadata.version`. The stamp is what lets a later
- * `init`, or a dashboard, tell three things apart when a project's text is not the one it carries:
+ * A skill's text as the dashboard writes it into a project: the package's `SKILL.md`, with the
+ * version it is from stamped into its front matter as `metadata.version`. The stamp is what lets a
+ * later dashboard tell three things apart when a project's text is not the one it carries:
  * the project's is older (a newer text is there to take), the project's was changed by hand (it is
  * never written over unasked), or the reader itself is the older one (it says nothing).
  */

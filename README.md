@@ -23,18 +23,16 @@ npx @openagt/start
 
 It opens the dashboard in your browser, on your project. Every agent you start gets the default skills (logs, question, github on a GitHub project, orchestration, tickets and queue), with nothing written in your project; a skill of your own with the same name takes one's place.
 
-To give the project more skills, as files of its own:
-
-```bash
-npx @openagt/init
-```
-
-It shows the skills as a list with ticks, the same list as Skills… in the project's ⋮ menu.
-
-Or pick them with [`skills`](https://github.com/vercel-labs/skills), for any agent:
+To give the project more skills, as files of its own, tick them in the dashboard's Skills list, under the message box. Or pick them with [`skills`](https://github.com/vercel-labs/skills), for any agent:
 
 ```bash
 npx skills add openagt/openagent
+```
+
+Or add one by its name:
+
+```bash
+npx skills add openagt/openagent@github
 ```
 
 Or install OpenAgent:

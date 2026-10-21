@@ -237,82 +237,6 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@20.19.43)(jsdom@29.1.1)(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
-  packages/init:
-    dependencies:
-      '@openagt/agent-data':
-        specifier: workspace:*
-        version: link:../agent-data
-      '@openagt/skill-browser':
-        specifier: workspace:*
-        version: link:../skill-browser
-      '@openagt/skill-discord':
-        specifier: workspace:*
-        version: link:../skill-discord
-      '@openagt/skill-github':
-        specifier: workspace:*
-        version: link:../skill-github
-      '@openagt/skill-maintainability':
-        specifier: workspace:*
-        version: link:../skill-maintainability
-      '@openagt/skill-maintenance':
-        specifier: workspace:*
-        version: link:../skill-maintenance
-      '@openagt/skill-market-research':
-        specifier: workspace:*
-        version: link:../skill-market-research
-      '@openagt/skill-plan':
-        specifier: workspace:*
-        version: link:../skill-plan
-      '@openagt/skill-plan-tickets':
-        specifier: workspace:*
-        version: link:../skill-plan-tickets
-      '@openagt/skill-post-merge-cleanup':
-        specifier: workspace:*
-        version: link:../skill-post-merge-cleanup
-      '@openagt/skill-readability':
-        specifier: workspace:*
-        version: link:../skill-readability
-      '@openagt/skill-reply':
-        specifier: workspace:*
-        version: link:../skill-reply
-      '@openagt/skill-research':
-        specifier: workspace:*
-        version: link:../skill-research
-      '@openagt/skill-scheduler':
-        specifier: workspace:*
-        version: link:../skill-scheduler
-      '@openagt/skill-security-audit':
-        specifier: workspace:*
-        version: link:../skill-security-audit
-      '@openagt/skill-suggest-new-features':
-        specifier: workspace:*
-        version: link:../skill-suggest-new-features
-      '@openagt/skill-suggest-new-tickets':
-        specifier: workspace:*
-        version: link:../skill-suggest-new-tickets
-      '@openagt/skill-suggest-tickets-to-work-on':
-        specifier: workspace:*
-        version: link:../skill-suggest-tickets-to-work-on
-      '@openagt/skill-triage':
-        specifier: workspace:*
-        version: link:../skill-triage
-      '@openagt/skill-update-tickets':
-        specifier: workspace:*
-        version: link:../skill-update-tickets
-      '@openagt/skill-ux':
-        specifier: workspace:*
-        version: link:../skill-ux
-      '@openagt/skill-work-queue':
-        specifier: workspace:*
-        version: link:../skill-work-queue
-    devDependencies:
-      '@types/node':
-        specifier: ^20.0.0
-        version: 20.19.43
-      typescript:
-        specifier: ^7.0.2
-        version: 7.0.2
-
   packages/openagent:
     dependencies:
       '@base-ui/react':
@@ -339,9 +263,6 @@ importers:
       '@openagt/files':
         specifier: workspace:*
         version: link:../files
-      '@openagt/init':
-        specifier: workspace:*
-        version: link:../init
       '@openagt/remote-access':
         specifier: workspace:*
         version: link:../remote-access
@@ -354,24 +275,78 @@ importers:
       '@openagt/skill-browser':
         specifier: workspace:*
         version: link:../skill-browser
+      '@openagt/skill-discord':
+        specifier: workspace:*
+        version: link:../skill-discord
       '@openagt/skill-github':
         specifier: workspace:*
         version: link:../skill-github
       '@openagt/skill-logs':
         specifier: workspace:*
         version: link:../skill-logs
+      '@openagt/skill-maintainability':
+        specifier: workspace:*
+        version: link:../skill-maintainability
+      '@openagt/skill-maintenance':
+        specifier: workspace:*
+        version: link:../skill-maintenance
+      '@openagt/skill-market-research':
+        specifier: workspace:*
+        version: link:../skill-market-research
       '@openagt/skill-orchestration':
         specifier: workspace:*
         version: link:../skill-orchestration
+      '@openagt/skill-plan':
+        specifier: workspace:*
+        version: link:../skill-plan
+      '@openagt/skill-plan-tickets':
+        specifier: workspace:*
+        version: link:../skill-plan-tickets
+      '@openagt/skill-post-merge-cleanup':
+        specifier: workspace:*
+        version: link:../skill-post-merge-cleanup
       '@openagt/skill-queue':
         specifier: workspace:*
         version: link:../skill-queue
+      '@openagt/skill-readability':
+        specifier: workspace:*
+        version: link:../skill-readability
+      '@openagt/skill-reply':
+        specifier: workspace:*
+        version: link:../skill-reply
+      '@openagt/skill-research':
+        specifier: workspace:*
+        version: link:../skill-research
       '@openagt/skill-scheduler':
         specifier: workspace:*
         version: link:../skill-scheduler
+      '@openagt/skill-security-audit':
+        specifier: workspace:*
+        version: link:../skill-security-audit
+      '@openagt/skill-suggest-new-features':
+        specifier: workspace:*
+        version: link:../skill-suggest-new-features
+      '@openagt/skill-suggest-new-tickets':
+        specifier: workspace:*
+        version: link:../skill-suggest-new-tickets
+      '@openagt/skill-suggest-tickets-to-work-on':
+        specifier: workspace:*
+        version: link:../skill-suggest-tickets-to-work-on
       '@openagt/skill-tickets':
         specifier: workspace:*
         version: link:../skill-tickets
+      '@openagt/skill-triage':
+        specifier: workspace:*
+        version: link:../skill-triage
+      '@openagt/skill-update-tickets':
+        specifier: workspace:*
+        version: link:../skill-update-tickets
+      '@openagt/skill-ux':
+        specifier: workspace:*
+        version: link:../skill-ux
+      '@openagt/skill-work-queue':
+        specifier: workspace:*
+        version: link:../skill-work-queue
       '@puppeteer/browsers':
         specifier: 3.2.1
         version: 3.2.1

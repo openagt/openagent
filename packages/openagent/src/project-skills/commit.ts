@@ -3,8 +3,8 @@ import { join } from 'node:path'
 import { gitReason, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 
 /**
- * The one commit `init` offers (#2023): only the skill files it just wrote or deleted, on the
- * branch the person is on, and nothing else they have open. Never a push: the person pushes, or
+ * The one commit of a change to a project's skills (#2023): only the skill files it wrote or
+ * deleted, on the branch the person is on, and nothing else they have open. Never a push: the person pushes, or
  * opens a pull request where the default branch is protected.
  */
 

@@ -10,17 +10,17 @@ import { held, readProject, standingOf } from './project.js'
 import { stamped } from './skill-file.js'
 import { folder, gone, run } from './test-project.js'
 
-test('how a project\'s text stands: the carried one, an older one, one changed by hand, one init did not write, one from a newer init', async () => {
+test('how a project\'s text stands: the carried one, an older one, one changed by hand, one OpenAgent did not write, one from a newer OpenAgent', async () => {
   const skill = (await carriedSkills()).get('readability')!
   const other = skill.text.replace(/\n---\n/, '\n---\nA line the carried text does not have.\n')
   assert.notEqual(other, skill.text)
   assert.equal(standingOf(stamped(skill.text, skill.version), skill), 'current')
   assert.equal(standingOf(skill.text, skill), 'current', 'the same text with no stamp, as copied by hand')
   assert.equal(standingOf(stamped(skill.text, '0.0.1'), skill), 'current', 'an older stamp on the same text: nothing newer to take')
-  assert.equal(standingOf(stamped(other, '0.0.1'), skill), 'newer', 'written by an older init, and the text has moved on')
+  assert.equal(standingOf(stamped(other, '0.0.1'), skill), 'newer', 'written by an older OpenAgent, and the text has moved on')
   assert.equal(standingOf(stamped(other, skill.version), skill), 'changed', 'this version wrote it, and it is no longer what was written')
-  assert.equal(standingOf(other, skill), 'own', 'no stamp: not init\'s')
-  assert.equal(standingOf(stamped(other, '99.0.0'), skill), 'ahead', 'a newer init wrote it: this one has nothing to say')
+  assert.equal(standingOf(other, skill), 'own', 'no stamp: not OpenAgent\'s')
+  assert.equal(standingOf(stamped(other, '99.0.0'), skill), 'ahead', 'a newer OpenAgent wrote it: this one has nothing to say')
   assert.equal(standingOf(stamped(skill.text, skill.version).replaceAll('\n', '\r\n'), skill), 'current', 'a checkout that made the line ends CRLF holds the same text')
 })
 
@@ -104,7 +104,7 @@ test('a skill removed loses its text and its link; a file a person put beside th
 test('the scheduler switched on makes a folder a project first, as a dashboard does, and writes its two lines; switched off it takes them back', async () => {
   const root = await folder(false)
   try {
-    assert.deepEqual(await setScheduler(root, true), { ok: true, changed: true, madeRepository: true })
+    assert.deepEqual(await setScheduler(root, true), { ok: true, changed: true })
     assert.equal((await run(root, 'log', '--format=%s')).trim(), '[OpenAgent] first commit')
     assert.equal(await readFile(join(root, '.openagent/hooks.yml'), 'utf8'), 'open:\n  - scheduler start\nclose:\n  - scheduler stop --unless-keep-alive\n')
     assert.equal(await run(root, 'status', '--porcelain', '-uall'), '', 'the hooks file is outside git')

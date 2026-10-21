@@ -1,5 +1,5 @@
 import { nodeGitRunner, originDefaultBranch } from '@openagt/agent-data'
-import { skillsOn } from '@openagt/init'
+import { skillsOn } from '../project-skills/branch.js'
 import { currentBranch } from './git-status.js'
 
 /**

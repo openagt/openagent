@@ -7,7 +7,7 @@ import { Checkbox } from './ui/checkbox.js'
 import { Dialog } from './ui/dialog.js'
 
 // A project's skills, on its own page (#2023). The door to them is "Skills", after "Auto" under the
-// launcher's box: it opens the same list with ticks `npx @openagt/init` shows in a terminal, the skills a
+// launcher's box: it opens the list with ticks of the skills a
 // project picks beyond the ones every run gets by default. The card under the agents that wait on
 // the person shows only while it has something to say: a newer version to take, and skills that
 // have not reached the branch agents start from, with the one press that sends them. Once agents

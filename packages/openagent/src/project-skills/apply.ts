@@ -1,6 +1,6 @@
 import { lstat, mkdir, realpath, rm, rmdir, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { gitReason, installProject, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import { gitReason, installProject } from '@openagt/agent-data'
 import { initHooks, removeHooks, stopScheduler } from '@openagt/skill-scheduler'
 import { carriedSkills } from './catalogue.js'
 import { LINKS_DIR, TEXTS_DIR } from './project.js'
@@ -17,7 +17,7 @@ import { stamped } from './skill-file.js'
 /** What one write or delete touched, as paths from the project's root: what a commit of it holds. */
 export interface Touched {
   paths: string[]
-  /** A place that was left as it is, and why: something there that `init` did not write. */
+  /** A place that was left as it is, and why: something there that OpenAgent did not write. */
   left: { path: string; reason: string }[]
 }
 
@@ -27,7 +27,7 @@ const kindOf = async (path: string): Promise<'none' | 'link' | 'directory' | 'ot
   return entry.isSymbolicLink() ? 'link' : entry.isDirectory() ? 'directory' : 'other'
 }
 
-/** The link `init` makes for Claude Code: relative, so it holds in every clone and every checkout that keeps links. */
+/** The link made for Claude Code: relative, so it holds in every clone and every checkout that keeps links. */
 const linkTarget = (name: string): string => `../../${TEXTS_DIR}/${name}`
 
 /** Write (or write again) the text of skill `name` and its link. */
@@ -77,17 +77,15 @@ export async function removeSkill(root: string, name: string): Promise<Touched> 
 }
 
 /** What switching the scheduler answered. */
-export type SchedulerOutcome = { ok: true; changed: boolean; madeRepository?: true } | { ok: false; error: string }
+export type SchedulerOutcome = { ok: true; changed: boolean } | { ok: false; error: string }
 
 /**
  * Switch the scheduler on or off for this project on this machine: its two lines in the project's
  * hooks file, which is outside git. Switching it off also stops one that is running, since nothing
- * else would. Switching it on in a folder no dashboard knows yet makes the
- * folder a project first, exactly as a dashboard's "Add project" does (a git repository when it is
- * none, an empty first commit when it has none, the hidden `.openagent/`), since the hooks file
- * lives there.
+ * else would. Switching it on in a folder with no `.openagent/` makes the folder a project first,
+ * exactly as a dashboard's "Add project" does, since the hooks file lives there.
  */
-export async function setScheduler(root: string, on: boolean, git: GitRunner = nodeGitRunner()): Promise<SchedulerOutcome> {
+export async function setScheduler(root: string, on: boolean): Promise<SchedulerOutcome> {
   if (!on) {
     const removed = await removeHooks(root)
     if (!removed.ok) return { ok: false, error: `${removed.file}: ${removed.detail ?? 'unreadable'}` }
@@ -95,9 +93,9 @@ export async function setScheduler(root: string, on: boolean, git: GitRunner = n
     if (removed.removed.length > 0) await stopScheduler(root).catch(() => {})
     return { ok: true, changed: removed.removed.length > 0 }
   }
-  const installed = await installProject(root, { git })
+  const installed = await installProject(root)
   if (!installed.ok) return { ok: false, error: gitReason(new Error(installed.error)) }
   const written = await initHooks(root)
   if (!written.ok) return { ok: false, error: `${written.file}: ${written.detail ?? written.reason}` }
-  return { ok: true, changed: written.added.length > 0, ...(installed.initialized ? { madeRepository: true as const } : {}) }
+  return { ok: true, changed: written.added.length > 0 }
 }
