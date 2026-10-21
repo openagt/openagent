@@ -284,14 +284,19 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
   const [click, setClick] = useState<{ agentId: string | undefined; sha: string | undefined; path: string; at: number } | null>(null)
   const clicked = click !== null && click.agentId === agentId && click.sha === sha ? click.path : null
   // A changed file asked for from the chat is picked as a click on it in "All changes" is: once
-  // for each ask, so a click made in the list after it stands.
+  // for each ask, so a click made in the list after it stands. An ask for all of them ("See all")
+  // shows "All changes" from its first diff.
   const revealedAt = reveal?.at
   const revealedPath = reveal?.path
+  const [allAsked, setAllAsked] = useState<number>()
   useEffect(() => {
-    if (revealedAt === undefined || revealedPath === undefined || revealedAt <= revealTaken) return
+    if (revealedAt === undefined || revealedAt <= revealTaken) return
     revealTaken = revealedAt
     setCommitClick(null)
-    setClick({ agentId, sha: undefined, path: revealedPath, at: Date.now() })
+    if (revealedPath === undefined) {
+      setClick(null)
+      setAllAsked(revealedAt)
+    } else setClick({ agentId, sha: undefined, path: revealedPath, at: Date.now() })
     setPeek(false)
   }, [revealedAt, revealedPath, agentId])
 
@@ -320,6 +325,9 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
   const merged = agentId !== undefined && run !== null && 'merged' in run ? run.merged : undefined
   const between = run && 'changes' in run && run.from && run.to ? `${run.from} → ${run.to}` : undefined
   const [diffsElement, setDiffsElement] = useState<HTMLElement | null>(null)
+  useEffect(() => {
+    if (allAsked !== undefined) diffsElement?.scrollTo({ top: 0 })
+  }, [allAsked, diffsElement])
   const header = (
     <>
       <PaneTitle>

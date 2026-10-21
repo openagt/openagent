@@ -184,7 +184,7 @@ export function AgentView({
   // A changed file's row in the chat opens the pane that lists changes, when a module of this
   // project has one.
   const listsChanges = mountedPanels.some(panel => panel.changes && panel.projects.includes(projectId))
-  const onOpenChange = useMemo(() => (listsChanges ? (path: string) => revealChange(panesPage(projectId, agentId), path) : undefined), [listsChanges, projectId, agentId])
+  const onOpenChange = useMemo(() => (listsChanges ? (path?: string) => revealChange(panesPage(projectId, agentId), path) : undefined), [listsChanges, projectId, agentId])
   // A live screen's row in the chat opens the pane that shows it, the same way.
   const showsScreen = mountedPanels.some(panel => panel.screen && panel.projects.includes(projectId))
   const onOpenScreen = useMemo(() => (showsScreen ? () => revealScreen(panesPage(projectId, agentId)) : undefined), [showsScreen, projectId, agentId])

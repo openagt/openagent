@@ -223,10 +223,11 @@ export interface ModulePanelProps {
   activity?: number
   /**
    * On a pane that lists what a run changed (`changes`): the changed file a click in the chat
-   * asked to see, by its path in the run's checkout. `at` tells one ask from the next for the
-   * same file. Absent until a file is asked for.
+   * asked to see, by its path in the run's checkout; no path when the click asked for all of
+   * them, from the first. `at` tells one ask from the next for the same file. Absent until a
+   * file is asked for.
    */
-  reveal?: { path: string; at: number }
+  reveal?: { path?: string; at: number }
   context: ModuleContext
 }
 

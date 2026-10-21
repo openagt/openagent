@@ -1,15 +1,16 @@
 import { useSyncExternalStore } from 'react'
 
 // What a row of the chat asks the page's panes to show. A changed file: the row of a file at the
-// end of a turn opens the pane that lists what the agent changed, with that file picked. A live
+// end of a turn opens the pane that lists what the agent changed, with that file picked; the
+// card's "See all" opens it on all of them, from the first. A live
 // screen: its row opens the pane that shows it. A subagent: its row opens the pane that shows it,
 // with its prompt and its transcript. An ask is kept for the page it was made on
 // (`panesPage`), for the page's life; `at` tells one ask from the next for the same thing. The
 // panes act on it (Panes): they know which pane lists changes and which shows a screen.
 
-/** The file asked for, and which ask it is. */
+/** The file asked for, none for all of them, and which ask it is. */
 export interface RevealedChange {
-  path: string
+  path?: string
   at: number
 }
 
@@ -24,9 +25,9 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-/** Ask the page with this name for this changed file. */
-export function revealChange(name: string, path: string): void {
-  asked.set(name, { path, at: ++asks })
+/** Ask the page with this name for this changed file, or with no path for all of them. */
+export function revealChange(name: string, path?: string): void {
+  asked.set(name, path === undefined ? { at: ++asks } : { path, at: ++asks })
   for (const listener of listeners) listener()
 }
 
