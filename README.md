@@ -31,6 +31,12 @@ npx @openagt/init
 
 It shows the skills as a list with ticks, the same list as Skills… in the project's ⋮ menu.
 
+Or pick them with [`skills`](https://github.com/vercel-labs/skills), for any agent:
+
+```bash
+npx skills add openagt/openagent
+```
+
 Or install OpenAgent:
 
 ```bash

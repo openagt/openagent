@@ -16,7 +16,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   names commands: the scheduler runs it and the agent is never given it. Picked over a
   command naming the capabilities it uses, which would tie the job to a package. A
   capability never names another skill.
-- One package per command, `@openagt/skill-<command>`, the SKILL.md at the package root
+- One package per command, `@openagt/skill-<command>`, its SKILL.md in `skills/<command>/`
   like the capability skills. Picked over one package holding every command, so a project
   installs the commands it wants and nothing else; the name follows Claude Code's own
   convention, a command is a skill.

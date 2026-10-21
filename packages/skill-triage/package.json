@@ -13,5 +13,9 @@
   },
   "files": [
     "SKILL.md"
-  ]
+  ],
+  "scripts": {
+    "build": "cp ../../skills/triage/SKILL.md SKILL.md",
+    "clean": "rm -f SKILL.md"
+  }
 }
