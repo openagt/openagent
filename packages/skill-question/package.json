@@ -16,6 +16,7 @@
   ],
   "scripts": {
     "build": "cp ../../skills/question/SKILL.md SKILL.md",
+    "prepack": "cp ../../skills/question/SKILL.md SKILL.md",
     "clean": "rm -f SKILL.md"
   }
 }
