@@ -33,10 +33,10 @@
     "./SKILL.md": "./SKILL.md"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && vite build -c dashboard/vite.config.ts",
+    "build": "cp ../../skills/browser/SKILL.md SKILL.md && tsc -p tsconfig.build.json && vite build -c dashboard/vite.config.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p dashboard/tsconfig.json",
     "test": "tsc -p tsconfig.test.json && node --test --test-timeout=120000 'dist-test/**/*.test.js' && cd dashboard && vitest run",
-    "clean": "rm -rf dist dist-test"
+    "clean": "rm -rf dist dist-test SKILL.md"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",

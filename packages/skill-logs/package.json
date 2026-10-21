@@ -40,11 +40,11 @@
     "./dashboard": "./dist/dashboard/dashboard.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && vite build -c dashboard/vite.config.ts",
+    "build": "cp ../../skills/logs/SKILL.md SKILL.md && tsc -p tsconfig.build.json && vite build -c dashboard/vite.config.ts",
     "prepack": "node -e \"if(!process.env.npm_config_user_agent?.startsWith('pnpm/')){console.error('Pack and publish with pnpm: it replaces workspace:* with the real version, npm does not');process.exit(1)}\"",
     "typecheck": "tsc --noEmit && tsc --noEmit -p dashboard/tsconfig.json",
     "test": "tsc -p tsconfig.test.json && node --test --test-timeout=60000 'dist-test/**/*.test.js'",
-    "clean": "rm -rf dist dist-test"
+    "clean": "rm -rf dist dist-test SKILL.md"
   },
   "dependencies": {
     "@openagt/agent-data": "workspace:*"

@@ -21,3 +21,7 @@ docs/.vitepress/cache/
 
 # OpenAgent
 ANALYSIS_RESULT.md
+
+# A skill's text lives in skills/<name>/SKILL.md, where `npx skills add` finds it; its package's
+# build copies it in, so the npm package ships it too
+packages/skill-*/SKILL.md

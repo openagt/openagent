@@ -32,10 +32,10 @@
     "./SKILL.md": "./SKILL.md"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "cp ../../skills/discord/SKILL.md SKILL.md && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "tsc -p tsconfig.test.json && node --test --test-timeout=60000 'dist-test/**/*.test.js'",
-    "clean": "rm -rf dist dist-test"
+    "clean": "rm -rf dist dist-test SKILL.md"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
