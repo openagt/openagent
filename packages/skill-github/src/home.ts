@@ -27,6 +27,23 @@ export function homeUrlFromRemote(remote: string): string | undefined {
   return `https://github.com/${slug}`
 }
 
+/**
+ * The repository pushes go to when `origin` pushes elsewhere than it reads, as `owner/repo`: an
+ * account that cannot write to the project pushes to its fork, set as origin's push address
+ * (`git remote set-url --push origin <fork>`), and still reads the project itself. Undefined when
+ * pushes go to origin's own repository, or to no GitHub one.
+ */
+export async function pushFork(cwd: string, git: GitRunner = nodeGitRunner()): Promise<string | undefined> {
+  try {
+    const [read, pushed] = await Promise.all([git(['remote', 'get-url', 'origin'], cwd), git(['remote', 'get-url', '--push', 'origin'], cwd)])
+    const from = homeUrlFromRemote(read)
+    const to = homeUrlFromRemote(pushed)
+    return to !== undefined && to.toLowerCase() !== from?.toLowerCase() ? to.slice('https://github.com/'.length) : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /** The repo's GitHub URL from its `origin` remote, or undefined (no remote / not GitHub). */
 export async function homeUrlFor(cwd: string, git: GitRunner = nodeGitRunner()): Promise<string | undefined> {
   try {

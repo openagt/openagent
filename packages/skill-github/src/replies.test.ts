@@ -60,7 +60,7 @@ test("a pull request is the run's that last worked on its branch, when that run 
 test("a pull request is the run's whose branch it is: one the run's record never learned, opened by its agent with no git host behind the run, is answered; a fork's of the same branch name is not", () => {
   const threads = parseThreads(
     answer([
-      pr(8, { headRefName: 'agent-footer', isCrossRepository: true, comments: { nodes: [comment('rom', '/agent From a fork.', AFTER)] } }),
+      pr(8, { headRefName: 'agent-footer', isCrossRepository: true, headRepository: { nameWithOwner: 'dani/r' }, comments: { nodes: [comment('rom', '/agent From a fork.', AFTER)] } }),
       pr(7, { headRefName: 'agent-footer', comments: { nodes: [comment('rom', '/agent Make it bold.', AFTER)] } }),
     ]),
   )
@@ -68,6 +68,19 @@ test("a pull request is the run's whose branch it is: one the run's record never
     answersFor(threads, [card('r7', undefined, { branch: 'agent-footer' })], 'this-box').map(a => a.text),
     ['On your pull request #7 (https://github.com/o/r/pull/7), since you ended:\n- @rom commented (https://github.com/o/r/pull/1#c-rom):\n/agent Make it bold.'],
   )
+})
+
+test("a pull request from the fork this machine pushes to is the run's whose branch it is, its red check too; another fork's of the same branch name is not", () => {
+  const prs = [
+    pr(8, { headRefName: 'agent-footer', isCrossRepository: true, headRepository: { nameWithOwner: 'dani/r' }, comments: { nodes: [comment('rom', '/agent From a fork.', AFTER)] } }),
+    pr(9, { headRefName: 'agent-footer', isCrossRepository: true, headRepository: { nameWithOwner: 'Agent/R' }, ...RED_CHECK }),
+  ]
+  const cards = [card('r9', undefined, { branch: 'agent-footer' })]
+  assert.deepEqual(
+    answersFor(parseThreads(answer(prs), 'agent/r'), cards, 'this-box').map(a => a.text),
+    ['On your pull request #9 (https://github.com/o/r/pull/9), since you ended:\n- The check "test" failed (u-test).'],
+  )
+  assert.deepEqual(answersFor(parseThreads(answer(prs)), cards, 'this-box'), [], 'no fork pushed to: both are another fork')
 })
 
 test("what counts on a pull request: its text, a maintainer's comment, review and line comment that call the agent with /agent, when written or edited; a red check, a conflict; not words without it, not someone else's, not an agent's, not a green check", () => {
@@ -252,6 +265,18 @@ test('a look asks first whether anything changed, then reads every issue and pul
     // With a time, a look is made with no run at all: a thread may call the agent.
     assert.deepEqual(who(await listReplies('/repo', { gh, host: 'this-box', runs: async () => [], cache: join(dir, 'third.json'), since: SINCE })), ['new: https://github.com/o/r/pull/1'])
     await assert.rejects(listReplies('/repo', { gh: async () => { throw new Error('gh: not logged in') }, host: 'this-box', runs: async () => [card('r1', 1)], cache }), /not logged in/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test("a look takes the fork this machine pushes to from origin's push address", async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'replies-fork-'))
+  try {
+    const gh: GhRunner = async args =>
+      args[1] === 'graphql' && args[3]!.startsWith('query=mutation') ? '{}' : args[1] === 'graphql' ? JSON.stringify(answer([pr(9, { isCrossRepository: true, headRepository: { nameWithOwner: 'agent/r' }, comments: { nodes: [comment('rom', '/agent Why?', AFTER)] } })])) : 'HTTP/2.0 200 OK\n\n[]'
+    const git = async (args: string[]) => (args.includes('--push') ? 'https://github.com/agent/r.git\n' : 'https://github.com/o/r.git\n')
+    assert.deepEqual(who(await listReplies('/repo', { gh, git, host: 'this-box', runs: async () => [card('r9', 9)], cache: join(dir, 'replies.json') })), ['r9'])
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

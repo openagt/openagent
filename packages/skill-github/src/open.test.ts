@@ -63,6 +63,19 @@ test('open: the request is opened with the given words on the current branch, an
   }
 })
 
+test("a branch pushed to a fork, origin's push address, is opened from that fork", async () => {
+  const dir = await repo()
+  try {
+    await git(['remote', 'add', 'origin', 'https://github.com/brillout/gemskills.git'], dir)
+    await git(['remote', 'set-url', '--push', 'origin', 'https://github.com/brillout-agent/gemskills.git'], dir)
+    const { gh, calls } = fakeGh()
+    assert.equal((await openRequest(dir, { title: 'Fix it', gh })).ok, true)
+    assert.deepEqual(calls.find(c => c[1] === 'create')!.slice(0, 4), ['pr', 'create', '--head', 'brillout-agent:agent-fix'])
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('a draft is a draft unless the merge is armed; a detached working directory with no --branch is no-branch; a create gh refuses is open-failed with its line', async () => {
   const dir = await repo()
   try {

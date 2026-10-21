@@ -2,8 +2,10 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
 import { listRuns, type RunCard } from '@openagt/skill-logs'
+import type { GitRunner } from '@openagt/agent-data'
 import { nodeGhRunner, type GhRunner } from './gh.js'
 import { COMMENT_MARK } from './comment.js'
+import { pushFork } from './home.js'
 
 /**
  * What came on the project's open issues and pull requests for this machine's agents (#2042): the
@@ -17,6 +19,8 @@ import { COMMENT_MARK } from './comment.js'
  * A thread's run is the run that last worked on it: one started for it, or, on a pull request, one
  * whose branch is the request's, as the run's record keeps it, whoever opened the request, the
  * run's agent with any tool or a person, and whether the run could tell its pull request or not.
+ * The request's branch is on the project's repository, or on the fork this machine pushes to (an
+ * account that cannot write to the project pushes there); another fork's is someone else's.
  * Only a thread whose run is this machine's and has ended: only this machine holds that run's
  * conversation, and a thread another run still works on is that run's.
  *
@@ -86,7 +90,7 @@ const QUERY = `query($owner: String!, $name: String!) {
     }
     pullRequests(states: OPEN, first: ${REPLIES_LIMIT}, orderBy: { field: UPDATED_AT, direction: DESC }) {
       nodes {
-        number title ${WORDS} mergeable headRefName isCrossRepository
+        number title ${WORDS} mergeable headRefName isCrossRepository headRepository { nameWithOwner }
         baseRef { name target { ... on Commit { committedDate } } }
         comments(last: 30) { nodes { ${WORDS} } }
         reviews(last: 30) {
@@ -125,9 +129,9 @@ export interface Thread {
   number: number
   url: string
   title: string
-  /** A pull request's branch on the project's repository; none for an issue, and none for a fork's: a fork's branch of a run's branch name is someone else's. */
+  /** A pull request's branch on the project's repository or on the fork this machine pushes to; none for an issue, and none for another fork's: its branch of a run's branch name is someone else's. */
   branch?: string
-  /** Whether the pull request comes from a fork. */
+  /** Whether the pull request comes from another fork. */
   fork?: true
   /** The maintainers' words that call the agent. */
   calls: Came[]
@@ -175,8 +179,8 @@ function threadCalls(thread: Node): Came[] {
   return came
 }
 
-/** The open issues and pull requests GitHub answered, each with what came on it; one it answered in a shape not known is left out. */
-export function parseThreads(output: unknown): Thread[] {
+/** The open issues and pull requests GitHub answered, each with what came on it; one it answered in a shape not known is left out. `fork` is the repository this machine pushes to, when not the project's own. */
+export function parseThreads(output: unknown, fork?: string): Thread[] {
   const repository = ((output as Node | null)?.['data'] as Node | null | undefined)?.['repository'] as Node | null | undefined
   const threads: Thread[] = []
   const known = (node: Node): node is Node & { number: number; url: string } => typeof node['number'] === 'number' && typeof node['url'] === 'string'
@@ -209,8 +213,9 @@ export function parseThreads(output: unknown): Thread[] {
     const base = pr['baseRef'] as Node | null | undefined
     const moved = text((base?.['target'] as Node | null | undefined)?.['committedDate'])
     if (pr['mergeable'] === 'CONFLICTING' && moved) broken.push({ at: moved, line: `It conflicts with ${base?.['name']}, which moved since.` })
-    const fork = pr['isCrossRepository'] === true
-    threads.push({ kind: 'pull request', number: pr.number, url: pr.url, title: text(pr['title']) ?? '', ...(fork ? { fork: true as const } : { branch: pr['headRefName'] }), calls, broken })
+    const head = text((pr['headRepository'] as Node | null | undefined)?.['nameWithOwner'])
+    const another = pr['isCrossRepository'] === true && (fork === undefined || head?.toLowerCase() !== fork.toLowerCase())
+    threads.push({ kind: 'pull request', number: pr.number, url: pr.url, title: text(pr['title']) ?? '', ...(another ? { fork: true as const } : { branch: pr['headRefName'] }), calls, broken })
   }
   return threads
 }
@@ -314,7 +319,7 @@ export function seenArgs(ids: string[]): string[] {
  * scheduler's row reads it, each call among it given 👀; with `since`, the threads no run is on
  * where someone called the agent since then too. Throws when GitHub cannot answer.
  */
-export async function listReplies(repo: string, deps: { gh?: GhRunner; host?: string; runs?: () => Promise<RunCard[]>; now?: () => number; cache?: string; since?: string } = {}): Promise<Told[]> {
+export async function listReplies(repo: string, deps: { gh?: GhRunner; git?: GitRunner; host?: string; runs?: () => Promise<RunCard[]>; now?: () => number; cache?: string; since?: string } = {}): Promise<Told[]> {
   const cards = await (deps.runs ?? (() => listRuns(repo)))()
   const host = deps.host ?? hostname()
   // Nothing to resume and no thread to start for asks GitHub nothing.
@@ -332,7 +337,7 @@ export async function listReplies(repo: string, deps: { gh?: GhRunner; host?: st
   }
   if (!changed && looked.wholeAt !== undefined && now - looked.wholeAt < WHOLE_READ_EVERY_MS) return []
   const answered = await gh(repliesArgs(), repo)
-  const answers = answersFor(parseThreads(JSON.parse(answered) as unknown), cards, host, deps.since)
+  const answers = answersFor(parseThreads(JSON.parse(answered) as unknown, await pushFork(repo, deps.git)), cards, host, deps.since)
   // GitHub keeps one 👀 a person: one put again, at a look that finds the same comment while its
   // run cannot start yet, is no second. One that could not be put leaves the answer to come.
   const ids = answers.flatMap(a => a.seen)
