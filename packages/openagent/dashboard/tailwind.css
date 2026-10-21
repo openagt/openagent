@@ -198,6 +198,13 @@ body {
     translate: 0 2px;
   }
 }
+/* A finished turn's copy and time (EventList.tsx) show while the pointer is on any row of the
+   turn, as Claude Code on the web's do: the row they are in, or one above it with no message of
+   the person's between. */
+[data-slot='message-scroller-item']:hover .turn-footer,
+[data-slot='message-scroller-item']:not([data-prompt]):hover ~ :not(:hover ~ [data-prompt] ~ *) .turn-footer {
+  opacity: 1;
+}
 .bubble-in {
   animation: bubble-in 0.3s cubic-bezier(0.34, 1.4, 0.64, 1);
 }
