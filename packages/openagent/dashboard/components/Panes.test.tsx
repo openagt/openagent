@@ -21,9 +21,9 @@ const { forgetRevealedChanges, revealChange, revealScreen, revealSubagent } = aw
 const Icon = () => <svg aria-hidden />
 // The installed modules' panes, as the Files module and the browser skill bring them: each shows what it was given.
 const shown = vi.fn()
-const FILES: MountedPanel = { id: 'files', label: 'Files', help: 'The project’s files', icon: Icon, Panel: (props: ModulePanelProps) => (shown(props), <div>the files</div>), package: '@openagt/files', projects: ['p1'] }
-const CHANGES: MountedPanel = { id: 'changes', label: 'Changes', help: 'What changed', icon: Icon, changes: true, Panel: (props: ModulePanelProps) => <div>changes: {props.reveal?.path ?? 'none asked'}</div>, package: '@openagt/changes', projects: ['p1'] }
-const BROWSER: MountedPanel = { id: 'browser', label: 'Browser', help: 'The agent’s browser', icon: Icon, screen: true, Panel: () => <div>the browser</div>, package: '@openagt/skill-browser', projects: ['p1'] }
+const FILES: MountedPanel = { id: 'files', label: 'Files', icon: Icon, Panel: (props: ModulePanelProps) => (shown(props), <div>the files</div>), package: '@openagt/files', projects: ['p1'] }
+const CHANGES: MountedPanel = { id: 'changes', label: 'Changes', icon: Icon, changes: true, Panel: (props: ModulePanelProps) => <div>changes: {props.reveal?.path ?? 'none asked'}</div>, package: '@openagt/changes', projects: ['p1'] }
+const BROWSER: MountedPanel = { id: 'browser', label: 'Browser', icon: Icon, screen: true, Panel: () => <div>the browser</div>, package: '@openagt/skill-browser', projects: ['p1'] }
 const mounted = (panels: MountedPanel[]): MountedModules => ({ pages: [], cards: [], linkActions: [], panels, runSlots: [], settings: [], loaded: true })
 
 const base = { projectId: 'p1', agentId: 'r1', enabled: true, files: [] as string[], context: new Set<string>(), toggleContext: () => {} }
@@ -89,10 +89,10 @@ describe('the panes\' icons', () => {
     expect(screen.queryByRole('group', { name: 'Panes' })).toBeNull()
   })
 
-  test('an icon says what its pane shows', async () => {
+  test("an icon's tooltip is its pane's name only", async () => {
     render(<Page />)
     const tip = await hoverTooltip(icon('Files'))
-    expect(tip.textContent).toBe('FilesThe project’s files')
+    expect(tip.textContent).toBe('Files')
   })
 
   test('a page with no panes has no icon, reads no documents, and is drawn as it is', () => {

@@ -31,3 +31,11 @@ vi.mock('react-resizable-panels', () => {
     Separator: ({ children, className, 'aria-label': label }: Props) => createElement('div', { role: 'separator', 'data-separator': '', 'aria-label': label, className }, children),
   }
 })
+
+// A tooltip opens once the pointer has rested on its trigger a moment (ui/tooltip.tsx), and a
+// test's pointer never rests: it only arrives. Here every tooltip opens as the pointer comes.
+vi.mock('@base-ui/react/tooltip', async importOriginal => {
+  const { Tooltip } = await importOriginal<typeof import('@base-ui/react/tooltip')>()
+  const Trigger = (props: Record<string, unknown>) => createElement(Tooltip.Trigger, { ...props, delay: 0 })
+  return { Tooltip: { ...Tooltip, Trigger } }
+})

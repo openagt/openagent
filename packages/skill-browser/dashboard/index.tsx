@@ -12,7 +12,6 @@ export default defineModule({
     {
       id: 'browser',
       label: 'Browser',
-      help: 'The browser the session’s agent opened, live: watch it, and click, scroll and type in it.',
       icon: Globe,
       screen: true,
       Panel: BrowserPanel,

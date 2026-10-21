@@ -1,5 +1,5 @@
 import { Code, Eye, FolderIcon } from 'lucide-react'
-import { Button, Markdown, Tooltip, TooltipContent, TooltipTrigger, useModuleHost, usePolled } from '@openagt/dashboard/module'
+import { Button, Markdown, Tooltip, TooltipContent, TooltipTrigger, useModuleHost, usePolled, Waiting } from '@openagt/dashboard/module'
 import type { FileContent } from '../src/read.js'
 import { readContent } from './reads.js'
 import { contentKey } from './keys.js'
@@ -72,7 +72,7 @@ export function FileView({ page, projectId, agentId, path, wrap, source }: {
       </div>
       <div className="min-h-0 flex-auto overflow-auto">
         {!loaded ? (
-          <p className="p-3 text-xs text-muted-foreground">Reading the file…</p>
+          <Waiting className="p-3">Reading the file…</Waiting>
         ) : !value ? (
           <p className="p-3 text-xs text-muted-foreground">This file is not here: it was deleted or moved, or it cannot be read.</p>
         ) : rendered && !value.binary && value.text ? (

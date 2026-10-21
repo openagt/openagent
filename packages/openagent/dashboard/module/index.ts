@@ -239,10 +239,8 @@ export interface ModulePanelProps {
 export interface ModulePanel {
   /** Which pane this is among the module's own, for its key and for remembering that it is open. */
   id: string
-  /** The pane's name: on its card, and what its icon is called. */
+  /** The pane's name: on its card, and what its icon is called and its tooltip says. */
   label: string
-  /** The icon's tooltip: one sentence on what the pane shows. */
-  help: string
   /** The pane's icon in the top bar, drawn at the size its `className` gives. */
   icon: ComponentType<{ className?: string }>
   /**
@@ -532,6 +530,7 @@ export { MAX_SPEND_OFFSET } from '../../src/preference-defaults.js'
 export { formatRelative, formatDateTime, formatDuration, formatAge } from '../lib/format-date.js'
 export { usePolled, useLoaded, forgetRemembered } from '../lib/use-async.js'
 export { useNarrow } from '../lib/use-narrow.js'
+export { Waiting } from '../components/Waiting.js'
 export { useHighlighted, Pieces, type Piece } from '../lib/highlight.js'
 export { useAction } from '../lib/use-action.js'
 export { useSchedule, type Schedule } from '../lib/use-schedule.js'

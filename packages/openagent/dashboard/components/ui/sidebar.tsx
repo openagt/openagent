@@ -10,7 +10,7 @@ import { Input } from './input.js'
 import { Separator } from './separator.js'
 import { Skeleton } from './skeleton.js'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from './sheet.js'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip.js'
+import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip.js'
 import { useIsMobile } from '../../lib/use-mobile.js'
 
 // shadcn's "base" (Base UI, not Radix) Sidebar, ported to this repo (#314 rail, shared shell). The
@@ -102,22 +102,20 @@ function SidebarProvider({
 
   return (
     <SidebarContext.Provider value={contextValue}>
-      <TooltipProvider delay={0}>
-        <div
-          data-slot="sidebar-wrapper"
-          style={
-            {
-              '--sidebar-width': SIDEBAR_WIDTH,
-              '--sidebar-width-icon': SIDEBAR_WIDTH_ICON,
-              ...style,
-            } as React.CSSProperties
-          }
-          className={cn('group/sidebar-wrapper has-data-[variant=inset]:bg-sidebar flex min-h-svh w-full', className)}
-          {...props}
-        >
-          {children}
-        </div>
-      </TooltipProvider>
+      <div
+        data-slot="sidebar-wrapper"
+        style={
+          {
+            '--sidebar-width': SIDEBAR_WIDTH,
+            '--sidebar-width-icon': SIDEBAR_WIDTH_ICON,
+            ...style,
+          } as React.CSSProperties
+        }
+        className={cn('group/sidebar-wrapper has-data-[variant=inset]:bg-sidebar flex min-h-svh w-full', className)}
+        {...props}
+      >
+        {children}
+      </div>
     </SidebarContext.Provider>
   )
 }

@@ -24,6 +24,7 @@ import {
   useModuleHost,
   useNarrow,
   usePolled,
+  Waiting,
   type ModulePanelProps,
 } from '@openagt/dashboard/module'
 import type { AgentCommit, FileMark } from '../src/run.js'
@@ -166,7 +167,7 @@ function DiffBody({ projectId, agentId, path, commit, whole, wrap, version, poll
   const shown = useRef<FileDiff | null>(null)
   if (loaded) shown.current = value
   const diff = loaded ? value : shown.current
-  if (!loaded && !diff) return <p className="px-3 py-2 text-xs text-muted-foreground">Reading the diff…</p>
+  if (!loaded && !diff) return <Waiting className="px-3 py-2">Reading the diff…</Waiting>
   if (!diff) return <p className="px-3 py-2 text-xs text-muted-foreground">No change to show.</p>
   return <DiffView diff={diff} wrap={wrap} whole={whole} onWhole={onWhole} className="py-1" />
 }
@@ -322,13 +323,25 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
   const header = (
     <>
       <PaneTitle>
+        {/* One line, cut at its end on a narrow pane: the branches come first. */}
+        {between ? (
+          <h2 className="min-w-0 truncate pl-2 text-[13px] text-muted-foreground" title={between}>
+            {between}
+            {merged !== undefined && <span className="pl-1 text-xs text-muted-foreground">{merged ? '· merged' : '· not merged yet'}</span>}
+          </h2>
+        ) : (
+          <h2 className="truncate pl-2 text-[13px] text-muted-foreground">Changes</h2>
+        )}
+      </PaneTitle>
+      <PaneActions>
+        <ChangeSearch paths={paths} changes={changes} onPick={pick} />
         <Tooltip>
           <TooltipTrigger
             render={
               <Button
                 variant="ghost"
                 size="icon-sm"
-                className={cn('shrink-0 text-muted-foreground', listShown && 'bg-accent text-primary')}
+                className={cn('shrink-0 text-muted-foreground', listShown && 'bg-accent text-accent-foreground')}
                 aria-label={listShown ? 'Hide the list of files' : 'Show the list of files'}
                 aria-pressed={listShown}
                 onClick={() => (narrow ? setPeek(!peek) : setChangesSetting('list', !settings.list))}
@@ -339,18 +352,6 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
           </TooltipTrigger>
           <TooltipContent>{listShown ? 'Hide the list of files' : 'Show the list of files'}</TooltipContent>
         </Tooltip>
-        {/* One line, cut at its end on a narrow pane: the branches come first. */}
-        {between ? (
-          <h2 className="min-w-0 truncate pl-1 text-[13px] text-muted-foreground" title={between}>
-            {between}
-            {merged !== undefined && <span className="pl-1 text-xs text-muted-foreground">{merged ? '· merged' : '· not merged yet'}</span>}
-          </h2>
-        ) : (
-          <h2 className="truncate pl-1 text-[13px] text-muted-foreground">Changes</h2>
-        )}
-      </PaneTitle>
-      <PaneActions>
-        <ChangeSearch paths={paths} changes={changes} onPick={pick} />
         <DropdownMenu>
           <DropdownMenuTrigger aria-label="The pane’s settings" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground">
             <MoreVertical aria-hidden className="size-4" />
@@ -389,10 +390,16 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
       <Line>{text}</Line>
     </>
   )
+  const waiting = (text: string) => (
+    <>
+      {header}
+      <Waiting className="p-3">{text}</Waiting>
+    </>
+  )
   if (agentId) {
-    if (!runLoaded || !commitsLoaded || !run || run.source === 'pending') return line('Looking for this run’s changes…')
+    if (!runLoaded || !commitsLoaded || !run || run.source === 'pending') return waiting('Looking for this run’s changes…')
     if (run.source === 'gone') return line('This run’s changes are gone from this machine: its checkout was reclaimed and it left no branch or merged pull request here.')
-  } else if (!projectLoaded) return line('Reading the project’s files…')
+  } else if (!projectLoaded) return waiting('Reading the project’s files…')
   if (Object.keys(all).length === 0 && commits.length === 0) return line(agentId ? 'This run changed no files.' : 'Nothing is changed in the project’s folder.')
 
   const caption = commit ? `${commit.short} ${commit.subject}` : agentId ? undefined : 'Changed in the project’s folder, not committed.'
