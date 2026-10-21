@@ -371,6 +371,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   over a channel of ours that every tool would have to learn.
 - A run that ends while the line is on its way has its line taken back out of the inbox
   and resumed instead. Picked over leaving it for a run that will never read it.
+- A question the agent waits on is a card in the chat, right under what the agent said, and
+  is answered there; the turn's copy and time go under the card. Picked over a panel above
+  the message box with an "Asking" line in the chat, which put an empty line and a gap
+  between the agent's words and its question.
 - An answer is checked against the question the run's diary holds open, and handed over as
   the option's label. Picked over passing the pick through: only what the agent offered
   can be answered, and the agent reads words, not ids.

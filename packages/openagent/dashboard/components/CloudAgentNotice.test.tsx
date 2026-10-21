@@ -81,17 +81,17 @@ describe('the parked question the bridge reports (#1237)', () => {
     onBridgeQuestion.mockResolvedValue(QUESTION)
     render(<CloudAgentNotice target="web" events={[handOff()]} projectId="p" agentId="a" />)
     await waitFor(() => expect(screen.getByText(QUESTION.title)).toBeTruthy())
-    // The panel a local agent's question gets (#1554), with the options only: the bridge types
+    // The card a local agent's question gets (#1554), with the options only: the bridge types
     // nothing but the question's own labels, so there is no "Other" row and no Skip.
     expect(screen.getByRole('region', { name: QUESTION.title })).toBeTruthy()
-    expect(screen.getByRole('radio', { name: /One page, both routes/ }).textContent).toBe('One page, both routesRecommendedlists every project1')
+    expect(screen.getByRole('radio', { name: /One page, both routes/ }).textContent).toBe('One page, both routesRecommendedlists every project')
     expect(screen.getByRole('radio', { name: /Cross-project only/ }).getAttribute('aria-checked')).toBe('false')
-    expect(screen.queryByLabelText('Other')).toBeNull()
+    expect(screen.queryByRole('radio', { name: 'Other' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Skip' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Submit' })).toBeTruthy()
   })
 
-  test('its number keys are not bound: they belong to the question above the message box', async () => {
+  test('its number keys are not bound: they belong to a question in the chat', async () => {
     onBridgeQuestion.mockResolvedValue(QUESTION)
     render(<CloudAgentNotice target="web" events={[handOff()]} projectId="p" agentId="a" />)
     await screen.findByRole('region', { name: QUESTION.title })
