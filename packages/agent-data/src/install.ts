@@ -6,8 +6,8 @@ import { openagentGitignore, gitignorePath } from './openagent-gitignore.js'
 
 /**
  * Make a folder a project of OpenAgent's (#391): create the `.openagent/` marker and its ignore
- * file. Nothing is committed on a branch that has a commit. What a dashboard's "Add project" and
- * `@openagt/init` both do to a folder, so here, where both reach it. Pure core over a
+ * file. Nothing is committed on a branch that has a commit. What a dashboard's "Add project" does
+ * to a folder. Pure core over a
  * {@link GitRunner} and the three file operations it needs.
  */
 

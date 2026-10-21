@@ -1,5 +1,8 @@
 import { nodeGitRunner } from '@openagt/agent-data'
-import { applyChange, carriedSkills, GROUPS, isKnown, readProject, skillsOn, uncommittedSkills, type Standing } from '@openagt/init'
+import { skillsOn, uncommittedSkills } from '../project-skills/branch.js'
+import { carriedSkills, GROUPS } from '../project-skills/catalogue.js'
+import { applyChange, isKnown } from '../project-skills/change.js'
+import { readProject, type Standing } from '../project-skills/project.js'
 import { cachedPrView } from '../dashboard/pull-requests.js'
 import { sendSkills, SKILLS_BRANCH, type SendSkillsResult } from '../dashboard/send-skills.js'
 import { waitingSkills } from '../dashboard/start-branch.js'
@@ -10,9 +13,8 @@ import { resolveProjectPath } from './context.js'
 export type { SendSkillsResult } from '../dashboard/send-skills.js'
 
 /**
- * A project's skills, as the dashboard shows and changes them (#2023): the same list with ticks
- * `npx @openagt/init` shows in a terminal, read and written through that package's own code, so
- * the two cannot drift apart. A project has a skill when the skill's text is in its folder; the
+ * A project's skills, as the dashboard shows and changes them (#2023): the list with ticks of the
+ * skills a project picks beyond the defaults. A project has a skill when the skill's text is in its folder; the
  * dashboard writes and deletes those files, and sends them where agents start from.
  */
 

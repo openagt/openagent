@@ -9,6 +9,8 @@ import { addProject, listProjects } from '../registry.js'
 import { readProjectModules } from '../project-modules.js'
 import { provideTestContext } from './test-context.js'
 import { onCommands } from './projects.js'
+import { commitSkills } from '../project-skills/branch.js'
+import { applyChange } from '../project-skills/change.js'
 import { hostName, onProjectSkills, sendChangeSkills, sendProjectSkills } from './skills.js'
 
 // A project's skills through the dashboard's own calls, against a real folder and real git, with
@@ -109,7 +111,6 @@ test('with a remote the branch agents start from is the remote\'s: a skill commi
     git('remote', 'add', 'origin', join(dir, '..', 'origin.git'))
     git('push', '-q', '-u', 'origin', 'main')
     await sendChangeSkills(id, { write: ['triage'] })
-    const { commitSkills } = await import('@openagt/init')
     await commitSkills(dir, ['triage'])
     const local = (await onProjectSkills(id))!
     assert.equal(local.startBranch, 'main')
@@ -138,8 +139,8 @@ test('a skill that reached the remote\'s branch elsewhere, a pull request merged
     const before = git('rev-parse', 'origin/main').trim()
     await writeFile(join(dir, '.git', 'x'), '')
     // The skill is committed and on the remote's main, and this clone's copy of that branch does not know yet.
-    const { applyChange, commitChange } = await import('@openagt/init')
-    await commitChange(dir, await applyChange(dir, { write: ['triage'] }))
+    await applyChange(dir, { write: ['triage'] })
+    await commitSkills(dir, ['triage'])
     git('push', '-q', 'origin', 'main')
     git('update-ref', 'refs/remotes/origin/main', before)
     assert.equal(git('rev-parse', 'origin/main').trim(), before)

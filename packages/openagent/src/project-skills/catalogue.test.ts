@@ -21,7 +21,7 @@ test('every skill is carried with its own package\'s text: its name, a descripti
     assert.equal(skill.package, `@openagt/skill-${skill.name}`)
     // A short name would run whatever package holds it on npm in a project with nothing installed.
     assert.doesNotMatch(skill.text, /npx (tickets|queue|logs|github|branches|browser|discord|orchestration|scheduler)\b/, `${skill.name} calls no command by a short name`)
-    assert.ok(!/^metadata:/m.test(skill.text.slice(0, skill.text.indexOf('\n---\n'))), `${skill.name}'s own text has no metadata key: the stamp is init's`)
+    assert.ok(!/^metadata:/m.test(skill.text.slice(0, skill.text.indexOf('\n---\n'))), `${skill.name}'s own text has no metadata key: the stamp is OpenAgent's`)
   }
 })
 

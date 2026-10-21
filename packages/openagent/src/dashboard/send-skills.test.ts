@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { applyChange } from '@openagt/init'
+import { applyChange } from '../project-skills/change.js'
 import type { GitHostSource } from '../store/git-host.js'
 import { sendSkills, SKILLS_BRANCH } from './send-skills.js'
 

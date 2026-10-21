@@ -3,14 +3,14 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 
 /**
- * The skills `init` offers (#2023): the list a person ticks, in its groups, with what is ticked
- * the first time. Every group is ticked except the skills that are useless until something of
+ * The skills a project can pick in the dashboard's Skills list (#2023), in its groups, with what
+ * is ticked the first time. Every group is ticked except the skills that are useless until something of
  * their own is set up. The skills every run gets by default are not here (the branches skill,
  * and the ones `@openagt/start` names): they come with every run, with nothing written in the
  * project.
  *
- * Each skill's text is its own package's `SKILL.md`, read from this package's install, so `init`
- * carries the texts of the versions it was published with.
+ * Each skill's text is its own package's `SKILL.md`, read from this package's install, so the
+ * dashboard carries the texts of the versions it was published with.
  */
 
 export interface SkillGroup {
@@ -29,7 +29,7 @@ export const GROUPS: readonly SkillGroup[] = [
   { title: 'Needs its own setup', ticked: false, skills: ['browser', 'discord'] },
 ]
 
-/** Every skill `init` knows, in the order of the list. */
+/** Every skill of the list, in its order. */
 export const SKILL_NAMES: readonly string[] = GROUPS.flatMap(group => group.skills)
 
 /**
@@ -40,7 +40,7 @@ export const SKILL_NAMES: readonly string[] = GROUPS.flatMap(group => group.skil
  */
 export const SCHEDULER = 'scheduler'
 
-/** One skill as `init` carries it. */
+/** One skill as the dashboard carries it. */
 export interface CarriedSkill {
   name: string
   /** The package the text is from, and its version: what a written text is stamped with. */

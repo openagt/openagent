@@ -177,13 +177,27 @@ already made, and lists it in its pull request; for anything else it proposes an
   a server is when it was just connected, with no way to let a phone in; and over a
   starter project made on every server, one nobody asked for.
 - "Add project" stays small: it writes no skill. The launcher's row under the box then has
-  "Skills", after Auto, which opens the same list with ticks `npx @openagt/init` shows in a
-  terminal, through that package's own code, so the two cannot drift apart. Picked over
-  "Add project" writing the skills itself, which put files into every project a person
-  adds, and over only pointing to the terminal. The button was picked over a line of its
-  own on the project's page ("This project has 4 of 25 skills", with an "Add skills"
-  button), which stood there also when it had nothing to offer, and over an item in the
-  project's ⋮ menu, where it was not seen.
+  "Skills", after Auto, which opens the list with ticks of the skills a project picks
+  beyond the defaults. Picked over "Add project" writing the skills itself, which put files
+  into every project a person adds. The button was picked over a line of its own on the
+  project's page ("This project has 4 of 25 skills", with an "Add skills" button), which
+  stood there also when it had nothing to offer, and over an item in the project's ⋮ menu,
+  where it was not seen.
+- OpenAgent has no command of its own to give a project skills: the Skills list in the
+  dashboard, or `npx skills add openagt/openagent` in a terminal, which writes the same
+  texts for any agent. Picked over `npx @openagt/init`, a second list with ticks to keep in
+  step with the dashboard's.
+- A skill the project picks is one tracked file, `.agents/skills/<name>/SKILL.md`, where
+  Codex reads it, and one tracked link at `.claude/skills/<name>`, where Claude Code reads
+  it, the shape `npx skills add` writes too. Nothing else: no `package.json`, no install,
+  so a Node project, a PHP project and an empty folder get exactly the same. Picked over
+  installing the skills' packages into the project.
+- The scheduler is one more skill in the list, ticked by default. Ticking it also writes its
+  two lines into the project's hooks file, which is this machine's and outside git, so it
+  starts with the dashboard; unticking it takes them out and stops it. A project that got the
+  text another way, `npx skills add` say, gets no lines: while the scheduler is off, the
+  Automations page says so and names the two commands that start it. Picked over a switch
+  on that page that writes the lines, one more control for a line that already says it.
 - A project is also added by its repository's address, for a computer that does not have
   its folder, as a server: OpenAgent clones it into `~/projects/<its name>` and says where
   it went. Picked over asking for the folder at every add, one more thing to read.
@@ -197,7 +211,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   files pushed to the remote's default branch, or, where that push is refused, to a branch
   of OpenAgent's own with a pull request opened for it, or that branch alone to merge by
   hand where no git host package opens one. Nothing else of the person's is pushed. With
-  no remote the commit is all it takes. Picked over offering the commit init offers and
+  no remote the commit is all it takes. Picked over offering a commit and
   leaving the push to the person, three steps with a git word at each before an agent had
   the skill, and over committing and pushing unasked.
 - What a project's skills need from the person is a card under the agents that wait on

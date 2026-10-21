@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { mkdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { commitSkills, skillsOn, uncommittedSkills } from './branch.js'
-import { applyChange, commitChange } from './change.js'
+import { applyChange } from './change.js'
 import { folder, gone, run } from './test-project.js'
 
 /** Which of `names` are on `ref`. */
@@ -19,7 +19,7 @@ test('a skill written into the folder is not on the branch until it is committed
     const changed = await applyChange(root, { write: ['maintenance', 'readability'] })
     assert.deepEqual(await on(root, 'HEAD', 'maintenance', 'readability'), [], 'written, not committed')
     assert.deepEqual(await uncommittedSkills(root), ['maintenance', 'readability'], 'two texts and two links')
-    await commitChange(root, changed)
+    await commitSkills(root, changed.written)
     assert.deepEqual(await on(root, 'HEAD', 'maintenance', 'readability', 'plan'), ['maintenance', 'readability'])
     assert.deepEqual(await uncommittedSkills(root), [])
 
@@ -69,7 +69,8 @@ test('where the skills folder is itself a link: to the other skills folder, the 
 test('the commit of every skill file that stands uncommitted takes a deleted one too, and nothing else; with names it takes those skills\' files alone', async () => {
   const root = await folder(true)
   try {
-    await commitChange(root, await applyChange(root, { write: ['maintenance', 'ux'] }))
+    await applyChange(root, { write: ['maintenance', 'ux'] })
+    await commitSkills(root)
     await applyChange(root, { write: ['plan'], remove: ['ux'] })
     await writeFile(join(root, '.agents/skills/maintenance/SKILL.md'), 'changed by hand\n')
     await writeFile(join(root, 'README.md'), '# edited\n')

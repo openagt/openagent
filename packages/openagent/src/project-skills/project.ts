@@ -11,18 +11,18 @@ import { olderThan, unstamped } from './skill-file.js'
  * anywhere. A folder deleted by hand is a skill removed.
  */
 
-/** Where `init` writes a skill's text, and where it links it for Claude Code. Codex reads the first. */
+/** Where a skill's text is written, and where it is linked for Claude Code. Codex reads the first. */
 export const TEXTS_DIR = '.agents/skills'
 export const LINKS_DIR = '.claude/skills'
 
 /**
  * How a skill stands in a project:
  * - `absent`: the project does not hold it.
- * - `current`: its text is the one `init` carries.
- * - `newer`: `init` carries a newer text than the one the project was given.
- * - `changed`: the project's text was changed by hand since `init` wrote it.
- * - `own`: the project holds a text under this name that `init` did not write.
- * - `ahead`: the project's text is from a newer `init` than this one.
+ * - `current`: its text is the one the dashboard carries.
+ * - `newer`: the dashboard carries a newer text than the one the project was given.
+ * - `changed`: the project's text was changed by hand since it was written.
+ * - `own`: the project holds a text under this name that OpenAgent did not write (no stamp).
+ * - `ahead`: the project's text is from a newer OpenAgent than this one.
  */
 export type Standing = 'absent' | 'current' | 'newer' | 'changed' | 'own' | 'ahead'
 
@@ -45,7 +45,7 @@ export interface ProjectState {
   github: boolean
 }
 
-/** The file a project's text of `name` is in, from the project's root: the folder `init` writes first, else Claude Code's. */
+/** The file a project's text of `name` is in, from the project's root: the folder written first, else Claude Code's. */
 async function textFile(root: string, name: string): Promise<string | undefined> {
   for (const dir of [TEXTS_DIR, LINKS_DIR]) {
     const file = `${dir}/${name}/SKILL.md`
@@ -54,7 +54,7 @@ async function textFile(root: string, name: string): Promise<string | undefined>
   return undefined
 }
 
-/** How the project's text of one skill stands against the one `init` carries. */
+/** How the project's text of one skill stands against the one the dashboard carries. */
 export function standingOf(file: string, carried: CarriedSkill): Exclude<Standing, 'absent'> {
   // A checkout that turned the line ends into CRLF holds the same text.
   const { version, text } = unstamped(file.replaceAll('\r\n', '\n'))

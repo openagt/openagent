@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 
-// A folder that `init` makes a repository itself has no identity of its own to commit under, and a
+// A folder made a repository by a test has no identity of its own to commit under, and a
 // machine may have none either (GitHub's runner): the tests bring one, as a person's machine does.
 for (const who of ['AUTHOR', 'COMMITTER']) {
   process.env[`GIT_${who}_NAME`] ??= 'tester'
@@ -13,7 +13,7 @@ for (const who of ['AUTHOR', 'COMMITTER']) {
 
 /** A folder for a test: empty, or a git repository with one commit on `main` and an identity of its own. */
 export async function folder(git: boolean): Promise<string> {
-  const root = await realpath(await mkdtemp(join(tmpdir(), 'openagent-init-')))
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'openagent-skills-')))
   if (git) {
     await run(root, 'init', '-q', '-b', 'main')
     await run(root, 'config', 'user.email', 'tester@example.com')
