@@ -291,7 +291,7 @@ function Answer({ question, answer }: { question: string; answer?: string | unde
 const FILES_ROW = 'group/row -mx-1.5 mt-2 flex items-start gap-2 rounded-sm px-1.5'
 
 // A turn's files, and under them the turn's copy and time when the turn ended on them.
-function TurnFiles({ files, onOpen, footer }: { files: readonly ChangedFile[]; onOpen?: ((path: string) => void) | undefined; footer?: { text: string; at: string | undefined } | undefined }) {
+function TurnFiles({ files, onOpen, footer }: { files: readonly ChangedFile[]; onOpen?: ((path?: string) => void) | undefined; footer?: { text: string; at: string | undefined } | undefined }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-1.5">
       <ChangedFiles files={files} onOpen={onOpen} />
@@ -619,9 +619,9 @@ export function EventList({
   setup?: SessionSetup | undefined
   /** Open a subagent beside the chat, by its row's key: what a subagent's row does on a click. */
   onOpenSubagent?: ((key: string) => void) | undefined
-  /** Show a changed file's change: what the row of a file at the end of a turn does on a click.
-   *  Without it, the rows are no buttons. */
-  onOpenChange?: ((path: string) => void) | undefined
+  /** Show a changed file's change: what the row of a file at the end of a turn does on a click;
+   *  with no path, all of them ("See all"). Without it, the rows are no buttons. */
+  onOpenChange?: ((path?: string) => void) | undefined
   /** Show the run's live screen: what the row of a live screen does on a click. Without it, the
    *  row is a line of text. */
   onOpenScreen?: (() => void) | undefined
@@ -761,7 +761,10 @@ export function EventList({
       <MessageScroller className="isolate flex-1">
         <MessageScrollerViewport ref={viewport} aria-label="Agent output" className="scroll-pb-(--chat-bottom)">
           <MessageScrollerContent spacerClassName="order-last" className="mx-auto w-full max-w-3xl gap-3 px-4 pt-4 font-mono text-xs">
-            <div ref={endRoom} data-testid="log-end-room" className="order-9998 h-[calc(var(--chat-bottom,0px)+0.5rem)] shrink-0" aria-hidden />
+            {/* First in the page, so never the row the browser keeps in place when a row above
+                it grows: a steps line opened at the log's end opens under the line, the line
+                where it was, as Claude Code's does, not pushed up by the room held still. */}
+            <div ref={endRoom} data-testid="log-end-room" className="order-9998 h-[calc(var(--chat-bottom,0px)+0.5rem)] shrink-0 [overflow-anchor:none]" aria-hidden />
             {shown.map((e, i, rows) => {
               const message = textOf(e)
               const choiceRow = choiceRows?.rows.get(e)

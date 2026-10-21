@@ -300,6 +300,24 @@ describe('ChangesPanel, a file asked for from the chat', () => {
     await waitFor(() => expect(row(/app\.ts/).getAttribute('aria-pressed')).toBe('true'))
   })
 
+  test('an ask for all of them ("See all"): "All changes" from its first diff, a file clicked before or a commit picked forgotten', async () => {
+    const commit = { sha: 'c'.repeat(40), short: 'ccccccc', subject: 'Change the app', at: '2026-10-04T10:00:00.000Z' }
+    readCommits.mockResolvedValue([commit])
+    readCommit.mockResolvedValue({ 'src/app.ts': { status: 'modified', committed: true } })
+    const { rerender } = render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
+    fireEvent.click(await waitFor(() => row(/new\.ts/)))
+    expect(row(/new\.ts/).getAttribute('aria-pressed')).toBe('true')
+    const scrolled = vi.spyOn(Element.prototype, 'scrollTo')
+    rerender(<ChangesPanel projectId="p1" agentId="run-1" context={context} reveal={{ at: ++asks }} />)
+    await waitFor(() => expect(row(/app\.ts/).getAttribute('aria-pressed')).toBe('true'))
+    expect(scrolled.mock.contexts).toEqual([screen.getByLabelText('Diffs')])
+    expect(scrolled.mock.calls).toEqual([[{ top: 0 }]])
+    fireEvent.click(screen.getByRole('button', { name: /Change the app/ }))
+    await waitFor(() => expect(screen.getByText('ccccccc Change the app')).toBeTruthy())
+    rerender(<ChangesPanel projectId="p1" agentId="run-1" context={context} reveal={{ at: ++asks }} />)
+    await waitFor(() => expect(screen.getByText(NOT_MERGED)).toBeTruthy())
+  })
+
   test('a file asked for by its whole path on disk is the listed file that path ends with', async () => {
     render(<ChangesPanel projectId="p1" agentId="run-1" context={context} reveal={ask('/repo/.branches/agent-1/src/app.ts')} />)
     await waitFor(() => expect(row(/app\.ts/).getAttribute('aria-pressed')).toBe('true'))

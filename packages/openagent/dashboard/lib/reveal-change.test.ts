@@ -21,6 +21,15 @@ describe('revealChange', () => {
     act(() => revealChange('p1/other', 'README.md'))
     expect(result.current!.path).toBe('src/app.ts')
   })
+
+  test('an ask with no file is an ask for all of them: a new ask, with no path', () => {
+    const { result } = renderHook(() => useRevealedChange('p1/r1'))
+    act(() => revealChange('p1/r1', 'src/app.ts'))
+    const first = result.current!.at
+    act(() => revealChange('p1/r1'))
+    expect(result.current!.at).toBeGreaterThan(first)
+    expect(result.current).not.toHaveProperty('path')
+  })
 })
 
 describe('revealScreen', () => {

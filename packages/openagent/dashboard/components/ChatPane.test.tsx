@@ -133,6 +133,13 @@ describe('the chat\'s rows and the message box over their end', () => {
     expect(spacer().className.split(' ')).toContain('order-last')
   })
 
+  // The browser keeps the first row of the page in the view where it was when a row above it
+  // grows: the room, first and at the end, kept the end still and pushed an opened steps line up.
+  test('the room at the end is never the row the browser holds in place', () => {
+    render(<EventList events={ended} projectId="p1" />)
+    expect(screen.getByTestId('log-end-room').className.split(' ')).toContain('[overflow-anchor:none]')
+  })
+
   // A layout for the real scroller: every drawn child of the list is 100 tall, the viewport 500.
   const layOut = () => {
     HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {

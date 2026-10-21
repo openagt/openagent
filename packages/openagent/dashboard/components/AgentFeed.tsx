@@ -58,8 +58,8 @@ export function AgentFeed({
   /** What was set up for the agent before it began: the chat's "Initialized session" line. */
   setup?: SessionSetup | undefined
   onOpenSubagent?: ((key: string) => void) | undefined
-  /** Show a changed file's change: a click on a file's row at the end of a turn. */
-  onOpenChange?: ((path: string) => void) | undefined
+  /** Show a changed file's change: a click on a file's row at the end of a turn; with no path, all of them. */
+  onOpenChange?: ((path?: string) => void) | undefined
   /** Show the run's live screen: what the row of a live screen does on a click. */
   onOpenScreen?: (() => void) | undefined
 }) {
