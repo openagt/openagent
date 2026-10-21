@@ -251,11 +251,12 @@ function CopyMessage({ text }: { text: string }) {
 /**
  * Under the agent's last message of a turn it finished: a button that copies it, and how long ago
  * it was said, as Claude Code on the web puts them under its messages. Shown while the pointer is
- * on the message, or a key is in the footer; its line is always there, so nothing moves when it shows.
+ * anywhere on the turn (`.turn-footer` in tailwind.css), or a key is in the footer; its line is
+ * always there, so nothing moves when it shows.
  */
 function ReplyFooter({ text, at }: { text: string; at?: string | undefined }) {
   return (
-    <div className="flex h-6 items-center gap-1 font-sans text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 group-hover/row:opacity-100">
+    <div className="turn-footer flex h-6 items-center gap-1 font-sans text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100">
       <CopyMessage text={text} />
       {at !== undefined && (
         <time dateTime={at} title={new Date(at).toLocaleString()} className="px-1 text-[11px]">
@@ -791,7 +792,7 @@ export function EventList({
                 {startedRows(i)}
                 {/* Every row carries the same -mx/px pair so a washed row's band and a plain row's
                     text share the exact same columns; only the background differs. */}
-                <MessageScrollerItem messageId={idOf(e)} className={`group/row relative -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${answer || inPlace ? 'mt-1 mb-3.5' : own ? '-mb-2.5 mt-4 first:mt-0' : ''} ${end ? '' : rowWash(e)}`}>
+                <MessageScrollerItem messageId={idOf(e)} data-prompt={own || undefined} className={`group/row relative -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${answer || inPlace ? 'mt-1 mb-3.5' : own ? '-mb-2.5 mt-4 first:mt-0' : ''} ${end ? '' : rowWash(e)}`}>
                   {answer ? (
                     <Answer {...answer} />
                   ) : inPlace && sentAnswer ? (
