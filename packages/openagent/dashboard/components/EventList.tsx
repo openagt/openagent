@@ -7,7 +7,6 @@ import { callRow, callSubagents, runRow, subagentEnd, subagentEvents, subagentGr
 import { answeredQuestion } from '../lib/answered-question.js'
 import { rowWords, type RowWords } from '../lib/row-words.js'
 import { formatAge } from '../lib/format-date.js'
-import { cn } from '../lib/utils.js'
 import { AnsweredChoice } from './AnsweredChoice.js'
 import { QuestionPanel } from './QuestionPanel.js'
 import { Markdown } from './Markdown.js'
@@ -842,13 +841,10 @@ export function EventList({
                       {(formatOpenAgentEvent(e) ?? '').trim()}
                     </span>
                   )}
-                  {!own && chunkHead && at !== undefined && !footers.has(e) && (
+                  {/* A line of steps has no time at its end, as Claude Code's has none. */}
+                  {!own && chunkHead && at !== undefined && !footers.has(e) && !steps.has(e) && (
                     <Tooltip>
-                      <TooltipTrigger
-                        // A box of steps is as wide as the chat, as Claude Code's is: its time floats over the
-                        // corner its line leaves free, and takes no column beside the box.
-                        render={<span className={cn(TIME, steps.has(e) && 'absolute top-0 right-1.5')} />}
-                      >
+                      <TooltipTrigger render={<span className={TIME} />}>
                         {formatTime(at)}
                       </TooltipTrigger>
                       <TooltipContent>{new Date(at).toLocaleString()}</TooltipContent>

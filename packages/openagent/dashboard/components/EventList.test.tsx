@@ -469,7 +469,7 @@ describe('EventList session line', () => {
     expect(screen.getByText('Initialized session')).toBeTruthy()
   })
 
-  test('as the first row of a box of steps, opened, its lines have no box of their own; alone, they do; the box of steps is as wide as the chat, its time over its corner', () => {
+  test('as the first row of a box of steps, opened, its lines have no box of their own; alone, they do; the line of steps has no time', () => {
     const at = '2026-09-25T10:04:05.000Z'
     const call: OpenAgentEvent = { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'ls' }, at }
     const { unmount } = render(<EventList events={[prompt, call, said]} setup={setup} stick={false} />)
@@ -477,8 +477,7 @@ describe('EventList session line', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Initialized session' }))
     const lines = screen.getByText('agent-1').closest('.flex-col') as HTMLElement
     expect(lines.className).not.toContain('border')
-    const time = screen.getByRole('button', { name: 'Ran a command' }).closest('[data-message-id]')!.querySelector('.tabular-nums')!
-    expect(time.className).toContain('absolute')
+    expect(screen.getByRole('button', { name: 'Ran a command' }).closest('[data-message-id]')!.querySelector('.tabular-nums')).toBeNull()
     unmount()
     render(<EventList events={[prompt, said]} setup={setup} stick={false} />)
     fireEvent.click(screen.getByRole('button', { name: 'Initialized session' }))
