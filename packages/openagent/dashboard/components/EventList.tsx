@@ -274,14 +274,14 @@ function isTall(text: string): boolean {
   return text.length > PROMPT_CHARS || text.trim().split('\n').length > PROMPT_LINES
 }
 
-// A question and the answer the person gave it: a small box on the left, the question in grey and
-// the answer under it, in place of the sentence the agent was resumed with. A skipped one says so
-// where the answer would be.
+// A question and the answer the person gave it, in place of the sentence the agent was resumed
+// with: a box as wide as the question's card was, the question and the answer under it in grey, as
+// Claude Code on the web keeps an answered question. A skipped one says so where the answer would be.
 function Answer({ question, answer }: { question: string; answer?: string | undefined }) {
   return (
-    <div role="group" aria-label="Your answer" className="min-w-[min(100%,20rem)] max-w-[85%] rounded-lg border border-border p-2.5 font-sans text-sm">
-      <div className="text-muted-foreground">{question}</div>
-      {answer !== undefined ? <div className="text-foreground">{answer}</div> : <div className="italic text-muted-foreground">Skipped</div>}
+    <div role="group" aria-label="Your answer" className="flex w-full max-w-[480px] flex-col gap-0.5 rounded-lg px-3 py-2 font-sans text-sm ring-1 ring-border">
+      <div className="font-medium text-foreground">{question}</div>
+      {answer !== undefined ? <div className="text-muted-foreground">{answer}</div> : <div className="italic text-muted-foreground">Skipped</div>}
     </div>
   )
 }
@@ -707,7 +707,9 @@ export function EventList({
     const message = textOf(e)
     const choiceRow = choiceRows?.rows.get(e)
     if (isTurnBoundary(e)) {
-      if (!ends.has(e) && last) footers.set(last.row, last.text)
+      // A turn that ended on a question the person answered: the question was its last thing, and
+      // the answer stands where its card was.
+      if (!ends.has(e) && last && !(message !== null && answeredQuestion(message))) footers.set(last.row, last.text)
       if (!ends.has(e)) last = undefined
     } else if (message !== null) last = { row: e, text: message }
     else if (choiceRow) last = { row: e, text: last?.text ?? choiceRow.choice.title }
@@ -758,7 +760,7 @@ export function EventList({
                 {startedRows(i)}
                 {/* Every row carries the same -mx/px pair so a washed row's band and a plain row's
                     text share the exact same columns; only the background differs. */}
-                <MessageScrollerItem messageId={idOf(e)} className={`group/row -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${own || answer ? 'mt-4 first:mt-0' : ''} ${end ? '' : rowWash(e)}`}>
+                <MessageScrollerItem messageId={idOf(e)} className={`group/row -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${answer ? 'my-3.5 first:mt-0' : own ? 'mt-4 first:mt-0' : ''} ${end ? '' : rowWash(e)}`}>
                   {answer ? (
                     <Answer {...answer} />
                   ) : own && message !== null ? (

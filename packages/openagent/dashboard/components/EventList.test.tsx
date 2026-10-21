@@ -562,6 +562,17 @@ describe('EventList choice rows', () => {
   })
   const resolved = (id = 'gate-1'): OpenAgentEvent => ({ kind: 'choice-resolved', id, picked: 'work', by: 'user' })
 
+  test('a turn that ended on a question the person answered has no copy and time under what was said before it: the answer stands where the card was', async () => {
+    const { answerPrompt } = await import('../lib/answered-question.js')
+    const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Here is the plan.' } }
+    const answered: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: answerPrompt('Start the next backlog item?', 'Work on it') } }
+    const first: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'Plan the next item' } }
+    render(<EventList events={[first, said, gate(), answered, { kind: 'driver', event: { type: 'text', text: 'On it.' } }]} stick={false} projectId="p1" agentId="r1" />)
+    expect(screen.getByRole('group', { name: 'Your answer' }).textContent).toBe('Start the next backlog item?Work on it')
+    const before = screen.getByText('Here is the plan.').closest('[data-message-id]') as HTMLElement
+    expect(within(before).queryByRole('button', { name: 'Copy this message' })).toBeNull()
+  })
+
   test('an open gate is its card in the flow, right under what the agent said', () => {
     const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Here is the plan.' } }
     render(<EventList events={[said, gate()]} stick={false} projectId="p1" agentId="r1" />)
