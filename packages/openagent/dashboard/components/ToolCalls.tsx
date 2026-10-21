@@ -193,12 +193,16 @@ export function ToolCalls({ steps, lead }: { steps: readonly ToolStep[]; lead?: 
   }
   return (
     <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
-      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={words} className="flex items-center gap-1.5 py-0.5 hover:text-foreground">
-        <span className="shrink-0 text-left">{summary.words}</span>
-        {summary.target !== undefined && <span className="min-w-0 truncate text-foreground">{summary.target}</span>}
-        {summary.size !== undefined && <LinesPill {...summary.size} />}
-        <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')} aria-hidden />
-      </button>
+      {/* The pointer anywhere on the line, as wide as the chat, lights its words a step: the
+          grey ones to the file's dimmed white, the file to full white, as Claude Code's do. */}
+      <div className="group/status flex">
+        <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={words} className="flex min-w-0 items-center gap-1.5 py-0.5">
+          <span className="shrink-0 text-left group-hover/status:text-foreground/80 group-has-focus-visible/status:text-foreground/80">{summary.words}</span>
+          {summary.target !== undefined && <span className="min-w-0 truncate text-foreground/80 group-hover/status:text-foreground group-has-focus-visible/status:text-foreground">{summary.target}</span>}
+          {summary.size !== undefined && <LinesPill {...summary.size} />}
+          <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')} aria-hidden />
+        </button>
+      </div>
       {open && (
         <div className="mt-1.5 flex flex-col divide-y divide-border rounded-lg border border-border">
           {lead && <div className="px-2 py-1.5">{lead}</div>}
