@@ -14,7 +14,6 @@ export default defineModule({
     {
       id: 'changes',
       label: 'Changes',
-      help: 'Only the files that changed: a session’s, kept after its work is merged, or the project folder’s own — the list on the left, every file’s diff on the right.',
       icon: FileDiff,
       changes: true,
       Panel: ChangesPanel,

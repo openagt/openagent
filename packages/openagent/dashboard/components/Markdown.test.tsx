@@ -147,11 +147,12 @@ describe('Markdown lists', () => {
     expect(document.querySelector('pre')!.textContent).toBe(' same\n-old\n+new')
   })
 
-  test('a code block is a card: the language above it, and a copy button that takes the code', async () => {
+  test('a code block is a card with no strip naming its language, its lines wrapped, and a copy button that takes the code', async () => {
     const written: string[] = []
     Object.assign(navigator, { clipboard: { writeText: (text: string) => { written.push(text); return Promise.resolve() } } })
     render(<Markdown text={'```bash\nnpm test\n```'} />)
-    expect(screen.getByText('bash')).toBeTruthy()
+    expect(screen.queryByText('bash')).toBeNull()
+    expect(document.querySelector('pre')!.className).toContain('whitespace-pre-wrap')
     fireEvent.click(screen.getByRole('button', { name: 'Copy the code' }))
     await waitFor(() => expect(written).toEqual(['npm test']))
   })

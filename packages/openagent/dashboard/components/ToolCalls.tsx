@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { callsSummary, summaryWords, toolCall } from '../lib/tool-calls.js'
 import { usePreferences } from '../lib/preferences.js'
@@ -80,7 +80,7 @@ function CallLine({ label, detail, whole, summary, output, live }: Call & { live
       ) : (
         <>
           <span className={cn('shrink-0', live && 'text-shimmer')}>{live ? call.doing : call.verb}</span>
-          {call.target !== undefined && <span className={cn('truncate', live ? 'text-shimmer' : 'text-foreground')}>{call.target}</span>}
+          {call.target !== undefined && <span className={cn('truncate', live ? 'text-shimmer' : !call.plain && 'text-foreground')}>{call.target}</span>}
         </>
       )}
       {call.size !== undefined && <LinesPill {...call.size} />}
@@ -197,8 +197,17 @@ export function ToolCalls({ steps, lead }: { steps: readonly ToolStep[]; lead?: 
           grey ones to the file's dimmed white, the file to full white, as Claude Code's do. */}
       <div className="group/status flex">
         <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={words} className="flex min-w-0 items-center gap-1.5 py-0.5">
-          <span className="shrink-0 text-left group-hover/status:text-foreground/80 group-has-focus-visible/status:text-foreground/80">{summary.words}</span>
-          {summary.target !== undefined && <span className="min-w-0 truncate text-foreground/80 group-hover/status:text-foreground group-has-focus-visible/status:text-foreground">{summary.target}</span>}
+          <span className="min-w-0 truncate text-left">
+            {summary.parts.map((part, at) => (
+              <Fragment key={at}>
+                <span className="group-hover/status:text-foreground/80 group-has-focus-visible/status:text-foreground/80">
+                  {at > 0 && ', '}
+                  {part.words}
+                </span>
+                {part.target !== undefined && <span className="text-foreground/80 group-hover/status:text-foreground group-has-focus-visible/status:text-foreground"> {part.target}</span>}
+              </Fragment>
+            ))}
+          </span>
           {summary.size !== undefined && <LinesPill {...summary.size} />}
           <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')} aria-hidden />
         </button>

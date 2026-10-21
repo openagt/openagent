@@ -9,11 +9,12 @@ import { cn } from '../../lib/utils.js'
 const TooltipProvider = TooltipPrimitive.Provider
 const Tooltip = TooltipPrimitive.Root
 
-// Tooltips open instantly (#1149). Base UI reads the delay off the trigger, and an explicit
-// trigger delay beats any <TooltipProvider>, so this one default governs every tooltip; no
-// provider is needed anywhere.
+// A tooltip opens 300ms after the pointer comes to rest, and the next one at once while the last is
+// open or just closed, as Claude Code on the web's do: the pointer passing over the page lights
+// nothing, and moving along a row of icons reads each one. The "at once" is the one
+// <TooltipProvider> around the app (AppFrame.tsx), whose tooltips are one group.
 function TooltipTrigger(props: ComponentProps<typeof TooltipPrimitive.Trigger>) {
-  return <TooltipPrimitive.Trigger delay={0} {...props} />
+  return <TooltipPrimitive.Trigger delay={300} {...props} />
 }
 
 function TooltipContent({

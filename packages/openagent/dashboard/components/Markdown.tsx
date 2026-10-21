@@ -32,18 +32,16 @@ function diffLineClass(line: string): string | undefined {
 // mid-fence; one place so the markup and classes can't drift between the two. A block fenced as
 // `diff` has its added and removed lines coloured, as the changed-lines counts are.
 //
-// A card, as Claude Code on the web sets one: a bordered box whose top strip names the language
-// and carries the copy button. Code is the one thing in an answer a reader takes somewhere else,
-// and selecting it by hand out of a scrolling box is where that went wrong.
+// A card, as Claude Code on the web sets one: a bordered box with the copy button in its corner,
+// its lines wrapped to the box rather than cut at its edge, and no strip naming the language. Code
+// is the one thing in an answer a reader takes somewhere else, and selecting it by hand is where
+// that went wrong.
 function codeBlock(lines: string[], language: string, key: number): ReactNode {
   const text = lines.join('\n')
   return (
-    <div key={key} className="overflow-hidden rounded-lg border border-border bg-muted/50">
-      <div className="flex h-7 items-center justify-between gap-2 border-b border-border/70 px-2 text-[11px] text-muted-foreground">
-        <span className="truncate font-mono">{language}</span>
-        <CopyButton text={text} label="Copy the code" />
-      </div>
-      <pre className="overflow-x-auto p-2 text-xs">
+    <div key={key} className="relative rounded-lg border border-border bg-muted/50">
+      <CopyButton text={text} label="Copy the code" className="absolute top-2.5 right-2.5" />
+      <pre className="px-4 py-3 pr-10 text-xs leading-[18px] break-words whitespace-pre-wrap">
         <code>
           {language === 'diff'
             ? lines.map((line, i) => (

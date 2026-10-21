@@ -507,7 +507,7 @@ describe('a changed file\'s row in the chat', () => {
     const modules: MountedModules = { pages: [], cards: [], linkActions: [], panels, runSlots: [], settings: [], loaded: true }
     return <ModulesContext.Provider value={modules}>{ui}</ModulesContext.Provider>
   }
-  const panel = (over: object) => ({ id: 'changes', label: 'Changes', help: '', icon: () => null, Panel: () => null, package: '@openagt/changes', projects: ['p1'], ...over })
+  const panel = (over: object) => ({ id: 'changes', label: 'Changes', icon: () => null, Panel: () => null, package: '@openagt/changes', projects: ['p1'], ...over })
 
   test('with a pane that lists changes, a click asks this agent\'s page for the file by its path in the checkout', async () => {
     const { useRevealedChange, forgetRevealedChanges } = await import('../lib/reveal-change.js')

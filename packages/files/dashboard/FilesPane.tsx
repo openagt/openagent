@@ -16,6 +16,7 @@ import {
   useModuleHost,
   useNarrow,
   usePolled,
+  Waiting,
   type ModulePanelProps,
 } from '@openagt/dashboard/module'
 import type { AgentTree } from '../src/tree.js'
@@ -77,9 +78,10 @@ export function FilesPane({ projectId, agentId, activity, context }: ModulePanel
   const settings = useFilesSettings()
   const [body, setBody] = useState<HTMLElement | null>(null)
   const narrow = useNarrow(body, NARROW)
-  // On a narrow pane the tree is shown on a press of its button, in the file's place, and hidden
-  // again by the file opened from it; the setting is what a wide pane does.
-  const [peek, setPeek] = useState(false)
+  // On a narrow pane the tree is shown in the file's place: from the start when no file is open, as
+  // Claude Code's narrow pane opens on its files, else on a press of its button; a file opened from
+  // it hides it again. The setting is what a wide pane does.
+  const [peek, setPeek] = useState(active === undefined)
   const tree = narrow ? peek : settings.tree
   const showTree = (shown: boolean) => (narrow ? setPeek(shown) : setFilesSetting('tree', shown))
   const open = (path: string, keep: boolean) => {
@@ -133,25 +135,8 @@ export function FilesPane({ projectId, agentId, activity, context }: ModulePanel
   const header = (
     <>
       <PaneTitle>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className={cn('shrink-0 text-muted-foreground', tree && 'bg-accent text-primary')}
-                aria-label={tree ? 'Hide the file tree' : 'Show the file tree'}
-                aria-pressed={tree}
-                onClick={() => showTree(!tree)}
-              />
-            }
-          >
-            <ListTree className="size-4" />
-          </TooltipTrigger>
-          <TooltipContent>{tree ? 'Hide the file tree' : 'Show the file tree'}</TooltipContent>
-        </Tooltip>
         {tabs.length === 0 ? (
-          <h2 className="truncate pl-1 text-[13px] text-muted-foreground">Files</h2>
+          <h2 className="truncate pl-2 text-[13px] text-muted-foreground">Files</h2>
         ) : (
           <div ref={tablist} role="tablist" aria-label="Open files" className="flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]">
             {tabs.map(tab => (
@@ -180,6 +165,23 @@ export function FilesPane({ projectId, agentId, activity, context }: ModulePanel
           </TooltipTrigger>
           <TooltipContent>Search files</TooltipContent>
         </Tooltip>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className={cn('shrink-0 text-muted-foreground', tree && 'bg-accent text-accent-foreground')}
+                aria-label={tree ? 'Hide the file tree' : 'Show the file tree'}
+                aria-pressed={tree}
+                onClick={() => showTree(!tree)}
+              />
+            }
+          >
+            <ListTree className="size-4" />
+          </TooltipTrigger>
+          <TooltipContent>{tree ? 'Hide the file tree' : 'Show the file tree'}</TooltipContent>
+        </Tooltip>
         <DropdownMenu>
           <DropdownMenuTrigger aria-label="The pane’s settings" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground">
             <MoreVertical aria-hidden className="size-4" />
@@ -206,11 +208,17 @@ export function FilesPane({ projectId, agentId, activity, context }: ModulePanel
       <p className="p-3 text-xs text-muted-foreground">{text}</p>
     </>
   )
-  if (agentId && (!treeLoaded || runTree?.source === 'pending')) return line('Looking for this run’s files…')
+  const waiting = (text: string) => (
+    <>
+      {header}
+      <Waiting className="p-3">{text}</Waiting>
+    </>
+  )
+  if (agentId && (!treeLoaded || runTree?.source === 'pending')) return waiting('Looking for this run’s files…')
   // No checkout, no branch and no merge commit on this machine: say so rather than show the
   // project's own files, which reads as "these are the run's".
   if (agentId && runTree?.source === 'gone') return line('This run’s files are gone from this machine: its checkout was reclaimed and it left no branch or merged pull request here.')
-  if (!agentId && !projectLoaded) return line('Reading the project’s files…')
+  if (!agentId && !projectLoaded) return waiting('Reading the project’s files…')
   if (files.length === 0) return line('No files here.')
 
   return (

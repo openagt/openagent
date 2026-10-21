@@ -275,16 +275,18 @@ describe('opening files, as Claude Code on the web does', () => {
     expect(await screen.findByText('hello world')).toBeTruthy()
   })
 
-  test('on a narrow pane the tree is hidden; its button shows it in the file’s place, and a file opened from it hides it again', async () => {
+  test('a narrow pane opened with no file open shows the tree; a file opened from it takes its place, and the button or search bring it back', async () => {
     readContent.mockResolvedValue({ path: 'README.md', text: 'hello world', truncated: false, binary: false })
     narrowPanes()
     render(<FilesPane projectId="p1" context={context()} />)
-    await waitFor(() => expect(screen.getByLabelText('Show the file tree')).toBeTruthy())
-    expect(screen.queryByLabelText('Filter files')).toBeNull()
-    fireEvent.click(screen.getByLabelText('Show the file tree'))
     fireEvent.click(await screen.findByTitle('README.md'))
     await screen.findByText('hello world')
     expect(screen.queryByLabelText('Filter files')).toBeNull()
+    fireEvent.click(screen.getByLabelText('Show the file tree'))
+    expect(screen.getByLabelText('Filter files')).toBeTruthy()
+    expect(screen.queryByText('hello world')).toBeNull()
+    fireEvent.click(screen.getAllByTitle('README.md').find(row => !row.closest('[role=tablist]'))!)
+    await screen.findByText('hello world')
     // Search shows the tree there too, in the file's place.
     fireEvent.click(screen.getByLabelText('Search files'))
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Filter files')))

@@ -719,27 +719,33 @@ export function EventList({
   const viewport = useRef<HTMLDivElement>(null)
   const endRoom = useRef<HTMLDivElement>(null)
   useEndKept(viewport, endRoom)
-  // The last row of each turn the agent finished, with the message its footer copies: the agent's
-  // last message, or the question the turn ended on, under which Claude Code on the web puts the
-  // pair too. The turn going on has none until it ends: the agent has not finished saying it.
-  // A turn that changed files ends on their card: the pair goes under it, as Claude Code puts it
-  // under its card of the turn's files. Keyed by the prompt the turn ended at; the last turn's by `null`.
+  // The last row of each turn the agent finished, with what its footer copies: everything the
+  // agent said since the person's last message, its messages one paragraph apart, as Claude Code on
+  // the web's copy takes them; a turn that said nothing but a question, the question. Claude Code
+  // puts the pair under the question the turn ended on too. An answer to the agent's question goes
+  // on the same turn, as it does there. The turn going on has none until it ends: the agent has not
+  // finished saying it. A turn that changed files ends on their card: the pair goes under it, as
+  // Claude Code puts it under its card of the turn's files. Keyed by the prompt the turn ended at;
+  // the last turn's by `null`.
   const footers = new Map<OpenAgentEvent, string>()
   const filesFooters = new Map<OpenAgentEvent | null, { text: string; at: string | undefined }>()
   let last: { row: OpenAgentEvent; text: string } | undefined
+  let said: string[] = []
   for (const e of shown) {
     const message = textOf(e)
     const choiceRow = choiceRows?.rows.get(e)
     if (isTurnBoundary(e)) {
-      // A turn that ended on a question the person answered: the question was its last thing, and
-      // the answer stands where its card was.
-      if (!ends.has(e) && last && !(message !== null && answeredQuestion(message))) {
+      if (ends.has(e) || (message !== null && answeredQuestion(message))) continue
+      if (last) {
         if (changes.ended.has(e)) filesFooters.set(e, { text: last.text, at: last.row.at })
         else footers.set(last.row, last.text)
       }
-      if (!ends.has(e)) last = undefined
-    } else if (message !== null) last = { row: e, text: message }
-    else if (choiceRow) last = { row: e, text: last?.text ?? choiceRow.choice.title }
+      last = undefined
+      said = []
+    } else if (message !== null) {
+      said.push(message)
+      last = { row: e, text: said.join('\n\n') }
+    } else if (choiceRow) last = { row: e, text: said.length > 0 ? said.join('\n\n') : choiceRow.choice.title }
   }
   if (last && !working && sending === undefined) {
     if (changes.last.length > 0) filesFooters.set(null, { text: last.text, at: last.row.at })
@@ -791,7 +797,7 @@ export function EventList({
                 {startedRows(i)}
                 {/* Every row carries the same -mx/px pair so a washed row's band and a plain row's
                     text share the exact same columns; only the background differs. */}
-                <MessageScrollerItem messageId={idOf(e)} data-prompt={own || undefined} className={`group/row relative -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${answer || inPlace ? 'mt-1 mb-3.5' : own ? '-mb-2.5 mt-4 first:mt-0' : ''} ${end ? '' : rowWash(e)}`}>
+                <MessageScrollerItem messageId={idOf(e)} data-prompt={(own && !answer) || undefined} className={`group/row relative -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${answer || inPlace ? 'mt-1 mb-3.5' : own ? '-mb-2.5 mt-4 first:mt-0' : ''} ${end ? '' : rowWash(e)}`}>
                   {answer ? (
                     <Answer {...answer} />
                   ) : inPlace && sentAnswer ? (
@@ -813,7 +819,7 @@ export function EventList({
                     footers.has(e) ? (
                       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                         <Reply text={message} />
-                        <ReplyFooter text={message} at={at} />
+                        <ReplyFooter text={footers.get(e)!} at={at} />
                       </div>
                     ) : (
                       <Reply text={message} />

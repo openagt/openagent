@@ -51,8 +51,6 @@ const COLUMN_SHARE = 50
 interface Pane {
   id: string
   label: string
-  /** One sentence on what the pane shows, for its icon's tooltip. */
-  help: string
   icon: ComponentType<{ className?: string }>
   /** The module's panel; absent on the dashboard's own panes. */
   panel?: MountedPanel
@@ -139,10 +137,10 @@ export function PanesProvider({
   const showsSubagent = subagent !== undefined && subagentAsked !== undefined
   const panes = useMemo<Pane[]>(() => {
     if (!shown) return []
-    const ofModules = mounted.filter(panel => panel.projects.includes(shown)).map(panel => ({ id: panelId(panel), label: panel.label, help: panel.help, icon: panel.icon, panel }))
+    const ofModules = mounted.filter(panel => panel.projects.includes(shown)).map(panel => ({ id: panelId(panel), label: panel.label, icon: panel.icon, panel }))
     const own: Pane[] = [
-      ...(docs.length > 0 ? [{ id: DOCS, label: 'Docs', help: 'The PLAN/TODO markdown files at the root of the workspace.', icon: FileText }] : []),
-      ...(showsSubagent ? [{ id: SUBAGENT, label: 'Subagent', help: 'A subagent of this run: its prompt and what it did.', icon: Bot, hidden: true as const }] : []),
+      ...(docs.length > 0 ? [{ id: DOCS, label: 'Docs', icon: FileText }] : []),
+      ...(showsSubagent ? [{ id: SUBAGENT, label: 'Subagent', icon: Bot, hidden: true as const }] : []),
     ]
     return [...ofModules, ...own]
   }, [mounted, shown, docs.length, showsSubagent])
@@ -234,10 +232,8 @@ export function PaneToggles() {
             >
               <pane.icon className="h-4 w-4" />
             </TooltipTrigger>
-            <TooltipContent className="max-w-64">
-              <span className="font-medium">{pane.label}</span>
-              <span className="block text-muted-foreground">{pane.help}</span>
-            </TooltipContent>
+            {/* Its name only, as Claude Code's icons say "Files" and "Changes". */}
+            <TooltipContent>{pane.label}</TooltipContent>
           </Tooltip>
         )
       })}

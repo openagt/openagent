@@ -169,7 +169,7 @@ describe('ToolCalls, edits whose files are known', () => {
   test("the folded line counts the commands and names the file the edits changed, with its size in a pill, as Claude Code's does; the edit's own row has the pill too", () => {
     render(<ToolCalls steps={[bash('a'), bash('b'), bash('c'), write]} />)
     const line = screen.getByRole('button', { name: 'Ran 3 commands, created DESCRIPTION.md' })
-    expect(line.textContent).toBe('Ran 3 commands, createdDESCRIPTION.md+11−011 added, 0 removed')
+    expect(line.textContent).toBe('Ran 3 commands, created DESCRIPTION.md+11−011 added, 0 removed')
     expect(line.querySelector('.text-success')!.textContent).toBe('+11')
     expect(line.querySelector('.text-success')!.className).toContain('bg-success/20')
     fireEvent.click(line)

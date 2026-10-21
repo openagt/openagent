@@ -288,7 +288,7 @@ describe('EventList tool calls', () => {
     expect(screen.getByRole('status').textContent).toBe('ReadingAGENTS.md')
     // The next event came: the call is over and joins its run; the agent is between calls.
     rerender(<EventList events={[prompt, call('Bash', 'ls'), call('Read', '/repo/AGENTS.md'), thought('next')]} working stick={false} />)
-    expect(screen.getByRole('button', { name: 'Ran 2 commands' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Ran a command, read a file' })).toBeTruthy()
     expect(screen.getByRole('status').textContent).toBe('')
   })
 
@@ -389,6 +389,23 @@ describe('EventList question and answer', () => {
     expect(screen.queryByText(/You paused to ask/)).toBeNull()
     expect(screen.queryByText(/○ Red/)).toBeNull()
     expect(screen.getAllByRole('group', { name: 'Your message' })).toHaveLength(1)
+  })
+
+  test('an answered question goes on the same turn: one footer at its end, whose copy takes all the agent said since my message', async () => {
+    const before: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Here are the words.' } }
+    const events = resumed('You paused to ask: "Which color do you prefer?". The user chose: Red. Continue with that decision.')
+    render(<EventList events={[events[0]!, before, ...events.slice(1)]} projectId="p1" stick={false} />)
+    // Besides my message's own copy, one: under the turn's last message.
+    const footers = screen.getAllByRole('button', { name: 'Copy this message' }).filter(button => !button.closest('[data-prompt]'))
+    expect(footers.map(button => button.closest('[data-message-id]')!.textContent)).toEqual([expect.stringContaining('Red it is.')])
+    // The answer is no message of mine: the turn's hover goes on over it (tailwind.css, `.turn-footer`).
+    expect(screen.getByRole('group', { name: 'Your answer' }).closest('[data-message-id]')!.hasAttribute('data-prompt')).toBe(false)
+    expect(screen.getByRole('group', { name: 'Your message' }).closest('[data-message-id]')!.hasAttribute('data-prompt')).toBe(true)
+    const writeText = vi.fn(async () => {})
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    fireEvent.click(footers[0]!)
+    await waitFor(() => expect(writeText).toHaveBeenCalled())
+    expect(writeText).toHaveBeenCalledWith('Here are the words.\n\nWhich color do you prefer?\n\nRed it is.')
   })
 
   test('an answer in my own words stays my message', () => {
@@ -1184,9 +1201,9 @@ describe('EventList changed files', () => {
     const events = [prompt('go'), { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'ls', id: 'b1' } } as OpenAgentEvent, ...edit('c1', `${WS}/A.md`, 2, 1), said]
     render(<EventList events={events} setup={{ workspace: WS }} stick={false} />)
     const line = screen.getByRole('button', { name: 'Ran a command, edited A.md' })
-    expect(line.textContent).toBe('Ran a command, editedA.md+2−12 added, 1 removed')
+    expect(line.textContent).toBe('Ran a command, edited A.md+2−12 added, 1 removed')
     fireEvent.click(line)
-    expect(screen.getByRole('button', { name: 'Edited A.md' }).textContent).toBe('EditedA.md+2−12 added, 1 removed')
+    expect(screen.getByRole('button', { name: 'Updated A.md' }).textContent).toBe('UpdatedA.md+2−12 added, 1 removed')
   })
 
   test('a turn that edited no file has no such row', () => {

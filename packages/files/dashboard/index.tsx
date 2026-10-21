@@ -12,7 +12,6 @@ export default defineModule({
     {
       id: 'files',
       label: 'Files',
-      help: 'The project’s files, or a session’s as it left them — click one to open it, right-click one to attach it to the next run’s Context.',
       icon: FolderIcon,
       Panel: FilesPane,
     },
