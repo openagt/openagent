@@ -240,7 +240,7 @@ function CopyMessage({ text }: { text: string }) {
           () => undefined,
         )
       }}
-      className="flex h-6 w-6 items-center justify-center rounded hover:bg-accent hover:text-accent-foreground"
+      className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground"
     >
       {copied ? <Check className="h-3.5 w-3.5" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
     </button>
@@ -311,10 +311,11 @@ function Prompt({ text, at, queued = false, attached, fresh = false }: { text: s
       </div>
       {attached !== undefined && <Attached text={attached} />}
       {queued ? (
-        <span className="h-6 pr-1 text-[11px] leading-6 text-muted-foreground">Queued</span>
+        <span className="mt-1.5 h-6 pr-1 text-[11px] leading-6 text-muted-foreground">Queued</span>
       ) : (
-        // When it was sent and a copy of it, as Claude Code on the web shows under a message.
-        <div className="flex h-6 items-center gap-1 text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 group-hover/prompt:opacity-100">
+        // When it was sent and a copy of it, as Claude Code on the web shows under a message, 6px
+        // below the box so a button's hover does not touch it.
+        <div className="mt-1.5 flex h-6 items-center gap-1 text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 group-hover/prompt:opacity-100">
           {at !== undefined && (
             <time dateTime={at} title={new Date(at).toLocaleString()} className="px-1 text-[11px]">
               {formatAge(at)}
@@ -624,7 +625,12 @@ export function EventList({
   const theirs = useMemo(() => subagentEvents(events), [events])
   const logged = promptFirst(events).filter(e => shownAsRow(e) && !choiceRows?.hidden.has(e) && !screenRows.hidden.has(e) && !theirs.has(e))
   // Every row and every passed end, in order, a message just sent last; `shown` is the rows alone.
-  const kept: OpenAgentEvent[] = sending === undefined ? logged : [...logged, { kind: 'driver', event: { type: 'start', prompt: sending } }]
+  // An answer just given to the question the chat asks: it stands where the card was until the
+  // agent's own line of it arrives in that same place, as Claude Code on the web answers in place.
+  // It is no message at the end, which came and then went back up.
+  const sentAnswer = sending !== undefined ? answeredQuestion(sending) : undefined
+  const answeredInPlace = sentAnswer && choiceRows ? [...choiceRows.rows].find(([, row]) => row.pick === undefined && row.choice.title === sentAnswer.question)?.[0] : undefined
+  const kept: OpenAgentEvent[] = sending === undefined || answeredInPlace ? logged : [...logged, { kind: 'driver', event: { type: 'start', prompt: sending } }]
   // The text of a row's message: the reply a question follows, without the question's block.
   const textOf = (e: OpenAgentEvent): string | null => {
     const text = messageText(e)
@@ -720,7 +726,7 @@ export function EventList({
 
   return (
     <MessageScrollerProvider autoScroll={stick} defaultScrollPosition={openAt ?? (stick ? 'end' : 'start')}>
-      <FollowSent sent={(sending === undefined ? 0 : 1) + queued.length} />
+      <FollowSent sent={(sending === undefined || answeredInPlace ? 0 : 1) + queued.length} />
       {/* A layer of its own: "Jump to latest" stays under the message box's bar. */}
       <MessageScroller className="isolate flex-1">
         <MessageScrollerViewport ref={viewport} aria-label="Agent output" className="scroll-pb-(--chat-bottom)">
@@ -742,6 +748,7 @@ export function EventList({
               const words = rowWords(e)
               // The prompt the agent was resumed with after an answer in its card: a box, not a message.
               const answer = own && message !== null ? answeredQuestion(message) : undefined
+              const inPlace = e === answeredInPlace
               return (
                 <Fragment key={idOf(e)}>
                 {changes.ended.has(e) && (
@@ -760,9 +767,11 @@ export function EventList({
                 {startedRows(i)}
                 {/* Every row carries the same -mx/px pair so a washed row's band and a plain row's
                     text share the exact same columns; only the background differs. */}
-                <MessageScrollerItem messageId={idOf(e)} className={`group/row -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${answer ? 'mt-1 mb-3.5' : own ? '-mb-1 mt-4 first:mt-0' : ''} ${end ? '' : rowWash(e)}`}>
+                <MessageScrollerItem messageId={idOf(e)} className={`group/row -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${answer || inPlace ? 'mt-1 mb-3.5' : own ? '-mb-2.5 mt-4 first:mt-0' : ''} ${end ? '' : rowWash(e)}`}>
                   {answer ? (
                     <Answer {...answer} />
+                  ) : inPlace && sentAnswer ? (
+                    <Answer {...sentAnswer} />
                   ) : own && message !== null ? (
                     <Prompt text={message} at={at} attached={e.kind === 'driver' && e.event.type === 'start' ? e.event.attached : undefined} fresh={idOf(e) === 'sending'} />
                   ) : end ? (
@@ -778,7 +787,7 @@ export function EventList({
                   ) : message !== null ? (
                     // The agent's reply, shown whole, and the last of a finished turn with its footer.
                     footers.has(e) ? (
-                      <div className="flex min-w-0 flex-1 flex-col gap-1">
+                      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                         <Reply text={message} />
                         <ReplyFooter text={message} at={at} />
                       </div>
@@ -789,7 +798,7 @@ export function EventList({
                     <ToolCalls steps={steps.get(e)!} lead={setupInSteps && i === setupAt ? setupLine : undefined} />
                   ) : choiceRow && choiceRow.pick === undefined && projectId !== undefined && agentId !== undefined ? (
                     // The question the agent waits on, answered here, under what it said.
-                    <div className="mt-1 flex min-w-0 flex-1 flex-col gap-1">
+                    <div className="mt-1 flex min-w-0 flex-1 flex-col gap-1.5">
                       <QuestionPanel key={`${agentId}:${choiceRow.choice.id}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} onSaid={onSaid} />
                       {footers.has(e) && <ReplyFooter text={footers.get(e)!} at={at} />}
                     </div>

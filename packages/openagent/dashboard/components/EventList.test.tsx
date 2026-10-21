@@ -573,6 +573,25 @@ describe('EventList choice rows', () => {
     expect(within(before).queryByRole('button', { name: 'Copy this message' })).toBeNull()
   })
 
+  test('an answer just given stands where the card was, and the agent\'s own line of it lands in that same place: nothing comes at the end and goes back up', async () => {
+    const { answerPrompt } = await import('../lib/answered-question.js')
+    const first: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'Plan the next item' } }
+    const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Here is the plan.' } }
+    const waiting: OpenAgentEvent = { kind: 'end', ok: false, waiting: true }
+    const answer = answerPrompt('Start the next backlog item?', 'Work on it')
+    const order = () => [...document.querySelectorAll('[data-message-id]')].map(row => (row.querySelector('[aria-label="Your answer"]') ? 'answer' : (row.textContent ?? '').slice(0, 9)))
+    const { rerender } = render(<EventList events={[first, said, gate(), waiting]} sending={answer} stick={false} projectId="p1" agentId="r1" />)
+    expect(screen.queryByRole('region', { name: 'Start the next backlog item?' })).toBeNull()
+    expect(screen.getByRole('group', { name: 'Your answer' }).textContent).toBe('Start the next backlog item?Work on it')
+    const sent = order()
+    expect(sent).toEqual(['Plan the n', 'Here is t', 'answer'].map(t => t.slice(0, 9)))
+    const sentRow = screen.getByRole('group', { name: 'Your answer' }).closest('[data-message-id]')!.className
+    // The agent's own line of it arrives: the same box, in the same place, with the same room around it.
+    rerender(<EventList events={[first, said, gate(), waiting, { kind: 'driver', event: { type: 'start', prompt: answer } }]} stick={false} projectId="p1" agentId="r1" />)
+    expect(order()).toEqual(sent)
+    expect(screen.getByRole('group', { name: 'Your answer' }).closest('[data-message-id]')!.className).toBe(sentRow)
+  })
+
   test('an open gate is its card in the flow, right under what the agent said', () => {
     const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Here is the plan.' } }
     render(<EventList events={[said, gate()]} stick={false} projectId="p1" agentId="r1" />)
