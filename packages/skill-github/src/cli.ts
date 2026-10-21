@@ -38,7 +38,9 @@ export const USAGE = `usage: github <command>
                                post a comment on issue or pull request <number>: its id and url. It opens with the coding agent's logo, the model and the effort, as the agent's
                                run record says (found through AGENT_DIARY, which its runner sets), else the line 🤖 automated; a hidden mark after the text, so replies never counts it
   open [--branch <b>] --title <t> [--body <text>] [--draft] [--merge]
-                               open the pull request of branch <b> (default: the current branch; it must be on the remote already); an open one is answered as it is; --merge lands it on green
+                               open the pull request of branch <b> (default: the current branch; it must be on the remote already); an open one is answered as it is; --merge lands it on green.
+                               An account that cannot write to the project pushes to its fork: git remote set-url --push origin <fork>; open and replies then take that fork's
+                               pull requests as this machine's
   merge <number>               land pull request <number>: a draft is marked ready, then the merge is armed as --merge arms it
   watch <number>               wait for pull request <number>'s checks and merge it once they pass; what --merge starts where the repository has no auto-merge
   home                         the project's page on GitHub, from its origin remote

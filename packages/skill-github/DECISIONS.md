@@ -34,6 +34,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   when the merge is armed.
 - The branch must be on the remote already; `open` neither pushes nor checks, GitHub's own
   refusal is the answer.
+- An agent whose account cannot write to the project works from its fork: `origin` reads
+  the project and pushes to the fork (`git remote set-url --push origin <fork>`), and
+  `open` and `replies` take that fork's pull requests as the agent's own. Picked over a
+  second remote for the fork, which every push and branch read would have had to learn.
 
 ## Flow: merge
 - `merge <number>` lands a request for a person or the scheduler: a draft is marked ready,

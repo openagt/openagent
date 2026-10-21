@@ -2,12 +2,14 @@ import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 import { errorMessage, nodeGhRunner, type GhRunner } from './gh.js'
 import { armMerge, type MergeArming, type WatchStarter } from './merge.js'
 import { openRequestOf } from './requests.js'
+import { pushFork } from './home.js'
 
 /**
  * Opening a pull request (#1820): the agent's own step after its branch is pushed, and
  * OpenAgent's on a person's Open PR. The words are the caller's; a branch that already has an
  * open request gets no second one, and only the merge arming happens. Pushing is not here: the
- * branches package pushes, this package asks GitHub.
+ * branches package pushes, this package asks GitHub. A branch pushed to a fork, where origin's
+ * push address is one, is opened from that fork.
  */
 
 export interface OpenOptions {
@@ -62,7 +64,8 @@ export async function openRequest(cwd: string, opts: OpenOptions): Promise<OpenO
   if (!request) {
     existing = false
     try {
-      const args = ['pr', 'create', '--head', branch, '--title', opts.title, '--body', opts.body ?? '']
+      const fork = await pushFork(cwd, git)
+      const args = ['pr', 'create', '--head', fork !== undefined ? `${fork.split('/')[0]}:${branch}` : branch, '--title', opts.title, '--body', opts.body ?? '']
       if (opts.draft && !opts.merge) args.push('--draft')
       const out = await gh(args, cwd)
       const url = out.trim().split('\n').filter(Boolean).at(-1)
