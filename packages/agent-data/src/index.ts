@@ -42,6 +42,7 @@ export {
   type BranchReader,
 } from './file-branch.js'
 export {
+  SKILLS_DIRS,
   projectPackages,
   packageBins,
   readManifest,

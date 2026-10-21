@@ -77,8 +77,11 @@ test('a checkout holds each basic skill where every harness looks, with its comm
       assert.equal(await realpath(join(path, 'node_modules', skill.package.name)), await realpath(skill.package.dir))
       // The range the text names is the one the linked copy is in: a copy outside it would send `npx` to npm.
       const text = await readFile(join(skill.dir, 'SKILL.md'), 'utf8')
-      const version: string = JSON.parse(await readFile(join(skill.package.dir, 'package.json'), 'utf8')).version
-      assert.ok(text.includes(`npx ${skill.package.name}@${version.split('.').slice(0, 2).join('.')}`), `${skill.name}'s text names the range ${version} is in`)
+      const manifest: { version: string; openagent?: unknown } = JSON.parse(await readFile(join(skill.package.dir, 'package.json'), 'utf8'))
+      const range = `${skill.package.name}@${manifest.version.split('.').slice(0, 2).join('.')}`
+      assert.ok(text.includes(`npx ${range}`), `${skill.name}'s text names the range ${manifest.version} is in`)
+      // A package that declares what it provides is named by its text, for a project that holds the text alone.
+      if (manifest.openagent) assert.match(text, new RegExp(`^package: "${range}"$`, 'm'), `${skill.name}'s text names its package`)
     }
     assert.equal((await git(['status', '--porcelain'], path)).trim(), '', 'the links are not the agent\'s work')
     assert.equal((await git(['status', '--porcelain'], repo)).trim(), '', 'nor the project\'s')

@@ -1,6 +1,7 @@
 ---
 name: scheduler
 description: "Start and stop the project's scheduler, switch the commands it starts on a schedule on or off, set their pace, or start one now, when the person asks you to."
+package: "@openagt/skill-scheduler@0.1"
 ---
 
 # Scheduler

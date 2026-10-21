@@ -1,6 +1,7 @@
 ---
 name: logs
 description: The record of every run agents made on this project — what was asked, where the work went, how it ended, what the agent said — where it lives, how to read it, and when to look back before you work.
+package: "@openagt/skill-logs@0.1"
 ---
 
 # Agent logs

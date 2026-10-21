@@ -1,6 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
+import { SKILLS_DIRS } from '@openagt/agent-data'
 
 /**
  * A project's commands (#1774): the skills written to be run by a person, read off the folders
@@ -9,9 +10,6 @@ import { parse as parseYaml } from 'yaml'
  * something (the tickets, the queue) is not a command: typed alone it starts an agent with
  * nothing to do, so the launcher does not list it.
  */
-
-/** Where coding agents read a project's skills: Claude Code's folder, and the shared one Codex reads. */
-export const SKILLS_DIRS = ['.claude/skills', '.agents/skills'] as const
 
 /** One skill as the launcher shows it. */
 export interface ProjectCommand {
