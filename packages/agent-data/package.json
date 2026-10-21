@@ -1,6 +1,6 @@
 {
   "name": "@openagt/agent-data",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "What OpenAgent's packages share about a project: making a folder a project, and a branch of the project's repository used as a file store for coding-agent skills. Checked out under .branches/; every write is one sync-commit-push cycle that re-applies when it loses a race, from a long-lived process or one-shot from any clone.",
   "license": "MIT",
   "repository": {

@@ -1,6 +1,6 @@
 {
   "name": "@openagt/skill-branches",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Branch management for coding agents: one git checkout per agent under .branches/, named as its branch, reclaimed once its work is on the remote.",
   "license": "MIT",
   "repository": {
