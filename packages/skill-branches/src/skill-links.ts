@@ -1,3 +1,4 @@
+import { readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { nodeGitRunner, type GitRunner, excludeFromGit } from '@openagt/agent-data'
@@ -46,11 +47,11 @@ export const OWN_SKILL: SkillLink = { name: SKILL_NAME, dir: SKILL_DIR }
 
 /**
  * Link the skill into `checkout` for every harness — this package's own, plus whatever `skills`
- * the caller names (see {@link SkillLink}) — and hide the links from the project's git
- * through the repository's exclude file: a symlink at the checkout root would otherwise ride any
- * sweeping `git add -A` onto the agent's branch. Best-effort: an entry already at a link's path is
- * left alone and gets no rule, a link of this package's that points nowhere is made again, and a
- * link that cannot be made is a worse run, not a failed one.
+ * the caller names (see {@link SkillLink}) — and hide the links from the project's git (see
+ * {@link hideLink}): a symlink at the checkout root would otherwise ride any sweeping `git add -A`
+ * onto the agent's branch. Best-effort: an entry already at a link's path is left alone and is not
+ * hidden, a link of this package's that points nowhere is made again, and a link that cannot be
+ * made is a worse run, not a failed one.
  */
 export async function linkSkill(
   repo: string,
@@ -64,10 +65,10 @@ export async function linkSkill(
       const rel = `${dir}/${skill.name}`
       try {
         const path = join(checkout, rel)
-        // The project's own copy, tracked or not, stays, and gets no rule: a rule would hide what a person adds there.
+        // The project's own copy, tracked or not, stays, and is not hidden: that would hide what a person adds there.
         if (await entryExists(path)) continue
-        await excludeFromGit(repo, `/${rel}`, undefined, git).catch(() => {})
         await fs.mkdir(join(checkout, dir))
+        await hideLink(repo, checkout, dir, skill.name, git).catch(() => {})
         await fs.symlinkDir(skill.dir, path)
       } catch {
         // A filesystem that refuses the link: the agent still starts, without the skill.
@@ -80,4 +81,24 @@ export async function linkSkill(
 /** The paths of a skill's links, relative to a checkout: its text for every harness, and its package's links when it has one. */
 export function skillLinkPaths(skill: SkillLink): string[] {
   return [...HARNESS_SKILL_DIRS.map(dir => `${dir}/${skill.name}`), ...(skill.package ? packageLinkPaths(skill.package) : [])]
+}
+
+/** The file a skill's link is hidden by, in the folder the link is in. */
+const IGNORE_FILE = '.gitignore'
+
+/**
+ * Hide the link `<dir>/<name>` by a line in `<dir>/.gitignore` of the agent's checkout, a file that
+ * names itself too, so it is hidden as well. The file is in that checkout only: a person who adds a
+ * skill of the same name in their own checkout sees it in git, where a rule in the repository's
+ * exclude file, read by every checkout of it, hid it from them too. A project that tracks its own
+ * `<dir>/.gitignore` gets no line in it, which would be work for the agent to commit: there the
+ * link is hidden by the repository's exclude file.
+ */
+async function hideLink(repo: string, checkout: string, dir: string, name: string, git: GitRunner): Promise<void> {
+  const tracked = (await git(['ls-files', '--', `${dir}/${IGNORE_FILE}`], checkout)).trim() !== ''
+  if (tracked) return excludeFromGit(repo, `/${dir}/${name}`, undefined, git)
+  const file = join(checkout, dir, IGNORE_FILE)
+  const current = await readFile(file, 'utf8').catch(() => `/${IGNORE_FILE}\n`)
+  if (current.split('\n').includes(`/${name}`)) return
+  await writeFile(file, (current.endsWith('\n') ? current : `${current}\n`) + `/${name}\n`)
 }

@@ -79,7 +79,8 @@ test('cleanup: checkouts go under the reclaim rule; uncommitted work, branches w
     assert.equal(await readlink(join(repo, '.branches', 'agent-fix-title')), 'agent-dirty', 'the kept checkout keeps its link')
     assert.ok((await branches(repo)).includes(work!), 'the branch with work on it stays, at the same commit')
     const hidden = await excludeOf(repo)
-    for (const rule of ['/.branches', '/node_modules/@openagt/skill-branches', '/node_modules/.bin/branches', '/.claude/skills/branches', '/.agents/skills/branches']) {
+    // The skill's own links are hidden in each checkout itself (`skill-links.ts`): no rule.
+    for (const rule of ['/.branches', '/node_modules/@openagt/skill-branches', '/node_modules/.bin/branches']) {
       assert.ok(hidden.split('\n').includes(rule), `${rule} still hides what a kept checkout holds`)
     }
     assert.equal(await outside(repo), before)

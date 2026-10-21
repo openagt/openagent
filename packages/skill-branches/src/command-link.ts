@@ -18,8 +18,8 @@ import { CLI_BIN_DIR } from './bin-dir.js'
  * The package is linked only beside its own commands. Beside another tool that holds a command's
  * name in the project, the full name would run that tool, so there it is left to npm.
  *
- * Hidden from the project's git through the repository's exclude file, like a skill's link: a link
- * is the package's state, not the agent's work. Best-effort: an entry already there (the project's
+ * Hidden from the project's git through the repository's exclude file: a link is the package's
+ * state, not the agent's work, and `node_modules` is never a person's. Best-effort: an entry already there (the project's
  * own copy) is left alone, a link of this package's that points nowhere is made again, and a link
  * that cannot be made is a worse run, not a failed one.
  */

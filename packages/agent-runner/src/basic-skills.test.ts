@@ -108,10 +108,9 @@ test('a project that tracks its own copy of a basic skill keeps it in the checko
     const { path } = await createCheckout(repo, { agentId: 'a2', skills: await basicSkills(repo) })
     assert.match(await readFile(join(path, '.claude', 'skills', 'question', 'SKILL.md'), 'utf8'), /The project's own way to ask/)
     assert.equal((await git(['status', '--porcelain'], path)).trim(), '')
-    // No rule hides the project's own folder: a file a person adds beside its text shows in git.
-    const hidden = (await excludeOf(repo)).split('\n')
-    assert.ok(!hidden.includes('/.claude/skills/question'), 'the tracked copy gets no rule')
-    assert.ok(hidden.includes('/.agents/skills/question'), 'the folder the project has no copy in is linked and hidden')
+    // Nothing hides the project's own folder: a file a person adds beside its text shows in git.
+    assert.ok(!(await readFile(join(path, '.claude', 'skills', '.gitignore'), 'utf8')).split('\n').includes('/question'), 'the tracked copy is not hidden')
+    assert.ok((await readFile(join(path, '.agents', 'skills', '.gitignore'), 'utf8')).split('\n').includes('/question'), 'the folder the project has no copy in is linked and hidden')
     await writeFile(join(path, '.claude', 'skills', 'question', 'notes.md'), 'more\n')
     assert.equal((await git(['status', '--porcelain'], path)).trim(), '?? .claude/skills/question/notes.md')
   } finally {
@@ -119,15 +118,16 @@ test('a project that tracks its own copy of a basic skill keeps it in the checko
   }
 })
 
-test('cleanup takes the rules of the basic skills back once no agent checkout is left, and leaves a person\'s lines', async () => {
+test('cleanup takes the rules of the basic skills\' packages back once no agent checkout is left, and leaves a person\'s lines', async () => {
   const repo = await testRepo()
   try {
     const { writeFile } = await import('node:fs/promises')
     await writeFile(join(repo, '.git', 'info', 'exclude'), '# mine\n/notes.txt\n')
     const skills = await everyBasicSkill()
     const { path } = await createCheckout(repo, { agentId: 'a3', skills })
-    const rules = skills.flatMap(skillLinkPaths).map(link => `/${link}`)
-    assert.ok(rules.length >= 10)
+    // A skill's text link is hidden in the checkout itself; its package's links, by the repository's exclude file.
+    const rules = skills.flatMap(skillLinkPaths).filter(link => link.startsWith('node_modules/')).map(link => `/${link}`)
+    assert.ok(rules.length > 0 && rules.length >= 2 * skills.filter(skill => skill.package).length, 'a command and its package for each skill that has one')
     for (const rule of rules) assert.ok((await excludeOf(repo)).split('\n').includes(rule), `${rule} hides a link`)
 
     const io = { cwd: repo, stdout: () => {}, stderr: () => {} }
