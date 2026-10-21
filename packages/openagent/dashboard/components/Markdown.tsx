@@ -1,4 +1,5 @@
 import { createContext, Fragment, useContext, type ReactNode } from 'react'
+import { cn } from '../lib/utils.js'
 import { CopyButton } from './ui/copy-button.js'
 
 // A tiny, dependency-free Markdown renderer for an agent's replies, the surfaced PLAN/TODO docs
@@ -202,16 +203,19 @@ function renderList(lines: string[], compact: boolean, depth: number, key: numbe
     margin = Infinity
     fences = []
   }
+  // As Claude Code on the web sets a list: its words 35px in, 3px between two items, and, in a
+  // message, twice the room under it before what follows.
+  const look = cn(compact ? 'ml-6 space-y-1 [&>li]:pl-1' : 'ml-7 space-y-[3px] [&>li]:pl-[7px]', !compact && depth === 0 && '[&:not(:last-child)]:mb-[21px]')
   const closeList = () => {
     closeItem()
     if (items.length === 0) return
     lists.push(
       ordered ? (
-        <ol key={`${key}-${lists.length}`} start={start} className="ml-6 list-decimal space-y-1 [&>li]:pl-1">
+        <ol key={`${key}-${lists.length}`} start={start} className={cn('list-decimal', look)}>
           {items}
         </ol>
       ) : (
-        <ul key={`${key}-${lists.length}`} className="ml-6 list-disc space-y-1 [&>li]:pl-1">
+        <ul key={`${key}-${lists.length}`} className={cn('list-disc', look)}>
           {items}
         </ul>
       ),

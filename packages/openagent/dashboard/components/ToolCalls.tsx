@@ -1,9 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { callsWords, toolCall } from '../lib/tool-calls.js'
+import { callsSummary, summaryWords, toolCall } from '../lib/tool-calls.js'
 import { usePreferences } from '../lib/preferences.js'
 import type { FileEdit } from '../lib/turn-changes.js'
-import { LinesChanged } from './ChangedFiles.js'
+import { LinesPill } from './ChangedFiles.js'
 import { cn } from '../lib/utils.js'
 import { formatElapsed } from '../lib/format-date.js'
 import { Markdown } from './Markdown.js'
@@ -83,7 +83,7 @@ function CallLine({ label, detail, whole, summary, output, live }: Call & { live
           {call.target !== undefined && <span className={cn('truncate', live ? 'text-shimmer' : 'text-foreground')}>{call.target}</span>}
         </>
       )}
-      {call.size !== undefined && <LinesChanged {...call.size} />}
+      {call.size !== undefined && <LinesPill {...call.size} />}
       {live?.since !== undefined && <Seconds since={live.since} />}
     </>
   )
@@ -168,9 +168,9 @@ export function LiveLine({ call, word, since }: { call?: Call | undefined; word?
 }
 
 // The agent's steps between two messages, as Claude Code on the web draws them: one grey line
-// counting them ("Ran 2 commands") and saying no more, opening to one bordered panel with a row per
-// step, a line between two rows, each row opening further. What each step was, which file it
-// changed and how much, is in there rather than on the line. `lead` is a row the panel opens with: the session's
+// counting the commands and naming the file the edits changed with how much ("Ran 2 commands,
+// edited README.md +12 −54"), opening to one bordered panel with a row per step, a line between
+// two rows, each row opening further. `lead` is a row the panel opens with: the session's
 // set-up, before the first turn's steps. A lone call with nothing to lead it is its own line
 // ("Read AGENTS.md"). A run with no call in it draws nothing.
 export function ToolCalls({ steps, lead }: { steps: readonly ToolStep[]; lead?: ReactNode }) {
@@ -181,7 +181,8 @@ export function ToolCalls({ steps, lead }: { steps: readonly ToolStep[]; lead?: 
   const shown = thinking ? steps : steps.filter(step => step.type === 'action')
   const calls = steps.filter(step => step.type === 'action')
   if (calls.length === 0) return null
-  const words = callsWords(calls.length)
+  const summary = callsSummary(calls.map(call => toolCall(call.label, call.detail, call.output?.changed)))
+  const words = summaryWords(summary)
   const only = shown.length === 1 ? shown[0] : undefined
   if (only?.type === 'action' && !lead) {
     return (
@@ -193,7 +194,9 @@ export function ToolCalls({ steps, lead }: { steps: readonly ToolStep[]; lead?: 
   return (
     <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
       <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={words} className="flex items-center gap-1.5 py-0.5 hover:text-foreground">
-        <span className="min-w-0 truncate text-left">{words}</span>
+        <span className="shrink-0 text-left">{summary.words}</span>
+        {summary.target !== undefined && <span className="min-w-0 truncate text-foreground">{summary.target}</span>}
+        {summary.size !== undefined && <LinesPill {...summary.size} />}
         <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')} aria-hidden />
       </button>
       {open && (

@@ -13,7 +13,7 @@ import { QuestionPanel } from './QuestionPanel.js'
 import { Markdown } from './Markdown.js'
 import { SessionLine, sessionLineEmpty, type SessionSetup } from './SessionLine.js'
 import { ChangedFiles } from './ChangedFiles.js'
-import { turnChanges } from '../lib/turn-changes.js'
+import { turnChanges, type ChangedFile } from '../lib/turn-changes.js'
 import { SubagentGroup, SubagentLine } from './SubagentLine.js'
 import { LiveLine, ToolCalls, type CallOutput, type ToolStep } from './ToolCalls.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
@@ -283,6 +283,19 @@ function Answer({ question, answer }: { question: string; answer?: string | unde
     <div role="group" aria-label="Your answer" className="flex w-full max-w-[480px] flex-col gap-0.5 rounded-lg px-3 py-2 font-sans text-sm ring-1 ring-border">
       <div className="font-medium text-foreground">{question}</div>
       {answer !== undefined ? <div className="text-muted-foreground">{answer}</div> : <div className="italic text-muted-foreground">Skipped</div>}
+    </div>
+  )
+}
+
+// The row of a turn's files: 20px under what the agent said, as Claude Code puts its card of them.
+const FILES_ROW = 'group/row -mx-1.5 mt-2 flex items-start gap-2 rounded-sm px-1.5'
+
+// A turn's files, and under them the turn's copy and time when the turn ended on them.
+function TurnFiles({ files, onOpen, footer }: { files: readonly ChangedFile[]; onOpen?: ((path: string) => void) | undefined; footer?: { text: string; at: string | undefined } | undefined }) {
+  return (
+    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+      <ChangedFiles files={files} onOpen={onOpen} />
+      {footer && <ReplyFooter text={footer.text} at={footer.at} />}
     </div>
   )
 }
@@ -709,7 +722,10 @@ export function EventList({
   // The last row of each turn the agent finished, with the message its footer copies: the agent's
   // last message, or the question the turn ended on, under which Claude Code on the web puts the
   // pair too. The turn going on has none until it ends: the agent has not finished saying it.
+  // A turn that changed files ends on their card: the pair goes under it, as Claude Code puts it
+  // under its card of the turn's files. Keyed by the prompt the turn ended at; the last turn's by `null`.
   const footers = new Map<OpenAgentEvent, string>()
+  const filesFooters = new Map<OpenAgentEvent | null, { text: string; at: string | undefined }>()
   let last: { row: OpenAgentEvent; text: string } | undefined
   for (const e of shown) {
     const message = textOf(e)
@@ -717,12 +733,18 @@ export function EventList({
     if (isTurnBoundary(e)) {
       // A turn that ended on a question the person answered: the question was its last thing, and
       // the answer stands where its card was.
-      if (!ends.has(e) && last && !(message !== null && answeredQuestion(message))) footers.set(last.row, last.text)
+      if (!ends.has(e) && last && !(message !== null && answeredQuestion(message))) {
+        if (changes.ended.has(e)) filesFooters.set(e, { text: last.text, at: last.row.at })
+        else footers.set(last.row, last.text)
+      }
       if (!ends.has(e)) last = undefined
     } else if (message !== null) last = { row: e, text: message }
     else if (choiceRow) last = { row: e, text: last?.text ?? choiceRow.choice.title }
   }
-  if (last && !working && sending === undefined) footers.set(last.row, last.text)
+  if (last && !working && sending === undefined) {
+    if (changes.last.length > 0) filesFooters.set(null, { text: last.text, at: last.row.at })
+    else footers.set(last.row, last.text)
+  }
   // The open question the keys answer: the newest.
   const asking = [...shown].reverse().find(e => choiceRows?.rows.has(e) && choiceRows.rows.get(e)?.pick === undefined)
 
@@ -754,15 +776,15 @@ export function EventList({
               return (
                 <Fragment key={idOf(e)}>
                 {changes.ended.has(e) && (
-                  <MessageScrollerItem messageId={`changes-${idOf(e)}`} className="-mx-1.5 flex items-start gap-2 rounded-sm px-1.5">
-                    <ChangedFiles files={changes.ended.get(e)!} onOpen={onOpenChange} />
+                  <MessageScrollerItem messageId={`changes-${idOf(e)}`} className={FILES_ROW}>
+                    <TurnFiles files={changes.ended.get(e)!} onOpen={onOpenChange} footer={filesFooters.get(e)} />
                   </MessageScrollerItem>
                 )}
                 {/* A message just sent ends the last turn as its own prompt line will: the turn's
                     files stay above it, where they were, and do not go and come back. */}
                 {idOf(e) === 'sending' && changes.last.length > 0 && (
-                  <MessageScrollerItem messageId="changes-last" className="-mx-1.5 flex items-start gap-2 rounded-sm px-1.5">
-                    <ChangedFiles files={changes.last} onOpen={onOpenChange} />
+                  <MessageScrollerItem messageId="changes-last" className={FILES_ROW}>
+                    <TurnFiles files={changes.last} onOpen={onOpenChange} />
                   </MessageScrollerItem>
                 )}
                 {i === setupAt && setupRow}
@@ -845,8 +867,8 @@ export function EventList({
             {/* The last turn's files, once it has ended: while the agent works the list still grows.
                 With a message just sent they are above that message, in the rows. */}
             {!working && sending === undefined && changes.last.length > 0 && (
-              <MessageScrollerItem messageId="changes-last" className="-mx-1.5 flex items-start gap-2 rounded-sm px-1.5">
-                <ChangedFiles files={changes.last} onOpen={onOpenChange} />
+              <MessageScrollerItem messageId="changes-last" className={FILES_ROW}>
+                <TurnFiles files={changes.last} onOpen={onOpenChange} footer={filesFooters.get(null)} />
               </MessageScrollerItem>
             )}
             {/* The live line's place is kept when it has nothing to say (a message being written,

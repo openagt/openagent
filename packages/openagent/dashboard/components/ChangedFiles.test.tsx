@@ -17,6 +17,16 @@ describe('ChangedFiles', () => {
     expect(screen.getByText('DESCRIPTION.md').getAttribute('title')).toBe('docs/DESCRIPTION.md')
   })
 
+  test('the files are one card, a row each, with no arrow, as Claude Code lists them', () => {
+    render(<ChangedFiles files={files} onOpen={() => {}} />)
+    const card = screen.getByRole('list', { name: 'Files changed' })
+    expect(card.className).toContain('ring-1')
+    for (const row of within(card).getAllByRole('button')) {
+      expect(row.className).not.toContain('border')
+      expect(row.querySelectorAll('svg')).toHaveLength(1)
+    }
+  })
+
   test('a click on a row asks for that file, by its path', () => {
     const onOpen = vi.fn()
     render(<ChangedFiles files={files} onOpen={onOpen} />)

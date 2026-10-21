@@ -1148,6 +1148,18 @@ describe('EventList changed files', () => {
     expect(rows()).toEqual(['A.md+2 −1', 'b.ts+5 −0'])
   })
 
+  test('a turn that ended on its files has its copy and time under their card, as Claude Code puts them, and none under what was said', () => {
+    const at = '2026-09-25T10:04:05.000Z'
+    const events = [prompt('go'), ...edit('c1', `${WS}/A.md`, 2, 1), { ...said, at }, prompt('more'), ...edit('c2', `${WS}/b.ts`, 5, 0), { ...said, at }]
+    render(<EventList events={events} setup={{ workspace: WS }} stick={false} />)
+    const rowOf = (id: string) => document.querySelector(`[data-message-id="${id}"]`) as HTMLElement
+    for (const id of ['changes-4', 'changes-last']) {
+      expect(within(rowOf(id)).getByRole('button', { name: 'Copy this message' })).toBeTruthy()
+      expect(rowOf(id).querySelector('time')?.getAttribute('datetime')).toBe(at)
+    }
+    for (const id of ['3', '7']) expect(within(rowOf(id)).queryByRole('button', { name: 'Copy this message' })).toBeNull()
+  })
+
   test('while the agent works on a turn, that turn\'s files are not listed yet', () => {
     const events = [prompt('go'), ...edit('c1', `${WS}/A.md`, 2, 1), said]
     const { rerender } = render(<EventList events={events} working stick={false} />)
@@ -1169,13 +1181,13 @@ describe('EventList changed files', () => {
     expect(rows()).toEqual(['A.md+2 −1'])
   })
 
-  test("the folded line of the turn's calls counts them; the file and its size are inside it", () => {
+  test("the folded line of the turn's calls counts the commands and names the edited file; inside, the edit has its size", () => {
     const events = [prompt('go'), { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'ls', id: 'b1' } } as OpenAgentEvent, ...edit('c1', `${WS}/A.md`, 2, 1), said]
     render(<EventList events={events} setup={{ workspace: WS }} stick={false} />)
-    const line = screen.getByRole('button', { name: 'Ran 2 commands' })
-    expect(line.textContent).toBe('Ran 2 commands')
+    const line = screen.getByRole('button', { name: 'Ran a command, edited A.md' })
+    expect(line.textContent).toBe('Ran a command, editedA.md+2−12 added, 1 removed')
     fireEvent.click(line)
-    expect(screen.getByRole('button', { name: 'Edited A.md' }).textContent).toBe('EditedA.md+2 −1')
+    expect(screen.getByRole('button', { name: 'Edited A.md' }).textContent).toBe('EditedA.md+2−12 added, 1 removed')
   })
 
   test('a turn that edited no file has no such row', () => {

@@ -90,6 +90,12 @@ describe('Markdown lists', () => {
     expect(screen.getByText('Done.').tagName).toBe('P')
   })
 
+  test('a list in a message is set as Claude Code sets one: its words 35px in, 3px between two items, 21px under it before what follows', () => {
+    render(<Markdown text={'Kept:\n\n- a\n- b\n\nAfter.'} />)
+    const list = screen.getByRole('list')
+    for (const look of ['ml-7', '[&>li]:pl-[7px]', 'space-y-[3px]', '[&:not(:last-child)]:mb-[21px]']) expect(list.className.split(' ')).toContain(look)
+  })
+
   test('a numbered list keeps the number it starts at', () => {
     render(<Markdown text={'3. third\n4. fourth'} />)
     expect(screen.getByRole('list').getAttribute('start')).toBe('3')

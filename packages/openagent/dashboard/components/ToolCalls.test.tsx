@@ -80,18 +80,18 @@ describe('ToolCalls', () => {
 
   test('the line opens to a bordered box with one line per call, in order, each opening further', () => {
     const { container } = render(<ToolCalls steps={[bash('pnpm build'), { type: 'action', label: 'Edit', detail: '/repo/src/app.ts' }]} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Ran 2 commands' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ran a command, edited a file' }))
     const box = container.querySelector('.border')!
     expect(Array.from(box.querySelectorAll('button')).map(b => b.textContent)).toEqual(['Ranpnpm build', 'Editedapp.ts'])
     fireEvent.click(screen.getByRole('button', { name: 'Edited app.ts' }))
     expect(screen.getByText('/repo/src/app.ts')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Ran 2 commands' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ran a command, edited a file' }))
     expect(container.querySelector('.border')).toBeNull()
   })
 
   test("Codex's calls read the same: its item kinds have their own verbs", () => {
     render(<ToolCalls steps={[{ type: 'action', label: 'commandExecution', detail: 'pnpm test' }, { type: 'action', label: 'fileChange', detail: '/repo/a.ts' }]} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Ran 2 commands' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ran a command, edited a file' }))
     expect(screen.getByRole('button', { name: 'Ran pnpm test' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Edited a.ts' })).toBeTruthy()
   })
@@ -166,26 +166,26 @@ describe('ToolCalls, edits whose files are known', () => {
   const made = { path: '/ws/docs/DESCRIPTION.md', added: 11, removed: 0, created: true as const }
   const write: ToolStep = { type: 'action', label: 'Write', detail: made.path, id: 'w1', output: { text: 'ok', changed: [made] } }
 
-  test("the folded line counts the steps and says no more, as Claude Code's does; the file and its size are inside", () => {
+  test("the folded line counts the commands and names the file the edits changed, with its size in a pill, as Claude Code's does; the edit's own row has the pill too", () => {
     render(<ToolCalls steps={[bash('a'), bash('b'), bash('c'), write]} />)
-    const line = screen.getByRole('button', { name: 'Ran 4 commands' })
-    expect(line.textContent).toBe('Ran 4 commands')
-    expect(line.querySelector('.text-success')).toBeNull()
+    const line = screen.getByRole('button', { name: 'Ran 3 commands, created DESCRIPTION.md' })
+    expect(line.textContent).toBe('Ran 3 commands, createdDESCRIPTION.md+11−011 added, 0 removed')
+    expect(line.querySelector('.text-success')!.textContent).toBe('+11')
+    expect(line.querySelector('.text-success')!.className).toContain('bg-success/20')
     fireEvent.click(line)
     const inside = screen.getByRole('button', { name: 'Created DESCRIPTION.md' })
-    expect(inside.textContent).toBe('CreatedDESCRIPTION.md+11 −0')
-    expect(inside.querySelector('.text-success')!.textContent).toBe('+11')
+    expect(inside.querySelector('.text-success')!.className).toContain('bg-success/20')
   })
 
   test('a lone edit is its own line: "Created", the file\'s name, its size', () => {
     render(<ToolCalls steps={[write]} />)
     const line = screen.getByRole('button', { name: 'Created DESCRIPTION.md' })
-    expect(line.textContent).toBe('CreatedDESCRIPTION.md+11 −0')
+    expect(line.textContent).toBe('CreatedDESCRIPTION.md+11−011 added, 0 removed')
   })
 
-  test('a run with no known file reads the same: the line is the count either way', () => {
+  test('an edit whose file its coding agent did not say is still an edit, with no size', () => {
     render(<ToolCalls steps={[bash('a'), { type: 'action', label: 'Edit', detail: '/ws/a.ts', id: 'e1', output: { text: 'ok' } }]} />)
-    const line = screen.getByRole('button', { name: 'Ran 2 commands' })
+    const line = screen.getByRole('button', { name: 'Ran a command, edited a file' })
     expect(line.querySelector('.text-success')).toBeNull()
   })
 })
