@@ -28,12 +28,14 @@ const panel = (over: Partial<Parameters<typeof QuestionPanel>[0]> = {}) => <Ques
 const option = (name: RegExp) => screen.getByRole('radio', { name })
 
 describe('QuestionPanel', () => {
-  test('it shows the title, a row per option with its description and number key, an "Other" row, Skip and Submit', () => {
+  test('it shows the title, a row per option with its description, an "Other" row, Skip and Submit; no number is drawn', () => {
     render(panel())
     expect(screen.getByRole('region', { name: 'Which database?' })).toBeTruthy()
-    expect(option(/Postgres/).textContent).toBe('PostgresRecommendedWhat production runs1')
-    expect(option(/SQLite/).textContent).toBe('SQLite2')
-    expect(screen.getByLabelText('Other').closest('label')!.textContent).toBe('3')
+    expect(option(/Postgres/).textContent).toBe('PostgresRecommendedWhat production runs')
+    expect(option(/SQLite/).textContent).toBe('SQLite')
+    expect(option(/Other/).textContent).toBe('Other')
+    // Its field opens only once "Other" is picked.
+    expect(screen.queryByLabelText('Other')).toBeNull()
     expect(screen.getByRole('button', { name: 'Skip' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Submit' })).toBeTruthy()
   })
@@ -70,8 +72,7 @@ describe('QuestionPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
     await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Sending your answer…'))
     for (const name of ['Submit', 'Skip']) expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true)
-    expect((option(/Postgres/) as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByLabelText('Other') as HTMLInputElement).disabled).toBe(true)
+    for (const name of [/Postgres/, /Other/]) expect((option(name) as HTMLButtonElement).disabled).toBe(true)
     taken({ ok: true })
     await waitFor(() => expect(screen.queryByRole('region')).toBeNull())
     expect(onSaid).toHaveBeenCalledWith(answerPrompt('Which database?', 'SQLite'))
@@ -119,12 +120,13 @@ describe('QuestionPanel', () => {
     expect(sendChoice).not.toHaveBeenCalled()
   })
 
-  test('"Other" is picked by typing in it, cannot be sent empty, and goes as the person\'s own message', async () => {
+  test('"Other" picked opens its field with the keys in it, cannot be sent empty, and goes as the person\'s own message', async () => {
     sendMessage.mockResolvedValue({ ok: true })
     const onSaid = vi.fn()
     render(panel({ onSaid }))
+    fireEvent.click(option(/Other/))
     const other = screen.getByLabelText('Other')
-    fireEvent.focus(other)
+    expect(document.activeElement).toBe(other)
     expect(option(/Postgres/).getAttribute('aria-checked')).toBe('false')
     expect((screen.getByRole('button', { name: 'Submit' }) as HTMLButtonElement).disabled).toBe(true)
     fireEvent.change(other, { target: { value: '  MySQL, we already pay for it  ' } })
@@ -138,8 +140,8 @@ describe('QuestionPanel', () => {
   test('Enter in the "Other" row submits it', async () => {
     sendMessage.mockResolvedValue({ ok: true })
     render(panel())
+    fireEvent.click(option(/Other/))
     const other = screen.getByLabelText('Other')
-    fireEvent.focus(other)
     fireEvent.change(other, { target: { value: 'MySQL' } })
     fireEvent.keyDown(other, { key: 'Enter' })
     await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', answerPrompt('Which database?', 'MySQL'), 'r1'))
@@ -173,6 +175,8 @@ describe('QuestionPanel', () => {
   test('several answers with words in "Other": the checked labels and the words go together as one message', async () => {
     sendMessage.mockResolvedValue({ ok: true })
     render(panel({ choice: several }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /Other/ }))
+    expect((screen.getByRole('button', { name: 'Submit' }) as HTMLButtonElement).disabled).toBe(true)
     fireEvent.change(screen.getByLabelText('Other'), { target: { value: 'and the type check' } })
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
     await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', answerPrompt('Which checks?', 'Lint, and the type check'), 'r1'))
@@ -209,7 +213,7 @@ describe('QuestionPanel', () => {
     test('only the options are offered: no "Other" row and no Skip, which are there without `send`', () => {
       const { unmount } = render(panel({ send: vi.fn(), active: true }))
       expect(screen.getAllByRole('listitem')).toHaveLength(2)
-      expect(screen.queryByLabelText('Other')).toBeNull()
+      expect(screen.queryByRole('radio', { name: /Other/ })).toBeNull()
       expect(screen.queryByRole('button', { name: 'Skip' })).toBeNull()
       expect(screen.getByRole('button', { name: 'Submit' })).toBeTruthy()
       // The key that would reach "Other" is no key of this panel.
@@ -217,31 +221,14 @@ describe('QuestionPanel', () => {
       unmount()
       render(panel())
       expect(screen.getAllByRole('listitem')).toHaveLength(3)
-      expect(screen.getByLabelText('Other')).toBeTruthy()
+      expect(option(/Other/)).toBeTruthy()
       expect(screen.getByRole('button', { name: 'Skip' })).toBeTruthy()
-    })
-
-    test('the card folds away and is put aside by hand, and neither answers the question', () => {
-      render(panel({ active: true }))
-      expect(screen.getAllByRole('radio')).toHaveLength(2)
-      fireEvent.click(screen.getByRole('button', { name: 'Hide the options' }))
-      expect(screen.queryByRole('radio')).toBeNull()
-      // The question itself stays, and so do Skip and Submit.
-      expect(screen.getByRole('region', { name: 'Which database?' })).toBeTruthy()
-      expect(screen.getByRole('button', { name: /Submit/ })).toBeTruthy()
-      fireEvent.click(screen.getByRole('button', { name: 'Show the options' }))
-      expect(screen.getAllByRole('radio')).toHaveLength(2)
-      fireEvent.click(screen.getByRole('button', { name: 'Put this question away' }))
-      expect(screen.queryByRole('region')).toBeNull()
-      // Nothing was sent by either: the agent is still waiting.
-      expect(sendChoice).not.toHaveBeenCalled()
-      expect(sendMessage).not.toHaveBeenCalled()
     })
 
     test('the key that submits is on the button, not written out under the options', () => {
       const { unmount } = render(panel({ active: true }))
       expect(screen.queryByText(/Number keys pick/)).toBeNull()
-      expect(screen.getByRole('button', { name: /Submit/ }).textContent).toBe('Submit⌃⏎')
+      expect(screen.getByRole('button', { name: /Submit/ }).textContent).toMatch(/^Submit(⌘|Ctrl)↵$/)
       unmount()
       // Not the question the keys answer: no key is promised on it.
       render(panel())

@@ -24,7 +24,7 @@ export function CloudAgentNotice({
 }: {
   target?: 'local' | 'actions' | 'remote' | 'web' | undefined
   events: readonly OpenAgentEvent[]
-  /** The agent this notice belongs to: what the question panel is given. */
+  /** The agent this notice belongs to: what the question's card is given. */
   projectId: string
   agentId: string
 }) {
@@ -116,7 +116,7 @@ function ParkedQuestion({
           Sending “{failure.labels.join(', ')}” failed{failure.note ? `: ${failure.note}` : ''}. Pick again, or answer in the session.
         </p>
       )}
-      {/* Not `active`: the keys belong to the question above the message box, and to the message box. */}
+      {/* Not `active`: the keys belong to a question in the chat, and to the message box. */}
       <QuestionPanel key={question.title} projectId={projectId} agentId={agentId} choice={bridgeChoiceRequest(question)} send={bridgeSend(sessionId)} />
       <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-4 py-2.5 text-xs text-primary hover:underline">
         Answer it in the session

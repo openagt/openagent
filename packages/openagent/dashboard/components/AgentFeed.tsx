@@ -19,6 +19,8 @@ export function AgentFeed({
   emptyLabel = 'Waiting for the session to start…',
   tail,
   projectId,
+  agentId,
+  onSaid,
   subagents,
   doing,
   setup,
@@ -27,10 +29,13 @@ export function AgentFeed({
   onOpenScreen,
 }: {
   events: OpenAgentEvent[]
-  /** The feed's own project: with it, an answered question is its ✓ card and an open one is no
-   *  row, since the agent's page asks it above the message box. Required, so no caller shows an
-   *  open question as log text by leaving it out. */
+  /** The feed's own project and agent: with them, an answered question is its ✓ card and an open
+   *  one is the question's card, answered in place. Required, so no caller shows an open question
+   *  as log text by leaving them out. */
   projectId: string
+  agentId: string | undefined
+  /** Told what an answer said to the agent, so the chat can show it at once. */
+  onSaid?: ((text: string) => void) | undefined
   /** The message the agent is writing, as far as it has got: a row after the last, growing as it comes. */
   writing?: string
   /** A message just sent to an ended agent, shown as the last prompt until its own line arrives. */
@@ -72,6 +77,8 @@ export function AgentFeed({
       {...(openAt ? { openAt } : {})}
       {...(tail ? { tail } : {})}
       projectId={projectId}
+      agentId={agentId}
+      onSaid={onSaid}
       {...(subagents ? { subagents } : {})}
       {...(doing ? { doing } : {})}
       setup={setup}

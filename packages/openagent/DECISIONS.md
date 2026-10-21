@@ -260,6 +260,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   happened, and the thing it happened to beside it, as a tool call's row reads. Picked over
   showing the terminal's own line in the chat, where `■ stopped`, a two-space indent and a
   time spelled for a machine say nothing to a person reading a conversation.
+- A run of the agent's steps is one line that counts its commands and names the file its edits
+  changed, with the lines added and removed, as Claude Code on the web says it: "Ran 2
+  commands, edited README.md +12 −54". Picked over the count alone, which Claude Code said
+  before.
 - The chat shows a `screen` line as one line, which opens the pane its package brings, and
   knows nothing of what the screen is. What the screen shows is streamed from the computer
   the run is on, through OpenAgent, as pictures: to this computer, to a phone, to another
@@ -371,6 +375,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   over a channel of ours that every tool would have to learn.
 - A run that ends while the line is on its way has its line taken back out of the inbox
   and resumed instead. Picked over leaving it for a run that will never read it.
+- A question the agent waits on is a card in the chat, right under what the agent said, and
+  is answered there; the turn's copy and time go under the card. Picked over a panel above
+  the message box with an "Asking" line in the chat, which put an empty line and a gap
+  between the agent's words and its question.
 - An answer is checked against the question the run's diary holds open, and handed over as
   the option's label. Picked over passing the pick through: only what the agent offered
   can be answered, and the agent reads words, not ids.

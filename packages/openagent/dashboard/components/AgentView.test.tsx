@@ -580,22 +580,20 @@ describe('a question the agent stopped on', () => {
     { kind: 'end', ok: false, waiting: true },
   ] as OpenAgentEvent[]
 
-  test('it is a panel above the message box, and the chat holds one "Asking" line and none of the choices', async () => {
+  test('it is a card in the chat, the only place it is asked', async () => {
     onAgent.mockResolvedValue(asked)
     render(view({ events: asked }))
-    const panel = await screen.findByRole('region', { name: 'Which database?' })
-    expect(panel.compareDocumentPosition(screen.getByTestId('composer-live')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(screen.getByLabelText('Agent output').contains(panel)).toBe(false)
-    const chat = screen.getByLabelText('Agent output')
-    expect(within(chat).getByRole('button', { name: 'Asking Which database?' })).toBeTruthy()
-    expect(chat.textContent).not.toContain('Postgres')
+    const card = await screen.findByRole('region', { name: 'Which database?' })
+    expect(screen.getByLabelText('Agent output').contains(card)).toBe(true)
+    expect(screen.getAllByRole('region', { name: 'Which database?' })).toHaveLength(1)
+    expect(within(card).getByRole('radio', { name: /Postgres/ })).toBeTruthy()
   })
 
-  test('an answer in one\'s own words shows in the chat at once, as the question and the words, and the panel goes', async () => {
+  test('an answer in one\'s own words shows in the chat at once, as the question and the words, and the card goes', async () => {
     onAgent.mockResolvedValue(asked)
     render(view({ events: asked }))
-    fireEvent.change(await screen.findByLabelText('Other'), { target: { value: 'MySQL' } })
-    fireEvent.focus(screen.getByLabelText('Other'))
+    fireEvent.click(await screen.findByRole('radio', { name: 'Other' }))
+    fireEvent.change(screen.getByLabelText('Other'), { target: { value: 'MySQL' } })
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
     await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', 'You paused to ask: "Which database?". The user chose: MySQL. Continue with that decision.', 'run-1'))
     await waitFor(() => expect(screen.getByRole('group', { name: 'Your answer' }).textContent).toBe('Which database?MySQL'))
@@ -611,7 +609,7 @@ describe('a question the agent stopped on', () => {
     expect(screen.queryByRole('region', { name: 'Which database?' })).toBeNull()
   })
 
-  test('once the agent has gone on, the panel is gone', async () => {
+  test('once the agent has gone on, the card is gone', async () => {
     const on = [...asked, { kind: 'driver', event: { type: 'start', prompt: 'MySQL' } }] as OpenAgentEvent[]
     onAgent.mockResolvedValue(on)
     render(view({ events: on, live: true }))

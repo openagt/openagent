@@ -52,7 +52,20 @@ export function sessionLineEmpty(setup: SessionSetup, working: boolean): boolean
   return setup.workspace === undefined && setup.branch === undefined && setup.driver === undefined && (!working || setup.elsewhere === true)
 }
 
-export function SessionLine({ setup, live, working = false, added }: { setup: SessionSetup; live?: { since?: string | undefined } | undefined; working?: boolean; added?: string | undefined }) {
+export function SessionLine({
+  setup,
+  live,
+  working = false,
+  added,
+  nested = false,
+}: {
+  setup: SessionSetup
+  live?: { since?: string | undefined } | undefined
+  working?: boolean
+  added?: string | undefined
+  /** The first row of a box of steps: opened, its lines need no box of their own inside that one. */
+  nested?: boolean
+}) {
   const [open, setOpen] = useState(false)
   const picked = driverFromImpl(setup.driver)
   const models = useModels()
@@ -77,12 +90,12 @@ export function SessionLine({ setup, live, working = false, added }: { setup: Se
   }
   return (
     <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
-      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} className="flex items-center gap-1.5 hover:text-foreground">
+      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} className="flex items-center gap-1.5 py-0.5 hover:text-foreground">
         <span>Initialized session</span>
         <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')} aria-hidden />
       </button>
       {open && (
-        <div className="mt-1.5 flex flex-col gap-1.5 rounded-lg border border-border px-3 py-2">
+        <div className={cn('mt-1.5 flex flex-col gap-1.5', !nested && 'rounded-lg border border-border px-3 py-2')}>
           {setup.workspace !== undefined && <Step label="Made the checkout" value={setup.workspace} />}
           {setup.branch !== undefined && <Step label="Made the branch" value={setup.branch} />}
           {setup.base !== undefined && (

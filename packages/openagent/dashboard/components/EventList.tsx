@@ -7,11 +7,13 @@ import { callRow, callSubagents, runRow, subagentEnd, subagentEvents, subagentGr
 import { answeredQuestion } from '../lib/answered-question.js'
 import { rowWords, type RowWords } from '../lib/row-words.js'
 import { formatAge } from '../lib/format-date.js'
+import { cn } from '../lib/utils.js'
 import { AnsweredChoice } from './AnsweredChoice.js'
+import { QuestionPanel } from './QuestionPanel.js'
 import { Markdown } from './Markdown.js'
 import { SessionLine, sessionLineEmpty, type SessionSetup } from './SessionLine.js'
 import { ChangedFiles } from './ChangedFiles.js'
-import { turnChanges } from '../lib/turn-changes.js'
+import { turnChanges, type ChangedFile } from '../lib/turn-changes.js'
 import { SubagentGroup, SubagentLine } from './SubagentLine.js'
 import { LiveLine, ToolCalls, type CallOutput, type ToolStep } from './ToolCalls.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
@@ -33,9 +35,9 @@ import {
 //     (#476/#520). The user's own prompt is a grey box on the right, as in a chat.
 //   - The agent's steps between two messages (`driver` `action` and `thought`): one folded line
 //     for the whole run of them (ToolCalls), opening to one line per step.
-//   - Choice gates, when the log knows its project: an open gate is one "Asking" line (the agent's page
-//     asks it above the message box); a resolved one collapses to the AnsweredChoice ✓ card and hides
-//     its "✓ chose" line.
+//   - Choice gates, when the log knows its project: an open gate is the question's card, answered
+//     in place (QuestionPanel), when the log knows its agent too; a resolved one collapses to the
+//     AnsweredChoice ✓ card and hides its "✓ chose" line.
 //   - Screens: the newest open `screen` line at an address, before the run's end, is live: its
 //     line opens the pane that shows the screen. An earlier one stays its one
 //     line of text, and an `ended` one is hidden.
@@ -141,8 +143,7 @@ type ChoiceRow = { choice: ChoiceRequest; pick?: string | readonly string[] }
  *
  * Only the LAST firing of a gate id is special — `pendingChoices` replaces a re-fired gate in
  * place, so an earlier firing is history and keeps its text. An open gate (no resolution, no
- * `end` after it) is one grey line, "Asking <title>": the question itself is asked above the
- * message box (QuestionPanel), not in the flow. A resolved one collapses to the ✓ card, and the
+ * `end` after it) is the question's card, asked in the flow. A resolved one collapses to the ✓ card, and the
  * `choice-resolved` line that told its story is hidden — the card says it better. One answered by
  * the prompt that resumed the agent is no row: that prompt is drawn as the question and its answer. A gate closed by `end` without an answer (#1359: its audience is gone) stays text —
  * a control nobody reads must not look answerable. Earlier firings' "✓ chose" lines stay put:
@@ -160,7 +161,7 @@ function foldChoiceRows(events: OpenAgentEvent[]): {
     if (e.kind === 'choice') lastFiring.set(e.id, { e, at })
     else if (e.kind === 'choice-resolved') lastResolved.set(e.id, { e, at })
   })
-  // A question answered in the panel: every firing of it, not only the last. A local agent's
+  // A question answered in its card: every firing of it, not only the last. A local agent's
   // questions all share one id, so an earlier question is an earlier firing.
   const answered = new Set(events.flatMap(e => (isTurnBoundary(e) ? [answeredQuestion((e as { event: { prompt: string } }).event.prompt)?.question] : [])))
   for (const e of events) if (e.kind === 'choice' && answered.has(e.title)) hidden.add(e)
@@ -183,7 +184,7 @@ function foldChoiceRows(events: OpenAgentEvent[]): {
 
 /**
  * The ends that are no row: a clean one, and one waiting on an answer. The agent's last message
- * is how a clean turn ends, and the question above the message box is how a waiting one does; a
+ * is how a clean turn ends, and the question's card is how a waiting one does; a
  * line under them said it twice. A failed or stopped end is a row where it happened: it says why
  * the agent is not going on, and why the next prompt was needed.
  */
@@ -240,7 +241,7 @@ function CopyMessage({ text }: { text: string }) {
           () => undefined,
         )
       }}
-      className="flex h-6 w-6 items-center justify-center rounded hover:bg-accent hover:text-accent-foreground"
+      className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground"
     >
       {copied ? <Check className="h-3.5 w-3.5" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
     </button>
@@ -274,39 +275,27 @@ function isTall(text: string): boolean {
   return text.length > PROMPT_CHARS || text.trim().split('\n').length > PROMPT_LINES
 }
 
-// A question the agent waits on, in the flow: one grey line, as Claude Code on the web says
-// "Asking …" while its question is open. It opens to the choices; the answer is given in the panel
-// above the message box.
-function Asking({ choice }: { choice: ChoiceRequest }) {
-  const [open, setOpen] = useState(false)
+// A question and the answer the person gave it, in place of the sentence the agent was resumed
+// with: a box as wide as the question's card was, the question and the answer under it in grey, as
+// Claude Code on the web keeps an answered question. A skipped one says so where the answer would be.
+function Answer({ question, answer }: { question: string; answer?: string | undefined }) {
   return (
-    <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
-      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={`Asking ${choice.title}`} className="flex max-w-full items-center gap-1.5 hover:text-foreground">
-        <span className="shrink-0">Asking</span>
-        <span className="truncate text-foreground">{choice.title}</span>
-        <ChevronRight className={`h-3.5 w-3.5 shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden />
-      </button>
-      {open && (
-        <ul className="mt-1.5 flex flex-col gap-1 rounded-lg border border-border px-3 py-2">
-          {choice.options.map(option => (
-            <li key={option.id} className="text-foreground">
-              {option.label}
-            </li>
-          ))}
-        </ul>
-      )}
+    <div role="group" aria-label="Your answer" className="flex w-full max-w-[480px] flex-col gap-0.5 rounded-lg px-3 py-2 font-sans text-sm ring-1 ring-border">
+      <div className="font-medium text-foreground">{question}</div>
+      {answer !== undefined ? <div className="text-muted-foreground">{answer}</div> : <div className="italic text-muted-foreground">Skipped</div>}
     </div>
   )
 }
 
-// A question and the answer the person gave it: a small box on the left, the question in grey and
-// the answer under it, in place of the sentence the agent was resumed with. A skipped one says so
-// where the answer would be.
-function Answer({ question, answer }: { question: string; answer?: string | undefined }) {
+// The row of a turn's files: 20px under what the agent said, as Claude Code puts its card of them.
+const FILES_ROW = 'group/row -mx-1.5 mt-2 flex items-start gap-2 rounded-sm px-1.5'
+
+// A turn's files, and under them the turn's copy and time when the turn ended on them.
+function TurnFiles({ files, onOpen, footer }: { files: readonly ChangedFile[]; onOpen?: ((path: string) => void) | undefined; footer?: { text: string; at: string | undefined } | undefined }) {
   return (
-    <div role="group" aria-label="Your answer" className="min-w-[min(100%,20rem)] max-w-[85%] rounded-lg border border-border p-2.5 font-sans text-sm">
-      <div className="text-muted-foreground">{question}</div>
-      {answer !== undefined ? <div className="text-foreground">{answer}</div> : <div className="italic text-muted-foreground">Skipped</div>}
+    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+      <ChangedFiles files={files} onOpen={onOpen} />
+      {footer && <ReplyFooter text={footer.text} at={footer.at} />}
     </div>
   )
 }
@@ -336,10 +325,11 @@ function Prompt({ text, at, queued = false, attached, fresh = false }: { text: s
       </div>
       {attached !== undefined && <Attached text={attached} />}
       {queued ? (
-        <span className="h-6 pr-1 text-[11px] leading-6 text-muted-foreground">Queued</span>
+        <span className="mt-1.5 h-6 pr-1 text-[11px] leading-6 text-muted-foreground">Queued</span>
       ) : (
-        // When it was sent and a copy of it, as Claude Code on the web shows under a message.
-        <div className="flex h-6 items-center gap-1 text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 group-hover/prompt:opacity-100">
+        // When it was sent and a copy of it, as Claude Code on the web shows under a message, 6px
+        // below the box so a button's hover does not touch it.
+        <div className="mt-1.5 flex h-6 items-center gap-1 text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 group-hover/prompt:opacity-100">
           {at !== undefined && (
             <time dateTime={at} title={new Date(at).toLocaleString()} className="px-1 text-[11px]">
               {formatAge(at)}
@@ -581,6 +571,8 @@ export function EventList({
   openAt,
   tail,
   projectId,
+  agentId,
+  onSaid,
   subagents = NO_SUBAGENTS,
   doing = NOTHING_DOING,
   setup,
@@ -610,10 +602,14 @@ export function EventList({
   /** Pinned after the last row, inside the scroller (#1265): the log's "and then…" — a web agent's
    *  live mirror box — that must scroll (and stick) with the log rather than float over it. */
   tail?: ReactNode
-  /** The log's own project: with it, an open gate is one "Asking" line (its page asks the question above
-   *  the message box) and a resolved one is the collapsed ✓ card. Without it, every `choice` row
-   *  keeps the formatter's text. */
+  /** The log's own project: with it, a resolved gate is the collapsed ✓ card, and an open one is
+   *  the question's card when the log knows its agent too. Without it, every `choice` row keeps the
+   *  formatter's text. */
   projectId?: string | undefined
+  /** The log's own agent, which an open question's card answers. */
+  agentId?: string | undefined
+  /** Told what an answer said to the agent, so the chat can show it at once. */
+  onSaid?: ((text: string) => void) | undefined
   /** The runs started for this run, oldest first: each gets a row where it was started. */
   subagents?: readonly AgentMeta[]
   /** What each working subagent is doing now, by id. */
@@ -643,7 +639,12 @@ export function EventList({
   const theirs = useMemo(() => subagentEvents(events), [events])
   const logged = promptFirst(events).filter(e => shownAsRow(e) && !choiceRows?.hidden.has(e) && !screenRows.hidden.has(e) && !theirs.has(e))
   // Every row and every passed end, in order, a message just sent last; `shown` is the rows alone.
-  const kept: OpenAgentEvent[] = sending === undefined ? logged : [...logged, { kind: 'driver', event: { type: 'start', prompt: sending } }]
+  // An answer just given to the question the chat asks: it stands where the card was until the
+  // agent's own line of it arrives in that same place, as Claude Code on the web answers in place.
+  // It is no message at the end, which came and then went back up.
+  const sentAnswer = sending !== undefined ? answeredQuestion(sending) : undefined
+  const answeredInPlace = sentAnswer && choiceRows ? [...choiceRows.rows].find(([, row]) => row.pick === undefined && row.choice.title === sentAnswer.question)?.[0] : undefined
+  const kept: OpenAgentEvent[] = sending === undefined || answeredInPlace ? logged : [...logged, { kind: 'driver', event: { type: 'start', prompt: sending } }]
   // The text of a row's message: the reply a question follows, without the question's block.
   const textOf = (e: OpenAgentEvent): string | null => {
     const text = messageText(e)
@@ -693,6 +694,7 @@ export function EventList({
   const firstPrompt = events.find(isTurnBoundary)
   const added = firstPrompt?.kind === 'driver' && firstPrompt.event.type === 'start' ? firstPrompt.event.added : undefined
   const setupLine = setup !== undefined && <SessionLine setup={setup} working={working} added={added} {...(settingUp ? { live: { since: turnStart } } : {})} />
+  const setupLead = setup !== undefined && <SessionLine setup={setup} working={working} added={added} nested />
   // Once set up, the line is the first row of the first turn's work, when that turn has some, as
   // Claude Code on the web opens its first "Ran 2 commands" with "Initialized session".
   const setupInSteps = setupLine !== false && !sessionLineEmpty(setup, working) && !settingUp && setupAt >= 0 && shown[setupAt] !== undefined && steps.has(shown[setupAt]!)
@@ -717,21 +719,38 @@ export function EventList({
   const viewport = useRef<HTMLDivElement>(null)
   const endRoom = useRef<HTMLDivElement>(null)
   useEndKept(viewport, endRoom)
-  // The agent's last message of each turn it finished: the one with the footer under it. The turn
-  // going on has none until it ends: the agent has not finished saying it.
-  const turnEnds = new Set<OpenAgentEvent>()
-  let lastSaid: OpenAgentEvent | undefined
+  // The last row of each turn the agent finished, with the message its footer copies: the agent's
+  // last message, or the question the turn ended on, under which Claude Code on the web puts the
+  // pair too. The turn going on has none until it ends: the agent has not finished saying it.
+  // A turn that changed files ends on their card: the pair goes under it, as Claude Code puts it
+  // under its card of the turn's files. Keyed by the prompt the turn ended at; the last turn's by `null`.
+  const footers = new Map<OpenAgentEvent, string>()
+  const filesFooters = new Map<OpenAgentEvent | null, { text: string; at: string | undefined }>()
+  let last: { row: OpenAgentEvent; text: string } | undefined
   for (const e of shown) {
+    const message = textOf(e)
+    const choiceRow = choiceRows?.rows.get(e)
     if (isTurnBoundary(e)) {
-      if (!ends.has(e) && lastSaid) turnEnds.add(lastSaid)
-      if (!ends.has(e)) lastSaid = undefined
-    } else if (textOf(e) !== null) lastSaid = e
+      // A turn that ended on a question the person answered: the question was its last thing, and
+      // the answer stands where its card was.
+      if (!ends.has(e) && last && !(message !== null && answeredQuestion(message))) {
+        if (changes.ended.has(e)) filesFooters.set(e, { text: last.text, at: last.row.at })
+        else footers.set(last.row, last.text)
+      }
+      if (!ends.has(e)) last = undefined
+    } else if (message !== null) last = { row: e, text: message }
+    else if (choiceRow) last = { row: e, text: last?.text ?? choiceRow.choice.title }
   }
-  if (lastSaid && !working && sending === undefined) turnEnds.add(lastSaid)
+  if (last && !working && sending === undefined) {
+    if (changes.last.length > 0) filesFooters.set(null, { text: last.text, at: last.row.at })
+    else footers.set(last.row, last.text)
+  }
+  // The open question the keys answer: the newest.
+  const asking = [...shown].reverse().find(e => choiceRows?.rows.has(e) && choiceRows.rows.get(e)?.pick === undefined)
 
   return (
     <MessageScrollerProvider autoScroll={stick} defaultScrollPosition={openAt ?? (stick ? 'end' : 'start')}>
-      <FollowSent sent={(sending === undefined ? 0 : 1) + queued.length} />
+      <FollowSent sent={(sending === undefined || answeredInPlace ? 0 : 1) + queued.length} />
       {/* A layer of its own: "Jump to latest" stays under the message box's bar. */}
       <MessageScroller className="isolate flex-1">
         <MessageScrollerViewport ref={viewport} aria-label="Agent output" className="scroll-pb-(--chat-bottom)">
@@ -751,29 +770,32 @@ export function EventList({
               // What the chat says for a row that is none of the above; nothing when the
               // terminal's own line is what it says (row-words.ts).
               const words = rowWords(e)
-              // The prompt the agent was resumed with after an answer in the panel: a box, not a message.
+              // The prompt the agent was resumed with after an answer in its card: a box, not a message.
               const answer = own && message !== null ? answeredQuestion(message) : undefined
+              const inPlace = e === answeredInPlace
               return (
                 <Fragment key={idOf(e)}>
                 {changes.ended.has(e) && (
-                  <MessageScrollerItem messageId={`changes-${idOf(e)}`} className="-mx-1.5 flex items-start gap-2 rounded-sm px-1.5">
-                    <ChangedFiles files={changes.ended.get(e)!} onOpen={onOpenChange} />
+                  <MessageScrollerItem messageId={`changes-${idOf(e)}`} className={FILES_ROW}>
+                    <TurnFiles files={changes.ended.get(e)!} onOpen={onOpenChange} footer={filesFooters.get(e)} />
                   </MessageScrollerItem>
                 )}
                 {/* A message just sent ends the last turn as its own prompt line will: the turn's
                     files stay above it, where they were, and do not go and come back. */}
                 {idOf(e) === 'sending' && changes.last.length > 0 && (
-                  <MessageScrollerItem messageId="changes-last" className="-mx-1.5 flex items-start gap-2 rounded-sm px-1.5">
-                    <ChangedFiles files={changes.last} onOpen={onOpenChange} />
+                  <MessageScrollerItem messageId="changes-last" className={FILES_ROW}>
+                    <TurnFiles files={changes.last} onOpen={onOpenChange} />
                   </MessageScrollerItem>
                 )}
                 {i === setupAt && setupRow}
                 {startedRows(i)}
                 {/* Every row carries the same -mx/px pair so a washed row's band and a plain row's
                     text share the exact same columns; only the background differs. */}
-                <MessageScrollerItem messageId={idOf(e)} className={`group/row -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${own || answer ? 'mt-4 first:mt-0' : ''} ${end ? '' : rowWash(e)}`}>
+                <MessageScrollerItem messageId={idOf(e)} className={`group/row relative -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${answer || inPlace ? 'mt-1 mb-3.5' : own ? '-mb-2.5 mt-4 first:mt-0' : ''} ${end ? '' : rowWash(e)}`}>
                   {answer ? (
                     <Answer {...answer} />
+                  ) : inPlace && sentAnswer ? (
+                    <Answer {...sentAnswer} />
                   ) : own && message !== null ? (
                     <Prompt text={message} at={at} attached={e.kind === 'driver' && e.event.type === 'start' ? e.event.attached : undefined} fresh={idOf(e) === 'sending'} />
                   ) : end ? (
@@ -788,8 +810,8 @@ export function EventList({
                     </div>
                   ) : message !== null ? (
                     // The agent's reply, shown whole, and the last of a finished turn with its footer.
-                    turnEnds.has(e) ? (
-                      <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    footers.has(e) ? (
+                      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                         <Reply text={message} />
                         <ReplyFooter text={message} at={at} />
                       </div>
@@ -797,13 +819,18 @@ export function EventList({
                       <Reply text={message} />
                     )
                   ) : steps.has(e) ? (
-                    <ToolCalls steps={steps.get(e)!} lead={setupInSteps && i === setupAt ? setupLine : undefined} />
-                  ) : choiceRow && choiceRow.pick === undefined ? (
-                    <Asking choice={choiceRow.choice} />
+                    <ToolCalls steps={steps.get(e)!} lead={setupInSteps && i === setupAt ? setupLead : undefined} />
+                  ) : choiceRow && choiceRow.pick === undefined && projectId !== undefined && agentId !== undefined ? (
+                    // The question the agent waits on, answered here, under what it said.
+                    <div className="mt-1 flex min-w-0 flex-1 flex-col gap-1.5">
+                      <QuestionPanel key={`${agentId}:${choiceRow.choice.id}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} onSaid={onSaid} />
+                      {footers.has(e) && <ReplyFooter text={footers.get(e)!} at={at} />}
+                    </div>
                   ) : choiceRow?.pick !== undefined ? (
                     // What was asked and what was picked. font-sans: a card, not log text.
-                    <div className="min-w-0 flex-1 font-sans">
+                    <div className="flex min-w-0 flex-1 flex-col gap-1 font-sans">
                       <AnsweredChoice choice={choiceRow.choice} pick={choiceRow.pick} />
+                      {footers.has(e) && <ReplyFooter text={footers.get(e)!} at={at} />}
                     </div>
                   ) : words ? (
                     <RowLine words={words} tone={rowTone(e)} />
@@ -814,10 +841,12 @@ export function EventList({
                       {(formatOpenAgentEvent(e) ?? '').trim()}
                     </span>
                   )}
-                  {!own && chunkHead && at !== undefined && !turnEnds.has(e) && (
+                  {!own && chunkHead && at !== undefined && !footers.has(e) && (
                     <Tooltip>
                       <TooltipTrigger
-                        render={<span className={TIME} />}
+                        // A box of steps is as wide as the chat, as Claude Code's is: its time floats over the
+                        // corner its line leaves free, and takes no column beside the box.
+                        render={<span className={cn(TIME, steps.has(e) && 'absolute top-0 right-1.5')} />}
                       >
                         {formatTime(at)}
                       </TooltipTrigger>
@@ -838,8 +867,8 @@ export function EventList({
             {/* The last turn's files, once it has ended: while the agent works the list still grows.
                 With a message just sent they are above that message, in the rows. */}
             {!working && sending === undefined && changes.last.length > 0 && (
-              <MessageScrollerItem messageId="changes-last" className="-mx-1.5 flex items-start gap-2 rounded-sm px-1.5">
-                <ChangedFiles files={changes.last} onOpen={onOpenChange} />
+              <MessageScrollerItem messageId="changes-last" className={FILES_ROW}>
+                <TurnFiles files={changes.last} onOpen={onOpenChange} footer={filesFooters.get(null)} />
               </MessageScrollerItem>
             )}
             {/* The live line's place is kept when it has nothing to say (a message being written,

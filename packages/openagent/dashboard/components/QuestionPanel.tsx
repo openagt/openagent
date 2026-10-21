@@ -1,32 +1,40 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, ChevronDown, X } from 'lucide-react'
+import { Check } from 'lucide-react'
 import type { ChoiceRequest } from '../../src/index.js'
 import { sendChoice, sendMessage } from '../rpc/control.js'
 import { useAction } from '../lib/use-action.js'
 import { cn } from '../lib/utils.js'
 import { answerPrompt, skipPrompt } from '../lib/answered-question.js'
-import { Button } from './ui/button.js'
 
 /** The pick that is no option: the person's own words, typed in the "Other" row. */
 const OTHER = Symbol('other')
 
-function Key({ n }: { n: number }) {
-  return (
-    <kbd className="mt-0.5 flex h-5 min-w-5 shrink-0 items-center justify-center rounded border border-border px-1 font-sans text-[11px] text-muted-foreground" aria-hidden>
-      {n}
-    </kbd>
+/** The key that submits, as the keyboard in front of the person names it. */
+const SUBMIT_KEY = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl'
+
+// A pick's mark, as Claude Code on the web draws one: a ring, filled with a dot when picked; a
+// box with a tick where several may be picked.
+function Mark({ on, multi }: { on: boolean; multi: boolean | undefined }) {
+  return multi ? (
+    <span className={cn('mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border', on ? 'border-primary bg-primary text-primary-foreground' : 'border-foreground/20')} aria-hidden>
+      {on && <Check className="h-3 w-3" />}
+    </span>
+  ) : (
+    <span className={cn('mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full', on ? 'bg-primary' : 'border border-foreground/20')} aria-hidden>
+      {on && <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />}
+    </span>
   )
 }
 
-// The question an agent's turn ended on, as a panel above the message box, the way Claude Code on
-// the web asks: the title, one row per option (its label, its description, the number key that
-// picks it), an "Other" row to answer in one's own words, and Skip / Submit. An option's pick goes
-// over the control RPC, which hands the chosen labels to the agent; "Other" and Skip go as a
-// message in the same sentence's shape, so the chat draws every answer, a skip too, as the question
-// and what was said to it. The panel goes the moment the answer is taken, and the chat shows it
-// then: the agent's own line comes seconds later, once it is going again. A caller whose agent is not
-// reached that way (a cloud session) gives `send`: the pick goes through it, and the panel offers
-// the options only.
+// The question an agent's turn ended on, in the chat under what the agent said, the way Claude
+// Code on the web asks: a card with the title on a grey band, one row per option (a ring, its
+// label, its description), an "Other" row to answer in one's own words, and Skip / Submit. The
+// number keys pick, as before, with no number drawn. An option's pick goes over the control RPC,
+// which hands the chosen labels to the agent; "Other" and Skip go as a message in the same
+// sentence's shape, so the chat draws every answer, a skip too, as the question and what was said
+// to it. The card goes the moment the answer is taken, and the chat shows it then: the agent's own
+// line comes seconds later, once it is going again. A caller whose agent is not reached that way (a
+// cloud session) gives `send`: the pick goes through it, and the card offers the options only.
 // Mount it with `key={choice.id}` so a question asked again starts fresh. `active` binds the keys.
 export function QuestionPanel({
   projectId,
@@ -39,32 +47,30 @@ export function QuestionPanel({
   projectId: string
   agentId: string
   choice: ChoiceRequest
-  /** The one question the keys answer: the number keys pick, Ctrl+Enter submits. */
+  /** The one question the keys answer: the number keys pick, ⌘ or Ctrl + Enter submits. */
   active?: boolean
   /** Told what the answer said to the agent, so the chat can show it at once. */
   onSaid?: ((text: string) => void) | undefined
   /**
    * Where the pick goes instead of the usual call: the picked option, or the checked ones. With
-   * it the panel has no "Other" row and no Skip: the bridge types only a parked question's own
+   * it the card has no "Other" row and no Skip: the bridge types only a parked question's own
    * labels into a cloud session, never free text, so it would refuse both.
    */
   send?: ((pick: string | string[]) => Promise<unknown>) | undefined
 }) {
   const { busy, error, run } = useAction()
-  // Sent and accepted by the daemon: the panel goes, and the chat shows the answer. A refusal is
+  // Sent and accepted by the daemon: the card goes, and the chat shows the answer. A refusal is
   // shown in the daemon's own words, and the controls come back.
   const [sent, setSent] = useState(false)
   const [picked, setPicked] = useState<string | typeof OTHER | undefined>(() => (choice.multi ? undefined : (choice.recommended ?? choice.options[0]?.id)))
   const [checked, setChecked] = useState<Set<string>>(() => new Set(choice.multi ? choice.options.filter(o => o.default).map(o => o.id) : []))
   const [other, setOther] = useState('')
-  // Folded, and put away: the card's own two controls, as Claude Code's card has them. Neither
-  // answers the question; the agent goes on waiting, and the chat keeps the "Asking" row.
-  const [folded, setFolded] = useState(false)
-  const [hidden, setHidden] = useState(false)
+  // "Other" ticked beside options where several may be picked: its words go with them.
+  const [otherOn, setOtherOn] = useState(false)
   const otherInput = useRef<HTMLInputElement>(null)
   const words = other.trim()
 
-  // Taken, the panel goes and the chat is told what the agent was sent, to show it at once.
+  // Taken, the card goes and the chat is told what the agent was sent, to show it at once.
   const deliver = (fn: () => Promise<unknown>, said?: string) =>
     void run(fn, 'Could not send your answer — try again.').then(outcome => {
       if (!outcome.ok) return
@@ -78,17 +84,23 @@ export function QuestionPanel({
   }
   const say = (text: string) => deliver(() => sendMessage(projectId, text, agentId), text)
 
-  // A single pick with "Other" chosen needs its words; everything else can always be sent.
-  const ready = choice.multi || picked !== OTHER || words !== ''
+  // "Other" picked needs its words; everything else can always be sent.
+  const otherPicked = choice.multi ? otherOn : picked === OTHER
+  const ready = !otherPicked || words !== ''
   const submit = () => {
     if (busy || !ready) return
     if (choice.multi) {
       // Words in "Other" go with the checked options' labels, as one message: the agent reads both.
-      if (words !== '') return say(answerPrompt(choice.title, [...choice.options.filter(o => checked.has(o.id)).map(o => o.label), words].join(', ')))
+      if (otherOn) return say(answerPrompt(choice.title, [...choice.options.filter(o => checked.has(o.id)).map(o => o.label), words].join(', ')))
       return answer([...checked])
     }
     if (picked === OTHER) return say(answerPrompt(choice.title, words))
     if (picked !== undefined) answer(picked)
+  }
+  const pickOther = () => {
+    if (busy) return
+    if (choice.multi) setOtherOn(on => !on)
+    else setPicked(OTHER)
   }
   const pick = (id: string) => {
     if (busy) return
@@ -101,13 +113,13 @@ export function QuestionPanel({
   }
 
   // The latest of everything the key handler reads, so the handler is wired up once.
-  const keys = useRef({ submit, pick })
-  keys.current = { submit, pick }
+  const keys = useRef({ submit, pick, pickOther })
+  keys.current = { submit, pick, pickOther }
   useEffect(() => {
-    // Answered: the panel is gone, and its keys with it.
+    // Answered: the card is gone, and its keys with it.
     if (!active || sent) return
     const onKey = (e: KeyboardEvent) => {
-      // Keys typed into a text field are that field's, except this panel's own "Other" row.
+      // Keys typed into a text field are that field's, except this card's own "Other" row.
       const target = e.target as HTMLElement | null
       const typing = target !== null && (target.isContentEditable || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
@@ -120,7 +132,7 @@ export function QuestionPanel({
       const n = Number(e.key)
       const option = choice.options[n - 1]
       if (option) keys.current.pick(option.id)
-      else if (!send && n === choice.options.length + 1) otherInput.current?.focus()
+      else if (!send && n === choice.options.length + 1) keys.current.pickOther()
       else return
       e.preventDefault()
     }
@@ -128,103 +140,77 @@ export function QuestionPanel({
     return () => window.removeEventListener('keydown', onKey)
   }, [active, sent, choice.options, send])
 
-  // A row is a filled block, not an outlined one, as Claude Code on the web draws its options: the
-  // card already has the only border, and five outlines inside one made the panel read as a stack
-  // of boxes. The one picked is a lighter fill in its place.
-  const row = (on: boolean) => cn('flex w-full items-start gap-3 rounded-[5px] p-2 text-left', on ? 'bg-accent' : 'bg-muted/60 hover:bg-muted')
-  if (hidden || sent) return null
+  // "Other" picked: its field takes the keys at once, as Claude Code's does.
+  useEffect(() => {
+    if (otherPicked) otherInput.current?.focus()
+  }, [otherPicked])
+
+  // Rows are parted by a line, as Claude Code on the web parts them; none is filled.
+  const row = 'flex w-full items-start gap-3 p-3 text-left disabled:opacity-60'
+  if (sent) return null
   return (
-    <section role="region" aria-label={choice.title} className="mx-auto w-full max-w-3xl px-2 pt-2">
-      <div className="rounded-[10px] border border-border bg-background p-3">
-        <div className="mb-2 flex items-start gap-2 px-1">
-          <h2 className="min-w-0 flex-1 text-sm font-medium">{choice.title}</h2>
-          {/* Folded away or put aside by hand, as Claude Code's is: the question is still in the
-              chat, and the agent waits for it either way. */}
-          <button
-            type="button"
-            aria-label={folded ? 'Show the options' : 'Hide the options'}
-            aria-expanded={!folded}
-            onClick={() => setFolded(f => !f)}
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-          >
-            <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', folded && '-rotate-90')} aria-hidden />
-          </button>
-          <button
-            type="button"
-            aria-label="Put this question away"
-            onClick={() => setHidden(true)}
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-          >
-            <X className="h-3.5 w-3.5" aria-hidden />
-          </button>
-        </div>
-        {!folded && (
-        <ul className="flex flex-col gap-[3px]">
-          {choice.options.map((o, at) => {
-            const on = choice.multi ? checked.has(o.id) : picked === o.id
-            return (
-              <li key={o.id}>
-                <button type="button" role={choice.multi ? 'checkbox' : 'radio'} aria-checked={on} disabled={busy} onClick={() => pick(o.id)} className={cn(row(on), 'disabled:opacity-60')}>
-                  {choice.multi && (
-                    <span className={cn('mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border', on ? 'border-primary bg-primary text-primary-foreground' : 'border-border')} aria-hidden>
-                      {on && <Check className="h-3 w-3" />}
-                    </span>
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span className="text-sm font-medium">
-                      {o.label}
-                      {o.id === choice.recommended && <span className="ml-2 text-xs font-normal text-muted-foreground">Recommended</span>}
-                    </span>
-                    {o.detail && <span className="block text-xs text-muted-foreground">{o.detail}</span>}
+    <section role="region" aria-label={choice.title} className="flex w-full max-w-[480px] flex-col overflow-clip rounded-[10px] font-sans text-sm ring-1 ring-border">
+      <h2 className="bg-foreground/5 px-3 py-2 font-normal">{choice.title}</h2>
+      <ul className="flex flex-col">
+        {choice.options.map(o => {
+          const on = choice.multi ? checked.has(o.id) : picked === o.id
+          return (
+            <li key={o.id} className="border-t border-border first:border-t-0">
+              <button type="button" role={choice.multi ? 'checkbox' : 'radio'} aria-checked={on} disabled={busy} onClick={() => pick(o.id)} className={row}>
+                <Mark on={on} multi={choice.multi} />
+                <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+                  <span>
+                    {o.label}
+                    {o.id === choice.recommended && <span className="ml-2 text-muted-foreground">Recommended</span>}
                   </span>
-                  <Key n={at + 1} />
-                </button>
-              </li>
-            )
-          })}
-          {!send && (
-            <li>
-              <label className={cn(row(choice.multi ? words !== '' : picked === OTHER), 'items-center')}>
-                <input
-                  ref={otherInput}
-                  value={other}
-                  disabled={busy}
-                  onFocus={() => !choice.multi && setPicked(OTHER)}
-                  onChange={e => setOther(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) submit()
-                  }}
-                  placeholder="Other: say it in your own words"
-                  aria-label="Other"
-                  className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                />
-                <Key n={choice.options.length + 1} />
-              </label>
+                  {o.detail && <span className="text-muted-foreground">{o.detail}</span>}
+                </span>
+              </button>
             </li>
-          )}
-        </ul>
+          )
+        })}
+        {!send && (
+          <li className="flex flex-col border-t border-border">
+            <button type="button" role={choice.multi ? 'checkbox' : 'radio'} aria-checked={otherPicked} disabled={busy} onClick={pickOther} className={row}>
+              <Mark on={otherPicked} multi={choice.multi} />
+              <span className="min-w-0 flex-1">Other</span>
+            </button>
+            {otherPicked && (
+              <input
+                ref={otherInput}
+                value={other}
+                disabled={busy}
+                onChange={e => setOther(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) submit()
+                }}
+                placeholder="Type your own answer here"
+                aria-label="Other"
+                className="mx-3 mb-1 ml-10 rounded-md border border-border bg-transparent px-2.5 py-1.5 outline-none placeholder:text-muted-foreground focus:border-primary"
+              />
+            )}
+          </li>
         )}
-        {error && (
-          <p role="alert" className="mt-2 px-1 text-xs text-danger">
-            {error}
-          </p>
+      </ul>
+      <div className="flex items-center gap-2 px-3 pt-2 pb-3">
+        {/* One line in every state, so the buttons never move: what went wrong, or that it is on its way. */}
+        <span role={error ? 'alert' : busy ? 'status' : undefined} className={cn('min-w-0 flex-1 truncate text-xs', error ? 'text-danger' : 'text-muted-foreground')}>
+          {error ?? (busy ? 'Sending your answer…' : '')}
+        </span>
+        {!send && (
+          <button type="button" disabled={busy} onClick={() => say(skipPrompt(choice.title))} className="h-6 rounded-md bg-foreground/10 px-2 text-[13px] hover:bg-foreground/15 disabled:opacity-60">
+            Skip
+          </button>
         )}
-        <div className="mt-3 flex items-center gap-2">
-          {/* One line in every state, so the buttons never move. What the keys do is not written
-              out: the number beside each option says it, and the key that submits is on the button. */}
-          <span role={busy ? 'status' : undefined} className="min-w-0 flex-1 truncate px-1 text-xs text-muted-foreground">
-            {busy ? 'Sending your answer…' : ''}
-          </span>
-          {!send && (
-            <Button variant="ghost" size="sm" disabled={busy} onClick={() => say(skipPrompt(choice.title))}>
-              Skip
-            </Button>
+        <button type="button" disabled={busy || !ready} onClick={submit} className="flex h-6 items-center gap-1.5 rounded-md bg-foreground px-2 text-[13px] font-medium text-background hover:bg-foreground/90 disabled:opacity-60">
+          Submit
+          {active && (
+            <span className="flex gap-0.5" aria-hidden>
+              <kbd className="flex h-[17px] min-w-[17px] items-center justify-center rounded border border-background/20 px-0.5 font-sans text-[11px]">{SUBMIT_KEY}</kbd>
+              <kbd className="flex h-[17px] min-w-[17px] items-center justify-center rounded border border-background/20 px-0.5 font-sans text-[11px]">↵</kbd>
+            </span>
           )}
-          <Button size="sm" disabled={busy || !ready} onClick={submit}>
-            Submit
-            {active && <kbd className="font-sans text-[11px] opacity-70" aria-hidden>⌃⏎</kbd>}
-          </Button>
-        </div>
+        </button>
       </div>
     </section>
   )

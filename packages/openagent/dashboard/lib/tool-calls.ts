@@ -96,12 +96,40 @@ export function toolCall(label: string, detail?: string, changed?: readonly File
   return call
 }
 
+/** A run of calls in one line: its words, the file its edits changed, and how much. */
+export interface CallsSummary {
+  /** The grey words: "Ran 2 commands, edited", "Edited", "Ran a command". */
+  words: string
+  /** What the edits changed: the file's name, or how many files. */
+  target?: string
+  /** The lines the edits added and removed, when their coding agent said them. */
+  size?: LineCount
+}
+
 /**
- * A run of calls in one line, as Claude Code on the web says it: how many steps it took, and
- * nothing else — "Ran a command", "Ran 4 commands". Every step counts as a command, whatever it
- * was, which is what Claude Code does too (an edit and two shell commands read there as "Ran 3
- * commands"). What each step was, which file it changed and how much, is the panel the line opens.
+ * A run of calls in one line, as Claude Code on the web says it: how many commands it ran, and the
+ * file its edits changed with how much — "Ran 2 commands, edited README.md +12 −54". An edit is
+ * said by its file and is no command; every other step counts as one, whatever it was. Several
+ * files are said by how many ("edited 3 files"), "created" when the run made every one of them.
  */
-export function callsWords(steps: number): string {
-  return steps === 1 ? 'Ran a command' : `Ran ${steps} commands`
+export function callsSummary(calls: readonly ToolCall[]): CallsSummary {
+  const edits = calls.filter(call => call.kind === 'edit')
+  const commands = calls.length - edits.length
+  const parts = commands === 0 ? [] : [commands === 1 ? 'ran a command' : `ran ${commands} commands`]
+  const summary: CallsSummary = { words: '' }
+  if (edits.length > 0) {
+    // A file a later call edited again is the same file: summed as a turn's are.
+    const files = sumEdits(edits.flatMap(call => (call.files ?? []).map(file => ({ path: file.path, added: file.added, removed: file.removed, ...(file.created ? { created: true as const } : {}) }))))
+    parts.push(files.length > 0 && files.every(file => file.created) ? 'created' : 'edited')
+    summary.target = files.length === 1 ? files[0]!.name : files.length > 1 ? `${files.length} files` : edits.length === 1 ? 'a file' : `${edits.length} files`
+    if (files.length > 0) summary.size = sizeOf(files)
+  }
+  const words = parts.join(', ')
+  summary.words = words.charAt(0).toUpperCase() + words.slice(1)
+  return summary
+}
+
+/** A run of calls in one line, as plain words: what the line says to a screen reader. */
+export function summaryWords(summary: CallsSummary): string {
+  return summary.target === undefined ? summary.words : `${summary.words} ${summary.target}`
 }

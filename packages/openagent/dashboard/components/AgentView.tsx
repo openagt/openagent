@@ -4,7 +4,7 @@ import { onAgent, onAgentsDoing, onGitHostHome, onRetainedWorktrees } from '../r
 import { useLoaded, usePolled } from '../lib/use-async.js'
 import { handoffSays, useAgentHandoff } from '../lib/use-agent-handoff.js'
 import { useCheckoutStatus } from '../lib/use-checkout-status.js'
-import { isAgentActive, agentOutcome, cardOutcome, pendingChoices } from '../lib/live-state.js'
+import { isAgentActive, agentOutcome, cardOutcome } from '../lib/live-state.js'
 import { AgentActionBar } from './AgentActionBar.js'
 import { RunPrLabels } from './RunPrLabels.js'
 import type { ContextSet } from '../lib/use-context-set.js'
@@ -20,7 +20,6 @@ import { ModuleSlot } from './ModulePageView.js'
 import { useMountedModules } from '../lib/use-modules.js'
 import { Committing, HandoffActions, HandoffSummary, isCommitAsk } from './AgentHandoff.js'
 import { AgentDetails, type AgentDetailsCard } from './AgentDetails.js'
-import { QuestionPanel } from './QuestionPanel.js'
 import { holdsMainAgent } from '../lib/subagents.js'
 import { agentLogKey } from '../lib/agent-log.js'
 import { revealChange, revealScreen, revealSubagent } from '../lib/reveal-change.js'
@@ -292,7 +291,6 @@ export function AgentView({
   // its events say it, and until they are read (or when they hold no ending) its card does, so
   // both are right from the first frame.
   const outcome = working ? undefined : (agentOutcome(shown) ?? (card ? cardOutcome(card.status) : undefined))
-  const questions = useMemo(() => pendingChoices(shown), [shown])
   // Until the handoff has actually loaded, a just-stopped agent keeps showing the modules' summaries
   // (the Changes module's count of changed files, #1030): the summary swaps once, to the handoff,
   // instead of blanking for the beat the handoff read takes.
@@ -418,8 +416,6 @@ export function AgentView({
       }
       bottom={
         <>
-          {/* The questions the agent stopped on, above the message box; the newest takes the keys. */}
-          {agentId && questions.map((choice, at) => <QuestionPanel key={`${agentId}:${choice.id}`} projectId={projectId} agentId={agentId} choice={choice} active={at === questions.length - 1} onSaid={onSending} />)}
           {/* Where the work is and the next step, right above the message box. */}
           <AgentWorkBar
             projectName={projectName}
@@ -497,6 +493,8 @@ export function AgentView({
           key={agentId}
           events={shown}
           projectId={projectId}
+          agentId={agentId}
+          onSaid={onSending}
           writing={feedLive ? writing : ''}
           {...(shownSending !== undefined ? { sending: shownSending } : {})}
           working={feedLive || shownSending !== undefined}

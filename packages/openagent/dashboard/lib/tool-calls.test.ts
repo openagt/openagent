@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { callsWords, toolCall } from './tool-calls.js'
+import { callsSummary, summaryWords, toolCall } from './tool-calls.js'
 
 describe('toolCall', () => {
   test("Claude Code's tools read as a verb and what it was done to", () => {
@@ -39,11 +39,31 @@ describe('toolCall', () => {
   })
 })
 
-describe('callsWords', () => {
-  test("a run of calls is counted and no more, as Claude Code on the web counts one", () => {
-    // Every step is a command there, whatever it was: an edit and two shell commands read as three.
-    expect(callsWords(1)).toBe('Ran a command')
-    expect(callsWords(3)).toBe('Ran 3 commands')
-    expect(callsWords(12)).toBe('Ran 12 commands')
+describe('callsSummary', () => {
+  const bash = toolCall('Bash', 'git status')
+  const edit = (path: string, added: number, removed: number, created?: true) => toolCall('Edit', path, [{ path, added, removed, ...(created ? { created } : {}) }])
+
+  test('commands are counted, as Claude Code on the web counts them: every step that is no edit is one', () => {
+    expect(callsSummary([bash])).toEqual({ words: 'Ran a command' })
+    expect(callsSummary([bash, toolCall('Read', '/repo/a.ts'), toolCall('Skill', 'question')])).toEqual({ words: 'Ran 3 commands' })
+  })
+
+  test('an edit is said by its file with how much it changed, and is no command', () => {
+    const summary = callsSummary([bash, edit('/repo/README.md', 12, 54), bash])
+    expect(summary).toEqual({ words: 'Ran 2 commands, edited', target: 'README.md', size: { added: 12, removed: 54 } })
+    expect(summaryWords(summary)).toBe('Ran 2 commands, edited README.md')
+  })
+
+  test('the same file edited twice is one file with its lines summed; several files are said by how many', () => {
+    expect(callsSummary([edit('/repo/a.md', 1, 0), edit('/repo/a.md', 2, 1)])).toEqual({ words: 'Edited', target: 'a.md', size: { added: 3, removed: 1 } })
+    expect(callsSummary([edit('/repo/a.md', 1, 0), edit('/repo/b.md', 2, 1)])).toEqual({ words: 'Edited', target: '2 files', size: { added: 3, removed: 1 } })
+  })
+
+  test('"created" when the run made every file it changed', () => {
+    expect(callsSummary([bash, edit('/repo/new.md', 10, 0, true)])).toEqual({ words: 'Ran a command, created', target: 'new.md', size: { added: 10, removed: 0 } })
+  })
+
+  test('an edit whose files its coding agent did not say is still said, with no size', () => {
+    expect(callsSummary([bash, toolCall('Edit', '/repo/x.md')])).toEqual({ words: 'Ran a command, edited', target: 'a file' })
   })
 })

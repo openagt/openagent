@@ -336,14 +336,25 @@ describe('EventList question and answer', () => {
   const resumed = (prompt: string): OpenAgentEvent[] =>
     [...asked, { kind: 'driver', event: { type: 'start', prompt } }, { kind: 'driver', event: { type: 'text', text: 'Red it is.' } }, { kind: 'end', ok: true }] as OpenAgentEvent[]
 
-  test('a question that waits is one grey line, "Asking" and its title, opening to the choices', () => {
-    render(<EventList events={asked} projectId="p1" stick={false} />)
-    const line = screen.getByRole('button', { name: 'Asking Which color do you prefer?' })
-    expect(line.getAttribute('aria-expanded')).toBe('false')
-    expect(screen.queryByText('Red')).toBeNull()
-    fireEvent.click(line)
-    expect(screen.getByText('Red')).toBeTruthy()
-    expect(screen.getByText('Blue')).toBeTruthy()
+  test('a question that waits is its card in the chat, with its choices, answered there', () => {
+    render(<EventList events={asked} projectId="p1" agentId="r1" stick={false} />)
+    const card = screen.getByRole('region', { name: 'Which color do you prefer?' })
+    expect(within(card).getByRole('radio', { name: 'Red' })).toBeTruthy()
+    expect(within(card).getByRole('radio', { name: 'Blue' })).toBeTruthy()
+    expect(within(card).getByRole('button', { name: /Submit/ })).toBeTruthy()
+    // The keys are the newest question's: the button promises one.
+    expect(within(card).getByRole('button', { name: /Submit/ }).textContent).toMatch(/^Submit(⌘|Ctrl)↵$/)
+  })
+
+  test('the turn a question ended has its copy and time under the card, and none under what was said before it', () => {
+    const at = '2026-09-25T10:04:05.000Z'
+    const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Here is the plan.' }, at }
+    render(<EventList events={[asked[0]!, said, { ...asked[2]!, at }, asked[3]!]} projectId="p1" agentId="r1" stick={false} />)
+    const row = screen.getByRole('region', { name: 'Which color do you prefer?' }).closest('[data-message-id]') as HTMLElement
+    expect(within(row).getByRole('button', { name: 'Copy this message' })).toBeTruthy()
+    expect(row.querySelector('time')?.getAttribute('datetime')).toBe(at)
+    const before = screen.getByText('Here is the plan.').closest('[data-message-id]') as HTMLElement
+    expect(within(before).queryByRole('button', { name: 'Copy this message' })).toBeNull()
   })
 
   test('answered, the prompt that resumed the agent is a box with the question and the answer, not my message, and the question is said once', () => {
@@ -458,6 +469,22 @@ describe('EventList session line', () => {
     expect(screen.getByText('Initialized session')).toBeTruthy()
   })
 
+  test('as the first row of a box of steps, opened, its lines have no box of their own; alone, they do; the box of steps is as wide as the chat, its time over its corner', () => {
+    const at = '2026-09-25T10:04:05.000Z'
+    const call: OpenAgentEvent = { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'ls' }, at }
+    const { unmount } = render(<EventList events={[prompt, call, said]} setup={setup} stick={false} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Ran a command' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Initialized session' }))
+    const lines = screen.getByText('agent-1').closest('.flex-col') as HTMLElement
+    expect(lines.className).not.toContain('border')
+    const time = screen.getByRole('button', { name: 'Ran a command' }).closest('[data-message-id]')!.querySelector('.tabular-nums')!
+    expect(time.className).toContain('absolute')
+    unmount()
+    render(<EventList events={[prompt, said]} setup={setup} stick={false} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Initialized session' }))
+    expect((screen.getByText('agent-1').closest('.flex-col') as HTMLElement).className).toContain('border')
+  })
+
   test('with no setup given there is no line', () => {
     render(<EventList events={[prompt, said]} stick={false} />)
     expect(screen.queryByText('Initialized session')).toBeNull()
@@ -551,13 +578,50 @@ describe('EventList choice rows', () => {
   })
   const resolved = (id = 'gate-1'): OpenAgentEvent => ({ kind: 'choice-resolved', id, picked: 'work', by: 'user' })
 
-  test('an open gate is one "Asking" line: its choices are asked above the message box, not in the flow', () => {
+  test('a turn that ended on a question the person answered has no copy and time under what was said before it: the answer stands where the card was', async () => {
+    const { answerPrompt } = await import('../lib/answered-question.js')
     const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Here is the plan.' } }
-    render(<EventList events={[said, gate()]} stick={false} projectId="p1" />)
+    const answered: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: answerPrompt('Start the next backlog item?', 'Work on it') } }
+    const first: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'Plan the next item' } }
+    render(<EventList events={[first, said, gate(), answered, { kind: 'driver', event: { type: 'text', text: 'On it.' } }]} stick={false} projectId="p1" agentId="r1" />)
+    expect(screen.getByRole('group', { name: 'Your answer' }).textContent).toBe('Start the next backlog item?Work on it')
+    const before = screen.getByText('Here is the plan.').closest('[data-message-id]') as HTMLElement
+    expect(within(before).queryByRole('button', { name: 'Copy this message' })).toBeNull()
+  })
+
+  test('an answer just given stands where the card was, and the agent\'s own line of it lands in that same place: nothing comes at the end and goes back up', async () => {
+    const { answerPrompt } = await import('../lib/answered-question.js')
+    const first: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'Plan the next item' } }
+    const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Here is the plan.' } }
+    const waiting: OpenAgentEvent = { kind: 'end', ok: false, waiting: true }
+    const answer = answerPrompt('Start the next backlog item?', 'Work on it')
+    const order = () => [...document.querySelectorAll('[data-message-id]')].map(row => (row.querySelector('[aria-label="Your answer"]') ? 'answer' : (row.textContent ?? '').slice(0, 9)))
+    const { rerender } = render(<EventList events={[first, said, gate(), waiting]} sending={answer} stick={false} projectId="p1" agentId="r1" />)
+    expect(screen.queryByRole('region', { name: 'Start the next backlog item?' })).toBeNull()
+    expect(screen.getByRole('group', { name: 'Your answer' }).textContent).toBe('Start the next backlog item?Work on it')
+    const sent = order()
+    expect(sent).toEqual(['Plan the n', 'Here is t', 'answer'].map(t => t.slice(0, 9)))
+    const sentRow = screen.getByRole('group', { name: 'Your answer' }).closest('[data-message-id]')!.className
+    // The agent's own line of it arrives: the same box, in the same place, with the same room around it.
+    rerender(<EventList events={[first, said, gate(), waiting, { kind: 'driver', event: { type: 'start', prompt: answer } }]} stick={false} projectId="p1" agentId="r1" />)
+    expect(order()).toEqual(sent)
+    expect(screen.getByRole('group', { name: 'Your answer' }).closest('[data-message-id]')!.className).toBe(sentRow)
+  })
+
+  test('an open gate is its card in the flow, right under what the agent said', () => {
+    const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Here is the plan.' } }
+    render(<EventList events={[said, gate()]} stick={false} projectId="p1" agentId="r1" />)
     expect(screen.getByText('Here is the plan.')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Asking Start the next backlog item?' })).toBeTruthy()
-    expect(screen.queryByText(/Work on it/)).toBeNull()
-    expect(document.querySelectorAll('[data-message-id]')).toHaveLength(2)
+    const rows = document.querySelectorAll('[data-message-id]')
+    expect(rows).toHaveLength(2)
+    expect(within(rows[1] as HTMLElement).getByRole('region', { name: 'Start the next backlog item?' })).toBeTruthy()
+    expect(within(rows[1] as HTMLElement).getByRole('radio', { name: /Work on it/ })).toBeTruthy()
+  })
+
+  test('with no agent to answer to, an open gate is its text', () => {
+    render(<EventList events={[gate()]} stick={false} projectId="p1" />)
+    expect(screen.queryByRole('region', { name: 'Start the next backlog item?' })).toBeNull()
+    expect(screen.getByText(/Start the next backlog item\?/)).toBeTruthy()
   })
 
   test('without a projectId the row keeps the formatter text', () => {
@@ -591,23 +655,23 @@ describe('EventList choice rows', () => {
     expect(screen.getByText(/Start the next backlog item\?/)).toBeTruthy()
   })
 
-  test('a run that ended waiting on its question says it in the "Asking" line; once the agent went on with no recorded pick, the question is its text (#1774)', () => {
+  test('a run that ended waiting on its question asks it in its card; once the agent went on with no recorded pick, the question is its text (#1774)', () => {
     const waiting: OpenAgentEvent = { kind: 'end', ok: false, waiting: true }
-    const { rerender } = render(<EventList events={[gate(), waiting]} stick={false} projectId="p1" />)
-    expect(screen.getByRole('button', { name: 'Asking Start the next backlog item?' })).toBeTruthy()
+    const { rerender } = render(<EventList events={[gate(), waiting]} stick={false} projectId="p1" agentId="r1" />)
+    expect(screen.getByRole('region', { name: 'Start the next backlog item?' })).toBeTruthy()
     expect(screen.queryByText(/\? Start the next backlog item\?/)).toBeNull()
     // The person's own message resumed the run: no pick was recorded, so the question stays as text.
     const next: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'On it.' } }
-    rerender(<EventList events={[gate(), waiting, next]} stick={false} projectId="p1" />)
-    expect(screen.queryByRole('button', { name: /^Asking/ })).toBeNull()
+    rerender(<EventList events={[gate(), waiting, next]} stick={false} projectId="p1" agentId="r1" />)
+    expect(screen.queryByRole('region', { name: 'Start the next backlog item?' })).toBeNull()
     expect(screen.getByText(/Start the next backlog item\?/)).toBeTruthy()
   })
 
   test('of a re-fired gate only the latest firing is the open question: the earlier one keeps its text', () => {
-    render(<EventList events={[gate(), gate()]} stick={false} projectId="p1" />)
-    // The earlier firing as text, the latest as the one "Asking" line.
+    render(<EventList events={[gate(), gate()]} stick={false} projectId="p1" agentId="r1" />)
+    // The earlier firing as text, the latest as the one card.
     expect(screen.getAllByText(/\? Start the next backlog item\?/)).toHaveLength(1)
-    expect(screen.getAllByRole('button', { name: 'Asking Start the next backlog item?' })).toHaveLength(1)
+    expect(screen.getAllByRole('region', { name: 'Start the next backlog item?' })).toHaveLength(1)
   })
 })
 
@@ -1084,6 +1148,18 @@ describe('EventList changed files', () => {
     expect(rows()).toEqual(['A.md+2 −1', 'b.ts+5 −0'])
   })
 
+  test('a turn that ended on its files has its copy and time under their card, as Claude Code puts them, and none under what was said', () => {
+    const at = '2026-09-25T10:04:05.000Z'
+    const events = [prompt('go'), ...edit('c1', `${WS}/A.md`, 2, 1), { ...said, at }, prompt('more'), ...edit('c2', `${WS}/b.ts`, 5, 0), { ...said, at }]
+    render(<EventList events={events} setup={{ workspace: WS }} stick={false} />)
+    const rowOf = (id: string) => document.querySelector(`[data-message-id="${id}"]`) as HTMLElement
+    for (const id of ['changes-4', 'changes-last']) {
+      expect(within(rowOf(id)).getByRole('button', { name: 'Copy this message' })).toBeTruthy()
+      expect(rowOf(id).querySelector('time')?.getAttribute('datetime')).toBe(at)
+    }
+    for (const id of ['3', '7']) expect(within(rowOf(id)).queryByRole('button', { name: 'Copy this message' })).toBeNull()
+  })
+
   test('while the agent works on a turn, that turn\'s files are not listed yet', () => {
     const events = [prompt('go'), ...edit('c1', `${WS}/A.md`, 2, 1), said]
     const { rerender } = render(<EventList events={events} working stick={false} />)
@@ -1105,13 +1181,13 @@ describe('EventList changed files', () => {
     expect(rows()).toEqual(['A.md+2 −1'])
   })
 
-  test("the folded line of the turn's calls counts them; the file and its size are inside it", () => {
+  test("the folded line of the turn's calls counts the commands and names the edited file; inside, the edit has its size", () => {
     const events = [prompt('go'), { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'ls', id: 'b1' } } as OpenAgentEvent, ...edit('c1', `${WS}/A.md`, 2, 1), said]
     render(<EventList events={events} setup={{ workspace: WS }} stick={false} />)
-    const line = screen.getByRole('button', { name: 'Ran 2 commands' })
-    expect(line.textContent).toBe('Ran 2 commands')
+    const line = screen.getByRole('button', { name: 'Ran a command, edited A.md' })
+    expect(line.textContent).toBe('Ran a command, editedA.md+2−12 added, 1 removed')
     fireEvent.click(line)
-    expect(screen.getByRole('button', { name: 'Edited A.md' }).textContent).toBe('EditedA.md+2 −1')
+    expect(screen.getByRole('button', { name: 'Edited A.md' }).textContent).toBe('EditedA.md+2−12 added, 1 removed')
   })
 
   test('a turn that edited no file has no such row', () => {
