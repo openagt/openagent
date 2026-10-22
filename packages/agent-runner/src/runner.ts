@@ -94,6 +94,8 @@ export interface SpawnedRun {
   branch?: string
   /** What the run is started for (`run --for`): a thread on the git host, by its address. */
   for?: string
+  /** The Claude account it starts on, by name: put in its environment ({@link CLAUDE_ACCOUNT_ENV}). */
+  account?: string
 }
 
 /** A resume spawned in its own process: the text or the answer it continues with, and who resumes it, when that is a scheduler's row. */
@@ -107,6 +109,8 @@ export interface SpawnedResume {
   by?: string
   /** How far the run takes its work from here on (`run --resume --publish`): a level, or `nothing`; its record's level when absent. */
   publish?: Publish | typeof NO_PUBLISH
+  /** The Claude account it goes on with, by name: put in its environment ({@link CLAUDE_ACCOUNT_ENV}). */
+  account?: string
 }
 
 /** The command line of a spawned resume: the text as the argument, or the answer. */
@@ -129,7 +133,7 @@ export function resumeArgs(run: SpawnedResume): string[] {
 export async function spawnRun(repo: string, run: SpawnedRun): Promise<void> {
   await acquireRunLock(repo, run.id, { pid: process.pid, isAlive: isPidAlive })
   try {
-    const child = await spawnDetached(repo, run.id, runArgs(run))
+    const child = await spawnDetached(repo, run.id, runArgs(run), run.account)
     await handOverRunLock(repo, run.id, process.pid, child)
   } catch (err) {
     await releaseRunLock(repo, run.id, process.pid)
@@ -139,11 +143,11 @@ export async function spawnRun(repo: string, run: SpawnedRun): Promise<void> {
 
 /** A resumed run's process, detached the same way: `agent-runner run --resume <id> …`. */
 export async function spawnResume(repo: string, run: SpawnedResume): Promise<void> {
-  await spawnDetached(repo, run.id, resumeArgs(run))
+  await spawnDetached(repo, run.id, resumeArgs(run), run.account)
 }
 
 /** Spawn a detached process of this tool for the run `id`; resolves with its pid once it is spawned. */
-async function spawnDetached(repo: string, id: string, args: string[]): Promise<number> {
+async function spawnDetached(repo: string, id: string, args: string[], account?: string): Promise<number> {
   const stderrPath = runStderrPath(repo, id)
   mkdirSync(dirname(stderrPath), { recursive: true })
   const fd = openSync(stderrPath, 'a')
@@ -151,7 +155,7 @@ async function spawnDetached(repo: string, id: string, args: string[]): Promise<
     cwd: repo,
     detached: true,
     stdio: ['ignore', 'ignore', fd],
-    env: { ...process.env, [AGENT_ID_ENV]: id },
+    env: { ...process.env, [AGENT_ID_ENV]: id, ...(account !== undefined ? { [CLAUDE_ACCOUNT_ENV]: account } : {}) },
   })
   closeSync(fd)
   child.unref()

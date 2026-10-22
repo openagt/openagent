@@ -102,3 +102,9 @@ test('reports nothing when the week cannot be placed', () => {
   assert.equal(weekBoundary([{ label: 'Current week (all models)', kind: 'week', percentUsed: 16 }], NOW), undefined)
   assert.equal(weekBoundary([weekWindow(16, 'later')], NOW), undefined)
 })
+
+test('a week that knows its reset exactly is placed by it, not by its words', () => {
+  const resetsAt = NOW + 2 * 24 * 60 * 60_000
+  assert.deepEqual(weekBoundary([{ label: 'Current week (all models)', kind: 'week', percentUsed: 16, resetsAt }], NOW), boundaryFromResetsAt(resetsAt, NOW))
+  assert.deepEqual(weekBoundary([{ label: 'Current week (all models)', kind: 'week', percentUsed: 16, resetsAt, resetsAtText: 'later' }], NOW), boundaryFromResetsAt(resetsAt, NOW))
+})
