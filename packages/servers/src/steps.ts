@@ -1,4 +1,4 @@
-import { OWN_NAME } from '@openagt/agent-driver-claude'
+import { OWN_NAME } from '@openagt/agent-driver'
 /**
  * The steps of an install, in order: what each is called on the page, who runs it on the server,
  * and the script itself. A step first looks whether its work is already done and then does
@@ -950,7 +950,7 @@ export function claudeLoginScript(login: string): LoginScript {
 
 /**
  * The Claude accounts a server's runs may use beside its own login, in the file its OpenAgent
- * reads them from (`accountsPath` of the server's user: the service's home is that user's). Runs
+ * reads them from (`claudeAccountsPath` of the server's user: the service's home is that user's). Runs
  * take the next free one when one hits its limit; the server's own login is the one with none.
  * Read and changed as the server's user, by the server's own Node, in the format OpenAgent keeps:
  * the file is written whole and then moved over the old one, readable by that user alone. What
@@ -962,28 +962,28 @@ const file = process.env.FILE
 let accounts = []
 try {
   const kept = JSON.parse(fs.readFileSync(file, 'utf8'))
-  if (Array.isArray(kept.accounts)) accounts = kept.accounts.filter(a => a && typeof a === 'object' && typeof a.name === 'string' && (a.token === undefined || typeof a.token === 'string'))
+  if (Array.isArray(kept.accounts)) accounts = kept.accounts.filter(a => a && typeof a === 'object' && typeof a.name === 'string' && (a.login === undefined || typeof a.login === 'string'))
 } catch {}
-if (!accounts.some(a => a.token === undefined)) accounts = [{ name: ${JSON.stringify(OWN_NAME)} }, ...accounts]
+if (!accounts.some(a => a.login === undefined)) accounts = [{ name: ${JSON.stringify(OWN_NAME)} }, ...accounts]
 const name = process.env.NAME || ''
 if (process.env.OP === 'add') {
   if (accounts.some(a => a.name.toLowerCase() === name.toLowerCase())) {
     console.error('There is an account named ' + name + ' on the server already.')
     process.exit(3)
   }
-  accounts.push({ name, token: fs.readFileSync(0, 'utf8').trim(), added: new Date().toISOString() })
+  accounts.push({ name, login: fs.readFileSync(0, 'utf8').trim(), added: new Date().toISOString() })
 }
-if (process.env.OP === 'remove') accounts = accounts.filter(a => a.name !== name || a.token === undefined)
+if (process.env.OP === 'remove') accounts = accounts.filter(a => a.name !== name || a.login === undefined)
 if (process.env.OP !== 'read') {
   const next = file + '.' + process.pid + '.new'
   fs.writeFileSync(next, JSON.stringify({ accounts }, null, 2) + '\\n', { mode: 0o600 })
   fs.chmodSync(next, 0o600)
   fs.renameSync(next, file)
 }
-console.log(JSON.stringify(accounts.map(({ token, ...rest }) => ({ ...rest, own: token === undefined }))))
+console.log(JSON.stringify(accounts.map(({ login, ...rest }) => ({ ...rest, own: login === undefined }))))
 `
 
-/** Where the server's user keeps its Claude accounts: as `accountsPath` finds it for a user with no XDG_CONFIG_HOME. */
+/** Where the server's user keeps its Claude accounts: as `claudeAccountsPath` finds it for a user with no XDG_CONFIG_HOME. */
 const ACCOUNTS_FILE = '"$HOME/.openagent-claude-accounts.json"'
 
 /** The server's Claude accounts, as its file says them: names, since when, how full; never a login. */

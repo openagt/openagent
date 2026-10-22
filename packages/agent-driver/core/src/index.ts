@@ -27,6 +27,32 @@ export { FakeDriver, FakeDriverSession, type FakeTurn, type FakeDriverOptions } 
 export { makeEmit, promptSent, startEvent, type PromptExtras, combineFraming, combineSignals, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, OUTPUT_MAX } from './session-support.js'
 export { ConversationGoneError, continuingTurn } from './gone.js'
 export {
+  accountsPath,
+  readAccounts,
+  changeAccounts,
+  nameRefused,
+  addAccount,
+  removeAccount,
+  nameOwnAccount,
+  useFirst,
+  isLimited,
+  usableAccounts,
+  pickAccount,
+  markLimited,
+  noteWindows,
+  freesIn,
+  shownAccounts,
+  turnOnAccounts,
+  goOn,
+  UsageLimitError,
+  OWN_NAME,
+  type AgentAccount,
+  type ShownAccount,
+  type AccountsOption,
+  type AccountTurn,
+  type TurnOnAccounts,
+} from './accounts.js'
+export {
   runCliSession,
   AgentExitError,
   type AgentCliParser,

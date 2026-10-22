@@ -314,6 +314,13 @@ already made, and lists it in its pull request; for anything else it proposes an
   login step every new install walks through: the onboarding is heavy enough.
 - A project's own accounts are a Settings page of that project, shown only for a kind the
   computer has two or more of, "same as this computer" until one is picked.
+- Every coding agent's accounts are the same card, menu row and pick, with the agent's own
+  words: adding one asks whose it is, then the agent's sign-in in this computer's browser.
+  Picked over showing the email Codex's sign-in tells, which only Codex could, and would
+  have made one button work two ways. The email only refuses an account added twice.
+- How full an account is reads as each of its windows by how long it lasts (5 h, week,
+  month), the longest on its bar. Picked over a week and a session, which is Claude's
+  shape: Codex's free plan has one window, a month.
 
 ## Starting a run
 - A Start runs the project's own `start` line, in the project's hooks file, and the line

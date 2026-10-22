@@ -1,5 +1,5 @@
-import type { DriverQuota, DriverReadiness } from '@openagt/agent-driver'
-import type { ClaudeAccount } from '@openagt/agent-driver-claude'
+import type { DriverQuota, DriverRateWindow, DriverReadiness } from '@openagt/agent-driver'
+import type { AgentAccount } from '@openagt/agent-driver'
 import { markerCard, runnerMark, type Publish, type RunnerMark } from '@openagt/agent-runner'
 import type { FileBranchWrite } from '@openagt/agent-data'
 import type { RunCard } from '@openagt/skill-logs'
@@ -7,7 +7,7 @@ import { AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, LAST_RUN_ENV, NEVER_STAR
 import type { LastRun } from './records.js'
 import { dueFrom, localStamp, paceInForce, paceText } from './pace.js'
 import { quotaBoundaryStatus, quotaHeadroom } from './quota-boundary.js'
-import { accountWithRoom } from './accounts.js'
+import { accountWithRoom, readClaudeAccount, readCodexAccount } from './accounts.js'
 import { ableAgents, checkFound, commandPrompt, homeAgent, isDue, lastRunValue, ownAttached, resumeText, eachItems, skillFile, type Schedule, type ScheduledCommand, type StartItem } from './schedule.js'
 import type { StartPoint } from './start-point.js'
 import { agentInForce, capInForce, modelInForce, publishInForce, switchedOnAt, type ListedCommand, type State, type TickDecision, type TickRecord } from './state.js'
@@ -59,14 +59,16 @@ export interface TickDeps {
   ready: (agent: AgentName) => Promise<DriverReadiness>
   /** How much of Claude's quota is used: the one agent whose quota can be read. */
   quota: () => Promise<DriverQuota>
-  /** The Claude accounts the project's runs use, in the order they try them: with two or more, or one that is not the person's own login, unattended work goes on whichever has room. */
-  accounts?: () => Promise<ClaudeAccount[]>
+  /** An agent's accounts the project's runs use, in the order they try them: with two or more, or one that is not the person's own login, unattended work goes on whichever has room. */
+  accounts?: (agent: AgentName) => Promise<AgentAccount[]>
+  /** How full a Codex account is now, read from its own home. */
+  codexUsage?: (account: AgentAccount) => Promise<DriverRateWindow[]>
   mint: () => string
   writeMarker: (card: RunCard) => Promise<FileBranchWrite>
   withdrawMarker: (id: string) => Promise<unknown>
   /** Start the run's process, detached; resolves once it is spawned. `startedAt` is the start its record keeps, `attached` what the agent is handed with the prompt, `branch` the existing branch it works on, `for` what it is for. */
   spawn: (run: { id: string; prompt: string; startedAt: string; driver: AgentName; model?: string; publish?: Publish; attached?: string; branch?: string; for?: string; account?: string }) => Promise<void>
-  /** Continue an ended run in its own process, with the text it is told and the row that resumes it, on the Claude account picked for it; resolves once it is spawned. */
+  /** Continue an ended run in its own process, with the text it is told and the row that resumes it, on the account picked for it; resolves once it is spawned. */
   resume: (run: { id: string; text: string; by: string; account?: string }) => Promise<void>
   /** Whether the scheduler was told to stop while this tick runs: then nothing more is started. */
   stopped?: () => boolean
@@ -84,7 +86,7 @@ export async function tick(deps: TickDeps): Promise<TickRecord> {
   if (!deps.state.on) return { ...record, note: 'off' }
   if (record.decisions.length === 0 && deps.schedule.commands.length === 0) return { ...record, note: 'no skill of this project schedules a command' }
 
-  const held: Readings = { readiness: {} }
+  const held: Readings = { readiness: {}, accounts: {} }
   for (const command of deps.schedule.commands) {
     for (const { outcome, started } of await decide(deps, command, held)) record.decisions.push({ command: command.name, outcome, ...(started ? { run: started.id } : {}) })
   }
@@ -98,7 +100,7 @@ export async function tick(deps: TickDeps): Promise<TickRecord> {
  */
 export async function glance(deps: TickDeps, due: (command: ScheduledCommand) => boolean): Promise<TickDecision[]> {
   if (!deps.state.on) return []
-  const held: Readings = { readiness: {} }
+  const held: Readings = { readiness: {}, accounts: {} }
   const decisions: TickDecision[] = []
   for (const command of deps.schedule.commands) {
     if (!command.checkEvery || !due(command)) continue
@@ -127,7 +129,7 @@ export async function startNow(deps: TickDeps, command: ScheduledCommand, clock:
   const giveUpAt = clock() + NOW_READY_MS
   const pulled = await deps.pull()
   if (!pulled.ok) return { ok: false, outcome: `agent-data could not be pulled: ${pulled.error}` }
-  const decided = await decide(deps, command, { readiness: {} }, { late: () => clock() > giveUpAt })
+  const decided = await decide(deps, command, { readiness: {}, accounts: {} }, { late: () => clock() > giveUpAt })
   // A row with each may start or resume several: the first is the answer, and the rest are on their records.
   const first = decided.find(d => d.started)
   return first?.started ? { ok: true, run: first.started, ...(first.outcome.startsWith('resumed ') ? { resumed: true as const } : {}) } : { ok: false, outcome: decided.map(d => d.outcome).join('; ') }
@@ -139,8 +141,8 @@ interface Readings {
   readiness: Partial<Record<AgentName, DriverReadiness>>
   /** Claude's usage, the one quota that can be read; the headroom it leaves is worked out per model. */
   quota?: DriverQuota
-  /** The person's Claude accounts. */
-  accounts?: ClaudeAccount[]
+  /** The person's accounts, per coding agent. */
+  accounts: Partial<Record<AgentName, AgentAccount[]>>
 }
 
 /** One line of what was decided for a command, and the run it started or resumed, as the command's last run. */
@@ -309,7 +311,7 @@ async function eachNamed(deps: TickDeps, command: ScheduledCommand, asked: Asked
   }
   return decided
 
-  /** Why the run cannot be resumed now, or the Claude account it goes on with. */
+  /** Why the run cannot be resumed now, or the account it goes on with. */
   async function whyNot(run: string): Promise<string | { account?: string }> {
     const card = await deps.findRun(run)
     if (!card) return 'no record of it'
@@ -332,7 +334,7 @@ async function eachNamed(deps: TickDeps, command: ScheduledCommand, asked: Asked
 /**
  * Whether a run on `agent` and `model` may go now: the agent can start, and, but for a run a
  * person asked for, there is quota and the scheduler was not stopped. The reason when not; else,
- * with several Claude accounts, the one with room the run goes on.
+ * with several accounts of the agent, the one with room the run goes on.
  */
 async function mayStart(deps: TickDeps, agent: AgentName, model: string | undefined, held: Readings, byHand?: { late: () => boolean }): Promise<{ reason: string } | { account?: string }> {
   // Both read once per tick, and only now: each spawns the agent's CLI.
@@ -340,14 +342,14 @@ async function mayStart(deps: TickDeps, agent: AgentName, model: string | undefi
   if (readiness.problems.length > 0) return { reason: `not ready: ${readiness.problems.join(' ')}` }
   if (byHand) return {}
   let account: string | undefined
-  // Only Claude's quota can be read: a run on any other agent starts without the question, and that agent says so itself when it has none left.
+  const input = { now: deps.now().getTime(), ...(model !== undefined ? { model } : {}), limitOffset: deps.state.spendOffset }
+  const accounts = (held.accounts[agent] ??= (await deps.accounts?.(agent)) ?? [])
+  // An added account alone (a project's own one) is read as an added one is, never as the person's own.
+  const several = accounts.length >= 2 || accounts[0]?.login !== undefined
   if (agent === 'claude-code') {
     const own = async (): Promise<DriverQuota> => (held.quota ??= await deps.quota().catch((): DriverQuota => ({ available: false, reason: 'fetch-failed' })))
-    const accounts = (held.accounts ??= (await deps.accounts?.()) ?? [])
-    const input = { now: deps.now().getTime(), ...(model !== undefined ? { model } : {}), limitOffset: deps.state.spendOffset }
-    // An added account alone (a project's own one) is read as an added one is, never by the person's own quota.
-    if (accounts.length >= 2 || accounts[0]?.token !== undefined) {
-      const room = await accountWithRoom(accounts, own, input)
+    if (several) {
+      const room = await accountWithRoom(accounts, readClaudeAccount(own), input, 'Claude')
       if ('reason' in room) return { reason: `quota: ${room.reason}` }
       account = room.account
     } else {
@@ -355,6 +357,11 @@ async function mayStart(deps: TickDeps, agent: AgentName, model: string | undefi
       const headroom = quotaHeadroom(quota.available ? quotaBoundaryStatus({ windows: quota.windows, ...input }) : undefined)
       if (!headroom.start) return { reason: `quota: ${headroom.reason}` }
     }
+  } else if (several && deps.codexUsage) {
+    // Codex's one own login starts without the question, as it always did: Codex says so itself when it has none left.
+    const room = await accountWithRoom(accounts, readCodexAccount(deps.codexUsage), input, 'Codex')
+    if ('reason' in room) return { reason: `quota: ${room.reason}` }
+    account = room.account
   }
   // The stop may have come in during the readings above: a stopped scheduler starts nothing.
   if (deps.stopped?.()) return { reason: 'not started: the scheduler was stopped' }

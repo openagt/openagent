@@ -168,7 +168,7 @@ already made, and lists it in its pull request; for anything else it proposes an
 
 ## Accounts
 - A project may name its own accounts, when not the computer's: its account at the git host,
-  and which of the person's Claude accounts its runs use (a project worked on as someone
-  else's agent, on their Claude). Kept on this computer for that project, never in the
+  and which of the person's Claude and Codex accounts its runs use (a project worked on as
+  someone else's agent, on their subscription). Kept on this computer for that project, never in the
   repository: whose accounts a project uses is the person's, not the project's. The
   computer's are used where it names none.

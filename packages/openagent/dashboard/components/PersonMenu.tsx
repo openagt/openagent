@@ -5,7 +5,7 @@ import { useLoaded } from '../lib/use-async.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { ThemeSubmenu } from './ThemeSubmenu.js'
 import { NotificationsSubmenu } from './NotificationsSubmenu.js'
-import { AGENT_ACCOUNTS_ENTRY, ClaudeAccountsSubmenu } from './AgentAccounts.js'
+import { AGENT_ACCOUNTS_ENTRY, AgentAccountsSubmenu } from './AgentAccounts.js'
 import { GitHostsSubmenu } from './GitHosts.js'
 import { useMissing } from './Logins.js'
 
@@ -76,9 +76,10 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
             <DropdownMenuSeparator />
           </>
         )}
-        {/* The accounts runs use: the git host's first, as the plan has it, then Claude's with the line under both. */}
+        {/* The accounts runs use: the git host's first, as the plan has it, then each agent's, with the line under them. */}
         <GitHostsSubmenu onSettings={onSettings} />
-        <ClaudeAccountsSubmenu onAdd={() => onSettings(AGENT_ACCOUNTS_ENTRY)} />
+        <AgentAccountsSubmenu agent="claude" onAdd={() => onSettings(AGENT_ACCOUNTS_ENTRY)} />
+        <AgentAccountsSubmenu agent="codex" onAdd={() => onSettings(AGENT_ACCOUNTS_ENTRY)} />
         <ThemeSubmenu />
         <NotificationsSubmenu />
         <DropdownMenuSeparator />

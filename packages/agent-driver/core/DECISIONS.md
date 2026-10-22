@@ -78,8 +78,12 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A person may give an agent several accounts of its own, kept in a list in their order: a
   run is on the first one free, and one that hits its limit hands the same conversation to
   the next free one, which is told to go on where it stopped. Only the runs an agent's
-  driver starts change account: the account's login is put in that turn's environment, and
-  the person's own login, the one their terminal uses, is never touched. Picked over
+  driver starts change account: the account's login reaches that turn alone, and the
+  person's own login, the one their terminal uses, is never touched. How it reaches the turn
+  is the agent's own (Claude Code reads a login from the turn's environment; Codex keeps one
+  in its home folder, so an added account has a folder of its own that links to the
+  conversations of the person's home); the list, its order and the hand-over are one piece
+  every agent shares. Picked over
   switching the whole computer's login when a limit is hit (every session moves, the
   person's terminal included, and a Mac keeps its login where such a switch cannot reach),
   and over a pooled account that people lend to an agent through a link (later, maybe).
@@ -87,6 +91,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   each agent's own format, so moving it to another agent would lose it.
 - An agent's package declares how its CLI is installed and logged in, each one command a
   press runs with no terminal and no admin (Claude Code: its own `install.sh` into
-  `~/.local/bin`, and `claude auth login` in this computer's browser). A dashboard shows the
+  `~/.local/bin`, and `claude auth login` in this computer's browser; Codex: its own
+  `install.sh` into `~/.local/bin`, and `codex login`). A dashboard shows the
   command under the button and runs only what the package declared. Picked over a line that
   tells the person what to type in a terminal.

@@ -62,16 +62,17 @@ export async function readPersonal(repo: string, log: (line: string) => void): P
 /**
  * The accounts this project's runs work as, when not the computer's: the `accounts:` map in the
  * config, kept on this machine only, since whose accounts a project uses is the person's, not the
- * project's. `git-host` names the account at the git host, `claude-code` the Claude accounts, in
- * the order they are tried. Anything else in the map is said on `log` and changes nothing.
+ * project's. `git-host` names the account at the git host, `claude-code` the Claude accounts and
+ * `codex` the Codex ones, each in the order they are tried. Anything else in the map is said on `log` and changes nothing.
  */
 export interface ProjectAccounts {
   gitHost?: string
   claude?: string[]
+  codex?: string[]
 }
 
 /** The keys of the `accounts:` map, by what each names. */
-const ACCOUNT_KEYS = { gitHost: 'git-host', claude: 'claude-code' } as const
+const ACCOUNT_KEYS = { gitHost: 'git-host', claude: 'claude-code', codex: 'codex' } as const
 
 export async function readProjectAccounts(repo: string, log: (line: string) => void): Promise<ProjectAccounts> {
   const value = (await readConfig(repo, log))['accounts']
@@ -86,9 +87,11 @@ export async function readProjectAccounts(repo: string, log: (line: string) => v
   const host = map[ACCOUNT_KEYS.gitHost]
   if (typeof host === 'string' && host.trim()) accounts.gitHost = host.trim()
   else if (host !== undefined && host !== null) log(`[agent-runner] ${file}: \`accounts.${ACCOUNT_KEYS.gitHost}\` is not an account`)
-  const claude = map[ACCOUNT_KEYS.claude]
-  if (Array.isArray(claude) && claude.every(name => typeof name === 'string') && claude.length > 0) accounts.claude = claude as string[]
-  else if (claude !== undefined && claude !== null) log(`[agent-runner] ${file}: \`accounts.${ACCOUNT_KEYS.claude}\` is not a list of account names`)
+  for (const agent of ['claude', 'codex'] as const) {
+    const names = map[ACCOUNT_KEYS[agent]]
+    if (Array.isArray(names) && names.every(name => typeof name === 'string') && names.length > 0) accounts[agent] = names as string[]
+    else if (names !== undefined && names !== null) log(`[agent-runner] ${file}: \`accounts.${ACCOUNT_KEYS[agent]}\` is not a list of account names`)
+  }
   for (const key of Object.keys(map)) if (!(Object.values(ACCOUNT_KEYS) as string[]).includes(key)) log(`[agent-runner] ${file}: \`accounts\` has no \`${key}\``)
   return accounts
 }
@@ -98,7 +101,7 @@ export async function readProjectAccounts(repo: string, log: (line: string) => v
  * again. The rest of the file stays as the person wrote it, comments too; the directory is hidden
  * from git as a run hides it.
  */
-export async function writeProjectAccounts(repo: string, change: { gitHost?: string | null; claude?: string[] | null }): Promise<void> {
+export async function writeProjectAccounts(repo: string, change: { gitHost?: string | null; claude?: string[] | null; codex?: string[] | null }): Promise<void> {
   const file = configFile(repo)
   const doc = parseDocument(await readFile(file, 'utf8').catch(() => ''))
   if (doc.errors.length > 0) throw new Error(`${file} does not read as YAML: ${doc.errors[0]!.message.split('\n')[0]}`)
