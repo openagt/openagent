@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { onProjectAccounts, sendProjectAccounts, type ProjectAccountsView } from '../rpc/logins.js'
-import { usePolled } from '../lib/use-async.js'
+import { readAhead, usePolled } from '../lib/use-async.js'
 import { Checkbox } from './ui/checkbox.js'
 import { SettingsSection as Section, SettingsSelectRow as SelectRow } from './SettingsRows.js'
 
@@ -12,9 +12,21 @@ import { SettingsSection as Section, SettingsSelectRow as SelectRow } from './Se
 /** The Settings entry, in the Project group. */
 export const PROJECT_ACCOUNTS_ENTRY = 'project-accounts'
 
+/** Where a project's answer is kept for the page's life. */
+const keyOf = (projectId: string): string => `project-accounts:${projectId}`
+
+/**
+ * Ask for a project's accounts before Settings opens on it: whether its Accounts entry is in the
+ * list takes the server a second to say (the git host's tool asks the host), and the list is
+ * drawn at once with what was read ahead.
+ */
+export function readProjectAccountsAhead(projectId: string): void {
+  readAhead(keyOf(projectId), () => onProjectAccounts(projectId))
+}
+
 /** The project's accounts as the page reads them; null while there is nothing a project could pick. */
 export function useProjectAccounts(projectId: string | undefined): { view: ProjectAccountsView | null; reload: () => Promise<void> } {
-  const { value, reload } = usePolled<ProjectAccountsView | null>(projectId ? () => onProjectAccounts(projectId) : null, null, 30_000, [projectId])
+  const { value, reload } = usePolled<ProjectAccountsView | null>(projectId ? () => onProjectAccounts(projectId) : null, null, 30_000, [projectId], projectId ? { remember: keyOf(projectId) } : undefined)
   return { view: value && (value.gitHost || value.claude) ? value : null, reload }
 }
 

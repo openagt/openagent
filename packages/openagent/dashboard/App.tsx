@@ -11,6 +11,7 @@ import { useSidebarWidth } from './lib/sidebar-width.js'
 import { ProjectHome } from './components/ProjectHome.js'
 import { DashboardPage } from './components/DashboardPage.js'
 import { SettingsDialog } from './components/SettingsDialog.js'
+import { readProjectAccountsAhead } from './components/ProjectAccounts.js'
 import { AgentView } from './components/AgentView.js'
 import { agentLabel, awaitingName } from './lib/agent-label.js'
 import { subagentsOf, taskLabel } from './lib/subagents.js'
@@ -112,6 +113,10 @@ export function App() {
   // The one project every page shows (#1513), or null for all of them. A project that is not
   // registered (removed, or a link from another machine) picks nothing.
   const scope = route.scope && projects.some(p => p.id === route.scope) ? route.scope : null
+  // Settings lists the picked project's Accounts entry only when there is something to pick there, which takes the server a second to say: asked now, so Settings opens with it.
+  useEffect(() => {
+    if (scope) readProjectAccountsAhead(scope)
+  }, [scope])
   // The address may name a project, and what it names is not read yet: until it is, the address's
   // word is no project's id, so nothing is read for it, and nothing says every project shows either.
   // A page's word counts: before the projects are read, a project's name reads as one.

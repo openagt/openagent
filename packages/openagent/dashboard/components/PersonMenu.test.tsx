@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { forgetRemembered } from '../lib/use-async.js'
 
 const onPerson = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/person.js', () => ({ onPerson }))
@@ -22,6 +23,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  forgetRemembered()
   onPerson.mockReset()
   accounts.onClaudeAccounts.mockReset()
   accounts.sendUseClaudeAccountFirst.mockReset()
@@ -110,6 +112,19 @@ describe('PersonMenu: the git host and what is missing', () => {
     expect(logins.sendUseGitHostAccount).toHaveBeenCalledWith('github.com', 'octo-agent')
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add account…' }))
     expect(onSettings).toHaveBeenCalledWith('git-hosts')
+  })
+
+  test('the GitHub row is there the moment the menu opens: the answer the sidebar read already is shown while it is asked again', async () => {
+    onPerson.mockResolvedValue({ name: 'Ada Lovelace', login: 'ada' })
+    logins.onGitHosts.mockResolvedValueOnce({ hosts: [GITHUB] })
+    render(<PersonMenu onSettings={vi.fn()} />)
+    const trigger = await screen.findByRole('button', { name: 'Ada Lovelace: settings' })
+    await waitFor(() => expect(logins.onGitHosts).toHaveBeenCalledTimes(1))
+    await new Promise(resolve => setTimeout(resolve, 0))
+    // Asked again on opening, and slow to answer: the row does not wait for it.
+    logins.onGitHosts.mockImplementation(() => new Promise(() => {}))
+    fireEvent.click(trigger)
+    expect(screen.getByRole('menuitem', { name: /GitHub/ }).textContent).toContain('@octo')
   })
 
   test('something runs need is missing: a dot on the picture, and the menu says what first, opening where it is fixed', async () => {

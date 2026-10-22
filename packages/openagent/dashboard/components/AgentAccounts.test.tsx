@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { forgetRemembered } from '../lib/use-async.js'
 
 const accounts = vi.hoisted(() => ({ onClaudeAccounts: vi.fn(), sendAddClaudeAccount: vi.fn(), sendRemoveClaudeAccount: vi.fn(), sendUseClaudeAccountFirst: vi.fn() }))
 vi.mock('../rpc/accounts.js', () => accounts)
@@ -26,6 +27,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  forgetRemembered()
   for (const fn of Object.values(accounts)) fn.mockReset()
   for (const fn of Object.values(logins)) fn.mockReset()
 })
