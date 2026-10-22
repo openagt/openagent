@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { refreshPreferences } from '../lib/preferences.js'
+import { forgetRemembered } from '../lib/use-async.js'
 import { ModulesContext, byMountOrder, type MountedModules } from '../lib/use-modules.js'
 import { CalendarClock, Network, Smartphone } from 'lucide-react'
 import { checked, choices, closeList, offered, openList, pick, showing } from '../test-controls.js'
@@ -58,6 +59,7 @@ const open = (entry = '', { scope = null, projects = [] }: { scope?: string | nu
 
 afterEach(() => {
   cleanup()
+  forgetRemembered()
   localStorage.clear()
   prefsSaved.mockClear()
   onClose.mockClear()
@@ -335,6 +337,19 @@ describe('the Settings list', () => {
     await waitFor(() => expect(entries('Project')).toEqual(['Accounts', 'Orchestration']))
     await pick(select('Project'), 'All projects')
     expect(entries('Project')).toEqual(['Orchestration', 'Scheduler'])
+    projectAccounts.onProjectAccounts.mockResolvedValue({} as never)
+  })
+
+  test("a project's Accounts entry read ahead is in the list from the dialog's first frame, not after the server's second", async () => {
+    const { readProjectAccountsAhead } = await import('./ProjectAccounts.js')
+    projectAccounts.onProjectAccounts.mockResolvedValueOnce({ gitHost: { host: 'github.com', name: 'GitHub', requestWord: 'pull request', accounts: ['octo', 'octo-agent'], computer: 'octo' } } as never)
+    readProjectAccountsAhead('p1')
+    await new Promise(resolve => setTimeout(resolve, 0))
+    // Opened later, and the server slow to answer again.
+    projectAccounts.onProjectAccounts.mockImplementation(() => new Promise(() => {}))
+    show('', 'p1')
+    expect(entries('Project')).toEqual(['Accounts', 'Orchestration'])
+    projectAccounts.onProjectAccounts.mockReset()
     projectAccounts.onProjectAccounts.mockResolvedValue({} as never)
   })
 

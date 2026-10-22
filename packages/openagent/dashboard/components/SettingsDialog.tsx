@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import { ArrowLeft, Bell, Bot, ChevronRight, GitBranch, Globe, KeyRound, Palette, Users, X } from 'lucide-react'
 import { DRIVERS } from '../../src/client.js'
@@ -15,7 +15,7 @@ import { BridgeSettings } from './BridgeSettings.js'
 import { AGENT_ACCOUNTS_ENTRY, AgentAccountsSettings } from './AgentAccounts.js'
 import { GitHostsSettings } from './GitHosts.js'
 import { GIT_HOSTS_ENTRY } from './Logins.js'
-import { PROJECT_ACCOUNTS_ENTRY, ProjectAccountsSettings, useProjectAccounts } from './ProjectAccounts.js'
+import { PROJECT_ACCOUNTS_ENTRY, ProjectAccountsSettings, readProjectAccountsAhead, useProjectAccounts } from './ProjectAccounts.js'
 import { BridgeBrowserSettings } from './BridgeBrowserSettings.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
 import { Switch } from './ui/switch.js'
@@ -96,6 +96,10 @@ export function SettingsDialog({
   const forProject = mounted.filter(section => !section.computer && (project ? section.projects.includes(project.id) : section.projects.length > 0))
   // A project's own accounts: one project's, so only with one picked, and only when there is something to pick.
   const { view: projectAccounts } = useProjectAccounts(project?.id)
+  // The other projects' too, so the project select shows a project's entries at once.
+  useEffect(() => {
+    for (const p of projects) readProjectAccountsAhead(p.id)
+  }, [projects])
   const ownForProject: Entry[] = project && projectAccounts ? [{ id: PROJECT_ACCOUNTS_ENTRY, title: 'Accounts', icon: KeyRound, body: <ProjectAccountsSettings projectId={project.id} /> }] : []
   const projectEntries = [...ownForProject, ...forProject.map(section => moduleEntry(section, project ? [project] : projects))]
   const shown = [...yours, ...projectEntries].find(e => e.id === entry)
