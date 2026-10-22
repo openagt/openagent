@@ -22,6 +22,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { cn } from '../lib/utils.js'
+import { AddedAccountsUsage } from './AgentAccounts.js'
 
 // The usage bar (#960): one week-long track, so "am I ahead or behind?" is a glance rather than a
 // calculation. It replaces the pair of flat meters that came before (#519/#879), which showed the
@@ -517,6 +518,8 @@ export function Quota({ projects }: { projects: ProjectSummary[] }) {
             ))}
           </div>
         ) : null}
+
+        <AddedAccountsUsage />
 
         {note ? (
           <p className="text-sm text-muted-foreground">

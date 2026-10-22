@@ -288,8 +288,8 @@ export function App() {
 
   // Settings (#958): a dialog over the page you are on, which stays under it, its own query too.
   // Moving between its entries replaces the address, so Back closes it rather than stepping through them.
-  const showSettings = () => {
-    navigate({ ...route, settings: '' }, { keepQuery: true })
+  const showSettings = (entry = '') => {
+    navigate({ ...route, settings: entry }, { keepQuery: true })
   }
   const showSettingsEntry = (entry: string) => {
     navigate({ ...route, settings: entry }, { keepQuery: true, replace: true })

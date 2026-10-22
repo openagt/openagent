@@ -25,6 +25,8 @@ const PROJECTS: ProjectSummary[] = [
 
 let view: QuotaView | undefined
 vi.mock('../lib/quota.js', () => ({ useQuota: () => view }))
+// The added accounts' rows have their own suite.
+vi.mock('./AgentAccounts.js', () => ({ AddedAccountsUsage: () => null }))
 
 const { Quota } = await import('./Quota.js')
 

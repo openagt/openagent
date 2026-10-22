@@ -1,6 +1,6 @@
 import { useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { ArrowLeft, Bell, Bot, ChevronRight, Globe, Palette, X } from 'lucide-react'
+import { ArrowLeft, Bell, Bot, ChevronRight, Globe, Palette, Users, X } from 'lucide-react'
 import { DRIVERS } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import { NO_MODEL_PINNED } from '../lib/agent-settings.js'
@@ -12,6 +12,7 @@ import { useDetectedEditors } from '../lib/editors.js'
 import { usePreferences, updatePreferences, themePreference, type ThemePreference } from '../lib/preferences.js'
 import { useNotificationPermission } from '../lib/notification-permission.js'
 import { BridgeSettings } from './BridgeSettings.js'
+import { AGENT_ACCOUNTS_ENTRY, AgentAccountsSettings } from './AgentAccounts.js'
 import { BridgeBrowserSettings } from './BridgeBrowserSettings.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
 import { Switch } from './ui/switch.js'
@@ -225,7 +226,7 @@ function ProjectSelect({ projects, value, onChange }: { projects: ProjectSummary
   )
 }
 
-/** The dashboard's own entries, the first of the list: how it looks, what it tells you, which agent runs, Claude web. */
+/** The dashboard's own entries, the first of the list: how it looks, what it tells you, which agent runs, on which accounts, Claude web. */
 function useOwnEntries(): Entry[] {
   const preferences = usePreferences()
   const editors = useDetectedEditors()
@@ -351,6 +352,12 @@ function useOwnEntries(): Entry[] {
           />
         </Section>
       ),
+    },
+    {
+      id: AGENT_ACCOUNTS_ENTRY,
+      title: 'Agent accounts',
+      icon: Users,
+      body: <AgentAccountsSettings />,
     },
     {
       id: 'claude-web',
