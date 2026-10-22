@@ -18,6 +18,9 @@ vi.mock('../lib/preferences.js', () => ({
   notificationsEnabled: () => false,
 }))
 vi.mock('../lib/notification-permission.js', () => ({ useNotificationPermission: () => 'default' }))
+// Nothing missing unless a test says so: the Get ready step is not on the board then.
+const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(async () => ({ hosts: [] })), onAgentState: vi.fn(async () => ({ driver: 'claude-code', ready: true })), sendAgentFix: vi.fn(), sendGitHostInstall: vi.fn(), sendGitHostLogin: vi.fn(), sendUseGitHostAccount: vi.fn() }))
+vi.mock('../rpc/logins.js', () => logins)
 // One stable object, so a test can steer the start and its error without a re-mock.
 const startAgent = vi.hoisted(() => ({ start: vi.fn(), busy: false, error: null as string | null }))
 vi.mock('../lib/use-start-agent.js', async () => ({
@@ -61,6 +64,29 @@ const clickImport = async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'Update tickets' }))
   await waitFor(() => expect(startAgent.start).toHaveBeenCalled())
 }
+
+describe('OnboardingChecklist: Get ready', () => {
+  test('first, and only while something runs need is missing: the agent not installed, the git host with no account, each with its press', async () => {
+    onDashboard.mockResolvedValue(WITH_PROJECT)
+    onOnboarding.mockResolvedValue(null)
+    logins.onAgentState.mockResolvedValue({ driver: 'claude-code', ready: false, problem: '`claude` not found', fix: { kind: 'install', command: 'curl -fsSL https://claude.ai/install.sh | bash' } } as never)
+    logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: { name: 'GitHub', requestWord: 'pull request', tool: 'gh', installed: true, install: 'brew install gh', accounts: [] } }] } as never)
+    render(<OnboardingChecklist onAgentStarted={vi.fn()} onSelectProject={() => {}} />)
+    expect(await screen.findByText('Get ready')).toBeTruthy()
+    expect(screen.getAllByRole('listitem')[0]!.textContent).toMatch(/^Get ready/)
+    expect(screen.getByText('Claude Code is not installed.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Install Claude Code' })).toBeTruthy()
+    expect(screen.getByText('No GitHub account is logged in.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Log in to GitHub' })).toBeTruthy()
+    cleanup()
+
+    logins.onAgentState.mockResolvedValue({ driver: 'claude-code', ready: true } as never)
+    logins.onGitHosts.mockResolvedValue({ hosts: [] })
+    render(<OnboardingChecklist onAgentStarted={vi.fn()} onSelectProject={() => {}} />)
+    await waitFor(() => expect(screen.getByText('Add a project')).toBeTruthy())
+    expect(screen.queryByText('Get ready')).toBeNull()
+  })
+})
 
 describe('OnboardingChecklist (#1139)', () => {
   test('the steps nothing breaks without are marked optional, and the two essentials are not', async () => {

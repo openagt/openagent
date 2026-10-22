@@ -18,6 +18,8 @@ vi.mock('../lib/preferences.js', () => ({ usePreferences: () => prefs.current, u
 const machine = vi.hoisted(() => ({ current: null as null | { id: string; url: string; label: string } }))
 vi.mock('../lib/machines.js', () => ({ useMachines: () => (machine.current ? [machine.current] : []) }))
 vi.mock('../lib/remote-target.js', () => ({ useSelectedMachineId: () => machine.current?.id ?? null }))
+const logins = vi.hoisted(() => ({ onAgentState: vi.fn(), sendAgentFix: vi.fn(), onGitHosts: vi.fn(), sendGitHostInstall: vi.fn(), sendGitHostLogin: vi.fn(), sendUseGitHostAccount: vi.fn() }))
+vi.mock('../rpc/logins.js', () => logins)
 
 const start = vi.hoisted(() => vi.fn())
 // What the start says of itself beside its answer: that the machine is cloning the project, or why there is no run.
@@ -331,6 +333,24 @@ describe('StartAgentForm (#1774)', () => {
     expect(problem!.className).toContain('text-danger')
     expect(warning!.className).toContain('text-warning')
     expect((screen.getByText('submit-typed') as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  test('a problem a press fixes has its button on the red line, with the command it runs; once fixed, the check is asked again and the line goes', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    const line = '`claude` is not logged in. Run `claude auth login`, then start again.'
+    onStartCheck.mockResolvedValue({ problems: [line], warnings: [], fix: { kind: 'log-in', command: 'claude auth login' } })
+    let ready = false
+    logins.onAgentState.mockImplementation(async () => (ready ? { driver: 'claude-code', ready: true } : { driver: 'claude-code', ready: false, problem: line, fix: { kind: 'log-in', command: 'claude auth login' } }))
+    logins.sendAgentFix.mockImplementation(async () => {
+      ready = true
+      return { ok: true }
+    })
+    render(<StartAgentForm {...props} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Log in to Claude Code' }))
+    expect(screen.getByText('claude auth login')).toBeTruthy()
+    await waitFor(() => expect(logins.sendAgentFix).toHaveBeenCalledWith('claude-code'))
+    onStartCheck.mockResolvedValue({ problems: [], warnings: [] })
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull(), { timeout: 3000 })
   })
 
   test('the row above the box starts with the project\'s name, said in words, not a button', () => {

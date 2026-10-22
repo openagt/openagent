@@ -103,3 +103,15 @@ already made, and lists it in its pull request; for anything else it proposes an
   dashboard offers it without naming GitHub. Always private: making code public is never this
   command's choice. Picked over a name the person types, which is one more thing to ask, and
   over moving a project that already has a remote.
+
+## Accounts
+- OpenAgent's runs work as an account of their own at GitHub, picked in OpenAgent, and given
+  to each run as that account's token, for `gh` and for git's pushes. Switching it never
+  changes the terminal's `gh`, and a switch in the terminal never moves the runs: the runs'
+  account is the one `gh` had active when OpenAgent first looked, kept until it is picked
+  again in OpenAgent. Picked over runs following the terminal's account until one is picked.
+- No switch at a limit for GitHub: the account is the agent's identity (who opens the pull
+  request, which forks it may push to), and its hourly calls are plenty. Picked over a list
+  that hands over like the Claude accounts do.
+- `gh` is installed with no admin: with Homebrew where it is, else GitHub's own build into
+  `~/.local/bin`, the command shown under the button that runs it.

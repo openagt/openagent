@@ -28,6 +28,9 @@ const onModels = vi.hoisted(() =>
 vi.mock('../rpc/models.js', () => ({ onModels }))
 // Its own suite reads the accounts; here the entry is its name.
 vi.mock('./AgentAccounts.js', () => ({ AGENT_ACCOUNTS_ENTRY: 'agent-accounts', AgentAccountsSettings: () => <p>Claude accounts</p> }))
+vi.mock('./GitHosts.js', () => ({ GitHostsSettings: () => <p>Git hosts</p> }))
+const projectAccounts = vi.hoisted(() => ({ onProjectAccounts: vi.fn(async () => ({})), sendProjectAccounts: vi.fn() }))
+vi.mock('../rpc/logins.js', () => projectAccounts)
 vi.mock('../rpc/reads.js', async importOriginal => ({
   ...(await importOriginal<typeof import('../rpc/reads.js')>()),
   onBridgeToken: vi.fn(async () => null),
@@ -317,13 +320,22 @@ describe('the Settings list', () => {
 
   test("two groups: yours and this computer's, the computer's packages among them; then the picked project's packages", () => {
     show('', 'p1')
-    expect(entries('You and this computer')).toEqual(['Appearance', 'Notifications', 'Agent', 'Agent accounts', 'Claude web', 'Devices'])
+    expect(entries('You and this computer')).toEqual(['Appearance', 'Notifications', 'Agent', 'Agent accounts', 'Git hosts', 'Claude web', 'Devices'])
     // gemstack has orchestration and no scheduler.
     expect(entries('Project')).toEqual(['Orchestration'])
     expect(showing(select('Project'))).toBe('gemstack')
     // Opened on nothing in particular: the first entry.
     expect(title()).toBe('SettingsAppearance')
     expect(screen.getByRole('button', { name: 'Appearance' }).getAttribute('aria-current')).toBe('page')
+  })
+
+  test("a project's own accounts are an entry of that project's, first, when the computer has something to pick; never under All projects", async () => {
+    projectAccounts.onProjectAccounts.mockResolvedValue({ gitHost: { host: 'github.com', name: 'GitHub', accounts: ['octo', 'octo-agent'], computer: 'octo' } } as never)
+    show('', 'p1')
+    await waitFor(() => expect(entries('Project')).toEqual(['Accounts', 'Orchestration']))
+    await pick(select('Project'), 'All projects')
+    expect(entries('Project')).toEqual(['Orchestration', 'Scheduler'])
+    projectAccounts.onProjectAccounts.mockResolvedValue({} as never)
   })
 
   test("a package's entry of the picked project is given that project alone, and the computer's none", () => {

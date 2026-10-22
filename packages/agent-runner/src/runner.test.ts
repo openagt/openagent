@@ -8,7 +8,8 @@ import { ClaudeCodeDriver } from '@openagt/agent-driver-claude'
 import { CodexDriver } from '@openagt/agent-driver-codex'
 import { markerCard, writeMarker } from './records.js'
 import { runCommand } from './run.js'
-import { detachResume, detachRun, driverFor, readyToRun, resumeArgs, resumeProject, runArgs } from './runner.js'
+import { detachResume, detachRun, driverFor, readyToRun, resumeArgs, resumeProject, runArgs, workAs } from './runner.js'
+import { writeProjectAccounts } from './config.js'
 import { removeRepo, testRepo } from './test-repo.js'
 import { TITLE_SYSTEM } from './title.js'
 
@@ -133,7 +134,7 @@ test('a spawned run is told its tool, and its model only when it has one', () =>
   assert.deepEqual(runArgs({ id: 'r1', prompt: '/reply', branch: 'dark-mode', for: 'https://github.com/o/r/pull/6' }), ['run', '/reply', '--id', 'r1', '--branch', 'dark-mode', '--for', 'https://github.com/o/r/pull/6'])
 })
 
-test('ready to run: the coding agent\'s problems stop a run; nothing else is probed, the git host least of all', async () => {
+test('ready to run: the coding agent\'s problems stop a run; nothing else is probed, the git host only for a project that names its own account there', async () => {
   const notRoot = () => false
   const probed: string[] = []
   const answers = (loggedIn: boolean) => async (bin: string, args: readonly string[]) => {
@@ -165,6 +166,35 @@ test('ready to run on Codex: skills in ~/.agents/skills are no warning while run
     const out = await readyToRun(repo, 'codex', deps)
     assert.deepEqual(out.problems, [])
     assert.match(out.warnings[0]!, /no switch/)
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
+test('ready to run, and the run: a project that names its own account at the git host works as it; one the git host cannot give stops the run before it starts', async () => {
+  const repo = await testRepo()
+  try {
+    const probe = async (_bin: string, args: readonly string[]) => ({ ok: true, output: args[0] === '--version' ? '2.1.0' : JSON.stringify({ loggedIn: true }) })
+    const asked: (string | undefined)[] = []
+    const gitHostEnv = async (_repo: string, user?: string) => {
+      asked.push(user)
+      return user === 'stranger' ? { ok: false as const, error: 'gh knows no account stranger' } : { ok: true as const, env: { GH_TOKEN: `tok-${user ?? 'computer'}` } }
+    }
+    assert.deepEqual(await readyToRun(repo, 'claude-code', { probe, isRoot: () => false, gitHostEnv }), { problems: [], warnings: [] })
+    assert.deepEqual(asked, [], 'no account named: the git host is not asked')
+    // No account named: the computer's.
+    const env: NodeJS.ProcessEnv = {}
+    assert.deepEqual(await workAs(repo, () => {}, { gitHostEnv, env }), {})
+    assert.equal(env['GH_TOKEN'], 'tok-computer')
+
+    await writeProjectAccounts(repo, { gitHost: 'octo-agent', claude: ['Rom', 'Dani'] })
+    assert.deepEqual(await workAs(repo, () => {}, { gitHostEnv, env }), { claude: ['Rom', 'Dani'] })
+    assert.equal(env['GH_TOKEN'], 'tok-octo-agent')
+
+    await writeProjectAccounts(repo, { gitHost: 'stranger' })
+    const out = await readyToRun(repo, 'claude-code', { probe, isRoot: () => false, gitHostEnv })
+    assert.match(out.problems[0]!, /work as stranger at the git host.*gh knows no account stranger/)
+    await assert.rejects(workAs(repo, () => {}, { gitHostEnv, env: {} }), /work as stranger/)
   } finally {
     await removeRepo(repo)
   }

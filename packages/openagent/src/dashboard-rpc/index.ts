@@ -23,6 +23,7 @@ export { onMachines, sendAddMachine, sendRemoveMachine, onMachinesReachable, onM
 export { onModules, runModuleCommand, runComputerCommand, runComputerCommandOn, readModule, type DashboardModule, type ModuleCommandResult, type ModuleReadResult } from './modules.js'
 export { onProjectSkills, sendChangeSkills, sendProjectSkills, type ProjectSkills, type ProjectSkill, type ChangeSkillsResult } from './skills.js'
 export { onPerson, type Person } from './person.js'
+export { onGitHosts, sendUseGitHostAccount, sendGitHostLogin, sendGitHostInstall, onAgentState, sendAgentFix, onProjectAccounts, sendProjectAccounts, type GitHostsView, type GitHostRow, type GitHostAccount, type GitHostProvider, type AgentState, type ProjectAccountsView } from './logins.js'
 export { onClaudeAccounts, sendAddClaudeAccount, sendRemoveClaudeAccount, sendUseClaudeAccountFirst, sendNameOwnClaudeAccount, type AccountRow, type AccountsView, type AccountResult } from './accounts.js'
 
 import * as reads from './reads.js'
@@ -36,6 +37,7 @@ import * as modules from './modules.js'
 import * as skills from './skills.js'
 import * as person from './person.js'
 import * as accounts from './accounts.js'
+import * as logins from './logins.js'
 import { streamAgentEvents } from './events.js'
 
 /** One RPC: called with whatever the browser sent, answering with whatever JSON.stringify keeps. */
@@ -56,7 +58,7 @@ export type RpcHandler = (...args: never[]) => unknown
 export const RPC_HANDLERS: Record<string, RpcHandler> = Object.assign(
   Object.create(null) as Record<string, RpcHandler>,
   Object.fromEntries(
-    [reads, control, projects, preferences, quota, models, machines, modules, skills, person, accounts]
+    [reads, control, projects, preferences, quota, models, machines, modules, skills, person, accounts, logins]
       .flatMap(module => Object.entries(module))
       .filter((entry): entry is [string, RpcHandler] => typeof entry[1] === 'function'),
   ),

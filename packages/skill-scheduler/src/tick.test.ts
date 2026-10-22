@@ -985,27 +985,36 @@ test('between ticks, only the rows that may be checked more often and are due ag
 
 test('with several Claude accounts unattended work goes on the first with room, and the run or the resume is told which; with every one past its line nothing starts, and the line says each', async () => {
   const dani = { name: 'Dani', token: 'sk-ant-oat01-dani', windows: [{ window: 'seven_day', percentUsed: 10, resetsAt: NOW.getTime() + 4 * 24 * 60 * 60 * 1000 }] }
-  const started = deps({ quota: async () => quota(90), accounts: () => [{ name: 'Rom' }, dani] })
+  const started = deps({ quota: async () => quota(90), accounts: async () => [{ name: 'Rom' }, dani] })
   assert.match((await tick(started.deps)).decisions[0]!.outcome, /^started /)
   assert.equal(started.seen.spawned[0]!.account, 'Dani')
 
-  const own = deps({ quota: async () => quota(10), accounts: () => [{ name: 'Rom' }, dani] })
+  const own = deps({ quota: async () => quota(10), accounts: async () => [{ name: 'Rom' }, dani] })
   await tick(own.deps)
   assert.equal(own.seen.spawned[0]!.account, 'Rom')
 
-  const resumed = deps({ commands: [replyRow()], ...printing(['r1', 'why?']), ...records(ended('r1')), quota: async () => quota(90), accounts: () => [{ name: 'Rom' }, dani] })
+  const resumed = deps({ commands: [replyRow()], ...printing(['r1', 'why?']), ...records(ended('r1')), quota: async () => quota(90), accounts: async () => [{ name: 'Rom' }, dani] })
   await tick(resumed.deps)
   assert.equal(resumed.seen.resumed[0]!.account, 'Dani')
 
-  const spent = deps({ quota: async () => quota(90), accounts: () => [{ name: 'Rom' }, { ...dani, limitedUntil: NOW.getTime() + 60 * 60_000 }] })
+  const spent = deps({ quota: async () => quota(90), accounts: async () => [{ name: 'Rom' }, { ...dani, limitedUntil: NOW.getTime() + 60 * 60_000 }] })
   const [decision] = (await tick(spent.deps)).decisions
   assert.match(decision!.outcome, /^quota: every Claude account is past its line \(Rom: Current week \(all models\) is 90% used, .*; Dani is at its limit, free again in 1 h\)$/)
   assert.deepEqual(spent.seen.spawned, [])
 })
 
 test('with one Claude account the gate is as it always was, and no run is told an account', async () => {
-  const one = deps({ quota: async () => quota(10), accounts: () => [{ name: 'Rom', limitedUntil: NOW.getTime() + 60 * 60_000 }] })
+  const one = deps({ quota: async () => quota(10), accounts: async () => [{ name: 'Rom', limitedUntil: NOW.getTime() + 60 * 60_000 }] })
   await tick(one.deps)
   assert.equal(one.seen.spawned.length, 1)
   assert.equal('account' in one.seen.spawned[0]!, false)
+})
+
+test('a project whose runs use one added account alone: unattended work is gated by that account, never by the person\'s own quota, and the run is told it', async () => {
+  const dani = { name: 'Dani', token: 'sk-ant-oat01-dani', windows: [{ window: 'seven_day', percentUsed: 10, resetsAt: NOW.getTime() + 4 * 24 * 60 * 60 * 1000 }] }
+  const room = deps({ quota: async () => quota(99), accounts: async () => [dani] })
+  await tick(room.deps)
+  assert.equal(room.seen.spawned[0]!.account, 'Dani')
+  const full = deps({ quota: async () => quota(10), accounts: async () => [{ ...dani, limitedUntil: NOW.getTime() + 60 * 60_000 }] })
+  assert.match((await tick(full.deps)).decisions[0]!.outcome, /^quota: every Claude account is past its line \(Dani is at its limit/)
 })

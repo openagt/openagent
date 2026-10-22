@@ -5,6 +5,8 @@ const onPerson = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/person.js', () => ({ onPerson }))
 const accounts = vi.hoisted(() => ({ onClaudeAccounts: vi.fn(), sendUseClaudeAccountFirst: vi.fn(), sendAddClaudeAccount: vi.fn(), sendRemoveClaudeAccount: vi.fn() }))
 vi.mock('../rpc/accounts.js', () => accounts)
+const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), sendGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
+vi.mock('../rpc/logins.js', () => logins)
 // The menu's theme and notifications rows have their own suites; here they are the rows' names.
 vi.mock('./ThemeSubmenu.js', () => ({ ThemeSubmenu: () => <div role="menuitem">Theme</div> }))
 vi.mock('./NotificationsSubmenu.js', () => ({ NotificationsSubmenu: () => <div role="menuitem">Notifications</div> }))
@@ -12,13 +14,18 @@ vi.mock('./NotificationsSubmenu.js', () => ({ NotificationsSubmenu: () => <div r
 const { PersonMenu, firstName, initials } = await import('./PersonMenu.js')
 
 // No account read yet: no Claude row, as the other rows' tests expect.
-beforeEach(() => accounts.onClaudeAccounts.mockResolvedValue({ now: 0, accounts: [] }))
+beforeEach(() => {
+  accounts.onClaudeAccounts.mockResolvedValue({ now: 0, accounts: [] })
+  logins.onGitHosts.mockResolvedValue({ hosts: [] })
+  logins.onAgentState.mockResolvedValue({ driver: 'claude-code', ready: true })
+})
 
 afterEach(() => {
   cleanup()
   onPerson.mockReset()
   accounts.onClaudeAccounts.mockReset()
   accounts.sendUseClaudeAccountFirst.mockReset()
+  for (const fn of Object.values(logins)) fn.mockReset()
 })
 
 describe('PersonMenu', () => {
@@ -79,5 +86,40 @@ describe('PersonMenu', () => {
     expect(initials('Ada King Lovelace')).toBe('AL')
     expect(initials('octo')).toBe('O')
     expect(initials('  ')).toBe('?')
+  })
+})
+
+const GITHUB = {
+  host: 'github.com',
+  projects: ['site'],
+  provider: { name: 'GitHub', requestWord: 'pull request', tool: 'gh', installed: true, install: 'brew install gh', accounts: [{ login: 'octo', terminal: true, runs: true, ok: true }, { login: 'octo-agent', terminal: false, runs: false, ok: true }] },
+}
+
+describe('PersonMenu: the git host and what is missing', () => {
+  test('a GitHub row says the account runs use; its submenu uses another for runs, or opens Git hosts to add one', async () => {
+    onPerson.mockResolvedValue({ name: 'Ada Lovelace', login: 'ada' })
+    logins.onGitHosts.mockResolvedValue({ hosts: [GITHUB] })
+    logins.sendUseGitHostAccount.mockResolvedValue({ ok: true })
+    const onSettings = vi.fn()
+    render(<PersonMenu onSettings={onSettings} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ada Lovelace: settings' }))
+    const row = await screen.findByRole('menuitem', { name: /GitHub/ })
+    expect(row.textContent).toContain('@octo')
+    fireEvent.click(row)
+    fireEvent.click(await screen.findByRole('menuitem', { name: '@octo-agent' }))
+    expect(logins.sendUseGitHostAccount).toHaveBeenCalledWith('github.com', 'octo-agent')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add account…' }))
+    expect(onSettings).toHaveBeenCalledWith('git-hosts')
+  })
+
+  test('something runs need is missing: a dot on the picture, and the menu says what first, opening where it is fixed', async () => {
+    onPerson.mockResolvedValue({ name: 'Ada Lovelace', login: 'ada' })
+    logins.onAgentState.mockResolvedValue({ driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' } })
+    const onSettings = vi.fn()
+    const { container } = render(<PersonMenu onSettings={onSettings} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ada Lovelace: settings, something is missing' }))
+    expect(container.ownerDocument.querySelector('[data-testid="missing-dot"]')).toBeTruthy()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Claude Code is not logged in.' }))
+    expect(onSettings).toHaveBeenCalledWith('agent-accounts')
   })
 })

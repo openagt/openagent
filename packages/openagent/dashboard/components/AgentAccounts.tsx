@@ -4,6 +4,7 @@ import { onClaudeAccounts, sendAddClaudeAccount, sendRemoveClaudeAccount, sendUs
 import { usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { ClaudeLogo } from './driver-logos.js'
+import { AgentFix, StatePill, agentLoginState, agentWords, useAgentState } from './Logins.js'
 import { Button } from './ui/button.js'
 import { Input } from './ui/input.js'
 import { DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from './ui/dropdown-menu.js'
@@ -82,6 +83,7 @@ export function AgentAccountsSettings() {
   const [error, setError] = useState<string | undefined>()
   const [busy, setBusy] = useState(false)
   const { view, reload } = useClaudeAccounts(true)
+  const { state, reload: reloadState } = useAgentState('claude-code')
   const adding = view?.adding
 
   const act = async (go: () => Promise<{ ok: true } | { ok: false; error: string }>): Promise<boolean> => {
@@ -110,11 +112,14 @@ export function AgentAccountsSettings() {
         <header className="flex items-center gap-2 border-b border-border px-3 py-2.5">
           <ClaudeLogo className="size-4 shrink-0" />
           <h3 className="flex-1 text-sm font-medium">Claude Code</h3>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
-            <span aria-hidden className="size-1.5 rounded-full bg-success" />
-            Connected
-          </span>
+          {state && <StatePill state={agentLoginState(state)!} />}
         </header>
+        {state && !state.ready && (
+          <div className="space-y-2 border-b border-border px-3 py-2.5">
+            <p className="text-xs text-muted-foreground">{agentWords(state)}</p>
+            <AgentFix state={state} onChanged={() => void reloadState()} />
+          </div>
+        )}
         <ul className="divide-y divide-border">
           {(view?.accounts ?? []).map(account => (
             <li key={account.id} aria-label={account.name} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5">

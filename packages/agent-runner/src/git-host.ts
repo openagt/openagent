@@ -58,3 +58,20 @@ export const projectGitHost: GitHost = {
     return outcome === 'auto-armed' || outcome === 'merged' || outcome === 'watching' ? { outcome } : { outcome: 'failed', error: `the git host answered no outcome for pull request ${number}` }
   },
 }
+
+/**
+ * The environment a run gets to work as an account at the git host (`<command> env`): the one
+ * the computer's runs use, or `user`, the project's own. Nothing when the project has no git host,
+ * or one that gives no environment; a `user` it cannot give is a refusal, so a run never goes on
+ * as someone else than the project asked for.
+ */
+export async function gitHostEnv(repo: string, user?: string): Promise<{ ok: true; env: Record<string, string> } | { ok: false; error: string }> {
+  const command = await gitHostCommand(repo)
+  if (!command) return user !== undefined ? { ok: false, error: `${NO_GIT_HOST}, so no run can work as ${user}` } : { ok: true, env: {} }
+  const result = await runPackageCommand(repo, command, ['env', ...(user !== undefined ? ['--user', user] : [])])
+  if (!result.ok) return user !== undefined ? { ok: false, error: result.error } : { ok: true, env: {} }
+  const env = (result.output as { env?: unknown } | null)?.env
+  const given: Record<string, string> = {}
+  if (env && typeof env === 'object') for (const [key, value] of Object.entries(env)) if (typeof value === 'string') given[key] = value
+  return { ok: true, env: given }
+}

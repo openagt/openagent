@@ -5,7 +5,7 @@ import { homedir, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { readClaudeQuota } from './claude-code-quota.js'
 import { readClaudeModels } from './claude-code-models.js'
-import { accountEnv, accountsPath, freesIn, isLimited, markLimited, noteWindows, pickAccount, readAccounts, type ClaudeAccount } from './claude-accounts.js'
+import { accountEnv, accountsPath, freesIn, isLimited, markLimited, noteWindows, pickAccount, readAccounts, usableAccounts, type ClaudeAccount } from './claude-accounts.js'
 import { combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, cutOutput, callArgument, lineCount, patchSize, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, finishTurn, agentEnv, oneLine, attachLog, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverQuota, type DriverRateLimit, type DriverRateWindow, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
 
 /** Claude Code permission modes we pass through to the CLI. */
@@ -62,6 +62,8 @@ export interface ClaudeAccountsOption {
   path?: string
   /** The account to start on, by name: a scheduler's pick. Else the first free one. */
   prefer?: string
+  /** The accounts this session may use, by name, in the file's order: a project's own few. All of them when unsaid, or when none of these is there any more. */
+  only?: readonly string[]
   /** The clock, for tests. */
   now?: () => number
 }
@@ -252,10 +254,12 @@ export class ClaudeCodeSession implements DriverSession {
     const path = accounts.path ?? accountsPath(env)
     let said = text
     let sent = opts
+    const usable = (all: ClaudeAccount[]): ClaudeAccount[] => usableAccounts(all, accounts.only)
     // One account is no choice: the turn tries it, as one always did, whatever a limit said of it before.
-    if (readAccounts(path).length < 2) return turnOn(text, opts, new StreamJsonParser(), env)
+    const first = usable(readAccounts(path))
+    if (first.length < 2) return turnOn(text, opts, new StreamJsonParser(), first[0] ? accountEnv(first[0], env) : env)
     for (;;) {
-      const all = readAccounts(path)
+      const all = usable(readAccounts(path))
       const account = (this.account !== undefined ? all.find(a => a.name === this.account && !isLimited(a, now())) : undefined) ?? pickAccount(all, now(), accounts.prefer)
       if (account === undefined) throw new UsageLimitError(allLimited(all, now()))
       this.account = account.name
@@ -273,7 +277,7 @@ export class ClaudeCodeSession implements DriverSession {
         if (turn === undefined) throw failure
         return turn
       }
-      const after = markLimited(account.name, parser.rejected?.resetsAt, now(), path)
+      const after = usable(markLimited(account.name, parser.rejected?.resetsAt, now(), path))
       const next = pickAccount(after, now())
       if (next === undefined) throw new UsageLimitError(allLimited(after, now()))
       const frees = after.find(a => a.name === account.name)?.limitedUntil
@@ -785,6 +789,9 @@ const CLAUDE_CLI: CliSpec = {
     }
   },
   login: 'claude auth login',
+  // Claude Code's own installer puts `claude` in ~/.local/bin, and its login opens the browser and
+  // waits on this computer for the yes: neither needs a terminal.
+  fixes: { install: 'curl -fsSL https://claude.ai/install.sh | bash', login: 'claude auth login' },
 }
 
 /**

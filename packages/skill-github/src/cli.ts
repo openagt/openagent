@@ -10,6 +10,8 @@ import { createRepository, offerRepository, type CreateOffer, type CreateOutcome
 import { signedIn } from './me.js'
 import { listReplies } from './replies.js'
 import { DIARY_ENV, byline, writeComment } from './comment.js'
+import { readFileSync } from 'node:fs'
+import { HOST, ghState, hasBrew, installCommand, jobFiles, jobState, loginUnderWay, picksPath, runEnv, runsAccount, startJob, startLogin, useForRuns, type JobState, type LoggingIn } from './accounts.js'
 
 /**
  * The command line over the package (#1820): the same functions for an agent in a shell, and for
@@ -45,6 +47,14 @@ export const USAGE = `usage: github <command>
   watch <number>               wait for pull request <number>'s checks and merge it once they pass; what --merge starts where the repository has no auto-merge
   home                         the project's page on GitHub, from its origin remote
   me                           who is signed in to GitHub through gh: login, name, avatar (a picture's https address)
+  accounts [--host <host>]     the GitHub accounts this computer's gh knows and the one OpenAgent's runs use: { host, name, requestWord, logo, tool, installed,
+                               install, accounts: [{ login, terminal, runs, ok }], loggingIn? }; a host other than github.com is refused (not-mine)
+  use <login>                  OpenAgent's runs use <login> from now on, an account gh knows; the terminal's gh stays on its own
+  login                        log another account in to gh in the browser: { code, url }, the code typed at url; gh waits on for the yes, then the terminal's
+                               account is made the terminal's again
+  install                      put gh on this computer with no admin: Homebrew where it is, else GitHub's build into ~/.local/bin; answers once it
+                               started, and accounts says installing until it ended, then installFailed if it did
+  env [--user <login>]         the environment a run gets to work as <login> (default: the account runs use): { env }, its token for gh and for git
   create [--check]             create a private repository for a project with no origin, named <account>/<folder>, set it as origin and push;
                                --check only says which repository that would be
 
@@ -65,6 +75,16 @@ export interface CliDeps {
   watch?: (repo: string, number: number) => Promise<void>
   /** The environment the command runs in; the default is this process's. */
   env?: NodeJS.ProcessEnv
+  /** Whether Homebrew is here; the default asks. */
+  hasBrew?: () => Promise<boolean>
+  /** Start an install command, going on after the command answers; the default runs it in a shell of its own. */
+  shell?: (command: string) => Promise<void>
+  /** How the install started last went; the default reads it off its files. */
+  installing?: () => JobState | undefined
+  /** Start a browser login, the terminal's account given back after; the default runs gh. */
+  login?: (terminal: string | undefined) => Promise<LoggingIn>
+  /** The browser login under way; the default reads it off its files. */
+  underWay?: () => LoggingIn | undefined
 }
 
 /** A refusal: a rule said no, and the caller learns which. */
@@ -88,7 +108,19 @@ export async function runCli(argv: string[], io: CliIo, deps: CliDeps = {}): Pro
     io.stderr(USAGE)
     return 2
   }
-  const context: Context = { cwd: io.cwd, gh: deps.gh ?? nodeGhRunner(), git: deps.git ?? nodeGitRunner(), ...(deps.watch ? { watch: deps.watch } : {}), env: deps.env ?? process.env, stderr: io.stderr }
+  const context: Context = {
+    cwd: io.cwd,
+    gh: deps.gh ?? nodeGhRunner(),
+    git: deps.git ?? nodeGitRunner(),
+    ...(deps.watch ? { watch: deps.watch } : {}),
+    env: deps.env ?? process.env,
+    stderr: io.stderr,
+    hasBrew: deps.hasBrew ?? (() => hasBrew()),
+    shell: deps.shell ?? (command => startJob(jobFiles('install'), command)),
+    installing: deps.installing ?? (() => jobState(jobFiles('install'))),
+    login: deps.login ?? (terminal => startLogin(terminal)),
+    underWay: deps.underWay ?? (() => loginUnderWay()),
+  }
   try {
     io.stdout(JSON.stringify(await run(rest, context)))
     return 0
@@ -116,7 +148,15 @@ interface Context {
   watch?: (repo: string, number: number) => Promise<void>
   env: NodeJS.ProcessEnv
   stderr: (line: string) => void
+  hasBrew: () => Promise<boolean>
+  shell: (command: string) => Promise<void>
+  installing: () => JobState | undefined
+  login: (terminal: string | undefined) => Promise<LoggingIn>
+  underWay: () => LoggingIn | undefined
 }
+
+/** The logo OpenAgent draws the host's card with. */
+const LOGO = readFileSync(new URL('../assets/github.svg', import.meta.url), 'utf8').trim()
 
 type Command = (args: string[], ctx: Context) => Promise<unknown>
 
@@ -200,6 +240,99 @@ const COMMANDS: Record<string, Command> = {
     const url = await homeUrlFor(cwd, git)
     if (!url) throw new Refused({ ok: false, reason: 'no-remote' }, 'no origin remote on GitHub')
     return { ok: true, url, name: GIT_HOST_NAME }
+  },
+
+  async accounts(args, { cwd, gh, env, hasBrew, underWay, installing }) {
+    const { values } = parse(args, { host: { type: 'string' } }, 0)
+    if (values.host !== undefined && values.host.toLowerCase() !== HOST) throw new Refused({ ok: false, reason: 'not-mine', host: values.host }, `this package answers for ${HOST}, not ${values.host}`)
+    const state = await ghState(cwd, gh)
+    const accounts = state.installed ? state.accounts : []
+    const runs = runsAccount(accounts, picksPath(env))
+    const loggingIn = state.installed ? underWay() : undefined
+    const install = installing()
+    const installWith = state.installed ? undefined : installCommand(await hasBrew())
+    return {
+      ok: true,
+      host: HOST,
+      name: GIT_HOST_NAME,
+      requestWord: 'pull request',
+      logo: LOGO,
+      tool: 'gh',
+      installed: state.installed,
+      ...(installWith !== undefined ? { install: installWith } : {}),
+      accounts: accounts.map(a => ({ ...a, runs: a.login === runs })),
+      ...(loggingIn ? { loggingIn } : {}),
+      // The install a press started: going on, or why it failed while gh is still not here.
+      ...(install?.running ? { installing: true } : !state.installed && install?.failed !== undefined ? { installFailed: install.failed } : {}),
+    }
+  },
+
+  async use(args, { cwd, gh, env }) {
+    const login = parse(args, {}, 1).positionals[0]!
+    const state = await ghState(cwd, gh)
+    try {
+      useForRuns(login, state.installed ? state.accounts : [], picksPath(env))
+    } catch (err) {
+      throw new Refused({ ok: false, reason: 'no-account', login }, err instanceof Error ? err.message : String(err))
+    }
+    return { ok: true, login }
+  },
+
+  async login(args, { cwd, gh, login }) {
+    parse(args, {}, 0)
+    const state = await ghState(cwd, gh)
+    if (!state.installed) throw new Refused({ ok: false, reason: 'not-installed' }, 'gh is not on this computer: run github install first')
+    try {
+      return { ok: true, ...(await login(state.accounts.find(a => a.terminal)?.login)) }
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err)
+      throw new Refused({ ok: false, reason: 'login-failed', detail }, `gh could not start a login: ${detail}`)
+    }
+  },
+
+  async install(args, { hasBrew, shell }) {
+    parse(args, {}, 0)
+    const command = installCommand(await hasBrew())
+    if (command === undefined) throw new Refused({ ok: false, reason: 'no-build' }, `GitHub makes no gh for this computer (${process.platform} ${process.arch}): install it by hand, https://cli.github.com`)
+    try {
+      await shell(command)
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err)
+      throw new Refused({ ok: false, reason: 'install-failed', detail, command }, `gh's install could not be started: ${detail}`)
+    }
+    return { ok: true, started: true, command }
+  },
+
+  async env(args, { cwd, gh, env }) {
+    const { values } = parse(args, { user: { type: 'string' } }, 0)
+    const state = await ghState(cwd, gh)
+    const accounts = state.installed ? state.accounts : []
+    if (values.user !== undefined && !accounts.some(a => a.login === values.user)) {
+      throw new Refused({ ok: false, reason: 'no-account', login: values.user }, `gh knows no account ${values.user} on ${HOST} on this computer: log it in in OpenAgent's Settings › Git hosts`)
+    }
+    const login = values.user ?? runsAccount(accounts, picksPath(env))
+    // Nobody logged in: the run works as git and gh would anyway.
+    if (login === undefined) return { ok: true, env: {} }
+    let token: string
+    try {
+      token = (await gh(['auth', 'token', '--hostname', HOST, '--user', login], cwd)).trim()
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err)
+      throw new Refused({ ok: false, reason: 'no-token', login, detail }, `gh gave no token for ${login}: ${detail}`)
+    }
+    // GitHub says whose the token is: a login gh keeps under one name can be another account's,
+    // and a run must never go out as someone else than the account it was given.
+    let whose: string
+    try {
+      whose = (await gh(['api', 'user', '--jq', '.login'], cwd, { GH_TOKEN: token })).trim()
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err)
+      throw new Refused({ ok: false, reason: 'no-token', login, detail }, `GitHub did not take ${login}'s login: ${detail}`)
+    }
+    if (whose.toLowerCase() !== login.toLowerCase()) {
+      throw new Refused({ ok: false, reason: 'not-that-account', login, whose }, `the login gh keeps for ${login} is ${whose}'s on GitHub: add ${login} again in OpenAgent's Settings › Git hosts`)
+    }
+    return { ok: true, login, env: runEnv(token, env) }
   },
 
   async me(args, { cwd, gh }) {

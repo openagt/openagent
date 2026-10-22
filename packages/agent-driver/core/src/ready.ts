@@ -14,6 +14,15 @@ import { execFile } from 'node:child_process'
 export interface DriverReadiness {
   problems: string[]
   warnings: string[]
+  /** What a press does about the problem, when the adapter has a command for it: install the CLI, or log it in. */
+  fix?: DriverFix
+}
+
+/** The command a press runs about a problem: one the adapter declared, never one from a page. */
+export interface DriverFix {
+  kind: 'install' | 'log-in'
+  /** A shell command line, shown under the button as it is run. */
+  command: string
 }
 
 /**
@@ -33,6 +42,12 @@ export interface CliSpec {
   loggedIn: (result: { ok: boolean; output: string }) => boolean | undefined
   /** The command that logs the CLI in. */
   login: string
+  /**
+   * The commands a press may run for the person, each with no terminal and no admin: one that
+   * installs the CLI where it is found again (a folder on the PATH runs get), one that logs it in
+   * in this computer's browser. A CLI with none is fixed by hand, as its line says.
+   */
+  fixes?: { install?: string; login?: string }
 }
 
 export interface DriverReadyOptions {
@@ -59,12 +74,15 @@ export async function checkCliReady(spec: CliSpec, opts: DriverReadyOptions = {}
   const probe = opts.probe ?? probeCli
   const problems: string[] = []
   const warnings: string[] = []
+  let fix: DriverFix | undefined
 
   const version = await probe(bin, ['--version'])
   if (!version.ok) {
     problems.push(`\`${bin}\` not found — ${spec.install}`)
+    if (spec.fixes?.install !== undefined) fix = { kind: 'install', command: spec.fixes.install }
   } else if (spec.loggedIn(await probe(bin, spec.authArgs)) === false) {
     problems.push(`\`${bin}\` is not logged in. Run \`${spec.login}\`, then start again.`)
+    if (spec.fixes?.login !== undefined) fix = { kind: 'log-in', command: spec.fixes.login }
   }
 
   if ((opts.isRoot ?? runningAsRoot)()) {
@@ -73,7 +91,7 @@ export async function checkCliReady(spec: CliSpec, opts: DriverReadyOptions = {}
       `running as root, so the coding agent looks for credentials under root's home and will not find yours. Run it as ${sudoUser ? `\`${sudoUser}\`` : 'your own user'}, without \`sudo\`.`,
     )
   }
-  return { problems, warnings }
+  return { problems, warnings, ...(fix ? { fix } : {}) }
 }
 
 /** The real probe: the binary on `PATH`, ten seconds at most. */

@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { DriverEvent, SpawnLike, SpawnedProcess } from '@openagt/agent-driver'
-import { addAccount, accountsPath, freesIn, markLimited, nameOwnAccount, OWN_NAME, pickAccount, readAccounts, removeAccount, shownAccounts, useFirst, CLAUDE_TOKEN_ENV } from './claude-accounts.js'
+import { addAccount, accountsPath, freesIn, markLimited, nameOwnAccount, OWN_NAME, pickAccount, readAccounts, removeAccount, shownAccounts, useFirst, usableAccounts, CLAUDE_TOKEN_ENV } from './claude-accounts.js'
 import { ClaudeCodeDriver, GO_ON, UsageLimitError } from './claude-code.js'
 
 const HOUR = 60 * 60_000
@@ -177,4 +177,20 @@ test('with one account there is no choice: a turn tries it whatever a limit said
   const session = await new ClaudeCodeDriver({ spawn: turns([{ lines: DONE('fine') }], seen), env: {}, accounts: { path, now: () => NOW } }).start({ cwd: '/ws' })
   assert.equal((await session.prompt('go')).text, 'fine')
   assert.equal(readAccounts(path)[0]?.windows, undefined)
+}))
+
+test('a project’s own few: its runs use only the accounts it names, in the file’s order; one named is that one’s login; none still there is all of them', withFile(async path => {
+  addAccount('Dani', 'sk-ant-oat01-dani', path)
+  addAccount('Rom', 'sk-ant-oat01-rom', path)
+  const seen: Spawned[] = []
+  const session = await new ClaudeCodeDriver({ spawn: turns([{ lines: LIMITED(NOW + HOUR), code: 1 }, { lines: DONE('done') }], seen), env: {}, accounts: { path, only: ['Rom', 'Dani'], now: () => NOW } }).start({ cwd: '/ws' })
+  assert.equal((await session.prompt('go')).text, 'done')
+  // Never the person's own: Dani's first (the file's order), then Rom's.
+  assert.deepEqual(seen.map(s => s.env[CLAUDE_TOKEN_ENV]), ['sk-ant-oat01-dani', 'sk-ant-oat01-rom'])
+
+  const one: Spawned[] = []
+  await (await new ClaudeCodeDriver({ spawn: turns([{ lines: DONE('fine') }], one), env: {}, accounts: { path, only: ['Rom'], now: () => NOW } }).start({ cwd: '/ws' })).prompt('go')
+  assert.deepEqual(one.map(s => s.env[CLAUDE_TOKEN_ENV]), ['sk-ant-oat01-rom'])
+
+  assert.deepEqual(usableAccounts(readAccounts(path), ['Gone']).map(a => a.name), [OWN_NAME, 'Dani', 'Rom'])
 }))
