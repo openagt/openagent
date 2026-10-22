@@ -389,6 +389,13 @@ export interface ModuleHost {
    * there stops working. Refused, with the reason, while a run is at work there.
    */
   removeMachine(id: string): Promise<MachineRemoved>
+  /** Give a saved machine the name the person picked. */
+  renameMachine(id: string, label: string): Promise<MachineAdded>
+  /**
+   * Have a saved machine save this computer, with the link this computer's door gave for a new
+   * device: that machine then starts runs here too. Not for a computer reached through a server.
+   */
+  letMachineIn(machineId: string, link: string): Promise<MachineAdded>
   /**
    * The computers that keep a line open to a saved server: computers at home a run can be sent to
    * through the server, and whether each is saved here already. None for a machine that is no server.
@@ -426,6 +433,11 @@ export interface ModuleMachine {
   device?: string
   /** Whose computer it is, by their GitHub account, when it is another person's shared with everyone on a server. */
   owner?: string
+  /**
+   * The ids the machine is listed under at the doors of the machines it saved, as it says: one of
+   * them among this computer's own door's devices is that machine, in there too.
+   */
+  listed?: string[]
 }
 
 /** What {@link ModuleHost.machines} answers. */

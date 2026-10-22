@@ -4,9 +4,9 @@ import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { execFileSync } from 'node:child_process'
 import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { onComputersThrough, onMachineVersions, onMachines, onMachinesReachable, onProjectOnMachine, sendAddComputerThrough, sendAddMachine, sendProjectToMachine, sendRemoveMachine } from './machines.js'
+import { onComputersThrough, onMachineVersions, onMachines, onMachinesReachable, onProjectOnMachine, sendAddComputerThrough, sendAddMachine, sendLetMachineIn, sendProjectToMachine, sendRemoveMachine, sendRenameMachine } from './machines.js'
 import { openagentVersion } from '../version.js'
 import { setDashboardContext } from './context.js'
 import { testDashboardContext } from './test-context.js'
@@ -39,13 +39,25 @@ const ENTER = '/_devices/enter'
  * computer in once and answers a key, a key takes its computer out again, and a ping is answered
  * only to a key that is in, with the OpenAgent the machine runs when it says.
  */
-async function machine(codes: string[] = [], version?: string, computers?: unknown[]): Promise<{ url: string; link: (code: string) => string; in: Map<string, string>; close: () => Promise<void> }> {
+async function machine(codes: string[] = [], version?: string, computers?: unknown[], listed?: unknown): Promise<{ url: string; link: (code: string) => string; in: Map<string, string>; saved: unknown[]; close: () => Promise<void> }> {
   const good = new Set(codes)
   const inside = new Map<string, string>()
   let made = 0
+  // What its OpenAgent was asked to save, as its page would add a machine: the link and the name, to a key that is in.
+  const saved: unknown[] = []
   const srv: Server = createServer((req, res) => {
     const key = /^Bearer (.+)$/.exec(req.headers.authorization ?? '')?.[1]
-    if (req.url === '/_relay/ping') return void res.writeHead(key && inside.has(key) ? 200 : 401).end(version === undefined ? '' : JSON.stringify({ version }))
+    if (req.url === '/_relay/ping') return void res.writeHead(key && inside.has(key) ? 200 : 401).end(version === undefined ? '' : JSON.stringify({ version, ...(listed !== undefined ? { listed } : {}) }))
+    if (req.url === '/_rpc/sendAddMachine') {
+      if (!key || !inside.has(key)) return void res.writeHead(401).end()
+      let body = ''
+      req.on('data', chunk => (body += chunk))
+      req.on('end', () => {
+        saved.push(JSON.parse(body))
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ret: { ok: true } }))
+      })
+      return
+    }
     // A server's door lists the computers on a line there, to a key that is in.
     if (req.url === '/_devices/computers' && computers) return void (key && inside.has(key) ? res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ computers })) : res.writeHead(401).end())
     if (req.url !== ENTER) return void res.writeHead(404).end()
@@ -65,7 +77,7 @@ async function machine(codes: string[] = [], version?: string, computers?: unkno
   })
   await new Promise<void>(r => srv.listen(0, '127.0.0.1', () => r()))
   const url = `http://127.0.0.1:${(srv.address() as AddressInfo).port}`
-  return { url, link: code => `${url}${ENTER}#${code}`, in: inside, close: () => new Promise<void>(r => srv.close(() => r())) }
+  return { url, link: code => `${url}${ENTER}#${code}`, in: inside, saved, close: () => new Promise<void>(r => srv.close(() => r())) }
 }
 
 test('a pasted link lets this computer in on the machine, under its name, and the machine is saved with the key it answered', async () => {
@@ -226,6 +238,58 @@ test('the saved machines are told with the OpenAgent each runs, beside this comp
     } finally {
       await behind.close()
       await silent.close()
+    }
+  })
+})
+
+test('a saved machine says the ids it is listed under at the doors it saved: they are told with it, and anything that is no id is left out', async () => {
+  await withHome(async () => {
+    const studio = await machine(['a'], '1.0.0', undefined, ['k3y1d0000001', 'NOT AN ID', 7, 'a'.repeat(40)])
+    const quiet = await machine(['b'], '1.0.0', undefined, 'k3y1d0000002')
+    try {
+      await sendAddMachine(studio.link('a'), 'Studio')
+      await sendAddMachine(quiet.link('b'), 'Quiet')
+      const told = await onMachineVersions()
+      assert.deepEqual(told.machines.find(m => m.label === 'Studio')?.listed, ['k3y1d0000001'])
+      assert.equal(told.machines.find(m => m.label === 'Quiet')?.listed, undefined)
+    } finally {
+      await studio.close()
+      await quiet.close()
+    }
+  })
+})
+
+test('a saved machine is renamed; an empty name and a machine not saved are refused', async () => {
+  await withHome(async () => {
+    const studio = await machine(['a'])
+    try {
+      await sendAddMachine(studio.link('a'), 'Studio')
+      assert.deepEqual(await sendRenameMachine(studio.url, 'Studio Mac'), { ok: true, machine: { id: studio.url, label: 'Studio Mac', url: studio.url } })
+      assert.deepEqual((await onMachines()).map(m => m.label), ['Studio Mac'])
+      assert.deepEqual(await sendRenameMachine(studio.url, '  '), { ok: false, error: 'Give it a name.' })
+      assert.deepEqual(await sendRenameMachine('http://10.0.0.9:4201', 'X'), { ok: false, error: 'That machine is no longer saved.' })
+    } finally {
+      await studio.close()
+    }
+  })
+})
+
+test('a saved machine is asked to save this computer with a link of its door, as its page would add a machine; no link, no saved machine and a computer through a server are refused, and nothing is asked', async () => {
+  await withHome(async () => {
+    const studio = await machine(['a'])
+    try {
+      await sendAddMachine(studio.link('a'), 'Studio')
+      const here = 'http://192.168.1.7:4201/_devices/enter#c0de'
+      assert.deepEqual(await sendLetMachineIn(studio.url, here), { ok: true })
+      assert.deepEqual(studio.saved, [[here, hostname().replace(/\.local$/i, '') || 'another computer']])
+      assert.deepEqual(await sendLetMachineIn(studio.url, 'no link'), { ok: false, error: 'That is no link of this computer\'s door.' })
+      assert.deepEqual(await sendLetMachineIn('http://10.0.0.9:4201', here), { ok: false, error: 'That machine is no longer saved.' })
+      const through = `${studio.url}/_devices/via/abc123def456`
+      await addMachine({ url: through, key: 'd9.k', door: `${studio.url}${ENTER}`, label: 'Home PC' })
+      assert.deepEqual(await sendLetMachineIn(through, here), { ok: false, error: 'Home PC is reached through a server: its runs come here through that server.' })
+      assert.equal(studio.saved.length, 1)
+    } finally {
+      await studio.close()
     }
   })
 })

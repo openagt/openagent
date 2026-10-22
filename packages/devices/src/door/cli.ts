@@ -6,7 +6,7 @@ import { ENTER_PATH, readKeyWord } from './door.js'
 import { askMe, enterForLine, leaveLine, readLineLink } from './line-out.js'
 import { startPersonWork } from './persons.js'
 import { HTTPS_PORT, serve } from './serve.js'
-import { MAX_LINES, Unreadable, accountOf, addCode, addPerson, addressOf, computerWordFor, isComputerId, listedDevices, nameOwner, pidAlive, readStore, removeComputer, removePerson, update, type Line, type ListedDevice, type Store } from './store.js'
+import { MAX_LINES, Unreadable, accountOf, addCode, addPerson, addressOf, computerWordFor, isComputerId, listedDevices, nameOwner, pidAlive, readStore, removeComputer, removePerson, renameComputer, update, type Line, type ListedDevice, type Store } from './store.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -24,6 +24,8 @@ export const USAGE = `usage: devices <command>
                  the device is that person's, by their GitHub account (the owner is named first); where
                  OPENAGENT_PERSON_HELPER names the helper, the person gets a user and an OpenAgent of their own
   remove <id>    take one device out, by its id as status names it; it is out at once, a computer with all it holds here
+  rename <id> <name>
+                 call a device by another name, by its id as status names it; a computer under all it holds here
   github         the GitHub account gh is logged in to on this computer: who the owner would be
   owner <account>
                  name this computer's owner, once, by their GitHub account: the devices already in are theirs
@@ -544,6 +546,13 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         const [id] = rest
         if (rest.length !== 1 || !id) break
         if (!(await removeComputer(io.env, id))) throw new Refused(`no device has the id ${id}`)
+        return print(statusOf(await readStore(io.env), io.env))
+      }
+      case 'rename': {
+        const [id, name] = rest
+        if (rest.length !== 2 || !id || !name) break
+        if (!name.trim()) throw new Refused('give it a name')
+        if (!(await renameComputer(io.env, id, name))) throw new Refused(`no device has the id ${id}`)
         return print(statusOf(await readStore(io.env), io.env))
       }
       case 'https': {

@@ -32,6 +32,12 @@ export const INERT_HOST_SERVICES: HostServices = {
   async removeMachine() {
     return { ok: false, error: 'no dashboard to remove a machine from' }
   },
+  async renameMachine() {
+    return { ok: false, error: 'no dashboard to rename a machine in' }
+  },
+  async letMachineIn() {
+    return { ok: false, error: 'no dashboard to ask a machine from' }
+  },
   async computersThrough() {
     return { ok: true, computers: [] }
   },

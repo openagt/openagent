@@ -573,6 +573,18 @@ export async function removeComputer(env: NodeJS.ProcessEnv, id: string, whose?:
   })
 }
 
+/** Give a device the name the person picked: a computer under both its entries. False when no device has that id, or the name is empty. */
+export async function renameComputer(env: NodeJS.ProcessEnv, id: string, name: string): Promise<boolean> {
+  const picked = name.trim().slice(0, MAX_NAME)
+  if (!picked) return false
+  return update(env, store => {
+    const named = store.devices.find(device => device.id === id)
+    if (!named) return false
+    for (const device of store.devices) if (device === named || (named.computer !== undefined && device.computer === named.computer && device.person === named.person)) device.name = picked
+    return true
+  })
+}
+
 /** Take one entry out, and no other: what a device does when it takes itself out. False when no device has that id. */
 export async function removeDevice(env: NodeJS.ProcessEnv, id: string): Promise<boolean> {
   return update(env, store => {

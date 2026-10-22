@@ -2,7 +2,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { hostname } from 'node:os'
 import type { OpenAgentEvent } from '../events.js'
 import type { StartAgentOptions, StartAgentResult } from './types.js'
-import type { BringProject, RelayProject, RelayStartResult } from './remote-run.js'
+import { THROUGH_PATH, deviceIdOf, type BringProject, type RelayProject, type RelayStartResult } from './remote-run.js'
+import { listMachines } from '../registry.js'
 import { isLoginWord, isServerName, type GivenLogins, type MachineLogins } from './machine-logins.js'
 import { end, readJsonBody, requireGet, sendJson } from './http.js'
 import { passToScreen, screenCallOf, type ScreenCall } from './screen.js'
@@ -20,7 +21,8 @@ import { isRelayRead } from '../dashboard-rpc/relay-dispatch.js'
  * - `POST /_relay/start`  starts an ordinary local agent and returns its {@link StartAgentResult}.
  * - `GET  /_relay/events?run=<id>&project=<address>` streams that agent's events as
  *   newline-delimited JSON until it ends or the caller disconnects.
- * - `GET  /_relay/ping` (#1072) a reachability probe: 200 and this OpenAgent's version, starts nothing. The
+ * - `GET  /_relay/ping` (#1072) a reachability probe: 200, this OpenAgent's version, and the ids it is
+ *   listed under at the doors of the machines it saved; starts nothing. The
  *   online/offline status the dashboard shows is the local daemon calling this on each saved
  *   machine with its key there.
  * - `POST /_relay/rpc` (#1067 slice 2) runs one whitelisted run-scoped RPC (a read/diff/steer/handoff/
@@ -102,7 +104,7 @@ export async function handleRelayRequest(
   if (watch && req.method !== 'GET' && pathname !== `${RELAY_PREFIX}/rpc`) return end(res, 403, WATCH_ONLY)
   // Ping is a pure reachability probe (#1072): it needs no wired handlers and starts nothing,
   // so it answers even on a host that enabled no relay.
-  if (pathname === `${RELAY_PREFIX}/ping`) return handlePing(req, res)
+  if (pathname === `${RELAY_PREFIX}/ping`) return void handlePing(req, res)
   if (!handlers) return end(res, 404, 'relay not enabled')
   if (pathname === `${RELAY_PREFIX}/start`) return handleStart(req, res, handlers)
   if (pathname === `${RELAY_PREFIX}/events`) return handleEvents(req, res, handlers)
@@ -129,9 +131,14 @@ async function handleScreen(req: IncomingMessage, res: ServerResponse, handlers:
  * nothing; it proves this daemon is reachable, and to another machine that its key still lets it in, tells that
  * machine whether this one fell behind it, and which runs in a project's shared records are this computer's:
  * a run's record carries the name of the computer that ran it. */
-function handlePing(req: IncomingMessage, res: ServerResponse): void {
+async function handlePing(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (!requireGet(req, res)) return
-  sendJson(res, { version: openagentVersion(), host: hostname() })
+  // The ids this OpenAgent is listed under at the doors of the machines it saved: a computer that
+  // saved this one, and that this one saved too, finds this one among its own door's devices by them.
+  const listed = (await listMachines().catch(() => []))
+    .filter(machine => !machine.url.includes(THROUGH_PATH))
+    .flatMap(machine => deviceIdOf(machine.key) ?? [])
+  sendJson(res, { version: openagentVersion(), host: hostname(), listed })
 }
 
 /** `POST /_relay/start`: read the agent request, start it locally, and answer with the result JSON. */

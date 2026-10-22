@@ -732,6 +732,20 @@ export async function tellMachine(id: string, fs: RegistryFs = nodeRegistryFs(),
   })
 }
 
+/** Give a saved machine the name the person picked. Answers the machine as saved; nothing when it is not saved, or the name is empty. */
+export async function renameMachine(id: string, label: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<MachineRecord | undefined> {
+  const name = label.trim().slice(0, MACHINE_LIMITS.label)
+  if (!name) return undefined
+  return serialize(async () => {
+    const registry = await readRegistry(fs, env)
+    const saved = (registry.machines ?? []).find(candidate => candidate.id === id)
+    if (!saved) return undefined
+    const renamed = { ...saved, label: name }
+    await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(machine => (machine.id === id ? renamed : machine)) }, fs, env)
+    return renamed
+  })
+}
+
 /** Take a saved machine off the list, by id. Answers the one that was there. */
 export async function removeMachine(
   id: string,
