@@ -31,6 +31,7 @@
     "clean": "rm -rf dist dist-test"
   },
   "dependencies": {
+    "@openagt/agent-driver-claude": "workspace:*",
     "@openagt/remote-access": "workspace:*"
   },
   "devDependencies": {

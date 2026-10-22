@@ -66,6 +66,10 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The Claude login is made new for the server by one press on this computer, with
   `claude setup-token`, and lasts a year. This computer's own Claude login is never copied:
   used on two computers, it logs one of them out.
+- A server's runs may use other Claude accounts beside its own login: each added under its
+  Claude login, by a name and the same one press, and a run that hits a limit goes on with the
+  next free one. Picked over a person sharing theirs from their own OpenAgent, and over a link
+  that asks someone to share; both may come later.
 - The owner's logins go to the server over SSH, as the install does. An invited person's go
   through the server's door, with their own computer's key there, and only to their own
   OpenAgent: a device changes its own person's logins and nobody else's. Picked over SSH alone,

@@ -73,3 +73,15 @@ already made, and lists it in its pull request; for anything else it proposes an
   as its own CLI says, leaving out what it does not. Picked over an event shape per coding
   agent, which a reader would have to learn twice, and over leaving such a call as the
   plain tool row it was: a row with no name on it, and on Codex one that never resolved.
+
+## Accounts
+- A person may give an agent several accounts of its own, kept in a list in their order: a
+  run is on the first one free, and one that hits its limit hands the same conversation to
+  the next free one, which is told to go on where it stopped. Only the runs an agent's
+  driver starts change account: the account's login is put in that turn's environment, and
+  the person's own login, the one their terminal uses, is never touched. Picked over
+  switching the whole computer's login when a limit is hit (every session moves, the
+  person's terminal included, and a Mac keeps its login where such a switch cannot reach),
+  and over a pooled account that people lend to an agent through a link (later, maybe).
+- An account hands over only to an account of the same agent: a conversation is kept in
+  each agent's own format, so moving it to another agent would lose it.

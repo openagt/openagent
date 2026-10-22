@@ -1,4 +1,5 @@
 import type { DriverQuota, DriverReadiness } from '@openagt/agent-driver'
+import type { ClaudeAccount } from '@openagt/agent-driver-claude'
 import { markerCard, runnerMark, type Publish, type RunnerMark } from '@openagt/agent-runner'
 import type { FileBranchWrite } from '@openagt/agent-data'
 import type { RunCard } from '@openagt/skill-logs'
@@ -6,6 +7,7 @@ import { AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, LAST_RUN_ENV, NEVER_STAR
 import type { LastRun } from './records.js'
 import { dueFrom, localStamp, paceInForce, paceText } from './pace.js'
 import { quotaBoundaryStatus, quotaHeadroom } from './quota-boundary.js'
+import { accountWithRoom } from './accounts.js'
 import { ableAgents, checkFound, commandPrompt, homeAgent, isDue, lastRunValue, ownAttached, resumeText, eachItems, skillFile, type Schedule, type ScheduledCommand, type StartItem } from './schedule.js'
 import type { StartPoint } from './start-point.js'
 import { agentInForce, capInForce, modelInForce, publishInForce, switchedOnAt, type ListedCommand, type State, type TickDecision, type TickRecord } from './state.js'
@@ -57,13 +59,15 @@ export interface TickDeps {
   ready: (agent: AgentName) => Promise<DriverReadiness>
   /** How much of Claude's quota is used: the one agent whose quota can be read. */
   quota: () => Promise<DriverQuota>
+  /** The person's Claude accounts, in the order runs try them: with two or more, unattended work goes on whichever has room. */
+  accounts?: () => ClaudeAccount[]
   mint: () => string
   writeMarker: (card: RunCard) => Promise<FileBranchWrite>
   withdrawMarker: (id: string) => Promise<unknown>
   /** Start the run's process, detached; resolves once it is spawned. `startedAt` is the start its record keeps, `attached` what the agent is handed with the prompt, `branch` the existing branch it works on, `for` what it is for. */
-  spawn: (run: { id: string; prompt: string; startedAt: string; driver: AgentName; model?: string; publish?: Publish; attached?: string; branch?: string; for?: string }) => Promise<void>
-  /** Continue an ended run in its own process, with the text it is told and the row that resumes it; resolves once it is spawned. */
-  resume: (run: { id: string; text: string; by: string }) => Promise<void>
+  spawn: (run: { id: string; prompt: string; startedAt: string; driver: AgentName; model?: string; publish?: Publish; attached?: string; branch?: string; for?: string; account?: string }) => Promise<void>
+  /** Continue an ended run in its own process, with the text it is told and the row that resumes it, on the Claude account picked for it; resolves once it is spawned. */
+  resume: (run: { id: string; text: string; by: string; account?: string }) => Promise<void>
   /** Whether the scheduler was told to stop while this tick runs: then nothing more is started. */
   stopped?: () => boolean
   log?: (line: string) => void
@@ -135,6 +139,8 @@ interface Readings {
   readiness: Partial<Record<AgentName, DriverReadiness>>
   /** Claude's usage, the one quota that can be read; the headroom it leaves is worked out per model. */
   quota?: DriverQuota
+  /** The person's Claude accounts. */
+  accounts?: ClaudeAccount[]
 }
 
 /** One line of what was decided for a command, and the run it started or resumed, as the command's last run. */
@@ -216,8 +222,8 @@ async function start(deps: TickDeps, command: ScheduledCommand, { now, found }: 
     const start = await deps.atStart(skillFile(command, AGENT_SKILLS_DIR[agent]))
     if (!start.there) return { outcome: `not on ${start.ref}${start.reached ? '' : ' as this clone last saw it'}: a run's checkout starts from ${start.ref}, and the command's skill is not there` }
   }
-  const unready = await mayStart(deps, agent, model, held, byHand)
-  if (unready !== undefined) return { outcome: unready }
+  const may = await mayStart(deps, agent, model, held, byHand)
+  if ('reason' in may) return { outcome: may.reason }
   // So may a person's switch: the check and the readings take seconds, and a command switched off or removed meanwhile starts nothing.
   if (!byHand && !(await deps.stillOn(command.name))) return { outcome: 'switched off on this machine' }
   if (byHand?.late()) return { outcome: lateOutcome() }
@@ -257,7 +263,7 @@ async function start(deps: TickDeps, command: ScheduledCommand, { now, found }: 
     return { outcome: `another machine got there first: run ${first} is for ${item!.start.for}` }
   }
   try {
-    await deps.spawn({ id, prompt, startedAt: now.toISOString(), driver: agent, ...(model !== undefined ? { model } : {}), ...publish, ...(attached !== undefined ? { attached } : {}), ...(item?.start.branch !== undefined ? { branch: item.start.branch } : {}), ...(item ? { for: item.start.for } : {}) })
+    await deps.spawn({ id, prompt, startedAt: now.toISOString(), driver: agent, ...(model !== undefined ? { model } : {}), ...publish, ...(attached !== undefined ? { attached } : {}), ...(item?.start.branch !== undefined ? { branch: item.start.branch } : {}), ...(item ? { for: item.start.for } : {}), ...(may.account !== undefined ? { account: may.account } : {}) })
     return { outcome: `started ${id}`, started: { id, at: now.toISOString() } }
   } catch (err) {
     // No record says running for a run that never was.
@@ -284,12 +290,12 @@ async function eachNamed(deps: TickDeps, command: ScheduledCommand, asked: Asked
   const decided: Decided[] = []
   for (const { run, text } of named.resumes) {
     const why = await whyNot(run)
-    if (why !== undefined) {
+    if (typeof why === 'string') {
       decided.push({ outcome: `run ${run} not resumed: ${why}` })
       continue
     }
     try {
-      await deps.resume({ id: run, text: resumeText(command, text, found!.lastRun), by: command.name })
+      await deps.resume({ id: run, text: resumeText(command, text, found!.lastRun), by: command.name, ...(why.account !== undefined ? { account: why.account } : {}) })
       running.push(run)
       resumed.push(run)
       decided.push({ outcome: `resumed ${run}`, started: { id: run, at: now.toISOString() } })
@@ -303,7 +309,8 @@ async function eachNamed(deps: TickDeps, command: ScheduledCommand, asked: Asked
   }
   return decided
 
-  async function whyNot(run: string): Promise<string | undefined> {
+  /** Why the run cannot be resumed now, or the Claude account it goes on with. */
+  async function whyNot(run: string): Promise<string | { account?: string }> {
     const card = await deps.findRun(run)
     if (!card) return 'no record of it'
     const mark = runnerMark(card)
@@ -314,32 +321,43 @@ async function eachNamed(deps: TickDeps, command: ScheduledCommand, asked: Asked
     if (!isAgent(agent)) return `it is on ${agent}, which agent-runner cannot start`
     if (!ableAgents(command).includes(agent)) return notACommandOf(command, agent)
     if (running.length >= cap) return `cap reached (${running.length} in flight: ${running.join(', ')})`
-    const unready = await mayStart(deps, agent, card.model, held, byHand)
-    if (unready !== undefined) return unready
+    const may = await mayStart(deps, agent, card.model, held, byHand)
+    if ('reason' in may) return may.reason
     if (!byHand && !(await deps.stillOn(command.name))) return 'switched off on this machine'
     if (byHand?.late()) return lateOutcome()
-    return undefined
+    return may
   }
 }
 
 /**
  * Whether a run on `agent` and `model` may go now: the agent can start, and, but for a run a
- * person asked for, there is quota and the scheduler was not stopped. The reason when not.
+ * person asked for, there is quota and the scheduler was not stopped. The reason when not; else,
+ * with several Claude accounts, the one with room the run goes on.
  */
-async function mayStart(deps: TickDeps, agent: AgentName, model: string | undefined, held: Readings, byHand?: { late: () => boolean }): Promise<string | undefined> {
+async function mayStart(deps: TickDeps, agent: AgentName, model: string | undefined, held: Readings, byHand?: { late: () => boolean }): Promise<{ reason: string } | { account?: string }> {
   // Both read once per tick, and only now: each spawns the agent's CLI.
   const readiness = (held.readiness[agent] ??= await deps.ready(agent))
-  if (readiness.problems.length > 0) return `not ready: ${readiness.problems.join(' ')}`
-  if (byHand) return undefined
+  if (readiness.problems.length > 0) return { reason: `not ready: ${readiness.problems.join(' ')}` }
+  if (byHand) return {}
+  let account: string | undefined
   // Only Claude's quota can be read: a run on any other agent starts without the question, and that agent says so itself when it has none left.
   if (agent === 'claude-code') {
-    held.quota ??= await deps.quota().catch((): DriverQuota => ({ available: false, reason: 'fetch-failed' }))
-    const headroom = quotaHeadroom(held.quota.available ? quotaBoundaryStatus({ windows: held.quota.windows, now: deps.now().getTime(), ...(model !== undefined ? { model } : {}), limitOffset: deps.state.spendOffset }) : undefined)
-    if (!headroom.start) return `quota: ${headroom.reason}`
+    const own = async (): Promise<DriverQuota> => (held.quota ??= await deps.quota().catch((): DriverQuota => ({ available: false, reason: 'fetch-failed' })))
+    const accounts = (held.accounts ??= deps.accounts?.() ?? [])
+    const input = { now: deps.now().getTime(), ...(model !== undefined ? { model } : {}), limitOffset: deps.state.spendOffset }
+    if (accounts.length >= 2) {
+      const room = await accountWithRoom(accounts, own, input)
+      if ('reason' in room) return { reason: `quota: ${room.reason}` }
+      account = room.account
+    } else {
+      const quota = await own()
+      const headroom = quotaHeadroom(quota.available ? quotaBoundaryStatus({ windows: quota.windows, ...input }) : undefined)
+      if (!headroom.start) return { reason: `quota: ${headroom.reason}` }
+    }
   }
   // The stop may have come in during the readings above: a stopped scheduler starts nothing.
-  if (deps.stopped?.()) return 'not started: the scheduler was stopped'
-  return undefined
+  if (deps.stopped?.()) return { reason: 'not started: the scheduler was stopped' }
+  return account !== undefined ? { account } : {}
 }
 
 function notACommandOf(command: ScheduledCommand, agent: AgentName): string {

@@ -182,6 +182,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   only as far as the week has elapsed, plus the user's cushion, half a day when unset.
   Picked over a plainer line (a window at 100% stands down): nothing would pace the week.
   Copied rather than moved into `agent-driver`, which is not this tool's to change.
+- With several Claude accounts, unattended work starts when any account is under its line,
+  and the run is told to start on that one. Picked over the person's own account alone
+  deciding, which would stand the work down while another account had room.
 - Two machines may mark for one command at once. Each machine counts by its own number: its
   marker stands while it ranks within that number among the records in time order, and a
   machine whose marker ranks past its number withdraws the marker and does not spawn. A

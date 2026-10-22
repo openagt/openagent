@@ -138,6 +138,12 @@ export function boundaryFromResetsAt(resetsAt: number, now: number): QuotaBounda
   return { startsAt, resetsAt, day, percent: (elapsedMs / QUOTA_WEEK_MS) * 100 }
 }
 
+/** When the week resets: the exact time where the reading has it (a turn's rate-limit line), else read off the agent's words. */
+function weekResetsAt(week: DriverQuotaWindow, now: number): number | undefined {
+  if (week.resetsAt !== undefined) return week.resetsAt
+  return week.resetsAtText ? parseResetsAt(week.resetsAtText, now) : undefined
+}
+
 /**
  * Where the boundary sits for the account's own week, as the agent reported it (#879).
  *
@@ -146,7 +152,6 @@ export function boundaryFromResetsAt(resetsAt: number, now: number): QuotaBounda
  */
 export function weekBoundary(windows: readonly DriverQuotaWindow[], now: number): QuotaBoundary | undefined {
   const week = windows.find(w => w.kind === 'week')
-  if (!week?.resetsAtText) return undefined
-  const resetsAt = parseResetsAt(week.resetsAtText, now)
+  const resetsAt = week && weekResetsAt(week, now)
   return resetsAt === undefined ? undefined : boundaryFromResetsAt(resetsAt, now)
 }

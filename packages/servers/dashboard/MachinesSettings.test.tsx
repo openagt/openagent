@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ModuleHostContext, type MachineAdded, type MachineRemoved, type ModuleCommandResult, type ModuleComputersThrough, type ModuleHost, type ModuleMachinePerson, type ModuleMachines } from '@openagt/dashboard/module'
 import { MachinesSettings, olderThan } from './MachinesSettings.js'
-import type { DeviceRow, LoginRow, ServerRow, StepState } from './servers.js'
+import type { AccountRow, DeviceRow, LoginRow, ServerRow, StepState } from './servers.js'
 
 const LABELS = { login: 'Log in', user: 'The user openagent', tools: 'git, gh, Node and Chrome', name: 'Your name and email for git', openagent: 'OpenAgent', agent: 'Claude Code', service: 'The service', door: 'The door' }
 const LINK = { url: 'https://203.0.113.5/_remote-access/enter#code.pin', expires: new Date(Date.now() + 5 * 60_000).toISOString() }
@@ -11,7 +11,7 @@ const NONE: LoginRow = { there: false, working: false }
 /** A server whose steps are in these states, in the install's order; the rest have not started. It has no login unless said. */
 function server(states: StepState[], over: Partial<ServerRow> = {}): ServerRow {
   const steps = Object.entries(LABELS).map(([id, label], index) => ({ id, label, state: states[index] ?? ('waiting' as const) }))
-  return { address: '203.0.113.5', url: 'https://203.0.113.5', user: 'root', working: false, adding: true, steps, logins: { github: NONE, claude: NONE }, ...over }
+  return { address: '203.0.113.5', url: 'https://203.0.113.5', user: 'root', working: false, adding: true, steps, logins: { github: NONE, claude: NONE }, claudeAccounts: [], ...over }
 }
 const ALL_DONE: StepState[] = ['done', 'done', 'done', 'done', 'done', 'done', 'done', 'done']
 const NO_GH: ModuleCommandResult = { ok: true, output: { problem: 'There is no GitHub login to copy from this computer. `gh` is not on this computer.' } }
@@ -824,6 +824,46 @@ describe('Settings → Machines', () => {
     expect(await screen.findByText('The server did not answer.')).toBeTruthy()
   })
 
+  test('under its own Claude login a server lists its other accounts, read from it as the row shows: each with how full it was, removed on a press; another is added by a name and a yes in the browser', async () => {
+    let accounts: AccountRow[] = [{ name: 'Dani', added: '2026-10-22T12:00:00.000Z', windows: [{ window: 'five_hour', percentUsed: 3, resetsAt: 1 }, { window: 'seven_day', percentUsed: 21.4, resetsAt: 2 }] }]
+    let adding: ServerRow['claudeAdding']
+    const { host, ran } = dashboard(args => {
+      if (args[0] === 'account-add') adding = { name: args[2]!, working: true, asking: true }
+      if (args[0] === 'account-remove') accounts = accounts.filter(account => account.name !== args[2])
+      return ok({ servers: [server(ALL_DONE, { adding: false, claudeAccounts: accounts, ...(adding ? { claudeAdding: adding } : {}) })] })
+    })
+    show(host)
+    const others = within(await screen.findByRole('listitem', { name: 'Other Claude accounts' }))
+    await waitFor(() => expect(ran()).toContain('accounts 203.0.113.5'))
+    expect(others.getByText('Other Claude accounts: a run that hits a limit goes on with the next free one, in this order.')).toBeTruthy()
+    expect(others.getByText(/^added .*2026, 21% of its week used at its last run$/)).toBeTruthy()
+
+    fireEvent.click(others.getByRole('button', { name: 'Add another Claude account to 203.0.113.5' }))
+    const press = others.getByRole('button', { name: 'Log in to Claude' }) as HTMLButtonElement
+    expect(press.disabled).toBe(true)
+    fireEvent.change(others.getByRole('textbox', { name: 'Whose account it is' }), { target: { value: ' Eve ' } })
+    fireEvent.click(press)
+    await waitFor(() => expect(ran()).toContain('account-add 203.0.113.5 Eve'))
+    expect(await others.findByText("Eve: say yes in the page this computer's browser opened, logged in to Eve's Claude account.")).toBeTruthy()
+
+    adding = { name: 'Eve', working: false, said: 'No yes came from the browser in 10 minutes.' }
+    expect((await others.findByRole('alert')).textContent).toBe('Eve: No yes came from the browser in 10 minutes.')
+    fireEvent.click(others.getByRole('button', { name: 'Remove the Claude account Dani from 203.0.113.5' }))
+    await waitFor(() => expect(ran()).toContain('account-remove 203.0.113.5 Dani'))
+    expect(await others.findByText('Other Claude accounts: none. A run that hits the limit of the login above stops there.')).toBeTruthy()
+  })
+
+  test('an account at its limit says until when; a server that cannot say its accounts says why, and the rest of the row is as before', async () => {
+    const until = Date.now() + 2 * 60 * 60_000
+    const { host } = dashboard(args => (args[0] === 'accounts' ? { ok: false, error: 'The server did not answer.' } : ok({ servers: [server(ALL_DONE, { adding: false, claudeAccounts: [{ name: 'Dani', limitedUntil: until }, { name: 'Eve' }] })] })))
+    show(host)
+    const others = within(await screen.findByRole('listitem', { name: 'Other Claude accounts' }))
+    expect(within(others.getByRole('listitem', { name: 'Dani' })).getByText(/^at its limit until /)).toBeTruthy()
+    expect(within(others.getByRole('listitem', { name: 'Eve' })).getByText('no run on it yet')).toBeTruthy()
+    expect(await others.findByText('The server did not say its other accounts: The server did not answer.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Log in to Claude for 203.0.113.5' })).toBeTruthy()
+  })
+
   test('a server among the machines has the switch that lets it start runs on this computer: off until set, on asks for the line, off again leaves it only watching', async () => {
     const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://203.0.113.5', label: '203.0.113.5', url: 'https://203.0.113.5', version: '1.2.3' }] }
     let row = server(ALL_DONE, { adding: false })
@@ -1017,7 +1057,7 @@ describe('Settings → Machines: a computer reached through a server', () => {
     const steps = Object.entries(THROUGH_LABELS)
       .filter((entry): entry is [string, string] => entry[1] !== undefined)
       .map(([id, label]) => ({ id, label, state: 'done' as const }))
-    return { address: '192.168.1.20', url: VIA, user: 'rom', working: false, adding: false, through: VPS, who: 'me', steps, logins: { github: NONE, claude: NONE }, ...over }
+    return { address: '192.168.1.20', url: VIA, user: 'rom', working: false, adding: false, through: VPS, who: 'me', steps, logins: { github: NONE, claude: NONE }, claudeAccounts: [], ...over }
   }
   const SAVED: ModuleMachines = { version: '1.2.3', machines: [{ id: VPS, label: '165.245.244.10', url: VPS, version: '1.2.3' }, { id: VIA, label: 'rom-box (through 165.245.244.10)', url: VIA, version: '1.2.3' }] }
 

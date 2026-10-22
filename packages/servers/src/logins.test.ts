@@ -5,9 +5,10 @@ import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'n
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { install } from './install.js'
-import { AlreadyAtWork, changeLogin, mintClaude, mintedIn, notMinted, scrubbed, startedAs, type LoginOptions, type Mint } from './logins.js'
+import { accountsPath, readAccounts, type Mint } from '@openagt/agent-driver-claude'
+import { AlreadyAtWork, accountsSaid, addClaudeAccount, changeLogin, readClaudeAccounts, removeClaudeAccount, scrubbed, type LoginOptions } from './logins.js'
 import type { Exec } from './ssh.js'
-import { CLAUDE_FILE, SERVICE_UNIT, STEPS, claudeLoginScript, claudeLogoutScript, githubCodeScript, githubLoginScript, githubLogoutScript, githubWaitScript } from './steps.js'
+import { CLAUDE_FILE, SERVICE_UNIT, STEPS, claudeAccountAddScript, claudeAccountRemoveScript, claudeAccountsScript, claudeLoginScript, claudeLogoutScript, githubCodeScript, githubLoginScript, githubLogoutScript, githubWaitScript } from './steps.js'
 import { freshSteps, readStore, storePath, update, type LoginKind } from './store.js'
 import { GH_LOGIN, pretendServer, testHome } from './test-home.js'
 
@@ -337,118 +338,10 @@ test('taking a login off the server runs as who keeps it, and forgets it here on
   }
 })
 
-/**
- * What Claude Code draws once the person said yes, as a terminal gets it: recorded from the real
- * `claude setup-token` (2.1.296) in the terminal lent to it, with a made-up login in the real
- * one's place. Its last two lines hold no space: each word is put at its column.
- */
-const screen = (login: string): string =>
-  [
-    '\x1b[2GPaste\x1b[8Gcode\x1b[13Ghere\x1b[18Gif\x1b[21Gprompted\x1b[30G>\r\r\n',
-    '\x1b[?2026l\x1b[?2026h\r\x1b[1C\x1b[7A\x1b[K\r\x1b[1C\x1b[1B\x1b[38;2;78;186;101m✓ Long-lived authentication token created successfully!\r\x1b[1B\x1b[39m\x1b[K',
-    '\r\x1b[1B Your OAuth token (valid for 1 year):\x1b[K',
-    `\r\x1b[1C\x1b[2B\x1b[38;2;255;193;7m${login}\r\x1b[1C\x1b[1B\x1b[39m\x1b[K\r\r\n`,
-    "\x1b[2G\x1b[38;2;153;153;153mStore\x1b[8Gthis\x1b[13Gtoken\x1b[19Gsecurely.\x1b[29GYou\x1b[33Gwon't\x1b[39Gbe\x1b[42Gable\x1b[47Gto\x1b[50Gsee\x1b[54Git\x1b[57Gagain.\x1b[39m\r\r\n\r\r\n",
-    '\x1b[2G\x1b[38;2;153;153;153mUse\x1b[6Gthis\x1b[11Gtoken\x1b[17Gby\x1b[20Gsetting:\x1b[29Gexport\x1b[36GCLAUDE_CODE_OAUTH_TOKEN=<token>\x1b[39m\r\r\n\r\r\n',
-  ].join('')
 
-test('the Claude login is read off what Claude Code shows once all of it is there, and only what reads as one; what is told of a failure never holds a part of one', () => {
-  assert.equal(mintedIn(screen(CLAUDE_LOGIN)), CLAUDE_LOGIN)
-  // Drawn again, as a terminal's screen is: still the one login.
-  assert.equal(mintedIn(screen(CLAUDE_LOGIN) + screen(CLAUDE_LOGIN)), CLAUDE_LOGIN)
-  // The same words with plain spaces between them, as a screen that puts no word at a column would hold them.
-  assert.equal(mintedIn(`Your OAuth token (valid for 1 year):\r\n\r\n${CLAUDE_LOGIN}\r\n\r\nStore this token securely. You won't be able to see it again.\r\n`), CLAUDE_LOGIN)
-  // Half a screen is no login: the rest of it may still come.
-  const whole = screen(CLAUDE_LOGIN)
-  assert.equal(mintedIn(whole.slice(0, whole.indexOf(CLAUDE_LOGIN) + 40)), undefined)
-  assert.equal(mintedIn(whole.slice(0, whole.indexOf('Store'))), undefined)
-  assert.equal(mintedIn("Browser didn't open? Use the url below to sign in\r\nhttps://claude.ai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e\r\n"), undefined)
-  // Other letters in the login's place are not one, and neither is a login with something drawn into it.
-  assert.equal(mintedIn(screen('a'.repeat(80))), undefined)
-  assert.equal(mintedIn(screen(`${CLAUDE_LOGIN.slice(0, 50)} ${CLAUDE_LOGIN.slice(50)}`)), undefined)
-  // Whatever moves the cursor inside a login: two pieces put side by side are not the login that was made.
-  for (const moved of ['\x1b[60G', '\x1b[1C', '\x1b[5D', '\x1b[2;60H', '\x1b[K', '\x1b[1B', '\x1bM']) {
-    assert.equal(mintedIn(screen(`${CLAUDE_LOGIN.slice(0, 50)}${moved}${CLAUDE_LOGIN.slice(50)}`)), undefined, JSON.stringify(moved))
-  }
-  // A colour inside it is only a colour.
-  assert.equal(mintedIn(screen(`${CLAUDE_LOGIN.slice(0, 50)}\x1b[33m${CLAUDE_LOGIN.slice(50)}`)), CLAUDE_LOGIN)
-  // The words around the login, put at their place another way: a space beside a column, or a row and a column.
-  assert.equal(mintedIn(` Your \x1b[7GOAuth token (valid for 1 year):\r\n${CLAUDE_LOGIN}\r\nStore \x1b[8Gthis\x1b[13Gtoken\x1b[19Gsecurely.`), CLAUDE_LOGIN)
-  assert.equal(mintedIn(`\x1b[3;2HYour\x1b[3;7HOAuth\x1b[3;13Htoken:\x1b[5;2H${CLAUDE_LOGIN}\x1b[7;2HStore\x1b[7;8Hthis\x1b[7;13Htoken\x1b[7;19Hsecurely.`), CLAUDE_LOGIN)
-
-  assert.equal(notMinted('started as 4242\r\n\x1b[31mThis command requires a Claude subscription.\x1b[39m\r\n\r\nGoodbye\r\nGoodbye\r\n'), 'Claude Code ended without a login.\nThis command requires a Claude subscription.\nGoodbye')
-  const unread = 'Claude Code made a login, and this OpenAgent could not read it off what Claude Code showed.'
-  assert.equal(notMinted(whole.slice(0, whole.indexOf(CLAUDE_LOGIN) + 40)), unread)
-  // A screen that holds a login this OpenAgent does not read, however its heading is drawn or cut: none of the screen is told.
-  for (const odd of [`Your OAuth t\x1b[1Cken:\r\n${CLAUDE_LOGIN}\r\n`, `${CLAUDE_LOGIN}\r\nGoodbye\r\n`, `Your\x1b[7GOAuth\x1b[13Gtoken:\r\n${CLAUDE_LOGIN.slice(0, 50)}\x1b[5D${CLAUDE_LOGIN.slice(50)}\r\n`]) {
-    assert.equal(mintedIn(odd), undefined)
-    assert.equal(notMinted(odd), unread)
-  }
-  // The lent terminal's first line names a process only once the whole line is there.
-  assert.equal(startedAs('started as 42'), undefined)
-  assert.equal(startedAs('started as 4242\r\nOpening the browser'), 4242)
+test('what is told of a failure never holds the login', () => {
   assert.equal(scrubbed(`a ${CLAUDE_LOGIN} b ${CLAUDE_LOGIN}`, CLAUDE_LOGIN), 'a ••• b •••')
   assert.equal(scrubbed('nothing to hide', ''), 'nothing to hide')
-})
-
-test('a program that draws on a terminal is lent one, wide enough for a login on one line; one that ends without a login, takes too long or is stopped is told so, and nothing is left running, even a program that does not heed a terminal that went away', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'servers-mint-'))
-  try {
-    // Stands in for Claude Code: it needs a terminal, as Claude Code does, and draws what Claude Code draws.
-    const stub = join(dir, 'stub.mjs')
-    await writeFile(
-      stub,
-      `import { writeFileSync } from 'node:fs'
-writeFileSync(${JSON.stringify(join(dir, 'pid'))}, String(process.pid))
-if (!process.stdout.isTTY || !process.stdin.isTTY) { console.log('no terminal'); process.exit(1) }
-process.stdin.setRawMode(true)
-process.stdin.on('data', key => console.log('a key nobody pressed', JSON.stringify(String(key))))
-const how = process.argv[2]
-if (how === 'refuse') { console.log('This command requires a Claude subscription.'); process.exit(1) }
-if (how === 'deaf') { process.on('SIGHUP', () => {}); process.on('SIGTERM', () => {}) }
-if (how === 'wait' || how === 'deaf') setInterval(() => {}, 1000)
-else setTimeout(() => {
-  if (process.stdout.columns < 200) console.log('too narrow', process.stdout.columns)
-  else process.stdout.write(${JSON.stringify(screen(CLAUDE_LOGIN))})
-  setInterval(() => {}, 1000)
-}, 100)
-`,
-    )
-    const command = (how: string): string => `node ${stub} ${how}`
-    const gone = async (): Promise<boolean> => {
-      const pid = Number(await readFile(join(dir, 'pid'), 'utf8'))
-      for (let tries = 0; tries < 40; tries++) {
-        try {
-          process.kill(pid, 0)
-        } catch {
-          return true
-        }
-        await new Promise(resolve => setTimeout(resolve, 50))
-      }
-      return false
-    }
-
-    assert.deepEqual(await mintClaude({ command: command('show') }), { ok: true, login: CLAUDE_LOGIN })
-    // It would have gone on for ever: it was ended with the login in hand.
-    assert.equal(await gone(), true)
-
-    assert.deepEqual(await mintClaude({ command: command('refuse') }), { ok: false, error: 'Claude Code ended without a login.\nThis command requires a Claude subscription.' })
-    assert.deepEqual(await mintClaude({ command: 'no-such-program-here setup-token' }), { ok: false, error: 'Claude Code ended without a login.\nClaude Code is not on this computer.' })
-
-    const late = await mintClaude({ command: command('wait'), timeoutMs: 600 })
-    assert.deepEqual(late, { ok: false, error: 'No yes came from the browser in 0 minutes.' })
-    assert.equal(await gone(), true)
-
-    assert.equal((await mintClaude({ command: command('deaf'), timeoutMs: 600 })).ok, false)
-    assert.equal(await gone(), true)
-
-    const stop = new AbortController()
-    setTimeout(() => stop.abort(), 300)
-    assert.deepEqual(await mintClaude({ command: command('wait'), signal: stop.signal }), { ok: false, error: 'The login was stopped.' })
-    assert.equal(await gone(), true)
-  } finally {
-    await rm(dir, { recursive: true, force: true })
-  }
 })
 
 test('a Claude login is made, given to the server as root, and written down with its day; the login is in no file here', async () => {
@@ -812,6 +705,134 @@ test('while a login is changed the file is told so again and again; one that ano
     assert.equal((await serverOf(home.env)).claude!.worker!.pid, other.pid)
   } finally {
     other.kill()
+    await home.remove()
+  }
+})
+
+test('the server\'s other Claude accounts are kept by its user where its OpenAgent reads them; a login goes in on a program\'s input, never on a command line, into a file only that user reads', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'servers-accounts-'))
+  try {
+    const bin = join(home, '.local', 'bin')
+    await mkdir(bin, { recursive: true })
+    const log = join(home, 'log')
+    const noted = `echo "$(basename "$0"): $*" >> ${log}`
+    // The server user's own Claude Code, and its Node: each writes down what it was started with, and Node is the real one.
+    await program(join(bin, 'claude'), `#!/bin/bash\n${noted}\nif [ -n "\${CLAUDE_CODE_OAUTH_TOKEN:-}" ] && [ ! -e ${home}/refuses ]; then echo '{ "loggedIn": true }'; else echo '{ "loggedIn": false }'; fi\n`)
+    await program(join(bin, 'node'), `#!/bin/bash\n${noted}\nexec '${process.execPath}' "$@"\n`)
+    await program(join(bin, 'timeout'), `#!/bin/bash\n${noted}\nshift\nexec "$@"\n`)
+    const env = { PATH: process.env.PATH, HOME: home }
+    const run = async (script: string) => sh(script, env)
+    const words = async (): Promise<string> => readFile(log, 'utf8').catch(() => '')
+    // The file the server's OpenAgent reads, its service's home being the user's.
+    const file = accountsPath({ HOME: home })
+
+    const scripts = [claudeAccountsScript(), claudeAccountAddScript('Dani', CLAUDE_LOGIN), claudeAccountRemoveScript('Dani')]
+    for (const { as, script } of scripts) {
+      assert.equal(as, 'openagent')
+      await new Promise<void>((resolve, reject) => execFile('bash', ['-n', '-c', script], error => (error ? reject(error) : resolve())))
+      assert.doesNotMatch(script, /export LOGIN/)
+    }
+    assert.match(scripts[1]!.script, new RegExp(`^LOGIN='${CLAUDE_LOGIN}'$`, 'm'))
+
+    // Nothing kept yet: the server's own login alone, which is no row of its own here.
+    const none = await run(claudeAccountsScript().script)
+    assert.equal(none.code, 0, none.stderr)
+    assert.deepEqual(accountsSaid(none.stdout), [])
+
+    const added = await run(claudeAccountAddScript('Dani', CLAUDE_LOGIN).script)
+    assert.equal(added.code, 0, added.stderr)
+    assert.ok(!added.stdout.includes(CLAUDE_LOGIN))
+    assert.deepEqual(accountsSaid(added.stdout)?.map(account => account.name), ['Dani'])
+    assert.equal((await stat(file)).mode & 0o777, 0o600)
+    // In the format OpenAgent reads: the server's own login first, then Dani's with her login.
+    assert.deepEqual(readAccounts(file).map(account => [account.name, account.token]), [['This computer', undefined], ['Dani', CLAUDE_LOGIN]])
+    const said = await words()
+    assert.match(said, /^timeout: 30 claude auth status$/m)
+    assert.match(said, /^node: -e /m)
+    assert.ok(!said.includes(CLAUDE_LOGIN), 'the login is on no command line')
+    assert.deepEqual((await readdir(home)).filter(name => name.endsWith('.new')), [])
+
+    // A name the server has already, in any case, is refused, and the file is as it was.
+    const twice = await run(claudeAccountAddScript('dani', CLAUDE_LOGIN.replace('Zx9', 'Two')).script)
+    assert.equal(twice.code, 3)
+    assert.match(twice.stderr, /There is an account named dani on the server already\./)
+    assert.equal(readAccounts(file).length, 2)
+    // A login Claude Code does not take, and what is no login's letters, are written nowhere.
+    await writeFile(join(home, 'refuses'), '')
+    const refused = await run(claudeAccountAddScript('Rom', CLAUDE_LOGIN.replace('Zx9', 'Rom')).script)
+    assert.equal(refused.code, 1)
+    assert.equal(refused.stderr.trim(), 'Claude Code on this server does not take the login.')
+    await rm(join(home, 'refuses'))
+    const odd = await run(claudeAccountAddScript('Rom', `${CLAUDE_LOGIN} x`).script)
+    assert.equal(odd.code, 1)
+    assert.equal(readAccounts(file).length, 2)
+
+    // Read back: names and how full, never a login.
+    const read = await run(claudeAccountsScript().script)
+    assert.ok(!read.stdout.includes(CLAUDE_LOGIN))
+    assert.deepEqual(accountsSaid(read.stdout)?.map(account => account.name), ['Dani'])
+
+    // Removed: the server's own login stays, whatever it is called.
+    const removed = await run(claudeAccountRemoveScript('Dani').script)
+    assert.equal(removed.code, 0, removed.stderr)
+    assert.deepEqual(accountsSaid(removed.stdout), [])
+    assert.equal((await run(claudeAccountRemoveScript('This computer').script)).code, 0)
+    assert.deepEqual(readAccounts(file).map(account => account.name), ['This computer'])
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('what a server says of its accounts is read forgivingly: its own login and anything malformed are left out', () => {
+  const line = JSON.stringify([{ name: 'This computer', own: true }, { name: 'Dani', added: '2026-10-22T12:00:00.000Z', limitedUntil: 1792681800000, windows: [{ window: 'seven_day', percentUsed: 21, resetsAt: 1792814400000 }, { window: 'x y', percentUsed: 1, resetsAt: 1 }], own: false }, { name: '' }, 'odd'])
+  assert.deepEqual(accountsSaid(`noise\n${line}\n`), [{ name: 'Dani', added: '2026-10-22T12:00:00.000Z', limitedUntil: 1792681800000, windows: [{ window: 'seven_day', percentUsed: 21, resetsAt: 1792814400000 }] }])
+  assert.equal(accountsSaid('not json'), undefined)
+})
+
+test('a Claude account is added with a login made here and handed to the server\'s user; the file keeps what the server said, never the login; one the server refuses says why', async () => {
+  const home = await testHome()
+  try {
+    await saved(home.env)
+    const during: unknown[] = []
+    const mint: Mint = async () => {
+      const { claudeAdding } = await serverOf(home.env)
+      during.push(claudeAdding!.name, claudeAdding!.asking, claudeAdding!.worker!.pid)
+      return { ok: true, login: CLAUDE_LOGIN }
+    }
+    const answered = JSON.stringify([{ name: 'This computer', own: true }, { name: 'Dani', added: '2026-10-22T12:00:00.000Z', own: false }])
+    const { exec, calls } = pretendServer(call => (call.remote === 'true' ? undefined : { out: `${answered}\n` }))
+    await addClaudeAccount({ env: home.env, address: SERVER.address, name: 'Dani', exec, mint })
+    assert.deepEqual(during, ['Dani', true, process.pid])
+    assert.deepEqual(calls.map(call => call.remote), ['true', AS_SERVER_USER])
+    assert.equal(calls[1]!.script, claudeAccountAddScript('Dani', CLAUDE_LOGIN).script)
+    for (const call of calls) assert.ok(!call.args.join(' ').includes(CLAUDE_LOGIN))
+    const kept = await serverOf(home.env)
+    assert.deepEqual(kept.claudeAccounts, [{ name: 'Dani', added: '2026-10-22T12:00:00.000Z' }])
+    assert.equal(kept.claudeAdding, undefined)
+    assert.ok(!(await onDisk(home.env)).includes(CLAUDE_LOGIN))
+
+    // The server refuses, repeating the login: said without it, and the accounts it had still count.
+    const refusing = pretendServer(call => (call.remote === 'true' ? undefined : { code: 3, err: `There is an account named Rom on the server already. ${CLAUDE_LOGIN}` }))
+    await addClaudeAccount({ env: home.env, address: SERVER.address, name: 'Rom', exec: refusing.exec, mint })
+    const after = await serverOf(home.env)
+    assert.deepEqual(after.claudeAdding, { name: 'Rom', failed: 'There is an account named Rom on the server already. •••' })
+    assert.deepEqual(after.claudeAccounts, [{ name: 'Dani', added: '2026-10-22T12:00:00.000Z' }])
+    // No login made: the server is not asked at all.
+    const untouched = pretendServer()
+    await addClaudeAccount({ env: home.env, address: SERVER.address, name: 'Rom', exec: untouched.exec, mint: async () => ({ ok: false, error: 'No yes came from the browser in 10 minutes.' }) })
+    assert.deepEqual(untouched.calls, [])
+    assert.equal((await serverOf(home.env)).claudeAdding?.failed, 'No yes came from the browser in 10 minutes.')
+    assert.ok(!(await onDisk(home.env)).includes(CLAUDE_LOGIN))
+
+    // Read and removed as the server's user, each time writing down what the server has now.
+    const reading = pretendServer(call => (call.remote === 'true' ? undefined : { out: answered }))
+    assert.equal((await readClaudeAccounts(home.env, SERVER.address, reading.exec)).ok, true)
+    assert.equal(reading.calls[1]!.script, claudeAccountsScript().script)
+    const removing = pretendServer(call => (call.remote === 'true' ? undefined : { out: JSON.stringify([{ name: 'This computer', own: true }]) }))
+    assert.equal((await removeClaudeAccount(home.env, SERVER.address, 'Dani', removing.exec)).ok, true)
+    assert.equal(removing.calls[1]!.script, claudeAccountRemoveScript('Dani').script)
+    assert.deepEqual((await serverOf(home.env)).claudeAccounts, [])
+  } finally {
     await home.remove()
   }
 })

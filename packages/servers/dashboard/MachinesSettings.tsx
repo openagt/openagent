@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Laptop, Loader2, Plus, Server, UserPlus, UserRound } from 'lucide-react'
 import { AddMachineDialog, Badge, Button, Checkbox, ConfirmDialog, Dialog, Input, InviteDialog, RadioGroup, RadioGroupOption, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SettingsSection, Switch, cn, formatDateTime, formatRelative, reachedByLine, useModuleHost, usePolled, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
-import { addThrough, askLink, connect, forget, idsOf, loadDevices, loadOther, loadOwn, loadServers, loadShared, login, logout, markAdded, nameOwner, otherLogin, ownCodeLogin, ownGithub, ownLogout, reach, readPersonThere, removeDevice, removePerson, setWho, sharedClaude, sharedForget, sharedGithub, sharedReach, type Answer, type DeviceRow, type DevicesRead, type DoorLink, type OtherLogin, type OtherRow, type OwnGithub, type OwnRead, type PersonThere, type ServerRow, type ServersRead, type SharedRow, type StepState, type Who } from './servers.js'
+import { addAccount, addThrough, askLink, connect, forget, idsOf, loadAccounts, loadDevices, loadOther, loadOwn, loadServers, loadShared, login, logout, markAdded, nameOwner, otherLogin, ownCodeLogin, ownGithub, ownLogout, reach, readPersonThere, removeAccount, removeDevice, removePerson, setWho, sharedClaude, sharedForget, sharedGithub, sharedReach, type AccountRow, type Answer, type DeviceRow, type DevicesRead, type DoorLink, type OtherLogin, type OtherRow, type OwnGithub, type OwnRead, type PersonThere, type ServerRow, type ServersRead, type SharedRow, type StepState, type Who } from './servers.js'
 
 // Settings → Machines: the other computers a run can be sent to, each listed once. A server this
 // computer installed OpenAgent on is listed with all that is set up on it; a machine added with a
@@ -798,6 +798,93 @@ function SharedServer({ host, machine, person, busy: pageBusy, everyMs, workingM
   )
 }
 
+/** How full an account was at the last run on it: its week, else its five hours; at a limit, when it frees. */
+function accountWords(account: AccountRow, now = Date.now()): string {
+  if (account.limitedUntil !== undefined && account.limitedUntil > now) return `at its limit until ${formatDateTime(new Date(account.limitedUntil).toISOString())}`
+  const window = account.windows?.find(w => w.window === 'seven_day') ?? account.windows?.find(w => w.window === 'five_hour')
+  if (window === undefined) return 'no run on it yet'
+  return `${Math.round(window.percentUsed)}% of its ${window.window === 'seven_day' ? 'week' : 'five hours'} used at its last run`
+}
+
+/**
+ * The Claude accounts a server has beside its own login: its runs take the next free one when
+ * one hits its limit. Read from the server once the row shows; added with a login made in this
+ * computer's browser, as the server's own is.
+ */
+function ClaudeAccounts({ host, server, busy, act, reload }: { host: ModuleHost; server: ServerRow; busy: boolean; act: (change: () => Promise<Answer<unknown>>) => Promise<boolean>; reload: () => Promise<unknown> }) {
+  const [naming, setNaming] = useState(false)
+  const [name, setName] = useState('')
+  const [unread, setUnread] = useState<string | undefined>()
+  const { address, claudeAccounts: accounts, claudeAdding: adding } = server
+  useEffect(() => {
+    let gone = false
+    void loadAccounts(host, address).then(read => {
+      if (gone) return
+      setUnread(read.ok ? undefined : read.error)
+      if (read.ok) void reload().catch(() => {})
+    })
+    return () => {
+      gone = true
+    }
+  }, [host, address])
+  const add = async (event: FormEvent): Promise<void> => {
+    event.preventDefault()
+    if (await act(() => addAccount(host, address, name.trim()))) {
+      setNaming(false)
+      setName('')
+    }
+  }
+  return (
+    <li aria-label="Other Claude accounts" className="space-y-1.5">
+      <p>{accounts.length === 0 ? 'Other Claude accounts: none. A run that hits the limit of the login above stops there.' : 'Other Claude accounts: a run that hits a limit goes on with the next free one, in this order.'}</p>
+      {accounts.length > 0 && (
+        <ul className="space-y-1">
+          {accounts.map(account => (
+            <li key={account.name} aria-label={account.name} className="flex flex-wrap items-center gap-2">
+              <span className="font-medium">{account.name}</span>
+              <span className="text-muted-foreground">{`${account.added !== undefined ? `added ${day(account.added)}, ` : ''}${accountWords(account)}`}</span>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                aria-label={`Remove the Claude account ${account.name} from ${address}`}
+                title="Takes the account off the server: its runs no longer switch to it. The login itself stays good until its year is over."
+                onClick={() => void act(() => removeAccount(host, address, account.name))}
+              >
+                Remove
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {adding?.working ? (
+        <p>{adding.asking ? `${adding.name}: say yes in the page this computer's browser opened, logged in to ${adding.name}'s Claude account.` : `${adding.name}: one moment, the server is being told.`}</p>
+      ) : naming ? (
+        <form className="flex flex-wrap items-center gap-2" onSubmit={event => void add(event)}>
+          <Input aria-label="Whose account it is" placeholder="Whose account, e.g. Dani" value={name} maxLength={40} onChange={event => setName(event.target.value)} className="h-8 w-48" autoFocus />
+          <Button size="sm" type="submit" disabled={busy || name.trim() === ''} title="Opens this computer's browser: log in there to that account's Claude and say yes once. The login is made for this server alone and lasts a year.">
+            Log in to Claude
+          </Button>
+          <Button size="sm" variant="ghost" type="button" onClick={() => setNaming(false)}>
+            Cancel
+          </Button>
+        </form>
+      ) : (
+        <Button size="sm" variant="outline" disabled={busy} aria-label={`Add another Claude account to ${address}`} onClick={() => setNaming(true)}>
+          <Plus aria-hidden className="h-3.5 w-3.5" />
+          Add another Claude account
+        </Button>
+      )}
+      {adding?.said !== undefined && !adding.working && (
+        <pre role="alert" className="overflow-x-auto whitespace-pre-wrap rounded-md border border-border bg-background p-2 font-mono text-foreground">
+          {`${adding.name}: ${adding.said}`}
+        </pre>
+      )}
+      {unread !== undefined && <p className="text-muted-foreground">{`The server did not say its other accounts: ${unread}`}</p>}
+    </li>
+  )
+}
+
 /** The section itself. On a computer that is itself a server it lists the machines, and offers no server to connect. */
 function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: Answer<ServersRead>; reload: () => Promise<unknown>; everyMs: number; devicesEveryMs: number; isServer: boolean }) {
   const host = useModuleHost()
@@ -1268,6 +1355,7 @@ function Machines({ read, reload, everyMs, devicesEveryMs, isServer }: { read: A
                         </Button>
                       )}
                     </LoginLine>
+                    <ClaudeAccounts host={host} server={server} busy={busy} act={act} reload={reload} />
                       </ul>
                     </div>
                   )}

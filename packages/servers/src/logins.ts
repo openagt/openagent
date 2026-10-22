@@ -1,7 +1,7 @@
-import { spawn } from 'node:child_process'
+import { mintClaude, type Mint } from '@openagt/agent-driver-claude'
 import { exec as ownExec, lastLines, openSession, withAdvice, type Exec, type Said, type Session } from './ssh.js'
-import { GITHUB_CODE_TIMEOUT_MS, LOGIN_TIMEOUT_MS, claudeLoginScript, claudeLogoutScript, githubCodeScript, githubLoginScript, githubLogoutScript, githubWaitScript, type LoginScript } from './steps.js'
-import { BEAT_MS, atWork, changeServer, heartbeat, isAccount, isGithubCode, type Login, type LoginKind, type Server } from './store.js'
+import { GITHUB_CODE_TIMEOUT_MS, LOGIN_TIMEOUT_MS, claudeAccountAddScript, claudeAccountRemoveScript, claudeAccountsScript, claudeLoginScript, claudeLogoutScript, githubCodeScript, githubLoginScript, githubLogoutScript, githubWaitScript, type LoginScript } from './steps.js'
+import { BEAT_MS, atWork, changeServer, heartbeat, isAccount, isGithubCode, readAccountKept, type ClaudeAccountKept, type Login, type LoginKind, type Server } from './store.js'
 
 /**
  * The two logins a server works with, and how each gets there: over SSH, as the install's own
@@ -113,110 +113,6 @@ export function noteGithub(kept: Server, given: GithubGiven): void {
   else kept.github = { ...(given.reached ? {} : known(kept.github)), failed: given.error }
 }
 
-/** What Claude Code writes before and after the login it made, and what such a login reads as. The gap between two words is of any width. */
-const MINTED = /Your\s+OAuth\s+token[^\n]*:\s*(sk-ant-[A-Za-z0-9_-]{40,400})\s+Store\s+this\s+token\s+securely/
-/** What a terminal is told beside words: colours, where the cursor goes, a link's address. */
-const TERMINAL = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]/g
-/** A colour: the one thing a terminal is told that leaves the words on its two sides together. */
-const COLOUR = /\x1b\[[0-9;:]*m/g
-
-/**
- * The words Claude Code showed, without what only a terminal reads. A colour goes; anything else
- * a terminal is told is a gap: Claude Code's screen puts a word at its column where a plain line
- * holds a space, and a login the cursor moved in is not one login.
- */
-const words = (shown: string): string => shown.replace(COLOUR, '').replace(TERMINAL, ' ').replaceAll('\r', '\n')
-
-/** The login among what Claude Code showed, once all of it is there. */
-export function mintedIn(shown: string): string | undefined {
-  return MINTED.exec(words(shown))?.[1]
-}
-
-/** Why Claude Code ended without a login, from what it showed: its last lines, never a part of a login. */
-export function notMinted(shown: string): string {
-  const text = words(shown)
-  // However the screen was drawn: where a login or its heading shows, none of the screen is told.
-  if (/YourOAuthtoken|sk-ant-/.test(text.replace(/\s/g, ''))) return 'Claude Code made a login, and this OpenAgent could not read it off what Claude Code showed.'
-  const lines = [...new Set(text.split('\n').map(line => line.trim().replace(/\s+/g, ' ')).filter(line => line && !STARTED_AS.test(line)))]
-  return ['Claude Code ended without a login.', ...lines.slice(-5)].join('\n')
-}
-
-/** Which process the lent terminal's first program said it is, once its whole line is there: half a number names another process. */
-export function startedAs(shown: string): number | undefined {
-  return Number(/^started as (\d+)\n/m.exec(words(shown))?.[1]) || undefined
-}
-
-export interface MintOptions {
-  signal?: AbortSignal
-  /** How long the person has to say yes in the browser. */
-  timeoutMs?: number
-  /** The command that makes the login; Claude Code's own when unsaid. */
-  command?: string
-}
-
-/** How a Claude login is made for a server. */
-export type Mint = (opts?: MintOptions) => Promise<{ ok: true; login: string } | Failed>
-
-const MINT_TIMEOUT_MS = 10 * 60_000
-/** How much of what Claude Code showed is kept: its end, where the login is. */
-const SHOWN = 256 * 1024
-/** The line the lent terminal's first program writes of itself, before it becomes Claude Code. */
-const STARTED_AS = /^started as \d+$/
-
-/**
- * Make a Claude login that lasts a year, with Claude Code's own `claude setup-token`: it opens
- * this computer's browser, the person says yes there, and it shows the login once. It keeps
- * nothing, and neither does this.
- *
- * Claude Code draws on a terminal's screen and this process has none, so the system's `script`
- * lends it one, wide enough that the login stays on one line. Its input is a pipe nothing ever
- * writes to. `script` gives its program a group of its own, so that program first says which
- * process it is: at the end both groups are ended, whether or not Claude Code heeds a terminal
- * that went away.
- */
-export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command = 'claude setup-token' } = {}) =>
-  new Promise(resolve => {
-    const inner = `echo "started as $$"; stty cols 250 rows 50; command -v ${command.split(' ')[0]} >/dev/null || { echo "Claude Code is not on this computer."; exit 1; }; exec ${command}`
-    const lent = process.platform === 'darwin' ? 'script -q /dev/null sh -c "$0"' : 'script -q -e -c "$0" /dev/null'
-    // On Linux `script` starts its program with the person's own shell, and the line above is written for sh.
-    const child = spawn('sh', ['-c', `tail -f /dev/null | { ${lent}; kill 0; }`, inner], { stdio: ['ignore', 'pipe', 'pipe'], detached: true, env: { ...process.env, SHELL: '/bin/sh' } })
-    let shown = ''
-    let lentTo: number | undefined
-    let ended = false
-    const end = (answer: { ok: true; login: string } | Failed): void => {
-      if (ended) return
-      ended = true
-      clearTimeout(timer)
-      signal?.removeEventListener('abort', stopped)
-      for (const group of [lentTo, child.pid]) {
-        if (group === undefined || group <= 1) continue
-        try {
-          process.kill(-group, 'SIGKILL')
-        } catch {
-          // Gone already.
-        }
-      }
-      child.stdout.destroy()
-      child.stderr.destroy()
-      resolve(answer)
-    }
-    const stopped = (): void => end({ ok: false, error: 'The login was stopped.' })
-    const timer = setTimeout(() => end({ ok: false, error: `No yes came from the browser in ${Math.round(timeoutMs / 60_000)} minutes.` }), timeoutMs)
-    signal?.addEventListener('abort', stopped, { once: true })
-    if (signal?.aborted) stopped()
-    const read = (said: string): void => {
-      shown = (shown + said).slice(-SHOWN)
-      // Read once, as it comes: it is the first thing written, and a long wait scrolls it out of what is kept.
-      lentTo ??= startedAs(shown)
-      const login = mintedIn(shown)
-      if (login) end({ ok: true, login })
-    }
-    child.stdout.setEncoding('utf8').on('data', read)
-    child.stderr.setEncoding('utf8').on('data', read)
-    child.once('error', error => end({ ok: false, error: `Claude Code could not be started: ${error.message}` }))
-    child.once('close', () => end({ ok: false, error: notMinted(shown) }))
-  })
-
 /** One change to one login of a server. */
 export interface Job {
   kind: LoginKind
@@ -304,6 +200,94 @@ export async function changeLogin(opts: LoginOptions): Promise<void> {
   } finally {
     await beating.stop()
     // One that was started over is another process's by now: nothing of it is this one's to write.
+    await changeServer(env, address, kept => void (mine(kept) && after(kept))).catch(() => {})
+  }
+}
+
+/** The added accounts among what an accounts script said last: the server's own login is the row above them. */
+export function accountsSaid(out: string): ClaudeAccountKept[] | undefined {
+  try {
+    const said = JSON.parse(out.trim().split('\n').at(-1) ?? '') as unknown
+    if (!Array.isArray(said)) return undefined
+    return said.flatMap(entry => (entry && typeof entry === 'object' && (entry as Record<string, unknown>)['own'] !== true ? (readAccountKept(entry) ?? []) : []))
+  } catch {
+    return undefined
+  }
+}
+
+type Accounts = { ok: true; accounts: ClaudeAccountKept[] } | Failed
+
+/** Run an accounts script on the server and read the accounts it answers with. */
+async function onAccounts(server: Pick<Server, 'address' | 'user'>, run: Exec | undefined, script: Parameters<typeof send>[1], login = ''): Promise<Accounts> {
+  const sent = await onServer(server, run, session => send(session, script, login))
+  if (!sent.ok) return sent
+  const accounts = accountsSaid(sent.out)
+  return accounts ? { ok: true, accounts } : { ok: false, error: 'The server answered something else than its Claude accounts.' }
+}
+
+/** The Claude accounts the server has beside its own login, as it says them now; written down for the page. */
+export async function readClaudeAccounts(env: NodeJS.ProcessEnv, address: string, exec?: Exec): Promise<Accounts> {
+  const server = await changeServer(env, address, kept => ({ address: kept.address, user: kept.user }))
+  if (!server) throw new Error(`no server at ${address}`)
+  const read = await onAccounts(server, exec, claudeAccountsScript())
+  if (read.ok) await changeServer(env, address, kept => void (kept.claudeAccounts = read.accounts))
+  return read
+}
+
+/** Take an added Claude account off the server, and write down the ones it still has. */
+export async function removeClaudeAccount(env: NodeJS.ProcessEnv, address: string, name: string, exec?: Exec): Promise<Accounts> {
+  const server = await changeServer(env, address, kept => ({ address: kept.address, user: kept.user }))
+  if (!server) throw new Error(`no server at ${address}`)
+  const gone = await onAccounts(server, exec, claudeAccountRemoveScript(name))
+  if (gone.ok) await changeServer(env, address, kept => void (kept.claudeAccounts = gone.accounts))
+  return gone
+}
+
+export interface AddAccountOptions {
+  env: NodeJS.ProcessEnv
+  address: string
+  /** What the person calls the account. */
+  name: string
+  exec?: Exec
+  mint?: Mint
+  /** Stops waiting for the person. What was already on its way to the server arrives all the same. */
+  signal?: AbortSignal
+  beatMs?: number
+}
+
+/**
+ * Add a Claude account on the server: a login is made in this computer's browser, as the
+ * server's own is, and handed to the server's user, who keeps it beside the server's own login.
+ * Run as a process of its own, as a login's change is; how it ended is written to the file.
+ */
+export async function addClaudeAccount(opts: AddAccountOptions): Promise<void> {
+  const { env, address, name } = opts
+  const mine = (kept: Server): boolean => kept.claudeAdding?.worker?.pid === process.pid
+  const beat = (): { pid: number; seen: string } => ({ pid: process.pid, seen: new Date().toISOString() })
+  const server = await changeServer(env, address, kept => {
+    const worker = kept.claudeAdding?.worker
+    if (atWork(worker) && worker!.pid !== process.pid && worker!.pid !== process.ppid) throw new Error(`A Claude account of ${address} is being added right now`)
+    kept.claudeAdding = { name, worker: beat() }
+    return { address: kept.address, user: kept.user }
+  })
+  if (!server) throw new Error(`no server at ${address}`)
+  const beating = heartbeat(() => changeServer(env, address, kept => void (mine(kept) && (kept.claudeAdding!.worker = beat()))), opts.beatMs ?? BEAT_MS)
+  const failed = (error: string) => (kept: Server): void => void (kept.claudeAdding = { name, failed: error })
+  let after: (kept: Server) => void = failed('The work stopped before it ended.')
+  try {
+    await changeServer(env, address, kept => void (mine(kept) && (kept.claudeAdding!.asking = true)))
+    const minted = await (opts.mint ?? mintClaude)(opts.signal ? { signal: opts.signal } : {})
+    await changeServer(env, address, kept => void (mine(kept) && delete kept.claudeAdding!.asking))
+    if (!minted.ok) return void (after = failed(minted.error))
+    const added = await onAccounts(server, opts.exec, claudeAccountAddScript(name, minted.login), minted.login)
+    after = added.ok
+      ? kept => {
+          kept.claudeAccounts = added.accounts
+          delete kept.claudeAdding
+        }
+      : failed(added.error)
+  } finally {
+    await beating.stop()
     await changeServer(env, address, kept => void (mine(kept) && after(kept))).catch(() => {})
   }
 }

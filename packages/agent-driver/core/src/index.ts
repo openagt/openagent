@@ -9,6 +9,7 @@ export type {
   DriverImplId,
   DriverUsage,
   DriverRateLimit,
+  DriverRateWindow,
   DriverQuota,
   DriverModel,
   DriverQuotaWindow,

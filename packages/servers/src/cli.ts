@@ -1,13 +1,14 @@
 import { spawn } from 'node:child_process'
 import { devicesIn, idsOf, isDeviceId, nameOwner, readDevices, removeDevice, removePerson, type Devices, type ServerDevice, type ServerPerson } from './devices.js'
 import { AlreadyWorking, askLink, install } from './install.js'
-import { AlreadyAtWork, changeLogin, ownGithubAccount, type Mint } from './logins.js'
+import type { Mint } from '@openagt/agent-driver-claude'
+import { AlreadyAtWork, addClaudeAccount, changeLogin, ownGithubAccount, readClaudeAccounts, removeClaudeAccount } from './logins.js'
 import { ownDoor, type OwnDoor } from './own-door.js'
 import { OwnAtWork, askOwnGithub, giveOwnClaude, giveOwnGithub, personHere, removeOwn, startOverSoon, startOwnGithubCode } from './own.js'
 import { askOpenAgent, copyGithub, copyGithubToOther, forgetShared, isOtherUrl, isSharedUrl, lineTo, mintFor, otherLogins, setSharedReach, startMint } from './shared.js'
 import { lastLines, openSession, withAdvice, type Exec } from './ssh.js'
 import { PERSON_TIMEOUT_MS, SERVER_MARK, SERVER_USER, STEPS, devicesScript, stepLabel, stepsFor, whoScript, type Who } from './steps.js'
-import { LOGIN_KINDS, Unreadable, addressOf, isAccount, isServerName, atWork, doorUrl, freshSteps, isMachineUrl, isUser, isVersion, readStore, throughUrl, update, working, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
+import { LOGIN_KINDS, Unreadable, addressOf, isAccount, isAccountName, isServerName, atWork, doorUrl, freshSteps, isMachineUrl, isUser, isVersion, readStore, throughUrl, update, working, type ClaudeAccountKept, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -51,6 +52,11 @@ export const USAGE = `usage: servers <command>
                                        login lasts a year and goes to the server over SSH; this computer's own Claude
                                        login is never read; run again while the browser waits, it asks anew
   logout <address> github|claude       delete that login on the server; the login itself is not ended by this
+  accounts <address>                   the Claude accounts the server has beside its own login, as it says them now: runs
+                                       there take the next free one when one hits its limit
+  account-add <address> <name>         add a Claude account on the server: this computer's browser asks you once, as for
+                                       its own login, and the login goes to the server over SSH
+  account-remove <address> <name>      take that account off the server; its login is not ended by this
   reach <address> full|watch           keep a line open from this computer to the server, so the server's page can start a
                                        run here (full), or can only see this computer's runs (watch)
   forget <address>                     take the server off this list, and the line this computer keeps to it; nothing else
@@ -59,6 +65,7 @@ export const USAGE = `usage: servers <command>
   login-work <address> github|claude [own]
                                        the process that gives the server a login, started by login
   logout-work <address> github|claude  the process that takes a login off the server, started by logout
+  account-work <address> <name>        the process that adds a Claude account, started by account-add
 
 On a computer several people use, where this OpenAgent is one person's (OPENAGENT_PERSON names them):
   own                                  this OpenAgent's own GitHub and Claude logins
@@ -188,6 +195,10 @@ export interface ServerStatus {
   who?: Who
   steps: { id: string; label: string; state: StepState; said?: string }[]
   logins: Record<LoginKind, LoginStatus>
+  /** The Claude accounts the server has beside its own login, as it last said them: never a login. None when it said none. */
+  claudeAccounts?: ClaudeAccountKept[]
+  /** A Claude account being added, or the last that did not get there. */
+  claudeAdding?: { name: string; working: boolean; asking?: true; said?: string }
 }
 
 export interface Status {
@@ -215,6 +226,48 @@ function loginOf(kind: LoginKind, login: Login | undefined, installing: boolean)
   }
 }
 
+function addingOf(adding: NonNullable<Server['claudeAdding']>): NonNullable<ServerStatus['claudeAdding']> {
+  const working = atWork(adding.worker)
+  return { name: adding.name, working, ...(working && adding.asking ? { asking: true as const } : {}), ...(!working && adding.failed ? { said: adding.failed } : {}) }
+}
+
+/**
+ * Start the process that adds a Claude account on a server. A name the server has already is
+ * refused here first; one being added that still waits for the person is ended and asked anew.
+ */
+async function addAccountOf(io: CliIO, said: string, name: string): Promise<Status> {
+  if (!isAccountName(name)) throw new Refused('An account needs a name of a few words, on one line.')
+  const { address } = await still(io, said)
+  const before = await update(io.env, store => {
+    const server = store.servers.find(candidate => candidate.address === address)!
+    if (server.claudeAccounts?.some(kept => kept.name.toLowerCase() === name.toLowerCase())) throw new Refused(`There is an account named ${name} on ${address} already`)
+    const adding = server.claudeAdding
+    const busy = atWork(adding?.worker)
+    if (busy && adding!.asking !== true) throw new Refused(`A Claude account of ${address} is being added right now`)
+    server.claudeAdding = { name, worker: { pid: process.pid, seen: new Date().toISOString() } }
+    return busy ? adding!.worker!.pid : undefined
+  })
+  if (before !== undefined) {
+    try {
+      process.kill(before, 'SIGTERM')
+    } catch {
+      // Ended by itself in the meantime.
+    }
+  }
+  let worker: number | undefined
+  try {
+    worker = (io.startWork ?? (words => startWork(words, io.env)))(['account-work', address, name])
+  } finally {
+    await update(io.env, store => {
+      const adding = store.servers.find(candidate => candidate.address === address)?.claudeAdding
+      if (!adding || adding.worker?.pid !== process.pid) return
+      if (worker !== undefined) adding.worker = { pid: worker, seen: new Date().toISOString() }
+      else delete adding.worker
+    })
+  }
+  return statusOf(await readStore(io.env), io.env)
+}
+
 function statusOf(store: Store, env: NodeJS.ProcessEnv): Status {
   return {
     ...(env[SERVER_MARK] === '1' ? { server: true as const } : {}),
@@ -238,6 +291,8 @@ function statusOf(store: Store, env: NodeJS.ProcessEnv): Status {
           return { id, label, state: step.state, ...(step.said ? { said: step.said } : {}) }
         }),
         logins: { github: loginOf('github', server.github, busy), claude: loginOf('claude', server.claude, busy) },
+        ...(server.claudeAccounts?.length ? { claudeAccounts: server.claudeAccounts } : {}),
+        ...(server.claudeAdding ? { claudeAdding: addingOf(server.claudeAdding) } : {}),
       }
     }),
   }
@@ -640,6 +695,20 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         if (rest.length !== (ownLogin ? 3 : 2) || !address || !isKind(kind)) break
         return print(await changeLoginOf(io, address, kind, command === 'logout', ownLogin))
       }
+      case 'accounts':
+      case 'account-remove': {
+        const [address, name] = rest
+        if (rest.length !== (command === 'accounts' ? 1 : 2) || !address) break
+        const { address: at } = await still(io, address)
+        const done = command === 'accounts' ? await readClaudeAccounts(io.env, at, io.exec) : await removeClaudeAccount(io.env, at, name!, io.exec)
+        if (!done.ok) throw new Refused(done.error)
+        return print(statusOf(await readStore(io.env), io.env))
+      }
+      case 'account-add': {
+        const [address, name] = rest
+        if (rest.length !== 2 || !address || name === undefined) break
+        return print(await addAccountOf(io, address, name))
+      }
       case 'reach': {
         const [address, mode] = rest
         if (rest.length !== 2 || !address || (mode !== 'full' && mode !== 'watch')) break
@@ -748,6 +817,13 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         if (!isVersion(version)) throw new Refused(`${version} is not a version of OpenAgent`)
         const { address: at } = await saved(io, address)
         await untilStopped(io, signal => install({ ...over, address: at, version, signal }))
+        return 0
+      }
+      case 'account-work': {
+        const [address, name] = rest
+        if (rest.length !== 2 || !address || !isAccountName(name)) break
+        const { address: at } = await saved(io, address)
+        await untilStopped(io, signal => addClaudeAccount({ env: io.env, address: at, name, signal, ...(io.exec ? { exec: io.exec } : {}), ...(io.mint ? { mint: io.mint } : {}) }))
         return 0
       }
       case 'login-work':

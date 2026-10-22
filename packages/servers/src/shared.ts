@@ -1,4 +1,5 @@
-import { mintClaude, ownGithubLogin, type Mint } from './logins.js'
+import { mintClaude, type Mint } from '@openagt/agent-driver-claude'
+import { ownGithubLogin } from './logins.js'
 import { ownDoor, type OwnDoor } from './own-door.js'
 import type { Exec } from './ssh.js'
 import { BEAT_MS, atWork, heartbeat, isMachineUrl, isThroughUrl, update, type Login, type Reach, type Shared, type Store } from './store.js'
