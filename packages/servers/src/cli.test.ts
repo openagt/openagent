@@ -487,3 +487,57 @@ test('reach asks the server for a link once and has this computer\'s own door ke
     await home.remove()
   }
 })
+
+test('a server\'s other Claude accounts: accounts reads them, account-add starts a process of its own that asks the person, account-remove takes one off; a bad or taken name is refused before anything starts', async () => {
+  const home = await testHome()
+  const { spawn } = await import('node:child_process')
+  const other = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'])
+  const LOGIN = `sk-ant-oat01-${'Zx9_-q'.repeat(16)}`
+  const said = (names: string[]) => `${JSON.stringify([{ name: 'This computer', own: true }, ...names.map(name => ({ name, added: '2026-10-22T12:00:00.000Z', own: false }))])}\n`
+  try {
+    await run(home.env, ['connect', '203.0.113.5', 'root', '1.2.3'])
+    assert.deepEqual((await run(home.env, ['account-add', '203.0.113.5', 'Dani'])).err, ['OpenAgent is being installed on 203.0.113.5 right now'])
+    await update(home.env, store => void delete store.servers[0]!.worker)
+    assert.equal(serversOf(await run(home.env, ['status']))[0]!.claudeAccounts, undefined)
+
+    const reading = pretendServer(call => (call.remote === 'true' ? undefined : { out: said(['Rom']) }))
+    assert.deepEqual(serversOf(await run(home.env, ['accounts', '203.0.113.5'], { exec: reading.exec }))[0]!.claudeAccounts, [{ name: 'Rom', added: '2026-10-22T12:00:00.000Z' }])
+
+    for (const [args, why] of [
+      [['account-add', '203.0.113.5', ''], 'An account needs a name of a few words, on one line.'],
+      [['account-add', '203.0.113.5', ' Dani'], 'An account needs a name of a few words, on one line.'],
+      [['account-add', '203.0.113.5', 'a\nb'], 'An account needs a name of a few words, on one line.'],
+      [['account-add', '203.0.113.5', 'rom'], 'There is an account named rom on 203.0.113.5 already'],
+    ] as const) {
+      const refused = await run(home.env, [...args], { startWork: () => assert.fail('nothing starts') })
+      assert.equal(refused.code, 1, JSON.stringify(args))
+      assert.deepEqual(refused.err, [why])
+    }
+
+    const started: string[][] = []
+    const adding = serversOf(await run(home.env, ['account-add', '203.0.113.5', 'Dani'], { startWork: words => (started.push(words), other.pid!) }))[0]!
+    assert.deepEqual(started, [['account-work', '203.0.113.5', 'Dani']])
+    assert.deepEqual(adding.claudeAdding, { name: 'Dani', working: true })
+    assert.deepEqual((await run(home.env, ['account-add', '203.0.113.5', 'Eve'])).err, ['A Claude account of 203.0.113.5 is being added right now'])
+
+    // The process itself, standing in for the one started: the person says yes, and the server takes the login.
+    await update(home.env, store => void (store.servers[0]!.claudeAdding!.worker = { pid: process.pid, seen: new Date().toISOString() }))
+    const adding2 = pretendServer(call => (call.remote === 'true' ? undefined : { out: said(['Rom', 'Dani']) }))
+    assert.equal((await run(home.env, ['account-work', '203.0.113.5', 'Dani'], { exec: adding2.exec, mint: async () => ({ ok: true, login: LOGIN }), signal: new AbortController().signal })).code, 0)
+    const added = serversOf(await run(home.env, ['status']))[0]!
+    assert.deepEqual(added.claudeAccounts!.map(account => account.name), ['Rom', 'Dani'])
+    assert.equal(added.claudeAdding, undefined)
+    assert.ok(!JSON.stringify(await readStore(home.env)).includes(LOGIN))
+
+    const removing = pretendServer(call => (call.remote === 'true' ? undefined : { out: said(['Dani']) }))
+    assert.deepEqual(serversOf(await run(home.env, ['account-remove', '203.0.113.5', 'Rom'], { exec: removing.exec }))[0]!.claudeAccounts!.map(account => account.name), ['Dani'])
+    assert.match(removing.calls[1]!.script, /^NAME='Rom'$/m)
+    const failing = pretendServer(call => (call.remote === 'true' ? undefined : { code: 1, err: 'node: not found' }))
+    const failed = await run(home.env, ['account-remove', '203.0.113.5', 'Dani'], { exec: failing.exec })
+    assert.equal(failed.code, 1)
+    assert.deepEqual(failed.err, ['node: not found'])
+  } finally {
+    other.kill()
+    await home.remove()
+  }
+})

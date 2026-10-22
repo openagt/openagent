@@ -56,6 +56,21 @@ export interface ServerRow {
   who?: Who
   steps: StepRow[]
   logins: Record<LoginKind, LoginRow>
+  /** The Claude accounts the server has beside its own login, as it last said them. */
+  claudeAccounts: AccountRow[]
+  /** A Claude account being added, or the last one that did not get there. */
+  claudeAdding?: { name: string; working: boolean; asking?: boolean; said?: string }
+}
+
+/** One Claude account a server has beside its own login: never the login itself. */
+export interface AccountRow {
+  name: string
+  /** ISO 8601. */
+  added?: string
+  /** Epoch milliseconds: a limit it hit keeps runs off it until then. */
+  limitedUntil?: number
+  /** How full its windows were at the last run on it, by the agent's own names (`five_hour`, `seven_day`). */
+  windows?: { window: string; percentUsed: number; resetsAt: number }[]
 }
 
 /** Who on its server may start runs on a computer reached through it: nobody, its own person, or every person there. */
@@ -127,6 +142,27 @@ function readLogin(value: unknown): LoginRow {
   return { there: there === true, working: working === true, ...(asking === true ? { asking: true, ...(typedAtGithub ? { code: typedAtGithub } : {}) } : {}), ...(wanted === true ? { wanted: true } : {}), ...(who ? { account: who } : {}), ...(from ? { since: from } : {}), ...(until ? { ends: until } : {}), ...(words ? { said: words } : {}) }
 }
 
+const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
+
+function readAccount(value: unknown): AccountRow | undefined {
+  const { name, added, limitedUntil, windows } = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
+  const called = text(name)
+  if (!called) return undefined
+  const said = Array.isArray(windows)
+    ? windows.flatMap(w => {
+        const { window, percentUsed, resetsAt } = (w && typeof w === 'object' ? w : {}) as Record<string, unknown>
+        return text(window) && finite(percentUsed) && finite(resetsAt) ? [{ window: window as string, percentUsed, resetsAt }] : []
+      })
+    : []
+  return { name: called, ...(text(added) ? { added: added as string } : {}), ...(finite(limitedUntil) ? { limitedUntil } : {}), ...(said.length > 0 ? { windows: said } : {}) }
+}
+
+function readAdding(value: unknown): ServerRow['claudeAdding'] {
+  const { name, working, asking, said } = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
+  const called = text(name)
+  return called ? { name: called, working: working === true, ...(asking === true ? { asking: true } : {}), ...(text(said) ? { said: said as string } : {}) } : undefined
+}
+
 export function readServers(output: unknown): ServerRow[] | undefined {
   if (!output || typeof output !== 'object') return undefined
   const { servers } = output as Record<string, unknown>
@@ -134,7 +170,7 @@ export function readServers(output: unknown): ServerRow[] | undefined {
   const rows: ServerRow[] = []
   for (const entry of servers) {
     if (!entry || typeof entry !== 'object') continue
-    const { address, url, user, fingerprint, working, adding, reach, through, who, steps, logins } = entry as Record<string, unknown>
+    const { address, url, user, fingerprint, working, adding, reach, through, who, steps, logins, claudeAccounts, claudeAdding } = entry as Record<string, unknown>
     const { github, claude } = (logins && typeof logins === 'object' ? logins : {}) as Record<string, unknown>
     const [at, door, by, known] = [text(address), text(url), text(user), text(fingerprint)]
     if (!at || !door || !by || !Array.isArray(steps)) continue
@@ -146,7 +182,7 @@ export function readServers(output: unknown): ServerRow[] | undefined {
       if (stepId && name && STATES.includes(state as string)) list.push({ id: stepId, label: name, state: state as StepState, ...(words ? { said: words } : {}) })
     }
     const via = text(through)
-    rows.push({ address: at, url: door, user: by, ...(known ? { fingerprint: known } : {}), working: working === true, adding: adding === true, ...(reach === 'full' || reach === 'watch' ? { reach } : {}), ...(via ? { through: via, who: WHO.includes(who as string) ? (who as Who) : 'me' } : {}), steps: list, logins: { github: readLogin(github), claude: readLogin(claude) } })
+    rows.push({ address: at, url: door, user: by, ...(known ? { fingerprint: known } : {}), working: working === true, adding: adding === true, ...(reach === 'full' || reach === 'watch' ? { reach } : {}), ...(via ? { through: via, who: WHO.includes(who as string) ? (who as Who) : 'me' } : {}), steps: list, logins: { github: readLogin(github), claude: readLogin(claude) }, claudeAccounts: Array.isArray(claudeAccounts) ? claudeAccounts.flatMap(kept => readAccount(kept) ?? []) : [], ...(readAdding(claudeAdding) ? { claudeAdding: readAdding(claudeAdding)! } : {}) })
   }
   return rows
 }
@@ -230,6 +266,9 @@ export const ownGithub = (host: ModuleHost): Promise<Answer<OwnGithub>> => run(h
 export const login = (host: ModuleHost, address: string, kind: LoginKind, own = false): Promise<Answer<ServerRow[]>> => run(host, ['login', address, kind, ...(own ? ['own'] : [])], readServers)
 /** Take a login off the server. */
 export const logout = (host: ModuleHost, address: string, kind: LoginKind): Promise<Answer<ServerRow[]>> => run(host, ['logout', address, kind], readServers)
+export const loadAccounts = (host: ModuleHost, address: string): Promise<Answer<ServerRow[]>> => run(host, ['accounts', address], readServers)
+export const addAccount = (host: ModuleHost, address: string, name: string): Promise<Answer<ServerRow[]>> => run(host, ['account-add', address, name], readServers)
+export const removeAccount = (host: ModuleHost, address: string, name: string): Promise<Answer<ServerRow[]>> => run(host, ['account-remove', address, name], readServers)
 export const askLink = (host: ModuleHost, address: string, person?: string): Promise<Answer<DoorLink>> => run(host, ['link', address, ...(person !== undefined ? ['--for', person] : [])], readLink)
 /** Name the server's owner at its door, by their GitHub account. */
 export const nameOwner = (host: ModuleHost, address: string, account: string): Promise<Answer<DevicesRead>> => run(host, ['owner', address, account], readDevices)

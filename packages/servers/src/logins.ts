@@ -1,7 +1,7 @@
 import { mintClaude, type Mint } from '@openagt/agent-driver-claude'
 import { exec as ownExec, lastLines, openSession, withAdvice, type Exec, type Said, type Session } from './ssh.js'
-import { GITHUB_CODE_TIMEOUT_MS, LOGIN_TIMEOUT_MS, claudeLoginScript, claudeLogoutScript, githubCodeScript, githubLoginScript, githubLogoutScript, githubWaitScript, type LoginScript } from './steps.js'
-import { BEAT_MS, atWork, changeServer, heartbeat, isAccount, isGithubCode, type Login, type LoginKind, type Server } from './store.js'
+import { GITHUB_CODE_TIMEOUT_MS, LOGIN_TIMEOUT_MS, claudeAccountAddScript, claudeAccountRemoveScript, claudeAccountsScript, claudeLoginScript, claudeLogoutScript, githubCodeScript, githubLoginScript, githubLogoutScript, githubWaitScript, type LoginScript } from './steps.js'
+import { BEAT_MS, atWork, changeServer, heartbeat, isAccount, isGithubCode, readAccountKept, type ClaudeAccountKept, type Login, type LoginKind, type Server } from './store.js'
 
 /**
  * The two logins a server works with, and how each gets there: over SSH, as the install's own
@@ -200,6 +200,94 @@ export async function changeLogin(opts: LoginOptions): Promise<void> {
   } finally {
     await beating.stop()
     // One that was started over is another process's by now: nothing of it is this one's to write.
+    await changeServer(env, address, kept => void (mine(kept) && after(kept))).catch(() => {})
+  }
+}
+
+/** The added accounts among what an accounts script said last: the server's own login is the row above them. */
+export function accountsSaid(out: string): ClaudeAccountKept[] | undefined {
+  try {
+    const said = JSON.parse(out.trim().split('\n').at(-1) ?? '') as unknown
+    if (!Array.isArray(said)) return undefined
+    return said.flatMap(entry => (entry && typeof entry === 'object' && (entry as Record<string, unknown>)['own'] !== true ? (readAccountKept(entry) ?? []) : []))
+  } catch {
+    return undefined
+  }
+}
+
+type Accounts = { ok: true; accounts: ClaudeAccountKept[] } | Failed
+
+/** Run an accounts script on the server and read the accounts it answers with. */
+async function onAccounts(server: Pick<Server, 'address' | 'user'>, run: Exec | undefined, script: Parameters<typeof send>[1], login = ''): Promise<Accounts> {
+  const sent = await onServer(server, run, session => send(session, script, login))
+  if (!sent.ok) return sent
+  const accounts = accountsSaid(sent.out)
+  return accounts ? { ok: true, accounts } : { ok: false, error: 'The server answered something else than its Claude accounts.' }
+}
+
+/** The Claude accounts the server has beside its own login, as it says them now; written down for the page. */
+export async function readClaudeAccounts(env: NodeJS.ProcessEnv, address: string, exec?: Exec): Promise<Accounts> {
+  const server = await changeServer(env, address, kept => ({ address: kept.address, user: kept.user }))
+  if (!server) throw new Error(`no server at ${address}`)
+  const read = await onAccounts(server, exec, claudeAccountsScript())
+  if (read.ok) await changeServer(env, address, kept => void (kept.claudeAccounts = read.accounts))
+  return read
+}
+
+/** Take an added Claude account off the server, and write down the ones it still has. */
+export async function removeClaudeAccount(env: NodeJS.ProcessEnv, address: string, name: string, exec?: Exec): Promise<Accounts> {
+  const server = await changeServer(env, address, kept => ({ address: kept.address, user: kept.user }))
+  if (!server) throw new Error(`no server at ${address}`)
+  const gone = await onAccounts(server, exec, claudeAccountRemoveScript(name))
+  if (gone.ok) await changeServer(env, address, kept => void (kept.claudeAccounts = gone.accounts))
+  return gone
+}
+
+export interface AddAccountOptions {
+  env: NodeJS.ProcessEnv
+  address: string
+  /** What the person calls the account. */
+  name: string
+  exec?: Exec
+  mint?: Mint
+  /** Stops waiting for the person. What was already on its way to the server arrives all the same. */
+  signal?: AbortSignal
+  beatMs?: number
+}
+
+/**
+ * Add a Claude account on the server: a login is made in this computer's browser, as the
+ * server's own is, and handed to the server's user, who keeps it beside the server's own login.
+ * Run as a process of its own, as a login's change is; how it ended is written to the file.
+ */
+export async function addClaudeAccount(opts: AddAccountOptions): Promise<void> {
+  const { env, address, name } = opts
+  const mine = (kept: Server): boolean => kept.claudeAdding?.worker?.pid === process.pid
+  const beat = (): { pid: number; seen: string } => ({ pid: process.pid, seen: new Date().toISOString() })
+  const server = await changeServer(env, address, kept => {
+    const worker = kept.claudeAdding?.worker
+    if (atWork(worker) && worker!.pid !== process.pid && worker!.pid !== process.ppid) throw new Error(`A Claude account of ${address} is being added right now`)
+    kept.claudeAdding = { name, worker: beat() }
+    return { address: kept.address, user: kept.user }
+  })
+  if (!server) throw new Error(`no server at ${address}`)
+  const beating = heartbeat(() => changeServer(env, address, kept => void (mine(kept) && (kept.claudeAdding!.worker = beat()))), opts.beatMs ?? BEAT_MS)
+  const failed = (error: string) => (kept: Server): void => void (kept.claudeAdding = { name, failed: error })
+  let after: (kept: Server) => void = failed('The work stopped before it ended.')
+  try {
+    await changeServer(env, address, kept => void (mine(kept) && (kept.claudeAdding!.asking = true)))
+    const minted = await (opts.mint ?? mintClaude)(opts.signal ? { signal: opts.signal } : {})
+    await changeServer(env, address, kept => void (mine(kept) && delete kept.claudeAdding!.asking))
+    if (!minted.ok) return void (after = failed(minted.error))
+    const added = await onAccounts(server, opts.exec, claudeAccountAddScript(name, minted.login), minted.login)
+    after = added.ok
+      ? kept => {
+          kept.claudeAccounts = added.accounts
+          delete kept.claudeAdding
+        }
+      : failed(added.error)
+  } finally {
+    await beating.stop()
     await changeServer(env, address, kept => void (mine(kept) && after(kept))).catch(() => {})
   }
 }
