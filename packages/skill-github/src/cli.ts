@@ -250,6 +250,7 @@ const COMMANDS: Record<string, Command> = {
     const runs = runsAccount(accounts, picksPath(env))
     const loggingIn = state.installed ? underWay() : undefined
     const install = installing()
+    const installWith = state.installed ? undefined : installCommand(await hasBrew())
     return {
       ok: true,
       host: HOST,
@@ -258,7 +259,7 @@ const COMMANDS: Record<string, Command> = {
       logo: LOGO,
       tool: 'gh',
       installed: state.installed,
-      install: installCommand(await hasBrew()),
+      ...(installWith !== undefined ? { install: installWith } : {}),
       accounts: accounts.map(a => ({ ...a, runs: a.login === runs })),
       ...(loggingIn ? { loggingIn } : {}),
       // The install a press started: going on, or why it failed while gh is still not here.
@@ -292,6 +293,7 @@ const COMMANDS: Record<string, Command> = {
   async install(args, { hasBrew, shell }) {
     parse(args, {}, 0)
     const command = installCommand(await hasBrew())
+    if (command === undefined) throw new Refused({ ok: false, reason: 'no-build' }, `GitHub makes no gh for this computer (${process.platform} ${process.arch}): install it by hand, https://cli.github.com`)
     try {
       await shell(command)
     } catch (err) {
@@ -317,6 +319,18 @@ const COMMANDS: Record<string, Command> = {
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err)
       throw new Refused({ ok: false, reason: 'no-token', login, detail }, `gh gave no token for ${login}: ${detail}`)
+    }
+    // GitHub says whose the token is: a login gh keeps under one name can be another account's,
+    // and a run must never go out as someone else than the account it was given.
+    let whose: string
+    try {
+      whose = (await gh(['api', 'user', '--jq', '.login'], cwd, { GH_TOKEN: token })).trim()
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err)
+      throw new Refused({ ok: false, reason: 'no-token', login, detail }, `GitHub did not take ${login}'s login: ${detail}`)
+    }
+    if (whose.toLowerCase() !== login.toLowerCase()) {
+      throw new Refused({ ok: false, reason: 'not-that-account', login, whose }, `the login gh keeps for ${login} is ${whose}'s on GitHub: add ${login} again in OpenAgent's Settings › Git hosts`)
     }
     return { ok: true, login, env: runEnv(token, env) }
   },

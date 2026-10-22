@@ -4,15 +4,15 @@
  * same either way.
  */
 
-/** A `gh` runner: the standard output of one invocation; rejects with gh's own line on failure. */
-export type GhRunner = (args: string[], cwd: string) => Promise<string>
+/** A `gh` runner: the standard output of one invocation, with more in its environment when given; rejects with gh's own line on failure. */
+export type GhRunner = (args: string[], cwd: string, env?: Record<string, string>) => Promise<string>
 
 /** `gh` on PATH, one minute per call: these talk to the network. */
 export function nodeGhRunner(): GhRunner {
-  return async (args, cwd) => {
+  return async (args, cwd, env) => {
     const { execFile } = await import('node:child_process')
     return new Promise<string>((resolve, reject) => {
-      execFile('gh', args, { cwd, timeout: 60_000 }, (err, stdout, stderr) => {
+      execFile('gh', args, { cwd, timeout: 60_000, ...(env ? { env: { ...process.env, ...env } } : {}) }, (err, stdout, stderr) => {
         if (err) reject(new Error(String(stderr).trim() || err.message))
         else resolve(String(stdout))
       })

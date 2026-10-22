@@ -216,6 +216,8 @@ export interface ProjectAccountsView {
   gitHost?: {
     host: string
     name: string
+    /** The host's word for a pull request. */
+    requestWord: string
     accounts: string[]
     /** The computer's runs' account. */
     computer?: string
@@ -240,7 +242,7 @@ export async function onProjectAccounts(projectId: string): Promise<ProjectAccou
   const provider = host !== undefined && command ? await askProvider(host, root, command) : undefined
   if (host !== undefined && provider && (provider.accounts.length >= 2 || own.gitHost !== undefined)) {
     const computer = provider.accounts.find(a => a.runs)?.login
-    view.gitHost = { host, name: provider.name, accounts: provider.accounts.map(a => a.login), ...(computer !== undefined ? { computer } : {}), ...(own.gitHost !== undefined ? { project: own.gitHost } : {}) }
+    view.gitHost = { host, name: provider.name, requestWord: provider.requestWord, accounts: provider.accounts.map(a => a.login), ...(computer !== undefined ? { computer } : {}), ...(own.gitHost !== undefined ? { project: own.gitHost } : {}) }
   }
   const claude = (await onClaudeAccounts()).accounts
   if (claude.length >= 2 || own.claude !== undefined) {

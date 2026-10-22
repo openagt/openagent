@@ -4,7 +4,7 @@ import { onClaudeAccounts, sendAddClaudeAccount, sendRemoveClaudeAccount, sendUs
 import { usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { ClaudeLogo } from './driver-logos.js'
-import { AgentFix, StatePill, agentLoginState, useAgentState } from './Logins.js'
+import { AgentFix, StatePill, agentLoginState, agentWords, useAgentState } from './Logins.js'
 import { Button } from './ui/button.js'
 import { Input } from './ui/input.js'
 import { DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from './ui/dropdown-menu.js'
@@ -116,7 +116,7 @@ export function AgentAccountsSettings() {
         </header>
         {state && !state.ready && (
           <div className="space-y-2 border-b border-border px-3 py-2.5">
-            <p className="text-xs text-muted-foreground">{state.problem}</p>
+            <p className="text-xs text-muted-foreground">{agentWords(state)}</p>
             <AgentFix state={state} onChanged={() => void reloadState()} />
           </div>
         )}

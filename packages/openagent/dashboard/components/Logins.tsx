@@ -81,14 +81,36 @@ export function PackageLogo({ svg, className }: { svg: string | undefined; class
   return <span aria-hidden className={cn('size-4 shrink-0 bg-current', className)} style={{ maskImage: url, WebkitMaskImage: url, maskSize: 'contain', WebkitMaskSize: 'contain', maskRepeat: 'no-repeat', WebkitMaskRepeat: 'no-repeat' }} />
 }
 
-/** The command a press runs, under its button, so the person sees what is done on their computer. */
+/** A command longer than this is one line until it is asked for whole. */
+const LONG = 72
+
+/** The command a press runs, under its button, so the person sees what is done on their computer. A long one is a line, whole on a press. */
 export function CommandLine({ command }: { command: string }) {
+  const [whole, setWhole] = useState(false)
+  const long = command.length > LONG
   return (
     <div className="flex min-w-0 items-start gap-1">
-      <code className="min-w-0 flex-1 break-all font-mono text-[11px] text-muted-foreground">{command}</code>
+      <code className={cn('min-w-0 flex-1 font-mono text-[11px] text-muted-foreground', long && !whole ? 'truncate' : 'break-all')}>{command}</code>
+      {long && (
+        <button type="button" className="shrink-0 text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline" onClick={() => setWhole(!whole)}>
+          {whole ? 'Less' : 'Show all'}
+        </button>
+      )}
       <CopyButton text={command} label="Copy the command" />
     </div>
   )
+}
+
+/** What is in the way of the agent, in words. */
+export function agentWords(state: AgentState): string {
+  const name = DRIVER_LABELS[state.driver]
+  return agentLoginState(state) === 'not-installed' ? `${name} is not installed.` : / logged in/.test(state.problem ?? '') ? `${name} is not logged in.` : (state.problem ?? `${name} cannot start.`)
+}
+
+/** What is missing at a host, in words. */
+export function hostWords(row: GitHostRow): string {
+  const p = row.provider!
+  return !p.installed ? `${p.tool}, the tool for ${p.name}, is not installed.` : p.accounts.length === 0 ? `No ${p.name} account is logged in.` : `${p.name} no longer takes a login: add it again.`
 }
 
 /** A press that fixes one thing: its button, what it is doing while it does, the command it runs, why it failed. */
@@ -185,6 +207,7 @@ export function HostFix({ row, onChanged, size }: { row: GitHostRow; onChanged: 
   const p = row.provider
   if (!p) return null
   if (!p.installed) {
+    if (!p.install) return <p className="text-xs text-muted-foreground">{`Install ${p.tool} by hand: ${p.name} makes none for this computer.`}</p>
     const install = async () => {
       setError(undefined)
       const done = await sendGitHostInstall(row.host)
@@ -223,7 +246,7 @@ export function useMissing(): { missing: Missing[]; reload: () => Promise<void> 
     missing.push({
       key: 'agent',
       name,
-      words: state.fix?.kind === 'install' || / not found/.test(state.problem ?? '') ? `${name} is not installed.` : `${name} is not logged in.`,
+      words: agentWords(state),
       entry: 'agent-accounts',
       fix: <AgentFix state={state} onChanged={() => void reloadAgent()} />,
     })
@@ -234,7 +257,7 @@ export function useMissing(): { missing: Missing[]; reload: () => Promise<void> 
     missing.push({
       key: `host:${row.host}`,
       name: p.name,
-      words: !p.installed ? `${p.tool}, what ${p.name} is reached through, is not installed.` : p.accounts.length === 0 ? `No ${p.name} account is logged in.` : `${p.name} no longer takes a login: log it in again.`,
+      words: hostWords(row),
       entry: GIT_HOSTS_ENTRY,
       fix: <HostFix row={row} onChanged={reloadHosts} />,
     })

@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { GhRunner } from './gh.js'
-import { ghState, installCommand, jobState, runEnv, runsAccount, startJob, useForRuns, type GhAccount } from './accounts.js'
+import { ghState, installCommand, jobState, loginUnderWay, runEnv, runsAccount, startJob, useForRuns, type GhAccount } from './accounts.js'
 import { runCli, type CliDeps } from './cli.js'
 
 // The accounts gh knows and the one runs use: picked once from the terminal's, kept from then on,
@@ -20,13 +20,18 @@ const STATUS = {
   },
 }
 
+/** gh as scripted: the token of each account is `tok-<login>`, and GitHub says it is that account's unless `whose` says another. */
 const ghWith =
-  (status: unknown, asked: string[][] = []): GhRunner =>
-  async args => {
+  (status: unknown, asked: string[][] = [], whose: Record<string, string> = {}): GhRunner =>
+  async (args, _cwd, env) => {
     asked.push(args)
     if (args[0] === '--version') return 'gh version 2.93.0\n'
     if (args[0] === 'auth' && args[1] === 'status') return JSON.stringify(status)
     if (args[0] === 'auth' && args[1] === 'token') return `tok-${args[args.indexOf('--user') + 1]}\n`
+    if (args[0] === 'api' && args[1] === 'user') {
+      const login = env?.['GH_TOKEN']?.slice('tok-'.length) ?? ''
+      return `${whose[login] ?? login}\n`
+    }
     throw new Error(`unexpected gh ${args.join(' ')}`)
   }
 
@@ -97,10 +102,24 @@ test('runEnv: git asks the token of the helper set here alone, ssh addresses go 
   assert.equal(url.trim(), 'https://github.com/o/r.git')
 })
 
-test('installCommand: Homebrew where it is, else GitHub’s build into ~/.local/bin', () => {
+test('installCommand: Homebrew where it is, else GitHub’s build for this computer into ~/.local/bin; none where GitHub makes none', () => {
   assert.equal(installCommand(true), 'brew install gh')
-  assert.match(installCommand(false), /github\.com\/cli\/cli\/releases\/download/)
-  assert.match(installCommand(false), /\$HOME\/\.local\/bin\/gh/)
+  const mac = installCommand(false, 'darwin', 'arm64')!
+  assert.match(mac, /releases\/download\/v\$v\/gh_\$\{v\}_macOS_arm64\.zip/)
+  assert.match(mac, /unzip -q/)
+  assert.match(mac, /mv "\$d"\/gh_\*\/bin\/gh ~\/\.local\/bin\//)
+  assert.match(installCommand(false, 'linux', 'x64')!, /linux_amd64\.tar\.gz.*tar -xzf/)
+  assert.equal(installCommand(false, 'win32', 'x64'), undefined)
+})
+
+test('the install, run for real in a home of its own, puts a working gh in its ~/.local/bin', { skip: process.env['OPENAGENT_NETWORK_TESTS'] !== '1' && 'reaches GitHub: OPENAGENT_NETWORK_TESTS=1' }, () => {
+  const home = mkdtempSync(join(tmpdir(), 'gh-home-'))
+  try {
+    execFileSync('sh', ['-c', installCommand(false)!], { env: { ...process.env, HOME: home } })
+    assert.match(execFileSync(join(home, '.local', 'bin', 'gh'), ['--version'], { encoding: 'utf8' }), /^gh version/)
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
 })
 
 test(
@@ -112,7 +131,7 @@ test(
     assert.equal(said.out['name'], 'GitHub')
     assert.equal(said.out['requestWord'], 'pull request')
     assert.equal(said.out['installed'], true)
-    assert.equal(said.out['install'], 'brew install gh')
+    assert.equal(said.out['install'], undefined, 'nothing to install while gh is here')
     assert.match(String(said.out['logo']), /^<svg/)
     assert.deepEqual(said.out['accounts'], [
       { login: 'octo', terminal: true, ok: true, runs: true },
@@ -123,6 +142,7 @@ test(
     assert.equal(other.out['reason'], 'not-mine')
     const none = await run(['accounts'], { gh: async () => Promise.reject(new Error('spawn gh ENOENT')), env, hasBrew: async () => false, installing: () => ({ running: false, failed: 'no network', said: '' }), underWay: () => undefined })
     assert.equal(none.out['installed'], false)
+    assert.match(String(none.out['install']), /releases\/download/)
     assert.equal(none.out['installFailed'], 'no network')
     const going = await run(['accounts'], { gh: async () => Promise.reject(new Error('spawn gh ENOENT')), env, hasBrew: async () => false, installing: () => ({ running: true, said: '' }), underWay: () => undefined })
     assert.equal(going.out['installing'], true)
@@ -143,13 +163,18 @@ test(
     const picked = await run(['env'], { gh, env })
     assert.equal(picked.out['login'], 'octo-agent')
     assert.equal((picked.out['env'] as Record<string, string>)['GH_TOKEN'], 'tok-octo-agent')
-    assert.deepEqual(asked.at(-1), ['auth', 'token', '--hostname', 'github.com', '--user', 'octo-agent'])
+    assert.deepEqual(asked.at(-2), ['auth', 'token', '--hostname', 'github.com', '--user', 'octo-agent'])
     assert.equal(((await run(['env', '--user', 'octo'], { gh, env })).out['env'] as Record<string, string>)['GH_TOKEN'], 'tok-octo')
     const stranger = await run(['env', '--user', 'stranger'], { gh, env })
     assert.equal(stranger.code, 1)
     assert.equal(stranger.out['reason'], 'no-account')
     assert.match(stranger.err, /Settings › Git hosts/)
     assert.equal((await run(['use', 'stranger'], { gh, env })).out['reason'], 'no-account')
+    // A login gh keeps under one name that GitHub says is another account's: never handed to a run.
+    const mixed = await run(['env', '--user', 'octo-agent'], { gh: ghWith(STATUS, [], { 'octo-agent': 'octo' }), env })
+    assert.equal(mixed.code, 1)
+    assert.equal(mixed.out['reason'], 'not-that-account')
+    assert.match(mixed.err, /the login gh keeps for octo-agent is octo's on GitHub/)
     // Nobody logged in: nothing changes for the run.
     assert.deepEqual((await run(['env'], { gh: ghWith({ hosts: {} }), env: { XDG_CONFIG_HOME: join(dir, 'x') } })).out, { ok: true, env: {} })
   }),
@@ -174,6 +199,20 @@ test('login: the terminal’s account is handed over to be given back; install r
   const failed = await run(['install'], { hasBrew: async () => true, shell: async () => Promise.reject(new Error('no network')) })
   assert.equal(failed.out['reason'], 'install-failed')
   assert.match(failed.err, /no network/)
+})
+
+test('the code of a login, as each gh says it', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'gh-code-'))
+  try {
+    const files = { log: join(dir, 'l.log'), pid: join(dir, 'l.pid'), exit: join(dir, 'l.exit') }
+    for (const said of ['! First copy your one-time code: 5BAA-3444', '! One-time code (3F1C-6E36) copied to clipboard']) {
+      await startJob(files, `echo "${said}"; echo "Open this URL to continue in your web browser: https://github.com/login/device"; sleep 1`)
+      await new Promise(resolve => setTimeout(resolve, 200))
+      assert.deepEqual(loginUnderWay(files), { code: /([A-Z0-9]{4}-[A-Z0-9]{4})/.exec(said)![1], url: 'https://github.com/login/device' })
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 test('a job goes on after the command answered, says how it ended, and a failed one its last lines', async () => {

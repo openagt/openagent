@@ -103,19 +103,25 @@ export function useForRuns(login: string, accounts: readonly GhAccount[], path: 
   writePicks(path, { runs: { ...picks.runs, [HOST]: login } })
 }
 
+/** GitHub's build of `gh` for each computer it makes one for, by platform and processor. */
+const BUILDS: Record<string, string> = {
+  'darwin-arm64': 'macOS_arm64.zip',
+  'darwin-x64': 'macOS_amd64.zip',
+  'linux-x64': 'linux_amd64.tar.gz',
+  'linux-arm64': 'linux_arm64.tar.gz',
+}
+
 /**
  * How `gh` is put on this computer with no admin: with Homebrew where it is, else GitHub's own
- * build for this computer, unpacked into `~/.local/bin`. One line, shown under the button as it runs.
+ * build for this computer, its newest, unpacked into `~/.local/bin`. One line, shown under the
+ * button that runs it. None for a computer GitHub makes no build for.
  */
-export function installCommand(hasBrew: boolean): string {
+export function installCommand(hasBrew: boolean, platform: string = process.platform, arch: string = process.arch): string | undefined {
   if (hasBrew) return 'brew install gh'
-  return [
-    'tag=$(curl -fsSLI -o /dev/null -w "%{url_effective}" https://github.com/cli/cli/releases/latest) && v=${tag##*/v}',
-    'case "$(uname -s)-$(uname -m)" in Darwin-arm64) f=macOS_arm64.zip;; Darwin-x86_64) f=macOS_amd64.zip;; Linux-x86_64) f=linux_amd64.tar.gz;; Linux-aarch64) f=linux_arm64.tar.gz;; *) echo "GitHub has no gh for $(uname -sm)" >&2; exit 1;; esac',
-    'd=$(mktemp -d) && curl -fsSL -o "$d/$f" "https://github.com/cli/cli/releases/download/v$v/gh_${v}_$f"',
-    'case $f in *.zip) unzip -q "$d/$f" -d "$d";; *) tar -xzf "$d/$f" -C "$d";; esac',
-    'mkdir -p "$HOME/.local/bin" && mv "$d"/gh_*/bin/gh "$HOME/.local/bin/gh" && rm -rf "$d"',
-  ].join('; ')
+  const build = BUILDS[`${platform}-${arch}`]
+  if (build === undefined) return undefined
+  const unpack = build.endsWith('.zip') ? 'unzip -q "$d/gh" -d "$d"' : 'tar -xzf "$d/gh" -C "$d"'
+  return `v=$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/cli/cli/releases/latest) && v=\${v##*/v} && d=$(mktemp -d) && curl -fsSL -o "$d/gh" "https://github.com/cli/cli/releases/download/v$v/gh_\${v}_${build}" && ${unpack} && mkdir -p ~/.local/bin && mv "$d"/gh_*/bin/gh ~/.local/bin/ && rm -rf "$d"`
 }
 
 /** Whether Homebrew is on this computer. */
@@ -202,7 +208,8 @@ export interface LoggingIn {
   url: string
 }
 
-const CODE = /one-time code: ([A-Z0-9]{4}-[A-Z0-9]{4})/
+// gh 2.93 says `one-time code: ABCD-1234`, 2.103 `One-time code (ABCD-1234) copied to clipboard`.
+const CODE = /one-time code:?\s*\(?([A-Z0-9]{4}-[A-Z0-9]{4})/i
 const DEVICE_URL = /(https:\/\/github\.com\/login\/device)/
 
 function codeIn(said: string): LoggingIn | undefined {

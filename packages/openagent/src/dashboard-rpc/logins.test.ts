@@ -140,7 +140,7 @@ test('a project’s own accounts: offered for a kind the computer has two or mor
   withProjects(async dirs => {
     const id = (await listProjects()).find(p => p.path === dirs.github)!.id
     let view = await onProjectAccounts(id)
-    assert.deepEqual(view?.gitHost, { host: 'github.com', name: 'GitHub', accounts: ['octo', 'octo-agent'], computer: 'octo' })
+    assert.deepEqual(view?.gitHost, { host: 'github.com', name: 'GitHub', requestWord: 'pull request', accounts: ['octo', 'octo-agent'], computer: 'octo' })
     assert.equal(view?.claude, undefined, 'one Claude account: nothing to pick')
 
     addAccount('Dani', 'sk-ant-oat01-dani', accountsWiring.path())

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Check, Plus } from 'lucide-react'
 import { sendUseGitHostAccount, type GitHostRow } from '../rpc/logins.js'
 import { cn } from '../lib/utils.js'
-import { DeviceCode, GIT_HOSTS_ENTRY, HostFix, PackageLogo, StatePill, hostLoginState, useGitHosts, useHostLogin } from './Logins.js'
+import { DeviceCode, GIT_HOSTS_ENTRY, HostFix, PackageLogo, StatePill, hostLoginState, hostWords, useGitHosts, useHostLogin } from './Logins.js'
 import { Button } from './ui/button.js'
 import { DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from './ui/dropdown-menu.js'
 
@@ -79,7 +79,7 @@ function HostCard({ row, onChanged }: { row: GitHostRow; onChanged: () => Promis
       <div className={cn('px-3 py-2.5', p.accounts.length > 0 && 'border-t border-border')}>
         {!p.installed || p.accounts.length === 0 ? (
           <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">{!p.installed ? `${p.name} is reached through ${p.tool}, which is not on this computer.` : `No ${p.name} account is logged in to ${p.tool} on this computer.`}</p>
+            <p className="text-xs text-muted-foreground">{hostWords(row)}</p>
             <HostFix row={row} onChanged={onChanged} />
           </div>
         ) : p.loggingIn ? (

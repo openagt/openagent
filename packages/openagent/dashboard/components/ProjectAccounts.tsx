@@ -39,9 +39,9 @@ export function ProjectAccountsSettings({ projectId }: { projectId: string }) {
       {host && (
         <SelectRow
           label={host.name}
-          description={`Which account this project's runs push and open a pull request as.`}
+          description={`Which account this project's runs push and open a ${host.requestWord} as.${host.computer !== undefined ? ` This computer's runs use @${host.computer}.` : ''}`}
           value={host.project ?? SAME}
-          options={[{ value: SAME, label: `Same as this computer${host.computer !== undefined ? ` (@${host.computer})` : ''}` }, ...host.accounts.map(login => ({ value: login, label: `@${login}` }))]}
+          options={[{ value: SAME, label: 'Same as this computer' }, ...host.accounts.map(login => ({ value: login, label: `@${login}` }))]}
           onChange={next => void save({ gitHost: next === SAME ? null : next })}
         />
       )}
