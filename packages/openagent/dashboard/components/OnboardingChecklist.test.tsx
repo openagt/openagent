@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { forgetRemembered } from '../lib/use-async.js'
 import type { DashboardData } from '../../src/index.js'
 import { configureFirst } from '../test-utils.js'
 import { checked } from '../test-controls.js'
@@ -33,6 +34,7 @@ const { takePendingDraft } = await import('../lib/draft-handoff.js')
 
 afterEach(() => {
   cleanup()
+  forgetRemembered()
   startAgent.start.mockReset()
   startAgent.busy = false
   startAgent.error = null

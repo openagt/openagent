@@ -20,10 +20,14 @@ const BUSY_MS = 2_000
 const MISSING_MS = 8_000
 const SELDOM_MS = 30_000
 
-/** A read asked again at the pace its last answer calls for. */
-function usePaced<T>(load: (() => Promise<T>) | null, pace: (value: T | undefined) => number, deps: unknown[]): { value: T | undefined; reload: () => Promise<void> } {
+/**
+ * A read asked again at the pace its last answer calls for. Its answer is kept under `key` for the
+ * page's life: a place that opens later (the person's menu) shows it from its first frame, never
+ * empty while the same question, asked a moment ago, is asked again.
+ */
+function usePaced<T>(key: string, load: (() => Promise<T>) | null, pace: (value: T | undefined) => number, deps: unknown[]): { value: T | undefined; reload: () => Promise<void> } {
   const [every, setEvery] = useState(SELDOM_MS)
-  const { value, reload } = usePolled<T | undefined>(load, undefined, every, [...deps, every], 'previous')
+  const { value, reload } = usePolled<T | undefined>(load, undefined, every, [...deps, every], { remember: key })
   const next = pace(value)
   useEffect(() => {
     if (next !== every) setEvery(next)
@@ -33,12 +37,12 @@ function usePaced<T>(load: (() => Promise<T>) | null, pace: (value: T | undefine
 
 /** The coding agent's CLI as this computer has it: `driver`, else the one picked in Settings. Not asked while `on` is false. */
 export function useAgentState(driver?: DriverName, on = true): { state: AgentState | undefined; reload: () => Promise<void> } {
-  const { value, reload } = usePaced(on ? () => onAgentState(driver) : null, state => (state?.fixing ? BUSY_MS : state && !state.ready ? MISSING_MS : SELDOM_MS), [driver, on])
+  const { value, reload } = usePaced(`agent-state:${driver ?? ''}`, on ? () => onAgentState(driver) : null, state => (state?.fixing ? BUSY_MS : state && !state.ready ? MISSING_MS : SELDOM_MS), [driver, on])
   return { state: value, reload }
 }
 
 export function useGitHosts(): { view: GitHostsView | undefined; reload: () => Promise<void> } {
-  const { value, reload } = usePaced(onGitHosts, view => (view?.hosts.some(h => h.provider?.installing || h.provider?.loggingIn) ? BUSY_MS : view?.hosts.some(h => hostLoginState(h) === 'step' || hostLoginState(h) === 'not-installed') ? MISSING_MS : SELDOM_MS), [])
+  const { value, reload } = usePaced('git-hosts', onGitHosts, view => (view?.hosts.some(h => h.provider?.installing || h.provider?.loggingIn) ? BUSY_MS : view?.hosts.some(h => hostLoginState(h) === 'step' || hostLoginState(h) === 'not-installed') ? MISSING_MS : SELDOM_MS), [])
   return { view: value, reload }
 }
 
