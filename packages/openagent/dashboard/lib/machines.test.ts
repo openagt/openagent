@@ -39,10 +39,10 @@ describe('the saved machines', () => {
     render(createElement(List))
     let result: Awaited<ReturnType<typeof addMachine>> | undefined
     await act(async () => {
-      result = await addMachine('http://box.local:4201/_remote-access/enter#bbb', 'Box')
+      result = await addMachine('http://box.local:4201/_devices/enter#bbb', 'Box')
     })
     expect(result).toEqual({ ok: true, machine: { id: 'http://box.local:4201', label: 'Box', url: 'http://box.local:4201' } })
-    expect(machinesRpc.sendAddMachine).toHaveBeenCalledWith('http://box.local:4201/_remote-access/enter#bbb', 'Box')
+    expect(machinesRpc.sendAddMachine).toHaveBeenCalledWith('http://box.local:4201/_devices/enter#bbb', 'Box')
     expect(screen.getByText('Box')).toBeTruthy()
     expect(localStorage.length).toBe(0)
     expect(JSON.stringify(result)).not.toContain('bbb')

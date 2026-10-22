@@ -54,10 +54,9 @@ test('the dashboard\'s modules are every registered project\'s, one per package,
     await addProject(a, '2026-09-19T00:00:00.000Z')
     await addProject(b, '2026-09-19T00:00:01.000Z')
 
-    // The computer's modules (the Devices section, the Machines section) come first, and are no project's. Then the built-in modules (Changes, Files, the logs package's), which are every project's, from the first; then the projects' own.
+    // The computer's module (the Devices and Machines sections) comes first, and is no project's. Then the built-in modules (Changes, Files, the logs package's), which are every project's, from the first; then the projects' own.
     assert.deepEqual(await onModules(), [
-      { package: '@openagt/remote-access', url: '/_computer-modules/%40openagt%2Fremote-access/dashboard.js', projects: [], computer: true },
-      { package: '@openagt/servers', url: '/_computer-modules/%40openagt%2Fservers/dashboard.js', projects: [], computer: true },
+      { package: '@openagt/devices', url: '/_computer-modules/%40openagt%2Fdevices/dashboard.js', projects: [], computer: true },
       { package: '@openagt/changes', url: `/_modules/${projectId(a)}/%40openagt%2Fchanges/dashboard.js`, projects: [projectId(a), projectId(b)] },
       { package: '@openagt/files', url: `/_modules/${projectId(a)}/%40openagt%2Ffiles/dashboard.js`, projects: [projectId(a), projectId(b)] },
       { package: '@openagt/skill-logs', url: `/_modules/${projectId(a)}/%40openagt%2Fskill-logs/dashboard.js`, projects: [projectId(a), projectId(b)] },
@@ -87,13 +86,12 @@ test('with no project added, the computer\'s modules are there and run their own
   try {
     await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
     assert.deepEqual(await onModules(), [
-      { package: '@openagt/remote-access', url: '/_computer-modules/%40openagt%2Fremote-access/dashboard.js', projects: [], computer: true },
-      { package: '@openagt/servers', url: '/_computer-modules/%40openagt%2Fservers/dashboard.js', projects: [], computer: true },
+      { package: '@openagt/devices', url: '/_computer-modules/%40openagt%2Fdevices/dashboard.js', projects: [], computer: true },
     ])
     // The door's own command, answering what it keeps for this computer: nobody is in, and it is shut.
-    assert.deepEqual(await runComputerCommand('@openagt/remote-access', ['status']), { ok: true, output: { on: false, listening: false, devices: [], lines: [], persons: [] } })
-    assert.deepEqual(await runComputerCommand('@openagt/servers', ['status']), { ok: true, output: { servers: [] } })
-    assert.deepEqual(await runComputerCommand('@openagt/remote-access', ['status'], 'servers'), { ok: false, error: '@openagt/remote-access has no command servers' })
+    assert.deepEqual(await runComputerCommand('@openagt/devices', ['status']), { ok: true, output: { on: false, listening: false, devices: [], lines: [], persons: [] } })
+    assert.deepEqual(await runComputerCommand('@openagt/devices', ['server', 'status']), { ok: true, output: { servers: [] } })
+    assert.deepEqual(await runComputerCommand('@openagt/devices', ['status'], 'servers'), { ok: false, error: '@openagt/devices has no command servers' })
     assert.deepEqual(await runComputerCommand('@openagt/files', []), { ok: false, error: "@openagt/files is not this computer's" })
     assert.deepEqual(await runComputerCommand('queue', []), { ok: false, error: "queue is not this computer's" })
 
@@ -101,7 +99,7 @@ test('with no project added, the computer\'s modules are there and run their own
     await project(a, { queue: module('queue') })
     await addProject(a, '2026-09-19T00:00:00.000Z')
     assert.deepEqual(await runComputerCommand('queue', []), { ok: false, error: "queue is not this computer's" })
-    assert.deepEqual(await runModuleCommand(projectId(a), '@openagt/remote-access', ['status']), { ok: false, error: '@openagt/remote-access brings no module to this project' })
+    assert.deepEqual(await runModuleCommand(projectId(a), '@openagt/devices', ['status']), { ok: false, error: '@openagt/devices brings no module to this project' })
   } finally {
     if (previous === undefined) delete process.env.XDG_CONFIG_HOME
     else process.env.XDG_CONFIG_HOME = previous

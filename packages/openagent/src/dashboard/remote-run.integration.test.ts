@@ -133,7 +133,7 @@ async function twoMachines(opts: { shopOnB?: boolean } = {}): Promise<TwoMachine
   const localOnlyA = await repository(join(root, 'a'), 'notes')
   await addProject(shopA, at, undefined, envA)
   await addProject(localOnlyA, at, undefined, envA)
-  const machineB = (await addMachine({ url: b.url, key: KEY, door: `${b.url}/_remote-access/enter`, label: 'Studio' }, undefined, envA)).record.id
+  const machineB = (await addMachine({ url: b.url, key: KEY, door: `${b.url}/_devices/enter`, label: 'Studio' }, undefined, envA)).record.id
   const a = createProjectRuntime({ cwd: shopA, env: envA })
 
   return {

@@ -25,7 +25,7 @@ test('a login is copied when the computer has none, or has an older copy; never 
   assert.deepEqual(loginsToCopy({}, {}), {})
 })
 
-test('what another computer says of the logins there is read as its data; the servers package\'s own answer reads as copies and logins made there', () => {
+test('what another computer says of the logins there is read as its data; the devices package\'s own answer reads as copies and logins made there', () => {
   assert.deepEqual(readLogins({ github: { source: 'copied', from: 'vps-1', mark: markOf(GITHUB), account: 'rom', extra: 1 }, claude: { source: 'stolen' } }), { github: { source: 'copied', from: 'vps-1', mark: markOf(GITHUB), account: 'rom' } })
   assert.deepEqual(readLogins('junk'), {})
   assert.deepEqual(readLogins({ github: { source: 'made', from: 'a b', mark: 'XYZ' } }), { github: { source: 'made' } })
@@ -120,20 +120,20 @@ test('a computer that cannot say its logins, or does not take them, stops the ru
   assert.deepEqual(await copyLoginsTo({ url: refusing.url, key: 'line', label: 'rom-desktop' }, { own: async () => ({ claude: CLAUDE }) }), { ok: false, error: 'Your logins could not be copied to rom-desktop: Claude Code on this computer does not take the login.' })
 })
 
-test('a person\'s OpenAgent takes logins as the servers package does, GitHub first, and says where each came from', async () => {
+test('a person\'s OpenAgent takes logins as the devices package does, GitHub first, and says where each came from', async () => {
   const ran: { args: string[]; input: string | null | undefined }[] = []
   const status = (logins: Record<string, unknown>) => ({ ok: true as const, output: { person: 'sul', logins } })
   let after: Record<string, unknown> = { github: { there: false, working: false }, claude: { there: false, working: false } }
   const run: RunComputerCommand = async (pkg, args, _command, input) => {
-    assert.equal(pkg, '@openagt/servers')
+    assert.equal(pkg, '@openagt/devices')
     ran.push({ args, input })
-    if (args[1] === 'login' && args[2] === 'github') after = { ...after, github: { there: true, working: false, from: 'vps-1', mark: markOf(GITHUB) } }
-    if (args[1] === 'login' && args[2] === 'claude') after = { ...after, claude: { there: true, working: false, from: 'vps-1', mark: markOf(CLAUDE) } }
+    if (args[2] === 'login' && args[3] === 'github') after = { ...after, github: { there: true, working: false, from: 'vps-1', mark: markOf(GITHUB) } }
+    if (args[2] === 'login' && args[3] === 'claude') after = { ...after, claude: { there: true, working: false, from: 'vps-1', mark: markOf(CLAUDE) } }
     return status(after)
   }
   const logins = personLogins(run)
   const given = await logins.give({ claude: CLAUDE, github: GITHUB, from: 'vps-1' })
-  assert.deepEqual(ran.map(call => call.args), [['own', 'login', 'github', '--from', 'vps-1'], ['own', 'login', 'claude', '--from', 'vps-1'], ['own']])
+  assert.deepEqual(ran.map(call => call.args), [['server', 'own', 'login', 'github', '--from', 'vps-1'], ['server', 'own', 'login', 'claude', '--from', 'vps-1'], ['server', 'own']])
   assert.deepEqual(ran.map(call => call.input), [GITHUB, CLAUDE, undefined])
   assert.deepEqual(given, { ok: true, logins: { github: { source: 'copied', from: 'vps-1', mark: markOf(GITHUB) }, claude: { source: 'copied', from: 'vps-1', mark: markOf(CLAUDE) } } })
 

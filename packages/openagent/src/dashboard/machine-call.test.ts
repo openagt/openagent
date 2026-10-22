@@ -83,7 +83,7 @@ test('a machine that shows another key is sent nothing: no key, no prompt, no co
     assert.equal(await pingRemote(target), false)
     const started = await startRemoteAgent(target, { prompt: 'a prompt nobody else should read', options: {} })
     assert.deepEqual(started, { ok: false, error: `could not reach the machine: ${NOT_THE_MACHINE}` })
-    const entered = await enterRemote(`${studio.url}/_remote-access/enter`, 'c0de', 'a laptop', other.pin)
+    const entered = await enterRemote(`${studio.url}/_devices/enter`, 'c0de', 'a laptop', other.pin)
     assert.deepEqual(entered, { ok: false, error: `The machine did not answer: ${NOT_THE_MACHINE}` })
     await assert.rejects(machineFetch(`${studio.url}/`, other.pin), new RegExp(NOT_THE_MACHINE))
     assert.deepEqual(studio.asked, []) // the connection was dropped before a byte of a request
@@ -184,7 +184,7 @@ test('once OpenAgent said which computer this is, every call to a machine says i
     assert.equal(computerSaid(), MAC)
     // To a machine known by its key, and to one on the same Wi-Fi: a call with headers of its own keeps them.
     await machineFetch(`${studio.url}/_relay/ping`, studio.pin, { headers: { authorization: 'Bearer d1.sekret' } })
-    await machineFetch(`${studio.url}/_remote-access/enter`, studio.pin, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+    await machineFetch(`${studio.url}/_devices/enter`, studio.pin, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
     await machineFetch(`${at}/`, undefined)
     // Each machine hears a word of its own, made from the word this computer keeps and the machine's address: never the word itself.
     const [toStudio, toPlain] = [computerWordFor(MAC, studio.url), computerWordFor(MAC, at)]
@@ -195,7 +195,7 @@ test('once OpenAgent said which computer this is, every call to a machine says i
     assert.equal([toStudio, toPlain].includes(MAC), false)
     // The same answer as the door package's own `computerWordFor`, pinned in its tests too: the two must agree, or a computer is two rows.
     assert.equal(computerWordFor(MAC, 'https://203.0.113.5'), '46613e5444e67e384ccb7c7ba693c92e')
-    assert.equal(computerWordFor(MAC, 'https://203.0.113.5/_remote-access/enter'), '46613e5444e67e384ccb7c7ba693c92e')
+    assert.equal(computerWordFor(MAC, 'https://203.0.113.5/_devices/enter'), '46613e5444e67e384ccb7c7ba693c92e')
     assert.equal(computerWordFor(MAC, 'http://studio.local:4201/x'), 'c72e4164c235580bb030ea4b32ffb51b')
   } finally {
     sayComputer(undefined)

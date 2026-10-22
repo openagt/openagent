@@ -47,13 +47,13 @@ async function door(opts: { old?: boolean } = {}): Promise<{ url: string; asked:
       asked.push({ method: req.method ?? '', url: req.url ?? '', ...(req.headers.authorization ? { authorization: req.headers.authorization } : {}), body })
       const json = (value: unknown): void => void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(value))
       if (req.headers.authorization !== `Bearer ${KEY}`) return void res.writeHead(401).end()
-      if (opts.old && req.url?.startsWith('/_remote-access/')) return void res.writeHead(404).end('not found')
-      if (req.url === '/_remote-access/me' && req.method === 'GET') return json(ME)
-      if (req.url === '/_remote-access/me/remove' && req.method === 'POST') {
+      if (opts.old && req.url?.startsWith('/_devices/')) return void res.writeHead(404).end('not found')
+      if (req.url === '/_devices/me' && req.method === 'GET') return json(ME)
+      if (req.url === '/_devices/me/remove' && req.method === 'POST') {
         const { id } = JSON.parse(body) as { id: string }
         return id === 'd1abcd' ? json({ ...ME, devices: [] }) : void res.writeHead(404).end('That device is not yours.')
       }
-      if (req.url === '/_remote-access/me/line' && req.method === 'POST') return json({ url: 'https://203.0.113.9/_remote-access/enter#c0de.pin', expires: '2026-10-19T00:05:00.000Z' })
+      if (req.url === '/_devices/me/line' && req.method === 'POST') return json({ url: 'https://203.0.113.9/_devices/enter#c0de.pin', expires: '2026-10-19T00:05:00.000Z' })
       if (req.url === '/_rpc/runComputerCommand' && req.method === 'POST') {
         const [pkg, args, command, input] = JSON.parse(body) as unknown[]
         return json({ ret: { ok: true, output: { pkg, args, command, input } } })
@@ -70,9 +70,9 @@ test('a saved machine\'s door is asked who this computer\'s person is there, wit
   await withHome(async () => {
     const server = await door()
     try {
-      await addMachine({ url: server.url, key: KEY, door: `${server.url}/_remote-access/enter` })
+      await addMachine({ url: server.url, key: KEY, door: `${server.url}/_devices/enter` })
       assert.deepEqual(await onMachinePerson(server.url), { ok: true, said: ME })
-      assert.deepEqual(server.asked.at(-1), { method: 'GET', url: '/_remote-access/me', authorization: `Bearer ${KEY}`, body: '' })
+      assert.deepEqual(server.asked.at(-1), { method: 'GET', url: '/_devices/me', authorization: `Bearer ${KEY}`, body: '' })
       // One of the person's devices out, and the door's refusal of another's, in its own words.
       assert.deepEqual(await sendRemoveMachineDevice(server.url, 'd1abcd'), { ok: true, said: { ...ME, devices: [] } })
       assert.deepEqual(server.asked.at(-1)?.body, JSON.stringify({ id: 'd1abcd' }))
@@ -82,8 +82,8 @@ test('a saved machine\'s door is asked who this computer\'s person is there, wit
       assert.deepEqual(await sendRemoveMachineDevice(server.url, '../enter'), { ok: false, error: 'That is no device id.' })
       assert.equal(server.asked.length, before)
       // A line's link, for this person.
-      assert.deepEqual(await sendMachineLineLink(server.url), { ok: true, url: 'https://203.0.113.9/_remote-access/enter#c0de.pin' })
-      assert.equal(server.asked.at(-1)?.url, '/_remote-access/me/line')
+      assert.deepEqual(await sendMachineLineLink(server.url), { ok: true, url: 'https://203.0.113.9/_devices/enter#c0de.pin' })
+      assert.equal(server.asked.at(-1)?.url, '/_devices/me/line')
       assert.deepEqual(await onMachinePerson('http://10.9.9.9:4201'), { ok: false, error: 'That machine is no longer saved.' })
     } finally {
       await server.close()
@@ -95,9 +95,9 @@ test('a machine from before persons does not say, and one whose key is out says 
   await withHome(async () => {
     const old = await door({ old: true })
     try {
-      await addMachine({ url: old.url, key: KEY, door: `${old.url}/_remote-access/enter` })
+      await addMachine({ url: old.url, key: KEY, door: `${old.url}/_devices/enter` })
       assert.deepEqual(await onMachinePerson(old.url), { ok: false, error: 'the machine does not say who this computer is there', unknown: true })
-      await addMachine({ url: old.url, key: 'd9.other', door: `${old.url}/_remote-access/enter` })
+      await addMachine({ url: old.url, key: 'd9.other', door: `${old.url}/_devices/enter` })
       const out = await onMachinePerson(old.url)
       assert.equal(out.ok, false)
       assert.match((out as { error: string }).error, /no longer in on the machine/)
@@ -111,10 +111,10 @@ test('a computer reached through a server says nothing of persons, and is not as
   await withHome(async () => {
     const server = await door()
     try {
-      const through = `${server.url}/_remote-access/via/abc123def456`
-      await addMachine({ url: through, key: KEY, door: `${through}/_remote-access/enter` })
+      const through = `${server.url}/_devices/via/abc123def456`
+      await addMachine({ url: through, key: KEY, door: `${through}/_devices/enter` })
       assert.deepEqual(await onMachinePerson(through), { ok: false, error: 'A computer reached through a server says nothing of persons.', unknown: true })
-      assert.deepEqual(await runComputerCommandOn('@openagt/servers', through, ['own']), { ok: false, error: 'That machine is no longer saved.' })
+      assert.deepEqual(await runComputerCommandOn('@openagt/devices', through, ['own']), { ok: false, error: 'That machine is no longer saved.' })
       assert.equal(server.asked.length, 0)
     } finally {
       await server.close()
@@ -126,10 +126,10 @@ test('a computer package\'s command is run on a saved machine as its page runs i
   await withHome(async () => {
     const server = await door()
     try {
-      await addMachine({ url: server.url, key: KEY, door: `${server.url}/_remote-access/enter` })
-      assert.deepEqual(await runComputerCommandOn('@openagt/servers', server.url, ['own', 'login', 'github'], null, 'gho_secret'), {
+      await addMachine({ url: server.url, key: KEY, door: `${server.url}/_devices/enter` })
+      assert.deepEqual(await runComputerCommandOn('@openagt/devices', server.url, ['own', 'login', 'github'], null, 'gho_secret'), {
         ok: true,
-        output: { pkg: '@openagt/servers', args: ['own', 'login', 'github'], command: null, input: 'gho_secret' },
+        output: { pkg: '@openagt/devices', args: ['own', 'login', 'github'], command: null, input: 'gho_secret' },
       })
       const call = server.asked.at(-1)!
       assert.equal(call.url, '/_rpc/runComputerCommand')
@@ -138,8 +138,8 @@ test('a computer package\'s command is run on a saved machine as its page runs i
       assert.equal(call.url.includes('gho_secret'), false)
       // Only a package that is this computer's, and only words.
       assert.deepEqual(await runComputerCommandOn('@openagt/files', server.url, ['x']), { ok: false, error: "@openagt/files is not this computer's" })
-      assert.deepEqual(await runComputerCommandOn('@openagt/servers', server.url, [1] as unknown as string[]), { ok: false, error: 'arguments must be a list of words' })
-      assert.deepEqual(await runComputerCommandOn('@openagt/servers', 'http://10.9.9.9:4201', ['own']), { ok: false, error: 'That machine is no longer saved.' })
+      assert.deepEqual(await runComputerCommandOn('@openagt/devices', server.url, [1] as unknown as string[]), { ok: false, error: 'arguments must be a list of words' })
+      assert.deepEqual(await runComputerCommandOn('@openagt/devices', 'http://10.9.9.9:4201', ['own']), { ok: false, error: 'That machine is no longer saved.' })
     } finally {
       await server.close()
     }

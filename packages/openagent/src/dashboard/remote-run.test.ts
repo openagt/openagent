@@ -407,9 +407,9 @@ test('enterRemote sends the link\'s code and this computer\'s name where the lin
     })
   })
   try {
-    assert.deepEqual(await enterRemote(`${srv.url}/_remote-access/enter`, 'c0de', 'studio'), { ok: true, key: 'd7.fresh' })
+    assert.deepEqual(await enterRemote(`${srv.url}/_devices/enter`, 'c0de', 'studio'), { ok: true, key: 'd7.fresh' })
     assert.equal(captured.method, 'POST')
-    assert.equal(captured.url, '/_remote-access/enter')
+    assert.equal(captured.url, '/_devices/enter')
     assert.equal(captured.origin, undefined) // no page made this call
     assert.deepEqual(captured.body, { code: 'c0de', computer: 'studio' })
   } finally {
@@ -432,7 +432,7 @@ test('enterRemote says in words why this computer was not let in', async () => {
     res.writeHead(status).end(body)
   })
   try {
-    const door = `${srv.url}/_remote-access/enter`
+    const door = `${srv.url}/_devices/enter`
     const spent = await enterRemote(door, 'c', 'studio')
     assert.equal(spent.ok, false)
     assert.match(spent.ok ? '' : spent.error, /no longer works.*make a new one/)
@@ -447,7 +447,7 @@ test('enterRemote says in words why this computer was not let in', async () => {
       const other = await enterRemote(door, 'c', 'studio')
       assert.match(other.ok ? '' : other.error, /not an OpenAgent that lets a machine in/)
     }
-    const nobody = await enterRemote('http://127.0.0.1:1/_remote-access/enter', 'c', 'studio')
+    const nobody = await enterRemote('http://127.0.0.1:1/_devices/enter', 'c', 'studio')
     assert.match(nobody.ok ? '' : nobody.error, /did not answer/)
   } finally {
     await srv.close()
@@ -462,12 +462,12 @@ test('leaveRemote takes this computer out where it was let in, with its key, and
     res.writeHead(status).end()
   })
   try {
-    const machine = { url: srv.url, key: 'd1.sekret', door: `${srv.url}/_remote-access/enter` }
+    const machine = { url: srv.url, key: 'd1.sekret', door: `${srv.url}/_devices/enter` }
     assert.equal(await leaveRemote(machine), true)
-    assert.deepEqual(captured, { method: 'DELETE', url: '/_remote-access/enter', authorization: 'Bearer d1.sekret' })
+    assert.deepEqual(captured, { method: 'DELETE', url: '/_devices/enter', authorization: 'Bearer d1.sekret' })
     status = 401
     assert.equal(await leaveRemote(machine), false)
-    assert.equal(await leaveRemote({ url: 'http://127.0.0.1:1', key: 'k', door: 'http://127.0.0.1:1/_remote-access/enter' }), false)
+    assert.equal(await leaveRemote({ url: 'http://127.0.0.1:1', key: 'k', door: 'http://127.0.0.1:1/_devices/enter' }), false)
   } finally {
     await srv.close()
   }

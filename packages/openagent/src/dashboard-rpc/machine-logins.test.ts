@@ -38,9 +38,9 @@ async function server(): Promise<{ url: string; posted: unknown[]; close: () => 
     req.on('end', () => {
       const json = (value: unknown): void => void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(value))
       if (req.headers.authorization !== `Bearer ${KEY}`) return void res.writeHead(401).end()
-      if (req.url === '/_remote-access/computers') return json({ computers: [{ id: BOX, name: 'rom-desktop', online: true, owner: 'rom' }, { id: 'h0me12', name: 'my-box', online: false, owner: '-no account' }] })
-      if (req.url === `/_remote-access/via/${BOX}/_relay/logins` && req.method === 'GET') return json({ github: { source: 'copied', from: 'vps-1', account: 'sul' } })
-      if (req.url === `/_remote-access/via/${BOX}/_relay/logins` && req.method === 'POST') {
+      if (req.url === '/_devices/computers') return json({ computers: [{ id: BOX, name: 'rom-desktop', online: true, owner: 'rom' }, { id: 'h0me12', name: 'my-box', online: false, owner: '-no account' }] })
+      if (req.url === `/_devices/via/${BOX}/_relay/logins` && req.method === 'GET') return json({ github: { source: 'copied', from: 'vps-1', account: 'sul' } })
+      if (req.url === `/_devices/via/${BOX}/_relay/logins` && req.method === 'POST') {
         posted.push(JSON.parse(body))
         return json({ github: { source: 'made', account: 'sul' } })
       }
@@ -55,12 +55,12 @@ test('a computer of another person\'s is listed and saved with whose it is; the 
   await withHome(async () => {
     const vps = await server()
     try {
-      await addMachine({ url: vps.url, key: KEY, door: `${vps.url}/_remote-access/enter`, label: 'vps' })
+      await addMachine({ url: vps.url, key: KEY, door: `${vps.url}/_devices/enter`, label: 'vps' })
       const listed = await onComputersThrough(vps.url)
       assert.deepEqual(listed, { ok: true, computers: [{ id: BOX, name: 'rom-desktop', online: true, owner: 'rom', added: false }, { id: 'h0me12', name: 'my-box', online: false, added: false }] })
       const added = await sendAddComputerThrough(vps.url, BOX)
       assert.equal(added.ok && added.machine.owner, 'rom')
-      const id = `${vps.url}/_remote-access/via/${BOX}`
+      const id = `${vps.url}/_devices/via/${BOX}`
       assert.equal((await onMachines()).find(machine => machine.id === id)?.told, undefined)
       assert.deepEqual(await sendMachineTold(id), { ok: true })
       assert.equal((await onMachines()).find(machine => machine.id === id)?.told, true)
@@ -74,9 +74,9 @@ test('the logins on another person\'s computer are read through the server, and 
   await withHome(async () => {
     const vps = await server()
     try {
-      await addMachine({ url: vps.url, key: KEY, door: `${vps.url}/_remote-access/enter`, label: 'vps' })
+      await addMachine({ url: vps.url, key: KEY, door: `${vps.url}/_devices/enter`, label: 'vps' })
       await sendAddComputerThrough(vps.url, BOX)
-      const id = `${vps.url}/_remote-access/via/${BOX}`
+      const id = `${vps.url}/_devices/via/${BOX}`
       assert.deepEqual(await onMachineLogins(id), { ok: true, logins: { github: { source: 'copied', from: 'vps-1', account: 'sul' } } })
       assert.deepEqual(await sendMachineLogins(id, { github: 'gho_mine123' }), { ok: true, logins: { github: { source: 'made', account: 'sul' } } })
       // No `from`: the login is the person's own, made for there.

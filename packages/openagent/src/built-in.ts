@@ -22,7 +22,7 @@ export const BUILT_IN_PACKAGES: readonly string[] = ['@openagt/changes', '@opena
  * installed OpenAgent on. Their pages show and their commands run with no project added, and
  * what one keeps is in the person's home folder.
  */
-export const COMPUTER_PACKAGES: readonly string[] = ['@openagt/remote-access', '@openagt/servers']
+export const COMPUTER_PACKAGES: readonly string[] = ['@openagt/devices']
 
 /**
  * The packages a project has once it picked them (#2023). A skill's package is every project's

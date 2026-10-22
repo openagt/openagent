@@ -501,7 +501,7 @@ test('a run started on another machine is followed only under an id that is a ru
   })
   await new Promise<void>(resolve => machine.listen(0, '127.0.0.1', resolve))
   const url = `http://127.0.0.1:${(machine.address() as AddressInfo).port}`
-  await addMachine({ url, key: 'id.key', door: `${url}/_remote-access/enter`, label: 'Server' }, undefined, env)
+  await addMachine({ url, key: 'id.key', door: `${url}/_devices/enter`, label: 'Server' }, undefined, env)
   const runtime = createProjectRuntime({ cwd: shop, env })
   try {
     const start = () => runtime.onStart('go', { machine: url })
@@ -555,7 +555,7 @@ test('a run sent to another person\'s computer first has the server\'s logins co
   })
   await new Promise<void>(resolve => machine.listen(0, '127.0.0.1', resolve))
   const url = `http://127.0.0.1:${(machine.address() as AddressInfo).port}`
-  await addMachine({ url, key: 'line', door: `${url}/_remote-access/enter`, label: 'rom-desktop', owner: 'rom' }, undefined, env)
+  await addMachine({ url, key: 'line', door: `${url}/_devices/enter`, label: 'rom-desktop', owner: 'rom' }, undefined, env)
   // This server's own logins, as its user's gh and its service say them: never this test computer's.
   const logins = async (said: NodeJS.ProcessEnv) => ({ github: 'gho_mine123', ...(said.CLAUDE_CODE_OAUTH_TOKEN ? { claude: said.CLAUDE_CODE_OAUTH_TOKEN } : {}) })
   const runtime = createProjectRuntime({ cwd: shop, env, logins })
@@ -646,7 +646,7 @@ test('a run whose record names a saved machine\'s computer is that machine\'s, w
   let said: string | undefined = 'server-box'
   const machine = await machineAt(() => said)
   const { url } = machine
-  await addMachine({ url, key: 'id.key', door: `${url}/_remote-access/enter`, label: 'Server' }, undefined, env)
+  await addMachine({ url, key: 'id.key', door: `${url}/_devices/enter`, label: 'Server' }, undefined, env)
   let runtime = createProjectRuntime({ cwd: join(base, 'shop'), env })
   const closing = [machine.close]
   try {
@@ -700,7 +700,7 @@ test('a run whose record names a saved machine\'s computer is that machine\'s, w
     // A second machine that says the same name: the name is neither's, and the run is asked of no machine.
     const twin = await machineAt(() => 'server-box')
     closing.push(twin.close)
-    await addMachine({ url: twin.url, key: 'id.twin', door: `${twin.url}/_remote-access/enter`, label: 'Twin' }, undefined, env)
+    await addMachine({ url: twin.url, key: 'id.twin', door: `${twin.url}/_devices/enter`, label: 'Twin' }, undefined, env)
     await runtime.dispose()
     runtime = createProjectRuntime({ cwd: join(base, 'shop'), env })
     assert.equal(await named(runtime.remoteAgents, 'server-box', undefined), undefined)
@@ -709,7 +709,7 @@ test('a run whose record names a saved machine\'s computer is that machine\'s, w
     // A machine that does not say its name, an older one, is asked and keeps none.
     const quiet = await machineAt(() => undefined)
     closing.push(quiet.close)
-    await addMachine({ url: quiet.url, key: 'id.quiet', door: `${quiet.url}/_remote-access/enter`, label: 'Quiet' }, undefined, env)
+    await addMachine({ url: quiet.url, key: 'id.quiet', door: `${quiet.url}/_devices/enter`, label: 'Quiet' }, undefined, env)
     for (let i = 0; i < 100 && !asked.includes('Bearer id.quiet /_relay/ping'); i++) {
       await runtime.remoteAgents.machineNames()
       await new Promise(resolve => setTimeout(resolve, 50))
