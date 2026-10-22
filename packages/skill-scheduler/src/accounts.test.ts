@@ -32,11 +32,11 @@ test("an added account's windows read as /usage names them; one whose reset has 
 })
 
 test('unattended work goes on the first account under its line: one at its limit is passed over, one nothing was said of yet has room, and with none it says each one', async () => {
-  const dani = { name: 'Dani', token: 't', windows: [{ window: 'seven_day', percentUsed: 10, resetsAt: NOW + 4 * DAY }] }
+  const dani = { name: 'Dani', login: 't', windows: [{ window: 'seven_day', percentUsed: 10, resetsAt: NOW + 4 * DAY }] }
   assert.deepEqual(await accountWithRoom([{ name: 'Rom' }, dani], own(10), { now: NOW }), { account: 'Rom' })
   assert.deepEqual(await accountWithRoom([{ name: 'Rom' }, dani], own(90), { now: NOW }), { account: 'Dani' })
-  assert.deepEqual(await accountWithRoom([{ name: 'Rom', limitedUntil: NOW + 2 * HOUR }, { name: 'New', token: 't' }], own(10), { now: NOW }), { account: 'New' })
-  const none = await accountWithRoom([{ name: 'Rom' }, { ...dani, windows: [{ window: 'seven_day', percentUsed: 95, resetsAt: NOW + 4 * DAY }] }, { name: 'Out', token: 't', limitedUntil: NOW + 3 * HOUR }], own(90), { now: NOW })
+  assert.deepEqual(await accountWithRoom([{ name: 'Rom', limitedUntil: NOW + 2 * HOUR }, { name: 'New', login: 't' }], own(10), { now: NOW }), { account: 'New' })
+  const none = await accountWithRoom([{ name: 'Rom' }, { ...dani, windows: [{ window: 'seven_day', percentUsed: 95, resetsAt: NOW + 4 * DAY }] }, { name: 'Out', login: 't', limitedUntil: NOW + 3 * HOUR }], own(90), { now: NOW })
   assert.ok('reason' in none)
   assert.match(none.reason, /^every Claude account is past its line \(Rom: Current week \(all models\) is 90% used, at or past day \d of the week's \d+%; Dani: Current week \(all models\) is 95% used, .*; Out is at its limit, free again in 3 h\)$/)
   // The person's own unread is no room on it; another account may still have some.

@@ -37,8 +37,8 @@ test('a run loads every part of the person\'s own setup unless this machine\'s `
 test('the project\'s own accounts: read off `accounts:`, anything else in it said; written in place, the rest of the file kept, and taken out again', async () => {
   const log: string[] = []
   assert.deepEqual(await readProjectAccounts(await project(), l => log.push(l)), {})
-  const repo = await project('# mine\npersonal:\n  memory: off\naccounts:\n  git-host: octo-agent\n  claude-code: [Rom, Dani]\n  slack: x\n')
-  assert.deepEqual(await readProjectAccounts(repo, l => log.push(l)), { gitHost: 'octo-agent', claude: ['Rom', 'Dani'] })
+  const repo = await project('# mine\npersonal:\n  memory: off\naccounts:\n  git-host: octo-agent\n  claude-code: [Rom, Dani]\n  codex: [Dani]\n  slack: x\n')
+  assert.deepEqual(await readProjectAccounts(repo, l => log.push(l)), { gitHost: 'octo-agent', claude: ['Rom', 'Dani'], codex: ['Dani'] })
   assert.match(log.join('\n'), /`accounts` has no `slack`/)
   assert.deepEqual(await readProjectAccounts(await project('accounts:\n  git-host: [a]\n  claude-code: Rom\n'), l => log.push(l)), {})
 
@@ -46,7 +46,7 @@ test('the project\'s own accounts: read off `accounts:`, anything else in it sai
   let file = await readFile(join(repo, '.agent-runner', 'config.yml'), 'utf8')
   assert.match(file, /^# mine/)
   assert.match(file, /memory: off/)
-  assert.deepEqual(await readProjectAccounts(repo, () => {}), { gitHost: 'octo', claude: ['Rom', 'Dani'] })
+  assert.deepEqual(await readProjectAccounts(repo, () => {}), { gitHost: 'octo', claude: ['Rom', 'Dani'], codex: ['Dani'] })
   await writeProjectAccounts(repo, { claude: null })
   await writeProjectAccounts(repo, { gitHost: null })
   file = await readFile(join(repo, '.agent-runner', 'config.yml'), 'utf8')

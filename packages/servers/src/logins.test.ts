@@ -5,7 +5,8 @@ import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'n
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { install } from './install.js'
-import { accountsPath, readAccounts, type Mint } from '@openagt/agent-driver-claude'
+import { claudeAccountsPath, type Mint } from '@openagt/agent-driver-claude'
+import { readAccounts } from '@openagt/agent-driver'
 import { AlreadyAtWork, accountsSaid, addClaudeAccount, changeLogin, readClaudeAccounts, removeClaudeAccount, scrubbed, type LoginOptions } from './logins.js'
 import type { Exec } from './ssh.js'
 import { CLAUDE_FILE, SERVICE_UNIT, STEPS, claudeAccountAddScript, claudeAccountRemoveScript, claudeAccountsScript, claudeLoginScript, claudeLogoutScript, githubCodeScript, githubLoginScript, githubLogoutScript, githubWaitScript } from './steps.js'
@@ -724,7 +725,7 @@ test('the server\'s other Claude accounts are kept by its user where its OpenAge
     const run = async (script: string) => sh(script, env)
     const words = async (): Promise<string> => readFile(log, 'utf8').catch(() => '')
     // The file the server's OpenAgent reads, its service's home being the user's.
-    const file = accountsPath({ HOME: home })
+    const file = claudeAccountsPath({ HOME: home })
 
     const scripts = [claudeAccountsScript(), claudeAccountAddScript('Dani', CLAUDE_LOGIN), claudeAccountRemoveScript('Dani')]
     for (const { as, script } of scripts) {
@@ -745,7 +746,7 @@ test('the server\'s other Claude accounts are kept by its user where its OpenAge
     assert.deepEqual(accountsSaid(added.stdout)?.map(account => account.name), ['Dani'])
     assert.equal((await stat(file)).mode & 0o777, 0o600)
     // In the format OpenAgent reads: the server's own login first, then Dani's with her login.
-    assert.deepEqual(readAccounts(file).map(account => [account.name, account.token]), [['This computer', undefined], ['Dani', CLAUDE_LOGIN]])
+    assert.deepEqual(readAccounts(file).map(account => [account.name, account.login]), [['This computer', undefined], ['Dani', CLAUDE_LOGIN]])
     const said = await words()
     assert.match(said, /^timeout: 30 claude auth status$/m)
     assert.match(said, /^node: -e /m)

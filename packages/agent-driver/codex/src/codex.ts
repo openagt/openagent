@@ -2,7 +2,8 @@ import { execFile, spawn as nodeSpawn } from 'node:child_process'
 import { copyFile, lstat, mkdir, readlink, readdir, realpath, rename, rm, stat, symlink } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { runCliSession, continuingTurn, finishTurn, agentEnv, attachLog, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, checkCliReady, type AgentCliParser, type CliIo, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
+import { accountFolder, accountHome, codexAccountsPath, codexWindows } from './codex-accounts.js'
+import { turnOnAccounts, type AccountsOption, type DriverRateWindow, runCliSession, continuingTurn, finishTurn, agentEnv, attachLog, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, checkCliReady, type AgentCliParser, type CliIo, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
 
 /**
  * Codex's sandbox policy for the shell commands the model writes.
@@ -40,6 +41,11 @@ export interface CodexDriverOptions {
    * {@link defaultCodexHome}.
    */
   codexHome?: string
+  /**
+   * Run on the person's Codex accounts (`codex-accounts.ts`), switching to the next free one when
+   * one hits its limit. Off, every turn runs on whatever login Codex has, as it always did.
+   */
+  accounts?: AccountsOption
   /** `spawn` override for tests. Default `node:child_process.spawn`. */
   spawn?: SpawnLike
 }
@@ -250,6 +256,8 @@ export class CodexSession implements DriverSession {
   private lastSessionId: string | undefined
   /** Codex's model list, read once for the session the first time it is needed. */
   private listed: Promise<DriverModel[]> | undefined
+  /** The Codex account the session is on, by name, when it runs on accounts: kept until its limit moves it on. */
+  private readonly current: { account?: string } = {}
 
   constructor(
     private readonly config: CodexDriverOptions,
@@ -266,39 +274,87 @@ export class CodexSession implements DriverSession {
   }
 
   async prompt(text: string, opts: DriverPromptOptions = {}): Promise<DriverTurn> {
+    const env = this.config.env ?? process.env
+    const emit = this.withDefaultEffort(makeEmit(this.startOpts.onEvent, 'codex'))
+    const accounts = this.config.accounts
+    const turn = accounts
+      ? await turnOnAccounts({
+          option: accounts,
+          path: accounts.path ?? codexAccountsPath(env),
+          agent: 'Codex',
+          current: this.current,
+          text,
+          opts,
+          emit,
+          stopped: () => this.startOpts.signal?.aborted === true || opts.signal?.aborted === true,
+          continueFrom: id => {
+            this.lastSessionId = id
+          },
+          run: async (account, said, sent) => {
+            // An added account's own login, with the conversations of the home the person's own runs from.
+            const turnEnv = account.login === undefined ? env : { ...env, CODEX_HOME: await accountHome(accountFolder(account, env), personalCodexHome(env), this.config.personal?.skills !== false) }
+            const parser = this.parser(said, sent)
+            let turn: DriverTurn | undefined
+            let failure: unknown
+            try {
+              turn = await this.turnOn(said, sent, parser, turnEnv, emit)
+            } catch (err) {
+              failure = err
+            }
+            const sessionId = turn?.sessionId ?? parser.session
+            const resetsAt = parser.limitFrees()
+            return {
+              ...(turn !== undefined ? { turn } : { failure }),
+              limited: parser.stoppedByLimit,
+              ...(resetsAt !== undefined ? { resetsAt } : {}),
+              ...(parser.windows ? { windows: parser.windows } : {}),
+              ...(sessionId !== undefined ? { sessionId } : {}),
+            }
+          },
+        })
+      : await this.turnOn(text, opts, this.parser(text, opts), env, emit)
+    if (turn.sessionId) this.lastSessionId = turn.sessionId
+    return finishTurn(this, turn, opts, emit)
+  }
+
+  /** The reader of one turn: on the session's conversation for a `resume` prompt, else a fresh one with the framing. */
+  private parser(text: string, opts: DriverPromptOptions): CodexAppServerParser {
     const resumeId = opts.resume ? this.lastSessionId : undefined
     // A resumed conversation already carries its framing; sending it again only repeats it.
     const framing = resumeId === undefined ? combineFraming(this.startOpts.system, opts.system) : ''
+    return new CodexAppServerParser({
+      text: promptSent(text, opts),
+      cwd: this.cwd,
+      sandbox: this.config.sandbox ?? 'workspace-write',
+      ...(framing ? { framing } : {}),
+      ...(this.startOpts.model ? { model: this.startOpts.model } : {}),
+      ...(resumeId !== undefined ? { resumeId } : {}),
+    })
+  }
+
+  /** One turn, its own `codex app-server` process, with `env`'s Codex home and login. */
+  private async turnOn(text: string, opts: DriverPromptOptions, parser: CodexAppServerParser, env: NodeJS.ProcessEnv, emit: (event: DriverEvent) => void): Promise<DriverTurn> {
+    const resumeId = parser.resumeId
     // Resolved every turn, not at start: the agent may `git init` in turn 1.
     const gitDir = await gitCommonDir(this.cwd)
-    const emit = this.withDefaultEffort(makeEmit(this.startOpts.onEvent, 'codex'))
     const agent = (emitFn: (event: DriverEvent) => void): Promise<DriverTurn> =>
       runCliSession({
         bin: this.config.bin ?? 'codex',
         args: this.buildArgs(gitDir),
         cwd: this.cwd,
-        env: agentEnv(this.config.env ?? process.env, this.log),
+        env: agentEnv(env, this.log),
         prompt: text,
         ...(opts.added !== undefined ? { added: opts.added } : {}),
         ...(opts.attached !== undefined ? { attached: opts.attached } : {}),
         spawn: this.config.spawn ?? (nodeSpawn as unknown as SpawnLike),
         emit: emitFn,
         signals: combineSignals(this.startOpts.signal, opts.signal),
-        parser: new CodexAppServerParser({
-          text: promptSent(text, opts),
-          cwd: this.cwd,
-          sandbox: this.config.sandbox ?? 'workspace-write',
-          ...(framing ? { framing } : {}),
-          ...(this.startOpts.model ? { model: this.startOpts.model } : {}),
-          ...(resumeId !== undefined ? { resumeId } : {}),
-        }),
+        parser,
         driver: 'codex',
       })
     // A conversation Codex no longer has (its rollout deleted, or never written on this machine) is
     // refused before the turn starts: the caller's to go on without.
-    const turn = resumeId === undefined ? await agent(emit) : await continuingTurn('codex', resumeId, emit, isConversationGone, agent)
-    if (turn.sessionId) this.lastSessionId = turn.sessionId
-    return finishTurn(this, turn, opts, emit)
+    return resumeId === undefined ? agent(emit) : continuingTurn('codex', resumeId, emit, isConversationGone, agent)
   }
 
   /**
@@ -519,6 +575,9 @@ export interface CodexTurnRequest {
   resumeId?: string
 }
 
+/** What Codex says when the account's usage limit stops a turn (codex-cli 0.144.4). */
+const USAGE_LIMIT = /you've hit your usage limit/i
+
 /** How Codex refuses a conversation it has no record of (codex-cli 0.144.4). */
 const CONVERSATION_GONE = /no rollout found for thread id/i
 
@@ -567,8 +626,28 @@ export class CodexAppServerParser implements AgentCliParser {
   private context: number | undefined
   private failed: string | undefined
   private ended = false
+  /** The account's windows as the turn last said them (`account/rateLimits/updated`). */
+  windows: DriverRateWindow[] | undefined
+  /** Whether the account's usage limit is what ended the turn. */
+  stoppedByLimit = false
 
   constructor(private readonly turn: CodexTurnRequest) {}
+
+  /** The conversation the turn continues, when it continues one. */
+  get resumeId(): string | undefined {
+    return this.turn.resumeId
+  }
+
+  /** The conversation, as soon as Codex said it: what a next account continues. */
+  get session(): string | undefined {
+    return this.sessionId
+  }
+
+  /** When the limit that stopped the turn frees, epoch ms: the latest reset of a window it filled. None when no window said it is full. */
+  limitFrees(): number | undefined {
+    const full = (this.windows ?? []).filter(w => w.percentUsed >= 100).map(w => w.resetsAt)
+    return full.length > 0 ? Math.max(...full) : undefined
+  }
 
   converse(io: CliIo): void {
     this.io = io
@@ -673,10 +752,19 @@ export class CodexAppServerParser implements AgentCliParser {
         }
         return []
       }
+      case 'account/rateLimits/updated': {
+        const windows = codexWindows(params['rateLimits'])
+        if (windows.length > 0) this.windows = windows
+        return []
+      }
       case 'turn/completed': {
         const status = field(params['turn'], 'status')
         if (status === 'completed') return this.end()
-        const message = field(field(params['turn'], 'error'), 'message')
+        const error = field(params['turn'], 'error')
+        // Codex's own word for it, and its sentence ("You've hit your usage limit…") when an older one says no word.
+        const info = field(error, 'codexErrorInfo')
+        const message = field(error, 'message')
+        if (info === 'usageLimitExceeded' || (info == null && typeof message === 'string' && USAGE_LIMIT.test(message))) this.stoppedByLimit = true
         return this.end(typeof message === 'string' && message.trim() !== '' ? codexErrorMessage(message.trim()) : `Codex's turn ended ${typeof status === 'string' ? status : 'without finishing'}`)
       }
       case 'item/started':
@@ -839,6 +927,9 @@ const CODEX_CLI: CliSpec = {
   // since it contains the positive.
   loggedIn: ({ output }) => (/not logged in/i.test(output) ? false : /logged in/i.test(output) ? true : undefined),
   login: 'codex login',
+  // Codex's own installer puts `codex` in ~/.local/bin, and its login opens the browser and waits on
+  // this computer for the sign-in: neither needs a terminal.
+  fixes: { install: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh', login: 'codex login' },
 }
 
 /** What {@link codexReady} takes: the CLI questions, and the setup parts a run turns off. */

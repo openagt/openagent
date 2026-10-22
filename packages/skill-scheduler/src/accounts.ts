@@ -1,5 +1,5 @@
 import type { DriverQuota, DriverQuotaWindow, DriverRateWindow } from '@openagt/agent-driver'
-import { freesIn, isLimited, type ClaudeAccount } from '@openagt/agent-driver-claude'
+import { freesIn, isLimited, type AgentAccount } from '@openagt/agent-driver'
 import { quotaBoundaryStatus, quotaHeadroom } from './quota-boundary.js'
 
 // Unattended work on several Claude accounts: it starts when any account is under its line, and
@@ -33,7 +33,7 @@ function labelled(window: string): Pick<DriverQuotaWindow, 'label' | 'kind'> {
 
 /** The account unattended work goes on, or why none: every account at its limit or past its line. */
 export async function accountWithRoom(
-  accounts: readonly ClaudeAccount[],
+  accounts: readonly AgentAccount[],
   own: () => Promise<DriverQuota>,
   input: { now: number; model?: string; limitOffset?: number },
 ): Promise<{ account: string } | { reason: string }> {
@@ -44,7 +44,7 @@ export async function accountWithRoom(
       continue
     }
     let windows: DriverQuotaWindow[]
-    if (account.token === undefined) {
+    if (account.login === undefined) {
       const quota = await own()
       if (!quota.available) {
         why.push(`${account.name}'s quota could not be read`)

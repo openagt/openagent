@@ -3,7 +3,8 @@ import { test } from 'node:test'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { addAccount, markLimited, noteWindows, OWN_NAME, readAccounts, type Mint } from '@openagt/agent-driver-claude'
+import { type Mint } from '@openagt/agent-driver-claude'
+import { addAccount, markLimited, noteWindows, OWN_NAME, readAccounts } from '@openagt/agent-driver'
 import { accountsWiring, onClaudeAccounts, sendAddClaudeAccount, sendNameOwnClaudeAccount, sendRemoveClaudeAccount, sendUseClaudeAccountFirst } from './accounts.js'
 import { provideTestContext } from './test-context.js'
 import type { QuotaView } from '../dashboard/quota.js'
@@ -72,7 +73,7 @@ test('adding an account refuses a taken name before the browser opens, then keep
     assert.deepEqual(await sendAddClaudeAccount('Dani'), { ok: true })
     await settled()
     assert.equal(asked, 1)
-    assert.deepEqual(readAccounts(path).map(a => [a.name, a.token]), [[OWN_NAME, undefined], ['Dani', LOGIN]])
+    assert.deepEqual(readAccounts(path).map(a => [a.name, a.login]), [[OWN_NAME, undefined], ['Dani', LOGIN]])
 
     accountsWiring.mint = async () => ({ ok: false, error: 'No yes came from the browser in 10 minutes.' })
     assert.deepEqual(await sendAddClaudeAccount('Rom'), { ok: true })

@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { accountsPath, addAccount, isLimited, mintClaude, nameOwnAccount, OWN_NAME, readAccounts, removeAccount, useFirst, type ClaudeAccount, type Mint } from '@openagt/agent-driver-claude'
+import { claudeAccountsPath, mintClaude, type Mint } from '@openagt/agent-driver-claude'
+import { addAccount, isLimited, nameOwnAccount, OWN_NAME, readAccounts, removeAccount, useFirst, type AgentAccount } from '@openagt/agent-driver'
 import type { DriverQuotaWindow, DriverRateWindow } from '@openagt/agent-driver'
 import { contextQuota } from './context.js'
 
@@ -55,7 +56,7 @@ export const accountsWiring: {
 } = {
   mint: mintClaude,
   claudeJson: () => join(process.env['CLAUDE_CONFIG_DIR'] ?? process.env['HOME'] ?? homedir(), '.claude.json'),
-  path: () => accountsPath(process.env),
+  path: () => claudeAccountsPath(process.env),
   now: Date.now,
 }
 
@@ -96,8 +97,8 @@ function liveWeek(windows: DriverQuotaWindow[]): {
   }
 }
 
-function row(account: ClaudeAccount, live: DriverQuotaWindow[], now: number): AccountRow {
-  const own = account.token === undefined
+function row(account: AgentAccount, live: DriverQuotaWindow[], now: number): AccountRow {
+  const own = account.login === undefined
   const name = own && account.name === OWN_NAME ? (ownName() ?? OWN_NAME) : account.name
   // The person's own login is read live where Claude Code lets it be (`/usage`); else, as an added one, from its last run.
   const reading =
@@ -147,7 +148,7 @@ export type AccountResult = { ok: true } | { ok: false; error: string }
 function nameTaken(name: string): string | undefined {
   const said = name.trim()
   if (said === '') return 'An account needs a name.'
-  const own = readAccounts(accountsWiring.path()).find(a => a.token === undefined)
+  const own = readAccounts(accountsWiring.path()).find(a => a.login === undefined)
   const shown = own && own.name === OWN_NAME ? ownName() : undefined
   if (readAccounts(accountsWiring.path()).some(a => a.name.toLowerCase() === said.toLowerCase()) || shown?.toLowerCase() === said.toLowerCase()) return `There is an account named ${said} already.`
   return undefined

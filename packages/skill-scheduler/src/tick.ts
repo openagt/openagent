@@ -1,5 +1,5 @@
 import type { DriverQuota, DriverReadiness } from '@openagt/agent-driver'
-import type { ClaudeAccount } from '@openagt/agent-driver-claude'
+import type { AgentAccount } from '@openagt/agent-driver'
 import { markerCard, runnerMark, type Publish, type RunnerMark } from '@openagt/agent-runner'
 import type { FileBranchWrite } from '@openagt/agent-data'
 import type { RunCard } from '@openagt/skill-logs'
@@ -60,7 +60,7 @@ export interface TickDeps {
   /** How much of Claude's quota is used: the one agent whose quota can be read. */
   quota: () => Promise<DriverQuota>
   /** The Claude accounts the project's runs use, in the order they try them: with two or more, or one that is not the person's own login, unattended work goes on whichever has room. */
-  accounts?: () => Promise<ClaudeAccount[]>
+  accounts?: () => Promise<AgentAccount[]>
   mint: () => string
   writeMarker: (card: RunCard) => Promise<FileBranchWrite>
   withdrawMarker: (id: string) => Promise<unknown>
@@ -140,7 +140,7 @@ interface Readings {
   /** Claude's usage, the one quota that can be read; the headroom it leaves is worked out per model. */
   quota?: DriverQuota
   /** The person's Claude accounts. */
-  accounts?: ClaudeAccount[]
+  accounts?: AgentAccount[]
 }
 
 /** One line of what was decided for a command, and the run it started or resumed, as the command's last run. */
@@ -346,7 +346,7 @@ async function mayStart(deps: TickDeps, agent: AgentName, model: string | undefi
     const accounts = (held.accounts ??= (await deps.accounts?.()) ?? [])
     const input = { now: deps.now().getTime(), ...(model !== undefined ? { model } : {}), limitOffset: deps.state.spendOffset }
     // An added account alone (a project's own one) is read as an added one is, never by the person's own quota.
-    if (accounts.length >= 2 || accounts[0]?.token !== undefined) {
+    if (accounts.length >= 2 || accounts[0]?.login !== undefined) {
       const room = await accountWithRoom(accounts, own, input)
       if ('reason' in room) return { reason: `quota: ${room.reason}` }
       account = room.account

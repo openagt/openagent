@@ -984,7 +984,7 @@ test('between ticks, only the rows that may be checked more often and are due ag
 })
 
 test('with several Claude accounts unattended work goes on the first with room, and the run or the resume is told which; with every one past its line nothing starts, and the line says each', async () => {
-  const dani = { name: 'Dani', token: 'sk-ant-oat01-dani', windows: [{ window: 'seven_day', percentUsed: 10, resetsAt: NOW.getTime() + 4 * 24 * 60 * 60 * 1000 }] }
+  const dani = { name: 'Dani', login: 'sk-ant-oat01-dani', windows: [{ window: 'seven_day', percentUsed: 10, resetsAt: NOW.getTime() + 4 * 24 * 60 * 60 * 1000 }] }
   const started = deps({ quota: async () => quota(90), accounts: async () => [{ name: 'Rom' }, dani] })
   assert.match((await tick(started.deps)).decisions[0]!.outcome, /^started /)
   assert.equal(started.seen.spawned[0]!.account, 'Dani')
@@ -1011,7 +1011,7 @@ test('with one Claude account the gate is as it always was, and no run is told a
 })
 
 test('a project whose runs use one added account alone: unattended work is gated by that account, never by the person\'s own quota, and the run is told it', async () => {
-  const dani = { name: 'Dani', token: 'sk-ant-oat01-dani', windows: [{ window: 'seven_day', percentUsed: 10, resetsAt: NOW.getTime() + 4 * 24 * 60 * 60 * 1000 }] }
+  const dani = { name: 'Dani', login: 'sk-ant-oat01-dani', windows: [{ window: 'seven_day', percentUsed: 10, resetsAt: NOW.getTime() + 4 * 24 * 60 * 60 * 1000 }] }
   const room = deps({ quota: async () => quota(99), accounts: async () => [dani] })
   await tick(room.deps)
   assert.equal(room.seen.spawned[0]!.account, 'Dani')
