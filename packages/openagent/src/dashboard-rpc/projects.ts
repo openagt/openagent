@@ -190,7 +190,7 @@ export async function onStartCheck(projectId: string, driver?: string): Promise<
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return null
   const checked = await runCheckHook(cwd, driver !== undefined ? { driver } : {})
-  if (checked.ok) return { problems: checked.problems, warnings: checked.warnings }
+  if (checked.ok) return { problems: checked.problems, warnings: checked.warnings, ...(checked.fix ? { fix: checked.fix } : {}) }
   return checked.noHook ? null : { problems: [], warnings: [checked.error] }
 }
 

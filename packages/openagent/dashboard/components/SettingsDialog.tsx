@@ -1,6 +1,6 @@
 import { useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { ArrowLeft, Bell, Bot, ChevronRight, Globe, Palette, Users, X } from 'lucide-react'
+import { ArrowLeft, Bell, Bot, ChevronRight, GitBranch, Globe, KeyRound, Palette, Users, X } from 'lucide-react'
 import { DRIVERS } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import { NO_MODEL_PINNED } from '../lib/agent-settings.js'
@@ -13,6 +13,9 @@ import { usePreferences, updatePreferences, themePreference, type ThemePreferenc
 import { useNotificationPermission } from '../lib/notification-permission.js'
 import { BridgeSettings } from './BridgeSettings.js'
 import { AGENT_ACCOUNTS_ENTRY, AgentAccountsSettings } from './AgentAccounts.js'
+import { GitHostsSettings } from './GitHosts.js'
+import { GIT_HOSTS_ENTRY } from './Logins.js'
+import { PROJECT_ACCOUNTS_ENTRY, ProjectAccountsSettings, useProjectAccounts } from './ProjectAccounts.js'
 import { BridgeBrowserSettings } from './BridgeBrowserSettings.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
 import { Switch } from './ui/switch.js'
@@ -91,12 +94,15 @@ export function SettingsDialog({
   }
   const yours = [...own, ...mounted.filter(section => section.computer).map(section => moduleEntry(section, []))]
   const forProject = mounted.filter(section => !section.computer && (project ? section.projects.includes(project.id) : section.projects.length > 0))
-  const projectEntries = forProject.map(section => moduleEntry(section, project ? [project] : projects))
+  // A project's own accounts: one project's, so only with one picked, and only when there is something to pick.
+  const { view: projectAccounts } = useProjectAccounts(project?.id)
+  const ownForProject: Entry[] = project && projectAccounts ? [{ id: PROJECT_ACCOUNTS_ENTRY, title: 'Accounts', icon: KeyRound, body: <ProjectAccountsSettings projectId={project.id} /> }] : []
+  const projectEntries = [...ownForProject, ...forProject.map(section => moduleEntry(section, project ? [project] : projects))]
   const shown = [...yours, ...projectEntries].find(e => e.id === entry)
   const current = shown ?? yours[0]!
   const inProject = projectEntries.includes(current)
   // With every project picked, an entry says which projects a change goes to.
-  const savedTo = inProject && !project ? projectsHaving(forProject.find(s => s.id === current.id)!.projects, projects) : []
+  const savedTo = inProject && !project ? projectsHaving(forProject.find(s => s.id === current.id)?.projects ?? [], projects) : []
 
   const item = (e: Entry) => {
     const Icon = e.icon
@@ -358,6 +364,12 @@ function useOwnEntries(): Entry[] {
       title: 'Agent accounts',
       icon: Users,
       body: <AgentAccountsSettings />,
+    },
+    {
+      id: GIT_HOSTS_ENTRY,
+      title: 'Git hosts',
+      icon: GitBranch,
+      body: <GitHostsSettings />,
     },
     {
       id: 'claude-web',

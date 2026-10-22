@@ -6,7 +6,8 @@ import { probeCli, type CliProbe, type Driver, type DriverReadiness, type Person
 import { ClaudeCodeDriver, claudeCodeReady } from '@openagt/agent-driver-claude'
 import { CodexDriver, codexReady } from '@openagt/agent-driver-codex'
 import { findRun } from '@openagt/skill-logs'
-import { readPersonal } from './config.js'
+import { readPersonal, readProjectAccounts } from './config.js'
+import { gitHostEnv } from './git-host.js'
 import { resumeRun, runCommand, runIdFrom, type RunOutcome } from './run.js'
 import { publishChange, type NO_PUBLISH, type Publish } from './records.js'
 import { acquireRunLock, handOverRunLock, isPidAlive, releaseRunLock, runStderrPath } from './run-lock.js'
@@ -36,17 +37,34 @@ export function isDriverName(name: string): name is DriverName {
  * coding agent's CLI is installed and logged in (a problem when not: the session would die
  * before its first turn). Warnings: running as root, and on Codex, skills in `~/.agents/skills`
  * it cannot keep out and `memory` on that does nothing while `skills` is off. What a dashboard's check hook runs, and what a
- * person's run and a scheduler's tick refuse on. The git host is not probed: a project with no
- * git host package runs fine, and one whose git host cannot answer says so in the run's own log.
+ * person's run and a scheduler's tick refuse on. The git host is asked only when the project names
+ * its own account there (`accounts:` in the config), whether that account can be used: a project
+ * with no git host package runs fine, and one whose git host cannot answer says so in the run's own log.
  */
-export async function readyToRun(repo: string, driver: DriverName, deps: { probe?: CliProbe; isRoot?: () => boolean; agentsSkills?: string } = {}): Promise<DriverReadiness> {
+export async function readyToRun(repo: string, driver: DriverName, deps: { probe?: CliProbe; isRoot?: () => boolean; agentsSkills?: string; gitHostEnv?: typeof gitHostEnv } = {}): Promise<DriverReadiness> {
   const opts = { probe: deps.probe ?? probeCli, ...(deps.isRoot ? { isRoot: deps.isRoot } : {}) }
-  switch (driver) {
-    case 'claude-code':
-      return claudeCodeReady(opts)
-    case 'codex':
-      return codexReady({ ...opts, personal: await readPersonal(repo, () => {}), ...(deps.agentsSkills !== undefined ? { agentsSkills: deps.agentsSkills } : {}) })
+  const ready = await (driver === 'claude-code' ? claudeCodeReady(opts) : codexReady({ ...opts, personal: await readPersonal(repo, () => {}), ...(deps.agentsSkills !== undefined ? { agentsSkills: deps.agentsSkills } : {}) }))
+  // The project's own account at the git host, when it names one: a run never works as someone else.
+  const user = (await readProjectAccounts(repo, () => {})).gitHost
+  if (user !== undefined) {
+    const given = await (deps.gitHostEnv ?? gitHostEnv)(repo, user)
+    if (!given.ok) ready.problems.push(`This project's runs work as ${user} at the git host, and it cannot be used here: ${given.error}`)
   }
+  return ready
+}
+
+/**
+ * The accounts this run works as: at the git host, the project's own or else the computer's, its
+ * environment set on this process, which is the run's own (the CLI's `run`), so the agent and
+ * every git push of the run go as that account, and nothing of the person's own settings changes;
+ * and the Claude accounts the project names, if it names some.
+ */
+export async function workAs(repo: string, log: (line: string) => void, deps: { gitHostEnv?: typeof gitHostEnv; env?: NodeJS.ProcessEnv } = {}): Promise<{ claude?: string[] }> {
+  const accounts = await readProjectAccounts(repo, log)
+  const given = await (deps.gitHostEnv ?? gitHostEnv)(repo, accounts.gitHost)
+  if (!given.ok) throw new Error(`This project's runs work as ${accounts.gitHost} at the git host, and it cannot be used here: ${given.error}`)
+  Object.assign(deps.env ?? process.env, given.env)
+  return accounts.claude ? { claude: accounts.claude } : {}
 }
 
 /** The command line of a spawned run: the model, the coding agent, the follow-up, the publish level, the attached text, the parent, the base, the branch and what it is for named only when the run has them, so the run's own defaults apply otherwise. */
@@ -211,6 +229,7 @@ export async function runProject(repo: string, opts: { prompt: string; id?: stri
   const id = opts.id ?? runIdFrom(new Date().toISOString())
   const driver = opts.driver ?? 'claude-code'
   const setup = await readPersonal(repo, opts.log ?? (() => {}))
+  const as = await workAs(repo, opts.log ?? (() => {}))
   return runCommand(repo, {
     prompt: opts.prompt,
     id,
@@ -219,8 +238,8 @@ export async function runProject(repo: string, opts: { prompt: string; id?: stri
     marked: opts.id !== undefined && opts.mark !== true,
     ...(opts.model !== undefined ? { model: opts.model } : {}),
     ...(opts.effort !== undefined ? { effort: opts.effort } : {}),
-    driver: driverFor(driver, id, setup),
-    ...(opts.then !== undefined ? { then: opts.then, nextDriver: (next: string) => driverFor(driver, next, setup) } : {}),
+    driver: driverFor(driver, id, setup, as),
+    ...(opts.then !== undefined ? { then: opts.then, nextDriver: (next: string) => driverFor(driver, next, setup, as) } : {}),
     ...(opts.publish !== undefined ? { publish: opts.publish } : {}),
     ...(opts.attached !== undefined ? { attached: opts.attached } : {}),
     ...(opts.parent !== undefined ? { parent: opts.parent } : {}),
@@ -251,6 +270,7 @@ export async function resumeProject(
   const recorded = card?.driver ?? 'claude-code'
   if (!isDriverName(recorded)) throw new Error(`run ${opts.id} is on ${recorded}, which agent-runner cannot start`)
   const setup = await readPersonal(repo, opts.log ?? (() => {}))
+  const as = await workAs(repo, opts.log ?? (() => {}))
   return resumeRun(repo, {
     id: opts.id,
     ...(opts.text !== undefined ? { text: opts.text } : {}),
@@ -259,8 +279,8 @@ export async function resumeProject(
     ...(opts.effort !== undefined ? { effort: opts.effort } : {}),
     ...(opts.by !== undefined ? { by: opts.by } : {}),
     ...(opts.publish !== undefined ? { publish: publishChange(opts.publish) ?? null } : {}),
-    driver: (deps.driverFor ?? driverFor)(recorded, opts.id, setup),
-    nextDriver: next => (deps.driverFor ?? driverFor)(recorded, next, setup),
+    driver: (deps.driverFor ?? driverFor)(recorded, opts.id, setup, as),
+    nextDriver: next => (deps.driverFor ?? driverFor)(recorded, next, setup, as),
     resume: resumeDetached(repo),
     ...(opts.log ? { log: opts.log } : {}),
   })
@@ -279,13 +299,13 @@ export const CLAUDE_ACCOUNT_ENV = 'OPENAGENT_CLAUDE_ACCOUNT'
  * this machine's config turns off (`personal:` in `config.ts`). How a part is turned off is the
  * adapter's own business.
  */
-export function driverFor(name: DriverName, id: string, personal: PersonalSetup): Driver {
+export function driverFor(name: DriverName, id: string, personal: PersonalSetup, as: { claude?: string[] } = {}): Driver {
   const env: NodeJS.ProcessEnv = { ...process.env, [AGENT_ID_ENV]: id }
   switch (name) {
     case 'claude-code': {
-      // On the person's Claude accounts, the next free one taking over at a limit; the one to start on, when whoever started the run said.
+      // On the person's Claude accounts, or the project's own few, the next free one taking over at a limit; the one to start on, when whoever started the run said.
       const prefer = env[CLAUDE_ACCOUNT_ENV]?.trim()
-      return new ClaudeCodeDriver({ permissionMode: 'bypassPermissions', env, personal, accounts: prefer ? { prefer } : {} })
+      return new ClaudeCodeDriver({ permissionMode: 'bypassPermissions', env, personal, accounts: { ...(prefer ? { prefer } : {}), ...(as.claude ? { only: as.claude } : {}) } })
     }
     case 'codex':
       return new CodexDriver({ sandbox: 'danger-full-access', env, personal })

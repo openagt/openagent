@@ -223,6 +223,8 @@ async function runRunHook(cwd: string, kind: RunHookKind, vars: Record<string, s
 export interface StartReadiness {
   problems: string[]
   warnings: string[]
+  /** What a press does about the problem: install the coding agent's CLI, or log it in. The command run is the agent's package's, asked again at the press. */
+  fix?: { kind: 'install' | 'log-in'; command: string }
 }
 
 /** How a `check` line went; `noHook` when the project's file names no such line. */
@@ -252,7 +254,10 @@ export async function runCheckHook(cwd: string, input: { driver?: string }, opts
   }
   const problems = lines('problems')
   const warnings = lines('warnings')
-  if (outcome.summary === 'exit 0' && problems && warnings) return { ok: true, problems, warnings }
+  const fix = said && typeof said === 'object' ? ((said as Record<string, unknown>)['fix'] as { kind?: unknown; command?: unknown } | undefined) : undefined
+  const kind = fix?.kind === 'install' ? ('install' as const) : fix?.kind === 'log-in' ? ('log-in' as const) : undefined
+  const fixed: Pick<StartReadiness, 'fix'> = kind !== undefined && typeof fix?.command === 'string' ? { fix: { kind, command: fix.command } } : {}
+  if (outcome.summary === 'exit 0' && problems && warnings) return { ok: true, problems, warnings, ...fixed }
   const lastSaid = outcome.stderr.split('\n').map(s => s.trim()).filter(Boolean).at(-1)
   return { ok: false, error: `the check hook: ${lastSaid ?? (outcome.summary === 'exit 0' ? 'it answered no problems and warnings' : outcome.summary)}` }
 }

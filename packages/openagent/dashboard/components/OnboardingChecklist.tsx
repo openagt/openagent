@@ -11,6 +11,7 @@ import { AddProjectEffects } from './AddProjectEffects.js'
 import { AddProjectPanel } from './AddProjectPanel.js'
 import { UpdateTicketsButton, UPDATE_TICKETS_PROMPT } from './UpdateTicketsButton.js'
 import { Button } from './ui/button.js'
+import { useMissing } from './Logins.js'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 
@@ -91,6 +92,8 @@ export function OnboardingChecklist({
   const preferences = usePreferences()
   const permission = useNotificationPermission()
   const { start, busy: starting, error: startError } = useStartAgent()
+  // What runs need on this computer and do not have: the step is there only while something is missing.
+  const { missing } = useMissing()
 
   // The Add dialog: open with the folder the dashboard runs in, open to pick one, open to take a repository's address, or closed.
   const [addingProject, setAddingProject] = useState<{ folder?: string; fromAddress?: boolean } | null>(null)
@@ -121,6 +124,26 @@ export function OnboardingChecklist({
   const here = suggestion?.cwd && !suggestion.cwdProjectId ? suggestion.cwd : undefined
 
   const steps: Step[] = [
+    ...(missing.length > 0
+      ? [
+          {
+            key: 'ready',
+            label: 'Get ready',
+            description: 'What runs need on this computer. Each is one press, with no admin.',
+            done: false,
+            action: (
+              <ul className="space-y-3">
+                {missing.map(item => (
+                  <li key={item.key} className="space-y-1.5">
+                    <p className="text-xs font-medium">{item.words}</p>
+                    {item.fix}
+                  </li>
+                ))}
+              </ul>
+            ),
+          },
+        ]
+      : []),
     {
       key: 'project',
       label: 'Add a project',

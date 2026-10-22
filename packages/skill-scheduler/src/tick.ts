@@ -59,8 +59,8 @@ export interface TickDeps {
   ready: (agent: AgentName) => Promise<DriverReadiness>
   /** How much of Claude's quota is used: the one agent whose quota can be read. */
   quota: () => Promise<DriverQuota>
-  /** The person's Claude accounts, in the order runs try them: with two or more, unattended work goes on whichever has room. */
-  accounts?: () => ClaudeAccount[]
+  /** The Claude accounts the project's runs use, in the order they try them: with two or more, or one that is not the person's own login, unattended work goes on whichever has room. */
+  accounts?: () => Promise<ClaudeAccount[]>
   mint: () => string
   writeMarker: (card: RunCard) => Promise<FileBranchWrite>
   withdrawMarker: (id: string) => Promise<unknown>
@@ -343,9 +343,10 @@ async function mayStart(deps: TickDeps, agent: AgentName, model: string | undefi
   // Only Claude's quota can be read: a run on any other agent starts without the question, and that agent says so itself when it has none left.
   if (agent === 'claude-code') {
     const own = async (): Promise<DriverQuota> => (held.quota ??= await deps.quota().catch((): DriverQuota => ({ available: false, reason: 'fetch-failed' })))
-    const accounts = (held.accounts ??= deps.accounts?.() ?? [])
+    const accounts = (held.accounts ??= (await deps.accounts?.()) ?? [])
     const input = { now: deps.now().getTime(), ...(model !== undefined ? { model } : {}), limitOffset: deps.state.spendOffset }
-    if (accounts.length >= 2) {
+    // An added account alone (a project's own one) is read as an added one is, never by the person's own quota.
+    if (accounts.length >= 2 || accounts[0]?.token !== undefined) {
       const room = await accountWithRoom(accounts, own, input)
       if ('reason' in room) return { reason: `quota: ${room.reason}` }
       account = room.account

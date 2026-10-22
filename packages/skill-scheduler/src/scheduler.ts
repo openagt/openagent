@@ -4,8 +4,8 @@ import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { DriverQuota } from '@openagt/agent-driver'
-import { readAccounts, readClaudeQuota } from '@openagt/agent-driver-claude'
-import { isPidAlive, lockHolder, markerCard, readyToRun, resumeDetached, runIdFrom, spawnResume, spawnRun, sweep, withdrawMarker, writeMarker } from '@openagt/agent-runner'
+import { readAccounts, readClaudeQuota, usableAccounts } from '@openagt/agent-driver-claude'
+import { isPidAlive, lockHolder, markerCard, readProjectAccounts, readyToRun, resumeDetached, runIdFrom, spawnResume, spawnRun, sweep, withdrawMarker, writeMarker } from '@openagt/agent-runner'
 import { findRun } from '@openagt/skill-logs'
 import { DATA_BRANCH, nodeGitRunner, pullFileBranch, type GitRunner } from '@openagt/agent-data'
 import { CHECK_TIMEOUT_MS, GLANCE_MS, NOW_CHECK_TIMEOUT_MS, QUOTA_KEPT_MS, SCHEDULER_LOG, TICK_MS } from './names.js'
@@ -69,7 +69,8 @@ function projectDeps(repo: string, state: State, schedule: Schedule, opts: { git
     busy: async id => (await lockHolder(repo, id, isPidAlive)) !== undefined,
     ready: agent => readyToRun(repo, agent),
     quota: keptQuota(repo),
-    accounts: () => readAccounts(),
+    // The project's own few when it names some (`accounts:` in its runner config), else all of the person's.
+    accounts: async () => usableAccounts(readAccounts(), (await readProjectAccounts(repo, log)).claude),
     mint: () => runIdFrom(now().toISOString()),
     writeMarker: card => writeMarker(repo, card),
     withdrawMarker: id => withdrawMarker(repo, id),

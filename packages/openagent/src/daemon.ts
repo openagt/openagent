@@ -1,3 +1,4 @@
+import { withLocalBin } from './local-bin.js'
 import { startDashboard, type Dashboard } from './dashboard/index.js'
 import { createProjectRuntime } from './daemon-runtime.js'
 import { defaultQuotaSource } from './dashboard/quota.js'
@@ -92,6 +93,8 @@ const SHUTDOWN_DEADLINE_MS = 10_000
 export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promise<void> {
   const port = opts.port ?? DEFAULT_DAEMON_PORT
   const env = opts.env ?? process.env
+  // What a press installs is found at once, by the checks and by every run started from here.
+  withLocalBin(process.env)
   if (opts.version !== undefined) setOpenagentVersion(opts.version)
   // The browser bridge (#1237). Opt-in, because it opens the daemon's one route reachable from
   // another origin, behind a key of its own. The key may not exist yet, hence ensure, not read.

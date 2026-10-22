@@ -1,7 +1,8 @@
-import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { excludeFromGit } from '@openagt/agent-data'
 import { PERSONAL_PARTS, type PersonalSetup } from '@openagt/agent-driver'
-import { parseDocument } from 'yaml'
+import { isMap, parseDocument } from 'yaml'
 import { RUNNER_CONFIG, RUNNER_DIR } from './names.js'
 
 /**
@@ -56,4 +57,61 @@ export async function readPersonal(repo: string, log: (line: string) => void): P
     else if (on !== null && on !== 'on' && on !== true) log(`[agent-runner] ${file}: \`personal.${part}\` is not on or off`)
   }
   return setup
+}
+
+/**
+ * The accounts this project's runs work as, when not the computer's: the `accounts:` map in the
+ * config, kept on this machine only, since whose accounts a project uses is the person's, not the
+ * project's. `git-host` names the account at the git host, `claude-code` the Claude accounts, in
+ * the order they are tried. Anything else in the map is said on `log` and changes nothing.
+ */
+export interface ProjectAccounts {
+  gitHost?: string
+  claude?: string[]
+}
+
+/** The keys of the `accounts:` map, by what each names. */
+const ACCOUNT_KEYS = { gitHost: 'git-host', claude: 'claude-code' } as const
+
+export async function readProjectAccounts(repo: string, log: (line: string) => void): Promise<ProjectAccounts> {
+  const value = (await readConfig(repo, log))['accounts']
+  if (value === undefined || value === null) return {}
+  const file = configFile(repo)
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    log(`[agent-runner] ${file}: \`accounts\` is not a map of ${Object.values(ACCOUNT_KEYS).join(', ')}`)
+    return {}
+  }
+  const map = value as Record<string, unknown>
+  const accounts: ProjectAccounts = {}
+  const host = map[ACCOUNT_KEYS.gitHost]
+  if (typeof host === 'string' && host.trim()) accounts.gitHost = host.trim()
+  else if (host !== undefined && host !== null) log(`[agent-runner] ${file}: \`accounts.${ACCOUNT_KEYS.gitHost}\` is not an account`)
+  const claude = map[ACCOUNT_KEYS.claude]
+  if (Array.isArray(claude) && claude.every(name => typeof name === 'string') && claude.length > 0) accounts.claude = claude as string[]
+  else if (claude !== undefined && claude !== null) log(`[agent-runner] ${file}: \`accounts.${ACCOUNT_KEYS.claude}\` is not a list of account names`)
+  for (const key of Object.keys(map)) if (!(Object.values(ACCOUNT_KEYS) as string[]).includes(key)) log(`[agent-runner] ${file}: \`accounts\` has no \`${key}\``)
+  return accounts
+}
+
+/**
+ * Change the project's accounts: a value sets one, `null` takes it out, so the computer's are used
+ * again. The rest of the file stays as the person wrote it, comments too; the directory is hidden
+ * from git as a run hides it.
+ */
+export async function writeProjectAccounts(repo: string, change: { gitHost?: string | null; claude?: string[] | null }): Promise<void> {
+  const file = configFile(repo)
+  const doc = parseDocument(await readFile(file, 'utf8').catch(() => ''))
+  if (doc.errors.length > 0) throw new Error(`${file} does not read as YAML: ${doc.errors[0]!.message.split('\n')[0]}`)
+  for (const [field, key] of Object.entries(ACCOUNT_KEYS) as [keyof typeof ACCOUNT_KEYS, string][]) {
+    const value = change[field]
+    if (value === undefined) continue
+    if (value === null || (Array.isArray(value) && value.length === 0)) doc.deleteIn(['accounts', key])
+    else doc.setIn(['accounts', key], value)
+  }
+  const accounts = doc.get('accounts')
+  if (isMap(accounts) && accounts.items.length === 0) doc.delete('accounts')
+  await mkdir(dirname(file), { recursive: true })
+  const top = doc.contents
+  await writeFile(file, top === null || (isMap(top) && top.items.length === 0 && !doc.commentBefore && !doc.comment) ? '' : doc.toString())
+  await excludeFromGit(repo, `/${RUNNER_DIR}`).catch(() => {})
 }

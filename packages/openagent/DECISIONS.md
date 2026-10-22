@@ -301,6 +301,20 @@ already made, and lists it in its pull request; for anything else it proposes an
   went, and over the last update as the default, Claude Code's, which moves a row while a
   person talks to it.
 
+## What runs log in with
+- Settings has two pages for it, Agent accounts and Git hosts, each a card per tool drawn
+  from its package's answers: a git host's card says the package's name for the host, its
+  word for a pull request, the accounts its tool knows and the one runs use, so OpenAgent
+  names no git host. One card per host the projects' remotes are on, a self-hosted one its
+  own; a host no package answers for is a plain line, and a project with no remote is none.
+  A card is green when there is nothing to do, amber for a step, grey for a tool not here.
+- What runs need and do not have is a first step of the Overview's onboarding, shown only
+  while something is missing (install the tool, then log in), the same press on the start
+  form's red line, and a dot on the person's picture whose menu says what. Picked over a
+  login step every new install walks through: the onboarding is heavy enough.
+- A project's own accounts are a Settings page of that project, shown only for a kind the
+  computer has two or more of, "same as this computer" until one is picked.
+
 ## Starting a run
 - A Start runs the project's own `start` line, in the project's hooks file, and the line
   answers the new run's id. The daemon runs what the line says and calls no tool by name.

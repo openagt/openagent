@@ -85,3 +85,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   and over a pooled account that people lend to an agent through a link (later, maybe).
 - An account hands over only to an account of the same agent: a conversation is kept in
   each agent's own format, so moving it to another agent would lose it.
+- An agent's package declares how its CLI is installed and logged in, each one command a
+  press runs with no terminal and no admin (Claude Code: its own `install.sh` into
+  `~/.local/bin`, and `claude auth login` in this computer's browser). A dashboard shows the
+  command under the button and runs only what the package declared. Picked over a line that
+  tells the person what to type in a terminal.

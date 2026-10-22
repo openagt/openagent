@@ -1,8 +1,8 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { CircleAlert, Folder, Puzzle } from 'lucide-react'
 import { onStartCheck } from '../rpc/projects.js'
 import { usePreferences, usePreferencesLoaded, updatePreferences } from '../lib/preferences.js'
-import { offeredPublishPicks, publishPickIn } from '../../src/client.js'
+import { isDriverName, offeredPublishPicks, publishPickIn } from '../../src/client.js'
 import { useMachines } from '../lib/machines.js'
 import { useSelectedMachineId } from '../lib/remote-target.js'
 import { cleanupPick, offersPostMergeCleanup, startPicks, useStartAgent } from '../lib/use-start-agent.js'
@@ -15,6 +15,7 @@ import { Composer, type ComposerHandle } from './Composer.js'
 import { StartFromMenu, type StartFrom } from './StartFromMenu.js'
 import { RowItem, rowButtonClass } from './ui/row-item.js'
 import { Dots } from './ToolCalls.js'
+import { AgentFix, useAgentState } from './Logins.js'
 
 /** The note while the start is asked for: what the chat's first line says next. */
 const STARTING = 'Starting session'
@@ -118,7 +119,17 @@ export function StartAgentForm({
   // Re-read when the pick changes: `claude` being logged in says nothing about `codex`. A run on
   // another machine uses that machine's CLIs, so this one's say nothing about it.
   const driver = preferences.driver
-  const readiness = useLoaded(machine ? null : () => onStartCheck(projectId, driver), null, [projectId, driver, machine === undefined])
+  // Asked again once a press fixed what it said: the agent's own state is followed only while the check says a press can.
+  const [recheck, setRecheck] = useState(0)
+  const readiness = useLoaded(machine ? null : () => onStartCheck(projectId, driver), null, [projectId, driver, machine === undefined, recheck])
+  const fixable = readiness?.fix !== undefined
+  const { state: agent, reload: reloadAgent } = useAgentState(isDriverName(driver) ? driver : undefined, fixable)
+  const wasReady = useRef<boolean | undefined>(undefined)
+  useEffect(() => {
+    const ready = fixable ? agent?.ready : undefined
+    if (wasReady.current === false && ready === true) setRecheck(n => n + 1)
+    wasReady.current = ready
+  }, [fixable, agent?.ready])
 
   const submit = async (text: string) => {
     if (busy) return
@@ -219,6 +230,11 @@ export function StartAgentForm({
       {readiness?.problems.map(problem => (
         <Refusal key={problem}>{problem}</Refusal>
       ))}
+      {readiness?.fix && agent && !agent.ready && (
+        <div className="mt-2 px-1">
+          <AgentFix state={agent} onChanged={() => void reloadAgent()} size="xs" />
+        </div>
+      )}
       {readiness?.warnings.map(warning => (
         <p key={warning} role="alert" className="mt-2 text-xs text-warning">
           {warning}

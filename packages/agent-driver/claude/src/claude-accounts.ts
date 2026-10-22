@@ -116,6 +116,13 @@ export function isLimited(account: ClaudeAccount, now: number): boolean {
 }
 
 /** The account a run uses: `prefer` when it is free, else the first free one in the order. None when every one is at a limit. */
+/** The accounts a project's runs may use, by name, in the file's order; all of them when it names none, or none that is still there. */
+export function usableAccounts(accounts: ClaudeAccount[], only: readonly string[] | undefined): ClaudeAccount[] {
+  if (only === undefined) return accounts
+  const kept = accounts.filter(a => only.includes(a.name))
+  return kept.length > 0 ? kept : accounts
+}
+
 export function pickAccount(accounts: ClaudeAccount[], now: number, prefer?: string): ClaudeAccount | undefined {
   const preferred = prefer !== undefined ? accounts.find(a => a.name === prefer && !isLimited(a, now)) : undefined
   return preferred ?? accounts.find(a => !isLimited(a, now))
