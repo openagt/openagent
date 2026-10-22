@@ -282,6 +282,21 @@ export interface DriverRateLimit {
   window: string
   /** When the window resets, epoch **milliseconds** (the agent reports seconds). */
   resetsAt: number
+  /**
+   * Every window the account has, each with how much of it is gone: the line carries them all,
+   * whichever one `window` names. What an account that cannot read its own `/usage` is known by.
+   */
+  windows?: DriverRateWindow[]
+}
+
+/** One of the account's windows as a turn's rate-limit line says it: its name, how full, when it resets. */
+export interface DriverRateWindow {
+  /** The agent's name for it: `five_hour`, `seven_day`, `seven_day_opus`… */
+  window: string
+  /** How much of the window is gone, 0-100. */
+  percentUsed: number
+  /** When it resets, epoch milliseconds. */
+  resetsAt: number
 }
 
 /**
@@ -314,6 +329,8 @@ export interface DriverQuotaWindow {
    * carries the exact epoch for the window it reports on.
    */
   resetsAtText?: string
+  /** When the window resets, epoch milliseconds, where the reading knows it exactly: a turn's rate-limit line does. */
+  resetsAt?: number
 }
 
 /**

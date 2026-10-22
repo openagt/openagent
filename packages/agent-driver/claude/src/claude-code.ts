@@ -5,7 +5,8 @@ import { homedir, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { readClaudeQuota } from './claude-code-quota.js'
 import { readClaudeModels } from './claude-code-models.js'
-import { combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, cutOutput, callArgument, lineCount, patchSize, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, finishTurn, agentEnv, oneLine, attachLog, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverQuota, type DriverRateLimit, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
+import { accountEnv, accountsPath, freesIn, isLimited, markLimited, noteWindows, pickAccount, readAccounts, type ClaudeAccount } from './claude-accounts.js'
+import { combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, cutOutput, callArgument, lineCount, patchSize, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, finishTurn, agentEnv, oneLine, attachLog, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverQuota, type DriverRateLimit, type DriverRateWindow, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
 
 /** Claude Code permission modes we pass through to the CLI. */
 export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan'
@@ -46,8 +47,43 @@ export interface ClaudeCodeDriverOptions {
    * leaves out the person's `~/.claude` settings, `CLAUDE.md` and skills together.
    */
   personal?: PersonalSetup
+  /**
+   * Run on the person's Claude accounts (`claude-accounts.ts`), switching to the next free one when
+   * one hits its limit. Off, every turn runs on whatever login Claude Code has, as it always did.
+   */
+  accounts?: ClaudeAccountsOption
   /** `spawn` override for tests. Default `node:child_process.spawn`. */
   spawn?: SpawnLike
+}
+
+/** Which accounts file a session runs on, and the account it starts on when that one is free. */
+export interface ClaudeAccountsOption {
+  /** The file. Default {@link accountsPath} of the session's environment. */
+  path?: string
+  /** The account to start on, by name: a scheduler's pick. Else the first free one. */
+  prefer?: string
+  /** The clock, for tests. */
+  now?: () => number
+}
+
+/** Every account the session may use is at its limit: the turn cannot go on. */
+export class UsageLimitError extends Error {
+  override readonly name = 'UsageLimitError'
+}
+
+/** What the next account is told after a switch: the prompt is in the conversation already. */
+export const GO_ON = 'A usage limit stopped you. The work goes on now on another Claude account: continue where you stopped.'
+
+/** Why no account can take the turn: each is at its limit, and the first to free says when. */
+function allLimited(accounts: ClaudeAccount[], now: number): string {
+  const first = accounts.filter(a => a.limitedUntil !== undefined).sort((a, b) => a.limitedUntil! - b.limitedUntil!)[0]
+  const count = accounts.length === 1 ? 'The Claude account is' : `All ${accounts.length} Claude accounts are`
+  return `${count} at their limit${first?.limitedUntil !== undefined ? `: ${first.name}'s is free again in ${freesIn(first.limitedUntil, now)}` : ''}.`
+}
+
+/** Whether the session or the turn was stopped: a stop is never a limit to switch over. */
+function signalled(...signals: (AbortSignal | undefined)[]): boolean {
+  return signals.some(signal => signal?.aborted === true)
 }
 
 /**
@@ -144,6 +180,8 @@ export class ClaudeCodeSession implements DriverSession {
   private readonly startOpts: DriverStartOptions
   /** How hard the model thinks: the one picked, else the one Claude Code's settings set, read once for the session. */
   private effort: Promise<string | undefined> | undefined
+  /** The Claude account the session is on, by name, when it runs on accounts: kept until its limit moves it on. */
+  private account: string | undefined
 
   constructor(
     private readonly config: ClaudeCodeDriverOptions,
@@ -161,34 +199,94 @@ export class ClaudeCodeSession implements DriverSession {
 
   async prompt(text: string, opts: DriverPromptOptions = {}): Promise<DriverTurn> {
     const system = combineFraming(this.startOpts.system, opts.system)
-    const resumeId = opts.resume ? this.lastSessionId : undefined
     const effort = await (this.effort ??= this.startOpts.effort !== undefined ? Promise.resolve(this.startOpts.effort) : settingsEffort(this.cwd, (this.config.env ?? process.env)['HOME'] ?? homedir(), this.config.personal?.skills !== false))
     const emit = withEffort(makeEmit(this.startOpts.onEvent, 'claude-code'), effort)
     const signals = combineSignals(this.startOpts.signal, opts.signal)
-    const agent = (id: string | undefined, emitFn: (event: DriverEvent) => void): Promise<DriverTurn> =>
-      runCliSession({
-        bin: this.config.bin ?? 'claude',
-        args: this.buildArgs(system, id),
-        cwd: this.cwd,
-        env: agentEnv(this.config.env ?? process.env, this.log),
-        prompt: text,
-        ...(opts.added !== undefined ? { added: opts.added } : {}),
-        ...(opts.attached !== undefined ? { attached: opts.attached } : {}),
-        stdin: stdinLines(promptSent(text, opts)),
-        spawn: this.config.spawn ?? (nodeSpawn as unknown as SpawnLike),
-        emit: emitFn,
-        signals,
-        parser: new StreamJsonParser(),
-        driver: 'claude-code',
-      })
+    const env = this.config.env ?? process.env
+    const turnOn = (said: string, sent: DriverPromptOptions, parser: StreamJsonParser, turnEnv: NodeJS.ProcessEnv): Promise<DriverTurn> => {
+      const resumeId = sent.resume ? this.lastSessionId : undefined
+      const agent = (id: string | undefined, emitFn: (event: DriverEvent) => void): Promise<DriverTurn> =>
+        runCliSession({
+          bin: this.config.bin ?? 'claude',
+          args: this.buildArgs(system, id),
+          cwd: this.cwd,
+          env: agentEnv(turnEnv, this.log),
+          prompt: said,
+          ...(sent.added !== undefined ? { added: sent.added } : {}),
+          ...(sent.attached !== undefined ? { attached: sent.attached } : {}),
+          stdin: stdinLines(promptSent(said, sent)),
+          spawn: this.config.spawn ?? (nodeSpawn as unknown as SpawnLike),
+          emit: emitFn,
+          signals,
+          parser,
+          driver: 'claude-code',
+        })
+      // The id we captured may outlive what the CLI will resume (#778): its retention, a cleared
+      // history, another machine. There is no way to ask first, so the turn tries, and a gone
+      // conversation is the caller's to go on without.
+      return resumeId === undefined ? agent(undefined, emit) : continuingTurn('claude-code', resumeId, emit, isConversationGone, held => agent(resumeId, held))
+    }
 
-    // The id we captured may outlive what the CLI will resume (#778): its retention, a cleared
-    // history, another machine. There is no way to ask first, so the turn tries, and a gone
-    // conversation is the caller's to go on without.
-    const turn = resumeId === undefined ? await agent(undefined, emit) : await continuingTurn('claude-code', resumeId, emit, isConversationGone, held => agent(resumeId, held))
+    const accounts = this.config.accounts
+    const turn = accounts ? await this.onAccounts(accounts, text, opts, emit, env, turnOn) : await turnOn(text, opts, new StreamJsonParser(), env)
     // Track the agent's session so a later resume continues this exact conversation.
     if (turn.sessionId) this.lastSessionId = turn.sessionId
     return finishTurn(this, turn, opts, emit)
+  }
+
+  /**
+   * A turn on the person's Claude accounts (`claude-accounts.ts`): on the one the session is on, or
+   * the first free one. The account's windows are kept as the turn says them; a turn its account's
+   * limit stops marks the account limited until it frees, and the same conversation goes on with
+   * the next free account, told to go on where it stopped. Every account at its limit ends the turn.
+   */
+  private async onAccounts(
+    accounts: ClaudeAccountsOption,
+    text: string,
+    opts: DriverPromptOptions,
+    emit: (event: DriverEvent) => void,
+    env: NodeJS.ProcessEnv,
+    turnOn: (said: string, sent: DriverPromptOptions, parser: StreamJsonParser, turnEnv: NodeJS.ProcessEnv) => Promise<DriverTurn>,
+  ): Promise<DriverTurn> {
+    const now = accounts.now ?? Date.now
+    const path = accounts.path ?? accountsPath(env)
+    let said = text
+    let sent = opts
+    // One account is no choice: the turn tries it, as one always did, whatever a limit said of it before.
+    if (readAccounts(path).length < 2) return turnOn(text, opts, new StreamJsonParser(), env)
+    for (;;) {
+      const all = readAccounts(path)
+      const account = (this.account !== undefined ? all.find(a => a.name === this.account && !isLimited(a, now())) : undefined) ?? pickAccount(all, now(), accounts.prefer)
+      if (account === undefined) throw new UsageLimitError(allLimited(all, now()))
+      this.account = account.name
+      const parser = new StreamJsonParser()
+      let turn: DriverTurn | undefined
+      let failure: unknown
+      try {
+        turn = await turnOn(said, sent, parser, accountEnv(account, env))
+      } catch (err) {
+        failure = err
+      }
+      if (parser.windows) noteWindows(account.name, parser.windows, now(), path)
+      const limited = parser.stoppedByLimit || (failure !== undefined && parser.rejected !== undefined)
+      if (!limited || signalled(this.startOpts.signal, opts.signal)) {
+        if (turn === undefined) throw failure
+        return turn
+      }
+      const after = markLimited(account.name, parser.rejected?.resetsAt, now(), path)
+      const next = pickAccount(after, now())
+      if (next === undefined) throw new UsageLimitError(allLimited(after, now()))
+      const frees = after.find(a => a.name === account.name)?.limitedUntil
+      emit({ type: 'notice', message: `↻ Switched to ${next.name}'s Claude: ${account.name}'s hit its limit${frees !== undefined ? `, free again in ${freesIn(frees, now())}` : ''}.` })
+      this.account = next.name
+      if (turn?.sessionId) this.lastSessionId = turn.sessionId
+      else if (parser.session !== undefined) this.lastSessionId = parser.session
+      // The prompt is in the conversation already: the next account is told to go on with it, and
+      // nothing of what went with it is handed over twice.
+      const { attached: _attached, added: _added, inbox: _inbox, onInboxLine: _onInboxLine, ...rest } = opts
+      said = GO_ON
+      sent = { ...rest, resume: true }
+    }
   }
 
   readCode(path: string): Promise<string> {
@@ -392,6 +490,17 @@ export class StreamJsonParser {
    * the subagent began, and the CLI's `task_notification` says when it is over.
    */
   private readonly backgrounded = new Set<string>()
+  /** The agent's message is the CLI's own "You've hit your limit" (`error: "rate_limit"`): the account's limit stopped the turn. */
+  stoppedByLimit = false
+  /** A rate-limit line said `rejected`: a turn that failed after it failed on the account's limit. When it frees, where said. */
+  rejected: { resetsAt?: number } | undefined
+  /** The account's windows as this turn's last rate-limit line said them. */
+  windows: DriverRateWindow[] | undefined
+
+  /** The agent's session id, once a line said it. */
+  get session(): string | undefined {
+    return this.sessionId
+  }
 
   /** Feed one line; returns the events it produced (may be empty). */
   push(line: string): DriverEvent[] {
@@ -432,12 +541,18 @@ export class StreamJsonParser {
       return [...announced, ...this.endSubagent(obj['tool_use_id'], obj['status'] !== 'completed')]
     }
 
+    if (type === 'assistant' && obj['error'] === 'rate_limit') {
+      this.stoppedByLimit = true
+      this.rejected = { ...this.rejected, ...limitFrees(obj) }
+    }
     if (type === 'assistant') return [...announced, ...this.handleAssistant(obj)]
     if (type === 'user') return [...announced, ...this.handleResults(obj)]
     // A subagent's message being written is not the agent's: only its whole message is shown, as the subagent's.
     if (type === 'stream_event') return withinSubagent(obj) !== undefined ? announced : [...announced, ...this.handlePiece(obj['event'])]
     if (type === 'rate_limit_event') {
       const limit = parseRateLimit(obj)
+      if (limit?.windows) this.windows = limit.windows
+      if (limit?.status === 'rejected') this.rejected = { resetsAt: limit.resetsAt }
       return limit ? [...announced, { type: 'rate-limit', limit }] : announced
     }
     if (type === 'result') {
@@ -591,7 +706,29 @@ function parseRateLimit(obj: Record<string, unknown>): DriverRateLimit | undefin
   if (typeof status !== 'string' || typeof window !== 'string') return undefined
   if (typeof resetsAt !== 'number' || !Number.isFinite(resetsAt)) return undefined
   // The agent reports epoch seconds; `resetsAt` is millis.
-  return { status, window, resetsAt: resetsAt * 1000 }
+  const windows = rateWindows(info['unifiedWindows'])
+  return { status, window, resetsAt: resetsAt * 1000, ...(windows.length > 0 ? { windows } : {}) }
+}
+
+/** When the limit an agent's "You've hit your limit" message is about frees, where the message's `apiErrorParams` say. */
+function limitFrees(obj: Record<string, unknown>): { resetsAt?: number } {
+  const params = obj['apiErrorParams']
+  const info = typeof params === 'object' && params !== null ? (params as Record<string, unknown>)['rate_limit_info'] : undefined
+  const resetsAt = typeof info === 'object' && info !== null ? (info as Record<string, unknown>)['resetsAt'] : undefined
+  return typeof resetsAt === 'number' && Number.isFinite(resetsAt) ? { resetsAt: resetsAt * 1000 } : {}
+}
+
+/** The account's windows off a rate-limit line's `unifiedWindows`: `{five_hour: {utilization: 0.02, resetsAt}}`, the share 0-1. */
+function rateWindows(raw: unknown): DriverRateWindow[] {
+  if (typeof raw !== 'object' || raw === null) return []
+  const windows: DriverRateWindow[] = []
+  for (const [window, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value !== 'object' || value === null) continue
+    const { utilization, resetsAt } = value as Record<string, unknown>
+    if (typeof utilization !== 'number' || !Number.isFinite(utilization) || typeof resetsAt !== 'number' || !Number.isFinite(resetsAt)) continue
+    windows.push({ window, percentUsed: Math.round(utilization * 1000) / 10, resetsAt: resetsAt * 1000 })
+  }
+  return windows
 }
 
 /**

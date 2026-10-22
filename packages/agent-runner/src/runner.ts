@@ -262,6 +262,9 @@ export async function resumeProject(
   })
 }
 
+/** The Claude account a run starts on, by name, when whoever started it picked one: a scheduler's pick. */
+export const CLAUDE_ACCOUNT_ENV = 'OPENAGENT_CLAUDE_ACCOUNT'
+
 /**
  * The coding agent a run is on, unrestricted either way: Claude Code with permissions bypassed, Codex
  * with full access. The run's agent, when asked to publish, pushes its branch and opens its pull request itself, which
@@ -275,8 +278,11 @@ export async function resumeProject(
 export function driverFor(name: DriverName, id: string, personal: PersonalSetup): Driver {
   const env: NodeJS.ProcessEnv = { ...process.env, [AGENT_ID_ENV]: id }
   switch (name) {
-    case 'claude-code':
-      return new ClaudeCodeDriver({ permissionMode: 'bypassPermissions', env, personal })
+    case 'claude-code': {
+      // On the person's Claude accounts, the next free one taking over at a limit; the one to start on, when whoever started the run said.
+      const prefer = env[CLAUDE_ACCOUNT_ENV]?.trim()
+      return new ClaudeCodeDriver({ permissionMode: 'bypassPermissions', env, personal, accounts: prefer ? { prefer } : {} })
+    }
     case 'codex':
       return new CodexDriver({ sandbox: 'danger-full-access', env, personal })
   }
