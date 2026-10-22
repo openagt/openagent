@@ -174,6 +174,12 @@ function windowModel(label: string): string | undefined {
   return /\(([^)]+)\)/.exec(label)?.[1]?.trim().toLowerCase()
 }
 
+/** When the week resets: the exact time where the reading has it (a turn's rate-limit line), else read off the agent's words. */
+function weekResetsAt(week: DriverQuotaWindow, now: number): number | undefined {
+  if (week.resetsAt !== undefined) return week.resetsAt
+  return week.resetsAtText ? parseResetsAt(week.resetsAtText, now) : undefined
+}
+
 /**
  * Measure the account's windows against the boundary (#879).
  *
@@ -199,8 +205,7 @@ export function quotaBoundaryStatus(input: {
   limitOffset?: number
 }): QuotaBoundaryStatus | undefined {
   const week = input.windows.find(w => w.kind === 'week')
-  if (!week?.resetsAtText) return undefined
-  const resetsAt = parseResetsAt(week.resetsAtText, input.now)
+  const resetsAt = week && weekResetsAt(week, input.now)
   if (resetsAt === undefined) return undefined
   const boundary = boundaryFromResetsAt(resetsAt, input.now)
 
