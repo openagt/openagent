@@ -1,11 +1,12 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { type Mint } from '@openagt/agent-driver-claude'
 import { addAccount, markLimited, noteWindows, OWN_NAME, readAccounts } from '@openagt/agent-driver'
-import { accountsWiring, onClaudeAccounts, sendAddClaudeAccount, sendNameOwnClaudeAccount, sendRemoveClaudeAccount, sendUseClaudeAccountFirst } from './accounts.js'
+import type { CodexLogin, CodexLoginOptions } from '@openagt/agent-driver-codex'
+import { accountsWiring, onAgentAccounts, sendAddAgentAccount, sendNameOwnAgentAccount, sendRemoveAgentAccount, sendUseAgentAccountFirst } from './accounts.js'
 import { provideTestContext } from './test-context.js'
 import type { QuotaView } from '../dashboard/quota.js'
 
@@ -19,7 +20,7 @@ async function withAccounts(body: (path: string) => Promise<void>, claude: objec
   const path = join(dir, 'accounts.json')
   writeFileSync(join(dir, '.claude.json'), JSON.stringify(claude))
   const before = { ...accountsWiring }
-  Object.assign(accountsWiring, { path: () => path, claudeJson: () => join(dir, '.claude.json'), now: () => NOW })
+  Object.assign(accountsWiring, { path: () => path, claudeJson: () => join(dir, '.claude.json'), now: () => NOW, codexWho: async () => ({}), codexUsage: async () => [] })
   provideTestContext({ quota: { read: async () => live, stop: () => {} } })
   try {
     await body(path)
@@ -31,7 +32,7 @@ async function withAccounts(body: (path: string) => Promise<void>, claude: objec
 
 /** Until the add that was started has ended. */
 async function settled(): Promise<void> {
-  for (let i = 0; i < 50 && (await onClaudeAccounts()).adding; i++) await new Promise(resolve => setTimeout(resolve, 10))
+  for (let i = 0; i < 50 && ((await onAgentAccounts('claude')).adding || (await onAgentAccounts('codex')).adding); i++) await new Promise(resolve => setTimeout(resolve, 10))
 }
 
 test('the page sees each account by name and how full it is, never a login: the person\'s own by Claude Code\'s name for them and read live, an added one as its last run said it', () =>
@@ -39,15 +40,15 @@ test('the page sees each account by name and how full it is, never a login: the 
     async path => {
       addAccount('Dani', LOGIN, path, new Date(NOW - HOUR))
       noteWindows('Dani', [{ window: 'seven_day', percentUsed: 61, resetsAt: NOW + 48 * HOUR }, { window: 'five_hour', percentUsed: 40, resetsAt: NOW - 1 }], NOW - HOUR, path)
-      const view = await onClaudeAccounts()
+      const view = await onAgentAccounts('claude')
       assert.equal(JSON.stringify(view).includes(LOGIN), false)
       assert.deepEqual(view.accounts, [
-        { id: OWN_NAME, name: 'Suleiman', own: true, weekPercent: 22, sessionPercent: 3, state: 'in-use' },
+        { id: OWN_NAME, name: 'Suleiman', own: true, windows: [{ label: '5 h', percent: 3 }, { label: 'week', percent: 22 }], state: 'in-use' },
         // A window past its reset is empty again.
-        { id: 'Dani', name: 'Dani', own: false, added: new Date(NOW - HOUR).toISOString(), weekPercent: 61, sessionPercent: 0, asOf: NOW - HOUR, state: 'next' },
+        { id: 'Dani', name: 'Dani', own: false, added: new Date(NOW - HOUR).toISOString(), windows: [{ label: '5 h', percent: 0 }, { label: 'week', percent: 61 }], asOf: NOW - HOUR, state: 'next' },
       ])
       markLimited(OWN_NAME, NOW + 2 * HOUR, NOW, path)
-      const limited = await onClaudeAccounts()
+      const limited = await onAgentAccounts('claude')
       assert.deepEqual(limited.accounts.map(a => [a.name, a.state, a.limitedUntil]), [['Suleiman', 'limited', NOW + 2 * HOUR], ['Dani', 'in-use', undefined]])
     },
     undefined,
@@ -57,7 +58,7 @@ test('the page sees each account by name and how full it is, never a login: the 
 test('with one account there is no order to say; a Claude Code that does not say who the person is leaves its own name', () =>
   withAccounts(
     async () => {
-      assert.deepEqual((await onClaudeAccounts()).accounts, [{ id: OWN_NAME, name: OWN_NAME, own: true }])
+      assert.deepEqual((await onAgentAccounts('claude')).accounts, [{ id: OWN_NAME, name: OWN_NAME, own: true, windows: [] }])
     },
     {},
   ))
@@ -67,18 +68,18 @@ test('adding an account refuses a taken name before the browser opens, then keep
     let asked = 0
     const made: Mint = async () => (asked++, { ok: true, login: LOGIN })
     accountsWiring.mint = made
-    assert.deepEqual(await sendAddClaudeAccount('suleiman'), { ok: false, error: 'There is an account named suleiman already.' })
-    assert.deepEqual(await sendAddClaudeAccount(' '), { ok: false, error: 'An account needs a name.' })
+    assert.deepEqual(await sendAddAgentAccount('claude', 'suleiman'), { ok: false, error: 'There is an account named suleiman already.' })
+    assert.deepEqual(await sendAddAgentAccount('claude', ' '), { ok: false, error: 'An account needs a name.' })
     assert.equal(asked, 0)
-    assert.deepEqual(await sendAddClaudeAccount('Dani'), { ok: true })
+    assert.deepEqual(await sendAddAgentAccount('claude', 'Dani'), { ok: true })
     await settled()
     assert.equal(asked, 1)
     assert.deepEqual(readAccounts(path).map(a => [a.name, a.login]), [[OWN_NAME, undefined], ['Dani', LOGIN]])
 
     accountsWiring.mint = async () => ({ ok: false, error: 'No yes came from the browser in 10 minutes.' })
-    assert.deepEqual(await sendAddClaudeAccount('Rom'), { ok: true })
+    assert.deepEqual(await sendAddAgentAccount('claude', 'Rom'), { ok: true })
     await settled()
-    assert.equal((await onClaudeAccounts()).failed, 'No yes came from the browser in 10 minutes.')
+    assert.equal((await onAgentAccounts('claude')).failed, 'No yes came from the browser in 10 minutes.')
     assert.equal(readAccounts(path).length, 2)
   }))
 
@@ -86,9 +87,11 @@ test('one add at a time: a second waits for the browser yes of the first', () =>
   withAccounts(async () => {
     let release: () => void = () => {}
     accountsWiring.mint = () => new Promise(resolve => (release = () => resolve({ ok: false, error: 'stopped' })))
-    assert.deepEqual(await sendAddClaudeAccount('Dani'), { ok: true })
-    assert.deepEqual((await onClaudeAccounts()).adding, { name: 'Dani' })
-    assert.equal((await sendAddClaudeAccount('Rom')).ok, false)
+    assert.deepEqual(await sendAddAgentAccount('claude', 'Dani'), { ok: true })
+    assert.deepEqual((await onAgentAccounts('claude')).adding, { name: 'Dani' })
+    // Each agent adds its own: Codex's is not held up by Claude's.
+    assert.equal((await onAgentAccounts('codex')).adding, undefined)
+    assert.equal((await sendAddAgentAccount('claude', 'Rom')).ok, false)
     release()
     await settled()
   }))
@@ -96,12 +99,82 @@ test('one add at a time: a second waits for the browser yes of the first', () =>
 test('an added account is removed, another put first, and the person\'s own named; never the person\'s own removed', () =>
   withAccounts(async path => {
     addAccount('Dani', LOGIN, path)
-    assert.deepEqual(await sendUseClaudeAccountFirst('Dani'), { ok: true })
-    assert.deepEqual(await sendNameOwnClaudeAccount('Rom'), { ok: true })
+    assert.deepEqual(await sendUseAgentAccountFirst('claude', 'Dani'), { ok: true })
+    assert.deepEqual(await sendNameOwnAgentAccount('claude', 'Rom'), { ok: true })
     assert.deepEqual(readAccounts(path).map(a => a.name), ['Dani', 'Rom'])
-    assert.deepEqual(await sendNameOwnClaudeAccount('dani'), { ok: false, error: 'There is an account named dani already.' })
-    await sendRemoveClaudeAccount('Rom')
-    await sendRemoveClaudeAccount('Dani')
+    assert.deepEqual(await sendNameOwnAgentAccount('claude', 'dani'), { ok: false, error: 'There is an account named dani already.' })
+    await sendRemoveAgentAccount('claude', 'Rom')
+    await sendRemoveAgentAccount('claude', 'Dani')
     assert.deepEqual(readAccounts(path).map(a => a.name), ['Rom'])
     assert.equal(readFileSync(path, 'utf8').includes(LOGIN), false)
+  }))
+
+/** A Codex account's folder and its own home, by the name the list gives its login, under `dir`. */
+function codexWiring(dir: string, who: Record<string, { name?: string; key?: string }>, usage: Record<string, { window: string; percentUsed: number; resetsAt: number }[]>, reads: string[] = []) {
+  const own = join(dir, 'own-codex')
+  const folders = join(dir, 'codex-accounts')
+  mkdirSync(folders, { recursive: true })
+  Object.assign(accountsWiring, {
+    codexDir: () => folders,
+    codexOwnHome: () => own,
+    codexFolder: (account: { login?: string }) => join(folders, account.login!),
+    codexWho: async (home: string) => who[home === own ? 'own' : home.slice(folders.length + 1)] ?? {},
+    codexUsage: async (home: string) => {
+      reads.push(home)
+      const said = usage[home === own ? 'own' : home.slice(folders.length + 1)]
+      if (!said) throw new Error('Codex did not answer')
+      return said
+    },
+  })
+  return { own, folders }
+}
+
+test('Codex accounts: the person\'s own by the name its login says, every one read live, by Codex\'s month; a reading kept a minute; one Codex cannot read is as its last run said it', () =>
+  withAccounts(async path => {
+    const dir = join(path, '..')
+    const reads: string[] = []
+    codexWiring(dir, { own: { name: 'Suleiman S', key: 'u1/w' } }, { own: [{ window: 'thirty_day', percentUsed: 7, resetsAt: NOW + 20 * 24 * HOUR }], 'codex-rom': [{ window: 'five_hour', percentUsed: 40, resetsAt: NOW + HOUR }, { window: 'seven_day', percentUsed: 12, resetsAt: NOW + 48 * HOUR }] }, reads)
+    addAccount('Rom', 'codex-rom', path, new Date(NOW - HOUR))
+    addAccount('Dani', 'codex-dani', path, new Date(NOW - HOUR))
+    noteWindows('Dani', [{ window: 'seven_day', percentUsed: 30, resetsAt: NOW + HOUR }], NOW - HOUR, path)
+    const view = await onAgentAccounts('codex')
+    assert.deepEqual(view.accounts, [
+      { id: OWN_NAME, name: 'Suleiman S', own: true, windows: [{ label: 'month', percent: 7 }], state: 'in-use' },
+      { id: 'Rom', name: 'Rom', own: false, added: new Date(NOW - HOUR).toISOString(), windows: [{ label: '5 h', percent: 40 }, { label: 'week', percent: 12 }], state: 'next' },
+      { id: 'Dani', name: 'Dani', own: false, added: new Date(NOW - HOUR).toISOString(), windows: [{ label: 'week', percent: 30 }], asOf: NOW - HOUR },
+    ])
+    assert.equal(reads.length, 3)
+    await onAgentAccounts('codex')
+    assert.equal(reads.length, 3, 'read again within the minute: none started')
+  }))
+
+test('adding a Codex account asks its name first, then the sign-in, with the page to copy into a private window; the same account twice is refused and leaves nothing behind; a removed one takes its folder with it', () =>
+  withAccounts(async path => {
+    const dir = join(path, '..')
+    const { folders } = codexWiring(dir, { own: { key: 'me/w' }, 'codex-new': { key: 'dani/w' }, 'codex-again': { key: 'me/w' } }, {})
+    let finish: (signed: CodexLogin) => void = () => {}
+    accountsWiring.loginCodex = (opts: CodexLoginOptions) =>
+      new Promise(resolve => {
+        opts.onUrl?.('https://auth.example/sign-in')
+        finish = resolve
+      })
+    assert.deepEqual(await sendAddAgentAccount('codex', ' '), { ok: false, error: 'An account needs a name.' })
+    assert.deepEqual(await sendAddAgentAccount('codex', 'Dani'), { ok: true })
+    assert.deepEqual((await onAgentAccounts('codex')).adding, { name: 'Dani', url: 'https://auth.example/sign-in' })
+    mkdirSync(join(folders, 'codex-new'))
+    finish({ ok: true, login: 'codex-new', who: { key: 'dani/w' } })
+    await settled()
+    assert.deepEqual(readAccounts(path).map(a => [a.name, a.login]), [[OWN_NAME, undefined], ['Dani', 'codex-new']])
+
+    assert.deepEqual(await sendAddAgentAccount('codex', 'Rom'), { ok: true })
+    mkdirSync(join(folders, 'codex-again'))
+    finish({ ok: true, login: 'codex-again', who: { key: 'me/w' } })
+    await settled()
+    assert.match((await onAgentAccounts('codex')).failed ?? '', /That account is on the list already/)
+    assert.equal(existsSync(join(folders, 'codex-again')), false)
+    assert.equal(readAccounts(path).length, 2)
+
+    await sendRemoveAgentAccount('codex', 'Dani')
+    assert.equal(existsSync(join(folders, 'codex-new')), false)
+    assert.deepEqual(readAccounts(path).map(a => a.name), [OWN_NAME])
   }))

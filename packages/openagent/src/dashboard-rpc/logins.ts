@@ -7,7 +7,7 @@ import { readProjectAccounts, writeProjectAccounts } from '@openagt/agent-runner
 import { providedCommand } from '../built-in.js'
 import { isDriverName, type DriverName } from '../driver-names.js'
 import { readPreferences } from '../registry.js'
-import { onClaudeAccounts, type AccountResult } from './accounts.js'
+import { onAgentAccounts, type AccountResult, type AccountsAgent } from './accounts.js'
 import { contextProjects, resolveProjectPath } from './context.js'
 import { readProvider, remoteHost, type GitHostProvider } from '../dashboard/git-hosts.js'
 
@@ -224,11 +224,15 @@ export interface ProjectAccountsView {
     /** The project's own, when it names one. */
     project?: string
   }
-  claude?: {
-    accounts: { id: string; name: string }[]
-    /** The project's own few, by id, when it names some. */
-    project?: string[]
-  }
+  claude?: ProjectAgentAccounts
+  codex?: ProjectAgentAccounts
+}
+
+/** One agent's accounts a project may pick from, and its own few. */
+export interface ProjectAgentAccounts {
+  accounts: { id: string; name: string }[]
+  /** The project's own few, by id, when it names some. */
+  project?: string[]
 }
 
 export async function onProjectAccounts(projectId: string): Promise<ProjectAccountsView | null> {
@@ -244,24 +248,29 @@ export async function onProjectAccounts(projectId: string): Promise<ProjectAccou
     const computer = provider.accounts.find(a => a.runs)?.login
     view.gitHost = { host, name: provider.name, requestWord: provider.requestWord, accounts: provider.accounts.map(a => a.login), ...(computer !== undefined ? { computer } : {}), ...(own.gitHost !== undefined ? { project: own.gitHost } : {}) }
   }
-  const claude = (await onClaudeAccounts()).accounts
-  if (claude.length >= 2 || own.claude !== undefined) {
-    view.claude = { accounts: claude.map(a => ({ id: a.id, name: a.name })), ...(own.claude !== undefined ? { project: own.claude } : {}) }
+  for (const agent of ['claude', 'codex'] as const) {
+    const accounts = (await onAgentAccounts(agent)).accounts
+    const project = own[agent]
+    if (accounts.length >= 2 || project !== undefined) view[agent] = { accounts: accounts.map(a => ({ id: a.id, name: a.name })), ...(project !== undefined ? { project } : {}) }
   }
   return view
 }
 
 /** Change a project's own accounts: a value sets one, `null` goes back to the computer's. Kept on this computer, never in the repository. */
-export async function sendProjectAccounts(projectId: string, change: { gitHost?: string | null; claude?: string[] | null }): Promise<AccountResult> {
+export async function sendProjectAccounts(projectId: string, change: { gitHost?: string | null; claude?: string[] | null; codex?: string[] | null }): Promise<AccountResult> {
   const root = await resolveProjectPath(projectId)
   if (!root) return { ok: false, error: 'No such project.' }
   const known = await onProjectAccounts(projectId)
   if (typeof change.gitHost === 'string' && !known?.gitHost?.accounts.includes(change.gitHost)) return { ok: false, error: `This computer knows no account ${change.gitHost} there.` }
-  if (Array.isArray(change.claude) && change.claude.some(id => !known?.claude?.accounts.some(a => a.id === id))) return { ok: false, error: 'That Claude account is not on this computer.' }
+  for (const agent of ['claude', 'codex'] as const satisfies AccountsAgent[]) {
+    const picked = change[agent]
+    if (Array.isArray(picked) && picked.some(id => !known?.[agent]?.accounts.some(a => a.id === id))) return { ok: false, error: `That ${agent === 'codex' ? 'Codex' : 'Claude'} account is not on this computer.` }
+  }
   try {
     await writeProjectAccounts(root, {
       ...(change.gitHost !== undefined ? { gitHost: change.gitHost } : {}),
       ...(change.claude !== undefined ? { claude: change.claude } : {}),
+      ...(change.codex !== undefined ? { codex: change.codex } : {}),
     })
     return { ok: true }
   } catch (err) {

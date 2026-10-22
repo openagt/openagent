@@ -4,7 +4,7 @@ import { forgetRemembered } from '../lib/use-async.js'
 
 const onPerson = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/person.js', () => ({ onPerson }))
-const accounts = vi.hoisted(() => ({ onClaudeAccounts: vi.fn(), sendUseClaudeAccountFirst: vi.fn(), sendAddClaudeAccount: vi.fn(), sendRemoveClaudeAccount: vi.fn() }))
+const accounts = vi.hoisted(() => ({ onAgentAccounts: vi.fn(), sendUseAgentAccountFirst: vi.fn(), sendAddAgentAccount: vi.fn(), sendRemoveAgentAccount: vi.fn() }))
 vi.mock('../rpc/accounts.js', () => accounts)
 const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), sendGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
@@ -14,9 +14,9 @@ vi.mock('./NotificationsSubmenu.js', () => ({ NotificationsSubmenu: () => <div r
 
 const { PersonMenu, firstName, initials } = await import('./PersonMenu.js')
 
-// No account read yet: no Claude row, as the other rows' tests expect.
+// No account read yet: no Claude or Codex row, as the other rows' tests expect.
 beforeEach(() => {
-  accounts.onClaudeAccounts.mockResolvedValue({ now: 0, accounts: [] })
+  accounts.onAgentAccounts.mockResolvedValue({ now: 0, accounts: [] })
   logins.onGitHosts.mockResolvedValue({ hosts: [] })
   logins.onAgentState.mockResolvedValue({ driver: 'claude-code', ready: true })
 })
@@ -25,8 +25,8 @@ afterEach(() => {
   cleanup()
   forgetRemembered()
   onPerson.mockReset()
-  accounts.onClaudeAccounts.mockReset()
-  accounts.sendUseClaudeAccountFirst.mockReset()
+  accounts.onAgentAccounts.mockReset()
+  accounts.sendUseAgentAccountFirst.mockReset()
   for (const fn of Object.values(logins)) fn.mockReset()
 })
 
@@ -48,14 +48,18 @@ describe('PersonMenu', () => {
 
   test('a Claude row says which account runs use first and how full its week is; its submenu puts another first, or opens Settings to add one', async () => {
     onPerson.mockResolvedValue({ name: 'Ada Lovelace' })
-    accounts.onClaudeAccounts.mockResolvedValue({
-      now: 0,
-      accounts: [
-        { id: 'This computer', name: 'Ada', own: true, weekPercent: 22, state: 'in-use' },
-        { id: 'Dani', name: 'Dani', own: false, weekPercent: 61.4, asOf: 0, state: 'next' },
-      ],
-    })
-    accounts.sendUseClaudeAccountFirst.mockResolvedValue({ ok: true })
+    accounts.onAgentAccounts.mockImplementation(async (agent: string) =>
+      agent === 'claude'
+        ? {
+            now: 0,
+            accounts: [
+              { id: 'This computer', name: 'Ada', own: true, windows: [{ label: '5 h', percent: 3 }, { label: 'week', percent: 22 }], state: 'in-use' },
+              { id: 'Dani', name: 'Dani', own: false, windows: [{ label: 'week', percent: 61.4 }], asOf: 0, state: 'next' },
+            ],
+          }
+        : { now: 0, accounts: [] },
+    )
+    accounts.sendUseAgentAccountFirst.mockResolvedValue({ ok: true })
     const onSettings = vi.fn()
     render(<PersonMenu onSettings={onSettings} />)
     fireEvent.click(await screen.findByRole('button', { name: 'Ada Lovelace: settings' }))
@@ -63,9 +67,27 @@ describe('PersonMenu', () => {
     expect(row.textContent).toBe('ClaudeAda · 22%')
     fireEvent.click(row)
     fireEvent.click(await screen.findByRole('menuitem', { name: /Dani/ }))
-    expect(accounts.sendUseClaudeAccountFirst).toHaveBeenCalledWith('Dani')
+    expect(accounts.sendUseAgentAccountFirst).toHaveBeenCalledWith('claude', 'Dani')
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add account…' }))
     expect(onSettings).toHaveBeenCalledWith('agent-accounts')
+  })
+
+  test('a Codex row, the same as Claude\'s, by how full its month is; none while Codex is not on this computer and has no account added', async () => {
+    onPerson.mockResolvedValue({ name: 'Ada Lovelace' })
+    accounts.onAgentAccounts.mockImplementation(async (agent: string) => (agent === 'codex' ? { now: 0, accounts: [{ id: 'This computer', name: 'Ada L', own: true, windows: [{ label: 'month', percent: 7 }] }] } : { now: 0, accounts: [] }))
+    logins.onAgentState.mockImplementation(async (driver: string) => ({ driver, ready: true }))
+    render(<PersonMenu onSettings={() => {}} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ada Lovelace: settings' }))
+    expect((await screen.findByRole('menuitem', { name: /Codex/ })).textContent).toBe('CodexAda L · 7%')
+    cleanup()
+    forgetRemembered()
+
+    logins.onAgentState.mockImplementation(async (driver: string) => (driver === 'codex' ? { driver, ready: false, problem: '`codex` not found', fix: { kind: 'install', command: 'x' } } : { driver, ready: true }))
+    render(<PersonMenu onSettings={() => {}} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ada Lovelace: settings' }))
+    await screen.findByRole('menuitem', { name: 'Settings' })
+    await waitFor(() => expect(logins.onAgentState).toHaveBeenCalledWith('codex'))
+    expect(screen.queryByRole('menuitem', { name: /Codex/ })).toBeNull()
   })
 
   test('with no picture, or one that does not load, their initials', async () => {

@@ -23,8 +23,8 @@ export { onMachines, sendAddMachine, sendRemoveMachine, onMachinesReachable, onM
 export { onModules, runModuleCommand, runComputerCommand, runComputerCommandOn, readModule, type DashboardModule, type ModuleCommandResult, type ModuleReadResult } from './modules.js'
 export { onProjectSkills, sendChangeSkills, sendProjectSkills, type ProjectSkills, type ProjectSkill, type ChangeSkillsResult } from './skills.js'
 export { onPerson, type Person } from './person.js'
-export { onGitHosts, sendUseGitHostAccount, sendGitHostLogin, sendGitHostInstall, onAgentState, sendAgentFix, onProjectAccounts, sendProjectAccounts, type GitHostsView, type GitHostRow, type GitHostAccount, type GitHostProvider, type AgentState, type ProjectAccountsView } from './logins.js'
-export { onClaudeAccounts, sendAddClaudeAccount, sendRemoveClaudeAccount, sendUseClaudeAccountFirst, sendNameOwnClaudeAccount, type AccountRow, type AccountsView, type AccountResult } from './accounts.js'
+export { onGitHosts, sendUseGitHostAccount, sendGitHostLogin, sendGitHostInstall, onAgentState, sendAgentFix, onProjectAccounts, sendProjectAccounts, type GitHostsView, type GitHostRow, type GitHostAccount, type GitHostProvider, type AgentState, type ProjectAccountsView, type ProjectAgentAccounts } from './logins.js'
+export { onAgentAccounts, sendAddAgentAccount, sendRemoveAgentAccount, sendUseAgentAccountFirst, sendNameOwnAgentAccount, type AccountsAgent, type AccountRow, type AccountWindow, type AccountAdding, type AccountsView, type AccountResult } from './accounts.js'
 
 import * as reads from './reads.js'
 import * as control from './control.js'
