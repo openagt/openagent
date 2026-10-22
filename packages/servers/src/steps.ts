@@ -1,3 +1,4 @@
+import { OWN_NAME } from '@openagt/agent-driver-claude'
 /**
  * The steps of an install, in order: what each is called on the page, who runs it on the server,
  * and the script itself. A step first looks whether its work is already done and then does
@@ -945,6 +946,75 @@ export function claudeLoginScript(login: string): LoginScript {
 `,
     ),
   }
+}
+
+/**
+ * The Claude accounts a server's runs may use beside its own login, in the file its OpenAgent
+ * reads them from (`accountsPath` of the server's user: the service's home is that user's). Runs
+ * take the next free one when one hits its limit; the server's own login is the one with none.
+ * Read and changed as the server's user, by the server's own Node, in the format OpenAgent keeps:
+ * the file is written whole and then moved over the old one, readable by that user alone. What
+ * comes back is the accounts without their logins.
+ */
+const ACCOUNTS_JS = `
+const fs = require('fs')
+const file = process.env.FILE
+let accounts = []
+try {
+  const kept = JSON.parse(fs.readFileSync(file, 'utf8'))
+  if (Array.isArray(kept.accounts)) accounts = kept.accounts.filter(a => a && typeof a === 'object' && typeof a.name === 'string' && (a.token === undefined || typeof a.token === 'string'))
+} catch {}
+if (!accounts.some(a => a.token === undefined)) accounts = [{ name: ${JSON.stringify(OWN_NAME)} }, ...accounts]
+const name = process.env.NAME || ''
+if (process.env.OP === 'add') {
+  if (accounts.some(a => a.name.toLowerCase() === name.toLowerCase())) {
+    console.error('There is an account named ' + name + ' on the server already.')
+    process.exit(3)
+  }
+  accounts.push({ name, token: fs.readFileSync(0, 'utf8').trim(), added: new Date().toISOString() })
+}
+if (process.env.OP === 'remove') accounts = accounts.filter(a => a.name !== name || a.token === undefined)
+if (process.env.OP !== 'read') {
+  const next = file + '.' + process.pid + '.new'
+  fs.writeFileSync(next, JSON.stringify({ accounts }, null, 2) + '\\n', { mode: 0o600 })
+  fs.chmodSync(next, 0o600)
+  fs.renameSync(next, file)
+}
+console.log(JSON.stringify(accounts.map(({ token, ...rest }) => ({ ...rest, own: token === undefined }))))
+`
+
+/** Where the server's user keeps its Claude accounts: as `accountsPath` finds it for a user with no XDG_CONFIG_HOME. */
+const ACCOUNTS_FILE = '"$HOME/.openagent-claude-accounts.json"'
+
+/** The server's Claude accounts, as its file says them: names, since when, how full; never a login. */
+export function claudeAccountsScript(): LoginScript {
+  return { as: SERVER_USER, script: script(SERVER_USER, { JS: ACCOUNTS_JS }, `\n  OP=read FILE=${ACCOUNTS_FILE} node -e "$JS"\n`) }
+}
+
+/**
+ * Add a Claude account on the server: Claude Code, the server user's own, is first asked whether it
+ * reads the login; then it goes into the file on the Node program's input, never on a command line,
+ * which every user of the server can read. A name the file has already is refused.
+ */
+export function claudeAccountAddScript(name: string, login: string): LoginScript {
+  return {
+    as: SERVER_USER,
+    script: script(
+      SERVER_USER,
+      { NAME: name, LOGIN: login, JS: ACCOUNTS_JS },
+      `
+  case "$LOGIN" in '' | *[!A-Za-z0-9_-]*) fail "What was sent is no Claude login." ;; esac
+  said=$(${CLAUDE_NAME}="$LOGIN" timeout 30 claude auth status 2>&1 || true)
+  printf '%s' "$said" | grep -Eq '"loggedIn": *true' || fail "Claude Code on this server does not take the login."
+  printf '%s' "$LOGIN" | OP=add NAME="$NAME" FILE=${ACCOUNTS_FILE} node -e "$JS"
+`,
+    ),
+  }
+}
+
+/** Take an added Claude account off the server. Its login stays good until its year is over; the server's own login is not one to take off here. */
+export function claudeAccountRemoveScript(name: string): LoginScript {
+  return { as: SERVER_USER, script: script(SERVER_USER, { NAME: name, JS: ACCOUNTS_JS }, `\n  OP=remove NAME="$NAME" FILE=${ACCOUNTS_FILE} node -e "$JS"\n`) }
 }
 
 /** Take the Claude login off the server, and start OpenAgent again without it. */

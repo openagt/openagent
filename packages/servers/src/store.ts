@@ -92,6 +92,48 @@ export interface Server {
   who?: Who
   /** For a computer reached through a server: the id its line has among that server's devices, once it is among OpenAgent's machines through it. */
   line?: string
+  /** The Claude accounts the server has beside its own login, as it last said them: never a login. */
+  claudeAccounts?: ClaudeAccountKept[]
+  /** A Claude account being added: its name, and the process that makes its login and hands it over. */
+  claudeAdding?: Login & { name: string }
+}
+
+/** One Claude account added on a server, as the server says it: its name, since when, and how full. */
+export interface ClaudeAccountKept {
+  name: string
+  /** ISO 8601. */
+  added?: string
+  /** Epoch milliseconds: a limit it hit keeps runs off it until then. */
+  limitedUntil?: number
+  /** Its windows as the last run on it said them. */
+  windows?: { window: string; percentUsed: number; resetsAt: number }[]
+  /** When those were said, epoch milliseconds. */
+  windowsAt?: number
+}
+
+/** What a person may call a Claude account: a few words on one line. */
+export const isAccountName = (said: unknown): said is string => typeof said === 'string' && said.trim() === said && /^[^\x00-\x1f\x7f]{1,40}$/.test(said)
+
+const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
+
+/** An account as a server said it, or a file kept it: anything malformed is left out. */
+export function readAccountKept(value: unknown): ClaudeAccountKept | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const { name, added, limitedUntil, windows, windowsAt } = value as Record<string, unknown>
+  if (!isAccountName(name)) return undefined
+  const said = Array.isArray(windows)
+    ? windows.flatMap(w => {
+        const { window, percentUsed, resetsAt } = (w && typeof w === 'object' ? w : {}) as Record<string, unknown>
+        return typeof window === 'string' && /^[a-z_]{1,40}$/.test(window) && finite(percentUsed) && finite(resetsAt) ? [{ window, percentUsed, resetsAt }] : []
+      })
+    : []
+  return {
+    name,
+    ...(typeof added === 'string' && !Number.isNaN(Date.parse(added)) ? { added } : {}),
+    ...(finite(limitedUntil) ? { limitedUntil } : {}),
+    ...(said.length > 0 ? { windows: said } : {}),
+    ...(finite(windowsAt) ? { windowsAt } : {}),
+  }
 }
 
 export type Reach = 'full' | 'watch'
@@ -247,8 +289,11 @@ export function sanitize(value: unknown): Store {
   for (const entry of Array.isArray(obj.servers) ? obj.servers : []) {
     if (servers.length >= MAX_SERVERS) break
     if (!entry || typeof entry !== 'object') continue
-    const { address, user, fingerprint, steps, worker, adding, github, claude, reach, through, who, line } = entry as Record<string, unknown>
+    const { address, user, fingerprint, steps, worker, adding, github, claude, reach, through, who, line, claudeAccounts, claudeAdding } = entry as Record<string, unknown>
     const [githubLogin, claudeLogin] = [readLogin(github), readLogin(claude)]
+    const accounts = Array.isArray(claudeAccounts) ? claudeAccounts.flatMap(kept => readAccountKept(kept) ?? []) : undefined
+    const addingLogin = readLogin(claudeAdding)
+    const addingName = (claudeAdding as Record<string, unknown> | undefined)?.['name']
     if (typeof address !== 'string' || addressOf(address) !== address || !isUser(user)) continue
     if (servers.some(server => server.address === address)) continue
     // Every step, in the install's own order: a step the file does not know has not started.
@@ -272,6 +317,8 @@ export function sanitize(value: unknown): Store {
       ...(via !== undefined ? { through: via, ...(WHO.includes(who as Who) ? { who: who as Who } : {}), ...(typeof line === 'string' && /^[a-z0-9]{6,32}$/.test(line) ? { line } : {}) } : {}),
       ...(githubLogin ? { github: githubLogin } : {}),
       ...(claudeLogin ? { claude: claudeLogin } : {}),
+      ...(accounts ? { claudeAccounts: accounts } : {}),
+      ...(addingLogin && isAccountName(addingName) ? { claudeAdding: { ...addingLogin, name: addingName } } : {}),
     })
   }
   const own: NonNullable<Store['own']> = {}
