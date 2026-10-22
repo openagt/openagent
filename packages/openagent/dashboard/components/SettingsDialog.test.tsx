@@ -307,7 +307,7 @@ describe('the Settings list', () => {
     throw new Error('boom')
   }
   const MODULES = mounted([
-    { id: 'devices', title: 'Devices', icon: Smartphone, Section: Given, package: '@openagt/remote-access', projects: [], computer: true },
+    { id: 'devices', title: 'Devices', icon: Smartphone, Section: Given, package: '@openagt/devices', projects: [], computer: true },
     { id: 'orchestration', title: 'Orchestration', icon: Network, Section: Given, package: '@openagt/skill-orchestration', projects: ['p1', 'p2', 'gone'], computer: false },
     { id: 'scheduler', title: 'Scheduler', icon: CalendarClock, Section: Broken, package: '@openagt/skill-scheduler', projects: ['p2'], computer: false },
   ])

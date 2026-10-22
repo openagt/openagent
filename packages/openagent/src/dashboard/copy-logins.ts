@@ -13,7 +13,7 @@ import { isServerName, loginsOfOwn, loginsToCopy, type MachineLogins } from './m
  * person's, it copies what that computer lacks of them, or has an older copy of. A laptop never
  * copies its own logins: they are made for it, and go to no other computer.
  *
- * On that computer, the person's own OpenAgent there takes them as the servers package takes a
+ * On that computer, the person's own OpenAgent there takes them as the devices package takes a
  * login handed over on standard input (`own login …`), which keeps them in that person's user's
  * home and says whose and where from.
  *
@@ -22,7 +22,7 @@ import { isServerName, loginsOfOwn, loginsToCopy, type MachineLogins } from './m
  */
 
 /** The package that keeps a person's own logins on a computer several people use. */
-const SERVERS = '@openagt/servers'
+const DEVICES = '@openagt/devices'
 
 /** How a command of this computer's packages is run: `runComputerCommand`. */
 export type RunComputerCommand = (pkg: string, args: string[], command?: string | null, input?: string | null) => Promise<ModuleCommandResult>
@@ -30,7 +30,7 @@ export type RunComputerCommand = (pkg: string, args: string[], command?: string 
 /** What a person's OpenAgent answers at `/_relay/logins`: their logins here, and logins handed over. */
 export function personLogins(run: RunComputerCommand): NonNullable<RelayHandlers['logins']> {
   const read = async (): Promise<MachineLogins> => {
-    const said = await run(SERVERS, ['own']).catch((): undefined => undefined)
+    const said = await run(DEVICES, ['server', 'own']).catch((): undefined => undefined)
     return said?.ok ? loginsOfOwn(said.output) : {}
   }
   return {
@@ -41,7 +41,7 @@ export function personLogins(run: RunComputerCommand): NonNullable<RelayHandlers
       for (const kind of ['github', 'claude'] as const) {
         const login = given[kind]
         if (login === undefined) continue
-        const said = await run(SERVERS, ['own', 'login', kind, ...from], null, login)
+        const said = await run(DEVICES, ['server', 'own', 'login', kind, ...from], null, login)
         if (!said.ok) return { ok: false, error: said.error }
         const status = (said.output as { logins?: Record<string, { there?: unknown; said?: unknown }> } | null)?.logins?.[kind]
         if (status?.there !== true || typeof status.said === 'string') return { ok: false, error: typeof status?.said === 'string' ? status.said : `The ${kind === 'github' ? 'GitHub' : 'Claude'} login was not taken.` }

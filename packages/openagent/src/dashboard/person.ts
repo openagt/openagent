@@ -19,7 +19,7 @@ export interface Person {
 }
 
 /**
- * Who a call came from, when the door in front of OpenAgent says (remote-access): the GitHub
+ * Who a call came from, when the door in front of OpenAgent says (the devices package): the GitHub
  * account of the person whose device made it. Said only on a computer several persons use.
  */
 export const PERSON_HEADER = 'x-openagent-person'

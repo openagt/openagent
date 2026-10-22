@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto'
  *
  * What a computer says of a login there is only whose it is, where it came from and a mark of it:
  * the start of its SHA-256, by which the copier tells whether the copy is still its own login.
- * The login itself is never said. The marks are the servers package's (`own.ts`), made the same way.
+ * The login itself is never said. The marks are the devices package's (`servers/own.ts`), made the same way.
  */
 
 /** One login there, as that computer says it. */
@@ -36,7 +36,7 @@ export interface GivenLogins {
   from?: string
 }
 
-/** How long a mark is: as the servers package keeps it. */
+/** How long a mark is: as the devices package keeps it. */
 const MARK_LENGTH = 16
 /** A login is a word, and not a long one. */
 const MAX_LOGIN = 4096
@@ -69,7 +69,7 @@ export function readLogins(value: unknown): MachineLogins {
 }
 
 /**
- * The servers package's `own` answer of a person's own OpenAgent, as that computer says it: each
+ * The devices package's `server own` answer of a person's own OpenAgent, as that computer says it: each
  * login that is there, a copy when it names the server it came from.
  */
 export function loginsOfOwn(said: unknown): MachineLogins {

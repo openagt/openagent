@@ -77,5 +77,5 @@ test('no service declared, nothing runs', async () => {
 })
 
 test('the services OpenAgent brings are the ones the computer\'s packages declare', async () => {
-  assert.deepEqual((await builtInServices()).map(command => [command.package, command.name]), [['@openagt/remote-access', 'remote-access']])
+  assert.deepEqual((await builtInServices()).map(command => [command.package, command.name]), [['@openagt/devices', 'devices']])
 })

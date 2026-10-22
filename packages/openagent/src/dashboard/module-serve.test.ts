@@ -54,19 +54,19 @@ test('the computer\'s module files are served by their package alone, with no pr
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
   try {
-    const url = computerModuleUrl({ package: '@openagt/remote-access', entry: 'dashboard.js' })
-    assert.equal(url, `${COMPUTER_MODULES_PREFIX}/%40openagt%2Fremote-access/dashboard.js`)
+    const url = computerModuleUrl({ package: '@openagt/devices', entry: 'dashboard.js' })
+    assert.equal(url, `${COMPUTER_MODULES_PREFIX}/%40openagt%2Fdevices/dashboard.js`)
     const response = await fetch(base + url)
     assert.equal(response.status, 200)
     assert.match(response.headers.get('content-type') ?? '', /javascript/)
     assert.equal(response.headers.get('cache-control'), 'no-cache')
-    assert.equal((await fetch(`${base}${COMPUTER_MODULES_PREFIX}/%40openagt%2Fservers/dashboard.css`)).status, 200)
+    assert.equal((await fetch(`${base}${COMPUTER_MODULES_PREFIX}/%40openagt%2Fdevices/dashboard.css`)).status, 200)
 
     for (const path of [
       `${COMPUTER_MODULES_PREFIX}/%40openagt%2Ffiles/dashboard.js`, // every project's, not the computer's
-      `${COMPUTER_MODULES_PREFIX}/%40openagt%2Fremote-access/..%2F..%2Fpackage.json`, // out of the module's directory
-      `${COMPUTER_MODULES_PREFIX}/%40openagt%2Fremote-access/..%2Fcli.js`, // the package's own code, not its browser part
-      `${COMPUTER_MODULES_PREFIX}/%40openagt%2Fremote-access`, // no file
+      `${COMPUTER_MODULES_PREFIX}/%40openagt%2Fdevices/..%2F..%2Fpackage.json`, // out of the module's directory
+      `${COMPUTER_MODULES_PREFIX}/%40openagt%2Fdevices/..%2Fcli.js`, // the package's own code, not its browser part
+      `${COMPUTER_MODULES_PREFIX}/%40openagt%2Fdevices`, // no file
       `${COMPUTER_MODULES_PREFIX}/%zz/dashboard.js`, // a malformed escape
     ])
       assert.equal((await fetch(base + path)).status, 404, path)

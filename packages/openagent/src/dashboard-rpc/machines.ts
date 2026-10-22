@@ -147,7 +147,7 @@ export async function sendAddComputerThrough(machineId: string, computerId: stri
   const computer = asked.computers.find(candidate => candidate.id === computerId)
   if (!computer) return { ok: false, error: `${server.label} has no such computer on a line now.` }
   const url = `${server.url}${THROUGH_PATH}${computer.id}`
-  const { record } = await addMachine({ url, key: server.key, door: `${url}/_remote-access/enter`, label: `${computer.name} (through ${server.label})`, ...(server.pin ? { pin: server.pin } : {}), ...(computer.owner !== undefined ? { owner: computer.owner } : {}) })
+  const { record } = await addMachine({ url, key: server.key, door: `${url}/_devices/enter`, label: `${computer.name} (through ${server.label})`, ...(server.pin ? { pin: server.pin } : {}), ...(computer.owner !== undefined ? { owner: computer.owner } : {}) })
   return { ok: true, machine: shown(record) }
 }
 

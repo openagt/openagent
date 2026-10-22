@@ -183,7 +183,7 @@ export async function leaveRemote(machine: MachineAccess & { door: string }): Pr
  * computer at home that nothing on a network reaches is asked at this address, through the
  * server, with this computer's key at the server. To this computer it is one more machine.
  */
-export const THROUGH_PATH = '/_remote-access/via/'
+export const THROUGH_PATH = '/_devices/via/'
 
 /** A computer that keeps a line open to a server, as the server's door lists it. */
 export interface ComputerOnServer {
@@ -198,7 +198,7 @@ export interface ComputerOnServer {
 /** The computers that keep a line open to a server this computer is in at, or why they could not be asked. */
 export async function remoteComputers(machine: MachineAccess): Promise<{ ok: true; computers: ComputerOnServer[] } | { ok: false; error: string }> {
   try {
-    const res = await machineFetch(`${trimSlashes(machine.url)}/_remote-access/computers`, machine.pin, { headers: { authorization: `Bearer ${machine.key}` }, signal: AbortSignal.timeout(PING_TIMEOUT_MS) })
+    const res = await machineFetch(`${trimSlashes(machine.url)}/_devices/computers`, machine.pin, { headers: { authorization: `Bearer ${machine.key}` }, signal: AbortSignal.timeout(PING_TIMEOUT_MS) })
     // A machine that is no server has no lines, and its door says it has no such page.
     if (res.status === 404) return { ok: true, computers: [] }
     if (res.status === 401) return { ok: false, error: NOT_IN }
@@ -631,7 +631,7 @@ export type DoorAsk = { what: 'me' } | { what: 'remove'; id: string } | { what: 
  * door said, as it said it: the caller reads it as the data of another computer.
  */
 export async function remoteDoor(machine: MachineAccess, ask: DoorAsk): Promise<{ ok: true; said: unknown } | { ok: false; error: string; unknown?: true }> {
-  const path = ask.what === 'me' ? '/_remote-access/me' : `/_remote-access/me/${ask.what}`
+  const path = ask.what === 'me' ? '/_devices/me' : `/_devices/me/${ask.what}`
   try {
     const res = await machineFetch(`${trimSlashes(machine.url)}${path}`, machine.pin, {
       method: ask.what === 'me' ? 'GET' : 'POST',

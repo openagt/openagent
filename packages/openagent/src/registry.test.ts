@@ -580,14 +580,14 @@ test('a filesystem with no chmod still writes the registry (#1095)', async () =>
 })
 
 const STUDIO = 'http://192.168.1.5:4201'
-const DOOR = `${STUDIO}/_remote-access/enter`
+const DOOR = `${STUDIO}/_devices/enter`
 const OFFICE = 'http://10.0.0.2:4201'
 
 test('addMachine saves a machine with its key, newest first, named by its host when no name is given', async () => {
   const fs = memFs()
   const saved = await addMachine({ url: STUDIO, key: 'aaa', door: DOOR }, fs, ENV)
   assert.deepEqual(saved, { record: { id: STUDIO, label: '192.168.1.5:4201', url: STUDIO, key: 'aaa', door: DOOR }, displaced: [] })
-  await addMachine({ url: OFFICE, key: 'bbb', door: `${OFFICE}/_remote-access/enter`, label: '  Office  ' }, fs, ENV)
+  await addMachine({ url: OFFICE, key: 'bbb', door: `${OFFICE}/_devices/enter`, label: '  Office  ' }, fs, ENV)
   assert.deepEqual((await listMachines(fs, ENV)).map(machine => machine.label), ['Office', '192.168.1.5:4201'])
   // The file itself holds the list, top-level, beside the projects and the preferences.
   const stored = JSON.parse(fs.files.get(FILE)!)
@@ -606,7 +606,7 @@ test('saving an address again replaces its name and its key and keeps one entry'
 
 test('a machine saved past the cap takes the place of the oldest, which is answered too', async () => {
   const fs = memFs()
-  for (let i = 0; i < 50; i++) await addMachine({ url: `http://10.1.0.${i}:4201`, key: `k${i}`, door: `http://10.1.0.${i}:4201/_remote-access/enter` }, fs, ENV)
+  for (let i = 0; i < 50; i++) await addMachine({ url: `http://10.1.0.${i}:4201`, key: `k${i}`, door: `http://10.1.0.${i}:4201/_devices/enter` }, fs, ENV)
   const over = await addMachine({ url: STUDIO, key: 'aaa', door: DOOR }, fs, ENV)
   assert.deepEqual(over.displaced.map(machine => machine.key), ['k0'])
   assert.equal((await listMachines(fs, ENV)).length, 50)
@@ -615,7 +615,7 @@ test('a machine saved past the cap takes the place of the oldest, which is answe
 test('removeMachine takes one machine off the list and answers the one that was there', async () => {
   const fs = memFs()
   await addMachine({ url: STUDIO, key: 'aaa', door: DOOR }, fs, ENV)
-  await addMachine({ url: OFFICE, key: 'bbb', door: `${OFFICE}/_remote-access/enter` }, fs, ENV)
+  await addMachine({ url: OFFICE, key: 'bbb', door: `${OFFICE}/_devices/enter` }, fs, ENV)
   assert.deepEqual(await removeMachine(STUDIO, fs, ENV), { id: STUDIO, label: '192.168.1.5:4201', url: STUDIO, key: 'aaa', door: DOOR })
   assert.deepEqual((await listMachines(fs, ENV)).map(machine => machine.id), [OFFICE])
   assert.equal(await removeMachine(STUDIO, fs, ENV), undefined)
@@ -623,7 +623,7 @@ test('removeMachine takes one machine off the list and answers the one that was 
 
 test('what a server\'s key is known by is kept with the machine, and left out for a machine whose link named none', async () => {
   const fs = memFs()
-  const server = { url: 'https://203.0.113.5', key: 'kkk', door: 'https://203.0.113.5/_remote-access/enter', pin: 'Zm9v' }
+  const server = { url: 'https://203.0.113.5', key: 'kkk', door: 'https://203.0.113.5/_devices/enter', pin: 'Zm9v' }
   assert.deepEqual((await addMachine(server, fs, ENV)).record, { id: server.url, label: '203.0.113.5', ...server })
   await addMachine({ url: STUDIO, key: 'aaa', door: DOOR }, fs, ENV)
   const [studio, saved] = await listMachines(fs, ENV)
@@ -650,7 +650,7 @@ test('a hand-edited machines list keeps only well-formed entries, one per addres
 test('another person\'s computer is saved with whose it is, and that the person was told once; anything else under those names is left out', async () => {
   const fs = memFs()
   const line = 'http://127.0.0.1:4311'
-  const saved = await addMachine({ url: line, key: 'line', door: `${line}/_remote-access/enter`, label: 'rom-desktop', owner: 'rom' }, fs, ENV)
+  const saved = await addMachine({ url: line, key: 'line', door: `${line}/_devices/enter`, label: 'rom-desktop', owner: 'rom' }, fs, ENV)
   assert.equal(saved.record.owner, 'rom')
   assert.equal(saved.record.told, undefined)
   assert.equal(await tellMachine(line, fs, ENV), true)
@@ -660,7 +660,7 @@ test('another person\'s computer is saved with whose it is, and that the person 
   assert.equal(kept!.owner, 'rom')
   assert.equal(kept!.told, true)
   // Saved anew, it is told anew: the record is the new one.
-  await addMachine({ url: line, key: 'line', door: `${line}/_remote-access/enter`, owner: 'Not an account!' }, fs, ENV)
+  await addMachine({ url: line, key: 'line', door: `${line}/_devices/enter`, owner: 'Not an account!' }, fs, ENV)
   const [again] = await listMachines(fs, ENV)
   assert.equal('owner' in again!, false)
   assert.equal('told' in again!, false)

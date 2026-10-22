@@ -133,7 +133,7 @@ test("the services of OpenAgent's own packages run while the daemon does: told i
     // Told where OpenAgent is and which computer this is: the word the home file keeps, made at this first start.
     const computer = JSON.parse(await readFile(join(env.XDG_CONFIG_HOME!, 'openagent.json'), 'utf8')).computer as string
     assert.match(computer, /^[a-f0-9]{32}$/)
-    assert.deepEqual(started, [{ packages: ['@openagt/remote-access'], url: state.url, home: env.XDG_CONFIG_HOME, computer }])
+    assert.deepEqual(started, [{ packages: ['@openagt/devices'], url: state.url, home: env.XDG_CONFIG_HOME, computer }])
     ac.abort()
     await done
     assert.equal(answeredAtStop, 200, 'the services end first, before the dashboard closes')

@@ -32,7 +32,7 @@ async function withHome(run: (file: string) => Promise<void>): Promise<void> {
   }
 }
 
-const ENTER = '/_remote-access/enter'
+const ENTER = '/_devices/enter'
 
 /**
  * What another machine opened to the network, as far as this computer meets it: a code lets a
@@ -47,7 +47,7 @@ async function machine(codes: string[] = [], version?: string, computers?: unkno
     const key = /^Bearer (.+)$/.exec(req.headers.authorization ?? '')?.[1]
     if (req.url === '/_relay/ping') return void res.writeHead(key && inside.has(key) ? 200 : 401).end(version === undefined ? '' : JSON.stringify({ version }))
     // A server's door lists the computers on a line there, to a key that is in.
-    if (req.url === '/_remote-access/computers' && computers) return void (key && inside.has(key) ? res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ computers })) : res.writeHead(401).end())
+    if (req.url === '/_devices/computers' && computers) return void (key && inside.has(key) ? res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ computers })) : res.writeHead(401).end())
     if (req.url !== ENTER) return void res.writeHead(404).end()
     if (req.method === 'DELETE') {
       const was = key !== undefined && inside.delete(key)
@@ -299,7 +299,7 @@ test('a saved server\'s computers on a line are listed, and one is saved as a ma
     try {
       await sendAddMachine(server.link('first'), 'Box')
       assert.deepEqual(await onComputersThrough(server.url), { ok: true, computers: [{ id: 'abc123def456', name: 'Studio', online: true, added: false }] })
-      const through = `${server.url}/_remote-access/via/abc123def456`
+      const through = `${server.url}/_devices/via/abc123def456`
       assert.deepEqual(await sendAddComputerThrough(server.url, 'abc123def456'), { ok: true, machine: { id: through, label: 'Studio (through Box)', url: through } })
       assert.deepEqual(await sendAddComputerThrough(server.url, 'nobody123456'), { ok: false, error: 'Box has no such computer on a line now.' })
       assert.deepEqual((await onComputersThrough(server.url)).ok && (await onComputersThrough(server.url) as { computers: { added: boolean }[] }).computers.map(computer => computer.added), [true])
