@@ -185,6 +185,10 @@ already made, and lists it in its pull request; for anything else it proposes an
 - With several Claude accounts, unattended work starts when any account is under its line,
   and the run is told to start on that one. Picked over the person's own account alone
   deciding, which would stand the work down while another account had room.
+- The same for several Codex accounts, each read live from its own home. A Codex week is
+  paced as Claude's is; a month (a plan with no week) stands the account down only when
+  full. Picked over pacing a month against the week's boundary, which would stand the work
+  down three weeks in four. One own Codex login starts unread, as it always did.
 - Two machines may mark for one command at once. Each machine counts by its own number: its
   marker stands while it ranks within that number among the records in time order, and a
   machine whose marker ranks past its number withdraws the marker and does not spawn. A

@@ -831,6 +831,9 @@ importers:
       '@openagt/agent-driver-claude':
         specifier: workspace:*
         version: link:../agent-driver/claude
+      '@openagt/agent-driver-codex':
+        specifier: workspace:*
+        version: link:../agent-driver/codex
       '@openagt/agent-runner':
         specifier: workspace:*
         version: link:../agent-runner

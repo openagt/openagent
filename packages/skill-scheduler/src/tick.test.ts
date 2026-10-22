@@ -1018,3 +1018,24 @@ test('a project whose runs use one added account alone: unattended work is gated
   const full = deps({ quota: async () => quota(10), accounts: async () => [{ ...dani, limitedUntil: NOW.getTime() + 60 * 60_000 }] })
   assert.match((await tick(full.deps)).decisions[0]!.outcome, /^quota: every Claude account is past its line \(Dani is at its limit/)
 })
+
+test('with several Codex accounts unattended Codex work goes on the first with room, each read live, and the run is told which; one own Codex login starts as always, unread', async () => {
+  const codex = [command('work-queue', { when: 'npx queue', dir: CODEX })]
+  const read: string[] = []
+  const usage = (percents: Record<string, number>) => async (account: { name: string }) => (read.push(account.name), [{ window: 'thirty_day', percentUsed: percents[account.name]!, resetsAt: NOW.getTime() + 20 * 24 * 60 * 60 * 1000 }])
+  const accounts = async (agent: string) => (agent === 'codex' ? [{ name: 'Rom' }, { name: 'Dani', login: 'codex-dani' }] : [])
+  const started = deps({ commands: codex, accounts, codexUsage: usage({ Rom: 100, Dani: 3 }) })
+  assert.match((await tick(started.deps)).decisions[0]!.outcome, /^started /)
+  assert.deepEqual(started.seen.spawned.map(s => [s.driver, s.account]), [['codex', 'Dani']])
+  assert.deepEqual(read, ['Rom', 'Dani'])
+
+  const none = deps({ commands: codex, accounts, codexUsage: usage({ Rom: 100, Dani: 100 }) })
+  assert.match((await tick(none.deps)).decisions[0]!.outcome, /^quota: every Codex account is past its line \(Rom: Current month is used up; Dani: Current month is used up\)$/)
+  assert.deepEqual(none.seen.spawned, [])
+
+  read.length = 0
+  const one = deps({ commands: codex, accounts: async () => [{ name: 'Rom' }], codexUsage: usage({ Rom: 100 }) })
+  await tick(one.deps)
+  assert.deepEqual(one.seen.spawned.map(s => [s.driver, 'account' in s]), [['codex', false]])
+  assert.deepEqual(read, [], 'one own login is not read')
+})

@@ -57,14 +57,20 @@ export async function readyToRun(repo: string, driver: DriverName, deps: { probe
  * The accounts this run works as: at the git host, the project's own or else the computer's, its
  * environment set on this process, which is the run's own (the CLI's `run`), so the agent and
  * every git push of the run go as that account, and nothing of the person's own settings changes;
- * and the Claude accounts the project names, if it names some.
+ * and the Claude and Codex accounts the project names, if it names some.
  */
-export async function workAs(repo: string, log: (line: string) => void, deps: { gitHostEnv?: typeof gitHostEnv; env?: NodeJS.ProcessEnv } = {}): Promise<{ claude?: string[] }> {
+export async function workAs(repo: string, log: (line: string) => void, deps: { gitHostEnv?: typeof gitHostEnv; env?: NodeJS.ProcessEnv } = {}): Promise<AgentAccounts> {
   const accounts = await readProjectAccounts(repo, log)
   const given = await (deps.gitHostEnv ?? gitHostEnv)(repo, accounts.gitHost)
   if (!given.ok) throw new Error(`This project's runs work as ${accounts.gitHost} at the git host, and it cannot be used here: ${given.error}`)
   Object.assign(deps.env ?? process.env, given.env)
-  return accounts.claude ? { claude: accounts.claude } : {}
+  return { ...(accounts.claude ? { claude: accounts.claude } : {}), ...(accounts.codex ? { codex: accounts.codex } : {}) }
+}
+
+/** The accounts a project's runs may use on each agent, by name, when it names its own few. */
+export interface AgentAccounts {
+  claude?: string[]
+  codex?: string[]
 }
 
 /** The command line of a spawned run: the model, the coding agent, the follow-up, the publish level, the attached text, the parent, the base, the branch and what it is for named only when the run has them, so the run's own defaults apply otherwise. */
@@ -112,7 +118,7 @@ export interface SpawnedRun {
   branch?: string
   /** What the run is started for (`run --for`): a thread on the git host, by its address. */
   for?: string
-  /** The Claude account it starts on, by name: put in its environment ({@link CLAUDE_ACCOUNT_ENV}). */
+  /** The account it starts on, of its agent's, by name: put in its environment ({@link ACCOUNT_ENV}). */
   account?: string
 }
 
@@ -127,7 +133,7 @@ export interface SpawnedResume {
   by?: string
   /** How far the run takes its work from here on (`run --resume --publish`): a level, or `nothing`; its record's level when absent. */
   publish?: Publish | typeof NO_PUBLISH
-  /** The Claude account it goes on with, by name: put in its environment ({@link CLAUDE_ACCOUNT_ENV}). */
+  /** The account it goes on with, of its agent's, by name: put in its environment ({@link ACCOUNT_ENV}). */
   account?: string
 }
 
@@ -173,7 +179,7 @@ async function spawnDetached(repo: string, id: string, args: string[], account?:
     cwd: repo,
     detached: true,
     stdio: ['ignore', 'ignore', fd],
-    env: { ...process.env, [AGENT_ID_ENV]: id, ...(account !== undefined ? { [CLAUDE_ACCOUNT_ENV]: account } : {}) },
+    env: { ...process.env, [AGENT_ID_ENV]: id, ...(account !== undefined ? { [ACCOUNT_ENV]: account } : {}) },
   })
   closeSync(fd)
   child.unref()
@@ -286,8 +292,8 @@ export async function resumeProject(
   })
 }
 
-/** The Claude account a run starts on, by name, when whoever started it picked one: a scheduler's pick. */
-export const CLAUDE_ACCOUNT_ENV = 'OPENAGENT_CLAUDE_ACCOUNT'
+/** The account a run starts on, of the agent it runs on, by name, when whoever started it picked one: a scheduler's pick. */
+export const ACCOUNT_ENV = 'OPENAGENT_ACCOUNT'
 
 /**
  * The coding agent a run is on, unrestricted either way: Claude Code with permissions bypassed, Codex
@@ -299,15 +305,15 @@ export const CLAUDE_ACCOUNT_ENV = 'OPENAGENT_CLAUDE_ACCOUNT'
  * this machine's config turns off (`personal:` in `config.ts`). How a part is turned off is the
  * adapter's own business.
  */
-export function driverFor(name: DriverName, id: string, personal: PersonalSetup, as: { claude?: string[] } = {}): Driver {
+export function driverFor(name: DriverName, id: string, personal: PersonalSetup, as: AgentAccounts = {}): Driver {
   const env: NodeJS.ProcessEnv = { ...process.env, [AGENT_ID_ENV]: id }
+  // On the person's accounts of the agent, or the project's own few, the next free one taking over at a limit; the one to start on, when whoever started the run said.
+  const prefer = env[ACCOUNT_ENV]?.trim()
+  const accounts = (only: string[] | undefined) => ({ ...(prefer ? { prefer } : {}), ...(only ? { only } : {}) })
   switch (name) {
-    case 'claude-code': {
-      // On the person's Claude accounts, or the project's own few, the next free one taking over at a limit; the one to start on, when whoever started the run said.
-      const prefer = env[CLAUDE_ACCOUNT_ENV]?.trim()
-      return new ClaudeCodeDriver({ permissionMode: 'bypassPermissions', env, personal, accounts: { ...(prefer ? { prefer } : {}), ...(as.claude ? { only: as.claude } : {}) } })
-    }
+    case 'claude-code':
+      return new ClaudeCodeDriver({ permissionMode: 'bypassPermissions', env, personal, accounts: accounts(as.claude) })
     case 'codex':
-      return new CodexDriver({ sandbox: 'danger-full-access', env, personal })
+      return new CodexDriver({ sandbox: 'danger-full-access', env, personal, accounts: accounts(as.codex) })
   }
 }

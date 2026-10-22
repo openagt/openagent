@@ -4,7 +4,7 @@ export { markerCard, writeMarker, withdrawMarker, recordRun, runnerMark, isPubli
 export { runCommand, resumeRun, runIdFrom, addedLine, HOLD_MERGE_LINE, PUBLISH_LINES, type RunOptions, type ResumeOptions, type RunOutcome } from './run.js'
 export { sweep, type SweepDeps, type SweepResult } from './sweep.js'
 export { childEndedLine, tellParent, type ChildEnd, type ParentDeps } from './parent.js'
-export { runProject, resumeProject, detachRun, detachResume, readyToRun, workAs, spawnRun, spawnResume, resumeDetached, driverFor, isDriverName, DRIVER_NAMES, AGENT_ID_ENV, CLAUDE_ACCOUNT_ENV, type DriverName, type SpawnedRun, type SpawnedResume } from './runner.js'
+export { runProject, resumeProject, detachRun, detachResume, readyToRun, workAs, spawnRun, spawnResume, resumeDetached, driverFor, isDriverName, DRIVER_NAMES, AGENT_ID_ENV, ACCOUNT_ENV, type AgentAccounts, type DriverName, type SpawnedRun, type SpawnedResume } from './runner.js'
 export { isPidAlive, lockHolder, runLockPath, runStderrPath } from './run-lock.js'
 export { projectGitHost, gitHostEnv, type GitHost, type BranchRequest, type MergeOutcome } from './git-host.js'
 export { readLiveCard, readLiveDiary, endLiveCard, liveDir, inboxPath, LIVE_DIR, INBOX_FILE } from './live-card.js'
