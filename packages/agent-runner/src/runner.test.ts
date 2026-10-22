@@ -8,7 +8,7 @@ import { ClaudeCodeDriver } from '@openagt/agent-driver-claude'
 import { CodexDriver } from '@openagt/agent-driver-codex'
 import { markerCard, writeMarker } from './records.js'
 import { runCommand } from './run.js'
-import { detachResume, detachRun, driverFor, readyToRun, resumeArgs, resumeProject, runArgs, workAs } from './runner.js'
+import { ACCOUNT_ENV, detachResume, detachRun, driverFor, readyToRun, resumeArgs, resumeProject, runArgs, workAs } from './runner.js'
 import { writeProjectAccounts } from './config.js'
 import { removeRepo, testRepo } from './test-repo.js'
 import { TITLE_SYSTEM } from './title.js'
@@ -94,6 +94,23 @@ test('a run\'s coding agent is unrestricted, has the run\'s id, and gets this ma
   assert.equal(optsOf(claude).permissionMode, 'bypassPermissions')
   assert.equal(optsOf(claude).env?.['AGENT_ID'], 'run-1')
   assert.deepEqual(optsOf(claude).personal, personal)
+})
+
+test('a run goes on its agent\'s accounts, or the project\'s own few of them, starting on the one whoever started it named, on Claude and on Codex alike', () => {
+  const accountsOf = (driver: Driver) => (driver as unknown as { opts: { accounts?: unknown } }).opts.accounts
+  const personal = { memory: true, connectors: true, skills: true }
+  const before = process.env[ACCOUNT_ENV]
+  try {
+    delete process.env[ACCOUNT_ENV]
+    assert.deepEqual(accountsOf(driverFor('codex', 'run-1', personal)), {})
+    assert.deepEqual(accountsOf(driverFor('claude-code', 'run-1', personal)), {})
+    process.env[ACCOUNT_ENV] = ' Dani '
+    assert.deepEqual(accountsOf(driverFor('codex', 'run-1', personal, { claude: ['Rom'], codex: ['Dani', 'Rom'] })), { prefer: 'Dani', only: ['Dani', 'Rom'] })
+    assert.deepEqual(accountsOf(driverFor('claude-code', 'run-1', personal, { claude: ['Rom'], codex: ['Dani', 'Rom'] })), { prefer: 'Dani', only: ['Rom'] })
+  } finally {
+    if (before === undefined) delete process.env[ACCOUNT_ENV]
+    else process.env[ACCOUNT_ENV] = before
+  }
 })
 
 test('a resumed run continues on the tool its record names, and a Codex run with no model resumes with none', async () => {
@@ -187,8 +204,8 @@ test('ready to run, and the run: a project that names its own account at the git
     assert.deepEqual(await workAs(repo, () => {}, { gitHostEnv, env }), {})
     assert.equal(env['GH_TOKEN'], 'tok-computer')
 
-    await writeProjectAccounts(repo, { gitHost: 'octo-agent', claude: ['Rom', 'Dani'] })
-    assert.deepEqual(await workAs(repo, () => {}, { gitHostEnv, env }), { claude: ['Rom', 'Dani'] })
+    await writeProjectAccounts(repo, { gitHost: 'octo-agent', claude: ['Rom', 'Dani'], codex: ['Dani'] })
+    assert.deepEqual(await workAs(repo, () => {}, { gitHostEnv, env }), { claude: ['Rom', 'Dani'], codex: ['Dani'] })
     assert.equal(env['GH_TOKEN'], 'tok-octo-agent')
 
     await writeProjectAccounts(repo, { gitHost: 'stranger' })

@@ -40,6 +40,7 @@
   },
   "dependencies": {
     "@openagt/agent-driver-claude": "workspace:*",
+    "@openagt/agent-driver-codex": "workspace:*",
     "@openagt/agent-data": "workspace:*",
     "@openagt/skill-branches": "workspace:*",
     "@openagt/skill-logs": "workspace:*",
