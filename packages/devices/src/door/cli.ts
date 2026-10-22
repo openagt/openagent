@@ -6,7 +6,7 @@ import { ENTER_PATH, readKeyWord } from './door.js'
 import { askMe, enterForLine, leaveLine, readLineLink } from './line-out.js'
 import { startPersonWork } from './persons.js'
 import { HTTPS_PORT, serve } from './serve.js'
-import { MAX_LINES, Unreadable, accountOf, addCode, addPerson, addressOf, computerWordFor, isComputerId, listedDevices, nameOwner, pidAlive, readStore, removeComputer, removePerson, renameComputer, update, type Line, type ListedDevice, type Store } from './store.js'
+import { MAX_LINES, Unreadable, accountOf, addCode, shownCode, addPerson, addressOf, computerWordFor, isComputerId, listedDevices, nameOwner, pidAlive, readStore, removeComputer, removePerson, renameComputer, update, type Line, type ListedDevice, type Store } from './store.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -213,7 +213,17 @@ async function setHttps(io: CliIO, address: string | undefined): Promise<Status>
   }
 }
 
-async function addDevice(io: CliIO, said?: string): Promise<{ url: string; numberUrl?: string; expires: string; person?: string }> {
+/** A code as a command answers it: the link a camera opens, and what is typed instead, where and the code. */
+interface Given {
+  url: string
+  numberUrl?: string
+  where: string
+  code: string
+  expires: string
+  person?: string
+}
+
+async function addDevice(io: CliIO, said?: string): Promise<Given> {
   const store = await readStore(io.env)
   const status = statusOf(store, io.env)
   // Asked once the door can give a link: a person's user is made on the way, which takes a while and is not undone.
@@ -225,8 +235,9 @@ async function addDevice(io: CliIO, said?: string): Promise<{ url: string; numbe
     const person = await whose()
     const { code, expires } = await addCode(io.env, Date.now(), person)
     const port = store.listening!.port
-    // After the code, what the door's key is known by: a computer that pastes the link knows the door again by it.
-    return { url: `https://${urlHost(store.https.address)}${port === HTTPS_PORT ? '' : `:${port}`}${ENTER_PATH}#${code}.${fingerprint}`, expires, ...(person !== undefined ? { person } : {}) }
+    const where = `${urlHost(store.https.address)}${port === HTTPS_PORT ? '' : `:${port}`}`
+    // After the code, what the door's key is known by: a device that opens the link knows the door again by it.
+    return { url: `https://${where}${ENTER_PATH}#${code}.${fingerprint}`, where, code: shownCode(code), expires, ...(person !== undefined ? { person } : {}) }
   }
   if (!status.on) throw new Refused('On this Wi-Fi is off: turn it on first')
   if (!status.listening) throw new Refused(status.problem ?? 'the door is not open')
@@ -239,7 +250,7 @@ async function addDevice(io: CliIO, said?: string): Promise<{ url: string; numbe
   const { code, expires } = await addCode(io.env, Date.now(), person)
   const link = (host: string): string => `http://${urlHost(host)}:${port}${ENTER_PATH}#${code}`
   // The number beside the name, for the phone that cannot open a name on the network.
-  return { url: link(first), ...(name && number ? { numberUrl: link(number) } : {}), expires, ...(person !== undefined ? { person } : {}) }
+  return { url: link(first), ...(name && number ? { numberUrl: link(number) } : {}), where: `${urlHost(first)}:${port}`, code: shownCode(code), expires, ...(person !== undefined ? { person } : {}) }
 }
 
 /**

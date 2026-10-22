@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
-import { useRoute } from './use-route.js'
+import { openSettings, useRoute } from './use-route.js'
 import { projectAddresses } from '../../src/project-address.js'
 
 // F1: this used to mock Vike's `usePageContext` and `navigate`. There is nothing to mock now —
@@ -89,5 +89,22 @@ describe('useRoute', () => {
     expect(result.current.route).toEqual({ projectId: 'my-repo-a1', agentId: null })
     act(() => result.current.go({ projectId: 'my-repo-a1', agentId: '1-run', scope: 'my-repo-a1' }))
     expect(window.location.pathname + window.location.search).toBe('/my-repo/1-run')
+  })
+})
+
+// Opening Settings from a part of the page that has no route to hand: the "Run on" menu's "Add a machine…".
+describe('openSettings', () => {
+  beforeEach(() => {
+    at('/')
+  })
+
+  it('opens a Settings entry over the page you are on, its own query kept, as a step Back undoes', () => {
+    at('/my-repo/1-run?all')
+    const { result } = renderHook(() => useRoute(projects))
+    const entries = window.history.length
+    act(() => openSettings('devices'))
+    expect(window.location.pathname + window.location.search).toBe('/my-repo/1-run?all=&settings=devices')
+    expect(window.history.length).toBe(entries + 1)
+    expect(result.current.route.settings).toBe('devices')
   })
 })

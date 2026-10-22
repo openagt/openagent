@@ -46,7 +46,7 @@ export interface Route {
 const ALL_PARAM = 'all'
 
 /** The query parameter that carries {@link Route.settings}. */
-const SETTINGS_PARAM = 'settings'
+export const SETTINGS_PARAM = 'settings'
 
 /**
  * Read the route out of a URL's path and query, naming projects by `projects`. A first segment

@@ -84,6 +84,9 @@ export type Reach = 'full' | 'watch'
 /** The link the server's door gives for a new machine. */
 export interface DoorLink {
   url: string
+  /** What is typed on another computer instead: where, and the code. */
+  where: string
+  code: string
   expires: string
 }
 
@@ -212,9 +215,9 @@ export function readDevices(output: unknown): DevicesRead | undefined {
 
 function readLink(output: unknown): DoorLink | undefined {
   if (!output || typeof output !== 'object') return undefined
-  const { url, expires } = output as Record<string, unknown>
-  const [link, until] = [text(url), text(expires)]
-  return link && until ? { url: link, expires: until } : undefined
+  const { url, where, code, expires } = output as Record<string, unknown>
+  const [link, at, typed, until] = [text(url), text(where), text(code), text(expires)]
+  return link && at && typed && until ? { url: link, where: at, code: typed, expires: until } : undefined
 }
 
 async function run<T>(host: ModuleHost, args: string[], read: (output: unknown) => T | undefined): Promise<Answer<T>> {

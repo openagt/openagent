@@ -220,6 +220,30 @@ export async function sendMachineLineLink(machineId: string): Promise<{ ok: true
   return typeof url === 'string' && url.startsWith('https://') ? { ok: true, url } : { ok: false, error: 'The machine gave no link.' }
 }
 
+/** A code one more device of this person's gets in with at a saved machine: the link a camera opens, and what is typed instead, where and the code. */
+export interface MachineCode {
+  url: string
+  where: string
+  code: string
+  expires: string
+}
+
+/**
+ * A code that lets one more device of this person's in at a saved machine, a server: a device
+ * that is in gives the code for the next one. Asked of the machine's door with this computer's
+ * key there, so every computer of the person's that is in asks, not only the one that set the
+ * server up. The code works once, for a short time.
+ */
+export async function sendMachineCode(machineId: string): Promise<{ ok: true; value: MachineCode } | { ok: false; error: string }> {
+  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  if (!machine || machine.url.includes(THROUGH_PATH)) return { ok: false, error: 'That machine is no longer saved.' }
+  const asked = await remoteDoor(machine, { what: 'code' })
+  if (!asked.ok) return asked
+  const { url, where, code, expires } = (asked.said ?? {}) as Record<string, unknown>
+  const given = typeof url === 'string' && typeof where === 'string' && typeof code === 'string' && typeof expires === 'string' && url.startsWith('https://') && /^[A-Z0-9-]{1,16}$/.test(code) && Number.isFinite(Date.parse(expires))
+  return given ? { ok: true, value: { url, where, code, expires } } : { ok: false, error: 'The machine gave no code: update it first.' }
+}
+
 /** Whether each saved machine answers right now, by id: one short call to each, with this computer's key. */
 export async function onMachinesReachable(): Promise<Record<string, boolean>> {
   const machines = await listMachines()

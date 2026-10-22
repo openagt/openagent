@@ -9,7 +9,7 @@ import { doorFingerprint, type Secured } from './certificate.js'
 import { deviceName } from './device-name.js'
 import { LINE_FOR_HEADER, LINE_PATH, LINE_PROTOCOL } from './line-out.js'
 import { enterPage, notInPage } from './pages.js'
-import { COMPUTER_HEADER, PERSON_HEADER, addCode, enter, isComputerId, isIn, listedDevices, personOf, portOf, readStore, removeComputer, removeDevice, sha256, shareLine, storePath, update, type Entry, type ListedDevice, type Store } from './store.js'
+import { COMPUTER_HEADER, PERSON_HEADER, addCode, shownCode, enter, isComputerId, isIn, listedDevices, personOf, portOf, readStore, removeComputer, removeDevice, sha256, shareLine, storePath, update, type Entry, type ListedDevice, type Store } from './store.js'
 
 /**
  * The door: the one thing that lets anything in from the network. A request from a device that is in is
@@ -44,7 +44,12 @@ import { COMPUTER_HEADER, PERSON_HEADER, addCode, enter, isComputerId, isIn, lis
  * A device that is in also asks the door who it is here (`ME_PATH`): its person, whether that is
  * the owner, and that person's devices, one of which it may take out. A computer of a person asks
  * the door for a code its own line gets in with (`ME_LINE_PATH`): a person who is not the owner
- * invites nobody, and that code lets in a line and nothing else.
+ * invites nobody, and that code lets in a line and nothing else. It also asks for a code one more
+ * device of its own person gets in with (`ME_CODE_PATH`), typed on another computer with the
+ * door's address: what "Give it a code" shows.
+ *
+ * A code is short enough to type, so an address that tries wrong codes waits a minute after a few
+ * (`TOO_MANY_TRIES`), whatever it tries then.
  */
 
 /** Every path of the door's own; never passed on. */
@@ -61,6 +66,8 @@ export const ME_PATH = `${DOOR_PREFIX}/me`
 export const ME_REMOVE_PATH = `${ME_PATH}/remove`
 /** Where a computer that is in asks for a code its line gets in with, for its own person. */
 export const ME_LINE_PATH = `${ME_PATH}/line`
+/** Where a computer that is in asks for a code a device of its own person gets in with: a device that is in gives the code for the next one. */
+export const ME_CODE_PATH = `${ME_PATH}/code`
 /** The cookie a device that is in carries: its id, a dot, its key. */
 export const DEVICE_COOKIE = 'oa_device'
 
@@ -71,6 +78,11 @@ const COOKIE_RESEND_MS = 24 * 60 * 60 * 1000
 const SEEN_FLUSH_MS = 60_000
 /** A code, a computer's name and their wrapping, generously. */
 const MAX_ENTER_BODY = 4 * 1024
+/** How many wrong codes one address tries in a minute before it has to wait: a code is short enough to type, so not to guess. */
+const WRONG_TRIES = 5
+const WRONG_TRIES_MS = 60_000
+/** What a door says to an address that tried too many wrong codes. */
+export const TOO_MANY_TRIES = 'too many wrong codes: wait a minute'
 /** The computer a request says it is, when it says one: as the file keeps it, the word's SHA-256, never the word. */
 function saidComputer(req: IncomingMessage): string | undefined {
   const said = req.headers[COMPUTER_HEADER]
@@ -252,6 +264,18 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
   // Which computer each device that called with its key says it is: written with the times, for an entry that does not say yet.
   const said = new Map<string, string>()
   const cookieSent = new Map<string, number>()
+  // When each address last tried wrong codes, within the last minute. Only the guesser waits: the code itself goes on working.
+  const wrongTries = new Map<string, number[]>()
+  const triesOf = (peer: string): number[] => {
+    const recent = (wrongTries.get(peer) ?? []).filter(at => now() - at < WRONG_TRIES_MS)
+    if (recent.length) wrongTries.set(peer, recent)
+    else wrongTries.delete(peer)
+    return recent
+  }
+  const triedWrong = (peer: string): void => {
+    for (const other of [...wrongTries.keys()]) triesOf(other)
+    wrongTries.set(peer, [...triesOf(peer), now()])
+  }
 
   const flushSeen = async (): Promise<void> => {
     if (seen.size === 0) return
@@ -296,9 +320,15 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     // A computer that gets in to keep a line open is listed by its own name: it is what this server starts runs on.
     const forLine = byComputer && line === true
     if (forLine && !opts.lines) return refuse(res, 403, 'this door gives no line: only a server does')
+    // Asked before the code is looked at: an address that is waiting is not told whether its next guess was right.
+    const peer = req.socket.remoteAddress ?? ''
+    if (triesOf(peer).length >= WRONG_TRIES) return refuse(res, 429, TOO_MANY_TRIES)
     const name = forLine ? saidName(computer as string) : byComputer ? computerName(computer as string) : deviceName(req.headers['user-agent'])
     const entry = typeof code === 'string' && code ? await enter(env, code, name, now(), forLine ? opts.lines!.ports : undefined, byComputer ? saidComputer(req) : undefined) : undefined
-    if (!entry) return refuse(res, 403, 'this code no longer works')
+    if (!entry) {
+      triedWrong(peer)
+      return refuse(res, 403, 'this code no longer works')
+    }
     const headers = { 'content-type': 'application/json', 'cache-control': 'no-store' }
     // A computer is answered its key; a browser gets it as a cookie its pages cannot read.
     if (byComputer) return void res.writeHead(200, headers).end(JSON.stringify({ ok: true, key: keyWord(entry) }))
@@ -386,7 +416,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       const path = (req.url ?? '/').split('?')[0] ?? '/'
       if (path === ENTER_PATH) return req.method === 'DELETE' ? leave(req, res) : letIn(req, res)
       if (opts.lines && (path === COMPUTERS_PATH || path.startsWith(`${VIA_PREFIX}/`))) return throughLine(req, res, path)
-      if (path === ME_PATH || path === ME_REMOVE_PATH || path === ME_LINE_PATH) return aboutMe(req, res, path)
+      if (path === ME_PATH || path === ME_REMOVE_PATH || path === ME_LINE_PATH || path === ME_CODE_PATH) return aboutMe(req, res, path)
       if (path === DOOR_PREFIX || path.startsWith(`${DOOR_PREFIX}/`)) return refuse(res, 404, 'not found')
 
       const who = await whoIsIn(req)
@@ -453,8 +483,10 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
 
   /**
    * A device that is in asks who it is here, takes one of its own person's devices out, or, for a
-   * computer, asks for a code its line gets in with. A computer asks with its key; a page with its
-   * cookie, from the door's own page only, and never for a line's code: a browser keeps no line.
+   * computer, asks for a code its line gets in with, or one a device of its person gets in with. A
+   * computer asks with its key; a page with its cookie, from the door's own page only, and never
+   * for a code: a browser keeps no line, and a phone shows its own person's code from that person's
+   * computer.
    * What a device is told and may do is its own person's, as the door says, whatever it asks.
    */
   const aboutMe = async (req: IncomingMessage, res: ServerResponse, path: string): Promise<void> => {
@@ -483,16 +515,18 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       if (!(await removeComputer(env, id, whose))) return refuse(res, 404, 'no device of yours has that id')
       return json(200, me(await currentStore(), who.person))
     }
-    // A code for a line: only a computer asks, and only a server gives lines.
-    if (!who.byBearer || !opts.lines) return refuse(res, 403, 'only a computer that is in at a server asks for a line')
+    // A code for a line, or for a device of the computer's person: only a computer asks, and only a server, which has an address to say where.
+    const forLine = path === ME_LINE_PATH
+    if (!who.byBearer || (forLine && !opts.lines)) return refuse(res, 403, forLine ? 'only a computer that is in at a server asks for a line' : 'only a computer that is in asks for a code')
     req.resume()
     const store = await currentStore()
     const fingerprint = await doorFingerprint(env)
     if (!store.https || !fingerprint) return refuse(res, 503, 'the door has no address or no key yet')
     const owner = store.persons.find(person => person.owner)?.account
-    const { code, expires } = await addCode(env, now(), who.person === owner ? undefined : who.person, true)
+    const { code, expires } = await addCode(env, now(), who.person === owner ? undefined : who.person, forLine)
     const port = (server.address() as AddressInfo).port
-    return json(200, { url: `https://${urlHost(store.https.address)}${port === 443 ? '' : `:${port}`}${ENTER_PATH}#${code}.${fingerprint}`, expires })
+    const where = `${urlHost(store.https.address)}${port === 443 ? '' : `:${port}`}`
+    return json(200, { url: `https://${where}${ENTER_PATH}#${code}.${fingerprint}`, where, code: shownCode(code), expires })
   }
 
   /**

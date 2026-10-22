@@ -113,7 +113,7 @@ test('a paste that is no link, a link with no code, and a link that was used bef
       }
       const spent = await sendAddMachine(studio.link('used-before'))
       assert.equal(spent.ok, false)
-      assert.match(spent.ok ? '' : spent.error, /no longer works/)
+      assert.match(spent.ok ? '' : spent.error, /That code doesn't work/)
       const nobody = await sendAddMachine(`http://127.0.0.1:1${ENTER}#abc`)
       assert.match(nobody.ok ? '' : nobody.error, /did not answer/)
       assert.deepEqual(await onMachines(), [])

@@ -38,6 +38,9 @@ export const INERT_HOST_SERVICES: HostServices = {
   async letMachineIn() {
     return { ok: false, error: 'no dashboard to ask a machine from' }
   },
+  async machineCode() {
+    return { ok: false, error: 'no dashboard to ask a machine from' }
+  },
   async computersThrough() {
     return { ok: true, computers: [] }
   },

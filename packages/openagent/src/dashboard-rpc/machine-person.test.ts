@@ -5,7 +5,7 @@ import type { AddressInfo } from 'node:net'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { onMachinePerson, sendMachineLineLink, sendRemoveMachineDevice } from './machines.js'
+import { onMachinePerson, sendMachineCode, sendMachineLineLink, sendRemoveMachineDevice } from './machines.js'
 import { runComputerCommandOn } from './modules.js'
 import { addMachine } from '../registry.js'
 
@@ -54,6 +54,7 @@ async function door(opts: { old?: boolean } = {}): Promise<{ url: string; asked:
         return id === 'd1abcd' ? json({ ...ME, devices: [] }) : void res.writeHead(404).end('That device is not yours.')
       }
       if (req.url === '/_devices/me/line' && req.method === 'POST') return json({ url: 'https://203.0.113.9/_devices/enter#c0de.pin', expires: '2026-10-19T00:05:00.000Z' })
+      if (req.url === '/_devices/me/code' && req.method === 'POST') return json(opts.old ? { url: 'https://203.0.113.9/_devices/enter#c0de.pin', expires: '2026-10-19T00:10:00.000Z' } : { url: 'https://203.0.113.9/_devices/enter#K7P4QX9M.pin', where: '203.0.113.9', code: 'K7P4-QX9M', expires: '2026-10-19T00:10:00.000Z' })
       if (req.url === '/_rpc/runComputerCommand' && req.method === 'POST') {
         const [pkg, args, command, input] = JSON.parse(body) as unknown[]
         return json({ ret: { ok: true, output: { pkg, args, command, input } } })
@@ -84,6 +85,9 @@ test('a saved machine\'s door is asked who this computer\'s person is there, wit
       // A line's link, for this person.
       assert.deepEqual(await sendMachineLineLink(server.url), { ok: true, url: 'https://203.0.113.9/_devices/enter#c0de.pin' })
       assert.equal(server.asked.at(-1)?.url, '/_devices/me/line')
+      // A code one more device of the person's types on another computer: where, and the code.
+      assert.deepEqual(await sendMachineCode(server.url), { ok: true, value: { url: 'https://203.0.113.9/_devices/enter#K7P4QX9M.pin', where: '203.0.113.9', code: 'K7P4-QX9M', expires: '2026-10-19T00:10:00.000Z' } })
+      assert.deepEqual([server.asked.at(-1)?.method, server.asked.at(-1)?.url, server.asked.at(-1)?.authorization], ['POST', '/_devices/me/code', `Bearer ${KEY}`])
       assert.deepEqual(await onMachinePerson('http://10.9.9.9:4201'), { ok: false, error: 'That machine is no longer saved.' })
     } finally {
       await server.close()

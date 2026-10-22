@@ -422,6 +422,7 @@ test('enterRemote says in words why this computer was not let in', async () => {
     [403, 'this code no longer works'],
     [403, 'only a device on the same network as this computer gets in'],
     [403, ''],
+    [429, 'too many wrong codes: wait a minute'],
     [500, '<html>boom</html>'],
     [200, '{"ok":true}'],
     [200, '<!doctype html>'],
@@ -435,11 +436,12 @@ test('enterRemote says in words why this computer was not let in', async () => {
     const door = `${srv.url}/_devices/enter`
     const spent = await enterRemote(door, 'c', 'studio')
     assert.equal(spent.ok, false)
-    assert.match(spent.ok ? '' : spent.error, /no longer works.*make a new one/)
+    assert.equal(spent.ok ? '' : spent.error, "That code doesn't work. A code works once, for ten minutes: check it, or make a new one on the other device.")
     // Another refusal is told in the machine's own words, not as a link that was used.
     const elsewhere = await enterRemote(door, 'c', 'studio')
     assert.deepEqual(elsewhere, { ok: false, error: 'The machine refused: only a device on the same network as this computer gets in.' })
     assert.deepEqual(await enterRemote(door, 'c', 'studio'), { ok: false, error: 'The machine refused.' })
+    assert.deepEqual(await enterRemote(door, 'c', 'studio'), { ok: false, error: 'Too many wrong codes: wait a minute, then try again.' })
     const failed = await enterRemote(door, 'c', 'studio')
     assert.deepEqual(failed, { ok: false, error: 'The machine refused (500).' })
     // An answer with no key, or one that is no JSON: not an OpenAgent that lets a machine in.

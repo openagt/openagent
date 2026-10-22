@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { DEVICE_COOKIE, ENTER_PATH, ME_LINE_PATH, ME_PATH, ME_REMOVE_PATH, openDoor, readBearer, readEntry, type Door } from './door.js'
+import { DEVICE_COOKIE, ENTER_PATH, ME_CODE_PATH, ME_LINE_PATH, ME_PATH, ME_REMOVE_PATH, TOO_MANY_TRIES, openDoor, readBearer, readEntry, type Door } from './door.js'
 import { COMPUTER_HEADER, PERSON_HEADER, addCode, addPerson, enter, nameOwner, readStore, removeDevice, sha256, update, type Entry } from './store.js'
 import { testHome } from './test-home.js'
 
@@ -578,6 +578,36 @@ test('a code for a line is asked for by a computer only, and only at a door that
     assert.equal((await fetch(`${r.at}${ME_LINE_PATH}`, { method: 'POST', headers: { cookie: phone.cookie, origin: r.at } })).status, 403, 'not a page')
     assert.equal((await fetch(`${r.at}${ME_LINE_PATH}`, { method: 'POST', headers: { authorization: `Bearer ${laptop.id}.${laptop.key}` } })).status, 403, 'this door gives no line')
     assert.equal((await fetch(`${r.at}${ME_LINE_PATH}`, { method: 'POST' })).status, 401)
+  } finally {
+    await r.close()
+  }
+})
+
+test('an address that tries five wrong codes in a minute waits a minute, the right code too; the code goes on working for everyone else', async () => {
+  const r = await rig()
+  try {
+    const { code } = await addCode(r.env)
+    const send = (sent: string): Promise<Response> => fetch(`${r.at}${ENTER_PATH}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: sent, computer: 'a guesser' }) })
+    for (let guess = 0; guess < 5; guess++) assert.equal((await send(`WRONG${guess}`)).status, 403)
+    const waiting = await send(code)
+    assert.equal(waiting.status, 429)
+    assert.equal(await waiting.text(), TOO_MANY_TRIES)
+    assert.equal((await readStore(r.env)).codes.length, 1, 'the code is not spent, nor taken away')
+    r.clock.now += 60_000
+    assert.equal((await send(code)).status, 200, 'a minute later')
+  } finally {
+    await r.close()
+  }
+})
+
+test('a code for one more device is asked for by a computer only, and only at a door with an address to say', async () => {
+  const r = await rig()
+  try {
+    const phone = await r.letIn('a phone')
+    const laptop = (await enter(r.env, (await addCode(r.env)).code, 'a laptop'))!
+    assert.equal((await fetch(`${r.at}${ME_CODE_PATH}`, { method: 'POST', headers: { cookie: phone.cookie, origin: r.at } })).status, 403, 'not a page')
+    assert.equal((await fetch(`${r.at}${ME_CODE_PATH}`, { method: 'POST', headers: { authorization: `Bearer ${laptop.id}.${laptop.key}` } })).status, 503, 'a door on the Wi-Fi has no address to say')
+    assert.equal((await fetch(`${r.at}${ME_CODE_PATH}`, { method: 'POST' })).status, 401)
   } finally {
     await r.close()
   }

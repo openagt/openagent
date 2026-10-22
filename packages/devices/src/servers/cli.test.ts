@@ -125,7 +125,7 @@ test('link asks the server\'s door; added says nothing is left to add; forget ta
   const home = await testHome()
   try {
     await run(home.env, ['connect', 'Box.Example.com', 'root', '1.2.3'], { startWork: () => 0 })
-    const link = { url: 'https://box.example.com/_devices/enter#code.pin', expires: '2026-10-11T12:00:00.000Z' }
+    const link = { url: 'https://box.example.com/_devices/enter#K7P4QX9M.pin', where: 'box.example.com', code: 'K7P4-QX9M', expires: '2026-10-11T12:00:00.000Z' }
     const { exec, calls } = pretendServer(() => ({ out: JSON.stringify(link) }))
     // A name is found again however it was typed.
     assert.deepEqual((await run(home.env, ['link', 'BOX.example.com'], { exec })).out, link)
@@ -442,7 +442,7 @@ test('reach asks the server for a link once and has this computer\'s own door ke
   const home = await testHome()
   try {
     await run(home.env, ['connect', 'box.example.com', 'root', '1.2.3'], { startWork: () => 0 })
-    const link = { url: 'https://box.example.com/_devices/enter#code.pin', expires: '2026-10-11T12:00:00.000Z' }
+    const link = { url: 'https://box.example.com/_devices/enter#K7P4QX9M.pin', where: 'box.example.com', code: 'K7P4-QX9M', expires: '2026-10-11T12:00:00.000Z' }
     const { exec, calls } = pretendServer(() => ({ out: JSON.stringify(link) }))
     const asked: string[] = []
     let answers: (args: string[]) => { ok: true } | { ok: false; error: string } = () => ({ ok: true })

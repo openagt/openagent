@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { readFile, stat, writeFile } from 'node:fs/promises'
-import { CODE_LIFETIME_MS, MAX_DEVICES, Unreadable, accountOf, addCode, addPerson, computerWordFor, enter, isComputerId, isIn, nameOwner, personLinePorts, personOf, portOf, portsOf, readStore, readStoreStrict, removeComputer, removeDevice, removePerson, sanitize, sha256, shareLine, storePath, update } from './store.js'
+import { CODE_LIFETIME_MS, MAX_DEVICES, Unreadable, accountOf, addCode, addPerson, computerWordFor, enter, isComputerId, isIn, nameOwner, personLinePorts, personOf, portOf, portsOf, readStore, readStoreStrict, removeComputer, removeDevice, removePerson, sanitize, sha256, shareLine, shownCode, storePath, update } from './store.js'
 import { testHome } from './test-home.js'
 
 test('no file reads as a closed door with nobody in', async () => {
@@ -50,13 +50,25 @@ test('a code lets one device in, once; the file keeps neither the code nor the k
   }
 })
 
-test('a code is good for five minutes, and an unknown one for nothing', async () => {
+test('a code is eight letters and digits that read as no other, typed in any case, with a dash or spaces', async () => {
+  const home = await testHome()
+  try {
+    const { code } = await addCode(home.env)
+    assert.match(code, /^[2-9A-HJKMNP-TV-Z]{8}$/)
+    assert.equal(shownCode(code), `${code.slice(0, 4)}-${code.slice(4)}`)
+    assert.ok(await enter(home.env, ` ${shownCode(code).toLowerCase().replace('-', ' - ')} `, 'a computer'))
+  } finally {
+    await home.remove()
+  }
+})
+
+test('a code is good for ten minutes, and an unknown one for nothing', async () => {
   const home = await testHome()
   try {
     const { code, expires } = await addCode(home.env, 0)
-    assert.equal(expires, new Date(CODE_LIFETIME_MS).toISOString())
+    assert.equal(expires, new Date(10 * 60 * 1000).toISOString())
     assert.equal(await enter(home.env, 'not a code', 'x', 1), undefined)
-    assert.equal(await enter(home.env, code, 'x', CODE_LIFETIME_MS), undefined, 'too old at five minutes')
+    assert.equal(await enter(home.env, code, 'x', CODE_LIFETIME_MS), undefined, 'too old at ten minutes')
     await addCode(home.env, CODE_LIFETIME_MS)
     assert.equal((await readStore(home.env)).codes.length, 1, 'a code that ran out leaves the file when the next one is made')
   } finally {

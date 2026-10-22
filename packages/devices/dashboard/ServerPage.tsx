@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { ChevronRight, CircleCheck, House, Laptop, Loader2, Plus, Server, UserPlus, UserRound } from 'lucide-react'
-import { Button, ConfirmDialog, Dialog, Input, InviteDialog, RadioGroup, RadioGroupOption, formatDateTime, formatRelative, usePolled, type ModuleComputersThrough, type ModuleHost, type ModuleMachine } from '@openagt/dashboard/module'
+import { Button, ConfirmDialog, Dialog, Input, RadioGroup, RadioGroupOption, formatDateTime, formatRelative, usePolled, type ModuleComputersThrough, type ModuleHost, type ModuleMachine } from '@openagt/dashboard/module'
 import { addAccount, idsOf, loadAccounts, loadDevices, login, logout, nameOwner, ownGithub, removeAccount, removeDevice, removePerson, setWho, askLink, type AccountRow, type Answer, type DeviceRow, type ServerRow, type Who } from './servers.js'
 import type { ServerItem } from './model.js'
+import { Invite } from './codes.js'
 import { Head, LoginLine, Part, Problem, Said, State, StepLine, StepMark, Tabs, day, hostOf, named, olderThan } from './parts.js'
 import type { Devices } from './use-devices.js'
 
@@ -112,8 +113,8 @@ export function ServerPage({ d, item, onBack }: { d: Devices; item: ServerItem; 
       )}
       {d.error !== undefined && <Problem>{d.error}</Problem>}
       {inviting && (
-        <InviteDialog
-          title={`Invite to ${item.name}`}
+        <Invite
+          label={item.name}
           ask={person => askLink(host, server.address, person)}
           persons={{
             owner,
@@ -129,8 +130,6 @@ export function ServerPage({ d, item, onBack }: { d: Devices; item: ServerItem; 
               return named.ok ? { ok: true } : named
             },
           }}
-          scan="Scan it with the phone's camera: it opens OpenAgent on the server, from anywhere."
-          openHere
           joined={joined}
           onCode={next => {
             setJoined(undefined)
@@ -424,7 +423,7 @@ function People({ d, address, ownDevice }: { d: Devices; address: string; ownDev
   return (
     <div className="space-y-2 text-xs">
       {(devices === undefined || (devices.length === 0 && persons.length < 2)) && (
-        <p className="text-muted-foreground">{devices === undefined ? (error === undefined ? 'Asking the server who is in…' : 'The devices that are in on the server could not be read.') : 'Nobody yet. Invite gives a code for a person, a phone or a browser.'}</p>
+        <p className="text-muted-foreground">{devices === undefined ? (error === undefined ? 'Asking the server who is in…' : 'The devices that are in on the server could not be read.') : 'Nobody yet. Invite gives someone a code; your own phone is added with Add device.'}</p>
       )}
       {devices !== undefined &&
         (devices.length > 0 || persons.length > 1) &&

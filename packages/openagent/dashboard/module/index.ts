@@ -397,6 +397,12 @@ export interface ModuleHost {
    */
   letMachineIn(machineId: string, link: string): Promise<MachineAdded>
   /**
+   * A code one more device of the person's gets in with at a saved machine, a server: the link a
+   * camera opens, and what is typed on another computer instead, where and the code. Works once,
+   * until `expires`. Not for a computer reached through a server.
+   */
+  machineCode(machineId: string): Promise<ModuleMachineCode>
+  /**
    * The computers that keep a line open to a saved server: computers at home a run can be sent to
    * through the server, and whether each is saved here already. None for a machine that is no server.
    */
@@ -451,6 +457,9 @@ export interface ModuleMachines {
 
 /** How saving a machine went: done, or stopped, with the reason. */
 export type MachineAdded = { ok: true } | { ok: false; error: string }
+
+/** A code a device gets in with at a saved machine, as {@link ModuleHost.machineCode} answers it. */
+export type ModuleMachineCode = { ok: true; value: { url: string; where: string; code: string; expires: string } } | { ok: false; error: string }
 
 /** A computer that keeps a line open to a saved server, as {@link ModuleHost.computersThrough} answers it. */
 export interface ModuleComputerThrough {
@@ -537,8 +546,6 @@ export { cn } from '../lib/utils.js'
 export { SettingsSection, SettingsRow, SettingsSelectRow, type SettingsOption } from '../components/SettingsRows.js'
 export { useSettingsCrumb, type SettingsCrumb } from '../lib/settings-crumb.js'
 export { QrCode } from '../components/QrCode.js'
-export { AddMachineDialog } from '../components/AddMachineDialog.js'
-export { InviteDialog, type InviteCode, type InviteAnswer, type InvitePersons } from '../components/InviteDialog.js'
 export { Dialog } from '../components/ui/dialog.js'
 export { reachedByLine } from '../../src/client.js'
 export { useCodingAgents, type CodingAgent } from '../lib/models.js'

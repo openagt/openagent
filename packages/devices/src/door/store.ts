@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
+import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto'
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { isIP } from 'node:net'
 import { dirname, join } from 'node:path'
@@ -233,8 +233,14 @@ export interface Store {
   problem?: string
 }
 
-/** How long a code is good for. */
-export const CODE_LIFETIME_MS = 5 * 60 * 1000
+/** How long a code is good for: time to walk to the other computer and type it there. */
+export const CODE_LIFETIME_MS = 10 * 60 * 1000
+/**
+ * What a code is made of: eight of these, typed by hand on another computer. No letter that reads
+ * as another (0 and O, 1, I and L) and no U; any case, and a dash or a space anywhere, is the same code.
+ */
+const CODE_LETTERS = '23456789ABCDEFGHJKMNPQRSTVWXYZ'
+const CODE_LENGTH = 8
 /** Caps, so a file edited by hand or a flood of scans cannot bloat it. */
 export const MAX_DEVICES = 50
 export const MAX_CODES = 20
@@ -486,14 +492,20 @@ export function liveCodes(codes: readonly Code[], now: number): Code[] {
  * lets in a computer that keeps a line, and nothing else.
  */
 export async function addCode(env: NodeJS.ProcessEnv, now = Date.now(), person?: string, line = false): Promise<{ code: string; expires: string }> {
-  // Half the length of a device's key: it lives five minutes and works once, and a shorter link is a QR code a camera reads more easily.
-  const code = randomBytes(16).toString('base64url')
+  // Short enough to type: the door slows down whoever tries wrong codes, and the code lives ten minutes and works once.
+  const code = Array.from({ length: CODE_LENGTH }, () => CODE_LETTERS[randomInt(CODE_LETTERS.length)]).join('')
   const expires = new Date(now + CODE_LIFETIME_MS).toISOString()
   await update(env, store => {
     store.codes = [...liveCodes(store.codes, now), { code: sha256(code), expires, ...(person !== undefined ? { person } : {}), ...(line ? { line: true as const } : {}) }].slice(-MAX_CODES)
   })
   return { code, expires }
 }
+
+/** A code as it is typed: in any case, with dashes and spaces anywhere. */
+export const codeOf = (said: string): string => said.toUpperCase().replace(/[\s-]/g, '')
+
+/** A code as a person reads it: in two halves. */
+export const shownCode = (code: string): string => `${code.slice(0, CODE_LENGTH / 2)}-${code.slice(CODE_LENGTH / 2)}`
 
 /** What a device holds once it is in: its id and its key, as the cookie carries them. */
 export interface Entry {
@@ -520,7 +532,7 @@ export interface Entered extends Entry {
  * made for a line lets in nothing but a line, and is not spent by what it does not let in.
  */
 export async function enter(env: NodeJS.ProcessEnv, code: string, name: string, now = Date.now(), line?: { from: number; count: number }, computer?: string): Promise<Entered | undefined> {
-  const digest = sha256(code)
+  const digest = sha256(codeOf(code))
   // Looked up before the file is locked: a flood of wrong codes from the network changes nothing and holds no writer up.
   if (!liveCodes((await readStore(env)).codes, now).some(candidate => sameDigest(candidate.code, digest))) return undefined
   return update(env, store => {

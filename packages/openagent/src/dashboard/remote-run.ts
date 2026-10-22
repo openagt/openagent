@@ -149,9 +149,10 @@ export async function enterRemote(door: string, code: string, name: string, pin?
     // The machine says why in words: a link that was used is one reason among others (this
     // computer is on another network than the machine, the machine's list is full).
     const why = (await res.text().catch(() => '')).trim().slice(0, 200)
-    if (why === CODE_SPENT) return { ok: false, error: 'This link no longer works. A link works once, and for a short time: make a new one on the other machine.' }
+    if (why === CODE_SPENT) return { ok: false, error: "That code doesn't work. A code works once, for ten minutes: check it, or make a new one on the other device." }
     return { ok: false, error: why ? `The machine refused: ${why}.` : 'The machine refused.' }
   }
+  if (res.status === 429) return { ok: false, error: 'Too many wrong codes: wait a minute, then try again.' }
   if (!res.ok) return { ok: false, error: `The machine refused (${res.status}).` }
   const key = await res.json().then(body => (body as { key?: unknown } | null)?.key, () => undefined)
   return typeof key === 'string' && key ? { ok: true, key } : { ok: false, error: 'What answered at this link is not an OpenAgent that lets a machine in.' }
@@ -654,7 +655,7 @@ export async function giveRemoteLogins(machine: MachineAccess, given: GivenLogin
 }
 
 /** What a machine's door is asked about this computer's person there: who they are and their devices, one of those devices out, or a link for this computer's line. */
-export type DoorAsk = { what: 'me' } | { what: 'remove'; id: string } | { what: 'line' }
+export type DoorAsk = { what: 'me' } | { what: 'remove'; id: string } | { what: 'line' } | { what: 'code' }
 
 /**
  * Ask a machine's door about the person this computer is in as there: the door answers it
@@ -667,7 +668,7 @@ export async function remoteDoor(machine: MachineAccess, ask: DoorAsk): Promise<
     const res = await machineFetch(`${trimSlashes(machine.url)}${path}`, machine.pin, {
       method: ask.what === 'me' ? 'GET' : 'POST',
       headers: ask.what === 'me' ? { authorization: `Bearer ${machine.key}` } : relayHeaders(machine.key),
-      ...(ask.what === 'remove' ? { body: JSON.stringify({ id: ask.id }) } : ask.what === 'line' ? { body: '{}' } : {}),
+      ...(ask.what === 'remove' ? { body: JSON.stringify({ id: ask.id }) } : ask.what === 'line' || ask.what === 'code' ? { body: '{}' } : {}),
       signal: AbortSignal.timeout(PING_TIMEOUT_MS * 3),
     })
     // A door that knows of no persons: an OpenAgent from before them, or no door at all.

@@ -158,7 +158,8 @@ export async function install(opts: InstallOptions): Promise<void> {
   }
 }
 
-export type Link = { ok: true; url: string; expires: string } | { ok: false; error: string }
+/** A code from the server's door: the link a camera opens, and what is typed instead, where and the code. */
+export type Link = { ok: true; url: string; where: string; code: string; expires: string } | { ok: false; error: string }
 
 /** How long a link may be: a door's link is its address, a code and a key's mark, and a page draws it as a QR code. */
 const LINK_MAX = 512
@@ -180,8 +181,12 @@ export async function askLink(server: Pick<Server, 'address' | 'user'>, opts: { 
     const said = await session.run(SERVER_USER, linkScript(person), person === undefined ? LINK_TIMEOUT_MS : PERSON_TIMEOUT_MS)
     if (said.code !== 0) return { ok: false, error: withAdvice(server, lastLines(said) || 'The server did not answer.') }
     try {
-      const { url, expires } = JSON.parse(said.out.trim().split('\n').at(-1) ?? '') as Record<string, unknown>
-      if (typeof url === 'string' && url.length <= LINK_MAX && typeof expires === 'string' && Number.isFinite(Date.parse(expires)) && new URL(url).origin === doorUrl(server.address)) return { ok: true, url, expires }
+      const { url, where, code, expires } = JSON.parse(said.out.trim().split('\n').at(-1) ?? '') as Record<string, unknown>
+      if (typeof url === 'string' && url.length <= LINK_MAX && typeof expires === 'string' && Number.isFinite(Date.parse(expires)) && new URL(url).origin === doorUrl(server.address)) {
+        // A server from before typed codes gives a link only: it is updated first.
+        if (typeof where !== 'string' || typeof code !== 'string' || new URL(`https://${where}`).origin !== doorUrl(server.address) || !/^[A-Z0-9-]{1,16}$/.test(code)) return { ok: false, error: 'The server gives no code to type yet: update it first.' }
+        return { ok: true, url, where, code, expires }
+      }
     } catch {
       // Told below, as any answer that is no link.
     }

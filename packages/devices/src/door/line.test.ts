@@ -849,6 +849,18 @@ test('on a server with a user per person, a person\'s computer has its line in t
     const lines = (await readStore(r.server)).devices.filter(device => device.line).map(device => [device.person, device.line!.port])
     assert.deepEqual(lines, [['rom', block + 10], ['rom', block + 11]])
     assert.equal((await doorCall(`${origin}/_devices/me/line`, { method: 'POST', headers: { ...romsLaptop, origin } })).status, 403, 'never from a page')
+
+    // Rom's laptop asks for a code one more device of his gets in with, typed with where it is: his, never the owner's.
+    const given = await doorCall(`${origin}/_devices/me/code`, { method: 'POST', headers: romsLaptop })
+    assert.equal(given.status, 200)
+    const typed = JSON.parse(given.text) as { url: string; where: string; code: string }
+    assert.equal(`https://${typed.where}`, origin)
+    assert.match(typed.code, /^[2-9A-HJKMNP-TV-Z]{4}-[2-9A-HJKMNP-TV-Z]{4}$/)
+    assert.equal(new URL(typed.url).hash.slice(1).split('.')[0], typed.code.replace('-', ''), 'the link holds the same code')
+    const office = await doorCall(`${origin}/_devices/enter`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: ` ${typed.code.toLowerCase().replace('-', ' - ')} `, computer: 'rom office' }) })
+    assert.equal(office.status, 200, 'typed in any case, with spaces and a dash')
+    assert.equal((await readStore(r.server)).devices.find(device => device.name === 'OpenAgent on rom office')?.person, 'rom')
+    assert.equal((await doorCall(`${origin}/_devices/me/code`, { method: 'POST', headers: { ...romsLaptop, origin } })).status, 403, 'never from a page')
   } finally {
     await shut(romsAgent)
     await r.stop()

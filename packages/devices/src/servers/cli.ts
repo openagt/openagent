@@ -638,7 +638,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         if (person !== undefined && !isAccount(person)) throw new Refused(`${person} is not a GitHub account`)
         const link = await askLink(await still(io, address), io.exec ? { exec: io.exec } : {}, person?.toLowerCase())
         if (!link.ok) throw new Refused(link.error)
-        return print({ url: link.url, expires: link.expires })
+        return print({ url: link.url, where: link.where, code: link.code, expires: link.expires })
       }
       case 'owner':
       case 'remove-person': {

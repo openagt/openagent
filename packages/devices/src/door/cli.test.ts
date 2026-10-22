@@ -183,12 +183,14 @@ test('on a server, add answers one HTTPS link at the server\'s address, with wha
     assert.deepEqual([status.listening, status.problem, status.https.address], [true, undefined, '127.0.0.1'])
     const port = (await readStore(home.env)).listening!.port
 
-    const link = (await run(home.env, ['add'])).out as { url: string; numberUrl?: string }
+    const link = (await run(home.env, ['add'])).out as { url: string; numberUrl?: string; where: string; code: string }
     assert.equal(link.numberUrl, undefined)
     const [at, after] = link.url.split('#') as [string, string]
     assert.equal(at, `https://127.0.0.1:${port}${ENTER_PATH}`)
     const [code, pin] = after.split('.')
-    assert.match(code!, /^[A-Za-z0-9_-]{20,}$/)
+    assert.match(code!, /^[2-9A-HJKMNP-TV-Z]{8}$/)
+    // The same code to type on another computer, with where to type it.
+    assert.deepEqual([link.where, link.code], [`127.0.0.1:${port}`, `${code!.slice(0, 4)}-${code!.slice(4)}`])
     assert.equal(pin, await doorFingerprint(home.env))
     assert.equal(pin, keyFingerprint(office.issued[0]!.publicKey))
   } finally {

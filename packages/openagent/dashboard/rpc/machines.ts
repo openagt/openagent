@@ -21,5 +21,6 @@ export const onMachinePerson = rpc<typeof impl.onMachinePerson>('onMachinePerson
 export const sendRemoveMachineDevice = rpc<typeof impl.sendRemoveMachineDevice>('sendRemoveMachineDevice')
 export const sendRenameMachine = rpc<typeof impl.sendRenameMachine>('sendRenameMachine')
 export const sendLetMachineIn = rpc<typeof impl.sendLetMachineIn>('sendLetMachineIn')
+export const sendMachineCode = rpc<typeof impl.sendMachineCode>('sendMachineCode')
 export const sendMachineTold = rpc<typeof impl.sendMachineTold>('sendMachineTold')
 export const onMachineLogins = rpc<typeof impl.onMachineLogins>('onMachineLogins')
