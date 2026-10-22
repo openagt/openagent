@@ -1,6 +1,6 @@
 {
   "name": "@openagt/changes",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "The Changes module for the OpenAgent dashboard: the files a run changed, or the ones changed in a project's folder, each with its diff, and a run's commits.",
   "license": "MIT",
   "repository": {
