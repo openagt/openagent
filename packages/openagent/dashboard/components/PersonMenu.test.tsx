@@ -1,17 +1,24 @@
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 const onPerson = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/person.js', () => ({ onPerson }))
+const accounts = vi.hoisted(() => ({ onClaudeAccounts: vi.fn(), sendUseClaudeAccountFirst: vi.fn(), sendAddClaudeAccount: vi.fn(), sendRemoveClaudeAccount: vi.fn() }))
+vi.mock('../rpc/accounts.js', () => accounts)
 // The menu's theme and notifications rows have their own suites; here they are the rows' names.
 vi.mock('./ThemeSubmenu.js', () => ({ ThemeSubmenu: () => <div role="menuitem">Theme</div> }))
 vi.mock('./NotificationsSubmenu.js', () => ({ NotificationsSubmenu: () => <div role="menuitem">Notifications</div> }))
 
 const { PersonMenu, firstName, initials } = await import('./PersonMenu.js')
 
+// No account read yet: no Claude row, as the other rows' tests expect.
+beforeEach(() => accounts.onClaudeAccounts.mockResolvedValue({ now: 0, accounts: [] }))
+
 afterEach(() => {
   cleanup()
   onPerson.mockReset()
+  accounts.onClaudeAccounts.mockReset()
+  accounts.sendUseClaudeAccountFirst.mockReset()
 })
 
 describe('PersonMenu', () => {
@@ -28,6 +35,28 @@ describe('PersonMenu', () => {
     expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Theme', 'Notifications', 'Settings'])
     fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }))
     expect(onSettings).toHaveBeenCalledTimes(1)
+  })
+
+  test('a Claude row says which account runs use first and how full its week is; its submenu puts another first, or opens Settings to add one', async () => {
+    onPerson.mockResolvedValue({ name: 'Ada Lovelace' })
+    accounts.onClaudeAccounts.mockResolvedValue({
+      now: 0,
+      accounts: [
+        { id: 'This computer', name: 'Ada', own: true, weekPercent: 22, state: 'in-use' },
+        { id: 'Dani', name: 'Dani', own: false, weekPercent: 61.4, asOf: 0, state: 'next' },
+      ],
+    })
+    accounts.sendUseClaudeAccountFirst.mockResolvedValue({ ok: true })
+    const onSettings = vi.fn()
+    render(<PersonMenu onSettings={onSettings} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ada Lovelace: settings' }))
+    const row = await screen.findByRole('menuitem', { name: /Claude/ })
+    expect(row.textContent).toBe('ClaudeAda · 22%')
+    fireEvent.click(row)
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Dani/ }))
+    expect(accounts.sendUseClaudeAccountFirst).toHaveBeenCalledWith('Dani')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add account…' }))
+    expect(onSettings).toHaveBeenCalledWith('agent-accounts')
   })
 
   test('with no picture, or one that does not load, their initials', async () => {

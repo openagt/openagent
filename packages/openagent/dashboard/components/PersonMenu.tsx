@@ -5,10 +5,11 @@ import { useLoaded } from '../lib/use-async.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { ThemeSubmenu } from './ThemeSubmenu.js'
 import { NotificationsSubmenu } from './NotificationsSubmenu.js'
+import { AGENT_ACCOUNTS_ENTRY, ClaudeAccountsSubmenu } from './AgentAccounts.js'
 
 // The foot of the sidebar: the person at this dashboard, their picture and first name, as one row
-// that opens their menu (his pick, over a row of three icons): the theme, the notifications, and
-// Settings, under their whole name. The gear at the row's end says what the row opens. The name is
+// that opens their menu (his pick, over a row of three icons): the Claude account runs use first,
+// the theme, the notifications, and Settings, under their whole name. The gear at the row's end says what the row opens. The name is
 // git's, the picture the git host's (`onPerson`); with no picture, their initials.
 
 /** The first word of a name: what the row says, the whole name being in the menu. */
@@ -33,7 +34,7 @@ function Avatar({ person }: { person: Person | null }) {
   )
 }
 
-export function PersonMenu({ onSettings }: { onSettings: () => void }) {
+export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => void }) {
   const person = useLoaded<Person | null>(() => onPerson().catch(() => null), null, [])
   return (
     <DropdownMenu>
@@ -57,10 +58,11 @@ export function PersonMenu({ onSettings }: { onSettings: () => void }) {
             <DropdownMenuSeparator />
           </>
         )}
+        <ClaudeAccountsSubmenu onAdd={() => onSettings(AGENT_ACCOUNTS_ENTRY)} />
         <ThemeSubmenu />
         <NotificationsSubmenu />
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={onSettings}>
+        <DropdownMenuItem onClick={() => onSettings()}>
           <Settings className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
           Settings
         </DropdownMenuItem>

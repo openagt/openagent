@@ -109,7 +109,7 @@ export function AgentHistory({
    *  to a no-op so a focused unit test can mount the rail without wiring the shell's chrome. */
   onDashboard?: () => void
   /** Open Settings, from the person's menu at the sidebar's foot. */
-  onSettings?: () => void
+  onSettings?: (entry?: string) => void
   /** The pages the installed modules add (#1774), the picked project's only when one is picked, one nav row each, below Overview. */
   pages?: readonly { segment: string; label: string; icon?: ComponentType<{ className?: string; 'aria-hidden'?: boolean }> }[]
   /** The module page that is the current view, by its segment, or null. */
