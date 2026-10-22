@@ -118,7 +118,7 @@ export function AgentAccountsSettings() {
         <ul className="divide-y divide-border">
           {(view?.accounts ?? []).map(account => (
             <li key={account.id} aria-label={account.name} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5">
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 max-sm:basis-full!">
                 <p className="truncate text-sm">{account.name}</p>
                 <p className="truncate text-xs text-muted-foreground">{source(account)}</p>
               </div>
