@@ -218,7 +218,7 @@ export interface Https {
 }
 
 export interface Store {
-  /** The "Phone on Wi-Fi" switch. */
+  /** The "On this Wi-Fi" switch. */
   on: boolean
   /** Set on a server: the door is always open there, and the switch is not looked at. */
   https?: Https
@@ -569,6 +569,18 @@ export async function removeComputer(env: NodeJS.ProcessEnv, id: string, whose?:
     if (!named) return false
     const partner = named.computer === undefined ? undefined : store.devices.find(device => device !== named && theirs(device) && device.computer === named.computer && (device.line !== undefined) !== (named.line !== undefined))
     store.devices = store.devices.filter(device => device !== named && device !== partner)
+    return true
+  })
+}
+
+/** Give a device the name the person picked: a computer under both its entries. False when no device has that id, or the name is empty. */
+export async function renameComputer(env: NodeJS.ProcessEnv, id: string, name: string): Promise<boolean> {
+  const picked = name.trim().slice(0, MAX_NAME)
+  if (!picked) return false
+  return update(env, store => {
+    const named = store.devices.find(device => device.id === id)
+    if (!named) return false
+    for (const device of store.devices) if (device === named || (named.computer !== undefined && device.computer === named.computer && device.person === named.person)) device.name = picked
     return true
   })
 }

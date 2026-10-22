@@ -525,7 +525,7 @@ test('a run another computer started, which is no saved machine, is not continue
 test('a machine that refuses what would change a run, and says why, is answered in its own words; nothing is done here in its place', async () => {
   const ctx = await projectWithWorktreeAgent({ pid: 0, host: 'server-box' }, { status: 'waiting', hooks: RESUME_HOOK, diary: [{ kind: 'said', text: 'kept in the record' }] })
   // A computer that only lets its server watch: it refuses a call that acts, in words for the person.
-  const WHY = 'This computer only lets its server watch. Turn on "Start runs on this computer from the phone" in its Settings, under Machines.'
+  const WHY = 'This computer only lets its server watch. Turn on "From anywhere" through this server in its Settings, under Devices.'
   const machine = createServer((req, res) => {
     req.resume()
     res.writeHead(403, { 'content-type': 'text/plain' }).end(WHY)

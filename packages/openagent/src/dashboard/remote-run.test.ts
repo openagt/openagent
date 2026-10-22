@@ -80,7 +80,7 @@ test('startRemoteAgent surfaces a non-2xx from the machine as an ok:false result
 })
 
 test('a machine that refuses a call and says why (403) is answered in its own words: a start, a project asked for, a relayed call', async () => {
-  const WHY = 'This computer only lets its server watch. Turn on "Start runs on this computer from the phone" in its Settings, under Machines.'
+  const WHY = 'This computer only lets its server watch. Turn on "From anywhere" through this server in its Settings, under Devices.'
   let why = WHY
   const srv = await server((req, res) => {
     req.resume()

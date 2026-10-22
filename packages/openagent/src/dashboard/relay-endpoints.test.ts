@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { AddressInfo } from 'node:net'
 import { test, type TestContext } from 'node:test'
 import type { OpenAgentEvent } from '../events.js'
 import { RELAY_RPC_NAMES, isRelayRead } from '../dashboard-rpc/relay-dispatch.js'
 import { handleRelayRequest, WATCH_HEADER, WATCH_ONLY, type RelayHandlers } from './relay-endpoints.js'
+import { addMachine } from '../registry.js'
 
 // A call that may only watch (WATCH_HEADER): a computer that keeps a line open to its server adds
 // the header to every call it passes on to its own OpenAgent, while its person lets the server
@@ -80,7 +84,7 @@ test('a call that may only watch starts no run, clones no project and does nothi
   ]
   for (const [path, body] of acts) assert.deepEqual(await said(await post(path, body, WATCH)), [403, WATCH_ONLY], path)
   assert.deepEqual(did, [], 'nothing reached the computer')
-  assert.match(WATCH_ONLY, /^This computer only lets its server watch\. Turn on "Start runs on this computer from the phone" in its Settings, under Machines\.$/)
+  assert.match(WATCH_ONLY, /^This computer only lets its server watch\. Turn on "From anywhere" through this server in its Settings, under Devices\.$/)
 
   // The header only restricts: the same calls without it are answered in full.
   assert.deepEqual((await said(await post(acts[0]![0], acts[0]![1])))[0], 200)
@@ -115,4 +119,23 @@ test('the header restricts whatever it says, and a call that is refused anyway i
   assert.equal((await get('/_relay/start', WATCH)).status, 405)
   assert.equal((await get('/_relay/rpc', WATCH)).status, 405)
   assert.equal((await get('/_relay/nothing', WATCH)).status, 404)
+})
+
+test('the ping says the ids this OpenAgent is listed under at the doors of the machines it saved; never a key, and none for a computer reached through a server', async t => {
+  const home = await mkdtemp(join(tmpdir(), 'oa-ping-'))
+  const previous = process.env.XDG_CONFIG_HOME
+  process.env.XDG_CONFIG_HOME = home
+  t.after(async () => {
+    if (previous === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = previous
+    await rm(home, { recursive: true, force: true })
+  })
+  const studio = 'http://192.168.1.5:4201'
+  await addMachine({ url: studio, key: 'a1b2c3d4e5f6.s3cret', door: `${studio}/_devices/enter`, label: 'Studio' })
+  await addMachine({ url: `${studio}/_devices/via/abc123def456`, key: 'a1b2c3d4e5f6.s3cret', door: `${studio}/_devices/enter`, label: 'Home PC' })
+  const { get } = await computer(t)
+  const answer = await get('/_relay/ping')
+  const body = await answer.text()
+  assert.deepEqual((JSON.parse(body) as { listed: string[] }).listed, ['a1b2c3d4e5f6'])
+  assert.doesNotMatch(body, /s3cret/)
 })

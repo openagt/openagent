@@ -381,7 +381,7 @@ export interface ModuleHost {
   machines(): Promise<ModuleMachines>
   /**
    * Save the machine a link names: the link another OpenAgent gives for a new device, as a person
-   * pastes it under Machines. This computer is let in there with it, once, and keeps its key.
+   * pastes it under Devices. This computer is let in there with it, once, and keeps its key.
    */
   addMachine(link: string, label?: string): Promise<MachineAdded>
   /**
@@ -389,6 +389,13 @@ export interface ModuleHost {
    * there stops working. Refused, with the reason, while a run is at work there.
    */
   removeMachine(id: string): Promise<MachineRemoved>
+  /** Give a saved machine the name the person picked. */
+  renameMachine(id: string, label: string): Promise<MachineAdded>
+  /**
+   * Have a saved machine save this computer, with the link this computer's door gave for a new
+   * device: that machine then starts runs here too. Not for a computer reached through a server.
+   */
+  letMachineIn(machineId: string, link: string): Promise<MachineAdded>
   /**
    * The computers that keep a line open to a saved server: computers at home a run can be sent to
    * through the server, and whether each is saved here already. None for a machine that is no server.
@@ -426,12 +433,19 @@ export interface ModuleMachine {
   device?: string
   /** Whose computer it is, by their GitHub account, when it is another person's shared with everyone on a server. */
   owner?: string
+  /**
+   * The ids the machine is listed under at the doors of the machines it saved, as it says: one of
+   * them among this computer's own door's devices is that machine, in there too.
+   */
+  listed?: string[]
 }
 
 /** What {@link ModuleHost.machines} answers. */
 export interface ModuleMachines {
   /** This computer's own OpenAgent. */
   version: string
+  /** This computer's own name, as another machine lists it: "Suleimans-MacBook-Pro". */
+  name?: string
   machines: ModuleMachine[]
 }
 
@@ -521,6 +535,7 @@ export { StartAgentButton } from '../components/StartAgentButton.js'
 export { LinkActions, type ProjectLinks, type LinkTargets } from '../components/LinkActions.js'
 export { cn } from '../lib/utils.js'
 export { SettingsSection, SettingsRow, SettingsSelectRow, type SettingsOption } from '../components/SettingsRows.js'
+export { useSettingsCrumb, type SettingsCrumb } from '../lib/settings-crumb.js'
 export { QrCode } from '../components/QrCode.js'
 export { AddMachineDialog } from '../components/AddMachineDialog.js'
 export { InviteDialog, type InviteCode, type InviteAnswer, type InvitePersons } from '../components/InviteDialog.js'

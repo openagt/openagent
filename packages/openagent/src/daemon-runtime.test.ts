@@ -577,7 +577,7 @@ test('a run sent to another person\'s computer first has the server\'s logins co
     assert.ok(asked.includes('POST /_relay/start'))
 
     asked.length = 0
-    assert.deepEqual(await laptop.onStart('go', { machine: url }), { ok: false, error: 'Your GitHub and Claude logins are not on rom-desktop yet. Start your first run there from your page on its server, which copies them, or log in there under Settings, Machines.' })
+    assert.deepEqual(await laptop.onStart('go', { machine: url }), { ok: false, error: 'Your GitHub and Claude logins are not on rom-desktop yet. Start your first run there from your page on its server, which copies them, or log in there on its page in Settings › Devices.' })
     // The run the server sent is still read meanwhile: only what this start asked counts.
     assert.deepEqual(asked.filter(call => call !== 'GET /_relay/events'), ['GET /_relay/logins'], 'a laptop copies nothing, and sends no run before the logins are there')
     has = { github: { account: 'sul', source: 'copied', from: 'vps-1' }, claude: { source: 'made' } }

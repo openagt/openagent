@@ -75,17 +75,19 @@ export async function pingRemote(target: MachineAccess): Promise<boolean> {
 }
 
 /**
- * What a saved machine says of itself in its ping: the OpenAgent it runs, and the computer's own
- * name, which the records of its runs carry. Nothing for a machine that does not answer, or
- * does not say.
+ * What a saved machine says of itself in its ping: the OpenAgent it runs, the computer's own
+ * name, which the records of its runs carry, and the ids it is listed under at the doors of the
+ * machines it saved. Nothing for a machine that does not answer, or does not say.
  */
-export async function remoteFacts(target: MachineAccess): Promise<{ version?: string; host?: string }> {
+export async function remoteFacts(target: MachineAccess): Promise<{ version?: string; host?: string; listed?: string[] }> {
   const said: unknown = await (await ping(target))?.json().catch(() => undefined)
-  const { version, host } = (said && typeof said === 'object' ? said : {}) as Record<string, unknown>
+  const { version, host, listed } = (said && typeof said === 'object' ? said : {}) as Record<string, unknown>
+  const ids = Array.isArray(listed) ? listed.filter((id): id is string => typeof id === 'string' && DEVICE_ID.test(id)).slice(0, MAX_LISTED) : []
   return {
     // What a machine says is shown on a page: only what reads as a version is one.
     ...(typeof version === 'string' && /^[0-9A-Za-z.+-]{1,64}$/.test(version) ? { version } : {}),
     ...(isHostName(host) ? { host } : {}),
+    ...(ids.length ? { listed: ids } : {}),
   }
 }
 
@@ -162,8 +164,13 @@ export async function enterRemote(door: string, code: string, name: string, pin?
  */
 export function deviceIdOf(key: string): string | undefined {
   const id = key.slice(0, Math.max(0, key.indexOf('.')))
-  return /^[a-z0-9]{6,32}$/.test(id) ? id : undefined
+  return DEVICE_ID.test(id) ? id : undefined
 }
+
+/** What a door names a device by. */
+const DEVICE_ID = /^[a-z0-9]{6,32}$/
+/** How many of a machine's ids at other doors are read: as many machines as one saves. */
+const MAX_LISTED = 50
 
 /**
  * Take this computer out of a machine: its key there stops working. Whether the machine did;
@@ -584,6 +591,30 @@ export async function remoteComputerCommand(machine: MachineAccess, pkg: string,
     const said = ((await res.json()) as { ret?: unknown }).ret
     const { ok, output, error } = (said && typeof said === 'object' ? said : {}) as Record<string, unknown>
     if (ok === true) return { ok: true, output }
+    return { ok: false, error: typeof error === 'string' && error ? error.slice(0, MAX_SAID) : 'the machine answered something else than expected' }
+  } catch (err) {
+    return { ok: false, error: errorMessage(err) }
+  }
+}
+
+/**
+ * Have a saved machine save this computer, by a link this computer's door gave for a new device:
+ * that machine then sends its runs here too. Asked of the machine's own OpenAgent, as its page
+ * would add a machine; what it answers is its own words.
+ */
+export async function remoteAddMachine(machine: MachineAccess, link: string, label: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const res = await machineFetch(`${trimSlashes(machine.url)}/_rpc/sendAddMachine`, machine.pin, {
+      method: 'POST',
+      headers: relayHeaders(machine.key),
+      body: JSON.stringify([link, label]),
+      signal: AbortSignal.timeout(COMMAND_TIMEOUT_MS),
+    })
+    if (res.status === 401) return { ok: false, error: NOT_IN }
+    if (!res.ok) return { ok: false, error: (await refusalOf(res)) ?? `the machine answered ${res.status}` }
+    const said = ((await res.json()) as { ret?: unknown }).ret
+    const { ok, error } = (said && typeof said === 'object' ? said : {}) as Record<string, unknown>
+    if (ok === true) return { ok: true }
     return { ok: false, error: typeof error === 'string' && error ? error.slice(0, MAX_SAID) : 'the machine answered something else than expected' }
   } catch (err) {
     return { ok: false, error: errorMessage(err) }

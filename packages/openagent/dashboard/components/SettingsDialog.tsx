@@ -7,6 +7,7 @@ import { NO_MODEL_PINNED } from '../lib/agent-settings.js'
 import type { DriverOption } from './DriverModelMenu.js'
 import type { ProjectSummary } from '../../src/index.js'
 import { useMountedModules, type MountedSettings } from '../lib/use-modules.js'
+import { SettingsCrumbContext, type SettingsCrumb } from '../lib/settings-crumb.js'
 import { useIsMobile } from '../lib/use-mobile.js'
 import { useDetectedEditors } from '../lib/editors.js'
 import { usePreferences, updatePreferences, themePreference, type ThemePreference } from '../lib/preferences.js'
@@ -79,6 +80,8 @@ export function SettingsDialog({
   const project = projects.find(p => p.id === picked) ?? null
   const label = useProjectLabel()
   const own = useOwnEntries()
+  // A page inside the entry shown, which the entry says it opened: its title in the header, and the back arrow to the entry.
+  const [crumb, setCrumb] = useState<SettingsCrumb | undefined>()
   const moduleEntry = (section: MountedSettings, of: ProjectSummary[]): Entry => {
     const Body = section.Section
     return {
@@ -173,10 +176,16 @@ export function SettingsDialog({
           {!listOnly && (
             <div className="flex min-w-0 flex-1 flex-col">
               <div className="flex h-12 shrink-0 items-center gap-2 px-4">
-                {phone && (
-                  <button type="button" aria-label="All settings" onClick={() => onEntry('')} className="-ml-1 rounded p-1 text-muted-foreground outline-none hover:text-foreground">
+                {crumb ? (
+                  <button type="button" aria-label={`Back to ${current.title}`} onClick={crumb.back} className="-ml-1 rounded p-1 text-muted-foreground outline-none hover:text-foreground">
                     <ArrowLeft className="size-4" aria-hidden />
                   </button>
+                ) : (
+                  phone && (
+                    <button type="button" aria-label="All settings" onClick={() => onEntry('')} className="-ml-1 rounded p-1 text-muted-foreground outline-none hover:text-foreground">
+                      <ArrowLeft className="size-4" aria-hidden />
+                    </button>
+                  )
                 )}
                 <BaseDialog.Title className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-normal">
                   {!phone && (
@@ -191,7 +200,21 @@ export function SettingsDialog({
                       <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
                     </>
                   )}
-                  <span className="truncate font-medium">{current.title}</span>
+                  {crumb ? (
+                    <>
+                      {!phone && (
+                        <>
+                          <button type="button" onClick={crumb.back} className="truncate rounded text-muted-foreground outline-none hover:text-foreground">
+                            {current.title}
+                          </button>
+                          <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                        </>
+                      )}
+                      <span className="truncate font-medium">{crumb.title}</span>
+                    </>
+                  ) : (
+                    <span className="truncate font-medium">{current.title}</span>
+                  )}
                 </BaseDialog.Title>
                 <BaseDialog.Close aria-label="Close settings" className="rounded p-1 text-muted-foreground outline-none hover:text-foreground">
                   <X className="size-4" aria-hidden />
@@ -205,7 +228,9 @@ export function SettingsDialog({
                     </p>
                   )}
                   {/* Keyed by the projects too: an entry's reads and picks are of the projects it was drawn for. */}
-                  <div key={`${current.id}/${project?.id ?? ALL_PROJECTS}`}>{current.body}</div>
+                  <div key={`${current.id}/${project?.id ?? ALL_PROJECTS}`}>
+                    <SettingsCrumbContext.Provider value={setCrumb}>{current.body}</SettingsCrumbContext.Provider>
+                  </div>
                 </div>
               </ScrollArea>
             </div>

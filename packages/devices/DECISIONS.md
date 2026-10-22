@@ -45,7 +45,7 @@ already made, and lists it in its pull request; for anything else it proposes an
 - Removing a person removes everything of theirs on a server: their user, their logins, their
   copies of projects, and work they did not push. Picked over taking only their access away.
 
-## Phone on Wi-Fi
+## On this Wi-Fi
 - The link on the Wi-Fi is plain HTTP, behind a switch that is off until a person turns it
   on, and turning it on says first what plain HTTP means. A lock of its own comes later.
   Picked over a private network app on the phone, one more thing to install and sign in to.
@@ -154,10 +154,17 @@ already made, and lists it in its pull request; for anything else it proposes an
   phone.
 
 ## In Settings
-- A server and every other machine are listed together, in one Machines section, each
-  once. Picked over a Servers section beside Machines, where a server showed in both.
+- Everything of a person's is in one Settings entry, Devices: this computer and how their
+  devices reach it, then their phones, their other computers and their servers, each listed
+  once, with a page of its own. Picked over a Devices entry for what gets into this computer
+  and a Machines entry for where its runs go, two ends of one link under two names.
+- A computer is one row whichever way runs go: runs go there, it starts runs here, or both.
+  Picked over a row for each way.
+- Each server this computer is in at has its switch for reaching this computer from
+  anywhere, whoever set the server up: the person's other computers too. Picked over the
+  switch on the computer that installed the server alone.
 - A server is set up from the person's own computer, with nothing left to do on the
-  server's own page: its row lists the devices that are in on it, each with when it was
+  server's own page: its page here lists the devices that are in on it, each with when it was
   last seen and a way to take it out. The server's own Settings lists them too. Picked
   over the server's page alone, a second place to go to for every set-up; and over this
   computer alone, where a lost phone stays in while that computer is away.

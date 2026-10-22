@@ -1,12 +1,12 @@
 import { hostname } from 'node:os'
 import { basename } from 'node:path'
 import { readSharing } from '@openagt/agent-data'
-import { THROUGH_PATH, deviceIdOf, enterRemote, giveRemoteLogins, leaveRemote, pingRemote, remoteComputers, remoteDoor, remoteLogins, remoteProject, remoteVersion } from '../dashboard/remote-run.js'
+import { THROUGH_PATH, deviceIdOf, enterRemote, giveRemoteLogins, leaveRemote, pingRemote, remoteAddMachine, remoteComputers, remoteDoor, remoteFacts, remoteLogins, remoteProject } from '../dashboard/remote-run.js'
 import { isLoginWord, type MachineLogins } from '../dashboard/machine-logins.js'
 import { errorMessage } from '../error-message.js'
 import { repositoryAddress, repositorySpelling } from '../repository-address.js'
 import { contextRemote, resolveProjectPath } from './context.js'
-import { addMachine, isAccount, listMachines, removeMachine, tellMachine, type MachineRecord } from '../registry.js'
+import { addMachine, isAccount, listMachines, noteListed, removeMachine, renameMachine, tellMachine, type MachineRecord } from '../registry.js'
 import { parseMachineLink } from '../machine-link.js'
 import { openagentVersion } from '../version.js'
 
@@ -231,25 +231,57 @@ export async function onMachinesReachable(): Promise<Record<string, boolean>> {
 export interface MachineVersions {
   /** This computer's own. */
   version: string
-  /** Each saved machine, with its version when it answers and says, and the id it lists this computer under among its devices. */
-  machines: (Machine & { version?: string; device?: string })[]
+  /** This computer's own name, as another machine lists it. */
+  name: string
+  /**
+   * Each saved machine, with its version when it answers and says, the id it lists this computer
+   * under among its devices, and the ids it is listed under at the doors of the machines it saved.
+   */
+  machines: (Machine & { version?: string; device?: string; listed?: string[] })[]
 }
 
 /**
  * The saved machines with the OpenAgent each runs, beside this computer's own: how a page tells
  * that a machine fell behind this computer. One short call to each, with this computer's key.
  * The key itself is never told: only the id the machine lists this computer under, which a page
- * that lists the machine's devices names this computer by.
+ * that lists the machine's devices names this computer by. A machine also says the ids it is
+ * listed under at the doors it saved: one of them in this computer's own door is that machine,
+ * in there too, so a page lists the computer once. A machine that does not answer is known by
+ * what it said last.
  */
 export async function onMachineVersions(): Promise<MachineVersions> {
   const machines = await Promise.all(
     (await listMachines()).map(async machine => {
-      const version = await remoteVersion(machine)
+      const { version, listed: said } = await remoteFacts(machine)
+      // What it says now is kept; one that does not answer is known by what it said last.
+      if (version !== undefined) await noteListed(machine, said ?? []).catch(() => {})
+      const listed = version !== undefined ? said : machine.listed
       const device = deviceIdOf(machine.key)
-      return { ...shown(machine), ...(version !== undefined ? { version } : {}), ...(device !== undefined ? { device } : {}) }
+      return { ...shown(machine), ...(version !== undefined ? { version } : {}), ...(device !== undefined ? { device } : {}), ...(listed !== undefined ? { listed } : {}) }
     }),
   )
-  return { version: openagentVersion(), machines }
+  return { version: openagentVersion(), name: ownName(), machines }
+}
+
+/** Give a saved machine the name the person picked. */
+export async function sendRenameMachine(id: string, label: string): Promise<AddMachineResult> {
+  if (typeof id !== 'string' || typeof label !== 'string' || !label.trim()) return { ok: false, error: 'Give it a name.' }
+  const renamed = await renameMachine(id, label)
+  return renamed ? { ok: true, machine: shown(renamed) } : { ok: false, error: 'That machine is no longer saved.' }
+}
+
+/**
+ * Have a saved machine save this computer, with a link this computer's door gave for a new
+ * device: from then on it starts runs here too. Not for a computer reached through a server,
+ * whose runs come here through that server.
+ */
+export async function sendLetMachineIn(machineId: string, link: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (typeof link !== 'string' || !parseMachineLink(link)) return { ok: false, error: 'That is no link of this computer\'s door.' }
+  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  if (!machine) return { ok: false, error: 'That machine is no longer saved.' }
+  if (machine.url.includes(THROUGH_PATH)) return { ok: false, error: `${machine.label} is reached through a server: its runs come here through that server.` }
+  const added = await remoteAddMachine(machine, link, ownName())
+  return added.ok ? added : { ok: false, error: `${machine.label} could not save this computer: ${added.error}` }
 }
 
 /** Whether a saved machine has a project of this computer's: `there` is false while the machine clones it. */

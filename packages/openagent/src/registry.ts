@@ -55,6 +55,11 @@ export interface MachineRecord {
   owner?: string
   /** The person was told, once, that their logins are copied to that other person's computer. */
   told?: true
+  /**
+   * The ids the machine is listed under at the doors of the machines it saved, as it last said:
+   * kept, so it is known to be in at this computer's door too while it does not answer.
+   */
+  listed?: string[]
 }
 
 /** A GitHub account as a person on a computer is known by: letters, digits and single dashes, at most 39. */
@@ -423,14 +428,18 @@ function sanitizeMachines(value: unknown): MachineRecord[] {
   for (const raw of value) {
     if (machines.length >= MACHINE_LIMITS.count) break
     if (typeof raw !== 'object' || raw === null) continue
-    const { label, url, key, door, pin, host, owner, told } = raw as Record<string, unknown>
+    const { label, url, key, door, pin, host, owner, told, listed } = raw as Record<string, unknown>
+    const ids = Array.isArray(listed) ? listed.filter((id): id is string => typeof id === 'string' && DEVICE_ID.test(id)).slice(0, MACHINE_LIMITS.count) : []
     if (typeof label !== 'string' || typeof url !== 'string' || typeof key !== 'string' || typeof door !== 'string') continue
     if (!url || !key || !door || seen.has(url)) continue
     seen.add(url)
-    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, key, door, ...(typeof pin === 'string' && pin ? { pin } : {}), ...(isHostName(host) ? { host } : {}), ...(isAccount(owner) ? { owner } : {}), ...(told === true ? { told: true as const } : {}) })
+    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, key, door, ...(typeof pin === 'string' && pin ? { pin } : {}), ...(isHostName(host) ? { host } : {}), ...(isAccount(owner) ? { owner } : {}), ...(told === true ? { told: true as const } : {}), ...(ids.length ? { listed: ids } : {}) })
   }
   return machines
 }
+
+/** What a door names a device by. */
+const DEVICE_ID = /^[a-z0-9]{6,32}$/
 
 /**
  * Read the whole registry. Forgiving: a missing / unreadable / malformed file — or one in a shape
@@ -720,6 +729,22 @@ export async function nameMachine(machine: { id: string; key: string }, host: st
   })
 }
 
+/**
+ * Keep the ids a saved machine said it is listed under at the doors it saved, when they changed.
+ * `key` is the key the machine was asked with: a machine saved anew since keeps what it says itself.
+ */
+export async function noteListed(machine: { id: string; key: string }, listed: string[], fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  const ids = listed.filter(id => DEVICE_ID.test(id)).slice(0, MACHINE_LIMITS.count)
+  await serialize(async () => {
+    const registry = await readRegistry(fs, env)
+    const saved = (registry.machines ?? []).find(candidate => candidate.id === machine.id)
+    if (!saved || saved.key !== machine.key || (saved.listed ?? []).join(' ') === ids.join(' ')) return
+    const { listed: _old, ...rest } = saved
+    const kept: MachineRecord = ids.length ? { ...rest, listed: ids } : rest
+    await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(candidate => (candidate.id === machine.id ? kept : candidate)) }, fs, env)
+  })
+}
+
 /** Write down that the person was told their logins are copied to a saved machine of another person's. Answers whether it is saved. */
 export async function tellMachine(id: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<boolean> {
   return serialize(async () => {
@@ -729,6 +754,20 @@ export async function tellMachine(id: string, fs: RegistryFs = nodeRegistryFs(),
     if (saved.told) return true
     await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(machine => (machine.id === id ? { ...machine, told: true as const } : machine)) }, fs, env)
     return true
+  })
+}
+
+/** Give a saved machine the name the person picked. Answers the machine as saved; nothing when it is not saved, or the name is empty. */
+export async function renameMachine(id: string, label: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<MachineRecord | undefined> {
+  const name = label.trim().slice(0, MACHINE_LIMITS.label)
+  if (!name) return undefined
+  return serialize(async () => {
+    const registry = await readRegistry(fs, env)
+    const saved = (registry.machines ?? []).find(candidate => candidate.id === id)
+    if (!saved) return undefined
+    const renamed = { ...saved, label: name }
+    await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(machine => (machine.id === id ? renamed : machine)) }, fs, env)
+    return renamed
   })
 }
 

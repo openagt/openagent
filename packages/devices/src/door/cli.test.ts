@@ -39,7 +39,7 @@ test('off until switched on; on without OpenAgent running says what is missing; 
     assert.deepEqual((await run(home.env, ['status'])).out, { on: false, listening: false, devices: [], lines: [], persons: [] })
     const refused = await run(home.env, ['add'])
     assert.equal(refused.code, 1)
-    assert.deepEqual(refused.err, ['Phone on Wi-Fi is off: turn it on first'])
+    assert.deepEqual(refused.err, ['On this Wi-Fi is off: turn it on first'])
 
     assert.deepEqual((await run(home.env, ['on'])).out, { on: true, listening: false, problem: 'The door opens once OpenAgent runs on this computer.', devices: [], lines: [], persons: [] })
     const notOpen = await run(home.env, ['add'])
@@ -230,6 +230,27 @@ test('status lists a computer once, its OpenAgent and its line as one row, and n
     assert.deepEqual((after.out as { devices: { id: string }[] }).devices.map(device => device.id), [phone.id, other.id, unsaid.id, second.id])
     assert.deepEqual((await readStore(home.env)).devices.map(device => device.id), [phone.id, other.id, unsaid.id, second.id])
     assert.deepEqual((await run(home.env, ['remove', agent.id])).err, [`no device has the id ${agent.id}`])
+  } finally {
+    await home.remove()
+  }
+})
+
+test('rename calls a device by the name picked, a computer under both its entries, so its row says it; an empty name and an unknown id change nothing', async () => {
+  const home = await testHome()
+  try {
+    const MAC = 'a'.repeat(64)
+    const key = 'f'.repeat(64)
+    const phone = { id: 'aaaaaa000001', name: 'iPhone, Safari', key, added: '2026-10-12T10:00:00.000Z' }
+    const agent = { id: 'aaaaaa000002', name: 'OpenAgent on Mac', key, added: '2026-10-12T12:00:00.000Z', computer: MAC }
+    const line = { id: 'aaaaaa000004', name: 'Mac', key, added: '2026-10-12T11:00:00.000Z', line: { port: 4300 }, computer: MAC }
+    await update(home.env, store => void (store.devices = [phone, agent, line]))
+    const named = (out: unknown): string[] => (out as { devices: { name: string }[] }).devices.map(device => device.name)
+    assert.deepEqual(named((await run(home.env, ['rename', phone.id, '  My phone '])).out), ['My phone', 'Mac'])
+    assert.deepEqual(named((await run(home.env, ['rename', agent.id, 'Studio Mac'])).out), ['My phone', 'Studio Mac'])
+    assert.deepEqual((await readStore(home.env)).devices.map(device => device.name), ['My phone', 'Studio Mac', 'Studio Mac'])
+    assert.deepEqual((await run(home.env, ['rename', phone.id, '  '])).err, ['give it a name'])
+    assert.deepEqual((await run(home.env, ['rename', 'bbbbbb000009', 'X'])).err, ['no device has the id bbbbbb000009'])
+    assert.deepEqual((await readStore(home.env)).devices.map(device => device.name), ['My phone', 'Studio Mac', 'Studio Mac'])
   } finally {
     await home.remove()
   }

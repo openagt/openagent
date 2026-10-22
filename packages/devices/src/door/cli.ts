@@ -6,7 +6,7 @@ import { ENTER_PATH, readKeyWord } from './door.js'
 import { askMe, enterForLine, leaveLine, readLineLink } from './line-out.js'
 import { startPersonWork } from './persons.js'
 import { HTTPS_PORT, serve } from './serve.js'
-import { MAX_LINES, Unreadable, accountOf, addCode, addPerson, addressOf, computerWordFor, isComputerId, listedDevices, nameOwner, pidAlive, readStore, removeComputer, removePerson, update, type Line, type ListedDevice, type Store } from './store.js'
+import { MAX_LINES, Unreadable, accountOf, addCode, addPerson, addressOf, computerWordFor, isComputerId, listedDevices, nameOwner, pidAlive, readStore, removeComputer, removePerson, renameComputer, update, type Line, type ListedDevice, type Store } from './store.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -16,14 +16,16 @@ import { MAX_LINES, Unreadable, accountOf, addCode, addPerson, addressOf, comput
 
 export const USAGE = `usage: devices <command>
 
-  status         whether Phone on Wi-Fi is on, whether the door listens, and the devices that are in
-  on             Phone on Wi-Fi on: the door opens on the network this computer is on, over plain HTTP
-  off            Phone on Wi-Fi off: nothing listens on the network; the devices stay in the list
+  status         whether On this Wi-Fi is on, whether the door listens, and the devices that are in
+  on             On this Wi-Fi on: the door opens on the network this computer is on, over plain HTTP
+  off            On this Wi-Fi off: nothing listens on the network; the devices stay in the list
   add [--for <account>]
                  a link a new device gets in with, once, for five minutes: the address a QR code holds; with --for,
                  the device is that person's, by their GitHub account (the owner is named first); where
                  OPENAGENT_PERSON_HELPER names the helper, the person gets a user and an OpenAgent of their own
   remove <id>    take one device out, by its id as status names it; it is out at once, a computer with all it holds here
+  rename <id> <name>
+                 call a device by another name, by its id as status names it; a computer under all it holds here
   github         the GitHub account gh is logged in to on this computer: who the owner would be
   owner <account>
                  name this computer's owner, once, by their GitHub account: the devices already in are theirs
@@ -32,7 +34,7 @@ export const USAGE = `usage: devices <command>
   keep <account> keep a person a server's line made here, though that server no longer has them: nobody is asked about them again
   https <at>     this computer is a server, reached at this number or name: the door is open to every network,
                  over HTTPS, with a certificate it asks for and renews itself (ports 80 and 443 must be reachable)
-  https off      no longer a server: Phone on Wi-Fi decides again
+  https off      no longer a server: On this Wi-Fi decides again
   line add <link> [watch]
                  keep a line open to a server, so a run can be started on this computer from the server's page;
                  the link is the one the server gives for a new device, or - to read it from standard input;
@@ -226,7 +228,7 @@ async function addDevice(io: CliIO, said?: string): Promise<{ url: string; numbe
     // After the code, what the door's key is known by: a computer that pastes the link knows the door again by it.
     return { url: `https://${urlHost(store.https.address)}${port === HTTPS_PORT ? '' : `:${port}`}${ENTER_PATH}#${code}.${fingerprint}`, expires, ...(person !== undefined ? { person } : {}) }
   }
-  if (!status.on) throw new Refused('Phone on Wi-Fi is off: turn it on first')
+  if (!status.on) throw new Refused('On this Wi-Fi is off: turn it on first')
   if (!status.listening) throw new Refused(status.problem ?? 'the door is not open')
   const port = store.listening!.port
   const name = await nameAddress(io.address)
@@ -544,6 +546,13 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         const [id] = rest
         if (rest.length !== 1 || !id) break
         if (!(await removeComputer(io.env, id))) throw new Refused(`no device has the id ${id}`)
+        return print(statusOf(await readStore(io.env), io.env))
+      }
+      case 'rename': {
+        const [id, name] = rest
+        if (rest.length !== 2 || !id || !name) break
+        if (!name.trim()) throw new Refused('give it a name')
+        if (!(await renameComputer(io.env, id, name))) throw new Refused(`no device has the id ${id}`)
         return print(statusOf(await readStore(io.env), io.env))
       }
       case 'https': {

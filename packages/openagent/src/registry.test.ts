@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import {
   addMachine,
   nameMachine,
+  renameMachine,
   addProject,
   ensureBridgeToken,
   ensureComputerId,
@@ -707,4 +708,16 @@ test('a machine\'s own computer name is kept as it first said it: a later name i
   assert.equal((await listMachines(fs, ENV))[0]!.host, undefined)
   assert.equal(await nameMachine(asked, 'studio-box', fs, ENV), false)
   assert.equal(await nameMachine({ id: STUDIO, key: 'bbb' }, 'studio-box', fs, ENV), true)
+})
+
+test('a saved machine takes the name the person picked, cut to the length a name may have; an empty name and a machine not saved change nothing', async () => {
+  const fs = memFs()
+  await addMachine({ url: STUDIO, key: 'aaa', door: DOOR, label: 'Studio' }, fs, ENV)
+  assert.equal((await renameMachine(STUDIO, '  Studio Mac  ', fs, ENV))?.label, 'Studio Mac')
+  assert.equal((await listMachines(fs, ENV))[0]!.label, 'Studio Mac')
+  assert.equal((await renameMachine(STUDIO, 'x'.repeat(100), fs, ENV))?.label, 'x'.repeat(60))
+  assert.equal(await renameMachine(STUDIO, '   ', fs, ENV), undefined)
+  assert.equal(await renameMachine('http://10.0.0.9:4201', 'Other', fs, ENV), undefined)
+  // The key and where it was let in stay.
+  assert.deepEqual(await listMachines(fs, ENV), [{ id: STUDIO, label: 'x'.repeat(60), url: STUDIO, key: 'aaa', door: DOOR }])
 })
