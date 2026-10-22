@@ -1,6 +1,6 @@
 {
   "name": "@openagt/agent-driver-github-actions",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "A coding agent on a GitHub Actions runner behind the agent-driver contract: each turn one workflow run, its transcript replayed. Claude Code today.",
   "license": "MIT",
   "repository": {

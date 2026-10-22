@@ -1,6 +1,6 @@
 {
   "name": "@openagt/skill-browser",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "A browser for coding agents: a headless Chrome the agent opens, reads, clicks and types into with the browser command, shown live to a person watching the run.",
   "license": "MIT",
   "repository": {

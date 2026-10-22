@@ -1,6 +1,6 @@
 {
   "name": "@openagt/files",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "The Files module for the OpenAgent dashboard: a project's or a run's files as a tree, and the files opened from it as tabs.",
   "license": "MIT",
   "repository": {
