@@ -273,7 +273,11 @@ export function AgentAccountsSubmenu({ agent, onAdd }: { agent: AccountsAgent; o
         <DropdownMenuSubTrigger>
           <words.Logo className="h-3.5 w-3.5 shrink-0" />
           <span className="flex-1">{words.short}</span>
-          <span className="max-w-32 truncate text-muted-foreground">{`${first.name}${percent}`}</span>
+          {/* A long name gives way, never how full the account is. */}
+          <span className="flex max-w-36 min-w-0 text-muted-foreground">
+            <span className="truncate">{first.name}</span>
+            <span className="shrink-0 whitespace-pre">{percent}</span>
+          </span>
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent className="min-w-[15rem]">
           {accounts.map((account, i) => (

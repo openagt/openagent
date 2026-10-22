@@ -93,7 +93,8 @@ test('a turn on an added account runs from a home with its own login and the con
     assert.equal(plain, join(folder, 'plain'))
     assert.equal(await readlink(join(plain, 'auth.json')), join(folder, 'auth.json'))
     assert.equal(await readlink(join(plain, 'sessions')), join(base, 'sessions'))
-    assert.equal(await readlink(join(plain, 'archived_sessions')), join(base, 'archived_sessions'))
+    // An archive the person does not have is not made in their home.
+    assert.equal(await lstat(join(base, 'archived_sessions')).catch(() => undefined), undefined)
     assert.equal(await lstat(join(plain, 'config.toml')).catch(() => undefined), undefined)
 
     const home = await accountHome(folder, base, true)

@@ -44,7 +44,9 @@ const SETUP = ['config.toml', 'AGENTS.md', 'AGENTS.override.md', 'skills', 'rule
 export async function accountHome(folder: string, base: string, setup: boolean): Promise<string> {
   const home = join(folder, setup ? 'home' : 'plain')
   await prepareCodexHome(home, folder)
-  for (const dir of CONVERSATIONS) await mkdir(join(base, dir), { recursive: true })
+  // Made when missing, as Codex makes it on a first run, so the conversations of a home that has
+  // none yet still end up in one place; the rest is linked only where the person has it.
+  await mkdir(join(base, 'sessions'), { recursive: true })
   for (const name of [...CONVERSATIONS, ...(setup ? SETUP : [])]) {
     const target = join(base, name)
     if (!(await lstat(target).catch(() => undefined))) continue
