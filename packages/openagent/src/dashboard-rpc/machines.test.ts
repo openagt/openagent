@@ -242,7 +242,7 @@ test('the saved machines are told with the OpenAgent each runs, beside this comp
   })
 })
 
-test('a saved machine says the ids it is listed under at the doors it saved: they are told with it, and anything that is no id is left out', async () => {
+test('a saved machine says the ids it is listed under at the doors it saved: they are told with it, kept for when it does not answer, and anything that is no id is left out', async () => {
   await withHome(async () => {
     const studio = await machine(['a'], '1.0.0', undefined, ['k3y1d0000001', 'NOT AN ID', 7, 'a'.repeat(40)])
     const quiet = await machine(['b'], '1.0.0', undefined, 'k3y1d0000002')
@@ -252,6 +252,11 @@ test('a saved machine says the ids it is listed under at the doors it saved: the
       const told = await onMachineVersions()
       assert.deepEqual(told.machines.find(m => m.label === 'Studio')?.listed, ['k3y1d0000001'])
       assert.equal(told.machines.find(m => m.label === 'Quiet')?.listed, undefined)
+      // Gone quiet, it is known by what it said last: a computer that is off is still one row on a page.
+      await studio.close()
+      const later = await onMachineVersions()
+      assert.equal(later.machines.find(m => m.label === 'Studio')?.version, undefined)
+      assert.deepEqual(later.machines.find(m => m.label === 'Studio')?.listed, ['k3y1d0000001'])
     } finally {
       await studio.close()
       await quiet.close()

@@ -39,7 +39,7 @@ test('off until switched on; on without OpenAgent running says what is missing; 
     assert.deepEqual((await run(home.env, ['status'])).out, { on: false, listening: false, devices: [], lines: [], persons: [] })
     const refused = await run(home.env, ['add'])
     assert.equal(refused.code, 1)
-    assert.deepEqual(refused.err, ['Phone on Wi-Fi is off: turn it on first'])
+    assert.deepEqual(refused.err, ['On this Wi-Fi is off: turn it on first'])
 
     assert.deepEqual((await run(home.env, ['on'])).out, { on: true, listening: false, problem: 'The door opens once OpenAgent runs on this computer.', devices: [], lines: [], persons: [] })
     const notOpen = await run(home.env, ['add'])

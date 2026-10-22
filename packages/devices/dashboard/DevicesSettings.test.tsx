@@ -1,22 +1,31 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { ModuleHostContext, type ModuleCommandResult, type ModuleHost } from '@openagt/dashboard/module'
-import { DevicesSettings, WARNING } from './DevicesSettings.js'
+import { ModuleHostContext, type ModuleCommandResult, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
+import { DevicesSettings } from './DevicesSettings.js'
+import { WARNING } from './ThisComputer.js'
 
-const OFF = { on: false, listening: false, devices: [] }
-const OPEN = { on: true, listening: true, addresses: { name: 'http://adas-macbook.local:4201', number: 'http://192.168.1.23:4201' }, devices: [] }
+// Settings › Devices, this computer's side: how devices reach it, the start page, and every
+// device once in one list. The servers' pages are ServerPage.test.tsx's.
+
+const OFF = { on: false, listening: false, devices: [], persons: [] }
+const OPEN = { on: true, listening: true, devices: [], persons: [] }
 const PHONE = { id: 'abc123def456', name: 'iPhone, Safari', added: new Date(Date.now() - 3 * 60_000).toISOString(), seen: new Date(Date.now() - 60_000).toISOString() }
 const LINK = { url: 'http://adas-macbook.local:4201/_devices/enter#code', numberUrl: 'http://192.168.1.23:4201/_devices/enter#code', expires: new Date(Date.now() + 5 * 60_000).toISOString() }
 
-/** A host whose `devices` command answers what `answer` says for its arguments. */
-function door(answer: (args: string[]) => ModuleCommandResult) {
+/**
+ * A host whose `devices` command (this computer's door) answers what `answer` says for its words,
+ * whose `devices server` command answers `server`'s (no server, unless said), with these machines saved.
+ */
+function door(answer: (args: string[]) => ModuleCommandResult, saved: ModuleMachine[] = [], server: (args: string[]) => ModuleCommandResult = () => ok({ servers: [] })) {
   const runComputerCommand = vi.fn(async (args: string[]) => answer(args))
+  const serverCommand = vi.fn(async (args: string[]) => server(args))
   const inProject = vi.fn(async () => ({ ok: false as const, error: 'the door is no project\'s' }))
+  const machines = vi.fn(async (): Promise<ModuleMachines> => ({ version: '0.0.0', name: 'Adas-MacBook', machines: saved }))
   const host: ModuleHost = {
     package: '@openagt/devices',
     runCommand: inProject,
     act: inProject,
-    runComputerCommand,
+    runComputerCommand: vi.fn(async (args: string[]) => (args[0] === 'server' ? serverCommand(args.slice(1)) : runComputerCommand(args))),
     runComputerCommandOn: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     read: vi.fn(async () => ({ ok: false as const, error: 'no server part' })),
     openAgent: vi.fn(),
@@ -25,9 +34,11 @@ function door(answer: (args: string[]) => ModuleCommandResult) {
     startRun: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     configureRun: vi.fn(),
     agents: vi.fn(async () => []),
-    machines: vi.fn(async () => ({ version: '0.0.0', machines: [] })),
-    addMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    removeMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
+    machines,
+    addMachine: vi.fn(async () => ({ ok: true as const })),
+    removeMachine: vi.fn(async () => ({ ok: true as const })),
+    renameMachine: vi.fn(async () => ({ ok: true as const })),
+    letMachineIn: vi.fn(async () => ({ ok: true as const })),
     computersThrough: vi.fn(async () => ({ ok: true as const, computers: [] })),
     machinePerson: vi.fn(async () => ({ ok: false as const, error: 'not here', unknown: true as const })),
     removeMachineDevice: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
@@ -35,7 +46,7 @@ function door(answer: (args: string[]) => ModuleCommandResult) {
     watchScreen: vi.fn(async () => undefined),
     sendToScreen: vi.fn(async () => false),
   }
-  return { host, runComputerCommand }
+  return { host, runComputerCommand, serverCommand }
 }
 
 function show(host: ModuleHost) {
@@ -47,34 +58,69 @@ function show(host: ModuleHost) {
 }
 
 const ok = (output: unknown): ModuleCommandResult => ({ ok: true, output })
-const theSwitch = (): Promise<HTMLElement> => screen.findByRole('switch', { name: 'Phone on Wi-Fi' })
-/** Add device, there whether a device can be added now or not: disabled, it says what to do first. */
-const addButton = (): HTMLButtonElement => screen.getByRole('button', { name: 'Add device' }) as HTMLButtonElement
-/** Press Add device, and pick "Me" on the dialog's first step. */
-async function addForMe(): Promise<void> {
-  fireEvent.click(await screen.findByRole('button', { name: 'Add device' }))
-  fireEvent.click(await screen.findByRole('button', { name: 'Continue' }))
+const theSwitch = (): Promise<HTMLElement> => screen.findByRole('switch', { name: 'On this Wi-Fi' })
+/** Add device › Phone or tablet, as a person picks it: the first of the kinds. */
+async function addPhone(): Promise<void> {
+  fireEvent.click(await screen.findByRole('button', { name: /^(Add device|Add phone)$/ }))
+  const go = screen.queryByRole('button', { name: 'Continue' })
+  if (go) fireEvent.click(go)
 }
 const qrPath = (): string => screen.getByRole('img', { name: 'The code a new device scans' }).querySelector('path')!.getAttribute('d')!
+/** A row's menu, then one of its items. */
+async function fromMenu(row: string, item: string): Promise<void> {
+  fireEvent.click(await screen.findByRole('button', { name: `${row}: more` }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: item }))
+}
+const open = async (name: string): Promise<void> => void fireEvent.click(within(await screen.findByRole('listitem', { name })).getByRole('button'))
+/** Add computer: from the start page's card, or Add device › Computer. */
+async function addComputer(): Promise<void> {
+  const press = await screen.findByRole('button', { name: /^(Add computer|Add device)$/ })
+  fireEvent.click(press)
+  if (press.textContent === 'Add computer') return
+  fireEvent.click(await screen.findByRole('radio', { name: /^Computer/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+}
 
 afterEach(cleanup)
 
-describe('Settings → Devices', () => {
-  test('off: Add device waits for the switch and says so, and the command is asked in no project', async () => {
+describe('Settings › Devices: this computer, and how devices reach it', () => {
+  test('with nothing in: this computer, nothing reaches it, and the three things to start with; the words say "same Wi-Fi" while there is no server', async () => {
     const { host, runComputerCommand } = door(() => ok(OFF))
     show(host)
-    await waitFor(async () => expect((await theSwitch()).getAttribute('aria-checked')).toBe('false'))
-    await waitFor(() => expect((screen.getByRole('switch', { name: 'Phone on Wi-Fi' }) as HTMLButtonElement).hasAttribute('data-disabled')).toBe(false))
-    expect(addButton().disabled).toBe(true)
-    expect(screen.getByText('Turn on Phone on Wi-Fi first: a device gets in on the same Wi-Fi as this computer.')).toBeTruthy()
+    const card = within(await screen.findByRole('region', { name: 'This computer' }))
+    expect(card.getByText('Adas-MacBook')).toBeTruthy()
+    expect(card.getByText("Nothing reaches it yet: only this computer's own browser opens OpenAgent.")).toBeTruthy()
+    expect(screen.getByText('Add your first device')).toBeTruthy()
+    expect(screen.getByText('Start runs and answer your agents from your phone, on the same Wi-Fi as this computer.')).toBeTruthy()
+    expect(screen.getByText('Run agents on your other Mac or PC, on the same Wi-Fi as this computer.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Set up a server' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Join with a code' })).toBeTruthy()
+    // Only the server's card says "anywhere": nothing reaches this computer from anywhere yet.
+    expect(screen.getByText('Always on. Your phone and computers reach each other from anywhere, and you can share it with people.')).toBeTruthy()
+    expect(screen.queryByText(/^From anywhere/)).toBeNull()
     expect(runComputerCommand).toHaveBeenCalledWith(['status'])
     expect(host.runCommand).not.toHaveBeenCalled()
   })
 
-  test('turning it on says first that the link is not locked; Cancel changes nothing, Turn on opens the door', async () => {
+  test('a phone on this Wi-Fi with the door shut: it is opened first, after saying the link is not locked', async () => {
     let state: object = OFF
     const { host, runComputerCommand } = door(args => {
       if (args[0] === 'on') state = OPEN
+      return ok(args[0] === 'add' ? LINK : state)
+    })
+    show(host)
+    await addPhone()
+    expect(await screen.findByText(WARNING)).toBeTruthy()
+    expect(runComputerCommand).not.toHaveBeenCalledWith(['on'])
+    fireEvent.click(screen.getByRole('button', { name: 'Turn on and show the code' }))
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['on']))
+    await screen.findByRole('img', { name: 'The code a new device scans' })
+  })
+
+  test('turning the Wi-Fi switch on says first that the link is not locked; Cancel changes nothing, Turn on opens the door', async () => {
+    let state: object = { ...OFF, devices: [PHONE] }
+    const { host, runComputerCommand } = door(args => {
+      if (args[0] === 'on') state = { ...OPEN, devices: [PHONE] }
       return ok(state)
     })
     show(host)
@@ -89,33 +135,31 @@ describe('Settings → Devices', () => {
     fireEvent.click(await theSwitch())
     fireEvent.click(screen.getByRole('button', { name: 'Turn on' }))
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['on']))
-    await waitFor(() => expect(addButton().disabled).toBe(false))
-    expect((await theSwitch()).getAttribute('aria-checked')).toBe('true')
+    await waitFor(async () => expect((await theSwitch()).getAttribute('aria-checked')).toBe('true'))
   })
 
   test('turning it off asks nothing first', async () => {
-    let state: object = OPEN
+    let state: object = { ...OPEN, devices: [PHONE] }
     const { host, runComputerCommand } = door(args => {
-      if (args[0] === 'off') state = OFF
+      if (args[0] === 'off') state = { ...OFF, devices: [PHONE] }
       return ok(state)
     })
     show(host)
-    await waitFor(() => expect(addButton().disabled).toBe(false))
+    await waitFor(async () => expect((await theSwitch()).getAttribute('aria-checked')).toBe('true'))
     fireEvent.click(await theSwitch())
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['off']))
-    await waitFor(() => expect(addButton().disabled).toBe(true))
+    await waitFor(async () => expect((await theSwitch()).getAttribute('aria-checked')).toBe('false'))
     expect(screen.queryByText(WARNING)).toBeNull()
   })
 
-  test('Add device shows the code of the link by the name, and the number on request', async () => {
+  test('Add phone shows the code of the link by the name, and the number on request', async () => {
     const { host } = door(args => (args[0] === 'add' ? ok(LINK) : ok(OPEN)))
     show(host)
-    await addForMe()
+    await addPhone()
     await screen.findByRole('img', { name: 'The code a new device scans' })
     const byName = qrPath()
     expect(screen.getByRole('timer').textContent).toMatch(/^Works once, for [45]:\d\d more\.$/)
-    // The same link as text, for another computer to paste where a phone scans.
-    expect(screen.getByText('Another computer that runs OpenAgent? Paste the link there, in Settings › Machines › Add machine.')).toBeTruthy()
+    expect(screen.getByText("Scan it with the phone's camera, on the same Wi-Fi as this computer.")).toBeTruthy()
     const pasted = (): string => (screen.getByRole('textbox', { name: 'The link' }) as HTMLInputElement).value
     expect(pasted()).toBe(LINK.url)
     fireEvent.click(screen.getByRole('button', { name: 'Phone does not open it? Use the number.' }))
@@ -130,21 +174,13 @@ describe('Settings → Devices', () => {
     let devices: object[] = [PHONE]
     const { host } = door(args => (args[0] === 'add' ? ok(LINK) : ok({ ...OPEN, devices })))
     show(host)
-    await addForMe()
+    await addPhone()
     await screen.findByRole('img', { name: 'The code a new device scans' })
     // A device fewer is no device got in: the code stays.
     devices = []
-    await waitFor(() => expect(screen.queryByText('iPhone, Safari')).toBeNull())
+    await waitFor(() => expect(screen.queryByRole('listitem', { name: 'iPhone, Safari' })).toBeNull())
     expect(screen.getByRole('img', { name: 'The code a new device scans' })).toBeTruthy()
     devices = [{ id: 'new000new000', name: 'Android phone, Chrome', added: new Date().toISOString() }]
-    expect(await screen.findByText('Android phone, Chrome', undefined)).toBeTruthy()
-    expect(await screen.findByText('Android phone, Chrome is in.')).toBeTruthy()
-    expect(screen.queryByRole('img', { name: 'The code a new device scans' })).toBeNull()
-
-    // A computer that gets in again is a new id under the row it had, and no new row: the code is spent all the same.
-    fireEvent.click(screen.getByRole('button', { name: 'Add another' }))
-    await screen.findByRole('img', { name: 'The code a new device scans' })
-    devices = [{ id: 'new000new000', name: 'Android phone, Chrome', added: new Date().toISOString(), also: ['again0again0'] }]
     expect(await screen.findByText('Android phone, Chrome is in.')).toBeTruthy()
     expect(screen.queryByRole('img', { name: 'The code a new device scans' })).toBeNull()
   })
@@ -152,7 +188,10 @@ describe('Settings → Devices', () => {
   test('a removed device does not come back from a read that was on its way before the removal', async () => {
     let late: ((result: ModuleCommandResult) => void) | undefined
     let removed = false
+    let reads = 0
+    const { host } = door(() => ok(OPEN))
     const runComputerCommand = vi.fn(async (args: string[]): Promise<ModuleCommandResult> => {
+      if (args[0] === 'server') return ok({ servers: [] })
       if (args[0] === 'remove') {
         removed = true
         // The read that was on its way lands now, telling the list from before.
@@ -161,85 +200,89 @@ describe('Settings → Devices', () => {
       }
       // Every read made after the removal is still on its way when the page is looked at.
       if (removed) return new Promise(() => {})
-      if (late === undefined && runComputerCommand.mock.calls.length > 1) return new Promise(resolve => (late = resolve))
+      if (late === undefined && ++reads > 1) return new Promise(resolve => (late = resolve))
       return ok({ ...OPEN, devices: [PHONE] })
     })
-    const { host } = door(() => ok(OPEN))
     show({ ...host, runComputerCommand })
-    const remove = await screen.findByRole('button', { name: 'Remove iPhone, Safari' })
+    await screen.findByRole('listitem', { name: 'iPhone, Safari' })
     await waitFor(() => expect(late).toBeDefined())
-    fireEvent.click(remove)
-    await waitFor(() => expect(screen.queryByText('iPhone, Safari')).toBeNull())
+    await fromMenu('iPhone, Safari', 'Remove')
+    await waitFor(() => expect(screen.queryByRole('listitem', { name: 'iPhone, Safari' })).toBeNull())
     await new Promise(resolve => setTimeout(resolve, 150))
-    expect(screen.queryByText('iPhone, Safari')).toBeNull()
+    expect(screen.queryByRole('listitem', { name: 'iPhone, Safari' })).toBeNull()
   })
 
-  test('on a server there is no switch: the section says where the door is open, gives one link, and says why a certificate is missing', async () => {
-    const SERVER = { on: false, listening: true, https: { address: '203.0.113.5' }, devices: [] }
+  test('on a server there is no switch: the card says where the door is open, a phone gets one link, and a missing certificate is said', async () => {
+    const SERVER = { on: false, listening: true, https: { address: '203.0.113.5' }, devices: [], persons: [] }
     const link = { url: 'https://203.0.113.5/_devices/enter#code.pin', expires: LINK.expires }
-    const { host } = door(args => (args[0] === 'add' ? ok(link) : ok(SERVER)))
+    const { host } = door(args => (args[0] === 'add' ? ok(link) : ok(SERVER)), [], () => ok({ server: true, servers: [] }))
     const { unmount } = show(host)
-    expect(await screen.findByText('Open on the internet')).toBeTruthy()
+    expect(await screen.findByText('On the internet')).toBeTruthy()
     expect(screen.getByText(/opens OpenAgent at https:\/\/203\.0\.113\.5 from anywhere/)).toBeTruthy()
     expect(screen.queryByRole('switch')).toBeNull()
-    await addForMe()
+    fireEvent.click(await screen.findByRole('button', { name: 'Add device' }))
+    // A server sets up no server.
+    expect(screen.queryByRole('radio', { name: /^Server/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    // Who it is for, on a computer several people use: "Me".
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }))
     await screen.findByRole('img', { name: 'The code a new device scans' })
     expect(screen.getByText("Scan it with the device's camera: it opens OpenAgent here, from anywhere.")).toBeTruthy()
     expect((screen.getByRole('textbox', { name: 'The link' }) as HTMLInputElement).value).toBe(link.url)
     expect(screen.queryByRole('button', { name: 'Phone does not open it? Use the number.' })).toBeNull()
     unmount()
 
-    const waiting = { on: false, listening: false, problem: 'No certificate for 203.0.113.5 yet: port 80 cannot be reached', https: { address: '203.0.113.5' }, devices: [] }
-    show(door(() => ok(waiting)).host)
+    const waiting = { on: false, listening: false, problem: 'No certificate for 203.0.113.5 yet: port 80 cannot be reached', https: { address: '203.0.113.5' }, devices: [], persons: [] }
+    show(door(() => ok(waiting), [], () => ok({ server: true, servers: [] })).host)
     expect((await screen.findByRole('alert')).textContent).toBe('No certificate for 203.0.113.5 yet: port 80 cannot be reached')
-    expect(addButton().disabled).toBe(true)
   })
 
   test('a computer with no name offers no second code', async () => {
     const { host } = door(args => (args[0] === 'add' ? ok({ url: LINK.numberUrl, expires: LINK.expires }) : ok(OPEN)))
     show(host)
-    await addForMe()
+    await addPhone()
     await screen.findByRole('img', { name: 'The code a new device scans' })
     expect(screen.queryByRole('button', { name: 'Phone does not open it? Use the number.' })).toBeNull()
   })
 
-  test('a computer that keeps a line open here is listed by its own name, and says what it is', async () => {
-    const { host } = door(() => ok({ ...OPEN, devices: [PHONE, { id: 'aaa111aaa111', name: 'Adas-MacBook', added: PHONE.added, line: true }] }))
-    show(host)
-    expect(await screen.findByText('Adas-MacBook')).toBeTruthy()
-    expect(screen.getAllByText('A computer of yours: runs can be started on it from here. Remove it and it is no longer in "Run on".')).toHaveLength(1)
-    expect(screen.getByRole('button', { name: 'Remove Adas-MacBook' })).toBeTruthy()
-  })
-
-  test('the devices that are in are listed, and each is removed alone', async () => {
-    let state: object = { ...OPEN, devices: [PHONE, { id: 'fff000fff000', name: 'Mac, Chrome', added: PHONE.added }] }
+  test('the devices that are in are listed, each with when it was last seen, and each is removed alone, also with the switch off', async () => {
+    let state: object = { ...OFF, devices: [PHONE, { id: 'fff000fff000', name: 'Mac, Chrome', added: PHONE.added }] }
     const { host, runComputerCommand } = door(args => {
-      if (args[0] === 'remove') state = { ...OPEN, devices: [PHONE] }
+      if (args[0] === 'remove') state = { ...OFF, devices: [PHONE] }
       return ok(state)
     })
     show(host)
-    expect(await screen.findByText('iPhone, Safari')).toBeTruthy()
-    expect(screen.getByText('Last seen 1m ago, added 3m ago')).toBeTruthy()
-    expect(screen.getByText('Added 3m ago')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Remove Mac, Chrome' }))
+    const phone = await screen.findByRole('listitem', { name: 'iPhone, Safari' })
+    expect(phone.textContent).toContain('Phone')
+    expect(phone.textContent).toContain('on this Wi-Fi')
+    expect(phone.textContent).toContain('last seen 1m ago')
+    expect(screen.getByRole('listitem', { name: 'Mac, Chrome' }).textContent).toContain('Browser')
+    expect(screen.getByRole('listitem', { name: 'Mac, Chrome' }).textContent).toContain('added 3m ago')
+    await fromMenu('Mac, Chrome', 'Remove')
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['remove', 'fff000fff000']))
-    await waitFor(() => expect(screen.queryByText('Mac, Chrome')).toBeNull())
-    expect(screen.getByText('iPhone, Safari')).toBeTruthy()
+    await waitFor(() => expect(screen.queryByRole('listitem', { name: 'Mac, Chrome' })).toBeNull())
+    expect(screen.getByRole('listitem', { name: 'iPhone, Safari' })).toBeTruthy()
   })
 
-  test('the devices stay listed with the switch off, so one can still be removed', async () => {
-    const { host } = door(() => ok({ ...OFF, devices: [PHONE] }))
+  test('a phone is renamed from its menu: the door calls it by the name picked', async () => {
+    let name = PHONE.name
+    const { host, runComputerCommand } = door(args => {
+      if (args[0] === 'rename') name = args[2]!
+      return ok({ ...OPEN, devices: [{ ...PHONE, name }] })
+    })
     show(host)
-    expect(await screen.findByRole('button', { name: 'Remove iPhone, Safari' })).toBeTruthy()
-    expect(addButton().disabled).toBe(true)
+    await fromMenu('iPhone, Safari', 'Rename')
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Name' }), { target: { value: ' My phone ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['rename', PHONE.id, 'My phone']))
+    expect(await screen.findByRole('listitem', { name: 'My phone' })).toBeTruthy()
   })
 
   test('a door that could not open says why, and a command that failed says so', async () => {
-    const { host } = door(args => (args[0] === 'status' ? ok({ on: true, listening: false, problem: 'Port 4201 is taken by another program on this computer.', devices: [PHONE] }) : { ok: false, error: 'no device has the id abc123def456' }))
+    const { host } = door(args => (args[0] === 'status' ? ok({ on: true, listening: false, problem: 'Port 4201 is taken by another program on this computer.', devices: [PHONE], persons: [] }) : { ok: false, error: 'no device has the id abc123def456' }))
     show(host)
     expect(await screen.findByText('Port 4201 is taken by another program on this computer.')).toBeTruthy()
-    expect(addButton().disabled).toBe(true)
-    fireEvent.click(screen.getByRole('button', { name: 'Remove iPhone, Safari' }))
+    await fromMenu('iPhone, Safari', 'Remove')
     expect(await screen.findByText('no device has the id abc123def456')).toBeTruthy()
   })
 
@@ -247,20 +290,159 @@ describe('Settings → Devices', () => {
     const { host } = door(() => ({ ok: false, error: 'devices printed no JSON' }))
     show(host)
     expect(await screen.findByText('The devices could not be read: devices printed no JSON')).toBeTruthy()
-    expect((await theSwitch()).hasAttribute('data-disabled')).toBe(true)
+  })
+})
+
+describe('Settings › Devices: another computer, once', () => {
+  const STUDIO: ModuleMachine = { id: 'http://studio.local:4201', label: 'Studio Mac', url: 'http://studio.local:4201', version: '1.2.3', listed: ['5d1234567890', 'ffeeddccbbaa'] }
+  // The same computer in at this one's door: its OpenAgent says the same name as another computer would.
+  const IN_HERE = { id: '5d1234567890', name: 'OpenAgent on Studio', added: PHONE.added, seen: PHONE.seen }
+
+  test('a computer saved here and in at this door is one row, by the id it is listed under here; a computer that only says the same name is another', async () => {
+    const LOOKALIKE = { id: 'aaaa00000000', name: 'OpenAgent on Studio', added: PHONE.added }
+    const { host } = door(() => ok({ ...OPEN, devices: [IN_HERE, LOOKALIKE] }), [STUDIO])
+    show(host)
+    const studio = await screen.findByRole('listitem', { name: 'Studio Mac' })
+    expect(studio.textContent).toContain('runs go both ways')
+    expect(studio.textContent).toContain('Online')
+    // The other one, named alike, starts runs here and is not saved: its own row, by its own name.
+    const other = screen.getByRole('listitem', { name: 'Studio' })
+    expect(other.textContent).toContain('starts runs here')
+    expect(within(screen.getByRole('list', { name: 'Your devices' })).getAllByRole('listitem')).toHaveLength(2)
   })
 
+  test('a computer only saved here: on its page, "can start runs here" turns on in one press: this door gives a link, and the computer saves it', async () => {
+    let devices: object[] = []
+    const { host, runComputerCommand } = door(args => {
+      if (args[0] === 'add') return (devices = [IN_HERE]), ok(LINK)
+      return ok({ ...OPEN, devices })
+    }, [STUDIO])
+    show(host)
+    expect((await screen.findByRole('listitem', { name: 'Studio Mac' })).textContent).toContain('your runs go there')
+    await open('Studio Mac')
+    expect(await screen.findByText('Off. Turn it on: Studio Mac is told this computer\'s link, and saves it.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('switch', { name: 'Studio Mac can start runs here' }))
+    await waitFor(() => expect(host.letMachineIn).toHaveBeenCalledWith(STUDIO.id, LINK.url))
+    expect(runComputerCommand).toHaveBeenCalledWith(['add'])
+    // The page stays open as the computer becomes both: its runs go both ways.
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Studio Mac can start runs here' }).getAttribute('aria-checked')).toBe('true'))
+    expect(screen.getByText(/runs go both ways/)).toBeTruthy()
+  })
+
+  test('with the door shut, the computer cannot be let in, and the page says what to do first; off takes it out here, and Remove forgets both ways', async () => {
+    let state: object = { ...OFF, devices: [IN_HERE] }
+    const { host, runComputerCommand } = door(args => {
+      if (args[0] === 'remove') state = { ...OFF, devices: [] }
+      return ok(state)
+    }, [STUDIO])
+    show(host)
+    await open('Studio Mac')
+    const here = await screen.findByRole('switch', { name: 'Studio Mac can start runs here' })
+    expect(here.getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(here)
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['remove', IN_HERE.id]))
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Studio Mac can start runs here' }).getAttribute('aria-checked')).toBe('false'))
+    fireEvent.click(screen.getByRole('switch', { name: 'Studio Mac can start runs here' }))
+    expect(await screen.findByText('Turn on "On this Wi-Fi" first: the other computer gets in here through it.')).toBeTruthy()
+    expect(host.letMachineIn).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Studio Mac' }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Remove' }))
+    await waitFor(() => expect(host.removeMachine).toHaveBeenCalledWith(STUDIO.id))
+  })
+
+  test('a computer is renamed on its page: a saved one as OpenAgent saves it, one only in here as the door calls it', async () => {
+    const { host, runComputerCommand } = door(() => ok({ ...OPEN, devices: [{ ...IN_HERE, id: 'bbbb00000000' }] }), [STUDIO])
+    show(host)
+    await open('Studio Mac')
+    fireEvent.click(await screen.findByRole('button', { name: 'Rename' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'Studio' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(host.renameMachine).toHaveBeenCalledWith(STUDIO.id, 'Studio'))
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Devices' }))
+
+    await open('Studio')
+    fireEvent.click(await screen.findByRole('button', { name: 'Rename' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'Old iMac' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['rename', 'bbbb00000000', 'Old iMac']))
+  })
+
+  test('Add computer saves the other computer by its link, and lets it in here in the same press: runs go both ways', async () => {
+    const { host, runComputerCommand } = door(args => (args[0] === 'add' ? ok(LINK) : ok(OPEN)))
+    show(host)
+    await addComputer()
+    const link = 'http://studio.local:4201/_devices/enter#c0de'
+    fireEvent.change(await screen.findByRole('textbox', { name: "The other computer's link" }), { target: { value: link } })
+    expect(screen.getByRole('checkbox', { name: 'It can start runs on this computer too' }).getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
+    await waitFor(() => expect(host.addMachine).toHaveBeenCalledWith(link))
+    await waitFor(() => expect(host.letMachineIn).toHaveBeenCalledWith('http://studio.local:4201', LINK.url))
+    expect(runComputerCommand).toHaveBeenCalledWith(['add'])
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: "The other computer's link" })).toBeNull())
+  })
+
+  test('with the door shut a computer is saved one way only, and this computer\'s link waits until the door is open', async () => {
+    const { host } = door(() => ok(OFF))
+    show(host)
+    await addComputer()
+    const both = await screen.findByRole('checkbox', { name: 'It can start runs on this computer too' })
+    expect(both.getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByText('Turn on "On this Wi-Fi" first: then runs can go both ways.')).toBeTruthy()
+    expect((screen.getByRole('button', { name: "Give it this computer's link" }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.change(screen.getByRole('textbox', { name: "The other computer's link" }), { target: { value: 'http://studio.local:4201/_devices/enter#c0de' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
+    await waitFor(() => expect(host.addMachine).toHaveBeenCalled())
+    expect(host.letMachineIn).not.toHaveBeenCalled()
+  })
+})
+
+describe('Settings › Devices: with a server', () => {
+  const BOX = { address: '203.0.113.5', url: 'https://203.0.113.5', user: 'root', working: false, adding: false, steps: [{ id: 'login', label: 'Log in', state: 'done' }], logins: { github: { there: false, working: false }, claude: { there: false, working: false } }, claudeAccounts: [] }
+  const SAVED: ModuleMachine = { id: 'https://203.0.113.5', label: 'my-vps', url: 'https://203.0.113.5', version: '0.0.0' }
+  const SERVER_LINK = { url: 'https://203.0.113.5/_devices/enter#code.pin', expires: LINK.expires }
+
+  test('a phone works from anywhere through the server, or only on this Wi-Fi: through the server, the code is the server\'s', async () => {
+    const { host, runComputerCommand, serverCommand } = door(args => ok(args[0] === 'add' ? LINK : OFF), [SAVED], args => ok(args[0] === 'link' ? SERVER_LINK : args[0] === 'devices' ? { devices: [] } : { servers: [BOX] }))
+    show(host)
+    // With a server, the words say "anywhere", and the line to it is a switch of this computer's.
+    expect(await screen.findByRole('switch', { name: 'From anywhere, through my-vps' })).toBeTruthy()
+    expect(screen.getByText(/Only you can use this computer\. To share a computer with people on my-vps, set it up as a server/)).toBeTruthy()
+    await addPhone()
+    expect(await screen.findByText('Where should it work?')).toBeTruthy()
+    expect(screen.getByRole('radio', { name: /Anywhere, through my-vps/ }).getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'Show the code' }))
+    await screen.findByRole('img', { name: 'The code a new device scans' })
+    expect(serverCommand).toHaveBeenCalledWith(['link', '203.0.113.5'])
+    expect(screen.getByText("Scan it with the phone's camera: it opens OpenAgent on my-vps, from anywhere.")).toBeTruthy()
+    expect(runComputerCommand).not.toHaveBeenCalledWith(['add'])
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+
+    await addPhone()
+    fireEvent.click(await screen.findByRole('radio', { name: /Only on this Wi-Fi/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Show the code' }))
+    // The door here is shut: it is opened first.
+    expect(await screen.findByRole('button', { name: 'Turn on and show the code' })).toBeTruthy()
+  })
+})
+
+describe('Settings › Devices: a computer several people use', () => {
   test('Someone else: the owner says who they are first, by this computer\'s GitHub account, then the code is for the person typed', async () => {
+    const SERVER = { on: false, listening: true, https: { address: '203.0.113.5' }, devices: [] }
     let persons: unknown[] = []
     let devices: unknown[] = []
-    const { host, runComputerCommand } = door(args => {
-      if (args[0] === 'github') return ok({ account: 'ada' })
-      if (args[0] === 'owner') return (persons = [{ account: args[1], owner: true }]), ok({ ...OPEN, persons })
-      if (args[0] === 'add') return ok(LINK)
-      return ok({ ...OPEN, persons, devices })
-    })
+    const { host, runComputerCommand } = door(
+      args => {
+        if (args[0] === 'github') return ok({ account: 'ada' })
+        if (args[0] === 'owner') return (persons = [{ account: args[1], owner: true }]), ok({ ...SERVER, persons })
+        if (args[0] === 'add') return ok(LINK)
+        return ok({ ...SERVER, persons, devices })
+      },
+      [],
+      () => ok({ server: true, servers: [] }),
+    )
     show(host)
-    fireEvent.click(await screen.findByRole('button', { name: 'Add device' }))
+    await addPhone()
     fireEvent.click(await screen.findByRole('radio', { name: /Someone else/ }))
     const field = await screen.findByRole('textbox', { name: 'Their GitHub account' })
     fireEvent.change(field, { target: { value: 'not an account!' } })
@@ -279,9 +461,10 @@ describe('Settings → Devices', () => {
   })
 
   test('with no GitHub login here, the dialog says so and asks nobody to be named', async () => {
-    const { host, runComputerCommand } = door(args => (args[0] === 'github' ? ok({ problem: 'gh is not logged in to github.com here: run gh auth login.' }) : ok(OPEN)))
+    const SERVER = { on: false, listening: true, https: { address: '203.0.113.5' }, devices: [], persons: [] }
+    const { host, runComputerCommand } = door(args => (args[0] === 'github' ? ok({ problem: 'gh is not logged in to github.com here: run gh auth login.' }) : ok(SERVER)), [], () => ok({ server: true, servers: [] }))
     show(host)
-    fireEvent.click(await screen.findByRole('button', { name: 'Add device' }))
+    await addPhone()
     fireEvent.click(await screen.findByRole('radio', { name: /Someone else/ }))
     fireEvent.change(await screen.findByRole('textbox', { name: 'Their GitHub account' }), { target: { value: 'rom' } })
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
@@ -305,9 +488,7 @@ describe('Settings → Devices', () => {
     fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Remove person' }))
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['remove-person', 'rom']))
 
-    await addForMe()
-    fireEvent.click(await screen.findByRole('button', { name: 'Done' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Add device' }))
+    await addPhone()
     fireEvent.click(await screen.findByRole('radio', { name: /Someone else/ }))
     fireEvent.change(await screen.findByRole('textbox', { name: 'Their GitHub account' }), { target: { value: 'eve' } })
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
@@ -362,7 +543,7 @@ describe('Settings → Devices', () => {
       show(host)
       const list = await screen.findByRole('list', { name: 'Your devices' })
       expect(list.textContent).toContain('iPhone, Safari')
-      expect(list.textContent).toContain('A computer of yours: your runs can be started on it from here.')
+      expect(list.textContent).toContain('A computer of yours: runs can be started on it from here.')
       expect(screen.getByText(/you are on it as @rom/)).toBeTruthy()
       expect(screen.queryByRole('switch')).toBeNull()
       expect(screen.queryByRole('button', { name: 'Add device' })).toBeNull()

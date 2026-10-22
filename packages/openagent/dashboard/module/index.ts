@@ -381,7 +381,7 @@ export interface ModuleHost {
   machines(): Promise<ModuleMachines>
   /**
    * Save the machine a link names: the link another OpenAgent gives for a new device, as a person
-   * pastes it under Machines. This computer is let in there with it, once, and keeps its key.
+   * pastes it under Devices. This computer is let in there with it, once, and keeps its key.
    */
   addMachine(link: string, label?: string): Promise<MachineAdded>
   /**
@@ -444,6 +444,8 @@ export interface ModuleMachine {
 export interface ModuleMachines {
   /** This computer's own OpenAgent. */
   version: string
+  /** This computer's own name, as another machine lists it: "Suleimans-MacBook-Pro". */
+  name?: string
   machines: ModuleMachine[]
 }
 
@@ -533,6 +535,7 @@ export { StartAgentButton } from '../components/StartAgentButton.js'
 export { LinkActions, type ProjectLinks, type LinkTargets } from '../components/LinkActions.js'
 export { cn } from '../lib/utils.js'
 export { SettingsSection, SettingsRow, SettingsSelectRow, type SettingsOption } from '../components/SettingsRows.js'
+export { useSettingsCrumb, type SettingsCrumb } from '../lib/settings-crumb.js'
 export { QrCode } from '../components/QrCode.js'
 export { AddMachineDialog } from '../components/AddMachineDialog.js'
 export { InviteDialog, type InviteCode, type InviteAnswer, type InvitePersons } from '../components/InviteDialog.js'

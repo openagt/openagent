@@ -176,3 +176,5 @@ export async function ownGithub(host: ModuleHost): Promise<{ ok: true; account: 
   return account ? { ok: true, account } : { ok: false, error: text(answer.value.problem) ?? 'GitHub did not say who is logged in here.' }
 }
 export const removeDevice = (host: ModuleHost, id: string): Promise<Answer<DoorStatus>> => run(host, ['remove', id], readStatus)
+/** Call a device by another name: a computer under all it holds here. */
+export const renameDevice = (host: ModuleHost, id: string, name: string): Promise<Answer<DoorStatus>> => run(host, ['rename', id, name], readStatus)

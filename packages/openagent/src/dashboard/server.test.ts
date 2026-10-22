@@ -428,15 +428,22 @@ test('/_relay/events streams the run\'s events as ndjson (#1067)', async () => {
 })
 
 test('/_relay/ping answers 200 with this OpenAgent\'s version and starts nothing (#1072)', async () => {
+  // A home of the test's own: the ids it says are those of the machines saved there, none.
+  const home = await mkdtemp(join(tmpdir(), 'oa-ping-'))
+  const previous = process.env.XDG_CONFIG_HOME
+  process.env.XDG_CONFIG_HOME = home
   const { base, starts, close } = await relayDashboard()
   try {
     const ok = await fetchText(`${base}/_relay/ping`)
     assert.equal(ok.status, 200)
-    // What a computer that added this one reads: whether this one fell behind it, and which runs in a project's shared records are this computer's.
-    assert.deepEqual(JSON.parse(ok.body), { version: openagentVersion(), host: hostname() })
+    // What a computer that added this one reads: whether this one fell behind it, which runs in a project's shared records are this computer's, and whether it is in at that computer too.
+    assert.deepEqual(JSON.parse(ok.body), { version: openagentVersion(), host: hostname(), listed: [] })
     assert.equal(starts.length, 0) // a health check must never spawn a run
   } finally {
     await close()
+    if (previous === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = previous
+    await rm(home, { recursive: true, force: true })
   }
 })
 

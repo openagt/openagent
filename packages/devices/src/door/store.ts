@@ -218,7 +218,7 @@ export interface Https {
 }
 
 export interface Store {
-  /** The "Phone on Wi-Fi" switch. */
+  /** The "On this Wi-Fi" switch. */
   on: boolean
   /** Set on a server: the door is always open there, and the switch is not looked at. */
   https?: Https

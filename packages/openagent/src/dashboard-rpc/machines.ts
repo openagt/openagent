@@ -6,7 +6,7 @@ import { isLoginWord, type MachineLogins } from '../dashboard/machine-logins.js'
 import { errorMessage } from '../error-message.js'
 import { repositoryAddress, repositorySpelling } from '../repository-address.js'
 import { contextRemote, resolveProjectPath } from './context.js'
-import { addMachine, isAccount, listMachines, removeMachine, renameMachine, tellMachine, type MachineRecord } from '../registry.js'
+import { addMachine, isAccount, listMachines, noteListed, removeMachine, renameMachine, tellMachine, type MachineRecord } from '../registry.js'
 import { parseMachineLink } from '../machine-link.js'
 import { openagentVersion } from '../version.js'
 
@@ -231,6 +231,8 @@ export async function onMachinesReachable(): Promise<Record<string, boolean>> {
 export interface MachineVersions {
   /** This computer's own. */
   version: string
+  /** This computer's own name, as another machine lists it. */
+  name: string
   /**
    * Each saved machine, with its version when it answers and says, the id it lists this computer
    * under among its devices, and the ids it is listed under at the doors of the machines it saved.
@@ -244,17 +246,21 @@ export interface MachineVersions {
  * The key itself is never told: only the id the machine lists this computer under, which a page
  * that lists the machine's devices names this computer by. A machine also says the ids it is
  * listed under at the doors it saved: one of them in this computer's own door is that machine,
- * in there too, so a page lists the computer once.
+ * in there too, so a page lists the computer once. A machine that does not answer is known by
+ * what it said last.
  */
 export async function onMachineVersions(): Promise<MachineVersions> {
   const machines = await Promise.all(
     (await listMachines()).map(async machine => {
-      const { version, listed } = await remoteFacts(machine)
+      const { version, listed: said } = await remoteFacts(machine)
+      // What it says now is kept; one that does not answer is known by what it said last.
+      if (version !== undefined) await noteListed(machine, said ?? []).catch(() => {})
+      const listed = version !== undefined ? said : machine.listed
       const device = deviceIdOf(machine.key)
       return { ...shown(machine), ...(version !== undefined ? { version } : {}), ...(device !== undefined ? { device } : {}), ...(listed !== undefined ? { listed } : {}) }
     }),
   )
-  return { version: openagentVersion(), machines }
+  return { version: openagentVersion(), name: ownName(), machines }
 }
 
 /** Give a saved machine the name the person picked. */

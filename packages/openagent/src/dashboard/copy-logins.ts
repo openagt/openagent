@@ -124,5 +124,5 @@ export async function loginsAreThere(machine: MachineAccess & { label: string })
   const there = await remoteLogins(machine)
   if (!there.ok) return { ok: false, error: `${machine.label}: ${there.error}` }
   if (there.logins.github !== undefined && there.logins.claude !== undefined) return { ok: true }
-  return { ok: false, error: `Your GitHub and Claude logins are not on ${machine.label} yet. Start your first run there from your page on its server, which copies them, or log in there under Settings, Machines.` }
+  return { ok: false, error: `Your GitHub and Claude logins are not on ${machine.label} yet. Start your first run there from your page on its server, which copies them, or log in there on its page in Settings › Devices.` }
 }

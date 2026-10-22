@@ -16,9 +16,9 @@ import { MAX_LINES, Unreadable, accountOf, addCode, addPerson, addressOf, comput
 
 export const USAGE = `usage: devices <command>
 
-  status         whether Phone on Wi-Fi is on, whether the door listens, and the devices that are in
-  on             Phone on Wi-Fi on: the door opens on the network this computer is on, over plain HTTP
-  off            Phone on Wi-Fi off: nothing listens on the network; the devices stay in the list
+  status         whether On this Wi-Fi is on, whether the door listens, and the devices that are in
+  on             On this Wi-Fi on: the door opens on the network this computer is on, over plain HTTP
+  off            On this Wi-Fi off: nothing listens on the network; the devices stay in the list
   add [--for <account>]
                  a link a new device gets in with, once, for five minutes: the address a QR code holds; with --for,
                  the device is that person's, by their GitHub account (the owner is named first); where
@@ -34,7 +34,7 @@ export const USAGE = `usage: devices <command>
   keep <account> keep a person a server's line made here, though that server no longer has them: nobody is asked about them again
   https <at>     this computer is a server, reached at this number or name: the door is open to every network,
                  over HTTPS, with a certificate it asks for and renews itself (ports 80 and 443 must be reachable)
-  https off      no longer a server: Phone on Wi-Fi decides again
+  https off      no longer a server: On this Wi-Fi decides again
   line add <link> [watch]
                  keep a line open to a server, so a run can be started on this computer from the server's page;
                  the link is the one the server gives for a new device, or - to read it from standard input;
@@ -228,7 +228,7 @@ async function addDevice(io: CliIO, said?: string): Promise<{ url: string; numbe
     // After the code, what the door's key is known by: a computer that pastes the link knows the door again by it.
     return { url: `https://${urlHost(store.https.address)}${port === HTTPS_PORT ? '' : `:${port}`}${ENTER_PATH}#${code}.${fingerprint}`, expires, ...(person !== undefined ? { person } : {}) }
   }
-  if (!status.on) throw new Refused('Phone on Wi-Fi is off: turn it on first')
+  if (!status.on) throw new Refused('On this Wi-Fi is off: turn it on first')
   if (!status.listening) throw new Refused(status.problem ?? 'the door is not open')
   const port = store.listening!.port
   const name = await nameAddress(io.address)
