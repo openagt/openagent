@@ -4,12 +4,12 @@ import { createServer, request as httpRequest, type IncomingMessage, type Outgoi
 import { createServer as createSecureServer, type Server as SecureServer } from 'node:https'
 import type { AddressInfo, Socket } from 'node:net'
 import type { Duplex } from 'node:stream'
-import { onOwnNetwork, urlHost } from './address.js'
+import { nameAddress, onOwnNetwork, plainAddress, urlHost, type AddressDeps } from './address.js'
 import { doorFingerprint, type Secured } from './certificate.js'
 import { deviceName } from './device-name.js'
 import { LINE_FOR_HEADER, LINE_PATH, LINE_PROTOCOL } from './line-out.js'
 import { enterPage, notInPage } from './pages.js'
-import { COMPUTER_HEADER, PERSON_HEADER, addCode, nameWord, shownCode, enter, isComputerId, isIn, listedDevices, personOf, portOf, readStore, removeComputer, removeDevice, sha256, shareLine, storePath, update, type Entry, type ListedDevice, type Store } from './store.js'
+import { COMPUTER_HEADER, PERSON_HEADER, addAsk, addCode, askOf, dropAsk, nameWord, shownCode, enter, isComputerId, isIn, listedDevices, personOf, portOf, readStore, removeComputer, removeDevice, sha256, shareLine, storePath, update, type Entry, type ListedDevice, type Store } from './store.js'
 
 /**
  * The door: the one thing that lets anything in from the network. A request from a device that is in is
@@ -50,6 +50,10 @@ import { COMPUTER_HEADER, PERSON_HEADER, addCode, nameWord, shownCode, enter, is
  *
  * A code is short enough to type, so an address that tries wrong codes waits a minute after a few
  * (`TOO_MANY_TRIES`), whatever it tries then.
+ *
+ * On the Wi-Fi, another computer that found this one asks to get in with no code (`ASK_PATH`): its
+ * ask waits for a person here to press Allow, and it hears the answer by a secret it was given.
+ * Allowed, it is handed a code made that moment, and gets in with it as with any code.
  */
 
 /** Every path of the door's own; never passed on. */
@@ -68,6 +72,8 @@ export const ME_REMOVE_PATH = `${ME_PATH}/remove`
 export const ME_LINE_PATH = `${ME_PATH}/line`
 /** Where a computer that is in asks for a code a device of its own person gets in with: a device that is in gives the code for the next one. */
 export const ME_CODE_PATH = `${ME_PATH}/code`
+/** Where a computer on this Wi-Fi asks to get in, hears the answer, and takes its ask away. */
+export const ASK_PATH = `${DOOR_PREFIX}/ask`
 /** The cookie a device that is in carries: its id, a dot, its key. */
 export const DEVICE_COOKIE = 'oa_device'
 
@@ -83,6 +89,12 @@ const WRONG_TRIES = 5
 const WRONG_TRIES_MS = 60_000
 /** What a door says to an address that tried too many wrong codes. */
 export const TOO_MANY_TRIES = 'too many wrong codes: wait a minute'
+/** What a door says to a computer it was denied to a moment ago, and to one more while as many asks as it shows at once wait. */
+export const ASK_DENIED = 'denied a moment ago: wait a minute to ask again'
+export const ASK_BUSY = 'other computers are asking right now: try again in a minute'
+/** How long a look at an ask is held open for its answer: well under the time a command is given. */
+const ASK_HOLD_MS = 20_000
+const ASK_LOOK_MS = 500
 /** The computer a request says it is, when it says one: as the file keeps it, the word's SHA-256, never the word. */
 function saidComputer(req: IncomingMessage): string | undefined {
   const said = req.headers[COMPUTER_HEADER]
@@ -103,6 +115,8 @@ export interface DoorOptions {
   knocks?: (peer: string | undefined) => boolean
   /** The key and certificate the door speaks HTTPS with; plain HTTP when unsaid. */
   secured?: Secured
+  /** How this computer's name on the network is read, for the code an allowed computer is handed; the real network when unsaid. */
+  address?: AddressDeps
   /** What takes a computer's line, and the ports such computers are given; a door with none gives no line. */
   lines?: {
     take(id: string, socket: Duplex, head: Buffer): void
@@ -113,6 +127,8 @@ export interface DoorOptions {
     pass(id: string, person: string | undefined, path: string, req: IncomingMessage, res: ServerResponse): boolean
   }
   now?: () => number
+  /** How long a look at an ask is held open for its answer; for a test that cannot wait. */
+  askHoldMs?: number
 }
 
 export interface Door {
@@ -339,6 +355,60 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
   }
 
   /**
+   * A computer on this Wi-Fi asks to get in (POST, with its name), looks whether it was allowed
+   * (GET, held open a while), or takes its ask away (DELETE), by the secret it was given. Only a
+   * door on the Wi-Fi takes asks: a server's is open to every network, where anyone who knows its
+   * address would knock. A computer asks, never a page: a site this computer's browser opens puts
+   * no popup on its screen.
+   */
+  const asking = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    if (req.headers.origin !== undefined || req.headers.cookie !== undefined) return refuse(res, 403, 'forbidden')
+    const json = (value: unknown): void => void res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify(value))
+    if (req.method === 'POST') {
+      let computer: unknown
+      try {
+        ;({ computer } = JSON.parse((await readBody(req, MAX_ENTER_BODY)) ?? '') as { computer?: unknown })
+      } catch {
+        computer = undefined
+      }
+      if (typeof computer !== 'string' || !saidName(computer)) return refuse(res, 400, 'say which computer asks: {"computer": "its name"}')
+      const asked = await addAsk(env, saidName(computer), plainAddress(req.socket.remoteAddress ?? ''), now())
+      if (asked === 'denied') return refuse(res, 429, ASK_DENIED)
+      if (asked === 'busy') return refuse(res, 503, ASK_BUSY)
+      return json({ secret: asked.secret, number: asked.ask.number, expires: asked.ask.expires })
+    }
+    const secret = BEARER.exec(req.headers.authorization ?? '')?.[1]
+    if (!secret) return refuse(res, 401, 'say which ask: its secret, as Authorization: Bearer')
+    req.resume()
+    if (req.method === 'DELETE') {
+      await dropAsk(env, secret, now())
+      return json({ ok: true })
+    }
+    if (req.method !== 'GET') return refuse(res, 405, 'method not allowed')
+    let left = false
+    req.socket.once('close', () => void (left = true))
+    const until = Date.now() + (opts.askHoldMs ?? ASK_HOLD_MS)
+    for (;;) {
+      const ask = askOf(await currentStore(), secret, now())
+      if (!ask) return json({ state: 'gone' })
+      if (ask.answer === 'denied') return json({ state: 'denied' })
+      if (ask.answer === 'allowed') {
+        // Taken away as it is heard: the code is handed once.
+        if ((await dropAsk(env, secret, now()))?.answer !== 'allowed') return json({ state: 'gone' })
+        const { code } = await addCode(env, now())
+        const port = (server.address() as AddressInfo).port
+        // By this computer's name on the network when it has one, as every code here is; by the number it was asked at too.
+        const name = await nameAddress(opts.address)
+        const asked = req.headers.host ?? `${urlHost(plainAddress(req.socket.localAddress ?? ''))}:${port}`
+        const link = (host: string): string => `http://${host}${ENTER_PATH}#${code}`
+        return json({ state: 'allowed', link: link(name ? `${urlHost(name)}:${port}` : asked), ...(name ? { numberLink: link(asked) } : {}) })
+      }
+      if (left || Date.now() >= until) return json({ state: 'waiting', expires: ask.expires })
+      await new Promise(resolve => setTimeout(resolve, ASK_LOOK_MS))
+    }
+  }
+
+  /**
    * Who a request comes from, when it is in: a computer by the key its header carries, a device
    * by its cookie. A header that is no key of the door's is the page's own, to pass on.
    */
@@ -416,6 +486,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       if (!knocks(req.socket.remoteAddress)) return refuse(res, 403, 'only a device on the same network as this computer gets in')
       const path = (req.url ?? '/').split('?')[0] ?? '/'
       if (path === ENTER_PATH) return req.method === 'DELETE' ? leave(req, res) : letIn(req, res)
+      if (path === ASK_PATH && !secure) return asking(req, res)
       if (opts.lines && (path === COMPUTERS_PATH || path.startsWith(`${VIA_PREFIX}/`))) return throughLine(req, res, path)
       if (path === ME_PATH || path === ME_REMOVE_PATH || path === ME_LINE_PATH || path === ME_CODE_PATH) return aboutMe(req, res, path)
       if (path === DOOR_PREFIX || path.startsWith(`${DOOR_PREFIX}/`)) return refuse(res, 404, 'not found')

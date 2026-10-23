@@ -24,7 +24,7 @@ const shown = vi.fn()
 const FILES: MountedPanel = { id: 'files', label: 'Files', icon: Icon, Panel: (props: ModulePanelProps) => (shown(props), <div>the files</div>), package: '@openagt/files', projects: ['p1'] }
 const CHANGES: MountedPanel = { id: 'changes', label: 'Changes', icon: Icon, changes: true, Panel: (props: ModulePanelProps) => <div>changes: {props.reveal?.path ?? 'none asked'}</div>, package: '@openagt/changes', projects: ['p1'] }
 const BROWSER: MountedPanel = { id: 'browser', label: 'Browser', icon: Icon, screen: true, Panel: () => <div>the browser</div>, package: '@openagt/skill-browser', projects: ['p1'] }
-const mounted = (panels: MountedPanel[]): MountedModules => ({ pages: [], cards: [], linkActions: [], panels, runSlots: [], settings: [], loaded: true })
+const mounted = (panels: MountedPanel[]): MountedModules => ({ pages: [], cards: [], linkActions: [], panels, runSlots: [], settings: [], everyPage: [], loaded: true })
 
 const base = { projectId: 'p1', agentId: 'r1', enabled: true, files: [] as string[], context: new Set<string>(), toggleContext: () => {} }
 

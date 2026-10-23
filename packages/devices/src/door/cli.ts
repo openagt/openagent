@@ -1,12 +1,14 @@
-import { nameAddress, numberAddress, urlHost, type AddressDeps } from './address.js'
+import { nameAddress, numberAddress, ownAddresses, urlHost, type AddressDeps } from './address.js'
 import { doorFingerprint } from './certificate.js'
 import { execFile } from 'node:child_process'
 import { hostname } from 'node:os'
 import { ENTER_PATH, readKeyWord } from './door.js'
 import { askMe, enterForLine, leaveLine, readLineLink } from './line-out.js'
+import { askAt, cancelAt, doorOrigin, hearAt, mayAnswerAsks, waitingAsks } from './pair.js'
 import { startPersonWork } from './persons.js'
 import { HTTPS_PORT, serve } from './serve.js'
-import { MAX_LINES, Unreadable, nameFromWord, nameOf, nameWord, addCode, shownCode, addPerson, addressOf, computerWordFor, isComputerId, listedDevices, nameOwner, pidAlive, readStore, removeComputer, removePerson, renameComputer, samePerson, update, type Line, type ListedDevice, type Store } from './store.js'
+import { announce, find } from './wifi.js'
+import { MAX_LINES, Unreadable, answerAsk, readStoreStrict, nameFromWord, nameOf, nameWord, addCode, shownCode, addPerson, addressOf, computerWordFor, isComputerId, listedDevices, nameOwner, pidAlive, readStore, removeComputer, removePerson, renameComputer, samePerson, update, type Line, type ListedDevice, type Store } from './store.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -47,6 +49,18 @@ export const USAGE = `usage: devices <command>
                  it may only read: this computer's runs are seen from the server's page, and none is started or told anything
   line remove <at>
                  no line to that server any more, and this computer's key for it there is taken out
+  find           the computers on this Wi-Fi whose door is open there: their name, OpenAgent's version, where their door is
+  ask <url>      ask the computer whose door is at <url>, as find names it, to let this one in: the number both screens
+                 show, and the secret the answer is heard by
+  ask-answer <url> -
+                 whether a person there allowed it, with the secret on standard input: waits a while for the answer, and
+                 once allowed, answers the link this computer gets in with
+  ask-cancel <url> -
+                 take this computer's ask away there, with the secret on standard input
+  asks [--wait <seconds>] [--seen <id,…>]
+                 the computers on this Wi-Fi asking to get in here; with --wait, waits up to that long (at most 25) until
+                 they are other than --seen says
+  allow <id>     let in the computer asking by that id; deny <id> says no, and it waits a minute to ask again
   serve          the door's own process, run by OpenAgent for as long as it runs itself (OPENAGENT_URL says where OpenAgent is)
   server <command>
                  the servers this computer sets up over SSH: devices server lists their commands`
@@ -70,6 +84,11 @@ export interface CliIO {
   leaveLine?: typeof leaveLine
   /** How a server's door is asked who this computer's person is there; the real one when unsaid. */
   askMe?: typeof askMe
+  /** How this Wi-Fi is asked for the doors open on it, and how `serve` says its door there; on the network itself when unsaid. */
+  find?: typeof find
+  announce?: typeof announce
+  /** How often `asks --wait` looks at the file. */
+  asksLookMs?: number
   /** The name of the person at this computer, as git knows it; asked of git when unsaid. */
   myName?: () => Promise<string | undefined>
   /** How the helper at `path` is run as root with `args`; with `sudo -n` when unsaid. */
@@ -375,9 +394,9 @@ async function ownStdin(): Promise<string> {
   return said
 }
 
-/** This computer's name as a server lists it. */
-function ownName(): string {
-  return hostname().replace(/\.local$/i, '') || 'A computer'
+/** This computer's name as a server lists it, and another computer on the Wi-Fi it asks. */
+function ownName(deps: AddressDeps = {}): string {
+  return (deps.hostname ?? hostname)().replace(/\.local$/i, '') || 'A computer'
 }
 
 /** The line to the server a person names, by its number or name or its whole address. */
@@ -474,7 +493,7 @@ async function runServe(io: CliIO): Promise<void> {
   }
   try {
     if (io.signal?.aborted) stop()
-    await serve({ env: io.env, target, signal: controller.signal, log: io.stderr, ...(port !== undefined ? { port } : {}), ...(proofPort !== undefined ? { proofPort } : {}), ...(directory ? { directory } : {}), ...(io.host !== undefined ? { host: io.host } : {}), ...(io.address ? { address: io.address } : {}) })
+    await serve({ env: io.env, target, signal: controller.signal, log: io.stderr, ...(port !== undefined ? { port } : {}), ...(proofPort !== undefined ? { proofPort } : {}), ...(directory ? { directory } : {}), ...(io.host !== undefined ? { host: io.host } : {}), ...(io.address ? { address: io.address } : {}), ...(io.announce ? { announce: io.announce } : {}) })
   } finally {
     // Whatever ended it, nothing of it is left to keep the process alive.
     clearInterval(watch)
@@ -488,6 +507,10 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
   const print = (value: unknown): number => {
     io.stdout(JSON.stringify(value))
     return 0
+  }
+  const usage = (): number => {
+    io.stderr(USAGE)
+    return 2
   }
   try {
     switch (command) {
@@ -574,6 +597,66 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         if (what === 'remove' && at && rest.length === 2) return print(await removeLine(io, at))
         break
       }
+      case 'find': {
+        if (rest.length) break
+        const store = await readStore(io.env)
+        // Not this computer's own door, which it announces too.
+        const own = ownAddresses(io.address)
+        const port = isListening(store) && !store.https ? store.listening!.port : undefined
+        const found = await (io.find ?? find)().catch((err: unknown) => {
+          throw new Refused(`This Wi-Fi could not be looked at: ${err instanceof Error ? err.message : String(err)}`)
+        })
+        return print({ found: found.filter(door => !(own.has(new URL(door.url).hostname) && Number(new URL(door.url).port) === port)) })
+      }
+      case 'ask': {
+        const [at] = rest
+        const origin = at === undefined ? undefined : doorOrigin(at)
+        if (rest.length !== 1 || origin === undefined) break
+        const asked = await askAt(origin, ownName(io.address))
+        if (!asked.ok) throw new Refused(asked.error)
+        return print(asked.value)
+      }
+      case 'ask-answer':
+      case 'ask-cancel': {
+        const [at, dash] = rest
+        const origin = at === undefined ? undefined : doorOrigin(at)
+        if (rest.length !== 2 || origin === undefined || dash !== '-') break
+        // The secret comes on standard input, where no other program on this computer sees it.
+        const secret = (await (io.stdin ?? ownStdin)()).trim()
+        if (!secret) throw new Refused('no secret on standard input')
+        if (command === 'ask-cancel') return print({ ok: await cancelAt(origin, secret) })
+        const heard = await hearAt(origin, secret)
+        if (!heard.ok) throw new Refused(heard.error)
+        return print(heard.value)
+      }
+      case 'asks': {
+        let wait = 0
+        let seen: string | undefined
+        for (let i = 0; i < rest.length; i += 2) {
+          const [flag, value] = [rest[i], rest[i + 1]]
+          if (flag === '--wait' && value !== undefined && /^\d+$/.test(value)) wait = Math.min(Number(value), 25)
+          else if (flag === '--seen' && value !== undefined) seen = value
+          else return usage()
+        }
+        // Another person's device sees none: only this computer's own screen and the owner's devices are asked.
+        if (!mayAnswerAsks(io.env)) return print({ asks: [] })
+        const until = Date.now() + wait * 1000
+        for (;;) {
+          const store = await readStoreStrict(io.env)
+          const asks = store === 'unreadable' ? [] : waitingAsks(store)
+          // Answered at once with nothing seen yet, or once the asks are other than the page has.
+          if (seen === undefined || asks.map(ask => ask.id).join(',') !== seen || Date.now() >= until) return print({ asks })
+          await new Promise(resolve => setTimeout(resolve, io.asksLookMs ?? 500))
+        }
+      }
+      case 'allow':
+      case 'deny': {
+        const [id] = rest
+        if (rest.length !== 1 || !id) break
+        if (!mayAnswerAsks(io.env)) throw new Refused("Only this computer's owner lets a computer in.")
+        if (!(await answerAsk(io.env, id, command === 'allow' ? 'allowed' : 'denied'))) throw new Refused('That computer is no longer asking.')
+        return print({ asks: waitingAsks(await readStore(io.env)) })
+      }
       case 'serve':
         if (rest.length) break
         await runServe(io)
@@ -593,6 +676,5 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
     io.stderr(err.message)
     return 1
   }
-  io.stderr(USAGE)
-  return 2
+  return usage()
 }

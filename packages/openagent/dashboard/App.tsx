@@ -20,7 +20,7 @@ import { SubagentPanel } from './components/SubagentPanel.js'
 import { MenuButton, PhoneBar } from './components/PhoneBar.js'
 import { useIsMobile } from './lib/use-mobile.js'
 import { NotFound } from './components/NotFound.js'
-import { ModulePageView } from './components/ModulePageView.js'
+import { ModulePageView, ModuleSlot } from './components/ModulePageView.js'
 import { useModules, ModulesContext } from './lib/use-modules.js'
 import { HostServicesContext, type HostServices } from './lib/host-services.js'
 import { sendToScreen, watchScreen } from './lib/screen.js'
@@ -604,6 +604,12 @@ export function App() {
           </PaneLayout>
         </PanesProvider>
       </div>
+      {/* What a module of this computer's draws over every page: a popup it raises itself. */}
+      {modules.everyPage.map(({ EveryPage, package: pkg }) => (
+        <ModuleSlot key={pkg} package={pkg} label={`${pkg} popup`}>
+          <EveryPage />
+        </ModuleSlot>
+      ))}
       {route.settings !== undefined && <SettingsDialog entry={route.settings} onEntry={showSettingsEntry} onClose={closeSettings} scope={scope} projects={projects} />}
     </SidebarProvider>
     </ProjectLabelsContext.Provider>

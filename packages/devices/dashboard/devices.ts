@@ -177,3 +177,84 @@ export async function myName(host: ModuleHost): Promise<string | undefined> {
 export const removeDevice = (host: ModuleHost, id: string): Promise<Answer<DoorStatus>> => run(host, ['remove', id], readStatus)
 /** Call a device by another name: a computer under all it holds here. */
 export const renameDevice = (host: ModuleHost, id: string, name: string): Promise<Answer<DoorStatus>> => run(host, ['rename', id, name], readStatus)
+
+// Pairing on this Wi-Fi: the computers found there, this computer's ask at one of them, and the
+// asks waiting here for Allow or Deny.
+
+/** A computer found on this Wi-Fi, its door open there. */
+export interface FoundComputer {
+  name: string
+  version?: string
+  /** Where its door is: what it is asked at. */
+  url: string
+}
+
+/** This computer's ask at another: the number both screens show, and the secret it hears the answer by. */
+export interface AskedThere {
+  number: string
+  secret: string
+  expires: string
+}
+
+/** What this computer hears of its ask. */
+export type AskAnswer = { state: 'waiting' } | { state: 'denied' } | { state: 'gone' } | { state: 'allowed'; link: string; numberLink?: string }
+
+/** A computer on this Wi-Fi asking to get in here. */
+export interface AskHere {
+  id: string
+  name: string
+  number: string
+  expires: string
+}
+
+const record = (value: unknown): Record<string, unknown> | undefined => (value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined)
+
+function readFound(output: unknown): FoundComputer[] | undefined {
+  const found = record(output)?.found
+  if (!Array.isArray(found)) return undefined
+  return found.flatMap(entry => {
+    const { name, version, url } = record(entry) ?? {}
+    const [said, at, v] = [text(name), text(url), text(version)]
+    return said && at ? [{ name: said, url: at, ...(v ? { version: v } : {}) }] : []
+  })
+}
+
+function readAsks(output: unknown): AskHere[] | undefined {
+  const asks = record(output)?.asks
+  if (!Array.isArray(asks)) return undefined
+  return asks.flatMap(entry => {
+    const { id, name, number, expires } = record(entry) ?? {}
+    const [which, said, shown, until] = [text(id), text(name), text(number), text(expires)]
+    return which && said && shown && until ? [{ id: which, name: said, number: shown, expires: until }] : []
+  })
+}
+
+/** The computers whose door is open on this Wi-Fi: a look of a few seconds. */
+export const findComputers = (host: ModuleHost): Promise<Answer<FoundComputer[]>> => run(host, ['find'], readFound)
+
+/** Ask the computer whose door is at `url` to let this one in. */
+export const askComputer = (host: ModuleHost, url: string): Promise<Answer<AskedThere>> =>
+  run(host, ['ask', url], output => {
+    const { number, secret, expires } = record(output) ?? {}
+    const [shown, word, until] = [text(number), text(secret), text(expires)]
+    return shown && word && until ? { number: shown, secret: word, expires: until } : undefined
+  })
+
+/** Whether a person there answered: waits a while for it. The secret goes on standard input. */
+export async function hearAnswer(host: ModuleHost, url: string, secret: string): Promise<Answer<AskAnswer>> {
+  const result = await host.runComputerCommand(['ask-answer', url, '-'], undefined, secret).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
+  if (!result.ok) return result
+  const { state, link, numberLink } = record(result.output) ?? {}
+  if (state === 'allowed' && text(link)) return { ok: true, value: { state, link: text(link)!, ...(text(numberLink) ? { numberLink: text(numberLink)! } : {}) } }
+  if (state === 'waiting' || state === 'denied' || state === 'gone') return { ok: true, value: { state } }
+  return { ok: false, error: 'the command answered something else than expected' }
+}
+
+/** Take this computer's ask away there. */
+export const cancelAsk = (host: ModuleHost, url: string, secret: string): Promise<unknown> => host.runComputerCommand(['ask-cancel', url, '-'], undefined, secret).catch(() => undefined)
+
+/** The asks waiting here; with `seen`, the answer waits up to 25 seconds for them to be other than that. */
+export const loadAsks = (host: ModuleHost, seen?: readonly string[]): Promise<Answer<AskHere[]>> => run(host, ['asks', ...(seen ? ['--wait', '25', '--seen', seen.join(',')] : [])], readAsks)
+
+/** Allow the ask `id`, or deny it. */
+export const answerAsk = (host: ModuleHost, id: string, allow: boolean): Promise<Answer<AskHere[]>> => run(host, [allow ? 'allow' : 'deny', id], readAsks)

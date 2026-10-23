@@ -10,7 +10,7 @@ import { keyFingerprint } from './der.js'
 import { ENTER_PATH } from './door.js'
 import { readFile, writeFile } from 'node:fs/promises'
 import { readStore, storePath, update } from './store.js'
-import { testHome } from './test-home.js'
+import { quietAnnounce, testHome } from './test-home.js'
 import { testOffice } from './test-office.js'
 
 /** A laptop on a Wi-Fi that answers to its name. */
@@ -29,7 +29,7 @@ interface Ran {
 async function run(env: NodeJS.ProcessEnv, args: string[], over: Partial<CliIO> = {}): Promise<Ran> {
   const out: string[] = []
   const err: string[] = []
-  const code = await runCli(args, { env, stdout: line => out.push(line), stderr: line => err.push(line), address: NAMED, followMs: 200, host: '127.0.0.1', ...over })
+  const code = await runCli(args, { env, stdout: line => out.push(line), stderr: line => err.push(line), address: NAMED, followMs: 200, host: '127.0.0.1', announce: quietAnnounce, ...over })
   return { code, out: out.length ? (JSON.parse(out.join('\n')) as unknown) : undefined, err }
 }
 
@@ -459,5 +459,59 @@ test('owner, add --for and remove-person: the owner is named first, a link is ma
     stop.abort()
     await serving
     await home.remove()
+  }
+})
+
+test('pairing on the Wi-Fi: find leaves this computer out, ask shows a number, the asks are the owner\'s to answer, and the answer is the link to get in with', async () => {
+  const there = await testHome()
+  const here = await testHome()
+  const openagent = createServer((req, res) => res.writeHead(200, { 'content-type': 'application/json' }).end(req.url === '/_relay/ping' ? '{"version":"0.36.0"}' : '{}'))
+  await new Promise<void>(resolve => openagent.listen(0, '127.0.0.1', resolve))
+  const stop = new AbortController()
+  const serving = run({ ...there.env, OPENAGENT_URL: `http://127.0.0.1:${(openagent.address() as AddressInfo).port}`, OPENAGENT_REMOTE_ACCESS_PORT: '0' }, ['serve'], { signal: stop.signal })
+  try {
+    await run(there.env, ['on'], { followMs: 5_000 })
+    const at = `http://127.0.0.1:${(await readStore(there.env)).listening!.port}`
+    // This computer hears its own door too, which it leaves out, while it listens there itself.
+    await update(here.env, store => {
+      store.on = true
+      store.listening = { pid: process.pid, port: 4201 }
+    })
+    const heard = [{ name: 'Studio Mac', version: '0.36.0', url: at }, { name: 'Adas-MacBook', url: 'http://192.168.1.23:4201' }]
+    assert.deepEqual((await run(here.env, ['find'], { find: async () => heard })).out, { found: [heard[0]] })
+
+    const asked = (await run(here.env, ['ask', at])).out as { number: string; secret: string }
+    assert.match(asked.number, /^\d{6}$/)
+    // A person the owner invited sees no ask there, and answers none.
+    const invited = { ...there.env, OPENAGENT_CALLER: 'Rom' }
+    assert.deepEqual((await run(invited, ['asks'])).out, { asks: [] })
+    const [waiting] = ((await run(there.env, ['asks'])).out as { asks: { id: string; name: string; number: string }[] }).asks
+    assert.deepEqual({ name: waiting!.name, number: waiting!.number }, { name: 'Adas-MacBook', number: asked.number })
+    const refused = await run(invited, ['allow', waiting!.id])
+    assert.equal(refused.code, 1)
+
+    // A page waits for the asks to change: nothing changes, so it is answered after the wait.
+    const started = Date.now()
+    assert.equal(((await run(there.env, ['asks', '--wait', '1', '--seen', waiting!.id], { asksLookMs: 50 })).out as { asks: unknown[] }).asks.length, 1)
+    assert.ok(Date.now() - started >= 900)
+    // The owner allows it while the page waits: answered at once.
+    const watching = run(there.env, ['asks', '--wait', '20', '--seen', waiting!.id], { asksLookMs: 50 })
+    assert.deepEqual((await run(there.env, ['allow', waiting!.id])).out, { asks: [] })
+    assert.deepEqual((await watching).out, { asks: [] })
+    assert.equal((await run(there.env, ['allow', waiting!.id])).code, 1, 'no longer asking')
+
+    // The secret is read on standard input, never among the arguments.
+    const answer = (await run(here.env, ['ask-answer', at, '-'], { stdin: async () => `${asked.secret}\n` })).out as { state: string; link: string; numberLink: string }
+    assert.equal(answer.state, 'allowed')
+    assert.match(answer.link, new RegExp(`^http://adas-macbook\\.local:\\d+${ENTER_PATH}#[A-Z0-9]{8}$`))
+    assert.equal(answer.numberLink, `${at}${ENTER_PATH}#${answer.link.split('#')[1]}`)
+    assert.equal((await run(here.env, ['ask-answer', at, asked.secret])).code, 2)
+  } finally {
+    stop.abort()
+    await serving
+    openagent.closeAllConnections()
+    await new Promise<void>(resolve => openagent.close(() => resolve()))
+    await there.remove()
+    await here.remove()
   }
 })

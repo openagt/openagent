@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { addProject, projectId } from '../registry.js'
 import { projectQueue } from '../store/queue.js'
 import { onModules, readModule, runComputerCommand, runModuleCommand } from './modules.js'
+import { asCaller } from '../dashboard/person.js'
 
 /** A project with a package.json and installed packages, each `{ exports, bin }` plus files. */
 async function project(dir: string, packages: Record<string, { manifest: Record<string, unknown>; files?: Record<string, string> }>): Promise<void> {
@@ -92,6 +93,11 @@ test('with no project added, the computer\'s modules are there and run their own
     assert.deepEqual(await runComputerCommand('@openagt/devices', ['status']), { ok: true, output: { on: false, listening: false, devices: [], lines: [], persons: [] } })
     assert.deepEqual(await runComputerCommand('@openagt/devices', ['server', 'status']), { ok: true, output: { servers: [] } })
     assert.deepEqual(await runComputerCommand('@openagt/devices', ['status'], 'servers'), { ok: false, error: '@openagt/devices has no command servers' })
+    // A command is told when a person the owner invited asks, and decides what such a person may do: no computer of theirs is let in here.
+    assert.deepEqual(await runComputerCommand('@openagt/devices', ['allow', 'a1b2c3d4e5f6']), { ok: false, error: 'That computer is no longer asking.' })
+    assert.deepEqual(await asCaller(encodeURIComponent('Rom Ö'), () => runComputerCommand('@openagt/devices', ['allow', 'a1b2c3d4e5f6'])), { ok: false, error: "Only this computer's owner lets a computer in." })
+    // What a command reads on standard input is handed over as it is.
+    assert.deepEqual(await runComputerCommand('@openagt/devices', ['ask-cancel', 'http://127.0.0.1:9', '-'], null, ''), { ok: false, error: 'no secret on standard input' })
     assert.deepEqual(await runComputerCommand('@openagt/files', []), { ok: false, error: "@openagt/files is not this computer's" })
     assert.deepEqual(await runComputerCommand('queue', []), { ok: false, error: "queue is not this computer's" })
 

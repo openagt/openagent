@@ -6,7 +6,7 @@ import { doorPort, serve } from './serve.js'
 import { readFile, writeFile } from 'node:fs/promises'
 import { DEVICE_COOKIE } from './door.js'
 import { addCode, enter, readStore, removeDevice, storePath, update, type Store } from './store.js'
-import { testHome } from './test-home.js'
+import { quietAnnounce, testHome } from './test-home.js'
 
 /** Wait until the file reads as `until` wants, looking often; fails after five seconds. */
 async function fileSays(env: NodeJS.ProcessEnv, until: (store: Store) => boolean): Promise<Store> {
@@ -32,7 +32,7 @@ test('the door is on the port after OpenAgent\'s own', () => {
 test('the process follows the switch: on opens the door, off closes it, and its end closes it too', async () => {
   const home = await testHome()
   const stop = new AbortController()
-  const running = serve({ env: home.env, target: 'http://127.0.0.1:1', port: 0, host: '127.0.0.1', signal: stop.signal, pollMs: 20 })
+  const running = serve({ env: home.env, target: 'http://127.0.0.1:1', port: 0, host: '127.0.0.1', signal: stop.signal, announce: quietAnnounce, pollMs: 20 })
   try {
     await new Promise(resolve => setTimeout(resolve, 80))
     assert.equal((await readStore(home.env)).listening, undefined, 'off: it listens on nothing and writes nothing')
@@ -68,7 +68,7 @@ test('a port another program holds is said, and the door opens once the port is 
   const port = (squatter.address() as AddressInfo).port
   const stop = new AbortController()
   await turn(home.env, true)
-  const running = serve({ env: home.env, target: 'http://127.0.0.1:1', port, host: '127.0.0.1', signal: stop.signal, pollMs: 20, retryMs: 50 })
+  const running = serve({ env: home.env, target: 'http://127.0.0.1:1', port, host: '127.0.0.1', signal: stop.signal, announce: quietAnnounce, pollMs: 20, retryMs: 50 })
   try {
     const stuck = await fileSays(home.env, store => store.problem !== undefined)
     assert.equal(stuck.problem, `Port ${port} is taken by another program on this computer.`)
@@ -91,7 +91,7 @@ test('switching off clears a problem that was said', async () => {
   await new Promise<void>(resolve => squatter.listen(0, '127.0.0.1', resolve))
   const stop = new AbortController()
   await turn(home.env, true)
-  const running = serve({ env: home.env, target: 'http://127.0.0.1:1', port: (squatter.address() as AddressInfo).port, host: '127.0.0.1', signal: stop.signal, pollMs: 20 })
+  const running = serve({ env: home.env, target: 'http://127.0.0.1:1', port: (squatter.address() as AddressInfo).port, host: '127.0.0.1', signal: stop.signal, announce: quietAnnounce, pollMs: 20 })
   try {
     await fileSays(home.env, store => store.problem !== undefined)
     await turn(home.env, false)
@@ -113,7 +113,7 @@ test('a device taken out of the file loses the live feed it held open, without a
   await new Promise<void>(resolve => upstream.listen(0, '127.0.0.1', resolve))
   const stop = new AbortController()
   await turn(home.env, true)
-  const running = serve({ env: home.env, target: `http://127.0.0.1:${(upstream.address() as AddressInfo).port}`, port: 0, host: '127.0.0.1', signal: stop.signal, pollMs: 20 })
+  const running = serve({ env: home.env, target: `http://127.0.0.1:${(upstream.address() as AddressInfo).port}`, port: 0, host: '127.0.0.1', signal: stop.signal, announce: quietAnnounce, pollMs: 20 })
   try {
     const { listening } = await fileSays(home.env, store => store.listening !== undefined)
     const entry = (await enter(home.env, (await addCode(home.env)).code, 'a phone'))!
@@ -139,7 +139,7 @@ test('a file a person broke by hand is left as it is: nobody gets in, and once c
   const stop = new AbortController()
   await turn(home.env, true)
   const said: string[] = []
-  const running = serve({ env: home.env, target: `http://127.0.0.1:${(upstream.address() as AddressInfo).port}`, port: 0, host: '127.0.0.1', signal: stop.signal, pollMs: 20, log: line => said.push(line) })
+  const running = serve({ env: home.env, target: `http://127.0.0.1:${(upstream.address() as AddressInfo).port}`, port: 0, host: '127.0.0.1', signal: stop.signal, announce: quietAnnounce, pollMs: 20, log: line => said.push(line) })
   try {
     const { listening } = await fileSays(home.env, store => store.listening !== undefined)
     const entry = (await enter(home.env, (await addCode(home.env)).code, 'a phone'))!
@@ -164,3 +164,50 @@ test('a file a person broke by hand is left as it is: nobody gets in, and once c
     await home.remove()
   }
 })
+
+test('while the door is open on the Wi-Fi, it is said there with this computer\'s name and OpenAgent\'s version; closed, it says so', async () => {
+  const home = await testHome()
+  const stop = new AbortController()
+  const openagent = createServer((req, res) => res.writeHead(200, { 'content-type': 'application/json' }).end(req.url === '/_relay/ping' ? '{"version":"0.36.0"}' : '{}'))
+  await new Promise<void>(resolve => openagent.listen(0, '127.0.0.1', resolve))
+  const said: string[] = []
+  const running = serve({
+    env: home.env,
+    target: `http://127.0.0.1:${(openagent.address() as AddressInfo).port}`,
+    port: 0,
+    host: '127.0.0.1',
+    signal: stop.signal,
+    pollMs: 20,
+    address: { interfaces: () => ({ en0: [{ address: '192.168.1.23', netmask: '', family: 'IPv4', mac: '', internal: false, cidr: '192.168.1.23/24' }] }) },
+    announce: async announced => {
+      said.push(`${announced.address}:${announced.port} ${announced.version ?? '?'} ${announced.name ? 'named' : 'nameless'}`)
+      return { stop: async () => void said.push('closed') }
+    },
+  })
+  try {
+    await new Promise(resolve => setTimeout(resolve, 80))
+    assert.deepEqual(said, [], 'off: nothing is said')
+    await turn(home.env, true)
+    const open = await fileSays(home.env, store => store.listening !== undefined)
+    await until(() => said.length === 1)
+    assert.deepEqual(said, [`192.168.1.23:${open.listening!.port} 0.36.0 named`])
+    await turn(home.env, false)
+    await until(() => said.length === 2)
+    assert.equal(said[1], 'closed')
+  } finally {
+    stop.abort()
+    await running
+    openagent.closeAllConnections()
+    await new Promise<void>(resolve => openagent.close(() => resolve()))
+    await home.remove()
+  }
+})
+
+/** Wait until `done` says so, looking often; fails after five seconds. */
+async function until(done: () => boolean): Promise<void> {
+  const deadline = Date.now() + 5_000
+  while (!done()) {
+    if (Date.now() > deadline) assert.fail('it never happened')
+    await new Promise(resolve => setTimeout(resolve, 20))
+  }
+}

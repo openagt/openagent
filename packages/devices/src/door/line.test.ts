@@ -11,7 +11,7 @@ import { carry, dial, enterForLine, knock, readLineLink, unchunked, WATCH_HEADER
 import { tellOpenAgent } from './line-in.js'
 import { NOT_A_SERVER, NO_OWNER, ONLY_ITS_OWN, making, routeFor, serve, type ServeOptions } from './serve.js'
 import { addCode, computerWordFor, enter, readStore, sha256, update, type Store } from './store.js'
-import { testHome } from './test-home.js'
+import { quietAnnounce, testHome } from './test-home.js'
 import { testOffice } from './test-office.js'
 
 // A server and a computer, each with the door's own process and a stand-in for its OpenAgent,
@@ -90,7 +90,7 @@ test('a call down a line goes to this computer\'s own OpenAgent for its own pers
   const helper = { OPENAGENT_PERSON_HELPER: '/opt/openagent/bin/openagent-person' }
   const line = { url: 'https://203.0.113.7', pin: 'p', key: 'id.k', mode: 'full' as const, person: 'rom' }
   const everyone = { ...line, for: 'everyone' as const }
-  const store: Store = { on: false, persons: [{ name: 'rom', owner: true, added }, { name: 'ada', added, port: 4300, ready: true }, { name: 'kim', added, port: 4400, problem: 'useradd failed' }], devices: [], codes: [], lines: [] }
+  const store: Store = { on: false, persons: [{ name: 'rom', owner: true, added }, { name: 'ada', added, port: 4300, ready: true }, { name: 'kim', added, port: 4400, problem: 'useradd failed' }], devices: [], codes: [], asks: [], lines: [] }
   const asked: string[] = []
   const start = { method: 'POST', path: '/_relay/start' }
   const route = (on: typeof line, person: string | undefined, env: NodeJS.ProcessEnv = helper, kept: Store = store, call = start): Route => routeFor(on, kept, target, env, person, call, account => asked.push(account))
@@ -278,7 +278,7 @@ async function rig(computerServe: Pick<ServeOptions, 'startWork' | 'mirrorMs'> =
   const line = { retryMs: [30, 60], pingMs: 40, quietMs: 400 }
   const running = [
     serve({ env: serverHome.env, target: serverTarget, port: doorPort, proofPort, host: '127.0.0.1', directory: office.directory, signal: abort.signal, pollMs: 20, retryMs: 100, keep: { lookMs: 30, retryMs: 60, pollMs: 10 }, line }),
-    serve({ env: computerHome.env, target: computerTarget, signal: abort.signal, pollMs: 20, retryMs: 100, line, ...computerServe }),
+    serve({ env: computerHome.env, target: computerTarget, signal: abort.signal, announce: quietAnnounce, pollMs: 20, retryMs: 100, line, ...computerServe }),
   ]
   await update(serverHome.env, store => void (store.https = { address: '127.0.0.1' }))
   await until('the door is open', async () => ((await readStore(serverHome.env)).listening !== undefined ? true : undefined))

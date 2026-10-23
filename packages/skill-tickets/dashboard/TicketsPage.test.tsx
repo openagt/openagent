@@ -25,6 +25,7 @@ const modules = (projects: string[] = ['p1', 'p2']): MountedModules => ({
   panels: [],
   runSlots: [],
   settings: [],
+  everyPage: [],
   loaded: true,
 })
 const render = (mounted: MountedModules = modules()) => {

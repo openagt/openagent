@@ -16,8 +16,8 @@ const LINK = { url: 'http://adas-macbook.local:4201/_devices/enter#code', number
  * A host whose `devices` command (this computer's door) answers what `answer` says for its words,
  * whose `devices server` command answers `server`'s (no server, unless said), with these machines saved.
  */
-function door(answer: (args: string[]) => ModuleCommandResult, saved: ModuleMachine[] = [], server: (args: string[]) => ModuleCommandResult = () => ok({ servers: [] })) {
-  const runComputerCommand = vi.fn(async (args: string[]) => answer(args))
+function door(answer: (args: string[], input?: string) => ModuleCommandResult | Promise<ModuleCommandResult>, saved: ModuleMachine[] = [], server: (args: string[]) => ModuleCommandResult = () => ok({ servers: [] })) {
+  const runComputerCommand = vi.fn(async (args: string[], input?: string) => answer(args, input))
   const serverCommand = vi.fn(async (args: string[]) => server(args))
   const inProject = vi.fn(async () => ({ ok: false as const, error: 'the door is no project\'s' }))
   const machines = vi.fn(async (): Promise<ModuleMachines> => ({ version: '0.0.0', name: 'Adas-MacBook', machines: saved }))
@@ -25,7 +25,7 @@ function door(answer: (args: string[]) => ModuleCommandResult, saved: ModuleMach
     package: '@openagt/devices',
     runCommand: inProject,
     act: inProject,
-    runComputerCommand: vi.fn(async (args: string[]) => (args[0] === 'server' ? serverCommand(args.slice(1)) : runComputerCommand(args))),
+    runComputerCommand: vi.fn(async (args: string[], _command?: string, input?: string) => (args[0] === 'server' ? serverCommand(args.slice(1)) : input === undefined ? runComputerCommand(args) : runComputerCommand(args, input))),
     runComputerCommandOn: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     read: vi.fn(async () => ({ ok: false as const, error: 'no server part' })),
     openAgent: vi.fn(),
@@ -376,35 +376,123 @@ describe('Settings › Devices: another computer, once', () => {
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['rename', 'bbbb00000000', 'Old iMac']))
   })
 
-  test('Add computer saves the other computer by its link, and lets it in here in the same press: runs go both ways', async () => {
-    const { host, runComputerCommand } = door(args => (args[0] === 'add' ? ok(LINK) : ok(OPEN)))
+  const FOUND = { name: 'Studio Mac', version: '0.36.0', url: 'http://192.168.1.5:4201' }
+  /** The other computer's door as a computer here hears it: found, asked, then answered as `heard` says, look after look. */
+  function pairing(status: object, heard: string[]) {
+    return door((args, input) => {
+      if (args[0] === 'find') return ok({ found: [FOUND, { name: "Dani's iMac", url: 'http://192.168.1.9:4301' }] })
+      if (args[0] === 'ask') return ok({ number: '482913', secret: 's3cret', expires: new Date(Date.now() + 120_000).toISOString() })
+      if (args[0] === 'ask-answer') {
+        expect(input).toBe('s3cret')
+        const state = heard.shift() ?? 'waiting'
+        return ok(state === 'allowed' ? { state, link: 'http://studio.local:4201/_devices/enter#K7P4QX9M', numberLink: 'http://192.168.1.5:4201/_devices/enter#K7P4QX9M' } : { state })
+      }
+      if (args[0] === 'ask-cancel') return ok({ ok: true })
+      return ok(args[0] === 'add' ? LINK : status)
+    })
+  }
+
+  test('Add computer lists the computers found on this Wi-Fi; Connect shows the number to match there, and once allowed it is saved and let in here: runs go both ways', async () => {
+    const { host, runComputerCommand } = pairing(OPEN, ['waiting', 'allowed'])
     show(host)
     await addComputer()
-    const link = 'http://studio.local:4201/_devices/enter#c0de'
-    fireEvent.change(await screen.findByRole('textbox', { name: "The other computer's link" }), { target: { value: link } })
-    expect(screen.getByRole('checkbox', { name: 'It can start runs on this computer too' }).getAttribute('aria-checked')).toBe('true')
-    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
-    await waitFor(() => expect(host.addMachine).toHaveBeenCalledWith(link))
-    await waitFor(() => expect(host.letMachineIn).toHaveBeenCalledWith('http://studio.local:4201', LINK.url))
-    expect(runComputerCommand).toHaveBeenCalledWith(['add'])
-    await waitFor(() => expect(screen.queryByRole('textbox', { name: "The other computer's link" })).toBeNull())
+    const found = await screen.findByRole('list', { name: 'On this Wi-Fi' })
+    expect(found.textContent).toContain('Studio MacOpenAgent 0.36.0')
+    expect(screen.getByText('Looking on this Wi-Fi…')).toBeTruthy()
+    expect(screen.queryByRole('textbox')).toBeNull()
+    fireEvent.click(within(found).getByRole('button', { name: 'Connect Studio Mac' }))
+    expect((await screen.findByLabelText('The number')).textContent).toBe('482 913')
+    expect(screen.getByText('Waiting for Studio Mac…')).toBeTruthy()
+    expect(runComputerCommand).toHaveBeenCalledWith(['ask', FOUND.url])
+    // The secret goes on standard input, never among the words.
+    expect(runComputerCommand).toHaveBeenCalledWith(['ask-answer', FOUND.url, '-'], 's3cret')
+    await screen.findByText('Studio Mac is connected.')
+    expect(host.addMachine).toHaveBeenCalledWith('http://studio.local:4201/_devices/enter#K7P4QX9M', 'Studio Mac')
+    expect(host.letMachineIn).toHaveBeenCalledWith('http://studio.local:4201', LINK.url)
+    expect(screen.getByText('Runs go both ways.')).toBeTruthy()
   })
 
-  test('with the door shut a computer is saved one way only, and this computer\'s link waits until the door is open', async () => {
-    const { host } = door(() => ok(OFF))
+  test('a computer that does not open by its name is saved by its number', async () => {
+    const { host } = pairing(OPEN, ['allowed'])
+    vi.mocked(host.addMachine).mockImplementation(async link => (link.includes('studio.local') ? { ok: false as const, error: 'getaddrinfo ENOTFOUND studio.local' } : { ok: true as const }))
     show(host)
     await addComputer()
-    const both = await screen.findByRole('checkbox', { name: 'It can start runs on this computer too' })
-    expect(both.getAttribute('aria-checked')).toBe('false')
-    expect(screen.getByText('Turn on "On this Wi-Fi" first: then runs can go both ways.')).toBeTruthy()
-    expect((screen.getByRole('button', { name: "Give it this computer's link instead" }) as HTMLButtonElement).disabled).toBe(true)
-    // With no server, a computer somewhere else has nothing to join through.
-    expect((screen.getByRole('button', { name: 'Give it a code' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect Studio Mac' }))
+    await screen.findByText('Studio Mac is connected.')
+    expect(host.addMachine).toHaveBeenLastCalledWith('http://192.168.1.5:4201/_devices/enter#K7P4QX9M', 'Studio Mac')
+    expect(host.letMachineIn).toHaveBeenCalledWith('http://192.168.1.5:4201', LINK.url)
+  })
+
+  test('with the door shut here the computer is saved one way only; with no server, somewhere else has nothing to join through', async () => {
+    const { host } = pairing(OFF, ['allowed'])
+    show(host)
+    await addComputer()
+    expect((await screen.findByRole('button', { name: 'Give it a code' }) as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByText("At the office, at a friend's: it joins through a server. Add a server first.")).toBeTruthy()
-    fireEvent.change(screen.getByRole('textbox', { name: "The other computer's link" }), { target: { value: 'http://studio.local:4201/_devices/enter#c0de' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
-    await waitFor(() => expect(host.addMachine).toHaveBeenCalled())
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect Studio Mac' }))
+    await screen.findByText('Studio Mac is connected.')
     expect(host.letMachineIn).not.toHaveBeenCalled()
+    expect(screen.getByText('Your runs can go there.')).toBeTruthy()
+  })
+
+  test('the box is read when the answer comes: unticked while it waits, the computer is saved one way only', async () => {
+    let answer: (value: ModuleCommandResult) => void = () => {}
+    const { host } = door(args => {
+      if (args[0] === 'find') return ok({ found: [FOUND] })
+      if (args[0] === 'ask') return ok({ number: '482913', secret: 's3cret', expires: new Date(Date.now() + 120_000).toISOString() })
+      if (args[0] === 'ask-answer') return new Promise<ModuleCommandResult>(resolve => (answer = resolve))
+      return ok(args[0] === 'add' ? LINK : OPEN)
+    })
+    show(host)
+    await addComputer()
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect Studio Mac' }))
+    const both = await screen.findByRole('checkbox', { name: 'Studio Mac can start runs on this computer too' })
+    expect(both.getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(both)
+    answer(ok({ state: 'allowed', link: 'http://studio.local:4201/_devices/enter#K7P4QX9M' }))
+    await screen.findByText('Studio Mac is connected.')
+    expect(host.letMachineIn).not.toHaveBeenCalled()
+  })
+
+  test('said no, or no answer in time: the dialog says so; Cancel while it waits takes the ask away there', async () => {
+    const denied = pairing(OPEN, ['denied'])
+    show(denied.host)
+    await addComputer()
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect Studio Mac' }))
+    await screen.findByText('Studio Mac said no.')
+    expect(denied.host.addMachine).not.toHaveBeenCalled()
+    cleanup()
+
+    const gone = pairing(OPEN, ['gone'])
+    show(gone.host)
+    await addComputer()
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect Studio Mac' }))
+    await screen.findByText('Studio Mac did not answer. Try again.')
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    await waitFor(() => expect(gone.runComputerCommand.mock.calls.filter(([args]) => args[0] === 'ask')).toHaveLength(2))
+    cleanup()
+
+    const waiting = pairing(OPEN, [])
+    show(waiting.host)
+    await addComputer()
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect Studio Mac' }))
+    await screen.findByLabelText('The number')
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(waiting.runComputerCommand).toHaveBeenCalledWith(['ask-cancel', FOUND.url, '-'], 's3cret'))
+    // Back at the list.
+    expect(await screen.findByRole('list', { name: 'On this Wi-Fi' })).toBeTruthy()
+  })
+
+  test('the other computer refuses the ask: why is said', async () => {
+    const { host } = door(args => {
+      if (args[0] === 'find') return ok({ found: [FOUND] })
+      if (args[0] === 'ask') return { ok: false, error: 'denied a moment ago: wait a minute to ask again' }
+      return ok(OPEN)
+    })
+    show(host)
+    await addComputer()
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect Studio Mac' }))
+    expect(await screen.findByText('denied a moment ago: wait a minute to ask again')).toBeTruthy()
   })
 })
 

@@ -5,7 +5,7 @@ import { ModulesContext, type MountedModules } from './use-modules.js'
 import { pathsIn, useFileNames } from './use-file-names.js'
 import { useSchedule } from './use-schedule.js'
 
-const NOTHING: MountedModules = { pages: [], cards: [], linkActions: [], panels: [], runSlots: [], settings: [], loaded: true }
+const NOTHING: MountedModules = { pages: [], cards: [], linkActions: [], panels: [], runSlots: [], settings: [], everyPage: [], loaded: true }
 
 afterEach(cleanup)
 

@@ -229,6 +229,28 @@ export interface Code {
   line?: true
 }
 
+/**
+ * A computer on this Wi-Fi that asks to get in, found here and Connect pressed on it: it waits for
+ * a person here to press Allow or Deny, both screens showing the same number. It holds no code:
+ * the one it gets in with is made when it hears it was allowed, and never written here.
+ */
+export interface Ask {
+  /** How a page here names it, to allow it or deny it. */
+  id: string
+  /** The SHA-256 of the secret the asking computer holds: it hears the answer by it, and nobody else does. */
+  secret: string
+  /** The asking computer's name, as it said it. */
+  name: string
+  /** What both screens show: six digits. */
+  number: string
+  /** The address it asked from: one ask for each. */
+  from: string
+  /** ISO 8601: until then it waits, and once denied, its address waits until then to ask again. */
+  expires: string
+  /** Pressed here: it hears so at its next look. */
+  answer?: 'allowed' | 'denied'
+}
+
 /** Where the door listens, written by its process while it does. */
 export interface Listening {
   pid: number
@@ -250,6 +272,8 @@ export interface Store {
   persons: Person[]
   devices: Device[]
   codes: Code[]
+  /** The computers on this Wi-Fi that asked to get in, and whose answer they have not heard yet. */
+  asks: Ask[]
   /** The servers this computer keeps a line open to. */
   lines: Line[]
   listening?: Listening
@@ -265,6 +289,12 @@ export const CODE_LIFETIME_MS = 10 * 60 * 1000
  */
 const CODE_LETTERS = '23456789ABCDEFGHJKMNPQRSTVWXYZ'
 const CODE_LENGTH = 8
+/** How long an ask waits for Allow or Deny: time to walk to this computer. */
+export const ASK_LIFETIME_MS = 2 * 60 * 1000
+/** How long an address that was denied waits before it asks again. */
+export const DENIED_WAIT_MS = 60 * 1000
+/** How many asks wait at once: each is a popup on this computer's screen. */
+export const MAX_ASKS = 3
 /** Caps, so a file edited by hand or a flood of scans cannot bloat it. */
 export const MAX_DEVICES = 50
 export const MAX_CODES = 20
@@ -394,6 +424,14 @@ export function sanitize(value: unknown): Store {
     const { code, expires, person, line } = entry as Record<string, unknown>
     if (isDigest(code) && isIso(expires)) codes.push({ code, expires, ...(someoneElse(person) ? { person: person as string } : {}), ...(line === true ? { line: true as const } : {}) })
   }
+  const asks: Ask[] = []
+  for (const entry of Array.isArray(obj.asks) ? obj.asks : []) {
+    if (!entry || typeof entry !== 'object') continue
+    const { id, secret, name, number, from, expires, answer } = entry as Record<string, unknown>
+    if (typeof id !== 'string' || !/^[a-z0-9]{6,32}$/.test(id) || !isDigest(secret) || typeof name !== 'string' || typeof number !== 'string' || !/^\d{6}$/.test(number) || typeof from !== 'string' || !isIP(from) || !isIso(expires)) continue
+    if (asks.some(ask => ask.id === id || ask.from === from)) continue
+    asks.push({ id, secret, name: name.trim().slice(0, MAX_NAME) || 'A computer', number, from, expires, ...(answer === 'allowed' || answer === 'denied' ? { answer } : {}) })
+  }
   const listening = obj.listening && typeof obj.listening === 'object' ? (obj.listening as Record<string, unknown>) : undefined
   const https = obj.https && typeof obj.https === 'object' ? (obj.https as Record<string, unknown>).address : undefined
   return {
@@ -402,6 +440,7 @@ export function sanitize(value: unknown): Store {
     persons,
     devices,
     codes: codes.slice(-MAX_CODES),
+    asks: asks.slice(-MAX_CODES),
     lines,
     ...(listening && Number.isInteger(listening.pid) && Number.isInteger(listening.port) ? { listening: { pid: listening.pid as number, port: listening.port as number } } : {}),
     ...(typeof obj.problem === 'string' && obj.problem ? { problem: obj.problem } : {}),
@@ -523,6 +562,65 @@ export async function addCode(env: NodeJS.ProcessEnv, now = Date.now(), person?:
     store.codes = [...liveCodes(store.codes, now), { code: sha256(code), expires, ...(person !== undefined ? { person } : {}), ...(line ? { line: true as const } : {}) }].slice(-MAX_CODES)
   })
   return { code, expires }
+}
+
+/** The asks still good at `now`: one waiting for an answer, an answer not heard yet, a denied address's wait. */
+export function liveAsks(asks: readonly Ask[], now: number): Ask[] {
+  return asks.filter(ask => Date.parse(ask.expires) > now)
+}
+
+/** Why a computer's ask is not taken: its address was denied a moment ago, or as many asks as wait at once already do. */
+export type NotAsked = 'denied' | 'busy'
+
+/**
+ * Keep the ask of a computer on this Wi-Fi, from address `from`: answers the secret it hears the
+ * answer by, which the file does not keep, and the number both screens show. A computer that asks
+ * again takes the place of its own ask, so it is one popup however often it presses Connect.
+ */
+export async function addAsk(env: NodeJS.ProcessEnv, name: string, from: string, now = Date.now()): Promise<{ ask: Ask; secret: string } | NotAsked> {
+  return update(env, store => {
+    const live = liveAsks(store.asks, now)
+    const own = live.find(ask => ask.from === from)
+    if (own?.answer === 'denied') return 'denied'
+    const others = live.filter(ask => ask !== own)
+    if (others.filter(ask => ask.answer === undefined).length >= MAX_ASKS) return 'busy'
+    const secret = newSecret()
+    const ask: Ask = { id: randomBytes(6).toString('hex'), secret: sha256(secret), name, number: String(randomInt(1_000_000)).padStart(6, '0'), from, expires: new Date(now + ASK_LIFETIME_MS).toISOString() }
+    store.asks = [...others, ask]
+    return { ask, secret }
+  })
+}
+
+/** Allow or deny the ask `id`, while it waits: a denied address waits a minute before it asks again. False when no ask waits by that id. */
+export async function answerAsk(env: NodeJS.ProcessEnv, id: string, answer: 'allowed' | 'denied', now = Date.now()): Promise<boolean> {
+  return update(env, store => {
+    store.asks = liveAsks(store.asks, now)
+    const ask = store.asks.find(candidate => candidate.id === id && candidate.answer === undefined)
+    if (!ask) return false
+    ask.answer = answer
+    // Allowed: as long as it waited, to hear so. Denied: its address waits a minute from now.
+    if (answer === 'denied') ask.expires = new Date(now + DENIED_WAIT_MS).toISOString()
+    return true
+  })
+}
+
+/** The ask whose secret this is, while it is good. */
+export function askOf(store: Store, secret: string, now = Date.now()): Ask | undefined {
+  const digest = sha256(secret)
+  return liveAsks(store.asks, now).find(ask => sameDigest(ask.secret, digest))
+}
+
+/**
+ * The asking computer takes its ask away: it heard it was allowed, or it gave up. A denied ask stays,
+ * so its address waits out its minute. Answers the ask as it was.
+ */
+export async function dropAsk(env: NodeJS.ProcessEnv, secret: string, now = Date.now()): Promise<Ask | undefined> {
+  return update(env, store => {
+    store.asks = liveAsks(store.asks, now)
+    const ask = askOf(store, secret, now)
+    if (ask && ask.answer !== 'denied') store.asks = store.asks.filter(candidate => candidate !== ask)
+    return ask
+  })
 }
 
 /** A code as it is typed: in any case, with dashes and spaces anywhere. */
