@@ -1,6 +1,7 @@
 import { lastLines, openSession, withAdvice, type Exec } from './ssh.js'
 import { PERSON_TIMEOUT_MS, SERVER_USER, devicesScript, ownerScript, removeDeviceScript, removePersonScript } from './steps.js'
-import { isAccount, isMachineUrl, type Server } from './store.js'
+import { isMachineUrl, type Server } from './store.js'
+import { nameOf } from '../door/store.js'
 
 /**
  * The devices that are in on a server, as its door lists them: asked over SSH, so a person sees
@@ -22,13 +23,13 @@ export interface ServerDevice {
   also?: string[]
   /** That computer is this one: the line this computer keeps open to the server. */
   own?: true
-  /** Whose device it is, by their GitHub account, once the server has persons. */
+  /** Whose device it is, by their name, once the server has persons. */
   person?: string
 }
 
-/** A person on the server, by their GitHub account; the owner first. */
+/** A person on the server, by their name; the owner first. */
 export interface ServerPerson {
-  account: string
+  name: string
   owner?: true
   /** Their own user and OpenAgent on the server are being made right now. */
   working?: true
@@ -68,8 +69,8 @@ function timeOf(value: unknown): string | undefined {
 /** How much of what a server said of a failure is told. */
 const MAX_SAID = 2_000
 
-/** A person's GitHub account as a door writes it: in small letters. */
-const accountIn = (said: unknown): string | undefined => (isAccount(said) && said === said.toLowerCase() ? said : undefined)
+/** A person's name as a door writes it. */
+const nameIn = (said: unknown): string | undefined => (typeof said === 'string' && nameOf(said) === said ? said : undefined)
 
 /** The devices and persons in what a door's `status` printed, or `undefined` for what is no such answer. */
 export function devicesIn(out: string): { devices: ServerDevice[]; persons: ServerPerson[] } | undefined {
@@ -85,17 +86,17 @@ export function devicesIn(out: string): { devices: ServerDevice[]; persons: Serv
   const persons: ServerPerson[] = []
   for (const entry of Array.isArray(answer?.persons) ? answer.persons : []) {
     if (persons.length >= MAX_DEVICES) break
-    const { account, owner, working, problem, from, removed, kept } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
-    const known = accountIn(account)
-    if (known === undefined || persons.some(person => person.account === known)) continue
+    const { name, owner, working, problem, from, removed, kept } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
+    const known = nameIn(name)
+    if (known === undefined || persons.some(person => person.name === known)) continue
     // A door lists its owner first: a list that does not start with one is no list of persons.
     if (!persons.length && owner !== true) break
     // What the server said is shown as words, with nothing in it that moves a line or turns its letters around.
     const said = typeof problem === 'string' ? problem.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, ' ').trim().slice(0, 400) : ''
-    if (!persons.length) persons.push({ account: known, owner: true })
+    if (!persons.length) persons.push({ name: known, owner: true })
     else if (owner !== true) {
       const via = typeof from === 'string' && isMachineUrl(from) && from.startsWith('https://') ? from : undefined
-      persons.push({ account: known, ...(working === true ? { working: true as const } : {}), ...(said ? { problem: said } : {}), ...(via !== undefined ? { from: via, ...(removed === true && kept !== true ? { removed: true as const } : {}), ...(kept === true ? { kept: true as const } : {}) } : {}) })
+      persons.push({ name: known, ...(working === true ? { working: true as const } : {}), ...(said ? { problem: said } : {}), ...(via !== undefined ? { from: via, ...(removed === true && kept !== true ? { removed: true as const } : {}), ...(kept === true ? { kept: true as const } : {}) } : {}) })
     }
   }
   const devices: ServerDevice[] = []
@@ -103,7 +104,7 @@ export function devicesIn(out: string): { devices: ServerDevice[]; persons: Serv
     if (devices.length >= MAX_DEVICES) break
     if (!entry || typeof entry !== 'object') continue
     const { id, name, added, seen, line, also, person } = entry as Record<string, unknown>
-    const whose = accountIn(person)
+    const whose = nameIn(person)
     const [since, last] = [timeOf(added), timeOf(seen)]
     const known = (candidate: string): boolean => devices.some(device => idsOf(device).includes(candidate))
     if (typeof id !== 'string' || !isDeviceId(id) || since === undefined || known(id)) continue
@@ -112,7 +113,7 @@ export function devicesIn(out: string): { devices: ServerDevice[]; persons: Serv
     for (const other of Array.isArray(also) ? also : []) if (others.length < MAX_ALSO && typeof other === 'string' && isDeviceId(other) && other !== id && !others.includes(other) && !known(other)) others.push(other)
     // A name is what a browser said it is: shown as words, with nothing in it that moves a line or turns its letters around.
     const words = typeof name === 'string' ? name.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, ' ').trim().slice(0, MAX_NAME) : ''
-    devices.push({ id, name: words || 'A device', added: since, ...(last !== undefined ? { seen: last } : {}), ...(line === true ? { line: true } : {}), ...(others.length ? { also: others } : {}), ...(whose !== undefined && persons.some(known => known.account === whose) ? { person: whose } : {}) })
+    devices.push({ id, name: words || 'A device', added: since, ...(last !== undefined ? { seen: last } : {}), ...(line === true ? { line: true } : {}), ...(others.length ? { also: others } : {}), ...(whose !== undefined && persons.some(known => known.name === whose) ? { person: whose } : {}) })
   }
   return { devices, persons }
 }
@@ -132,17 +133,18 @@ async function ask(server: Pick<Server, 'address' | 'user'>, script: string, opt
 /** Ask the server's door which devices are in. */
 export const readDevices = (server: Pick<Server, 'address' | 'user'>, opts: { exec?: Exec } = {}): Promise<Devices> => ask(server, devicesScript(), opts)
 
-/** Name the server's owner at its door, by their GitHub account: the devices already in are theirs. */
-export function nameOwner(server: Pick<Server, 'address' | 'user'>, account: string, opts: { exec?: Exec } = {}): Promise<Devices> {
-  if (!isAccount(account)) return Promise.resolve({ ok: false, error: `${account} is not a GitHub account` })
-  return ask(server, ownerScript(account.toLowerCase()), opts)
+/** Name the server's owner at its door, by their name: the devices already in are theirs. */
+export function nameOwner(server: Pick<Server, 'address' | 'user'>, said: string, opts: { exec?: Exec } = {}): Promise<Devices> {
+  const name = nameOf(said)
+  if (name === undefined) return Promise.resolve({ ok: false, error: `${said} is not a name: letters, digits, spaces, dots, apostrophes and dashes, at most 40` })
+  return ask(server, ownerScript(name), opts)
 }
 
 /** Take a person out at the server's door, with every device of theirs. Answers the ones still in. */
-export function removePerson(server: Pick<Server, 'address' | 'user'>, account: string, opts: { exec?: Exec } = {}): Promise<Devices> {
-  if (!isAccount(account)) return Promise.resolve({ ok: false, error: `${account} is not a GitHub account` })
+export function removePerson(server: Pick<Server, 'address' | 'user'>, name: string, opts: { exec?: Exec } = {}): Promise<Devices> {
+  if (nameOf(name) !== name) return Promise.resolve({ ok: false, error: `${name} is no person's name` })
   // Longer than the others: the person's user is taken away, with their programs and their home.
-  return ask(server, removePersonScript(account.toLowerCase()), opts, PERSON_TIMEOUT_MS)
+  return ask(server, removePersonScript(name), opts, PERSON_TIMEOUT_MS)
 }
 
 /** Take one device out at the server's door: it is out at once. Answers the ones still in. */

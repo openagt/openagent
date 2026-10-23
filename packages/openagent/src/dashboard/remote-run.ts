@@ -4,7 +4,7 @@ import type { AgentMeta } from '../store/index.js'
 import type { StartAgentOptions, StartAgentResult } from './types.js'
 import { errorMessage } from '../error-message.js'
 import { machineFetch } from './machine-call.js'
-import { isAccount, isHostName } from '../registry.js'
+import { isHostName, isPersonName } from '../registry.js'
 import { readLogins, type GivenLogins, type MachineLogins } from './machine-logins.js'
 
 /**
@@ -216,7 +216,7 @@ export async function remoteComputers(machine: MachineAccess): Promise<{ ok: tru
     for (const entry of Array.isArray(listed) ? listed : []) {
       const { id, name, online, owner } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
       // An id is a word a door makes: it goes into an address, so nothing else is taken.
-      if (typeof id === 'string' && /^[a-z0-9]{6,32}$/.test(id) && typeof name === 'string' && name.trim()) computers.push({ id, name: name.trim().slice(0, 80), online: online === true, ...(isAccount(owner) ? { owner } : {}) })
+      if (typeof id === 'string' && /^[a-z0-9]{6,32}$/.test(id) && typeof name === 'string' && name.trim()) computers.push({ id, name: name.trim().slice(0, 80), online: online === true, ...(isPersonName(owner) ? { owner } : {}) })
     }
     return { ok: true, computers }
   } catch (err) {

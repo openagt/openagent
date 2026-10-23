@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { readFile, stat, writeFile } from 'node:fs/promises'
-import { CODE_LIFETIME_MS, MAX_DEVICES, Unreadable, accountOf, addCode, addPerson, computerWordFor, enter, isComputerId, isIn, nameOwner, personLinePorts, personOf, portOf, portsOf, readStore, readStoreStrict, removeComputer, removeDevice, removePerson, sanitize, sha256, shareLine, shownCode, storePath, update } from './store.js'
+import { CODE_LIFETIME_MS, MAX_DEVICES, Unreadable, nameOf, addCode, addPerson, computerWordFor, enter, isComputerId, isIn, nameOwner, personLinePorts, personOf, portOf, portsOf, readStore, readStoreStrict, removeComputer, removeDevice, removePerson, sanitize, sha256, shareLine, shownCode, storePath, update } from './store.js'
 import { testHome } from './test-home.js'
 
 test('no file reads as a closed door with nobody in', async () => {
@@ -306,9 +306,9 @@ test('a computer says another word to each door, made from the word it keeps and
   assert.equal(isComputerId(computerWordFor(word, 'https://203.0.113.5')), true)
 })
 
-test('a person is a GitHub account, written in small letters', () => {
-  assert.deepEqual(['Rom', '@rom-b', ' ada ', 'a'.repeat(39)].map(accountOf), ['rom', 'rom-b', 'ada', 'a'.repeat(39)])
-  assert.deepEqual(['-rom', 'rom-', 'r--m', 'a'.repeat(40), 'ro m', ''].map(accountOf), [undefined, undefined, undefined, undefined, undefined, undefined])
+test('a person is a name in any language, spaces made one; a name with nothing but letters, digits, spaces, dots, apostrophes and dashes', () => {
+  assert.deepEqual(['Rom', ' Rom  Brillout ', 'רום', "Dani O'Neil", 'José', 'a'.repeat(40)].map(nameOf), ['Rom', 'Rom Brillout', 'רום', "Dani O'Neil", 'José', 'a'.repeat(40)])
+  assert.deepEqual(['-rom', 'a'.repeat(41), 'rom\nx', 'rom/x', '<rom>', ''].map(nameOf), [undefined, undefined, undefined, undefined, undefined, undefined])
 })
 
 test('the owner is named once, then persons are added; the devices in before are the owner\'s; removing a person takes their devices and codes', async () => {
@@ -327,13 +327,13 @@ test('the owner is named once, then persons are added; the devices in before are
     const roms = (await enter(home.env, (await addCode(home.env, Date.now(), 'rom')).code, 'rom\'s phone'))!
     await addCode(home.env, Date.now(), 'rom')
     let store = await readStore(home.env)
-    assert.deepEqual(store.persons.map(person => [person.account, person.owner === true]), [['ada', true], ['rom', false]])
+    assert.deepEqual(store.persons.map(person => [person.name, person.owner === true]), [['ada', true], ['rom', false]])
     assert.deepEqual(store.devices.map(device => [device.id, personOf(store, device)]), [[mine.id, 'ada'], [roms.id, 'rom']])
 
     assert.equal(await removePerson(home.env, 'ada'), false, 'the owner stays')
     assert.ok(await removePerson(home.env, 'rom'))
     store = await readStore(home.env)
-    assert.deepEqual([store.persons.map(person => person.account), store.devices.map(device => device.id), store.codes.length], [['ada'], [mine.id], 0])
+    assert.deepEqual([store.persons.map(person => person.name), store.devices.map(device => device.id), store.codes.length], [['ada'], [mine.id], 0])
   } finally {
     await home.remove()
   }
@@ -342,9 +342,9 @@ test('the owner is named once, then persons are added; the devices in before are
 test('persons edited by hand are read forgivingly: no owner means no persons, and a device for nobody known is the owner\'s', () => {
   const added = new Date().toISOString()
   const device = { id: 'abc123', name: 'x', key: 'a'.repeat(64), added }
-  assert.deepEqual(sanitize({ persons: [{ account: 'rom', added }], devices: [{ ...device, person: 'rom' }] }).persons, [])
-  const read = sanitize({ persons: [{ account: 'rom', added }, { account: 'ada', owner: true, added }, { account: 'Bad Name', added }], devices: [{ ...device, person: 'eve' }, { ...device, id: 'def456', person: 'rom' }, { ...device, id: 'ghi789', person: 'ada' }] })
-  assert.deepEqual(read.persons.map(person => person.account), ['ada', 'rom'])
+  assert.deepEqual(sanitize({ persons: [{ name: 'rom', added }], devices: [{ ...device, person: 'rom' }] }).persons, [])
+  const read = sanitize({ persons: [{ name: 'rom', added }, { name: 'ada', owner: true, added }, { name: '<bad>', added }], devices: [{ ...device, person: 'eve' }, { ...device, id: 'def456', person: 'rom' }, { ...device, id: 'ghi789', person: 'ada' }] })
+  assert.deepEqual(read.persons.map(person => person.name), ['ada', 'rom'])
   assert.deepEqual(read.devices.map(entry => entry.person), [undefined, 'rom', undefined])
 })
 
@@ -352,7 +352,7 @@ test('on a computer with users per person, each person gets the first free block
   const home = await testHome()
   try {
     await nameOwner(home.env, 'ada')
-    assert.deepEqual(await addPerson(home.env, 'eve'), { account: 'eve', added: (await readStore(home.env)).persons[1]!.added }, 'no block where nobody gets a user')
+    assert.deepEqual(await addPerson(home.env, 'eve'), { name: 'eve', added: (await readStore(home.env)).persons[1]!.added }, 'no block where nobody gets a user')
     assert.equal((await addPerson(home.env, 'rom', Date.now(), true))?.port, 4300)
     assert.equal((await addPerson(home.env, 'kim', Date.now(), true))?.port, 4400)
     assert.equal((await addPerson(home.env, 'rom', Date.now(), true))?.port, 4300, 'kept')
@@ -372,8 +372,8 @@ test('on a computer with users per person, each person gets the first free block
 
 test('a block of ports edited by hand is one person\'s: a second person naming it has none, and the owner never has one', () => {
   const added = new Date().toISOString()
-  const read = sanitize({ persons: [{ account: 'ada', owner: true, added, port: 4300 }, { account: 'rom', added, port: 4300 }, { account: 'kim', added, port: 4300 }, { account: 'eve', added, port: 'x' }] })
-  assert.deepEqual(read.persons.map(person => [person.account, person.port]), [['ada', undefined], ['rom', 4300], ['kim', undefined], ['eve', undefined]])
+  const read = sanitize({ persons: [{ name: 'ada', owner: true, added, port: 4300 }, { name: 'rom', added, port: 4300 }, { name: 'kim', added, port: 4300 }, { name: 'eve', added, port: 'x' }] })
+  assert.deepEqual(read.persons.map(person => [person.name, person.port]), [['ada', undefined], ['rom', 4300], ['kim', undefined], ['eve', undefined]])
 })
 
 test('a code made for a line lets in a line of that person, in their block of ports, and nothing else; what it does not let in does not spend it', async () => {
@@ -417,9 +417,9 @@ test('a line for everyone, who it is for and the persons a server last said are 
   const key = sha256('k')
   const store = sanitize({
     persons: [
-      { account: 'ada', owner: true, added },
-      { account: 'rom', added, port: 4300, from: 'https://203.0.113.7', kept: true },
-      { account: 'kim', added, port: 4400, from: 'http://203.0.113.7', kept: 'yes' },
+      { name: 'ada', owner: true, added },
+      { name: 'rom', added, port: 4300, from: 'https://203.0.113.7', kept: true },
+      { name: 'kim', added, port: 4400, from: 'http://203.0.113.7', kept: 'yes' },
     ],
     devices: [
       { id: 'aaaaaa', name: 'studio', key, added, line: { port: 4310, others: { ada: 4210, kim: 4410, eve: 4211, rom: 4311, bad: 'x', 'NOT AN ACCOUNT': 4212 } }, person: 'rom' },
@@ -427,16 +427,16 @@ test('a line for everyone, who it is for and the persons a server last said are 
       { id: 'cccccc', name: 'desk', key, added, line: { port: 4211, others: [4212] } },
     ],
     lines: [
-      { url: 'https://203.0.113.7', pin: 'p', key: 'id.k', mode: 'full', for: 'everyone', account: 'rom', persons: ['ada', 'rom', 'rom', 'NOT ONE', 7] },
-      { url: 'https://203.0.113.8', pin: 'p', key: 'id.k', mode: 'full', for: 'some', account: '-x', persons: ['ada'] },
+      { url: 'https://203.0.113.7', pin: 'p', key: 'id.k', mode: 'full', for: 'everyone', person: 'rom', persons: ['ada', 'rom', 'rom', '<not one>', 7] },
+      { url: 'https://203.0.113.8', pin: 'p', key: 'id.k', mode: 'full', for: 'some', person: '-x', persons: ['ada'] },
     ],
   })
   assert.deepEqual(
-    store.persons.map(({ account, from, kept }) => ({ account, from, kept })),
+    store.persons.map(({ name, from, kept }) => ({ name, from, kept })),
     [
-      { account: 'ada', from: undefined, kept: undefined },
-      { account: 'rom', from: 'https://203.0.113.7', kept: true },
-      { account: 'kim', from: undefined, kept: undefined },
+      { name: 'ada', from: undefined, kept: undefined },
+      { name: 'rom', from: 'https://203.0.113.7', kept: true },
+      { name: 'kim', from: undefined, kept: undefined },
     ],
   )
   // Each port is one address: the second computer's own port was the first one's for kim already, so it has no line.
@@ -446,7 +446,7 @@ test('a line for everyone, who it is for and the persons a server last said are 
   )
   assert.deepEqual(portsOf(store.devices[0]!), [4310, 4210, 4410])
   assert.deepEqual(store.lines, [
-    { url: 'https://203.0.113.7', pin: 'p', key: 'id.k', mode: 'full', for: 'everyone', account: 'rom', persons: ['ada', 'rom'] },
+    { url: 'https://203.0.113.7', pin: 'p', key: 'id.k', mode: 'full', for: 'everyone', person: 'rom', persons: ['ada', 'rom'] },
     { url: 'https://203.0.113.8', pin: 'p', key: 'id.k', mode: 'full' },
   ])
 })
@@ -457,10 +457,10 @@ test('a computer whose line is for everyone gets an address in the block of each
   const owner = { from: 4210, count: 50 }
   const store = sanitize({
     persons: [
-      { account: 'ada', owner: true, added },
-      { account: 'rom', added, port: 4300 },
-      { account: 'kim', added, port: 4400 },
-      { account: 'eve', added },
+      { name: 'ada', owner: true, added },
+      { name: 'rom', added, port: 4300 },
+      { name: 'kim', added, port: 4400 },
+      { name: 'eve', added },
     ],
     devices: [
       { id: 'aaaaaa', name: 'studio', key, added, line: { port: 4310 }, person: 'rom' },
@@ -473,7 +473,7 @@ test('a computer whose line is for everyone gets an address in the block of each
   // Not its own person, nobody without an OpenAgent of their own, and never a port another address has.
   assert.deepEqual(studio.line!.others, { ada: 4211, kim: 4411 })
   assert.equal(shareLine(store, studio, owner), false, 'the same again changes nothing')
-  store.persons = store.persons.filter(person => person.account !== 'kim')
+  store.persons = store.persons.filter(person => person.name !== 'kim')
   assert.equal(shareLine(store, studio, owner), true)
   assert.deepEqual(studio.line!.others, { ada: 4211 })
   // A line for everyone on a computer with nobody else yet is one all the same.

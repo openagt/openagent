@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { ChevronRight, CircleCheck, House, Laptop, Loader2, Plus, Server, UserPlus, UserRound } from 'lucide-react'
 import { Button, ConfirmDialog, Dialog, Input, RadioGroup, RadioGroupOption, formatDateTime, formatRelative, usePolled, type ModuleComputersThrough, type ModuleHost, type ModuleMachine } from '@openagt/dashboard/module'
-import { addAccount, idsOf, loadAccounts, loadDevices, login, logout, nameOwner, ownGithub, removeAccount, removeDevice, removePerson, setWho, askLink, type AccountRow, type Answer, type DeviceRow, type ServerRow, type Who } from './servers.js'
+import { addAccount, idsOf, loadAccounts, loadDevices, login, logout, nameOwner, removeAccount, removeDevice, removePerson, setWho, askLink, type AccountRow, type Answer, type DeviceRow, type ServerRow, type Who } from './servers.js'
 import type { ServerItem } from './model.js'
 import { Invite } from './codes.js'
+import { myName } from './devices.js'
 import { Head, LoginLine, Part, Problem, Said, State, StepLine, StepMark, Tabs, day, hostOf, named, olderThan } from './parts.js'
 import type { Devices } from './use-devices.js'
 
@@ -13,8 +14,8 @@ import type { Devices } from './use-devices.js'
 // SSH, by the `devices server` command's own process: no login ever comes to this page.
 
 /** What removing a person does, said before it is done: it cannot be taken back. */
-export const REMOVE_PERSON = (account: string): string =>
-  `Their devices are taken out, and their own user on the server is deleted with everything in it: their GitHub and Claude logins, their copies of projects, and any work they did not push to GitHub. Their finished runs stay on GitHub. @${account} can be invited again later.`
+export const REMOVE_PERSON = (name: string): string =>
+  `Their devices are taken out, and their own user on the server is deleted with everything in it: their logins, their copies of projects, and any work they did not push. ${name} can be invited again later.`
 
 type Tab = 'overview' | 'people' | 'logins'
 
@@ -27,7 +28,7 @@ export function ServerPage({ d, item, onBack }: { d: Devices; item: ServerItem; 
   const [joined, setJoined] = useState<string | undefined>()
   const [codeOn, setCodeOn] = useState(false)
   const read = d.devices[server.address]
-  const owner = read?.persons.find(person => person.owner)?.account
+  const owner = read?.persons.find(person => person.owner)?.name
 
   // A device that got in while a code was on the page got in with it: the dialog says so.
   useDevicesBefore(read?.devices, codeOn, name => setJoined(name))
@@ -118,14 +119,10 @@ export function ServerPage({ d, item, onBack }: { d: Devices; item: ServerItem; 
           ask={person => askLink(host, server.address, person)}
           persons={{
             owner,
-            // The server's owner is the person at this computer: the GitHub account its gh is logged in to.
-            whoAmI: async () => {
-              const me = await ownGithub(host)
-              if (!me.ok) return me
-              return 'account' in me.value ? { ok: true, account: me.value.account } : { ok: false, error: me.value.problem }
-            },
-            nameOwner: async account => {
-              const named = await nameOwner(host, server.address, account)
+            // The server's owner is the person at this computer: their name starts as the one git knows.
+            myName: () => myName(host),
+            nameOwner: async name => {
+              const named = await nameOwner(host, server.address, name)
               if (named.ok) d.setDevices(server.address, named.value)
               return named.ok ? { ok: true } : named
             },
@@ -271,7 +268,7 @@ function WhoCanStart({ host, server, busy, onChange }: { host: ModuleHost; serve
     if (next === who) return
     if (who === 'everyone') {
       const listed = await loadDevices(host, server.address)
-      const others = listed.ok ? listed.value.persons.filter(person => !person.owner && person.from === server.through).map(person => person.account) : []
+      const others = listed.ok ? listed.value.persons.filter(person => !person.owner && person.from === server.through).map(person => person.name) : []
       if (others.length) return setAsking({ who: next, others })
     }
     await onChange(() => setWho(host, server.address, next))
@@ -348,7 +345,7 @@ export function ComputersThrough({ host, machine, busy, everyMs }: { host: Modul
                 {computer.owner !== undefined ? <Server aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> : <Laptop aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
                 <span className="truncate text-sm">{computer.name}</span>
                 {/* Another person's, set up as a server and shared with everyone on this one. */}
-                {computer.owner !== undefined && <span className="shrink-0 text-muted-foreground">{`· @${computer.owner}'s · for everyone`}</span>}
+                {computer.owner !== undefined && <span className="shrink-0 text-muted-foreground">{`· ${computer.owner}'s · for everyone`}</span>}
                 <State tone={computer.online ? 'good' : 'quiet'}>{computer.online ? 'Online' : 'Away'}</State>
               </div>
               {computer.added ? (
@@ -408,7 +405,7 @@ function People({ d, address, ownDevice }: { d: Devices; address: string; ownDev
   const devices = read?.devices
   const persons = read?.persons ?? []
   // By person, the owner first; one list with no heading while nobody else is invited.
-  const groups = persons.length ? persons.map(person => ({ person, devices: (devices ?? []).filter(device => (device.person ?? persons[0]!.account) === person.account) })) : [{ person: undefined, devices: devices ?? [] }]
+  const groups = persons.length ? persons.map(person => ({ person, devices: (devices ?? []).filter(device => (device.person ?? persons[0]!.name) === person.name) })) : [{ person: undefined, devices: devices ?? [] }]
 
   const remove = async (taken: () => Promise<Answer<{ devices: DeviceRow[]; persons: typeof persons; lineRefused: boolean }>>): Promise<void> => {
     setRemoving(true)
@@ -428,34 +425,34 @@ function People({ d, address, ownDevice }: { d: Devices; address: string; ownDev
       {devices !== undefined &&
         (devices.length > 0 || persons.length > 1) &&
         groups.map(({ person, devices: theirs }) => (
-          <div key={person?.account ?? ''} className="space-y-2">
+          <div key={person?.name ?? ''} className="space-y-2">
             {person !== undefined && (
               <div className="flex items-center justify-between gap-4 pt-1">
                 <p className="flex min-w-0 items-center gap-2 font-medium text-muted-foreground">
                   <UserRound className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                  <span className="truncate">{person.owner ? `@${person.account}, the owner` : `@${person.account}`}</span>
+                  <span className="truncate">{person.owner ? `${person.name}, the owner` : person.name}</span>
                 </p>
                 {!person.owner && (
                   <ConfirmDialog
                     trigger={
-                      <Button size="sm" variant="ghost" disabled={busy || removing} aria-label={`Remove @${person.account} from ${address}`}>
+                      <Button size="sm" variant="ghost" disabled={busy || removing} aria-label={`Remove ${person.name} from ${address}`}>
                         Remove person
                       </Button>
                     }
-                    title={`Remove @${person.account} from ${address}?`}
-                    body={REMOVE_PERSON(person.account)}
+                    title={`Remove ${person.name} from ${address}?`}
+                    body={REMOVE_PERSON(person.name)}
                     confirmLabel="Remove person"
                     confirmBusyLabel="Removing…"
-                    onConfirm={() => remove(() => removePerson(host, address, person.account))}
+                    onConfirm={() => remove(() => removePerson(host, address, person.name))}
                   />
                 )}
               </div>
             )}
-            {person?.working && <p className="text-muted-foreground">{`Making @${person.account}'s own user on the server, with their own OpenAgent. This takes a minute or two.`}</p>}
-            {person?.problem !== undefined && !person.working && <p role="alert" className="text-danger">{`@${person.account}'s own user on the server could not be made: ${person.problem.replace(/\.?$/, '.')} Invite them again to try again.`}</p>}
+            {person?.working && <p className="text-muted-foreground">{`Making ${person.name}'s own user on the server, with their own OpenAgent. This takes a minute or two.`}</p>}
+            {person?.problem !== undefined && !person.working && <p role="alert" className="text-danger">{`${person.name}'s own user on the server could not be made: ${person.problem.replace(/\.?$/, '.')} Invite them again to try again.`}</p>}
             {person !== undefined && theirs.length === 0 && <p className="text-muted-foreground">No device yet.</p>}
             {theirs.length > 0 && (
-              <ul aria-label={person !== undefined ? `Devices of @${person.account} on ${address}` : `The devices that are in on ${address}`} className="space-y-2">
+              <ul aria-label={person !== undefined ? `Devices of ${person.name} on ${address}` : `The devices that are in on ${address}`} className="space-y-2">
                 {theirs.map(device => (
                   <DeviceLine key={device.id} device={device} address={address} busy={busy || removing} ownKey={ownDevice !== undefined && idsOf(device).includes(ownDevice)} onRemove={() => void remove(() => removeDevice(host, address, device.id))} />
                 ))}

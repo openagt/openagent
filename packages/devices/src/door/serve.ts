@@ -32,7 +32,7 @@ import { addPerson, computerWordFor, isComputerId, pidAlive, readStore, readStor
 export const ONLY_ITS_OWN = "This computer is only its own person's: it starts no run of anyone else's."
 export const NOT_A_SERVER = 'This computer is not set up as a server: it gives nobody a user of their own.'
 export const NO_OWNER = "This computer's owner is not named yet."
-export const making = (account: string): string => `@${account}'s place on this computer is being made. Try again in a minute.`
+export const making = (name: string): string => `${name}'s place on this computer is being made. Try again in a minute.`
 
 /** How often a line for everyone asks its server who is there. */
 const MIRROR_MS = 60_000
@@ -47,14 +47,14 @@ const MIRROR_MS = 60_000
  * page that only looks whether the computer is there, or which logins it has, makes nobody a user:
  * it asks for every machine it lists, every few seconds, whether its person ever runs one there.
  */
-export function routeFor(line: Line, store: Store, target: string, env: NodeJS.ProcessEnv, person: string | undefined, call: { method: string; path: string }, make: (account: string) => void): Route {
-  const owner = store.persons.find(candidate => candidate.owner)?.account
+export function routeFor(line: Line, store: Store, target: string, env: NodeJS.ProcessEnv, person: string | undefined, call: { method: string; path: string }, make: (name: string) => void): Route {
+  const owner = store.persons.find(candidate => candidate.owner)?.name
   // A line that never heard who its person is takes every call as theirs, as before persons; a line for everyone does not.
-  if (person === undefined || person === line.account || person === owner || (line.account === undefined && line.for !== 'everyone')) return { target }
+  if (person === undefined || person === line.person || person === owner || (line.person === undefined && line.for !== 'everyone')) return { target }
   if (line.for !== 'everyone') return { status: 403, text: ONLY_ITS_OWN }
   if (!env.OPENAGENT_PERSON_HELPER) return { status: 403, text: NOT_A_SERVER }
   if (owner === undefined) return { status: 503, text: NO_OWNER }
-  const theirs = store.persons.find(candidate => candidate.account === person && !candidate.owner)
+  const theirs = store.persons.find(candidate => candidate.name === person && !candidate.owner)
   if (theirs?.ready && theirs.port !== undefined) return { target: `http://127.0.0.1:${theirs.port}` }
   const route = call.path.split('?')[0]
   // Whether the computer is there: its own OpenAgent says so, with its version and name and nothing else.
@@ -98,7 +98,7 @@ export interface ServeOptions {
   mirrorMs?: number
   askMe?: typeof askMe
   /** How the making of a person's user is started on its own; this package's own command, detached, when unsaid. */
-  startWork?: (env: NodeJS.ProcessEnv, account: string) => number | undefined
+  startWork?: (env: NodeJS.ProcessEnv, person: string) => number | undefined
 }
 
 /** The door's port for an OpenAgent at `target`. */
@@ -189,16 +189,16 @@ export async function serve(opts: ServeOptions): Promise<void> {
   let latest: Store | undefined
   // The persons whose user this process started making: one call after another while it is made starts it once.
   const asked = new Set<string>()
-  const make = (account: string, from: string): void => {
-    if (asked.has(account)) return
-    asked.add(account)
+  const make = (name: string, from: string): void => {
+    if (asked.has(name)) return
+    asked.add(name)
     void (async () => {
-      const person = await addPerson(env, account, Date.now(), true)
-      if (!person?.port) return log(`devices: @${account} could not be given a place on this computer: it has as many persons as it can, or no owner`)
+      const person = await addPerson(env, name, Date.now(), true)
+      if (!person?.port) return log(`devices: ${name} could not be given a place on this computer: it has as many persons as it can, or no owner`)
       // Started again only when it is not made and no making of it is at work, as the file says now: a
       // call that read the file a moment earlier may ask for one that was made since. One that failed is asked again.
       const working = person.ready === true || (person.worker !== undefined && pidAlive(person.worker))
-      const known = (kept: Store): Store['persons'][number] | undefined => kept.persons.find(candidate => candidate.account === account && !candidate.owner)
+      const known = (kept: Store): Store['persons'][number] | undefined => kept.persons.find(candidate => candidate.name === name && !candidate.owner)
       // Which server they came from, written before their user is made: whoever reads that it is made reads where they came from too.
       await update(env, kept => {
         const them = known(kept)
@@ -207,15 +207,15 @@ export async function serve(opts: ServeOptions): Promise<void> {
         if (!working) delete them.problem
       })
       if (working) return
-      const worker = (opts.startWork ?? startPersonWork)(env, account)
+      const worker = (opts.startWork ?? startPersonWork)(env, name)
       if (worker === undefined) return
       await update(env, kept => {
         const them = known(kept)
         if (them) them.worker = worker
       })
     })()
-      .catch(err => log(`devices: @${account}'s place on this computer could not be made: ${err instanceof Error ? err.message : String(err)}`))
-      .finally(() => asked.delete(account))
+      .catch(err => log(`devices: ${name}'s place on this computer could not be made: ${err instanceof Error ? err.message : String(err)}`))
+      .finally(() => asked.delete(name))
   }
   const followLines = (store: Store): void => {
     latest = store
@@ -246,7 +246,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
         // The line as the file says it now: who its person is may have been heard since it was asked for.
         route: (person, call) => {
           const now = latest ?? store
-          return routeFor(now.lines.find(candidate => candidate.url === line.url) ?? line, now, opts.target, env, person, call, account => make(account, line.url))
+          return routeFor(now.lines.find(candidate => candidate.url === line.url) ?? line, now, opts.target, env, person, call, name => make(name, line.url))
         },
         watch: () => modes.get(line.url) !== 'full',
         signal: controller.signal,
@@ -301,18 +301,18 @@ export async function serve(opts: ServeOptions): Promise<void> {
   const heardAt = new Map<string, number>()
   const mirror = (): void => {
     for (const line of latest?.lines ?? []) {
-      if ((line.for !== 'everyone' && line.account !== undefined) || line.refused || Date.now() - (heardAt.get(line.key) ?? -Infinity) < (opts.mirrorMs ?? MIRROR_MS)) continue
+      if ((line.for !== 'everyone' && line.person !== undefined) || line.refused || Date.now() - (heardAt.get(line.key) ?? -Infinity) < (opts.mirrorMs ?? MIRROR_MS)) continue
       // Asked once in a while, whatever came of the last time: a server that is away is not asked in a hurry.
       heardAt.set(line.key, Date.now())
       void (opts.askMe ?? askMe)(line)
         .then(async (said: MeThere | undefined) => {
           if (!said) return
-          const same = (kept: Line): boolean => (said.account === undefined || kept.account === said.account) && (said.persons === undefined || JSON.stringify(kept.persons) === JSON.stringify(said.persons))
+          const same = (kept: Line): boolean => (said.person === undefined || kept.person === said.person) && (said.persons === undefined || JSON.stringify(kept.persons) === JSON.stringify(said.persons))
           if (same(line)) return
           await update(env, store => {
             const kept = store.lines.find(candidate => candidate.url === line.url && candidate.key === line.key)
             if (!kept || same(kept)) return
-            if (said.account !== undefined) kept.account = said.account
+            if (said.person !== undefined) kept.person = said.person
             if (said.persons !== undefined && kept.for === 'everyone') kept.persons = said.persons
           })
         })

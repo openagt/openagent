@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { PassThrough, Readable, type Duplex } from 'node:stream'
 import { DATA, END, HEAD, Link, RESET, carriedHeaders, carriedPath, carriedValue, readHead, sendBody, type Frame } from './frames.js'
-import { PERSON_HEADER, personLinePorts, personOf, type Store } from './store.js'
+import { PERSON_HEADER, nameWord, personLinePorts, personOf, type Store } from './store.js'
 
 /**
  * The server's end of the lines. A computer that keeps a line open here is asked through it, and
@@ -155,7 +155,7 @@ export interface LinesOptions {
 export interface LineComputer {
   /** Its device id at the door. */
   id: string
-  /** Which of its addresses this is: its id for its own person's, `<id>@<account>` for the one it has for another person. */
+  /** Which of its addresses this is: its id for its own person's, `<id>@<name>` for the one it has for another person. */
   key: string
   name: string
   /** The address on this server: `http://127.0.0.1:<port>`. */
@@ -163,12 +163,12 @@ export interface LineComputer {
   /** Whose computer it is, when it is not the owner's. */
   person?: string
   /**
-   * Whom of the persons here the address is for, by their GitHub account: the person whose own
+   * Whom of the persons here the address is for, by their name: the person whose own
    * OpenAgent, when they have one, is told of it, and whom each call through it is for. The
    * computer's own person at its own address; absent while this server has no persons.
    */
   viewer?: string
-  /** At an address for another person: whose computer it is, by their GitHub account, the owner's too. */
+  /** At an address for another person: whose computer it is, by their name, the owner's too. */
   owner?: string
 }
 
@@ -235,7 +235,8 @@ export function openLines(opts: LinesOptions = {}): Lines {
       if (value !== undefined) headers[name] = value
     }
     // Whom the call is for: by the address it came to, never by what the caller says.
-    if (viewer !== undefined) headers[PERSON_HEADER] = viewer
+    // A name is any language's letters: a header carries only plain ones.
+    if (viewer !== undefined) headers[PERSON_HEADER] = nameWord(viewer)
     const gone = new AbortController()
     const connection = req.socket
     // A caller that left before the answer ended is no longer answered: the computer is told.
@@ -306,7 +307,7 @@ export function openLines(opts: LinesOptions = {}): Lines {
         const whose = personOf(store, device)
         const of = { id: device.id, name: device.name, ...(device.person !== undefined ? { person: device.person } : {}) }
         wanted.set(device.id, { ...of, key: device.id, port: device.line.port, ...(whose !== undefined ? { viewer: whose } : {}) })
-        for (const [account, port] of Object.entries(device.line.others ?? {})) wanted.set(addressKey(device.id, account), { ...of, key: addressKey(device.id, account), port, viewer: account, ...(whose !== undefined ? { owner: whose } : {}) })
+        for (const [name, port] of Object.entries(device.line.others ?? {})) wanted.set(addressKey(device.id, name), { ...of, key: addressKey(device.id, name), port, viewer: name, ...(whose !== undefined ? { owner: whose } : {}) })
       }
       let changed = false
       for (const [key, held] of addresses) {
@@ -377,10 +378,10 @@ export interface ToTell {
  */
 export function whomToTell(store: Store, target: string, ports: { from: number; count: number }, computers: readonly LineComputer[]): ToTell[] {
   const persons = store.persons.filter(person => !person.owner && person.port !== undefined)
-  const theirs = (account: string | undefined): boolean => account !== undefined && persons.some(person => person.account === account)
+  const theirs = (name: string | undefined): boolean => name !== undefined && persons.some(person => person.name === name)
   return [
     { target, ports, computers: computers.filter(computer => !theirs(computer.viewer)) },
-    ...persons.map(({ account, port }) => ({ person: account, target: `http://127.0.0.1:${port}`, ports: personLinePorts(port!), computers: computers.filter(computer => computer.viewer === account) })),
+    ...persons.map(({ name, port }) => ({ person: name, target: `http://127.0.0.1:${port}`, ports: personLinePorts(port!), computers: computers.filter(computer => computer.viewer === name) })),
   ]
 }
 

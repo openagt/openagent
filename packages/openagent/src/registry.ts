@@ -48,7 +48,7 @@ export interface MachineRecord {
    */
   host?: string
   /**
-   * Whose computer it is, by their GitHub account, when it is another person's: a computer that
+   * Whose computer it is, by the person's name, when it is another person's: a computer that
    * keeps a line to a server for everyone there. A run started on it uses this person's own logins
    * there, which reach it as copies.
    */
@@ -62,9 +62,14 @@ export interface MachineRecord {
   listed?: string[]
 }
 
-/** A GitHub account as a person on a computer is known by: letters, digits and single dashes, at most 39. */
+/** A GitHub account's name: letters, digits and single dashes, at most 39. */
 export function isAccount(value: unknown): value is string {
   return typeof value === 'string' && /^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,38}$/.test(value)
+}
+
+/** A person's name as a computer several people use knows them: letters of any language, digits, spaces, dots, apostrophes and dashes, at most 40. */
+export function isPersonName(value: unknown): value is string {
+  return typeof value === 'string' && /^[\p{L}\p{N}][\p{L}\p{M}\p{N} .'’-]{0,39}$/u.test(value) && !/\s\s|\s$/.test(value)
 }
 
 /** The cap on saved machines and on a name's length, so a hand-edited file cannot bloat. */
@@ -433,7 +438,7 @@ function sanitizeMachines(value: unknown): MachineRecord[] {
     if (typeof label !== 'string' || typeof url !== 'string' || typeof key !== 'string' || typeof door !== 'string') continue
     if (!url || !key || !door || seen.has(url)) continue
     seen.add(url)
-    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, key, door, ...(typeof pin === 'string' && pin ? { pin } : {}), ...(isHostName(host) ? { host } : {}), ...(isAccount(owner) ? { owner } : {}), ...(told === true ? { told: true as const } : {}), ...(ids.length ? { listed: ids } : {}) })
+    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, key, door, ...(typeof pin === 'string' && pin ? { pin } : {}), ...(isHostName(host) ? { host } : {}), ...(isPersonName(owner) ? { owner } : {}), ...(told === true ? { told: true as const } : {}), ...(ids.length ? { listed: ids } : {}) })
   }
   return machines
 }
@@ -702,7 +707,7 @@ export async function addMachine(
       key: machine.key,
       door: machine.door,
       ...(machine.pin ? { pin: machine.pin } : {}),
-      ...(isAccount(machine.owner) ? { owner: machine.owner } : {}),
+      ...(isPersonName(machine.owner) ? { owner: machine.owner } : {}),
     }
     const before = registry.machines ?? []
     const machines = [record, ...before.filter(saved => saved.id !== record.id)].slice(0, MACHINE_LIMITS.count)

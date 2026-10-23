@@ -165,19 +165,25 @@ export function RanOut() {
 
 /** How the dialog learns and names the computer's owner, for a code made for someone else. */
 export interface Persons {
-  /** The owner's GitHub account, once named. */
+  /** The owner's name, once named. */
   owner: string | undefined
-  /** The GitHub account this computer is logged in to: who the owner would be. */
-  whoAmI: () => Promise<{ ok: true; account: string } | { ok: false; error: string }>
+  /** The name of the person at this computer, as git knows it: what the owner's name starts as. */
+  myName: () => Promise<string | undefined>
   /** Name the owner, once. */
-  nameOwner: (account: string) => Promise<{ ok: true } | { ok: false; error: string }>
+  nameOwner: (name: string) => Promise<{ ok: true } | { ok: false; error: string }>
 }
 
-/** A GitHub account as a person types it: letters, digits and single dashes, with or without an `@`. */
-export const accountOf = (said: string): string | undefined => {
-  const account = said.trim().replace(/^@/, '').toLowerCase()
-  return /^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,38}$/.test(account) ? account : undefined
+/** A person's name as it is typed: letters of any language, digits, spaces, dots, apostrophes and dashes, at most 40. */
+export const nameOf = (said: string): string | undefined => {
+  const name = said.trim().replace(/\s+/g, ' ')
+  return /^[\p{L}\p{N}][\p{L}\p{M}\p{N} .'’-]{0,39}$/u.test(name) ? name : undefined
 }
+
+/** Whether two names are one person's: their letters' case is not looked at. */
+const samePerson = (a: string, b: string): boolean => a.toLocaleLowerCase() === b.toLocaleLowerCase()
+
+/** What is said under a name field that holds no name. */
+const NOT_A_NAME = 'A name is letters and digits, with spaces, dots, apostrophes or dashes between, at most 40.'
 
 /**
  * A phone gets in: the code as a QR code its camera opens, and the link to send it when it has no
@@ -221,7 +227,7 @@ export function PhoneCode({
   return (
     <Dialog open onOpenChange={open => !open && onClose()} title={title}>
       <div className="space-y-4">
-        {forWhom !== undefined && <p className="text-sm font-medium">{`For @${forWhom}. Send them the link.`}</p>}
+        {forWhom !== undefined && <p className="text-sm font-medium">{`For ${forWhom}. Send them the link.`}</p>}
         {joined !== undefined ? (
           <Joined>{`${joined} is in.`}</Joined>
         ) : asking || error !== undefined || !code ? (
@@ -304,80 +310,77 @@ function CopyLink({ text }: { text: string }) {
 }
 
 /**
- * The owner is named the first time a code is made for someone else, by the GitHub account this
- * computer is logged in to: until then nobody but the owner is in. Answers once the owner is named.
+ * The owner is named the first time a code is made for someone else: until then nobody but the
+ * owner is in. The name starts as the one git knows for the person at this computer.
  */
 export function useNaming(persons: Persons) {
-  // The owner being named: this computer's account as GitHub says it, or why it cannot be said.
-  const [naming, setNaming] = useState<{ account?: string; error?: string; busy: boolean } | undefined>()
+  // The owner being named: the name typed so far, and why the last try did not go.
+  const [naming, setNaming] = useState<{ typed: string; error?: string; busy: boolean } | undefined>()
   const ask = async (): Promise<void> => {
-    setNaming({ busy: true })
-    const me = await persons.whoAmI().catch(failed)
-    setNaming(me.ok ? { account: me.account, busy: false } : { error: me.error, busy: false })
+    setNaming({ typed: '', busy: true })
+    const known = await persons.myName().catch(() => undefined)
+    setNaming(was => ({ typed: was?.typed || known || '', busy: false }))
   }
+  const type = (typed: string): void => setNaming(was => was && { ...was, typed })
   const confirm = async (owner: string): Promise<boolean> => {
-    setNaming({ account: owner, busy: true })
+    setNaming({ typed: owner, busy: true })
     const named = await persons.nameOwner(owner).catch(failed)
     if (!named.ok) {
-      setNaming({ account: owner, error: named.error, busy: false })
+      setNaming({ typed: owner, error: named.error, busy: false })
       return false
     }
     setNaming(undefined)
     return true
   }
-  return { naming, ask, confirm }
+  return { naming, ask, type, confirm }
 }
 
-/** The first time someone else is let in: the person at the page says they are the owner. */
-export function WhoAreYou({ title, naming, onAgain, onConfirm, onClose }: { title: string; naming: { account?: string; error?: string; busy: boolean }; onAgain: () => void; onConfirm: (owner: string) => void; onClose: () => void }) {
+/** The first time someone else is let in: the person at the page names themselves, the owner. */
+export function WhoAreYou({ title, naming, onType, onConfirm, onClose }: { title: string; naming: { typed: string; error?: string; busy: boolean }; onType: (typed: string) => void; onConfirm: (owner: string) => void; onClose: () => void }) {
+  const name = nameOf(naming.typed)
   return (
     <Dialog open onOpenChange={open => !open && onClose()} title={title}>
-      <div className="space-y-4">
-        {naming.account !== undefined ? (
-          <div className="space-y-2">
-            <p className="text-sm">{`First, who are you? This computer is logged in to GitHub as @${naming.account}.`}</p>
-            <p className="text-xs text-muted-foreground">That account becomes the owner, the one who invites. The devices already in are yours.</p>
-          </div>
-        ) : naming.busy ? (
-          <div role="status" className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" aria-hidden />
-            Asking GitHub who you are…
-          </div>
-        ) : null}
+      <form
+        className="space-y-4"
+        onSubmit={event => {
+          event.preventDefault()
+          if (name !== undefined) onConfirm(name)
+        }}
+      >
+        <div className="space-y-1">
+          <label htmlFor="owner-name" className="text-sm">
+            First, your name?
+          </label>
+          <Input id="owner-name" autoFocus disabled={naming.busy} value={naming.typed} onChange={event => onType(event.target.value)} className="h-8 bg-background px-2 text-sm" />
+          <p className="text-xs text-muted-foreground">You are the owner, the one who invites. The devices already in are yours.</p>
+          {naming.typed.trim() !== '' && name === undefined && <p className="text-xs text-danger">{NOT_A_NAME}</p>}
+        </div>
         {naming.error !== undefined && <Problem>{naming.error}</Problem>}
         <div className="flex justify-end gap-2">
-          <Button size="sm" variant="outline" onClick={onClose}>
+          <Button size="sm" variant="outline" type="button" onClick={onClose}>
             Cancel
           </Button>
-          {naming.account !== undefined ? (
-            <Button size="sm" disabled={naming.busy} onClick={() => onConfirm(naming.account!)}>
-              {"Yes, that's me"}
-            </Button>
-          ) : (
-            !naming.busy && (
-              <Button size="sm" onClick={onAgain}>
-                <RotateCw className="h-3.5 w-3.5" aria-hidden />
-                Try again
-              </Button>
-            )
-          )}
+          <Button size="sm" type="submit" disabled={naming.busy || name === undefined}>
+            {naming.busy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
+            Continue
+          </Button>
         </div>
-      </div>
+      </form>
     </Dialog>
   )
 }
 
-/** Who a phone's code is for, on a computer that tells persons apart: the person at the page, or someone else by their GitHub account. */
+/** Who a phone's code is for, on a computer that tells persons apart: the person at the page, or someone else by their name. */
 function ForWhom({ title, persons, onPicked, onClose }: { title: string; persons: Persons; onPicked: (person: string) => void; onClose: () => void }) {
   const [whom, setWhom] = useState<'me' | 'other'>('me')
   const [typed, setTyped] = useState('')
-  const { naming, ask, confirm } = useNaming(persons)
-  const account = accountOf(typed)
+  const { naming, ask, type, confirm } = useNaming(persons)
+  const name = nameOf(typed)
 
   const go = (): void => {
     if (whom === 'me') return onPicked('')
-    if (account === undefined) return
-    if (persons.owner !== undefined) return onPicked(account === persons.owner ? '' : account)
+    if (name === undefined) return
+    if (persons.owner !== undefined) return onPicked(samePerson(name, persons.owner) ? '' : name)
     void ask()
   }
 
@@ -386,9 +389,9 @@ function ForWhom({ title, persons, onPicked, onClose }: { title: string; persons
       <WhoAreYou
         title={title}
         naming={naming}
-        onAgain={go}
-        // The owner's own account is the owner's device, as "Me" is.
-        onConfirm={owner => void confirm(owner).then(named => named && onPicked(account === undefined || account === owner ? '' : account))}
+        onType={type}
+        // The owner's own name is the owner's device, as "Me" is.
+        onConfirm={owner => void confirm(owner).then(named => named && onPicked(name === undefined || samePerson(name, owner) ? '' : name))}
         onClose={onClose}
       />
     )
@@ -415,21 +418,21 @@ function ForWhom({ title, persons, onPicked, onClose }: { title: string; persons
           <RadioGroupOption value="other" className="flex-nowrap items-start [&>[data-slot=radio-group-item]]:mt-0.5">
             <span>
               Someone else
-              <span className="block text-xs text-muted-foreground">By their GitHub account. On a server they get a user of their own, and their runs use their own GitHub and Claude logins. On any other computer they use this computer's.</span>
+              <span className="block text-xs text-muted-foreground">By their name. On a server they get a user of their own, and their runs use their own logins. On any other computer they use this computer's.</span>
             </span>
           </RadioGroupOption>
         </RadioGroup>
         {whom === 'other' && (
           <div className="space-y-1">
-            <Input autoFocus aria-label="Their GitHub account" placeholder="their-github-account" value={typed} onChange={event => setTyped(event.target.value)} className="h-8 bg-background px-2 text-sm" />
-            {typed.trim() !== '' && account === undefined && <p className="text-xs text-danger">That is not a GitHub account.</p>}
+            <Input autoFocus aria-label="Their name" placeholder="Their name" value={typed} onChange={event => setTyped(event.target.value)} className="h-8 bg-background px-2 text-sm" />
+            {typed.trim() !== '' && name === undefined && <p className="text-xs text-danger">{NOT_A_NAME}</p>}
           </div>
         )}
         <div className="flex justify-end gap-2">
           <Button size="sm" variant="outline" type="button" onClick={onClose}>
             Cancel
           </Button>
-          <Button size="sm" type="submit" disabled={whom === 'other' && account === undefined}>
+          <Button size="sm" type="submit" disabled={whom === 'other' && name === undefined}>
             Continue
           </Button>
         </div>
@@ -439,7 +442,7 @@ function ForWhom({ title, persons, onPicked, onClose }: { title: string; persons
 }
 
 /**
- * Someone else is let in at a server, by their GitHub account: they type where and the code on
+ * Someone else is let in at a server, by their name: they type where and the code on
  * their computer, or scan it as a QR code with their phone. The first time, the person at the
  * page says they are the owner.
  */
@@ -464,18 +467,20 @@ export function Invite({
   const [typed, setTyped] = useState('')
   const [person, setPerson] = useState<string | undefined>()
   const [qr, setQr] = useState(false)
-  const { naming, ask: askOwner, confirm } = useNaming(persons)
+  const { naming, ask: askOwner, type, confirm } = useNaming(persons)
   const { code, asking, error, left, expired, again } = useCode(said => ask(said!), false, next => (setQr(false), onCode?.(next)), joined !== undefined)
-  const account = accountOf(typed)
+  const name = nameOf(typed)
+  // The owner's own name is no one to invite: their own phone is added with Add device.
+  const own = name !== undefined && persons.owner !== undefined && samePerson(name, persons.owner)
 
   const make = (owner = persons.owner): void => {
-    if (account === undefined) return
+    if (name === undefined || (owner !== undefined && samePerson(name, owner))) return
     if (owner === undefined) return void askOwner()
-    setPerson(account)
-    void again(account)
+    setPerson(name)
+    void again(name)
   }
 
-  if (naming !== undefined) return <WhoAreYou title={title} naming={naming} onAgain={() => make()} onConfirm={owner => void confirm(owner).then(named => named && make(owner))} onClose={onClose} />
+  if (naming !== undefined) return <WhoAreYou title={title} naming={naming} onType={type} onConfirm={owner => void confirm(owner).then(named => named && make(owner))} onClose={onClose} />
 
   return (
     <Dialog open onOpenChange={open => !open && onClose()} title={title}>
@@ -487,28 +492,29 @@ export function Invite({
             make()
           }}
         >
-          <label htmlFor="invite-account" className="text-xs text-muted-foreground">
-            Their GitHub account
+          <label htmlFor="invite-name" className="text-xs text-muted-foreground">
+            Their name
           </label>
           <div className="flex gap-2">
-            <Input id="invite-account" autoFocus placeholder="their-github-account" value={typed} onChange={event => setTyped(event.target.value)} className="h-8 min-w-0 flex-1 bg-background px-2 text-sm" />
-            {(person === undefined || account !== person) && (
-              <Button size="sm" type="submit" disabled={account === undefined || asking}>
+            <Input id="invite-name" autoFocus placeholder="Their name" value={typed} onChange={event => setTyped(event.target.value)} className="h-8 min-w-0 flex-1 bg-background px-2 text-sm" />
+            {(person === undefined || name !== person) && (
+              <Button size="sm" type="submit" disabled={name === undefined || own || asking}>
                 Make the code
               </Button>
             )}
           </div>
-          {typed.trim() !== '' && account === undefined && <p className="text-xs text-danger">That is not a GitHub account.</p>}
+          {typed.trim() !== '' && name === undefined && <p className="text-xs text-danger">{NOT_A_NAME}</p>}
+          {own && <p className="text-xs text-muted-foreground">That is you: add your own phone or computer with Add device.</p>}
         </form>
         {person === undefined ? null : joined !== undefined ? (
-          <Joined>{`${joined} is in, for @${person}.`}</Joined>
+          <Joined>{`${joined} is in, for ${person}.`}</Joined>
         ) : asking || error !== undefined || !code?.where || !code.code ? (
           <NoCodeYet asking={asking} error={error ?? (code ? 'the server gives no code to type yet: update it first' : undefined)} />
         ) : expired ? (
           <RanOut />
         ) : (
           <>
-            <p className="text-xs text-muted-foreground">{`@${person} gets a user of their own on ${label}: their own runs, with their own GitHub and Claude logins. Send them this:`}</p>
+            <p className="text-xs text-muted-foreground">{`${person} gets a user of their own on ${label}: their own runs, with their own logins. Send them this:`}</p>
             {qr ? (
               <div className="flex justify-center">
                 <QrCode text={code.url} label="The code a new device scans" />

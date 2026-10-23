@@ -122,8 +122,8 @@ export function itemsOf(sources: Sources): Item[] {
   }
 
   // This person's own phones at the servers they are in at: not this computer, not a computer on a line there.
-  const mineAt = (listed: readonly ServerDevice[], persons: readonly { account: string; owner?: true }[], own: string | undefined): ServerDevice[] => {
-    const owner = persons.find(person => person.owner)?.account
+  const mineAt = (listed: readonly ServerDevice[], persons: readonly { name: string; owner?: true }[], own: string | undefined): ServerDevice[] => {
+    const owner = persons.find(person => person.owner)?.name
     return listed.filter(device => !device.line && !device.own && !(own !== undefined && idsOf(device).includes(own)) && (device.person === undefined || device.person === owner) && !AGENT_NAME.test(device.name))
   }
   for (const server of servers) {

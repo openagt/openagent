@@ -18,11 +18,8 @@ export const hostOf = (url: string): string => {
   }
 }
 
-/** Names as a sentence says them: `@a`, `@a and @b`, `@a, @b and @c`. */
-export const named = (accounts: readonly string[]): string => {
-  const said = accounts.map(account => `@${account}`)
-  return said.length < 2 ? (said[0] ?? '') : `${said.slice(0, -1).join(', ')} and ${said.at(-1)}`
-}
+/** Names as a sentence says them: `a`, `a and b`, `a, b and c`. */
+export const named = (names: readonly string[]): string => (names.length < 2 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`)
 
 /** Whether version `a` is older than `b`, by their three numbers; false when either is not three numbers. */
 export function olderThan(a: string, b: string): boolean {

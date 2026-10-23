@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ComponentType, type FormEvent } from 'react'
 import { Globe, Loader2, Monitor, Server, Smartphone, Ticket, Wifi } from 'lucide-react'
 import { Button, Checkbox, Dialog, Input, cn, type ModuleMachine } from '@openagt/dashboard/module'
-import { addDevice, nameOwner, ownGithub, setSwitch } from './devices.js'
+import { addDevice, myName, nameOwner, setSwitch } from './devices.js'
 import { readPersonThere } from './servers.js'
 import { CodeCard, Joined, NoCodeYet, PhoneCode, RanOut, Waiting, clock, useCode, type Given, type GivenAnswer } from './codes.js'
 import { ConnectServer } from './ConnectServer.js'
@@ -192,10 +192,10 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
       {...(!server && (status?.https || status?.persons.length)
         ? {
             persons: {
-              owner: status.persons.find(person => person.owner)?.account,
-              whoAmI: () => ownGithub(host),
-              nameOwner: async account => {
-                const named = await nameOwner(host, account)
+              owner: status.persons.find(person => person.owner)?.name,
+              myName: () => myName(host),
+              nameOwner: async name => {
+                const named = await nameOwner(host, name)
                 await d.reloadDoor().catch(() => {})
                 return named.ok ? { ok: true } : named
               },

@@ -4,6 +4,7 @@ import { askGithub, giveGithubLogin, scrubbed, type Failed, type GithubGiven } f
 import { exec as ownExec, lastLines, type Exec, type Session } from './ssh.js'
 import { LOGIN_TIMEOUT_MS, SERVER_USER, githubLogoutScript, quoted, type LoginScript } from './steps.js'
 import { BEAT_MS, MARK_LENGTH, atWork, heartbeat, update, type Login, type LoginKind, type Store } from './store.js'
+import { nameFromWord } from '../door/store.js'
 
 /**
  * The logins of one person's own OpenAgent, on a computer several people use. There, each person
@@ -31,13 +32,13 @@ export function markOf(login: string): string {
   return createHash('sha256').update(login).digest('hex').slice(0, MARK_LENGTH)
 }
 
-/** What tells an OpenAgent it is one person's on a computer several people use: their GitHub account. */
+/** What tells an OpenAgent it is one person's on a computer several people use: their name, as `nameWord` writes it. */
 export const PERSON_ENV = 'OPENAGENT_PERSON'
 
 /** The person this OpenAgent is, when it is one person's on a computer several people use. */
 export function personHere(env: NodeJS.ProcessEnv): string | undefined {
-  const said = env[PERSON_ENV]?.trim().toLowerCase()
-  return said && /^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,38}$/.test(said) ? said : undefined
+  const said = env[PERSON_ENV]?.trim()
+  return said ? nameFromWord(said) : undefined
 }
 
 /** Where a person's Claude login is kept, in their user's home: the computer's service reads it as it starts their OpenAgent. */
@@ -133,16 +134,9 @@ async function send(session: Session, { as, script: text }: LoginScript, login =
   return said.code === 0 ? { ok: true } : { ok: false, error: lastLines({ out: scrubbed(said.out, login), err: scrubbed(said.err, login) }) || 'The login could not be written.' }
 }
 
-/**
- * A GitHub login is the person's only when it is their own account: one of anyone else's is taken
- * off again at once. Then git is given the account's name and email.
- */
-async function theirs(session: Session, person: string, given: GithubGiven): Promise<GithubGiven> {
+/** Once a GitHub login is there, git is given the account's name and email. */
+async function named(session: Session, given: GithubGiven): Promise<GithubGiven> {
   if (!given.ok) return given
-  if (given.account.toLowerCase() !== person) {
-    await send(session, githubLogoutScript())
-    return { ok: false, error: `That is the GitHub login of @${given.account}. This OpenAgent is @${person}'s: log in to GitHub as @${person}.`, reached: true }
-  }
   const named = await send(session, ownIdentityScript())
   return named.ok ? given : { ok: false, error: `The login is there; git could not be given its name: ${named.error}`, reached: true }
 }
@@ -199,8 +193,6 @@ function endWaiting(pid: number | undefined): void {
 
 export interface OwnOptions {
   env: NodeJS.ProcessEnv
-  /** The person this OpenAgent is. */
-  person: string
   exec?: Exec
 }
 
@@ -211,7 +203,7 @@ export async function giveOwnGithub(opts: OwnOptions, login: string, from?: stri
   const word = login.trim()
   let given: GithubGiven = { ok: false, error: 'The work stopped before it ended.', reached: false }
   try {
-    given = await theirs(session, opts.person, await giveGithubLogin(session, word))
+    given = await named(session, await giveGithubLogin(session, word))
   } finally {
     await update(opts.env, store => noteOwnGithub(store, given, { login: word, ...(from !== undefined ? { from } : {}) }))
   }
@@ -229,7 +221,7 @@ export async function askOwnGithub(opts: OwnOptions & { signal?: AbortSignal; be
   let given: GithubGiven = { ok: false, error: 'The work stopped before it ended.', reached: true }
   try {
     const shown = (code: string): Promise<unknown> => update(opts.env, store => void (mine(store.own?.github) && Object.assign(store.own!.github!, { asking: true, code })))
-    given = await theirs(localSession(opts.exec), opts.person, await askGithub(session, shown))
+    given = await named(localSession(opts.exec), await askGithub(session, shown))
   } finally {
     await beating.stop()
     await update(opts.env, store => void (mine(store.own?.github) && noteOwnGithub(store, given))).catch(() => {})

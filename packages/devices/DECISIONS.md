@@ -45,7 +45,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   entry each time, which left the old ones to be removed by hand.
 
 ## Persons
-- A person on a computer is their GitHub account. Picked over a name typed at each invite.
+- A person on a computer is a name, typed at the invite, whatever git host they use; the owner
+  names themselves the same way the first time. Picked over their GitHub account, which left out
+  a person on another git host.
 - Only the computer's owner invites. Picked over anyone who is in inviting; letting the owner
   allow others to invite can come later.
 - A computer only one person uses is unchanged: OpenAgent asks who the owner is only the first

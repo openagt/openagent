@@ -40,12 +40,12 @@ test('with no git name, the git host\'s name, then the login; with no git host e
   assert.deepEqual(await readPerson({ gitName: async () => undefined, projects: async () => [], gitHost: github }), { name: userInfo().username })
 })
 
-test('a page another person\'s device opened shows that person, by the account the door said; the computer\'s own person otherwise', async () => {
+test('a page another person\'s device opened shows that person, by the name the door said; the computer\'s own person otherwise', async () => {
   const own = { name: 'Ada Lovelace', login: 'Ada', avatar: 'https://example.com/ada.png' }
-  assert.deepEqual(await asCaller(undefined, async () => personAtPage(own)), own)
-  assert.deepEqual(await asCaller('ada', async () => personAtPage(own)), own, 'the owner\'s own device')
-  assert.deepEqual(await asCaller('rom', async () => personAtPage(own)), { name: 'rom', login: 'rom', avatar: 'https://github.com/rom.png' })
-  // What is no account a door writes is no person: the page shows the computer's own.
-  for (const said of ['Rom', 'rom/../x', ['rom', 'eve'], '']) assert.deepEqual(await asCaller(said, async () => personAtPage(own)), own)
+  assert.deepEqual(await asCaller(undefined, async () => personAtPage(own)), own, 'the owner\'s own device: the door says nobody')
+  assert.deepEqual(await asCaller('Rom%20Brillout', async () => personAtPage(own)), { name: 'Rom Brillout' })
+  assert.deepEqual(await asCaller('%D7%A8%D7%95%D7%9D', async () => personAtPage(own)), { name: 'רום' })
+  // A word that is no name, or no word, is nobody: the page is the computer's own.
+  for (const said of ['Rom%0AX', '%E0%A4%A', '<rom>', ['rom', 'eve'], '']) assert.deepEqual(await asCaller(said, async () => personAtPage(own)), own)
   assert.deepEqual(personAtPage(own), own, 'outside a call')
 })

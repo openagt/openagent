@@ -131,13 +131,13 @@ test('link asks the server\'s door; added says nothing is left to add; forget ta
     assert.deepEqual((await run(home.env, ['link', 'BOX.example.com'], { exec })).out, link)
     assert.deepEqual(calls[0]!.args.slice(-5, -1), ['-l', 'root', '--', 'box.example.com'])
 
-    // For a person: the account goes to the server as one word of the script, in small letters.
+    // For a person: their name goes to the server as one word of the script, an apostrophe and all.
     const forRom = pretendServer(() => ({ out: JSON.stringify(link) }))
-    assert.deepEqual((await run(home.env, ['link', 'box.example.com', '--for', 'Rom'], { exec: forRom.exec })).out, link)
-    assert.match(forRom.calls[0]!.script, /^FOR='rom'$/m)
+    assert.deepEqual((await run(home.env, ['link', 'box.example.com', '--for', " Rom  O'Neil "], { exec: forRom.exec })).out, link)
+    assert.match(forRom.calls[0]!.script, /^FOR='Rom O'\\''Neil'$/m)
     assert.match(forRom.calls[0]!.script, /devices add --for "\$FOR"\n/)
-    const notAccount = await run(home.env, ['link', 'box.example.com', '--for', "x'; reboot"], { exec: forRom.exec })
-    assert.deepEqual([notAccount.code, notAccount.err, forRom.calls.length], [1, ["x'; reboot is not a GitHub account"], 1])
+    const notName = await run(home.env, ['link', 'box.example.com', '--for', "x; reboot"], { exec: forRom.exec })
+    assert.deepEqual([notName.code, notName.err, forRom.calls.length], [1, ['x; reboot is not a name: letters, digits, spaces, dots, apostrophes and dashes, at most 40'], 1])
 
     const elsewhere = await run(home.env, ['link', 'box.example.com'], { exec: pretendServer(() => ({ out: JSON.stringify({ ...link, url: 'https://evil.example/_devices/enter#code.pin' }) })).exec })
     assert.equal(elsewhere.code, 1)

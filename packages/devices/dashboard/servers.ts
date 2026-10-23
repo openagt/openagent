@@ -102,13 +102,13 @@ export interface DeviceRow {
   also?: string[]
   /** That computer is this one, by the line it keeps open to the server. */
   own?: true
-  /** Whose device it is, by their GitHub account, once the server has persons. */
+  /** Whose device it is, by their name, once the server has persons. */
   person?: string
 }
 
-/** A person on a server, by their GitHub account; the owner first. */
+/** A person on a server, by their name; the owner first. */
 export interface PersonRow {
-  account: string
+  name: string
   owner?: true
   /** Their own user and OpenAgent on the server are being made right now. */
   working?: true
@@ -205,10 +205,10 @@ export function readDevices(output: unknown): DevicesRead | undefined {
   }
   const people: PersonRow[] = []
   for (const entry of Array.isArray(persons) ? persons : []) {
-    const { account, owner, working, problem, from, removed, kept } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
-    const [known, why, via] = [text(account), text(problem), text(from)]
-    if (known && !people.some(person => person.account === known))
-      people.push({ account: known, ...(owner === true ? { owner: true as const } : {}), ...(working === true ? { working: true as const } : {}), ...(why ? { problem: why } : {}), ...(via ? { from: via } : {}), ...(removed === true ? { removed: true as const } : {}), ...(kept === true ? { kept: true as const } : {}) })
+    const { name, owner, working, problem, from, removed, kept } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
+    const [known, why, via] = [text(name), text(problem), text(from)]
+    if (known && !people.some(person => person.name === known))
+      people.push({ name: known, ...(owner === true ? { owner: true as const } : {}), ...(working === true ? { working: true as const } : {}), ...(why ? { problem: why } : {}), ...(via ? { from: via } : {}), ...(removed === true ? { removed: true as const } : {}), ...(kept === true ? { kept: true as const } : {}) })
   }
   return { devices: rows, persons: people, lineRefused: lineRefused === true }
 }
@@ -273,10 +273,10 @@ export const loadAccounts = (host: ModuleHost, address: string): Promise<Answer<
 export const addAccount = (host: ModuleHost, address: string, name: string): Promise<Answer<ServerRow[]>> => run(host, ['account-add', address, name], readServers)
 export const removeAccount = (host: ModuleHost, address: string, name: string): Promise<Answer<ServerRow[]>> => run(host, ['account-remove', address, name], readServers)
 export const askLink = (host: ModuleHost, address: string, person?: string): Promise<Answer<DoorLink>> => run(host, ['link', address, ...(person !== undefined ? ['--for', person] : [])], readLink)
-/** Name the server's owner at its door, by their GitHub account. */
-export const nameOwner = (host: ModuleHost, address: string, account: string): Promise<Answer<DevicesRead>> => run(host, ['owner', address, account], readDevices)
+/** Name the server's owner at its door. */
+export const nameOwner = (host: ModuleHost, address: string, name: string): Promise<Answer<DevicesRead>> => run(host, ['owner', address, name], readDevices)
 /** Take a person out on the server, with every device of theirs. */
-export const removePerson = (host: ModuleHost, address: string, account: string): Promise<Answer<DevicesRead>> => run(host, ['remove-person', address, account], readDevices)
+export const removePerson = (host: ModuleHost, address: string, name: string): Promise<Answer<DevicesRead>> => run(host, ['remove-person', address, name], readDevices)
 export const markAdded = (host: ModuleHost, address: string): Promise<Answer<ServerRow[]>> => run(host, ['added', address], readServers)
 export const forget = (host: ModuleHost, address: string): Promise<Answer<ServerRow[]>> => run(host, ['forget', address], readServers)
 /** Keep a line open from this computer to the server, and say what the server may do through it. */
@@ -325,7 +325,8 @@ function readShared(output: unknown): SharedRow[] | undefined {
 
 /** What a server's door says of this computer's person there: who they are, whether they are its owner, and their devices. */
 export interface PersonThere {
-  account?: string
+  /** Their name there, once the server has persons. */
+  person?: string
   owner: boolean
   devices: DeviceRow[]
 }
@@ -333,10 +334,10 @@ export interface PersonThere {
 /** The door's answer, read as another computer's data: anything that is not what it should be is left out. */
 export function readPersonThere(said: unknown): PersonThere | undefined {
   if (!said || typeof said !== 'object') return undefined
-  const { account, owner } = said as Record<string, unknown>
+  const { person, owner } = said as Record<string, unknown>
   const listed = readDevices(said)
-  const who = text(account)
-  return listed && typeof owner === 'boolean' ? { ...(who ? { account: who } : {}), owner, devices: listed.devices } : undefined
+  const who = text(person)
+  return listed && typeof owner === 'boolean' ? { ...(who ? { person: who } : {}), owner, devices: listed.devices } : undefined
 }
 
 /** What this person's own OpenAgent on the server says of its logins. */

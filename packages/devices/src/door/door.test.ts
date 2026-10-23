@@ -466,14 +466,19 @@ test('on a computer with persons, each call says whose device made it, and a hea
 
     assert.ok(await nameOwner(r.env, 'ada'))
     assert.ok(await addPerson(r.env, 'rom'))
+    assert.ok(await addPerson(r.env, 'Rom Brillout'))
     const roms = (await enter(r.env, (await addCode(r.env, Date.now(), 'rom')).code, 'a phone'))!
     assert.equal(roms.person, 'rom')
+    const brillouts = (await enter(r.env, (await addCode(r.env, Date.now(), 'Rom Brillout')).code, 'a phone'))!
 
-    // The device that was in before the owner was named is the owner's.
+    // The device that was in before the owner was named is the owner's: the owner at their own page, said by nobody.
     await fetch(`${r.at}/`, { headers: { cookie: before.cookie, [PERSON_HEADER]: 'rom' } })
-    assert.equal(r.asked.at(-1)!.headers[PERSON_HEADER], 'ada')
+    assert.equal(r.asked.at(-1)!.headers[PERSON_HEADER], undefined)
     await fetch(`${r.at}/`, { headers: { cookie: `${DEVICE_COOKIE}=${roms.id}.${roms.key}`, [PERSON_HEADER]: 'ada' } })
     assert.equal(r.asked.at(-1)!.headers[PERSON_HEADER], 'rom')
+    // A name of any letters goes as a header carries it: plain letters, and % with the number of any other.
+    await fetch(`${r.at}/`, { headers: { cookie: `${DEVICE_COOKIE}=${brillouts.id}.${brillouts.key}` } })
+    assert.equal(r.asked.at(-1)!.headers[PERSON_HEADER], 'Rom%20Brillout')
   } finally {
     await r.close()
   }
@@ -508,7 +513,7 @@ test('a person with an OpenAgent of their own reaches it and no other; the owner
     await nameOwner(r.env, 'ada')
     await addPerson(r.env, 'eve')
     await addPerson(r.env, 'rom')
-    await update(r.env, store => void (store.persons.find(person => person.account === 'rom')!.port = roms.port))
+    await update(r.env, store => void (store.persons.find(person => person.name === 'rom')!.port = roms.port))
     const cookieOf = async (person?: string): Promise<string> => {
       const entry = (await enter(r.env, (await addCode(r.env, Date.now(), person)).code, 'a phone'))!
       return `${DEVICE_COOKIE}=${entry.id}.${entry.key}`
@@ -523,7 +528,8 @@ test('a person with an OpenAgent of their own reaches it and no other; the owner
 
     await fetch(`${r.at}/`, { headers: { cookie: ada } })
     await fetch(`${r.at}/`, { headers: { cookie: eve } })
-    assert.deepEqual(r.asked.map(one => one.headers[PERSON_HEADER]), ['ada', 'eve'])
+    // The owner's device is the owner at their own page: said by nobody.
+    assert.deepEqual(r.asked.map(one => one.headers[PERSON_HEADER]), [undefined, 'eve'])
     assert.equal(roms.asked.length, 1)
   } finally {
     await roms.close()
@@ -546,10 +552,10 @@ test('a device asks who it is here, and takes out a device of its own person and
     const romCookie = `${DEVICE_COOKIE}=${romsPhone.id}.${romsPhone.key}`
     const romBearer = { authorization: `Bearer ${romsLaptop.id}.${romsLaptop.key}` }
 
-    const mine = (await (await fetch(`${r.at}${ME_PATH}`, { headers: romBearer })).json()) as { account: string; owner: boolean; devices: { id: string; person: string }[] }
-    assert.deepEqual([mine.account, mine.owner, mine.devices.map(device => [device.id, device.person])], ['rom', false, [[romsPhone.id, 'rom'], [romsLaptop.id, 'rom']]])
-    const owners = (await (await fetch(`${r.at}${ME_PATH}`, { headers: { cookie: phone.cookie } })).json()) as { account: string; owner: boolean; devices: { id: string }[] }
-    assert.deepEqual([owners.account, owners.owner, owners.devices.map(device => device.id)], ['ada', true, [phone.entry.id]])
+    const mine = (await (await fetch(`${r.at}${ME_PATH}`, { headers: romBearer })).json()) as { person: string; owner: boolean; devices: { id: string; person: string }[] }
+    assert.deepEqual([mine.person, mine.owner, mine.devices.map(device => [device.id, device.person])], ['rom', false, [[romsPhone.id, 'rom'], [romsLaptop.id, 'rom']]])
+    const owners = (await (await fetch(`${r.at}${ME_PATH}`, { headers: { cookie: phone.cookie } })).json()) as { person: string; owner: boolean; devices: { id: string }[] }
+    assert.deepEqual([owners.person, owners.owner, owners.devices.map(device => device.id)], ['ada', true, [phone.entry.id]])
 
     // Not another person's device, not without being in, not from a page of another site, not a read with a body.
     const remove = (id: string, headers: Record<string, string>): Promise<Response> => fetch(`${r.at}${ME_REMOVE_PATH}`, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify({ id }) })

@@ -87,23 +87,23 @@ test('a device is taken out by its id, which goes to the server as one word of t
   assert.deepEqual(await removeDevice(SERVER, PHONE.id, { exec: pretendServer(() => ({ code: 1, err: `no device has the id ${PHONE.id}` })).exec }), { ok: false, error: `no device has the id ${PHONE.id}` })
 })
 
-test('a server\'s persons are read as data: the owner first and once, each account as a door writes it, and a device is a person\'s only when that person is listed', () => {
+test('a server\'s persons are read as data: the owner first and once, each name as a door writes it, and a device is a person\'s only when that person is listed', () => {
   const said = (persons: unknown, devices: unknown[] = []): string => JSON.stringify({ on: false, listening: true, devices, lines: [], persons }) + '\n'
-  assert.deepEqual(devicesIn(said([{ account: 'rom' }, { account: 'ada', owner: true }]))!.persons, [], 'no owner first, no persons')
-  const read = devicesIn(said([{ account: 'ada', owner: true }, { account: 'ada' }, { account: 'Rom' }, { account: '$(reboot)' }, { account: 'eve', owner: true }, { account: 'rom' }], [{ ...PHONE, person: 'rom' }, { ...LAPTOP, person: 'mallory' }]))!
-  assert.deepEqual(read.persons, [{ account: 'ada', owner: true }, { account: 'rom' }])
+  assert.deepEqual(devicesIn(said([{ name: 'rom' }, { name: 'ada', owner: true }]))!.persons, [], 'no owner first, no persons')
+  const read = devicesIn(said([{ name: 'ada', owner: true }, { name: 'ada' }, { name: ' Rom' }, { name: '$(reboot)' }, { name: 'eve', owner: true }, { name: 'rom' }], [{ ...PHONE, person: 'rom' }, { ...LAPTOP, person: 'mallory' }]))!
+  assert.deepEqual(read.persons, [{ name: 'ada', owner: true }, { name: 'rom' }])
   assert.deepEqual(read.devices.map(device => device.person), ['rom', undefined])
 })
 
-test('the owner is named and a person removed at the server\'s door, each account one word of the script; what is no account never reaches a server', async () => {
-  const server = pretendServer(() => ({ out: JSON.stringify({ on: false, listening: true, devices: [PHONE], lines: [], persons: [{ account: 'ada', owner: true }] }) }))
-  assert.deepEqual(await nameOwner(SERVER, 'Ada', { exec: server.exec }), { ok: true, devices: [PHONE], persons: [{ account: 'ada', owner: true }] })
-  assert.match(server.calls[0]!.script, /^ACCOUNT='ada'$/m)
-  assert.match(server.calls[0]!.script, /devices owner "\$ACCOUNT"\n/)
+test('the owner is named and a person removed at the server\'s door, each name one word of the script; what is no name never reaches a server', async () => {
+  const server = pretendServer(() => ({ out: JSON.stringify({ on: false, listening: true, devices: [PHONE], lines: [], persons: [{ name: 'Ada', owner: true }] }) }))
+  assert.deepEqual(await nameOwner(SERVER, 'Ada', { exec: server.exec }), { ok: true, devices: [PHONE], persons: [{ name: 'Ada', owner: true }] })
+  assert.match(server.calls[0]!.script, /^NAME='Ada'$/m)
+  assert.match(server.calls[0]!.script, /devices owner "\$NAME"\n/)
   await removePerson(SERVER, 'rom', { exec: server.exec })
-  assert.match(server.calls[1]!.script, /devices remove-person "\$ACCOUNT"\n/)
+  assert.match(server.calls[1]!.script, /devices remove-person "\$NAME"\n/)
   const untouched = pretendServer()
-  assert.deepEqual(await nameOwner(SERVER, "x'; reboot", { exec: untouched.exec }), { ok: false, error: "x'; reboot is not a GitHub account" })
-  assert.deepEqual(await removePerson(SERVER, '-rf', { exec: untouched.exec }), { ok: false, error: '-rf is not a GitHub account' })
+  assert.deepEqual(await nameOwner(SERVER, "x'; reboot", { exec: untouched.exec }), { ok: false, error: "x'; reboot is not a name: letters, digits, spaces, dots, apostrophes and dashes, at most 40" })
+  assert.deepEqual(await removePerson(SERVER, '-rf', { exec: untouched.exec }), { ok: false, error: '-rf is no person\'s name' })
   assert.deepEqual(untouched.calls, [])
 })

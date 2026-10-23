@@ -441,14 +441,14 @@ describe('Settings › Devices: with a server', () => {
 })
 
 describe('Settings › Devices: a computer several people use', () => {
-  test('Someone else: the owner says who they are first, by this computer\'s GitHub account, then the code is for the person typed', async () => {
+  test('Someone else: the owner names themselves first, starting from the name git knows here, then the code is for the person typed, by their name', async () => {
     const SERVER = { on: false, listening: true, https: { address: '203.0.113.5' }, devices: [] }
     let persons: unknown[] = []
     let devices: unknown[] = []
     const { host, runComputerCommand } = door(
       args => {
-        if (args[0] === 'github') return ok({ account: 'ada' })
-        if (args[0] === 'owner') return (persons = [{ account: args[1], owner: true }]), ok({ ...SERVER, persons })
+        if (args[0] === 'me') return ok({ name: 'Ada Lovelace' })
+        if (args[0] === 'owner') return (persons = [{ name: args[1], owner: true }]), ok({ ...SERVER, persons })
         if (args[0] === 'add') return ok(LINK)
         return ok({ ...SERVER, persons, devices })
       },
@@ -458,92 +458,98 @@ describe('Settings › Devices: a computer several people use', () => {
     show(host)
     await addPhone()
     fireEvent.click(await screen.findByRole('radio', { name: /Someone else/ }))
-    const field = await screen.findByRole('textbox', { name: 'Their GitHub account' })
-    fireEvent.change(field, { target: { value: 'not an account!' } })
-    expect(screen.getByText('That is not a GitHub account.')).toBeTruthy()
+    const field = await screen.findByRole('textbox', { name: 'Their name' })
+    fireEvent.change(field, { target: { value: '<not a name>' } })
+    expect(screen.getByText('A name is letters and digits, with spaces, dots, apostrophes or dashes between, at most 40.')).toBeTruthy()
     expect((screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement).disabled).toBe(true)
-    fireEvent.change(field, { target: { value: '@Rom' } })
+    fireEvent.change(field, { target: { value: ' Rom  Brillout ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
-    expect(await screen.findByText('First, who are you? This computer is logged in to GitHub as @ada.')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: "Yes, that's me" }))
-    expect(await screen.findByText('For @rom. Send them the link.')).toBeTruthy()
-    expect(runComputerCommand).toHaveBeenCalledWith(['owner', 'ada'])
-    expect(runComputerCommand).toHaveBeenCalledWith(['add', '--for', 'rom'])
+    const own = (await screen.findByRole('textbox', { name: 'First, your name?' })) as HTMLInputElement
+    await waitFor(() => expect(own.value).toBe('Ada Lovelace'))
+    fireEvent.change(own, { target: { value: 'Ada' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    expect(await screen.findByText('For Rom Brillout. Send them the link.')).toBeTruthy()
+    expect(runComputerCommand).toHaveBeenCalledWith(['owner', 'Ada'])
+    expect(runComputerCommand).toHaveBeenCalledWith(['add', '--for', 'Rom Brillout'])
     // The page goes on reading the list: the device that gets in with the code is told.
-    devices = [{ ...PHONE, person: 'rom' }]
+    devices = [{ ...PHONE, person: 'Rom Brillout' }]
     expect(await screen.findByText('iPhone, Safari is in.')).toBeTruthy()
   })
 
-  test('with no GitHub login here, the dialog says so and asks nobody to be named', async () => {
+  test('with no name git knows here, the owner types theirs; nothing is named until they do', async () => {
     const SERVER = { on: false, listening: true, https: { address: '203.0.113.5' }, devices: [], persons: [] }
-    const { host, runComputerCommand } = door(args => (args[0] === 'github' ? ok({ problem: 'gh is not logged in to github.com here: run gh auth login.' }) : ok(SERVER)), [], () => ok({ server: true, servers: [] }))
+    const { host, runComputerCommand } = door(args => (args[0] === 'me' ? ok({}) : ok(SERVER)), [], () => ok({ server: true, servers: [] }))
     show(host)
     await addPhone()
     fireEvent.click(await screen.findByRole('radio', { name: /Someone else/ }))
-    fireEvent.change(await screen.findByRole('textbox', { name: 'Their GitHub account' }), { target: { value: 'rom' } })
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Their name' }), { target: { value: 'Rom' } })
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
-    expect(await screen.findByText('gh is not logged in to github.com here: run gh auth login.')).toBeTruthy()
+    const own = (await screen.findByRole('textbox', { name: 'First, your name?' })) as HTMLInputElement
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['me']))
+    expect(own.value).toBe('')
+    expect((screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement).disabled).toBe(true)
     expect(runComputerCommand.mock.calls.some(([args]) => args[0] === 'owner' || args[0] === 'add')).toBe(false)
   })
 
   test('once named, the owner is not asked again, and the devices are listed by person; a person is removed with their devices', async () => {
-    const persons = [{ account: 'ada', owner: true }, { account: 'rom' }, { account: 'eve' }]
-    const devices = [{ ...PHONE, person: 'ada' }, { ...PHONE, id: 'fed654cba321', name: 'Pixel, Chrome', person: 'rom' }]
+    const persons = [{ name: 'Ada', owner: true }, { name: 'Rom' }, { name: 'Eve' }]
+    const devices = [{ ...PHONE, person: 'Ada' }, { ...PHONE, id: 'fed654cba321', name: 'Pixel, Chrome', person: 'Rom' }]
     const { host, runComputerCommand } = door(args => (args[0] === 'add' ? ok(LINK) : ok({ ...OPEN, persons, devices })))
     show(host)
-    expect(await screen.findByText('@ada, the owner')).toBeTruthy()
-    expect(screen.getByRole('list', { name: 'Devices of @rom' }).textContent).toContain('Pixel, Chrome')
-    expect(screen.getByRole('list', { name: 'Devices of @ada' }).textContent).toContain('iPhone, Safari')
+    expect(await screen.findByText('Ada, the owner')).toBeTruthy()
+    expect(screen.getByRole('list', { name: 'Devices of Rom' }).textContent).toContain('Pixel, Chrome')
+    expect(screen.getByRole('list', { name: 'Devices of Ada' }).textContent).toContain('iPhone, Safari')
     expect(screen.getByText('No device yet.')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Remove @ada' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Remove @rom' }))
+    expect(screen.queryByRole('button', { name: 'Remove Ada' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Rom' }))
     // Said first: their user on this computer goes with everything in it.
     expect((await screen.findByRole('alertdialog')).textContent).toContain('their own user on this computer is deleted with everything in it')
     fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Remove person' }))
-    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['remove-person', 'rom']))
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['remove-person', 'Rom']))
 
     await addPhone()
     fireEvent.click(await screen.findByRole('radio', { name: /Someone else/ }))
-    fireEvent.change(await screen.findByRole('textbox', { name: 'Their GitHub account' }), { target: { value: 'eve' } })
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Their name' }), { target: { value: 'eve' } })
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
-    expect(await screen.findByText('For @eve. Send them the link.')).toBeTruthy()
-    expect(runComputerCommand.mock.calls.some(([args]) => args[0] === 'github' || args[0] === 'owner')).toBe(false)
+    // The name of a person here already, in other letters' case, is that person.
+    expect(await screen.findByText('For eve. Send them the link.')).toBeTruthy()
+    expect(runComputerCommand.mock.calls.some(([args]) => args[0] === 'me' || args[0] === 'owner')).toBe(false)
   })
 
   test('a person whose own user is being made, or could not be made, is said so under their name', async () => {
-    const persons = [{ account: 'ada', owner: true }, { account: 'rom', working: true }, { account: 'eve', problem: 'This server has no room for another user' }]
+    const persons = [{ name: 'Ada', owner: true }, { name: 'Rom', working: true }, { name: 'Eve', problem: 'This server has no room for another user' }]
     const { host } = door(() => ok({ ...OPEN, persons, devices: [] }))
     show(host)
-    expect(await screen.findByText("Making @rom's own user on this computer, with their own OpenAgent. This takes a minute or two.")).toBeTruthy()
-    expect(screen.getByRole('alert').textContent).toBe("@eve's own user on this computer could not be made: This server has no room for another user. Add a device for them again to try again.")
+    expect(await screen.findByText("Making Rom's own user on this computer, with their own OpenAgent. This takes a minute or two.")).toBeTruthy()
+    expect(screen.getByRole('alert').textContent).toBe("Eve's own user on this computer could not be made: This server has no room for another user. Add a device for them again to try again.")
   })
 
   test('a person of a server that starts runs here through its line says so; one that server no longer has is marked, kept switched off, or removed', async () => {
     const from = 'https://165.245.244.10'
-    let persons: object[] = [{ account: 'rom', owner: true }, { account: 'ada', ready: true, from }, { account: 'kim', ready: true, from, removed: true }]
+    let persons: object[] = [{ name: 'Rom', owner: true }, { name: 'Ada', ready: true, from }, { name: 'Kim', ready: true, from, removed: true }]
     const { host, runComputerCommand } = door(args => {
-      if (args[0] === 'keep') persons = persons.map(person => ((person as { account: string }).account === args[1] ? { ...person, kept: true } : person))
+      if (args[0] === 'keep') persons = persons.map(person => ((person as { name: string }).name === args[1] ? { ...person, kept: true } : person))
       return ok({ ...OPEN, persons, devices: [] })
     })
     show(host)
     expect(await screen.findByText('Uses this computer through 165.245.244.10.')).toBeTruthy()
     // Their devices are the server's: none here is none missing. The owner's own none is said.
     expect(screen.getAllByText('No device yet.')).toHaveLength(1)
-    const marked = screen.getByRole('group', { name: '@kim was removed from 165.245.244.10' })
+    const marked = screen.getByRole('group', { name: 'Kim was removed from 165.245.244.10' })
     expect(marked.textContent).toContain('Removed from 165.245.244.10.')
     // Remove asks first, as Remove person does.
-    fireEvent.click(within(marked).getByRole('button', { name: 'Remove @kim' }))
+    fireEvent.click(within(marked).getByRole('button', { name: 'Remove Kim' }))
     expect((await screen.findByRole('alertdialog')).textContent).toContain('their own user on this computer is deleted with everything in it')
     fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Cancel' }))
-    fireEvent.click(within(screen.getByRole('group', { name: '@kim was removed from 165.245.244.10' })).getByRole('button', { name: 'Keep, switched off' }))
-    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['keep', 'kim']))
+    fireEvent.click(within(screen.getByRole('group', { name: 'Kim was removed from 165.245.244.10' })).getByRole('button', { name: 'Keep, switched off' }))
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['keep', 'Kim']))
     expect(await screen.findByText('Removed from 165.245.244.10. Kept here, switched off.')).toBeTruthy()
-    expect(screen.queryByRole('group', { name: '@kim was removed from 165.245.244.10' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Remove @kim' }).textContent).toBe('Remove person')
+    expect(screen.queryByRole('group', { name: 'Kim was removed from 165.245.244.10' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Remove Kim' }).textContent).toBe('Remove person')
   })
 
   test('on one person\'s own OpenAgent: only their devices, asked of the door, each removable; no switch, no Add device, no other person', async () => {
-    const mine = { account: 'rom', owner: false, devices: [{ ...PHONE, person: 'rom' }, { ...PHONE, id: 'fed654cba321', name: 'OpenAgent on rom-laptop', line: true, person: 'rom' }] }
+    const mine = { person: 'Rom', owner: false, devices: [{ ...PHONE, person: 'Rom' }, { ...PHONE, id: 'fed654cba321', name: 'OpenAgent on rom-laptop', line: true, person: 'Rom' }] }
     const fetched = vi.fn(async (url: string, init?: RequestInit) => {
       if (url === '/_devices/me/remove') {
         expect([init?.method, init?.body]).toEqual(['POST', JSON.stringify({ id: 'fed654cba321' })])
@@ -553,12 +559,12 @@ describe('Settings › Devices: a computer several people use', () => {
     })
     vi.stubGlobal('fetch', fetched)
     try {
-      const { host } = door(() => ok({ ...OFF, persons: [], person: 'rom' }))
+      const { host } = door(() => ok({ ...OFF, persons: [], person: 'Rom' }))
       show(host)
       const list = await screen.findByRole('list', { name: 'Your devices' })
       expect(list.textContent).toContain('iPhone, Safari')
       expect(list.textContent).toContain('A computer of yours: runs can be started on it from here.')
-      expect(screen.getByText(/you are on it as @rom/)).toBeTruthy()
+      expect(screen.getByText(/you are on it as Rom/)).toBeTruthy()
       expect(screen.queryByRole('switch')).toBeNull()
       expect(screen.queryByRole('button', { name: 'Add device' })).toBeNull()
       fireEvent.click(screen.getByRole('button', { name: 'Remove OpenAgent on rom-laptop' }))

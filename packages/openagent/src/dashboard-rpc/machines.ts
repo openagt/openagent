@@ -6,7 +6,7 @@ import { isLoginWord, type MachineLogins } from '../dashboard/machine-logins.js'
 import { errorMessage } from '../error-message.js'
 import { repositoryAddress, repositorySpelling } from '../repository-address.js'
 import { contextRemote, resolveProjectPath } from './context.js'
-import { addMachine, isAccount, listMachines, noteListed, removeMachine, renameMachine, tellMachine, type MachineRecord } from '../registry.js'
+import { addMachine, isPersonName, listMachines, noteListed, removeMachine, renameMachine, tellMachine, type MachineRecord } from '../registry.js'
 import { parseMachineLink } from '../machine-link.js'
 import { openagentVersion } from '../version.js'
 
@@ -68,7 +68,7 @@ export async function sendAddMachine(pasted: string, label?: string, owner?: str
   const access = { url: link.url, key: entered.key, door: link.door, ...(link.pin ? { pin: link.pin } : {}) }
   let added: Awaited<ReturnType<typeof addMachine>>
   try {
-    added = await addMachine({ ...access, ...(typeof label === 'string' ? { label } : {}), ...(isAccount(owner) ? { owner } : {}) })
+    added = await addMachine({ ...access, ...(typeof label === 'string' ? { label } : {}), ...(isPersonName(owner) ? { owner } : {}) })
   } catch (err) {
     // A key nobody holds is not left on the machine.
     void leaveRemote(access)
