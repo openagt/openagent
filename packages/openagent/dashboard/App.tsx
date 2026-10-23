@@ -3,7 +3,7 @@ import type { Intervention, Activity, ProjectionRead, ProjectSummary, RecentAgen
 import { onProjectFiles, onInterventions, onActivity, onRecentAgents, onAgents } from './rpc/reads.js'
 import { sendStart } from './rpc/control.js'
 import { onProjects } from './rpc/projects.js'
-import { onComputersThrough, onMachinePerson, onMachineVersions, sendLetMachineIn, sendRemoveMachineDevice } from './rpc/machines.js'
+import { onComputersThrough, onMachinePerson, onMachineVersions, sendLetMachineIn, sendMachineCode, sendRemoveMachineDevice } from './rpc/machines.js'
 import { addComputerThrough, addMachine, removeMachine, renameMachine } from './lib/machines.js'
 import { AgentHistory } from './components/AgentHistory.js'
 import { SidebarProvider } from './components/ui/sidebar.js'
@@ -351,6 +351,7 @@ export function App() {
         return renamed.ok ? { ok: true } : renamed
       },
       letMachineIn: sendLetMachineIn,
+      machineCode: sendMachineCode,
       computersThrough: onComputersThrough,
       machinePerson: onMachinePerson,
       removeMachineDevice: sendRemoveMachineDevice,

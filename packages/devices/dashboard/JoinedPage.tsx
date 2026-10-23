@@ -58,7 +58,7 @@ export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; 
       {tab === 'overview' && (
         <>
           <Part>
-            <p className="text-sm">{owner ? 'Yours, set up from another computer.' : person.account !== undefined ? `You are in as @${person.account}.` : 'You are in.'}</p>
+            <p className="text-sm">{owner ? 'Yours, set up from another computer.' : person.person !== undefined ? `You are in as ${person.person}.` : 'You are in.'}</p>
             <p className="text-xs text-muted-foreground">
               {owner
                 ? 'Its install, its updates, its logins and its invites are done from the computer that set it up. From here, your phone and this computer reach it, and runs go there.'
@@ -173,13 +173,13 @@ function OwnLogins({ d, item }: { d: Devices; item: JoinedItem }) {
       <ul aria-label={`Your logins on ${name}`} className="space-y-3 text-xs">
         <LoginLine
           label="GitHub"
-          words={github.asking && github.code !== undefined ? `GitHub: type the code ${github.code} at github.com/login/device, and say yes there.` : github.working ? 'GitHub: one moment, the server is being told.' : github.there ? `GitHub: logged in as ${github.account ?? person.account} since ${day(github.since)}.` : github.said !== undefined ? 'GitHub: the last try did not go through.' : 'GitHub: not logged in on the server.'}
+          words={github.asking && github.code !== undefined ? `GitHub: type the code ${github.code} at github.com/login/device, and say yes there.` : github.working ? 'GitHub: one moment, the server is being told.' : github.there ? github.account !== undefined ? `GitHub: logged in as ${github.account} since ${day(github.since)}.` : `GitHub: logged in since ${day(github.since)}.` : github.said !== undefined ? 'GitHub: the last try did not go through.' : 'GitHub: not logged in on the server.'}
           said={github.working ? undefined : github.said}
         >
-          <Button size="sm" variant="outline" disabled={busy || github.working || account === undefined} aria-label={`Copy my GitHub login to ${name}`} title={account !== undefined ? `Copies the login of ${account} from this computer to your own OpenAgent on the server. It must be @${person.account}'s.` : noLogin} onClick={() => void act(() => sharedGithub(host, machine.url))}>
+          <Button size="sm" variant="outline" disabled={busy || github.working || account === undefined} aria-label={`Copy my GitHub login to ${name}`} title={account !== undefined ? `Copies the login of ${account} from this computer to your own OpenAgent on the server.` : noLogin} onClick={() => void act(() => sharedGithub(host, machine.url))}>
             {github.there ? 'Copy again' : 'Copy my login'}
           </Button>
-          <Button size="sm" variant="outline" disabled={busy || (github.working && github.asking !== true)} aria-label={`Log in to GitHub for ${name}`} title={`The server asks GitHub for a login of your own. GitHub gives a short code: you type it at github.com/login/device, logged in as @${person.account}, and say yes there.`} onClick={() => void act(() => ownCodeLogin(host, machine.id))}>
+          <Button size="sm" variant="outline" disabled={busy || (github.working && github.asking !== true)} aria-label={`Log in to GitHub for ${name}`} title={`The server asks GitHub for a login of your own. GitHub gives a short code: you type it at github.com/login/device, and say yes there.`} onClick={() => void act(() => ownCodeLogin(host, machine.id))}>
             {github.asking ? 'Start over' : 'Log in to GitHub'}
           </Button>
           {github.asking && github.code !== undefined && (
@@ -253,9 +253,9 @@ export function OtherPage({ d, item, onBack }: { d: Devices; item: OtherItem; on
   }
   return (
     <div>
-      <Head icon={Server} name={name} badge={`@${owner}'s`} facts={[machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Offline</State>, `for everyone on ${server}`]} />
+      <Head icon={Server} name={name} badge={`${owner}'s`} facts={[machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Offline</State>, `for everyone on ${server}`]} />
       <Part>
-        <p className="text-xs text-muted-foreground">{`@${owner}'s server, for everyone on ${server}. Your runs there use your own GitHub and Claude logins.`}</p>
+        <p className="text-xs text-muted-foreground">{`${owner}'s server, for everyone on ${server}. Your runs there use your own logins.`}</p>
       </Part>
       <Part title="Logins">
         {row?.error !== undefined && <p className="text-xs text-muted-foreground">{`${name} did not say: ${row.error}`}</p>}

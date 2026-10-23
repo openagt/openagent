@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { ModuleHostContext, type ModuleCommandResult, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
+import { ModuleHostContext, type ModuleCommandResult, type ModuleComputerThrough, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
 import { DevicesSettings } from './DevicesSettings.js'
 import { WARNING } from './ThisComputer.js'
 
@@ -39,6 +39,7 @@ function door(answer: (args: string[]) => ModuleCommandResult, saved: ModuleMach
     removeMachine: vi.fn(async () => ({ ok: true as const })),
     renameMachine: vi.fn(async () => ({ ok: true as const })),
     letMachineIn: vi.fn(async () => ({ ok: true as const })),
+    machineCode: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     computersThrough: vi.fn(async () => ({ ok: true as const, computers: [] })),
     machinePerson: vi.fn(async () => ({ ok: false as const, error: 'not here', unknown: true as const })),
     removeMachineDevice: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
@@ -64,6 +65,14 @@ async function addPhone(): Promise<void> {
   fireEvent.click(await screen.findByRole('button', { name: /^(Add device|Add phone)$/ }))
   const go = screen.queryByRole('button', { name: 'Continue' })
   if (go) fireEvent.click(go)
+}
+/** What "Copy the link" puts on the clipboard. */
+async function copiedLink(): Promise<string> {
+  const writeText = vi.fn(async (_text: string) => {})
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+  fireEvent.click(screen.getByRole('button', { name: /^Cop(y|ied) the link$/ }))
+  await waitFor(() => expect(writeText).toHaveBeenCalled())
+  return writeText.mock.calls.at(-1)![0]
 }
 const qrPath = (): string => screen.getByRole('img', { name: 'The code a new device scans' }).querySelector('path')!.getAttribute('d')!
 /** A row's menu, then one of its items. */
@@ -158,15 +167,15 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     await addPhone()
     await screen.findByRole('img', { name: 'The code a new device scans' })
     const byName = qrPath()
-    expect(screen.getByRole('timer').textContent).toMatch(/^Works once, for [45]:\d\d more\.$/)
-    expect(screen.getByText("Scan it with the phone's camera, on the same Wi-Fi as this computer.")).toBeTruthy()
-    const pasted = (): string => (screen.getByRole('textbox', { name: 'The link' }) as HTMLInputElement).value
-    expect(pasted()).toBe(LINK.url)
+    expect(screen.getByRole('timer').textContent).toMatch(/^Waiting for the phone… works once, for [45]:\d\d\.$/)
+    expect(screen.getByText("Open the phone's camera and point it at the code.")).toBeTruthy()
+    expect(screen.getByText('Tap the link it shows. OpenAgent opens, and stays in.')).toBeTruthy()
+    expect(await copiedLink()).toBe(LINK.url)
     fireEvent.click(screen.getByRole('button', { name: 'Phone does not open it? Use the number.' }))
     expect(qrPath()).not.toBe(byName)
-    expect(pasted()).toBe(LINK.numberUrl)
+    expect(await copiedLink()).toBe(LINK.numberUrl)
     expect(screen.queryByRole('button', { name: 'Phone does not open it? Use the number.' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(screen.queryByRole('img', { name: 'The code a new device scans' })).toBeNull())
   })
 
@@ -227,8 +236,7 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     // Who it is for, on a computer several people use: "Me".
     fireEvent.click(await screen.findByRole('button', { name: 'Continue' }))
     await screen.findByRole('img', { name: 'The code a new device scans' })
-    expect(screen.getByText("Scan it with the device's camera: it opens OpenAgent here, from anywhere.")).toBeTruthy()
-    expect((screen.getByRole('textbox', { name: 'The link' }) as HTMLInputElement).value).toBe(link.url)
+    expect(await copiedLink()).toBe(link.url)
     expect(screen.queryByRole('button', { name: 'Phone does not open it? Use the number.' })).toBeNull()
     unmount()
 
@@ -389,7 +397,10 @@ describe('Settings › Devices: another computer, once', () => {
     const both = await screen.findByRole('checkbox', { name: 'It can start runs on this computer too' })
     expect(both.getAttribute('aria-checked')).toBe('false')
     expect(screen.getByText('Turn on "On this Wi-Fi" first: then runs can go both ways.')).toBeTruthy()
-    expect((screen.getByRole('button', { name: "Give it this computer's link" }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: "Give it this computer's link instead" }) as HTMLButtonElement).disabled).toBe(true)
+    // With no server, a computer somewhere else has nothing to join through.
+    expect((screen.getByRole('button', { name: 'Give it a code' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText("At the office, at a friend's: it joins through a server. Add a server first.")).toBeTruthy()
     fireEvent.change(screen.getByRole('textbox', { name: "The other computer's link" }), { target: { value: 'http://studio.local:4201/_devices/enter#c0de' } })
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
     await waitFor(() => expect(host.addMachine).toHaveBeenCalled())
@@ -403,7 +414,8 @@ describe('Settings › Devices: with a server', () => {
   const SERVER_LINK = { url: 'https://203.0.113.5/_devices/enter#code.pin', expires: LINK.expires }
 
   test('a phone works from anywhere through the server, or only on this Wi-Fi: through the server, the code is the server\'s', async () => {
-    const { host, runComputerCommand, serverCommand } = door(args => ok(args[0] === 'add' ? LINK : OFF), [SAVED], args => ok(args[0] === 'link' ? SERVER_LINK : args[0] === 'devices' ? { devices: [] } : { servers: [BOX] }))
+    const { host, runComputerCommand, serverCommand } = door(args => ok(args[0] === 'add' ? LINK : OFF), [SAVED], args => ok(args[0] === 'devices' ? { devices: [] } : { servers: [BOX] }))
+    vi.mocked(host.machineCode).mockResolvedValue({ ok: true, value: { ...SERVER_LINK, where: '203.0.113.5', code: 'K7P4-QX9M' } })
     show(host)
     // With a server, the words say "anywhere", and the line to it is a switch of this computer's.
     expect(await screen.findByRole('switch', { name: 'From anywhere, through my-vps' })).toBeTruthy()
@@ -413,10 +425,12 @@ describe('Settings › Devices: with a server', () => {
     expect(screen.getByRole('radio', { name: /Anywhere, through my-vps/ }).getAttribute('aria-checked')).toBe('true')
     fireEvent.click(screen.getByRole('button', { name: 'Show the code' }))
     await screen.findByRole('img', { name: 'The code a new device scans' })
-    expect(serverCommand).toHaveBeenCalledWith(['link', '203.0.113.5'])
-    expect(screen.getByText("Scan it with the phone's camera: it opens OpenAgent on my-vps, from anywhere.")).toBeTruthy()
+    // Asked of the server's door with this computer's key there: no SSH, so any computer of the person's in at the server asks.
+    expect(host.machineCode).toHaveBeenCalledWith(SAVED.id)
+    expect(serverCommand).not.toHaveBeenCalledWith(expect.arrayContaining(['link']))
+    expect(await copiedLink()).toBe(SERVER_LINK.url)
     expect(runComputerCommand).not.toHaveBeenCalledWith(['add'])
-    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
 
     await addPhone()
     fireEvent.click(await screen.findByRole('radio', { name: /Only on this Wi-Fi/ }))
@@ -427,14 +441,14 @@ describe('Settings › Devices: with a server', () => {
 })
 
 describe('Settings › Devices: a computer several people use', () => {
-  test('Someone else: the owner says who they are first, by this computer\'s GitHub account, then the code is for the person typed', async () => {
+  test('Someone else: the owner names themselves first, starting from the name git knows here, then the code is for the person typed, by their name', async () => {
     const SERVER = { on: false, listening: true, https: { address: '203.0.113.5' }, devices: [] }
     let persons: unknown[] = []
     let devices: unknown[] = []
     const { host, runComputerCommand } = door(
       args => {
-        if (args[0] === 'github') return ok({ account: 'ada' })
-        if (args[0] === 'owner') return (persons = [{ account: args[1], owner: true }]), ok({ ...SERVER, persons })
+        if (args[0] === 'me') return ok({ name: 'Ada Lovelace' })
+        if (args[0] === 'owner') return (persons = [{ name: args[1], owner: true }]), ok({ ...SERVER, persons })
         if (args[0] === 'add') return ok(LINK)
         return ok({ ...SERVER, persons, devices })
       },
@@ -444,92 +458,98 @@ describe('Settings › Devices: a computer several people use', () => {
     show(host)
     await addPhone()
     fireEvent.click(await screen.findByRole('radio', { name: /Someone else/ }))
-    const field = await screen.findByRole('textbox', { name: 'Their GitHub account' })
-    fireEvent.change(field, { target: { value: 'not an account!' } })
-    expect(screen.getByText('That is not a GitHub account.')).toBeTruthy()
+    const field = await screen.findByRole('textbox', { name: 'Their name' })
+    fireEvent.change(field, { target: { value: '<not a name>' } })
+    expect(screen.getByText('A name is letters and digits, with spaces, dots, apostrophes or dashes between, at most 40.')).toBeTruthy()
     expect((screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement).disabled).toBe(true)
-    fireEvent.change(field, { target: { value: '@Rom' } })
+    fireEvent.change(field, { target: { value: ' Rom  Brillout ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
-    expect(await screen.findByText('First, who are you? This computer is logged in to GitHub as @ada.')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: "Yes, that's me" }))
-    expect(await screen.findByText('For @rom. Send them the link.')).toBeTruthy()
-    expect(runComputerCommand).toHaveBeenCalledWith(['owner', 'ada'])
-    expect(runComputerCommand).toHaveBeenCalledWith(['add', '--for', 'rom'])
+    const own = (await screen.findByRole('textbox', { name: 'First, your name?' })) as HTMLInputElement
+    await waitFor(() => expect(own.value).toBe('Ada Lovelace'))
+    fireEvent.change(own, { target: { value: 'Ada' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    expect(await screen.findByText('For Rom Brillout. Send them the link.')).toBeTruthy()
+    expect(runComputerCommand).toHaveBeenCalledWith(['owner', 'Ada'])
+    expect(runComputerCommand).toHaveBeenCalledWith(['add', '--for', 'Rom Brillout'])
     // The page goes on reading the list: the device that gets in with the code is told.
-    devices = [{ ...PHONE, person: 'rom' }]
+    devices = [{ ...PHONE, person: 'Rom Brillout' }]
     expect(await screen.findByText('iPhone, Safari is in.')).toBeTruthy()
   })
 
-  test('with no GitHub login here, the dialog says so and asks nobody to be named', async () => {
+  test('with no name git knows here, the owner types theirs; nothing is named until they do', async () => {
     const SERVER = { on: false, listening: true, https: { address: '203.0.113.5' }, devices: [], persons: [] }
-    const { host, runComputerCommand } = door(args => (args[0] === 'github' ? ok({ problem: 'gh is not logged in to github.com here: run gh auth login.' }) : ok(SERVER)), [], () => ok({ server: true, servers: [] }))
+    const { host, runComputerCommand } = door(args => (args[0] === 'me' ? ok({}) : ok(SERVER)), [], () => ok({ server: true, servers: [] }))
     show(host)
     await addPhone()
     fireEvent.click(await screen.findByRole('radio', { name: /Someone else/ }))
-    fireEvent.change(await screen.findByRole('textbox', { name: 'Their GitHub account' }), { target: { value: 'rom' } })
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Their name' }), { target: { value: 'Rom' } })
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
-    expect(await screen.findByText('gh is not logged in to github.com here: run gh auth login.')).toBeTruthy()
+    const own = (await screen.findByRole('textbox', { name: 'First, your name?' })) as HTMLInputElement
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['me']))
+    expect(own.value).toBe('')
+    expect((screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement).disabled).toBe(true)
     expect(runComputerCommand.mock.calls.some(([args]) => args[0] === 'owner' || args[0] === 'add')).toBe(false)
   })
 
   test('once named, the owner is not asked again, and the devices are listed by person; a person is removed with their devices', async () => {
-    const persons = [{ account: 'ada', owner: true }, { account: 'rom' }, { account: 'eve' }]
-    const devices = [{ ...PHONE, person: 'ada' }, { ...PHONE, id: 'fed654cba321', name: 'Pixel, Chrome', person: 'rom' }]
+    const persons = [{ name: 'Ada', owner: true }, { name: 'Rom' }, { name: 'Eve' }]
+    const devices = [{ ...PHONE, person: 'Ada' }, { ...PHONE, id: 'fed654cba321', name: 'Pixel, Chrome', person: 'Rom' }]
     const { host, runComputerCommand } = door(args => (args[0] === 'add' ? ok(LINK) : ok({ ...OPEN, persons, devices })))
     show(host)
-    expect(await screen.findByText('@ada, the owner')).toBeTruthy()
-    expect(screen.getByRole('list', { name: 'Devices of @rom' }).textContent).toContain('Pixel, Chrome')
-    expect(screen.getByRole('list', { name: 'Devices of @ada' }).textContent).toContain('iPhone, Safari')
+    expect(await screen.findByText('Ada, the owner')).toBeTruthy()
+    expect(screen.getByRole('list', { name: 'Devices of Rom' }).textContent).toContain('Pixel, Chrome')
+    expect(screen.getByRole('list', { name: 'Devices of Ada' }).textContent).toContain('iPhone, Safari')
     expect(screen.getByText('No device yet.')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Remove @ada' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Remove @rom' }))
+    expect(screen.queryByRole('button', { name: 'Remove Ada' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Rom' }))
     // Said first: their user on this computer goes with everything in it.
     expect((await screen.findByRole('alertdialog')).textContent).toContain('their own user on this computer is deleted with everything in it')
     fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Remove person' }))
-    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['remove-person', 'rom']))
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['remove-person', 'Rom']))
 
     await addPhone()
     fireEvent.click(await screen.findByRole('radio', { name: /Someone else/ }))
-    fireEvent.change(await screen.findByRole('textbox', { name: 'Their GitHub account' }), { target: { value: 'eve' } })
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Their name' }), { target: { value: 'eve' } })
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
-    expect(await screen.findByText('For @eve. Send them the link.')).toBeTruthy()
-    expect(runComputerCommand.mock.calls.some(([args]) => args[0] === 'github' || args[0] === 'owner')).toBe(false)
+    // The name of a person here already, in other letters' case, is that person.
+    expect(await screen.findByText('For eve. Send them the link.')).toBeTruthy()
+    expect(runComputerCommand.mock.calls.some(([args]) => args[0] === 'me' || args[0] === 'owner')).toBe(false)
   })
 
   test('a person whose own user is being made, or could not be made, is said so under their name', async () => {
-    const persons = [{ account: 'ada', owner: true }, { account: 'rom', working: true }, { account: 'eve', problem: 'This server has no room for another user' }]
+    const persons = [{ name: 'Ada', owner: true }, { name: 'Rom', working: true }, { name: 'Eve', problem: 'This server has no room for another user' }]
     const { host } = door(() => ok({ ...OPEN, persons, devices: [] }))
     show(host)
-    expect(await screen.findByText("Making @rom's own user on this computer, with their own OpenAgent. This takes a minute or two.")).toBeTruthy()
-    expect(screen.getByRole('alert').textContent).toBe("@eve's own user on this computer could not be made: This server has no room for another user. Add a device for them again to try again.")
+    expect(await screen.findByText("Making Rom's own user on this computer, with their own OpenAgent. This takes a minute or two.")).toBeTruthy()
+    expect(screen.getByRole('alert').textContent).toBe("Eve's own user on this computer could not be made: This server has no room for another user. Add a device for them again to try again.")
   })
 
   test('a person of a server that starts runs here through its line says so; one that server no longer has is marked, kept switched off, or removed', async () => {
     const from = 'https://165.245.244.10'
-    let persons: object[] = [{ account: 'rom', owner: true }, { account: 'ada', ready: true, from }, { account: 'kim', ready: true, from, removed: true }]
+    let persons: object[] = [{ name: 'Rom', owner: true }, { name: 'Ada', ready: true, from }, { name: 'Kim', ready: true, from, removed: true }]
     const { host, runComputerCommand } = door(args => {
-      if (args[0] === 'keep') persons = persons.map(person => ((person as { account: string }).account === args[1] ? { ...person, kept: true } : person))
+      if (args[0] === 'keep') persons = persons.map(person => ((person as { name: string }).name === args[1] ? { ...person, kept: true } : person))
       return ok({ ...OPEN, persons, devices: [] })
     })
     show(host)
     expect(await screen.findByText('Uses this computer through 165.245.244.10.')).toBeTruthy()
     // Their devices are the server's: none here is none missing. The owner's own none is said.
     expect(screen.getAllByText('No device yet.')).toHaveLength(1)
-    const marked = screen.getByRole('group', { name: '@kim was removed from 165.245.244.10' })
+    const marked = screen.getByRole('group', { name: 'Kim was removed from 165.245.244.10' })
     expect(marked.textContent).toContain('Removed from 165.245.244.10.')
     // Remove asks first, as Remove person does.
-    fireEvent.click(within(marked).getByRole('button', { name: 'Remove @kim' }))
+    fireEvent.click(within(marked).getByRole('button', { name: 'Remove Kim' }))
     expect((await screen.findByRole('alertdialog')).textContent).toContain('their own user on this computer is deleted with everything in it')
     fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Cancel' }))
-    fireEvent.click(within(screen.getByRole('group', { name: '@kim was removed from 165.245.244.10' })).getByRole('button', { name: 'Keep, switched off' }))
-    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['keep', 'kim']))
+    fireEvent.click(within(screen.getByRole('group', { name: 'Kim was removed from 165.245.244.10' })).getByRole('button', { name: 'Keep, switched off' }))
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['keep', 'Kim']))
     expect(await screen.findByText('Removed from 165.245.244.10. Kept here, switched off.')).toBeTruthy()
-    expect(screen.queryByRole('group', { name: '@kim was removed from 165.245.244.10' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Remove @kim' }).textContent).toBe('Remove person')
+    expect(screen.queryByRole('group', { name: 'Kim was removed from 165.245.244.10' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Remove Kim' }).textContent).toBe('Remove person')
   })
 
   test('on one person\'s own OpenAgent: only their devices, asked of the door, each removable; no switch, no Add device, no other person', async () => {
-    const mine = { account: 'rom', owner: false, devices: [{ ...PHONE, person: 'rom' }, { ...PHONE, id: 'fed654cba321', name: 'OpenAgent on rom-laptop', line: true, person: 'rom' }] }
+    const mine = { person: 'Rom', owner: false, devices: [{ ...PHONE, person: 'Rom' }, { ...PHONE, id: 'fed654cba321', name: 'OpenAgent on rom-laptop', line: true, person: 'Rom' }] }
     const fetched = vi.fn(async (url: string, init?: RequestInit) => {
       if (url === '/_devices/me/remove') {
         expect([init?.method, init?.body]).toEqual(['POST', JSON.stringify({ id: 'fed654cba321' })])
@@ -539,12 +559,12 @@ describe('Settings › Devices: a computer several people use', () => {
     })
     vi.stubGlobal('fetch', fetched)
     try {
-      const { host } = door(() => ok({ ...OFF, persons: [], person: 'rom' }))
+      const { host } = door(() => ok({ ...OFF, persons: [], person: 'Rom' }))
       show(host)
       const list = await screen.findByRole('list', { name: 'Your devices' })
       expect(list.textContent).toContain('iPhone, Safari')
       expect(list.textContent).toContain('A computer of yours: runs can be started on it from here.')
-      expect(screen.getByText(/you are on it as @rom/)).toBeTruthy()
+      expect(screen.getByText(/you are on it as Rom/)).toBeTruthy()
       expect(screen.queryByRole('switch')).toBeNull()
       expect(screen.queryByRole('button', { name: 'Add device' })).toBeNull()
       fireEvent.click(screen.getByRole('button', { name: 'Remove OpenAgent on rom-laptop' }))
@@ -552,5 +572,79 @@ describe('Settings › Devices: a computer several people use', () => {
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+})
+
+describe('Settings › Devices: a code typed on another computer', () => {
+  const VPS: ModuleMachine = { id: 'https://203.0.113.10', label: 'my-vps', url: 'https://203.0.113.10', version: '0.0.0' }
+  const STUDIO = { id: 'abc123def456', name: 'Studio', online: true, added: false }
+  const ROMS = { id: 'f00f00f00f00', name: "Rom's PC", online: true, added: false, owner: 'rom' }
+
+  test('Join with a code: where and the code, pasted both at once; this computer keeps its line there, and the person\'s own computers there are saved through it', async () => {
+    const saved: ModuleMachine[] = []
+    const { host, serverCommand } = door(() => ok(OFF), saved, args => ok(args[0] === 'shared' || args[0] === 'shared-reach' ? { shared: [] } : { servers: [] }))
+    vi.mocked(host.addMachine).mockImplementation(async () => (saved.push(VPS), { ok: true }))
+    vi.mocked(host.computersThrough).mockResolvedValue({ ok: true, computers: [STUDIO, ROMS] })
+    vi.mocked(host.addComputerThrough).mockResolvedValue({ ok: true })
+    show(host)
+    fireEvent.click(await screen.findByRole('button', { name: 'Join with a code' }))
+    const where = await screen.findByRole('textbox', { name: 'Where' })
+    expect((screen.getByRole('button', { name: 'Join' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.paste(where, { clipboardData: { getData: () => 'Where: 203.0.113.10\nCode: K7P4-QX9M' } })
+    expect((where as HTMLInputElement).value).toBe('203.0.113.10')
+    expect((screen.getByRole('textbox', { name: 'Code' }) as HTMLInputElement).value).toBe('K7P4-QX9M')
+    expect(screen.getByRole('checkbox', { name: 'Your other devices can start runs on this computer' }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByText('Through 203.0.113.10, while it is on.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Join' }))
+    await waitFor(() => expect(host.addMachine).toHaveBeenCalledWith('https://203.0.113.10/_devices/enter#K7P4QX9M'))
+    await waitFor(() => expect(serverCommand).toHaveBeenCalledWith(['shared-reach', 'https://203.0.113.10', 'full']))
+    await waitFor(() => expect(host.addComputerThrough).toHaveBeenCalledWith(VPS.id, STUDIO.id))
+    // Another person's computer there is theirs to share: never saved by itself.
+    expect(host.addComputerThrough).not.toHaveBeenCalledWith(VPS.id, ROMS.id)
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Where' })).toBeNull())
+  })
+
+  test('Join with a code says why a code did not work, and keeps what was typed; unticked, this computer keeps no line there', async () => {
+    const saved: ModuleMachine[] = []
+    const { host, serverCommand } = door(() => ok(OFF), saved, () => ok({ servers: [] }))
+    vi.mocked(host.addMachine).mockResolvedValueOnce({ ok: false, error: "That code doesn't work. A code works once, for ten minutes: check it, or make a new one on the other device." })
+    show(host)
+    fireEvent.click(await screen.findByRole('button', { name: 'Join with a code' }))
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Where' }), { target: { value: 'https://203.0.113.10/' } })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Code' }), { target: { value: 'k7p4 qx9m' } })
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Your other devices can start runs on this computer' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Join' }))
+    expect((await screen.findByRole('alert')).textContent).toContain("That code doesn't work.")
+    expect(host.addMachine).toHaveBeenCalledWith('https://203.0.113.10/_devices/enter#K7P4QX9M')
+    expect((screen.getByRole('textbox', { name: 'Code' }) as HTMLInputElement).value).toBe('k7p4 qx9m')
+    vi.mocked(host.addMachine).mockImplementation(async () => (saved.push(VPS), { ok: true }))
+    fireEvent.click(screen.getByRole('button', { name: 'Join' }))
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Where' })).toBeNull())
+    expect(serverCommand).not.toHaveBeenCalledWith(expect.arrayContaining(['shared-reach']))
+  })
+
+  test('Give it a code: where and a code from the server, for a computer somewhere else; once it keeps its line there it is saved here through the server, and runs go both ways', async () => {
+    const { host } = door(() => ok(OPEN), [VPS], args => ok(args[0] === 'shared' ? { shared: [{ url: VPS.url, reach: 'full' }] } : { servers: [] }))
+    vi.mocked(host.machineCode).mockResolvedValue({ ok: true, value: { url: 'https://203.0.113.10/_devices/enter#K7P4QX9M', where: '203.0.113.10', code: 'K7P4-QX9M', expires: new Date(Date.now() + 10 * 60_000).toISOString() } })
+    vi.mocked(host.machinePerson).mockResolvedValue({ ok: true, said: { owner: true, devices: [] } })
+    let there: ModuleComputerThrough[] = [ROMS]
+    vi.mocked(host.computersThrough).mockImplementation(async () => ({ ok: true, computers: there }))
+    vi.mocked(host.addComputerThrough).mockResolvedValue({ ok: true })
+    show(host)
+    await addComputer()
+    expect(await screen.findByText("At the office, at a friend's: it joins through my-vps.")).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Give it a code' }))
+    const card = await screen.findByRole('group', { name: 'The code' })
+    expect(host.machineCode).toHaveBeenCalledWith(VPS.id)
+    expect(card.textContent).toContain('203.0.113.10')
+    expect(card.textContent).toContain('K7P4-QX9M')
+    expect(screen.getByRole('timer').textContent).toMatch(/^Waiting… the code works once, for (10:00|9:\d\d)\. It joins as yours, through my-vps\.$/)
+    // Another person's computer that comes on a line meanwhile is not the one that got in.
+    there = [ROMS, STUDIO]
+    expect(await screen.findByText('Studio is in.', {}, { timeout: 8000 })).toBeTruthy()
+    expect(host.addComputerThrough).toHaveBeenCalledWith(VPS.id, STUDIO.id)
+    expect(host.addComputerThrough).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('Runs go both ways, through my-vps. The code is spent.')).toBeTruthy()
+    expect(screen.queryByRole('group', { name: 'The code' })).toBeNull()
   })
 })

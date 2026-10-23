@@ -1,19 +1,22 @@
 import { useEffect, useRef, useState, type ComponentType, type FormEvent } from 'react'
 import { Globe, Loader2, Monitor, Server, Smartphone, Ticket, Wifi } from 'lucide-react'
-import { AddMachineDialog, Button, Checkbox, Dialog, Input, InviteDialog, cn, type InviteCode } from '@openagt/dashboard/module'
-import { addDevice, nameOwner, ownGithub, setSwitch } from './devices.js'
-import { askLink } from './servers.js'
+import { Button, Checkbox, Dialog, Input, cn, type ModuleMachine } from '@openagt/dashboard/module'
+import { addDevice, myName, nameOwner, setSwitch } from './devices.js'
+import { readPersonThere } from './servers.js'
+import { CodeCard, Joined, NoCodeYet, PhoneCode, RanOut, Waiting, clock, useCode, type Given, type GivenAnswer } from './codes.js'
 import { ConnectServer } from './ConnectServer.js'
-import { hasServer } from './model.js'
-import { Problem } from './parts.js'
+import { JoinDialog } from './Join.js'
+import { hasDoor, isComputer } from './model.js'
+import { Problem, hostOf } from './parts.js'
 import { WARNING } from './ThisComputer.js'
 import type { Devices } from './use-devices.js'
 
 // Add device: what is being added, then that one's own way in, each on what OpenAgent does today.
 // A phone gets a code to scan: from this computer's door on the Wi-Fi, or from a server of this
-// person's, from anywhere. Another computer is saved by the link it gives, and is let in here in
-// the same press; or it is given this computer's link. A server is set up over SSH. A link someone
-// gave is pasted.
+// person's, from anywhere. Another computer on the Wi-Fi is saved by the link it gives, and is let
+// in here in the same press; or it is given this computer's link. A computer somewhere else is
+// given a code to type there, through a server. A server is set up over SSH. A code someone gave
+// is typed in.
 
 export type Adding = 'choose' | 'phone' | 'computer' | 'server' | 'code'
 
@@ -52,7 +55,7 @@ export function AddDevice({ d, start, isServer, onClose }: { d: Devices; start: 
   if (adding === 'phone') return <AddPhone d={d} onClose={onClose} />
   if (adding === 'computer') return <AddComputer d={d} onClose={onClose} />
   if (adding === 'server') return <ConnectServer d={d} onClose={onClose} onStarted={onClose} />
-  return <AddMachineDialog onClose={onClose} onAdded={() => void d.reloadMachines()} />
+  return <JoinDialog d={d} onClose={onClose} />
 }
 
 function Choose({ kinds, onPicked, onClose }: { kinds: typeof KINDS; onPicked: (adding: Adding) => void; onClose: () => void }) {
@@ -93,28 +96,33 @@ function Choose({ kinds, onPicked, onClose }: { kinds: typeof KINDS; onPicked: (
   )
 }
 
-/** The servers a phone can be let in at from here: installed from here, done, and saved. */
-const phoneServers = (d: Devices) =>
-  d.servers
-    .filter(server => server.through === undefined && !server.working && server.steps.every(step => step.state === 'done'))
-    .flatMap(server => {
-      const machine = d.machines?.machines.find(saved => saved.url === server.url)
-      return machine ? [{ address: server.address, label: machine.label }] : []
-    })
+/**
+ * The servers a device of this person's gets in at from here: each server this computer is in at,
+ * installed here or set up elsewhere, done; never another person's computer.
+ */
+export const serversOf = (d: Devices): ModuleMachine[] =>
+  (d.machines?.machines ?? []).filter(machine => hasDoor(machine) && machine.owner === undefined && !d.servers.some(server => server.url === machine.url && (server.working || !server.steps.every(step => step.state === 'done'))))
+
+/** A code from a server's door, as the dialogs show it. */
+const codeAt = async (d: Devices, server: ModuleMachine): Promise<GivenAnswer> => {
+  const asked = await d.host.machineCode(server.id)
+  return asked.ok ? { ok: true, value: asked.value } : asked
+}
 
 function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
   const { host } = d
   const status = d.door?.ok ? d.door.value : undefined
-  const servers = phoneServers(d)
-  // Where the phone works: through a server, by its address, or on this Wi-Fi (''); asked only when there is a server to go through.
+  const servers = serversOf(d)
+  // Where the phone works: through a server, by its id, or on this Wi-Fi (''); asked only when there is a server to go through.
   const [where, setWhere] = useState<string | undefined>(servers.length && !status?.https ? undefined : '')
-  const [picked, setPicked] = useState(servers[0]?.address ?? '')
+  const [picked, setPicked] = useState(servers[0]?.id ?? '')
   const [turning, setTurning] = useState(false)
   const [error, setError] = useState<string | undefined>()
-  const [code, setCode] = useState<InviteCode | undefined>()
+  const [code, setCode] = useState<Given | undefined>()
   const joined = useJoined(d, code !== undefined)
+  const server = servers.find(candidate => candidate.id === where)
   useEffect(() => {
-    d.await(where ? where : undefined)
+    d.await(server ? hostOf(server.url) : undefined)
     return () => d.await(undefined)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [where])
@@ -126,13 +134,13 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
           <p className="text-sm">Where should it work?</p>
           <div role="radiogroup" aria-label="Where should it work?" className="space-y-2">
             {servers.map(server => (
-              <Choice key={server.address} on={picked === server.address} icon={Globe} title={`Anywhere, through ${server.label}`} recommended={server.address === servers[0]!.address} words={`It opens ${server.label}, with a lock. From there it starts runs on this computer and on all your devices that are on.`} onPick={() => setPicked(server.address)} />
+              <Choice key={server.id} on={picked === server.id} icon={Globe} title={`Anywhere, through ${server.label}`} recommended={server.id === servers[0]!.id} words={`It opens ${server.label}, with a lock. From there it starts runs on this computer and on all your devices that are on.`} onPick={() => setPicked(server.id)} />
             ))}
             <Choice on={picked === ''} icon={Wifi} title="Only on this Wi-Fi" words="It opens this computer directly. No lock on the link: someone on the same Wi-Fi could listen. Use it at home." onPick={() => setPicked('')} />
           </div>
           <div className="flex justify-end gap-2">
             <Button size="sm" variant="ghost" onClick={onClose}>
-              Cancel
+              Back
             </Button>
             <Button size="sm" onClick={() => setWhere(picked)}>
               Show the code
@@ -176,26 +184,24 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
       </Dialog>
     )
 
-  const server = servers.find(candidate => candidate.address === where)
   return (
-    <InviteDialog
+    <PhoneCode
       title="Add phone"
-      ask={where ? () => askLink(host, where) : person => addDevice(host, person)}
+      ask={server ? () => codeAt(d, server) : person => addDevice(host, person)}
       // A computer several people use asks who a device is for: on a personal one, a device is its owner's.
-      {...(status?.https || status?.persons.length
+      {...(!server && (status?.https || status?.persons.length)
         ? {
             persons: {
-              owner: status.persons.find(person => person.owner)?.account,
-              whoAmI: () => ownGithub(host),
-              nameOwner: async account => {
-                const named = await nameOwner(host, account)
+              owner: status.persons.find(person => person.owner)?.name,
+              myName: () => myName(host),
+              nameOwner: async name => {
+                const named = await nameOwner(host, name)
                 await d.reloadDoor().catch(() => {})
                 return named.ok ? { ok: true } : named
               },
             },
           }
         : {})}
-      scan={server ? `Scan it with the phone's camera: it opens OpenAgent on ${server.label}, from anywhere.` : status?.https ? "Scan it with the device's camera: it opens OpenAgent here, from anywhere." : "Scan it with the phone's camera, on the same Wi-Fi as this computer."}
       {...(server ? { openHere: true } : {})}
       joined={joined}
       onCode={setCode}
@@ -208,9 +214,12 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
 function Choice({ on, icon: Icon, title, words, recommended = false, onPick }: { on: boolean; icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; title: string; words: string; recommended?: boolean; onPick: () => void }) {
   return (
     <button type="button" role="radio" aria-checked={on} onClick={onPick} className={cn('flex w-full gap-3 rounded-lg border p-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]', on ? 'border-[var(--color-primary)]' : 'border-border')}>
+      <span aria-hidden className={cn('mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border', on ? 'border-[var(--color-primary)]' : 'border-muted-foreground/50')}>
+        {on && <span className="h-2 w-2 rounded-full bg-[var(--color-primary)]" />}
+      </span>
       <Icon aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
       <span>
-        <span className="flex items-center gap-2 text-sm">
+        <span className="flex items-center gap-2 text-sm font-medium">
           {title}
           {recommended && <span className="rounded-full border border-border px-1.5 text-[10px] text-muted-foreground">Recommended</span>}
         </span>
@@ -238,10 +247,10 @@ function AddComputer({ d, onClose }: { d: Devices; onClose: () => void }) {
   const [both, setBoth] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | undefined>()
-  const [giving, setGiving] = useState(false)
-  const [code, setCode] = useState<InviteCode | undefined>()
+  const [giving, setGiving] = useState<'link' | 'code' | undefined>()
+  const [code, setCode] = useState<Given | undefined>()
   const joined = useJoined(d, code !== undefined)
-  const server = hasServer({ servers: d.servers, machines: d.machines?.machines ?? [] })
+  const server = serversOf(d)[0]
 
   const save = async (event: FormEvent): Promise<void> => {
     event.preventDefault()
@@ -269,12 +278,14 @@ function AddComputer({ d, onClose }: { d: Devices; onClose: () => void }) {
     if (!failed) onClose()
   }
 
-  if (giving)
+  if (giving === 'code' && server) return <GiveCode d={d} server={server} onClose={onClose} />
+  if (giving === 'link')
     return (
-      <InviteDialog
+      <PhoneCode
         title="Give it this computer's link"
         ask={() => addDevice(host)}
-        scan="On the other computer, open Settings › Devices › Add device › I have a code, and paste it there."
+        steps={['On the other computer, open Settings › Devices › Add device › I have a code.', 'Paste the link there, under Where.']}
+        camera={false}
         joined={joined}
         onCode={setCode}
         onClose={onClose}
@@ -284,9 +295,10 @@ function AddComputer({ d, onClose }: { d: Devices; onClose: () => void }) {
   return (
     <Dialog open onOpenChange={next => !next && onClose()} title="Add computer">
       <form className="space-y-4" onSubmit={event => void save(event)}>
+        <p className="text-sm font-medium">On this Wi-Fi</p>
         <label className="block space-y-1 text-xs text-muted-foreground">
           <span>On the other computer, open Settings › Devices › Add device › Computer › Give it this computer's link, and paste that link here:</span>
-          <Input autoFocus aria-label="The other computer's link" placeholder={server ? 'https://…' : 'http://studio.local:4201/…'} value={link} onChange={event => setLink(event.target.value)} />
+          <Input autoFocus aria-label="The other computer's link" placeholder="http://studio.local:4201/…" value={link} onChange={event => setLink(event.target.value)} />
         </label>
         <label className="flex items-start gap-2 text-sm">
           <Checkbox className="mt-0.5" checked={both && open} disabled={!open} onCheckedChange={checked => setBoth(checked === true)} aria-label="It can start runs on this computer too" />
@@ -296,23 +308,122 @@ function AddComputer({ d, onClose }: { d: Devices; onClose: () => void }) {
           </span>
         </label>
         {error !== undefined && <Problem>{error}</Problem>}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
-          <span className="text-xs text-muted-foreground">At the other computer instead?</span>
-          <Button size="sm" type="button" variant="outline" disabled={!open} title={open ? undefined : 'Turn on "On this Wi-Fi" first.'} onClick={() => setGiving(true)}>
-            <Ticket className="h-3.5 w-3.5" aria-hidden />
-            Give it this computer's link
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Button size="sm" type="button" variant="ghost" disabled={!open} title={open ? undefined : 'Turn on "On this Wi-Fi" first.'} onClick={() => setGiving('link')}>
+            Give it this computer's link instead
           </Button>
+          <div className="flex gap-2">
+            <Button size="sm" type="button" variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button size="sm" type="submit" disabled={saving || originOf(link) === undefined}>
+              {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
+              Connect
+            </Button>
+          </div>
         </div>
-        <div className="flex justify-end gap-2">
-          <Button size="sm" type="button" variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button size="sm" type="submit" disabled={saving || originOf(link) === undefined}>
-            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
-            Connect
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+          <span className="text-sm">
+            Somewhere else?
+            <span className="block text-xs text-muted-foreground">{server ? `At the office, at a friend's: it joins through ${server.label}.` : 'At the office, at a friend\'s: it joins through a server. Add a server first.'}</span>
+          </span>
+          <Button size="sm" type="button" variant="outline" disabled={!server} onClick={() => setGiving('code')}>
+            <Ticket className="h-3.5 w-3.5" aria-hidden />
+            Give it a code
           </Button>
         </div>
       </form>
+    </Dialog>
+  )
+}
+
+/** How often a server is asked whether the computer got in, while its code is on the page: one call to the server's door. */
+const JOIN_POLL_MS = 3_000
+
+/** A computer's name as a door lists the OpenAgent on it. */
+const computerName = (listed: string): string => listed.replace(/^OpenAgent on /, '')
+
+/**
+ * Another computer of this person's, somewhere else, gets in at their server with a code typed
+ * there: where and the code. Once it is in and keeps its line there, it is saved here, through the
+ * server, so runs go both ways in one go.
+ */
+export function GiveCode({ d, server, onClose }: { d: Devices; server: ModuleMachine; onClose: () => void }) {
+  const { host } = d
+  const [joined, setJoined] = useState<{ name: string; saved: boolean } | undefined>()
+  const { code, asking, error, left, expired, again } = useCode(() => codeAt(d, server), true, undefined, joined?.saved === true)
+  // What was at the server when the code came: what is new after it is the computer that used it.
+  const before = useRef<{ devices: Set<string>; computers: Set<string> } | undefined>(undefined)
+  // This computer keeps its line at the server: then the new one starts runs here too.
+  const line = d.shared.find(row => row.url === server.url)?.reach === 'full' || d.servers.some(row => row.url === server.url && row.reach === 'full')
+
+  useEffect(() => {
+    before.current = undefined
+    setJoined(undefined)
+    if (!code) return
+    let stopped = false
+    const look = async (): Promise<void> => {
+      const [person, there] = await Promise.all([host.machinePerson(server.id), host.computersThrough(server.id)])
+      const devices = (person.ok ? readPersonThere(person.said)?.devices : undefined) ?? []
+      const computers = there.ok ? there.computers.filter(computer => computer.owner === undefined) : []
+      if (stopped) return
+      if (!before.current) {
+        before.current = { devices: new Set(devices.map(device => device.id)), computers: new Set(computers.map(computer => computer.id)) }
+        return
+      }
+      const fresh = computers.find(computer => !before.current!.computers.has(computer.id) && !computer.added)
+      if (fresh) {
+        const saved = await host.addComputerThrough(server.id, fresh.id)
+        await d.reloadMachines().catch(() => {})
+        if (!stopped) setJoined({ name: fresh.name, saved: saved.ok })
+        return
+      }
+      const entered = devices.find(device => !before.current!.devices.has(device.id) && isComputer(device))
+      if (entered) setJoined(was => was ?? { name: computerName(entered.name), saved: false })
+    }
+    void look()
+    const timer = setInterval(() => void look(), JOIN_POLL_MS)
+    return () => {
+      stopped = true
+      clearInterval(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code])
+  const done = joined?.saved === true
+
+  return (
+    <Dialog open onOpenChange={open => !open && onClose()} title="Give it a code">
+      <div className="space-y-4">
+        {done ? (
+          <Joined words={line ? 'Runs go both ways, through ' + server.label + '. The code is spent.' : `Your runs can go there. Turn on "From anywhere, through ${server.label}" for its runs to come here.`}>{`${joined!.name} is in.`}</Joined>
+        ) : asking || error !== undefined || !code?.where || !code.code ? (
+          <NoCodeYet asking={asking} error={error ?? (code ? 'the server gives no code to type yet: update it first' : undefined)} />
+        ) : expired && joined === undefined ? (
+          <RanOut />
+        ) : (
+          <>
+            <p className="text-sm">
+              On the other computer, open <span className="font-medium">Settings › Devices › Add device › I have a code</span>, and type:
+            </p>
+            <CodeCard where={code.where} code={code.code} />
+            {joined !== undefined ? (
+              <Waiting>{`${joined.name} is in. Waiting for it to keep its line at ${server.label}, so runs go both ways…`}</Waiting>
+            ) : (
+              <Waiting>{`Waiting… the code works once, for ${clock(left)}. It joins as yours, through ${server.label}.`}</Waiting>
+            )}
+          </>
+        )}
+        <div className="flex justify-end gap-2">
+          {!asking && !done && (expired || error !== undefined || !code) && joined === undefined && (
+            <Button size="sm" variant="outline" onClick={() => void again()}>
+              New code
+            </Button>
+          )}
+          <Button size="sm" variant={done ? 'default' : 'ghost'} onClick={onClose}>
+            {done ? 'Done' : 'Cancel'}
+          </Button>
+        </div>
+      </div>
     </Dialog>
   )
 }

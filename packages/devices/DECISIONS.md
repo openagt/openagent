@@ -25,10 +25,18 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A device that is in sees and does what the computer's own browser does; on a server, a
   device of an invited person does so on that person's own OpenAgent there. Picked over a
   device that only watches.
-- Another computer's OpenAgent gets in as a device does: with the same code, pasted as a
-  link where a phone scans it, and a key of its own that is removed alone. Picked over a
+- Another computer's OpenAgent gets in as a device does: with the same code, typed with where
+  it is where a phone scans it, and a key of its own that is removed alone. Picked over a
   second kind of key that opens less: a key that starts an agent already runs anything on
   the computer.
+- A computer somewhere else gets in by typing where and a code that another device of the
+  person's shows, through their server. Picked over typing where alone and pressing Allow on
+  a device of the person's, which needs that device at hand, and lets anyone who knows the
+  address knock.
+- A code is eight letters and digits, with none that reads as another, and works once, for ten
+  minutes. An address that tries five wrong codes in a minute waits a minute, and the code goes
+  on working. Picked over six digits that stop working after a few wrong tries, which a
+  stranger could do on purpose.
 
 - A computer is listed once among the devices, whatever it holds there, and is taken out
   whole. Picked over a row for its OpenAgent and one for its line, where one laptop showed
@@ -37,7 +45,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   entry each time, which left the old ones to be removed by hand.
 
 ## Persons
-- A person on a computer is their GitHub account. Picked over a name typed at each invite.
+- A person on a computer is a name, typed at the invite, whatever git host they use; the owner
+  names themselves the same way the first time. Picked over their GitHub account, which left out
+  a person on another git host.
 - Only the computer's owner invites. Picked over anyone who is in inviting; letting the owner
   allow others to invite can come later.
 - A computer only one person uses is unchanged: OpenAgent asks who the owner is only the first

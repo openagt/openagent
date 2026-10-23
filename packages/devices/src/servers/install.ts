@@ -2,7 +2,8 @@ import { giveGithub, noteGithub } from './logins.js'
 import { askOpenAgent } from './shared.js'
 import { exec as realExec, lastLines, openSession, withAdvice, type Exec, type Session } from './ssh.js'
 import { PERSON_TIMEOUT_MS, SERVER_USER, devicesScript, linkScript, stepsFor, type Facts, type StepId } from './steps.js'
-import { BEAT_MS, changeServer, doorUrl, heartbeat, isAccount, working, type Server, type StepState } from './store.js'
+import { BEAT_MS, changeServer, doorUrl, heartbeat, working, type Server, type StepState } from './store.js'
+import { nameOf } from '../door/store.js'
 
 /**
  * The install itself: the steps, one after the other, on one server, each written to the file
@@ -56,10 +57,10 @@ async function lineFacts(session: Session, server: Required<Pick<Server, 'throug
   const host = new URL(server.through).host
   try {
     // OpenAgent's machines are named by their address.
-    const person = (await ask('onMachinePerson', [server.through])) as { ok?: boolean; said?: { account?: unknown }; error?: unknown } | undefined
-    const account = person?.ok ? person.said?.account : undefined
-    if (!isAccount(account)) return { ok: false, said: person?.ok || person?.error === undefined ? `${host} does not say who you are there. Press Invite on its row once: it names you its owner.` : `${host} did not say who you are there: ${String(person.error)}` }
-    const through = { url: server.through, owner: account.toLowerCase(), who: server.who ?? 'me' }
+    const person = (await ask('onMachinePerson', [server.through])) as { ok?: boolean; said?: { person?: unknown }; error?: unknown } | undefined
+    const name = person?.ok && typeof person.said?.person === 'string' ? nameOf(person.said.person) : undefined
+    if (name === undefined) return { ok: false, said: person?.ok || person?.error === undefined ? `${host} does not say who you are there. Press Invite on its row once: it names you its owner.` : `${host} did not say who you are there: ${String(person.error)}` }
+    const through = { url: server.through, owner: name, who: server.who ?? 'me' }
     if (await keepsLine(session, server.through)) return { ok: true, through }
     const link = (await ask('sendMachineLineLink', [server.through])) as { ok?: boolean; url?: unknown; error?: unknown } | undefined
     if (!link?.ok || typeof link.url !== 'string') return { ok: false, said: `${host} gave no link for the line: ${typeof link?.error === 'string' ? link.error : 'it did not say why'}` }
@@ -158,7 +159,8 @@ export async function install(opts: InstallOptions): Promise<void> {
   }
 }
 
-export type Link = { ok: true; url: string; expires: string } | { ok: false; error: string }
+/** A code from the server's door: the link a camera opens, and what is typed instead, where and the code. */
+export type Link = { ok: true; url: string; where: string; code: string; expires: string } | { ok: false; error: string }
 
 /** How long a link may be: a door's link is its address, a code and a key's mark, and a page draws it as a QR code. */
 const LINK_MAX = 512
@@ -180,8 +182,12 @@ export async function askLink(server: Pick<Server, 'address' | 'user'>, opts: { 
     const said = await session.run(SERVER_USER, linkScript(person), person === undefined ? LINK_TIMEOUT_MS : PERSON_TIMEOUT_MS)
     if (said.code !== 0) return { ok: false, error: withAdvice(server, lastLines(said) || 'The server did not answer.') }
     try {
-      const { url, expires } = JSON.parse(said.out.trim().split('\n').at(-1) ?? '') as Record<string, unknown>
-      if (typeof url === 'string' && url.length <= LINK_MAX && typeof expires === 'string' && Number.isFinite(Date.parse(expires)) && new URL(url).origin === doorUrl(server.address)) return { ok: true, url, expires }
+      const { url, where, code, expires } = JSON.parse(said.out.trim().split('\n').at(-1) ?? '') as Record<string, unknown>
+      if (typeof url === 'string' && url.length <= LINK_MAX && typeof expires === 'string' && Number.isFinite(Date.parse(expires)) && new URL(url).origin === doorUrl(server.address)) {
+        // A server from before typed codes gives a link only: it is updated first.
+        if (typeof where !== 'string' || typeof code !== 'string' || new URL(`https://${where}`).origin !== doorUrl(server.address) || !/^[A-Z0-9-]{1,16}$/.test(code)) return { ok: false, error: 'The server gives no code to type yet: update it first.' }
+        return { ok: true, url, where, code, expires }
+      }
     } catch {
       // Told below, as any answer that is no link.
     }

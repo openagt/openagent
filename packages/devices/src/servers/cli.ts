@@ -8,7 +8,8 @@ import { OwnAtWork, askOwnGithub, giveOwnClaude, giveOwnGithub, personHere, remo
 import { askOpenAgent, copyGithub, copyGithubToOther, forgetShared, isOtherUrl, isSharedUrl, lineTo, mintFor, otherLogins, setSharedReach, startMint } from './shared.js'
 import { lastLines, openSession, withAdvice, type Exec } from './ssh.js'
 import { PERSON_TIMEOUT_MS, SERVER_MARK, SERVER_USER, STEPS, devicesScript, stepLabel, stepsFor, whoScript, type Who } from './steps.js'
-import { LOGIN_KINDS, Unreadable, addressOf, isAccount, isAccountName, isServerName, atWork, doorUrl, freshSteps, isMachineUrl, isUser, isVersion, readStore, throughUrl, update, working, type ClaudeAccountKept, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
+import { LOGIN_KINDS, Unreadable, addressOf, isAccountName, isServerName, atWork, doorUrl, freshSteps, isMachineUrl, isUser, isVersion, readStore, throughUrl, update, working, type ClaudeAccountKept, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
+import { nameOf } from '../door/store.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -34,14 +35,14 @@ export const USAGE = `usage: devices server <command>
                                        say who on its server may start runs on a computer reached through it: nobody (the
                                        server only shows its runs), only its own person, or every person there; with
                                        "remove", the user each other person has on it is deleted, with everything in it
-  link <address> [--for <account>]     a link the server's door gives for a new machine, once, for five minutes; with
-                                       --for, for a person's device, by their GitHub account (the owner is named first)
-  owner <address> <account>            name the server's owner at its door, once, by their GitHub account
+  link <address> [--for <name>]        a code the server's door gives for a new device, once, for ten minutes, with its
+                                       link; with --for, for a person's device, by their name (the owner is named first)
+  owner <address> <name>               name the server's owner at its door, once
   added <address>                      the server is among OpenAgent's machines: nothing is left to add
   devices <address>                    the devices that are in on the server, as its door lists them, asked over SSH; the
                                        line this computer keeps open to the server is marked as its own
   remove-device <address> <id>         take one device out on the server, by its id as devices names it: it is out at once
-  remove-person <address> <account>    take a person out on the server, with every device of theirs; the owner stays
+  remove-person <address> <name>       take a person out on the server, with every device of theirs; the owner stays
   github                               the GitHub account gh is logged in to on this computer: whose login a copy would be,
                                        or why there is none to copy
   login <address> github               copy this computer's GitHub login to the server, over SSH
@@ -69,7 +70,7 @@ export const USAGE = `usage: devices server <command>
 
 On a computer several people use, where this OpenAgent is one person's (OPENAGENT_PERSON names them):
   own                                  this OpenAgent's own GitHub and Claude logins
-  own login github [--from <server>]   log in to GitHub with the login given on standard input; it must be the person's own;
+  own login github [--from <server>]   log in to GitHub with the login given on standard input;
                                        --from names the server whose OpenAgent of the same person copied it
   own login github own                 log in to GitHub with a code GitHub gives: own tells it, and the person types it at
                                        github.com/login/device
@@ -492,9 +493,9 @@ function ownStatusOf(store: Store, person: string): OwnStatus {
 
 /** The person this OpenAgent is; a refusal on any other computer. */
 function person(io: CliIO): string {
-  const account = personHere(io.env)
-  if (account === undefined) throw new Refused('This OpenAgent is no person\'s on a computer several people use.')
-  return account
+  const name = personHere(io.env)
+  if (name === undefined) throw new Refused('This OpenAgent is no person\'s on a computer several people use.')
+  return name
 }
 
 async function sharedStatusOf(io: CliIO, urls: string[]): Promise<{ shared: SharedStatus[] }> {
@@ -535,7 +536,7 @@ async function setWho(io: CliIO, said: string, who: Who, remove: boolean): Promi
   if (remove) {
     const listed = await readDevices(server, over)
     if (!listed.ok) throw new Refused(listed.error)
-    others = listed.persons.filter(person => !person.owner && person.from === server.through).map(person => person.account)
+    others = listed.persons.filter(person => !person.owner && person.from === server.through).map(person => person.name)
   }
   const session = await openSession(server, over)
   let answered: Devices
@@ -635,18 +636,19 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
       case 'link': {
         const [address, flag, person] = rest
         if (!address || !(rest.length === 1 || (rest.length === 3 && flag === '--for' && person))) break
-        if (person !== undefined && !isAccount(person)) throw new Refused(`${person} is not a GitHub account`)
-        const link = await askLink(await still(io, address), io.exec ? { exec: io.exec } : {}, person?.toLowerCase())
+        const name = person === undefined ? undefined : nameOf(person)
+        if (person !== undefined && name === undefined) throw new Refused(`${person} is not a name: letters, digits, spaces, dots, apostrophes and dashes, at most 40`)
+        const link = await askLink(await still(io, address), io.exec ? { exec: io.exec } : {}, name)
         if (!link.ok) throw new Refused(link.error)
-        return print({ url: link.url, expires: link.expires })
+        return print({ url: link.url, where: link.where, code: link.code, expires: link.expires })
       }
       case 'owner':
       case 'remove-person': {
-        const [address, account] = rest
-        if (rest.length !== 2 || !address || !account) break
+        const [address, name] = rest
+        if (rest.length !== 2 || !address || !name) break
         const server = await still(io, address)
         const over = io.exec ? { exec: io.exec } : {}
-        return print(devicesOf(await (command === 'owner' ? nameOwner : removePerson)(server, account, over), await ownLine(io, server)))
+        return print(devicesOf(await (command === 'owner' ? nameOwner : removePerson)(server, name, over), await ownLine(io, server)))
       }
       case 'devices': {
         const [address] = rest
@@ -730,10 +732,10 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         return print(statusOf(await readStore(io.env), io.env))
       }
       case 'own': {
-        const account = person(io)
-        const own = { env: io.env, person: account, ...(io.exec ? { exec: io.exec } : {}) }
+        const name = person(io)
+        const own = { env: io.env, ...(io.exec ? { exec: io.exec } : {}) }
         const [what, kind, how, from] = rest
-        if (rest.length === 0) return print(ownStatusOf(await readStore(io.env), account))
+        if (rest.length === 0) return print(ownStatusOf(await readStore(io.env), name))
         // A login handed over may be a copy from the person's own OpenAgent on a server, which names that server.
         const copy = rest.length === 2 || (rest.length === 4 && how === '--from' && isServerName(from))
         const copiedFrom = rest.length === 4 ? from : undefined
@@ -744,13 +746,14 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         } else if (what === 'logout' && isKind(kind) && rest.length === 2) {
           if (await removeOwn(own, kind)) (io.startOver ?? startOverSoon)()
         } else break
-        return print(ownStatusOf(await readStore(io.env), account))
+        return print(ownStatusOf(await readStore(io.env), name))
       }
       case 'own-work': {
         const [kind] = rest
         if (rest.length !== 1 || kind !== 'github') break
-        const account = person(io)
-        await untilStopped(io, signal => askOwnGithub({ env: io.env, person: account, signal, ...(io.exec ? { exec: io.exec } : {}) }))
+        // Only on the OpenAgent of one person's: refused anywhere else.
+        person(io)
+        await untilStopped(io, signal => askOwnGithub({ env: io.env, signal, ...(io.exec ? { exec: io.exec } : {}) }))
         return 0
       }
       case 'shared': {

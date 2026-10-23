@@ -4,7 +4,7 @@ import type { Duplex } from 'node:stream'
 import { connect } from 'node:tls'
 import { keyFingerprint } from './der.js'
 import { DATA, END, HEAD, Link, RESET, carriedHeaders, carriedPath, carriedValue, readHead, sendBody, type Frame } from './frames.js'
-import { COMPUTER_HEADER, PERSON_HEADER, accountOf } from './store.js'
+import { COMPUTER_HEADER, PERSON_HEADER, nameFromWord, nameOf } from './store.js'
 
 /**
  * This computer's end of a line: it calls its server, says who it is with the key it has there,
@@ -149,9 +149,9 @@ export function carry(socket: Duplex, rest: Buffer, opts: CarryOptions): Promise
       if (method !== 'GET' && method !== 'POST') return say(call, 405, 'method not allowed')
       if (calls.size >= MAX_CALLS) return say(call, 503, 'too many calls at once')
       const said = (headers && typeof headers === 'object' ? headers : {}) as Record<string, unknown>
-      // For whom the server says it is; a word that is no GitHub account is no one's.
+      // For whom the server says it is, by their name as a header carries it; a word that is no name is no one's.
       const person = carriedValue(said[PERSON_HEADER])
-      const route = opts.route(person === undefined ? undefined : accountOf(person), { method, path })
+      const route = opts.route(person === undefined ? undefined : nameFromWord(person), { method, path })
       if (!('target' in route)) return say(call, route.status, route.text, route.type)
       const target = new URL(route.target)
       const passed: Record<string, string> = { host: target.host }
@@ -376,9 +376,9 @@ export async function enterForLine(link: LineLink, name: string, computer?: stri
   }
 }
 
-/** What a server's door says of this computer's person there: their GitHub account, and, to a line for everyone, the server's persons. */
+/** What a server's door says of this computer's person there: their name, and, to a line for everyone, the server's persons. */
 export interface MeThere {
-  account?: string
+  person?: string
   persons?: string[]
 }
 
@@ -388,10 +388,10 @@ export async function askMe(line: { url: string; pin: string; key: string }): Pr
     const socket = await dial(line.url, line.pin)
     const answer = await exchange(socket, 'GET', new URL(`${line.url}${ME_PATH}`), { Authorization: `Bearer ${line.key}` })
     if (answer.status !== 200) return undefined
-    const { account, persons } = JSON.parse(answer.body) as Record<string, unknown>
-    const known = typeof account === 'string' ? accountOf(account) : undefined
-    const theirs = Array.isArray(persons) ? persons.flatMap(person => (typeof person === 'string' && accountOf(person) === person ? [person] : [])) : undefined
-    return { ...(known !== undefined ? { account: known } : {}), ...(theirs ? { persons: theirs } : {}) }
+    const { person, persons } = JSON.parse(answer.body) as Record<string, unknown>
+    const known = typeof person === 'string' ? nameOf(person) : undefined
+    const theirs = Array.isArray(persons) ? persons.flatMap(other => (typeof other === 'string' && nameOf(other) === other ? [other] : [])) : undefined
+    return { ...(known !== undefined ? { person: known } : {}), ...(theirs ? { persons: theirs } : {}) }
   } catch {
     return undefined
   }

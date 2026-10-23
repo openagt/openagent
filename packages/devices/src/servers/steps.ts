@@ -26,7 +26,7 @@ export const LINE_MODE: Record<Who, 'watch' | 'full' | 'everyone'> = { nobody: '
 export interface Through {
   /** The server's door, as an origin: what the computer keeps its line to. */
   url: string
-  /** The person who connects it, by their GitHub account there: the computer's owner. */
+  /** The person who connects it, by their name there: the computer's owner. */
   owner: string
   who: Who
   /** A link that lets the computer's line in at the server, once; none when the computer keeps its line there already. */
@@ -143,7 +143,7 @@ export const SERVER_MARK = 'OPENAGENT_SERVER'
 export const PERSON_HELPER = `${ROOT}/bin/openagent-person`
 /** How the door is told where the helper is. A computer with none gives nobody a user of their own: a laptop, a computer at home. */
 export const PERSON_HELPER_ENV = 'OPENAGENT_PERSON_HELPER'
-/** How a person's OpenAgent is told whose it is: their GitHub account. */
+/** How a person's OpenAgent is told whose it is: their name, as `nameWord` writes it. */
 export const PERSON_MARK = 'OPENAGENT_PERSON'
 /** Root's folder of the persons: a file each, `<user>.env`, which their OpenAgent's service reads. */
 export const PERSONS_DIR = '/etc/openagent/persons'
@@ -233,11 +233,12 @@ export const SUDOERS = `${SERVER_USER} ALL=(root) NOPASSWD: ${PERSON_HELPER}`
 /**
  * The helper itself, a script root runs:
  *
- * - `add <account> <port>` makes the person's user (`oa-<account>`), puts Claude Code in its home,
+ * - `add <name> <port>` makes the person's user (`oa-<letters of the name>-<a mark of all of it>`),
+ *   the name as `nameWord` writes it, puts Claude Code in its home,
  *   and starts the person's OpenAgent on `<port>`, the first of a block of 100 ports that are
  *   theirs: their OpenAgent, and the lines of their computers. It answers the user's name once
  *   that OpenAgent answers. Asked again, it does only what is not done yet.
- * - `remove <account>` stops it all and deletes the user with everything in its home.
+ * - `remove <name>` stops it all and deletes the user with everything in its home.
  * - `firewall` puts the rules in place anew.
  *
  * The rules: a call on this server to the owner's ports (4200–4299) is made only by the server's
@@ -259,17 +260,19 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 PERSONS=${PERSONS_DIR}
 
 fail() { echo "$1" >&2; exit 1; }
-usage() { echo "usage: openagent-person add <github account> <port> | remove <github account> | firewall" >&2; exit 2; }
+usage() { echo "usage: openagent-person add <name> <port> | remove <name> | firewall" >&2; exit 2; }
 
-# A GitHub account as the door keeps it: letters, digits and single dashes, at most 39.
-account_ok() { [ \${#1} -le 39 ] && [[ $1 =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; }
+# A person's name as the door hands it over: plain letters, and % with the number of any other.
+name_ok() { [ \${#1} -le 480 ] && [[ $1 =~ ^[A-Za-z0-9%._~-]+$ ]]; }
 # The first port of a block of 100 a person has, never the owner's: 4300, 4400, up to 9900.
 port_ok() { [[ $1 =~ ^[4-9][0-9]00$ ]] && [ "$1" -ge 4300 ]; }
 user_ok() { [[ $1 =~ ^oa-[a-z0-9-]{1,29}$ ]]; }
 is_user() { id -u "$1" >/dev/null 2>&1; }
-# A person's user: their account after "oa-", and when that is too long for a user name, its start and a mark of all of it.
+# A person's user: the plain letters and digits of their name after "oa-", at most 20, and a mark of all of it.
 user_of() {
-  if [ \${#1} -le 29 ]; then echo "oa-$1"; else echo "oa-\${1:0:20}-$(printf %s "$1" | sha256sum | cut -c1-8)"; fi
+  local letters
+  letters=$(printf %s "$1" | sed 's/%[0-9A-Fa-f][0-9A-Fa-f]//g' | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9' | cut -c1-20)
+  echo "oa-\${letters:-p}-$(printf %s "$1" | sha256sum | cut -c1-8)"
 }
 # The port a person's file names; nothing for a file that names none.
 port_in() { sed -n 's/^PORT=\\([4-9][0-9]00\\)$/\\1/p' "$1" | head -n 1; }
@@ -312,10 +315,10 @@ EOF
 }
 
 add() {
-  local account=$1 port=$2 user file home unit before tmp other
-  account_ok "$account" || fail "$account is not a GitHub account."
+  local name=$1 port=$2 user file home unit before tmp other
+  name_ok "$name" || fail "$name is not a person's name as the door hands it over."
   port_ok "$port" || fail "$port is not the first port of a person's block."
-  user=$(user_of "$account")
+  user=$(user_of "$name")
   file=$PERSONS/$user.env
   unit=openagent-person@$user.service
   lock
@@ -328,7 +331,7 @@ add() {
   if is_user "$user" && [ ! -e "$file" ]; then fail "This server has a user $user that OpenAgent did not make."; fi
   before=$(cat "$file" 2>/dev/null || true)
   tmp=$(mktemp "$PERSONS/.new.XXXXXX")
-  printf 'OPENAGENT_PERSON=%s\\nPORT=%s\\n' "$account" "$port" > "$tmp"
+  printf 'OPENAGENT_PERSON=%s\\nPORT=%s\\n' "$name" "$port" > "$tmp"
   chmod 644 "$tmp"
   mv -f "$tmp" "$file"
   is_user "$user" || useradd --create-home --shell /bin/bash "$user"
@@ -337,7 +340,7 @@ add() {
   # Claude Code's own installer, into the person's home, as for the server's own user: it keeps itself up to date there.
   if [ ! -e "$home/.local/bin/claude" ]; then
     runuser -u "$user" -- env -i HOME="$home" USER="$user" LOGNAME="$user" PATH=/usr/local/bin:/usr/bin:/bin bash -c 'cd && curl -fsSL https://claude.ai/install.sh | bash' </dev/null >/dev/null 2>&1 ||
-      fail "Claude Code could not be installed for @$account."
+      fail "Claude Code could not be installed for $user."
   fi
   systemctl enable --quiet "$unit"
   apply_firewall
@@ -347,13 +350,13 @@ add() {
     sleep 1
   done
   journalctl -u "$unit" -n 20 --no-pager >&2 || true
-  fail "@$account's OpenAgent did not start on this server."
+  fail "The OpenAgent of $user did not start on this server."
 }
 
 remove() {
-  local account=$1 user file
-  account_ok "$account" || fail "$account is not a GitHub account."
-  user=$(user_of "$account")
+  local name=$1 user file
+  name_ok "$name" || fail "$name is not a person's name as the door hands it over."
+  user=$(user_of "$name")
   file=$PERSONS/$user.env
   lock
   # Only a user this helper made is taken away: one it keeps a file of.
@@ -716,7 +719,7 @@ export function stepLabel(step: StepDef, through: string | undefined): string {
 export function whoScript(url: string, who: Who, remove: readonly string[] = []): string {
   return script(SERVER_USER, { URL: url, MODE: LINE_MODE[who] }, `
   ${WITH_HELPER} ${DOOR} line "$MODE" "$URL" >/dev/null
-${remove.map(account => `  ${WITH_HELPER} ${DOOR} remove-person ${quoted(account)} >/dev/null
+${remove.map(person => `  ${WITH_HELPER} ${DOOR} remove-person ${quoted(person)} >/dev/null
 `).join('')}  ${DOOR} status
 `)
 }
@@ -730,13 +733,13 @@ export function linkScript(person?: string): string {
 }
 
 /** The script that names the server's owner at its door, and answers the devices and persons. Run as the server's own user. */
-export function ownerScript(account: string): string {
-  return script(SERVER_USER, { ACCOUNT: account }, `\n  ${DOOR} owner "$ACCOUNT"\n`)
+export function ownerScript(name: string): string {
+  return script(SERVER_USER, { NAME: name }, `\n  ${DOOR} owner "$NAME"\n`)
 }
 
 /** The script that takes a person out at the server's door, with their devices, their user and all it holds, and answers the ones still in. Run as the server's own user. */
-export function removePersonScript(account: string): string {
-  return script(SERVER_USER, { ACCOUNT: account }, `\n  ${WITH_HELPER} ${DOOR} remove-person "$ACCOUNT"\n`)
+export function removePersonScript(name: string): string {
+  return script(SERVER_USER, { NAME: name }, `\n  ${WITH_HELPER} ${DOOR} remove-person "$NAME"\n`)
 }
 
 /** The script that asks the server's door which devices are in. Run as the server's own user. */

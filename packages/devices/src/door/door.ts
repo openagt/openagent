@@ -9,7 +9,7 @@ import { doorFingerprint, type Secured } from './certificate.js'
 import { deviceName } from './device-name.js'
 import { LINE_FOR_HEADER, LINE_PATH, LINE_PROTOCOL } from './line-out.js'
 import { enterPage, notInPage } from './pages.js'
-import { COMPUTER_HEADER, PERSON_HEADER, addCode, enter, isComputerId, isIn, listedDevices, personOf, portOf, readStore, removeComputer, removeDevice, sha256, shareLine, storePath, update, type Entry, type ListedDevice, type Store } from './store.js'
+import { COMPUTER_HEADER, PERSON_HEADER, addCode, nameWord, shownCode, enter, isComputerId, isIn, listedDevices, personOf, portOf, readStore, removeComputer, removeDevice, sha256, shareLine, storePath, update, type Entry, type ListedDevice, type Store } from './store.js'
 
 /**
  * The door: the one thing that lets anything in from the network. A request from a device that is in is
@@ -44,7 +44,12 @@ import { COMPUTER_HEADER, PERSON_HEADER, addCode, enter, isComputerId, isIn, lis
  * A device that is in also asks the door who it is here (`ME_PATH`): its person, whether that is
  * the owner, and that person's devices, one of which it may take out. A computer of a person asks
  * the door for a code its own line gets in with (`ME_LINE_PATH`): a person who is not the owner
- * invites nobody, and that code lets in a line and nothing else.
+ * invites nobody, and that code lets in a line and nothing else. It also asks for a code one more
+ * device of its own person gets in with (`ME_CODE_PATH`), typed on another computer with the
+ * door's address: what "Give it a code" shows.
+ *
+ * A code is short enough to type, so an address that tries wrong codes waits a minute after a few
+ * (`TOO_MANY_TRIES`), whatever it tries then.
  */
 
 /** Every path of the door's own; never passed on. */
@@ -61,6 +66,8 @@ export const ME_PATH = `${DOOR_PREFIX}/me`
 export const ME_REMOVE_PATH = `${ME_PATH}/remove`
 /** Where a computer that is in asks for a code its line gets in with, for its own person. */
 export const ME_LINE_PATH = `${ME_PATH}/line`
+/** Where a computer that is in asks for a code a device of its own person gets in with: a device that is in gives the code for the next one. */
+export const ME_CODE_PATH = `${ME_PATH}/code`
 /** The cookie a device that is in carries: its id, a dot, its key. */
 export const DEVICE_COOKIE = 'oa_device'
 
@@ -71,6 +78,11 @@ const COOKIE_RESEND_MS = 24 * 60 * 60 * 1000
 const SEEN_FLUSH_MS = 60_000
 /** A code, a computer's name and their wrapping, generously. */
 const MAX_ENTER_BODY = 4 * 1024
+/** How many wrong codes one address tries in a minute before it has to wait: a code is short enough to type, so not to guess. */
+const WRONG_TRIES = 5
+const WRONG_TRIES_MS = 60_000
+/** What a door says to an address that tried too many wrong codes. */
+export const TOO_MANY_TRIES = 'too many wrong codes: wait a minute'
 /** The computer a request says it is, when it says one: as the file keeps it, the word's SHA-256, never the word. */
 function saidComputer(req: IncomingMessage): string | undefined {
   const said = req.headers[COMPUTER_HEADER]
@@ -202,28 +214,28 @@ async function readBody(req: IncomingMessage, limit: number): Promise<string | u
 
 /** What a device is told of itself here (`ME_PATH`). */
 export interface Me {
-  /** Its person's GitHub account; absent while the computer has no persons, when every device is the one person's. */
-  account?: string
+  /** Its person's name; absent while the computer has no persons, when every device is the one person's. */
+  person?: string
   /** Whether that person is the computer's owner: always so while it has no persons. */
   owner: boolean
   /** That person's devices, as `status` lists them: a computer once. */
   devices: ListedDevice[]
-  /** To a computer whose line is for everyone here: every person here, the owner first, by their GitHub account. */
+  /** To a computer whose line is for everyone here: every person here, the owner first, by their name. */
   persons?: string[]
 }
 
 /**
- * What `person`'s device is told of itself: their account, whether they own the computer, and
+ * What `person`'s device is told of itself: their name, whether they own the computer, and
  * their devices. A computer whose line is for everyone is told who everyone is, so it knows who
  * of those it gave a user of their own is no longer here.
  */
 export function me(store: Store, person: string | undefined, forEveryone = false): Me {
-  const owner = store.persons.find(candidate => candidate.owner)?.account
+  const owner = store.persons.find(candidate => candidate.owner)?.name
   return {
-    ...(person !== undefined ? { account: person } : {}),
+    ...(person !== undefined ? { person } : {}),
     owner: person === undefined || person === owner,
     devices: listedDevices(store).filter(device => device.person === person),
-    ...(forEveryone ? { persons: store.persons.map(candidate => candidate.account) } : {}),
+    ...(forEveryone ? { persons: store.persons.map(candidate => candidate.name) } : {}),
   }
 }
 
@@ -252,6 +264,18 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
   // Which computer each device that called with its key says it is: written with the times, for an entry that does not say yet.
   const said = new Map<string, string>()
   const cookieSent = new Map<string, number>()
+  // When each address last tried wrong codes, within the last minute. Only the guesser waits: the code itself goes on working.
+  const wrongTries = new Map<string, number[]>()
+  const triesOf = (peer: string): number[] => {
+    const recent = (wrongTries.get(peer) ?? []).filter(at => now() - at < WRONG_TRIES_MS)
+    if (recent.length) wrongTries.set(peer, recent)
+    else wrongTries.delete(peer)
+    return recent
+  }
+  const triedWrong = (peer: string): void => {
+    for (const other of [...wrongTries.keys()]) triesOf(other)
+    wrongTries.set(peer, [...triesOf(peer), now()])
+  }
 
   const flushSeen = async (): Promise<void> => {
     if (seen.size === 0) return
@@ -296,15 +320,21 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     // A computer that gets in to keep a line open is listed by its own name: it is what this server starts runs on.
     const forLine = byComputer && line === true
     if (forLine && !opts.lines) return refuse(res, 403, 'this door gives no line: only a server does')
+    // Asked before the code is looked at: an address that is waiting is not told whether its next guess was right.
+    const peer = req.socket.remoteAddress ?? ''
+    if (triesOf(peer).length >= WRONG_TRIES) return refuse(res, 429, TOO_MANY_TRIES)
     const name = forLine ? saidName(computer as string) : byComputer ? computerName(computer as string) : deviceName(req.headers['user-agent'])
     const entry = typeof code === 'string' && code ? await enter(env, code, name, now(), forLine ? opts.lines!.ports : undefined, byComputer ? saidComputer(req) : undefined) : undefined
-    if (!entry) return refuse(res, 403, 'this code no longer works')
+    if (!entry) {
+      triedWrong(peer)
+      return refuse(res, 403, 'this code no longer works')
+    }
     const headers = { 'content-type': 'application/json', 'cache-control': 'no-store' }
     // A computer is answered its key; a browser gets it as a cookie its pages cannot read.
     if (byComputer) return void res.writeHead(200, headers).end(JSON.stringify({ ok: true, key: keyWord(entry) }))
     cookieSent.set(entry.id, now())
     // Whose device it is, for the page to say: the owner's when no person is named.
-    const person = entry.person ?? (await currentStore()).persons[0]?.account
+    const person = entry.person ?? (await currentStore()).persons[0]?.name
     res.writeHead(200, { ...headers, 'set-cookie': cookieHeader(entry, secure) }).end(JSON.stringify({ ok: true, ...(person !== undefined ? { person } : {}) }))
   }
 
@@ -312,13 +342,13 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
    * Who a request comes from, when it is in: a computer by the key its header carries, a device
    * by its cookie. A header that is no key of the door's is the page's own, to pass on.
    */
-  const whoIsIn = async (req: IncomingMessage): Promise<{ entry: Entry; byBearer: boolean; person?: string; port?: number } | undefined> => {
+  const whoIsIn = async (req: IncomingMessage): Promise<{ entry: Entry; byBearer: boolean; person?: string; owner: boolean; port?: number } | undefined> => {
     const store = await currentStore()
-    const whose = (entry: Entry): { person?: string; port?: number } => {
+    const whose = (entry: Entry): { person?: string; owner: boolean; port?: number } => {
       const device = store.devices.find(candidate => candidate.id === entry.id)
       const person = device && personOf(store, device)
       const port = portOf(store, person)
-      return { ...(person !== undefined ? { person } : {}), ...(port !== undefined ? { port } : {}) }
+      return { ...(person !== undefined ? { person } : {}), owner: device?.person === undefined, ...(port !== undefined ? { port } : {}) }
     }
     const bearer = readBearer(req.headers.authorization)
     if (bearer && isIn(store, bearer)) return { entry: bearer, byBearer: true, ...whose(bearer) }
@@ -345,7 +375,8 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     delete headers[COMPUTER_HEADER]
     // Who the call is from is the door's to say, never the request's.
     delete headers[PERSON_HEADER]
-    if (person !== undefined) headers[PERSON_HEADER] = person
+    // A name is any language's letters: a header carries only plain ones.
+    if (person !== undefined) headers[PERSON_HEADER] = nameWord(person)
     // OpenAgent is asked as its own browser asks it: at its own address, from its own page.
     headers.host = target.host
     if (headers.origin) headers.origin = target.origin
@@ -386,7 +417,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       const path = (req.url ?? '/').split('?')[0] ?? '/'
       if (path === ENTER_PATH) return req.method === 'DELETE' ? leave(req, res) : letIn(req, res)
       if (opts.lines && (path === COMPUTERS_PATH || path.startsWith(`${VIA_PREFIX}/`))) return throughLine(req, res, path)
-      if (path === ME_PATH || path === ME_REMOVE_PATH || path === ME_LINE_PATH) return aboutMe(req, res, path)
+      if (path === ME_PATH || path === ME_REMOVE_PATH || path === ME_LINE_PATH || path === ME_CODE_PATH) return aboutMe(req, res, path)
       if (path === DOOR_PREFIX || path.startsWith(`${DOOR_PREFIX}/`)) return refuse(res, 404, 'not found')
 
       const who = await whoIsIn(req)
@@ -396,7 +427,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       }
       if (!fromOwnPage(req, secure)) return refuse(res, 403, 'forbidden')
 
-      const { entry, byBearer, person, port } = who
+      const { entry, byBearer, person, owner, port } = who
       seen.set(entry.id, now())
       // Only a computer says which one it is: a page's word for it is not taken.
       const computer = byBearer ? saidComputer(req) : undefined
@@ -409,7 +440,8 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
         held.add(socket)
         socket.once('close', () => held.delete(socket))
       }
-      passOn(req, res, entry, byBearer, person, port)
+      // OpenAgent shows the person at the page: the owner's own device is the owner at their own page, said by nobody.
+      passOn(req, res, entry, byBearer, owner ? undefined : person, port)
     })().catch(() => {
       if (!res.headersSent) refuse(res, 500, 'the door failed')
       else res.destroy()
@@ -453,8 +485,10 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
 
   /**
    * A device that is in asks who it is here, takes one of its own person's devices out, or, for a
-   * computer, asks for a code its line gets in with. A computer asks with its key; a page with its
-   * cookie, from the door's own page only, and never for a line's code: a browser keeps no line.
+   * computer, asks for a code its line gets in with, or one a device of its person gets in with. A
+   * computer asks with its key; a page with its cookie, from the door's own page only, and never
+   * for a code: a browser keeps no line, and a phone shows its own person's code from that person's
+   * computer.
    * What a device is told and may do is its own person's, as the door says, whatever it asks.
    */
   const aboutMe = async (req: IncomingMessage, res: ServerResponse, path: string): Promise<void> => {
@@ -483,16 +517,18 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       if (!(await removeComputer(env, id, whose))) return refuse(res, 404, 'no device of yours has that id')
       return json(200, me(await currentStore(), who.person))
     }
-    // A code for a line: only a computer asks, and only a server gives lines.
-    if (!who.byBearer || !opts.lines) return refuse(res, 403, 'only a computer that is in at a server asks for a line')
+    // A code for a line, or for a device of the computer's person: only a computer asks, and only a server, which has an address to say where.
+    const forLine = path === ME_LINE_PATH
+    if (!who.byBearer || (forLine && !opts.lines)) return refuse(res, 403, forLine ? 'only a computer that is in at a server asks for a line' : 'only a computer that is in asks for a code')
     req.resume()
     const store = await currentStore()
     const fingerprint = await doorFingerprint(env)
     if (!store.https || !fingerprint) return refuse(res, 503, 'the door has no address or no key yet')
-    const owner = store.persons.find(person => person.owner)?.account
-    const { code, expires } = await addCode(env, now(), who.person === owner ? undefined : who.person, true)
+    const owner = store.persons.find(person => person.owner)?.name
+    const { code, expires } = await addCode(env, now(), who.person === owner ? undefined : who.person, forLine)
     const port = (server.address() as AddressInfo).port
-    return json(200, { url: `https://${urlHost(store.https.address)}${port === 443 ? '' : `:${port}`}${ENTER_PATH}#${code}.${fingerprint}`, expires })
+    const where = `${urlHost(store.https.address)}${port === 443 ? '' : `:${port}`}`
+    return json(200, { url: `https://${where}${ENTER_PATH}#${code}.${fingerprint}`, where, code: shownCode(code), expires })
   }
 
   /**

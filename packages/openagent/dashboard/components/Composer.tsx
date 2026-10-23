@@ -16,7 +16,7 @@ import { PresetCreatePanel } from './PresetCreatePanel.js'
 import { CommandsMenu } from './CommandsMenu.js'
 import { DriverModelMenu, type DriverOption } from './DriverModelMenu.js'
 import { RunOnMenu } from './RunOnMenu.js'
-import { AddMachineDialog } from './AddMachineDialog.js'
+import { openSettings } from '../lib/use-route.js'
 import { useMachines, removeMachine, tellMachine, type Machine } from '../lib/machines.js'
 import { useSelectedMachineId, selectMachine } from '../lib/remote-target.js'
 import { useMachineStatus } from '../lib/use-machine-status.js'
@@ -113,7 +113,6 @@ export const Composer = forwardRef<ComposerHandle, {
 ) {
   const [prompt, setPrompt] = useState('')
   const [addingPreset, setAddingPreset] = useState(false)
-  const [addingMachine, setAddingMachine] = useState(false) // #1052: the "Add a machine" modal
   const [machineRefusal, setMachineRefusal] = useState<string | null>(null) // why a machine was not removed
   const editorRef = useRef<PromptEditorHandle>(null)
   // The machines saved on this dashboard's own machine (#1052).
@@ -258,7 +257,8 @@ export const Composer = forwardRef<ComposerHandle, {
         // #1067: selecting a machine makes it the run target in place, no navigation.
         onSelect: (m: Machine) => selectMachine(m.id),
         onSelectLocal: () => selectMachine(null),
-        onAddMachine: () => setAddingMachine(true),
+        // A machine is added where every device is: Settings › Devices.
+        onAddMachine: () => openSettings('devices'),
         // #1072: drop a saved machine; it is then no longer the run target either.
         onRemove: (m: Machine) => {
           setMachineRefusal(null)
@@ -341,10 +341,6 @@ export const Composer = forwardRef<ComposerHandle, {
     </p>
   )
 
-  // The "Add a machine" modal (#1052), rendered by both forms since the "Run on" pick is in both. A portal, so
-  // its place in the tree does not matter.
-  const machineDialog = addingMachine && <AddMachineDialog onClose={() => setAddingMachine(false)} onAdded={() => editorRef.current?.focus()} />
-
   // Compact (#723): a single row for the navbar — editor, then the same controls and submit. It
   // stays one row on purpose (#755): the header must not grow taller to gain them.
   if (compact) {
@@ -354,7 +350,6 @@ export const Composer = forwardRef<ComposerHandle, {
         {driverModelEl}
         {runOnEl}
         {slotEl}
-        {machineDialog}
       </div>
     )
   }
@@ -423,7 +418,6 @@ export const Composer = forwardRef<ComposerHandle, {
           }}
         />
       )}
-      {machineDialog}
     </>
   )
 })

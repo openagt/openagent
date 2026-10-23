@@ -35,11 +35,12 @@ test('the helper is a script a shell reads, and a word it is not made for does n
 })
 
 test('every word the helper is given is checked before anything is done with it', async () => {
-  for (const account of ['Rom', 'rom;id', '-rom', 'rom-', 'ro--m', '../rom', 'a'.repeat(40), '']) {
-    const said = await helper(['add', account, '4300'])
-    assert.equal(said.code, 1, account)
-    assert.equal(said.err, `${account} is not a GitHub account.\n`)
-    assert.equal((await helper(['remove', account])).err, `${account} is not a GitHub account.\n`)
+  // A name comes as the door hands it over: plain letters, and % with the number of any other.
+  for (const word of ['Rom Brillout', 'rom;id', '$(id)', '../rom', 'rom/x', "rom'x", 'a'.repeat(481), '']) {
+    const said = await helper(['add', word, '4300'])
+    assert.equal(said.code, 1, word)
+    assert.equal(said.err, `${word} is not a person's name as the door hands it over.\n`)
+    assert.equal((await helper(['remove', word])).err, `${word} is not a person's name as the door hands it over.\n`)
   }
   // Never one of the owner's ports, never one in the middle of a block, nothing that only reads as a number.
   for (const port of ['4200', '4299', '4350', '04300', '10000', '43OO', '4300 ', '$(id)', '-1']) {
@@ -49,16 +50,17 @@ test('every word the helper is given is checked before anything is done with it'
   }
 })
 
-test('a person\'s user is named after their account, and one too long for a user name is folded the same way every time', async () => {
-  const userOf = async (account: string): Promise<string> => (await helper([account], only('user_of "$1"'))).out.trim()
-  assert.equal(await userOf('rom'), 'oa-rom')
-  assert.equal(await userOf('a'.repeat(29)), `oa-${'a'.repeat(29)}`)
-  const long = `${'b'.repeat(20)}-and-more-than-that`
-  const folded = await userOf(long)
-  assert.equal(folded, `oa-${'b'.repeat(20)}-${createHash('sha256').update(long).digest('hex').slice(0, 8)}`)
-  assert.equal(folded.length, 32)
+test('a person\'s user is named after the plain letters of their name and a mark of all of it, the same way every time', async () => {
+  const userOf = async (word: string): Promise<string> => (await helper([word], only('user_of "$1"'))).out.trim()
+  const mark = (word: string): string => createHash('sha256').update(word).digest('hex').slice(0, 8)
+  assert.equal(await userOf('Rom%20Brillout'), `oa-rombrillout-${mark('Rom%20Brillout')}`)
+  // A name in letters of no plain kind is its mark alone.
+  assert.equal(await userOf('%D7%A8%D7%95%D7%9D'), `oa-p-${mark('%D7%A8%D7%95%D7%9D')}`)
+  const long = await userOf('b'.repeat(40))
+  assert.equal(long, `oa-${'b'.repeat(20)}-${mark('b'.repeat(40))}`)
+  assert.equal(long.length, 32)
   // Every name it makes is one the helper takes back as its own.
-  assert.equal((await helper([folded], only('user_ok "$1" && echo yes'))).out, 'yes\n')
+  assert.equal((await helper([long], only('user_ok "$1" && echo yes'))).out, 'yes\n')
 })
 
 test('the firewall lets only its owner\'s user and root call a block of ports and answer from it, and a file that names no person is none', async () => {

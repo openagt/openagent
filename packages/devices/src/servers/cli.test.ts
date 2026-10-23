@@ -125,19 +125,19 @@ test('link asks the server\'s door; added says nothing is left to add; forget ta
   const home = await testHome()
   try {
     await run(home.env, ['connect', 'Box.Example.com', 'root', '1.2.3'], { startWork: () => 0 })
-    const link = { url: 'https://box.example.com/_devices/enter#code.pin', expires: '2026-10-11T12:00:00.000Z' }
+    const link = { url: 'https://box.example.com/_devices/enter#K7P4QX9M.pin', where: 'box.example.com', code: 'K7P4-QX9M', expires: '2026-10-11T12:00:00.000Z' }
     const { exec, calls } = pretendServer(() => ({ out: JSON.stringify(link) }))
     // A name is found again however it was typed.
     assert.deepEqual((await run(home.env, ['link', 'BOX.example.com'], { exec })).out, link)
     assert.deepEqual(calls[0]!.args.slice(-5, -1), ['-l', 'root', '--', 'box.example.com'])
 
-    // For a person: the account goes to the server as one word of the script, in small letters.
+    // For a person: their name goes to the server as one word of the script, an apostrophe and all.
     const forRom = pretendServer(() => ({ out: JSON.stringify(link) }))
-    assert.deepEqual((await run(home.env, ['link', 'box.example.com', '--for', 'Rom'], { exec: forRom.exec })).out, link)
-    assert.match(forRom.calls[0]!.script, /^FOR='rom'$/m)
+    assert.deepEqual((await run(home.env, ['link', 'box.example.com', '--for', " Rom  O'Neil "], { exec: forRom.exec })).out, link)
+    assert.match(forRom.calls[0]!.script, /^FOR='Rom O'\\''Neil'$/m)
     assert.match(forRom.calls[0]!.script, /devices add --for "\$FOR"\n/)
-    const notAccount = await run(home.env, ['link', 'box.example.com', '--for', "x'; reboot"], { exec: forRom.exec })
-    assert.deepEqual([notAccount.code, notAccount.err, forRom.calls.length], [1, ["x'; reboot is not a GitHub account"], 1])
+    const notName = await run(home.env, ['link', 'box.example.com', '--for', "x; reboot"], { exec: forRom.exec })
+    assert.deepEqual([notName.code, notName.err, forRom.calls.length], [1, ['x; reboot is not a name: letters, digits, spaces, dots, apostrophes and dashes, at most 40'], 1])
 
     const elsewhere = await run(home.env, ['link', 'box.example.com'], { exec: pretendServer(() => ({ out: JSON.stringify({ ...link, url: 'https://evil.example/_devices/enter#code.pin' }) })).exec })
     assert.equal(elsewhere.code, 1)
@@ -442,7 +442,7 @@ test('reach asks the server for a link once and has this computer\'s own door ke
   const home = await testHome()
   try {
     await run(home.env, ['connect', 'box.example.com', 'root', '1.2.3'], { startWork: () => 0 })
-    const link = { url: 'https://box.example.com/_devices/enter#code.pin', expires: '2026-10-11T12:00:00.000Z' }
+    const link = { url: 'https://box.example.com/_devices/enter#K7P4QX9M.pin', where: 'box.example.com', code: 'K7P4-QX9M', expires: '2026-10-11T12:00:00.000Z' }
     const { exec, calls } = pretendServer(() => ({ out: JSON.stringify(link) }))
     const asked: string[] = []
     let answers: (args: string[]) => { ok: true } | { ok: false; error: string } = () => ({ ok: true })

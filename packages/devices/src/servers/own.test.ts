@@ -51,16 +51,16 @@ test('a person\'s own logins are only on a person\'s OpenAgent: anywhere else ow
     const refused = await run(home.env, ['own'])
     assert.equal(refused.code, 1)
     assert.deepEqual(refused.err, ["This OpenAgent is no person's on a computer several people use."])
-    assert.deepEqual((await run({ ...home.env, OPENAGENT_PERSON: '-not-an-account' }, ['own'])).code, 1)
-    const env = { ...home.env, OPENAGENT_PERSON: 'Rom' }
-    assert.deepEqual((await run(env, ['own'])).out, { person: 'rom', logins: { github: { there: false, working: false }, claude: { there: false, working: false } } } satisfies OwnStatus)
+    assert.deepEqual((await run({ ...home.env, OPENAGENT_PERSON: '%0A' }, ['own'])).code, 1)
+    const env = { ...home.env, OPENAGENT_PERSON: 'Rom%20Brillout' }
+    assert.deepEqual((await run(env, ['own'])).out, { person: 'Rom Brillout', logins: { github: { there: false, working: false }, claude: { there: false, working: false } } } satisfies OwnStatus)
     assert.equal((await run(env, ['own', 'login', 'gitlab'])).code, 2)
   } finally {
     await home.remove()
   }
 })
 
-test('a GitHub login handed over on standard input is given to this user\'s gh when it is the person\'s own, and git gets its name; anyone else\'s is taken off at once', async () => {
+test('a GitHub login handed over on standard input is given to this user\'s gh, whichever account it is, and git gets its name', async () => {
   const home = await testHome()
   try {
     const env = { ...home.env, OPENAGENT_PERSON: 'rom' }
@@ -75,13 +75,10 @@ test('a GitHub login handed over on standard input is given to this user\'s gh w
     assert.match(shell.scripts[1]!, /git config --global -- user\.email "\$id\+\$login@users\.noreply\.github\.com"/)
     assert.equal((await readFile(storePath(env), 'utf8')).includes(GH_LOGIN), false)
 
-    // Someone else's account: logged out again, said in words, and not counted on.
+    // The person is a name, not an account: any account's login is theirs to use.
     const other = pretendShell(script => (GH_GIVEN.test(script) ? { out: 'octocat\n' } : undefined))
-    const refused = await run(env, ['own', 'login', 'github'], { exec: other.exec, stdin: async () => GH_LOGIN })
-    assert.equal(refused.code, 0)
-    assert.deepEqual((refused.out as OwnStatus).logins.github, { there: false, working: false, said: "That is the GitHub login of @octocat. This OpenAgent is @rom's: log in to GitHub as @rom." })
-    assert.match(other.scripts[1]!, /rm -f "\$HOME\/\.config\/gh\/hosts\.yml"/)
-    assert.equal(other.scripts.length, 2, 'git is not named after someone else')
+    const taken = await run(env, ['own', 'login', 'github'], { exec: other.exec, stdin: async () => GH_LOGIN })
+    assert.equal((taken.out as OwnStatus).logins.github.account, 'octocat')
 
     // What reads as no GitHub login is not sent anywhere.
     const nothing = pretendShell()

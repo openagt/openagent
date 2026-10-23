@@ -183,12 +183,14 @@ test('on a server, add answers one HTTPS link at the server\'s address, with wha
     assert.deepEqual([status.listening, status.problem, status.https.address], [true, undefined, '127.0.0.1'])
     const port = (await readStore(home.env)).listening!.port
 
-    const link = (await run(home.env, ['add'])).out as { url: string; numberUrl?: string }
+    const link = (await run(home.env, ['add'])).out as { url: string; numberUrl?: string; where: string; code: string }
     assert.equal(link.numberUrl, undefined)
     const [at, after] = link.url.split('#') as [string, string]
     assert.equal(at, `https://127.0.0.1:${port}${ENTER_PATH}`)
     const [code, pin] = after.split('.')
-    assert.match(code!, /^[A-Za-z0-9_-]{20,}$/)
+    assert.match(code!, /^[2-9A-HJKMNP-TV-Z]{8}$/)
+    // The same code to type on another computer, with where to type it.
+    assert.deepEqual([link.where, link.code], [`127.0.0.1:${port}`, `${code!.slice(0, 4)}-${code!.slice(4)}`])
     assert.equal(pin, await doorFingerprint(home.env))
     assert.equal(pin, keyFingerprint(office.issued[0]!.publicKey))
   } finally {
@@ -285,33 +287,33 @@ test('line everyone, full and watch say who at the server may start runs here; o
     const added = new Date().toISOString()
     await update(home.env, store => {
       store.persons = [
-        { account: 'rom', owner: true, added },
-        { account: 'ada', added, port: 4300, ready: true, from: url },
-        { account: 'kim', added, port: 4400, ready: true, from: url },
+        { name: 'rom', owner: true, added },
+        { name: 'ada', added, port: 4300, ready: true, from: url },
+        { name: 'kim', added, port: 4400, ready: true, from: url },
       ]
-      store.lines = [{ url, pin: 'p'.repeat(43), key: '0f9e8d7c6b5a.the-secret', mode: 'full', account: 'rom' }]
+      store.lines = [{ url, pin: 'p'.repeat(43), key: '0f9e8d7c6b5a.the-secret', mode: 'full', person: 'rom' }]
     })
-    type Said = { lines: { mode: string; for?: string; account?: string }[]; persons: { account: string; from?: string; removed?: true; kept?: true }[] }
-    const linesOf = (said: unknown): unknown => (said as Said).lines.map(({ mode, for: who, account }) => ({ mode, for: who, account }))
+    type Said = { lines: { mode: string; for?: string; person?: string }[]; persons: { name: string; from?: string; removed?: true; kept?: true }[] }
+    const linesOf = (said: unknown): unknown => (said as Said).lines.map(({ mode, for: who, person }) => ({ mode, for: who, person }))
 
     const notServer = await run(home.env, ['line', 'everyone', '203.0.113.7'])
     assert.equal(notServer.code, 1)
     assert.match(notServer.err.join(''), /not set up as a server/)
     assert.equal((await readStore(home.env)).lines[0]!.for, undefined)
 
-    assert.deepEqual(linesOf((await run(server, ['line', 'everyone', '203.0.113.7'])).out), [{ mode: 'full', for: 'everyone', account: 'rom' }])
-    assert.deepEqual(linesOf((await run(server, ['line', 'watch', '203.0.113.7'])).out), [{ mode: 'watch', for: undefined, account: 'rom' }], 'nobody: only what reads, and for nobody else')
-    assert.deepEqual(linesOf((await run(server, ['line', 'everyone', '203.0.113.7'])).out), [{ mode: 'full', for: 'everyone', account: 'rom' }])
+    assert.deepEqual(linesOf((await run(server, ['line', 'everyone', '203.0.113.7'])).out), [{ mode: 'full', for: 'everyone', person: 'rom' }])
+    assert.deepEqual(linesOf((await run(server, ['line', 'watch', '203.0.113.7'])).out), [{ mode: 'watch', for: undefined, person: 'rom' }], 'nobody: only what reads, and for nobody else')
+    assert.deepEqual(linesOf((await run(server, ['line', 'everyone', '203.0.113.7'])).out), [{ mode: 'full', for: 'everyone', person: 'rom' }])
 
     // The server has not said yet who is there: nobody is taken for gone.
     const persons = async (): Promise<Said['persons']> => ((await run(home.env, ['status'])).out as Said).persons
-    assert.deepEqual((await persons()).map(({ account, from, removed }) => ({ account, from, removed })), [
-      { account: 'rom', from: undefined, removed: undefined },
-      { account: 'ada', from: url, removed: undefined },
-      { account: 'kim', from: url, removed: undefined },
+    assert.deepEqual((await persons()).map(({ name, from, removed }) => ({ name, from, removed })), [
+      { name: 'rom', from: undefined, removed: undefined },
+      { name: 'ada', from: url, removed: undefined },
+      { name: 'kim', from: url, removed: undefined },
     ])
     await update(home.env, store => void (store.lines[0]!.persons = ['ada', 'rom']))
-    assert.deepEqual((await persons()).filter(person => person.removed).map(person => person.account), ['kim'])
+    assert.deepEqual((await persons()).filter(person => person.removed).map(person => person.name), ['kim'])
 
     // Only me: the others are switched off here, not gone there, and who is there is heard anew once it is for everyone again.
     await run(server, ['line', 'full', '203.0.113.7'])
@@ -322,13 +324,13 @@ test('line everyone, full and watch say who at the server may start runs here; o
 
     const kept = await run(home.env, ['keep', 'kim'])
     assert.equal(kept.code, 0)
-    assert.deepEqual((kept.out as Said).persons.find(person => person.account === 'kim'), { account: 'kim', ready: true, from: url, removed: true, kept: true })
+    assert.deepEqual((kept.out as Said).persons.find(person => person.name === 'kim'), { name: 'kim', ready: true, from: url, removed: true, kept: true })
     assert.equal((await run(home.env, ['keep', 'rom'])).code, 1, 'the owner is no person to keep')
     assert.equal((await run(home.env, ['keep', 'nobody'])).code, 1)
 
     // No line to that server any more: everyone it made here is removed from it.
     await update(home.env, store => void (store.lines = []))
-    assert.deepEqual((await persons()).filter(person => person.removed).map(person => person.account), ['ada', 'kim'])
+    assert.deepEqual((await persons()).filter(person => person.removed).map(person => person.name), ['ada', 'kim'])
   } finally {
     await home.remove()
   }
@@ -348,8 +350,8 @@ test('where the helper is named, add --for answers at once and has the person\'s
   }
   const works: Promise<Ran>[] = []
   // The making, run here as the detached process would run it.
-  const startWork = (workEnv: NodeJS.ProcessEnv, account: string): number => {
-    works.push(run(workEnv, ['person-work', account], { helper }))
+  const startWork = (workEnv: NodeJS.ProcessEnv, person: string): number => {
+    works.push(run(workEnv, ['person-work', person], { helper }))
     return process.pid
   }
   const until = async (what: string, ok: () => Promise<boolean> | boolean): Promise<void> => {
@@ -362,18 +364,19 @@ test('where the helper is named, add --for answers at once and has the person\'s
   const persons = async (): Promise<unknown> => ((await run(env, ['status'])).out as { persons: unknown }).persons
   try {
     await run(env, ['on'], { followMs: 5_000 })
-    await run(env, ['owner', 'ada'])
+    await run(env, ['owner', 'Ada'])
 
-    const link = await run(env, ['add', '--for', 'rom'], { helper, startWork })
+    const link = await run(env, ['add', '--for', 'Rom Brillout'], { helper, startWork })
     assert.equal(link.code, 0, 'answered while the user is still being made')
     await until('the helper is asked', () => asked.length === 1)
-    assert.deepEqual(asked, ['/opt/openagent/bin/openagent-person add rom 4300'])
-    assert.deepEqual(await persons(), [{ account: 'ada', owner: true }, { account: 'rom', working: true }])
+    // The helper is given the name in plain letters, whatever its own: a word root's script checks.
+    assert.deepEqual(asked, ['/opt/openagent/bin/openagent-person add Rom%20Brillout 4300'])
+    assert.deepEqual(await persons(), [{ name: 'Ada', owner: true }, { name: 'Rom Brillout', working: true }])
     answers.shift()!({ ok: true })
     await Promise.all(works)
-    assert.deepEqual(await persons(), [{ account: 'ada', owner: true }, { account: 'rom', ready: true }])
-    // Asked again for a person whose user is made: nothing is started.
-    await run(env, ['add', '--for', 'rom'], { helper, startWork })
+    assert.deepEqual(await persons(), [{ name: 'Ada', owner: true }, { name: 'Rom Brillout', ready: true }])
+    // Asked again for a person whose user is made, in other letters' case: the same person, and nothing is started.
+    await run(env, ['add', '--for', 'rom brillout'], { helper, startWork })
     assert.equal(works.length, 1)
 
     // A user that could not be made is said, and tried again at the next code for that person.
@@ -381,7 +384,7 @@ test('where the helper is named, add --for answers at once and has the person\'s
     await until('the helper is asked for kim', () => answers.length === 1)
     answers.shift()!({ ok: false, error: 'This server has no room for another user.' })
     await Promise.all(works)
-    assert.deepEqual(await persons(), [{ account: 'ada', owner: true }, { account: 'rom', ready: true }, { account: 'kim', problem: 'This server has no room for another user.' }])
+    assert.deepEqual(await persons(), [{ name: 'Ada', owner: true }, { name: 'Rom Brillout', ready: true }, { name: 'kim', problem: 'This server has no room for another user.' }])
     await run(env, ['add', '--for', 'kim'], { helper, startWork })
     await until('the helper is asked for kim again', () => answers.length === 1)
     assert.equal(asked.at(-1), '/opt/openagent/bin/openagent-person add kim 4400', 'the same block as before')
@@ -389,17 +392,17 @@ test('where the helper is named, add --for answers at once and has the person\'s
     await Promise.all(works)
 
     // remove-person removes the user first; one that could not be removed keeps the person, to be removed again.
-    const refusing = run(env, ['remove-person', 'rom'], { helper })
+    const refusing = run(env, ['remove-person', 'Rom Brillout'], { helper })
     await until('the helper is asked to remove', () => answers.length === 1)
     answers.shift()!({ ok: false, error: 'userdel failed.' })
     const refused = await refusing
-    assert.deepEqual([refused.code, refused.err], [1, ['@rom\'s user on this computer could not be removed: userdel failed.']])
-    const removing = run(env, ['remove-person', 'rom'], { helper })
+    assert.deepEqual([refused.code, refused.err], [1, ['Rom Brillout\'s user on this computer could not be removed: userdel failed.']])
+    const removing = run(env, ['remove-person', 'Rom Brillout'], { helper })
     await until('the helper is asked to remove again', () => answers.length === 1)
     answers.shift()!({ ok: true })
     assert.equal((await removing).code, 0)
-    assert.deepEqual(asked.slice(-2), ['/opt/openagent/bin/openagent-person remove rom', '/opt/openagent/bin/openagent-person remove rom'])
-    assert.deepEqual(await persons(), [{ account: 'ada', owner: true }, { account: 'kim', ready: true }])
+    assert.deepEqual(asked.slice(-2), ['/opt/openagent/bin/openagent-person remove Rom%20Brillout', '/opt/openagent/bin/openagent-person remove Rom%20Brillout'])
+    assert.deepEqual(await persons(), [{ name: 'Ada', owner: true }, { name: 'kim', ready: true }])
   } finally {
     stop.abort()
     await serving
@@ -410,8 +413,8 @@ test('where the helper is named, add --for answers at once and has the person\'s
 test('a person\'s own OpenAgent says whose it is', async () => {
   const home = await testHome()
   try {
-    assert.equal(((await run({ ...home.env, OPENAGENT_PERSON: 'Rom' }, ['status'])).out as { person?: string }).person, 'rom')
-    assert.equal(((await run({ ...home.env, OPENAGENT_PERSON: 'not an account' }, ['status'])).out as { person?: string }).person, undefined)
+    assert.equal(((await run({ ...home.env, OPENAGENT_PERSON: 'Rom%20Brillout' }, ['status'])).out as { person?: string }).person, 'Rom Brillout')
+    assert.equal(((await run({ ...home.env, OPENAGENT_PERSON: 'Rom%0AX' }, ['status'])).out as { person?: string }).person, undefined)
   } finally {
     await home.remove()
   }
@@ -426,31 +429,32 @@ test('owner, add --for and remove-person: the owner is named first, a link is ma
     await run(home.env, ['on'], { followMs: 5_000 })
     const port = (await readStore(home.env)).listening!.port
 
-    const first = await run(home.env, ['add', '--for', 'rom'])
-    assert.deepEqual([first.code, first.err], [1, ['Name the owner first: devices owner <your GitHub account>']])
-    assert.equal((await run(home.env, ['add', '--for', 'not an account'])).code, 1)
+    const first = await run(home.env, ['add', '--for', 'Rom'])
+    assert.deepEqual([first.code, first.err], [1, ['Name the owner first: devices owner <your name>']])
+    assert.equal((await run(home.env, ['add', '--for', '<not a name>'])).code, 1)
 
-    assert.deepEqual((await run(home.env, ['github'], { github: async () => ({ ok: true, account: 'ada' }) })).out, { account: 'ada' })
-    assert.deepEqual((await run(home.env, ['github'], { github: async () => ({ ok: false, error: 'gh is not logged in' }) })).out, { problem: 'gh is not logged in' })
+    // Whom to name the owner: the name git knows for the person at this computer, or none.
+    assert.deepEqual((await run(home.env, ['me'], { myName: async () => 'Ada Lovelace' })).out, { name: 'Ada Lovelace' })
+    assert.deepEqual((await run(home.env, ['me'], { myName: async () => undefined })).out, {})
 
-    assert.deepEqual(((await run(home.env, ['owner', '@Ada'])).out as { persons: unknown }).persons, [{ account: 'ada', owner: true }])
-    const second = await run(home.env, ['owner', 'eve'])
-    assert.deepEqual([second.code, second.err], [1, ['This computer\'s owner is @ada.']])
+    assert.deepEqual(((await run(home.env, ['owner', ' Ada  Lovelace '])).out as { persons: unknown }).persons, [{ name: 'Ada Lovelace', owner: true }])
+    const second = await run(home.env, ['owner', 'Eve'])
+    assert.deepEqual([second.code, second.err], [1, ['This computer\'s owner is Ada Lovelace.']])
 
-    const own = (await run(home.env, ['add', '--for', 'ada'])).out as { person?: string }
-    assert.equal(own.person, undefined, 'the owner\'s own account is the owner\'s device, as with no --for')
+    const own = (await run(home.env, ['add', '--for', 'ada lovelace'])).out as { person?: string }
+    assert.equal(own.person, undefined, 'the owner\'s own name, in any letters\' case, is the owner\'s device, as with no --for')
     const link = (await run(home.env, ['add', '--for', 'Rom'])).out as { url: string; person: string }
-    assert.equal(link.person, 'rom')
+    assert.equal(link.person, 'Rom')
     const code = link.url.split('#')[1]!
     await fetch(`http://127.0.0.1:${port}${ENTER_PATH}`, { method: 'POST', headers: { 'user-agent': 'Mozilla/5.0 (iPhone) Safari/604.1' }, body: JSON.stringify({ code }) })
 
     const status = (await run(home.env, ['status'])).out as { persons: unknown; devices: { name: string; person?: string }[] }
-    assert.deepEqual(status.persons, [{ account: 'ada', owner: true }, { account: 'rom' }])
-    assert.deepEqual(status.devices.map(device => [device.name, device.person]), [['iPhone, Safari', 'rom']])
+    assert.deepEqual(status.persons, [{ name: 'Ada Lovelace', owner: true }, { name: 'Rom' }])
+    assert.deepEqual(status.devices.map(device => [device.name, device.person]), [['iPhone, Safari', 'Rom']])
 
-    assert.equal((await run(home.env, ['remove-person', 'ada'])).code, 1)
-    const removed = (await run(home.env, ['remove-person', 'rom'])).out as { persons: unknown; devices: unknown[] }
-    assert.deepEqual([removed.persons, removed.devices], [[{ account: 'ada', owner: true }], []])
+    assert.equal((await run(home.env, ['remove-person', 'Ada Lovelace'])).code, 1)
+    const removed = (await run(home.env, ['remove-person', 'Rom'])).out as { persons: unknown; devices: unknown[] }
+    assert.deepEqual([removed.persons, removed.devices], [[{ name: 'Ada Lovelace', owner: true }], []])
   } finally {
     stop.abort()
     await serving

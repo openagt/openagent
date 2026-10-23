@@ -88,19 +88,19 @@ test('a call down a line goes to this computer\'s own OpenAgent for its own pers
   const added = new Date().toISOString()
   const target = 'http://127.0.0.1:4200'
   const helper = { OPENAGENT_PERSON_HELPER: '/opt/openagent/bin/openagent-person' }
-  const line = { url: 'https://203.0.113.7', pin: 'p', key: 'id.k', mode: 'full' as const, account: 'rom' }
+  const line = { url: 'https://203.0.113.7', pin: 'p', key: 'id.k', mode: 'full' as const, person: 'rom' }
   const everyone = { ...line, for: 'everyone' as const }
-  const store: Store = { on: false, persons: [{ account: 'rom', owner: true, added }, { account: 'ada', added, port: 4300, ready: true }, { account: 'kim', added, port: 4400, problem: 'useradd failed' }], devices: [], codes: [], lines: [] }
+  const store: Store = { on: false, persons: [{ name: 'rom', owner: true, added }, { name: 'ada', added, port: 4300, ready: true }, { name: 'kim', added, port: 4400, problem: 'useradd failed' }], devices: [], codes: [], lines: [] }
   const asked: string[] = []
   const start = { method: 'POST', path: '/_relay/start' }
   const route = (on: typeof line, person: string | undefined, env: NodeJS.ProcessEnv = helper, kept: Store = store, call = start): Route => routeFor(on, kept, target, env, person, call, account => asked.push(account))
   // Its own person, the computer's owner, a call for nobody: this computer's own OpenAgent.
   for (const person of ['rom', undefined]) assert.deepEqual(route(line, person), { target })
-  assert.deepEqual(route({ ...line, account: 'someone' }, 'rom'), { target }, 'the owner here')
+  assert.deepEqual(route({ ...line, person: 'someone' }, 'rom'), { target }, 'the owner here')
   // A line for only its person: nobody else, whatever the server says.
   assert.deepEqual(route(line, 'ada'), { status: 403, text: ONLY_ITS_OWN })
   // A line that never heard who its person is takes every call as theirs, as before persons; one for everyone does not.
-  const { account: _account, ...unheard } = line
+  const { person: _person, ...unheard } = line
   assert.deepEqual(route(unheard as typeof line, 'ada', {}), { target })
   assert.deepEqual(route(everyone, 'ada', {}), { status: 403, text: NOT_A_SERVER })
   assert.deepEqual(route(everyone, 'ada', helper, { ...store, persons: [] }), { status: 503, text: NO_OWNER })
@@ -815,7 +815,7 @@ test('on a server with a user per person, a person\'s computer has its line in t
     // Rom's own OpenAgent at the first port of his block, as the helper would have started it.
     const block = Number(new URL(romsTarget).port)
     await command(r.server, 'owner', 'ada')
-    await update(r.server, store => void store.persons.push({ account: 'rom', added: new Date().toISOString(), port: block }))
+    await update(r.server, store => void store.persons.push({ name: 'rom', added: new Date().toISOString(), port: block }))
     const forRom = async (): Promise<URL> => new URL((await command<{ url: string }>(r.server, 'add', '--for', 'rom')).url)
     const enterAs = async (link: URL, body: Record<string, unknown>): Promise<{ status: number; text: string }> =>
       doorCall(link.origin + link.pathname, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: link.hash.slice(1).split('.')[0], ...body }) })
@@ -849,6 +849,18 @@ test('on a server with a user per person, a person\'s computer has its line in t
     const lines = (await readStore(r.server)).devices.filter(device => device.line).map(device => [device.person, device.line!.port])
     assert.deepEqual(lines, [['rom', block + 10], ['rom', block + 11]])
     assert.equal((await doorCall(`${origin}/_devices/me/line`, { method: 'POST', headers: { ...romsLaptop, origin } })).status, 403, 'never from a page')
+
+    // Rom's laptop asks for a code one more device of his gets in with, typed with where it is: his, never the owner's.
+    const given = await doorCall(`${origin}/_devices/me/code`, { method: 'POST', headers: romsLaptop })
+    assert.equal(given.status, 200)
+    const typed = JSON.parse(given.text) as { url: string; where: string; code: string }
+    assert.equal(`https://${typed.where}`, origin)
+    assert.match(typed.code, /^[2-9A-HJKMNP-TV-Z]{4}-[2-9A-HJKMNP-TV-Z]{4}$/)
+    assert.equal(new URL(typed.url).hash.slice(1).split('.')[0], typed.code.replace('-', ''), 'the link holds the same code')
+    const office = await doorCall(`${origin}/_devices/enter`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: ` ${typed.code.toLowerCase().replace('-', ' - ')} `, computer: 'rom office' }) })
+    assert.equal(office.status, 200, 'typed in any case, with spaces and a dash')
+    assert.equal((await readStore(r.server)).devices.find(device => device.name === 'OpenAgent on rom office')?.person, 'rom')
+    assert.equal((await doorCall(`${origin}/_devices/me/code`, { method: 'POST', headers: { ...romsLaptop, origin } })).status, 403, 'never from a page')
   } finally {
     await shut(romsAgent)
     await r.stop()
@@ -870,7 +882,7 @@ test('a computer whose line is for everyone at its server has an address for eac
     startWork: (env, account) => {
       made.push(account)
       void update(env, store => {
-        const person = store.persons.find(candidate => candidate.account === account)!
+        const person = store.persons.find(candidate => candidate.name === account)!
         Object.assign(person, { port: adasPort, ready: true })
       })
       return undefined
@@ -883,12 +895,12 @@ test('a computer whose line is for everyone at its server has an address for eac
     // The server: ada owns it, rom is invited and has his own OpenAgent there.
     const block = Number(new URL(romsTarget).port)
     await command(r.server, 'owner', 'ada')
-    await update(r.server, store => void store.persons.push({ account: 'rom', added: new Date().toISOString(), port: block }))
+    await update(r.server, store => void store.persons.push({ name: 'rom', added: new Date().toISOString(), port: block }))
     // Rom's computer is set up as a server, with rom as its owner, and keeps its line to the server as his.
     r.computer.OPENAGENT_PERSON_HELPER = '/opt/openagent/bin/openagent-person'
     await command(r.computer, 'owner', 'rom')
     await command(r.computer, 'line', 'add', (await command<{ url: string }>(r.server, 'add', '--for', 'rom')).url)
-    assert.equal((await readStore(r.computer)).lines[0]!.account, 'rom', 'the server said who this computer\'s person is there')
+    assert.equal((await readStore(r.computer)).lines[0]!.person, 'rom', 'the server said who this computer\'s person is there')
     const own = await until('rom’s own OpenAgent saved his computer', () => romsMachines[0])
     assert.equal(own.owner, undefined)
 
@@ -904,7 +916,7 @@ test('a computer whose line is for everyone at its server has an address for eac
     assert.deepEqual(made, [])
     // Her first run there has her user made, and is answered that it is being made; then her calls reach her own OpenAgent there.
     const first = await fetch(`${forAda.url}/_relay/start`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
-    if (first.status === 503) assert.match(await first.text(), /@ada's place on this computer is being made/)
+    if (first.status === 503) assert.match(await first.text(), /ada's place on this computer is being made/)
     else assert.equal(first.status, 200)
     const ping = await until('ada’s own OpenAgent there answers', async () => {
       const res = await fetch(`${forAda.url}/_relay/ping`)
@@ -913,7 +925,7 @@ test('a computer whose line is for everyone at its server has an address for eac
     })
     assert.deepEqual(ping, { host: 'ada on the computer' })
     assert.deepEqual(made, ['ada'])
-    const there = (await readStore(r.computer)).persons.find(person => person.account === 'ada')!
+    const there = (await readStore(r.computer)).persons.find(person => person.name === 'ada')!
     assert.equal(there.from, new URL(await r.link()).origin)
     // Whom a call is for is the server's word, used here and never passed on.
     assert.equal(adasThere.at(-1)!['x-openagent-person'], undefined)

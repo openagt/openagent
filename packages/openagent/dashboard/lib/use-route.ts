@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { parseRoute, formatRoute, keepPageQuery, type Route } from './route.js'
+import { SETTINGS_PARAM, parseRoute, formatRoute, keepPageQuery, type Route } from './route.js'
 import type { ProjectAddresses } from '../../src/project-address.js'
 
 // The route as state (#784): read the current one, go to another. Back/Forward are free, and a
@@ -53,4 +53,12 @@ export function useRoute(projects: ProjectAddresses): {
   }
 
   return { route, go }
+}
+
+/** Open Settings at `entry` over the page you are on, from a part of the page that has no route to hand. */
+export function openSettings(entry: string): void {
+  const url = new URL(window.location.href)
+  url.searchParams.set(SETTINGS_PARAM, entry)
+  window.history.pushState(null, '', url.pathname + url.search)
+  notify()
 }

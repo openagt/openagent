@@ -162,7 +162,7 @@ export function RunOnMenu({ connection, busy, inRow = false }: { connection: Con
         )}
         <DropdownMenuItem className="items-start" disabled={busy} onClick={() => connection.onAddMachine()}>
           <Plus className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-          <OptionLabel label="Add a machine…" description="Paste the link the other machine gives: its Settings, Devices, Add device." />
+          <OptionLabel label="Add a machine…" description="In Settings › Devices: connect a computer, or join with a code." />
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

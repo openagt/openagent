@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { homedir, userInfo } from 'node:os'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { projectGitHost, type GitHostFor } from '../store/git-host.js'
+import { isPersonName } from '../registry.js'
 
 /**
  * The person at this dashboard, as the foot of its sidebar shows them: a name, and a picture
@@ -19,26 +20,34 @@ export interface Person {
 }
 
 /**
- * Who a call came from, when the door in front of OpenAgent says (the devices package): the GitHub
- * account of the person whose device made it. Said only on a computer several persons use.
+ * Who a call came from, when the door in front of OpenAgent says (the devices package): the name
+ * of the person whose device made it, `%`-encoded, as a header carries only plain letters. Said
+ * only on a computer several persons use.
  */
 export const PERSON_HEADER = 'x-openagent-person'
 
 const caller = new AsyncLocalStorage<string>()
 
-/** Run `call` as one a person's device made, by their GitHub account, when the request said one. */
-export function asCaller<T>(header: string | string[] | undefined, call: () => Promise<T>): Promise<T> {
-  const account = typeof header === 'string' && /^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,38}$/.test(header) ? header : undefined
-  return account === undefined ? call() : caller.run(account, call)
+/** The name a header says, as it was; nothing for a word that is no name. */
+function nameIn(header: string | string[] | undefined): string | undefined {
+  if (typeof header !== 'string') return undefined
+  try {
+    const name = decodeURIComponent(header)
+    return isPersonName(name) ? name : undefined
+  } catch {
+    return undefined
+  }
 }
 
-/**
- * The person at the page: the one this computer knows, or, for a call another person's device
- * made, that person by their GitHub account and its picture.
- */
-export function personAtPage(own: Person, account = caller.getStore()): Person {
-  if (account === undefined || own.login?.toLowerCase() === account) return own
-  return { name: account, login: account, avatar: `https://github.com/${account}.png` }
+/** Run `call` as one a person's device made, by their name, when the request said one. */
+export function asCaller<T>(header: string | string[] | undefined, call: () => Promise<T>): Promise<T> {
+  const name = nameIn(header)
+  return name === undefined ? call() : caller.run(name, call)
+}
+
+/** The person at the page: the one this computer knows, or, for a call another person's device made, that person by their name. */
+export function personAtPage(own: Person, name = caller.getStore()): Person {
+  return name === undefined ? own : { name }
 }
 
 /** `projects` are the listed projects' folders, in the list's order. */

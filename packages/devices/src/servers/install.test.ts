@@ -132,9 +132,14 @@ test('only the end of what a command said is kept, its errors last', () => {
 })
 
 test('the server\'s door is asked for a link as the server\'s own user; only a link to that server\'s own door is taken for one', async () => {
-  const link = { url: 'https://203.0.113.5/_devices/enter#code.pin', expires: '2026-10-11T12:00:00.000Z' }
+  const link = { url: 'https://203.0.113.5/_devices/enter#K7P4QX9M.pin', where: '203.0.113.5', code: 'K7P4-QX9M', expires: '2026-10-11T12:00:00.000Z' }
   const good = pretendServer(() => ({ out: JSON.stringify(link) + '\n' }))
   assert.deepEqual(await askLink(SERVER, { exec: good.exec }), { ok: true, ...link })
+  // A server from before typed codes answers a link only: it is updated first. A code said for another address is no code of this server's.
+  const before = pretendServer(() => ({ out: JSON.stringify({ url: link.url, expires: link.expires }) + '\n' }))
+  assert.deepEqual(await askLink(SERVER, { exec: before.exec }), { ok: false, error: 'The server gives no code to type yet: update it first.' })
+  const elsewhere = pretendServer(() => ({ out: JSON.stringify({ ...link, where: 'evil.example' }) + '\n' }))
+  assert.equal((await askLink(SERVER, { exec: elsewhere.exec })).ok, false)
   assert.deepEqual(good.calls.map(call => call.remote), ["runuser -l openagent -c 'bash -s'"])
   assert.match(good.calls[0]!.script, /devices\/bin\/devices add\n/)
 

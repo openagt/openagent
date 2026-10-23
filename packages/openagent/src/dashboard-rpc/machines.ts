@@ -6,7 +6,7 @@ import { isLoginWord, type MachineLogins } from '../dashboard/machine-logins.js'
 import { errorMessage } from '../error-message.js'
 import { repositoryAddress, repositorySpelling } from '../repository-address.js'
 import { contextRemote, resolveProjectPath } from './context.js'
-import { addMachine, isAccount, listMachines, noteListed, removeMachine, renameMachine, tellMachine, type MachineRecord } from '../registry.js'
+import { addMachine, isPersonName, listMachines, noteListed, removeMachine, renameMachine, tellMachine, type MachineRecord } from '../registry.js'
 import { parseMachineLink } from '../machine-link.js'
 import { openagentVersion } from '../version.js'
 
@@ -68,7 +68,7 @@ export async function sendAddMachine(pasted: string, label?: string, owner?: str
   const access = { url: link.url, key: entered.key, door: link.door, ...(link.pin ? { pin: link.pin } : {}) }
   let added: Awaited<ReturnType<typeof addMachine>>
   try {
-    added = await addMachine({ ...access, ...(typeof label === 'string' ? { label } : {}), ...(isAccount(owner) ? { owner } : {}) })
+    added = await addMachine({ ...access, ...(typeof label === 'string' ? { label } : {}), ...(isPersonName(owner) ? { owner } : {}) })
   } catch (err) {
     // A key nobody holds is not left on the machine.
     void leaveRemote(access)
@@ -218,6 +218,30 @@ export async function sendMachineLineLink(machineId: string): Promise<{ ok: true
   if (!asked.ok) return asked
   const url = (asked.said as { url?: unknown } | null)?.url
   return typeof url === 'string' && url.startsWith('https://') ? { ok: true, url } : { ok: false, error: 'The machine gave no link.' }
+}
+
+/** A code one more device of this person's gets in with at a saved machine: the link a camera opens, and what is typed instead, where and the code. */
+export interface MachineCode {
+  url: string
+  where: string
+  code: string
+  expires: string
+}
+
+/**
+ * A code that lets one more device of this person's in at a saved machine, a server: a device
+ * that is in gives the code for the next one. Asked of the machine's door with this computer's
+ * key there, so every computer of the person's that is in asks, not only the one that set the
+ * server up. The code works once, for a short time.
+ */
+export async function sendMachineCode(machineId: string): Promise<{ ok: true; value: MachineCode } | { ok: false; error: string }> {
+  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  if (!machine || machine.url.includes(THROUGH_PATH)) return { ok: false, error: 'That machine is no longer saved.' }
+  const asked = await remoteDoor(machine, { what: 'code' })
+  if (!asked.ok) return asked
+  const { url, where, code, expires } = (asked.said ?? {}) as Record<string, unknown>
+  const given = typeof url === 'string' && typeof where === 'string' && typeof code === 'string' && typeof expires === 'string' && url.startsWith('https://') && /^[A-Z0-9-]{1,16}$/.test(code) && Number.isFinite(Date.parse(expires))
+  return given ? { ok: true, value: { url, where, code, expires } } : { ok: false, error: 'The machine gave no code: update it first.' }
 }
 
 /** Whether each saved machine answers right now, by id: one short call to each, with this computer's key. */

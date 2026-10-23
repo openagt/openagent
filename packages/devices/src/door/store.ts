@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
+import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto'
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { isIP } from 'node:net'
 import { dirname, join } from 'node:path'
@@ -30,7 +30,7 @@ export interface Device {
    * OpenAgent saved it under stays good.
    *
    * A computer whose line is for everyone here has an address for each other person too
-   * (`others`, by their GitHub account, the owner's among them): each in the block of ports of
+   * (`others`, by their name, the owner's among them): each in the block of ports of
    * that person's own OpenAgent, which asks it there. An empty `others` is a line for everyone on
    * a computer that has nobody else yet.
    */
@@ -42,18 +42,18 @@ export interface Device {
    * else say it. Absent for a phone or a browser, and for a computer that never said.
    */
   computer?: string
-  /** The person the device is theirs, by their GitHub account; absent for the owner's. */
+  /** The person the device is theirs, by their name; absent for the owner's. */
   person?: string
 }
 
 /**
- * A person on this computer: their GitHub account. The owner is named once, the first time a
+ * A person on this computer, by the name the owner typed: whatever git host they use. The owner is named once, the first time a
  * device is let in for someone else; until then the computer has no persons and every device is
  * the owner's, as on a computer one person uses.
  */
 export interface Person {
-  /** Their GitHub account, in small letters. */
-  account: string
+  /** Their name, as it was typed the first time: one person to one name, whatever its letters' case. */
+  name: string
   /** The computer's owner: the one who invites. */
   owner?: true
   /** ISO 8601. */
@@ -115,13 +115,13 @@ export function shareLine(store: Store, device: Device, ownerPorts: { from: numb
   taken.add(device.line.port)
   const others: Record<string, number> = {}
   for (const person of store.persons) {
-    if (person.account === own || (!person.owner && person.port === undefined)) continue
+    if (person.name === own || (!person.owner && person.port === undefined)) continue
     const block = person.owner ? ownerPorts : personLinePorts(person.port!)
-    const kept = had[person.account]
+    const kept = had[person.name]
     const port = kept !== undefined && kept >= block.from && kept < block.from + block.count && !taken.has(kept) ? kept : Array.from({ length: block.count }, (_, at) => block.from + at).find(candidate => !taken.has(candidate))
     if (port === undefined) continue
     taken.add(port)
-    others[person.account] = port
+    others[person.name] = port
   }
   const same = device.line.others !== undefined && JSON.stringify(Object.entries(others).sort()) === JSON.stringify(Object.entries(had).sort())
   device.line.others = others
@@ -133,18 +133,42 @@ export function shareLine(store: Store, device: Device, ownerPorts: { from: numb
  * nobody, and on a computer with no users per person. A person whose user is still being made
  * has it already: their calls get no answer until their OpenAgent is up, and never the owner's.
  */
-export function portOf(store: Store, account: string | undefined): number | undefined {
-  return account === undefined ? undefined : store.persons.find(person => person.account === account && !person.owner)?.port
-}
-
-/** What a GitHub account is: letters, digits and single dashes, at most 39, not starting or ending with a dash. */
-export function accountOf(said: string): string | undefined {
-  const account = said.trim().replace(/^@/, '').toLowerCase()
-  return /^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,38}$/.test(account) ? account : undefined
+export function portOf(store: Store, name: string | undefined): number | undefined {
+  return name === undefined ? undefined : store.persons.find(person => person.name === name && !person.owner)?.port
 }
 
 /**
- * How the door tells OpenAgent who a call is from: the person's GitHub account. The door sets it
+ * A person's name as it is typed: letters of any language, digits, spaces, dots, apostrophes and
+ * dashes, at most 40, starting with a letter or a digit, on one line. Spaces around it are
+ * dropped, and two in a row are one.
+ */
+export function nameOf(said: string): string | undefined {
+  // A name is one line: one that breaks a line, or hides a letter, is no name.
+  if (/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(said.trim().replace(/ +/g, ' '))) return undefined
+  const name = said.trim().replace(/ +/g, ' ')
+  return /^[\p{L}\p{N}][\p{L}\p{M}\p{N} .'’-]{0,39}$/u.test(name) ? name : undefined
+}
+
+/**
+ * A name as it is written where only plain letters go: a header, the file a person's service
+ * reads, the helper's word. Every letter that is not a plain one is `%` and its number.
+ */
+export const nameWord = (name: string): string => encodeURIComponent(name).replace(/[!'()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
+
+/** A name written as {@link nameWord} writes it, as it was; `undefined` for a word that is no name. */
+export function nameFromWord(word: string): string | undefined {
+  try {
+    return nameOf(decodeURIComponent(word))
+  } catch {
+    return undefined
+  }
+}
+
+/** Whether two names are one person's: their letters' case is not looked at. */
+export const samePerson = (a: string, b: string): boolean => a.toLocaleLowerCase() === b.toLocaleLowerCase()
+
+/**
+ * How the door tells OpenAgent who a call is from: the person's name, as {@link nameWord} writes it. The door sets it
  * on every call it passes on, and takes it off any request that brings one of its own.
  */
 export const PERSON_HEADER = 'x-openagent-person'
@@ -182,8 +206,8 @@ export interface Line {
    * their own on this computer. Absent: only this computer's own person.
    */
   for?: 'everyone'
-  /** This computer's person at the server, by their GitHub account, as its door said. */
-  account?: string
+  /** This computer's person at the server, by their name, as its door said. */
+  person?: string
   /** For a line for everyone: the server's persons, as its door last said them. */
   persons?: string[]
   /** The server said no to this computer's key when the line was last asked for: nothing changes that but the person. */
@@ -233,8 +257,14 @@ export interface Store {
   problem?: string
 }
 
-/** How long a code is good for. */
-export const CODE_LIFETIME_MS = 5 * 60 * 1000
+/** How long a code is good for: time to walk to the other computer and type it there. */
+export const CODE_LIFETIME_MS = 10 * 60 * 1000
+/**
+ * What a code is made of: eight of these, typed by hand on another computer. No letter that reads
+ * as another (0 and O, 1, I and L) and no U; any case, and a dash or a space anywhere, is the same code.
+ */
+const CODE_LETTERS = '23456789ABCDEFGHJKMNPQRSTVWXYZ'
+const CODE_LENGTH = 8
 /** Caps, so a file edited by hand or a flood of scans cannot bloat it. */
 export const MAX_DEVICES = 50
 export const MAX_CODES = 20
@@ -287,7 +317,7 @@ export function addressOf(said: string): string | undefined {
 
 const isIso = (value: unknown): value is string => typeof value === 'string' && !Number.isNaN(Date.parse(value))
 const isDigest = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value)
-const isAccount = (value: unknown): value is string => typeof value === 'string' && accountOf(value) === value
+const isName = (value: unknown): value is string => typeof value === 'string' && nameOf(value) === value
 const isPort = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value > 0 && value < 65536
 /** A server's door as a line is kept under: an HTTPS origin, written the one way. */
 export function isLineUrl(value: unknown): value is string {
@@ -307,20 +337,20 @@ export function sanitize(value: unknown): Store {
   for (const entry of Array.isArray(obj.persons) ? obj.persons : []) {
     if (persons.length >= MAX_PERSONS) break
     if (!entry || typeof entry !== 'object') continue
-    const { account, owner, added, port, ready, problem, worker, from, kept } = entry as Record<string, unknown>
-    if (!isAccount(account) || !isIso(added) || persons.some(person => person.account === account)) continue
+    const { name, owner, added, port, ready, problem, worker, from, kept } = entry as Record<string, unknown>
+    if (!isName(name) || !isIso(added) || persons.some(person => samePerson(person.name, name))) continue
     const came = { ...(isLineUrl(from) ? { from } : {}), ...(kept === true ? { kept: true as const } : {}) }
     // One owner, listed first.
-    if (owner === true && !persons.some(person => person.owner)) persons.unshift({ account, owner: true, added })
+    if (owner === true && !persons.some(person => person.owner)) persons.unshift({ name, owner: true, added })
     // One block for one person: a second person that names a port already given has none, and no user to make.
     else if (isPort(port) && !persons.some(person => person.port === port))
-      persons.push({ account, added, port, ...(ready === true ? { ready: true as const } : {}), ...(typeof problem === 'string' && problem.trim() ? { problem: problem.trim().slice(0, MAX_PROBLEM) } : {}), ...(Number.isInteger(worker) && (worker as number) > 0 ? { worker: worker as number } : {}), ...came })
-    else persons.push({ account, added, ...came })
+      persons.push({ name, added, port, ...(ready === true ? { ready: true as const } : {}), ...(typeof problem === 'string' && problem.trim() ? { problem: problem.trim().slice(0, MAX_PROBLEM) } : {}), ...(Number.isInteger(worker) && (worker as number) > 0 ? { worker: worker as number } : {}), ...came })
+    else persons.push({ name, added, ...came })
   }
   // Persons with no owner are no persons: the owner is named first, then the others.
   if (!persons[0]?.owner) persons.length = 0
   // A device or a code for someone who is not among the persons, or for the owner, is the owner's.
-  const someoneElse = (said: unknown): string | undefined => (isAccount(said) && persons.some(person => person.account === said && !person.owner) ? said : undefined)
+  const someoneElse = (said: unknown): string | undefined => (isName(said) && persons.some(person => person.name === said && !person.owner) ? said : undefined)
   const devices: Device[] = []
   // Every port a line has here, its own and those it has for others: one port is one address.
   const taken = new Set<number>()
@@ -339,10 +369,10 @@ export function sanitize(value: unknown): Store {
     let shared: Record<string, number> | undefined
     if (own && others && typeof others === 'object' && !Array.isArray(others)) {
       shared = {}
-      for (const [account, at] of Object.entries(others as Record<string, unknown>)) {
-        if (!isAccount(account) || !isPort(at) || taken.has(at) || account === (whose ?? persons[0]?.account) || !persons.some(candidate => candidate.account === account)) continue
+      for (const [other, at] of Object.entries(others as Record<string, unknown>)) {
+        if (!isName(other) || !isPort(at) || taken.has(at) || other === (whose ?? persons[0]?.name) || !persons.some(candidate => candidate.name === other)) continue
         taken.add(at)
-        shared[account] = at
+        shared[other] = at
       }
     }
     devices.push({ id, name: typeof name === 'string' && name.trim() ? name.trim().slice(0, MAX_NAME) : 'A device', key, added, ...(isIso(seen) ? { seen } : {}), ...(own ? { line: { port, ...(shared ? { others: shared } : {}) } } : {}), ...(isDigest(computer) ? { computer } : {}), ...(whose ? { person: whose } : {}) })
@@ -351,12 +381,12 @@ export function sanitize(value: unknown): Store {
   for (const entry of Array.isArray(obj.lines) ? obj.lines : []) {
     if (lines.length >= MAX_LINES) break
     if (!entry || typeof entry !== 'object') continue
-    const { url, pin, key, mode, refused, for: who, account, persons: theirs } = entry as Record<string, unknown>
+    const { url, pin, key, mode, refused, for: who, person, persons: theirs } = entry as Record<string, unknown>
     if (!isLineUrl(url) || typeof pin !== 'string' || !pin || typeof key !== 'string' || !key) continue
     if (lines.some(line => line.url === url)) continue
     const everyone = who === 'everyone'
-    const heard = everyone && Array.isArray(theirs) ? [...new Set(theirs.filter(isAccount))].slice(0, MAX_PERSONS) : undefined
-    lines.push({ url, pin, key, mode: mode === 'watch' ? 'watch' : 'full', ...(everyone ? { for: 'everyone' as const } : {}), ...(isAccount(account) ? { account } : {}), ...(heard ? { persons: heard } : {}), ...(refused === true ? { refused: true } : {}) })
+    const heard = everyone && Array.isArray(theirs) ? [...new Set(theirs.filter(isName))].slice(0, MAX_PERSONS) : undefined
+    lines.push({ url, pin, key, mode: mode === 'watch' ? 'watch' : 'full', ...(everyone ? { for: 'everyone' as const } : {}), ...(isName(person) ? { person } : {}), ...(heard ? { persons: heard } : {}), ...(refused === true ? { refused: true } : {}) })
   }
   const codes: Code[] = []
   for (const entry of Array.isArray(obj.codes) ? obj.codes : []) {
@@ -486,14 +516,20 @@ export function liveCodes(codes: readonly Code[], now: number): Code[] {
  * lets in a computer that keeps a line, and nothing else.
  */
 export async function addCode(env: NodeJS.ProcessEnv, now = Date.now(), person?: string, line = false): Promise<{ code: string; expires: string }> {
-  // Half the length of a device's key: it lives five minutes and works once, and a shorter link is a QR code a camera reads more easily.
-  const code = randomBytes(16).toString('base64url')
+  // Short enough to type: the door slows down whoever tries wrong codes, and the code lives ten minutes and works once.
+  const code = Array.from({ length: CODE_LENGTH }, () => CODE_LETTERS[randomInt(CODE_LETTERS.length)]).join('')
   const expires = new Date(now + CODE_LIFETIME_MS).toISOString()
   await update(env, store => {
     store.codes = [...liveCodes(store.codes, now), { code: sha256(code), expires, ...(person !== undefined ? { person } : {}), ...(line ? { line: true as const } : {}) }].slice(-MAX_CODES)
   })
   return { code, expires }
 }
+
+/** A code as it is typed: in any case, with dashes and spaces anywhere. */
+export const codeOf = (said: string): string => said.toUpperCase().replace(/[\s-]/g, '')
+
+/** A code as a person reads it: in two halves. */
+export const shownCode = (code: string): string => `${code.slice(0, CODE_LENGTH / 2)}-${code.slice(CODE_LENGTH / 2)}`
 
 /** What a device holds once it is in: its id and its key, as the cookie carries them. */
 export interface Entry {
@@ -520,7 +556,7 @@ export interface Entered extends Entry {
  * made for a line lets in nothing but a line, and is not spent by what it does not let in.
  */
 export async function enter(env: NodeJS.ProcessEnv, code: string, name: string, now = Date.now(), line?: { from: number; count: number }, computer?: string): Promise<Entered | undefined> {
-  const digest = sha256(code)
+  const digest = sha256(codeOf(code))
   // Looked up before the file is locked: a flood of wrong codes from the network changes nothing and holds no writer up.
   if (!liveCodes((await readStore(env)).codes, now).some(candidate => sameDigest(candidate.code, digest))) return undefined
   return update(env, store => {
@@ -595,34 +631,35 @@ export async function removeDevice(env: NodeJS.ProcessEnv, id: string): Promise<
   })
 }
 
-/** Whose a device is, by its GitHub account: its person's, else the owner's; `undefined` while no owner is named. */
+/** Whose a device is, by their name: its person's, else the owner's; `undefined` while no owner is named. */
 export function personOf(store: Store, device: Device): string | undefined {
-  return device.person ?? store.persons.find(person => person.owner)?.account
+  return device.person ?? store.persons.find(person => person.owner)?.name
 }
 
 /**
  * Name the computer's owner, once: the devices already in are theirs. False when another owner
- * is named already, or when the account is one of the persons invited here.
+ * is named already, by another name.
  */
-export async function nameOwner(env: NodeJS.ProcessEnv, account: string, now = Date.now()): Promise<boolean> {
+export async function nameOwner(env: NodeJS.ProcessEnv, name: string, now = Date.now()): Promise<boolean> {
   return update(env, store => {
     const owner = store.persons.find(person => person.owner)
-    if (owner) return owner.account === account
-    store.persons = [{ account, owner: true, added: new Date(now).toISOString() }]
+    if (owner) return samePerson(owner.name, name)
+    store.persons = [{ name, owner: true, added: new Date(now).toISOString() }]
     return true
   })
 }
 
 /**
- * Put a person among the persons, when they are not yet: the owner must be named first. With
+ * Put a person among the persons, when they are not yet: the owner must be named first. A name
+ * that is a person's already, in other letters' case, is that person. With
  * `withPort`, on a computer that gives each person a user of their own, the person gets the first
  * block of ports no other person has, and keeps it. Answers the person as the file keeps them;
  * `undefined` when the owner is not named, the list is full, or no block is free.
  */
-export async function addPerson(env: NodeJS.ProcessEnv, account: string, now = Date.now(), withPort = false): Promise<Person | undefined> {
+export async function addPerson(env: NodeJS.ProcessEnv, name: string, now = Date.now(), withPort = false): Promise<Person | undefined> {
   return update(env, store => {
     if (!store.persons[0]?.owner) return undefined
-    const known = store.persons.find(person => person.account === account)
+    const known = store.persons.find(person => samePerson(person.name, name))
     if (known && (known.owner || !withPort || known.port !== undefined)) return { ...known }
     const port = withPort ? freeBlock(store) : undefined
     if (withPort && port === undefined) return undefined
@@ -631,7 +668,7 @@ export async function addPerson(env: NodeJS.ProcessEnv, account: string, now = D
       return { ...known }
     }
     if (store.persons.length >= MAX_PERSONS) return undefined
-    const person: Person = { account, added: new Date(now).toISOString(), ...(port !== undefined ? { port } : {}) }
+    const person: Person = { name, added: new Date(now).toISOString(), ...(port !== undefined ? { port } : {}) }
     store.persons = [...store.persons, person]
     return { ...person }
   })
@@ -645,13 +682,13 @@ function freeBlock(store: Store): number | undefined {
 }
 
 /** Take a person out, with every device of theirs and every code made for them. False for the owner and for no such person. */
-export async function removePerson(env: NodeJS.ProcessEnv, account: string): Promise<boolean> {
+export async function removePerson(env: NodeJS.ProcessEnv, name: string): Promise<boolean> {
   return update(env, store => {
-    const person = store.persons.find(candidate => candidate.account === account)
+    const person = store.persons.find(candidate => candidate.name === name)
     if (!person || person.owner) return false
     store.persons = store.persons.filter(candidate => candidate !== person)
-    store.devices = store.devices.filter(device => device.person !== account)
-    store.codes = store.codes.filter(code => code.person !== account)
+    store.devices = store.devices.filter(device => device.person !== name)
+    store.codes = store.codes.filter(code => code.person !== name)
     return true
   })
 }
@@ -666,7 +703,7 @@ export interface ListedDevice {
   line?: true
   /** The ids of what else the computer holds here, beside the row's own. */
   also?: string[]
-  /** Whose device it is, by their GitHub account, once the computer has persons. */
+  /** Whose device it is, by their name, once the computer has persons. */
   person?: string
 }
 

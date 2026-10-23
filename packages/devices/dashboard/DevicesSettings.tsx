@@ -178,9 +178,9 @@ function ItemRow({ d, item, onOpen }: { d: Devices; item: Item; onOpen: () => vo
   }
   if (item.kind === 'joined') {
     const { machine, person } = item
-    return <Row icon={Server} name={item.name} facts={[machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Offline</State>, 'Server', person.owner ? 'yours' : person.account !== undefined ? `you are @${person.account}` : undefined]} onOpen={onOpen} />
+    return <Row icon={Server} name={item.name} facts={[machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Offline</State>, 'Server', person.owner ? 'yours' : person.person !== undefined ? `you are ${person.person}` : undefined]} onOpen={onOpen} />
   }
-  return <Row icon={Server} name={item.name} facts={[item.machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Offline</State>, `@${item.owner}'s server`]} onOpen={onOpen} />
+  return <Row icon={Server} name={item.name} facts={[item.machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Offline</State>, `${item.owner}'s server`]} onOpen={onOpen} />
 }
 
 /** A phone or a browser: no page of its own, a menu to rename it here, or take it out. */
@@ -259,16 +259,16 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
 }
 
 /** Removing a person, asked first: everything of theirs on this computer goes. */
-function RemovePerson({ account, label, busy, onConfirm }: { account: string; label: string; busy: boolean; onConfirm: () => Promise<void> }) {
+function RemovePerson({ name, label, busy, onConfirm }: { name: string; label: string; busy: boolean; onConfirm: () => Promise<void> }) {
   return (
     <ConfirmDialog
       trigger={
-        <Button size="sm" variant="ghost" disabled={busy} aria-label={`Remove @${account}`}>
+        <Button size="sm" variant="ghost" disabled={busy} aria-label={`Remove ${name}`}>
           {label}
         </Button>
       }
-      title={`Remove @${account}?`}
-      body={`Their devices are taken out, and their own user on this computer is deleted with everything in it: their GitHub and Claude logins, their copies of projects, and any work they did not push to GitHub. Their finished runs stay on GitHub. @${account} can be invited again later.`}
+      title={`Remove ${name}?`}
+      body={`Their devices are taken out, and their own user on this computer is deleted with everything in it: their logins, their copies of projects, and any work they did not push. ${name} can be invited again later.`}
       confirmLabel="Remove person"
       confirmBusyLabel="Removing…"
       onConfirm={onConfirm}
@@ -288,7 +288,7 @@ function DoorDevice({ device, mine, busy, onRemove }: { device: DeviceRow; mine:
           <p className="text-xs text-muted-foreground" title={formatDateTime(device.seen ?? device.added)}>
             {device.seen !== undefined ? `Last seen ${formatRelative(device.seen)}, added ${formatRelative(device.added)}` : `Added ${formatRelative(device.added)}`}
           </p>
-          {device.line && <p className="text-xs text-muted-foreground">{`${device.person !== undefined && !mine ? `A computer of @${device.person}` : 'A computer of yours'}: runs can be started on it from here. Remove it and it is no longer in "Run on".`}</p>}
+          {device.line && <p className="text-xs text-muted-foreground">{`${device.person !== undefined && !mine ? `A computer of ${device.person}` : 'A computer of yours'}: runs can be started on it from here. Remove it and it is no longer in "Run on".`}</p>}
         </div>
       </div>
       <Button size="sm" variant="ghost" disabled={busy} aria-label={`Remove ${device.name}`} onClick={onRemove}>
@@ -313,34 +313,34 @@ function DoorPeople({ d, persons, devices }: { d: Devices; persons: PersonRow[];
   return (
     <div className="space-y-1 pt-2">
       {persons.map(person => {
-        const theirs = devices.filter(device => (device.person ?? persons[0]!.account) === person.account)
+        const theirs = devices.filter(device => (device.person ?? persons[0]!.name) === person.name)
         return (
-          <div key={person.account} className="pt-2">
+          <div key={person.name} className="pt-2">
             <div className="flex items-center justify-between gap-3 pt-2">
               <p className="flex min-w-0 items-center gap-2 text-xs font-medium text-muted-foreground">
                 <UserRound className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                <span className="truncate">{person.owner ? `@${person.account}, the owner` : `@${person.account}`}</span>
+                <span className="truncate">{person.owner ? `${person.name}, the owner` : person.name}</span>
               </p>
-              {!person.owner && !(person.removed && !person.kept) && <RemovePerson account={person.account} label="Remove person" busy={busy} onConfirm={() => act(() => removePerson(host, person.account))} />}
+              {!person.owner && !(person.removed && !person.kept) && <RemovePerson name={person.name} label="Remove person" busy={busy} onConfirm={() => act(() => removePerson(host, person.name))} />}
             </div>
             {/* A person of a server whose line lets everyone there start runs here: where they come from, and whether that server still has them. */}
             {person.from !== undefined && !(person.removed && !person.kept) && <p className="pt-1 text-xs text-muted-foreground">{person.removed ? `Removed from ${hostOf(person.from)}. Kept here, switched off.` : `Uses this computer through ${hostOf(person.from)}.`}</p>}
             {person.from !== undefined && person.removed && !person.kept && (
-              <div role="group" aria-label={`@${person.account} was removed from ${hostOf(person.from)}`} className="flex flex-wrap items-center justify-between gap-2 pt-1">
+              <div role="group" aria-label={`${person.name} was removed from ${hostOf(person.from)}`} className="flex flex-wrap items-center justify-between gap-2 pt-1">
                 <p className="text-xs text-warning">{`Removed from ${hostOf(person.from)}.`}</p>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" disabled={busy} onClick={() => void act(() => keepPerson(host, person.account))}>
+                  <Button size="sm" variant="outline" disabled={busy} onClick={() => void act(() => keepPerson(host, person.name))}>
                     Keep, switched off
                   </Button>
-                  <RemovePerson account={person.account} label="Remove" busy={busy} onConfirm={() => act(() => removePerson(host, person.account))} />
+                  <RemovePerson name={person.name} label="Remove" busy={busy} onConfirm={() => act(() => removePerson(host, person.name))} />
                 </div>
               </div>
             )}
-            {person.working && <p className="pt-1 text-xs text-muted-foreground">{`Making @${person.account}'s own user on this computer, with their own OpenAgent. This takes a minute or two.`}</p>}
-            {person.problem !== undefined && !person.working && <p role="alert" className="pt-1 text-xs text-danger">{`@${person.account}'s own user on this computer could not be made: ${person.problem.replace(/\.?$/, '.')} Add a device for them again to try again.`}</p>}
+            {person.working && <p className="pt-1 text-xs text-muted-foreground">{`Making ${person.name}'s own user on this computer, with their own OpenAgent. This takes a minute or two.`}</p>}
+            {person.problem !== undefined && !person.working && <p role="alert" className="pt-1 text-xs text-danger">{`${person.name}'s own user on this computer could not be made: ${person.problem.replace(/\.?$/, '.')} Add a device for them again to try again.`}</p>}
             {/* A person of a server has their devices at that server: none here is none missing. */}
             {person.from === undefined && theirs.length === 0 && <p className="py-2 text-xs text-muted-foreground">No device yet.</p>}
-            <ul aria-label={`Devices of @${person.account}`} className="divide-y divide-border">
+            <ul aria-label={`Devices of ${person.name}`} className="divide-y divide-border">
               {theirs.map(device => (
                 <DoorDevice key={device.id} device={device} mine={person.owner === true} busy={busy} onRemove={() => void act(() => removeDevice(host, device.id))} />
               ))}
@@ -379,7 +379,7 @@ function PersonDevices({ person, everyMs }: { person: string; everyMs: number })
   const devices = mine?.devices ?? []
   return (
     <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">{`This computer is shared, and you are on it as @${person}. Your devices are in until you remove them. A new device gets in with a code from the computer's owner.`}</p>
+      <p className="text-sm text-muted-foreground">{`This computer is shared, and you are on it as ${person}. Your devices are in until you remove them. A new device gets in with a code from the computer's owner.`}</p>
       {mine !== undefined && (
         <div className="space-y-1">
           <p className="text-sm">{devices.length > 0 ? `Your devices (${devices.length})` : 'Your devices'}</p>

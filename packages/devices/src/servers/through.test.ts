@@ -108,13 +108,13 @@ test('the install of a computer reached through a server gives it its line as th
   try {
     await update(home.env, store => void store.servers.push({ ...BOX, through: VPS, steps: freshSteps(true), adding: true }))
     const { exec, calls } = pretendServer(call => (isStatus(call) ? { out: statusWith([]) } : undefined))
-    const openagent = pretendOpenAgent({ onMachinePerson: { ok: true, said: { account: 'Rom', owner: false, devices: [] } }, sendMachineLineLink: { ok: true, url: LINK } })
+    const openagent = pretendOpenAgent({ onMachinePerson: { ok: true, said: { person: 'Rom', owner: false, devices: [] } }, sendMachineLineLink: { ok: true, url: LINK } })
     await install({ env: home.env, address: BOX.address, version: '1.2.3', exec, ask: openagent.ask })
     const [server] = (await readStore(home.env)).servers
     assert.deepEqual(server!.steps.map(step => `${step.id}:${step.state}`), THROUGH_STEP_IDS.map(id => `${id}:done`))
     assert.deepEqual(openagent.asked, [`onMachinePerson ["${VPS}"]`, `sendMachineLineLink ["${VPS}"]`])
     const line = calls.at(-1)!.script
-    assert.match(line, /^OWNER='rom'$/m)
+    assert.match(line, /^OWNER='Rom'$/m)
     assert.match(line, new RegExp(`^LINK='${LINK.replace(/[.#/]/g, '\\$&')}'$`, 'm'))
     assert.match(line, /^MODE='full'$/m)
     // The person logs in as their own user: the one at the computer's screen, whom its firewall lets open OpenAgent.
@@ -123,7 +123,7 @@ test('the install of a computer reached through a server gives it its line as th
     // Again, with its line kept and everyone let in: no link is spent, and what it was told is kept.
     await update(home.env, store => Object.assign(store.servers[0]!, { steps: freshSteps(true), who: 'everyone' }))
     const kept = pretendServer(call => (isStatus(call) ? { out: statusWith([{ url: VPS, mode: 'full', for: 'everyone', id: 'line12345678' }]) } : undefined))
-    const again = pretendOpenAgent({ onMachinePerson: { ok: true, said: { account: 'rom', owner: false, devices: [] } } })
+    const again = pretendOpenAgent({ onMachinePerson: { ok: true, said: { person: 'rom', owner: false, devices: [] } } })
     await install({ env: home.env, address: BOX.address, version: '1.2.3', exec: kept.exec, ask: again.ask })
     assert.deepEqual(again.asked, [`onMachinePerson ["${VPS}"]`])
     assert.match(kept.calls.at(-1)!.script, /^LINK=''$/m)
@@ -144,7 +144,7 @@ test('a server that does not say who the person is there stops the line step, in
     assert.ok(steps.slice(0, -1).every(step => step.state === 'done'))
 
     await update(home.env, store => void (store.servers[0]!.steps = freshSteps(true)))
-    await install({ env: home.env, address: BOX.address, version: '1.2.3', exec, ask: pretendOpenAgent({ onMachinePerson: { ok: true, said: { account: 'rom', owner: false, devices: [] } }, sendMachineLineLink: { ok: false, error: 'only a computer that is in at a server asks for a line' } }).ask })
+    await install({ env: home.env, address: BOX.address, version: '1.2.3', exec, ask: pretendOpenAgent({ onMachinePerson: { ok: true, said: { person: 'rom', owner: false, devices: [] } }, sendMachineLineLink: { ok: false, error: 'only a computer that is in at a server asks for a line' } }).ask })
     assert.equal((await readStore(home.env)).servers[0]!.steps.at(-1)!.said, '165.245.244.10 gave no link for the line: only a computer that is in at a server asks for a line')
   } finally {
     await home.remove()
@@ -213,7 +213,7 @@ test('who says who may start runs; with remove, the users the line made for the 
   const home = await testHome()
   try {
     await update(home.env, store => void store.servers.push({ ...BOX, through: VPS, who: 'everyone', steps: freshSteps(true).map(step => ({ ...step, state: 'done' })), adding: false }))
-    const persons = [{ account: 'rom', owner: true }, { account: 'dani', from: VPS }, { account: 'sam', from: 'https://other.example' }, { account: 'lee', from: VPS, removed: true }]
+    const persons = [{ name: 'rom', owner: true }, { name: 'dani', from: VPS }, { name: 'sam', from: 'https://other.example' }, { name: 'lee', from: VPS, removed: true }]
     const listed = `${JSON.stringify({ devices: [], persons })}\n`
     const { exec, calls } = pretendServer(call => (call.script.includes(`${DOOR} status`) ? { out: listed } : undefined))
     const said = await cli(home.env, ['who', BOX.address, 'me', 'remove'], { exec })
@@ -222,7 +222,7 @@ test('who says who may start runs; with remove, the users the line made for the 
     assert.match(script, /remove-person 'dani'/)
     assert.match(script, /remove-person 'lee'/)
     assert.doesNotMatch(script, /remove-person 'sam'|remove-person 'rom'/)
-    assert.deepEqual((said.out as { persons: unknown[] }).persons.slice(1, 2), [{ account: 'dani', from: VPS }])
+    assert.deepEqual((said.out as { persons: unknown[] }).persons.slice(1, 2), [{ name: 'dani', from: VPS }])
     assert.equal((await readStore(home.env)).servers[0]!.who, 'me')
 
     const kept = await cli(home.env, ['who', BOX.address, 'nobody'], { exec })
