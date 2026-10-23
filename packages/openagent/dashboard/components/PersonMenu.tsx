@@ -5,9 +5,9 @@ import { useLoaded } from '../lib/use-async.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { ThemeSubmenu } from './ThemeSubmenu.js'
 import { NotificationsSubmenu } from './NotificationsSubmenu.js'
-import { AGENT_ACCOUNTS_ENTRY, AgentAccountsSubmenu } from './AgentAccounts.js'
+import { AGENT_ACCOUNTS_ENTRY, AgentAccountsSubmenu, accountsInMenu, useAgentAccounts } from './AgentAccounts.js'
 import { GitHostsSubmenu } from './GitHosts.js'
-import { useMissing } from './Logins.js'
+import { useAgentState, useMissing } from './Logins.js'
 
 // The foot of the sidebar: the person at this dashboard, their picture and first name, as one row
 // that opens their menu (his pick, over a row of three icons): the Claude account runs use first,
@@ -41,8 +41,14 @@ function Avatar({ person, dot }: { person: Person | null; dot: boolean }) {
 }
 
 export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => void }) {
-  const person = useLoaded<Person | null>(() => onPerson().catch(() => null), null, [])
-  const { missing } = useMissing()
+  // Kept for the page's life: on a phone the sidebar is drawn anew at each opening, and shows them at once.
+  const person = useLoaded<Person | null>(() => onPerson().catch(() => null), null, [], { remember: 'person' })
+  const { missing, hosts } = useMissing()
+  // Read with the page, not as the menu opens: its accounts rows are there from its first frame.
+  const { view: claude } = useAgentAccounts('claude')
+  const { view: codex } = useAgentAccounts('codex')
+  const { state: codexState } = useAgentState('codex')
+  const anyAccount = (hosts?.hosts ?? []).some(row => row.provider) || accountsInMenu('claude', claude, undefined) || accountsInMenu('codex', codex, codexState)
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -76,10 +82,11 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
             <DropdownMenuSeparator />
           </>
         )}
-        {/* The accounts runs use: the git host's first, as the plan has it, then each agent's, with the line under them. */}
+        {/* The accounts runs use: the git host's first, as the plan has it, then each agent's, with one line under them all. */}
         <GitHostsSubmenu onSettings={onSettings} />
         <AgentAccountsSubmenu agent="claude" onAdd={() => onSettings(AGENT_ACCOUNTS_ENTRY)} />
         <AgentAccountsSubmenu agent="codex" onAdd={() => onSettings(AGENT_ACCOUNTS_ENTRY)} />
+        {anyAccount && <DropdownMenuSeparator />}
         <ThemeSubmenu />
         <NotificationsSubmenu />
         <DropdownMenuSeparator />

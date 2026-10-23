@@ -104,6 +104,23 @@ test('Git hosts: one row per host the remotes are on, with its projects; a host 
     assert.deepEqual(await sendUseGitHostAccount('gitlab.example.com', 'x'), { ok: false, error: 'No package answers for gitlab.example.com.' })
   }))
 
+test('Git hosts: the last answer comes at once while the hosts are read again behind it; after a press, the next answer is a fresh one', () => {
+  const accounts: { login: string; terminal?: boolean; runs?: boolean }[] = [{ login: 'octo', terminal: true, runs: true }]
+  return withProjects(async () => {
+    const logins = (view: { hosts: { provider?: { accounts: { login: string }[] } }[] }) => view.hosts[0]!.provider?.accounts.map(a => a.login)
+    assert.equal((await sendUseGitHostAccount('github.com', 'octo')).ok, true)
+    assert.deepEqual(logins(await onGitHosts()), ['octo'])
+    accounts.push({ login: 'octo-agent' })
+    assert.deepEqual(logins(await onGitHosts()), ['octo'])
+    let next = await onGitHosts()
+    for (let tries = 0; tries < 50 && logins(next)?.length !== 2; tries++) next = await new Promise(resolve => setTimeout(() => resolve(onGitHosts()), 10))
+    assert.deepEqual(logins(next), ['octo', 'octo-agent'])
+    accounts.pop()
+    assert.equal((await sendUseGitHostAccount('github.com', 'octo')).ok, true)
+    assert.deepEqual(logins(await onGitHosts()), ['octo'])
+  }, accounts)
+})
+
 test('the agent: what is in the way and the fix its package declared; a press runs that fix, never a command from the page, and says why it failed', async () => {
   const before = { ...loginsWiring }
   let ready = false

@@ -9,7 +9,7 @@
 //
 // This file IS `@openagt/dashboard/module`: the dashboard's build emits it as its own entry (`/host/module.js`),
 // sharing every chunk with the dashboard itself. Nothing here names a skill.
-import { createContext, useContext, type ComponentType } from 'react'
+import { createContext, useContext, useMemo, type ComponentType } from 'react'
 import type { AgentStatus } from '../../src/index.js'
 import { readModule, runComputerCommand, runComputerCommandOn, runModuleCommand } from '../rpc/modules.js'
 import type { ModuleCommandResult, ModuleReadResult } from '../rpc/modules.js'
@@ -520,8 +520,10 @@ export const ModuleHostContext = createContext<ModuleHostBase | ModuleHost | nul
 /** The dashboard's services for the module being rendered. Only valid inside a module page. */
 export function useModuleHost(): ModuleHost {
   const host = useContext(ModuleHostContext)
+  // The same host from render to render, so an effect keyed on it does not start over.
+  const bound = useMemo(() => (host && !('runCommand' in host) ? moduleHost(host) : undefined), [host])
   if (!host) throw new Error('useModuleHost is only available inside a module page')
-  return 'runCommand' in host ? host : moduleHost(host)
+  return bound ?? (host as ModuleHost)
 }
 
 // The dashboard's own building blocks, so a module looks like the rest of the page.

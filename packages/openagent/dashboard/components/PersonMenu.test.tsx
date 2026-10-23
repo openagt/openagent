@@ -72,6 +72,26 @@ describe('PersonMenu', () => {
     expect(onSettings).toHaveBeenCalledWith('agent-accounts')
   })
 
+  test('the accounts, GitHub, Claude and Codex, are one group with one line under it; with none of them, no line of their own', async () => {
+    const shape = () =>
+      [...screen.getByRole('menu').querySelectorAll('[role=menuitem], [role=separator]')].map(e =>
+        e.getAttribute('role') === 'separator' ? '—' : ['GitHub', 'Claude', 'Codex', 'Theme', 'Notifications', 'Settings'].find(name => e.textContent!.startsWith(name)),
+      )
+    onPerson.mockResolvedValue({ name: 'Ada Lovelace', login: 'ada' })
+    logins.onAgentState.mockImplementation(async (driver: string) => ({ driver, ready: true }))
+    const none = render(<PersonMenu onSettings={() => {}} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ada Lovelace: settings' }))
+    expect(await screen.findByRole('menuitem', { name: 'Theme' })).toBeTruthy()
+    expect(shape()).toEqual(['—', 'Theme', 'Notifications', '—', 'Settings'])
+    none.unmount()
+    logins.onGitHosts.mockResolvedValue({ hosts: [GITHUB] })
+    accounts.onAgentAccounts.mockImplementation(async (agent: string) => ({ now: 0, accounts: [{ id: 'This computer', name: agent === 'codex' ? 'Ada L' : 'Ada', own: true, windows: [] }] }))
+    render(<PersonMenu onSettings={() => {}} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ada Lovelace: settings' }))
+    await screen.findByRole('menuitem', { name: /Codex/ })
+    expect(shape()).toEqual(['—', 'GitHub', 'Claude', 'Codex', '—', 'Theme', 'Notifications', '—', 'Settings'])
+  })
+
   test('a Codex row, the same as Claude\'s, by how full its month is; none while Codex is not on this computer and has no account added', async () => {
     onPerson.mockResolvedValue({ name: 'Ada Lovelace' })
     accounts.onAgentAccounts.mockImplementation(async (agent: string) => (agent === 'codex' ? { now: 0, accounts: [{ id: 'This computer', name: 'Ada L', own: true, windows: [{ label: 'month', percent: 7 }] }] } : { now: 0, accounts: [] }))
@@ -88,6 +108,16 @@ describe('PersonMenu', () => {
     await screen.findByRole('menuitem', { name: 'Settings' })
     await waitFor(() => expect(logins.onAgentState).toHaveBeenCalledWith('codex'))
     expect(screen.queryByRole('menuitem', { name: /Codex/ })).toBeNull()
+  })
+
+  test('drawn again, as a phone draws its sidebar at each opening, the row shows the person at once, while they are asked again', async () => {
+    onPerson.mockResolvedValue({ name: 'Ada Lovelace', login: 'ada' })
+    const first = render(<PersonMenu onSettings={() => {}} />)
+    await screen.findByRole('button', { name: 'Ada Lovelace: settings' })
+    first.unmount()
+    onPerson.mockImplementation(() => new Promise(() => {}))
+    render(<PersonMenu onSettings={() => {}} />)
+    expect(screen.getByRole('button', { name: 'Ada Lovelace: settings' })).toBeTruthy()
   })
 
   test('with no picture, or one that does not load, their initials', async () => {

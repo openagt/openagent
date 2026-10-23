@@ -140,7 +140,17 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
   const [devicesError, setDevicesError] = useState<Record<string, string | undefined>>({})
   const [, setDevicesTick] = useState(0)
   const asking = useRef<Record<string, Promise<void> | undefined>>({})
+  // Until a server answers, over SSH in seconds, the list as last told on this computer: read at once, once.
+  const keptAsked = useRef(new Set<string>())
   const askOne = (address: string): Promise<void> => {
+    if (!lastDevices.current[address] && !keptAsked.current.has(address)) {
+      keptAsked.current.add(address)
+      void loadDevices(host, address, true).then(kept => {
+        if (!kept.ok || lastDevices.current[address]) return
+        lastDevices.current = { ...lastDevices.current, [address]: kept.value }
+        setDevicesTick(tick => tick + 1)
+      })
+    }
     asking.current[address] ??= new Promise<Answer<DevicesRead>>(resolve => {
       const late = setTimeout(() => resolve({ ok: false, error: 'The server did not say in time which devices are in.' }), devicesAnswerMs)
       void loadDevices(host, address).then(answer => {

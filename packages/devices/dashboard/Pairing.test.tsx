@@ -97,4 +97,20 @@ describe('A computer wants to connect', () => {
       vi.useRealTimers()
     }
   })
+
+  test('a page out of sight asks nothing, and reads at once when it is back in sight', async () => {
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true)
+    try {
+      const h = host([ASK])
+      show(h.host)
+      await new Promise(resolve => setTimeout(resolve, 50))
+      expect(h.runComputerCommand).not.toHaveBeenCalled()
+      hidden.mockReturnValue(false)
+      document.dispatchEvent(new Event('visibilitychange'))
+      expect(await screen.findByText("Ada's MacBook")).toBeTruthy()
+      expect(h.runComputerCommand).toHaveBeenNthCalledWith(1, ['asks'])
+    } finally {
+      hidden.mockRestore()
+    }
+  })
 })

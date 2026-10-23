@@ -237,8 +237,8 @@ export interface Missing {
   fix: ReactNode
 }
 
-/** What is missing, in the order a person sets things up: the coding agent first, then the git hosts. Nothing while it is not read yet. */
-export function useMissing(): { missing: Missing[]; reload: () => Promise<void> } {
+/** What is missing, in the order a person sets things up: the coding agent first, then the git hosts. Nothing while it is not read yet. With it, the git hosts as read, for a place that shows them too. */
+export function useMissing(): { missing: Missing[]; reload: () => Promise<void>; hosts: GitHostsView | undefined } {
   const { state, reload: reloadAgent } = useAgentState()
   const { view, reload: reloadHosts } = useGitHosts()
   const reload = async () => {
@@ -266,5 +266,5 @@ export function useMissing(): { missing: Missing[]; reload: () => Promise<void> 
       fix: <HostFix row={row} onChanged={reloadHosts} />,
     })
   }
-  return { missing, reload }
+  return { missing, reload, hosts: view }
 }

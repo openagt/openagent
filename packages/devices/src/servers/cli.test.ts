@@ -173,10 +173,16 @@ test('devices asks the server\'s door who is in, and marks the line this compute
     const lines = [{ url: 'https://other.example.com', mode: 'full', id: OTHER.id }, { url: 'https://box.example.com', mode: 'full', id: LINE.id }]
     const door: CliIO['door'] = async args => (asked.push(args.join(' ')), { ok: true, out: JSON.stringify({ on: false, listening: false, devices: [], lines }) })
 
+    // Nothing listed here yet: no list to show at once.
+    assert.deepEqual((await run(home.env, ['devices', 'box.example.com', '--last'], { exec, door })).err, ['box.example.com was not listed here yet'])
     // The door is asked which line is this computer's, whatever this package's own file says of one: the door keeps the line.
     assert.deepEqual((await run(home.env, ['devices', 'BOX.example.com'], { exec, door })).out, { devices: [PHONE, { ...LINE, own: true }, OTHER], persons: [] })
     assert.deepEqual(asked, ['status'])
     assert.deepEqual(calls[0]!.args.slice(-5, -1), ['-l', 'root', '--', 'box.example.com'])
+    // What was told is kept: --last says it at once, asking neither the server nor the door.
+    assert.deepEqual((await run(home.env, ['devices', 'box.example.com', '--last'], { exec, door })).out, { devices: [PHONE, { ...LINE, own: true }, OTHER], persons: [] })
+    assert.equal(calls.length, 1)
+    assert.deepEqual(asked, ['status'])
     // A device that says it keeps no line is not this computer's line, whatever id it has.
     listed = [PHONE, { ...LINE, line: undefined }, OTHER]
     assert.deepEqual((await run(home.env, ['devices', 'box.example.com'], { exec, door })).out, { devices: [PHONE, { id: LINE.id, name: LINE.name, added: LINE.added }, OTHER], persons: [] })
@@ -215,6 +221,8 @@ test('devices asks the server\'s door who is in, and marks the line this compute
     assert.deepEqual((await run(home.env, ['devices', 'box.example.com'], { exec, door: refusedDoor })).out, { devices: [PHONE, { ...LINE, own: true }, OTHER], persons: [], lineRefused: true })
 
     assert.deepEqual((await run(home.env, ['remove-device', 'box.example.com', PHONE.id], { exec, door })).out, { devices: [{ ...LINE, own: true }, OTHER], persons: [] })
+    // The list a removal tells is the one kept.
+    assert.deepEqual((await run(home.env, ['devices', 'box.example.com', '--last'], { exec, door })).out, { devices: [{ ...LINE, own: true }, OTHER], persons: [] })
     assert.match(calls.at(-1)!.script, /devices remove "\$ID"\n/)
 
     const refused = await run(home.env, ['devices', 'box.example.com'], { exec: pretendServer(() => ({ code: 1, err: 'the door is not installed' })).exec, door })

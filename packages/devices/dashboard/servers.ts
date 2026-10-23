@@ -298,8 +298,8 @@ export const markAdded = (host: ModuleHost, address: string): Promise<Answer<Ser
 export const forget = (host: ModuleHost, address: string): Promise<Answer<ServerRow[]>> => run(host, ['forget', address], readServers)
 /** Keep a line open from this computer to the server, and say what the server may do through it. */
 export const reach = (host: ModuleHost, address: string, mode: Reach): Promise<Answer<ServerRow[]>> => run(host, ['reach', address, mode], readServers)
-/** The devices that are in on the server, asked of its door over SSH. */
-export const loadDevices = (host: ModuleHost, address: string): Promise<Answer<DevicesRead>> => run(host, ['devices', address], readDevices)
+/** The devices that are in on the server, asked of its door over SSH; with `last`, as last told on this computer, at once. */
+export const loadDevices = (host: ModuleHost, address: string, last = false): Promise<Answer<DevicesRead>> => run(host, ['devices', address, ...(last ? ['--last'] : [])], readDevices)
 /** Take one device out on the server, a computer with all it holds there; answers the ones still in. */
 export const removeDevice = (host: ModuleHost, address: string, id: string): Promise<Answer<DevicesRead>> => run(host, ['remove-device', address, id], readDevices)
 

@@ -67,8 +67,31 @@ async function askProvider(host: string, root: string, command: ProvidedCommand)
   return result.ok ? readProvider(result.output) : undefined
 }
 
-/** The hosts the projects' remotes are on, in the projects' order, each with its package's answer. A project with no remote is on none. */
+/**
+ * The hosts as last read, and the read under way: a git host's tool asks its host who is logged
+ * in (GitHub's takes most of a second), so a page is answered at once with the last answer while
+ * the hosts are read again behind it, and sees that one at its next ask.
+ */
+let lastHosts: { projects: string; view: GitHostsView } | undefined
+let readingHosts: Promise<GitHostsView> | undefined
+
+/**
+ * The hosts the projects' remotes are on, in the projects' order, each with its package's answer:
+ * the last answer when there is one for the same projects, the hosts being read again behind it.
+ */
 export async function onGitHosts(): Promise<GitHostsView> {
+  const projects = (await contextProjects().list()).map(project => project.path).join('\n')
+  const reading = (readingHosts ??= readGitHosts()
+    .then(view => ((lastHosts = { projects, view }), view))
+    .finally(() => (readingHosts = undefined)))
+  if (lastHosts?.projects !== projects) return reading
+  // Its answer is for the next ask; a read that failed leaves the last answer standing.
+  reading.catch(() => undefined)
+  return lastHosts.view
+}
+
+/** The hosts the projects' remotes are on, in the projects' order, each with its package's answer. A project with no remote is on none. */
+async function readGitHosts(): Promise<GitHostsView> {
   const projects = await contextProjects().list()
   const byHost = new Map<string, { roots: string[]; names: string[] }>()
   for (const project of projects) {
@@ -99,14 +122,17 @@ export async function onGitHosts(): Promise<GitHostsView> {
 
 /** The package of `host`, as last found, else found now. */
 async function providerOf(host: string): Promise<{ root: string; command: ProvidedCommand } | undefined> {
-  if (!found.has(host)) await onGitHosts()
+  if (!found.has(host)) await readGitHosts()
   return found.get(host)
 }
 
 async function act(host: string, args: string[]): Promise<{ ok: true; output: unknown } | { ok: false; error: string }> {
   const at = await providerOf(host)
   if (!at) return { ok: false, error: `No package answers for ${host}.` }
-  return loginsWiring.run(at.root, at.command, args)
+  const done = await loginsWiring.run(at.root, at.command, args)
+  // A press changed what the host's card says: the page reads it again, and waits for the change.
+  lastHosts = undefined
+  return done
 }
 
 /** Runs use `login` at `host` from now on; the terminal's own account stays as it is. */
@@ -242,8 +268,8 @@ export async function onProjectAccounts(projectId: string): Promise<ProjectAccou
   const view: ProjectAccountsView = {}
   const remote = await loginsWiring.origin(root)
   const host = remote !== undefined ? remoteHost(remote) : undefined
-  const command = host !== undefined ? await loginsWiring.gitHost(root) : undefined
-  const provider = host !== undefined && command ? await askProvider(host, root, command) : undefined
+  // The host's accounts as the Git hosts answer has them: asking its tool again takes most of a second.
+  const provider = host !== undefined ? (await onGitHosts()).hosts.find(row => row.host === host)?.provider : undefined
   if (host !== undefined && provider && (provider.accounts.length >= 2 || own.gitHost !== undefined)) {
     const computer = provider.accounts.find(a => a.runs)?.login
     view.gitHost = { host, name: provider.name, requestWord: provider.requestWord, accounts: provider.accounts.map(a => a.login), ...(computer !== undefined ? { computer } : {}), ...(own.gitHost !== undefined ? { project: own.gitHost } : {}) }
