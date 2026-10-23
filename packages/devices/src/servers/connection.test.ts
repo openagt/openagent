@@ -79,7 +79,7 @@ test('the key is the first one ssh would offer that has its public half, else th
 test('the line is one sh line root runs: SSH on, the key on the user once, and sudo without a password; root gets no sudo rule', async () => {
   const line = fixLine(KEY, 'dani')
   assert.match(line, /^sudo sh -c '[^']*'$/)
-  assert.match(line, /apt-get install -y openssh-server/)
+  assert.match(line, /^sudo sh -c 'export DEBIAN_FRONTEND=noninteractive && apt-get update && apt-get install -y openssh-server && /)
   assert.match(line, /grep -qxF "\$k"/)
   assert.match(line, /echo "dani ALL=\(ALL\) NOPASSWD:ALL" > \/etc\/sudoers\.d\/openagent-dani/)
   assert.doesNotMatch(fixLine(KEY, 'root'), /sudoers/)

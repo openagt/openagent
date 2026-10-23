@@ -68,6 +68,10 @@ export async function ownKey(server: { address: string; user: string }, run: Exe
  */
 export function fixLine(key: string, user: string): string {
   const parts = [
+    // apt asks nothing: what it brings along (the time zone, on a bare system) would wait for an answer.
+    'export DEBIAN_FRONTEND=noninteractive',
+    // A computer's list of packages may be old, or not there at all.
+    'apt-get update',
     'apt-get install -y openssh-server',
     `h=$(getent passwd ${user} | cut -d: -f6)`,
     `install -d -m 700 -o ${user} -g $(id -gn ${user}) "$h/.ssh"`,
