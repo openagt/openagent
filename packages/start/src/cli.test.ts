@@ -171,6 +171,34 @@ test('a second run hands its repository to the dashboard on the port, prints the
   }
 })
 
+test('on a server, the folder its service starts in is never handed over as a project, even a repository', async () => {
+  const asked: string[] = []
+  const running = await holdPort((req, res) => {
+    let body = ''
+    req.on('data', chunk => (body += chunk))
+    req.on('end', () => {
+      asked.push(body)
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ ret: { version: openagentVersion() } }))
+    })
+  })
+  const before = process.env.OPENAGENT_SERVER
+  process.env.OPENAGENT_SERVER = '1'
+  try {
+    await withConfig(async () => {
+      const { io, out, err } = capture()
+      assert.equal(await runCli(['--port', String(running.port)], io), 0, err.join('\n'))
+      assert.deepEqual(out, [`◆ dashboard already running: http://127.0.0.1:${running.port}`])
+      // Run from inside this repository, and still no folder goes over.
+      assert.ok(asked.every(body => !body.includes('/')), asked.join('\n'))
+    })
+  } finally {
+    if (before === undefined) delete process.env.OPENAGENT_SERVER
+    else process.env.OPENAGENT_SERVER = before
+    await running.close()
+  }
+})
+
 test('a port another program holds is said to be taken, with what to do (#2141)', async () => {
   const other = await holdPort((_req, res) => res.writeHead(200, { 'content-type': 'text/html' }).end('<html>a dev server</html>'))
   try {

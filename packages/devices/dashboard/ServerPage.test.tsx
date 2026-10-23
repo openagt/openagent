@@ -586,9 +586,11 @@ describe('Settings › Devices: a server this computer installed', () => {
     const { host, runComputerCommand } = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false })] }), BOX_SAVED())
     let answer: (result: ModuleCommandResult) => void = () => {}
     const slow = new Promise<ModuleCommandResult>(resolve => (answer = resolve))
-    const asked = (): number => runComputerCommand.mock.calls.filter(([args]) => args[0] === 'devices').length
+    const asked = (): number => runComputerCommand.mock.calls.filter(([args]) => args[0] === 'devices' && !args.includes('--last')).length
     const usual = runComputerCommand.getMockImplementation()!
-    runComputerCommand.mockImplementation(async (args: string[]) => (args[0] === 'devices' && asked() === 1 ? slow : usual(args)))
+    runComputerCommand.mockImplementation(async (args: string[]) =>
+      args[0] === 'devices' && args.includes('--last') ? { ok: false, error: '203.0.113.5 was not listed here yet' } : args[0] === 'devices' && asked() === 1 ? slow : usual(args),
+    )
     show(host)
     await waitFor(() => expect(asked()).toBe(1))
     // Many looks later the server was still asked once: its answer has not come.
@@ -597,6 +599,22 @@ describe('Settings › Devices: a server this computer installed', () => {
     answer(ok({ devices: [{ id: 'a1b2c3d4e5f6', name: 'iPhone, Safari', added: new Date().toISOString() }] }))
     expect(await screen.findByText('iPhone, Safari')).toBeTruthy()
     await waitFor(() => expect(asked()).toBeGreaterThan(1))
+  })
+
+  test('while the server is slow to say who is in, the list as last told on this computer shows at once; the server\'s answer takes its place', async () => {
+    const { host, runComputerCommand } = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false })] }), BOX_SAVED())
+    let answer: (result: ModuleCommandResult) => void = () => {}
+    const slow = new Promise<ModuleCommandResult>(resolve => (answer = resolve))
+    const usual = runComputerCommand.getMockImplementation()!
+    const added = new Date().toISOString()
+    runComputerCommand.mockImplementation(async (args: string[]) =>
+      args[0] === 'devices' && args.includes('--last') ? ok({ devices: [{ id: 'a1b2c3d4e5f6', name: 'iPhone, Safari', added }] }) : args[0] === 'devices' ? slow : usual(args),
+    )
+    show(host)
+    expect(await screen.findByText('iPhone, Safari')).toBeTruthy()
+    answer(ok({ devices: [{ id: 'b1b2c3d4e5f6', name: 'Mac, Chrome', added }] }))
+    expect(await screen.findByText('Mac, Chrome')).toBeTruthy()
+    expect(screen.queryByText('iPhone, Safari')).toBeNull()
   })
 
   test('a device that was taken out stays off the page when the read made after it fails; a tab nobody looks at asks the server nothing', async () => {

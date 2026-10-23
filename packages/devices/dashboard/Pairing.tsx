@@ -150,10 +150,23 @@ export function Connecting({ d, computer, canBoth, onBack, onClose }: { d: Devic
 /** How long the popup rests after its read failed: a computer with no door package, or one that is down. */
 const RETRY_MS = 30_000
 
+/** Once the page is in sight: a read that waits holds one of the few connections a browser opens to the dashboard, which its tabs share, so a tab out of sight holds none. */
+function inSight(): Promise<void> {
+  return new Promise(resolve => {
+    if (!document.hidden) return resolve()
+    const seen = (): void => {
+      if (document.hidden) return
+      document.removeEventListener('visibilitychange', seen)
+      resolve()
+    }
+    document.addEventListener('visibilitychange', seen)
+  })
+}
+
 /**
  * Over every page: a computer on this Wi-Fi asks to connect. Shown with the number its screen
  * shows, until someone here allows it or denies it, it gives up, or its two minutes run out. Read
- * with one command at a time that waits for the asks to change. The door answers no asks to a
+ * with one command at a time that waits for the asks to change, while the page is in sight. The door answers no asks to a
  * device of a person the owner invited: their page shows none.
  */
 export function AskPopup() {
@@ -169,6 +182,12 @@ export function AskPopup() {
     void (async () => {
       let seen: string[] | undefined
       while (!stopped) {
+        // Back in sight, it reads at once: what changed out of sight is not waited for.
+        if (document.hidden) {
+          await inSight()
+          seen = undefined
+          if (stopped) return
+        }
         const read = await loadAsks(host, seen)
         if (stopped) return
         if (!read.ok) {

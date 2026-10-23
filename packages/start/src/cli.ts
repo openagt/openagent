@@ -110,7 +110,9 @@ async function runForegroundDaemonCmd(args: CliArgs, io: CliIO): Promise<number>
   try {
     // Set in this process's own environment, so everything the dashboard starts inherits it.
     await handDownSkills(process.env)
-    project = await repositoryOf(cwd)
+    // A server's service starts in its user's home, which is no project however it looks: a home
+    // made a repository would be added again at every start.
+    project = process.env.OPENAGENT_SERVER === '1' ? undefined : await repositoryOf(cwd)
     let url = ''
     await runDaemon(cwd, {
       port,

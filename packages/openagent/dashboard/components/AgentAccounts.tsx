@@ -5,6 +5,7 @@ import type { DriverName } from '../../src/client.js'
 import { usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { ClaudeLogo, CodexLogo } from './driver-logos.js'
+import type { AgentState } from '../rpc/logins.js'
 import { AgentFix, StatePill, agentLoginState, agentWords, useAgentState } from './Logins.js'
 import { Button } from './ui/button.js'
 import { Input } from './ui/input.js'
@@ -48,7 +49,7 @@ const AGENTS: Record<AccountsAgent, { title: string; short: string; driver: Driv
   },
 }
 
-/** An agent's accounts as the daemon has them, asked often while `often`. */
+/** An agent's accounts as the daemon has them, asked often while `often`, and kept for the page's life: a place that opens later (the person's menu) shows them from its first frame. */
 export function useAgentAccounts(
   agent: AccountsAgent,
   often = false,
@@ -56,7 +57,7 @@ export function useAgentAccounts(
   view: AccountsView | undefined
   reload: () => Promise<void>
 } {
-  const { value, reload } = usePolled<AccountsView | undefined>(() => onAgentAccounts(agent), undefined, often ? OFTEN_MS : SELDOM_MS, [agent, often])
+  const { value, reload } = usePolled<AccountsView | undefined>(() => onAgentAccounts(agent), undefined, often ? OFTEN_MS : SELDOM_MS, [agent, often], { remember: `agent-accounts:${agent}` })
   return { view: value, reload }
 }
 
@@ -256,46 +257,48 @@ export function AccountsCard({ agent }: { agent: AccountsAgent }) {
  * An agent's row of the person's menu: which account runs use first and how full it is; its submenu
  * picks another first. Codex's is there only when Codex is on this computer or has accounts added.
  */
+/** Whether the person's menu has a row for an agent's accounts: once one is read, and for an agent other than Claude Code, once it is installed or has accounts added. */
+export function accountsInMenu(agent: AccountsAgent, view: AccountsView | undefined, state: AgentState | undefined): boolean {
+  const accounts = view?.accounts ?? []
+  if (accounts.length === 0) return false
+  return agent === 'claude' || accounts.length >= 2 || (state !== undefined && agentLoginState(state) !== 'not-installed')
+}
+
 export function AgentAccountsSubmenu({ agent, onAdd }: { agent: AccountsAgent; onAdd: () => void }) {
   const words = AGENTS[agent]
   const { view, reload } = useAgentAccounts(agent)
   const { state } = useAgentState(words.driver, agent !== 'claude')
   const accounts = view?.accounts ?? []
   const first = accounts[0]
-  if (!first) return null
-  if (agent !== 'claude' && accounts.length < 2 && (state === undefined || agentLoginState(state) === 'not-installed')) return null
+  if (!first || !accountsInMenu(agent, view, state)) return null
   const window = longest(first)
   const percent = window !== undefined ? ` · ${Math.round(window.percent)}%` : ''
-  // Its own line under it: no account read yet, no row and no line.
   return (
-    <>
-      <DropdownMenuSub>
-        <DropdownMenuSubTrigger>
-          <words.Logo className="h-3.5 w-3.5 shrink-0" />
-          <span className="flex-1">{words.short}</span>
-          {/* A long name gives way, never how full the account is. */}
-          <span className="flex max-w-36 min-w-0 text-muted-foreground">
-            <span className="truncate">{first.name}</span>
-            <span className="shrink-0 whitespace-pre">{percent}</span>
-          </span>
-        </DropdownMenuSubTrigger>
-        <DropdownMenuSubContent className="min-w-[15rem]">
-          {accounts.map((account, i) => (
-            <DropdownMenuItem key={account.id} closeOnClick={false} onClick={() => void sendUseAgentAccountFirst(agent, account.id).then(reload)}>
-              <Check className={cn('h-3.5 w-3.5 shrink-0', i === 0 ? 'opacity-100' : 'opacity-0')} aria-hidden />
-              <span className="flex-1 truncate">{account.name}</span>
-              <span className="text-xs text-muted-foreground">{account.state === 'limited' ? 'limited' : longest(account) !== undefined ? `${Math.round(longest(account)!.percent)}%` : ''}</span>
-            </DropdownMenuItem>
-          ))}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={onAdd}>
-            <Plus className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
-            Add account…
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>
+        <words.Logo className="h-3.5 w-3.5 shrink-0" />
+        <span className="flex-1">{words.short}</span>
+        {/* A long name gives way, never how full the account is. */}
+        <span className="flex max-w-36 min-w-0 text-muted-foreground">
+          <span className="truncate">{first.name}</span>
+          <span className="shrink-0 whitespace-pre">{percent}</span>
+        </span>
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="min-w-[15rem]">
+        {accounts.map((account, i) => (
+          <DropdownMenuItem key={account.id} closeOnClick={false} onClick={() => void sendUseAgentAccountFirst(agent, account.id).then(reload)}>
+            <Check className={cn('h-3.5 w-3.5 shrink-0', i === 0 ? 'opacity-100' : 'opacity-0')} aria-hidden />
+            <span className="flex-1 truncate">{account.name}</span>
+            <span className="text-xs text-muted-foreground">{account.state === 'limited' ? 'limited' : longest(account) !== undefined ? `${Math.round(longest(account)!.percent)}%` : ''}</span>
           </DropdownMenuItem>
-        </DropdownMenuSubContent>
-      </DropdownMenuSub>
-      <DropdownMenuSeparator />
-    </>
+        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={onAdd}>
+          <Plus className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+          Add account…
+        </DropdownMenuItem>
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
   )
 }
 

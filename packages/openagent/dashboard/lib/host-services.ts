@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react'
+import { createContext, useContext, useMemo, useRef } from 'react'
 import type { ModuleHostBase } from '../module/index.js'
 
 // The dashboard's services for modules (#1774), as the shell provides them once: navigation, a
@@ -64,8 +64,25 @@ export const INERT_HOST_SERVICES: HostServices = {
 /** Set by the shell around the whole dashboard: the services every module's host is built from. */
 export const HostServicesContext = createContext<HostServices | null>(null)
 
-/** The shell's services bound to one module package: the base of that module's host. */
+/**
+ * The shell's services as one object for the page's life, each calling the latest one the shell
+ * gave: a module keys an effect on its host, and a host made anew at every render of the shell
+ * started that effect over each time, a read that waits included.
+ */
+export function useSteadyServices(services: HostServices): HostServices {
+  const latest = useRef(services)
+  latest.current = services
+  return useMemo(() => {
+    const steady: Record<string, unknown> = {}
+    for (const name of Object.keys(services)) steady[name] = (...args: unknown[]) => (latest.current as unknown as Record<string, (...args: unknown[]) => unknown>)[name]!(...args)
+    return steady as unknown as HostServices
+    // The names are the same at every render; what each one calls is read when it is called.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+}
+
+/** The shell's services bound to one module package: the base of that module's host, the same object while the package is. */
 export function useHostServices(pkg: string): ModuleHostBase {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
-  return { ...services, package: pkg }
+  return useMemo(() => ({ ...services, package: pkg }), [services, pkg])
 }

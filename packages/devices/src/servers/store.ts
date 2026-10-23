@@ -169,6 +169,45 @@ export function storePath(env: NodeJS.ProcessEnv): string {
   return join(env.HOME ?? '', '.' + FILE)
 }
 
+const DEVICES_FILE = 'openagent-servers-devices.json'
+
+/** Where who is in at each server is kept, as last listed: beside the servers' file, by the same rule. */
+export function keptDevicesPath(env: NodeJS.ProcessEnv): string {
+  if (env.XDG_CONFIG_HOME) return join(env.XDG_CONFIG_HOME, DEVICES_FILE)
+  return join(env.HOME ?? '', '.' + DEVICES_FILE)
+}
+
+async function readKeptDevices(env: NodeJS.ProcessEnv): Promise<Record<string, unknown>> {
+  try {
+    const said: unknown = JSON.parse(await readFile(keptDevicesPath(env), 'utf8'))
+    return said && typeof said === 'object' && !Array.isArray(said) ? (said as Record<string, unknown>) : {}
+  } catch {
+    return {}
+  }
+}
+
+/** Who is in at the server at `address`, as last listed here: none when it was never listed. */
+export async function keptDevices(env: NodeJS.ProcessEnv, address: string): Promise<unknown> {
+  return (await readKeptDevices(env))[address]
+}
+
+/**
+ * Keep who is in at the server at `address`, as just listed: the list comes over SSH, which takes
+ * seconds, so a page shows the kept one at once while it asks again. Not in the servers' file: a
+ * list read every few seconds is no change to a server. `said` undefined forgets it.
+ */
+export async function keepDevices(env: NodeJS.ProcessEnv, address: string, said: unknown): Promise<void> {
+  const path = keptDevicesPath(env)
+  await withLock(path, async () => {
+    const kept = await readKeptDevices(env)
+    delete kept[address]
+    if (said !== undefined) kept[address] = said
+    const tmp = `${path}.${process.pid}.tmp`
+    await writeFile(tmp, JSON.stringify(Object.fromEntries(Object.entries(kept).slice(-MAX_SERVERS))) + '\n', { mode: 0o600 })
+    await rename(tmp, path)
+  })
+}
+
 /**
  * `said` as a server's address is kept, or `undefined` for what is none: a number, or a name, in
  * the one form the server's door keeps it in too, so the two always read the same. Nothing that

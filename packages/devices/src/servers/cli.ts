@@ -9,7 +9,7 @@ import { OwnAtWork, askOwnGithub, giveOwnClaude, giveOwnGithub, personHere, remo
 import { askOpenAgent, copyGithub, copyGithubToOther, forgetShared, isOtherUrl, isSharedUrl, lineTo, mintFor, otherLogins, setSharedReach, startMint } from './shared.js'
 import { lastLines, openSession, withAdvice, type Exec } from './ssh.js'
 import { PERSON_TIMEOUT_MS, SERVER_MARK, SERVER_USER, STEPS, devicesScript, stepLabel, stepsFor, whoScript, type Who } from './steps.js'
-import { LOGIN_KINDS, Unreadable, addressOf, isAccountName, isServerName, atWork, doorUrl, freshSteps, isMachineUrl, isUser, isVersion, readStore, throughUrl, update, working, type ClaudeAccountKept, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
+import { LOGIN_KINDS, Unreadable, addressOf, isAccountName, isServerName, atWork, doorUrl, freshSteps, isMachineUrl, isUser, isVersion, keepDevices, keptDevices, readStore, throughUrl, update, working, type ClaudeAccountKept, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
 import { nameOf } from '../door/store.js'
 
 /**
@@ -44,8 +44,9 @@ export const USAGE = `usage: devices server <command>
                                        link; with --for, for a person's device, by their name (the owner is named first)
   owner <address> <name>               name the server's owner at its door, once
   added <address>                      the server is among OpenAgent's machines: nothing is left to add
-  devices <address>                    the devices that are in on the server, as its door lists them, asked over SSH; the
-                                       line this computer keeps open to the server is marked as its own
+  devices <address> [--last]           the devices that are in on the server, as its door lists them, asked over SSH; the
+                                       line this computer keeps open to the server is marked as its own; with --last, the
+                                       list as last told here, at once, without asking the server
   remove-device <address> <id>         take one device out on the server, by its id as devices names it: it is out at once
   remove-person <address> <name>       take a person out on the server, with every device of theirs; the owner stays
   github                               the GitHub account gh is logged in to on this computer: whose login a copy would be,
@@ -424,6 +425,12 @@ export interface DevicesStatus {
 }
 
 /** The devices a server's door listed, with this computer's own line among them marked; a refusal for a server that did not say. */
+/** Who is in at a server, as just listed, kept for the next `devices <address> --last`. */
+async function kept(io: CliIO, address: string, status: DevicesStatus): Promise<DevicesStatus> {
+  await keepDevices(io.env, address, status)
+  return status
+}
+
 function devicesOf(answer: Devices, line: { id?: string; refused: boolean } | undefined): DevicesStatus {
   if (!answer.ok) throw new Refused(answer.error)
   const own = line?.id
@@ -663,13 +670,18 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         if (rest.length !== 2 || !address || !name) break
         const server = await still(io, address)
         const over = io.exec ? { exec: io.exec } : {}
-        return print(devicesOf(await (command === 'owner' ? nameOwner : removePerson)(server, name, over), await ownLine(io, server)))
+        return print(await kept(io, server.address, devicesOf(await (command === 'owner' ? nameOwner : removePerson)(server, name, over), await ownLine(io, server))))
       }
       case 'devices': {
-        const [address] = rest
-        if (rest.length !== 1 || !address) break
+        const [address, last] = rest
+        if (!address || rest.length > 2 || (last !== undefined && last !== '--last')) break
         const server = await still(io, address)
-        return print(devicesOf(await readDevices(server, io.exec ? { exec: io.exec } : {}), await ownLine(io, server)))
+        if (last !== undefined) {
+          const said = await keptDevices(io.env, server.address)
+          if (said === undefined) throw new Refused(`${server.address} was not listed here yet`)
+          return print(said)
+        }
+        return print(await kept(io, server.address, devicesOf(await readDevices(server, io.exec ? { exec: io.exec } : {}), await ownLine(io, server))))
       }
       case 'remove-device': {
         const [address, id] = rest
@@ -686,7 +698,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
           const row = listed.devices.find(device => idsOf(device).includes(id))
           if (id === line.id || (row !== undefined && idsOf(row).includes(line.id))) throw new Refused(`That device is the line this computer keeps open to ${server.address}. To take it out, remove the server here.`)
         }
-        return print(devicesOf(await removeDevice(server, id, over), line))
+        return print(await kept(io, server.address, devicesOf(await removeDevice(server, id, over), line)))
       }
       case 'added': {
         const [address] = rest
@@ -744,6 +756,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         })
         // A server this computer no longer lists is not left a way to it. One that cannot be told keeps a key that opens nothing here.
         if (reached) await (io.door ?? ownDoor)(['line', 'remove', at], io.env)
+        await keepDevices(io.env, at, undefined)
         return print(statusOf(await readStore(io.env), io.env))
       }
       case 'own': {

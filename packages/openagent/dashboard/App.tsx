@@ -22,7 +22,7 @@ import { useIsMobile } from './lib/use-mobile.js'
 import { NotFound } from './components/NotFound.js'
 import { ModulePageView, ModuleSlot } from './components/ModulePageView.js'
 import { useModules, ModulesContext } from './lib/use-modules.js'
-import { HostServicesContext, type HostServices } from './lib/host-services.js'
+import { HostServicesContext, useSteadyServices } from './lib/host-services.js'
 import { sendToScreen, watchScreen } from './lib/screen.js'
 import { startPicks } from './lib/use-start-agent.js'
 import { stashPendingDraft } from './lib/draft-handoff.js'
@@ -319,7 +319,7 @@ export function App() {
 
   // The shell's services for modules (#1774): what a module page or a link action may ask of the
   // dashboard, none of it naming a skill. Bound to each module's package where its host is built.
-  const hostServices: HostServices = {
+  const hostServices = useSteadyServices({
       openAgent: selectAgentInProject,
       openPage: (segment, path, inProject) => go({ projectId: null, agentId: null, page: segment, ...(path && path.length ? { pagePath: path } : {}), ...(inProject ? { scope: inProject } : {}) }),
       pageHref: segment => formatRoute({ projectId: null, agentId: null, page: segment, ...(scope ? { scope } : {}) }, addresses),
@@ -361,7 +361,7 @@ export function App() {
       },
       watchScreen,
       sendToScreen,
-  }
+  })
 
   // The live agent feed is owned here: the main view and the panes' count of its events read one
   // shared event stream.
