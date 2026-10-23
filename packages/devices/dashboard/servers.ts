@@ -246,6 +246,23 @@ export const loadServers = (host: ModuleHost): Promise<Answer<ServersRead>> => r
  */
 export const connect = (host: ModuleHost, address: string, user: string, version: string, github = false, through?: string): Promise<Answer<ServerRow[]>> =>
   run(host, ['connect', address, user, version, ...(github ? ['github'] : []), ...(through !== undefined ? ['--through', through] : [])], readServers)
+/** What failed at a "Test connection", by what a person does about it. */
+export type Trouble = 'unreachable' | 'no-ssh' | 'key' | 'no-key' | 'sudo' | 'host-key' | 'system'
+const TROUBLES: readonly string[] = ['unreachable', 'no-ssh', 'key', 'no-key', 'sudo', 'host-key', 'system']
+
+/** One try at logging in to a server over SSH, with nothing changed there: what it runs, or what failed, with the line to paste there for what is fixed there. */
+export type Tested = { ok: true; system: string } | { ok: false; trouble: Trouble; reached: boolean; said: string; key?: string; fix?: string }
+
+function readTested(output: unknown): Tested | undefined {
+  if (!output || typeof output !== 'object') return undefined
+  const { ok, system, trouble, reached, said, key, fix } = output as Record<string, unknown>
+  if (ok === true) return { ok: true, system: text(system) ?? '' }
+  if (ok !== false || !TROUBLES.includes(trouble as string)) return undefined
+  const [publicKey, line] = [text(key), text(fix)]
+  return { ok: false, trouble: trouble as Trouble, reached: reached === true, said: text(said) ?? '', ...(publicKey ? { key: publicKey } : {}), ...(line ? { fix: line } : {}) }
+}
+
+export const testConnection = (host: ModuleHost, address: string, user: string): Promise<Answer<Tested>> => run(host, ['test', address, user], readTested)
 /** Save a computer reached through a server among the machines, through that server, once its install is done. */
 export const addThrough = (host: ModuleHost, address: string): Promise<Answer<ServerRow[]>> => run(host, ['add-through', address], readServers)
 /** Say who on its server may start runs on a computer reached through it; with `remove`, the users of the others there go. */

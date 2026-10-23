@@ -50,12 +50,12 @@ function useJoined(d: Devices, waiting: boolean): string | undefined {
   return joined
 }
 
-export function AddDevice({ d, start, isServer, onClose }: { d: Devices; start: Adding; /** This computer is a server: it sets up no server. */ isServer: boolean; onClose: () => void }) {
+export function AddDevice({ d, start, isServer, onClose, onInvite }: { d: Devices; start: Adding; /** This computer is a server: it sets up no server. */ isServer: boolean; onClose: () => void; /** Invite people to a server just set up. */ onInvite: (address: string) => void }) {
   const [adding, setAdding] = useState<Adding>(start)
   if (adding === 'choose') return <Choose kinds={isServer ? KINDS.filter(kind => kind.id !== 'server') : KINDS} onPicked={setAdding} onClose={onClose} />
   if (adding === 'phone') return <AddPhone d={d} onClose={onClose} />
   if (adding === 'computer') return <AddComputer d={d} onClose={onClose} />
-  if (adding === 'server') return <ConnectServer d={d} onClose={onClose} onStarted={onClose} />
+  if (adding === 'server') return <ConnectServer d={d} onClose={onClose} onInvite={onInvite} />
   return <JoinDialog d={d} onClose={onClose} />
 }
 

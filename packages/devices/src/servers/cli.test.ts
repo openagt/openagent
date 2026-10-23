@@ -104,7 +104,7 @@ test('an install whose process is gone reads as failed at the step it was at, an
     assert.equal(died!.working, false)
     assert.deepEqual(died!.steps.slice(0, 3), [
       { id: 'login', label: 'Log in', state: 'done' },
-      { id: 'user', label: 'The user openagent', state: 'failed', said: 'The install stopped before this step ended.' },
+      { id: 'user', label: 'A user of its own, openagent', state: 'failed', said: 'The install stopped before this step ended.' },
       { id: 'tools', label: 'git, gh, Node and Chrome', state: 'waiting' },
     ])
 

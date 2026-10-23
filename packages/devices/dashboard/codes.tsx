@@ -77,7 +77,7 @@ export function useCode(ask: (person?: string) => Promise<GivenAnswer>, atOnce: 
 }
 
 /** Copy `text`, and say so on the button for a moment. */
-function CopyButton({ text, label, children }: { text: string; label: string; children: ReactNode }) {
+export function CopyButton({ text, label, children }: { text: string; label: string; children: ReactNode }) {
   const [copied, setCopied] = useState(false)
   useEffect(() => {
     if (!copied) return
@@ -85,7 +85,7 @@ function CopyButton({ text, label, children }: { text: string; label: string; ch
     return () => clearTimeout(timer)
   }, [copied])
   return (
-    <Button size="sm" variant="outline" aria-label={label} className="shrink-0" onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true))}>
+    <Button size="sm" type="button" variant="outline" aria-label={label} className="shrink-0" onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true))}>
       {copied ? <Check className="h-3.5 w-3.5 text-success" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
       {copied ? 'Copied' : children}
     </Button>
