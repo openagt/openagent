@@ -1,0 +1,8 @@
+{"kind":"start","prompt":"Say hello suleiman","at":"2026-10-23T17:23:29.293Z"}
+{"kind":"title","text":"Greeting Suleiman","at":"2026-10-23T17:23:35.970Z"}
+{"kind":"session","sessionId":"055c9ff6-65ad-4bf9-852e-72aa34e1cb9d","at":"2026-10-23T17:23:36.882Z"}
+{"kind":"said","text":"Hello Suleiman! 👋 How can I help you today?","at":"2026-10-23T17:23:38.686Z"}
+{"kind":"rate-limit","limit":{"status":"allowed","window":"five_hour","resetsAt":1792780800000,"windows":[{"window":"five_hour","percentUsed":5,"resetsAt":1792780800000},{"window":"seven_day","percentUsed":27,"resetsAt":1792814400000}]},"at":"2026-10-23T17:23:38.790Z"}
+{"kind":"result","text":"Hello Suleiman! 👋 How can I help you today?","sessionId":"055c9ff6-65ad-4bf9-852e-72aa34e1cb9d","at":"2026-10-23T17:23:39.996Z"}
+{"kind":"cost","usd":0.0219925,"at":"2026-10-23T17:23:39.996Z"}
+{"kind":"ended","status":"done","at":"2026-10-23T17:23:41.400Z"}

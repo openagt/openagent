@@ -1,15 +1,26 @@
 {
   "id": "2026-10-23T17-23-21-295Z",
   "startedAt": "2026-10-23T17:23:25.298Z",
-  "status": "running",
+  "endedAt": "2026-10-23T17:23:41.400Z",
+  "status": "done",
   "intent": "Say hello suleiman",
+  "title": "Greeting Suleiman",
   "driver": "claude-code",
-  "model": "sonnet",
+  "model": "claude-sonnet-5-5",
+  "branch": "agent-2026-10-23T17-23-21-295Z",
+  "cost": 0.0219925,
+  "contextTokens": 17816,
   "caller": {
     "runner": {
       "host": "ubuntu-s-1vcpu-2gb-fra1",
-      "pid": 2587676
+      "pid": 2587676,
+      "baseCommit": "f3638e5be9255ae555137e85de7ce2b4a81cd877"
     },
-    "host": "ubuntu-s-1vcpu-2gb-fra1"
+    "pid": 2587676,
+    "host": "ubuntu-s-1vcpu-2gb-fra1",
+    "baseCommit": "f3638e5be9255ae555137e85de7ce2b4a81cd877",
+    "kind": "prompt",
+    "workspace": "/home/openagent/projects/openagent/.branches/agent-2026-10-23T17-23-21-295Z",
+    "sessionId": "055c9ff6-65ad-4bf9-852e-72aa34e1cb9d"
   }
 }
