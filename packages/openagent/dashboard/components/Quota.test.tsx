@@ -17,7 +17,7 @@ const sendSpendOffset = vi.fn(async (_points: number): Promise<{ ok: true } | { 
 let savedOffset = 0
 const readOffset = vi.fn(async (_host: ModuleHost, _projects: ModuleProject[]): Promise<number | undefined> => savedOffset)
 const usageLimit: MountedUsageLimit = { package: '@openagt/skill-scheduler', projects: ['p1'], read: readOffset, save: (_host, _projects, points) => sendSpendOffset(points) }
-const NOTHING: MountedModules = { pages: [], cards: [], linkActions: [], panels: [], runSlots: [], settings: [], loaded: true }
+const NOTHING: MountedModules = { pages: [], cards: [], linkActions: [], panels: [], runSlots: [], settings: [], everyPage: [], loaded: true }
 const PROJECTS: ProjectSummary[] = [
   { id: 'p1', path: '/p1', name: 'gemstack', activated: true, gitHost: true },
   { id: 'p2', path: '/p2', name: 'other', activated: true, gitHost: false },

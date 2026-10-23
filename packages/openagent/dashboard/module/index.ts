@@ -289,6 +289,12 @@ export interface ModuleDefinition {
   run?: ModuleRunSlots
   /** The entries the module adds to Settings. */
   settings?: ModuleSettings[]
+  /**
+   * What the module draws over every page, for as long as the dashboard is open: nothing, until
+   * something it watches asks for the person, such as another computer asking to connect. Drawn
+   * once, with no project, and only for a module of this computer's.
+   */
+  everyPage?: ComponentType
   /** The stop line the module puts on the usage bar. */
   usageLimit?: ModuleUsageLimit
   /** The commands the module starts by itself, for the other pages to say. */
@@ -340,8 +346,10 @@ export interface ModuleHost {
    * Run one of the module package's own commands in no project, for a package that is this
    * computer's (the door to it, its servers): what such a package keeps is the computer's, so
    * its page reads and changes it with no project added. Refused for any other package.
+   * `input` is what the command reads on standard input: a secret, which no other program on
+   * this computer sees there, as it would among the arguments.
    */
-  runComputerCommand(args: string[], command?: string): Promise<ModuleCommandResult>
+  runComputerCommand(args: string[], command?: string, input?: string): Promise<ModuleCommandResult>
   /**
    * The same, on a saved machine whose package of the same name is that computer's: what the
    * package keeps over there, read and changed with this computer's key there, as that machine's
@@ -496,7 +504,7 @@ export function moduleHost(base: ModuleHostBase, opts: { acts?: boolean } = {}):
     ...base,
     runCommand: (projectId, args, command) => runModuleCommand(projectId, base.package, args, command, opts.acts ?? false),
     act: (projectId, args, command) => runModuleCommand(projectId, base.package, args, command, true),
-    runComputerCommand: (args, command) => runComputerCommand(base.package, args, command),
+    runComputerCommand: (args, command, input) => runComputerCommand(base.package, args, command, input),
     runComputerCommandOn: (machineId, args, command) => runComputerCommandOn(base.package, machineId, args, command),
     read: (projectId, name, input = {}) => readModule(projectId, base.package, name, input),
   }

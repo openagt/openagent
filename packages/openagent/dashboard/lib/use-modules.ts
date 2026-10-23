@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, type ComponentType } from 'react'
 import { onModules, type DashboardModule } from '../rpc/modules.js'
 import type { LinkAction, ModuleCard, ModuleDefinition, ModulePage, ModulePanel, ModuleRunSlots, ModuleSchedule, ModuleSettings, ModuleUsageLimit } from '../module/index.js'
 import { usePolled } from './use-async.js'
@@ -47,6 +47,12 @@ export interface MountedUsageLimit extends ModuleUsageLimit {
   projects: string[]
 }
 
+/** What a module of this computer's draws over every page, as the shell mounts it: the part, and the package it came from. */
+export interface MountedEveryPage {
+  EveryPage: ComponentType
+  package: string
+}
+
 /** The commands a module starts by itself, as the shell mounts them: the read, plus the package it came from and the projects that have it. */
 export interface MountedSchedule extends ModuleSchedule {
   package: string
@@ -68,6 +74,8 @@ export interface MountedModules {
   runSlots: MountedRunSlots[]
   /** The Settings entries, in the order they are listed: by `order`, then by package name. */
   settings: MountedSettings[]
+  /** What the modules of this computer's draw over every page, in package order. */
+  everyPage: MountedEveryPage[]
   /** The usage bar's stop line: the first module's that declares one, in package order; absent when none does. */
   usageLimit?: MountedUsageLimit
   /** What starts by itself: the first module's that declares it, in package order; absent when none does. */
@@ -76,7 +84,7 @@ export interface MountedModules {
   loaded: boolean
 }
 
-const NOTHING_MOUNTED: MountedModules = { pages: [], cards: [], linkActions: [], panels: [], runSlots: [], settings: [], loaded: false }
+const NOTHING_MOUNTED: MountedModules = { pages: [], cards: [], linkActions: [], panels: [], runSlots: [], settings: [], everyPage: [], loaded: false }
 
 /** Each module's browser part, imported once per page load, by URL; a module that fails to load is skipped. */
 const imported = new Map<string, Promise<ModuleDefinition | undefined>>()
@@ -136,6 +144,7 @@ export function useModules(reloadKey = 0): MountedModules {
       const panels: MountedPanel[] = []
       const runSlots: MountedRunSlots[] = []
       const settings: MountedSettings[] = []
+      const everyPage: MountedEveryPage[] = []
       let usageLimit: MountedUsageLimit | undefined
       let schedule: MountedSchedule | undefined
       for (const { module, definition } of loadedModules) {
@@ -155,6 +164,8 @@ export function useModules(reloadKey = 0): MountedModules {
         for (const section of definition?.settings ?? []) {
           settings.push({ ...section, package: module.package, projects: module.projects, computer: module.computer === true })
         }
+        // Only a module of this computer's: a project's package does not put things on every page.
+        if (definition?.everyPage && module.computer === true) everyPage.push({ EveryPage: definition.everyPage, package: module.package })
         if (definition?.usageLimit) usageLimit ??= { ...definition.usageLimit, package: module.package, projects: module.projects }
         if (definition?.schedule) schedule ??= { ...definition.schedule, package: module.package, projects: module.projects }
         const run = definition?.run
@@ -163,7 +174,7 @@ export function useModules(reloadKey = 0): MountedModules {
       // Numbers, not a list the shell keeps: a third package sits between two others without the shell knowing it exists.
       cards.sort(byMountOrder)
       settings.sort(byMountOrder)
-      setState({ pages, cards, linkActions, panels, runSlots, settings, ...(usageLimit ? { usageLimit } : {}), ...(schedule ? { schedule } : {}), loaded: true })
+      setState({ pages, cards, linkActions, panels, runSlots, settings, everyPage, ...(usageLimit ? { usageLimit } : {}), ...(schedule ? { schedule } : {}), loaded: true })
     })
     return () => {
       live = false

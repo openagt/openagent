@@ -7,3 +7,6 @@ export async function testHome(): Promise<{ env: NodeJS.ProcessEnv; remove: () =
   const dir = await mkdtemp(join(tmpdir(), 'devices-'))
   return { env: { XDG_CONFIG_HOME: dir }, remove: () => rm(dir, { recursive: true, force: true }) }
 }
+
+/** A door's process in a test says nothing on the network: what it would say is the Wi-Fi's own test's. */
+export const quietAnnounce = async (): Promise<{ stop: () => Promise<void> }> => ({ stop: async () => {} })

@@ -1,12 +1,14 @@
 import { stat } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
+import { hostname } from 'node:os'
 import { CHALLENGE_PREFIX, LETS_ENCRYPT } from './acme.js'
-import { onOwnNetwork, urlHost, type AddressDeps } from './address.js'
+import { numberAddress, onOwnNetwork, urlHost, type AddressDeps } from './address.js'
 import { keepCertificate, type KeepOptions, type Keeper, type Secured } from './certificate.js'
 import { openDoor, type Door } from './door.js'
 import { linePorts, openLines, tellOpenAgent, whomToTell } from './line-in.js'
 import { askMe, keepLine, type MeThere, type Route } from './line-out.js'
 import { startPersonWork } from './persons.js'
+import { announce, type Announcing } from './wifi.js'
 import { addPerson, computerWordFor, isComputerId, pidAlive, readStore, readStoreStrict, shareLine, storePath, update, type Line, type Store } from './store.js'
 
 /**
@@ -18,6 +20,9 @@ import { addPerson, computerWordFor, isComputerId, pidAlive, readStore, readStor
  * door is open to every network, over HTTPS, once it has a certificate for that address. The
  * certificate is asked for here and renewed here, and the proof its office reads is shown on
  * port 80, which otherwise only sends a browser on to the door.
+ *
+ * While the door is open on the Wi-Fi, it is announced there, so another computer's OpenAgent
+ * finds it (wifi.ts); a server's door is not.
  *
  * The lines are kept here too. To each server the file names, this computer keeps a line open,
  * whatever its own door does. And on a server, each computer that keeps a line here gets its
@@ -99,6 +104,19 @@ export interface ServeOptions {
   askMe?: typeof askMe
   /** How the making of a person's user is started on its own; this package's own command, detached, when unsaid. */
   startWork?: (env: NodeJS.ProcessEnv, person: string) => number | undefined
+  /** How the door is announced on the Wi-Fi; on the network itself when unsaid. */
+  announce?: typeof announce
+}
+
+/** OpenAgent's version, as its own ping says it: what the Wi-Fi is told beside this computer's name. */
+async function versionAt(target: string): Promise<string | undefined> {
+  try {
+    const res = await fetch(`${target}/_relay/ping`, { signal: AbortSignal.timeout(5_000) })
+    const { version } = (await res.json()) as { version?: unknown }
+    return typeof version === 'string' && /^[\w.+-]{1,40}$/.test(version) ? version : undefined
+  } catch {
+    return undefined
+  }
 }
 
 /** The door's port for an OpenAgent at `target`. */
@@ -165,6 +183,25 @@ export async function serve(opts: ServeOptions): Promise<void> {
   /** Set when the certificate changed or could not be had: the next look is not skipped. */
   let turned = false
   const proofs = new Map<string, string>()
+
+  // Said on the Wi-Fi while the door is open there.
+  let announcing: Promise<Announcing | undefined> | undefined
+  const startAnnouncing = (port: number): void => {
+    if (announcing) return
+    announcing = (async () => {
+      const address = numberAddress(opts.address)
+      if (!address) return undefined
+      return (opts.announce ?? announce)({ name: hostname().replace(/\.local$/i, '') || 'A computer', port, address, ...(await versionAt(opts.target).then(version => (version ? { version } : {}))) })
+    })().catch((err: unknown) => {
+      log(`devices: this computer could not be announced on the Wi-Fi, so other computers do not find it there: ${err instanceof Error ? err.message : String(err)}`)
+      return undefined
+    })
+  }
+  const stopAnnouncing = async (): Promise<void> => {
+    const was = announcing
+    announcing = undefined
+    await (await was)?.stop().catch(() => {})
+  }
 
   // The lines this computer keeps open, by what each is asked for with; what each server may do is read anew for every call.
   const kept = new Map<string, AbortController>()
@@ -339,6 +376,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
     let problem: string | undefined
     if (!served) {
       // A door opened for the Wi-Fi is not the server's.
+      await stopAnnouncing()
       await door?.close()
       door = undefined
       let proof: Server | undefined
@@ -438,7 +476,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
     if (store.on && !door) {
       try {
         const knocks = opts.address
-        door = await openDoor({ env, target: opts.target, port, ...(opts.host !== undefined ? { host: opts.host } : {}), ...(knocks ? { knocks: peer => onOwnNetwork(peer, knocks) } : {}) })
+        door = await openDoor({ env, target: opts.target, port, ...(opts.host !== undefined ? { host: opts.host } : {}), ...(knocks ? { knocks: peer => onOwnNetwork(peer, knocks), address: knocks } : {}) })
         failedAt = undefined
         log(`devices: the door is open on port ${door.port}`)
       } catch (err) {
@@ -456,6 +494,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
         }
       }
     } else if (!store.on && (door || store.listening || store.problem)) {
+      await stopAnnouncing()
       await door?.close()
       door = undefined
       failedAt = undefined
@@ -476,6 +515,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
         delete s.problem
       })
     }
+    startAnnouncing(door.port)
     door.dropRemoved(store)
   }
 
@@ -500,6 +540,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
   for (const controller of kept.values()) controller.abort()
   kept.clear()
   await closeServed()
+  await stopAnnouncing()
   if (door) {
     await door.close()
     await update(env, s => {

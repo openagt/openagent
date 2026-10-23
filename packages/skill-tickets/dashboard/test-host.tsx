@@ -57,7 +57,7 @@ export function fakeHost(answers: Answers = {}, agents: Record<string, ModuleAge
 }
 
 /** No module offers anything on links: the default for pages whose tests are not about the slot. */
-export const NO_MODULES: MountedModules = { pages: [], cards: [], linkActions: [], panels: [], runSlots: [], settings: [], loaded: true }
+export const NO_MODULES: MountedModules = { pages: [], cards: [], linkActions: [], panels: [], runSlots: [], settings: [], everyPage: [], loaded: true }
 
 /** Render a page inside the fake host, and inside whatever link actions installed modules offer. */
 export function renderWithHost(ui: ReactElement, host: ModuleHost, modules: MountedModules = NO_MODULES): RenderResult {

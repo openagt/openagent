@@ -7,7 +7,7 @@ import type { AddressInfo } from 'node:net'
 import type { TLSSocket } from 'node:tls'
 import { doorFingerprint } from './certificate.js'
 import { keyFingerprint } from './der.js'
-import { DEVICE_COOKIE, ENTER_PATH } from './door.js'
+import { ASK_PATH, DEVICE_COOKIE, ENTER_PATH } from './door.js'
 import { serve } from './serve.js'
 import { keysDir } from './certificate.js'
 import { addCode, readStore, update, type Store } from './store.js'
@@ -67,6 +67,8 @@ interface Rig {
   /** How far ahead of the real time the keeper of the certificate believes it is. */
   ahead: { ms: number }
   asked: string[]
+  /** What the door's process said on the Wi-Fi. */
+  announced: number[]
   stop: () => Promise<void>
 }
 
@@ -84,7 +86,12 @@ async function rig(): Promise<Rig> {
   await new Promise<void>(resolve => upstream.listen(0, '127.0.0.1', resolve))
   const ahead = { ms: 0 }
   const abort = new AbortController()
+  const announced: number[] = []
   const running = serve({
+    announce: async said => {
+      announced.push(said.port)
+      return { stop: async () => {} }
+    },
     env: home.env,
     target: `http://127.0.0.1:${(upstream.address() as AddressInfo).port}`,
     port: 0,
@@ -102,6 +109,7 @@ async function rig(): Promise<Rig> {
     proofPort,
     ahead,
     asked,
+    announced,
     async stop() {
       abort.abort()
       await running
@@ -142,6 +150,11 @@ test('on a server the door gets a certificate for its address and opens over HTT
     const entering = await ask(`${at}/_devices/enter`, r.office.authority, { headers: { accept: 'text/html' } })
     assert.match(entering.body, /on the internet/)
     assert.doesNotMatch(notIn.body + entering.body, /Wi-Fi/)
+    // A server's door is open to every network: no computer asks there to be let in, and it is not said on any Wi-Fi.
+    const asking = await ask(`${at}${ASK_PATH}`, r.office.authority, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ computer: 'a stranger' }) })
+    assert.equal(asking.status, 404)
+    assert.deepEqual((await readStore(r.env)).asks, [])
+    assert.deepEqual(r.announced, [])
 
     // A device gets in with a code; its cookie is one a browser never sends over plain HTTP.
     const { code } = await addCode(r.env)

@@ -504,7 +504,7 @@ describe('a changed file\'s row in the chat', () => {
     { kind: 'end', ok: true },
   ] as OpenAgentEvent[]
   const withPanels = (ui: ReactNode, panels: MountedModules['panels']) => {
-    const modules: MountedModules = { pages: [], cards: [], linkActions: [], panels, runSlots: [], settings: [], loaded: true }
+    const modules: MountedModules = { pages: [], cards: [], linkActions: [], panels, runSlots: [], settings: [], everyPage: [], loaded: true }
     return <ModulesContext.Provider value={modules}>{ui}</ModulesContext.Provider>
   }
   const panel = (over: object) => ({ id: 'changes', label: 'Changes', icon: () => null, Panel: () => null, package: '@openagt/changes', projects: ['p1'], ...over })
@@ -534,7 +534,7 @@ describe('a changed file\'s row in the chat', () => {
 describe('what the modules add to a run’s page (#817)', () => {
   const Summary = ({ agentId, working }: ModuleRunProps) => <span>summary {agentId} {String(working)}</span>
   const withSlots = (ui: ReactNode, projects = ['p1']) => {
-    const modules: MountedModules = { pages: [], cards: [], linkActions: [], panels: [], runSlots: [{ summary: Summary, package: '@openagt/changes', projects }], settings: [], loaded: true }
+    const modules: MountedModules = { pages: [], cards: [], linkActions: [], panels: [], runSlots: [{ summary: Summary, package: '@openagt/changes', projects }], settings: [], everyPage: [], loaded: true }
     return <ModulesContext.Provider value={modules}>{ui}</ModulesContext.Provider>
   }
 

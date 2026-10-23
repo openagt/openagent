@@ -62,6 +62,16 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The code holds the computer's name on the network when it has one, and its number
   otherwise, with a link under the code to use the number. Picked over the number alone,
   which the network changes, and then every device has to scan again.
+- Another computer on the same Wi-Fi is found there, and connected with one press and an
+  Allow on it, both screens showing the same number: a door is said on the Wi-Fi while its
+  switch is on, and takes asks from the Wi-Fi with no code. A code is typed only for a
+  computer somewhere else. Picked over a code typed at home too.
+- An ask waits two minutes for Allow or Deny, then both screens say so. Picked over one
+  minute, short for a computer in another room, and ten, a popup left long after it was
+  forgotten.
+- A computer that asks again takes the place of its own ask, and after Deny it waits a minute
+  to ask again; at most three asks wait at once. Picked over no limit, where anyone on the
+  Wi-Fi fills the screen with asks, and over a day's wait after Deny.
 
 ## On a server
 - On a server the door speaks HTTPS, with a certificate for the server's number that it

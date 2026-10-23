@@ -7,7 +7,7 @@ import { testHome } from './test-home.js'
 test('no file reads as a closed door with nobody in', async () => {
   const home = await testHome()
   try {
-    assert.deepEqual(await readStore(home.env), { on: false, persons: [], devices: [], codes: [], lines: [] })
+    assert.deepEqual(await readStore(home.env), { on: false, persons: [], devices: [], codes: [], asks: [], lines: [] })
   } finally {
     await home.remove()
   }
@@ -119,11 +119,13 @@ test('a file edited by hand is read forgivingly', async () => {
   const home = await testHome()
   try {
     const good = { id: 'abcdef123456', name: '  My phone  ', key: sha256('k'), added: '2026-01-01T00:00:00.000Z' }
+    const ask = { id: 'a1a1a1a1a1a1', secret: sha256('s'), name: 'Adas-MacBook', number: '482913', from: '192.168.1.5', expires: '2026-01-01T00:02:00.000Z', answer: 'denied' }
     await writeFile(
       storePath(home.env),
-      JSON.stringify({ on: 'yes', devices: [good, { ...good }, { id: 'x', key: 'short', added: 'never' }, null], codes: [{ code: 'nope', expires: 'never' }], listening: { pid: 'a' }, extra: 1 }),
+      JSON.stringify({ on: 'yes', devices: [good, { ...good }, { id: 'x', key: 'short', added: 'never' }, null], codes: [{ code: 'nope', expires: 'never' }], asks: [ask, { ...ask, id: 'b2b2b2b2b2b2' }, { ...ask, id: 'c3c3c3c3c3c3', from: '192.168.1.6', number: '12345' }, { ...ask, id: 'd4d4d4d4d4d4', from: 'somewhere', answer: 'maybe' }], listening: { pid: 'a' }, extra: 1 }),
     )
-    assert.deepEqual(await readStore(home.env), { on: false, persons: [], devices: [{ ...good, name: 'My phone' }], codes: [], lines: [] })
+    // One ask per address, with a number of six digits, from an address; an answer that is no answer is none.
+    assert.deepEqual(await readStore(home.env), { on: false, persons: [], devices: [{ ...good, name: 'My phone' }], codes: [], asks: [ask], lines: [] })
   } finally {
     await home.remove()
   }

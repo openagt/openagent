@@ -30,6 +30,11 @@ export function plainAddress(address: string): string {
   return mapped ? mapped[1]! : unzoned
 }
 
+/** Every number this computer is at, its own loopback too. */
+export function ownAddresses(deps: AddressDeps = {}): Set<string> {
+  return new Set(['127.0.0.1', '::1', ...ownInterfaces(deps).map(info => plainAddress(info.address))])
+}
+
 /** This computer's number on the network: its first IPv4 address that a network handed out. */
 export function numberAddress(deps: AddressDeps = {}): string | undefined {
   return ownInterfaces(deps).find(info => info.family === 'IPv4' && !info.address.startsWith('169.254.'))?.address

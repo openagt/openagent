@@ -45,6 +45,14 @@ export function asCaller<T>(header: string | string[] | undefined, call: () => P
   return name === undefined ? call() : caller.run(name, call)
 }
 
+/** The person whose device made this call, by their name: only a person the owner invited is said. */
+export function callerAtPage(): string | undefined {
+  return caller.getStore()
+}
+
+/** How a command of this computer's is told who asks, when a person the owner invited does: their name, `%`-encoded. */
+export const CALLER_ENV = 'OPENAGENT_CALLER'
+
 /** The person at the page: the one this computer knows, or, for a call another person's device made, that person by their name. */
 export function personAtPage(own: Person, name = caller.getStore()): Person {
   return name === undefined ? own : { name }

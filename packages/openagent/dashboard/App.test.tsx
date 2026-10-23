@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createElement } from 'react'
 import { phoneScreen } from './test-utils.js'
-import type { ModuleCardProps, ModuleDefinition, ModulePageProps } from './module/index.js'
+import { useModuleHost, type ModuleCardProps, type ModuleDefinition, type ModulePageProps } from './module/index.js'
 
 // The whole transport, stubbed at its one seam: every RPC stub is `rpc(name)`, so a map by name
 // answers every read the shell makes, and the live feed never emits.
@@ -71,6 +71,24 @@ describe('module pages in the shell (#1774)', () => {
     expect(row.getAttribute('aria-current')).toBe('page')
     // The page's segment names no project: nothing reads a project called "logs".
     expect(calls.filter(call => call.args[0] === 'logs' || call.args[0] === 'elsewhere').map(call => call.name)).toEqual([])
+  })
+
+  test('a module of this computer\'s draws over every page, with its host; a project\'s package draws nothing there', async () => {
+    function Popup() {
+      return createElement('p', null, `a popup of ${useModuleHost().package}`)
+    }
+    answerShell([
+      { package: '@acme/door', url: moduleModule('__doorPopup', { everyPage: Popup }), projects: [], computer: true },
+      { package: '@acme/logs', url: moduleModule('__logsPopup', { everyPage: Popup }), projects: [PROJECT.id] },
+    ])
+    render(<App />)
+    expect(await screen.findByText('a popup of @acme/door')).toBeTruthy()
+    expect(screen.queryByText('a popup of @acme/logs')).toBeNull()
+    cleanup()
+    window.history.replaceState(null, '', '/nothing')
+    render(<App />)
+    expect(await screen.findByText('No such page')).toBeTruthy()
+    expect(screen.getByText('a popup of @acme/door')).toBeTruthy()
   })
 
   test('a URL no installed module claims says so once the modules are loaded', async () => {

@@ -7,6 +7,7 @@ import { callModuleRead, serverHost, type ModuleReadResult } from '../dashboard/
 import { relayOr } from './relay-agent.js'
 import { COMPUTER_ENV, URL_ENV, ownUrlSaid } from '../package-services.js'
 import { computerSaid } from '../dashboard/machine-call.js'
+import { CALLER_ENV, callerAtPage } from '../dashboard/person.js'
 import { THROUGH_PATH, remoteComputerCommand } from '../dashboard/remote-run.js'
 import { listMachines } from '../registry.js'
 import { DATA_BRANCH, pullFileBranch } from '@openagt/agent-data'
@@ -94,7 +95,9 @@ export async function runComputerCommand(pkg: string, args: string[], command?: 
   // Told which computer this is, in the word OpenAgent's own calls are made from: what such a command sets up on another machine is listed there as this computer's.
   const computer = computerSaid()
   const url = ownUrlSaid()
-  const more = { ...(computer !== undefined ? { [COMPUTER_ENV]: computer } : {}), ...(url !== undefined ? { [URL_ENV]: url } : {}) }
+  // Told whose device asks, when it is a person's the owner invited: the package decides what such a person may see and do.
+  const caller = callerAtPage()
+  const more = { ...(computer !== undefined ? { [COMPUTER_ENV]: computer } : {}), ...(url !== undefined ? { [URL_ENV]: url } : {}), ...(caller !== undefined ? { [CALLER_ENV]: encodeURIComponent(caller) } : {}) }
   return runCommand(homedir(), module, args, typeof command === 'string' ? command : undefined, more, typeof input === 'string' ? input : undefined)
 }
 

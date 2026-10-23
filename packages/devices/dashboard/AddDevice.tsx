@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState, type ComponentType, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type ComponentType } from 'react'
 import { Globe, Loader2, Monitor, Server, Smartphone, Ticket, Wifi } from 'lucide-react'
-import { Button, Checkbox, Dialog, Input, cn, type ModuleMachine } from '@openagt/dashboard/module'
-import { addDevice, myName, nameOwner, setSwitch } from './devices.js'
+import { Button, Dialog, cn, type ModuleMachine } from '@openagt/dashboard/module'
+import { addDevice, findComputers, myName, nameOwner, setSwitch, type FoundComputer } from './devices.js'
 import { readPersonThere } from './servers.js'
 import { CodeCard, Joined, NoCodeYet, PhoneCode, RanOut, Waiting, clock, useCode, type Given, type GivenAnswer } from './codes.js'
 import { ConnectServer } from './ConnectServer.js'
 import { JoinDialog } from './Join.js'
+import { Connecting } from './Pairing.js'
 import { hasDoor, isComputer } from './model.js'
 import { Problem, hostOf } from './parts.js'
 import { WARNING } from './ThisComputer.js'
@@ -13,8 +14,8 @@ import type { Devices } from './use-devices.js'
 
 // Add device: what is being added, then that one's own way in, each on what OpenAgent does today.
 // A phone gets a code to scan: from this computer's door on the Wi-Fi, or from a server of this
-// person's, from anywhere. Another computer on the Wi-Fi is saved by the link it gives, and is let
-// in here in the same press; or it is given this computer's link. A computer somewhere else is
+// person's, from anywhere. Another computer on the Wi-Fi is found there, and connected once a
+// person there allows it; it can be let in here in the same go. A computer somewhere else is
 // given a code to type there, through a server. A server is set up over SSH. A code someone gave
 // is typed in.
 
@@ -229,110 +230,78 @@ function Choice({ on, icon: Icon, title, words, recommended = false, onPick }: {
   )
 }
 
-/** The origin of a pasted link: the address a machine is saved under. */
-const originOf = (link: string): string | undefined => {
-  try {
-    return new URL(link.trim()).origin
-  } catch {
-    return undefined
-  }
+/** How long the Wi-Fi rests between two looks, while the list is on the page: each look takes a few seconds itself. */
+const FIND_REST_MS = 3_000
+
+/** The computers on this Wi-Fi whose door is open there, looked for again and again while `looking`. */
+function useFound(d: Devices, looking: boolean): { found: FoundComputer[] | undefined; error: string | undefined } {
+  const [found, setFound] = useState<FoundComputer[] | undefined>()
+  const [error, setError] = useState<string | undefined>()
+  useEffect(() => {
+    if (!looking) return
+    let stopped = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const look = async (): Promise<void> => {
+      const answer = await findComputers(d.host)
+      if (stopped) return
+      if (answer.ok) setFound(answer.value)
+      setError(answer.ok ? undefined : answer.error)
+      timer = setTimeout(() => void look(), FIND_REST_MS)
+    }
+    void look()
+    return () => {
+      stopped = true
+      clearTimeout(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [looking])
+  return { found, error }
 }
 
 function AddComputer({ d, onClose }: { d: Devices; onClose: () => void }) {
-  const { host } = d
   const status = d.door?.ok ? d.door.value : undefined
-  const [link, setLink] = useState('')
-  // The other computer starts runs here too: on by default, when this computer's door can let it in.
-  const open = status?.listening === true
-  const [both, setBoth] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | undefined>()
-  const [giving, setGiving] = useState<'link' | 'code' | undefined>()
-  const [code, setCode] = useState<Given | undefined>()
-  const joined = useJoined(d, code !== undefined)
+  const [giving, setGiving] = useState(false)
+  const [connecting, setConnecting] = useState<FoundComputer | undefined>()
+  const { found, error } = useFound(d, !giving && connecting === undefined)
   const server = serversOf(d)[0]
 
-  const save = async (event: FormEvent): Promise<void> => {
-    event.preventDefault()
-    setSaving(true)
-    setError(undefined)
-    const added = await host.addMachine(link.trim())
-    if (!added.ok) {
-      setError(added.error)
-      setSaving(false)
-      return
-    }
-    const machine = originOf(link)
-    let failed = false
-    if (both && open && machine !== undefined) {
-      // This computer's own link, handed to the other one, which saves it: its runs can come here too.
-      const mine = await addDevice(host)
-      const letIn = mine.ok ? await host.letMachineIn(machine, mine.value.url) : mine
-      if (!letIn.ok) {
-        failed = true
-        setError(`Saved: your runs can go there. It could not be let in here: ${letIn.error}`)
-      }
-    }
-    await Promise.all([d.reloadMachines(), d.reloadDoor()]).catch(() => {})
-    setSaving(false)
-    if (!failed) onClose()
-  }
-
-  if (giving === 'code' && server) return <GiveCode d={d} server={server} onClose={onClose} />
-  if (giving === 'link')
-    return (
-      <PhoneCode
-        title="Give it this computer's link"
-        ask={() => addDevice(host)}
-        steps={['On the other computer, open Settings › Devices › Add device › I have a code.', 'Paste the link there, under Where.']}
-        camera={false}
-        joined={joined}
-        onCode={setCode}
-        onClose={onClose}
-      />
-    )
+  if (giving && server) return <GiveCode d={d} server={server} onClose={onClose} />
+  // The other computer starts runs here too, when this computer's door can let it in.
+  if (connecting) return <Connecting d={d} computer={connecting} canBoth={status?.listening === true} onBack={() => setConnecting(undefined)} onClose={onClose} />
 
   return (
     <Dialog open onOpenChange={next => !next && onClose()} title="Add computer">
-      <form className="space-y-4" onSubmit={event => void save(event)}>
-        <p className="text-sm font-medium">On this Wi-Fi</p>
-        <label className="block space-y-1 text-xs text-muted-foreground">
-          <span>On the other computer, open Settings › Devices › Add device › Computer › Give it this computer's link, and paste that link here:</span>
-          <Input autoFocus aria-label="The other computer's link" placeholder="http://studio.local:4201/…" value={link} onChange={event => setLink(event.target.value)} />
-        </label>
-        <label className="flex items-start gap-2 text-sm">
-          <Checkbox className="mt-0.5" checked={both && open} disabled={!open} onCheckedChange={checked => setBoth(checked === true)} aria-label="It can start runs on this computer too" />
-          <span>
-            It can start runs on this computer too
-            <span className="block text-xs text-muted-foreground">{open ? 'Then runs go both ways.' : 'Turn on "On this Wi-Fi" first: then runs can go both ways.'}</span>
-          </span>
-        </label>
+      <div className="space-y-3">
+        <Waiting>Looking on this Wi-Fi…</Waiting>
         {error !== undefined && <Problem>{error}</Problem>}
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <Button size="sm" type="button" variant="ghost" disabled={!open} title={open ? undefined : 'Turn on "On this Wi-Fi" first.'} onClick={() => setGiving('link')}>
-            Give it this computer's link instead
-          </Button>
-          <div className="flex gap-2">
-            <Button size="sm" type="button" variant="ghost" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button size="sm" type="submit" disabled={saving || originOf(link) === undefined}>
-              {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
-              Connect
-            </Button>
-          </div>
-        </div>
+        {found !== undefined && found.length > 0 && (
+          <ul aria-label="On this Wi-Fi" className="divide-y divide-border border-y border-border">
+            {found.map((computer, at) => (
+              <li key={computer.url} className="flex items-center gap-3 py-2.5">
+                <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm">{computer.name}</span>
+                  {computer.version !== undefined && <span className="block text-xs text-muted-foreground">{`OpenAgent ${computer.version}`}</span>}
+                </span>
+                <Button size="sm" variant={at === 0 ? 'default' : 'outline'} aria-label={`Connect ${computer.name}`} onClick={() => setConnecting(computer)}>
+                  Connect
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="text-xs text-muted-foreground">Not in the list? Open OpenAgent on it, on the same Wi-Fi, with "On this Wi-Fi" on there.</p>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
           <span className="text-sm">
             Somewhere else?
-            <span className="block text-xs text-muted-foreground">{server ? `At the office, at a friend's: it joins through ${server.label}.` : 'At the office, at a friend\'s: it joins through a server. Add a server first.'}</span>
+            <span className="block text-xs text-muted-foreground">{server ? `At the office, at a friend's: it joins through ${server.label}.` : "At the office, at a friend's: it joins through a server. Add a server first."}</span>
           </span>
-          <Button size="sm" type="button" variant="outline" disabled={!server} onClick={() => setGiving('code')}>
+          <Button size="sm" type="button" variant="outline" disabled={!server} onClick={() => setGiving(true)}>
             <Ticket className="h-3.5 w-3.5" aria-hidden />
             Give it a code
           </Button>
         </div>
-      </form>
+      </div>
     </Dialog>
   )
 }

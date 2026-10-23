@@ -295,7 +295,7 @@ describe('Settings › Appearance', () => {
 })
 
 describe('the Settings list', () => {
-  const mounted = (settings: MountedModules['settings']): MountedModules => ({ pages: [], cards: [], linkActions: [], panels: [], runSlots: [], settings, loaded: true })
+  const mounted = (settings: MountedModules['settings']): MountedModules => ({ pages: [], cards: [], linkActions: [], panels: [], runSlots: [], settings, everyPage: [], loaded: true })
   const PROJECTS = [
     { id: 'p1', name: 'gemstack', gitHost: true },
     { id: 'p2', name: 'other', gitHost: true },
