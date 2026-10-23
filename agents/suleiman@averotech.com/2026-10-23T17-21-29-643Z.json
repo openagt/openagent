@@ -1,0 +1,15 @@
+{
+  "id": "2026-10-23T17-21-29-643Z",
+  "startedAt": "2026-10-23T17:21:33.205Z",
+  "status": "running",
+  "intent": "Tell me hi, nothing else",
+  "driver": "claude-code",
+  "model": "sonnet",
+  "caller": {
+    "runner": {
+      "host": "ubuntu-s-1vcpu-2gb-fra1",
+      "pid": 2582625
+    },
+    "host": "ubuntu-s-1vcpu-2gb-fra1"
+  }
+}
