@@ -416,7 +416,7 @@ export const STEPS: readonly StepDef[] = [
   },
   {
     id: 'user',
-    label: `The user ${SERVER_USER}`,
+    label: `A user of its own, ${SERVER_USER}`,
     as: 'root',
     timeoutMs: 2 * MINUTE,
     script: () =>
@@ -610,7 +610,7 @@ export const STEPS: readonly StepDef[] = [
   },
   {
     id: 'service',
-    label: 'The service',
+    label: 'Starts by itself',
     as: 'root',
     timeoutMs: 3 * MINUTE,
     script: ({ through }) =>

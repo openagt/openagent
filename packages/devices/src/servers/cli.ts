@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { devicesIn, idsOf, isDeviceId, nameOwner, readDevices, removeDevice, removePerson, type Devices, type ServerDevice, type ServerPerson } from './devices.js'
 import { AlreadyWorking, askLink, install } from './install.js'
+import { testConnection } from './connection.js'
 import type { Mint } from '@openagt/agent-driver-claude'
 import { AlreadyAtWork, addClaudeAccount, changeLogin, ownGithubAccount, readClaudeAccounts, removeClaudeAccount } from './logins.js'
 import { ownDoor, type OwnDoor } from './own-door.js'
@@ -29,6 +30,10 @@ export const USAGE = `usage: devices server <command>
                                        copied to the server once it is installed; with --through, the computer has no door
                                        of its own on the internet (a computer at home): it keeps a line open to the server
                                        at that address among OpenAgent's machines instead, as this computer's person's
+  test <address> <user>                log in to the server once over SSH as this user, with this computer's own SSH keys,
+                                       as the install's first step does, and change nothing there: what it runs, or what
+                                       failed (unreachable, no-ssh, key, no-key, sudo, host-key, system) with what ssh said
+                                       and, for one fixed on the computer itself, a line to paste there once
   add-through <address>                save a computer reached through a server among OpenAgent's machines, through that
                                        server, once its install is done
   who <address> nobody|me|everyone [remove]
@@ -112,6 +117,8 @@ export interface CliIO {
   startOver?: () => void
   /** How this computer's OpenAgent is asked; at the address it told this command when unsaid. */
   ask?: (fn: string, args: unknown[]) => Promise<unknown>
+  /** This computer's public key that ssh offers a server; read off its key files and its SSH agent when unsaid. */
+  ownKey?: () => Promise<string | undefined>
 }
 
 /** All of the process's standard input, as text. */
@@ -622,6 +629,14 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         const [address, user, version, github] = words
         if (words.length < 3 || words.length > 4 || !address || !user || !version || (words.length === 4 && github !== 'github')) break
         return print(await connect(io, { address, user, version, github: github === 'github', ...(flagged ? { through: rest.at(-1)! } : {}) }))
+      }
+      case 'test': {
+        const [address, user] = rest
+        if (rest.length !== 2 || !address || !user) break
+        const at = addressOf(address)
+        if (at === undefined) throw new Refused(`${address} is not a server's number or name`)
+        if (!isUser(user)) throw new Refused(`${user} is not a user name`)
+        return print(await testConnection({ address: at, user }, { ...(io.exec ? { exec: io.exec } : {}), ...(io.ownKey ? { key: io.ownKey } : {}) }))
       }
       case 'add-through': {
         const [address] = rest

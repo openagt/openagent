@@ -19,12 +19,12 @@ export const REMOVE_PERSON = (name: string): string =>
 
 type Tab = 'overview' | 'people' | 'logins'
 
-export function ServerPage({ d, item, onBack }: { d: Devices; item: ServerItem; onBack: () => void }) {
+export function ServerPage({ d, item, onBack, invite = false }: { d: Devices; item: ServerItem; onBack: () => void; /** Opened to invite people: on its People, with Invite open. */ invite?: boolean }) {
   const { host, busy } = d
   const { server, machine } = item
   const home = server.through !== undefined
-  const [tab, setTab] = useState<Tab>('overview')
-  const [inviting, setInviting] = useState(false)
+  const [tab, setTab] = useState<Tab>(invite ? 'people' : 'overview')
+  const [inviting, setInviting] = useState(invite)
   const [joined, setJoined] = useState<string | undefined>()
   const [codeOn, setCodeOn] = useState(false)
   const read = d.devices[server.address]
@@ -247,7 +247,7 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
  * every person there. Going from everyone to fewer asks first what becomes of the users the others
  * have on the computer: they go with all of it, or stay, switched off.
  */
-function WhoCanStart({ host, server, busy, onChange }: { host: ModuleHost; server: ServerRow & { through: string }; busy: boolean; onChange: (change: () => Promise<Answer<unknown>>) => Promise<boolean> }) {
+export function WhoCanStart({ host, server, busy, onChange }: { host: ModuleHost; server: ServerRow & { through: string }; busy: boolean; onChange: (change: () => Promise<Answer<unknown>>) => Promise<boolean> }) {
   const at = hostOf(server.through)
   // How many people that server has, when its door says: a person's computer only hears of them through a line for everyone.
   const { value: people } = usePolled<number | undefined>(

@@ -72,6 +72,8 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A computer that asks again takes the place of its own ask, and after Deny it waits a minute
   to ask again; at most three asks wait at once. Picked over no limit, where anyone on the
   Wi-Fi fills the screen with asks, and over a day's wait after Deny.
+- An ask shows on the computer's own screen and on its owner's devices, never on an invited
+  person's. Picked over the computer's own screen alone, and over every device that is in.
 
 ## On a server
 - On a server the door speaks HTTPS, with a certificate for the server's number that it
@@ -138,7 +140,11 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A computer at home or in an office is shared by setting it up as a server, as one on the
   internet is: from a laptop over SSH; it then starts on its own, and Update keeps it current.
   It has no door of its own: it is reached through its line to a server. Picked over a command
-  pasted once on it, the system's password window, and sandboxes in place of users.
+  that installs OpenAgent pasted once on it, the system's password window, and sandboxes in
+  place of users.
+- A computer with no SSH yet gets one line to paste on it once, which turns SSH on, adds the
+  laptop's key and lets its user install without a password. Picked over the same three steps
+  told in words, and over a line that installs OpenAgent on the computer itself.
 - A computer is personal or a server: only a server offers "Everyone", and a personal computer
   keeps its one switch. Linux first; a Mac later. Picked over three choices on every computer,
   with "Everyone" greyed where it cannot work.

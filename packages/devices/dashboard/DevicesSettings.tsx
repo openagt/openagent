@@ -42,9 +42,14 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
   const d = useDevices({ everyMs, devicesEveryMs, ...(devicesAnswerMs !== undefined ? { devicesAnswerMs } : {}) })
   const [opened, setOpened] = useState<Opened | undefined>()
   const [adding, setAdding] = useState<Adding | undefined>()
+  // A server just set up opens on its page with Invite open.
+  const [inviting, setInviting] = useState(false)
   const status = d.door?.ok ? d.door.value : undefined
   const open = opened ? findOpened(d.items, opened) : undefined
-  const back = (): void => setOpened(undefined)
+  const back = (): void => {
+    setOpened(undefined)
+    setInviting(false)
+  }
   // A device's page is named in the Settings dialog's header, with its way back; outside it, the page has its own.
   const crumbShown = useSettingsCrumb(open ? { title: open.name, back } : undefined)
 
@@ -53,7 +58,19 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
   // Nothing shows until this computer said what it is: a server never offers a server to set up for a moment.
   if (d.door === undefined || (d.machines === undefined && d.door.ok)) return null
 
-  const dialogs = adding !== undefined && <AddDevice d={d} start={adding} isServer={d.isServer} onClose={() => setAdding(undefined)} />
+  const dialogs = adding !== undefined && (
+    <AddDevice
+      d={d}
+      start={adding}
+      isServer={d.isServer}
+      onClose={() => setAdding(undefined)}
+      onInvite={address => {
+        setAdding(undefined)
+        setInviting(true)
+        setOpened({ key: `server:${address}` })
+      }}
+    />
+  )
 
   if (open)
     return (
@@ -65,7 +82,7 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
           </button>
         )}
         {open.kind === 'computer' && <ComputerPage d={d} item={open} onBack={back} onSetUp={() => setAdding('server')} />}
-        {open.kind === 'server' && <ServerPage d={d} item={open} onBack={back} />}
+        {open.kind === 'server' && <ServerPage d={d} item={open} onBack={back} invite={inviting} />}
         {open.kind === 'joined' && <JoinedPage d={d} item={open} onBack={back} />}
         {open.kind === 'other' && <OtherPage d={d} item={open} onBack={back} />}
         {dialogs}

@@ -9,7 +9,7 @@ import type { AccountRow, DeviceRow, LoginRow, ServerRow, StepState } from './se
 // home set up as one, a server set up elsewhere or shared by someone, another person's computer.
 // Each is a row of the list, and a page of its own with its install, its people and its logins.
 
-const LABELS = { login: 'Log in', user: 'The user openagent', tools: 'git, gh, Node and Chrome', name: 'Your name and email for git', openagent: 'OpenAgent', agent: 'Claude Code', service: 'The service', door: 'The door' }
+const LABELS = { login: 'Log in', user: 'A user of its own, openagent', tools: 'git, gh, Node and Chrome', name: 'Your name and email for git', openagent: 'OpenAgent', agent: 'Claude Code', service: 'Starts by itself', door: 'The door' }
 const LINK = { url: 'https://203.0.113.5/_devices/enter#K7P4QX9M.pin', where: '203.0.113.5', code: 'K7P4-QX9M', expires: new Date(Date.now() + 10 * 60_000).toISOString() }
 /** The server's people, with its owner named. */
 const OWNED = (): ModuleCommandResult => ({ ok: true, output: { devices: [], persons: [{ name: 'Ada', owner: true }] } })
@@ -20,6 +20,8 @@ async function invite(name: string): Promise<void> {
   fireEvent.click(screen.getByRole('button', { name: 'Make the code' }))
 }
 const NONE: LoginRow = { there: false, working: false }
+/** A Test connection that went through. */
+const TESTED_OK = { ok: true, system: 'Ubuntu 24.04.1 LTS, x86_64' }
 /** This computer's door, shut, with nobody in. */
 const DOOR_SHUT = { on: false, listening: false, devices: [], persons: [], lines: [] }
 
@@ -50,8 +52,9 @@ function dashboard(
   own: ModuleCommandResult = NO_GH,
   devices: (args: string[]) => ModuleCommandResult = () => ({ ok: true, output: { devices: [] } }),
   door: (args: string[]) => ModuleCommandResult = () => ({ ok: true, output: DOOR_SHUT }),
+  tested: (args: string[]) => ModuleCommandResult = () => ({ ok: true, output: TESTED_OK }),
 ) {
-  const runComputerCommand = vi.fn(async (args: string[]) => (args[0] === 'github' ? own : args[0] === 'devices' || args[0] === 'remove-device' ? devices(args) : answer(args)))
+  const runComputerCommand = vi.fn(async (args: string[]) => (args[0] === 'github' ? own : args[0] === 'devices' || args[0] === 'remove-device' ? devices(args) : args[0] === 'test' ? tested(args) : answer(args)))
   const doorCommand = vi.fn(async (args: string[]) => door(args))
   const inProject = vi.fn(async () => ({ ok: false as const, error: 'the servers are no project\'s' }))
   const machines = vi.fn(async () => saved)
@@ -126,40 +129,6 @@ const stepNames = (): string[] => within(screen.getByRole('list', { name: 'The i
 afterEach(cleanup)
 
 describe('Settings › Devices: a server this computer installed', () => {
-  test('an address and a user name, root unless said: Connect installs this computer\'s own OpenAgent there, in no project', async () => {
-    const { host, ran } = dashboard(() => ok({ servers: [] }))
-    show(host)
-    // The page is there once this computer said it is no server itself, and Set up a server opens the form.
-    await openConnect()
-    const connect = (await screen.findByRole('button', { name: 'Connect' })) as HTMLButtonElement
-    expect(connect.disabled).toBe(true)
-    expect((screen.getByLabelText('User name') as HTMLInputElement).value).toBe('root')
-    fireEvent.change(screen.getByLabelText("The server's address"), { target: { value: ' 203.0.113.5 ' } })
-    await waitFor(() => expect(connect.disabled).toBe(false))
-    fireEvent.click(connect)
-    await waitFor(() => expect(ran()).toContain('connect 203.0.113.5 root 1.2.3'))
-    expect(host.runCommand).not.toHaveBeenCalled()
-    // The server is in the list from here on, its steps running there: the dialog has done its part.
-    await waitFor(() => expect(screen.queryByLabelText("The server's address")).toBeNull())
-    await openConnect()
-    expect((screen.getByLabelText("The server's address") as HTMLInputElement).value).toBe('')
-  })
-
-  test('Connect waits until this computer has said which OpenAgent it runs: that is the one the server gets', async () => {
-    const { host, machines, ran } = dashboard(() => ok({ servers: [] }))
-    let say: (saved: ModuleMachines) => void = () => {}
-    machines.mockImplementation(() => new Promise<ModuleMachines>(resolve => (say = resolve)))
-    show(host)
-    await waitFor(() => expect(ran()).toContain('status'))
-    // Nothing to press before then: the list is not known to be empty, and the server would get no version.
-    await new Promise(resolve => setTimeout(resolve, 100))
-    expect(screen.queryByRole('button', { name: 'Set up a server' })).toBeNull()
-    say({ version: '1.2.3', machines: [] })
-    await openConnect()
-    fireEvent.change(await screen.findByLabelText("The server's address"), { target: { value: '203.0.113.5' } })
-    await waitFor(() => expect((screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement).disabled).toBe(false))
-  })
-
   test('an install at work lists its steps with their state, and shows the key the server was first met with', async () => {
     const { host } = dashboard(() => ok({ servers: [server(['done', 'done', 'running'], { working: true, fingerprint: 'SHA256:abc' })] }))
     show(host)
@@ -167,7 +136,7 @@ describe('Settings › Devices: a server this computer installed', () => {
     expect(within(await screen.findByRole('listitem', { name: '203.0.113.5' })).getByText('Installing…')).toBeTruthy()
     await open('203.0.113.5')
     expect(await screen.findByText('Installing: step 3 of 8')).toBeTruthy()
-    expect(stepNames()).toEqual(['Log in: done', 'The user openagent: done', 'git, gh, Node and Chrome: running', 'Your name and email for git: not started', 'OpenAgent: not started', 'Claude Code: not started', 'The service: not started', 'The door: not started'])
+    expect(stepNames()).toEqual(['Log in: done', 'A user of its own, openagent: done', 'git, gh, Node and Chrome: running', 'Your name and email for git: not started', 'OpenAgent: not started', 'Claude Code: not started', 'Starts by itself: not started', 'The door: not started'])
     expect(screen.getByText("The server's key: SHA256:abc")).toBeTruthy()
     // Nothing to press on a server that is being installed.
     for (const name of ['Try 203.0.113.5 again', 'Update 203.0.113.5', 'Remove 203.0.113.5']) expect(screen.queryByRole('button', { name })).toBeNull()
@@ -382,10 +351,10 @@ describe('Settings › Devices: a server this computer installed', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Update 203.0.113.5' }))
     await waitFor(() => expect(ran()).toContain('connect 203.0.113.5 root 1.2.3'))
     expect(await screen.findByText('Updating: step 1 of 8')).toBeTruthy()
-    expect(stepNames().slice(0, 2)).toEqual(['Log in: not started', 'The user openagent: not started'])
+    expect(stepNames().slice(0, 2)).toEqual(['Log in: not started', 'A user of its own, openagent: not started'])
     now = server(['done', 'done', 'running'], { adding: false, working: true })
     expect(await screen.findByText('Updating: step 3 of 8')).toBeTruthy()
-    expect(stepNames().slice(0, 4)).toEqual(['Log in: done', 'The user openagent: done', 'git, gh, Node and Chrome: running', 'Your name and email for git: not started'])
+    expect(stepNames().slice(0, 4)).toEqual(['Log in: done', 'A user of its own, openagent: done', 'git, gh, Node and Chrome: running', 'Your name and email for git: not started'])
     // Nothing to press while it runs.
     expect(screen.queryByRole('button', { name: 'Update 203.0.113.5' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Remove 203.0.113.5' })).toBeNull()
@@ -722,49 +691,10 @@ describe('Settings › Devices: a server this computer installed', () => {
     expect(code()).toBeNull()
   })
 
-  test('a command that refuses says why; servers that cannot be read say so', async () => {
-    const refusing = dashboard(args => (args[0] === 'connect' ? { ok: false, error: 'nope is not a server\'s number or name' } : ok({ servers: [] })))
-    show(refusing.host)
-    await openConnect()
-    fireEvent.change(await screen.findByLabelText("The server's address"), { target: { value: 'nope' } })
-    await waitFor(() => expect((screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement).disabled).toBe(false))
-    await waitFor(() => expect(refusing.machines).toHaveBeenCalled())
-    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
-    expect(await screen.findByText("nope is not a server's number or name")).toBeTruthy()
-    // What was refused stays in the field, in the dialog that stays open, to be corrected.
-    expect((screen.getByLabelText("The server's address") as HTMLInputElement).value).toBe('nope')
-    cleanup()
-
+  test('servers that cannot be read say so', async () => {
     const unread = dashboard(() => ({ ok: false, error: 'servers printed no JSON' }))
     show(unread.host)
     expect(await screen.findByText('The servers could not be read: servers printed no JSON')).toBeTruthy()
-  })
-
-  test('the tick names whose GitHub login would be copied, and Connect then asks for the copy; with no login on this computer there is nothing to tick', async () => {
-    const { host, ran } = dashboard(() => ok({ servers: [] }), undefined, undefined, OCTOCAT)
-    show(host)
-    await openConnect()
-    expect(await screen.findByText('Copy my GitHub login (octocat) to the server.')).toBeTruthy()
-    const tick = screen.getByRole('checkbox', { name: 'Copy my GitHub login to the server' })
-    // Set by the person, never for them.
-    expect(tick.getAttribute('aria-checked')).toBe('false')
-    fireEvent.change(screen.getByLabelText("The server's address"), { target: { value: '203.0.113.5' } })
-    await waitFor(() => expect((screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement).disabled).toBe(false))
-    fireEvent.click(tick)
-    await waitFor(() => expect(tick.getAttribute('aria-checked')).toBe('true'))
-    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
-    await waitFor(() => expect(ran()).toContain('connect 203.0.113.5 root 1.2.3 github'))
-    cleanup()
-
-    const none = dashboard(() => ok({ servers: [] }))
-    show(none.host)
-    await openConnect()
-    expect(await screen.findByText('There is no GitHub login to copy from this computer. `gh` is not on this computer.')).toBeTruthy()
-    expect(screen.getByRole('checkbox', { name: 'Copy my GitHub login to the server' }).hasAttribute('data-disabled')).toBe(true)
-    fireEvent.change(screen.getByLabelText("The server's address"), { target: { value: '203.0.113.5' } })
-    await waitFor(() => expect((screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement).disabled).toBe(false))
-    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
-    await waitFor(() => expect(none.ran()).toContain('connect 203.0.113.5 root 1.2.3'))
   })
 
   test('a server that is being installed has no logins to press yet; a GitHub login that was ticked waits in the steps', async () => {
@@ -1140,27 +1070,6 @@ describe('Settings › Devices: a computer at home set up as a server, through a
   }
   const SAVED: ModuleMachines = { version: '1.2.3', machines: [{ id: VPS, label: '165.245.244.10', url: VPS, version: '1.2.3' }, { id: VIA, label: 'rom-box', url: VIA, version: '1.2.3' }] }
 
-  test('Connect offers to reach the computer through a server this computer is in at, and only then', async () => {
-    const { host, ran } = dashboard(() => ok({ servers: [] }), { version: '1.2.3', machines: [{ id: VPS, label: '165.245.244.10', url: VPS }] })
-    show(host)
-    await openConnect()
-    expect(screen.queryByText("SSH must be on at the computer, with this computer's key. The user name is your own user on it.")).toBeNull()
-    fireEvent.click(await screen.findByRole('radio', { name: /through a server/ }))
-    expect(await screen.findByText("SSH must be on at the computer, with this computer's key. The user name is your own user on it.")).toBeTruthy()
-    fireEvent.change(screen.getByLabelText("The server's address"), { target: { value: '192.168.1.20' } })
-    fireEvent.change(screen.getByLabelText('User name'), { target: { value: 'rom' } })
-    const connect = screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement
-    await waitFor(() => expect(connect.disabled).toBe(false))
-    fireEvent.click(connect)
-    await waitFor(() => expect(ran()).toContain(`connect 192.168.1.20 rom 1.2.3 --through ${VPS}`))
-    cleanup()
-
-    // A computer that is in at no server on the internet has nothing to reach one through.
-    show(dashboard(() => ok({ servers: [] })).host)
-    await openConnect()
-    expect(screen.queryByRole('radiogroup', { name: 'How the server is reached' })).toBeNull()
-  })
-
   test('its page is a server at home, reached through another: who may start runs on it in place of an Invite, and no line from this computer', async () => {
     const { host, ran, machinePerson } = dashboard(() => ok({ servers: [box()] }), SAVED)
     machinePerson.mockImplementation(async id => (id === VPS ? { ok: true, said: { person: 'rom', owner: false, devices: [], persons: ['suleimansh', 'rom', 'dani'] } } : { ok: false, error: 'not said', unknown: true }))
@@ -1218,5 +1127,251 @@ describe('Settings › Devices: a computer at home set up as a server, through a
     await waitFor(() => expect(ran()).toContain('add-through 192.168.1.20'))
     expect(ran().some(line => line.startsWith('link '))).toBe(false)
     expect(addMachine).not.toHaveBeenCalled()
+  })
+})
+
+describe('Settings › Devices: Set up a server, in steps', () => {
+  const VPS = 'https://165.245.244.10'
+  const VIA = `${VPS}/_devices/via/line12345678`
+  const WITH_VPS: ModuleMachines = { version: '1.2.3', machines: [{ id: VPS, label: '165.245.244.10', url: VPS, version: '1.2.3' }] }
+  const LINE = `sudo sh -c 'apt-get install -y openssh-server && echo the-rest'`
+  const failed = (trouble: string, more: Record<string, unknown> = {}): ModuleCommandResult => ok({ ok: false, trouble, reached: trouble !== 'unreachable', said: `ssh said ${trouble}`, ...more })
+  /** Which step the dialog is at, as its steps along the top say. */
+  const now = (): string | null | undefined => screen.getByRole('list', { name: 'Steps' }).querySelector('[aria-current="step"]')?.getAttribute('aria-label')
+  const button = (name: string): HTMLButtonElement => screen.getByRole('button', { name }) as HTMLButtonElement
+  /** Where (a PC at home, when said), then Continue. */
+  async function toConnect(home = false): Promise<void> {
+    await openConnect()
+    if (home) fireEvent.click(await screen.findByRole('radio', { name: /A PC at home/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }))
+    await screen.findByLabelText("The server's address")
+  }
+  /** Type the address, and the user when said, and press Test connection. */
+  function testAs(address: string, user?: string): void {
+    fireEvent.change(screen.getByLabelText("The server's address"), { target: { value: address } })
+    if (user !== undefined) fireEvent.change(screen.getByLabelText('User name'), { target: { value: user } })
+    fireEvent.click(button('Test connection'))
+  }
+
+  test('a cloud server: Where, a test that goes through, its logins, then Install starts this computer\'s own OpenAgent there, in no project', async () => {
+    const { host, ran } = dashboard(() => ok({ servers: [] }), undefined, undefined, OCTOCAT)
+    show(host)
+    await openConnect()
+    expect(now()).toBe('Where: now')
+    // A PC at home goes through a cloud server: with none, it cannot be picked yet.
+    expect((screen.getByRole('radio', { name: /A PC at home/ }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText('Set up a cloud server first.')).toBeTruthy()
+    fireEvent.click(button('Continue'))
+    expect(await screen.findByText('Its address')).toBeTruthy()
+    expect(now()).toBe('Connect: now')
+    expect((screen.getByLabelText('User name') as HTMLInputElement).value).toBe('root')
+    expect(button('Continue').disabled).toBe(true)
+    testAs(' 203.0.113.5 ')
+    expect(await screen.findByText('Ubuntu 24.04.1 LTS, x86_64: OpenAgent installs there')).toBeTruthy()
+    expect(screen.getByText('Reached 203.0.113.5')).toBeTruthy()
+    expect(screen.getByText('Logged in as root')).toBeTruthy()
+    expect(ran()).toContain('test 203.0.113.5 root')
+    // Another address is not tested yet: Continue waits for its own test.
+    fireEvent.change(screen.getByLabelText("The server's address"), { target: { value: '203.0.113.6' } })
+    expect(screen.queryByRole('list', { name: 'What the test found' })).toBeNull()
+    expect(button('Continue').disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText("The server's address"), { target: { value: '203.0.113.5' } })
+    expect(button('Continue').disabled).toBe(false)
+    fireEvent.click(button('Continue'))
+    // This computer's GitHub login is copied unless said, and Claude logs in once it is installed.
+    const github = await screen.findByRole('radiogroup', { name: 'GitHub on the server' })
+    expect(within(github).getByRole('radio', { name: /Copy mine \(octocat\)/ }).getAttribute('aria-checked')).toBe('true')
+    expect(within(screen.getByRole('radiogroup', { name: 'Claude on the server' })).getByRole('radio', { name: /Log in once it is installed/ }).getAttribute('aria-checked')).toBe('true')
+    expect(now()).toBe('Logins: now')
+    fireEvent.click(button('Install'))
+    await waitFor(() => expect(ran()).toContain('connect 203.0.113.5 root 1.2.3 github'))
+    expect(host.runCommand).not.toHaveBeenCalled()
+    await waitFor(() => expect(now()).toBe('Install: now'))
+    // Back to Where in another go: the dialog starts over.
+    fireEvent.click(button('Close'))
+    await openConnect()
+    expect(now()).toBe('Where: now')
+  })
+
+  test('Install waits until this computer has said which OpenAgent it runs: that is the one the server gets', async () => {
+    const { host, machines, ran } = dashboard(() => ok({ servers: [] }))
+    let say: (saved: ModuleMachines) => void = () => {}
+    machines.mockImplementation(() => new Promise<ModuleMachines>(resolve => (say = resolve)))
+    show(host)
+    await waitFor(() => expect(ran()).toContain('status'))
+    // Nothing to press before then: the list is not known to be empty, and the server would get no version.
+    await new Promise(resolve => setTimeout(resolve, 100))
+    expect(screen.queryByRole('button', { name: 'Set up a server' })).toBeNull()
+    say({ version: '1.2.3', machines: [] })
+    await toConnect()
+    testAs('203.0.113.5')
+    await waitFor(() => expect(button('Continue').disabled).toBe(false))
+    fireEvent.click(button('Continue'))
+    await waitFor(() => expect(button('Install').disabled).toBe(false))
+  })
+
+  test('what the test found is said by what to do about it: on a PC, the line to paste there once; a server pastes it in its own console', async () => {
+    const writeText = vi.fn(async (_text: string) => {})
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    const answers: Record<string, ModuleCommandResult> = {
+      '192.168.1.40': failed('key', { key: 'ssh-ed25519 AAAA mac', fix: LINE }),
+      '192.168.1.41': failed('unreachable'),
+      '192.168.1.42': failed('sudo', { key: 'ssh-ed25519 AAAA mac', fix: LINE }),
+      '192.168.1.43': failed('no-key'),
+      '192.168.1.44': failed('host-key'),
+      '192.168.1.45': failed('system', { said: 'OpenAgent installs on Ubuntu and Debian. This server runs Fedora Linux 41.' }),
+    }
+    let fixed = false
+    const { host, ran } = dashboard(() => ok({ servers: [] }), WITH_VPS, undefined, undefined, undefined, undefined, args => (fixed ? ok({ ok: true, system: 'Debian GNU/Linux 12 (bookworm), x86_64' }) : answers[args[1]!]!))
+    show(host)
+    await toConnect(true)
+    expect(screen.getByText('Its address on its network')).toBeTruthy()
+    // On a PC the user is the person's own there: nothing to test before it is typed.
+    expect((screen.getByLabelText('User name') as HTMLInputElement).value).toBe('')
+    fireEvent.change(screen.getByLabelText("The server's address"), { target: { value: '192.168.1.40' } })
+    expect(button('Test connection').disabled).toBe(true)
+    testAs('192.168.1.40', 'dani')
+    expect(await screen.findByText('Your SSH key is not on it yet.')).toBeTruthy()
+    expect(screen.getByText('Reached 192.168.1.40')).toBeTruthy()
+    expect(screen.getByText('On the PC, open a terminal and paste this once. It lets this computer in, and nobody else:')).toBeTruthy()
+    expect(screen.getByText(LINE)).toBeTruthy()
+    expect(screen.getByText("It asks for the PC's password once: it turns SSH on, adds this computer's key, and lets dani install without a password. Then press Test connection again.")).toBeTruthy()
+    fireEvent.click(button('Copy the line for the PC'))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(LINE))
+    expect(button('Continue').disabled).toBe(true)
+
+    testAs('192.168.1.41')
+    expect(await screen.findByText('Nothing answers at 192.168.1.41. Check the address, and that the PC is on and on this network.')).toBeTruthy()
+    expect(screen.queryByText('Reached 192.168.1.41')).toBeNull()
+    expect(screen.queryByText(LINE)).toBeNull()
+
+    testAs('192.168.1.42')
+    expect(await screen.findByText('dani cannot become root without a password.')).toBeTruthy()
+    expect(screen.getByText('Logged in as dani')).toBeTruthy()
+    expect(screen.getByText(LINE)).toBeTruthy()
+
+    testAs('192.168.1.43')
+    expect(await screen.findByText('This computer has no SSH key yet.')).toBeTruthy()
+    expect(screen.getByText('ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519')).toBeTruthy()
+
+    testAs('192.168.1.44')
+    expect(await screen.findByText('It shows another key than the one this computer remembers for 192.168.1.44. Nothing was sent to it.')).toBeTruthy()
+    expect(screen.getByText('ssh-keygen -R 192.168.1.44')).toBeTruthy()
+
+    testAs('192.168.1.45')
+    expect(await screen.findByText('OpenAgent installs on Ubuntu and Debian. This server runs Fedora Linux 41.')).toBeTruthy()
+    expect(button('Continue').disabled).toBe(true)
+
+    // The line pasted, Test connection again: it goes through.
+    fixed = true
+    testAs('192.168.1.40')
+    expect(await screen.findByText('Debian GNU/Linux 12 (bookworm), x86_64: OpenAgent installs there')).toBeTruthy()
+    expect(button('Continue').disabled).toBe(false)
+    expect(ran().filter(line => line.startsWith('test '))).toEqual(['test 192.168.1.40 dani', 'test 192.168.1.41 dani', 'test 192.168.1.42 dani', 'test 192.168.1.43 dani', 'test 192.168.1.44 dani', 'test 192.168.1.45 dani', 'test 192.168.1.40 dani'])
+    cleanup()
+
+    // A server on the internet as root: its own console at the provider, and no password rule to add.
+    const vps = dashboard(() => ok({ servers: [] }), undefined, undefined, undefined, undefined, undefined, () => failed('no-ssh', { key: 'ssh-ed25519 AAAA mac', fix: LINE }))
+    show(vps.host)
+    await toConnect()
+    testAs('203.0.113.5')
+    expect(await screen.findByText('SSH is not on there yet.')).toBeTruthy()
+    expect(screen.getByText("Open the server's own console at your provider, and paste this once. It lets this computer in, and nobody else:")).toBeTruthy()
+    expect(screen.getByText("It asks for the server's password once: it turns SSH on, adds this computer's key. Then press Test connection again.")).toBeTruthy()
+  })
+
+  test('an install that is refused says why in the dialog, which stays at its logins; with no GitHub login here there is no copy to pick', async () => {
+    const { host, ran } = dashboard(args => (args[0] === 'connect' ? { ok: false, error: 'OpenAgent is being installed on 203.0.113.5 right now' } : ok({ servers: [] })))
+    show(host)
+    await toConnect()
+    testAs('203.0.113.5')
+    await waitFor(() => expect(button('Continue').disabled).toBe(false))
+    fireEvent.click(button('Continue'))
+    const github = await screen.findByRole('radiogroup', { name: 'GitHub on the server' })
+    expect(within(github).getByRole('radio', { name: /Copy mine/ }).hasAttribute('data-disabled')).toBe(true)
+    expect(within(github).getByText('There is no GitHub login to copy from this computer. `gh` is not on this computer.')).toBeTruthy()
+    expect(within(github).getByRole('radio', { name: 'Later' }).getAttribute('aria-checked')).toBe('true')
+    await waitFor(() => expect(button('Install').disabled).toBe(false))
+    fireEvent.click(button('Install'))
+    expect(await screen.findByText('OpenAgent is being installed on 203.0.113.5 right now')).toBeTruthy()
+    expect(ran()).toContain('connect 203.0.113.5 root 1.2.3')
+    expect(now()).toBe('Logins: now')
+  })
+
+  test('the install shows its steps; once installed, the logins picked start (a code for GitHub, the browser for Claude); then Ready, and Invite people opens the server inviting', async () => {
+    let row: ServerRow | undefined
+    const asking = { github: { there: false, working: true, asking: true, code: 'ABCD-1234' }, claude: { there: false, working: true, asking: true } }
+    const { host, ran } = dashboard(
+      args => {
+        if (args[0] === 'connect') row = server(['done', 'running'], { working: true })
+        if (args[0] === 'login' && row) row = { ...row, logins: { ...row.logins, [args[2]!]: asking[args[2] as 'github' | 'claude'] } }
+        return ok({ servers: row ? [row] : [] })
+      },
+      BOX_SAVED(),
+      undefined,
+      OCTOCAT,
+    )
+    show(host)
+    await toConnect()
+    testAs('203.0.113.5')
+    await waitFor(() => expect(button('Continue').disabled).toBe(false))
+    fireEvent.click(button('Continue'))
+    fireEvent.click(await screen.findByRole('radio', { name: /Log in to another account on the server/ }))
+    fireEvent.click(button('Install'))
+    const steps = await screen.findByRole('list', { name: 'The install on 203.0.113.5' })
+    await waitFor(() => expect(within(steps).getByRole('listitem', { name: 'A user of its own, openagent: running' })).toBeTruthy())
+    expect(within(steps).getByRole('listitem', { name: 'A GitHub login of its own: not started' })).toBeTruthy()
+    expect(within(steps).getByRole('listitem', { name: 'Claude login: not started' })).toBeTruthy()
+    expect(screen.getByText('A few minutes. You can close this: it goes on, and its row shows how far it is.')).toBeTruthy()
+    // Nothing is asked of the person before the server is installed.
+    expect(ran().some(line => line.startsWith('login '))).toBe(false)
+    row = server(ALL_DONE, { adding: false })
+    await waitFor(() => expect(ran()).toContain('login 203.0.113.5 github own'))
+    await waitFor(() => expect(ran()).toContain('login 203.0.113.5 claude'))
+    expect(await screen.findByText(/Type the code ABCD-1234 at/)).toBeTruthy()
+    expect(await screen.findByText("Say yes in the page this computer's browser opened.")).toBeTruthy()
+    expect(within(steps).getByRole('listitem', { name: 'Runs can be sent to it: done' })).toBeTruthy()
+    // Each asked once, however often the page looks.
+    await new Promise(resolve => setTimeout(resolve, 150))
+    expect(ran().filter(line => line.startsWith('login '))).toEqual(['login 203.0.113.5 github own', 'login 203.0.113.5 claude'])
+    row = { ...row, logins: { github: { there: true, working: false, account: 'octocat' }, claude: { there: true, working: false } } }
+    expect(await screen.findByText('203.0.113.5 is ready.')).toBeTruthy()
+    expect(now()).toBe('Ready: now')
+    fireEvent.click(button('Invite people'))
+    expect(await screen.findByText('Invite to 203.0.113.5')).toBeTruthy()
+    // Under it, the server's own page, on its people.
+    expect(screen.getByRole('tab', { name: 'People', selected: true, hidden: true })).toBeTruthy()
+  })
+
+  test('a PC at home: through a cloud server this computer is in at; Install sends it through that one, and Ready asks who else uses it', async () => {
+    let row: ServerRow | undefined
+    const done = (): ServerRow => ({ ...server(ALL_DONE, { address: '192.168.1.20', url: VIA, user: 'rom', adding: false }), through: VPS, who: 'me' })
+    const { host, ran } = dashboard(
+      args => {
+        if (args[0] === 'connect') row = done()
+        return ok({ servers: row ? [row] : [] })
+      },
+      { version: '1.2.3', machines: [...WITH_VPS.machines, { id: VIA, label: 'rom-box', url: VIA, version: '1.2.3' }] },
+    )
+    show(host)
+    await toConnect(true)
+    // Back to Where: it is still a PC at home, reached through the one cloud server.
+    fireEvent.click(button('Back'))
+    expect((await screen.findByRole('radio', { name: /A PC at home/ })).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('combobox', { name: 'The server it is reached through' }).textContent).toContain('165.245.244.10')
+    fireEvent.click(button('Continue'))
+    await screen.findByLabelText("The server's address")
+    testAs('192.168.1.20', 'rom')
+    await waitFor(() => expect(button('Continue').disabled).toBe(false))
+    fireEvent.click(button('Continue'))
+    fireEvent.click(within(await screen.findByRole('radiogroup', { name: 'GitHub on the server' })).getByRole('radio', { name: 'Later' }))
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Claude on the server' })).getByRole('radio', { name: 'Later' }))
+    fireEvent.click(button('Install'))
+    await waitFor(() => expect(ran()).toContain(`connect 192.168.1.20 rom 1.2.3 --through ${VPS}`))
+    expect(await screen.findByText('rom-box is ready.')).toBeTruthy()
+    expect(screen.getByText('Your runs can go there from here. Who else uses it?')).toBeTruthy()
+    expect(screen.getByRole('radiogroup', { name: 'Who can start runs on 192.168.1.20' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Invite people' })).toBeNull()
+    expect(ran().some(line => line.startsWith('login '))).toBe(false)
   })
 })
