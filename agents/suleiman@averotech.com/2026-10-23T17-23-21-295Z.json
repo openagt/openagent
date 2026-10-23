@@ -7,7 +7,6 @@
   "title": "Greeting Suleiman",
   "driver": "claude-code",
   "model": "claude-sonnet-5-5",
-  "branch": "agent-2026-10-23T17-23-21-295Z",
   "cost": 0.0219925,
   "contextTokens": 17816,
   "caller": {
