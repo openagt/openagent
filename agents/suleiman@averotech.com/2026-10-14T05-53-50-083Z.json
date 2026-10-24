@@ -1,12 +1,14 @@
 {
   "id": "2026-10-14T05-53-50-083Z",
   "startedAt": "2026-10-14T05:53:50.348Z",
-  "status": "running",
+  "endedAt": "2026-10-24T18:04:38.975Z",
+  "status": "waiting",
   "intent": "ask me about my fav color",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
   "branch": "agent-2026-10-14T05-53-50-083Z",
-  "cost": 0.07209679999999999,
+  "cost": 0.21224759999999998,
+  "contextTokens": 18354,
   "caller": {
     "runner": {
       "host": "ubuntu-s-1vcpu-2gb-fra1",
