@@ -18,3 +18,10 @@
 {"kind":"cost","usd":0.1401508,"at":"2026-10-24T18:04:37.853Z"}
 {"kind":"question","title":"What's your favorite color?","options":[{"id":"opt:0","label":"Blue"},{"id":"opt:1","label":"Green"},{"id":"opt:2","label":"Red"},{"id":"opt:3","label":"Purple"}],"recommended":"opt:0","at":"2026-10-24T18:04:37.856Z"}
 {"kind":"ended","status":"waiting","at":"2026-10-24T18:04:38.975Z"}
+{"kind":"start","prompt":"You paused to ask: \"What's your favorite color?\". The user chose: Blue. Continue with that decision.","added":"When you finish, if you changed any file, commit your work.","at":"2026-10-24T21:16:49.426Z"}
+{"kind":"session","sessionId":"71c5e460-f0f6-4e0d-a15b-fbd57b6925c3","at":"2026-10-24T21:16:49.426Z"}
+{"kind":"said","text":"Your favorite color is blue. I didn't change any files, so there's nothing to commit.","at":"2026-10-24T21:16:49.569Z"}
+{"kind":"rate-limit","limit":{"status":"allowed","window":"five_hour","resetsAt":1792887000000,"windows":[{"window":"five_hour","percentUsed":1,"resetsAt":1792887000000},{"window":"seven_day","percentUsed":3,"resetsAt":1793419200000}]},"at":"2026-10-24T21:16:49.615Z"}
+{"kind":"result","text":"Your favorite color is blue. I didn't change any files, so there's nothing to commit.","sessionId":"71c5e460-f0f6-4e0d-a15b-fbd57b6925c3","at":"2026-10-24T21:16:50.401Z"}
+{"kind":"cost","usd":0.20766079999999998,"at":"2026-10-24T21:16:50.401Z"}
+{"kind":"ended","status":"done","at":"2026-10-24T21:16:51.577Z"}
