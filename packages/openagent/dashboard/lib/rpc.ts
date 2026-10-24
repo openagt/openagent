@@ -79,6 +79,9 @@ export async function openEvents(projectId: string, agentId?: string): Promise<E
   if (!res.ok || !res.body) throw new Error(`could not subscribe to events (${res.status})`)
 
   let onEvent: ((event: LiveFeedEvent) => void) | undefined
+  // What comes before anyone listens: the stream is read from the moment it opens, and a server
+  // that has the run's first lines already sends them at once. Dropped, the prompt went missing.
+  const held: LiveFeedEvent[] = []
   let onClosed: ((err?: Error) => void) | undefined
   let closed = false
   const finish = (err?: Error): void => {
@@ -108,7 +111,9 @@ export async function openEvents(projectId: string, agentId?: string): Promise<E
             .join('')
           if (!data) continue
           try {
-            onEvent?.(JSON.parse(data) as LiveFeedEvent)
+            const event = JSON.parse(data) as LiveFeedEvent
+            if (onEvent) onEvent(event)
+            else held.push(event)
           } catch {
             // A torn frame is one lost event, not a dead feed.
           }
@@ -124,6 +129,7 @@ export async function openEvents(projectId: string, agentId?: string): Promise<E
   return {
     listen: cb => {
       onEvent = cb
+      for (const event of held.splice(0)) cb(event)
     },
     onClose: cb => {
       onClosed = cb

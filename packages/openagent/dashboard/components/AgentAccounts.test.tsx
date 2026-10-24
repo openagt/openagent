@@ -89,6 +89,15 @@ describe('Agent accounts', () => {
     await waitFor(() => expect(accounts.sendRemoveAgentAccount).toHaveBeenCalledWith('claude', 'Dani'))
   })
 
+  test('a login whose usage cannot be read draws no bar: an empty one read as nothing used', async () => {
+    views({ now: NOW, accounts: [{ id: 'This computer', name: 'This computer', own: true, windows: [] }] })
+    render(<AccountsSettings />)
+    const card = screen.getByRole('region', { name: 'Claude Code' })
+    const own = await within(card).findByRole('listitem', { name: 'This computer' })
+    expect(own.textContent).toContain('login on Studio')
+    expect(own.querySelector('[aria-hidden].rounded-full')).toBeNull()
+  })
+
   test('adding asks whose account it is, then says to say yes in the browser while the login is made; a refused name is said', async () => {
     views(TWO)
     accounts.sendAddAgentAccount.mockResolvedValueOnce({ ok: false, error: 'There is an account named Dani already.' })
