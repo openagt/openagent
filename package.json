@@ -12,6 +12,8 @@
     "dev": "pnpm build && pnpm -C packages/openagent dev",
     "typecheck": "pnpm -r run typecheck",
     "clean": "pnpm -r run clean",
+    "// Try this checkout on a server before publishing: what Update does, with this build in place of npm's": "",
+    "try-on-server": "node scripts/try-on-server.mjs",
     "test": "pnpm -r --workspace-concurrency=1 run test",
     "========= Website": "",
     "// Develop website https://openagent.build locally": "",
