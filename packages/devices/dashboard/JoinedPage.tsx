@@ -1,23 +1,23 @@
 import { useEffect, useState } from 'react'
 import { Server } from 'lucide-react'
 import { Button, ConfirmDialog, formatDateTime, formatRelative, usePolled } from '@openagt/dashboard/module'
-import { idsOf, loadOther, loadOwn, otherLogin, ownCodeLogin, ownLogout, readPersonThere, sharedClaude, sharedForget, sharedGithub, type Answer, type DeviceRow, type OtherLogin, type OtherRow, type OwnRead } from './servers.js'
+import { idsOf, loadOther, otherLogin, readPersonThere, sharedForget, type Answer, type DeviceRow, type OtherLogin, type OtherRow } from './servers.js'
 import type { JoinedItem, OtherItem } from './model.js'
 import { ComputersThrough } from './ServerPage.js'
-import { Head, LoginLine, Part, Problem, State, Tabs, day, hostOf } from './parts.js'
+import { Head, LoginLine, Part, Problem, State, Tabs, hostOf } from './parts.js'
 import type { Devices } from './use-devices.js'
 
 // The page of a server this person is in at, set up from somewhere else: their own from another
 // computer of theirs, or someone else's who invited them. On a server several people use, this
 // person has an OpenAgent of their own there, as a user of their own, and their runs there use
-// their own logins: this page gives that OpenAgent its logins and lists the person's devices, all
+// their own logins, which Settings › Accounts gives it. This page lists the person's devices,
 // through the server's door with this computer's key there. What only the server's owner does
 // from the computer that set it up (the install, an update, an invite) is not here.
 //
 // And the page of another person's computer, shared with everyone on a server: the logins this
 // person's runs use there.
 
-type Tab = 'overview' | 'devices' | 'logins'
+type Tab = 'overview' | 'devices'
 
 export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; onBack: () => void }) {
   const { host } = d
@@ -39,7 +39,7 @@ export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; 
     setBusy(false)
     return answer.ok
   }
-  const tabs: { id: Tab; title: string }[] = [{ id: 'overview', title: 'Overview' }, { id: 'devices', title: 'Your devices' }, ...(owner ? [] : [{ id: 'logins' as const, title: 'Logins' }])]
+  const tabs: { id: Tab; title: string }[] = [{ id: 'overview', title: 'Overview' }, { id: 'devices', title: 'Your devices' }]
 
   return (
     <div>
@@ -61,7 +61,7 @@ export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; 
             <p className="text-sm">{owner ? 'Yours, set up from another computer.' : person.person !== undefined ? `You are in as ${person.person}.` : 'You are in.'}</p>
             <p className="text-xs text-muted-foreground">
               {owner
-                ? 'Its install, its updates, its logins and its invites are done from the computer that set it up. From here, your phone and this computer reach it, and runs go there.'
+                ? 'Its install, its updates and its invites are done from the computer that set it up, its logins in Settings › Accounts. From here, your phone and this computer reach it, and runs go there.'
                 : 'Your runs there are yours: they use your own GitHub and Claude logins.'}
             </p>
             {here?.lineRefused && <p className="text-xs text-warning">{`${item.name} no longer lets this computer in for its line: turn on "From anywhere, through ${item.name}" under This computer to set it up again.`}</p>}
@@ -131,85 +131,8 @@ export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; 
           </ul>
         </Part>
       )}
-      {tab === 'logins' && !owner && <OwnLogins d={d} item={item} />}
       {error !== undefined && <Problem>{error}</Problem>}
     </div>
-  )
-}
-
-/** This person's logins for their own OpenAgent on a server someone invited them to. */
-function OwnLogins({ d, item }: { d: Devices; item: JoinedItem }) {
-  const { host, account, noLogin } = d
-  const { machine, person } = item
-  // Read often only while a login is being changed: each read of the server's side is a call through its door.
-  const [working, setWorking] = useState(false)
-  const pace = working ? 3_000 : 30_000
-  const { value: own, reload } = usePolled<Answer<OwnRead> | undefined>(() => loadOwn(host, machine.id), undefined, pace, [machine.id, pace], 'previous')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | undefined>()
-  const here = d.shared.find(row => row.url === machine.url)
-  const logins = own?.ok ? own.value.logins : undefined
-  const github = logins?.github ?? { there: false, working: false }
-  // Whether the login is there is the server's to say; this computer only makes it, in its browser.
-  const claudeThere = logins?.claude ?? { there: false, working: false }
-  const making = here?.claude ?? { there: false, working: false }
-  const claude = { ...claudeThere, working: making.working, ...(making.asking ? { asking: true } : {}), said: making.working ? undefined : (making.said ?? claudeThere.said) }
-  const nowWorking = github.working || claude.working
-  useEffect(() => setWorking(nowWorking), [nowWorking])
-  const name = item.name
-
-  const act = async (change: () => Promise<Answer<unknown>>): Promise<void> => {
-    setBusy(true)
-    setError(undefined)
-    const answer = await change()
-    if (!answer.ok) setError(answer.error)
-    await Promise.all([reload(), d.reloadShared()]).catch(() => {})
-    setBusy(false)
-  }
-  return (
-    <Part>
-      {(!github.there || !claude.there) && own?.ok && <p className="text-xs text-warning">Before your first run there: log in to GitHub and Claude below.</p>}
-      {own !== undefined && !own.ok && <p className="text-xs text-muted-foreground">{`Your OpenAgent on ${name} did not say: ${own.error}`}</p>}
-      <ul aria-label={`Your logins on ${name}`} className="space-y-3 text-xs">
-        <LoginLine
-          label="GitHub"
-          words={github.asking && github.code !== undefined ? `GitHub: type the code ${github.code} at github.com/login/device, and say yes there.` : github.working ? 'GitHub: one moment, the server is being told.' : github.there ? github.account !== undefined ? `GitHub: logged in as ${github.account} since ${day(github.since)}.` : `GitHub: logged in since ${day(github.since)}.` : github.said !== undefined ? 'GitHub: the last try did not go through.' : 'GitHub: not logged in on the server.'}
-          said={github.working ? undefined : github.said}
-        >
-          <Button size="sm" variant="outline" disabled={busy || github.working || account === undefined} aria-label={`Copy my GitHub login to ${name}`} title={account !== undefined ? `Copies the login of ${account} from this computer to your own OpenAgent on the server.` : noLogin} onClick={() => void act(() => sharedGithub(host, machine.url))}>
-            {github.there ? 'Copy again' : 'Copy my login'}
-          </Button>
-          <Button size="sm" variant="outline" disabled={busy || (github.working && github.asking !== true)} aria-label={`Log in to GitHub for ${name}`} title={`The server asks GitHub for a login of your own. GitHub gives a short code: you type it at github.com/login/device, and say yes there.`} onClick={() => void act(() => ownCodeLogin(host, machine.id))}>
-            {github.asking ? 'Start over' : 'Log in to GitHub'}
-          </Button>
-          {github.asking && github.code !== undefined && (
-            <a href="https://github.com/login/device" target="_blank" rel="noreferrer" className="self-center underline">
-              Open GitHub
-            </a>
-          )}
-          {(github.there || github.said !== undefined) && !github.working && (
-            <Button size="sm" variant="outline" disabled={busy} aria-label={`Remove my GitHub login from ${name}`} onClick={() => void act(() => ownLogout(host, machine.id, 'github'))}>
-              Remove
-            </Button>
-          )}
-        </LoginLine>
-        <LoginLine
-          label="Claude"
-          words={claude.asking ? "Claude: say yes in the page this computer's browser opened." : claude.working ? 'Claude: one moment, the server is being told.' : claude.there ? `Claude: logged in since ${day(claude.since)}, good until about ${day(claude.ends)}.` : claude.said !== undefined ? 'Claude: the last try did not go through.' : 'Claude: not logged in on the server.'}
-          said={claude.said}
-        >
-          <Button size="sm" variant={claude.there || claude.working ? 'outline' : 'default'} disabled={busy || (claude.working && claude.asking !== true)} aria-label={`Log in to Claude for ${name}`} title="Opens this computer's browser, where you say yes once. The login is made for your OpenAgent on the server alone and lasts a year." onClick={() => void act(() => sharedClaude(host, machine.url))}>
-            {claude.asking ? 'Start over' : claude.there ? 'Log in again' : 'Log in to Claude'}
-          </Button>
-          {(claude.there || claude.said !== undefined) && !claude.working && (
-            <Button size="sm" variant="outline" disabled={busy} aria-label={`Remove my Claude login from ${name}`} onClick={() => void act(() => ownLogout(host, machine.id, 'claude'))}>
-              Remove
-            </Button>
-          )}
-        </LoginLine>
-      </ul>
-      {error !== undefined && <Problem>{error}</Problem>}
-    </Part>
   )
 }
 
@@ -237,7 +160,7 @@ export function OtherPage({ d, item, onBack }: { d: Devices; item: OtherItem; on
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
   const row = read?.ok ? read.value.find(candidate => candidate.url === machine.url) : undefined
-  const making = row?.making ?? { there: false, working: false }
+  const making = row?.making ?? { working: false }
   useEffect(() => setWorking(making.working), [making.working])
   const name = item.name
   // The server both computers are in at: where the copies come from.

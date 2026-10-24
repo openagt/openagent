@@ -3,11 +3,11 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { ModuleHostContext, type MachineAdded, type MachineRemoved, type ModuleCommandResult, type ModuleComputersThrough, type ModuleHost, type ModuleMachinePerson, type ModuleMachines } from '@openagt/dashboard/module'
 import { DevicesSettings } from './DevicesSettings.js'
 import { olderThan } from './parts.js'
-import type { AccountRow, DeviceRow, LoginRow, ServerRow, StepState } from './servers.js'
+import type { DeviceRow, ServerRow, StepState } from './servers.js'
 
 // The servers in Settings › Devices: a server this computer installed OpenAgent on, a computer at
 // home set up as one, a server set up elsewhere or shared by someone, another person's computer.
-// Each is a row of the list, and a page of its own with its install, its people and its logins.
+// Each is a row of the list, and a page of its own with its install and its people.
 
 const LABELS = { login: 'Log in', user: 'A user of its own, openagent', tools: 'git, gh, Node and Chrome', name: 'Your name and email for git', openagent: 'OpenAgent', agent: 'Claude Code', service: 'Starts by itself', door: 'The door' }
 const LINK = { url: 'https://203.0.113.5/_devices/enter#K7P4QX9M.pin', where: '203.0.113.5', code: 'K7P4-QX9M', expires: new Date(Date.now() + 10 * 60_000).toISOString() }
@@ -19,16 +19,15 @@ async function invite(name: string): Promise<void> {
   fireEvent.change(await screen.findByRole('textbox', { name: 'Their name' }), { target: { value: name } })
   fireEvent.click(screen.getByRole('button', { name: 'Make the code' }))
 }
-const NONE: LoginRow = { there: false, working: false }
 /** A Test connection that went through. */
 const TESTED_OK = { ok: true, system: 'Ubuntu 24.04.1 LTS, x86_64' }
 /** This computer's door, shut, with nobody in. */
 const DOOR_SHUT = { on: false, listening: false, devices: [], persons: [], lines: [] }
 
-/** A server whose steps are in these states, in the install's order; the rest have not started. It has no login unless said. */
+/** A server whose steps are in these states, in the install's order; the rest have not started. */
 function server(states: StepState[], over: Partial<ServerRow> = {}): ServerRow {
   const steps = Object.entries(LABELS).map(([id, label], index) => ({ id, label, state: states[index] ?? ('waiting' as const) }))
-  return { address: '203.0.113.5', url: 'https://203.0.113.5', user: 'root', working: false, adding: true, steps, logins: { github: NONE, claude: NONE }, claudeAccounts: [], ...over }
+  return { address: '203.0.113.5', url: 'https://203.0.113.5', user: 'root', working: false, adding: true, steps, ...over }
 }
 const ALL_DONE: StepState[] = ['done', 'done', 'done', 'done', 'done', 'done', 'done', 'done']
 const NO_GH: ModuleCommandResult = { ok: true, output: { problem: 'There is no GitHub login to copy from this computer. `gh` is not on this computer.' } }
@@ -62,6 +61,7 @@ function dashboard(
   const removeMachine = vi.fn(async (_id: string): Promise<MachineRemoved> => ({ ok: true }))
   const computersThrough = vi.fn(async (_id: string): Promise<ModuleComputersThrough> => ({ ok: true, computers: [] }))
   const addComputerThrough = vi.fn(async (_id: string, _computer: string): Promise<MachineAdded> => ({ ok: true }))
+  const useLoginsOn = vi.fn(async (_id: string): Promise<MachineAdded> => ({ ok: true }))
   // No machine says who this computer's person is there, unless a test says otherwise.
   const machinePerson = vi.fn(async (_id: string): Promise<ModuleMachinePerson> => ({ ok: false, error: 'not said', unknown: true }))
   const removeMachineDevice = vi.fn(async (_id: string, _device: string): Promise<ModuleMachinePerson> => ({ ok: false, error: 'not said' }))
@@ -90,12 +90,13 @@ function dashboard(
     addComputerThrough,
     machinePerson,
     removeMachineDevice,
+    useLoginsOn,
     watchScreen: vi.fn(async () => undefined),
     sendToScreen: vi.fn(async () => false),
   }
   // What was asked of the `devices server` command, without the reads a page makes again and again by itself.
   const ran = (): string[] => runComputerCommand.mock.calls.map(([args]) => args.join(' ')).filter(line => !line.startsWith('devices '))
-  return { host, runComputerCommand, runComputerCommandOn, doorCommand, machines, addMachine, removeMachine, computersThrough, addComputerThrough, machinePerson, removeMachineDevice, ran }
+  return { host, runComputerCommand, runComputerCommandOn, doorCommand, machines, addMachine, removeMachine, computersThrough, addComputerThrough, machinePerson, removeMachineDevice, useLoginsOn, ran }
 }
 
 function show(host: ModuleHost) {
@@ -159,7 +160,7 @@ describe('Settings › Devices: a server this computer installed', () => {
 
   test('once every step is done the server\'s door is asked for a link, the server is saved among the machines with it, and the command is told', async () => {
     let adding = true
-    const { host, ran, addMachine } = dashboard(args => {
+    const { host, ran, addMachine, useLoginsOn } = dashboard(args => {
       if (args[0] === 'link') return ok(LINK)
       if (args[0] === 'added') adding = false
       return ok({ servers: [server(ALL_DONE, { adding })] })
@@ -173,6 +174,8 @@ describe('Settings › Devices: a server this computer installed', () => {
     expect(addMachine).toHaveBeenCalledTimes(1)
     // A server just connected is let start runs on this computer, once, without a press.
     expect(ran().filter(line => line.startsWith('reach '))).toEqual(['reach 203.0.113.5 full'])
+    // Its logins are the person's pick in Set up a server: none was made here.
+    expect(useLoginsOn).not.toHaveBeenCalled()
   })
 
   test('an update leaves the switch as the person set it: a server that was told to only watch is not let start runs again by itself', async () => {
@@ -193,6 +196,8 @@ describe('Settings › Devices: a server this computer installed', () => {
     const { host, ran } = dashboard(args => (args[0] === 'link' ? link : ok({ servers: [server(ALL_DONE, { adding: false })] })), BOX_SAVED(), { ok: true }, NO_GH, OWNED)
     show(host)
     await open('203.0.113.5')
+    // Its logins are on its page in Settings › Accounts.
+    expect(screen.queryByRole('tab', { name: 'Logins' })).toBeNull()
     await tab('People')
     const card = () => screen.queryByRole('group', { name: 'The code' })
     await invite(' Rom  Brillout ')
@@ -231,34 +236,7 @@ describe('Settings › Devices: a server this computer installed', () => {
     expect(card()).toBeNull()
   })
 
-  test('Log in to GitHub has the server get a login of its own: the page shows the code to type at GitHub, with a way there and a way to start over', async () => {
-    let github: LoginRow = NONE
-    const { host, ran } = dashboard(args => {
-      if (args[0] === 'login') github = { there: false, working: true, asking: true, code: 'ABCD-1234' }
-      return ok({ servers: [server(ALL_DONE, { adding: false, logins: { github, claude: NONE } })] })
-    }, BOX_SAVED())
-    show(host)
-    await open('203.0.113.5')
-    await tab('Logins')
-    // No GitHub login on this computer: nothing to copy, and the server can still get one of its own.
-    expect(((await screen.findByRole('button', { name: 'Copy my GitHub login to 203.0.113.5' })) as HTMLButtonElement).disabled).toBe(true)
-    const own = screen.getByRole('button', { name: 'Log in to GitHub for 203.0.113.5' }) as HTMLButtonElement
-    expect([own.disabled, own.textContent]).toEqual([false, 'Log in to GitHub'])
-    fireEvent.click(own)
-    await waitFor(() => expect(ran()).toContain('login 203.0.113.5 github own'))
-    expect(await screen.findByText('GitHub: type the code ABCD-1234 at github.com/login/device, and say yes there.')).toBeTruthy()
-    const there = screen.getByRole('link', { name: 'Open GitHub' }) as HTMLAnchorElement
-    expect([there.href, there.target, there.rel]).toEqual(['https://github.com/login/device', '_blank', 'noreferrer'])
-    // While the server waits for the person a second press is the person starting over.
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Log in to GitHub for 203.0.113.5' }).textContent).toBe('Start over'))
-    expect((screen.getByRole('button', { name: 'Log in to GitHub for 203.0.113.5' }) as HTMLButtonElement).disabled).toBe(false)
-
-    github = { there: true, working: false, account: 'octocat', since: '2026-10-12T10:00:00.000Z' }
-    expect(await screen.findByText(/^GitHub: logged in as octocat since /)).toBeTruthy()
-    expect(screen.queryByRole('link', { name: 'Open GitHub' })).toBeNull()
-  })
-
-  test('a server that is not installed yet gives no code, and has no people or logins to show', async () => {
+  test('a server that is not installed yet gives no code, and has no people to show', async () => {
     const { host } = dashboard(() => ok({ servers: [server(['done', 'done', 'failed'])] }))
     show(host)
     await open('203.0.113.5')
@@ -652,21 +630,6 @@ describe('Settings › Devices: a server this computer installed', () => {
     await waitFor(() => expect(asked()).toBeGreaterThan(again))
   })
 
-  test('a server whose login is being changed is not removed: nothing of it is taken out before it can be forgotten', async () => {
-    let github: LoginRow = { there: false, working: true, asking: true, code: 'ABCD-1234' }
-    const { host, ran, removeMachine } = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false, logins: { github, claude: NONE } })] }), BOX_SAVED())
-    show(host)
-    await open('203.0.113.5')
-    const remove = (await screen.findByRole('button', { name: 'Remove 203.0.113.5' })) as HTMLButtonElement
-    expect(remove.disabled).toBe(true)
-    expect(remove.title).toBe('One of its logins is being changed right now: wait until that ends.')
-    fireEvent.click(remove)
-    github = NONE
-    await waitFor(() => expect((screen.getByRole('button', { name: 'Remove 203.0.113.5' }) as HTMLButtonElement).disabled).toBe(false))
-    expect(removeMachine).not.toHaveBeenCalled()
-    expect(ran()).not.toContain('forget 203.0.113.5')
-  })
-
   test('a look that could not read the servers says so, and takes no row off the page', async () => {
     let fails = false
     const { host } = dashboard(() => (fails ? { ok: false, error: 'servers printed no JSON' } : ok({ servers: [server(ALL_DONE, { adding: false })] })), BOX_SAVED())
@@ -713,162 +676,6 @@ describe('Settings › Devices: a server this computer installed', () => {
     const unread = dashboard(() => ({ ok: false, error: 'servers printed no JSON' }))
     show(unread.host)
     expect(await screen.findByText('The servers could not be read: servers printed no JSON')).toBeTruthy()
-  })
-
-  test('a server that is being installed has no logins to press yet; a GitHub login that was ticked waits in the steps', async () => {
-    const { host } = dashboard(() => ok({ servers: [server(['done', 'running'], { working: true, logins: { github: { there: false, working: true }, claude: NONE } })] }))
-    show(host)
-    await open('203.0.113.5')
-    expect(await screen.findByText('Installing: step 2 of 8')).toBeTruthy()
-    expect(stepNames().at(-1)).toBe('Your GitHub login: not copied yet')
-    expect(screen.queryByRole('tab', { name: 'Logins' })).toBeNull()
-    expect(screen.queryByRole('list', { name: 'The logins on 203.0.113.5' })).toBeNull()
-  })
-
-  test('an installed server lists its two logins: the GitHub one is copied on a press and removed on a press', async () => {
-    let github: LoginRow = NONE
-    const { host, ran } = dashboard(
-      args => {
-        if (args[0] === 'login') github = { there: true, working: false, account: 'octocat', since: '2026-10-11T12:00:00.000Z' }
-        if (args[0] === 'logout') github = NONE
-        return ok({ servers: [server(ALL_DONE, { adding: false, logins: { github, claude: NONE } })] })
-      },
-      undefined,
-      undefined,
-      OCTOCAT,
-    )
-    show(host)
-    await open('203.0.113.5')
-    await tab('Logins')
-    const logins = within(await screen.findByRole('list', { name: 'The logins on 203.0.113.5' }))
-    expect(logins.getByText('GitHub: no login on the server.')).toBeTruthy()
-    expect(logins.getByText('Claude: not logged in on the server.')).toBeTruthy()
-    expect(logins.queryByRole('button', { name: 'Remove the GitHub login from 203.0.113.5' })).toBeNull()
-    const copy = logins.getByRole('button', { name: 'Copy my GitHub login to 203.0.113.5' }) as HTMLButtonElement
-    await waitFor(() => expect(copy.disabled).toBe(false))
-    fireEvent.click(copy)
-    await waitFor(() => expect(ran()).toContain('login 203.0.113.5 github'))
-    expect(await logins.findByText(/^GitHub: logged in as octocat since .*2026\.$/)).toBeTruthy()
-    expect(copy.textContent).toBe('Copy again')
-    fireEvent.click(logins.getByRole('button', { name: 'Remove the GitHub login from 203.0.113.5' }))
-    await waitFor(() => expect(ran()).toContain('logout 203.0.113.5 github'))
-    expect(await logins.findByText('GitHub: no login on the server.')).toBeTruthy()
-  })
-
-  test('with no GitHub login on this computer there is none to copy; a copy that failed at the install\'s end says why', async () => {
-    const failed: LoginRow = { there: false, working: false, said: 'error validating token: HTTP 401: Bad credentials' }
-    const { host } = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false, logins: { github: failed, claude: NONE } })] }))
-    show(host)
-    await open('203.0.113.5')
-    await tab('Logins')
-    const logins = within(await screen.findByRole('list', { name: 'The logins on 203.0.113.5' }))
-    expect(logins.getByRole('alert').textContent).toBe('error validating token: HTTP 401: Bad credentials')
-    expect(logins.getByText('GitHub: the last try did not go through.')).toBeTruthy()
-    expect((logins.getByRole('button', { name: 'Copy my GitHub login to 203.0.113.5' }) as HTMLButtonElement).disabled).toBe(true)
-    // What a failed try left on the server is not always known here: it can be taken off all the same.
-    expect(logins.getByRole('button', { name: 'Remove the GitHub login from 203.0.113.5' })).toBeTruthy()
-    expect(logins.queryByRole('button', { name: 'Remove the Claude login from 203.0.113.5' })).toBeNull()
-  })
-
-  test('while the server is being told there is nothing to press, and an older failure is not shown', async () => {
-    const told: LoginRow = { there: true, working: true, account: 'octocat', since: '2026-10-11T12:00:00.000Z', said: 'an older failure' }
-    const { host } = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false, logins: { github: told, claude: { there: false, working: true } } })] }), undefined, undefined, OCTOCAT)
-    show(host)
-    await open('203.0.113.5')
-    await tab('Logins')
-    const logins = within(await screen.findByRole('list', { name: 'The logins on 203.0.113.5' }))
-    expect(logins.getByText('GitHub: one moment, the server is being told.')).toBeTruthy()
-    expect(logins.getByText('Claude: one moment, the server is being told.')).toBeTruthy()
-    expect(logins.queryByRole('alert')).toBeNull()
-    await waitFor(() => expect(host.runComputerCommand).toHaveBeenCalledWith(['server', 'github']))
-    expect((logins.getByRole('button', { name: 'Copy my GitHub login to 203.0.113.5' }) as HTMLButtonElement).disabled).toBe(true)
-    // Only a login that still waits for the person is started over; one on its way to the server arrives.
-    expect((logins.getByRole('button', { name: 'Log in to Claude for 203.0.113.5' }) as HTMLButtonElement).disabled).toBe(true)
-    for (const name of ['Remove the GitHub login from 203.0.113.5', 'Remove the Claude login from 203.0.113.5']) expect(logins.queryByRole('button', { name })).toBeNull()
-  })
-
-  test('a press makes a Claude login for the server: the page says where to say yes, then until when it is good; it is removed on a press', async () => {
-    let claude: LoginRow = NONE
-    const { host, ran } = dashboard(args => {
-      if (args[0] === 'login') claude = { there: false, working: true, asking: true }
-      if (args[0] === 'logout') claude = NONE
-      return ok({ servers: [server(ALL_DONE, { adding: false, logins: { github: NONE, claude } })] })
-    })
-    show(host)
-    await open('203.0.113.5')
-    await tab('Logins')
-    const logins = within(await screen.findByRole('list', { name: 'The logins on 203.0.113.5' }))
-    const press = logins.getByRole('button', { name: 'Log in to Claude for 203.0.113.5' })
-    expect(press.textContent).toBe('Log in to Claude')
-    fireEvent.click(press)
-    await waitFor(() => expect(ran()).toContain('login 203.0.113.5 claude'))
-    expect(await logins.findByText("Claude: say yes in the page this computer's browser opened.")).toBeTruthy()
-    // A page that was closed is no dead end.
-    expect(press.textContent).toBe('Start over')
-    expect(logins.queryByRole('button', { name: 'Remove the Claude login from 203.0.113.5' })).toBeNull()
-
-    claude = { there: true, working: false, since: '2026-10-11T12:00:00.000Z', ends: '2027-10-11T12:00:00.000Z' }
-    expect(await logins.findByText(/^Claude: logged in since .*2026, good until about .*2027\.$/)).toBeTruthy()
-    expect(press.textContent).toBe('Log in again')
-    fireEvent.click(logins.getByRole('button', { name: 'Remove the Claude login from 203.0.113.5' }))
-    await waitFor(() => expect(ran()).toContain('logout 203.0.113.5 claude'))
-    expect(await logins.findByText('Claude: not logged in on the server.')).toBeTruthy()
-  })
-
-  test('a Claude login that was not made says why, and a login that could not be removed says why', async () => {
-    const failed: LoginRow = { there: false, working: false, said: 'No yes came from the browser in 10 minutes.' }
-    const { host } = dashboard(args => (args[0] === 'logout' ? { ok: false, error: 'The server did not answer.' } : ok({ servers: [server(ALL_DONE, { adding: false, logins: { github: { there: true, working: false, account: 'octocat', since: '2026-10-11T12:00:00.000Z' }, claude: failed } })] })))
-    show(host)
-    await open('203.0.113.5')
-    await tab('Logins')
-    const logins = within(await screen.findByRole('list', { name: 'The logins on 203.0.113.5' }))
-    expect(logins.getByRole('alert').textContent).toBe('No yes came from the browser in 10 minutes.')
-    fireEvent.click(logins.getByRole('button', { name: 'Remove the GitHub login from 203.0.113.5' }))
-    expect(await screen.findByText('The server did not answer.')).toBeTruthy()
-  })
-
-  test('under its own Claude login a server lists its other accounts, read from it as the page shows them: each with how full it was, removed on a press; another is added by a name and a yes in the browser', async () => {
-    let accounts: AccountRow[] = [{ name: 'Dani', added: '2026-10-22T12:00:00.000Z', windows: [{ window: 'five_hour', percentUsed: 3, resetsAt: 1 }, { window: 'seven_day', percentUsed: 21.4, resetsAt: 2 }] }]
-    let adding: ServerRow['claudeAdding']
-    const { host, ran } = dashboard(args => {
-      if (args[0] === 'account-add') adding = { name: args[2]!, working: true, asking: true }
-      if (args[0] === 'account-remove') accounts = accounts.filter(account => account.name !== args[2])
-      return ok({ servers: [server(ALL_DONE, { adding: false, claudeAccounts: accounts, ...(adding ? { claudeAdding: adding } : {}) })] })
-    })
-    show(host)
-    await open('203.0.113.5')
-    await tab('Logins')
-    const others = within(await screen.findByRole('listitem', { name: 'Other Claude accounts' }))
-    await waitFor(() => expect(ran()).toContain('accounts 203.0.113.5'))
-    expect(others.getByText('Other Claude accounts: a run that hits a limit goes on with the next free one, in this order.')).toBeTruthy()
-    expect(others.getByText(/^added .*2026, 21% of its week used at its last run$/)).toBeTruthy()
-
-    fireEvent.click(others.getByRole('button', { name: 'Add another Claude account to 203.0.113.5' }))
-    const press = others.getByRole('button', { name: 'Log in to Claude' }) as HTMLButtonElement
-    expect(press.disabled).toBe(true)
-    fireEvent.change(others.getByRole('textbox', { name: 'Whose account it is' }), { target: { value: ' Eve ' } })
-    fireEvent.click(press)
-    await waitFor(() => expect(ran()).toContain('account-add 203.0.113.5 Eve'))
-    expect(await others.findByText("Eve: say yes in the page this computer's browser opened, logged in to Eve's Claude account.")).toBeTruthy()
-
-    adding = { name: 'Eve', working: false, said: 'No yes came from the browser in 10 minutes.' }
-    expect((await others.findByRole('alert')).textContent).toBe('Eve: No yes came from the browser in 10 minutes.')
-    fireEvent.click(others.getByRole('button', { name: 'Remove the Claude account Dani from 203.0.113.5' }))
-    await waitFor(() => expect(ran()).toContain('account-remove 203.0.113.5 Dani'))
-    expect(await others.findByText('Other Claude accounts: none. A run that hits the limit of the login above stops there.')).toBeTruthy()
-  })
-
-  test('an account at its limit says until when; a server that cannot say its accounts says why, and the rest of its logins are as before', async () => {
-    const until = Date.now() + 2 * 60 * 60_000
-    const { host } = dashboard(args => (args[0] === 'accounts' ? { ok: false, error: 'The server did not answer.' } : ok({ servers: [server(ALL_DONE, { adding: false, claudeAccounts: [{ name: 'Dani', limitedUntil: until }, { name: 'Eve' }] })] })))
-    show(host)
-    await open('203.0.113.5')
-    await tab('Logins')
-    const others = within(await screen.findByRole('listitem', { name: 'Other Claude accounts' }))
-    expect(within(others.getByRole('listitem', { name: 'Dani' })).getByText(/^at its limit until /)).toBeTruthy()
-    expect(within(others.getByRole('listitem', { name: 'Eve' })).getByText('no run on it yet')).toBeTruthy()
-    expect(await others.findByText('The server did not say its other accounts: The server did not answer.')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Log in to Claude for 203.0.113.5' })).toBeTruthy()
   })
 
   test('a server among the machines has a switch under This computer that lets it start runs here: off until set, on asks for the line, off again leaves it only watching', async () => {
@@ -975,16 +782,14 @@ describe('Settings › Devices: a server this computer installed', () => {
     expect(screen.queryByText('Computers on this server')).toBeNull()
   })
 
-  test('a server someone invited this computer\'s person to is a server with that person\'s own logins, line and devices, all through its door; nothing only its owner does', async () => {
+  test('a server someone invited this computer\'s person to is a server with that person\'s own line and devices, all through its door; nothing only its owner does', async () => {
     const SHARED = 'https://198.51.100.7'
     const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: SHARED, label: '198.51.100.7', url: SHARED, version: '1.2.3', device: 'k1abcd' }] }
-    const own = { person: 'rom', logins: { github: NONE, claude: NONE } }
-    const kept = { shared: [{ url: SHARED, claude: NONE }] }
-    const { host, runComputerCommand, runComputerCommandOn, machinePerson, removeMachineDevice, removeMachine } = dashboard(args => (args[0] === 'status' ? ok({ servers: [] }) : args[0] === 'github' ? OCTOCAT : args[0] === 'shared-login' && args[2] === 'github' ? ok({ ...own, logins: { github: { there: true, working: false, account: 'rom', since: '2026-10-19T00:00:00.000Z' }, claude: NONE } }) : ok(kept)), saved, { ok: true }, OCTOCAT)
+    const kept = { shared: [{ url: SHARED }] }
+    const { host, runComputerCommand, runComputerCommandOn, machinePerson, removeMachineDevice, removeMachine } = dashboard(args => (args[0] === 'status' ? ok({ servers: [] }) : ok(kept)), saved)
     const PHONE = { id: 'p1abcd', name: 'iPhone, Safari', added: '2026-10-19T00:00:00.000Z' }
     machinePerson.mockImplementation(async () => ({ ok: true, said: { person: 'rom', owner: false, devices: [{ id: 'k1abcd', name: 'OpenAgent on Roms-Mac', added: '2026-10-19T00:00:00.000Z' }, PHONE] } }))
     removeMachineDevice.mockImplementation(async () => ({ ok: true, said: { person: 'rom', owner: false, devices: [] } }))
-    runComputerCommandOn.mockImplementation(async (_machine, args) => ok(args[0] === 'own' ? own : {}))
     show(host)
     // The line to it is a switch under This computer, as any server's.
     fireEvent.click(await screen.findByRole('switch', { name: 'From anywhere, through 198.51.100.7' }))
@@ -995,18 +800,11 @@ describe('Settings › Devices: a server this computer installed', () => {
     await open('198.51.100.7')
     expect(await screen.findByText('You are in as rom.')).toBeTruthy()
     expect(screen.getByText('Your runs there are yours: they use your own GitHub and Claude logins.')).toBeTruthy()
-    // What only the owner does is not there.
+    // What only the owner does is not there; its logins are in Settings › Accounts, and nothing is asked of the person's own OpenAgent there.
     expect(screen.queryByRole('button', { name: /^Invite/ })).toBeNull()
     expect(screen.queryByText(/Installed, as/)).toBeNull()
-
-    await tab('Logins')
-    expect(await screen.findByText('Before your first run there: log in to GitHub and Claude below.')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Copy my GitHub login to 198.51.100.7' }))
-    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['shared-login', SHARED, 'github']))
-    fireEvent.click(await screen.findByRole('button', { name: 'Log in to GitHub for 198.51.100.7' }))
-    await waitFor(() => expect(runComputerCommandOn).toHaveBeenCalledWith(SHARED, ['own', 'login', 'github', 'own']))
-    fireEvent.click(await screen.findByRole('button', { name: 'Log in to Claude for 198.51.100.7' }))
-    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['shared-login', SHARED, 'claude']))
+    expect(screen.queryByRole('tab', { name: 'Logins' })).toBeNull()
+    expect(runComputerCommandOn).not.toHaveBeenCalled()
 
     // The person's own devices, this computer's OpenAgent among them with no Remove.
     await tab('Your devices')
@@ -1024,7 +822,7 @@ describe('Settings › Devices: a server this computer installed', () => {
 
   test('a server set up from another computer of this person\'s is theirs here too: it has its own switch under This computer, which only the computer that installed it had', async () => {
     const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: 'https://198.51.100.7', label: 'Box', url: 'https://198.51.100.7', version: '1.2.3' }, { id: 'https://198.51.100.8', label: 'my-vps', url: 'https://198.51.100.8', version: '1.2.3' }] }
-    const { host, runComputerCommand, machinePerson, runComputerCommandOn } = dashboard(args => (args[0] === 'status' ? ok({ servers: [] }) : ok({ shared: [{ url: 'https://198.51.100.8', claude: NONE }] })), saved)
+    const { host, runComputerCommand, machinePerson, runComputerCommandOn } = dashboard(args => (args[0] === 'status' ? ok({ servers: [] }) : ok({ shared: [{ url: 'https://198.51.100.8' }] })), saved)
     machinePerson.mockImplementation(async id => (id === 'https://198.51.100.8' ? { ok: true, said: { person: 'ada', owner: true, devices: [] } } : { ok: false, error: 'not said', unknown: true }))
     show(host)
     // Its owner's other computer: one switch, through it, as on the computer that set it up.
@@ -1047,7 +845,7 @@ describe('Settings › Devices: a server this computer installed', () => {
     const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: SERVER, label: '203.0.113.5', url: SERVER, version: '1.2.3' }, { id: BOX, label: 'rom-desktop (through 203.0.113.5)', url: BOX, version: '1.2.3', owner: 'rom' }] }
     let logins: unknown = { github: { source: 'copied', from: 'vps-1', account: 'sul' } }
     const { host, runComputerCommand, computersThrough } = dashboard(
-      args => (args[0] === 'status' ? ok({ servers: [] }) : args[0] === 'other' || args[0] === 'other-login' ? ok({ other: [{ url: BOX, logins, claude: NONE }] }) : ok({})),
+      args => (args[0] === 'status' ? ok({ servers: [] }) : args[0] === 'other' || args[0] === 'other-login' ? ok({ other: [{ url: BOX, logins, claude: { there: false, working: false } }] }) : ok({})),
       saved,
       { ok: true },
       OCTOCAT,
@@ -1084,7 +882,7 @@ describe('Settings › Devices: a computer at home set up as a server, through a
     const steps = Object.entries(THROUGH_LABELS)
       .filter((entry): entry is [string, string] => entry[1] !== undefined)
       .map(([id, label]) => ({ id, label, state: 'done' as const }))
-    return { address: '192.168.1.20', url: VIA, user: 'rom', working: false, adding: false, through: VPS, who: 'me', steps, logins: { github: NONE, claude: NONE }, claudeAccounts: [], ...over }
+    return { address: '192.168.1.20', url: VIA, user: 'rom', working: false, adding: false, through: VPS, who: 'me', steps, ...over }
   }
   const SAVED: ModuleMachines = { version: '1.2.3', machines: [{ id: VPS, label: '165.245.244.10', url: VPS, version: '1.2.3' }, { id: VIA, label: 'rom-box', url: VIA, version: '1.2.3' }] }
 
@@ -1105,10 +903,7 @@ describe('Settings › Devices: a computer at home set up as a server, through a
     expect(group.textContent).toContain('Their agents run on your home network.')
     expect(screen.queryByRole('button', { name: 'Invite to 192.168.1.20' })).toBeNull()
     expect(screen.queryByRole('tab', { name: 'People' })).toBeNull()
-    // Its logins are a server's, over SSH.
-    await tab('Logins')
-    expect(await screen.findByRole('list', { name: 'The logins on 192.168.1.20' })).toBeTruthy()
-    await tab('Overview')
+    expect(screen.queryByRole('tab', { name: 'Logins' })).toBeNull()
 
     fireEvent.click(within(await screen.findByRole('radiogroup', { name: 'Who can start runs on 192.168.1.20' })).getByRole('radio', { name: /Everyone/ }))
     await waitFor(() => expect(ran()).toContain('who 192.168.1.20 everyone'))
@@ -1172,7 +967,7 @@ describe('Settings › Devices: Set up a server, in steps', () => {
   }
 
   test('a cloud server: Where, a test that goes through, its logins, then Install starts this computer\'s own OpenAgent there, in no project', async () => {
-    const { host, ran } = dashboard(() => ok({ servers: [] }), undefined, undefined, OCTOCAT)
+    const { host, ran } = dashboard(() => ok({ servers: [] }))
     show(host)
     await openConnect()
     expect(now()).toBe('Where: now')
@@ -1196,13 +991,15 @@ describe('Settings › Devices: Set up a server, in steps', () => {
     fireEvent.change(screen.getByLabelText("The server's address"), { target: { value: '203.0.113.5' } })
     expect(button('Continue').disabled).toBe(false)
     fireEvent.click(button('Continue'))
-    // This computer's GitHub login is copied unless said, and Claude logs in once it is installed.
-    const github = await screen.findByRole('radiogroup', { name: 'GitHub on the server' })
-    expect(within(github).getByRole('radio', { name: /Copy mine \(octocat\)/ }).getAttribute('aria-checked')).toBe('true')
-    expect(within(screen.getByRole('radiogroup', { name: 'Claude on the server' })).getByRole('radio', { name: /Log in once it is installed/ }).getAttribute('aria-checked')).toBe('true')
-    expect(now()).toBe('Logins: now')
+    // The server uses this computer's logins unless said, in one box.
+    expect((await screen.findByRole('checkbox', { name: 'Use my logins from this computer' })).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByText("Runs on the server use the accounts you're logged into here. Logging in or out here updates the server.")).toBeTruthy()
+    expect(screen.getByText('The server gets logins of its own. Nothing here is logged out, now or later.')).toBeTruthy()
+    expect(screen.getByText('Unchecked: the server has no logins. You can turn it on later in Settings › Accounts.')).toBeTruthy()
+    expect(screen.queryByRole('radiogroup')).toBeNull()
+    expect(now()).toBe('Your logins: now')
     fireEvent.click(button('Install'))
-    await waitFor(() => expect(ran()).toContain('connect 203.0.113.5 root 1.2.3 github'))
+    await waitFor(() => expect(ran()).toContain('connect 203.0.113.5 root 1.2.3'))
     expect(host.runCommand).not.toHaveBeenCalled()
     await waitFor(() => expect(now()).toBe('Install: now'))
     // Back to Where in another go: the dialog starts over.
@@ -1298,75 +1095,97 @@ describe('Settings › Devices: Set up a server, in steps', () => {
     expect(screen.getByText("It asks for the server's password once: it turns SSH on, adds this computer's key. Then press Test connection again.")).toBeTruthy()
   })
 
-  test('an install that is refused says why in the dialog, which stays at its logins; with no GitHub login here there is no copy to pick', async () => {
+  test('an install that is refused says why in the dialog, which stays at its logins', async () => {
     const { host, ran } = dashboard(args => (args[0] === 'connect' ? { ok: false, error: 'OpenAgent is being installed on 203.0.113.5 right now' } : ok({ servers: [] })))
     show(host)
     await toConnect()
     testAs('203.0.113.5')
     await waitFor(() => expect(button('Continue').disabled).toBe(false))
     fireEvent.click(button('Continue'))
-    const github = await screen.findByRole('radiogroup', { name: 'GitHub on the server' })
-    expect(within(github).getByRole('radio', { name: /Copy mine/ }).hasAttribute('data-disabled')).toBe(true)
-    expect(within(github).getByText('There is no GitHub login to copy from this computer. `gh` is not on this computer.')).toBeTruthy()
-    expect(within(github).getByRole('radio', { name: 'Later' }).getAttribute('aria-checked')).toBe('true')
     await waitFor(() => expect(button('Install').disabled).toBe(false))
     fireEvent.click(button('Install'))
     expect(await screen.findByText('OpenAgent is being installed on 203.0.113.5 right now')).toBeTruthy()
     expect(ran()).toContain('connect 203.0.113.5 root 1.2.3')
-    expect(now()).toBe('Logins: now')
+    expect(now()).toBe('Your logins: now')
   })
 
-  test('the install shows its steps; once installed, the logins picked start (a code for GitHub, the browser for Claude); then Ready, and Invite people opens the server inviting', async () => {
+  test('the install shows its steps; once it is saved among the machines it uses this computer\'s logins, as the box said; then Ready, and Invite people opens the server inviting', async () => {
     let row: ServerRow | undefined
-    const asking = { github: { there: false, working: true, asking: true, code: 'ABCD-1234' }, claude: { there: false, working: true, asking: true } }
-    const { host, ran } = dashboard(
+    const { host, ran, useLoginsOn } = dashboard(
       args => {
         if (args[0] === 'connect') row = server(['done', 'running'], { working: true })
-        if (args[0] === 'login' && row) row = { ...row, logins: { ...row.logins, [args[2]!]: asking[args[2] as 'github' | 'claude'] } }
+        if (args[0] === 'link') return ok(LINK)
+        if (args[0] === 'added' && row) row = { ...row, adding: false }
         return ok({ servers: row ? [row] : [] })
       },
       BOX_SAVED(),
-      undefined,
-      OCTOCAT,
     )
+    let used: (answer: MachineAdded) => void = () => {}
+    useLoginsOn.mockImplementation(() => new Promise<MachineAdded>(resolve => (used = resolve)))
     show(host)
     await toConnect()
     testAs('203.0.113.5')
     await waitFor(() => expect(button('Continue').disabled).toBe(false))
     fireEvent.click(button('Continue'))
-    fireEvent.click(await screen.findByRole('radio', { name: /Log in to another account on the server/ }))
     fireEvent.click(button('Install'))
     const steps = await screen.findByRole('list', { name: 'The install on 203.0.113.5' })
     await waitFor(() => expect(within(steps).getByRole('listitem', { name: 'A user of its own, openagent: running' })).toBeTruthy())
-    expect(within(steps).getByRole('listitem', { name: 'A GitHub login of its own: not started' })).toBeTruthy()
-    expect(within(steps).getByRole('listitem', { name: 'Claude login: not started' })).toBeTruthy()
+    expect(within(steps).getByRole('listitem', { name: 'Uses your logins: not started' })).toBeTruthy()
     expect(screen.getByText('A few minutes. You can close this: it goes on, and its row shows how far it is.')).toBeTruthy()
-    // Nothing is asked of the person before the server is installed.
-    expect(ran().some(line => line.startsWith('login '))).toBe(false)
-    row = server(ALL_DONE, { adding: false })
-    await waitFor(() => expect(ran()).toContain('login 203.0.113.5 github own'))
-    await waitFor(() => expect(ran()).toContain('login 203.0.113.5 claude'))
-    expect(await screen.findByText(/Type the code ABCD-1234 at/)).toBeTruthy()
-    expect(await screen.findByText("Say yes in the page this computer's browser opened.")).toBeTruthy()
+    // Nothing is said of the logins before the server is saved among the machines.
+    expect(useLoginsOn).not.toHaveBeenCalled()
+    row = server(ALL_DONE)
+    await waitFor(() => expect(ran()).toContain('added 203.0.113.5'))
+    // A machine is saved by its address.
+    await waitFor(() => expect(useLoginsOn).toHaveBeenCalledWith('https://203.0.113.5'))
+    expect(await within(steps).findByRole('listitem', { name: 'Uses your logins: running' })).toBeTruthy()
     expect(within(steps).getByRole('listitem', { name: 'Runs can be sent to it: done' })).toBeTruthy()
-    // Each asked once, however often the page looks.
-    await new Promise(resolve => setTimeout(resolve, 150))
-    expect(ran().filter(line => line.startsWith('login '))).toEqual(['login 203.0.113.5 github own', 'login 203.0.113.5 claude'])
-    row = { ...row, logins: { github: { there: true, working: false, account: 'octocat' }, claude: { there: true, working: false } } }
+    used({ ok: true })
     expect(await screen.findByText('203.0.113.5 is ready.')).toBeTruthy()
     expect(now()).toBe('Ready: now')
+    // Once, however often the page looks.
+    expect(useLoginsOn).toHaveBeenCalledTimes(1)
     fireEvent.click(button('Invite people'))
     expect(await screen.findByText('Invite to 203.0.113.5')).toBeTruthy()
     // Under it, the server's own page, on its people.
     expect(screen.getByRole('tab', { name: 'People', selected: true, hidden: true })).toBeTruthy()
   })
 
+  test('logins that could not be used are said on their own line: the server is installed all the same, and Continue goes on to Ready', async () => {
+    let row: ServerRow | undefined
+    const { host, useLoginsOn } = dashboard(
+      args => {
+        if (args[0] === 'connect') row = server(ALL_DONE)
+        if (args[0] === 'link') return ok(LINK)
+        if (args[0] === 'added' && row) row = { ...row, adding: false }
+        return ok({ servers: row ? [row] : [] })
+      },
+      BOX_SAVED(),
+    )
+    useLoginsOn.mockResolvedValue({ ok: false, error: 'That server is no longer saved.' })
+    show(host)
+    await toConnect()
+    testAs('203.0.113.5')
+    await waitFor(() => expect(button('Continue').disabled).toBe(false))
+    fireEvent.click(button('Continue'))
+    fireEvent.click(button('Install'))
+    const steps = await screen.findByRole('list', { name: 'The install on 203.0.113.5' })
+    const line = await within(steps).findByRole('listitem', { name: 'Uses your logins: failed' })
+    expect(line.textContent).toContain('That server is no longer saved.')
+    expect(within(steps).getByRole('listitem', { name: 'Runs can be sent to it: done' })).toBeTruthy()
+    expect(screen.queryByText('203.0.113.5 is ready.')).toBeNull()
+    fireEvent.click(button('Continue'))
+    expect(await screen.findByText('203.0.113.5 is ready.')).toBeTruthy()
+  })
+
   test('a PC at home: through a cloud server this computer is in at; Install sends it through that one, and Ready asks who else uses it', async () => {
     let row: ServerRow | undefined
-    const done = (): ServerRow => ({ ...server(ALL_DONE, { address: '192.168.1.20', url: VIA, user: 'rom', adding: false }), through: VPS, who: 'me' })
-    const { host, ran } = dashboard(
+    // Installed, and then saved through its server, by its line there.
+    const done = (adding: boolean): ServerRow => ({ ...server(ALL_DONE, { address: '192.168.1.20', url: adding ? 'https://192.168.1.20' : VIA, user: 'rom', adding }), through: VPS, who: 'me' })
+    const { host, ran, useLoginsOn } = dashboard(
       args => {
-        if (args[0] === 'connect') row = done()
+        if (args[0] === 'connect') row = done(true)
+        if (args[0] === 'add-through') row = done(false)
         return ok({ servers: row ? [row] : [] })
       },
       { version: '1.2.3', machines: [...WITH_VPS.machines, { id: VIA, label: 'rom-box', url: VIA, version: '1.2.3' }] },
@@ -1382,14 +1201,16 @@ describe('Settings › Devices: Set up a server, in steps', () => {
     testAs('192.168.1.20', 'rom')
     await waitFor(() => expect(button('Continue').disabled).toBe(false))
     fireEvent.click(button('Continue'))
-    fireEvent.click(within(await screen.findByRole('radiogroup', { name: 'GitHub on the server' })).getByRole('radio', { name: 'Later' }))
-    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Claude on the server' })).getByRole('radio', { name: 'Later' }))
+    // Unchecked: the server has no logins of this computer's.
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Use my logins from this computer' }))
+    expect(screen.getByRole('checkbox', { name: 'Use my logins from this computer' }).getAttribute('aria-checked')).toBe('false')
     fireEvent.click(button('Install'))
     await waitFor(() => expect(ran()).toContain(`connect 192.168.1.20 rom 1.2.3 --through ${VPS}`))
     expect(await screen.findByText('rom-box is ready.')).toBeTruthy()
     expect(screen.getByText('Your runs can go there from here. Who else uses it?')).toBeTruthy()
     expect(screen.getByRole('radiogroup', { name: 'Who can start runs on 192.168.1.20' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Invite people' })).toBeNull()
-    expect(ran().some(line => line.startsWith('login '))).toBe(false)
+    expect(ran()).toContain('add-through 192.168.1.20')
+    expect(useLoginsOn).not.toHaveBeenCalled()
   })
 })

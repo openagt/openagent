@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useModuleHost, usePolled, type ModuleHost, type ModuleMachines } from '@openagt/dashboard/module'
 import { loadStatus, type DoorStatus } from './devices.js'
-import { addThrough, askLink, connect, forget, loadDevices, loadServers, loadShared, markAdded, ownGithub, reach, readPersonThere, type Answer, type DevicesRead, type OwnGithub, type PersonThere, type ServerRow, type ServersRead, type SharedRow } from './servers.js'
+import { addThrough, askLink, connect, forget, loadDevices, loadServers, loadShared, markAdded, ownGithub, reach, readPersonThere, type Answer, type DevicesRead, type OwnGithub, type PersonThere, type ServerRow, type ServersRead, type SharedRow, type StepState } from './servers.js'
 import { hasDoor, itemsOf, type Item, type Sources } from './model.js'
 
 // What Settings › Devices reads, read once for the list and every page of it: this computer's
 // door, the servers it installed and what each is doing, the saved machines, what each server's
 // door says of this computer's person, and who is in at each server. And what a person does that
-// takes more than one command: an install, its last step (the server is saved among the machines),
-// a server's removal.
+// takes more than one command: an install, its last step (the server is saved among the machines,
+// and uses this computer's logins when the person said so), a server's removal.
 
 /**
  * How often a server is asked who is in while a code is on the page: a device that just got in
@@ -56,6 +56,8 @@ export interface Devices {
   setError: (error: string | undefined) => void
   /** Why a server whose install ended is not among the machines, by address. */
   notAdded: Record<string, string>
+  /** How a server just saved among the machines took this computer's logins, by address: once the person said it uses them. */
+  logins: Record<string, { state: StepState; said?: string }>
   /** The server whose Update or Try again was pressed, until its command answered. */
   pressed: string | undefined
   reloadDoor: () => Promise<unknown>
@@ -74,8 +76,12 @@ export interface Devices {
   setDevices: (address: string, read: DevicesRead) => void
   /** Run a change, and read the servers again; whether it went. */
   act: (change: () => Promise<Answer<unknown>>) => Promise<boolean>
-  /** Install OpenAgent at a server, or update it there; whether the install started. */
-  install: (address: string, user: string, github?: boolean, through?: string) => Promise<boolean>
+  /**
+   * Install OpenAgent at a server, or update it there; whether the install started. With `logins`,
+   * whether the server uses this computer's logins once it is saved among the machines; unsaid, as
+   * the person last said for it.
+   */
+  install: (address: string, user: string, through?: string, logins?: boolean) => Promise<boolean>
   /** Save a server whose install ended among the machines. */
   addToMachines: (server: ServerRow) => Promise<void>
   removeServer: (server: ServerRow) => Promise<void>
@@ -179,6 +185,9 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
   const [notAdded, setNotAdded] = useState<Record<string, string>>({})
   const [pressed, setPressed] = useState<string | undefined>()
   const adding = useRef(new Set<string>())
+  // The servers that are to use this computer's logins once they are saved, by address.
+  const wantsLogins = useRef(new Set<string>())
+  const [logins, setLogins] = useState<Devices['logins']>({})
 
   const act = async (change: () => Promise<Answer<unknown>>): Promise<boolean> => {
     setBusy(true)
@@ -190,16 +199,25 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
     return answer.ok
   }
 
-  const install = async (at: string, as: string, github = false, through?: string): Promise<boolean> => {
+  const install = async (at: string, as: string, through?: string, useLogins?: boolean): Promise<boolean> => {
     if (!machines || machines.version === 'unknown') {
       setError('This computer could not say which OpenAgent it runs.')
       return false
     }
+    if (useLogins !== undefined) wantsLogins.current[useLogins ? 'add' : 'delete'](at)
     setNotAdded(reasons => without(reasons, at))
     setPressed(at)
-    const started = await act(() => connect(host, at, as, machines.version, github, through))
+    const started = await act(() => connect(host, at, as, machines.version, through))
     setPressed(undefined)
     return started
+  }
+
+  /** A server just saved as the machine `id` uses this computer's logins, when the person said so; one that failed is told, and the server stays saved. */
+  const useLoginsOn = async (address: string, id: string): Promise<void> => {
+    if (!wantsLogins.current.delete(address)) return
+    setLogins(states => ({ ...states, [address]: { state: 'running' } }))
+    const used = await host.useLoginsOn(id).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
+    setLogins(states => ({ ...states, [address]: used.ok ? { state: 'done' } : { state: 'failed', said: used.error } }))
   }
 
   /**
@@ -219,6 +237,9 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
         const added = await addThrough(host, server.address)
         if (!added.ok) return stopped(added.error)
         await Promise.all([reloadServers(), reloadMachines()]).catch(() => {})
+        // Saved by its line through that server, which is its address among the machines from now on.
+        const url = added.value.find(row => row.address === server.address)?.url
+        if (url !== undefined) await useLoginsOn(server.address, url)
         return
       }
       // Read now, not as the page last saw them: the machines change from the launcher, too.
@@ -235,6 +256,8 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
       // the switch under This computer. One that could not be given its line shows the switch off.
       if (told.value.find(row => row.address === server.address)?.reach === undefined) await reach(host, server.address, 'full')
       await Promise.all([reloadServers(), reloadMachines()]).catch(() => {})
+      // A machine is saved by its address.
+      await useLoginsOn(server.address, server.url)
     } catch (err) {
       // Told, so the page does not try by itself again at its next look.
       stopped(err instanceof Error ? err.message : String(err))
@@ -293,6 +316,7 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
     error,
     setError,
     notAdded,
+    logins,
     pressed,
     reloadDoor,
     changeDoor,

@@ -107,13 +107,13 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The first time this computer meets a server, the server's key is taken as it is, shown,
   and remembered. A server that later shows another key is refused. Picked over showing the
   key and waiting for a click, and over taking only servers this computer already met.
-- SSH is only for the install, an update, the server's logins, a device's code and the
-  list of its devices. For everything else this computer reaches the server through the
-  server's door, with a key of its own.
+- SSH is only for the install, an update, a device's code and the list of its devices. For
+  everything else this computer reaches the server through the server's door, with a key of
+  its own.
 
 ## On the server
 - Everything runs as a user of its own, `openagent`. `root`, or a user that becomes root,
-  is only for the install, an update and the logins.
+  is only for the install and an update.
 - The install brings git, gh, Node, Chrome and the coding agent.
 - The server's git gets this computer's name and email, when it has none: a commit made on
   the server reads like one made on this computer. Picked over the name of the GitHub login
@@ -150,23 +150,6 @@ already made, and lists it in its pull request; for anything else it proposes an
   with "Everyone" greyed where it cannot work.
 
 ## The server's logins
-- The GitHub login is this computer's own, copied to the server when the person ticks it,
-  or one the server gets for itself with a "Log in to GitHub" button. Picked over the copy
-  alone, which gave a server no login when this computer has none; and over the button
-  alone, one more step at every install.
-- A ticked login is copied at the install's end, to a server met for the first time too.
-  Picked over waiting until the person has looked at the server's key.
-- The Claude login is made new for the server by one press on this computer, with
-  `claude setup-token`, and lasts a year. This computer's own Claude login is never copied:
-  used on two computers, it logs one of them out.
-- A server's runs may use other Claude accounts beside its own login: each added under its
-  Claude login, by a name and the same one press, and a run that hits a limit goes on with the
-  next free one. Picked over a person sharing theirs from their own OpenAgent, and over a link
-  that asks someone to share; both may come later.
-- The owner's logins go to the server over SSH, as the install does. An invited person's go
-  through the server's door, with their own computer's key there, and only to their own
-  OpenAgent: a device changes its own person's logins and nobody else's. Picked over SSH alone,
-  which an invited person has no way into.
 - A person's logins reach another person's computer copied from their own server, before their
   first run there; they can make a login of its own there instead, and a copy never replaces it.
   The Claude login copied is the one made for the server, never a laptop's own. Picked over a
@@ -195,9 +178,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   over the server's page alone, a second place to go to for every set-up; and over this
   computer alone, where a lost phone stays in while that computer is away.
 
-- An invited person sees the server on their own computer as the owner does: their own logins
-  there, their own devices, their own line. What only the owner does is not there: the
-  install, an update, an invite.
+- An invited person sees the server on their own computer as the owner does: their own devices
+  there, their own line. What only the owner does is not there: the install, an update, an
+  invite.
 
 ## An install or an update
 - Each step shows its own state while it runs: waiting, running, done or failed. Picked over

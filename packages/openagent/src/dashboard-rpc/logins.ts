@@ -1,15 +1,17 @@
 import { spawn } from 'node:child_process'
+import { homedir } from 'node:os'
 import { nodeGitRunner, runPackageCommand, type ProvidedCommand } from '@openagt/agent-data'
 import type { DriverFix, DriverReadiness } from '@openagt/agent-driver'
-import { claudeCodeReady } from '@openagt/agent-driver-claude'
-import { codexReady } from '@openagt/agent-driver-codex'
+import { claudeAccountsPath, claudeCodeReady } from '@openagt/agent-driver-claude'
+import { codexAccountsPath, codexReady } from '@openagt/agent-driver-codex'
 import { readProjectAccounts, writeProjectAccounts } from '@openagt/agent-runner'
 import { providedCommand } from '../built-in.js'
 import { isDriverName, type DriverName } from '../driver-names.js'
 import { readPreferences } from '../registry.js'
-import { onAgentAccounts, type AccountResult, type AccountsAgent } from './accounts.js'
+import { accountsWiring, onAgentAccounts, type AccountResult, type AccountsAgent } from './accounts.js'
 import { contextProjects, resolveProjectPath } from './context.js'
 import { readProvider, remoteHost, type GitHostProvider } from '../dashboard/git-hosts.js'
+import { readCopied } from '../dashboard/copied-logins.js'
 
 export type { GitHostAccount, GitHostProvider } from '../dashboard/git-hosts.js'
 
@@ -39,6 +41,8 @@ export const loginsWiring: {
   /** The project's git host package's command. */
   gitHost: (root: string) => Promise<ProvidedCommand | undefined>
   run: typeof runPackageCommand
+  /** Where a git host's package is asked when no project is on its host: the person's home folder. */
+  home: () => string
   ready: (driver: DriverName) => Promise<DriverReadiness>
   /** Run a fix's command to its end; rejects with its last lines. */
   fix: (command: string) => Promise<void>
@@ -51,7 +55,8 @@ export const loginsWiring: {
     ),
   gitHost: root => providedCommand(root, 'git-host').catch(() => undefined),
   run: runPackageCommand,
-  ready: driver => (driver === 'codex' ? codexReady() : claudeCodeReady()),
+  home: () => homedir(),
+  ready: driver => (driver === 'codex' ? codexReady({ accounts: codexAccountsPath() }) : claudeCodeReady({ accounts: claudeAccountsPath() })),
   fix: runFix,
   driver: async () => {
     const picked = (await readPreferences().catch(() => ({}) as { driver?: string })).driver
@@ -90,7 +95,11 @@ export async function onGitHosts(): Promise<GitHostsView> {
   return lastHosts.view
 }
 
-/** The hosts the projects' remotes are on, in the projects' order, each with its package's answer. A project with no remote is on none. */
+/**
+ * The hosts the projects' remotes are on, in the projects' order, each with its package's answer,
+ * then the host of the git host package OpenAgent brings, when no project is on it: a person logs
+ * in there before a project is. A project with no remote is on none.
+ */
 async function readGitHosts(): Promise<GitHostsView> {
   const projects = await contextProjects().list()
   const byHost = new Map<string, { roots: string[]; names: string[] }>()
@@ -117,7 +126,40 @@ async function readGitHosts(): Promise<GitHostsView> {
     if (!provider) found.delete(host)
     hosts.push({ host, projects: names, ...(provider ? { provider } : {}) })
   }
-  return { hosts }
+  const home = loginsWiring.home()
+  const command = await loginsWiring.gitHost(home)
+  const said = command ? await loginsWiring.run(home, command, ['accounts']) : undefined
+  const host = said?.ok ? (said.output as { host?: unknown } | null)?.host : undefined
+  const provider = said?.ok ? readProvider(said.output) : undefined
+  if (command && provider && typeof host === 'string' && !byHost.has(host)) {
+    found.set(host, { root: home, command })
+    hosts.push({ host, projects: [], provider })
+  }
+  return { hosts: hosts.map(row => withCopies(row)) }
+}
+
+/** A host's accounts, each that a computer of the person's handed over saying which: on a server, the person's own computers' logins. */
+function withCopies(row: GitHostRow): GitHostRow {
+  if (!row.provider) return row
+  const copies = readCopied().filter(login => login.kind === 'git' && login.host === row.host)
+  if (copies.length === 0) return row
+  const fromOf = (login: string): string | undefined => copies.find(copy => copy.name.toLowerCase() === login.toLowerCase())?.from
+  return { ...row, provider: { ...row.provider, accounts: row.provider.accounts.map(account => ({ ...account, ...(fromOf(account.login) !== undefined ? { from: fromOf(account.login)! } : {}) })) } }
+}
+
+/**
+ * A git host's package command for `host`, run where the host was last found, with `input` on its
+ * standard input. An object, not a function: what the RPC table is built of are this module's
+ * functions, and this is no call a page makes.
+ */
+export const gitHostPackages = {
+  async run(host: string, args: string[], input?: string): Promise<{ ok: true; output: unknown } | { ok: false; error: string }> {
+    const at = await providerOf(host)
+    if (!at) return { ok: false, error: `No package answers for ${host}.` }
+    const done = await loginsWiring.run(at.root, at.command, args, undefined, input)
+    lastHosts = undefined
+    return done
+  },
 }
 
 /** The package of `host`, as last found, else found now. */
@@ -164,6 +206,8 @@ export interface AgentState {
   problem?: string
   /** What a press does about it, when the agent's package declared a command for it. */
   fix?: DriverFix
+  /** The agent's own login is out, and runs use an added account: the own login is no account to show. */
+  ownLoggedOut?: true
   /** A press's fix going on. */
   fixing?: DriverFix['kind']
   /** Why the last press's fix failed. */
@@ -178,11 +222,14 @@ export async function onAgentState(driver?: string): Promise<AgentState> {
   const name = driver !== undefined && isDriverName(driver) ? driver : await loginsWiring.driver()
   const ready = await loginsWiring.ready(name)
   const press = fixes.get(name)
+  // A computer with no browser cannot log its agent in by a press: the person adds an account in its card instead.
+  const fix = ready.fix && !(ready.fix.kind === 'log-in' && accountsWiring.headless()) ? ready.fix : undefined
   return {
     driver: name,
     ready: ready.problems.length === 0,
     ...(ready.problems[0] !== undefined ? { problem: ready.problems[0] } : {}),
-    ...(ready.fix ? { fix: ready.fix } : {}),
+    ...(fix ? { fix } : {}),
+    ...(ready.ownLoggedOut ? { ownLoggedOut: true as const } : {}),
     ...(press?.fixing ? { fixing: press.fixing } : {}),
     ...(press?.failed !== undefined && ready.problems.length > 0 ? { failed: press.failed } : {}),
   }

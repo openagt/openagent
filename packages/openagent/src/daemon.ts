@@ -18,6 +18,7 @@ import { readAllAgents } from './store/index.js'
 import { setOpenagentVersion } from './version.js'
 import type { BridgeSession, StartedProject } from './dashboard/index.js'
 import { personLogins } from './dashboard/copy-logins.js'
+import { startLoginsSync } from './dashboard/logins-sync.js'
 import { runComputerCommand } from './dashboard-rpc/modules.js'
 
 /**
@@ -216,7 +217,11 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     log: console.log,
   })
 
+  // A computer keeps the servers that use its logins up to them (`logins-sync.ts`); a server makes none for another.
+  const stopLoginsSync = env.OPENAGENT_SERVER === '1' ? () => {} : startLoginsSync(env)
+
   await waitForShutdown(opts.signal)
+  stopLoginsSync()
 
   // One Ctrl+C stops the dashboard (#2141): a step that hangs is logged and left behind once the
   // deadline passes, and a second Ctrl+C stops at once.

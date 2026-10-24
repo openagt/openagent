@@ -2,7 +2,10 @@ import assert from 'node:assert/strict'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { test, type TestContext } from 'node:test'
-import { copyLoginsTo, personLogins, type RunComputerCommand } from './copy-logins.js'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { copyLoginsTo, ownLogins, personLogins, type RunComputerCommand } from './copy-logins.js'
 import { loginsOfOwn, loginsToCopy, markOf, readLogins, type GivenLogins, type MachineLogins } from './machine-logins.js'
 import { handleRelayRequest, WATCH_HEADER, type RelayHandlers } from './relay-endpoints.js'
 
@@ -142,4 +145,17 @@ test('a person\'s OpenAgent takes logins as the devices package does, GitHub fir
   assert.deepEqual(await personLogins(refusing).give({ github: GITHUB, claude: CLAUDE }), { ok: false, error: 'That is the GitHub login of @octocat.' })
   // A package that cannot be asked says no logins at all.
   assert.deepEqual(await personLogins(async () => ({ ok: false, error: 'not here' })).read(), {})
+})
+
+test('the Claude login a server copies is the one its runs take first: an added account, as one of the person\'s own computer\'s is, else its service\'s', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'own-logins-'))
+  try {
+    // No gh here: only the Claude login is asked about.
+    const env = { HOME: dir, XDG_CONFIG_HOME: dir, PATH: '/nonexistent', CLAUDE_CODE_OAUTH_TOKEN: 'sk-ant-oat01-service' }
+    assert.deepEqual(await ownLogins(env), { claude: 'sk-ant-oat01-service' })
+    writeFileSync(join(dir, 'openagent-claude-accounts.json'), JSON.stringify({ accounts: [{ name: 'Suleiman', login: CLAUDE }, { name: 'This computer' }] }))
+    assert.deepEqual(await ownLogins(env), { claude: CLAUDE })
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

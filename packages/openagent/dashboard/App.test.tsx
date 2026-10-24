@@ -136,6 +136,51 @@ describe('module cards on the Overview (#1818)', () => {
     expect(await screen.findByText('@acme/queue card for app')).toBeTruthy()
   })
 
+  test('the page itself scrolls only where it is a phone\'s page with no chat: anywhere else it is pinned, its columns scrolling by themselves', async () => {
+    answerOverview([])
+    window.history.replaceState(null, '', '/')
+    // What shows of the page: a phone's keyboard took the rest.
+    const shown = Object.assign(new EventTarget(), { height: 500, offsetTop: 0 })
+    Object.defineProperty(window, 'visualViewport', { configurable: true, value: shown })
+    // A box someone types in has the focus: the keyboard is up.
+    const box = document.body.appendChild(document.createElement('textarea'))
+    box.focus()
+    try {
+      render(<App />)
+      await waitFor(() => expect(document.documentElement.dataset['pinned']).toBe('true'))
+      expect(document.documentElement.style.getPropertyValue('--shown-height')).toBe('500px')
+      // Nothing keeps the page taller than what shows: a page at least as tall as the screen ran under the keyboard.
+      const shell = document.querySelector('.group\\/sidebar-wrapper')!
+      expect(shell.className.split(' ')).toEqual(expect.arrayContaining(['fixed', 'top-(--shown-top,0px)', 'h-(--shown-height,100dvh)', 'min-h-0']))
+      expect(shell.className.split(' ')).not.toContain('min-h-svh')
+      shown.height = 800
+      shown.dispatchEvent(new Event('resize'))
+      expect(document.documentElement.style.getPropertyValue('--shown-height')).toBe('800px')
+      // Safari scrolled what shows down the page: the page follows it there.
+      shown.offsetTop = 120
+      shown.dispatchEvent(new Event('scroll'))
+      expect(document.documentElement.style.getPropertyValue('--shown-top')).toBe('120px')
+      // Its keyboard went away and it said nothing more: what shows is read again as it settles.
+      shown.height = 844
+      await waitFor(() => expect(document.documentElement.style.getPropertyValue('--shown-height')).toBe('844px'))
+      // The box let go of the keyboard, and Safari still says the page is moved down: it is the whole screen at its top all the same.
+      box.blur()
+      await waitFor(() => expect(document.documentElement.style.getPropertyValue('--shown-height')).toBe(''))
+      expect(document.documentElement.style.getPropertyValue('--shown-top')).toBe('')
+    } finally {
+      box.remove()
+      delete (window as { visualViewport?: unknown }).visualViewport
+    }
+    cleanup()
+    const wide = phoneScreen()
+    try {
+      render(<App />)
+      await waitFor(() => expect(document.documentElement.dataset['pinned']).toBeUndefined())
+    } finally {
+      wide()
+    }
+  })
+
   test('cards come out by order, then by package name; a card that throws shows only its own error', async () => {
     const card = (text: string) => ({ Card: () => createElement('p', null, text) })
     function Boom(): never {

@@ -55,6 +55,10 @@ export const USAGE = `usage: github <command>
   install                      put gh on this computer with no admin: Homebrew where it is, else GitHub's build into ~/.local/bin; answers once it
                                started, and accounts says installing until it ended, then installFailed if it did
   env [--user <login>]         the environment a run gets to work as <login> (default: the account runs use): { env }, its token for gh and for git
+  token --user <login>         <login>'s token as gh keeps it, checked with GitHub to be that account's: { login, token }; what OpenAgent copies to a
+                               server of the person's, which then uses the same login, never a new one
+  take                         log in to gh with the token on standard input, beside the accounts gh knows: { login }
+  forget <login>               gh forgets <login> on this computer; the token is not ended, and goes on working wherever else it is
   create [--check]             create a private repository for a project with no origin, named <account>/<folder>, set it as origin and push;
                                --check only says which repository that would be
 
@@ -85,6 +89,8 @@ export interface CliDeps {
   login?: (terminal: string | undefined) => Promise<LoggingIn>
   /** The browser login under way; the default reads it off its files. */
   underWay?: () => LoggingIn | undefined
+  /** What the command was handed on standard input; the default reads the process's. */
+  stdin?: () => Promise<string>
 }
 
 /** A refusal: a rule said no, and the caller learns which. */
@@ -120,6 +126,7 @@ export async function runCli(argv: string[], io: CliIo, deps: CliDeps = {}): Pro
     installing: deps.installing ?? (() => jobState(jobFiles('install'))),
     login: deps.login ?? (terminal => startLogin(terminal)),
     underWay: deps.underWay ?? (() => loginUnderWay()),
+    stdin: deps.stdin ?? readStdin,
   }
   try {
     io.stdout(JSON.stringify(await run(rest, context)))
@@ -153,7 +160,47 @@ interface Context {
   installing: () => JobState | undefined
   login: (terminal: string | undefined) => Promise<LoggingIn>
   underWay: () => LoggingIn | undefined
+  stdin: () => Promise<string>
 }
+
+/** All of the process's standard input, as text. */
+async function readStdin(): Promise<string> {
+  let said = ''
+  for await (const chunk of process.stdin.setEncoding('utf8')) said += chunk
+  return said
+}
+
+/**
+ * `login`'s token as gh keeps it, once GitHub said it is that account's: a login gh keeps under
+ * one name can be another account's, and nothing must go out as someone else than it says.
+ */
+async function tokenOf(login: string, cwd: string, gh: GhRunner): Promise<string> {
+  let token: string
+  try {
+    token = (await gh(['auth', 'token', '--hostname', HOST, '--user', login], cwd)).trim()
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    throw new Refused({ ok: false, reason: 'no-token', login, detail }, `gh gave no token for ${login}: ${detail}`)
+  }
+  const whose = await whoseToken(token, cwd, gh, login)
+  if (whose.toLowerCase() !== login.toLowerCase()) {
+    throw new Refused({ ok: false, reason: 'not-that-account', login, whose }, `the login gh keeps for ${login} is ${whose}'s on GitHub: add ${login} again in OpenAgent's Settings › Accounts`)
+  }
+  return token
+}
+
+/** The account GitHub says a token is: `login`, when given, names the account it was asked for. */
+async function whoseToken(token: string, cwd: string, gh: GhRunner, login?: string): Promise<string> {
+  try {
+    return (await gh(['api', 'user', '--jq', '.login'], cwd, { GH_TOKEN: token })).trim()
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    throw new Refused({ ok: false, reason: 'no-token', ...(login !== undefined ? { login } : {}), detail }, `GitHub did not take ${login !== undefined ? `${login}'s login` : 'the login'}: ${detail}`)
+  }
+}
+
+/** What a GitHub token reads as: letters, digits and underscores, nothing a line could break on. */
+const TOKEN = /^[A-Za-z0-9_]{20,255}$/
 
 /** The logo OpenAgent draws the host's card with. */
 const LOGO = readFileSync(new URL('../assets/github.svg', import.meta.url), 'utf8').trim()
@@ -308,31 +355,50 @@ const COMMANDS: Record<string, Command> = {
     const state = await ghState(cwd, gh)
     const accounts = state.installed ? state.accounts : []
     if (values.user !== undefined && !accounts.some(a => a.login === values.user)) {
-      throw new Refused({ ok: false, reason: 'no-account', login: values.user }, `gh knows no account ${values.user} on ${HOST} on this computer: log it in in OpenAgent's Settings › Git hosts`)
+      throw new Refused({ ok: false, reason: 'no-account', login: values.user }, `gh knows no account ${values.user} on ${HOST} on this computer: log it in in OpenAgent's Settings › Accounts`)
     }
     const login = values.user ?? runsAccount(accounts, picksPath(env))
     // Nobody logged in: the run works as git and gh would anyway.
     if (login === undefined) return { ok: true, env: {} }
-    let token: string
+    return { ok: true, login, env: runEnv(await tokenOf(login, cwd, gh), env) }
+  },
+
+  async token(args, { cwd, gh }) {
+    const { values } = parse(args, { user: { type: 'string' } }, 0)
+    const login = values.user
+    if (login === undefined) throw new Usage('token needs --user <login>')
+    const state = await ghState(cwd, gh)
+    if (!(state.installed ? state.accounts : []).some(a => a.login === login)) throw new Refused({ ok: false, reason: 'no-account', login }, `gh knows no account ${login} on ${HOST} on this computer`)
+    return { ok: true, login, token: await tokenOf(login, cwd, gh) }
+  },
+
+  async take(args, { cwd, gh, stdin }) {
+    parse(args, {}, 0)
+    const token = (await stdin()).trim()
+    if (!TOKEN.test(token)) throw new Refused({ ok: false, reason: 'no-token' }, 'what was handed over is no GitHub token')
+    const login = await whoseToken(token, cwd, gh)
     try {
-      token = (await gh(['auth', 'token', '--hostname', HOST, '--user', login], cwd)).trim()
+      await gh(['auth', 'login', '--hostname', HOST, '--git-protocol', 'https', '--with-token'], cwd, undefined, token)
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err)
-      throw new Refused({ ok: false, reason: 'no-token', login, detail }, `gh gave no token for ${login}: ${detail}`)
+      throw new Refused({ ok: false, reason: 'login-failed', login, detail }, `gh did not take ${login}'s login: ${detail}`)
     }
-    // GitHub says whose the token is: a login gh keeps under one name can be another account's,
-    // and a run must never go out as someone else than the account it was given.
-    let whose: string
+    return { ok: true, login }
+  },
+
+  async forget(args, { cwd, gh }) {
+    const login = parse(args, {}, 1).positionals[0]!
+    const state = await ghState(cwd, gh)
+    if (!(state.installed ? state.accounts : []).some(a => a.login === login)) return { ok: true, login }
     try {
-      whose = (await gh(['api', 'user', '--jq', '.login'], cwd, { GH_TOKEN: token })).trim()
+      // gh only takes it off this computer: the token itself goes on working wherever else it is.
+      await gh(['auth', 'logout', '--hostname', HOST, '--user', login], cwd)
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err)
-      throw new Refused({ ok: false, reason: 'no-token', login, detail }, `GitHub did not take ${login}'s login: ${detail}`)
+      throw new Refused({ ok: false, reason: 'logout-failed', login, detail }, `gh did not forget ${login}: ${detail}`)
     }
-    if (whose.toLowerCase() !== login.toLowerCase()) {
-      throw new Refused({ ok: false, reason: 'not-that-account', login, whose }, `the login gh keeps for ${login} is ${whose}'s on GitHub: add ${login} again in OpenAgent's Settings › Git hosts`)
-    }
-    return { ok: true, login, env: runEnv(token, env) }
+    // A pick of runs that names it falls back to the terminal's account.
+    return { ok: true, login }
   },
 
   async me(args, { cwd, gh }) {

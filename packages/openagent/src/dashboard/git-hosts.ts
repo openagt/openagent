@@ -1,5 +1,5 @@
 // A git host as its package answers for it (`<command> accounts`), read off what the package
-// printed, and the host a project's remote is on: what Settings › Git hosts is drawn from.
+// printed, and the host a project's remote is on: what the git hosts of Settings › Accounts are drawn from.
 
 /** An account the git host's tool knows, as its package said it. */
 export interface GitHostAccount {
@@ -10,6 +10,8 @@ export interface GitHostAccount {
   runs: boolean
   /** Whether the tool could use it when asked. */
   ok: boolean
+  /** On a server: the computer of the person's whose login it is. */
+  from?: string
 }
 
 /** What a git host's package answers of it. */

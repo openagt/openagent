@@ -127,7 +127,7 @@ async function handleScreen(req: IncomingMessage, res: ServerResponse, handlers:
   await passToScreen(req, res, call, await handlers.screen(projectId, agentId).catch(() => undefined))
 }
 
-/** `GET /_relay/ping` (#1072): answer 200 with this OpenAgent's version and this computer's own name. Starts
+/** `GET /_relay/ping` (#1072): answer 200 with this OpenAgent's version, this computer's own name, and whether it is a server. Starts
  * nothing; it proves this daemon is reachable, and to another machine that its key still lets it in, tells that
  * machine whether this one fell behind it, and which runs in a project's shared records are this computer's:
  * a run's record carries the name of the computer that ran it. */
@@ -138,7 +138,8 @@ async function handlePing(req: IncomingMessage, res: ServerResponse): Promise<vo
   const listed = (await listMachines().catch(() => []))
     .filter(machine => !machine.url.includes(THROUGH_PATH))
     .flatMap(machine => deviceIdOf(machine.key) ?? [])
-  sendJson(res, { version: openagentVersion(), host: hostname(), listed })
+  // A server says so: a computer of its person's offers it its logins (`logins-sync.ts`).
+  sendJson(res, { version: openagentVersion(), host: hostname(), listed, ...(process.env.OPENAGENT_SERVER === '1' ? { server: true } : {}) })
 }
 
 /** `POST /_relay/start`: read the agent request, start it locally, and answer with the result JSON. */

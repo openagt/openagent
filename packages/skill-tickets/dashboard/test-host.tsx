@@ -50,6 +50,7 @@ export function fakeHost(answers: Answers = {}, agents: Record<string, ModuleAge
     computersThrough: vi.fn(async () => ({ ok: true as const, computers: [] })),
     machinePerson: vi.fn(async () => ({ ok: false as const, error: 'no person there', unknown: true as const })),
     removeMachineDevice: vi.fn(async () => ({ ok: false as const, error: 'no person there' })),
+    useLoginsOn: vi.fn(async () => ({ ok: false as const, error: 'no server here' })),
     addComputerThrough: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     watchScreen: vi.fn(async () => undefined),
     sendToScreen: vi.fn(async () => false),

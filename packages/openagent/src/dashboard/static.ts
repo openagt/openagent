@@ -1,4 +1,5 @@
 import { readFile, stat } from 'node:fs/promises'
+import { sendBody } from './compress.js'
 import { join, normalize, sep } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { contentTypeFor } from './content-type.js'
@@ -42,6 +43,7 @@ export async function serveClientBundle(req: IncomingMessage, res: ServerRespons
 
   const target = within && rel && (await isFile(candidate)) ? candidate : join(root, 'index.html')
   const body = await readFile(target).catch(() => undefined)
+  const facts = await stat(target).catch(() => undefined)
   if (body === undefined) {
     res.writeHead(404, { 'content-type': 'text/plain' })
     res.end('dashboard bundle not built')
@@ -53,6 +55,6 @@ export async function serveClientBundle(req: IncomingMessage, res: ServerRespons
   // browser that kept `/host/module.js` from the last version would hand every module a host
   // missing whatever the new version added, until its cache expired a year later.
   const cacheControl = target.startsWith(join(root, 'assets') + sep) ? 'public, max-age=31536000, immutable' : 'no-cache'
-  res.writeHead(200, { 'content-type': type, 'cache-control': cacheControl })
-  res.end(body)
+  // A file's packed copy is kept while the file is the same one.
+  await sendBody(req, res, 200, { 'content-type': type, 'cache-control': cacheControl }, body, facts ? `${target} ${facts.mtimeMs} ${facts.size}` : undefined)
 }

@@ -302,8 +302,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   person talks to it.
 
 ## What runs log in with
-- Settings has two pages for it, Agent accounts and Git hosts, each a card per tool drawn
-  from its package's answers: a git host's card says the package's name for the host, its
+- Settings has one page for it, Accounts: the coding agents' cards, then the git hosts', each
+  a card per tool drawn from its package's answers. Picked over two pages, Agent accounts and
+  Git hosts, which a server's logins would have split in two: a git host's card says the package's name for the host, its
   word for a pull request, the accounts its tool knows and the one runs use, so OpenAgent
   names no git host. One card per host the projects' remotes are on, a self-hosted one its
   own; a host no package answers for is a plain line, and a project with no remote is none.
@@ -321,6 +322,31 @@ already made, and lists it in its pull request; for anything else it proposes an
 - How full an account is reads as each of its windows by how long it lasts (5 h, week,
   month), the longest on its bar. Picked over a week and a session, which is Claude's
   shape: Codex's free plan has one window, a month.
+- A page never says "this computer": a login is named by the computer it is on. Picked over
+  "this computer", which a phone reading a server's page read as the phone or the laptop.
+
+## A server uses the person's own logins
+- A server of the person's uses the accounts their own computer is logged in to, every coding
+  agent's and git host's, each a login of the server's own that the computer makes for it. One
+  that can go as it is goes with nothing to press (a git host's token, a Claude account added
+  on the computer); one that cannot is made anew with one press in the computer's browser (the
+  computer's own Claude login, any Codex account). Picked over copying every login as it is,
+  where the computer and the server renew the same login and one of them is logged out, and
+  over logging in again on the server.
+- A login on a server never logs another device out, and taking it off deletes it there only.
+- The person says once that a server uses their computer's logins: a step of setting the
+  server up, or a bar in Accounts for a server set up before. Picked over a login step for
+  each login of each server.
+- A login the computer no longer has, or another account it switched to, changes nothing on
+  the server until the person says: the server keeps what it has meanwhile. A new account just
+  goes there. Picked over the server following at once, which could leave its runs with no login.
+- Only a person's own computers' logins are used. A person with no computer of their own logs
+  in on the server's own page, in the same cards, the browser step on their own device.
+- The person's settings follow the same way: how OpenAgent looks, what it tells them, what a run
+  starts with, the onboarding hidden. One changed on the server's own page stays until the same
+  one changes on the computer. A computer's own settings (its editor, its browser bridge) stay
+  its own. Picked over each OpenAgent keeping its own settings, where a phone showed what the
+  laptop had hidden.
 
 ## Starting a run
 - A Start runs the project's own `start` line, in the project's hooks file, and the line

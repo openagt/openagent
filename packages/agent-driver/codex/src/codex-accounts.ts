@@ -128,6 +128,12 @@ export interface CodexLoginOptions {
   onUrl?: (url: string) => void
   /** Opens the page in this computer's browser. Default the system's opener. */
   open?: (url: string) => void
+  /**
+   * For a computer whose browser is on another device: Codex gives a code in place of a page to
+   * open, told here with where it is typed; the person signs in there and types it. ChatGPT asks
+   * them first to allow it, in its security settings.
+   */
+  onCode?: (code: string, url: string) => void
   signal?: AbortSignal
   /** How long the person has to sign in. */
   timeoutMs?: number
@@ -142,8 +148,10 @@ const LOGIN_TIMEOUT_MS = 10 * 60_000
 
 /**
  * Log a new account in, in a folder of its own: Codex's own sign-in, in this computer's browser,
- * as `codex login` does it. Answers with the folder's name, the account's login for the list, and
- * who signed in. A login that does not go through leaves no folder behind.
+ * as `codex login` does it, or with a code typed on another device, as `codex login --device-auth`
+ * does it, when {@link CodexLoginOptions.onCode} is given. Answers with the folder's name, the
+ * account's login for the list, and who signed in. A login that does not go through leaves no
+ * folder behind.
  */
 export async function loginCodex(opts: CodexLoginOptions = {}): Promise<CodexLogin> {
   const env = opts.env ?? process.env
@@ -173,11 +181,19 @@ export async function loginCodex(opts: CodexLoginOptions = {}): Promise<CodexLog
       opts.signal?.addEventListener('abort', () => resolve({ success: false, error: 'The login was stopped.' }), { once: true })
       void server.gone.then(() => resolve({ success: false, error: 'Codex ended before anyone signed in.' }))
     })
-    const started = await server.request('account/login/start', { type: 'chatgpt' })
-    const url = started['authUrl']
-    if (typeof url !== 'string') return await failed('Codex gave no page to sign in at.')
-    opts.onUrl?.(url)
-    ;(opts.open ?? openInBrowser)(url)
+    if (opts.onCode) {
+      const started = await server.request('account/login/start', { type: 'chatgptDeviceCode' })
+      const code = started['userCode']
+      const url = started['verificationUrl']
+      if (typeof code !== 'string' || typeof url !== 'string' || !url.startsWith('https://')) return await failed('Codex gave no code to sign in with.')
+      opts.onCode(code, url)
+    } else {
+      const started = await server.request('account/login/start', { type: 'chatgpt' })
+      const url = started['authUrl']
+      if (typeof url !== 'string') return await failed('Codex gave no page to sign in at.')
+      opts.onUrl?.(url)
+      ;(opts.open ?? openInBrowser)(url)
+    }
     const result = await done
     if (!result.success) return await failed(result.error ?? 'The sign-in did not go through.')
     return { ok: true, login, who: await codexWho(folder) }

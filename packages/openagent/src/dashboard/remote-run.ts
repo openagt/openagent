@@ -76,18 +76,19 @@ export async function pingRemote(target: MachineAccess): Promise<boolean> {
 
 /**
  * What a saved machine says of itself in its ping: the OpenAgent it runs, the computer's own
- * name, which the records of its runs carry, and the ids it is listed under at the doors of the
- * machines it saved. Nothing for a machine that does not answer, or does not say.
+ * name, which the records of its runs carry, the ids it is listed under at the doors of the
+ * machines it saved, and whether it is a server. Nothing for a machine that does not answer, or does not say.
  */
-export async function remoteFacts(target: MachineAccess): Promise<{ version?: string; host?: string; listed?: string[] }> {
+export async function remoteFacts(target: MachineAccess): Promise<{ version?: string; host?: string; listed?: string[]; server?: true }> {
   const said: unknown = await (await ping(target))?.json().catch(() => undefined)
-  const { version, host, listed } = (said && typeof said === 'object' ? said : {}) as Record<string, unknown>
+  const { version, host, listed, server } = (said && typeof said === 'object' ? said : {}) as Record<string, unknown>
   const ids = Array.isArray(listed) ? listed.filter((id): id is string => typeof id === 'string' && DEVICE_ID.test(id)).slice(0, MAX_LISTED) : []
   return {
     // What a machine says is shown on a page: only what reads as a version is one.
     ...(typeof version === 'string' && /^[0-9A-Za-z.+-]{1,64}$/.test(version) ? { version } : {}),
     ...(isHostName(host) ? { host } : {}),
     ...(ids.length ? { listed: ids } : {}),
+    ...(server === true ? { server: true as const } : {}),
   }
 }
 
@@ -617,6 +618,26 @@ export async function remoteAddMachine(machine: MachineAccess, link: string, lab
     const { ok, error } = (said && typeof said === 'object' ? said : {}) as Record<string, unknown>
     if (ok === true) return { ok: true }
     return { ok: false, error: typeof error === 'string' && error ? error.slice(0, MAX_SAID) : 'the machine answered something else than expected' }
+  } catch (err) {
+    return { ok: false, error: errorMessage(err) }
+  }
+}
+
+/**
+ * Call one of a machine's own functions, as its page calls it, with this computer's key there:
+ * what the machine answers is its own words, to read as data. Why not, when it did not answer.
+ */
+export async function machineCall(machine: MachineAccess, fn: string, args: unknown[], timeoutMs = COMMAND_TIMEOUT_MS): Promise<{ ok: true; ret: unknown } | { ok: false; error: string }> {
+  try {
+    const res = await machineFetch(`${trimSlashes(machine.url)}/_rpc/${fn}`, machine.pin, {
+      method: 'POST',
+      headers: relayHeaders(machine.key),
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+    if (res.status === 401) return { ok: false, error: NOT_IN }
+    if (!res.ok) return { ok: false, error: (await refusalOf(res)) ?? `the machine answered ${res.status}` }
+    return { ok: true, ret: ((await res.json()) as { ret?: unknown }).ret }
   } catch (err) {
     return { ok: false, error: errorMessage(err) }
   }

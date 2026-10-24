@@ -1,4 +1,3 @@
-import { giveGithub, noteGithub } from './logins.js'
 import { askOpenAgent } from './shared.js'
 import { exec as realExec, lastLines, openSession, withAdvice, type Exec, type Session } from './ssh.js'
 import { PERSON_TIMEOUT_MS, SERVER_USER, devicesScript, linkScript, stepsFor, type Facts, type StepId } from './steps.js'
@@ -10,8 +9,6 @@ import { nameOf } from '../door/store.js'
  * as it starts and as it ends, so the page shows where the install is. It stops at the first
  * step that fails, with what the server said. Run as a process of its own: an install takes
  * minutes, and a command a page runs has seconds.
- *
- * Once the steps are done, the GitHub login is copied when the person asked for that.
  *
  * A computer reached through a server (a computer at home, which nothing on the internet reaches)
  * gets no door of its own. Its last step gives it its line to that server instead, as this
@@ -141,11 +138,6 @@ export async function install(opts: InstallOptions): Promise<void> {
         return void (await set(step.id, 'failed', login ? withAdvice(server, words) : words))
       }
       await set(step.id, 'done')
-    }
-    // The person's tick. A copy that fails is told on the login's own line: the server is installed all the same.
-    if (await change(kept => kept.github?.wanted === true)) {
-      const given = await giveGithub(session, opts.exec)
-      await change(kept => noteGithub(kept, given))
     }
   } finally {
     await beating.stop()

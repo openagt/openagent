@@ -10,8 +10,8 @@ import { stepIdsFor, type StepId, type Who } from './steps.js'
  * write it, so every change goes through {@link update}.
  *
  * It holds no key, no password and no login: the way in is this computer's own SSH keys, the key
- * the server's door gives is OpenAgent's, kept with its machines, and a GitHub or Claude login
- * goes to the server and is not kept here.
+ * the server's door gives is OpenAgent's, kept with its machines, and a login handed on from here
+ * is not kept here.
  */
 
 export type StepState = 'waiting' | 'running' | 'done' | 'failed'
@@ -30,29 +30,26 @@ export interface Worker {
   seen: string
 }
 
-/** The two logins a server works with. */
+/** The two logins a person's own OpenAgent works with. */
 export const LOGIN_KINDS = ['github', 'claude'] as const
 export type LoginKind = (typeof LOGIN_KINDS)[number]
 
 /**
- * One login of a server, as this computer left it. The login itself is never kept here: only
- * that it was put there, when, and for GitHub whose it is.
+ * One login, as this computer left it: one of this OpenAgent's own, or one it makes for another
+ * person's computer. The login itself is never kept here: only that it was put there, when, and
+ * for GitHub whose it is.
  */
 export interface Login {
-  /** ISO 8601: when this computer put the login on the server. Absent while the server has none from here. */
+  /** ISO 8601: when the login was put there. Absent while there is none. */
   since?: string
-  /** GitHub: the account, as the server's own `gh` answered. */
+  /** GitHub: the account, as `gh` answered. */
   account?: string
-  /** GitHub: to be copied once the install's steps are done. */
-  wanted?: boolean
   /** Why the last try ended without a login. */
   failed?: string
   /** The process that changes the login right now, and when it last said it still does. */
   worker?: Worker
-  /** That process waits for the person: for a yes in this computer's browser (Claude), or for a code typed at GitHub. */
+  /** That process waits for the person: for a yes in this computer's browser. */
   asking?: boolean
-  /** GitHub: the code the person types at github.com/login/device while the server waits for it. It is no login: it says which waiting server a person's yes is for. */
-  code?: string
   /**
    * A login of this OpenAgent's own that another OpenAgent of the same person copied here: the
    * name of the server it came from. Absent for one the person made here themselves.
@@ -74,10 +71,6 @@ export interface Server {
   worker?: Worker
   /** The install was asked for and the server is not among the machines yet: the page adds it once the steps are done. */
   adding: boolean
-  /** The GitHub login this computer copied to the server. */
-  github?: Login
-  /** The Claude login this computer made for the server. */
-  claude?: Login
   /**
    * Set once this computer keeps a line open to the server, so a run can be started here from
    * the server's page: what the server may do through it, everything or only read.
@@ -92,54 +85,12 @@ export interface Server {
   who?: Who
   /** For a computer reached through a server: the id its line has among that server's devices, once it is among OpenAgent's machines through it. */
   line?: string
-  /** The Claude accounts the server has beside its own login, as it last said them: never a login. */
-  claudeAccounts?: ClaudeAccountKept[]
-  /** A Claude account being added: its name, and the process that makes its login and hands it over. */
-  claudeAdding?: Login & { name: string }
-}
-
-/** One Claude account added on a server, as the server says it: its name, since when, and how full. */
-export interface ClaudeAccountKept {
-  name: string
-  /** ISO 8601. */
-  added?: string
-  /** Epoch milliseconds: a limit it hit keeps runs off it until then. */
-  limitedUntil?: number
-  /** Its windows as the last run on it said them. */
-  windows?: { window: string; percentUsed: number; resetsAt: number }[]
-  /** When those were said, epoch milliseconds. */
-  windowsAt?: number
-}
-
-/** What a person may call a Claude account: a few words on one line. */
-export const isAccountName = (said: unknown): said is string => typeof said === 'string' && said.trim() === said && /^[^\x00-\x1f\x7f]{1,40}$/.test(said)
-
-const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
-
-/** An account as a server said it, or a file kept it: anything malformed is left out. */
-export function readAccountKept(value: unknown): ClaudeAccountKept | undefined {
-  if (!value || typeof value !== 'object') return undefined
-  const { name, added, limitedUntil, windows, windowsAt } = value as Record<string, unknown>
-  if (!isAccountName(name)) return undefined
-  const said = Array.isArray(windows)
-    ? windows.flatMap(w => {
-        const { window, percentUsed, resetsAt } = (w && typeof w === 'object' ? w : {}) as Record<string, unknown>
-        return typeof window === 'string' && /^[a-z_]{1,40}$/.test(window) && finite(percentUsed) && finite(resetsAt) ? [{ window, percentUsed, resetsAt }] : []
-      })
-    : []
-  return {
-    name,
-    ...(typeof added === 'string' && !Number.isNaN(Date.parse(added)) ? { added } : {}),
-    ...(finite(limitedUntil) ? { limitedUntil } : {}),
-    ...(said.length > 0 ? { windows: said } : {}),
-    ...(finite(windowsAt) ? { windowsAt } : {}),
-  }
 }
 
 export type Reach = 'full' | 'watch'
 
 /**
- * A computer several people use that this computer is in at as one of them, not as its owner:
+ * Another person's computer, shared with everyone on a server this computer's person is in at:
  * saved among OpenAgent's machines, by the address it answers at. What is kept here is only
  * what this computer does for it itself: the Claude login it makes in its browser for that
  * person's OpenAgent there, while it does.
@@ -229,9 +180,6 @@ export const isUser = (said: unknown): said is string => typeof said === 'string
 /** Whether `said` is a version npm keeps a package under. */
 export const isVersion = (said: unknown): said is string => typeof said === 'string' && said.length <= 64 && /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(said)
 
-/** Whether `said` reads as the code GitHub gives a device to show: two groups of four. */
-export const isGithubCode = (said: unknown): said is string => typeof said === 'string' && /^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(said)
-
 /** How often the install's process says it still works, and after how long of silence it is taken for gone. */
 export const BEAT_MS = 10_000
 export const SILENT_MS = 45_000
@@ -306,15 +254,13 @@ const isMark = (value: unknown): value is string => typeof value === 'string' &&
 
 function readLogin(value: unknown): Login | undefined {
   if (!value || typeof value !== 'object') return undefined
-  const { since, account, wanted, failed, worker, asking, code, from, mark } = value as Record<string, unknown>
+  const { since, account, failed, worker, asking, from, mark } = value as Record<string, unknown>
   const login: Login = {
     ...(typeof since === 'string' && !Number.isNaN(Date.parse(since)) ? { since } : {}),
     ...(isAccount(account) ? { account } : {}),
-    ...(wanted === true ? { wanted } : {}),
     ...(typeof failed === 'string' && failed ? { failed: failed.slice(-MAX_SAID) } : {}),
     ...(readWorker(worker) ?? {}),
     ...(asking === true ? { asking } : {}),
-    ...(isGithubCode(code) ? { code } : {}),
     ...(isServerName(from) ? { from } : {}),
     ...(isMark(mark) ? { mark } : {}),
   }
@@ -328,11 +274,7 @@ export function sanitize(value: unknown): Store {
   for (const entry of Array.isArray(obj.servers) ? obj.servers : []) {
     if (servers.length >= MAX_SERVERS) break
     if (!entry || typeof entry !== 'object') continue
-    const { address, user, fingerprint, steps, worker, adding, github, claude, reach, through, who, line, claudeAccounts, claudeAdding } = entry as Record<string, unknown>
-    const [githubLogin, claudeLogin] = [readLogin(github), readLogin(claude)]
-    const accounts = Array.isArray(claudeAccounts) ? claudeAccounts.flatMap(kept => readAccountKept(kept) ?? []) : undefined
-    const addingLogin = readLogin(claudeAdding)
-    const addingName = (claudeAdding as Record<string, unknown> | undefined)?.['name']
+    const { address, user, fingerprint, steps, worker, adding, reach, through, who, line } = entry as Record<string, unknown>
     if (typeof address !== 'string' || addressOf(address) !== address || !isUser(user)) continue
     if (servers.some(server => server.address === address)) continue
     // Every step, in the install's own order: a step the file does not know has not started.
@@ -354,10 +296,6 @@ export function sanitize(value: unknown): Store {
       adding: adding === true,
       ...(reach === 'full' || reach === 'watch' ? { reach } : {}),
       ...(via !== undefined ? { through: via, ...(WHO.includes(who as Who) ? { who: who as Who } : {}), ...(typeof line === 'string' && /^[a-z0-9]{6,32}$/.test(line) ? { line } : {}) } : {}),
-      ...(githubLogin ? { github: githubLogin } : {}),
-      ...(claudeLogin ? { claude: claudeLogin } : {}),
-      ...(accounts ? { claudeAccounts: accounts } : {}),
-      ...(addingLogin && isAccountName(addingName) ? { claudeAdding: { ...addingLogin, name: addingName } } : {}),
     })
   }
   const own: NonNullable<Store['own']> = {}

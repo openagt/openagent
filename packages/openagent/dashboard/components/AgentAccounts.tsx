@@ -1,25 +1,24 @@
 import { useState } from 'react'
 import { Check, Copy, Plus } from 'lucide-react'
-import { onAgentAccounts, sendAddAgentAccount, sendRemoveAgentAccount, sendUseAgentAccountFirst, type AccountRow, type AccountWindow, type AccountsAgent, type AccountsView } from '../rpc/accounts.js'
+import { onAgentAccounts, sendAddAgentAccount, sendAgentAccountCode, sendRemoveAgentAccount, sendUseAgentAccountFirst, type AccountAdding, type AccountRow, type AccountWindow, type AccountsAgent, type AccountsView } from '../rpc/accounts.js'
 import type { DriverName } from '../../src/client.js'
 import { usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { ClaudeLogo, CodexLogo } from './driver-logos.js'
 import type { AgentState } from '../rpc/logins.js'
-import { AgentFix, StatePill, agentLoginState, agentWords, useAgentState } from './Logins.js'
+import { AgentFix, DeviceCode, StatePill, agentLoginState, agentWords, useAgentState } from './Logins.js'
+import { LeftNotices, ServerNotes, SwitchNotice } from './ServerLogins.js'
 import { Button } from './ui/button.js'
 import { Input } from './ui/input.js'
 import { DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from './ui/dropdown-menu.js'
 
 // The accounts runs use, per coding agent, in the order they try them (`accounts.ts` in the driver
 // core): the person's own login and the ones added beside it. When one hits its limit, the next free
-// one takes the run over in the same conversation. Three places show them: Settings' "Agent
-// accounts" (a card per agent, where they are added and removed), a row per agent in the person's
-// menu at the sidebar's foot (which one is first), and the Overview's usage card (how full each
-// added Claude one is). Every agent's card and row are the same, with the agent's own words.
-
-/** The Settings entry the accounts are in: what "Add account…" in the person's menu opens. */
-export const AGENT_ACCOUNTS_ENTRY = 'agent-accounts'
+// one takes the run over in the same conversation. Three places show them: Settings › Accounts
+// (a card per agent, where they are added and removed), a row per agent in the person's menu at
+// the sidebar's foot (which one is first), and the Overview's usage card (how full each added
+// Claude one is). Every agent's card and row are the same, with the agent's own words. A row never
+// says "this computer", which reads as whichever computer the page is open on: it names the one.
 
 /** How often a page that shows the accounts asks again: often while one is being added, the sign-in being the person's. */
 const OFTEN_MS = 2_000
@@ -78,9 +77,10 @@ function clock(at: number): string {
   })
 }
 
-/** What an account's row says of it beside its name. */
-function source(account: AccountRow): string {
-  if (account.own) return "this computer's login"
+/** What an account's row says of it beside its name: the computer it is a login of, or when it was added. */
+function source(account: AccountRow, computer: string): string {
+  if (account.own) return `login on ${computer}`
+  if (account.from !== undefined) return `from ${account.from}`
   return account.added ? `added ${new Date(account.added).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : 'added'
 }
 
@@ -113,13 +113,45 @@ function StateWords({ account, now }: { account: AccountRow; now: number }) {
   return null
 }
 
-/** Settings › Agent accounts: one card per coding agent, Claude Code's and Codex's. */
-export function AgentAccountsSettings() {
+/**
+ * An account being added: in this computer's browser, or, on a computer with no browser, on the
+ * person's own device: Codex's code typed at its page, or Claude's page opened and its code pasted back here.
+ */
+function Adding({ agent, adding, words }: { agent: AccountsAgent; adding: AccountAdding; words: string }) {
+  const [code, setCode] = useState('')
+  const [error, setError] = useState<string | undefined>()
+  if (adding.code !== undefined && adding.url !== undefined) return <DeviceCode code={adding.code} url={adding.url} />
+  if (adding.paste && adding.url !== undefined) {
+    const send = async () => {
+      setError(undefined)
+      const done = await sendAgentAccountCode(agent, code)
+      if (!done.ok) setError(done.error)
+    }
+    return (
+      <div role="status" className="space-y-2">
+        <a href={adding.url} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center rounded-md border border-border px-3 text-sm hover:bg-accent">
+          {`1. Open Claude and press Authorize ↗`}
+        </a>
+        <form
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={event => {
+            event.preventDefault()
+            void send()
+          }}
+        >
+          <Input aria-label="Code from Claude" placeholder="2. Paste the code it shows" value={code} onChange={event => setCode(event.target.value)} className="h-9 min-w-0 flex-1 basis-48 text-base sm:text-sm" />
+          <Button size="sm" type="submit" disabled={code.trim() === ''}>
+            Done
+          </Button>
+        </form>
+        {error !== undefined && <p role="alert" className="text-xs text-danger">{error}</p>}
+      </div>
+    )
+  }
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">Runs use these accounts in this order. When one hits its limit, the next free one takes the run over where it stopped.</p>
-      <AccountsCard agent="claude" />
-      <AccountsCard agent="codex" />
+    <div role="status" className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <p className="text-xs text-muted-foreground">{words}</p>
+      {adding.url !== undefined && <CopyLink url={adding.url} />}
     </div>
   )
 }
@@ -144,7 +176,11 @@ function CopyLink({ url }: { url: string }) {
   )
 }
 
-/** One agent's card: its state, its accounts in order, and adding one. One not installed shows only its state and the press that installs it. */
+/**
+ * One agent's card: its state, its accounts in order, and adding one. One not installed shows only
+ * its state and the press that installs it. The agent's own login has no row while it is logged in
+ * to nothing and another account is there: a server mostly runs on the person's own computers' logins.
+ */
 export function AccountsCard({ agent }: { agent: AccountsAgent }) {
   const words = AGENTS[agent]
   const [naming, setNaming] = useState(false)
@@ -155,6 +191,9 @@ export function AccountsCard({ agent }: { agent: AccountsAgent }) {
   const { state, reload: reloadState } = useAgentState(words.driver)
   const adding = view?.adding
   const absent = agentLoginState(state) === 'not-installed' && (view?.accounts.length ?? 0) < 2
+  // Its own login is out: nothing of the agent's own to show, whether or not another account covers for it.
+  const ownOut = state?.ownLoggedOut === true || agentLoginState(state) === 'step'
+  const accounts = (view?.accounts ?? []).filter(account => !(account.own && ownOut))
 
   const act = async (go: () => Promise<{ ok: true } | { ok: false; error: string }>): Promise<boolean> => {
     setBusy(true)
@@ -182,7 +221,7 @@ export function AccountsCard({ agent }: { agent: AccountsAgent }) {
         <h3 className="flex-1 text-sm font-medium">{words.title}</h3>
         {state && <StatePill state={agentLoginState(state)!} />}
       </header>
-      {state && !state.ready && (
+      {state && !state.ready && (state.fix !== undefined || agentLoginState(state) === 'not-installed') && (
         <div className={cn('space-y-2 px-3 py-2.5', !absent && 'border-b border-border', absent && 'pt-0')}>
           <p className="text-xs text-muted-foreground">{agentWords(state)}</p>
           <AgentFix state={state} onChanged={() => void reloadState()} />
@@ -191,33 +230,35 @@ export function AccountsCard({ agent }: { agent: AccountsAgent }) {
       {!absent && (
         <>
           <ul className="divide-y divide-border">
-            {(view?.accounts ?? []).map(account => (
-              <li key={account.id} aria-label={account.name} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5">
-                <div className="min-w-0 flex-1 max-sm:basis-full!">
-                  <p className="truncate text-sm">{account.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">{source(account)}</p>
+            {accounts.map(account => (
+              <li key={account.id} aria-label={account.name}>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5">
+                  <div className="min-w-0 flex-1 max-sm:basis-full!">
+                    <p className="truncate text-sm">{account.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">{source(account, view!.computer)}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <AccountBar percent={longest(account)?.percent} />
+                    <span className="w-44 truncate text-xs text-muted-foreground max-sm:w-auto">{usageWords(account) ?? ''}</span>
+                  </div>
+                  <div className="flex w-36 items-center justify-end gap-2 max-sm:w-auto">
+                    {view && <StateWords account={account} now={view.now} />}
+                    {!account.own && account.from === undefined && (
+                      <Button size="xs" variant="ghost" disabled={busy} aria-label={`Remove ${account.name}'s account`} title={words.remove} onClick={() => void act(() => sendRemoveAgentAccount(agent, account.id))}>
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                  <ServerNotes row={{ kind: agent, source: account.own ? 'own' : account.id }} />
                 </div>
-                <div className="flex items-center gap-2">
-                  <AccountBar percent={longest(account)?.percent} />
-                  <span className="w-44 truncate text-xs text-muted-foreground max-sm:w-auto">{usageWords(account) ?? ''}</span>
-                </div>
-                <div className="flex w-36 items-center justify-end gap-2 max-sm:w-auto">
-                  {view && <StateWords account={account} now={view.now} />}
-                  {!account.own && (
-                    <Button size="xs" variant="ghost" disabled={busy} aria-label={`Remove ${account.name}'s account`} title={words.remove} onClick={() => void act(() => sendRemoveAgentAccount(agent, account.id))}>
-                      Remove
-                    </Button>
-                  )}
-                </div>
+                <SwitchNotice row={{ kind: agent, source: account.own ? 'own' : account.id }} />
               </li>
             ))}
           </ul>
-          <div className="border-t border-border px-3 py-2.5">
+          <LeftNotices kind={agent} />
+          <div className={cn('px-3 py-2.5', accounts.length > 0 && 'border-t border-border')}>
             {adding ? (
-              <div role="status" className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <p className="text-xs text-muted-foreground">{words.adding(adding.name)}</p>
-                {adding.url !== undefined && <CopyLink url={adding.url} />}
-              </div>
+              <Adding agent={agent} adding={adding} words={words.adding(adding.name)} />
             ) : naming ? (
               <form
                 className="flex flex-wrap items-center gap-2"
@@ -235,9 +276,9 @@ export function AccountsCard({ agent }: { agent: AccountsAgent }) {
                 </Button>
               </form>
             ) : (
-              <Button size="sm" variant="ghost" onClick={() => setNaming(true)}>
+              <Button size="sm" variant={accounts.length === 0 ? 'default' : 'ghost'} onClick={() => setNaming(true)}>
                 <Plus className="size-3.5" aria-hidden />
-                Add account
+                {accounts.length === 0 ? words.logIn : 'Add account'}
               </Button>
             )}
             {naming && !adding && <p className="mt-1.5 text-xs text-muted-foreground">{words.help}</p>}
@@ -310,10 +351,10 @@ export function AddedAccountsUsage() {
   return (
     <div className="space-y-1.5 border-t border-border pt-3" aria-label="Other Claude accounts">
       {added.map(account => (
-        <div key={account.id} className="flex items-center gap-2 text-sm">
+        <div key={account.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
           <span className="w-24 truncate">{account.name}</span>
           <AccountBar percent={longest(account)?.percent} />
-          <span className="truncate text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             {account.state === 'limited' && account.limitedUntil !== undefined ? `limited, free in ${freeIn(account.limitedUntil, view!.now)}` : (usageWords(account) ?? '')}
           </span>
         </div>

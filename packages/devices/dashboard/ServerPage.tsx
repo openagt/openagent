@@ -1,23 +1,23 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { ChevronRight, CircleCheck, House, Laptop, Loader2, Plus, Server, UserPlus, UserRound } from 'lucide-react'
-import { Button, ConfirmDialog, Dialog, Input, RadioGroup, RadioGroupOption, formatDateTime, formatRelative, usePolled, type ModuleComputersThrough, type ModuleHost, type ModuleMachine } from '@openagt/dashboard/module'
-import { addAccount, idsOf, loadAccounts, loadDevices, login, logout, nameOwner, removeAccount, removeDevice, removePerson, setWho, askLink, type AccountRow, type Answer, type DeviceRow, type ServerRow, type Who } from './servers.js'
+import { useEffect, useState } from 'react'
+import { ChevronRight, CircleCheck, House, Laptop, Loader2, Server, UserPlus, UserRound } from 'lucide-react'
+import { Button, ConfirmDialog, Dialog, RadioGroup, RadioGroupOption, formatDateTime, formatRelative, usePolled, type ModuleComputersThrough, type ModuleHost, type ModuleMachine } from '@openagt/dashboard/module'
+import { idsOf, loadDevices, nameOwner, removeDevice, removePerson, setWho, askLink, type Answer, type DeviceRow, type ServerRow, type Who } from './servers.js'
 import type { ServerItem } from './model.js'
 import { Invite } from './codes.js'
 import { myName } from './devices.js'
-import { Head, LoginLine, Part, Problem, Said, State, StepLine, StepMark, Tabs, day, hostOf, named, olderThan } from './parts.js'
+import { Head, Part, Problem, Said, State, StepLine, Tabs, hostOf, named, olderThan } from './parts.js'
 import type { Devices } from './use-devices.js'
 
 // A server's own page in Settings › Devices, for a server this computer installed OpenAgent on:
-// on the internet, or a computer at home reached through one. Its state and its steps, who is in
-// on it and who may start runs on it, and its logins. Whatever is changed on it is changed over
-// SSH, by the `devices server` command's own process: no login ever comes to this page.
+// on the internet, or a computer at home reached through one. Its state and its steps, and who is
+// in on it and who may start runs on it. Whatever is changed on it is changed over SSH, by the
+// `devices server` command's own process. Its logins are on its page in Settings › Accounts.
 
 /** What removing a person does, said before it is done: it cannot be taken back. */
 export const REMOVE_PERSON = (name: string): string =>
   `Their devices are taken out, and their own user on the server is deleted with everything in it: their logins, their copies of projects, and any work they did not push. ${name} can be invited again later.`
 
-type Tab = 'overview' | 'people' | 'logins'
+type Tab = 'overview' | 'people'
 
 export function ServerPage({ d, item, onBack, invite = false }: { d: Devices; item: ServerItem; onBack: () => void; /** Opened to invite people: on its People, with Invite open. */ invite?: boolean }) {
   const { host, busy } = d
@@ -47,7 +47,6 @@ export function ServerPage({ d, item, onBack, invite = false }: { d: Devices; it
   const doing = machine ? 'Updating' : 'Installing'
   const current = server.steps.findIndex(step => step.state !== 'done')
   const spins = busy && d.pressed === server.address
-  const { github } = server.logins
 
   const state = server.working ? (
     <State tone="working">{current < 0 ? `${doing}…` : `${doing}: step ${current + 1} of ${server.steps.length}`}</State>
@@ -65,10 +64,9 @@ export function ServerPage({ d, item, onBack, invite = false }: { d: Devices; it
     <State tone="quiet">{`Logs in as ${server.user}`}</State>
   )
 
-  const tabs: { id: Tab; title: string }[] = home || !done ? [{ id: 'overview', title: 'Overview' }, ...(done ? [{ id: 'logins' as const, title: 'Logins' }] : [])] : [
+  const tabs: { id: Tab; title: string }[] = home || !done ? [{ id: 'overview', title: 'Overview' }] : [
     { id: 'overview', title: 'Overview' },
     { id: 'people', title: 'People' },
-    { id: 'logins', title: 'Logins' },
   ]
 
   return (
@@ -87,7 +85,7 @@ export function ServerPage({ d, item, onBack, invite = false }: { d: Devices; it
       {(behind || unfinished || failed) && !server.working && (
         <div role="status" className="mb-2 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-3">
           <p className="text-xs">{failed ? `${machine ? 'The update' : 'The install'} stopped at a step: see Overview.` : behind ? `OpenAgent ${machine!.version} runs there: behind this computer, which runs ${d.machines!.version}.` : 'A step of the install never ran there.'}</p>
-          <Button size="sm" disabled={busy || !d.machines} aria-label={failed ? `Try ${server.address} again` : `Update ${server.address}`} onClick={() => void d.install(server.address, server.user, failed && github.wanted === true)}>
+          <Button size="sm" disabled={busy || !d.machines} aria-label={failed ? `Try ${server.address} again` : `Update ${server.address}`} onClick={() => void d.install(server.address, server.user)}>
             {spins && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
             {failed ? 'Try again' : 'Update'}
           </Button>
@@ -105,11 +103,6 @@ export function ServerPage({ d, item, onBack, invite = false }: { d: Devices; it
             </Button>
           </div>
           <People d={d} address={server.address} ownDevice={machine?.device} />
-        </Part>
-      )}
-      {tab === 'logins' && (
-        <Part>
-          <Logins d={d} server={server} />
         </Part>
       )}
       {d.error !== undefined && <Problem>{d.error}</Problem>}
@@ -166,10 +159,9 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
   const [opened, setOpened] = useState(false)
   const done = !server.working && server.steps.every(step => step.state === 'done')
   const reason = d.notAdded[server.address]
-  const { github, claude } = server.logins
   const sendable = machine ? 'done' : reason !== undefined ? 'failed' : server.adding ? 'running' : 'waiting'
   // The steps fold into one line once there is nothing left to see in them.
-  const settled = done && machine !== undefined && !github.working
+  const settled = done && machine !== undefined
   return (
     <>
       <Part title="Install">
@@ -181,12 +173,6 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
                   {step.id === 'login' && step.state === 'done' && server.fingerprint !== undefined && <span className="ml-5.5 block break-all font-mono text-[11px] text-muted-foreground">{`The server's key: ${server.fingerprint}`}</span>}
                 </StepLine>
               ))}
-              {github.working && (
-                <li aria-label="Your GitHub login: not copied yet" className="flex items-center gap-2 text-muted-foreground">
-                  <StepMark state={server.steps.every(step => step.state === 'done') ? 'running' : 'waiting'} />
-                  Your GitHub login
-                </li>
-              )}
               {done && <StepLine label="Runs can be sent to it" state={sendable} said={machine ? undefined : reason} />}
             </ol>
             {settled && (
@@ -218,15 +204,7 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
         <div className="pt-4">
           <ConfirmDialog
             trigger={
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-danger"
-                // Not while one of its logins is being changed: the server is not forgotten then, and nothing of it is taken out before.
-                disabled={busy || github.working || claude.working}
-                aria-label={`Remove ${server.address}`}
-                title={github.working || claude.working ? 'One of its logins is being changed right now: wait until that ends.' : 'Takes the server off this list, and this computer out of the server.'}
-              >
+              <Button size="sm" variant="outline" className="text-danger" disabled={busy} aria-label={`Remove ${server.address}`} title="Takes the server off this list, and this computer out of the server.">
                 Remove server
               </Button>
             }
@@ -462,149 +440,5 @@ function People({ d, address, ownDevice }: { d: Devices; address: string; ownDev
         ))}
       {(failed ?? error) !== undefined && <Said>{failed ?? error}</Said>}
     </div>
-  )
-}
-
-/** How full an account was at the last run on it: its week, else its five hours; at a limit, when it frees. */
-function accountWords(account: AccountRow, now = Date.now()): string {
-  if (account.limitedUntil !== undefined && account.limitedUntil > now) return `at its limit until ${formatDateTime(new Date(account.limitedUntil).toISOString())}`
-  const window = account.windows?.find(w => w.window === 'seven_day') ?? account.windows?.find(w => w.window === 'five_hour')
-  if (window === undefined) return 'no run on it yet'
-  return `${Math.round(window.percentUsed)}% of its ${window.window === 'seven_day' ? 'week' : 'five hours'} used at its last run`
-}
-
-/** A server's logins: GitHub's, Claude's, and the other Claude accounts its runs go on with at a limit. */
-function Logins({ d, server }: { d: Devices; server: ServerRow }) {
-  const { host, busy, account, noLogin } = d
-  const { github, claude } = server.logins
-  const act = d.act
-  return (
-    <ul aria-label={`The logins on ${server.address}`} className="space-y-3 text-xs">
-      <LoginLine
-        label="GitHub"
-        words={
-          github.asking && github.code !== undefined
-            ? `GitHub: type the code ${github.code} at github.com/login/device, and say yes there.`
-            : github.working
-              ? 'GitHub: one moment, the server is being told.'
-              : github.there
-                ? `GitHub: logged in as ${github.account ?? 'you'} since ${day(github.since)}.`
-                : github.said !== undefined
-                  ? 'GitHub: the last try did not go through.'
-                  : 'GitHub: no login on the server.'
-        }
-        said={github.working ? undefined : github.said}
-      >
-        <Button size="sm" variant="outline" disabled={busy || github.working || account === undefined} aria-label={`Copy my GitHub login to ${server.address}`} title={account !== undefined ? `Copies the login of ${account} from this computer to the server, over SSH.` : noLogin} onClick={() => void act(() => login(host, server.address, 'github'))}>
-          {github.there ? 'Copy again' : 'Copy my login'}
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={busy || (github.working && github.asking !== true)}
-          aria-label={`Log in to GitHub for ${server.address}`}
-          title="The server asks GitHub for a login of its own. GitHub gives a short code: you type it at github.com/login/device and say yes there. This computer's own GitHub login is not touched, and the login the server had is replaced."
-          onClick={() => void act(() => login(host, server.address, 'github', true))}
-        >
-          {github.asking ? 'Start over' : 'Log in to GitHub'}
-        </Button>
-        {github.asking && github.code !== undefined && (
-          <a href="https://github.com/login/device" target="_blank" rel="noreferrer" className="self-center underline">
-            Open GitHub
-          </a>
-        )}
-        {/* After a try that failed too: what it left on the server is not always known here. */}
-        {(github.there || github.said !== undefined) && !github.working && (
-          <Button size="sm" variant="outline" disabled={busy} aria-label={`Remove the GitHub login from ${server.address}`} title="Deletes the login on the server. The login itself is not ended by this: a copied one is this computer's own and stays good. To end one everywhere, take it back on github.com." onClick={() => void act(() => logout(host, server.address, 'github'))}>
-            Remove
-          </Button>
-        )}
-      </LoginLine>
-      <LoginLine
-        label="Claude"
-        words={claude.asking ? "Claude: say yes in the page this computer's browser opened." : claude.working ? 'Claude: one moment, the server is being told.' : claude.there ? `Claude: logged in since ${day(claude.since)}, good until about ${day(claude.ends)}.` : claude.said !== undefined ? 'Claude: the last try did not go through.' : 'Claude: not logged in on the server.'}
-        said={claude.working ? undefined : claude.said}
-      >
-        <Button size="sm" variant={claude.there || claude.working ? 'outline' : 'default'} disabled={busy || (claude.working && claude.asking !== true)} aria-label={`Log in to Claude for ${server.address}`} title="Opens this computer's browser, where you say yes once. The login is made for this server alone and lasts a year; this computer's own Claude login is not touched." onClick={() => void act(() => login(host, server.address, 'claude'))}>
-          {claude.asking ? 'Start over' : claude.there ? 'Log in again' : 'Log in to Claude'}
-        </Button>
-        {(claude.there || claude.said !== undefined) && !claude.working && (
-          <Button size="sm" variant="outline" disabled={busy} aria-label={`Remove the Claude login from ${server.address}`} title="Deletes the login on the server and starts OpenAgent there again without it. An agent at work there keeps it until it ends. The login itself stays good until its year is over." onClick={() => void act(() => logout(host, server.address, 'claude'))}>
-            Remove
-          </Button>
-        )}
-      </LoginLine>
-      <ClaudeAccounts d={d} server={server} />
-    </ul>
-  )
-}
-
-/**
- * The Claude accounts a server has beside its own login: its runs take the next free one when
- * one hits its limit. Read from the server once the page shows them; added with a login made in
- * this computer's browser, as the server's own is.
- */
-function ClaudeAccounts({ d, server }: { d: Devices; server: ServerRow }) {
-  const { host, busy, act } = d
-  const [naming, setNaming] = useState(false)
-  const [name, setName] = useState('')
-  const [unread, setUnread] = useState<string | undefined>()
-  const { address, claudeAccounts: accounts, claudeAdding: adding } = server
-  useEffect(() => {
-    let gone = false
-    void loadAccounts(host, address).then(read => {
-      if (gone) return
-      setUnread(read.ok ? undefined : read.error)
-      if (read.ok) void d.reloadServers().catch(() => {})
-    })
-    return () => {
-      gone = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [host, address])
-  const add = async (event: FormEvent): Promise<void> => {
-    event.preventDefault()
-    if (await act(() => addAccount(host, address, name.trim()))) {
-      setNaming(false)
-      setName('')
-    }
-  }
-  return (
-    <li aria-label="Other Claude accounts" className="space-y-1.5">
-      <p>{accounts.length === 0 ? 'Other Claude accounts: none. A run that hits the limit of the login above stops there.' : 'Other Claude accounts: a run that hits a limit goes on with the next free one, in this order.'}</p>
-      {accounts.length > 0 && (
-        <ul className="space-y-1">
-          {accounts.map(account => (
-            <li key={account.name} aria-label={account.name} className="flex flex-wrap items-center gap-2">
-              <span className="font-medium">{account.name}</span>
-              <span className="text-muted-foreground">{`${account.added !== undefined ? `added ${day(account.added)}, ` : ''}${accountWords(account)}`}</span>
-              <Button size="sm" variant="outline" disabled={busy} aria-label={`Remove the Claude account ${account.name} from ${address}`} title="Takes the account off the server: its runs no longer switch to it. The login itself stays good until its year is over." onClick={() => void act(() => removeAccount(host, address, account.name))}>
-                Remove
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {adding?.working ? (
-        <p>{adding.asking ? `${adding.name}: say yes in the page this computer's browser opened, logged in to ${adding.name}'s Claude account.` : `${adding.name}: one moment, the server is being told.`}</p>
-      ) : naming ? (
-        <form className="flex flex-wrap items-center gap-2" onSubmit={event => void add(event)}>
-          <Input aria-label="Whose account it is" placeholder="Whose account, e.g. Dani" value={name} maxLength={40} onChange={event => setName(event.target.value)} className="h-8 w-48" autoFocus />
-          <Button size="sm" type="submit" disabled={busy || name.trim() === ''} title="Opens this computer's browser: log in there to that account's Claude and say yes once. The login is made for this server alone and lasts a year.">
-            Log in to Claude
-          </Button>
-          <Button size="sm" variant="ghost" type="button" onClick={() => setNaming(false)}>
-            Cancel
-          </Button>
-        </form>
-      ) : (
-        <Button size="sm" variant="outline" disabled={busy} aria-label={`Add another Claude account to ${address}`} onClick={() => setNaming(true)}>
-          <Plus aria-hidden className="h-3.5 w-3.5" />
-          Add another Claude account
-        </Button>
-      )}
-      {adding?.said !== undefined && !adding.working && <Said>{`${adding.name}: ${adding.said}`}</Said>}
-      {unread !== undefined && <p className="text-muted-foreground">{`The server did not say its other accounts: ${unread}`}</p>}
-    </li>
   )
 }

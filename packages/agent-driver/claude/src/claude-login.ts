@@ -34,6 +34,17 @@ export function notMinted(shown: string): string {
   return ['Claude Code ended without a login.', ...lines.slice(-5)].join('\n')
 }
 
+/** Where Claude Code's sign-in page is, as the link it drew says it: the whole address, however the screen wrapped its words. */
+const SIGN_IN_LINK = /\x1b\]8;[^;\x07\x1b]*;(https:\/\/[^\x07\x1b\s]+\/oauth\/authorize\?[^\x07\x1b\s]+)(?:\x07|\x1b\\)/
+
+/** The sign-in page Claude Code offers for a browser on another device, once it drew it. */
+export function signInUrl(shown: string): string | undefined {
+  return SIGN_IN_LINK.exec(shown)?.[1]
+}
+
+/** What the sign-in page hands the person to paste back: letters, digits and the few marks it is written with. */
+export const isSignInCode = (code: string): boolean => /^[A-Za-z0-9_\-#.~]{8,1000}$/.test(code)
+
 /** Which process the lent terminal's first program said it is, once its whole line is there: half a number names another process. */
 export function startedAs(shown: string): number | undefined {
   return Number(/^started as (\d+)\n/m.exec(words(shown))?.[1]) || undefined
@@ -45,6 +56,12 @@ export interface MintOptions {
   timeoutMs?: number
   /** The command that makes the login; Claude Code's own when unsaid. */
   command?: string
+  /**
+   * Told the sign-in page once Claude Code shows it, for a computer whose browser is on another
+   * device: the person opens it there, says yes, and pastes back the code the page shows.
+   * `paste` answers whether the code was handed to Claude Code.
+   */
+  onLink?: (url: string, paste: (code: string) => boolean) => void
 }
 
 /** How a Claude login is made: Claude Code's own, or a stand-in for tests. */
@@ -62,19 +79,21 @@ const STARTED_AS = /^started as \d+$/
  * nothing, and neither does this.
  *
  * Claude Code draws on a terminal's screen and this process has none, so the system's `script`
- * lends it one, wide enough that the login stays on one line. Its input is a pipe nothing ever
- * writes to. `script` gives its program a group of its own, so that program first says which
- * process it is: at the end both groups are ended, whether or not Claude Code heeds a terminal
- * that went away.
+ * lends it one, wide enough that the login stays on one line. Its input is a pipe nothing writes
+ * to but a code the person pastes back. `script` gives its program a group of its own, so that
+ * program first says which process it is: at the end both groups are ended, whether or not Claude
+ * Code heeds a terminal that went away.
  */
-export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command = 'claude setup-token' } = {}) =>
+export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command = 'claude setup-token', onLink } = {}) =>
   new Promise(resolve => {
     const inner = `echo "started as $$"; stty cols 250 rows 50; command -v ${command.split(' ')[0]} >/dev/null || { echo "Claude Code is not on this computer."; exit 1; }; exec ${command}`
     const lent = process.platform === 'darwin' ? 'script -q /dev/null sh -c "$0"' : 'script -q -e -c "$0" /dev/null'
     // On Linux `script` starts its program with the person's own shell, and the line above is written for sh.
-    const child = spawn('sh', ['-c', `tail -f /dev/null | { ${lent}; kill 0; }`, inner], { stdio: ['ignore', 'pipe', 'pipe'], detached: true, env: { ...process.env, SHELL: '/bin/sh' } })
+    const child = spawn('sh', ['-c', `cat | { ${lent}; kill 0; }`, inner], { stdio: ['pipe', 'pipe', 'pipe'], detached: true, env: { ...process.env, SHELL: '/bin/sh' } })
+    child.stdin.on('error', () => {})
     let shown = ''
     let lentTo: number | undefined
+    let linked = false
     let ended = false
     const end = (answer: { ok: true; login: string } | Failed): void => {
       if (ended) return
@@ -89,6 +108,7 @@ export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command 
           // Gone already.
         }
       }
+      child.stdin.destroy()
       child.stdout.destroy()
       child.stderr.destroy()
       resolve(answer)
@@ -101,6 +121,16 @@ export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command 
       shown = (shown + said).slice(-SHOWN)
       // Read once, as it comes: it is the first thing written, and a long wait scrolls it out of what is kept.
       lentTo ??= startedAs(shown)
+      const url = linked || !onLink ? undefined : signInUrl(shown)
+      if (url !== undefined) {
+        linked = true
+        onLink!(url, code => {
+          const word = code.trim()
+          if (ended || !isSignInCode(word)) return false
+          child.stdin.write(`${word}\r`)
+          return true
+        })
+      }
       const login = mintedIn(shown)
       if (login) end({ ok: true, login })
     }

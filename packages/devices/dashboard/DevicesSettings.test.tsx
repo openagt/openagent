@@ -43,6 +43,7 @@ function door(answer: (args: string[], input?: string) => ModuleCommandResult | 
     computersThrough: vi.fn(async () => ({ ok: true as const, computers: [] })),
     machinePerson: vi.fn(async () => ({ ok: false as const, error: 'not here', unknown: true as const })),
     removeMachineDevice: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
+    useLoginsOn: vi.fn(async () => ({ ok: true as const })),
     addComputerThrough: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     watchScreen: vi.fn(async () => undefined),
     sendToScreen: vi.fn(async () => false),
@@ -497,7 +498,7 @@ describe('Settings › Devices: another computer, once', () => {
 })
 
 describe('Settings › Devices: with a server', () => {
-  const BOX = { address: '203.0.113.5', url: 'https://203.0.113.5', user: 'root', working: false, adding: false, steps: [{ id: 'login', label: 'Log in', state: 'done' }], logins: { github: { there: false, working: false }, claude: { there: false, working: false } }, claudeAccounts: [] }
+  const BOX = { address: '203.0.113.5', url: 'https://203.0.113.5', user: 'root', working: false, adding: false, steps: [{ id: 'login', label: 'Log in', state: 'done' }] }
   const SAVED: ModuleMachine = { id: 'https://203.0.113.5', label: 'my-vps', url: 'https://203.0.113.5', version: '0.0.0' }
   const SERVER_LINK = { url: 'https://203.0.113.5/_devices/enter#code.pin', expires: LINK.expires }
 

@@ -1,18 +1,23 @@
 import { readFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
+import { computerName } from '../computer-name.js'
 import { join } from 'node:path'
 import { addAccount, isLimited, nameOwnAccount, nameRefused, OWN_NAME, readAccounts, removeAccount, useFirst, type AgentAccount, type DriverQuotaWindow, type DriverRateWindow } from '@openagt/agent-driver'
 import { claudeAccountsPath, mintClaude, type Mint } from '@openagt/agent-driver-claude'
 import { accountFolder, codexAccountsDir, codexAccountsPath, codexWho, loginCodex, personalCodexHome, readCodexUsage, type CodexLogin, type CodexLoginOptions, type CodexWho } from '@openagt/agent-driver-codex'
 import { contextQuota } from './context.js'
+import { readCopied, type CopiedLogin } from '../dashboard/copied-logins.js'
 
 // The accounts runs use, per coding agent (`accounts.ts` in the driver core): the person's own
 // login, which the agent keeps, and the ones added beside it. A page sees each one's name, how full
 // it is and whether a limit keeps it out, never a login. Adding one is the same for every agent: a
 // name first, then this computer's browser, where the person signs in to the account being added.
 // Claude Code makes a login that lasts a year; Codex keeps the account's login in a folder of its
-// own, where it renews it.
+// own, where it renews it. A server has no browser: there the person signs in on the device they
+// read its page on, from a link, and pastes back the code Claude's page shows, or types Codex's
+// code at its page. On a server, an account may also be a login of the person's own computer
+// (`copied-logins.ts`): its row says which computer, and how full the computer last read it.
 
 /** The agents with accounts: Claude Code's and Codex's. */
 export type AccountsAgent = 'claude' | 'codex'
@@ -31,6 +36,8 @@ export interface AccountRow {
   id: string
   /** Its name as shown: the person's own goes by the agent's name for them until they give it one. */
   name: string
+  /** A login of the person's own computer, by that computer's name: a server's copy of it. */
+  from?: string
   /** The person's own login, which the agent keeps: it is never removed. */
   own: boolean
   /** When an added one was added, ISO 8601. */
@@ -48,12 +55,20 @@ export interface AccountRow {
 /** An account being added: the browser is open on the agent's page, or the login is being kept. */
 export interface AccountAdding {
   name: string
-  /** The page to sign in at, when the agent gave one: what a person copies into a private window when the browser is signed in to another account. */
+  /** The page to sign in at, when the agent gave one: what a person copies into a private window when the browser is signed in to another account, or opens on their device where this computer has no browser. */
   url?: string
+  /** No browser here: the code Codex gave, which the person types at {@link url}. */
+  code?: string
+  /** No browser here: Claude's page shows a code once the person said yes, which they paste back. */
+  paste?: true
 }
 
 export interface AccountsView {
   accounts: AccountRow[]
+  /** This computer's own name: what its own login's row says it is on. */
+  computer: string
+  /** On a server: the computer of the person's whose logins it uses, by its name. */
+  from?: string
   adding?: AccountAdding
   /** Why the last add did not go through. */
   failed?: string
@@ -73,6 +88,10 @@ export const accountsWiring: {
   codexFolder: (account: AgentAccount) => string
   codexWho: (home: string) => Promise<CodexWho>
   codexUsage: (home: string) => Promise<DriverRateWindow[]>
+  /** No browser on this computer: a server's. */
+  headless: () => boolean
+  /** This computer's own name. */
+  computer: () => string
 } = {
   mint: mintClaude,
   claudeJson: () => join(process.env['CLAUDE_CONFIG_DIR'] ?? process.env['HOME'] ?? homedir(), '.claude.json'),
@@ -84,10 +103,14 @@ export const accountsWiring: {
   codexFolder: account => accountFolder(account, process.env),
   codexWho,
   codexUsage: home => readCodexUsage({ home }),
+  headless: () => process.env['OPENAGENT_SERVER'] === '1',
+  computer: computerName,
 }
 
 const adding = new Map<AccountsAgent, AccountAdding>()
 const failed = new Map<AccountsAgent, string>()
+/** Where a code the person pastes back goes: Claude Code, waiting for it on a server. */
+const pastes = new Map<AccountsAgent, (code: string) => boolean>()
 
 /** The person's own name as Claude Code knows it: its account's display name, else its email. */
 function claudeOwnName(): string | undefined {
@@ -141,11 +164,22 @@ function liveClaude(windows: DriverQuotaWindow[]): AccountWindow[] {
   return [...(session ? [{ label: '5 h', percent: session.percentUsed }] : []), ...(week ? [{ label: 'week', percent: week.percentUsed }] : [])]
 }
 
-/** One account's row. Claude's own login is read live where Claude Code lets it be (`/usage`), an added one from its last run; every Codex one live. */
-async function row(agent: AccountsAgent, account: AgentAccount, liveOwn: DriverQuotaWindow[], now: number): Promise<AccountRow> {
+/** What the person's own login is called before they name it: never "this computer", which reads as whichever computer the page is open on. */
+const AGENT_NAMES: Record<AccountsAgent, string> = { claude: 'Claude', codex: 'Codex' }
+
+/**
+ * One account's row. Claude's own login is read live where Claude Code lets it be (`/usage`), an
+ * added one from its last run, a login of the person's computer from the last reading it sent when
+ * that is newer; every Codex one live.
+ */
+async function row(agent: AccountsAgent, account: AgentAccount, liveOwn: DriverQuotaWindow[], copies: CopiedLogin[], now: number): Promise<AccountRow> {
   const own = account.login === undefined
-  const name = own && account.name === OWN_NAME ? ((await ownName(agent)) ?? OWN_NAME) : account.name
-  const said = (): Pick<AccountRow, 'windows' | 'asOf'> => ({ windows: windowsOf(account.windows ?? [], now), ...(account.windowsAt !== undefined ? { asOf: account.windowsAt } : {}) })
+  const name = own && account.name === OWN_NAME ? ((await ownName(agent)) ?? `${AGENT_NAMES[agent]} login on ${accountsWiring.computer()}`) : account.name
+  const copy = own ? undefined : copies.find(login => login.name === account.name)
+  const said = (): Pick<AccountRow, 'windows' | 'asOf'> => {
+    if (copy?.usage && (account.windowsAt === undefined || copy.usage.at > account.windowsAt)) return { windows: copy.usage.windows, asOf: copy.usage.at }
+    return { windows: windowsOf(account.windows ?? [], now), ...(account.windowsAt !== undefined ? { asOf: account.windowsAt } : {}) }
+  }
   let reading: Pick<AccountRow, 'windows' | 'asOf'>
   if (agent === 'claude') reading = own && liveOwn.length > 0 ? { windows: liveClaude(liveOwn) } : said()
   else {
@@ -155,6 +189,7 @@ async function row(agent: AccountsAgent, account: AgentAccount, liveOwn: DriverQ
   return {
     id: account.name,
     name,
+    ...(copy ? { from: copy.from } : {}),
     own,
     ...(account.added !== undefined ? { added: account.added } : {}),
     ...reading,
@@ -172,7 +207,8 @@ export async function onAgentAccounts(agent: AccountsAgent): Promise<AccountsVie
           .then(view => view.windows)
           .catch(() => [])
       : []
-  const rows = await Promise.all(readAccounts(accountsWiring.path(agent)).map(account => row(agent, account, liveOwn, now)))
+  const copies = readCopied().filter(login => login.kind === agent)
+  const rows = await Promise.all(readAccounts(accountsWiring.path(agent)).map(account => row(agent, account, liveOwn, copies, now)))
   // The first free one is the one a run takes; with one account there is no order to say.
   if (rows.length > 1) {
     const free = rows.filter(r => r.limitedUntil === undefined)
@@ -182,8 +218,11 @@ export async function onAgentAccounts(agent: AccountsAgent): Promise<AccountsVie
   }
   const beingAdded = adding.get(agent)
   const lastFailed = failed.get(agent)
+  const from = rows.find(r => r.from !== undefined)?.from
   return {
     accounts: rows,
+    computer: accountsWiring.computer(),
+    ...(from !== undefined ? { from } : {}),
     ...(beingAdded ? { adding: beingAdded } : {}),
     ...(lastFailed !== undefined ? { failed: lastFailed } : {}),
     now,
@@ -210,15 +249,26 @@ async function codexKeys(): Promise<string[]> {
 /** Sign the account in, and keep it under `name`. Why not, when it did not go through. */
 async function signIn(agent: AccountsAgent, name: string): Promise<string | undefined> {
   const path = accountsWiring.path(agent)
+  const headless = accountsWiring.headless()
   if (agent === 'claude') {
-    const minted = await accountsWiring.mint()
+    const minted = await accountsWiring.mint(
+      headless
+        ? {
+            onLink: (url, paste) => {
+              pastes.set(agent, paste)
+              adding.set(agent, { name, url, paste: true })
+            },
+          }
+        : {},
+    )
+    pastes.delete(agent)
     if (!minted.ok) return minted.error
     addAccount(name, minted.login, path, new Date(accountsWiring.now()))
     return undefined
   }
   const signed = await accountsWiring.loginCodex({
     dir: accountsWiring.codexDir(),
-    onUrl: url => void adding.set(agent, { name, url }),
+    ...(headless ? { onCode: (code: string, url: string) => void adding.set(agent, { name, url, code }) } : { onUrl: (url: string) => void adding.set(agent, { name, url }) }),
   })
   if (!signed.ok) return signed.error
   const folder = join(accountsWiring.codexDir(), signed.login)
@@ -246,7 +296,7 @@ export async function sendAddAgentAccount(agent: AccountsAgent, name: string): P
   if (busy)
     return {
       ok: false,
-      error: `${busy.name}'s account is being added: sign in in the page the browser opened, or wait for it to end.`,
+      error: `${busy.name}'s account is being added: sign in on the page it gave, or wait for it to end.`,
     }
   const refused = await nameTaken(agent, name)
   if (refused) return { ok: false, error: refused }
@@ -264,6 +314,13 @@ export async function sendAddAgentAccount(agent: AccountsAgent, name: string): P
       adding.delete(agent)
     })
   return { ok: true }
+}
+
+/** Hand Claude Code the code its page showed the person, on a computer with no browser of its own. */
+export async function sendAgentAccountCode(agent: AccountsAgent, code: string): Promise<AccountResult> {
+  const paste = pastes.get(agent)
+  if (!paste) return { ok: false, error: 'No login waits for a code: start it again.' }
+  return typeof code === 'string' && paste(code) ? { ok: true } : { ok: false, error: 'That is not the code the page shows: copy it whole, and paste it here.' }
 }
 
 /**

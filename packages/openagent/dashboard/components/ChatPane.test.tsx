@@ -47,6 +47,15 @@ describe('ChatPane', () => {
     expect(room('--chat-bottom')).toBe('400px')
   })
 
+  test('on a touch screen the chat ends where the message box starts: a phone draws its scroll bar the chat\'s whole height', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(pointer: coarse)' }))
+    render(<ChatPane top={<b>top bar</b>} bottom={<b>message box</b>}><p>chat</p></ChatPane>)
+    expect(room('--chat-bar')).toBe('96.5px')
+    // The chat keeps no room for the bar: it is not under it.
+    expect(room('--chat-bottom')).toBe('0px')
+    expect(screen.getByTestId('chat-bottom').parentElement!.className.split(' ')).toContain('pointer-coarse:pb-(--chat-bar)')
+  })
+
   test('the top bar is the page\'s first row, and the chat\'s room starts under it: the chat keeps no room for it', () => {
     render(<ChatPane top={<b>top bar</b>} bottom={<b>message box</b>}><p>chat</p></ChatPane>)
     const top = screen.getByTestId('chat-top')
@@ -87,7 +96,7 @@ describe('ChatPane', () => {
     expect(fades).toHaveLength(2)
     for (const fade of fades) expect(fade).toEqual(expect.arrayContaining(['pointer-events-none', 'absolute', 'left-0', 'right-[max(var(--chat-scroll-bar),0.75rem)]']))
     expect(fades[0]).toEqual(expect.arrayContaining(['top-0', 'bg-gradient-to-b']))
-    expect(fades[1]).toEqual(expect.arrayContaining(['bottom-(--chat-bottom)', 'bg-gradient-to-t']))
+    expect(fades[1]).toEqual(expect.arrayContaining(['bottom-(--chat-bar)', 'bg-gradient-to-t']))
   })
 
   test('a note stands in the middle of the room the message box leaves', () => {

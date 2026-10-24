@@ -4,8 +4,9 @@ import { forgetRemembered } from '../lib/use-async.js'
 
 const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), sendGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
+vi.mock('../rpc/server-logins.js', () => ({ onServerLogins: vi.fn(async () => ({ computer: 'Studio', servers: [] })), sendUseLoginsOn: vi.fn(), sendAllowLogins: vi.fn(), sendSettleLogin: vi.fn() }))
 
-const { GitHostsSettings } = await import('./GitHosts.js')
+const { GitHostCards } = await import('./GitHosts.js')
 
 const provider = (over: Record<string, unknown> = {}) => ({
   name: 'GitHub',
@@ -36,7 +37,7 @@ afterEach(() => {
 describe('Git hosts', () => {
   test('a card per host, drawn from its package: the accounts its tool knows, the one runs use, the terminal’s; another is used for runs with a press; a host with no package is one line', async () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site', 'gemskills'], provider: provider() }, { host: 'gitlab.example.com', projects: ['tool'] }] })
-    render(<GitHostsSettings />)
+    render(<GitHostCards />)
     const card = await screen.findByRole('region', { name: 'GitHub' })
     expect(within(card).getByText('Connected')).toBeTruthy()
     expect(within(card).getByText('github.com · used by site, gemskills')).toBeTruthy()
@@ -51,7 +52,7 @@ describe('Git hosts', () => {
   test('Add account asks the package for a code, and the card shows it with the page to type it at while the login waits', async () => {
     logins.onGitHosts.mockResolvedValueOnce({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider() }] })
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider({ loggingIn: { code: 'ABCD-1234', url: 'https://github.com/login/device' } }) }] })
-    render(<GitHostsSettings />)
+    render(<GitHostCards />)
     fireEvent.click(await screen.findByRole('button', { name: 'Add account' }))
     await waitFor(() => expect(logins.sendGitHostLogin).toHaveBeenCalledWith('github.com'))
     expect(await screen.findByText('ABCD-1234')).toBeTruthy()
@@ -60,7 +61,7 @@ describe('Git hosts', () => {
 
   test('no tool is grey, with the press that installs it and the command it runs, and why the last install failed; no account is amber, with the press that logs one in', async () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider({ installed: false, accounts: [], installFailed: 'curl: could not resolve host' }) }] })
-    render(<GitHostsSettings />)
+    render(<GitHostCards />)
     const card = await screen.findByRole('region', { name: 'GitHub' })
     expect(within(card).getByText('Not installed')).toBeTruthy()
     expect(within(card).getByText('brew install gh')).toBeTruthy()
@@ -70,7 +71,7 @@ describe('Git hosts', () => {
     cleanup()
 
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider({ accounts: [] }) }] })
-    render(<GitHostsSettings />)
+    render(<GitHostCards />)
     const out = await screen.findByRole('region', { name: 'GitHub' })
     expect(within(out).getByText('Log in')).toBeTruthy()
     fireEvent.click(within(out).getByRole('button', { name: 'Log in to GitHub' }))
@@ -79,7 +80,7 @@ describe('Git hosts', () => {
 
   test('no project with a remote: no card, one line saying when one comes', async () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [] })
-    render(<GitHostsSettings />)
+    render(<GitHostCards />)
     expect(await screen.findByText(/None of your projects has a remote yet/)).toBeTruthy()
   })
 })

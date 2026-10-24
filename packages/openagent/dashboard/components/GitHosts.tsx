@@ -2,17 +2,19 @@ import { useState } from 'react'
 import { Check, Plus } from 'lucide-react'
 import { sendUseGitHostAccount, type GitHostRow } from '../rpc/logins.js'
 import { cn } from '../lib/utils.js'
-import { DeviceCode, GIT_HOSTS_ENTRY, HostFix, PackageLogo, StatePill, hostLoginState, hostWords, useGitHosts, useHostLogin } from './Logins.js'
+import { ACCOUNTS_ENTRY, DeviceCode, HostFix, PackageLogo, StatePill, hostLoginState, hostWords, useGitHosts, useHostLogin } from './Logins.js'
+import { LeftNotices, ServerNotes } from './ServerLogins.js'
 import { Button } from './ui/button.js'
 import { DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from './ui/dropdown-menu.js'
 
-// Settings › Git hosts: one card per host the projects' remotes are on, drawn from what the host's
-// package answers (its name, its tool, the accounts the tool knows, the one runs use). Runs use the
-// account picked here, whatever the terminal's tool has active, and a switch here leaves the
-// terminal as it is. A host no package answers for is one line; a project with no remote, none.
+// The git hosts of Settings › Accounts: one card per host the projects' remotes are on, and the
+// host of the git host package OpenAgent brings, drawn from what the host's package answers (its
+// name, its tool, the accounts the tool knows, the one runs use). Runs use the account picked here,
+// whatever the terminal's tool has active, and a switch here leaves the terminal as it is. A host
+// no package answers for is one line; a project with no remote, none.
 
-/** Settings › Git hosts. */
-export function GitHostsSettings() {
+/** The git hosts' cards. */
+export function GitHostCards() {
   const { view, reload } = useGitHosts()
   if (view && view.hosts.length === 0) return <p className="text-sm text-muted-foreground">None of your projects has a remote yet. A project pushed to a git host gets its card here.</p>
   return (
@@ -24,7 +26,7 @@ export function GitHostsSettings() {
 }
 
 function usedBy(row: GitHostRow): string {
-  return `used by ${row.projects.join(', ')}`
+  return row.projects.length > 0 ? `used by ${row.projects.join(', ')}` : 'no project on it yet'
 }
 
 function NoPackage({ row }: { row: GitHostRow }) {
@@ -62,9 +64,10 @@ function HostCard({ row, onChanged }: { row: GitHostRow; onChanged: () => Promis
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm">@{account.login}</p>
                 <p className={cn('truncate text-xs', account.ok ? 'text-muted-foreground' : 'text-warning')}>
-                  {!account.ok ? `${p.name} no longer takes this login: add it again` : account.terminal ? "the terminal's account" : `logged in to ${p.tool}`}
+                  {!account.ok ? `${p.name} no longer takes this login: add it again` : account.from !== undefined ? `from ${account.from}` : account.terminal ? "the terminal's account" : `logged in to ${p.tool}`}
                 </p>
               </div>
+              <ServerNotes row={{ kind: 'git', host: row.host, source: account.login }} />
               {account.runs ? (
                 <span className="text-xs font-medium text-success">in use for runs</span>
               ) : (
@@ -76,6 +79,7 @@ function HostCard({ row, onChanged }: { row: GitHostRow; onChanged: () => Promis
           ))}
         </ul>
       )}
+      <LeftNotices kind="git" host={row.host} />
       <div className={cn('px-3 py-2.5', p.accounts.length > 0 && 'border-t border-border')}>
         {!p.installed || p.accounts.length === 0 ? (
           <div className="space-y-2">
@@ -115,7 +119,7 @@ export function GitHostsSubmenu({ onSettings }: { onSettings: (entry: string) =>
         const runs = p.accounts.find(a => a.runs)
         if (!runs)
           return (
-            <DropdownMenuItem key={row.host} onClick={() => onSettings(GIT_HOSTS_ENTRY)}>
+            <DropdownMenuItem key={row.host} onClick={() => onSettings(ACCOUNTS_ENTRY)}>
               <PackageLogo svg={p.logo} className="size-3.5" />
               <span className="flex-1">{p.name}</span>
               <span className="text-warning">{p.installed ? 'Log in' : 'Not installed'}</span>
@@ -137,7 +141,7 @@ export function GitHostsSubmenu({ onSettings }: { onSettings: (entry: string) =>
                 </DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => onSettings(GIT_HOSTS_ENTRY)}>
+              <DropdownMenuItem onClick={() => onSettings(ACCOUNTS_ENTRY)}>
                 <Plus className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
                 Add account…
               </DropdownMenuItem>

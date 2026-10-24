@@ -10,7 +10,7 @@ import { runCli, type CliIO, type OtherStatus, type OwnStatus, type SharedStatus
 import { OWN_CLAUDE_FILE, markOf, ownClaudeLoginScript, ownClaudeLogoutScript, ownIdentityScript } from './own.js'
 import type { OwnDoor } from './own-door.js'
 import type { Exec } from './ssh.js'
-import { readStore, storePath } from './store.js'
+import { storePath } from './store.js'
 import { GH_LOGIN, testHome } from './test-home.js'
 
 /** A Claude login as Claude Code shows one, made up. */
@@ -90,15 +90,10 @@ test('a GitHub login handed over on standard input is given to this user\'s gh, 
   }
 })
 
-test('a GitHub login with a code is a process of its own, and a Claude login handed over is written, and OpenAgent is started again with it; a login taken off starts it again only for Claude', async () => {
+test('a Claude login handed over is written, and OpenAgent is started again with it; a login taken off starts it again only for Claude', async () => {
   const home = await testHome()
   try {
     const env = { ...home.env, OPENAGENT_PERSON: 'rom' }
-    const started: string[][] = []
-    await run(env, ['own', 'login', 'github', 'own'], { startWork: words => (started.push(words), 4242) })
-    assert.deepEqual(started, [['own-work', 'github']])
-    assert.equal((await readStore(env)).own?.github?.worker?.pid, 4242)
-
     let over = 0
     const shell = pretendShell()
     const given = await run(env, ['own', 'login', 'claude'], { exec: shell.exec, stdin: async () => CLAUDE_LOGIN, startOver: () => void over++ })
@@ -203,57 +198,6 @@ function pretendDoor(lines: { url: string; mode: string; id?: string; refused?: 
   return { door, asked }
 }
 
-test('for a server someone invited this computer\'s person to, this computer\'s GitHub login is copied through OpenAgent, on standard input there, and never in an address', async () => {
-  const home = await testHome()
-  const agent = await openAgent(fn => (fn === 'runComputerCommandOn' ? { ok: true, output: { person: 'rom', logins: {} } } : undefined))
-  try {
-    const env = { ...home.env, OPENAGENT_URL: agent.url }
-    const gh: Exec = async bin => (bin === 'gh' ? { code: 0, out: `${GH_LOGIN}\n`, err: '' } : { code: 1, out: '', err: '' })
-    const copied = await run(env, ['shared-login', SERVER_URL, 'github'], { exec: gh })
-    assert.equal(copied.code, 0)
-    assert.deepEqual(copied.out, { person: 'rom', logins: {} })
-    assert.deepEqual(agent.asked, [{ fn: 'runComputerCommandOn', args: ['@openagt/devices', SERVER_URL, ['own', 'login', 'github'], null, GH_LOGIN], origin: agent.url }])
-    // What names no server reached over HTTPS is not one.
-    assert.equal((await run(env, ['shared-login', 'http://203.0.113.9', 'github'])).code, 2)
-    assert.equal((await run(env, ['shared-login', `${SERVER_URL}/x`, 'github'])).code, 2)
-    // Only this computer's own OpenAgent is asked.
-    const elsewhere = await run({ ...home.env, OPENAGENT_URL: 'https://203.0.113.7' }, ['shared-login', SERVER_URL, 'github'], { exec: gh })
-    assert.equal(elsewhere.code, 1)
-  } finally {
-    await agent.close()
-    await home.remove()
-  }
-})
-
-test('a Claude login for a shared server is made in this computer\'s browser by a process of its own and handed over through OpenAgent; how it ended is written down, never the login', async () => {
-  const home = await testHome()
-  let answer: unknown = { ok: true, output: {} }
-  const agent = await openAgent(() => answer)
-  try {
-    const env = { ...home.env, OPENAGENT_URL: agent.url }
-    const started: string[][] = []
-    const asked = await run(env, ['shared-login', SERVER_URL, 'claude'], { startWork: words => (started.push(words), 4242), door: pretendDoor().door })
-    assert.deepEqual(started, [['shared-work', SERVER_URL]])
-    assert.equal((asked.out as { shared: SharedStatus[] }).shared[0]!.claude.working, false, 'the process 4242 is not this one: it is not at work')
-
-    // The process itself.
-    const minted = await run(env, ['shared-work', SERVER_URL], { mint: async () => ({ ok: true, login: CLAUDE_LOGIN }) })
-    assert.equal(minted.code, 0)
-    assert.deepEqual(agent.asked.at(-1)?.args, ['@openagt/devices', SERVER_URL, ['own', 'login', 'claude'], null, CLAUDE_LOGIN])
-    assert.equal((await readFile(storePath(env), 'utf8')).includes(CLAUDE_LOGIN), false)
-
-    // Started again from the command, as the page does, then made and refused over there: said in the server's words.
-    answer = { ok: false, error: 'Claude Code on this computer does not take the login.' }
-    await run(env, ['shared-login', SERVER_URL, 'claude'], { startWork: () => process.pid, door: pretendDoor().door })
-    await run(env, ['shared-work', SERVER_URL], { mint: async () => ({ ok: true, login: CLAUDE_LOGIN }) })
-    const told = await run(env, ['shared', SERVER_URL], { door: pretendDoor().door })
-    assert.deepEqual((told.out as { shared: SharedStatus[] }).shared, [{ url: SERVER_URL, claude: { there: false, working: false, said: 'Claude Code on this computer does not take the login.' } }])
-  } finally {
-    await agent.close()
-    await home.remove()
-  }
-})
-
 test('a line to a shared server is asked for with a link its door gives this person, through OpenAgent, handed to this computer\'s door on standard input; then only what it may do is changed, and off takes it away', async () => {
   const home = await testHome()
   const LINK = `${SERVER_URL}/_devices/enter#c0de.pin`
@@ -265,7 +209,7 @@ test('a line to a shared server is asked for with a link its door gives this per
     assert.equal(on.code, 0)
     assert.deepEqual(agent.asked.map(call => [call.fn, call.args]), [['sendMachineLineLink', [SERVER_URL]]])
     assert.deepEqual(asked.find(call => call.args[1] === 'add'), { args: ['line', 'add', '-', 'watch'], input: LINK })
-    assert.deepEqual((on.out as { shared: SharedStatus[] }).shared[0], { url: SERVER_URL, reach: 'watch', line: 'l1abcd', claude: { there: false, working: false } })
+    assert.deepEqual((on.out as { shared: SharedStatus[] }).shared[0], { url: SERVER_URL, reach: 'watch', line: 'l1abcd' })
 
     const full = await run(env, ['shared-reach', SERVER_URL, 'full'], { door })
     assert.equal((full.out as { shared: SharedStatus[] }).shared[0]!.reach, 'full')

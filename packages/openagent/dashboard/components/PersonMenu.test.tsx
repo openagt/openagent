@@ -69,7 +69,7 @@ describe('PersonMenu', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: /Dani/ }))
     expect(accounts.sendUseAgentAccountFirst).toHaveBeenCalledWith('claude', 'Dani')
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add account…' }))
-    expect(onSettings).toHaveBeenCalledWith('agent-accounts')
+    expect(onSettings).toHaveBeenCalledWith('accounts')
   })
 
   test('the accounts, GitHub, Claude and Codex, are one group with one line under it; with none of them, no line of their own', async () => {
@@ -150,7 +150,7 @@ const GITHUB = {
 }
 
 describe('PersonMenu: the git host and what is missing', () => {
-  test('a GitHub row says the account runs use; its submenu uses another for runs, or opens Git hosts to add one', async () => {
+  test('a GitHub row says the account runs use; its submenu uses another for runs, or opens Accounts to add one', async () => {
     onPerson.mockResolvedValue({ name: 'Ada Lovelace', login: 'ada' })
     logins.onGitHosts.mockResolvedValue({ hosts: [GITHUB] })
     logins.sendUseGitHostAccount.mockResolvedValue({ ok: true })
@@ -163,7 +163,7 @@ describe('PersonMenu: the git host and what is missing', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: '@octo-agent' }))
     expect(logins.sendUseGitHostAccount).toHaveBeenCalledWith('github.com', 'octo-agent')
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add account…' }))
-    expect(onSettings).toHaveBeenCalledWith('git-hosts')
+    expect(onSettings).toHaveBeenCalledWith('accounts')
   })
 
   test('the GitHub row is there the moment the menu opens: the answer the sidebar read already is shown while it is asked again', async () => {
@@ -187,6 +187,6 @@ describe('PersonMenu: the git host and what is missing', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Ada Lovelace: settings, something is missing' }))
     expect(container.ownerDocument.querySelector('[data-testid="missing-dot"]')).toBeTruthy()
     fireEvent.click(screen.getByRole('menuitem', { name: 'Claude Code is not logged in.' }))
-    expect(onSettings).toHaveBeenCalledWith('agent-accounts')
+    expect(onSettings).toHaveBeenCalledWith('accounts')
   })
 })

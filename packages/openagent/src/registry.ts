@@ -55,6 +55,8 @@ export interface MachineRecord {
   owner?: string
   /** The person was told, once, that their logins are copied to that other person's computer. */
   told?: true
+  /** A server of the person's own that uses this computer's logins: they said so once (`logins-sync.ts`). */
+  logins?: true
   /**
    * The ids the machine is listed under at the doors of the machines it saved, as it last said:
    * kept, so it is known to be in at this computer's door too while it does not answer.
@@ -433,12 +435,12 @@ function sanitizeMachines(value: unknown): MachineRecord[] {
   for (const raw of value) {
     if (machines.length >= MACHINE_LIMITS.count) break
     if (typeof raw !== 'object' || raw === null) continue
-    const { label, url, key, door, pin, host, owner, told, listed } = raw as Record<string, unknown>
+    const { label, url, key, door, pin, host, owner, told, logins, listed } = raw as Record<string, unknown>
     const ids = Array.isArray(listed) ? listed.filter((id): id is string => typeof id === 'string' && DEVICE_ID.test(id)).slice(0, MACHINE_LIMITS.count) : []
     if (typeof label !== 'string' || typeof url !== 'string' || typeof key !== 'string' || typeof door !== 'string') continue
     if (!url || !key || !door || seen.has(url)) continue
     seen.add(url)
-    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, key, door, ...(typeof pin === 'string' && pin ? { pin } : {}), ...(isHostName(host) ? { host } : {}), ...(isPersonName(owner) ? { owner } : {}), ...(told === true ? { told: true as const } : {}), ...(ids.length ? { listed: ids } : {}) })
+    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, key, door, ...(typeof pin === 'string' && pin ? { pin } : {}), ...(isHostName(host) ? { host } : {}), ...(isPersonName(owner) ? { owner } : {}), ...(told === true ? { told: true as const } : {}), ...(logins === true ? { logins: true as const } : {}), ...(ids.length ? { listed: ids } : {}) })
   }
   return machines
 }
@@ -758,6 +760,19 @@ export async function tellMachine(id: string, fs: RegistryFs = nodeRegistryFs(),
     if (!saved) return false
     if (saved.told) return true
     await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(machine => (machine.id === id ? { ...machine, told: true as const } : machine)) }, fs, env)
+    return true
+  })
+}
+
+/** Say whether a saved server uses this computer's logins. Answers whether it is saved. */
+export async function useLoginsOn(id: string, on: boolean, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<boolean> {
+  return serialize(async () => {
+    const registry = await readRegistry(fs, env)
+    const saved = (registry.machines ?? []).find(candidate => candidate.id === id)
+    if (!saved) return false
+    const { logins: _was, ...rest } = saved
+    const next: MachineRecord = on ? { ...rest, logins: true } : rest
+    await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(machine => (machine.id === id ? next : machine)) }, fs, env)
     return true
   })
 }

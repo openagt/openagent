@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mintClaude, mintedIn, notMinted, startedAs } from './claude-login.js'
+import { isSignInCode, mintClaude, mintedIn, notMinted, signInUrl, startedAs } from './claude-login.js'
 
 const CLAUDE_LOGIN = `sk-ant-oat01-${'Zx9_-q'.repeat(16)}`
 
@@ -114,6 +114,58 @@ else setTimeout(() => {
     setTimeout(() => stop.abort(), 300)
     assert.deepEqual(await mintClaude({ command: command('wait'), signal: stop.signal }), { ok: false, error: 'The login was stopped.' })
     assert.equal(await gone(), true)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+/** The sign-in link as Claude Code (2.1.310) draws it with no browser to open: a link around words the screen wraps. */
+const SIGN_IN = 'https://claude.com/cai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e&response_type=code&redirect_uri=https%3A%2F%2Fplatform.claude.com%2Foauth%2Fcode%2Fcallback&scope=user%3Ainference&state=abc'
+const linkScreen = `\x1b[38;2;153;153;153mBrowser didn't open? Use the url below to sign in (c to copy)\x1b[39m\r\n\r\n\x1b]8;id=x;${SIGN_IN}\x07\x1b[38;2;153;153;153m${SIGN_IN.slice(0, 120)}\x1b[39m\x1b]8;;\x07\r\n\x1b]8;id=x;${SIGN_IN}\x07${SIGN_IN.slice(120)}\x1b]8;;\x07\r\n\x1b[2GPaste\x1b[8Gcode\x1b[13Ghere\x1b[18Gif\x1b[21Gprompted\x1b[30G>`
+
+test('the sign-in page is read whole off the link Claude Code draws, however its words wrap; a code to paste back is a word and nothing else', () => {
+  assert.equal(signInUrl(linkScreen), SIGN_IN)
+  assert.equal(signInUrl("Browser didn't open? Use the url below\r\nhttps://example.com/x\r\n"), undefined)
+  assert.equal(isSignInCode('Ab3_-x9#stateOf.it~'), true)
+  assert.equal(isSignInCode('short'), false)
+  assert.equal(isSignInCode('code\rexit\r'), false)
+  assert.equal(isSignInCode('two words here'), false)
+})
+
+test('with no browser here, the sign-in page is handed over, and the code pasted back reaches Claude Code, which then shows the login', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'claude-mint-'))
+  try {
+    // Stands in for Claude Code with no browser: it draws the link, and takes the code typed into its terminal.
+    const stub = join(dir, 'stub.mjs')
+    await writeFile(
+      stub,
+      `if (!process.stdout.isTTY || !process.stdin.isTTY) { console.log('no terminal'); process.exit(1) }
+process.stdin.setRawMode(true)
+process.stdout.write(${JSON.stringify(linkScreen)})
+let typed = ''
+process.stdin.on('data', key => {
+  typed += String(key)
+  if (!typed.endsWith('\\r')) return
+  if (typed === 'Good-code_42#state\\r') process.stdout.write(${JSON.stringify(screen(CLAUDE_LOGIN))})
+  else console.log('Invalid code')
+  typed = ''
+})
+setInterval(() => {}, 1000)
+`,
+    )
+    const links: string[] = []
+    const login = await mintClaude({
+      command: `node ${stub}`,
+      timeoutMs: 20_000,
+      onLink: (url, paste) => {
+        links.push(url)
+        // A code that is no code never reaches Claude Code; a good one does.
+        assert.equal(paste('bad\rcode'), false)
+        assert.equal(paste(' Good-code_42#state '), true)
+      },
+    })
+    assert.deepEqual(login, { ok: true, login: CLAUDE_LOGIN })
+    assert.deepEqual(links, [SIGN_IN])
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

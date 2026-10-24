@@ -168,7 +168,7 @@ test(
     const stranger = await run(['env', '--user', 'stranger'], { gh, env })
     assert.equal(stranger.code, 1)
     assert.equal(stranger.out['reason'], 'no-account')
-    assert.match(stranger.err, /Settings › Git hosts/)
+    assert.match(stranger.err, /Settings › Accounts/)
     assert.equal((await run(['use', 'stranger'], { gh, env })).out['reason'], 'no-account')
     // A login gh keeps under one name that GitHub says is another account's: never handed to a run.
     const mixed = await run(['env', '--user', 'octo-agent'], { gh: ghWith(STATUS, [], { 'octo-agent': 'octo' }), env })
@@ -177,6 +177,41 @@ test(
     assert.match(mixed.err, /the login gh keeps for octo-agent is octo's on GitHub/)
     // Nobody logged in: nothing changes for the run.
     assert.deepEqual((await run(['env'], { gh: ghWith({ hosts: {} }), env: { XDG_CONFIG_HOME: join(dir, 'x') } })).out, { ok: true, env: {} })
+  }),
+)
+
+test(
+  'token, take and forget: an account’s own token is handed out, checked to be its own; a token handed over is logged in beside the others; forgetting one ends nothing',
+  withDir(async dir => {
+    const env = { XDG_CONFIG_HOME: dir }
+    assert.deepEqual((await run(['token', '--user', 'octo-agent'], { gh: ghWith(STATUS), env })).out, { ok: true, login: 'octo-agent', token: 'tok-octo-agent' })
+    assert.equal((await run(['token', '--user', 'stranger'], { gh: ghWith(STATUS), env })).out['reason'], 'no-account')
+    assert.equal((await run(['token', '--user', 'octo-agent'], { gh: ghWith(STATUS, [], { 'octo-agent': 'octo' }), env })).out['reason'], 'not-that-account')
+
+    const token = `gho_${'a1B2'.repeat(9)}`
+    const asked: { args: string[]; input?: string }[] = []
+    const gh: GhRunner = async (args, _cwd, ghEnv, input) => {
+      asked.push({ args, ...(input !== undefined ? { input } : {}) })
+      if (args[0] === 'api' && args[1] === 'user') return ghEnv?.['GH_TOKEN'] === token ? 'octo\n' : Promise.reject(new Error('Bad credentials'))
+      if (args[0] === '--version') return 'gh version 2.93.0\n'
+      if (args[0] === 'auth' && args[1] === 'status') return JSON.stringify(STATUS)
+      return ''
+    }
+    assert.deepEqual((await run(['take'], { gh, env, stdin: async () => `${token}\n` })).out, { ok: true, login: 'octo' })
+    // The token reaches gh on its input, never among its arguments.
+    const login = asked.find(a => a.args[1] === 'login')!
+    assert.deepEqual(login, { args: ['auth', 'login', '--hostname', 'github.com', '--git-protocol', 'https', '--with-token'], input: token })
+    assert.ok(asked.every(a => !a.args.join(' ').includes(token)))
+    assert.equal((await run(['take'], { gh, env, stdin: async () => 'not a token' })).out['reason'], 'no-token')
+    assert.equal((await run(['take'], { gh, env, stdin: async () => `gho_${'z'.repeat(36)}` })).out['reason'], 'no-token')
+
+    asked.length = 0
+    assert.deepEqual((await run(['forget', 'octo-agent'], { gh, env })).out, { ok: true, login: 'octo-agent' })
+    assert.deepEqual(asked.at(-1)?.args, ['auth', 'logout', '--hostname', 'github.com', '--user', 'octo-agent'])
+    // One gh does not know is forgotten already.
+    asked.length = 0
+    assert.deepEqual((await run(['forget', 'stranger'], { gh, env })).out, { ok: true, login: 'stranger' })
+    assert.ok(!asked.some(a => a.args[1] === 'logout'))
   }),
 )
 

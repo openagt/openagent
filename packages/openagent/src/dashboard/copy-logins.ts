@@ -1,5 +1,7 @@
 import { execFile } from 'node:child_process'
 import { hostname } from 'node:os'
+import { readAccounts } from '@openagt/agent-driver'
+import { claudeAccountsPath } from '@openagt/agent-driver-claude'
 import type { ModuleCommandResult } from '../project-modules.js'
 import type { RelayHandlers } from './relay-endpoints.js'
 import { giveRemoteLogins, pingRemote, remoteLogins, type MachineAccess } from './remote-run.js'
@@ -9,7 +11,7 @@ import { isServerName, loginsOfOwn, loginsToCopy, type MachineLogins } from './m
  * Both ends of copying a person's logins to another person's computer (machine-logins.ts).
  *
  * On a server, a person's own OpenAgent holds their GitHub login (its user's `gh`) and their
- * Claude login (what its service started it with). Before it sends a run to a computer of another
+ * Claude login (an account its runs use: one of their own computer's, `logins-sync.ts`). Before it sends a run to a computer of another
  * person's, it copies what that computer lacks of them, or has an older copy of. A laptop never
  * copies its own logins: they are made for it, and go to no other computer.
  *
@@ -70,10 +72,14 @@ export interface OwnLogins {
   claude?: string
 }
 
-/** The logins this OpenAgent works with: its user's `gh`, and the Claude login its service started it with. */
+/**
+ * The logins this OpenAgent works with: its user's `gh`, and the Claude login its runs take first:
+ * one of its added accounts, as a login of the person's own computer is here, else the one its
+ * service started it with.
+ */
 export async function ownLogins(env: NodeJS.ProcessEnv = process.env): Promise<OwnLogins> {
   const github = await ownGithub(env)
-  const claude = env.CLAUDE_CODE_OAUTH_TOKEN?.trim()
+  const claude = readAccounts(claudeAccountsPath(env)).find(account => account.login !== undefined)?.login ?? env.CLAUDE_CODE_OAUTH_TOKEN?.trim()
   return { ...(github ? { github } : {}), ...(claude ? { claude } : {}) }
 }
 

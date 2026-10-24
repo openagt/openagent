@@ -9,3 +9,4 @@ export const sendAddAgentAccount = rpc<typeof impl.sendAddAgentAccount>('sendAdd
 export const sendRemoveAgentAccount = rpc<typeof impl.sendRemoveAgentAccount>('sendRemoveAgentAccount')
 export const sendUseAgentAccountFirst = rpc<typeof impl.sendUseAgentAccountFirst>('sendUseAgentAccountFirst')
 export const sendNameOwnAgentAccount = rpc<typeof impl.sendNameOwnAgentAccount>('sendNameOwnAgentAccount')
+export const sendAgentAccountCode = rpc<typeof impl.sendAgentAccountCode>('sendAgentAccountCode')

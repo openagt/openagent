@@ -14,7 +14,7 @@ import { cn } from '../../lib/utils.js'
 // #710 still stands for everything not converted: no `::-webkit-scrollbar` rule comes back.
 //
 // The scrollbar unmounts when the content fits, so a short list has no bar at all, and a list that
-// grows or shrinks is measured again (the Content part).
+// grows or shrinks is measured again (the Content part). A touch screen has its own.
 //
 // Vertical only: nothing here scrolls sideways, and upstream's horizontal branch would ship
 // untested. Add it with its first use.
@@ -63,7 +63,9 @@ function ScrollBar({ className, ...props }: ComponentProps<typeof ScrollAreaPrim
     <ScrollAreaPrimitive.Scrollbar
       data-slot="scroll-area-scrollbar"
       orientation="vertical"
-      className={cn('flex h-full w-2.5 touch-none select-none border-l border-l-transparent p-px', className)}
+      // On a touch screen the phone shows its own bar while a finger scrolls: a drawn one there
+      // reads as a box scrolling inside the page.
+      className={cn('flex h-full w-2.5 touch-none select-none border-l border-l-transparent p-px pointer-coarse:hidden', className)}
       {...props}
     >
       <ScrollAreaPrimitive.Thumb

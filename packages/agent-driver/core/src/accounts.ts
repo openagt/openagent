@@ -46,7 +46,11 @@ export function accountsPath(agent: string, env: NodeJS.ProcessEnv = process.env
   return join(env['HOME'] ?? homedir(), `.openagent-${agent}-accounts.json`)
 }
 
-/** The accounts, in order, the person's own always among them: first when the file does not say otherwise. */
+/**
+ * The accounts, in order, the person's own always among them: first when the file does not say
+ * otherwise. The person's own is the one with no login, and there is one: another with none is no
+ * account a run can use, and is left out.
+ */
 export function readAccounts(path: string): AgentAccount[] {
   let accounts: AgentAccount[] = []
   try {
@@ -55,7 +59,8 @@ export function readAccounts(path: string): AgentAccount[] {
   } catch {
     // No file yet, or one that does not read: the person's own login alone.
   }
-  return accounts.some(a => a.login === undefined) ? accounts : [{ name: OWN_NAME }, ...accounts]
+  const own = accounts.find(a => a.login === undefined)
+  return own ? accounts.filter(a => a.login !== undefined || a === own) : [{ name: OWN_NAME }, ...accounts]
 }
 
 function isAccount(value: unknown): value is AgentAccount {

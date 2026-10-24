@@ -18,7 +18,6 @@ async function run(env: NodeJS.ProcessEnv, args: string[], over: Partial<CliIO> 
   return { code, out: out.length ? (JSON.parse(out.join('\n')) as unknown) : undefined, err }
 }
 
-const NONE = { there: false, working: false }
 const serversOf = (ran: Ran): Status['servers'] => (ran.out as Status).servers
 
 test('no server until one is connected; what is no address, user or version is refused in words, and nothing is started', async () => {
@@ -43,7 +42,7 @@ test('no server until one is connected; what is no address, user or version is r
     }
     assert.deepEqual(started, [])
     assert.deepEqual((await readStore(home.env)).servers, [])
-    for (const args of [[], ['nonsense'], ['connect', '203.0.113.5'], ['status', 'more'], ['forget']]) {
+    for (const args of [[], ['nonsense'], ['connect', '203.0.113.5'], ['connect', '203.0.113.5', 'root', '1.2.3', 'github'], ['status', 'more'], ['forget']]) {
       const unread = await run(home.env, args)
       assert.equal(unread.code, 2)
       assert.deepEqual(unread.err, [USAGE])
@@ -62,7 +61,7 @@ test('connect saves the server and starts its install; a second press is the sam
     const connected = await run(home.env, ['connect', '203.0.113.5', 'root', '1.2.3'], { startWork })
     assert.equal(connected.code, 0)
     assert.deepEqual(started, [['work', '203.0.113.5', '1.2.3']])
-    assert.deepEqual(serversOf(connected), [{ address: '203.0.113.5', url: 'https://203.0.113.5', user: 'root', working: true, adding: true, steps: STEPS.map(({ id, label }) => ({ id, label, state: 'waiting' })), logins: { github: NONE, claude: NONE } }])
+    assert.deepEqual(serversOf(connected), [{ address: '203.0.113.5', url: 'https://203.0.113.5', user: 'root', working: true, adding: true, steps: STEPS.map(({ id, label }) => ({ id, label, state: 'waiting' })) }])
 
     const again = await run(home.env, ['connect', '203.0.113.5', 'root', '1.2.3'], { startWork })
     assert.equal(again.code, 1)
@@ -239,51 +238,10 @@ test('devices asks the server\'s door who is in, and marks the line this compute
   }
 })
 
-test('connect with "github" keeps the person\'s tick until the install copies the login; the tick counts as it is at each press', async () => {
-  const home = await testHome()
-  try {
-    for (const args of [['connect', '203.0.113.5', 'root', '1.2.3', 'gitlab'], ['connect', '203.0.113.5', 'root', '1.2.3', 'github', 'more'], ['login', '203.0.113.5'], ['login', '203.0.113.5', 'gitlab'], ['logout', '203.0.113.5'], ['github', 'more'], ['login-work'], ['login-work', '203.0.113.5'], ['logout-work', '203.0.113.5', 'gitlab']]) {
-      assert.equal((await run(home.env, args)).code, 2, args.join(' '))
-    }
-    const ticked = serversOf(await run(home.env, ['connect', '203.0.113.5', 'root', '1.2.3', 'github']))[0]!
-    assert.deepEqual(ticked.logins, { github: { there: false, working: true, wanted: true }, claude: NONE })
-    assert.deepEqual((await readStore(home.env)).servers[0]!.github, { wanted: true })
-
-    const { exec } = pretendServer(call => (call.script.includes('--with-token') ? { out: 'octocat\n' } : undefined))
-    assert.equal((await run(home.env, ['work', '203.0.113.5', '1.2.3'], { exec, signal: new AbortController().signal })).code, 0)
-    const [copied] = serversOf(await run(home.env, ['status']))
-    assert.equal(copied!.logins.github.there, true)
-    assert.equal(copied!.logins.github.account, 'octocat')
-    assert.equal(copied!.logins.github.working, false)
-    assert.equal(copied!.logins.github.wanted, undefined)
-
-    // An update without the tick copies nothing, and the login that is there still counts.
-    const updated = serversOf(await run(home.env, ['connect', '203.0.113.5', 'root', '1.2.4']))[0]!
-    assert.deepEqual(Object.keys(updated.logins.github).sort(), ['account', 'since', 'there', 'working'])
-    assert.equal(updated.logins.github.working, false)
-  } finally {
-    await home.remove()
-  }
-})
-
-test('a tick that was taken back before the next press is not kept from the press before', async () => {
-  const home = await testHome()
-  try {
-    // An install that never started: the server is saved, and nothing works on it.
-    const startWork = (): number => 0
-    await run(home.env, ['connect', '203.0.113.5', 'root', '1.2.3', 'github'], { startWork })
-    assert.deepEqual((await readStore(home.env)).servers[0]!.github, { wanted: true })
-    await update(home.env, store => void delete store.servers[0]!.worker)
-    await run(home.env, ['connect', '203.0.113.5', 'root', '1.2.3'], { startWork })
-    assert.equal((await readStore(home.env)).servers[0]!.github, undefined)
-  } finally {
-    await home.remove()
-  }
-})
-
 test('github says whose login a copy would be, or why there is none', async () => {
   const home = await testHome()
   try {
+    assert.equal((await run(home.env, ['github', 'more'])).code, 2)
     const good = pretendServer()
     assert.deepEqual((await run(home.env, ['github'], { exec: good.exec })).out, { account: 'octocat' })
     // Asked of github.com, whatever other host this computer's gh is set to.
@@ -293,155 +251,6 @@ test('github says whose login a copy would be, or why there is none', async () =
     assert.equal(nobody.code, 0)
     assert.deepEqual(nobody.out, { problem: 'There is no GitHub login to copy from this computer. `gh` is not logged in to github.com here, or GitHub does not answer: see `gh auth status`.' })
   } finally {
-    await home.remove()
-  }
-})
-
-test('login and logout start a process of their own, which tells the server; not during an install, and not twice at once', async () => {
-  const home = await testHome()
-  const { spawn } = await import('node:child_process')
-  const other = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'])
-  try {
-    assert.deepEqual((await run(home.env, ['login', '203.0.113.5', 'github'])).err, ['no server at 203.0.113.5'])
-    await run(home.env, ['connect', '203.0.113.5', 'root', '1.2.3'])
-    // Not while the server is being installed: the install's own end is where a ticked login goes.
-    for (const args of [['login', '203.0.113.5', 'github'], ['login', '203.0.113.5', 'claude'], ['logout', '203.0.113.5', 'github']]) {
-      assert.deepEqual((await run(home.env, args)).err, ['OpenAgent is being installed on 203.0.113.5 right now'], args.join(' '))
-    }
-    await update(home.env, store => void delete store.servers[0]!.worker)
-
-    // A command a page runs has seconds: it starts the work and answers, and the work is another process's.
-    const started: string[][] = []
-    const copying = serversOf(await run(home.env, ['login', '203.0.113.5', 'github'], { startWork: words => (started.push(words), other.pid!) }))[0]!
-    assert.deepEqual(started, [['login-work', '203.0.113.5', 'github']])
-    assert.deepEqual(copying.logins.github, { there: false, working: true })
-    for (const [args, why] of [
-      [['login', '203.0.113.5', 'github'], 'The GitHub login of 203.0.113.5 is being changed right now'],
-      [['logout', '203.0.113.5', 'github'], 'The GitHub login of 203.0.113.5 is being changed right now'],
-      [['forget', '203.0.113.5'], 'A login of 203.0.113.5 is being changed right now: wait until it ends'],
-      [['connect', '203.0.113.5', 'root', '1.2.4'], 'A login of 203.0.113.5 is being changed right now: wait until it ends'],
-    ] as const) {
-      const refused = await run(home.env, [...args])
-      assert.equal(refused.code, 1, args.join(' '))
-      assert.deepEqual(refused.err, [why])
-    }
-    assert.equal(started.length, 1)
-
-    // The process itself: this one stands in for it, as the command that started it left it.
-    await update(home.env, store => void (store.servers[0]!.github!.worker = { pid: process.pid, seen: new Date().toISOString() }))
-    const { exec, calls } = pretendServer(call => (call.script.includes('--with-token') ? { out: 'octocat\n' } : undefined))
-    assert.equal((await run(home.env, ['login-work', '203.0.113.5', 'github'], { exec, signal: new AbortController().signal })).code, 0)
-    assert.equal(calls.length, 2)
-    const copied = serversOf(await run(home.env, ['status']))[0]!.logins.github
-    assert.equal(copied.account, 'octocat')
-    assert.equal(copied.there, true)
-    assert.equal(copied.working, false)
-
-    const refusing = pretendServer(call => (call.remote === 'true' ? undefined : { code: 1, err: 'error validating token: HTTP 401: Bad credentials' }))
-    assert.equal((await run(home.env, ['login-work', '203.0.113.5', 'github'], { exec: refusing.exec, signal: new AbortController().signal })).code, 0)
-    assert.deepEqual(serversOf(await run(home.env, ['status']))[0]!.logins.github, { there: false, working: false, said: 'error validating token: HTTP 401: Bad credentials' })
-
-    await run(home.env, ['login-work', '203.0.113.5', 'github'], { exec, signal: new AbortController().signal })
-    const leaving = serversOf(await run(home.env, ['logout', '203.0.113.5', 'github'], { startWork: words => (started.push(words), process.pid) }))[0]!
-    assert.deepEqual(started.at(-1), ['logout-work', '203.0.113.5', 'github'])
-    assert.equal(leaving.logins.github.working, true)
-    assert.equal((await run(home.env, ['logout-work', '203.0.113.5', 'github'], { exec, signal: new AbortController().signal })).code, 0)
-    assert.deepEqual(serversOf(await run(home.env, ['status']))[0]!.logins.github, NONE)
-  } finally {
-    other.kill()
-    await home.remove()
-  }
-})
-
-test('login github own has the server get a login of its own: status tells the code while the server waits, and a second press starts over; own is for a GitHub login alone', async () => {
-  const home = await testHome()
-  const { spawn } = await import('node:child_process')
-  const first = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'])
-  try {
-    await run(home.env, ['connect', '203.0.113.5', 'root', '1.2.3'])
-    await update(home.env, store => void delete store.servers[0]!.worker)
-    for (const args of [['login', '203.0.113.5', 'claude', 'own'], ['logout', '203.0.113.5', 'github', 'own'], ['login', '203.0.113.5', 'github', 'mine'], ['login-work', '203.0.113.5', 'claude', 'own'], ['logout-work', '203.0.113.5', 'github', 'own']]) {
-      assert.equal((await run(home.env, args)).code, 2, args.join(' '))
-    }
-
-    const started: string[][] = []
-    const asked = serversOf(await run(home.env, ['login', '203.0.113.5', 'github', 'own'], { startWork: words => (started.push(words), first.pid!) }))[0]!
-    assert.deepEqual(started, [['login-work', '203.0.113.5', 'github', 'own']])
-    assert.deepEqual(asked.logins.github, { there: false, working: true })
-    // Not yet waiting for the person: a second press is refused, as for a copy.
-    assert.deepEqual((await run(home.env, ['login', '203.0.113.5', 'github', 'own'])).err, ['The GitHub login of 203.0.113.5 is being changed right now'])
-
-    // The server waits for the code to be typed: status tells it, and a second press ends the first and asks anew.
-    await update(home.env, store => void Object.assign(store.servers[0]!.github!, { asking: true, code: 'ABCD-1234' }))
-    assert.deepEqual(serversOf(await run(home.env, ['status']))[0]!.logins.github, { there: false, working: true, asking: true, code: 'ABCD-1234' })
-    const ended = new Promise(resolve => first.once('exit', resolve))
-    const again = serversOf(await run(home.env, ['login', '203.0.113.5', 'github', 'own'], { startWork: words => (started.push(words), process.pid) }))[0]!
-    await ended
-    assert.equal(started.length, 2)
-    // The old code is no longer told: it is the first press's.
-    assert.deepEqual(again.logins.github, { there: false, working: true })
-
-    // The process itself, as the command that started it left it.
-    const { exec, calls } = pretendServer(call => (call.script.includes('nohup setsid gh') ? { out: '4242 /home/openagent/.cache/openagent-github-login.aB3dE9 WXYZ-9876\n' } : call.script.includes('while asking "$PID"') ? { out: 'octocat\n' } : undefined))
-    assert.equal((await run(home.env, ['login-work', '203.0.113.5', 'github', 'own'], { exec, signal: new AbortController().signal })).code, 0)
-    assert.equal(calls.filter(call => call.remote !== 'true').length, 2)
-    const given = serversOf(await run(home.env, ['status']))[0]!.logins.github
-    assert.deepEqual([given.there, given.working, given.account, given.asking, given.code], [true, false, 'octocat', undefined, undefined])
-  } finally {
-    first.kill()
-    await home.remove()
-  }
-})
-
-test('login claude asks the person and gives the server the login; a second press while the person is asked starts over and ends the first; one on its way to the server is not cut', async () => {
-  const home = await testHome()
-  const { spawn } = await import('node:child_process')
-  const first = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'])
-  const second = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'])
-  try {
-    await run(home.env, ['connect', '203.0.113.5', 'root', '1.2.3'], { startWork: () => 0 })
-    await update(home.env, store => void delete store.servers[0]!.worker)
-
-    const started: string[][] = []
-    const begun = serversOf(await run(home.env, ['login', '203.0.113.5', 'claude'], { startWork: words => (started.push(words), first.pid!) }))[0]!
-    assert.deepEqual(started, [['login-work', '203.0.113.5', 'claude']])
-    assert.deepEqual(begun.logins.claude, { there: false, working: true })
-
-    // Its process says it waits for the person: from then on a second press is a new start.
-    await update(home.env, store => void (store.servers[0]!.claude!.asking = true))
-    assert.deepEqual(serversOf(await run(home.env, ['status']))[0]!.logins.claude, { there: false, working: true, asking: true })
-    assert.deepEqual((await run(home.env, ['logout', '203.0.113.5', 'claude'])).err, ['The Claude login of 203.0.113.5 is being changed right now'])
-    const ended = new Promise<NodeJS.Signals | null>(resolve => first.once('exit', (_code, signal) => resolve(signal)))
-    await run(home.env, ['login', '203.0.113.5', 'claude'], { startWork: words => (started.push(words), second.pid!) })
-    assert.equal(await ended, 'SIGTERM')
-    assert.equal(started.length, 2)
-
-    // The second one no longer waits: it tells the server. A press now changes nothing and ends nothing.
-    assert.deepEqual(serversOf(await run(home.env, ['status']))[0]!.logins.claude, { there: false, working: true })
-    const cut = await run(home.env, ['login', '203.0.113.5', 'claude'], { startWork: words => (started.push(words), process.pid) })
-    assert.deepEqual(cut.err, ['The Claude login of 203.0.113.5 is being changed right now'])
-    assert.equal(started.length, 2)
-    assert.equal(second.exitCode, null)
-    assert.equal(second.signalCode, null)
-
-    // The process itself: this one stands in for it, as the command that started it left it.
-    await update(home.env, store => void (store.servers[0]!.claude!.worker = { pid: process.pid, seen: new Date().toISOString() }))
-    const login = `sk-ant-oat01-${'Zx9_-q'.repeat(16)}`
-    const { exec, calls } = pretendServer()
-    assert.equal((await run(home.env, ['login-work', '203.0.113.5', 'claude'], { exec, mint: async () => ({ ok: true, login }), signal: new AbortController().signal })).code, 0)
-    assert.deepEqual(calls.map(call => call.remote), ['true', 'bash -s'])
-    const { claude } = serversOf(await run(home.env, ['status']))[0]!.logins
-    assert.equal(claude.there, true)
-    assert.equal(claude.working, false)
-    // Good for a year from the day it was made.
-    assert.equal(Date.parse(claude.ends!) - Date.parse(claude.since!), 365 * 24 * 60 * 60_000)
-
-    await run(home.env, ['logout', '203.0.113.5', 'claude'])
-    assert.equal((await run(home.env, ['logout-work', '203.0.113.5', 'claude'], { exec, signal: new AbortController().signal })).code, 0)
-    assert.deepEqual(serversOf(await run(home.env, ['status']))[0]!.logins.claude, NONE)
-  } finally {
-    first.kill()
-    second.kill()
     await home.remove()
   }
 })
@@ -492,60 +301,6 @@ test('reach asks the server for a link once and has this computer\'s own door ke
     assert.deepEqual((await run(home.env, ['forget', 'box.example.com'], { door })).out, { servers: [] })
     assert.deepEqual(asked, ['line remove box.example.com'])
   } finally {
-    await home.remove()
-  }
-})
-
-test('a server\'s other Claude accounts: accounts reads them, account-add starts a process of its own that asks the person, account-remove takes one off; a bad or taken name is refused before anything starts', async () => {
-  const home = await testHome()
-  const { spawn } = await import('node:child_process')
-  const other = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'])
-  const LOGIN = `sk-ant-oat01-${'Zx9_-q'.repeat(16)}`
-  const said = (names: string[]) => `${JSON.stringify([{ name: 'This computer', own: true }, ...names.map(name => ({ name, added: '2026-10-22T12:00:00.000Z', own: false }))])}\n`
-  try {
-    await run(home.env, ['connect', '203.0.113.5', 'root', '1.2.3'])
-    assert.deepEqual((await run(home.env, ['account-add', '203.0.113.5', 'Dani'])).err, ['OpenAgent is being installed on 203.0.113.5 right now'])
-    await update(home.env, store => void delete store.servers[0]!.worker)
-    assert.equal(serversOf(await run(home.env, ['status']))[0]!.claudeAccounts, undefined)
-
-    const reading = pretendServer(call => (call.remote === 'true' ? undefined : { out: said(['Rom']) }))
-    assert.deepEqual(serversOf(await run(home.env, ['accounts', '203.0.113.5'], { exec: reading.exec }))[0]!.claudeAccounts, [{ name: 'Rom', added: '2026-10-22T12:00:00.000Z' }])
-
-    for (const [args, why] of [
-      [['account-add', '203.0.113.5', ''], 'An account needs a name of a few words, on one line.'],
-      [['account-add', '203.0.113.5', ' Dani'], 'An account needs a name of a few words, on one line.'],
-      [['account-add', '203.0.113.5', 'a\nb'], 'An account needs a name of a few words, on one line.'],
-      [['account-add', '203.0.113.5', 'rom'], 'There is an account named rom on 203.0.113.5 already'],
-    ] as const) {
-      const refused = await run(home.env, [...args], { startWork: () => assert.fail('nothing starts') })
-      assert.equal(refused.code, 1, JSON.stringify(args))
-      assert.deepEqual(refused.err, [why])
-    }
-
-    const started: string[][] = []
-    const adding = serversOf(await run(home.env, ['account-add', '203.0.113.5', 'Dani'], { startWork: words => (started.push(words), other.pid!) }))[0]!
-    assert.deepEqual(started, [['account-work', '203.0.113.5', 'Dani']])
-    assert.deepEqual(adding.claudeAdding, { name: 'Dani', working: true })
-    assert.deepEqual((await run(home.env, ['account-add', '203.0.113.5', 'Eve'])).err, ['A Claude account of 203.0.113.5 is being added right now'])
-
-    // The process itself, standing in for the one started: the person says yes, and the server takes the login.
-    await update(home.env, store => void (store.servers[0]!.claudeAdding!.worker = { pid: process.pid, seen: new Date().toISOString() }))
-    const adding2 = pretendServer(call => (call.remote === 'true' ? undefined : { out: said(['Rom', 'Dani']) }))
-    assert.equal((await run(home.env, ['account-work', '203.0.113.5', 'Dani'], { exec: adding2.exec, mint: async () => ({ ok: true, login: LOGIN }), signal: new AbortController().signal })).code, 0)
-    const added = serversOf(await run(home.env, ['status']))[0]!
-    assert.deepEqual(added.claudeAccounts!.map(account => account.name), ['Rom', 'Dani'])
-    assert.equal(added.claudeAdding, undefined)
-    assert.ok(!JSON.stringify(await readStore(home.env)).includes(LOGIN))
-
-    const removing = pretendServer(call => (call.remote === 'true' ? undefined : { out: said(['Dani']) }))
-    assert.deepEqual(serversOf(await run(home.env, ['account-remove', '203.0.113.5', 'Rom'], { exec: removing.exec }))[0]!.claudeAccounts!.map(account => account.name), ['Dani'])
-    assert.match(removing.calls[1]!.script, /^NAME='Rom'$/m)
-    const failing = pretendServer(call => (call.remote === 'true' ? undefined : { code: 1, err: 'node: not found' }))
-    const failed = await run(home.env, ['account-remove', '203.0.113.5', 'Dani'], { exec: failing.exec })
-    assert.equal(failed.code, 1)
-    assert.deepEqual(failed.err, ['node: not found'])
-  } finally {
-    other.kill()
     await home.remove()
   }
 })

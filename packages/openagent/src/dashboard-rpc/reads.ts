@@ -369,8 +369,24 @@ export async function onActivity(): Promise<ProjectionRead<Activity>> {
 
 /** The Overview dashboard page (#471): the {@link onOverview} rollup plus agent counts, run-status totals, and activity. */
 export async function onDashboard(): Promise<DashboardData> {
-  return withProjects(buildDashboard)
+  const projects = await contextProjects().list().catch(() => [])
+  const of = projects.map(project => project.path).join('\n')
+  const building = (buildingDashboard ??= buildDashboard(projects)
+    .then(view => ((lastDashboard = { of, view }), view))
+    .finally(() => (buildingDashboard = undefined)))
+  if (lastDashboard?.of !== of) return building
+  // Its answer is for the next ask; a build that failed leaves the last answer standing.
+  building.catch(() => undefined)
+  return lastDashboard.view
 }
+
+/**
+ * The Overview's summary as last built, and the build under way: it reads every project's queue and
+ * tickets through their packages, a second and more on a small server, so a page is answered at
+ * once with the last summary for the same projects while it is built again behind it.
+ */
+let lastDashboard: { of: string; view: DashboardData } | undefined
+let buildingDashboard: Promise<DashboardData> | undefined
 
 /**
  * The project's files for the `#` context picker (#504) and the Context's file count (#661): every

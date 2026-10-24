@@ -25,8 +25,9 @@ const PROJECTS: ProjectSummary[] = [
 
 let view: QuotaView | undefined
 vi.mock('../lib/quota.js', () => ({ useQuota: () => view }))
-// The added accounts' rows have their own suite.
-vi.mock('./AgentAccounts.js', () => ({ AddedAccountsUsage: () => null }))
+// The added accounts' rows have their own suite; here only whether there are some.
+let added: { id: string; name: string; own: boolean }[] = []
+vi.mock('./AgentAccounts.js', () => ({ AddedAccountsUsage: () => null, useAgentAccounts: () => ({ view: { accounts: added } }) }))
 
 const { Quota } = await import('./Quota.js')
 
@@ -165,6 +166,17 @@ describe('Quota (#960)', () => {
     expect(screen.queryByRole('img')).toBeNull()
     // And no slider: there is no line to move.
     expect(screen.queryByLabelText('Unattended work stops at')).toBeNull()
+  })
+
+  test('why the own login has no reading is not said while runs use other accounts, as a server\'s use the person\'s own computer\'s', async () => {
+    view = { windows: [], unavailable: 'no-subscription' }
+    added = [{ id: 'Suleiman', name: 'Suleiman', own: false }]
+    try {
+      await show()
+      expect(screen.queryByText(/no subscription usage to report/)).toBeNull()
+    } finally {
+      added = []
+    }
   })
 
   test('a week with no reset time says so, rather than denying the week exists', async () => {
