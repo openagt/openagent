@@ -17,24 +17,12 @@ export interface StepRow {
 
 export type LoginKind = 'github' | 'claude'
 
-/** One login of a server, as this computer left it. The login itself is never here. */
+/** A login this computer makes for another computer, while it does. The login itself is never here. */
 export interface LoginRow {
-  /** This computer put it on the server, and did not take it off since. */
-  there: boolean
-  /** It is being changed right now, or the install copies it at its end. */
+  /** It is being made right now. */
   working: boolean
-  /** The change waits for the person: for a yes in this computer's browser (Claude), or for a code typed at GitHub. */
+  /** The making waits for the person: for a yes in this computer's browser. */
   asking?: boolean
-  /** GitHub: the code the person types at github.com/login/device while the server waits for it. */
-  code?: string
-  /** GitHub: the person asked for a copy, and it was not made yet. */
-  wanted?: boolean
-  /** GitHub: whose it is. */
-  account?: string
-  /** ISO 8601: when it was put there. */
-  since?: string
-  /** Claude: when it ends by itself. */
-  ends?: string
   /** Why the last try ended without a login. */
   said?: string
 }
@@ -55,22 +43,6 @@ export interface ServerRow {
   /** For a computer reached through a server: who there may start runs on it. */
   who?: Who
   steps: StepRow[]
-  logins: Record<LoginKind, LoginRow>
-  /** The Claude accounts the server has beside its own login, as it last said them. */
-  claudeAccounts: AccountRow[]
-  /** A Claude account being added, or the last one that did not get there. */
-  claudeAdding?: { name: string; working: boolean; asking?: boolean; said?: string }
-}
-
-/** One Claude account a server has beside its own login: never the login itself. */
-export interface AccountRow {
-  name: string
-  /** ISO 8601. */
-  added?: string
-  /** Epoch milliseconds: a limit it hit keeps runs off it until then. */
-  limitedUntil?: number
-  /** How full its windows were at the last run on it, by the agent's own names (`five_hour`, `seven_day`). */
-  windows?: { window: string; percentUsed: number; resetsAt: number }[]
 }
 
 /** Who on its server may start runs on a computer reached through it: nobody, its own person, or every person there. */
@@ -140,30 +112,9 @@ const text = (value: unknown): string | undefined => (typeof value === 'string' 
 const STATES: readonly string[] = ['waiting', 'running', 'done', 'failed']
 
 function readLogin(value: unknown): LoginRow {
-  const { there, working, asking, code, wanted, account, since, ends, said } = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
-  const [who, from, until, words, typedAtGithub] = [text(account), text(since), text(ends), text(said), text(code)]
-  return { there: there === true, working: working === true, ...(asking === true ? { asking: true, ...(typedAtGithub ? { code: typedAtGithub } : {}) } : {}), ...(wanted === true ? { wanted: true } : {}), ...(who ? { account: who } : {}), ...(from ? { since: from } : {}), ...(until ? { ends: until } : {}), ...(words ? { said: words } : {}) }
-}
-
-const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
-
-function readAccount(value: unknown): AccountRow | undefined {
-  const { name, added, limitedUntil, windows } = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
-  const called = text(name)
-  if (!called) return undefined
-  const said = Array.isArray(windows)
-    ? windows.flatMap(w => {
-        const { window, percentUsed, resetsAt } = (w && typeof w === 'object' ? w : {}) as Record<string, unknown>
-        return text(window) && finite(percentUsed) && finite(resetsAt) ? [{ window: window as string, percentUsed, resetsAt }] : []
-      })
-    : []
-  return { name: called, ...(text(added) ? { added: added as string } : {}), ...(finite(limitedUntil) ? { limitedUntil } : {}), ...(said.length > 0 ? { windows: said } : {}) }
-}
-
-function readAdding(value: unknown): ServerRow['claudeAdding'] {
-  const { name, working, asking, said } = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
-  const called = text(name)
-  return called ? { name: called, working: working === true, ...(asking === true ? { asking: true } : {}), ...(text(said) ? { said: said as string } : {}) } : undefined
+  const { working, asking, said } = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
+  const words = text(said)
+  return { working: working === true, ...(asking === true ? { asking: true } : {}), ...(words ? { said: words } : {}) }
 }
 
 export function readServers(output: unknown): ServerRow[] | undefined {
@@ -173,8 +124,7 @@ export function readServers(output: unknown): ServerRow[] | undefined {
   const rows: ServerRow[] = []
   for (const entry of servers) {
     if (!entry || typeof entry !== 'object') continue
-    const { address, url, user, fingerprint, working, adding, reach, through, who, steps, logins, claudeAccounts, claudeAdding } = entry as Record<string, unknown>
-    const { github, claude } = (logins && typeof logins === 'object' ? logins : {}) as Record<string, unknown>
+    const { address, url, user, fingerprint, working, adding, reach, through, who, steps } = entry as Record<string, unknown>
     const [at, door, by, known] = [text(address), text(url), text(user), text(fingerprint)]
     if (!at || !door || !by || !Array.isArray(steps)) continue
     const list: StepRow[] = []
@@ -185,7 +135,7 @@ export function readServers(output: unknown): ServerRow[] | undefined {
       if (stepId && name && STATES.includes(state as string)) list.push({ id: stepId, label: name, state: state as StepState, ...(words ? { said: words } : {}) })
     }
     const via = text(through)
-    rows.push({ address: at, url: door, user: by, ...(known ? { fingerprint: known } : {}), working: working === true, adding: adding === true, ...(reach === 'full' || reach === 'watch' ? { reach } : {}), ...(via ? { through: via, who: WHO.includes(who as string) ? (who as Who) : 'me' } : {}), steps: list, logins: { github: readLogin(github), claude: readLogin(claude) }, claudeAccounts: Array.isArray(claudeAccounts) ? claudeAccounts.flatMap(kept => readAccount(kept) ?? []) : [], ...(readAdding(claudeAdding) ? { claudeAdding: readAdding(claudeAdding)! } : {}) })
+    rows.push({ address: at, url: door, user: by, ...(known ? { fingerprint: known } : {}), working: working === true, adding: adding === true, ...(reach === 'full' || reach === 'watch' ? { reach } : {}), ...(via ? { through: via, who: WHO.includes(who as string) ? (who as Who) : 'me' } : {}), steps: list })
   }
   return rows
 }
@@ -241,11 +191,10 @@ export function readStatus(output: unknown): ServersRead | undefined {
 export const loadServers = (host: ModuleHost): Promise<Answer<ServersRead>> => run(host, ['status'], readStatus)
 /**
  * Install OpenAgent at `version` on the server, or go on where the install failed, or bring a server that fell behind to it.
- * With `github`, this computer's GitHub login is copied to the server once it is installed. With
- * `through`, the computer has no door of its own on the internet: it keeps a line to that server instead.
+ * With `through`, the computer has no door of its own on the internet: it keeps a line to that server instead.
  */
-export const connect = (host: ModuleHost, address: string, user: string, version: string, github = false, through?: string): Promise<Answer<ServerRow[]>> =>
-  run(host, ['connect', address, user, version, ...(github ? ['github'] : []), ...(through !== undefined ? ['--through', through] : [])], readServers)
+export const connect = (host: ModuleHost, address: string, user: string, version: string, through?: string): Promise<Answer<ServerRow[]>> =>
+  run(host, ['connect', address, user, version, ...(through !== undefined ? ['--through', through] : [])], readServers)
 /** What failed at a "Test connection", by what a person does about it. */
 export type Trouble = 'unreachable' | 'no-ssh' | 'key' | 'no-key' | 'sudo' | 'host-key' | 'system'
 const TROUBLES: readonly string[] = ['unreachable', 'no-ssh', 'key', 'no-key', 'sudo', 'host-key', 'system']
@@ -278,17 +227,6 @@ function readOwn(output: unknown): OwnGithub | undefined {
 }
 
 export const ownGithub = (host: ModuleHost): Promise<Answer<OwnGithub>> => run(host, ['github'], readOwn)
-/**
- * Give the server a login: GitHub's is this computer's own, copied, or with `own` one the server
- * gets for itself, with a code the person types at GitHub; Claude's is made new, once the person
- * said yes in this computer's browser.
- */
-export const login = (host: ModuleHost, address: string, kind: LoginKind, own = false): Promise<Answer<ServerRow[]>> => run(host, ['login', address, kind, ...(own ? ['own'] : [])], readServers)
-/** Take a login off the server. */
-export const logout = (host: ModuleHost, address: string, kind: LoginKind): Promise<Answer<ServerRow[]>> => run(host, ['logout', address, kind], readServers)
-export const loadAccounts = (host: ModuleHost, address: string): Promise<Answer<ServerRow[]>> => run(host, ['accounts', address], readServers)
-export const addAccount = (host: ModuleHost, address: string, name: string): Promise<Answer<ServerRow[]>> => run(host, ['account-add', address, name], readServers)
-export const removeAccount = (host: ModuleHost, address: string, name: string): Promise<Answer<ServerRow[]>> => run(host, ['account-remove', address, name], readServers)
 export const askLink = (host: ModuleHost, address: string, person?: string): Promise<Answer<DoorLink>> => run(host, ['link', address, ...(person !== undefined ? ['--for', person] : [])], readLink)
 /** Name the server's owner at its door. */
 export const nameOwner = (host: ModuleHost, address: string, name: string): Promise<Answer<DevicesRead>> => run(host, ['owner', address, name], readDevices)
@@ -303,28 +241,13 @@ export const loadDevices = (host: ModuleHost, address: string, last = false): Pr
 /** Take one device out on the server, a computer with all it holds there; answers the ones still in. */
 export const removeDevice = (host: ModuleHost, address: string, id: string): Promise<Answer<DevicesRead>> => run(host, ['remove-device', address, id], readDevices)
 
-/** A person's own OpenAgent on a computer several people use: whose it is, and the logins it holds for that person's runs. */
-export interface OwnRead {
-  person: string
-  logins: Record<LoginKind, LoginRow>
-}
-
-function readOwnLogins(output: unknown): OwnRead | undefined {
-  if (!output || typeof output !== 'object') return undefined
-  const { person, logins } = output as Record<string, unknown>
-  const { github, claude } = (logins && typeof logins === 'object' ? logins : {}) as Record<string, unknown>
-  const who = text(person)
-  return who ? { person: who, logins: { github: readLogin(github), claude: readLogin(claude) } } : undefined
-}
-
-/** What this computer keeps for a server someone invited its person to: its line there, and the Claude login it makes for it in this browser. */
+/** What this computer keeps for a server someone invited its person to: its line there. */
 export interface SharedRow {
   url: string
   reach?: Reach
   lineRefused: boolean
   /** The id the line has among the server's devices. */
   line?: string
-  claude: LoginRow
 }
 
 function readShared(output: unknown): SharedRow[] | undefined {
@@ -333,9 +256,9 @@ function readShared(output: unknown): SharedRow[] | undefined {
   if (!Array.isArray(shared)) return undefined
   const rows: SharedRow[] = []
   for (const entry of shared) {
-    const { url, reach, lineRefused, line, claude } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
+    const { url, reach, lineRefused, line } = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
     const [at, id] = [text(url), text(line)]
-    if (at) rows.push({ url: at, ...(reach === 'full' || reach === 'watch' ? { reach } : {}), lineRefused: lineRefused === true, ...(id ? { line: id } : {}), claude: readLogin(claude) })
+    if (at) rows.push({ url: at, ...(reach === 'full' || reach === 'watch' ? { reach } : {}), lineRefused: lineRefused === true, ...(id ? { line: id } : {}) })
   }
   return rows
 }
@@ -357,29 +280,12 @@ export function readPersonThere(said: unknown): PersonThere | undefined {
   return listed && typeof owner === 'boolean' ? { ...(who ? { person: who } : {}), owner, devices: listed.devices } : undefined
 }
 
-/** What this person's own OpenAgent on the server says of its logins. */
-export const loadOwn = (host: ModuleHost, machine: string): Promise<Answer<OwnRead>> => runOn(host, machine, ['own'], readOwnLogins)
-/** The server asks GitHub for a login of this person's own, with a code typed at GitHub. */
-export const ownCodeLogin = (host: ModuleHost, machine: string): Promise<Answer<OwnRead>> => runOn(host, machine, ['own', 'login', 'github', 'own'], readOwnLogins)
-/** Take one of this person's logins off the server. */
-export const ownLogout = (host: ModuleHost, machine: string, kind: LoginKind): Promise<Answer<OwnRead>> => runOn(host, machine, ['own', 'logout', kind], readOwnLogins)
 /** What this computer keeps for servers someone invited its person to, by their addresses. */
 export const loadShared = (host: ModuleHost, urls: string[]): Promise<Answer<SharedRow[]>> => run(host, ['shared', ...urls], readShared)
-/** Copy this computer's GitHub login to this person's own OpenAgent on the server; answers what that one says of its logins. */
-export const sharedGithub = (host: ModuleHost, url: string): Promise<Answer<OwnRead>> => run(host, ['shared-login', url, 'github'], readOwnLogins)
-/** Make a Claude login for this person's own OpenAgent on the server, in this computer's browser. */
-export const sharedClaude = (host: ModuleHost, url: string): Promise<Answer<SharedRow[]>> => run(host, ['shared-login', url, 'claude'], readShared)
 /** Keep a line open to the server as this person's, and say what it may do through it; or none. */
 export const sharedReach = (host: ModuleHost, url: string, mode: Reach | 'off'): Promise<Answer<SharedRow[]>> => run(host, ['shared-reach', url, mode], readShared)
 /** Forget the server here, and the line to it. */
 export const sharedForget = (host: ModuleHost, url: string): Promise<Answer<SharedRow[]>> => run(host, ['shared-forget', url], readShared)
-
-async function runOn<T>(host: ModuleHost, machine: string, args: string[], read: (output: unknown) => T | undefined): Promise<Answer<T>> {
-  const result = await host.runComputerCommandOn(machine, ['server', ...args]).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
-  if (!result.ok) return result
-  const value = read(result.output)
-  return value !== undefined ? { ok: true, value } : { ok: false, error: 'the server answered something else than expected' }
-}
 
 /** One login of this person's on another person's computer, as that computer says it: a copy from a server, or made there. */
 export interface OtherLogin {

@@ -6,7 +6,9 @@ import { useLayoutEffect, useRef, type ReactNode } from 'react'
 // sits on it (the open questions, the agent's work), and lies over the chat's end.
 //
 // The room that bar takes is written on the page as `--chat-bottom`, and the chat keeps its last
-// row clear of it (EventList). It is written straight to the element as the bar changes its size,
+// row clear of it (EventList). On a touch screen the bar does not lie over the chat: the chat ends
+// where the bar starts (`--chat-bar`), since a phone draws its scroll bar the chat's whole height,
+// and under the bar it went behind it. It is written straight to the element as the bar changes its size,
 // with no render in between: the chat moves in the same frame as the bar. The bar's height is read
 // to the part of a pixel, so its fade starts where it ends. The bar stops short of the scroll bar
 // (`--chat-scroll-bar`): its width is read off a probe styled as the chat's scroller is, since a
@@ -21,9 +23,12 @@ export function ChatPane({ top, bottom, children }: { top: ReactNode; bottom: Re
   const bottomBar = useRef<HTMLDivElement>(null)
   const probe = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
+    const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
     const read = () => {
       const style = pane.current!.style
-      style.setProperty('--chat-bottom', `${bottomBar.current!.getBoundingClientRect().height}px`)
+      const bar = bottomBar.current!.getBoundingClientRect().height
+      style.setProperty('--chat-bar', `${bar}px`)
+      style.setProperty('--chat-bottom', touch ? '0px' : `${bar}px`)
       style.setProperty('--chat-scroll-bar', `${probe.current!.offsetWidth - probe.current!.clientWidth}px`)
     }
     read()
@@ -37,7 +42,7 @@ export function ChatPane({ top, bottom, children }: { top: ReactNode; bottom: Re
       <div data-testid="chat-top" className="shrink-0">
         {top}
       </div>
-      <div className="relative isolate flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="relative isolate flex min-h-0 flex-1 flex-col overflow-hidden pointer-coarse:pb-(--chat-bar)">
         <div ref={probe} className="scrollbar-thin invisible absolute h-0 w-8 overflow-y-scroll" aria-hidden />
         {children}
         {/* On a window too short for a tall question, the bar scrolls inside itself. */}
@@ -48,7 +53,7 @@ export function ChatPane({ top, bottom, children }: { top: ReactNode; bottom: Re
             stop short of the scroll bar, and of a strip as wide as one where the scroll bar lies over
             the content and takes no room (a Mac's): there the bar would show up faded at either end. */}
         <div className="pointer-events-none absolute top-0 right-[max(var(--chat-scroll-bar),0.75rem)] left-0 z-10 h-4 bg-gradient-to-b from-background to-transparent" aria-hidden />
-        <div className="pointer-events-none absolute right-[max(var(--chat-scroll-bar),0.75rem)] bottom-(--chat-bottom) left-0 z-10 h-4 bg-gradient-to-t from-background to-transparent" aria-hidden />
+        <div className="pointer-events-none absolute right-[max(var(--chat-scroll-bar),0.75rem)] bottom-(--chat-bar) left-0 z-10 h-4 bg-gradient-to-t from-background to-transparent" aria-hidden />
       </div>
     </div>
   )

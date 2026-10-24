@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { askGithub, giveGithubLogin, scrubbed, type Failed, type GithubGiven } from './logins.js'
+import { giveGithubLogin, scrubbed, type Failed, type GithubGiven } from './logins.js'
 import { exec as ownExec, lastLines, type Exec, type Session } from './ssh.js'
 import { LOGIN_TIMEOUT_MS, SERVER_USER, githubLogoutScript, quoted, type LoginScript } from './steps.js'
-import { BEAT_MS, MARK_LENGTH, atWork, heartbeat, update, type Login, type LoginKind, type Store } from './store.js'
+import { MARK_LENGTH, atWork, update, type Login, type LoginKind, type Store } from './store.js'
 import { nameFromWord } from '../door/store.js'
 
 /**
@@ -15,7 +15,8 @@ import { nameFromWord } from '../door/store.js'
  * The person is not at that computer and has no way in over SSH: their own computer hands the
  * logins to this OpenAgent through the door, with that computer's key there, and this OpenAgent
  * puts them where its user's programs read them. A login comes in on standard input, never on a
- * command line. The owner's OpenAgent is not one of these: its logins come over SSH, as before.
+ * command line. The owner's OpenAgent is not one of these: OpenAgent itself gives it the logins of
+ * the owner's own computer.
  *
  * GitHub's login is `gh`'s, in the user's own home, as on the owner's server; it must be the
  * person's own account. Claude's is a file in the user's home that the computer's service reads
@@ -51,10 +52,10 @@ const CLAUDE_NAME = 'CLAUDE_CODE_OAUTH_TOKEN'
  * A line to this computer itself, for the scripts written for a server's own user: they run here,
  * as the user this OpenAgent is, in that user's home.
  */
-export function localSession(run: Exec = ownExec, signal?: AbortSignal): Session {
+export function localSession(run: Exec = ownExec): Session {
   return {
     meet: async () => ({ ok: true }),
-    run: (_as, script, timeoutMs) => run('bash', ['-s'], script, { timeoutMs, ...(signal ? { signal } : {}) }),
+    run: (_as, script, timeoutMs) => run('bash', ['-s'], script, { timeoutMs }),
     close: async () => {},
   }
 }
@@ -142,7 +143,7 @@ async function named(session: Session, given: GithubGiven): Promise<GithubGiven>
 }
 
 /** Write down how a GitHub login went, for this OpenAgent's own user; `copied` says what was handed over, and from where when it is a copy. */
-function noteOwnGithub(store: Store, given: GithubGiven, copied?: { login: string; from?: string }): void {
+function noteOwnGithub(store: Store, given: GithubGiven, copied: { login: string; from?: string }): void {
   const own = (store.own ??= {})
   if (given.ok) own.github = { since: new Date().toISOString(), account: given.account, ...handedOver(copied) }
   // One that was sent and did not arrive replaced what was there: no login is counted on.
@@ -150,8 +151,8 @@ function noteOwnGithub(store: Store, given: GithubGiven, copied?: { login: strin
 }
 
 /** What a login handed over says of itself: its mark, and the server it was copied from. */
-function handedOver(copied: { login: string; from?: string } | undefined): Pick<Login, 'from' | 'mark'> {
-  return copied ? { mark: markOf(copied.login), ...(copied.from !== undefined ? { from: copied.from } : {}) } : {}
+function handedOver(copied: { login: string; from?: string }): Pick<Login, 'from' | 'mark'> {
+  return { mark: markOf(copied.login), ...(copied.from !== undefined ? { from: copied.from } : {}) }
 }
 
 /** What is known of a login beyond a try: since when it is there, and whose it is. */
@@ -169,26 +170,14 @@ export class OwnAtWork extends Error {
   }
 }
 
-/** Mark the login as this process's to change; refused while another process changes it, unless that one only waits for the person. */
-async function take(env: NodeJS.ProcessEnv, kind: LoginKind): Promise<number | undefined> {
-  return update(env, store => {
+/** Mark the login as this process's to change; refused while another process changes it. */
+async function take(env: NodeJS.ProcessEnv, kind: LoginKind): Promise<void> {
+  await update(env, store => {
     const own = (store.own ??= {})
     const login = own[kind]
-    const busy = atWork(login?.worker)
-    if (busy && login!.asking !== true) throw new OwnAtWork(kind)
+    if (atWork(login?.worker)) throw new OwnAtWork(kind)
     own[kind] = { ...known(login), worker: { pid: process.pid, seen: new Date().toISOString() } }
-    return busy ? login!.worker!.pid : undefined
   })
-}
-
-/** End a process that still waits for the person: a second press starts over. */
-function endWaiting(pid: number | undefined): void {
-  if (pid === undefined) return
-  try {
-    process.kill(pid, 'SIGTERM')
-  } catch {
-    // Ended by itself in the meantime.
-  }
 }
 
 export interface OwnOptions {
@@ -198,7 +187,7 @@ export interface OwnOptions {
 
 /** Copy a GitHub login handed over on standard input to this OpenAgent's user; `from` names the server it is a copy from. */
 export async function giveOwnGithub(opts: OwnOptions, login: string, from?: string): Promise<void> {
-  endWaiting(await take(opts.env, 'github'))
+  await take(opts.env, 'github')
   const session = localSession(opts.exec)
   const word = login.trim()
   let given: GithubGiven = { ok: false, error: 'The work stopped before it ended.', reached: false }
@@ -206,42 +195,6 @@ export async function giveOwnGithub(opts: OwnOptions, login: string, from?: stri
     given = await named(session, await giveGithubLogin(session, word))
   } finally {
     await update(opts.env, store => noteOwnGithub(store, given, { login: word, ...(from !== undefined ? { from } : {}) }))
-  }
-}
-
-/**
- * Have this OpenAgent's user ask GitHub for a login of its own: GitHub answers with a code, which
- * the file shows, and the work waits until the person typed it at GitHub. Run as a process of its
- * own, started by {@link startOwnGithubCode}.
- */
-export async function askOwnGithub(opts: OwnOptions & { signal?: AbortSignal; beatMs?: number }): Promise<void> {
-  const mine = (login: Login | undefined): boolean => login?.worker?.pid === process.pid
-  const beating = heartbeat(() => update(opts.env, store => void (mine(store.own?.github) && (store.own!.github!.worker = { pid: process.pid, seen: new Date().toISOString() }))), opts.beatMs ?? BEAT_MS)
-  const session = localSession(opts.exec, opts.signal)
-  let given: GithubGiven = { ok: false, error: 'The work stopped before it ended.', reached: true }
-  try {
-    const shown = (code: string): Promise<unknown> => update(opts.env, store => void (mine(store.own?.github) && Object.assign(store.own!.github!, { asking: true, code })))
-    given = await named(localSession(opts.exec), await askGithub(session, shown))
-  } finally {
-    await beating.stop()
-    await update(opts.env, store => void (mine(store.own?.github) && noteOwnGithub(store, given))).catch(() => {})
-  }
-}
-
-/** Start the process that asks GitHub for a login with a code; a second press while it waits starts over. */
-export async function startOwnGithubCode(opts: OwnOptions, startWork: (words: string[]) => number): Promise<void> {
-  const before = await take(opts.env, 'github')
-  endWaiting(before)
-  let worker: number | undefined
-  try {
-    worker = startWork(['own-work', 'github'])
-  } finally {
-    await update(opts.env, store => {
-      const login = store.own?.github
-      if (!login || login.worker?.pid !== process.pid) return
-      if (worker !== undefined) login.worker = { pid: worker, seen: new Date().toISOString() }
-      else delete login.worker
-    })
   }
 }
 
@@ -265,7 +218,7 @@ export async function giveOwnClaude(opts: OwnOptions, login: string, from?: stri
 
 /** Take one of this OpenAgent's user's logins off. Answers whether OpenAgent is to be started again without it. */
 export async function removeOwn(opts: OwnOptions, kind: LoginKind): Promise<boolean> {
-  endWaiting(await take(opts.env, kind))
+  await take(opts.env, kind)
   const gone = await send(localSession(opts.exec), kind === 'github' ? githubLogoutScript() : ownClaudeLogoutScript())
   await update(opts.env, store => {
     const own = (store.own ??= {})

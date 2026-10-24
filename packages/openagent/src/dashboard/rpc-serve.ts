@@ -4,6 +4,7 @@ import { setDashboardContext } from '../dashboard-rpc/context.js'
 import { RPC_HANDLERS, RPC_EVENT_STREAM } from '../dashboard-rpc/index.js'
 import { errorMessage } from '../error-message.js'
 import { PERSON_HEADER, asCaller } from './person.js'
+import { sendBody } from './compress.js'
 import type { OpenAgentEvent } from '../events.js'
 import type { PreferencesStore } from '../registry.js'
 import type { QuotaSource } from './quota.js'
@@ -168,10 +169,8 @@ async function readBody(req: IncomingMessage, limit = 4 * 1024 * 1024): Promise<
   return Buffer.concat(chunks).toString('utf8')
 }
 
-function sendJson(res: ServerResponse, status: number, body: unknown): void {
-  const text = JSON.stringify(body)
-  res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' })
-  res.end(text)
+function sendJson(req: IncomingMessage, res: ServerResponse, status: number, body: unknown): Promise<void> {
+  return sendBody(req, res, status, { 'content-type': 'application/json', 'cache-control': 'no-store' }, JSON.stringify(body))
 }
 
 /**
@@ -261,24 +260,24 @@ export function makeRpcMount(context: DashboardContext): (req: IncomingMessage, 
       }
       const handler = RPC_HANDLERS[name]
       if (req.method !== 'POST' || !handler) {
-        sendJson(res, 404, { error: `no such RPC: ${name}` })
+        await sendJson(req, res, 404, { error: `no such RPC: ${name}` })
         return true
       }
       if (!isJsonRequest(req)) {
-        sendJson(res, 415, { error: 'a call is sent as application/json' })
+        await sendJson(req, res, 415, { error: 'a call is sent as application/json' })
         return true
       }
       const raw = await readBody(req)
       const args: unknown[] = raw ? (JSON.parse(raw) as unknown[]) : []
       if (!Array.isArray(args)) {
-        sendJson(res, 400, { error: 'the request body must be a JSON array of arguments' })
+        await sendJson(req, res, 400, { error: 'the request body must be a JSON array of arguments' })
         return true
       }
-      sendJson(res, 200, { ret: await asCaller(req.headers[PERSON_HEADER], () => Promise.resolve(handler(...(args as never[])))) })
+      await sendJson(req, res, 200, { ret: await asCaller(req.headers[PERSON_HEADER], () => Promise.resolve(handler(...(args as never[])))) })
     } catch (err) {
       // An RPC that throws is a failed call, not a dead daemon: answer it and stay up. Without
       // this a rejected promise inside the mount became an unhandled rejection.
-      if (!res.headersSent) sendJson(res, 500, { error: errorMessage(err) })
+      if (!res.headersSent) await sendJson(req, res, 500, { error: errorMessage(err) })
       else res.end()
     }
     return true

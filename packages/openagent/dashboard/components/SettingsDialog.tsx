@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { ArrowLeft, Bell, Bot, ChevronRight, GitBranch, Globe, KeyRound, Palette, Users, X } from 'lucide-react'
+import { ArrowLeft, Bell, Bot, ChevronRight, Globe, KeyRound, Palette, Users, X } from 'lucide-react'
 import { DRIVERS } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import { NO_MODEL_PINNED } from '../lib/agent-settings.js'
@@ -13,9 +13,8 @@ import { useDetectedEditors } from '../lib/editors.js'
 import { usePreferences, updatePreferences, themePreference, type ThemePreference } from '../lib/preferences.js'
 import { useNotificationPermission } from '../lib/notification-permission.js'
 import { BridgeSettings } from './BridgeSettings.js'
-import { AGENT_ACCOUNTS_ENTRY, AgentAccountsSettings } from './AgentAccounts.js'
-import { GitHostsSettings } from './GitHosts.js'
-import { GIT_HOSTS_ENTRY } from './Logins.js'
+import { AccountsSettings } from './Accounts.js'
+import { ACCOUNTS_ENTRY } from './Logins.js'
 import { PROJECT_ACCOUNTS_ENTRY, ProjectAccountsSettings, readProjectAccountsAhead, useProjectAccounts } from './ProjectAccounts.js'
 import { BridgeBrowserSettings } from './BridgeBrowserSettings.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
@@ -389,16 +388,10 @@ function useOwnEntries(): Entry[] {
       ),
     },
     {
-      id: AGENT_ACCOUNTS_ENTRY,
-      title: 'Agent accounts',
+      id: ACCOUNTS_ENTRY,
+      title: 'Accounts',
       icon: Users,
-      body: <AgentAccountsSettings />,
-    },
-    {
-      id: GIT_HOSTS_ENTRY,
-      title: 'Git hosts',
-      icon: GitBranch,
-      body: <GitHostsSettings />,
+      body: <AccountsSettings />,
     },
     {
       id: 'claude-web',

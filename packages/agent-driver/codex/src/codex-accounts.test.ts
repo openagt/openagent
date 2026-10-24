@@ -196,6 +196,29 @@ test('a new account signs in in this computer\'s browser into a folder of its ow
     assert.deepEqual(await readdir(dir), [signedIn.login])
   }))
 
+test('with no browser here, a new account signs in with a code typed on another device, and no browser is opened', () =>
+  inDir(async dir => {
+    const opened: string[] = []
+    const codes: [string, string][] = []
+    const seen: Seen[] = []
+    const signedIn = await loginCodex({
+      dir,
+      env: {},
+      open: url => opened.push(url),
+      onCode: (code, url) => codes.push([code, url]),
+      spawn: fakeServer((method, params, send, home) => {
+        if (method !== 'account/login/start') return
+        send({ id: params['id'], result: { type: 'chatgptDeviceCode', loginId: 'l1', userCode: 'KQ7M-4XPD', verificationUrl: 'https://auth.example/codex/device' } })
+        void writeFile(join(home, 'auth.json'), auth('dani', 'ws', 'Dani')).then(() => send({ method: 'account/login/completed', params: { loginId: 'l1', success: true, error: null } }))
+      }, seen),
+    })
+    assert.ok(signedIn.ok)
+    assert.deepEqual(seen[0]!.messages.find(m => m.method === 'account/login/start')?.params, { type: 'chatgptDeviceCode' })
+    assert.deepEqual(codes, [['KQ7M-4XPD', 'https://auth.example/codex/device']])
+    assert.deepEqual(opened, [])
+    assert.equal(signedIn.who.name, 'Dani')
+  }))
+
 /** One turn of a fake Codex app server, by the account (Codex home) it runs on. */
 function turns(byHome: (home: string, turn: number) => 'limit' | 'done', seen: Seen[], frees = NOW + 2 * HOUR): SpawnLike {
   let turn = 0

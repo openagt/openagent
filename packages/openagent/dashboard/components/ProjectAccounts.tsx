@@ -66,14 +66,14 @@ export function ProjectAccountsSettings({ projectId }: { projectId: string }) {
   )
 }
 
-/** One agent's accounts for the project: the computer's, or only some of them, in the order Agent accounts has them. */
+/** One agent's accounts for the project: the computer's, or only some of them, in the order Settings › Accounts has them. */
 function AgentPick({ label, accounts, onChange }: { label: string; accounts: ProjectAgentAccounts; onChange: (picked: string[] | null) => void }) {
   const picked = new Set(accounts.project ?? [])
   return (
     <div className="py-3">
       <SelectRow
         label={label}
-        description={`Which ${label} accounts this project's runs use, in the order Agent accounts has them.`}
+        description={`Which ${label} accounts this project's runs use, in the order Settings › Accounts has them.`}
         value={accounts.project ? SOME : SAME}
         options={[
           { value: SAME, label: 'Same as this computer' },

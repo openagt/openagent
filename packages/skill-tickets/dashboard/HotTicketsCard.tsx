@@ -113,10 +113,11 @@ function Lane({ lane, tickets, showProject }: { lane: (typeof LANES)[number]; ti
           {tickets.map(({ project, ticket }) => {
             const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy
             return (
-              <li key={`${project.id}:${ticket.file}`} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent/60">
+              // On a phone the title has a line of its own, and what earns the lane goes under it.
+              <li key={`${project.id}:${ticket.file}`} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent/60 max-sm:flex-wrap max-sm:gap-y-1">
                 <Tooltip>
                   <TooltipTrigger
-                    render={<button type="button" onClick={() => host.openPage('tickets', [ticket.file], project.id)} className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:underline" />}
+                    render={<button type="button" onClick={() => host.openPage('tickets', [ticket.file], project.id)} className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:underline max-sm:basis-full!" />}
                   >
                     {ticket.title}
                   </TooltipTrigger>
@@ -138,7 +139,7 @@ function Lane({ lane, tickets, showProject }: { lane: (typeof LANES)[number]; ti
                   )
                 )}
                 {lane.key === 'waiting' && ticket.waiting && (
-                  <span title={`Waiting: ${ticket.waiting}`} className="inline-block max-w-[10rem] shrink-0 truncate text-[10px] text-muted-foreground">
+                  <span title={`Waiting: ${ticket.waiting}`} className="inline-block max-w-[10rem] shrink-0 truncate text-[10px] text-muted-foreground max-sm:max-w-none! max-sm:min-w-0 max-sm:flex-1 max-sm:shrink">
                     {ticket.waiting}
                   </span>
                 )}

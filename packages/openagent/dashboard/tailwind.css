@@ -105,6 +105,28 @@ body {
   color: var(--foreground);
 }
 
+/* A page whose columns scroll by themselves (a chat) is pinned in place: the page never scrolls
+   or bounces, and a chat's bar and message box stay where they are. Never by a fixed body: a
+   phone shifts one as its keyboard opens, and taps then land beside what they meant. A page that
+   scrolls as a page (a phone's Overview) still bounces, and pulls down to reload. */
+html[data-pinned],
+html[data-pinned] body {
+  overflow: hidden;
+  overscroll-behavior: none;
+  height: 100%;
+}
+
+/* A phone zooms the page into a box whose text is smaller than 16px as it is focused, and leaves
+   it zoomed: on a touch screen every box's text is 16px at least. */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select,
+  [contenteditable='true'] {
+    font-size: max(16px, 1em) !important;
+  }
+}
+
 /* Recents row title: the truncated end fades out (like the reference) instead of a hard ellipsis.
    A long title's full text shows in a tooltip on hover (#1494) — the old hover marquee is gone. */
 .rail-title {

@@ -6,8 +6,11 @@ const accounts = vi.hoisted(() => ({ onAgentAccounts: vi.fn(), sendAddAgentAccou
 vi.mock('../rpc/accounts.js', () => accounts)
 const logins = vi.hoisted(() => ({ onAgentState: vi.fn(), sendAgentFix: vi.fn(), onGitHosts: vi.fn(), sendGitHostInstall: vi.fn(), sendGitHostLogin: vi.fn(), sendUseGitHostAccount: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
+const servers = vi.hoisted(() => ({ onServerLogins: vi.fn(), sendUseLoginsOn: vi.fn(), sendAllowLogins: vi.fn(), sendSettleLogin: vi.fn() }))
+vi.mock('../rpc/server-logins.js', () => servers)
 
-const { AgentAccountsSettings, AddedAccountsUsage, freeIn } = await import('./AgentAccounts.js')
+const { AddedAccountsUsage, freeIn } = await import('./AgentAccounts.js')
+const { AccountsSettings } = await import('./Accounts.js')
 
 const HOUR = 60 * 60_000
 const NOW = Date.parse('2026-10-22T12:00:00Z')
@@ -25,7 +28,7 @@ const CODEX_ONE = { now: NOW, accounts: [{ id: 'This computer', name: 'Suleiman 
 
 /** Each agent's accounts: Claude's as given, Codex's own alone unless said. */
 function views(claude: object, codex: object = CODEX_ONE): void {
-  accounts.onAgentAccounts.mockImplementation(async (agent: string) => (agent === 'codex' ? codex : claude))
+  accounts.onAgentAccounts.mockImplementation(async (agent: string) => ({ computer: 'Studio', ...(agent === 'codex' ? codex : claude) }))
 }
 
 /** Each agent's state: Claude Code's as given, Codex connected unless said. */
@@ -36,6 +39,7 @@ function states(claude: object, codex: object = { driver: 'codex', ready: true }
 beforeEach(() => {
   states({ driver: 'claude-code', ready: true })
   logins.onGitHosts.mockResolvedValue({ hosts: [] })
+  servers.onServerLogins.mockResolvedValue({ computer: 'Studio', servers: [] })
 })
 
 afterEach(() => {
@@ -43,6 +47,7 @@ afterEach(() => {
   forgetRemembered()
   for (const fn of Object.values(accounts)) fn.mockReset()
   for (const fn of Object.values(logins)) fn.mockReset()
+  for (const fn of Object.values(servers)) fn.mockReset()
 })
 
 describe('Agent accounts', () => {
@@ -50,7 +55,7 @@ describe('Agent accounts', () => {
     views({ now: NOW, accounts: [{ id: 'This computer', name: 'This computer', own: true, windows: [] }] })
     states({ driver: 'claude-code', ready: false, problem: '`claude` not found', fix: { kind: 'install', command: 'curl -fsSL https://claude.ai/install.sh | bash' } })
     logins.sendAgentFix.mockResolvedValue({ ok: true })
-    render(<AgentAccountsSettings />)
+    render(<AccountsSettings />)
     const card = screen.getByRole('region', { name: 'Claude Code' })
     expect(await within(card).findByText('Not installed')).toBeTruthy()
     expect(within(card).getByText('curl -fsSL https://claude.ai/install.sh | bash')).toBeTruthy()
@@ -59,7 +64,7 @@ describe('Agent accounts', () => {
     cleanup()
 
     states({ driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' }, fixing: 'log-in' })
-    render(<AgentAccountsSettings />)
+    render(<AccountsSettings />)
     const out = screen.getByRole('region', { name: 'Claude Code' })
     expect(await within(out).findByText('Log in')).toBeTruthy()
     expect(within(out).getByRole('status').textContent).toMatch(/Say yes in the page this computer's browser opened/)
@@ -68,11 +73,11 @@ describe('Agent accounts', () => {
   test('a Claude Code card lists the accounts in the order runs use them: whose, how full their longest window is, which one runs use now and when a limited one frees; only an added one is removed', async () => {
     views(TWO)
     accounts.sendRemoveAgentAccount.mockResolvedValue({ ok: true })
-    render(<AgentAccountsSettings />)
+    render(<AccountsSettings />)
     const card = screen.getByRole('region', { name: 'Claude Code' })
     expect(await within(card).findByText('Connected')).toBeTruthy()
     const own = await within(card).findByRole('listitem', { name: 'Suleiman' })
-    expect(own.textContent).toContain("this computer's login")
+    expect(own.textContent).toContain("login on Studio")
     expect(own.textContent).toContain('22% this week')
     expect(own.textContent).toContain('limited, free in 2 h 10 min')
     expect(within(own).queryByRole('button', { name: /Remove/ })).toBeNull()
@@ -87,7 +92,7 @@ describe('Agent accounts', () => {
   test('adding asks whose account it is, then says to say yes in the browser while the login is made; a refused name is said', async () => {
     views(TWO)
     accounts.sendAddAgentAccount.mockResolvedValueOnce({ ok: false, error: 'There is an account named Dani already.' })
-    render(<AgentAccountsSettings />)
+    render(<AccountsSettings />)
     const card = screen.getByRole('region', { name: 'Claude Code' })
     fireEvent.click(await within(card).findByRole('button', { name: 'Add account' }))
     const name = within(card).getByRole('textbox', { name: 'Whose account' })
@@ -136,7 +141,7 @@ describe('Agent accounts', () => {
     })
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.assign(navigator, { clipboard: { writeText } })
-    render(<AgentAccountsSettings />)
+    render(<AccountsSettings />)
     const card = screen.getByRole('region', { name: 'Codex' })
     expect((await within(card).findByRole('listitem', { name: 'Suleiman S' })).textContent).toContain('7% this month')
     expect(within(card).getByRole('listitem', { name: 'Rom' }).textContent).toContain('12% this week')
@@ -150,7 +155,7 @@ describe('Agent accounts', () => {
   test('a Codex that is not here is its state and the press that installs it, with no accounts to add', async () => {
     views(TWO)
     states({ driver: 'claude-code', ready: true }, { driver: 'codex', ready: false, problem: '`codex` not found', fix: { kind: 'install', command: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh' } })
-    render(<AgentAccountsSettings />)
+    render(<AccountsSettings />)
     const card = screen.getByRole('region', { name: 'Codex' })
     expect(await within(card).findByText('Not installed')).toBeTruthy()
     expect(within(card).getByRole('button', { name: 'Install Codex' })).toBeTruthy()

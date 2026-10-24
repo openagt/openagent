@@ -355,10 +355,10 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         // resolved by the viewport's height, so the editor would grow instead of scrolling.
         viewportClassName={compact ? 'max-h-32 min-h-8' : 'max-h-64 min-h-10'}
       >
-        <EditorContent editor={editor} className={`w-full bg-transparent text-sm ${pad}`} />
+        <EditorContent editor={editor} className={`w-full bg-transparent text-sm pointer-coarse:text-base ${pad}`} />
       </ScrollArea>
       {isEmpty && (
-        <span className={`pointer-events-none absolute text-sm text-muted-foreground ${placeholderInset}`}>
+        <span className={`pointer-events-none absolute text-sm text-muted-foreground pointer-coarse:text-base ${placeholderInset}`}>
           {placeholder}
         </span>
       )}

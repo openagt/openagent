@@ -28,8 +28,7 @@ const onModels = vi.hoisted(() =>
 )
 vi.mock('../rpc/models.js', () => ({ onModels }))
 // Its own suite reads the accounts; here the entry is its name.
-vi.mock('./AgentAccounts.js', () => ({ AGENT_ACCOUNTS_ENTRY: 'agent-accounts', AgentAccountsSettings: () => <p>Claude accounts</p> }))
-vi.mock('./GitHosts.js', () => ({ GitHostsSettings: () => <p>Git hosts</p> }))
+vi.mock('./Accounts.js', () => ({ AccountsSettings: () => <p>Claude accounts</p> }))
 const projectAccounts = vi.hoisted(() => ({ onProjectAccounts: vi.fn(async () => ({})), sendProjectAccounts: vi.fn() }))
 vi.mock('../rpc/logins.js', () => projectAccounts)
 vi.mock('../rpc/reads.js', async importOriginal => ({
@@ -322,7 +321,7 @@ describe('the Settings list', () => {
 
   test("two groups: yours and this computer's, the computer's packages among them; then the picked project's packages", () => {
     show('', 'p1')
-    expect(entries('You and this computer')).toEqual(['Appearance', 'Notifications', 'Agent', 'Agent accounts', 'Git hosts', 'Claude web', 'Devices'])
+    expect(entries('You and this computer')).toEqual(['Appearance', 'Notifications', 'Agent', 'Accounts', 'Claude web', 'Devices'])
     // gemstack has orchestration and no scheduler.
     expect(entries('Project')).toEqual(['Orchestration'])
     expect(showing(select('Project'))).toBe('gemstack')

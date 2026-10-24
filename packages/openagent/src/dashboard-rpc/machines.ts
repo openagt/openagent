@@ -1,4 +1,4 @@
-import { hostname } from 'node:os'
+import { computerName } from '../computer-name.js'
 import { basename } from 'node:path'
 import { readSharing } from '@openagt/agent-data'
 import { THROUGH_PATH, deviceIdOf, enterRemote, giveRemoteLogins, leaveRemote, pingRemote, remoteAddMachine, remoteComputers, remoteDoor, remoteFacts, remoteLogins, remoteProject } from '../dashboard/remote-run.js'
@@ -45,7 +45,7 @@ function throughOf(server: Pick<MachineRecord, 'url'>, saved: readonly MachineRe
 
 /** This computer's name as the other machine lists it, among the devices that are in there. */
 function ownName(): string {
-  return hostname().replace(/\.local$/i, '') || 'another computer'
+  return computerName() || 'another computer'
 }
 
 /**

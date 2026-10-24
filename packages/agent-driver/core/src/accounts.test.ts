@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { mkdtempSync, rmSync, statSync } from 'node:fs'
+import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { addAccount, accountsPath, freesIn, markLimited, nameOwnAccount, OWN_NAME, pickAccount, readAccounts, removeAccount, shownAccounts, useFirst } from './accounts.js'
@@ -33,6 +33,12 @@ test('with no file the person\'s own login is the one account; added ones go las
   assert.throws(() => addAccount('  ', 'sk-ant-oat01-other', path), /needs a name/)
   // A page is shown everything but the logins.
   assert.deepEqual(shownAccounts(readAccounts(path)).map(a => [a.name, a.own, 'login' in a]), [[OWN_NAME, true, false], ['Dani', false, false]])
+}))
+
+test('one entry is the person\'s own login: another with no login is no account, and is left out', withFile(path => {
+  // Written by an OpenAgent that named the login otherwise: read as no login, it was a second own row.
+  writeFileSync(path, JSON.stringify({ accounts: [{ name: 'Suleiman' }, { name: 'Second account', token: 'sk-ant-oat01-old' }, { name: 'Dani', login: 'sk-ant-oat01-dani' }] }))
+  assert.deepEqual(readAccounts(path).map(a => a.name), ['Suleiman', 'Dani'])
 }))
 
 test('the person\'s own login takes a name and can be put after another, but is never removed: the agent has it', withFile(path => {

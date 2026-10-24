@@ -1,31 +1,30 @@
-import { useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type ComponentType, type FormEvent, type ReactNode } from 'react'
 import { Check, CircleCheck, CircleX, Cloud, House, Loader2, PlugZap } from 'lucide-react'
-import { Button, Dialog, Input, RadioGroup, RadioGroupOption, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn } from '@openagt/dashboard/module'
-import { login, testConnection, type Answer, type LoginRow, type ServerRow, type Tested } from './servers.js'
+import { Button, Checkbox, Dialog, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn } from '@openagt/dashboard/module'
+import { testConnection, type Answer, type ServerRow, type Tested } from './servers.js'
 import { CopyButton } from './codes.js'
 import { hasDoor } from './model.js'
 import { Problem, StepLine, StepMark } from './parts.js'
 import { WhoCanStart } from './ServerPage.js'
 import type { Devices } from './use-devices.js'
 
-// "Set up a server", in steps: where the server is, a test that this computer gets in there, the
-// logins it gets, the install, and who else uses it. The install is the `devices server`
-// command's own process: closing the dialog stops nothing, and the server's row shows how far it
-// is. A computer at home, which nothing on the internet reaches, is set up the same way, through a
-// server this computer is in at.
+// "Set up a server", in steps: where the server is, a test that this computer gets in there,
+// whether it uses this computer's logins, the install, and who else uses it. The install is the
+// `devices server` command's own process: closing the dialog stops nothing, and the server's row
+// shows how far it is. A computer at home, which nothing on the internet reaches, is set up the
+// same way, through a server this computer is in at.
 
 type Stage = 'where' | 'connect' | 'logins' | 'install' | 'ready'
 
 const STAGES: readonly { id: Stage; title: string }[] = [
   { id: 'where', title: 'Where' },
   { id: 'connect', title: 'Connect' },
-  { id: 'logins', title: 'Logins' },
+  { id: 'logins', title: 'Your logins' },
   { id: 'install', title: 'Install' },
   { id: 'ready', title: 'Ready' },
 ]
 
 type Kind = 'vps' | 'home'
-type GithubPick = 'copy' | 'own' | 'later'
 
 export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: () => void; /** Invite people to the server just set up: its page, inviting. */ onInvite: (address: string) => void }) {
   const doors = (d.machines?.machines ?? []).filter(hasDoor)
@@ -37,8 +36,8 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
   // The last test, with the address and user it was made for: another address is not tested yet.
   const [tested, setTested] = useState<{ for: string; answer: Answer<Tested> } | undefined>()
   const [testing, setTesting] = useState(false)
-  const [github, setGithub] = useState<GithubPick>(d.account !== undefined ? 'copy' : 'later')
-  const [claude, setClaude] = useState<'login' | 'later'>('login')
+  // Whether the server uses this computer's logins, from when it is saved among the machines.
+  const [useMine, setUseMine] = useState(true)
   const [installed, setInstalled] = useState<string | undefined>()
   const through = kind === 'home' ? (via ?? doors[0]?.url) : undefined
   const at = address.trim()
@@ -62,7 +61,7 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
   }
 
   const install = async (): Promise<void> => {
-    if (await d.install(at, as, github === 'copy' && d.account !== undefined, through)) {
+    if (await d.install(at, as, through, useMine)) {
       setInstalled(at)
       setStage('install')
     }
@@ -88,8 +87,8 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
             </div>
             <p className="text-xs text-muted-foreground">
               {kind === 'home'
-                ? 'Your own user on the PC, which becomes root without a password: only to install, to update and to give it logins. What runs there afterwards runs as a user of its own, openagent.'
-                : 'root, or a user that becomes root without a password: only to install, to update and to give the server logins. What runs there afterwards runs as a user of its own, openagent.'}
+                ? 'Your own user on the PC, which becomes root without a password: only to install and to update. What runs there afterwards runs as a user of its own, openagent.'
+                : 'root, or a user that becomes root without a password: only to install and to update. What runs there afterwards runs as a user of its own, openagent.'}
             </p>
             <Button size="sm" type="submit" variant="outline" disabled={testing || !at || !as}>
               {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <PlugZap className="h-3.5 w-3.5" aria-hidden />}
@@ -108,29 +107,16 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
         )}
         {stage === 'logins' && (
           <div className="space-y-4">
-            <div className="space-y-2">
-              <p className="text-sm font-medium">GitHub</p>
-              <RadioGroup aria-label="GitHub on the server" value={github} disabled={d.busy} onValueChange={next => setGithub(next as GithubPick)}>
-                <RadioGroupOption value="copy" disabled={d.account === undefined}>
-                  {d.account !== undefined ? `Copy mine (${d.account})` : 'Copy mine'}
-                  {d.account === undefined && d.noLogin !== undefined && <span className="block w-full pl-6 text-xs text-muted-foreground">{d.noLogin}</span>}
-                </RadioGroupOption>
-                <RadioGroupOption value="own">
-                  Log in to another account on the server
-                  <span className="block w-full pl-6 text-xs text-muted-foreground">Once it is installed, GitHub gives a short code: you type it at github.com/login/device.</span>
-                </RadioGroupOption>
-                <RadioGroupOption value="later">Later</RadioGroupOption>
-              </RadioGroup>
-            </div>
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Claude</p>
-              <RadioGroup aria-label="Claude on the server" value={claude} disabled={d.busy} onValueChange={next => setClaude(next as 'login' | 'later')}>
-                <RadioGroupOption value="login">
-                  Log in once it is installed
-                  <span className="block w-full pl-6 text-xs text-muted-foreground">Your browser opens then: say yes there. The login is made for this server alone, lasts a year, and leaves this computer's login as it is.</span>
-                </RadioGroupOption>
-                <RadioGroupOption value="later">Later</RadioGroupOption>
-              </RadioGroup>
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox className="mt-0.5" checked={useMine} onCheckedChange={checked => setUseMine(checked === true)} aria-label="Use my logins from this computer" />
+              <span>
+                Use my logins from this computer
+                <span className="block text-xs text-muted-foreground">Runs on the server use the accounts you're logged into here. Logging in or out here updates the server.</span>
+              </span>
+            </label>
+            <div className="space-y-1 pl-6 text-xs">
+              <p>The server gets logins of its own. Nothing here is logged out, now or later.</p>
+              <p className="text-muted-foreground">Unchecked: the server has no logins. You can turn it on later in Settings › Accounts.</p>
             </div>
             {d.error !== undefined && <Problem>{d.error}</Problem>}
             <Footer>
@@ -145,7 +131,7 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
             </Footer>
           </div>
         )}
-        {stage === 'install' && <Installing d={d} server={server} github={github} claude={claude === 'login'} onReady={() => setStage('ready')} onClose={onClose} />}
+        {stage === 'install' && <Installing d={d} server={server} useMine={useMine} onReady={() => setStage('ready')} onClose={onClose} />}
         {stage === 'ready' && server !== undefined && <Ready d={d} server={server} onInvite={() => onInvite(server.address)} onClose={onClose} />}
       </div>
     </Dialog>
@@ -325,72 +311,28 @@ function TestResult({ answer, address, user, home }: { answer: Answer<Tested>; a
   )
 }
 
-/** A login the person picked, made once the install is done, as a line among its steps. */
-function LoginStep({ label, login, words }: { label: string; login: LoginRow; words?: ReactNode }) {
-  const state = login.working ? 'running' : login.there ? 'done' : login.said !== undefined ? 'failed' : 'waiting'
-  return (
-    <StepLine label={label} state={state} said={state === 'failed' ? login.said : undefined}>
-      {words !== undefined && state === 'running' && <span className="ml-5.5 block text-xs text-muted-foreground">{words}</span>}
-    </StepLine>
-  )
-}
-
-/** Settled: made, or failed and said why. */
-const settled = (login: LoginRow): boolean => !login.working && (login.there || login.said !== undefined)
-const failedLogin = (login: LoginRow): boolean => !login.working && !login.there && login.said !== undefined
-
-function Installing({ d, server, github, claude, onReady, onClose }: { d: Devices; server: ServerRow | undefined; github: GithubPick; claude: boolean; onReady: () => void; onClose: () => void }) {
-  const asked = useRef(false)
+function Installing({ d, server, useMine, onReady, onClose }: { d: Devices; server: ServerRow | undefined; /** The server is to use this computer's logins. */ useMine: boolean; onReady: () => void; onClose: () => void }) {
   const done = server !== undefined && !server.working && server.steps.every(step => step.state === 'done')
   const failed = server !== undefined && !server.working && server.steps.some(step => step.state === 'failed')
   const item = d.items.find(candidate => candidate.kind === 'server' && candidate.server.address === server?.address)
   const saved = item?.kind === 'server' && item.machine !== undefined && server?.adding === false
   const reason = server !== undefined ? d.notAdded[server.address] : undefined
-  const logins = server?.logins
-  // The logins the person picked here, each made or failed.
-  const loginsSettled = logins !== undefined && (github === 'later' || settled(logins.github)) && (!claude || settled(logins.claude))
-  const loginFailed = logins !== undefined && ((github !== 'later' && failedLogin(logins.github)) || (claude && failedLogin(logins.claude)))
+  // Taken once the server is saved; one that failed leaves the server installed all the same.
+  const logins = (server !== undefined ? d.logins[server.address] : undefined) ?? { state: 'waiting' as const }
+  const loginsFailed = useMine && logins.state === 'failed'
 
-  // Once it is installed, the logins that need the person here start: a code for GitHub, this computer's browser for Claude.
   useEffect(() => {
-    if (!done || server === undefined || asked.current) return
-    asked.current = true
-    void (async () => {
-      if (github === 'own') await d.act(() => login(d.host, server.address, 'github', true))
-      if (claude) await d.act(() => login(d.host, server.address, 'claude'))
-    })()
-  })
-  useEffect(() => {
-    if (done && saved && loginsSettled && !loginFailed) onReady()
+    if (done && saved && (!useMine || logins.state === 'done')) onReady()
   })
 
   if (server === undefined) return <Loader2 aria-label="Starting" className="h-4 w-4 animate-spin text-primary" />
   const sendable = saved ? 'done' : reason !== undefined ? 'failed' : done ? 'running' : 'waiting'
-  const code = server.logins.github.code
   return (
     <div className="space-y-3">
       <ol aria-label={`The install on ${server.address}`} className="space-y-1.5 text-sm">
         {server.steps.map(step => (
           <StepLine key={step.id} label={step.label} state={step.state} said={step.state === 'failed' ? step.said : undefined} />
         ))}
-        {github !== 'later' && (
-          <LoginStep
-            label={github === 'copy' ? 'Your GitHub login' : 'A GitHub login of its own'}
-            login={server.logins.github}
-            words={
-              code !== undefined ? (
-                <>
-                  {`Type the code ${code} at `}
-                  <a href="https://github.com/login/device" target="_blank" rel="noreferrer" className="underline">
-                    github.com/login/device
-                  </a>
-                  , and say yes there.
-                </>
-              ) : undefined
-            }
-          />
-        )}
-        {claude && <LoginStep label="Claude login" login={server.logins.claude} words={server.logins.claude.asking ? "Say yes in the page this computer's browser opened." : undefined} />}
         <li aria-label={`Runs can be sent to it: ${sendable}`}>
           <span className={cn('flex items-center gap-2', sendable === 'failed' ? 'text-danger' : sendable === 'waiting' ? 'text-muted-foreground' : undefined)}>
             <StepMark state={sendable} />
@@ -398,12 +340,13 @@ function Installing({ d, server, github, claude, onReady, onClose }: { d: Device
           </span>
           {reason !== undefined && <p className="mt-1 ml-5.5 text-xs text-danger">{reason}</p>}
         </li>
+        {useMine && <StepLine label="Uses your logins" state={logins.state} said={logins.said} />}
       </ol>
       {!failed && !done && <p className="text-xs text-muted-foreground">A few minutes. You can close this: it goes on, and its row shows how far it is.</p>}
       {d.error !== undefined && <Problem>{d.error}</Problem>}
       <Footer>
         {failed && (
-          <Button size="sm" disabled={d.busy} onClick={() => void d.install(server.address, server.user, server.logins.github.wanted === true)}>
+          <Button size="sm" disabled={d.busy} onClick={() => void d.install(server.address, server.user)}>
             Try again
           </Button>
         )}
@@ -412,7 +355,7 @@ function Installing({ d, server, github, claude, onReady, onClose }: { d: Device
             Try again
           </Button>
         )}
-        {done && saved && loginFailed && (
+        {done && saved && loginsFailed && (
           <Button size="sm" onClick={onReady}>
             Continue
           </Button>

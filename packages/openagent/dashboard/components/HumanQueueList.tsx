@@ -80,14 +80,15 @@ export function HumanQueueList({
           const since = formatRelative(item.createdAt, '')
           const row = (
             <>
-              <span className={cn('flex w-28 shrink-0 items-center gap-1.5 text-xs', tone)}>
+              <span className={cn('flex w-28 shrink-0 items-center gap-1.5 text-xs max-md:w-auto max-md:flex-1', tone)}>
                 <Icon className="h-3.5 w-3.5 shrink-0" />
                 {needsWord(item.kind, item.gitHost)}
               </span>
               {/* The name and what it is about give up width, each cut short with an ellipsis: in a
-                  narrow column the row still fits, and nothing scrolls sideways. */}
-              <span className="min-w-0 shrink truncate text-foreground md:max-w-[50%] max-md:flex-1">{item.title}</span>
-              <span className="min-w-0 truncate text-muted-foreground md:flex-auto max-md:order-last max-md:basis-full">{detail}</span>
+                  narrow column the row still fits, and nothing scrolls sideways. On a phone each
+                  has a line of its own under what is needed, where, and since when. */}
+              <span className="min-w-0 shrink truncate text-foreground md:max-w-[50%] max-md:order-1 max-md:basis-full">{item.title}</span>
+              <span className="min-w-0 truncate text-muted-foreground md:flex-auto max-md:order-2 max-md:basis-full">{detail}</span>
               {projects && <span className="shrink-0 text-xs text-muted-foreground">{item.projectName}</span>}
               <span className="min-w-14 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{since}</span>
               <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />

@@ -5,9 +5,9 @@ import { useLoaded } from '../lib/use-async.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { ThemeSubmenu } from './ThemeSubmenu.js'
 import { NotificationsSubmenu } from './NotificationsSubmenu.js'
-import { AGENT_ACCOUNTS_ENTRY, AgentAccountsSubmenu, accountsInMenu, useAgentAccounts } from './AgentAccounts.js'
+import { AgentAccountsSubmenu, accountsInMenu, useAgentAccounts } from './AgentAccounts.js'
 import { GitHostsSubmenu } from './GitHosts.js'
-import { useAgentState, useMissing } from './Logins.js'
+import { ACCOUNTS_ENTRY, useAgentState, useMissing } from './Logins.js'
 
 // The foot of the sidebar: the person at this dashboard, their picture and first name, as one row
 // that opens their menu (his pick, over a row of three icons): the Claude account runs use first,
@@ -84,8 +84,8 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
         )}
         {/* The accounts runs use: the git host's first, as the plan has it, then each agent's, with one line under them all. */}
         <GitHostsSubmenu onSettings={onSettings} />
-        <AgentAccountsSubmenu agent="claude" onAdd={() => onSettings(AGENT_ACCOUNTS_ENTRY)} />
-        <AgentAccountsSubmenu agent="codex" onAdd={() => onSettings(AGENT_ACCOUNTS_ENTRY)} />
+        <AgentAccountsSubmenu agent="claude" onAdd={() => onSettings(ACCOUNTS_ENTRY)} />
+        <AgentAccountsSubmenu agent="codex" onAdd={() => onSettings(ACCOUNTS_ENTRY)} />
         {anyAccount && <DropdownMenuSeparator />}
         <ThemeSubmenu />
         <NotificationsSubmenu />

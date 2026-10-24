@@ -12,7 +12,7 @@ import { accountsWiring } from './accounts.js'
 import { loginsWiring, onAgentState, onGitHosts, onProjectAccounts, sendAgentFix, sendGitHostLogin, sendProjectAccounts, sendUseGitHostAccount } from './logins.js'
 import { provideTestContext } from './test-context.js'
 
-// Settings › Git hosts, the agent's own fix, and a project's own accounts: drawn from what the
+// Settings › Accounts, the agent's own fix, and a project's own accounts: drawn from what the
 // git host's package and the agent's package answer, never naming either.
 
 const GITHUB: ProvidedCommand = { name: 'github', bin: '/pkg/github', package: '@openagt/skill-github' } as ProvidedCommand
@@ -46,7 +46,7 @@ async function withProjects(body: (dirs: { github: string; gitlab: string; local
   const asked: { root: string; args: string[] }[] = []
   const before = { ...loginsWiring }
   const accountsBefore = { ...accountsWiring }
-  Object.assign(accountsWiring, { path: (agent: string) => join(dir, `${agent}-accounts.json`), claudeJson: () => join(dir, 'none.json'), codexOwnHome: () => join(dir, 'codex'), codexWho: async () => ({}), codexUsage: async () => [] })
+  Object.assign(accountsWiring, { path: (agent: string) => join(dir, `${agent}-accounts.json`), claudeJson: () => join(dir, 'none.json'), codexOwnHome: () => join(dir, 'codex'), codexWho: async () => ({}), codexUsage: async () => [], computer: () => 'Studio' })
   provideTestContext({ quota: { read: async () => ({ windows: [] }), stop: () => {} } })
   Object.assign(loginsWiring, {
     gitHost: async () => GITHUB,
@@ -163,7 +163,7 @@ test('a project’s own accounts: offered for a kind the computer has two or mor
 
     addAccount('Dani', 'sk-ant-oat01-dani', accountsWiring.path('claude'))
     addAccount('Rom', 'codex-rom', accountsWiring.path('codex'))
-    assert.deepEqual((await onProjectAccounts(id))?.codex, { accounts: [{ id: 'This computer', name: 'This computer' }, { id: 'Rom', name: 'Rom' }] })
+    assert.deepEqual((await onProjectAccounts(id))?.codex, { accounts: [{ id: 'This computer', name: 'Codex login on Studio' }, { id: 'Rom', name: 'Rom' }] })
     assert.deepEqual((await sendProjectAccounts(id, { codex: ['Rom'] })).ok, true)
     assert.match(readFileSync(join(dirs.github, '.agent-runner', 'config.yml'), 'utf8'), /codex:\n\s+- Rom/)
     assert.equal((await sendProjectAccounts(id, { codex: ['Nobody'] })).ok, false)

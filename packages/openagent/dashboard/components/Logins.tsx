@@ -9,11 +9,11 @@ import { CopyButton } from './ui/copy-button.js'
 // What runs log in with, and what is missing for them to (#2194's accounts, a step further): the
 // coding agent's CLI, installed and logged in, and the tool of each git host the projects are on.
 // Each is drawn from its own package's answers; a press runs the command that package declared.
-// Four places show it: Settings' Agent accounts and Git hosts cards, the Overview's "Get ready"
-// step, the start form's red line, and the dot on the person's picture.
+// Four places show it: the cards of Settings › Accounts, the Overview's "Get ready" step, the
+// start form's red line, and the dot on the person's picture.
 
-/** The Settings entry of the git hosts: what "Add account…" in the person's menu opens. */
-export const GIT_HOSTS_ENTRY = 'git-hosts'
+/** The Settings entry of every login runs use: what "Add account…" in the person's menu opens. */
+export const ACCOUNTS_ENTRY = 'accounts'
 
 /** How often a page asks again: often while something is under way (an install, the browser's yes), less while something is missing, seldom once all is there. */
 const BUSY_MS = 2_000
@@ -251,7 +251,7 @@ export function useMissing(): { missing: Missing[]; reload: () => Promise<void>;
       key: 'agent',
       name,
       words: agentWords(state),
-      entry: 'agent-accounts',
+      entry: ACCOUNTS_ENTRY,
       fix: <AgentFix state={state} onChanged={() => void reloadAgent()} />,
     })
   }
@@ -262,7 +262,7 @@ export function useMissing(): { missing: Missing[]; reload: () => Promise<void>;
       key: `host:${row.host}`,
       name: p.name,
       words: hostWords(row),
-      entry: GIT_HOSTS_ENTRY,
+      entry: ACCOUNTS_ENTRY,
       fix: <HostFix row={row} onChanged={reloadHosts} />,
     })
   }

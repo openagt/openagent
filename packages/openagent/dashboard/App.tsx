@@ -4,6 +4,7 @@ import { onProjectFiles, onInterventions, onActivity, onRecentAgents, onAgents }
 import { sendStart } from './rpc/control.js'
 import { onProjects } from './rpc/projects.js'
 import { onComputersThrough, onMachinePerson, onMachineVersions, sendLetMachineIn, sendMachineCode, sendRemoveMachineDevice } from './rpc/machines.js'
+import { sendUseLoginsOn } from './rpc/server-logins.js'
 import { addComputerThrough, addMachine, removeMachine, renameMachine } from './lib/machines.js'
 import { AgentHistory } from './components/AgentHistory.js'
 import { SidebarProvider } from './components/ui/sidebar.js'
@@ -18,6 +19,7 @@ import { subagentsOf, taskLabel } from './lib/subagents.js'
 import { PaneLayout, PanesProvider } from './components/Panes.js'
 import { SubagentPanel } from './components/SubagentPanel.js'
 import { MenuButton, PhoneBar } from './components/PhoneBar.js'
+import { cn } from './lib/utils.js'
 import { useIsMobile } from './lib/use-mobile.js'
 import { NotFound } from './components/NotFound.js'
 import { ModulePageView, ModuleSlot } from './components/ModulePageView.js'
@@ -77,6 +79,15 @@ const EMPTY_RECENT: RecentAgent[] = []
 // shows, or none for all of them. It filters what the pages show; it is not a page of its own, so it
 // rides along on every navigation as the address's first segment (`/{project}/overview`,
 // `/{project}/logs`). A project's own pages pick their project unless `?all` is there.
+/** How long what a phone shows is read at every frame once it changed: as its keyboard slides and settles. */
+const SETTLE_MS = 700
+
+/** Whether a box someone types in has the focus: what brings up a phone's keyboard. */
+function typing(): boolean {
+  const focused = document.activeElement
+  return focused instanceof HTMLElement && (focused.isContentEditable || focused instanceof HTMLTextAreaElement || (focused instanceof HTMLInputElement && !['button', 'checkbox', 'radio', 'submit', 'reset', 'range', 'color', 'file'].includes(focused.type)))
+}
+
 export function App() {
   // The registered projects, for the browser-tab title (#695/U3) — the selected project's name
   // plus the needs-you count drive `document.title` so a backgrounded tab tells you which project
@@ -355,6 +366,7 @@ export function App() {
       computersThrough: onComputersThrough,
       machinePerson: onMachinePerson,
       removeMachineDevice: sendRemoveMachineDevice,
+      useLoginsOn: sendUseLoginsOn,
       addComputerThrough: async (machineId, computerId) => {
         const added = await addComputerThrough(machineId, computerId)
         return added.ok ? { ok: true } : added
@@ -521,6 +533,63 @@ export function App() {
   const sidebarWidth = useSidebarWidth()
   // The name a phone's top bar gives the page; null on a project's own pages, which have a top row.
   const phoneTitle = pageSegment ? (modulePage?.label ?? '') : projectId === null ? 'Overview' : null
+  // On a phone a page with no chat scrolls as a page, its bar staying at the top: a column
+  // scrolling inside a page that bounces reads as two scrolls. A chat keeps its box at the bottom.
+  const phonePage = isMobile && phoneTitle !== null
+  // Every other page is pinned: only its own columns scroll. A phone made the page itself a little
+  // taller than it shows, and a finger on the top bar or the message box scrolled it, or reloaded it.
+  useEffect(() => {
+    if (phonePage) return
+    document.documentElement.dataset['pinned'] = 'true'
+    // The page lies exactly where the screen shows it: with a phone's keyboard open, the room
+    // above the keyboard, so the message box sits on the keyboard. Safari leaves the page as tall,
+    // lays its keyboard over it and scrolls what shows: the page follows where that is, rather
+    // than scrolling it back, which made it jump while the keyboard came and went.
+    const view = window.visualViewport
+    const root = document.documentElement
+    // Only while a box has the keyboard: once none has, the page is the whole screen at its top
+    // again, whatever Safari still says of what shows, which kept it short and low after its
+    // keyboard was gone.
+    const fit = (): void => {
+      if (!view) return
+      if (!typing()) {
+        root.style.removeProperty('--shown-height')
+        root.style.removeProperty('--shown-top')
+        if (window.scrollY !== 0 || view.offsetTop !== 0) window.scrollTo(0, 0)
+        return
+      }
+      root.style.setProperty('--shown-height', `${view.height}px`)
+      root.style.setProperty('--shown-top', `${view.offsetTop}px`)
+    }
+    // Safari moves what shows as its keyboard slides, says so only after, and says nothing once
+    // it stopped: while a box takes or lets go of the keyboard, what shows is read at every frame.
+    let frame = 0
+    let until = 0
+    const step = (): void => {
+      fit()
+      frame = performance.now() < until ? requestAnimationFrame(step) : 0
+    }
+    const settle = (): void => {
+      until = performance.now() + SETTLE_MS
+      fit()
+      if (frame === 0) frame = requestAnimationFrame(step)
+    }
+    fit()
+    view?.addEventListener('resize', settle)
+    view?.addEventListener('scroll', settle)
+    document.addEventListener('focusin', settle)
+    document.addEventListener('focusout', settle)
+    return () => {
+      delete root.dataset['pinned']
+      root.style.removeProperty('--shown-height')
+      root.style.removeProperty('--shown-top')
+      cancelAnimationFrame(frame)
+      view?.removeEventListener('resize', settle)
+      view?.removeEventListener('scroll', settle)
+      document.removeEventListener('focusin', settle)
+      document.removeEventListener('focusout', settle)
+    }
+  }, [phonePage])
 
   return (
     // The whole shell lives inside the SidebarProvider so the sidebar's context (state + Cmd/Ctrl+B,
@@ -531,7 +600,9 @@ export function App() {
     <HostServicesContext.Provider value={hostServices}>
     <OpenProjectContext.Provider value={projectId}>
     <ProjectLabelsContext.Provider value={labels}>
-    <SidebarProvider className="h-screen flex-col overflow-hidden" style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
+    {/* As tall as what the screen shows, never taller: a phone's 100vh reaches under its browser's
+        bars, and the page then scrolled around the column that scrolls. */}
+    <SidebarProvider className={phonePage ? 'min-h-dvh flex-col' : 'fixed inset-x-0 top-(--shown-top,0px) h-(--shown-height,100dvh) min-h-0 flex-col overflow-hidden'} style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
       {/* The top navbar is gone (#772 follow-up): its brand, global nav and utility controls moved
           into the sidebar (AgentHistory), so the workspace and the panes get the full height. */}
       {!healthy && (
@@ -547,7 +618,8 @@ export function App() {
           labels resolve against the initial containing block, keep their static position deep in
           the scrolled content, and give the document a phantom scrollbar that slides the whole
           app off-screen. */}
-      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+      {/* A page that scrolls as a page is clipped sideways only: a box that clips both ways holds its bar from sticking. */}
+      <div className={cn('relative flex min-h-0 flex-1', phonePage ? 'overflow-x-clip' : 'overflow-hidden')}>
         <AgentHistory
           projectId={projectId}
           scope={scope}
@@ -582,7 +654,7 @@ export function App() {
         {/* On a phone the sidebar is a sheet, and this button, over the page's top left corner,
             opens it. An agent's page and the "New agent" page keep that corner of their top row
             free; a page with no top row of its own gets a bar that names it. */}
-        {isMobile && <MenuButton />}
+        {isMobile && !phonePage && <MenuButton />}
         {/* A project's page and an agent's have panes beside them (Panes). A module's page takes
             the full width itself (#1774), the way the Overview does. */}
         <PanesProvider

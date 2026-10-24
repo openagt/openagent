@@ -20,7 +20,7 @@ async function withAccounts(body: (path: string) => Promise<void>, claude: objec
   const path = join(dir, 'accounts.json')
   writeFileSync(join(dir, '.claude.json'), JSON.stringify(claude))
   const before = { ...accountsWiring }
-  Object.assign(accountsWiring, { path: () => path, claudeJson: () => join(dir, '.claude.json'), now: () => NOW, codexWho: async () => ({}), codexUsage: async () => [] })
+  Object.assign(accountsWiring, { path: () => path, claudeJson: () => join(dir, '.claude.json'), now: () => NOW, codexWho: async () => ({}), codexUsage: async () => [], computer: () => 'Studio', headless: () => false })
   provideTestContext({ quota: { read: async () => live, stop: () => {} } })
   try {
     await body(path)
@@ -55,10 +55,10 @@ test('the page sees each account by name and how full it is, never a login: the 
     { windows: [{ label: 'Current week (all models)', kind: 'week', percentUsed: 22 }, { label: 'Current session', kind: 'session', percentUsed: 3 }] },
   ))
 
-test('with one account there is no order to say; a Claude Code that does not say who the person is leaves its own name', () =>
+test('with one account there is no order to say; a Claude Code that does not say who the person is names the login by the computer it is on, never "this computer"', () =>
   withAccounts(
     async () => {
-      assert.deepEqual((await onAgentAccounts('claude')).accounts, [{ id: OWN_NAME, name: OWN_NAME, own: true, windows: [] }])
+      assert.deepEqual((await onAgentAccounts('claude')).accounts, [{ id: OWN_NAME, name: 'Claude login on Studio', own: true, windows: [] }])
     },
     {},
   ))

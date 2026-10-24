@@ -423,6 +423,11 @@ export interface ModuleHost {
    * it said is another computer's data, to read as such; `unknown` for a machine that does not say.
    */
   machinePerson(machineId: string): Promise<ModuleMachinePerson>
+  /**
+   * A saved server of the person's uses this computer's logins from now on: each account this
+   * computer is logged in to gets a login of the server's own there, as Settings › Accounts says.
+   */
+  useLoginsOn(machineId: string): Promise<MachineAdded>
   /** Take one of that person's devices out at the machine, by its id there; answers as {@link machinePerson} does, after. */
   removeMachineDevice(machineId: string, deviceId: string): Promise<ModuleMachinePerson>
   /**

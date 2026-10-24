@@ -2,4 +2,4 @@ export { ClaudeCodeDriver, ClaudeCodeSession, StreamJsonParser, claudeCodeReady,
 export { readClaudeQuota, parseQuotaReadout, type ReadClaudeQuotaOptions } from './claude-code-quota.js'
 export { readClaudeModels, parseInitializeLine, type ReadClaudeModelsOptions } from './claude-code-models.js'
 export { claudeAccountsPath, accountEnv, CLAUDE_TOKEN_ENV } from './claude-accounts.js'
-export { mintClaude, mintedIn, notMinted, startedAs, type Mint, type MintOptions } from './claude-login.js'
+export { mintClaude, mintedIn, notMinted, startedAs, signInUrl, isSignInCode, type Mint, type MintOptions } from './claude-login.js'

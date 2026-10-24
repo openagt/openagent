@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { readAccounts } from './accounts.js'
 
 /**
  * Whether a coding agent's CLI can start a session at all, asked before a run spends a checkout
@@ -16,6 +17,8 @@ export interface DriverReadiness {
   warnings: string[]
   /** What a press does about the problem, when the adapter has a command for it: install the CLI, or log it in. */
   fix?: DriverFix
+  /** The CLI's own login is out, and an added account is what runs use: its own login is no account to show. */
+  ownLoggedOut?: true
 }
 
 /** The command a press runs about a problem: one the adapter declared, never one from a page. */
@@ -59,6 +62,12 @@ export interface DriverReadyOptions {
   isRoot?: () => boolean
   /** The user `sudo` recorded, named in the root warning. Default `SUDO_USER`. */
   sudoUser?: string | undefined
+  /**
+   * The agent's accounts file (`accounts.ts`): one that holds an added account is a login runs
+   * use, so the CLI's own login is not needed, as on a server that has only the person's own
+   * computers' logins. Unsaid, only the CLI's own login counts.
+   */
+  accounts?: string
 }
 
 /**
@@ -75,14 +84,18 @@ export async function checkCliReady(spec: CliSpec, opts: DriverReadyOptions = {}
   const problems: string[] = []
   const warnings: string[] = []
   let fix: DriverFix | undefined
+  let ownLoggedOut = false
 
   const version = await probe(bin, ['--version'])
   if (!version.ok) {
     problems.push(`\`${bin}\` not found — ${spec.install}`)
     if (spec.fixes?.install !== undefined) fix = { kind: 'install', command: spec.fixes.install }
   } else if (spec.loggedIn(await probe(bin, spec.authArgs)) === false) {
-    problems.push(`\`${bin}\` is not logged in. Run \`${spec.login}\`, then start again.`)
-    if (spec.fixes?.login !== undefined) fix = { kind: 'log-in', command: spec.fixes.login }
+    if (opts.accounts !== undefined && readAccounts(opts.accounts).some(account => account.login !== undefined)) ownLoggedOut = true
+    else {
+      problems.push(`\`${bin}\` is not logged in. Run \`${spec.login}\`, then start again.`)
+      if (spec.fixes?.login !== undefined) fix = { kind: 'log-in', command: spec.fixes.login }
+    }
   }
 
   if ((opts.isRoot ?? runningAsRoot)()) {
@@ -91,7 +104,7 @@ export async function checkCliReady(spec: CliSpec, opts: DriverReadyOptions = {}
       `running as root, so the coding agent looks for credentials under root's home and will not find yours. Run it as ${sudoUser ? `\`${sudoUser}\`` : 'your own user'}, without \`sudo\`.`,
     )
   }
-  return { problems, warnings, ...(fix ? { fix } : {}) }
+  return { problems, warnings, ...(fix ? { fix } : {}), ...(ownLoggedOut ? { ownLoggedOut: true as const } : {}) }
 }
 
 /** The real probe: the binary on `PATH`, ten seconds at most. */

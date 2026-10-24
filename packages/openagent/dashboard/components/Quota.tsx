@@ -22,7 +22,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { cn } from '../lib/utils.js'
-import { AddedAccountsUsage } from './AgentAccounts.js'
+import { AddedAccountsUsage, useAgentAccounts } from './AgentAccounts.js'
 
 // The usage bar (#960): one week-long track, so "am I ahead or behind?" is a glance rather than a
 // calculation. It replaces the pair of flat meters that came before (#519/#879), which showed the
@@ -300,7 +300,7 @@ function WeekBar({
       {/* The legend, and — on the same row (#960 Edit) — whether the knob has left any room to
           project. Grouped on the right since both describe the same knob: the warning first, since
           it explains why the state beside it might be worth a second look. */}
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] text-muted-foreground max-sm:text-xs">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <LegendItem swatch={<span className={cn('h-2 w-2 rounded-sm', TONE_FILL[tone])} aria-hidden />}>Used</LegendItem>
           {limited && <LegendItem swatch={<span className={cn('h-2 w-2 rounded-sm opacity-35', TONE_FILL[tone])} aria-hidden />}>Budget for Autonomous AI</LegendItem>}
@@ -473,14 +473,16 @@ function LimitedWeekBar({ limit, projects, boundary, percentUsed, others }: { li
 export function Quota({ projects }: { projects: ProjectSummary[] }) {
   const view = useQuota()
   const { usageLimit } = useMountedModules()
-  const note = view ? unavailableNote(view) : undefined
+  // Why the own login has no reading says nothing while runs use other accounts with readings of their own: a server's runs use the person's own computer's.
+  const others = (useAgentAccounts('claude').view?.accounts ?? []).filter(account => !account.own)
+  const note = view && !(view.windows.length === 0 && others.length > 0) ? unavailableNote(view) : undefined
   // When the newest attempt failed but earlier numbers are still on screen, say how old they are.
   // A retained reading can now outlive several failures (#960), and an undated bar claims to be now.
   const staleAt = view?.unavailable !== undefined && view.windows.length > 0 ? view.readAt : undefined
   const week = view ? weekWindow(view.windows) : undefined
   // Every window, in the order Claude Code reports them — the session, the account's own week
   // (also drawn as the bar above, but worth its own line here too), and a model's own week.
-  const others = view?.windows ?? []
+  const windows = view?.windows ?? []
 
   return (
     <Card>
@@ -497,23 +499,23 @@ export function Quota({ projects }: { projects: ProjectSummary[] }) {
         {view?.boundary && week ? (
           usageLimit ? (
             <ModuleSlot package={usageLimit.package} label="usage limit">
-              <LimitedWeekBar limit={usageLimit} projects={projectsHaving(usageLimit.projects, projects)} boundary={view.boundary} percentUsed={week.percentUsed} others={others} />
+              <LimitedWeekBar limit={usageLimit} projects={projectsHaving(usageLimit.projects, projects)} boundary={view.boundary} percentUsed={week.percentUsed} others={windows} />
             </ModuleSlot>
           ) : (
-            <WeekBar boundary={view.boundary} percentUsed={week.percentUsed} others={others} />
+            <WeekBar boundary={view.boundary} percentUsed={week.percentUsed} others={windows} />
           )
         ) : view && view.windows.length ? (
           <p role="alert" className="text-sm text-danger">
-            {unplaceableWeek(week, others)}
+            {unplaceableWeek(week, windows)}
           </p>
         ) : null}
 
         {/* Normally these live behind the bar's own "show all limits" tooltip — but without a bar
             to hide them in, they still have to show up somewhere; the windows Claude Code did
             report are data, not a fallback, and stay regardless. */}
-        {!(view?.boundary && week) && others.length ? (
+        {!(view?.boundary && week) && windows.length ? (
           <div className="space-y-1 border-t border-border pt-3">
-            {others.map(w => (
+            {windows.map(w => (
               <OtherWindow key={w.label} window={w} />
             ))}
           </div>

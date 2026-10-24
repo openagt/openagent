@@ -1,5 +1,5 @@
 import { FastForward, ListTodo, Play } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitleLink, Input, StartAgentButton, Tooltip, TooltipContent, TooltipTrigger, pathsIn, useFileNames, usePolled, useModuleHost, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
+import { Card, CardContent, CardHeader, CardTitleLink, Input, StartAgentButton, Tooltip, TooltipContent, TooltipTrigger, cn, pathsIn, useFileNames, usePolled, useModuleHost, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
 import { fanOutLabel, workOnEntryPrompt } from '../src/module.js'
 import { EntryTitle, entryView } from './entry.js'
 import { useQueueStarts } from './starts.js'
@@ -130,7 +130,7 @@ export function QueueCard({ projects }: ModuleCardProps) {
                           <span aria-hidden className="w-4 shrink-0 text-right text-xs tabular-nums text-muted-foreground/70">
                             {i + 1}.
                           </span>
-                          <EntryTitle view={view} entry={entry} className={`min-w-0 flex-1 truncate text-left${(view.open ?? view.url) !== undefined ? ' hover:text-foreground hover:underline' : ''}`} />
+                          <EntryTitle view={view} entry={entry} className={cn('min-w-0 flex-1 truncate text-left max-sm:line-clamp-2 max-sm:whitespace-normal!', (view.open ?? view.url) !== undefined && 'hover:text-foreground hover:underline')} />
                           <StartAgentButton
                             variant="ghost"
                             size="icon-sm"
