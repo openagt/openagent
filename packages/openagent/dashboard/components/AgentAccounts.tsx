@@ -237,10 +237,13 @@ export function AccountsCard({ agent }: { agent: AccountsAgent }) {
                     <p className="truncate text-sm">{account.name}</p>
                     <p className="truncate text-xs text-muted-foreground">{source(account, view!.computer)}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <AccountBar percent={longest(account)?.percent} />
-                    <span className="w-44 truncate text-xs text-muted-foreground max-sm:w-auto">{usageWords(account) ?? ''}</span>
-                  </div>
+                  {/* A login with no reading of its usage has no bar: an empty one read as nothing used. */}
+                  {usageWords(account) !== undefined && (
+                    <div className="flex items-center gap-2">
+                      <AccountBar percent={longest(account)?.percent} />
+                      <span className="w-44 truncate text-xs text-muted-foreground max-sm:w-auto">{usageWords(account)}</span>
+                    </div>
+                  )}
                   <div className="flex w-36 items-center justify-end gap-2 max-sm:w-auto">
                     {view && <StateWords account={account} now={view.now} />}
                     {!account.own && account.from === undefined && (
