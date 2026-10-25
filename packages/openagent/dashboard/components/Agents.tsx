@@ -18,7 +18,7 @@ export function Agents({
   working,
   onSelectAgent,
 }: {
-  /** The agents at work: never none, since the Overview draws the card only while one works. */
+  /** The agents at work; none says so in one line. */
   working: ActiveAgent[]
   onSelectAgent: (projectId: string, agentId: string) => void
 }) {
@@ -35,7 +35,9 @@ export function Agents({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {
+        {working.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No agent is at work.</p>
+        ) : (
           <ul className="space-y-0.5">
             {working.map(a => (
               <AgentRow
@@ -49,7 +51,7 @@ export function Agents({
               />
             ))}
           </ul>
-        }
+        )}
       </CardContent>
     </Card>
   )

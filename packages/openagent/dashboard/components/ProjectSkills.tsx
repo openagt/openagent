@@ -48,7 +48,7 @@ const NOTES: Partial<Record<ProjectSkill['standing'], string>> = {
 }
 
 /** The words of the one press that takes skills to agents: a send where there is a remote, a commit where there is none. */
-const sendWord = (skills: ProjectSkills): string => (skills.remote ? `Send to ${skills.remote}` : 'Commit')
+export const sendWord = (skills: ProjectSkills): string => (skills.remote ? `Send to ${skills.remote}` : 'Commit')
 
 export function ProjectSkillsLine({
   projectId,
@@ -92,16 +92,8 @@ export function ProjectSkillsLine({
       setPending(null)
     }
   }
-  const newer = all(skills).filter(skill => skill.standing === 'newer').map(skill => skill.name)
-  const waiting = all(skills).filter(skill => skill.waiting).map(skill => skill.name)
-  // What a pull request, or the branch a send left, already holds is said with it; what is still on this computer only, apart.
-  const here = skills.request || skills.branch ? skills.uncommitted : [...new Set([...skills.uncommitted, ...waiting])]
-  const update = () =>
-    act('update', async () => {
-      const written = await run(() => sendChangeSkills(projectId, { write: newer }), 'Could not update the skills.')
-      if (!written.ok || !skills.git) return written
-      return run(() => sendProjectSkills(projectId, newer), 'Could not send the skills.')
-    })
+  const { newer, waiting, here, sending, inRequest, onBranch } = skillsSay(skills)
+  const update = () => act('update', () => updateSkills(projectId, skills, run))
   const send = () => act('send', () => run(() => sendProjectSkills(projectId), 'Could not send the skills.'))
 
   const list = adding && (
@@ -115,9 +107,6 @@ export function ProjectSkillsLine({
       onSaved={() => void changed()}
     />
   )
-  const sending = skills.git && here.length > 0
-  const inRequest = skills.request !== undefined && waiting.length > 0
-  const onBranch = !inRequest && skills.branch !== undefined && waiting.length > 0
   // Nothing to say: the list alone, when the menu opened it.
   if (newer.length === 0 && !sending && !inRequest && !onBranch && !error) return list || null
 
@@ -163,6 +152,31 @@ export function ProjectSkillsLine({
       {list}
     </div>
   )
+}
+
+/**
+ * What a project's skills say to the person, as this notice and the Overview's Skills card say it:
+ * the skills with a newer version; the ones not yet where agents start from; of those, the ones
+ * still on this computer only (a pull request, or the branch a send left, already holds the rest);
+ * and whether they wait in a pull request or on a branch to merge.
+ */
+export function skillsSay(skills: ProjectSkills) {
+  const newer = all(skills).filter(skill => skill.standing === 'newer').map(skill => skill.name)
+  const waiting = all(skills).filter(skill => skill.waiting).map(skill => skill.name)
+  const here = skills.request || skills.branch ? skills.uncommitted : [...new Set([...skills.uncommitted, ...waiting])]
+  const sending = skills.git && here.length > 0
+  const inRequest = skills.request !== undefined && waiting.length > 0
+  const onBranch = !inRequest && skills.branch !== undefined && waiting.length > 0
+  const heldNames = all(skills).filter(held).map(skill => skill.name)
+  return { newer, waiting, here, sending, inRequest, onBranch, held: heldNames.length, heldNames }
+}
+
+/** Take the newer versions of a project's skills, and send them where agents start from when the folder is a repository. */
+export async function updateSkills(projectId: string, skills: ProjectSkills, run: ReturnType<typeof useAction>['run']): Promise<{ ok: boolean }> {
+  const { newer } = skillsSay(skills)
+  const written = await run(() => sendChangeSkills(projectId, { write: newer }), 'Could not update the skills.')
+  if (!written.ok || !skills.git) return written
+  return run(() => sendProjectSkills(projectId, newer), 'Could not send the skills.')
 }
 
 /** What is ticked when the list opens: what the project has; in a project with nothing yet, the default picks. */

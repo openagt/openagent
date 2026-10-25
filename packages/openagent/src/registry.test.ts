@@ -236,6 +236,15 @@ test('every boolean preference survives a save; the sanitizer cannot silently dr
   assert.deepEqual(await readPreferences(fs, ENV), allOn)
 })
 
+test('the Overview\'s layouts survive a save, kept only as well-formed', async () => {
+  const stored = (preferences: Record<string, unknown>) => readPreferences(memFs({ [FILE]: JSON.stringify({ projects: [], preferences }) }), ENV)
+  assert.deepEqual(await stored({ overviewLayouts: { '*': [{ id: 'usage', hidden: true }], p1: [{ id: 'summary', width: '1/2' }] } }), {
+    overviewLayouts: { '*': [{ id: 'usage', hidden: true }], p1: [{ id: 'summary', width: '1/2' }] },
+  })
+  assert.deepEqual(await stored({ overviewLayouts: 'all' }), {}, 'junk is dropped')
+  assert.deepEqual(await stored({ overviewLayouts: {} }), {}, 'no layout left: the key is left out')
+})
+
 test('sanitizePreferences reads only the current spellings', async () => {
   // A renamed key is an unknown key, and an unknown key is dropped — the same answer the sanitizer
   // gives junk. `driver` does not read the `agent` D5 renamed, nor the old name of Claude Code

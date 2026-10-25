@@ -69,6 +69,7 @@ function fakeBranches(
     },
     home: async () => undefined,
     me: async () => undefined,
+    people: async () => [],
   })
   return { branches, gitHost, calls }
 }

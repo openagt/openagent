@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Switch, Tooltip, TooltipContent, TooltipTrigger, Button, buttonVariants, cn, formatAge, formatDateTime, useCodingAgents, useModuleHost, usePolled, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
+import { Page, Switch, Tooltip, TooltipContent, TooltipTrigger, Button, buttonVariants, cn, formatAge, formatDateTime, useCodingAgents, useModuleHost, usePolled, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
 import type { ModulePageProps } from '@openagt/dashboard/module'
 import { AutomationForm } from './AutomationForm.js'
 import { EditPanel } from './EditPanel.js'
 import { openedAutomation, type OpenedAutomation } from './automation-form.js'
-import { atOnce, atOnceWords, cannotRun, decided, isOwn, outcomeWords, ownPace, pace, publishes, readSchedulers, rowTitle, runsOnWords, saysAtOnce, schedulerStatus, unlistedWords, type AgentModels, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
+import { atOnce, atOnceWords, cannotRun, decided, startedNow, type Answered, isOwn, outcomeWords, ownPace, pace, publishes, readSchedulers, rowTitle, runsOnWords, saysAtOnce, schedulerStatus, unlistedWords, type AgentModels, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
 // The Automations page: what starts by itself while nobody is at the keyboard. One part per
 // project the page is given (every project that has this package, or the one picked in the
@@ -122,10 +122,8 @@ export function AutomationsPage({ projects }: ModulePageProps) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6 max-md:p-4">
-      <h1 className="text-lg font-semibold">Automations</h1>
-      <p className="mt-1 text-sm text-muted-foreground">What starts by itself while nobody is at the keyboard. Every row starts switched off: it runs on this machine only once you switch it on here.</p>
-      {!loaded && <p className="mt-6 text-sm text-muted-foreground">Loading…</p>}
+    <Page title="Automations" description="What starts by itself while nobody is at the keyboard. Every row starts switched off: it runs on this machine only once you switch it on here.">
+      {!loaded && <p className="text-sm text-muted-foreground">Loading…</p>}
       {rows.map(row => {
         const status = schedulerStatus(row)
         const note = row.lastTick?.note
@@ -134,7 +132,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
           ["From the project's skills", row.commands.filter(c => !isOwn(c))],
         ]
         return (
-          <section key={row.project.id} aria-label={row.project.name} className="mt-6">
+          <section key={row.project.id} aria-label={row.project.name} className="not-first:mt-6">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border pb-2">
               <h2 className="text-sm font-semibold">{row.project.name}</h2>
               <span className={cn('text-xs font-medium', status.tone)}>Scheduler {status.label}</span>
@@ -294,37 +292,11 @@ export function AutomationsPage({ projects }: ModulePageProps) {
           </section>
         )
       })}
-    </div>
+    </Page>
   )
 }
 
 /** What a save or a start on a row answered, for the row to say: why it was not taken, that nothing was to do, or the run it started (empty when the answer names none). */
-interface Answered {
-  failed?: string
-  note?: string
-  started?: string
-  /** Whether the run started is one that went on, not a new one. */
-  resumed?: true
-}
-
-/**
- * What "Run now" answered (`scheduler now`), for the row to say: the run it started, or why
- * none started, in the page's words for the scheduler's decision. Nothing to do, or one already
- * running, is no failure.
- */
-function startedNow(answer: ModuleCommandResult): Answered {
-  if (answer.ok) {
-    const output = typeof answer.output === 'object' && answer.output !== null ? (answer.output as Record<string, unknown>) : {}
-    return { started: typeof output['run'] === 'string' ? output['run'] : '', ...(output['resumed'] === true ? { resumed: true as const } : {}) }
-  }
-  if (answer.error === 'not due') return { note: 'Nothing started. No work: its shell line printed nothing.' }
-  if (answer.error.startsWith('cap reached ')) return { note: `Nothing started. ${outcomeWords(answer.error)}.` }
-  // The dashboard ended the command before it answered: whether it had started the run by then is not known here.
-  if (answer.error.endsWith(' took too long')) return { failed: 'No answer in time. A run may have started all the same: if one did, the row says when it last ran.' }
-  const why = outcomeWords(answer.error) ?? answer.error
-  return { failed: `Nothing started. ${/[.!?]$/.test(why) ? why : `${why}.`}` }
-}
-
 /**
  * Where a row stands, in one line: on or off; when it last ran, or that its last run failed, which
  * opens that run; and what the scheduler last decided for it while it is on. A command the coding

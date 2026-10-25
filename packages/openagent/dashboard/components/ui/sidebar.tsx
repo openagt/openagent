@@ -45,6 +45,11 @@ function useSidebar() {
   return context
 }
 
+/** The sidebar's state, or null outside a SidebarProvider: for a part drawn in the shell and also alone (a module's page in its own tests). */
+function useOptionalSidebar() {
+  return React.useContext(SidebarContext)
+}
+
 function SidebarProvider({
   defaultOpen = true,
   open: openProp,
@@ -584,4 +589,5 @@ export {
   SidebarSeparator,
   SidebarTrigger,
   useSidebar,
+  useOptionalSidebar,
 }

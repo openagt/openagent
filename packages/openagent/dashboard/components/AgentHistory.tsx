@@ -38,6 +38,7 @@ import { ScrollArea } from './ui/scroll-area.js'
 import { BrandLink } from './BrandLink.js'
 import { PersonMenu } from './PersonMenu.js'
 import { SidebarResizer } from './SidebarResizer.js'
+import { HideSidebarButton } from './SidebarToggle.js'
 import { readAgentLogAhead } from '../lib/agent-log.js'
 
 // One rendered row of the rail, from either source (a project's own run, or a pooled cross-project
@@ -61,6 +62,7 @@ function near(projectId: string | null, agent: AgentMeta): { onNear?: () => void
 // so the rail and the main pane share one list. `startTick`/`startIntent`/`startId` seed an optimistic
 // "starting…" row once a start reports its run, until that run's real card lands.
 export function AgentHistory({
+  pageScrolls = false,
   projectId,
   scope = null,
   scopePending = false,
@@ -87,6 +89,8 @@ export function AgentHistory({
   onPage = () => {},
   interventionCount = 0,
 }: {
+  /** The page beside it scrolls as a page (App): the sidebar then stays where it is, as tall as the screen. */
+  pageScrolls?: boolean
   /** The project of the page being shown, its launcher or one of its agents; null on every other page. */
   projectId: string | null
   /** The one project every page shows (#1513), picked at the top of the rail; null when all show. */
@@ -140,7 +144,7 @@ export function AgentHistory({
 }) {
   // On a phone the rail is a sheet over the page, opened from the page's top left corner
   // (MenuButton): going somewhere from it closes it.
-  const { isMobile, setOpenMobile } = useSidebar()
+  const { isMobile, open, setOpenMobile } = useSidebar()
   const leave =
     <A extends unknown[]>(go: (...args: A) => void) =>
     (...args: A) => {
@@ -270,133 +274,145 @@ export function AgentHistory({
     />
   )
 
+  // Hidden on a wide screen (SidebarToggle): the page takes its room.
+  if (!isMobile && !open) return null
+
+  // Beside a page that scrolls as a page, the sidebar is fixed to the window, and a strip as wide
+  // holds its place: one that scrolled with the page (even one that stuck at the top) moved with
+  // the page as it bounced at either end.
+  const pinned = pageScrolls && !isMobile
+
   return (
     // A fixed-width, in-flow column (`collapsible="none"`): with the top navbar gone (#772
     // follow-up), the sidebar carries the app's chrome — brand, global nav, and the utility
     // controls in the footer — so the workspace and the panes get the full height. A phone has no
     // width for a column: there it is a sheet over the page, closed until asked for.
-    <Sidebar collapsible={isMobile ? 'offcanvas' : 'none'} className="relative w-(--sidebar-width) border-r border-sidebar-border">
-      {/* The brand and the project select (#1513): the project picked here is the one every page
-          under it shows. No rule under it: the room around it sets it apart. */}
-      <SidebarHeader className="gap-4 pb-2">
-        {/* The mark + wordmark, the way home (#909), now that there is no navbar to hold them. */}
-        <div className="px-1 pt-1">
-          <BrandLink working={working} href={homeHref} onNavigate={leave(onDashboard)} />
-        </div>
-        <ProjectSelect projects={projects} scope={scope} pending={scopePending} onScope={onScope} onProjectAdded={onProjectAdded} />
-      </SidebarHeader>
-      {/* New/Overview/the modules' pages stack tight as one nav group (gap-0.5), close under the
-          project select (no top padding: the select's own section has its room below it), with a
-          little space below the group (pb-2) before the session list. The `!` because a module's
-          stylesheet, loaded after the dashboard's, redefines the header's own `p-2`, which would
-          otherwise win over a plain `pt-0`. */}
-      <SidebarHeader className="gap-0.5 pt-0! pb-2">
-        {/* "New" starts a session — but where depends on what exists: with no project it prompts to
-            add one first, with one project it starts there, with several it opens a picker. With
-            one project picked at the top, it starts there. */}
-        <NewButton
-          scope={scope}
-          projects={projects}
-          active={atProjectLauncher}
-          onNewAgentInProject={onNewAgentInProject && leave(onNewAgentInProject)}
-          onSelect={leave(onSelect)}
-          onProjectAdded={onProjectAdded}
-        />
-        {/* Overview: the way home, its own nav item directly under New and above the session list,
-            more prominent than a menu row. Only this — the current view — carries the active fill. */}
-        <OverviewButton active={projectId === null && activePage === null} count={interventionCount} onClick={leave(onDashboard)} />
-        {/* The modules' pages the shell hands over (#1774), the picked project's only when one is
-            picked: destinations with no project selected, like the Overview, named by the module,
-            never by the dashboard — the tickets' page among them, when a package brings one. */}
-        {pages.map(page => (
-          <NavRow key={page.segment} icon={page.icon ?? Blocks} label={page.label} active={activePage === page.segment} onClick={leave(() => onPage(page.segment))} />
-        ))}
-      </SidebarHeader>
-      {/* The themed ScrollArea (#913) instead of the sidebar's native overflow bar, matching the
-          Overview: suppress SidebarContent's own `overflow-auto` and let the ScrollArea own it. */}
-      <SidebarContent className="overflow-hidden">
-        <ScrollArea className="min-h-0 flex-1">
-          {/* pr-3 keeps the rows (and the active card) clear of the overlaid scrollbar (w-2.5). */}
-          <SidebarGroup className="pt-3 pr-3">
-            {/* The label sticks to the top of the scroll; the gradient strip under it (also sticky)
-                fades the rows into the background as they scroll up beneath the label. Shown even
-                when the list is empty (#1147): the heading is what makes "No sessions yet." read as
-                the state of this list rather than a lonely line in the sidebar. */}
-            <div className="sticky top-0 z-10">
-              <SidebarGroupLabel className="rounded-none bg-sidebar font-normal tracking-wide text-muted-foreground">
-                Recent agents
-                <RecentsSortMenu order={order} />
-              </SidebarGroupLabel>
-              {/* Absolute (hanging just below the label) so it does not push the first row down; it
-                  still overlays the rows scrolling up under it. `rail-fade` keeps it invisible at
-                  the top of the scroll (so it never dims the first row) and fades it in on scroll. */}
-              <div aria-hidden className="rail-fade pointer-events-none absolute inset-x-0 top-full h-4 bg-gradient-to-b from-sidebar to-transparent" />
-            </div>
-            <SidebarGroupContent>
-              <SidebarMenu className="gap-0.5">
-                {/* A just-started run, before its run.json exists — highlighted while following it. */}
-                {showOptimistic && (
-                  <SidebarMenuItem>
-                    {/* Drawn as the run's own row will be a few seconds on (the same logo, not
-                        dimmed), so that row taking its place changes nothing on screen. With naming
-                        on that row will carry a name, so this one holds the place rather than
-                        printing the prompt and having it swapped a second later. */}
-                    <AgentHistoryRow
-                      status="running"
-                      {...(preferences.nameRuns === false ? { intent: optimistic?.intent ?? undefined } : { intent: undefined, naming: true })}
-                      {...(crossProject && startProjectName ? { project: startProjectName } : {})}
-                      subtitle="just now"
-                      driver={preferences.driver}
-                      active={starting}
-                      standIn
-                      onClick={leave(() => onSelect(null))}
-                    />
-                  </SidebarMenuItem>
-                )}
-                {tree.map(({ row, subagents }) => {
-                  // Open while a subagent is not over, or is the page being read; folded to a count once
-                  // all have ended. A click on the count is the reader's own choice and wins.
-                  const open = folds[row.key] ?? subagents.some(sub => isOpenSubagent(sub.agent) || sub.active)
-                  const working = subagents.filter(sub => sub.agent.status === 'running').length
-                  // A main agent whose own turn is over while its job waits on a subagent is still going.
-                  const now = Date.now()
-                  const going = row.agent.status === 'done' && subagents.some(sub => holdsMainAgent(sub.agent, now))
-                  return (
-                    <SidebarMenuItem key={row.key}>
-                      {renderRow(
-                        row,
-                        false,
-                        going ? 'running' : row.agent.status,
-                        subagents.length > 0 ? { count: subagents.length, working, open, onToggle: () => setFolds(f => ({ ...f, [row.key]: !open })) } : undefined,
-                      )}
-                      {subagents.length > 0 && open && (
-                        // The indented sub-list, with the rule the Projects list draws down its group.
-                        <div className="mt-0.5 ml-4 flex flex-col gap-0.5 border-l border-sidebar-border pl-2">
-                          {subagents.map(sub => (
-                            <div key={sub.key}>{renderRow(sub, true)}</div>
-                          ))}
-                        </div>
-                      )}
+    <>
+      {pinned && <div aria-hidden className="w-(--sidebar-width) shrink-0" />}
+      <Sidebar collapsible={isMobile ? 'offcanvas' : 'none'} className={cn('relative w-(--sidebar-width) border-r border-sidebar-border', pinned && 'fixed inset-y-0 left-0 z-20 h-dvh')}>
+        {/* The brand and the project select (#1513): the project picked here is the one every page
+            under it shows. No rule under it: the room around it sets it apart. */}
+        <SidebarHeader className="gap-4 pb-2">
+          {/* The mark + wordmark, the way home (#909), now that there is no navbar to hold them. */}
+          <div className="flex items-center justify-between gap-2 px-1 pt-1">
+            <BrandLink working={working} href={homeHref} onNavigate={leave(onDashboard)} />
+            <HideSidebarButton />
+          </div>
+          <ProjectSelect projects={projects} scope={scope} pending={scopePending} onScope={onScope} onProjectAdded={onProjectAdded} />
+        </SidebarHeader>
+        {/* New/Overview/the modules' pages stack tight as one nav group (gap-0.5), close under the
+            project select (no top padding: the select's own section has its room below it), with a
+            little space below the group (pb-2) before the session list. The `!` because a module's
+            stylesheet, loaded after the dashboard's, redefines the header's own `p-2`, which would
+            otherwise win over a plain `pt-0`. */}
+        <SidebarHeader className="gap-0.5 pt-0! pb-2">
+          {/* "New" starts a session — but where depends on what exists: with no project it prompts to
+              add one first, with one project it starts there, with several it opens a picker. With
+              one project picked at the top, it starts there. */}
+          <NewButton
+            scope={scope}
+            projects={projects}
+            active={atProjectLauncher}
+            onNewAgentInProject={onNewAgentInProject && leave(onNewAgentInProject)}
+            onSelect={leave(onSelect)}
+            onProjectAdded={onProjectAdded}
+          />
+          {/* Overview: the way home, its own nav item directly under New and above the session list,
+              more prominent than a menu row. Only this — the current view — carries the active fill. */}
+          <OverviewButton active={projectId === null && activePage === null} count={interventionCount} onClick={leave(onDashboard)} />
+          {/* The modules' pages the shell hands over (#1774), the picked project's only when one is
+              picked: destinations with no project selected, like the Overview, named by the module,
+              never by the dashboard — the tickets' page among them, when a package brings one. */}
+          {pages.map(page => (
+            <NavRow key={page.segment} icon={page.icon ?? Blocks} label={page.label} active={activePage === page.segment} onClick={leave(() => onPage(page.segment))} />
+          ))}
+        </SidebarHeader>
+        {/* The themed ScrollArea (#913) instead of the sidebar's native overflow bar, matching the
+            Overview: suppress SidebarContent's own `overflow-auto` and let the ScrollArea own it. */}
+        <SidebarContent className="overflow-hidden">
+          <ScrollArea className="min-h-0 flex-1">
+            {/* pr-3 keeps the rows (and the active card) clear of the overlaid scrollbar (w-2.5). */}
+            <SidebarGroup className="pt-3 pr-3">
+              {/* The label sticks to the top of the scroll; the gradient strip under it (also sticky)
+                  fades the rows into the background as they scroll up beneath the label. Shown even
+                  when the list is empty (#1147): the heading is what makes "No sessions yet." read as
+                  the state of this list rather than a lonely line in the sidebar. */}
+              <div className="sticky top-0 z-10">
+                <SidebarGroupLabel className="rounded-none bg-sidebar font-normal tracking-wide text-muted-foreground">
+                  Recent agents
+                  <RecentsSortMenu order={order} />
+                </SidebarGroupLabel>
+                {/* Absolute (hanging just below the label) so it does not push the first row down; it
+                    still overlays the rows scrolling up under it. `rail-fade` keeps it invisible at
+                    the top of the scroll (so it never dims the first row) and fades it in on scroll. */}
+                <div aria-hidden className="rail-fade pointer-events-none absolute inset-x-0 top-full h-4 bg-gradient-to-b from-sidebar to-transparent" />
+              </div>
+              <SidebarGroupContent>
+                <SidebarMenu className="gap-0.5">
+                  {/* A just-started run, before its run.json exists — highlighted while following it. */}
+                  {showOptimistic && (
+                    <SidebarMenuItem>
+                      {/* Drawn as the run's own row will be a few seconds on (the same logo, not
+                          dimmed), so that row taking its place changes nothing on screen. With naming
+                          on that row will carry a name, so this one holds the place rather than
+                          printing the prompt and having it swapped a second later. */}
+                      <AgentHistoryRow
+                        status="running"
+                        {...(preferences.nameRuns === false ? { intent: optimistic?.intent ?? undefined } : { intent: undefined, naming: true })}
+                        {...(crossProject && startProjectName ? { project: startProjectName } : {})}
+                        subtitle="just now"
+                        driver={preferences.driver}
+                        active={starting}
+                        standIn
+                        onClick={leave(() => onSelect(null))}
+                      />
                     </SidebarMenuItem>
-                  )
-                })}
-              </SidebarMenu>
-              {/* Nothing while the list is read: it takes a moment, and "No agents yet." would not be true yet. */}
-              {!hasRecents && listLoaded && (
-                <p className="whitespace-nowrap px-2 py-1 text-sm text-muted-foreground">No agents yet.</p>
-              )}
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </ScrollArea>
-      </SidebarContent>
-      {/* The person at this dashboard, as one row that opens their menu: the theme, the
-          notifications and Settings (PersonMenu). */}
-      <SidebarFooter className="border-t border-sidebar-border">
-        <PersonMenu onSettings={leave(onSettings)} />
-      </SidebarFooter>
-      {/* Its right edge, dragged to set its width; a phone's sheet has none. */}
-      {!isMobile && <SidebarResizer />}
-    </Sidebar>
+                  )}
+                  {tree.map(({ row, subagents }) => {
+                    // Open while a subagent is not over, or is the page being read; folded to a count once
+                    // all have ended. A click on the count is the reader's own choice and wins.
+                    const open = folds[row.key] ?? subagents.some(sub => isOpenSubagent(sub.agent) || sub.active)
+                    const working = subagents.filter(sub => sub.agent.status === 'running').length
+                    // A main agent whose own turn is over while its job waits on a subagent is still going.
+                    const now = Date.now()
+                    const going = row.agent.status === 'done' && subagents.some(sub => holdsMainAgent(sub.agent, now))
+                    return (
+                      <SidebarMenuItem key={row.key}>
+                        {renderRow(
+                          row,
+                          false,
+                          going ? 'running' : row.agent.status,
+                          subagents.length > 0 ? { count: subagents.length, working, open, onToggle: () => setFolds(f => ({ ...f, [row.key]: !open })) } : undefined,
+                        )}
+                        {subagents.length > 0 && open && (
+                          // The indented sub-list, with the rule the Projects list draws down its group.
+                          <div className="mt-0.5 ml-4 flex flex-col gap-0.5 border-l border-sidebar-border pl-2">
+                            {subagents.map(sub => (
+                              <div key={sub.key}>{renderRow(sub, true)}</div>
+                            ))}
+                          </div>
+                        )}
+                      </SidebarMenuItem>
+                    )
+                  })}
+                </SidebarMenu>
+                {/* Nothing while the list is read: it takes a moment, and "No agents yet." would not be true yet. */}
+                {!hasRecents && listLoaded && (
+                  <p className="whitespace-nowrap px-2 py-1 text-sm text-muted-foreground">No agents yet.</p>
+                )}
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </ScrollArea>
+        </SidebarContent>
+        {/* The person at this dashboard, as one row that opens their menu: the theme, the
+            notifications and Settings (PersonMenu). */}
+        <SidebarFooter className="border-t border-sidebar-border">
+          <PersonMenu onSettings={leave(onSettings)} />
+        </SidebarFooter>
+        {/* Its right edge, dragged to set its width; a phone's sheet has none. */}
+        {!isMobile && <SidebarResizer />}
+      </Sidebar>
+    </>
   )
 }
 

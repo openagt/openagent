@@ -16,10 +16,12 @@ export interface MountedLinkAction extends LinkAction {
   projects: string[]
 }
 
-/** A card as the shell mounts it (#1818): the card, plus the package it came from and the projects that have it. */
+/** A card as the shell mounts it (#1818): the card, plus the package it came from, the projects that have it, and whether it is the computer's. */
 export interface MountedCard extends ModuleCard {
   package: string
   projects: string[]
+  /** A package of this computer's (its devices): the card is on every Overview, whichever project is picked. */
+  computer: boolean
 }
 
 /** A pane as the shell mounts it: the pane, plus the package it came from and the projects that have it. */
@@ -153,7 +155,7 @@ export function useModules(reloadKey = 0): MountedModules {
           pages.push({ ...page, package: module.package, projects: module.projects })
         }
         for (const card of definition?.cards ?? []) {
-          cards.push({ ...card, package: module.package, projects: module.projects })
+          cards.push({ ...card, package: module.package, projects: module.projects, computer: module.computer === true })
         }
         for (const action of definition?.linkActions ?? []) {
           linkActions.push({ ...action, package: module.package, projects: module.projects })

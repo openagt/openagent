@@ -4,6 +4,7 @@ import {
   Button,
   ConfirmDialog,
   Input,
+  Page,
   Select,
   SelectContent,
   SelectItem,
@@ -99,23 +100,22 @@ export function QueuePage({ projects }: ModulePageProps) {
   const starts = useQueueStarts(host)
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6 max-md:p-4">
-      <h1 className="text-lg font-semibold">Queue</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        What agents will work on next, from the top{projects.length > 1 ? ', one list per project' : ''}. A higher priority is taken first: 10 is the most urgent, 0 is only if there is capacity.
-      </p>
-      {!loaded && <p className="mt-6 text-sm text-muted-foreground">Loading…</p>}
+    <Page
+      title="Queue"
+      description={`What agents will work on next, from the top${projects.length > 1 ? ', one list per project' : ''}. A higher priority is taken first: 10 is the most urgent, 0 is only if there is capacity.`}
+    >
+      {!loaded && <p className="text-sm text-muted-foreground">Loading…</p>}
       {starts.error && (
-        <p role="alert" className="mt-4 text-sm text-danger">
+        <p role="alert" className="mb-4 text-sm text-danger">
           {starts.error}
         </p>
       )}
-      <div className="max-w-4xl">
+      <div className="space-y-6">
         {reads.map(read => (
           <ProjectQueue key={read.project.id} read={read} titled={projects.length > 1} schedule={schedule} names={names} starts={starts} reload={reload} />
         ))}
       </div>
-    </div>
+    </Page>
   )
 }
 
@@ -126,7 +126,7 @@ function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read:
   const raw = (entries ?? []).map(placed => placed.entry)
   const count = Math.min(starts.countOf(project.id), Math.max(raw.length, 1))
   return (
-    <section aria-label={project.name} className="mt-6">
+    <section aria-label={project.name}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         {titled && <h2 className="text-sm font-semibold">{project.name}</h2>}
         {raw.length > 0 && <span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">{raw.length === 1 ? '1 entry' : `${raw.length} entries`}</span>}

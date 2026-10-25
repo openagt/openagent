@@ -61,8 +61,11 @@ export function HumanQueueList({
   items,
   onOpenAgent,
   onOpenProject,
+  grouped = false,
 }: {
   items: Intervention[]
+  /** The rows sit under a heading that says their kind (the Overview's card): each says it with its icon alone, on hover in words. */
+  grouped?: boolean
   onOpenAgent: (projectId: string, agentId: string) => void
   /** For a row that somehow names no run: its project, rather than nothing. */
   onOpenProject?: ((projectId: string) => void) | undefined
@@ -80,14 +83,20 @@ export function HumanQueueList({
           const since = formatRelative(item.createdAt, '')
           const row = (
             <>
-              <span className={cn('flex w-28 shrink-0 items-center gap-1.5 text-xs max-md:w-auto max-md:flex-1', tone)}>
-                <Icon className="h-3.5 w-3.5 shrink-0" />
-                {needsWord(item.kind, item.gitHost)}
-              </span>
+              {grouped ? (
+                <span title={needsWord(item.kind, item.gitHost)} className={cn('flex size-4 shrink-0 items-center justify-center', tone)}>
+                  <Icon className="h-3.5 w-3.5" aria-hidden />
+                </span>
+              ) : (
+                <span className={cn('flex w-28 shrink-0 items-center gap-1.5 text-xs max-md:w-auto max-md:flex-1', tone)}>
+                  <Icon className="h-3.5 w-3.5 shrink-0" />
+                  {needsWord(item.kind, item.gitHost)}
+                </span>
+              )}
               {/* The name and what it is about give up width, each cut short with an ellipsis: in a
                   narrow column the row still fits, and nothing scrolls sideways. On a phone each
                   has a line of its own under what is needed, where, and since when. */}
-              <span className="min-w-0 shrink truncate text-foreground md:max-w-[50%] max-md:order-1 max-md:basis-full">{item.title}</span>
+              <span className={cn('min-w-0 shrink truncate text-foreground md:max-w-[50%]', grouped ? 'max-md:flex-1' : 'max-md:order-1 max-md:basis-full')}>{item.title}</span>
               <span className="min-w-0 truncate text-muted-foreground md:flex-auto max-md:order-2 max-md:basis-full">{detail}</span>
               {projects && <span className="shrink-0 text-xs text-muted-foreground">{item.projectName}</span>}
               <span className="min-w-14 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{since}</span>

@@ -6,6 +6,7 @@ import { openRequest, type OpenOutcome } from './open.js'
 import { mergeRequest } from './merge.js'
 import { watchAndMerge } from './merge-watch.js'
 import { GIT_HOST_NAME, homeUrlFor } from './home.js'
+import { MAX_PEOPLE, peopleByEmail } from './people.js'
 import { createRepository, offerRepository, type CreateOffer, type CreateOutcome } from './create.js'
 import { signedIn } from './me.js'
 import { listReplies } from './replies.js'
@@ -47,6 +48,8 @@ export const USAGE = `usage: github <command>
   watch <number>               wait for pull request <number>'s checks and merge it once they pass; what --merge starts where the repository has no auto-merge
   home                         the project's page on GitHub, from its origin remote
   me                           who is signed in to GitHub through gh: login, name, avatar (a picture's https address)
+  people <email>...            the GitHub accounts behind the project's commit emails: [{ email, login, avatar }], one per email a commit of the
+                               repository's is signed with by an account (at most 20 asked at once); an email no account's commit carries is left out
   accounts [--host <host>]     the GitHub accounts this computer's gh knows and the one OpenAgent's runs use: { host, name, requestWord, logo, tool, installed,
                                install, accounts: [{ login, terminal, runs, ok }], loggingIn? }; a host other than github.com is refused (not-mine)
   use <login>                  OpenAgent's runs use <login> from now on, an account gh knows; the terminal's gh stays on its own
@@ -399,6 +402,11 @@ const COMMANDS: Record<string, Command> = {
     }
     // A pick of runs that names it falls back to the terminal's account.
     return { ok: true, login }
+  },
+
+  async people(args, { cwd, gh }) {
+    const { positionals } = parse(args, {}, 1, MAX_PEOPLE)
+    return peopleByEmail(cwd, positionals.filter(email => /^[^\s@]+@[^\s@]+$/.test(email)), gh)
   },
 
   async me(args, { cwd, gh }) {

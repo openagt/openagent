@@ -1,4 +1,4 @@
-import type { ModuleHost, ModuleProject } from '@openagt/dashboard/module'
+import type { ModuleCommandResult, ModuleHost, ModuleProject } from '@openagt/dashboard/module'
 import type { PublishPick, TickDecision } from '../src/state.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, DEFAULT_PUBLISH, isAgent, isAgents, isTime, type AgentName } from '../src/names.js'
 import { MAX_COUNT, dueFrom, paceInForce, parseInterval, parseTimeOfDay, takesTimeOfDay, type PacePick, type PaceUnit } from '../src/pace.js'
@@ -588,4 +588,31 @@ export function schedulerStatus(row: Pick<SchedulerRow, 'error' | 'on' | 'runnin
   if (!row.on) return { label: 'off', tone: 'text-muted-foreground' }
   if (!row.running) return { label: 'on, not running', tone: 'text-warning' }
   return { label: 'on', tone: 'text-success' }
+}
+
+/** What a row says after a press: the run it started, why none did, or that it failed. */
+export interface Answered {
+  failed?: string
+  note?: string
+  started?: string
+  /** Whether the run started is one that went on, not a new one. */
+  resumed?: true
+}
+
+/**
+ * What "Run now" answered (`scheduler now`), for the row to say: the run it started, or why
+ * none started, in the page's words for the scheduler's decision. Nothing to do, or one already
+ * running, is no failure.
+ */
+export function startedNow(answer: ModuleCommandResult): Answered {
+  if (answer.ok) {
+    const output = typeof answer.output === 'object' && answer.output !== null ? (answer.output as Record<string, unknown>) : {}
+    return { started: typeof output['run'] === 'string' ? output['run'] : '', ...(output['resumed'] === true ? { resumed: true as const } : {}) }
+  }
+  if (answer.error === 'not due') return { note: 'Nothing started. No work: its shell line printed nothing.' }
+  if (answer.error.startsWith('cap reached ')) return { note: `Nothing started. ${outcomeWords(answer.error)}.` }
+  // The dashboard ended the command before it answered: whether it had started the run by then is not known here.
+  if (answer.error.endsWith(' took too long')) return { failed: 'No answer in time. A run may have started all the same: if one did, the row says when it last ran.' }
+  const why = outcomeWords(answer.error) ?? answer.error
+  return { failed: `Nothing started. ${/[.!?]$/.test(why) ? why : `${why}.`}` }
 }

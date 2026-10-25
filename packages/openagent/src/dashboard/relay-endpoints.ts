@@ -1,3 +1,4 @@
+import { computerHealth } from '../health.js'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { hostname } from 'node:os'
 import type { OpenAgentEvent } from '../events.js'
@@ -127,7 +128,7 @@ async function handleScreen(req: IncomingMessage, res: ServerResponse, handlers:
   await passToScreen(req, res, call, await handlers.screen(projectId, agentId).catch(() => undefined))
 }
 
-/** `GET /_relay/ping` (#1072): answer 200 with this OpenAgent's version, this computer's own name, and whether it is a server. Starts
+/** `GET /_relay/ping` (#1072): answer 200 with this OpenAgent's version, this computer's own name, whether it is a server, and how it stands (its memory, disk and load). Starts
  * nothing; it proves this daemon is reachable, and to another machine that its key still lets it in, tells that
  * machine whether this one fell behind it, and which runs in a project's shared records are this computer's:
  * a run's record carries the name of the computer that ran it. */
@@ -139,7 +140,8 @@ async function handlePing(req: IncomingMessage, res: ServerResponse): Promise<vo
     .filter(machine => !machine.url.includes(THROUGH_PATH))
     .flatMap(machine => deviceIdOf(machine.key) ?? [])
   // A server says so: a computer of its person's offers it its logins (`logins-sync.ts`).
-  sendJson(res, { version: openagentVersion(), host: hostname(), listed, ...(process.env.OPENAGENT_SERVER === '1' ? { server: true } : {}) })
+  const health = await computerHealth().catch(() => undefined)
+  sendJson(res, { version: openagentVersion(), host: hostname(), listed, ...(process.env.OPENAGENT_SERVER === '1' ? { server: true } : {}), ...(health ? { health } : {}) })
 }
 
 /** `POST /_relay/start`: read the agent request, start it locally, and answer with the result JSON. */

@@ -4,11 +4,12 @@ import { onProjectFiles, onInterventions, onActivity, onRecentAgents, onAgents }
 import { sendStart } from './rpc/control.js'
 import { onProjects } from './rpc/projects.js'
 import { onComputersThrough, onMachinePerson, onMachineVersions, sendLetMachineIn, sendMachineCode, sendRemoveMachineDevice } from './rpc/machines.js'
+import { onGitHostPeople } from './rpc/people.js'
 import { sendUseLoginsOn } from './rpc/server-logins.js'
 import { addComputerThrough, addMachine, removeMachine, renameMachine } from './lib/machines.js'
 import { AgentHistory } from './components/AgentHistory.js'
 import { SidebarProvider } from './components/ui/sidebar.js'
-import { useSidebarWidth } from './lib/sidebar-width.js'
+import { setSidebarHidden, useSidebarHidden, useSidebarWidth } from './lib/sidebar-width.js'
 import { ProjectHome } from './components/ProjectHome.js'
 import { DashboardPage } from './components/DashboardPage.js'
 import { SettingsDialog } from './components/SettingsDialog.js'
@@ -334,6 +335,8 @@ export function App() {
       openAgent: selectAgentInProject,
       openPage: (segment, path, inProject) => go({ projectId: null, agentId: null, page: segment, ...(path && path.length ? { pagePath: path } : {}), ...(inProject ? { scope: inProject } : {}) }),
       pageHref: segment => formatRoute({ projectId: null, agentId: null, page: segment, ...(scope ? { scope } : {}) }, addresses),
+      openSettings: entry => showSettings(entry),
+      gitHostPeople: onGitHostPeople,
       startRun: async (inProject, prompt, opts) => {
         const result = await sendStart(inProject, prompt, startPicks(preferences))
         if (!result.ok) return result
@@ -531,15 +534,19 @@ export function App() {
   const isMobile = useIsMobile()
   // The width its edge was dragged to (SidebarResizer), in place of the sidebar's own default.
   const sidebarWidth = useSidebarWidth()
+  // Hidden by its button or Cmd/Ctrl+B, and remembered; a phone's sheet is opened apart from it.
+  const sidebarHidden = useSidebarHidden()
   // The name a phone's top bar gives the page; null on a project's own pages, which have a top row.
   const phoneTitle = pageSegment ? (modulePage?.label ?? '') : projectId === null ? 'Overview' : null
-  // On a phone a page with no chat scrolls as a page, its bar staying at the top: a column
-  // scrolling inside a page that bounces reads as two scrolls. A chat keeps its box at the bottom.
-  const phonePage = isMobile && phoneTitle !== null
+  // A page with no chat (the Overview, a module's page) scrolls as a page: the browser's own
+  // scrolling, which bounces at either end, and its header goes up with the rest. On a phone its bar
+  // stays at the top; on a wider screen the sidebar stays beside it. A chat keeps its box at the
+  // bottom, and only its own columns scroll.
+  const pageScrolls = phoneTitle !== null
   // Every other page is pinned: only its own columns scroll. A phone made the page itself a little
   // taller than it shows, and a finger on the top bar or the message box scrolled it, or reloaded it.
   useEffect(() => {
-    if (phonePage) return
+    if (pageScrolls) return
     document.documentElement.dataset['pinned'] = 'true'
     // The page lies exactly where the screen shows it: with a phone's keyboard open, the room
     // above the keyboard, so the message box sits on the keyboard. Safari leaves the page as tall,
@@ -589,7 +596,7 @@ export function App() {
       document.removeEventListener('focusin', settle)
       document.removeEventListener('focusout', settle)
     }
-  }, [phonePage])
+  }, [pageScrolls])
 
   return (
     // The whole shell lives inside the SidebarProvider so the sidebar's context (state + Cmd/Ctrl+B,
@@ -602,7 +609,7 @@ export function App() {
     <ProjectLabelsContext.Provider value={labels}>
     {/* As tall as what the screen shows, never taller: a phone's 100vh reaches under its browser's
         bars, and the page then scrolled around the column that scrolls. */}
-    <SidebarProvider className={phonePage ? 'min-h-dvh flex-col' : 'fixed inset-x-0 top-(--shown-top,0px) h-(--shown-height,100dvh) min-h-0 flex-col overflow-hidden'} style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
+    <SidebarProvider open={!sidebarHidden} onOpenChange={open => setSidebarHidden(!open)} className={pageScrolls ? 'min-h-dvh flex-col' : 'fixed inset-x-0 top-(--shown-top,0px) h-(--shown-height,100dvh) min-h-0 flex-col overflow-hidden'} style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
       {/* The top navbar is gone (#772 follow-up): its brand, global nav and utility controls moved
           into the sidebar (AgentHistory), so the workspace and the panes get the full height. */}
       {!healthy && (
@@ -619,8 +626,9 @@ export function App() {
           the scrolled content, and give the document a phantom scrollbar that slides the whole
           app off-screen. */}
       {/* A page that scrolls as a page is clipped sideways only: a box that clips both ways holds its bar from sticking. */}
-      <div className={cn('relative flex min-h-0 flex-1', phonePage ? 'overflow-x-clip' : 'overflow-hidden')}>
+      <div className={cn('relative flex min-h-0 flex-1', pageScrolls ? 'overflow-x-clip' : 'overflow-hidden')}>
         <AgentHistory
+          pageScrolls={pageScrolls}
           projectId={projectId}
           scope={scope}
           scopePending={scopePending}
@@ -654,7 +662,7 @@ export function App() {
         {/* On a phone the sidebar is a sheet, and this button, over the page's top left corner,
             opens it. An agent's page and the "New agent" page keep that corner of their top row
             free; a page with no top row of its own gets a bar that names it. */}
-        {isMobile && !phonePage && <MenuButton />}
+        {isMobile && !pageScrolls && <MenuButton />}
         {/* A project's page and an agent's have panes beside them (Panes). A module's page takes
             the full width itself (#1774), the way the Overview does. */}
         <PanesProvider

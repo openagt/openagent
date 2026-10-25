@@ -21,6 +21,8 @@ import { isBuiltIn, providedCommand } from '../built-in.js'
  *   `<command> merge <number>`                          land the pull request: armed to merge on green, or merged at once
  *   `<command> home`                                    the project's page on the git host, and the git host's name
  *   `<command> me`                                      who is signed in there: {@link GitHostPerson}
+ *   `<command> people <email>...`                       the accounts behind the project's commit emails: an array of
+ *                                                       {@link GitHostPerson} each with its `email`, one per email the host knows
  * The branch `open` is asked for must already be on the remote: pushing is the branches
  * provider's step, and OpenAgent runs it first.
  *
@@ -81,6 +83,8 @@ export interface GitHostSource {
   home(): Promise<GitHostHome | undefined>
   /** Who is signed in at the git host; `undefined` when nobody is, or the provider cannot tell. */
   me(): Promise<GitHostPerson | undefined>
+  /** The accounts behind these commit emails, each with its email; an email the host knows no account for is left out. */
+  people(emails: readonly string[]): Promise<(GitHostPerson & { email: string })[]>
 }
 
 /** The git host of the project at `root`, or `undefined` when none of its packages provides one. */
@@ -164,6 +168,17 @@ function commandGitHost(root: string, command: ProvidedCommand): GitHostSource {
         // Only a picture on the web: the page loads it, and nothing else is fetched.
         ...(typeof me['avatar'] === 'string' && me['avatar'].startsWith('https://') ? { avatar: me['avatar'] } : {}),
       }
+    },
+    async people(emails) {
+      if (emails.length === 0) return []
+      const result = await runPackageCommand(root, command, ['people', ...emails])
+      if (!result.ok || !Array.isArray(result.output)) return []
+      return result.output.flatMap(value => {
+        const { email, login, avatar } = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
+        if (typeof email !== 'string' || !emails.includes(email) || typeof login !== 'string' || !login) return []
+        // Only a picture on the web: the page loads it, and nothing else is fetched.
+        return [{ email, login, ...(typeof avatar === 'string' && avatar.startsWith('https://') ? { avatar } : {}) }]
+      })
     },
   }
 }

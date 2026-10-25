@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import type { LinkAction } from '@openagt/dashboard/module'
 import type { MountedModules } from '../../openagent/dashboard/lib/use-modules.js'
 import { HotTicketsCard } from './HotTicketsCard.js'
@@ -23,7 +23,7 @@ const render = (answers: Answers, agents: Parameters<typeof fakeHost>[1] = {}, m
 afterEach(cleanup)
 
 describe('HotTicketsCard', () => {
-  test('pools every project: a claimed ticket in the Claimed lane, an unclaimed one at 7+ in High priority, the rest off the card', async () => {
+  test('pools every project: a claimed ticket, an unclaimed one at 7+ by its priority, the rest off the card', async () => {
     render({
       p1: { 'list --local': [ticket('held.md', { locked: true, lockedBy: 'someone', priority: '2' }), ticket('urgent.md', { priority: '9' }), ticket('later.md', { priority: '3' })] },
       p2: { 'list --local': [ticket('also-urgent.md', { priority: '7' })] },
@@ -32,9 +32,12 @@ describe('HotTicketsCard', () => {
     expect(screen.getByText('urgent')).toBeTruthy()
     expect(screen.getByText('also-urgent')).toBeTruthy()
     expect(screen.queryByText('later')).toBeNull()
-    expect(screen.getByText('someone')).toBeTruthy()
-    expect(screen.getAllByText('alpha')).toHaveLength(2)
-    expect(screen.getByText('beta')).toBeTruthy()
+    // Held by no run of the project's: held for nobody, and who claimed it said on its mark.
+    expect(screen.getByLabelText('No run holds it any more, claimed by someone')).toBeTruthy()
+    expect(screen.getByLabelText('Priority 9')).toBeTruthy()
+    // The project said at each row's end, beside its fact when it has one.
+    expect(screen.getAllByText(/alpha/)).toHaveLength(2)
+    expect(screen.getByText(/beta/)).toBeTruthy()
     expect(host.runCommand).toHaveBeenCalledWith('p1', ['list', '--local'])
     expect(host.agents).toHaveBeenCalledWith('p2')
   })
@@ -53,13 +56,13 @@ describe('HotTicketsCard', () => {
     })
     expect(await screen.findByText('urgent')).toBeTruthy()
     expect(screen.queryByText('reviewed')).toBeNull()
-    expect(screen.getByText('Waiting')).toBeTruthy()
+    expect(screen.getByLabelText('Waiting on the vendor')).toBeTruthy()
     expect(screen.getByText('blocked')).toBeTruthy()
     expect(screen.getByText('low-blocked')).toBeTruthy()
-    expect(screen.getByText('the vendor')).toBeTruthy()
-    expect(screen.getByText('the design review')).toBeTruthy()
-    // The lane's count: the two waiting tickets.
-    expect(screen.getByText('Waiting').nextElementSibling?.textContent).toBe('2')
+    expect(screen.getByText(/the vendor/)).toBeTruthy()
+    expect(screen.getByText(/the design review/)).toBeTruthy()
+    // The heading's count: the two waiting tickets.
+    expect(within(screen.getByRole('region', { name: 'Waiting' })).getAllByRole('listitem')).toHaveLength(2)
   })
 
   test('a row opens the ticket\'s page; a claim held by one of the project\'s runs opens that run', async () => {
@@ -69,8 +72,56 @@ describe('HotTicketsCard', () => {
     )
     fireEvent.click(await screen.findByText('held'))
     expect(host.openPage).toHaveBeenCalledWith('tickets', ['held.md'], 'p1')
-    fireEvent.click(screen.getByText('login-page'))
+    // The run at work opens from the mark that says so.
+    fireEvent.click(screen.getByRole('button', { name: 'Its run is at work, claimed by login-page: open the run' }))
     expect(host.openAgent).toHaveBeenCalledWith('p1', 'run-1')
+  })
+
+  test('a claim is told apart by its run: one at work, or waiting on an answer, is being worked on; one whose run stopped holds the ticket for nobody', async () => {
+    render(
+      {
+        p1: {
+          'list --local': [
+            ticket('busy.md', { locked: true, lockedBy: 'run-1' }),
+            ticket('asking.md', { locked: true, lockedBy: 'run-2' }),
+            ticket('left.md', { locked: true, lockedBy: 'run-3' }),
+          ],
+        },
+        p2: { 'list --local': [] },
+      },
+      {
+        p1: [
+          { id: 'run-1', status: 'running', startedAt: '2026-08-01T00:00:00.000Z' },
+          { id: 'run-2', status: 'waiting', startedAt: '2026-08-01T00:00:00.000Z' },
+          { id: 'run-3', status: 'stopped', startedAt: '2026-08-01T00:00:00.000Z' },
+        ],
+      },
+    )
+    await screen.findByText('busy')
+    const working = screen.getByRole('region', { name: 'Being worked on' }).textContent
+    expect(working).toContain('busy')
+    expect(working).toContain('asking')
+    expect(screen.getByRole('region', { name: 'Claimed, run stopped' }).textContent).toContain('left')
+    expect(screen.getByLabelText('Its run waits on your answer, claimed by run-2: open the run')).toBeTruthy()
+    // The claims held for nobody come first: they are the ones a person has to act on.
+    expect(screen.getAllByRole('region')[0]!.getAttribute('aria-label')).toBe('Claimed, run stopped')
+  })
+
+  test('a claim whose run stopped is gone on with in its run, or let go: the claim is lifted, whoever holds it, and the card reads again; it offers no link action meanwhile', async () => {
+    const run = vi.fn<LinkAction['run']>(async () => ({ ok: true as const }))
+    render(
+      { p1: { 'list --local': [ticket('left.md', { locked: true, lockedBy: 'run-3' })], 'release left.md --force': { ok: true } }, p2: { 'list --local': [] } },
+      { p1: [{ id: 'run-3', status: 'stopped', startedAt: '2026-08-01T00:00:00.000Z' }] },
+      { ...NO_MODULES, linkActions: [{ label: 'Add to queue', doneLabel: 'Queued', run, package: '@x/queue', projects: ['p1'] }] },
+    )
+    await screen.findByText('left')
+    expect(screen.queryByRole('button', { name: 'Add to queue' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    expect(host.openAgent).toHaveBeenCalledWith('p1', 'run-3')
+    const reads = host.runCommand.mock.calls.length
+    fireEvent.click(screen.getByRole('button', { name: 'Release' }))
+    await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['release', 'left.md', '--force']))
+    await waitFor(() => expect(host.runCommand.mock.calls.length).toBeGreaterThan(reads))
   })
 
   test('a claimed ticket in review stays in Claimed but offers no link action', async () => {
@@ -110,17 +161,19 @@ describe('HotTicketsCard', () => {
     expect(screen.getByText('urgent')).toBeTruthy()
   })
 
-  test('a lane with nothing in it is not drawn: no "Claimed 0" beside the lanes that have tickets', async () => {
+  test('a kind with nothing in it has no heading', async () => {
     render({ p1: { 'list --local': [ticket('urgent.md', { priority: '9' })] }, p2: { 'list --local': [] } })
     expect(await screen.findByText('urgent')).toBeTruthy()
-    expect(screen.getByText('High priority')).toBeTruthy()
-    expect(screen.queryByText('Claimed')).toBeNull()
-    expect(screen.queryByText('Waiting')).toBeNull()
+    expect(screen.getByRole('region', { name: 'High priority' })).toBeTruthy()
+    expect(screen.queryByRole('region', { name: 'Waiting' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Claimed, run stopped' })).toBeNull()
   })
 
   test('the card\'s title opens the Tickets page', async () => {
     render({ p1: { 'list --local': [] }, p2: { 'list --local': [] } })
-    const title = await screen.findByRole('link', { name: 'Hot tickets' })
+    // Read once the card has loaded: the loading card is drawn anew as the empty one.
+    await screen.findByText('Nothing claimed, high priority or waiting.')
+    const title = screen.getByRole('link', { name: 'Hot tickets' })
     expect(title.getAttribute('href')).toBe('/tickets')
     fireEvent.click(title)
     expect(host.openPage).toHaveBeenCalledWith('tickets')

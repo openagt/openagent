@@ -54,6 +54,21 @@ describe('the Automations card of the Overview', () => {
     expect(other.queryByText(/switched off/)).toBeNull()
   })
 
+  test('Run now on a row starts one run of it at once (`scheduler now`), and the row says what it started, or why nothing did', async () => {
+    let now: { ok: true; output: unknown } | { ok: false; error: string } = { ok: true, output: { run: '2026-10-25T10-00-00-000Z' } }
+    const { host, runCommand } = hostAnswering((_projectId, args) => (args[0] === 'now' ? now : { ok: true, output: RAN }))
+    show(host, [GEMSTACK])
+    const row = await screen.findByRole('button', { name: 'Run /post-merge-cleanup now' })
+    fireEvent.click(row)
+    await screen.findByText('Started: open it')
+    expect(runCommand).toHaveBeenCalledWith('p1', ['now', 'post-merge-cleanup'])
+    fireEvent.click(screen.getByText('Started: open it'))
+    expect(host.openAgent).toHaveBeenCalledWith('p1', '2026-10-25T10-00-00-000Z')
+    now = { ok: false, error: 'not due' }
+    fireEvent.click(screen.getByRole('button', { name: 'Run /post-merge-cleanup now' }))
+    expect(await screen.findByText('Nothing started. No work: its shell line printed nothing.')).toBeTruthy()
+  })
+
   test('a row with a shell line says its next start as its Edit panel would: the wait left, if there is work; then that it starts when there is work', async () => {
     const queue = { command: 'work-queue', every: '6h', when: 'npx queue', waitsFor: 'when the queue holds a task', ...ON_CLAUDE }
     const { host } = hostAnswering(() => ({ ok: true, output: { ...STATUS, switches: { 'work-queue': '2026-10-03T08:00:00.000Z', 'plan-tickets': '2026-10-03T08:00:00.000Z' }, lastTick: { at: STATUS.lastTick.at, decisions: [] }, schedule: [{ ...queue, lastRun: { id: 'r1', at: ago(3 * HOUR) } }, { ...queue, command: 'plan-tickets', lastRun: { id: 'r2', at: ago(9 * HOUR) } }] } }))

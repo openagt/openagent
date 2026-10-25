@@ -1,3 +1,4 @@
+import { readHealth, type Health } from '../health.js'
 import { EventStream } from '../event-stream.js'
 import type { OpenAgentEvent } from '../events.js'
 import type { AgentMeta } from '../store/index.js'
@@ -79,9 +80,10 @@ export async function pingRemote(target: MachineAccess): Promise<boolean> {
  * name, which the records of its runs carry, the ids it is listed under at the doors of the
  * machines it saved, and whether it is a server. Nothing for a machine that does not answer, or does not say.
  */
-export async function remoteFacts(target: MachineAccess): Promise<{ version?: string; host?: string; listed?: string[]; server?: true }> {
+export async function remoteFacts(target: MachineAccess): Promise<{ version?: string; host?: string; listed?: string[]; server?: true; health?: Health }> {
   const said: unknown = await (await ping(target))?.json().catch(() => undefined)
-  const { version, host, listed, server } = (said && typeof said === 'object' ? said : {}) as Record<string, unknown>
+  const { version, host, listed, server, health } = (said && typeof said === 'object' ? said : {}) as Record<string, unknown>
+  const stands = readHealth(health)
   const ids = Array.isArray(listed) ? listed.filter((id): id is string => typeof id === 'string' && DEVICE_ID.test(id)).slice(0, MAX_LISTED) : []
   return {
     // What a machine says is shown on a page: only what reads as a version is one.
@@ -89,6 +91,7 @@ export async function remoteFacts(target: MachineAccess): Promise<{ version?: st
     ...(isHostName(host) ? { host } : {}),
     ...(ids.length ? { listed: ids } : {}),
     ...(server === true ? { server: true as const } : {}),
+    ...(stands ? { health: stands } : {}),
   }
 }
 

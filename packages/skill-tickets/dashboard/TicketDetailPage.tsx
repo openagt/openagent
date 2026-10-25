@@ -1,13 +1,15 @@
 import { useState } from 'react'
-import { ExternalLink, LockOpen } from 'lucide-react'
+import { Bot, ExternalLink, LockOpen, Play } from 'lucide-react'
 import { Badge, Button, LinkActions, Markdown, cn, formatAge, formatDateTime, useAction, usePolled, useModuleHost } from '@openagt/dashboard/module'
 import { heldBack, holderAgent, readShown, ticketLink } from '../src/module.js'
 import type { WorkspaceTicketDetail } from './lib/types.js'
 import { TicketPageShell, TicketPageNote } from './TicketPageShell.js'
+import { releaseClaim } from './lib/release.js'
 import { priorityTone } from './lib/ticket-priority.js'
 
 /** The page's read: the ticket, or nothing (no such ticket), or why the command failed. */
-type Read = { ticket: WorkspaceTicketDetail | null } | { error: string }
+/** The ticket, and how the run holding its claim stands when the claim is one of the project's runs. */
+type Read = { ticket: WorkspaceTicketDetail | null; holderStatus?: string } | { error: string }
 
 // One ticket's own page: its entire markdown, not just the head the list row reads — and where the
 // actions on the ticket live now that the list is one-liners: the ticket is shown as a link, and
@@ -31,7 +33,7 @@ export function TicketDetailPage({
       if ('error' in shown) return shown
       if (!shown.shown) return { ticket: null }
       const agent = holderAgent(agents, shown.shown.ticket.lockedBy)
-      return { ticket: agent ? { ...shown.shown.ticket, lockedByAgent: { id: agent.id, ...(agent.name ? { name: agent.name } : {}) } } : shown.shown.ticket }
+      return agent ? { ticket: { ...shown.shown.ticket, lockedByAgent: { id: agent.id, ...(agent.name ? { name: agent.name } : {}) } }, holderStatus: agent.status } : { ticket: shown.shown.ticket }
     },
     null,
     10_000,
@@ -42,20 +44,17 @@ export function TicketDetailPage({
   const onBack = () => host.openPage('tickets')
   const onOpenAgent = (agentId: string) => host.openAgent(projectId, agentId)
 
-  // The manual lock release: nothing times a `.lock.md` out, so a dead agent's claim stands until
-  // a person lifts it here — `tickets release <file> --force`, as an act, so the dashboard reads
-  // the lifted lock back at once. `released` bridges the gap until the next poll.
+  // The manual lock release (`releaseClaim`): a dead agent's claim stands until a person lifts it
+  // here. `released` bridges the gap until the next poll.
   const [released, setReleased] = useState(false)
   const claimed = Boolean(ticket?.locked) && !released
   const holder = ticket?.lockedByAgent?.name ?? ticket?.lockedBy
+  const holderStatus = read && 'ticket' in read ? read.holderStatus : undefined
+  // Whether the run holding the claim still holds it for a reason: at work, or stopped on a question.
+  const working = holderStatus === 'running' || holderStatus === 'waiting'
   const release = async () => {
     if (!ticket) return
-    const outcome = await run(async () => {
-      const result = await host.act(projectId, ['release', ticket.file, '--force'])
-      if (!result.ok) return result
-      const answer = result.output as { ok?: unknown; reason?: unknown } | null
-      return answer && typeof answer === 'object' && answer.ok === false ? { ok: false as const, error: `the release was refused: ${String(answer.reason)}` } : { ok: true as const }
-    }, 'The lock could not be released.')
+    const outcome = await run(() => releaseClaim(host, projectId, ticket.file), 'The lock could not be released.')
     if (outcome.ok) setReleased(true)
   }
 
@@ -75,6 +74,14 @@ export function TicketDetailPage({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <h1 className="text-lg font-semibold">{ticket.title}</h1>
             <div className="flex shrink-0 items-center gap-1.5">
+              {/* The run holding the claim, one press away: at work (or waiting on an answer) it is
+                  looked at; stopped, failed or ended, it is gone on with, in its own chat. */}
+              {claimed && ticket.lockedByAgent && (
+                <Button size="sm" variant="outline" onClick={() => onOpenAgent(ticket.lockedByAgent!.id)} className="gap-1.5" title={`The run that claimed it: ${holder}`}>
+                  {working ? <Bot className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                  {working ? 'Open the run' : 'Continue'}
+                </Button>
+              )}
               {claimed && (
                 <Button
                   size="sm"
@@ -88,8 +95,9 @@ export function TicketDetailPage({
                 </Button>
               )}
               {/* The ticket as a link, for whatever the installed modules offer on one (#1774);
-                  none for a ticket in review or waiting, which is never queued. */}
-              {!heldBack(ticket) && <LinkActions projects={[projectId]} targets={[{ projectId, links: [ticketLink(ticket)] }]} resetKey={ticket.file} disabled={busy} />}
+                  none for a ticket in review or waiting, which is never queued, nor for a claimed
+                  one: an agent the queue hands it to finds it taken. Released, it is offered. */}
+              {!heldBack(ticket) && !claimed && <LinkActions projects={[projectId]} targets={[{ projectId, links: [ticketLink(ticket)] }]} resetKey={ticket.file} disabled={busy} />}
             </div>
           </div>
           {ticket.summary && <p className="mt-2 text-sm text-muted-foreground">{ticket.summary}</p>}
@@ -144,6 +152,7 @@ export function TicketDetailPage({
                       <button type="button" className="hover:underline" onClick={() => onOpenAgent(ticket.lockedByAgent!.id)}>
                         {holder}
                       </button>
+                      {holderStatus !== undefined && <>&nbsp;· {working ? (holderStatus === 'waiting' ? 'waits on your answer' : 'at work') : `run ${holderStatus}`}</>}
                     </>
                   ) : (
                     <>&nbsp;· {holder}</>

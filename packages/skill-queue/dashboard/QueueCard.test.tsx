@@ -66,8 +66,9 @@ describe('QueueCard', () => {
   test('the fan-out starts one agent per top entry, as many as the count says, each pinned to its own entry, without landing', async () => {
     render({ p1: [LOGIN, 'Tidy the loader', 'Third', 'Fourth'] })
     await screen.findByText('Login page')
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'How many agents to spin up' }), { target: { value: '2' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Spin up 2 agents working on the top 2 entries' }))
+    // Three at first; one fewer is two.
+    fireEvent.click(screen.getByRole('button', { name: 'One agent fewer' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Start 2' }))
     await waitFor(() =>
       expect(started()).toEqual([
         ['p1', workOnEntryPrompt(LOGIN), { land: false }],
@@ -80,7 +81,8 @@ describe('QueueCard', () => {
     render({ p1: [LOGIN, 'Tidy the loader'], p2: [] })
     await screen.findByText('Login page')
     host.startRun.mockResolvedValueOnce({ ok: true, agentId: 'run-1' }).mockResolvedValueOnce({ ok: false, error: 'the daemon refused' })
-    fireEvent.click(screen.getByRole('button', { name: 'Spin up 2 agents working on the top 2 entries' }))
+    // Three asked for, two entries there: the button says two.
+    fireEvent.click(screen.getByRole('button', { name: 'Start 2' }))
     expect((await screen.findByRole('alert')).textContent).toBe('the daemon refused')
     expect(started()).toHaveLength(2)
   })

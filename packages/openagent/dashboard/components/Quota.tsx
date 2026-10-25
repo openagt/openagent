@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { CircleHelp } from 'lucide-react'
+import { CircleHelp, TriangleAlert } from 'lucide-react'
 import type { DriverQuotaWindow, ProjectSummary, QuotaBoundary, QuotaView } from '../../src/index.js'
 import { MAX_SPEND_OFFSET } from '../../src/client.js'
 import { useQuota } from '../lib/quota.js'
@@ -324,22 +324,27 @@ function WeekBar({
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           {eagerConsumption && (
             <Tooltip>
-              <TooltipTrigger render={<span className="inline-flex cursor-default items-center gap-0.5 text-warning" />}>
-                ⚠️  Eager consumption
+              <TooltipTrigger render={<span className="inline-flex cursor-default items-center gap-1 text-warning" />}>
+                <TriangleAlert className="h-3 w-3" aria-hidden />
+                Eager consumption
                 <CircleHelp className="h-3 w-3" aria-hidden />
               </TooltipTrigger>
               <TooltipContent>Autonomous AI will spend tokens {formatDurationLong(limitDeviationMs)} faster than the week's pace allows</TooltipContent>
             </Tooltip>
           )}
           {limited && <Tooltip>
-            <TooltipTrigger render={<span className="cursor-default" />}>
+            {/* What the handle allows, said as a sentence, with how far it goes; how to change it after, in grey. */}
+            <TooltipTrigger render={<span className={cn('inline-flex cursor-default items-center gap-1.5 text-xs', enabled ? 'text-foreground' : 'text-warning')} />}>
+              <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', enabled ? 'bg-success' : 'bg-warning')} />
               {enabled ? (
                 <>
-                  ✅ Autonomous AI <em>enabled</em> <small className="text-muted-foreground/70">move slider to the left to disable</small>
+                  Agents may start work on their own up to <strong className="tabular-nums">{Math.round(limit)}%</strong> of the week
+                  <span className="text-muted-foreground">· drag the handle to change</span>
                 </>
               ) : (
                 <>
-                  ❌ Autonomous AI <em>disabled</em> <small className="text-muted-foreground/70">move slider to the right to enable</small>
+                  Agents start no work on their own
+                  <span className="text-muted-foreground">· drag the handle right to allow it</span>
                 </>
               )}
             </TooltipTrigger>

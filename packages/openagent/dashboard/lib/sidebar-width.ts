@@ -48,3 +48,42 @@ export function useSidebarWidth(): number {
     () => width,
   )
 }
+
+// Whether the sidebar is hidden (its button, or Cmd/Ctrl+B): remembered the same way, so a page
+// opened again is laid out as it was left. A phone's sidebar is a sheet, closed until asked for,
+// and never hidden this way.
+
+const HIDDEN_KEY = 'oa.sidebar-hidden'
+
+function readHidden(): boolean {
+  try {
+    return localStorage.getItem(HIDDEN_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+let hidden = readHidden()
+
+/** Hide the sidebar, or show it again. */
+export function setSidebarHidden(next: boolean): void {
+  hidden = next
+  try {
+    if (next) localStorage.setItem(HIDDEN_KEY, 'true')
+    else localStorage.removeItem(HIDDEN_KEY)
+  } catch {
+    // A browser that keeps nothing still hides it, for this page's life.
+  }
+  for (const listener of listeners) listener()
+}
+
+/** Whether the sidebar is hidden, as reactive state. */
+export function useSidebarHidden(): boolean {
+  return useSyncExternalStore(
+    listener => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    () => hidden,
+  )
+}

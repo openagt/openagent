@@ -39,6 +39,8 @@ export function fakeHost(answers: Answers = {}): FakeHost {
     openAgent: vi.fn<ModuleHost['openAgent']>(),
     openPage: vi.fn<ModuleHost['openPage']>(),
     pageHref: (segment: string) => `/${segment}`,
+    openSettings: vi.fn(),
+    gitHostPeople: vi.fn(async () => []),
     startRun: vi.fn(async () => ({ ok: true as const, agentId: `run-${++runs}` })),
     configureRun: vi.fn(),
     agents: vi.fn<ModuleHost['agents']>(async () => []),

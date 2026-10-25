@@ -3,6 +3,7 @@ import { formatBytes } from '../../src/client.js'
 import { AgentActionsMenu } from './AgentActionsMenu.js'
 import { AgentErrorCount } from './AgentErrorCount.js'
 import { PaneMenu, PaneToggles } from './Panes.js'
+import { ShowSidebarButton } from './SidebarToggle.js'
 import { thisMachineName } from '../lib/this-machine.js'
 
 // One agent's top bar, as Claude Code on the web lays it out: its name with a small ⌄, which is
@@ -64,9 +65,10 @@ export function AgentActionBar({
     // On a phone the row's start is kept free: the shell lays the menu's button over it
     // (MenuButton). Each left padding is under its own screen size, never a plain one with a
     // phone's over it: a module's stylesheet carries its own copy of the plain class, which comes
-    // later and would win. The row is as tall with nothing at its end as the "New agent" page's
-    // is with its ⋮ (ProjectActions).
-    <div className="@container flex min-h-11 items-center gap-2 overflow-hidden py-2 pr-2 md:pl-4 max-md:pl-11">
+    // later and would win. The row is as tall as the "New agent" page's (ProjectActions) and as an
+    // open pane's header, so the three stand level; unlike a pane's, it has no line under it.
+    <div className="@container flex h-11 shrink-0 items-center gap-2 overflow-hidden pr-2 md:pl-4 max-md:pl-11">
+      <ShowSidebarButton />
       <PaneMenu />
       {/* Which session this is, as Claude Code on the web says it: its name, which is the button of
           its menu, and a grey chip with where it runs and its project. The name is the one part

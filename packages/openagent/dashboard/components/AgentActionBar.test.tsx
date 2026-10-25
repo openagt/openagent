@@ -97,8 +97,10 @@ describe('AgentActionBar', () => {
     const row = container.firstElementChild!.className.split(' ')
     for (const cls of ['pr-2', 'md:pl-4', 'max-md:pl-11']) expect(row).toContain(cls)
     expect(row).not.toContain('pr-12')
-    // With nothing at its end the row is as tall as the "New agent" page's, which has its ⋮ there.
-    expect(row).toContain('min-h-11')
+    // As tall as the "New agent" page's row and an open pane's header, so the three stand level;
+    // unlike a pane's header, no line under it.
+    expect(row).toContain('h-11')
+    expect(row.join(' ')).not.toMatch(/border/)
     // The menu is the agent's own: it is handed the agent.
     expect(lastSession()['agentId']).toBe('run-1')
   })

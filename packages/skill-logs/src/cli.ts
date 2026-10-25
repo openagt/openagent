@@ -2,7 +2,9 @@ import { parseArgs } from 'node:util'
 import { checkoutRoot, gitReason, nodeGitRunner, openBranchReader, type BranchReader, type GitRunner, DATA_BRANCH } from '@openagt/agent-data'
 import { RUNS_DIR } from './names.js'
 import { agentLines, isRunId, newestFirst, parseDiary, parseRunCard, publicCard, runCardFile, runDiaryFile, runIdOfFile, type RunCard, type RunPatch } from './run.js'
-import { deleteRun, findRun, listRuns, patchRun, readDiary, runFiles } from './store.js'
+import { deleteRun, findRun, listRuns, patchRun, readDiary, resolveLogsDeps, runFiles, runsPath } from './store.js'
+import { peopleOf, readCommitLines } from './people.js'
+import { skillUseOf } from './skill-use.js'
 
 /**
  * The command line over the package: the reads a daemon's pages do, for an agent (and a person)
@@ -41,6 +43,13 @@ export const USAGE = `usage: logs [command]
                                      no fetch from origin
   --full                             with either read: the whole card (with the writer's caller key)
                                      and, for show, every diary line
+  people [--days N]                  who works here: each person who started runs (by the folder their
+                                     runs are kept in) or committed to the main branch, with their runs
+                                     of the last N days (30 unless said), what they cost, how many are
+                                     going now, their commits, the name git knows them by, and when
+                                     they last did either
+  skills [--days N]                  which skills the agents used in the last N days (30 unless said): for each, how many
+                                     times it was loaded or a run started with its command, in how many runs, and when last
   delete <id>                        remove a run, card and diary, as one commit
   patch <id> [--branch <name>] [--pr <number> --pr-url <url>] [--landed <commit> --from <commit>]
                                      set the branch the work landed on, and its pull request
@@ -127,6 +136,34 @@ const list: Command = async (args, io, git) => {
 const READ_FLAGS = { local: { type: 'boolean' }, full: { type: 'boolean' } } as const
 
 const COMMANDS: Record<string, Command> = {
+  async skills(args, io, git) {
+    const { values } = parse(args, { days: { type: 'string' }, local: { type: 'boolean' } }, 0)
+    if (values.days !== undefined && (!/^\d+$/.test(values.days) || Number(values.days) < 1)) throw new Usage(`--days takes a whole number above 0, got ${values.days}`)
+    const since = Date.now() - Number(values.days ?? 30) * 86_400_000
+    if (values.local) {
+      const root = await inRepo(() => checkoutRoot(io.cwd, git))
+      const files = resolveLogsDeps({ git })
+      return skillUseOf({ list: dir => files.list(dir), read: path => files.read(path).catch(() => undefined) }, await runsPath(root, git), since)
+    }
+    const reader = await open(io.cwd, git)
+    return skillUseOf({ list: dir => reader.list(dir), read: path => reader.read(path) }, RUNS_DIR, since)
+  },
+  async people(args, io, git) {
+    const { values } = parse(args, { days: { type: 'string' }, local: { type: 'boolean' } }, 0)
+    if (values.days !== undefined && (!/^\d+$/.test(values.days) || Number(values.days) < 1)) throw new Usage(`--days takes a whole number above 0, got ${values.days}`)
+    const since = Date.now() - Number(values.days ?? 30) * 86_400_000
+    const me = (await git(['config', 'user.email'], io.cwd).catch(() => '')).trim() || undefined
+    // The main branch's commits, newest first: the default branch as origin names it, else what is checked out.
+    const main = (await git(['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], io.cwd).catch(() => '')).trim() || 'HEAD'
+    const commits = readCommitLines(await git(['log', main, '-n', '5000', '--format=%ae%x09%an%x09%at'], io.cwd).catch(() => ''))
+    if (values.local) {
+      const root = await inRepo(() => checkoutRoot(io.cwd, git))
+      const files = resolveLogsDeps({ git })
+      return peopleOf({ list: dir => files.list(dir), read: path => files.read(path).catch(() => undefined) }, await runsPath(root, git), since, me, commits)
+    }
+    const reader = await open(io.cwd, git)
+    return peopleOf({ list: dir => reader.list(dir), read: path => reader.read(path) }, RUNS_DIR, since, me, commits)
+  },
   async show(args, io, git) {
     const { values, positionals } = parse(args, READ_FLAGS, 1)
     const id = runIdArg(positionals[0]!)
