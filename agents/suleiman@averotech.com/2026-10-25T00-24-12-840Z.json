@@ -1,15 +1,26 @@
 {
   "id": "2026-10-25T00-24-12-840Z",
   "startedAt": "2026-10-25T00:24:15.132Z",
-  "status": "running",
+  "endedAt": "2026-10-25T00:24:31.649Z",
+  "status": "waiting",
   "intent": "ask me some question",
+  "title": "Vague Question Request",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "branch": "agent-2026-10-25T00-24-12-840Z",
+  "cost": 0.0729276,
+  "contextTokens": 18331,
   "caller": {
     "runner": {
       "host": "ubuntu-s-1vcpu-2gb-fra1",
-      "pid": 3151272
+      "pid": 3151272,
+      "baseCommit": "b6af130be7565047e790dd93a1c986ee5dbbf738"
     },
-    "host": "ubuntu-s-1vcpu-2gb-fra1"
+    "pid": 3151272,
+    "host": "ubuntu-s-1vcpu-2gb-fra1",
+    "baseCommit": "b6af130be7565047e790dd93a1c986ee5dbbf738",
+    "kind": "prompt",
+    "workspace": "/home/openagent/projects/openagent/.branches/agent-2026-10-25T00-24-12-840Z",
+    "sessionId": "75464ad2-fcac-4bc9-a876-f0e2dbc47696"
   }
 }
