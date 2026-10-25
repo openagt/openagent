@@ -7,7 +7,6 @@
   "title": "Queue consensual ticket for PR-comment agent resume",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-10-25T14-42-33-456Z",
   "cost": 0.137493,
   "contextTokens": 23264,
   "caller": {
