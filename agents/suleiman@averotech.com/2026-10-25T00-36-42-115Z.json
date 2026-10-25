@@ -1,0 +1,16 @@
+{
+  "id": "2026-10-25T00-36-42-115Z",
+  "startedAt": "2026-10-25T00:36:33.693Z",
+  "status": "running",
+  "intent": "/work-queue",
+  "driver": "claude-code",
+  "model": "opus",
+  "caller": {
+    "runner": {
+      "host": "Suleimans-MacBook-Pro.local",
+      "publish": "pr"
+    },
+    "host": "Suleimans-MacBook-Pro.local",
+    "publish": "pr"
+  }
+}
