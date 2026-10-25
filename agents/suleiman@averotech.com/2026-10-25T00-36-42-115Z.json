@@ -6,7 +6,6 @@
   "intent": "/work-queue",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-10-25T00-36-42-115Z",
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
