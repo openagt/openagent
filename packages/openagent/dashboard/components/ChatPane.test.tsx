@@ -74,9 +74,14 @@ describe('ChatPane', () => {
     expect(document.body.textContent).toBe('top barchatmessage box')
   })
 
-  test('the message box\'s bar lies over the chat and stops short of its scroll bar; a scroll bar that lies over the content takes no room', () => {
+  test('the message box\'s bar lies over the chat and stops short of its scroll bar; a scroll bar that lies over the content takes no room, and the bar still leaves it a strip', () => {
     const { unmount } = render(<ChatPane top={<b>top bar</b>} bottom={<b>message box</b>}><p>chat</p></ChatPane>)
-    expect(screen.getByTestId('chat-bottom').className.split(' ')).toEqual(expect.arrayContaining(['absolute', 'bottom-0', 'left-0', 'right-(--chat-scroll-bar)', 'bg-background']))
+    const bar = screen.getByTestId('chat-bottom').className.split(' ')
+    expect(bar).toEqual(expect.arrayContaining(['absolute', 'bottom-0', 'left-0', 'right-[max(var(--chat-scroll-bar),0.75rem)]', 'bg-background']))
+    // As much more on its left, so the message box stays centered under the chat.
+    expect(bar).toContain('pl-[calc(max(var(--chat-scroll-bar),0.75rem)_-_var(--chat-scroll-bar))]')
+    // A phone's chat ends above the bar: no strip there.
+    expect(bar).toEqual(expect.arrayContaining(['pointer-coarse:right-(--chat-scroll-bar)', 'pointer-coarse:pl-0']))
     expect(room('--chat-scroll-bar')).toBe('11px')
     unmount()
     scrollBar = 0
