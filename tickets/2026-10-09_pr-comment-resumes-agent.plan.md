@@ -1,5 +1,6 @@
 Effort: 6
 Uncertainty: 5
+Outdated: yes
 
 # [Plan] A comment on an agent's pull request resumes that agent
 
