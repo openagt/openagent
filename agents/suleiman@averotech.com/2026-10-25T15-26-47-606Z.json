@@ -1,15 +1,27 @@
 {
   "id": "2026-10-25T15-26-47-606Z",
   "startedAt": "2026-10-25T15:26:48.825Z",
-  "status": "running",
+  "endedAt": "2026-10-25T15:26:56.834Z",
+  "status": "done",
   "intent": "tell me hi, nothing else",
+  "title": "Greeting Exchange",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "branch": "agent-2026-10-25T15-26-47-606Z",
+  "cost": 0.0454724,
+  "contextTokens": 17690,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
-      "pid": 57417
+      "pid": 57417,
+      "baseCommit": "b6af130be7565047e790dd93a1c986ee5dbbf738"
     },
-    "host": "Suleimans-MacBook-Pro.local"
+    "pid": 57417,
+    "host": "Suleimans-MacBook-Pro.local",
+    "baseCommit": "b6af130be7565047e790dd93a1c986ee5dbbf738",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/gemstack/.branches/agent-2026-10-25T15-26-47-606Z",
+    "sessionId": "97c727df-b340-4df5-8a5e-028b9c3b76d8"
   }
 }
