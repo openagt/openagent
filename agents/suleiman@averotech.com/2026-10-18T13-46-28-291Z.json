@@ -1,7 +1,8 @@
 {
   "id": "2026-10-18T13-46-28-291Z",
   "startedAt": "2026-10-18T13:46:18.961Z",
-  "status": "running",
+  "endedAt": "2026-10-25T00:30:30.898Z",
+  "status": "stopped",
   "intent": "/work-queue",
   "title": "Work Queue Command",
   "driver": "claude-code",
