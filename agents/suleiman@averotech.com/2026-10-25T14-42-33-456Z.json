@@ -1,0 +1,16 @@
+{
+  "id": "2026-10-25T14-42-33-456Z",
+  "startedAt": "2026-10-25T14:42:26.352Z",
+  "status": "running",
+  "intent": "/triage consensual",
+  "driver": "claude-code",
+  "model": "opus",
+  "caller": {
+    "runner": {
+      "host": "Suleimans-MacBook-Pro.local",
+      "publish": "commit"
+    },
+    "host": "Suleimans-MacBook-Pro.local",
+    "publish": "commit"
+  }
+}
