@@ -1,60 +1,46 @@
-Effort: 6
-Uncertainty: 5
-Outdated: yes
+Effort: 3
+Uncertainty: 3
 
 # [Plan] A comment on an agent's pull request resumes that agent
 
-How a new comment on a pull request a run opened reaches that run instead of a new agent: the parts, the picks made for the ticket's open questions, and the order of the work.
+What is left of the ticket now that most of it is built, and how to do it.
 
-## What is there already
+## Already built
 
-- A run's record keeps its pull request (`pr` on the card, `packages/skill-logs/src/run.ts:39`), its host (`runnerMark(card).host`) and its coding agent's session (`caller.sessionId`).
-- `agent-runner run --resume <id> <text>` continues an ended run in its session (`packages/agent-runner/src/run.ts:327`); a run still recorded running is refused.
-- `tellParent` (`packages/agent-runner/src/parent.ts:63`) already hands one line to a run the right way either way: into its inbox while it works, as a resume once it has ended, with the race between the two closed. Only children use it today.
-- The scheduler only starts new runs: a row's check prints JSON, and `decide` (`packages/agent-scheduler/src/tick.ts`) marks and spawns one run handed that output. Rows come from skills' `schedule` front matter; the tool names no skill.
-- `#2138` settled that a run another computer started is only read here: continued here it would have none of its conversation.
+Checked against the code on `main` (b6af130be). Items 1–10 of the TLDR are done. Only build-order steps 3 and 4 are left.
 
-## Picks for the open questions
+- **Resume rows (TLDR 1):** a row with `each: true` prints one item per run, `{ "run", "text" }` to resume or `{ "for", "text" }` to start (`eachItems`, `packages/skill-scheduler/src/schedule.ts:410`). `eachNamed` (`packages/skill-scheduler/src/tick.ts:285`) resumes each one. The scheduler names no git host.
+- **Agent, model, readiness, quota per run (2):** done in `whyNot`/`mayStart`, `tick.ts:315`. A run that cannot go now gets one line and is tried again at a later tick.
+- **New means after the run ended (3):** done in `packages/skill-github/src/replies.ts`, using the record's `endedAt`. No time is stored.
+- **Only this machine's runs (4):** `whyNot` checks `mark.host !== deps.host`.
+- **`replies` (5):** `agent-runner git-host replies --since "$SWITCHED_ON"` → `replies.ts`. It costs one GitHub call per look, with an ETag cache, and a full read at least once a minute. It covers comments, reviews, line comments, red checks and conflicts, and puts 👀 on whatever it hands over.
+- **The `reply` skill (6):** `skills/reply/SKILL.md`, package `packages/skill-reply`. It checks every 15s.
+- **Automations page (7):** `packages/skill-scheduler/dashboard/schedulers.ts:55,109` and `EditPanel.tsx` say that resumed runs keep their own coding agent, model and publish level.
+- **Maintainers only (8):** `MAINTAINERS`, plus the 🤖 line and `COMMENT_MARK` skipped. A person picked something narrower than the ticket: only words that call `/agent` count, even on the agent's own pull request (`packages/skill-reply/DECISIONS.md`, "Only maintainers' comments count…"). The ticket's point 8 and its first sentence still say "a comment". The ticket text is out of date; the code is right.
+- **Conversation gone (9):** `afresh` (`packages/agent-runner/src/run.ts:771`) starts the session again, attaching `earlierWorkLine(run.id, run.card.pr)`. It runs when the record has no session id or the agent throws `ConversationGoneError`.
+- **Pull request with no run (10):** `/agent` there starts a run whose record names the thread (`{ "for": … }` items). That is the "later, worth a try" part, also done.
 
-1. **Whose comments count**: those whose `author_association` is `OWNER`, `MEMBER` or `COLLABORATOR` (GitHub puts it on every comment, no extra call), not a bot's (`user.type == "Bot"`), and never one an agent posted. Agents post under the person's own login, so the author cannot tell them apart: an agent's comment carries a hidden line `<!-- openagent-run: <id> -->`, and comments with it are skipped. Picked over anyone's (a stranger's comment would spend the person's quota) and over the author alone (the person and their agents share it).
-2. **Line review comments and review bodies count the same way** as thread comments: same API family, same filter, and they are where most review is said. Failing checks: later, their own ticket.
-3. **A pull request with no run behind it**: nothing. The row says it answers agents' pull requests.
-4. **Which machine**: only the run's own machine (its record's host) answers comments on its pull request; every other machine's scheduler skips it. That is the only machine that has the conversation, and two machines can never both answer. The fallback (a new agent) is for the run's own machine when the conversation cannot be resumed there (no `sessionId`, or the coding agent says the session is gone). This narrows the ticket's fallback "it ran on another machine": with every machine able to answer, a comment would reach two agents whenever both machines have the row on, which breaks point 4 of the TLDR. A run whose machine never has the row on is not answered; its row says so.
+## What is left
 
-## Design
+1. **Build step 4: the run's page shows what woke the run, with its link.** Today a resumed run's page shows the whole resume text as a plain message from the person: `/reply`, the scheduler's opening sentence, then the check's lines, with each comment's URL inline. Only the record's `resumed: { by, at }` says a row did it, and only for the latest resume.
+2. **Build step 3: a trial on a test repository.** A run opens a pull request. Then a `/agent` comment, a failing check and a conflicting merge to `main` must each be answered by that same run. This was never recorded as done.
 
-One new kind of scheduled row: a row whose output names runs to tell, not work for a new run.
+## Problems
 
-- **Row key `tells: runs`** in a skill's `schedule` (`ROW_KEYS`, `packages/agent-scheduler/src/schedule.ts:108`). Its check prints a JSON array of `{ "run": "<id>", "text": "<what to hand it>" }`. For each item the scheduler tells that run, instead of spawning one run for the whole output. The tool still names no skill: the github skill brings the row. Picked over a dedicated command that a scheduled agent runs (an agent started only to start another agent) and over the scheduler calling `gh` itself (the tool would know the git host).
-- **Telling a run** is a new `agent-runner tell <id> <text>` command: `tellParent`'s logic made public as `tellRun` (rename; `tellParent` calls it), answered at once; it refuses a run whose host is not this one, and a run that cannot be resumed (no session) with `{ok:false, reason:"no-session"}`. The scheduler's `TickDeps` gets `tell(run, text)`.
-- **The fallback**: on `no-session`, the scheduler starts a new run of the row's command as today (marker, cap, quota, publish level, `attached`), handed the comments and the line "The run <id> opened this pull request and cannot be resumed: read its record (`npx @openagt/skill-logs@0.1 show <id>`) and the whole thread first, then work on its branch." Its record then names the same pull request (`skill-logs patch --pr`, done by the run when it pushes to the branch, as `open` answers `existing`), so the next comment resumes it: the check takes the latest run naming a pull request.
-- **One agent per pull request**: the check lists ended runs only; should one start working between the check and the tell, `tellRun` puts the text in its inbox instead. Telling an ended run resumes it under its run lock (`acquireRunLock`), so two ticks never resume it twice. The cap is not asked for a tell (it is no new run); the quota is, like any start, read once per tick.
-- **What is new** is read off the run's own record, nothing is stored: a comment counts when it is newer than the run's `endedAt`. A run still working is skipped until it ends: handing it the same comments on every tick would fill its inbox, and it reads the thread again before it ends. `$LAST_RUN` is not used by this row. A comment that lands while a resumed run works and after it read the thread is caught because the resumed agent is told to read the thread again before it ends.
+- **Where the link comes from.** The dashboard should not parse the scheduler's sentences or GitHub's words (`answeredQuestion` parses the runner's own question prompt, which is a different case). The links have to travel as data from the check, through the scheduler and the runner, to the diary.
+- **Where it is kept.** `resumed` on the record's mark only holds the latest resume. A run woken five times needs the source on each prompt, so it belongs in the diary line of that turn's prompt, not on the card.
 
-## The github skill's part (`packages/skill-github`)
+## Implementation
 
-- `comments` subcommand: for every open pull request of the repository whose head branch is a run's (record `pr` set, latest record per pull request, host this machine, status not running), list issue comments, review comments and review bodies newer than the run's `endedAt`, filtered as in pick 1, and print the `tells: runs` array; `[]` when none. One `gh api` call per pull request kind, only for pull requests that have such a run (most machines have a handful).
-- The text handed over: "New comments on your pull request <url>:" then each comment (author, time, file:line for a review comment, body), then "Read the whole thread again first (`gh pr view <n> --comments`, and its review comments), and answer from the thread as it stands. Before you end, read it once more and answer anything new. Post every comment with `npx @openagt/skill-github@0.1 comment`."
-- `comment <number> --body <text>` subcommand: posts with the hidden `<!-- openagent-run: $AGENT_ID -->` line appended. `SKILL.md` tells agents to comment through it, never `gh pr comment`.
-- `schedule` in `packages/skill-github/SKILL.md` (and the copy under `.claude/skills/github`): `when: npx @openagt/skill-github@0.1 comments`, `tells: runs`, `every: 10m`, `waits-for: when a pull request an agent of this machine opened has a new comment`. The row is off by default like every row; its pace and publish pick are the Automations page's as for any row (the publish level reaches a resume through the record's mark, as today; a fallback run takes the row's pick).
-
-## Scheduler changes (`packages/agent-scheduler`)
-
-- `schedule.ts`: read `tells` (only the value `runs`; anything else makes the schedule unreadable); a `tells` row needs `when`.
-- `tick.ts` `decide`: after the check, for a `tells` row, parse the array (an unreadable one is `check printed no runs to tell`), then for each item: `tell`; on `no-session` the existing start path with the fallback text. One decision line per row summing it up: `told r1, r2; started r3 for r4`. `startNow` the same.
-- `listed`: carry `tells`, so the Automations page can say the row answers runs ("Answers comments on its agents' pull requests") instead of "starts an agent".
-- `DECISIONS.md`: bullets for the picks above once the person confirms them (an AI writes a bullet only for a person's pick).
+1. **Check item:** `{ "run", "text", "from"?: [{ "label", "url" }] }`, where each entry is one thing that woke the run (`@alice commented`, `The check "test" failed`, `It conflicts with main`). `replies.ts` already has the URL and the words in each `Came`: give `Came` a `label`, and have `told()` return `from` next to `text`. `StartItem` gets the same field, so a run started by `/agent` shows its call too.
+2. **Scheduler:** `ResumeItem`/`StartItem` and `eachItems` read and validate `from`; a malformed entry is dropped, not the whole item. When several items name the same run they are merged, so their `from` entries are concatenated. `TickDeps.resume` gets `from`, and the start path passes it the same way. No sentence about it is added to the text: the agent already reads the links in its words.
+3. **Runner:** `agent-runner run --resume <id> --from <json>` (and the same on start) keeps `from` on that turn's prompt line in the diary, next to the row (`by`). Neither the card nor the mark holds it.
+4. **Dashboard (`packages/openagent/dashboard/components/EventList.tsx`):** a prompt line carrying `by` and `from` is drawn as a box, not a message bubble, the way an answered question is. The title is "Continued by <row>", followed by one link per `from` entry. The full text it was told sits in a folded "What it was told". A prompt with `by` but no `from` (a check that gives no links) gets the title alone.
+5. **Tests:** `replies.test.ts` (each item has `from`), `schedule.test.ts` (`from` is read; a malformed entry is dropped), `tick.test.ts` (`from` reaches `resume` and start), `run.test.ts` (the diary's prompt line keeps `from`), and an `EventList` test (the box, its links, the folded text).
+6. **The trial (build step 3),** after the above is merged and published: on a test repository with the `reply` row switched on, open a pull request through a run, then (a) comment `/agent please rename x`, (b) push a failing test to its branch from another clone, (c) merge a conflicting change to `main`. Each must resume that same run id (the scheduler's decision line `resumed <id>`), get 👀, a new comment answering it, and, for (b) and (c), a push. For (c) that push is a merge commit, with no force push. The run page shows the three boxes with their links. Write down what failed as new tickets. It needs a GitHub repository the agent can write to and the scheduler running on the machine. If neither exists, the ticket waits on a person to provide them after steps 1–5 are merged.
 
 ## Considerations
 
-- The agent's comments under the person's login are the sharpest edge: an agent that posts with `gh` directly, not the new command, would resume itself in a loop. Guard: skip comments whose `created_at` falls between the run's last start and its `endedAt` and whose author is the logged-in user (`gh api user`), as a second filter.
-- A pull request merged or closed is not open: no tells. A run deleted from the records: its pull request has no run, nothing.
-- The first tick after the row is switched on would hand every comment newer than each run's end; that is the point (comments nobody answered), but bounded to open pull requests.
-- Rate limits: three `gh api` calls per open agent pull request per pace; at 10 minutes this is far under GitHub's limit.
-
-## Implementation order
-
-1. `agent-runner`: `tellRun` + `tell` command + tests (working run → inbox; ended → resume; other host / no session refused).
-2. `skill-github`: `comment` command, `comments` check with its filter, tests with a fake `gh`; `SKILL.md` text and `schedule`.
-3. `agent-scheduler`: `tells` key, `decide` branch, fallback, `listed`; tests in `tick.test.ts` and `schedule.test.ts`.
-4. Automations page wording for a `tells` row (`AutomationsPage.tsx`), its test.
+- The 👀 and the links name the same things. `Came.seen` (the GitHub node id) and the new `label`/`url` sit on the same `Came`, so they cannot drift apart.
+- A check from another git host, or a person's own automation, that prints no `from` keeps working unchanged.
+- The ticket's text is outdated about which comments count (see point 8 above). Whoever next updates the ticket should change "a comment" to "a maintainer's `/agent` call, a red check or a conflict". This plan builds what the code and `DECISIONS.md` say.
