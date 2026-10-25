@@ -37,8 +37,8 @@ ${script ? `<script nonce="${nonce}">${script}</script>` : ''}
  */
 export function howToGetIn(server: boolean): string {
   return server
-    ? "This computer is a server. On the computer it was connected from, open OpenAgent's Settings, find Servers, press Add device on this server's row, and scan the code with this device. A device that is already in can also make a code: its Settings, Devices, Add device."
-    : 'On the computer that runs OpenAgent, open Settings, find Devices, press Add device, and scan the code with this device.'
+    ? "This computer is a server. On the computer it was connected from, open OpenAgent's Settings › Devices › Add device › Phone or tablet, pick Anywhere, through this server, and scan the code with this device. A device that is already in can also make a code: its Settings › Devices › Add device."
+    : 'On the computer that runs OpenAgent, open Settings › Devices › Add device › Phone or tablet, and scan the code with this device.'
 }
 
 /** What a device that is not in sees when it opens the door's address; `server` says the door is a server's. */
