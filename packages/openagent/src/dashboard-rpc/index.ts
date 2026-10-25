@@ -23,6 +23,7 @@ export { onMachines, sendAddMachine, sendRemoveMachine, onMachinesReachable, onM
 export { onModules, runModuleCommand, runComputerCommand, runComputerCommandOn, readModule, type DashboardModule, type ModuleCommandResult, type ModuleReadResult } from './modules.js'
 export { onProjectSkills, sendChangeSkills, sendProjectSkills, type ProjectSkills, type ProjectSkill, type ChangeSkillsResult } from './skills.js'
 export { onPerson, type Person } from './person.js'
+export { onGitHostPeople, type HostPerson } from './people.js'
 export { onGitHosts, sendUseGitHostAccount, sendGitHostLogin, sendGitHostInstall, onAgentState, sendAgentFix, onProjectAccounts, sendProjectAccounts, type GitHostsView, type GitHostRow, type GitHostAccount, type GitHostProvider, type AgentState, type ProjectAccountsView, type ProjectAgentAccounts } from './logins.js'
 export { onServerLogins, sendUseLoginsOn, sendAllowLogins, sendSettleLogin, type ServerLoginsView, type ServerLogins, type LoginThere } from './server-logins.js'
 export { onCopiedLogins, sendCopiedLogin, sendForgetCopiedLogin, sendKeepCopiedLogin, sendCopiedUsage, type CopiedView } from './copied-logins.js'
@@ -38,6 +39,7 @@ import * as machines from './machines.js'
 import * as modules from './modules.js'
 import * as skills from './skills.js'
 import * as person from './person.js'
+import * as people from './people.js'
 import * as accounts from './accounts.js'
 import * as logins from './logins.js'
 import * as copiedLogins from './copied-logins.js'
@@ -62,7 +64,7 @@ export type RpcHandler = (...args: never[]) => unknown
 export const RPC_HANDLERS: Record<string, RpcHandler> = Object.assign(
   Object.create(null) as Record<string, RpcHandler>,
   Object.fromEntries(
-    [reads, control, projects, preferences, quota, models, machines, modules, skills, person, accounts, logins, copiedLogins, serverLogins]
+    [reads, control, projects, preferences, quota, models, machines, modules, skills, person, people, accounts, logins, copiedLogins, serverLogins]
       .flatMap(module => Object.entries(module))
       .filter((entry): entry is [string, RpcHandler] => typeof entry[1] === 'function'),
   ),

@@ -174,6 +174,8 @@ describe('TicketDetailPage (#1144)', () => {
     // page has the room, no tooltip hunt needed.
     expect(screen.getByText(/· plan-1-0/)).toBeTruthy()
     expect(screen.getByRole('button', { name: /release lock/i })).toBeTruthy()
+    // Not queued while claimed: the agent the queue hands it to would find it taken.
+    expect(screen.queryByRole('button', { name: 'Add to queue' })).toBeNull()
   })
 
   test('an unclaimed ticket offers no release (#1420)', async () => {
@@ -194,6 +196,8 @@ describe('TicketDetailPage (#1144)', () => {
     expect(host.runCommand).not.toHaveBeenCalledWith('p1', expect.arrayContaining(['release']))
     await waitFor(() => expect(screen.queryByText('claimed')).toBeNull())
     expect(screen.queryByRole('button', { name: /release lock/i })).toBeNull()
+    // Released, it is a ticket like any other: it may be queued.
+    expect(screen.getByRole('button', { name: 'Add to queue' })).toBeTruthy()
   })
 
   test('a failed release surfaces and keeps the claim visible (#1420)', async () => {
@@ -218,6 +222,25 @@ describe('TicketDetailPage (#1144)', () => {
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
     fireEvent.click(await screen.findByRole('button', { name: 'login-page' }))
     expect(host.openAgent).toHaveBeenCalledWith('p1', '2026-08-30T10-00-00-000Z')
+  })
+
+  test('the run holding the claim is one press away at the top: looked at while it works, gone on with once it stopped', async () => {
+    agents = [{ id: 'run-1', name: 'login-page', status: 'running', startedAt: '2026-08-30T10:00:00.000Z' }]
+    onTicket.mockResolvedValue(ticket({ locked: true, lockedBy: 'run-1' }))
+    render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Open the run' }))
+    expect(host.openAgent).toHaveBeenCalledWith('p1', 'run-1')
+    expect(screen.getByText(/at work/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
+    cleanup()
+
+    agents = [{ id: 'run-1', name: 'login-page', status: 'stopped', startedAt: '2026-08-30T10:00:00.000Z' }]
+    render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }))
+    expect(host.openAgent).toHaveBeenCalledWith('p1', 'run-1')
+    expect(screen.getByText(/run stopped/)).toBeTruthy()
+    // The claim can still be lifted beside it.
+    expect(screen.getByRole('button', { name: /release lock/i })).toBeTruthy()
   })
 
   test('a command that cannot run is named, not shown as a missing ticket', async () => {

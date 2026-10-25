@@ -1,17 +1,22 @@
 import type { DashboardData, Intervention } from '../../src/index.js'
-import { Inbox } from 'lucide-react'
+import { useState } from 'react'
+import { Inbox, SlidersHorizontal } from 'lucide-react'
 import { onDashboard } from '../rpc/reads.js'
 import { Quota } from './Quota.js'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
 import { HumanQueueList } from './HumanQueueList.js'
 import { usePolled } from '../lib/use-async.js'
-import { cn } from '../lib/utils.js'
-import { usePreferences } from '../lib/preferences.js'
+import { updatePreferences, usePreferences } from '../lib/preferences.js'
 import { OnboardingChecklist } from './OnboardingChecklist.js'
 import { Agents } from './Agents.js'
-import { ModuleCards } from './ModuleCards.js'
+import { useModuleCards, type OverviewCard } from './ModuleCards.js'
+import { SkillsCard } from './SkillsCard.js'
+import { CardGrid, EditOverview } from './CustomizeOverview.js'
+import { Button } from './ui/button.js'
+import { ALL_PROJECTS, arrangeCards } from '../../src/client.js'
 import type { ProjectSummary } from '../../src/index.js'
-import { ScrollArea } from './ui/scroll-area.js'
+import { Page } from './Page.js'
+import { NEEDS_YOU_ID, StatTile, WORKING_ID, scrollToPart } from './StatTile.js'
 
 // The Overview landing page (#1139): a focused at-a-glance board — usage first, then what needs a
 // human (Human Queue) beside the agents working now, then the cards the installed packages
@@ -52,33 +57,135 @@ export function DashboardPage({
   const onboardingDismissed = usePreferences().onboardingDismissed ?? false
   const working = (data?.active ?? []).filter(agent => scope === null || agent.projectId === scope)
   const shownProjects = scope === null ? projects : projects.filter(project => project.id === scope)
+  // Every card the Overview can show here, each with the widths it stands at; the person's layout
+  // for this page (the picked project's, else all projects') orders them, sizes them, and hides some.
+  const moduleCards = useModuleCards(shownProjects)
+  const questions = interventions.filter(item => item.kind === 'awaiting').length
+  const cards: OverviewCard[] = [
+    // How things stand, a number each: what needs the person, and who is at work. The queue's own
+    // tile (what waits its turn) is its package's card, beside them by its order.
+    {
+      id: 'needs-you',
+      label: 'Needs you',
+      order: 1,
+      width: '1/3',
+      minWidth: '1/4',
+      node: (
+        <StatTile
+          label="Needs you"
+          value={interventions.length}
+          tone="text-warning"
+          note={interventions.length === 0 ? 'Nothing waits on you' : questions > 0 ? (questions === 1 ? '1 question to answer' : `${questions} questions to answer`) : 'Work to review or publish'}
+          onClick={() => scrollToPart(NEEDS_YOU_ID)}
+        />
+      ),
+    },
+    {
+      id: 'working-now',
+      label: 'Working now',
+      order: 2,
+      width: '1/3',
+      minWidth: '1/4',
+      node: (
+        <StatTile
+          label="Working now"
+          value={working.length}
+          live={working.length > 0}
+          note={working.length === 0 ? 'No agent is at work' : working.length === 1 ? '1 agent at work' : `${working.length} agents at work`}
+          {...(working.length > 0 ? { onClick: () => scrollToPart(WORKING_ID) } : {})}
+        />
+      ),
+    },
+    // Usage (#1139): the one figure that governs everything the agent may do next.
+    { id: 'usage', label: 'Usage', order: 5, width: '1', minWidth: '1/2', node: <Quota projects={projects} /> },
+    {
+      id: 'human-queue',
+      label: 'Human Queue',
+      order: 6,
+      width: '1',
+      minWidth: '1/2',
+      node: (
+        <div id={NEEDS_YOU_ID} className="flex scroll-mt-6 flex-col *:flex-1">
+          <HumanQueue items={interventions} onSelectProject={onSelectProject} onSelectAgent={onSelectAgent} />
+        </div>
+      ),
+    },
+    {
+      id: 'working',
+      label: 'Agents at work',
+      order: 7,
+      width: '1/2',
+      minWidth: '1/3',
+      node: (
+        <div id={WORKING_ID} className="flex scroll-mt-6 flex-col *:flex-1">
+          <Agents working={working} onSelectAgent={onSelectAgent} />
+        </div>
+      ),
+    },
+    // How each project's skills stand: a newer version to take, skills not yet where agents start from.
+    { id: 'skills', label: 'Skills', order: 8, width: '1/3', minWidth: '1/4', node: <SkillsCard projects={shownProjects} onSelectProject={onSelectProject} /> },
+    // The cards the installed packages declare (#1818): a package's own summary of its data, only
+    // when one of the projects shown (every registered one, or the picked one alone) has the package.
+    ...moduleCards,
+  ]
+  // Until a layout names them, the cards stand by their order: the tiles first, then the cards.
+  cards.sort((a, b) => a.order - b.order)
+  const layoutKey = scope ?? ALL_PROJECTS
+  const layouts = usePreferences().overviewLayouts
+  const arranged = arrangeCards(cards, layouts, layoutKey)
+  // Arranging the page, on its cards themselves: the layout of this page (the picked project's, else
+  // all projects'), changed at once as the person moves, sizes and hides the cards.
+  const [editing, setEditing] = useState(false)
+  const scopeName = scope === null ? undefined : projects.find(project => project.id === scope)?.name
+  const own = layouts?.[layoutKey] !== undefined
+  const reset = (): void => {
+    const { [layoutKey]: _dropped, ...rest } = layouts ?? {}
+    updatePreferences({ overviewLayouts: rest })
+  }
 
   return (
-    <ScrollArea className="min-h-0 flex-1">
-      <div className="mx-auto max-w-6xl space-y-6 p-6">
-        {!onboardingDismissed && (
+    <Page
+      title="Overview"
+      description="What needs you, the agents at work, and what comes next."
+      actions={
+        editing ? (
+          <>
+            {own && (
+              <Button variant="ghost" size="sm" onClick={reset}>
+                {layoutKey === ALL_PROJECTS ? 'Reset to the default layout' : 'Use the all-projects layout'}
+              </Button>
+            )}
+            <Button size="sm" onClick={() => setEditing(false)}>
+              Done
+            </Button>
+          </>
+        ) : (
+          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={() => setEditing(true)}>
+            <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
+            Customize
+          </Button>
+        )
+      }
+      bar={
+        editing && (
+          <p role="status" className="rounded-md bg-accent/60 px-3 py-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">{scopeName !== undefined ? `Arranging the layout for ${scopeName}.` : 'Arranging the layout for all projects.'}</span>{' '}
+            {scopeName !== undefined ? 'Each project keeps its own; a project you never arranged uses the all-projects one.' : 'A project you never arranged on its own uses it too.'} Drag a card by its handle, pick its width, or take it off with ✕. On a phone every card is full width.
+          </p>
+        )
+      }
+    >
+      <div className="space-y-4">
+        {!onboardingDismissed && !editing && (
           <OnboardingChecklist onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} />
         )}
-
-        {/* Usage first (#1139): the one figure that governs everything the agent may do next. */}
-        <Quota projects={projects} />
-
-        {/* What needs a person, beside who is working now. The agents' card is drawn only while
-            one works: with none, what needs you takes the whole row. */}
-        {/* One column that may shrink below its content: without it a long row pushes the cards past a phone's edge. */}
-        <div className={cn('grid grid-cols-[minmax(0,1fr)] items-start gap-4', working.length > 0 && 'lg:grid-cols-2')}>
-          <HumanQueue items={interventions} onSelectProject={onSelectProject} onSelectAgent={onSelectAgent} />
-          {working.length > 0 && <Agents working={working} onSelectAgent={onSelectAgent} />}
-        </div>
-
-        {/* The cards the installed packages declare (#1818), in two columns that fill evenly whatever
-            each card's height: a package's own summary of its data, only when one of the projects
-            shown (every registered one, or the picked one alone) has the package. */}
-        <div className="gap-4 lg:columns-2 [&>*]:mb-4 [&>*]:break-inside-avoid">
-          <ModuleCards projects={shownProjects} />
-        </div>
+        {editing ? <EditOverview arranged={arranged} layouts={layouts} layoutKey={layoutKey} /> : arranged.some(({ hidden }) => !hidden) ? (
+          <CardGrid cards={arranged.filter(({ hidden }) => !hidden)} />
+        ) : (
+          <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">Every card is off the Overview. Press Customize to put some back.</p>
+        )}
       </div>
-    </ScrollArea>
+    </Page>
   )
 }
 
@@ -96,6 +203,7 @@ function HumanQueue({
   onSelectProject: (id: string) => void
   onSelectAgent: (projectId: string, agentId: string) => void
 }) {
+  const groups = KINDS.map(kind => ({ ...kind, items: items.filter(item => item.kind === kind.value) })).filter(group => group.items.length > 0)
   return (
     <Card>
       <CardHeader>
@@ -114,12 +222,30 @@ function HumanQueue({
         {items.length === 0 ? (
           <p className="py-2 text-sm text-muted-foreground">AI doesn&apos;t need you.</p>
         ) : (
+          // One group per kind, under a quiet heading with how many: a few questions are not lost
+          // among many checkouts left to commit. Each group shows its first rows and offers the rest.
           // Pulled out by the rows' own inset, so their text starts where the card's title does.
-          <div className="-mx-2">
-            <HumanQueueList items={items} onOpenAgent={onSelectAgent} onOpenProject={onSelectProject} />
+          <div className="-mx-2 space-y-3">
+            {groups.map(group => (
+              <section key={group.value} aria-label={group.label}>
+                <h4 className="flex items-baseline gap-1.5 px-2 pb-0.5 text-xs font-medium text-muted-foreground">
+                  {group.label}
+                  <span className="tabular-nums opacity-70">{group.items.length}</span>
+                </h4>
+                <HumanQueueList grouped items={group.items} onOpenAgent={onSelectAgent} onOpenProject={onSelectProject} />
+              </section>
+            ))}
           </div>
         )}
       </CardContent>
     </Card>
   )
 }
+
+/** The kinds the card groups its rows by, in the order of how much they hold a run up: a question stops one. */
+const KINDS: { value: Intervention['kind']; label: string }[] = [
+  { value: 'awaiting', label: 'Questions' },
+  { value: 'pr', label: 'Pull requests' },
+  { value: 'unpushed', label: 'To publish' },
+  { value: 'uncommitted', label: 'To commit' },
+]

@@ -44,6 +44,7 @@ function host(asked: string[]): GitHostSource {
     merge: async () => ({ ok: false, error: 'not here' }),
     home: async () => undefined,
     me: async () => undefined,
+    people: async () => [],
   }
 }
 

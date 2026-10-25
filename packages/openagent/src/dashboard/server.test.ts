@@ -1,3 +1,4 @@
+import { readHealth } from '../health.js'
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { get, request } from 'node:http'
@@ -427,7 +428,7 @@ test('/_relay/events streams the run\'s events as ndjson (#1067)', async () => {
   }
 })
 
-test('/_relay/ping answers 200 with this OpenAgent\'s version and starts nothing (#1072)', async () => {
+test('/_relay/ping answers 200 with this OpenAgent\'s version and how this computer stands, and starts nothing (#1072)', async () => {
   // A home of the test's own: the ids it says are those of the machines saved there, none.
   const home = await mkdtemp(join(tmpdir(), 'oa-ping-'))
   const previous = process.env.XDG_CONFIG_HOME
@@ -436,8 +437,10 @@ test('/_relay/ping answers 200 with this OpenAgent\'s version and starts nothing
   try {
     const ok = await fetchText(`${base}/_relay/ping`)
     assert.equal(ok.status, 200)
-    // What a computer that added this one reads: whether this one fell behind it, which runs in a project's shared records are this computer's, and whether it is in at that computer too.
-    assert.deepEqual(JSON.parse(ok.body), { version: openagentVersion(), host: hostname(), listed: [] })
+    // What a computer that added this one reads: whether this one fell behind it, which runs in a project's shared records are this computer's, whether it is in at that computer too, and how it stands.
+    const { health, ...said } = JSON.parse(ok.body) as Record<string, unknown>
+    assert.deepEqual(said, { version: openagentVersion(), host: hostname(), listed: [] })
+    assert.ok(readHealth(health), 'its memory, disk and load, as another computer reads them')
     assert.equal(starts.length, 0) // a health check must never spawn a run
   } finally {
     await close()

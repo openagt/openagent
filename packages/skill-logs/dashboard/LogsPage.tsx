@@ -1,11 +1,12 @@
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, useModuleHost, usePolled, formatRelative, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
+import { useState } from 'react'
+import { FilterChips, Page, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn, formatDateTime, formatDuration, useModuleHost, usePolled, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
 const LIMIT = 50
 
 /** One run, with the project it was recorded in. */
-interface Row {
+export interface Row {
   project: ModuleProject
   card: Omit<RunCard, 'caller'>
 }
@@ -18,12 +19,65 @@ interface Read {
 
 const NOTHING_READ: Read = { rows: [], failed: [] }
 
-const STATUS_CLASS: Record<string, string> = {
-  running: 'text-primary',
-  done: 'text-success',
-  stopped: 'text-warning',
-  failed: 'text-danger',
-  waiting: 'text-info',
+/** Each status's tone: its word, and the dot before it. */
+const STATUS_TONE: Record<string, { text: string; dot: string }> = {
+  running: { text: 'text-primary', dot: 'bg-primary' },
+  done: { text: 'text-success', dot: 'bg-success' },
+  waiting: { text: 'text-info', dot: 'bg-info' },
+  stopped: { text: 'text-warning', dot: 'bg-warning' },
+  failed: { text: 'text-danger', dot: 'bg-danger' },
+}
+
+/** The statuses a chip picks, in this order: what is going, then how runs ended. */
+const STATUSES = ['running', 'waiting', 'done', 'stopped', 'failed']
+
+/** A run's status as a dot and its word. */
+function Status({ status }: { status: string }) {
+  const tone = STATUS_TONE[status]
+  return (
+    <span className={cn('inline-flex items-center gap-1.5', tone?.text ?? 'text-muted-foreground')}>
+      <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', tone?.dot ?? 'bg-muted-foreground')} />
+      {status}
+    </span>
+  )
+}
+
+/** The day a run started, as a heading says it: "Today", "Yesterday", else the weekday and the date. */
+export function dayOf(iso: string, now: Date = new Date()): string {
+  const day = new Date(iso)
+  const start = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  const days = Math.round((start(now) - start(day)) / 86_400_000)
+  if (days === 0) return 'Today'
+  if (days === 1) return 'Yesterday'
+  return day.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', ...(day.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}) })
+}
+
+/** The runs in order, cut into their days, each day with what its runs cost together. */
+export function byDay(rows: Row[], now: Date = new Date()): { day: string; rows: Row[]; cost: number }[] {
+  const days: { day: string; rows: Row[]; cost: number }[] = []
+  for (const row of rows) {
+    const day = dayOf(row.card.startedAt, now)
+    const last = days[days.length - 1]
+    if (last?.day === day) last.rows.push(row)
+    else days.push({ day, rows: [row], cost: 0 })
+    days[days.length - 1]!.cost += row.card.cost ?? 0
+  }
+  return days
+}
+
+/** How long a run took, from its start to its end; nothing for one still going. */
+function took(card: Row['card']): string {
+  return card.endedAt ? formatDuration(Date.parse(card.endedAt) - Date.parse(card.startedAt)) : '—'
+}
+
+/** The time of day a run started, its day being the heading's. */
+function clock(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+}
+
+/** What cost a sum of runs: "$1.23", nothing for none. */
+function dollars(cost: number): string {
+  return `$${cost.toFixed(2)}`
 }
 
 /**
@@ -53,82 +107,132 @@ export function LogsPage({ projects }: ModulePageProps) {
     [key],
   )
 
+  // Which status the list shows: every one, until a chip picks one. One no run has any more goes back to all.
+  const [picked, setPicked] = useState<string | null>(null)
+  const counts = STATUSES.map(value => ({ value, label: value[0]!.toUpperCase() + value.slice(1), count: read.rows.filter(row => row.card.status === value).length })).filter(c => c.count > 0)
+  const status = counts.some(c => c.value === picked) ? picked : null
+  const shown = status === null ? read.rows : read.rows.filter(row => row.card.status === status)
+  const days = byDay(shown)
+  const many = projects.length > 1
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6 max-md:p-4">
-      <h1 className="text-lg font-semibold">Logs</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Every run recorded in {projects.length === 1 ? 'this project' : 'these projects'}, newest first.</p>
+    <Page
+      title="Logs"
+      description={`Every run recorded in ${projects.length === 1 ? 'this project' : 'these projects'}, newest first.`}
+      bar={<FilterChips chips={counts} total={read.rows.length} picked={status} onPick={setPicked} />}
+    >
       {read.failed.map(({ project, error }) => (
-        <p key={project.id} role="alert" className="mt-3 text-sm text-danger">
+        <p key={project.id} role="alert" className="mb-3 text-sm text-danger">
           Could not read the runs of {project.name}: {error}
         </p>
       ))}
-      {loaded && read.rows.length === 0 && read.failed.length === 0 && <p className="mt-6 text-sm text-muted-foreground">No runs recorded yet.</p>}
-      {read.rows.length > 0 && (
-        <div className="mt-4 max-md:hidden">
+      {!loaded && <p className="text-sm text-muted-foreground">Loading…</p>}
+      {loaded && read.rows.length === 0 && read.failed.length === 0 && <p className="text-sm text-muted-foreground">No runs recorded yet.</p>}
+      {days.length > 0 && (
+        // One table for every day, so the columns stand in one place down the page; each day opens
+        // with a row of its own: the day, how many runs it had and what they cost together.
+        <div className="max-md:hidden">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Status</TableHead>
-                <TableHead>Asked</TableHead>
-                {projects.length > 1 && <TableHead>Project</TableHead>}
+                <TableHead className="w-24">Status</TableHead>
+                <TableHead>Run</TableHead>
+                {many && <TableHead>Project</TableHead>}
                 <TableHead>Branch</TableHead>
-                <TableHead>Pull request</TableHead>
+                <TableHead className="text-right">Took</TableHead>
                 <TableHead className="text-right">Cost</TableHead>
-                <TableHead>Started</TableHead>
+                <TableHead className="w-20 text-right">Started</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {read.rows.map(({ project, card }) => (
-                <TableRow key={`${project.id}/${card.id}`} onClick={() => host.openAgent(project.id, card.id)} className="cursor-pointer">
-                  <TableCell className={STATUS_CLASS[card.status] ?? 'text-muted-foreground'}>{card.status}</TableCell>
-                  <TableCell className="max-w-md truncate" title={card.intent}>
-                    {card.intent?.trim() || card.id}
+              {days.map(({ day, rows, cost }) => [
+                <TableRow key={day} className="hover:bg-transparent">
+                  <TableCell colSpan={many ? 7 : 6} className="pt-5 pb-1.5">
+                    <DayHeading day={day} runs={rows.length} cost={cost} />
                   </TableCell>
-                  {projects.length > 1 && <TableCell className="text-muted-foreground">{project.name}</TableCell>}
-                  <TableCell className="font-mono text-xs text-muted-foreground">{card.branch ?? '—'}</TableCell>
-                  <TableCell>
-                    {card.pr ? (
-                      <a href={card.pr.url} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()} className="text-info hover:underline">
-                        #{card.pr.number}
-                      </a>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{card.cost !== undefined ? `$${card.cost.toFixed(2)}` : '—'}</TableCell>
-                  <TableCell className="whitespace-nowrap text-muted-foreground" title={card.startedAt}>
-                    {formatRelative(card.startedAt)}
-                  </TableCell>
-                </TableRow>
-              ))}
+                </TableRow>,
+                ...rows.map(({ project, card }) => (
+                  <TableRow key={`${project.id}/${card.id}`} onClick={() => host.openAgent(project.id, card.id)} className="cursor-pointer">
+                    <TableCell>
+                      <Status status={card.status} />
+                    </TableCell>
+                    {/* The run's short name, and what it was asked under it; a run with no name yet is its ask. */}
+                    <TableCell className="max-w-md">
+                      <p className="truncate font-medium" title={card.title ?? card.intent}>
+                        {card.title?.trim() || card.intent?.trim() || card.id}
+                      </p>
+                      {card.title?.trim() && card.intent?.trim() && (
+                        <p className="truncate text-xs text-muted-foreground" title={card.intent}>
+                          {card.intent}
+                        </p>
+                      )}
+                    </TableCell>
+                    {many && <TableCell className="text-muted-foreground">{project.name}</TableCell>}
+                    <TableCell className="max-w-56">
+                      {card.pr ? (
+                        <a href={card.pr.url} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()} className="text-info hover:underline">
+                          #{card.pr.number}
+                        </a>
+                      ) : (
+                        <span className="block truncate font-mono text-xs text-muted-foreground" title={card.branch}>
+                          {card.branch ?? '—'}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground tabular-nums">{took(card)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{card.cost !== undefined ? dollars(card.cost) : '—'}</TableCell>
+                    <TableCell className="whitespace-nowrap text-right text-muted-foreground tabular-nums" title={formatDateTime(card.startedAt)}>
+                      {clock(card.startedAt)}
+                    </TableCell>
+                  </TableRow>
+                )),
+              ])}
             </TableBody>
           </Table>
         </div>
       )}
-      {/* A phone has no width for the table's columns: there a run is two lines, what was asked and
-          then the rest, and its branch is left to its own page. */}
-      {read.rows.length > 0 && (
-        <ul className="mt-4 text-sm md:hidden">
-          {read.rows.map(({ project, card }) => (
-            <li key={`${project.id}/${card.id}`} onClick={() => host.openAgent(project.id, card.id)} className="cursor-pointer border-b border-border py-2 hover:bg-accent">
-              <p className="truncate" title={card.intent}>
-                {card.intent?.trim() || card.id}
-              </p>
-              <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
-                <span className={STATUS_CLASS[card.status]}>{card.status}</span>
-                {projects.length > 1 && <span>{project.name}</span>}
-                {card.pr && (
-                  <a href={card.pr.url} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()} className="text-info hover:underline">
-                    #{card.pr.number}
-                  </a>
-                )}
-                {card.cost !== undefined && <span className="tabular-nums">${card.cost.toFixed(2)}</span>}
-                <span title={card.startedAt}>{formatRelative(card.startedAt)}</span>
-              </p>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+      {/* A phone has no width for the table's columns: there a run is two lines, its name and then
+          the rest, and its branch is left to its own page. */}
+      <div className="space-y-5 md:hidden">
+        {days.map(({ day, rows, cost }) => (
+          <section key={day} aria-label={day}>
+            <DayHeading day={day} runs={rows.length} cost={cost} />
+            <ul className="mt-1 text-sm">
+              {rows.map(({ project, card }) => (
+                <li key={`${project.id}/${card.id}`} onClick={() => host.openAgent(project.id, card.id)} className="cursor-pointer border-b border-border py-2 hover:bg-accent">
+                  <p className="truncate font-medium" title={card.intent}>
+                    {card.title?.trim() || card.intent?.trim() || card.id}
+                  </p>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+                    <Status status={card.status} />
+                    {many && <span>{project.name}</span>}
+                    {card.pr && (
+                      <a href={card.pr.url} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()} className="text-info hover:underline">
+                        #{card.pr.number}
+                      </a>
+                    )}
+                    {card.cost !== undefined && <span className="tabular-nums">{dollars(card.cost)}</span>}
+                    <span className="tabular-nums">{clock(card.startedAt)}</span>
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+    </Page>
+  )
+}
+
+/** A day's heading: the day, how many runs it had and what they cost together. */
+function DayHeading({ day, runs, cost }: { day: string; runs: number; cost: number }) {
+  return (
+    <h2 className="flex items-baseline gap-2 text-sm font-semibold text-foreground">
+      {day}
+      <span className="text-xs font-normal text-muted-foreground tabular-nums">
+        {runs === 1 ? '1 run' : `${runs} runs`}
+        {cost > 0 && ` · ${dollars(cost)}`}
+      </span>
+    </h2>
   )
 }

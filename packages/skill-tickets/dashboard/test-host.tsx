@@ -38,6 +38,8 @@ export function fakeHost(answers: Answers = {}, agents: Record<string, ModuleAge
     openAgent: vi.fn(),
     openPage: vi.fn(),
     pageHref: (segment: string) => `/${segment}`,
+    openSettings: vi.fn(),
+    gitHostPeople: vi.fn(async () => []),
     startRun: vi.fn(async (_projectId: string, _prompt: string) => ({ ok: true as const, agentId: 'started' })),
     configureRun: vi.fn(),
     agents: vi.fn(async (projectId: string) => agents[projectId] ?? []),

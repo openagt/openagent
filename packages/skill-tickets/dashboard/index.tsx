@@ -28,6 +28,6 @@ export default defineModule({
       },
     },
   ],
-  cards: [{ id: 'hot', order: 20, Card: HotTicketsCard }],
+  cards: [{ id: 'hot', label: 'Hot tickets', order: 20, Card: HotTicketsCard }],
   stylesheet: 'dashboard.css',
 })

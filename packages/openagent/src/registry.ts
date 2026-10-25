@@ -1,3 +1,4 @@
+import { sanitizeOverviewLayouts, type OverviewLayouts } from './overview-layout.js'
 import { basename, dirname, join, resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { isDriverName } from './driver-names.js'
@@ -195,6 +196,8 @@ export interface Preferences {
    * Appearance clears it.
    */
   onboardingDismissed?: boolean
+  /** How the Overview lays out its cards, per project and for all projects ({@link OverviewLayouts}); absent = each card in its own order and width. */
+  overviewLayouts?: OverviewLayouts
 }
 
 /** The persisted registry file shape (#410): the project list plus the user preferences. */
@@ -383,6 +386,8 @@ function sanitizePreferences(value: unknown): Preferences {
   if (customPresets.length) preferences.customPresets = customPresets
   // `recentsSort` is constrained to the known set; the default, `created`, is stored as nothing.
   if (input['recentsSort'] === 'updated' || input['recentsSort'] === 'name') preferences.recentsSort = input['recentsSort']
+  const overviewLayouts = sanitizeOverviewLayouts(input['overviewLayouts'])
+  if (Object.keys(overviewLayouts).length) preferences.overviewLayouts = overviewLayouts
   return preferences
 }
 

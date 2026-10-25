@@ -12,7 +12,7 @@ import './dashboard.css'
 
 export default defineModule({
   pages: [{ segment: 'automations', label: 'Automations', icon: CalendarClock, Page: AutomationsPage }],
-  cards: [{ id: 'scheduler', order: 90, Card: SchedulerCard }],
+  cards: [{ id: 'scheduler', label: 'Automations', order: 90, Card: SchedulerCard }],
   settings: [{ id: 'scheduler', title: 'Scheduler', icon: CalendarClock, order: 20, Section: SchedulerSettings }],
   usageLimit: {
     read: async (host, projects) => loosestSpendOffset(await readSchedulers(host, projects)),

@@ -36,3 +36,18 @@ describe('the sidebar\'s width', () => {
     expect(renderHook(() => junk.useSidebarWidth()).result.current).toBe(junk.SIDEBAR_DEFAULT)
   })
 })
+
+describe('whether the sidebar is hidden', () => {
+  test('shown until hidden; hidden, kept in this browser and read so on the next load; shown again, forgotten', async () => {
+    const sidebar = await load()
+    const { result } = renderHook(() => sidebar.useSidebarHidden())
+    expect(result.current).toBe(false)
+    act(() => sidebar.setSidebarHidden(true))
+    expect(result.current).toBe(true)
+    expect(localStorage.getItem('oa.sidebar-hidden')).toBe('true')
+    const next = await load()
+    expect(renderHook(() => next.useSidebarHidden()).result.current).toBe(true)
+    act(() => next.setSidebarHidden(false))
+    expect(localStorage.getItem('oa.sidebar-hidden')).toBeNull()
+  })
+})

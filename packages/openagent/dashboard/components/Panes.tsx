@@ -262,9 +262,9 @@ export function PaneMenu() {
 }
 
 /**
- * One open pane: a card with its name, the button that lets it fill the page and the one that
- * closes it, over what it shows. A module's pane may put its own things in place of its name and
- * before those buttons (`PaneTitle`, `PaneActions`).
+ * One open pane, flush with its neighbours: a header with its name, the button that lets it fill
+ * the page and the one that closes it, over what it shows. A module's pane may put its own things
+ * in place of its name and before those buttons (`PaneTitle`, `PaneActions`).
  */
 function PaneCard({ pane }: { pane: Pane }) {
   const { page, expanded, panelProps, reveal, docs, docsLoaded, subagent } = useContext(PanesContext)
@@ -275,9 +275,10 @@ function PaneCard({ pane }: { pane: Pane }) {
   return (
     // A pane that fills the page is laid over the whole of it, where it is: its contents are not
     // drawn anew, so what was opened and scrolled in it stays.
-    <div className={fills ? 'absolute inset-0 z-30 flex bg-background p-2' : 'flex h-full min-h-0 min-w-0'}>
-      <section aria-label={pane.label} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground">
-        <header className="flex h-8 shrink-0 items-center gap-0.5 pr-1 pl-1">
+    <div className={fills ? 'absolute inset-0 z-30 flex bg-background' : 'flex h-full min-h-0 min-w-0'}>
+      <section aria-label={pane.label} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
+        {/* As tall as the chat's top row, and lined under as it is: the two read as one bar. */}
+        <header className="flex h-11 shrink-0 items-center gap-0.5 border-b border-border pr-2 pl-2">
           {/* The pane's name stands until the pane puts its own title here. */}
           <div ref={setTitle} className="peer flex min-w-0 flex-1 items-center gap-0.5 empty:hidden" />
           <h2 className="min-w-0 flex-1 truncate pl-2 text-[13px] text-muted-foreground peer-[:not(:empty)]:hidden">{pane.label}</h2>
@@ -306,7 +307,7 @@ function PaneCard({ pane }: { pane: Pane }) {
             <TooltipContent>Close</TooltipContent>
           </Tooltip>
         </header>
-        {/* The pane fills what is left of the card's height, and scrolls inside itself. */}
+        {/* The pane fills what is left of its height, and scrolls inside itself. */}
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {pane.id === SUBAGENT ? (
             <PaneHeaderContext.Provider value={slots}>{subagent}</PaneHeaderContext.Provider>
@@ -384,14 +385,14 @@ export function PaneLayout({ children }: { children: ReactNode }) {
         </ResizablePanel>
         {beside && <ResizableHandle aria-label="The width of the chat and the panes" />}
         {beside && (
-          <ResizablePanel id={columnId} defaultSize={`${column}%`} minSize={288} className="py-2 pr-2" style={{ overflow: 'hidden' }}>
+          <ResizablePanel id={columnId} defaultSize={`${column}%`} minSize={288} style={{ overflow: 'hidden' }}>
             <PaneStack />
           </ResizablePanel>
         )}
       </ResizablePanelGroup>
       {isMobile && open.length > 0 && (
         // Over the chat's right two thirds, as Claude Code's are; all of the page while one pane fills it.
-        <div className={cn('absolute inset-y-0 right-0 z-20 flex flex-col gap-2 p-2', expanded ? 'left-0' : 'w-2/3 min-w-64 max-w-full')}>
+        <div className={cn('absolute inset-y-0 right-0 z-20 flex flex-col divide-y divide-border border-l border-border bg-background', expanded ? 'left-0' : 'w-2/3 min-w-64 max-w-full')}>
           {open.map(pane => (
             <div key={pane.id} className="min-h-0 flex-1">
               <PaneCard pane={pane} />

@@ -1,7 +1,9 @@
-import { Flame } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitleLink, LinkActions, Tooltip, TooltipContent, TooltipTrigger, cn, usePolled, useModuleHost, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
-import { heldBack, holderAgent, hotLane, readListed, ticketLink, type HotLane } from '../src/module.js'
+import { useState, type ReactNode } from 'react'
+import { ArrowUp, Bot, CirclePause, Clock, Flame, type LucideIcon } from 'lucide-react'
+import { Button, Card, CardContent, CardHeader, CardTitleLink, LinkActions, cn, usePolled, useModuleHost, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
+import { heldBack, holderAgent, hotLane, readListed, ticketLink } from '../src/module.js'
 import type { WorkspaceTicket } from './lib/types.js'
+import { releaseClaim } from './lib/release.js'
 
 // The Overview's hot-tickets card: a cross-project glance at what agents hold, what is flagged
 // high priority, and what waits on a person, nothing else. Its data is `tickets list --local` in each project, the list an
@@ -10,12 +12,23 @@ import type { WorkspaceTicket } from './lib/types.js'
 // the installed modules offer on a ticket as a link ("Add to queue" where the project has a queue
 // package), so the card names no queue and still leads to one.
 
-/** One ticket on the card, tagged with its project and lane. */
+/**
+ * The card's lanes. A claim is told apart by its run: one still at it (working, or waiting on the
+ * person's answer) is being worked on; one whose run stopped, failed or ended, or is not among the
+ * project's runs, holds the ticket for nobody, and nothing lifts it but a person.
+ */
+type CardLane = 'working' | 'stale' | 'high-priority' | 'waiting'
+
+/** One ticket on the card, tagged with its project and lane, and the run holding it when one does. */
 interface HotTicket {
   project: ModuleProject
-  lane: HotLane
+  lane: CardLane
   ticket: WorkspaceTicket
+  holder?: { id: string; status: string }
 }
+
+/** Whether a holder's run still holds its claim for a reason: at work, or stopped on a question. */
+const holds = (status: string): boolean => status === 'running' || status === 'waiting'
 
 /** What one read of every project answered: the hot tickets, and the projects whose command failed. */
 interface Read {
@@ -25,17 +38,21 @@ interface Read {
 
 const NOTHING_READ: Read = { hot: [], errors: [] }
 
-/** The three lanes, each with the dot colour of the rest of the status vocabulary: warning = held, info = flagged, muted = parked on a person. */
-const LANES: { key: HotLane; label: string; dot: string }[] = [
-  { key: 'claimed', label: 'Claimed', dot: 'bg-warning' },
-  { key: 'high-priority', label: 'High priority', dot: 'bg-info' },
-  { key: 'waiting', label: 'Waiting', dot: 'bg-muted-foreground' },
+/** The kinds of row, in the order the list shows them, each with its heading. */
+const LANES: { key: CardLane; heading: string }[] = [
+  { key: 'stale', heading: 'Claimed, run stopped' },
+  { key: 'working', heading: 'Being worked on' },
+  { key: 'high-priority', heading: 'High priority' },
+  { key: 'waiting', heading: 'Waiting' },
 ]
+
+/** How a holder's run ended, as a stale claim's row says it. */
+const ENDED: Record<string, string> = { stopped: 'Run stopped', failed: 'Run failed', done: 'Run ended' }
 
 export function HotTicketsCard({ projects }: ModuleCardProps) {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
-  const { value: read, loaded } = usePolled<Read>(
+  const { value: read, loaded, reload } = usePolled<Read>(
     async () => {
       const reads = await Promise.all(
         projects.map(async project => {
@@ -43,10 +60,16 @@ export function HotTicketsCard({ projects }: ModuleCardProps) {
           if ('error' in listed) return { project, hot: [], error: listed.error }
           const hot: HotTicket[] = []
           for (const ticket of listed.tickets) {
-            const lane = hotLane(ticket)
-            if (!lane) continue
+            const hotIn = hotLane(ticket)
+            if (!hotIn) continue
             const agent = holderAgent(agents, ticket.lockedBy)
-            hot.push({ project, lane, ticket: agent ? { ...ticket, lockedByAgent: { id: agent.id, ...(agent.name ? { name: agent.name } : {}) } } : ticket })
+            const lane: CardLane = hotIn !== 'claimed' ? hotIn : agent && holds(agent.status) ? 'working' : 'stale'
+            hot.push({
+              project,
+              lane,
+              ticket: agent ? { ...ticket, lockedByAgent: { id: agent.id, ...(agent.name ? { name: agent.name } : {}) } } : ticket,
+              ...(agent ? { holder: { id: agent.id, status: agent.status } } : {}),
+            })
           }
           return { project, hot }
         }),
@@ -62,35 +85,63 @@ export function HotTicketsCard({ projects }: ModuleCardProps) {
     [key],
   )
 
+  const title = (
+    <CardTitleLink icon={<Flame className="h-4 w-4 text-muted-foreground" aria-hidden />} segment="tickets" onOpen={() => host.openPage('tickets')}>
+      Hot tickets
+    </CardTitleLink>
+  )
+  // Nothing hot: the card is its title and one line, not a box as tall as a full one.
+  if (loaded && read.hot.length === 0 && read.errors.length === 0)
+    return (
+      <Card>
+        <CardHeader className="pb-4">
+          {title}
+          {/* Named lanes, not "no tickets": the card is a shortlist, and its empty state must not
+              claim the backlog is empty when merely nothing qualifies. */}
+          <p className="text-xs text-muted-foreground">Nothing claimed, high priority or waiting.</p>
+        </CardHeader>
+      </Card>
+    )
+
+  return <HotList hot={read.hot} errors={read.errors} loaded={loaded} title={title} showProject={projects.length > 1} reload={reload} />
+}
+
+/**
+ * The list, as an issue list draws one: a quiet heading per kind, with how many; under it one row
+ * per ticket, whose small icon says the same in its tone and whose title takes the row. Ordered by
+ * what needs a person most: a claim held for nobody, then work going on, then what is flagged,
+ * then what waits on someone else. A kind with nothing in it has no heading.
+ */
+function HotList({ hot, errors, loaded, title, showProject, reload }: { hot: HotTicket[]; errors: Read['errors']; loaded: boolean; title: ReactNode; showProject: boolean; reload: () => Promise<void> }) {
+  const groups = LANES.map(lane => ({ lane, tickets: hot.filter(t => t.lane === lane.key) })).filter(group => group.tickets.length > 0)
   return (
     <Card>
-      <CardHeader>
-        <CardTitleLink icon={<Flame className="h-4 w-4 text-muted-foreground" aria-hidden />} segment="tickets" onOpen={() => host.openPage('tickets')}>
-          Hot tickets
-        </CardTitleLink>
-      </CardHeader>
-      <CardContent>
-        {read.errors.map(({ project, error }) => (
+      <CardHeader>{title}</CardHeader>
+      <CardContent className="pt-2">
+        {errors.map(({ project, error }) => (
           <p key={project.id} role="alert" className="mb-2 text-xs text-danger">
             Could not read the tickets of {project.name}: {error}
           </p>
         ))}
         {!loaded ? (
           <p className="py-2 text-sm text-muted-foreground">Loading…</p>
-        ) : read.hot.length === 0 ? (
-          // Named lanes, not "no tickets": the card is a shortlist, and its empty state must not
-          // claim the backlog is empty when merely nothing qualifies.
-          <p className="py-2 text-sm text-muted-foreground">Nothing claimed, high priority or waiting.</p>
         ) : (
-          // The lanes stacked, not side by side: the card shares the Overview's narrow column with
-          // the other packages' cards, and a row needs its width for the title.
-          <div className="flex flex-col gap-5">
-            {/* A lane with nothing in it is not drawn: "Claimed 0" says nothing the missing lane does not. */}
-            {LANES.map(lane => ({ lane, tickets: read.hot.filter(t => t.lane === lane.key) }))
-              .filter(({ tickets }) => tickets.length > 0)
-              .map(({ lane, tickets }) => (
-                <Lane key={lane.key} lane={lane} tickets={tickets} showProject={projects.length > 1} />
-              ))}
+          // Every ticket, never a "+N more": the card is the shortlist. Pulled out by the rows' own
+          // inset, so their text starts where the card's title does.
+          <div className="-mx-2 space-y-3">
+            {groups.map(({ lane, tickets }) => (
+              <section key={lane.key} aria-label={lane.heading}>
+                <h4 className="flex items-baseline gap-1.5 px-2 pb-0.5 text-xs font-medium text-muted-foreground">
+                  {lane.heading}
+                  <span className="tabular-nums opacity-70">{tickets.length}</span>
+                </h4>
+                <ul>
+                  {tickets.map(t => (
+                    <Row key={`${t.project.id}:${t.ticket.file}`} hot={t} showProject={showProject} reload={reload} />
+                  ))}
+                </ul>
+              </section>
+            ))}
           </div>
         )}
       </CardContent>
@@ -98,62 +149,81 @@ export function HotTicketsCard({ projects }: ModuleCardProps) {
   )
 }
 
-function Lane({ lane, tickets, showProject }: { lane: (typeof LANES)[number]; tickets: HotTicket[]; showProject: boolean }) {
+/** A row's mark, in its tone, and what it means, said on its hover. */
+function stateOf(hot: HotTicket): { Icon: LucideIcon; says: string; tone: string } {
+  const holder = hot.ticket.lockedByAgent?.name ?? hot.ticket.lockedBy
+  const by = holder ? `, claimed by ${holder}` : ''
+  if (hot.lane === 'working') return { Icon: Bot, says: `${hot.holder?.status === 'waiting' ? 'Its run waits on your answer' : 'Its run is at work'}${by}: open the run`, tone: 'text-success' }
+  if (hot.lane === 'stale') return { Icon: CirclePause, says: `${hot.holder ? (ENDED[hot.holder.status] ?? 'Run stopped') : 'No run holds it any more'}${by}`, tone: 'text-warning' }
+  if (hot.lane === 'high-priority') return { Icon: ArrowUp, says: `Priority ${hot.ticket.priority ?? ''}`.trim(), tone: 'text-info' }
+  return { Icon: Clock, says: `Waiting${hot.ticket.waiting ? ` on ${hot.ticket.waiting}` : ''}`, tone: 'text-muted-foreground' }
+}
+
+/**
+ * One ticket: its mark, its title, which opens its page, a short fact at the end (its priority,
+ * what it waits on, its project where the card spans several), and, under the pointer, what can be
+ * done with it, laid over the row's end rather than pushing the row. A ticket held for nobody can be
+ * gone on with (its run opens) or let go (the claim is lifted, and it is a ticket like any other
+ * again); one held by a run at work, or in review or waiting, has nothing to be done here. A phone
+ * has no hover: there the actions always show, in the row.
+ */
+function Row({ hot, showProject, reload }: { hot: HotTicket; showProject: boolean; reload: () => Promise<void> }) {
   const host = useModuleHost()
+  const { project, ticket, lane, holder } = hot
+  const [releasing, setReleasing] = useState(false)
+  const [failed, setFailed] = useState<string>()
+  const release = async (): Promise<void> => {
+    setReleasing(true)
+    setFailed(undefined)
+    const outcome = await releaseClaim(host, project.id, ticket.file).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
+    if (!outcome.ok) setFailed(outcome.error)
+    await reload().catch(() => {})
+    setReleasing(false)
+  }
+  const actions = lane === 'stale' ? (
+    <>
+      {holder && (
+        <Button variant="ghost" size="xs" onClick={() => host.openAgent(project.id, holder.id)} title="Open the run that claimed it, to go on with its work">
+          Continue
+        </Button>
+      )}
+      <Button variant="ghost" size="xs" disabled={releasing} onClick={() => void release()} title="Lift the claim: any agent may take the ticket again">
+        {releasing ? 'Releasing…' : 'Release'}
+      </Button>
+    </>
+  ) : lane !== 'working' && !heldBack(ticket) ? (
+    <LinkActions projects={[project.id]} targets={[{ projectId: project.id, links: [ticketLink(ticket)] }]} resetKey={`${project.id}:${ticket.file}`} size="xs" variant="ghost" />
+  ) : null
+  const { Icon, says, tone } = stateOf(hot)
+  // The short fact at the row's end, in grey.
+  const fact = lane === 'waiting' ? ticket.waiting : lane === 'high-priority' && ticket.priority ? `P${ticket.priority}` : undefined
+  const mark = <Icon className="h-3.5 w-3.5" aria-hidden />
   return (
-    <div>
-      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
-        <span aria-hidden className={cn('h-2 w-2 shrink-0 rounded-full', lane.dot)} />
-        <span className="text-foreground/80">{lane.label}</span>
-        <span className="tabular-nums text-muted-foreground/70">{tickets.length}</span>
-      </div>
-      {
-        // Every ticket in the lane, never a "+N more": the card is the shortlist.
-        <ul className="mt-1.5">
-          {tickets.map(({ project, ticket }) => {
-            const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy
-            return (
-              // On a phone the title has a line of its own, and what earns the lane goes under it.
-              <li key={`${project.id}:${ticket.file}`} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent/60 max-sm:flex-wrap max-sm:gap-y-1">
-                <Tooltip>
-                  <TooltipTrigger
-                    render={<button type="button" onClick={() => host.openPage('tickets', [ticket.file], project.id)} className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:underline max-sm:basis-full!" />}
-                  >
-                    {ticket.title}
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-[24rem]">{ticket.summary || ticket.title}</TooltipContent>
-                </Tooltip>
-                {/* The one fact that earns the lane: who holds it, the priority that flagged it, or what it waits on. */}
-                {lane.key === 'claimed' && holder && (
-                  ticket.lockedByAgent ? (
-                    <button
-                      type="button"
-                      onClick={() => host.openAgent(project.id, ticket.lockedByAgent!.id)}
-                      title="Open the run holding this ticket"
-                      className="inline-block max-w-[8rem] shrink-0 truncate rounded border border-border px-1 text-[10px] text-warning hover:opacity-80"
-                    >
-                      {holder}
-                    </button>
-                  ) : (
-                    <span className="inline-block max-w-[8rem] shrink-0 truncate rounded border border-border px-1 text-[10px] text-warning">{holder}</span>
-                  )
-                )}
-                {lane.key === 'waiting' && ticket.waiting && (
-                  <span title={`Waiting: ${ticket.waiting}`} className="inline-block max-w-[10rem] shrink-0 truncate text-[10px] text-muted-foreground max-sm:max-w-none! max-sm:min-w-0 max-sm:flex-1 max-sm:shrink">
-                    {ticket.waiting}
-                  </span>
-                )}
-                {lane.key === 'high-priority' && ticket.priority && (
-                  <span className="shrink-0 rounded border border-border px-1 text-[10px] uppercase tracking-wide text-muted-foreground">{ticket.priority}</span>
-                )}
-                {/* The project's name only where the card spans several: with one it says nothing. */}
-                {showProject && <span className="shrink-0 text-xs text-muted-foreground">{project.name}</span>}
-                {!heldBack(ticket) && <LinkActions projects={[project.id]} targets={[{ projectId: project.id, links: [ticketLink(ticket)] }]} resetKey={`${project.id}:${ticket.file}`} size="xs" variant="ghost" />}
-              </li>
-            )
-          })}
-        </ul>
-      }
-    </div>
+    <li className="group/row relative flex h-8 items-center gap-2.5 rounded-md px-2 text-sm hover:bg-accent">
+      {lane === 'working' && holder ? (
+        <button type="button" onClick={() => host.openAgent(project.id, holder.id)} title={says} aria-label={says} className={cn('flex size-4 shrink-0 items-center justify-center', tone)}>
+          {mark}
+        </button>
+      ) : (
+        <span title={says} aria-label={says} className={cn('flex size-4 shrink-0 items-center justify-center', tone)}>
+          {mark}
+        </span>
+      )}
+      <button type="button" onClick={() => host.openPage('tickets', [ticket.file], project.id)} className="min-w-0 flex-1 truncate text-left text-foreground hover:underline">
+        {ticket.title}
+      </button>
+      {(fact || showProject) && (
+        <span className="max-w-[40%] shrink-0 truncate text-xs text-muted-foreground" title={fact}>
+          {[fact, showProject ? project.name : undefined].filter(Boolean).join(' · ')}
+        </span>
+      )}
+      {failed && <span className="shrink-0 text-xs text-danger">{failed}</span>}
+      {/* Laid over the row's end, on the row's own colour, so the row never moves under the pointer. */}
+      {actions && (
+        <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 rounded-r-md bg-[inherit] pr-1 pl-3 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100 max-md:static max-md:bg-transparent max-md:p-0 max-md:opacity-100">
+          {actions}
+        </div>
+      )}
+    </li>
   )
 }

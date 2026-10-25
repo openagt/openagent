@@ -249,7 +249,7 @@ async function syncServer(machine: MachineRecord, local: LocalLogin[], usage: Aw
  * them, what a run starts with. Never this computer's own: its editor, its browser bridge, where
  * its projects' runs start from.
  */
-const FOLLOWING = ['theme', 'notifyBrowser', 'notifyNewActivity', 'notifyHumanIntervention', 'driver', 'model', 'effort', 'publish', 'postMergeCleanup', 'nameRuns', 'showThinking', 'recentsSort', 'customPresets', 'onboardingDismissed'] as const satisfies readonly (keyof Preferences)[]
+const FOLLOWING = ['theme', 'notifyBrowser', 'notifyNewActivity', 'notifyHumanIntervention', 'driver', 'model', 'effort', 'publish', 'postMergeCleanup', 'nameRuns', 'showThinking', 'recentsSort', 'customPresets', 'onboardingDismissed', 'overviewLayouts'] as const satisfies readonly (keyof Preferences)[]
 
 type Followed = Pick<Preferences, (typeof FOLLOWING)[number]>
 

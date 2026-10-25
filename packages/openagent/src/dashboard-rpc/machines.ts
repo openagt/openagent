@@ -1,3 +1,4 @@
+import { computerHealth, type Health } from '../health.js'
 import { computerName } from '../computer-name.js'
 import { basename } from 'node:path'
 import { readSharing } from '@openagt/agent-data'
@@ -257,11 +258,14 @@ export interface MachineVersions {
   version: string
   /** This computer's own name, as another machine lists it. */
   name: string
+  /** How this computer stands: its memory, disk and load. */
+  health?: Health
   /**
-   * Each saved machine, with its version when it answers and says, the id it lists this computer
-   * under among its devices, and the ids it is listed under at the doors of the machines it saved.
+   * Each saved machine, with its version and how it stands when it answers and says, the id it
+   * lists this computer under among its devices, and the ids it is listed under at the doors of
+   * the machines it saved.
    */
-  machines: (Machine & { version?: string; device?: string; listed?: string[] })[]
+  machines: (Machine & { version?: string; health?: Health; device?: string; listed?: string[] })[]
 }
 
 /**
@@ -276,15 +280,16 @@ export interface MachineVersions {
 export async function onMachineVersions(): Promise<MachineVersions> {
   const machines = await Promise.all(
     (await listMachines()).map(async machine => {
-      const { version, listed: said } = await remoteFacts(machine)
+      const { version, health, listed: said } = await remoteFacts(machine)
       // What it says now is kept; one that does not answer is known by what it said last.
       if (version !== undefined) await noteListed(machine, said ?? []).catch(() => {})
       const listed = version !== undefined ? said : machine.listed
       const device = deviceIdOf(machine.key)
-      return { ...shown(machine), ...(version !== undefined ? { version } : {}), ...(device !== undefined ? { device } : {}), ...(listed !== undefined ? { listed } : {}) }
+      return { ...shown(machine), ...(version !== undefined ? { version } : {}), ...(health ? { health } : {}), ...(device !== undefined ? { device } : {}), ...(listed !== undefined ? { listed } : {}) }
     }),
   )
-  return { version: openagentVersion(), name: ownName(), machines }
+  const health = await computerHealth().catch(() => undefined)
+  return { version: openagentVersion(), name: ownName(), ...(health ? { health } : {}), machines }
 }
 
 /** Give a saved machine the name the person picked. */

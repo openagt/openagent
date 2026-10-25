@@ -341,22 +341,24 @@ describe('Quota (#960)', () => {
 
   test('names whether autonomous AI currently has room to spend (#960 Edit)', async () => {
     view = reading(20, 15) // limit 72% > 20% used: room left
-    const { container } = await show()
-    expect(container.querySelector('em')?.textContent).toBe('enabled')
-    expect(screen.getByText(/move slider to the left to disable/)).toBeTruthy()
+    await show()
+    // Said as a sentence, with how far the handle lets it go, and how to change it after.
+    const line = screen.getByText(/Agents may start work on their own up to/)
+    expect(line.textContent).toMatch(/up to 72% of the week/)
+    expect(screen.getByText(/drag the handle to change/)).toBeTruthy()
   })
 
   test('names autonomous AI as disabled once the knob leaves no room (#960 Edit)', async () => {
     view = reading(80, -50) // limit 7% < 80% used: no room
-    const { container } = await show()
-    expect(container.querySelector('em')?.textContent).toBe('disabled')
-    expect(screen.getByText(/move slider to the right to enable/)).toBeTruthy()
+    await show()
+    expect(screen.getByText(/Agents start no work on their own/).className).toMatch(/text-warning/)
+    expect(screen.getByText(/drag the handle right to allow it/)).toBeTruthy()
   })
 
   test('the enabled status has its own tooltip naming what enabled means (#960 Edit)', async () => {
     view = reading(20, 15) // room left: enabled
     await show()
-    await hoverTooltip(screen.getByText('enabled', { selector: 'em' }).closest('span')!)
+    await hoverTooltip(screen.getByText(/Agents may start work on their own up to/))
     expect(
       screen.getByText(
         'Autonomous AI enabled means that unattended work may start on its own while the account is under the line.',
@@ -367,7 +369,7 @@ describe('Quota (#960)', () => {
   test('the disabled status has its own tooltip naming what disabled means (#960 Edit)', async () => {
     view = reading(80, -50) // no room: disabled
     await show()
-    await hoverTooltip(screen.getByText('disabled', { selector: 'em' }).closest('span')!)
+    await hoverTooltip(screen.getByText(/Agents start no work on their own/))
     expect(
       screen.getByText(
         'Autonomous AI disabled means that no agent starts on its own — every new agentic work is triggered by you manually.',
@@ -393,7 +395,7 @@ describe('Quota (#960)', () => {
     // 20-point offset over a 7-day week is 1.4 days, floored to "1 day".
     view = reading(20, 20)
     await show()
-    const warning = screen.getByText('⚠️ Eager consumption')
+    const warning = screen.getByText('Eager consumption')
     await hoverTooltip(warning)
     expect(screen.getByText("Autonomous AI will spend tokens 1 day faster than the week's pace allows")).toBeTruthy()
   })
@@ -403,16 +405,15 @@ describe('Quota (#960)', () => {
     // "1 day" at offset 20, proving the tooltip reads the real deviation rather than a hardcoded one.
     view = reading(20, 40)
     await show()
-    await hoverTooltip(screen.getByText('⚠️ Eager consumption'))
+    await hoverTooltip(screen.getByText('Eager consumption'))
     expect(screen.getByText("Autonomous AI will spend tokens 2 days faster than the week's pace allows")).toBeTruthy()
   })
 
   test('the warning sits beside the enabled/disabled status, not stacked below it (#960 Edit)', async () => {
     view = reading(20, 20)
-    const { container } = await show()
-    const em = container.querySelector('em')
-    const row = em?.closest('div')
-    expect(row?.textContent).toMatch(/enabled/)
+    await show()
+    const row = screen.getByText(/Agents may start work on their own up to/).closest('div')
+    expect(row?.textContent).toMatch(/Eager consumption/)
     expect(row?.querySelectorAll('svg.lucide-circle-help').length).toBeGreaterThan(0)
   })
 
@@ -556,17 +557,17 @@ describe('Quota (#960)', () => {
   test('the legend and the enabled/disabled status share one row, the warning between them (#960 Edit)', async () => {
     view = reading(20, 20) // limit a full day past the boundary, so the warning shows too
     await show()
-    const em = screen.getByText('enabled', { selector: 'em' })
+    const status = screen.getByText(/Agents may start work on their own up to/)
     const legend = screen.getByText('Used')
     // Same row: the legend and the status line share the same immediate row container.
-    const row = em.closest('.justify-between')!
+    const row = status.closest('.justify-between')!
     expect(legend.closest('.justify-between')).toBe(row)
     // The warning sits to the left of the status, both within the row's own right-hand group.
-    const warning = screen.getByText('⚠️ Eager consumption')
-    const statusGroup = em.closest('span')!.parentElement!
+    const warning = screen.getByText('Eager consumption')
+    const statusGroup = status.parentElement!
     expect(statusGroup.contains(warning)).toBe(true)
-    // DOCUMENT_POSITION_FOLLOWING (4) on the status span means the warning precedes it.
-    expect(warning.compareDocumentPosition(em.closest('span')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // DOCUMENT_POSITION_FOLLOWING (4) on the status means the warning precedes it.
+    expect(warning.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   test('"show all limits" is absent when there is nothing else to show', async () => {

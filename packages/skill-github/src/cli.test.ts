@@ -184,6 +184,26 @@ test('me: who is signed in to GitHub, with name and picture when GitHub has them
   assert.deepEqual(nobody.out, { ok: false, reason: 'not-logged-in', detail: 'You are not logged into any GitHub hosts' })
 })
 
+test("people: the GitHub account behind each commit email, by the newest commit signed with it; an email no account's commit carries is left out", async () => {
+  const asked: string[][] = []
+  const gh: GhRunner = async args => {
+    asked.push(args)
+    if (args[1]!.includes(encodeURIComponent('a+b@x.dev'))) return '{"login":"ab","avatar":"https://avatars.githubusercontent.com/u/2?v=4"}\n'
+    if (args[1]!.includes('rom%40y.dev')) return '{"login":"rom","avatar":"javascript:alert(1)"}'
+    return ''
+  }
+  const people = await run('/r', ['people', 'a+b@x.dev', 'rom@y.dev', 'nobody@z.dev', 'not-an-email'], { gh })
+  assert.equal(people.code, 0)
+  assert.deepEqual(people.out, [
+    { email: 'a+b@x.dev', login: 'ab', avatar: 'https://avatars.githubusercontent.com/u/2?v=4' },
+    { email: 'rom@y.dev', login: 'rom' },
+  ])
+  // The email is sent as a query's value; what is no email is never asked.
+  assert.equal(asked.length, 3)
+  assert.match(asked[0]![1]!, /^repos\/\{owner\}\/\{repo\}\/commits\?author=a%2Bb%40x\.dev&per_page=1$/)
+  assert.equal((await run('/r', ['people'], { gh })).code, 2, 'no email: a usage error')
+})
+
 test('comment: a new one on a pull request; GitHub answers its id and url; the usage errors and the refusal', async () => {
   const asked: string[][] = []
   const gh: GhRunner = async args => {

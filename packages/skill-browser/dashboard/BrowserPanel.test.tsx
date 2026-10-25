@@ -26,6 +26,8 @@ function dashboard() {
     openAgent: vi.fn(),
     openPage: vi.fn(),
     pageHref: (segment: string) => `/${segment}`,
+    openSettings: vi.fn(),
+    gitHostPeople: vi.fn(async () => []),
     startRun: vi.fn(async () => ({ ok: false as const, error: 'no runs' })),
     configureRun: vi.fn(),
     agents: vi.fn(async () => []),

@@ -37,7 +37,7 @@
   --color-merged: var(--merged);
 
   /* The shadcn sidebar reads its own `--sidebar-*` family so a sidebar can be themed apart from
-     the page. Its background is its own (`--sidebar`: in the dark theme a step below the page, as
+     the page. Its background is its own (`--sidebar`: in the dark theme a step above the page, as
      Claude Code's); the rest keeps in step with the palette: accent for the hover/active fill, the
      shared border and the primary ring. */
   --color-sidebar: var(--sidebar);

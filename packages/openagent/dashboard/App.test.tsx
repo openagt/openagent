@@ -130,15 +130,16 @@ describe('module cards on the Overview (#1818)', () => {
       const host = useModuleHost()
       return createElement('p', null, `${host.package} card for ${projects.map(p => p.name).join(', ')}`)
     }
-    answerOverview([{ package: '@acme/queue', url: moduleModule('__queueCard', { cards: [{ id: 'queue', Card: QueueCard }] }), projects: [PROJECT.id] }])
+    answerOverview([{ package: '@acme/queue', url: moduleModule('__queueCard', { cards: [{ id: 'queue', label: 'queue', Card: QueueCard }] }), projects: [PROJECT.id] }])
     window.history.replaceState(null, '', '/')
     render(<App />)
     expect(await screen.findByText('@acme/queue card for app')).toBeTruthy()
   })
 
-  test('the page itself scrolls only where it is a phone\'s page with no chat: anywhere else it is pinned, its columns scrolling by themselves', async () => {
+  test('a page with no chat scrolls as a page, on any screen, the sidebar fixed beside it; a project\'s own page is pinned, its columns scrolling by themselves', async () => {
     answerOverview([])
-    window.history.replaceState(null, '', '/')
+    // A project's own page: its "New agent" page, whose message box stays at the bottom.
+    window.history.replaceState(null, '', `/${PROJECT.name}`)
     // What shows of the page: a phone's keyboard took the rest.
     const shown = Object.assign(new EventTarget(), { height: 500, offsetTop: 0 })
     Object.defineProperty(window, 'visualViewport', { configurable: true, value: shown })
@@ -172,6 +173,14 @@ describe('module cards on the Overview (#1818)', () => {
       delete (window as { visualViewport?: unknown }).visualViewport
     }
     cleanup()
+    // The Overview, on a wide screen: the page scrolls, and bounces, as the browser's own; the
+    // sidebar is fixed to the window, so the bounce does not carry it.
+    window.history.replaceState(null, '', '/')
+    render(<App />)
+    await waitFor(() => expect(document.documentElement.dataset['pinned']).toBeUndefined())
+    expect(document.querySelector('[data-slot=sidebar]')!.className.split(' ')).toEqual(expect.arrayContaining(['fixed', 'h-dvh']))
+    cleanup()
+    // And on a phone.
     const wide = phoneScreen()
     try {
       render(<App />)
@@ -181,15 +190,22 @@ describe('module cards on the Overview (#1818)', () => {
     }
   })
 
+  test("a card of this computer's package is on the Overview though no project has the package", async () => {
+    answerOverview([{ package: '@acme/devices', url: moduleModule('__devicesCard', { cards: [{ id: 'devices', label: 'Devices', Card: () => createElement('p', null, 'devices card') }] }), projects: [], computer: true }])
+    window.history.replaceState(null, '', '/')
+    render(<App />)
+    expect(await screen.findByText('devices card')).toBeTruthy()
+  })
+
   test('cards come out by order, then by package name; a card that throws shows only its own error', async () => {
     const card = (text: string) => ({ Card: () => createElement('p', null, text) })
     function Boom(): never {
       throw new Error('kaboom')
     }
     answerOverview([
-      { package: '@acme/tickets', url: moduleModule('__ticketsCard', { cards: [{ id: 'hot', order: 20, ...card('tickets card') }] }), projects: [PROJECT.id] },
-      { package: '@acme/queue', url: moduleModule('__queueCard2', { cards: [{ id: 'queue', order: 10, ...card('queue card') }, { id: 'boom', order: 10, Card: Boom }] }), projects: [PROJECT.id] },
-      { package: '@acme/audit', url: moduleModule('__auditCard', { cards: [{ id: 'audit', ...card('audit card') }] }), projects: [PROJECT.id] },
+      { package: '@acme/tickets', url: moduleModule('__ticketsCard', { cards: [{ id: 'hot', label: 'hot', order: 20, ...card('tickets card') }] }), projects: [PROJECT.id] },
+      { package: '@acme/queue', url: moduleModule('__queueCard2', { cards: [{ id: 'queue', label: 'queue', order: 10, ...card('queue card') }, { id: 'boom', label: 'boom', order: 10, Card: Boom }] }), projects: [PROJECT.id] },
+      { package: '@acme/audit', url: moduleModule('__auditCard', { cards: [{ id: 'audit', label: 'audit', ...card('audit card') }] }), projects: [PROJECT.id] },
     ])
     window.history.replaceState(null, '', '/')
     render(<App />)
@@ -213,7 +229,7 @@ describe('module cards on the Overview (#1818)', () => {
         createElement('button', { onClick: () => void host.startRun(projects[0]!.id, 'work the queue') }, 'start and go'),
       )
     }
-    answerOverview([{ package: '@acme/queue', url: moduleModule('__starterCard', { cards: [{ id: 'starter', Card: Starter }] }), projects: [PROJECT.id] }])
+    answerOverview([{ package: '@acme/queue', url: moduleModule('__starterCard', { cards: [{ id: 'starter', label: 'starter', Card: Starter }] }), projects: [PROJECT.id] }])
     answers.set('sendStart', () => ({ ok: true, agentId: '9-r' }))
     window.history.replaceState(null, '', '/')
     render(<App />)
@@ -237,7 +253,7 @@ describe('the project select (#1513)', () => {
     function QueueCard({ projects }: ModuleCardProps) {
       return createElement('p', null, `card for ${projects.map(p => p.name).join(', ')}`)
     }
-    answerShell([{ package: '@acme/logs', url: moduleModule('__scopeModule', { pages: [{ segment: 'logs', label: 'Logs', Page: LogsPage }], cards: [{ id: 'queue', Card: QueueCard }] }), projects: [PROJECT.id, OTHER.id] }])
+    answerShell([{ package: '@acme/logs', url: moduleModule('__scopeModule', { pages: [{ segment: 'logs', label: 'Logs', Page: LogsPage }], cards: [{ id: 'queue', label: 'queue', Card: QueueCard }] }), projects: [PROJECT.id, OTHER.id] }])
     answers.set('onProjects', () => [PROJECT, OTHER])
     answers.set('onQuota', () => null)
     answers.set('onDocs', () => [])
@@ -443,7 +459,7 @@ describe('the project select (#1513)', () => {
       return createElement('p', null, `hot tickets of ${projects.map(p => p.name).join(', ') || 'no project'}`)
     }
     const both = (answers.get('onModules')!() as unknown[])[0]
-    answers.set('onModules', () => [both, { package: '@acme/tickets', url: moduleModule('__hotCard', { cards: [{ id: 'hot', Card: HotCard }] }), projects: [PROJECT.id] }])
+    answers.set('onModules', () => [both, { package: '@acme/tickets', url: moduleModule('__hotCard', { cards: [{ id: 'hot', label: 'hot', Card: HotCard }] }), projects: [PROJECT.id] }])
     render(<App />)
     expect(await screen.findByText('hot tickets of app')).toBeTruthy()
     expect(screen.getByText('card for app, site')).toBeTruthy()
@@ -568,8 +584,10 @@ describe('the shell on a phone', () => {
       answers.set('onProjectFiles', () => [])
       render(<App />)
       const open = await screen.findByRole('button', { name: 'Open the menu' })
-      // The bar's word, not the sidebar's row: the sidebar is closed.
-      expect(screen.getByText('Overview').tagName).toBe('SPAN')
+      // The bar's word, not the sidebar's row: the sidebar is closed. The page's own heading says it
+      // too, to a screen reader only: the bar already names the page.
+      expect(await screen.findByRole('heading', { name: 'Overview' })).toBeTruthy()
+      expect(screen.getAllByText('Overview').map(el => (el.closest('h1') ? 'heading' : el.tagName))).toEqual(['SPAN', 'heading'])
       expect(screen.queryByRole('button', { name: 'Overview' })).toBeNull()
 
       expect(open.getAttribute('aria-expanded')).toBe('false')
@@ -594,11 +612,34 @@ describe('the shell on a phone', () => {
     }
   })
 
+  test('on a wide screen the sidebar hides by its button or Cmd+B, the page then offers it back, and it stays hidden on the next load', async () => {
+    answerShell([])
+    try {
+      const { unmount } = render(<App />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Hide the sidebar' }))
+      expect(screen.queryByRole('button', { name: 'Overview' })).toBeNull()
+      // The page's own header holds the button that shows it again.
+      fireEvent.click(await screen.findByRole('button', { name: 'Show the sidebar' }))
+      expect(await screen.findByRole('button', { name: 'Overview' })).toBeTruthy()
+      fireEvent.keyDown(window, { key: 'b', metaKey: true })
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Overview' })).toBeNull())
+      unmount()
+      // Kept in this browser: hidden still on the next load (the module reads it once, as a page load does).
+      expect(localStorage.getItem('oa.sidebar-hidden')).toBe('true')
+    } finally {
+      localStorage.removeItem('oa.sidebar-hidden')
+      const { setSidebarHidden } = await import('./lib/sidebar-width.js')
+      setSidebarHidden(false)
+    }
+  })
+
   test('on a wide screen there is no bar and no button: the sidebar is beside the page', async () => {
     answerShell([])
     render(<App />)
     expect(await screen.findByRole('button', { name: 'Overview' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Open the menu' })).toBeNull()
-    expect(screen.getAllByText('Overview')).toHaveLength(1)
+    // The sidebar's row, and the page's own heading: no bar names it a third time.
+    expect(await screen.findByRole('heading', { name: 'Overview' })).toBeTruthy()
+    expect(screen.getAllByText('Overview')).toHaveLength(2)
   })
 })

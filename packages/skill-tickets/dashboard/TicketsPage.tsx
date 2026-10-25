@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Button, LinkActions, ScrollArea, usePolled, useAction, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, LinkActions, Page, usePolled, useAction, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject } from '@openagt/dashboard/module'
 import { heldBack, holderAgent, planLink, planTicketPrompt, readListed, ticketLink, workOnTicketPrompt } from '../src/module.js'
 import type { ProjectTickets, WorkspaceTicket } from './lib/types.js'
 import {
@@ -197,184 +197,168 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
   const projectsShown = [...new Set(scope.map(r => r.projectId))]
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      {/* The same header as the other pages (Automations, Logs, Queue): the same title, the same
-          line under it, the same edge, and no bar of its own. Its count and its filter bar are the
-          page's own, and stay above the list while the list scrolls. */}
-      <div className="space-y-3 px-6 pt-6 pb-3 max-md:px-4 max-md:pt-4">
-        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-          <div>
-            <h1 className="text-lg font-semibold">
-              Tickets
-              {/* Shown/total beside the name it counts (#1144 follow-up) — it describes the page's
-                  content, not the toolbar's controls. Unfiltered it reads n/n, doubling as the
-                  backlog's total, which the page otherwise says nowhere. */}
-              {loaded && rows.length > 0 && (
-                <span className="ml-2 text-sm font-normal tabular-nums text-muted-foreground">
-                  {visible.length}/{rows.length}
-                </span>
-              )}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {projects.length === 1 ? 'This project\u2019s' : 'Every project\u2019s'} <code className="rounded bg-muted px-1">tickets/</code> backlog: what agents plan from.
-            </p>
-          </div>
-          {/* The whole shown set onto the queue — or, with rows ticked, just the selected ones:
-              the detail page's Queue action lifted to the page, and its plan sibling — the plan
-              asks for the same set. Each renders only when it has something
-              to add — "all 0 tickets" is not an offer, the list below already explains an empty
-              set, and an all-claimed (or, for plans, all-planned) one has nothing left to ask
-              for. */}
-          {/* On a phone a button's words are longer than the screen: the buttons give up width, and their words are cut. */}
-          <div className="flex flex-wrap items-center justify-end gap-2 md:shrink-0 max-md:min-w-0">
-            {/* The selection's own readout and exit: while any row is ticked the buttons stop
-                speaking for the shown set, so the count says what took over and the clear hands
-                the page back without hunting down every ticked box. */}
-            {hasSelection && (
-              <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="tabular-nums">
-                  {selectedShown.length} selected
-                </span>
-                <Button variant="outline" size="xs" onClick={() => setSelected(new Set())}>
-                  Clear selection
-                </Button>
+    // The header (with the count, the page's buttons and its filter bar) stays above the list while the list scrolls.
+    <Page
+      title="Tickets"
+      // Shown/total beside the name it counts (#1144 follow-up): unfiltered it reads n/n, doubling as the backlog's total.
+      count={loaded && rows.length > 0 ? `${visible.length}/${rows.length}` : undefined}
+      description={
+        <>
+          {projects.length === 1 ? 'This project\u2019s' : 'Every project\u2019s'} <code className="rounded bg-muted px-1">tickets/</code> backlog: what agents plan from.
+        </>
+      }
+      // The whole shown set onto the queue — or, with rows ticked, just the selected ones: the detail
+      // page's Queue action lifted to the page, and its plan sibling — the plan asks for the same
+      // set. Each renders only when it has something to add — "all 0 tickets" is not an offer, the
+      // list below already explains an empty set, and an all-claimed (or, for plans, all-planned)
+      // one has nothing left to ask for.
+      actions={
+        <>
+          {/* The selection's own readout and exit: while any row is ticked the buttons stop
+              speaking for the shown set, so the count says what took over and the clear hands
+              the page back without hunting down every ticked box. */}
+          {hasSelection && (
+            <span className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="tabular-nums">
+                {selectedShown.length} selected
               </span>
-            )}
-            {loaded && planTargets.length > 0 && (
-              <LinkActions
-                projects={projectsShown}
-                targets={planAsks(planTargets)}
-                resetKey={`plans\n${planKey}`}
-                label={action => `${action.label}: ${planObject}`}
-                disabled={busy}
-                tooltip={
-                  <>
-                    Each {hasSelection ? 'selected ' : ''}ticket gets its plan asked for — the same &quot;Create tickets/….plan.md&quot; entry the plan-tickets
-                    command queues — worked highest priority first and, within a priority, in the order shown below. Tickets already planned, held by an agent,
-                    in review or waiting stay as they are, and what is already there is left alone.
-                    {hasSelection && ' The rest of the shown set stays put.'}
-                  </>
-                }
-              />
-            )}
-            {loaded && targets.length > 0 && (
-              <LinkActions
-                projects={projectsShown}
-                targets={ticketTargets(targets)}
-                resetKey={`tickets\n${queueKey}`}
-                label={action => `${action.label}: ${queueObject}`}
-                disabled={busy}
-                tooltip={
-                  <>
-                    {`Every ${hasSelection ? 'selected ' : ''}ticket joins the queue — the work OpenAgent picks up on its own, worked highest priority first and, within a priority, in the order shown below. A ticket already queued stays as it is.`}
-                    {hasSelection && ' The rest of the shown set stays put.'}
-                    {claimedShown === 1 && ` The claimed ticket ${hasSelection ? 'selected' : 'shown'} is left to the agent holding it.`}
-                    {claimedShown > 1 && ` The ${claimedShown} claimed tickets ${hasSelection ? 'selected' : 'shown'} are left to the agents holding them.`}
-                    {heldShown === 1 && ` The ticket in review or waiting ${hasSelection ? 'selected' : 'shown'} is left out.`}
-                    {heldShown > 1 && ` The ${heldShown} tickets in review or waiting ${hasSelection ? 'selected' : 'shown'} are left out.`}
-                  </>
-                }
-              />
-            )}
-          </div>
-        </div>
-        {/* Page-level failures land here, above the toolbar, so grouped mode shows them too — the
-            header owns an action of its own now, not just the flat rows'. */}
-        {error && <p className="text-xs text-danger">{error}</p>}
-        <TicketFilterBar
-          view={view}
-          rows={rows}
-          onChange={setView}
-        />
-      </div>
-      <ScrollArea className="min-h-0 flex-1">
-        {/* The full page width, no columns and no max-width (#1144/#1265): each project's table
-            spans the whole pane, so a row has room for its title and every piece of meta at once.
-            Columns looked tidy but split the one dimension the rows actually need. */}
-        <div className="w-full px-6 pb-6 pt-1 max-md:px-4 max-md:pb-4">
-          {!loaded ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : groups.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No project has the tickets package.</p>
-          ) : view.group === 'none' ? (
-            // The flat cross-project list: one pool, one order, rows carrying their project. No
-            // per-project Update bars here — those belong to the sections, and grouped mode is a
-            // menu click away.
-            <div className="space-y-2">
-              {filtered && rows.length - visible.length > 0 && (
-                <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                  <span>
-                    {rows.length - visible.length} ticket{rows.length - visible.length === 1 ? '' : 's'} hidden by the current filters.
-                  </span>
-                  <Button variant="outline" size="xs" onClick={clearFilters}>
-                    Clear filters
-                  </Button>
-                </div>
-              )}
-              {flatRows.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  {rows.length === 0 ? 'No tickets in any project yet — group by project to import a project\'s issues.' : 'No tickets match.'}
-                </p>
-              ) : (
-                <div className="overflow-hidden rounded-lg border border-border">
-                  <ul className="divide-y divide-border">
-                    {flatRows.map(r => (
-                      <TicketRow
-                        key={`${r.projectId}/${r.ticket.file}`}
-                        ticket={r.ticket}
-                        projectName={r.projectName}
-                        busy={busy}
-                        selected={selected.has(`${r.projectId}/${r.ticket.file}`)}
-                        onToggleSelect={() => toggleSelected(`${r.projectId}/${r.ticket.file}`)}
-                        onOpen={() => onOpenTicket(r.projectId, r.ticket.file)}
-                        onStartWork={() => void startWork(r.projectId, r.ticket.file)}
-                        onConfigureWork={() => host.configureRun(r.projectId, workOnTicketPrompt(r.ticket.file))}
-                        onOpenPlan={() => onOpenTicketPlan(r.projectId, r.ticket.file)}
-                        onStartPlan={() => void startPlan(r.projectId, r.ticket.file)}
-                        onConfigurePlan={() => host.configureRun(r.projectId, planTicketPrompt(r.ticket.file))}
-                        onTopicClick={addTopic}
-                        onClaimedClick={filterClaimed}
-                        onOpenAgent={agentId => onOpenAgent(r.projectId, agentId)}
-                      />
-                    ))}
-                  </ul>
-                </div>
-              )}
+              <Button variant="outline" size="xs" onClick={() => setSelected(new Set())}>
+                Clear selection
+              </Button>
+            </span>
+          )}
+          {loaded && planTargets.length > 0 && (
+            <LinkActions
+              projects={projectsShown}
+              targets={planAsks(planTargets)}
+              resetKey={`plans\n${planKey}`}
+              label={action => `${action.label}: ${planObject}`}
+              disabled={busy}
+              tooltip={
+                <>
+                  Each {hasSelection ? 'selected ' : ''}ticket gets its plan asked for — the same &quot;Create tickets/….plan.md&quot; entry the plan-tickets
+                  command queues — worked highest priority first and, within a priority, in the order shown below. Tickets already planned, held by an agent,
+                  in review or waiting stay as they are, and what is already there is left alone.
+                  {hasSelection && ' The rest of the shown set stays put.'}
+                </>
+              }
+            />
+          )}
+          {loaded && targets.length > 0 && (
+            <LinkActions
+              projects={projectsShown}
+              targets={ticketTargets(targets)}
+              resetKey={`tickets\n${queueKey}`}
+              label={action => `${action.label}: ${queueObject}`}
+              disabled={busy}
+              tooltip={
+                <>
+                  {`Every ${hasSelection ? 'selected ' : ''}ticket joins the queue — the work OpenAgent picks up on its own, worked highest priority first and, within a priority, in the order shown below. A ticket already queued stays as it is.`}
+                  {hasSelection && ' The rest of the shown set stays put.'}
+                  {claimedShown === 1 && ` The claimed ticket ${hasSelection ? 'selected' : 'shown'} is left to the agent holding it.`}
+                  {claimedShown > 1 && ` The ${claimedShown} claimed tickets ${hasSelection ? 'selected' : 'shown'} are left to the agents holding them.`}
+                  {heldShown === 1 && ` The ticket in review or waiting ${hasSelection ? 'selected' : 'shown'} is left out.`}
+                  {heldShown > 1 && ` The ${heldShown} tickets in review or waiting ${hasSelection ? 'selected' : 'shown'} are left out.`}
+                </>
+              }
+            />
+          )}
+        </>
+      }
+      bar={
+        <>
+          {/* Page-level failures land here, above the toolbar, so grouped mode shows them too — the
+              header owns an action of its own now, not just the flat rows'. */}
+          {error && <p className="text-xs text-danger">{error}</p>}
+          <TicketFilterBar
+            view={view}
+            rows={rows}
+            onChange={setView}
+          />
+        </>
+      }
+    >
+      {!loaded ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : groups.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No project has the tickets package.</p>
+      ) : view.group === 'none' ? (
+        // The flat cross-project list: one pool, one order, rows carrying their project. No
+        // per-project Update bars here — those belong to the sections, and grouped mode is a
+        // menu click away.
+        <div className="space-y-2">
+          {filtered && rows.length - visible.length > 0 && (
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span>
+                {rows.length - visible.length} ticket{rows.length - visible.length === 1 ? '' : 's'} hidden by the current filters.
+              </span>
+              <Button variant="outline" size="xs" onClick={clearFilters}>
+                Clear filters
+              </Button>
             </div>
+          )}
+          {flatRows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {rows.length === 0 ? 'No tickets in any project yet — group by project to import a project\'s issues.' : 'No tickets match.'}
+            </p>
           ) : (
-            <div className="space-y-8">
-              {groups.map(g => {
-                const groupRows = visible.filter(r => r.projectId === g.projectId)
-                const sorted = sortRows(groupRows, view.sort)
-                return (
-                  <section key={g.projectId} className="min-w-0 space-y-2">
-                    <h2 className="truncate text-sm font-semibold">{g.projectName}</h2>
-                    {g.error !== undefined && (
-                      <p role="alert" className="text-xs text-danger">
-                        Could not read the tickets of {g.projectName}: {g.error}
-                      </p>
-                    )}
-                    <TicketsPanel
-                      projectId={g.projectId}
-                      tickets={sorted.map(r => r.ticket)}
-                      loaded
-                      hiddenByFilter={g.tickets.length - groupRows.length}
-                      isSelected={file => selected.has(`${g.projectId}/${file}`)}
-                      onToggleSelect={file => toggleSelected(`${g.projectId}/${file}`)}
-                      onOpen={file => onOpenTicket(g.projectId, file)}
-                      onOpenPlan={file => onOpenTicketPlan(g.projectId, file)}
-                      onTopicClick={addTopic}
-                      onClaimedClick={filterClaimed}
-                      onOpenAgent={agentId => onOpenAgent(g.projectId, agentId)}
-                      onClearFilters={filtered ? clearFilters : undefined}
-                    />
-                  </section>
-                )
-              })}
+            <div className="overflow-hidden rounded-lg border border-border">
+              <ul className="divide-y divide-border">
+                {flatRows.map(r => (
+                  <TicketRow
+                    key={`${r.projectId}/${r.ticket.file}`}
+                    ticket={r.ticket}
+                    projectName={r.projectName}
+                    busy={busy}
+                    selected={selected.has(`${r.projectId}/${r.ticket.file}`)}
+                    onToggleSelect={() => toggleSelected(`${r.projectId}/${r.ticket.file}`)}
+                    onOpen={() => onOpenTicket(r.projectId, r.ticket.file)}
+                    onStartWork={() => void startWork(r.projectId, r.ticket.file)}
+                    onConfigureWork={() => host.configureRun(r.projectId, workOnTicketPrompt(r.ticket.file))}
+                    onOpenPlan={() => onOpenTicketPlan(r.projectId, r.ticket.file)}
+                    onStartPlan={() => void startPlan(r.projectId, r.ticket.file)}
+                    onConfigurePlan={() => host.configureRun(r.projectId, planTicketPrompt(r.ticket.file))}
+                    onTopicClick={addTopic}
+                    onClaimedClick={filterClaimed}
+                    onOpenAgent={agentId => onOpenAgent(r.projectId, agentId)}
+                  />
+                ))}
+              </ul>
             </div>
           )}
         </div>
-      </ScrollArea>
-    </div>
+      ) : (
+        <div className="space-y-8">
+          {groups.map(g => {
+            const groupRows = visible.filter(r => r.projectId === g.projectId)
+            const sorted = sortRows(groupRows, view.sort)
+            return (
+              <section key={g.projectId} className="min-w-0 space-y-2">
+                <h2 className="truncate text-sm font-semibold">{g.projectName}</h2>
+                {g.error !== undefined && (
+                  <p role="alert" className="text-xs text-danger">
+                    Could not read the tickets of {g.projectName}: {g.error}
+                  </p>
+                )}
+                <TicketsPanel
+                  projectId={g.projectId}
+                  tickets={sorted.map(r => r.ticket)}
+                  loaded
+                  hiddenByFilter={g.tickets.length - groupRows.length}
+                  isSelected={file => selected.has(`${g.projectId}/${file}`)}
+                  onToggleSelect={file => toggleSelected(`${g.projectId}/${file}`)}
+                  onOpen={file => onOpenTicket(g.projectId, file)}
+                  onOpenPlan={file => onOpenTicketPlan(g.projectId, file)}
+                  onTopicClick={addTopic}
+                  onClaimedClick={filterClaimed}
+                  onOpenAgent={agentId => onOpenAgent(g.projectId, agentId)}
+                  onClearFilters={filtered ? clearFilters : undefined}
+                />
+              </section>
+            )
+          })}
+        </div>
+      )}
+    </Page>
   )
 }

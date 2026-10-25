@@ -38,3 +38,4 @@ export { isLoopbackHost } from './loopback-host.js'
 export { bridgeChoiceRequest } from './dashboard/bridge-question.js'
 // What a web run's cloud side is doing, from its record (#1668): pure, so every surface derives the same word.
 export { cloudRunState, cloudRunActive, CLOUD_SESSION_WINDOW_MS, type CloudRunState } from './cloud-run-state.js'
+export { ALL_PROJECTS, CARD_WIDTHS, arrangeCards, widthsFor, type CardPlace, type CardWidth, type LayoutCard, type OverviewLayouts } from './overview-layout.js'

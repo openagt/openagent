@@ -8,7 +8,7 @@ import { asCaller, personAtPage, readPerson } from './person.js'
 function hosts(at: Record<string, Awaited<ReturnType<GitHostSource['me']>>>) {
   return async (root: string): Promise<GitHostSource | undefined> =>
     root in at
-      ? { requests: async () => ({ ok: true, requests: [] }), open: async () => ({ ok: false, error: 'no' }), merge: async () => ({ ok: false, error: 'no' }), home: async () => undefined, me: async () => at[root] }
+      ? { requests: async () => ({ ok: true, requests: [] }), open: async () => ({ ok: false, error: 'no' }), merge: async () => ({ ok: false, error: 'no' }), home: async () => undefined, me: async () => at[root], people: async () => [] }
       : undefined
 }
 

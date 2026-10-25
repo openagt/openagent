@@ -9,12 +9,14 @@
 //
 // This file IS `@openagt/dashboard/module`: the dashboard's build emits it as its own entry (`/host/module.js`),
 // sharing every chunk with the dashboard itself. Nothing here names a skill.
+import type { Health } from '../../src/health.js'
+import type { CardWidth } from '../../src/overview-layout.js'
 import { createContext, useContext, useMemo, type ComponentType } from 'react'
 import type { AgentStatus } from '../../src/index.js'
 import { readModule, runComputerCommand, runComputerCommandOn, runModuleCommand } from '../rpc/modules.js'
 import type { ModuleCommandResult, ModuleReadResult } from '../rpc/modules.js'
 
-export type { ModuleCommandResult, ModuleReadResult, AgentStatus }
+export type { ModuleCommandResult, ModuleReadResult, AgentStatus, CardWidth, Health }
 
 /** A registered project that has the module's package, as a page gets it. */
 export interface ModuleProject {
@@ -124,6 +126,12 @@ export interface ModuleCardProps {
 export interface ModuleCard {
   /** Which card this is, for the shell's key and its error line; never shown as a title. */
   id: string
+  /** Its name where the person arranges the Overview's cards: what its title says ("Hot tickets"). */
+  label: string
+  /** How wide it stands until the person picks: half the Overview when unsaid. */
+  width?: CardWidth
+  /** The narrowest it fits: a third of the Overview when unsaid. */
+  minWidth?: CardWidth
   /** Its place among every installed package's cards, lower first; 50 when unsaid, ties by package name. */
   order?: number
   /** The card itself. */
@@ -372,6 +380,13 @@ export interface ModuleHost {
   openPage(segment: string, path?: string[], projectId?: string): void
   /** The address of a page a module adds, with the project picked in the dashboard: a link's `href`, for a link that also opens in a new tab. */
   pageHref(segment: string): string
+  /** Open an entry of Settings over the page, by its id: `openSettings('devices')`. */
+  openSettings(entry: string): void
+  /**
+   * The accounts behind a project's commit emails at its git host, each with its login and picture:
+   * an email the host knows nobody for, or a project with no git host, is left out. Kept a day.
+   */
+  gitHostPeople(projectId: string, emails: string[]): Promise<ModuleHostPerson[]>
   /**
    * Start a run in one project with this prompt, with the person's own picks (which tool, which
    * model, where it runs), and land on it, unless `land` is false: then the dashboard stays where
@@ -440,6 +455,14 @@ export interface ModuleHost {
   sendToScreen(projectId: string, agentId: string, input: unknown): Promise<boolean>
 }
 
+/** A person of a project, as its git host knows them. */
+export interface ModuleHostPerson {
+  email: string
+  login: string
+  /** A picture of them: an https address. */
+  avatar?: string
+}
+
 /** A saved machine, as a module sees it: never this computer's key there. */
 export interface ModuleMachine {
   /** Where the machine answers, as an origin (`https://203.0.113.5`): what it is known by. */
@@ -448,6 +471,8 @@ export interface ModuleMachine {
   url: string
   /** The OpenAgent it runs; absent for a machine that does not answer right now. */
   version?: string
+  /** How it stands, as it says: its memory, disk and load; absent for one that does not answer, or does not say. */
+  health?: Health
   /** The id the machine lists this computer under, among the devices that are in there. */
   device?: string
   /** Whose computer it is, by their GitHub account, when it is another person's shared with everyone on a server. */
@@ -465,6 +490,8 @@ export interface ModuleMachines {
   version: string
   /** This computer's own name, as another machine lists it: "Suleimans-MacBook-Pro". */
   name?: string
+  /** How this computer stands: its memory, disk and load. */
+  health?: Health
   machines: ModuleMachine[]
 }
 
@@ -553,6 +580,9 @@ export { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/toolti
 export { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '../components/ui/dropdown-menu.js'
 export { ContextMenu, ContextMenuTrigger } from '../components/ui/context-menu.js'
 export { PaneTitle, PaneActions } from '../components/PaneHeader.js'
+export { Page } from '../components/Page.js'
+export { StatTile } from '../components/StatTile.js'
+export { FilterChips, type FilterChip } from '../components/FilterChips.js'
 export { FileIcon } from '../components/FileIcon.js'
 export { Markdown } from '../components/Markdown.js'
 export { StartAgentButton } from '../components/StartAgentButton.js'
