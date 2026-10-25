@@ -1,0 +1,15 @@
+{
+  "id": "2026-10-25T00-24-12-840Z",
+  "startedAt": "2026-10-25T00:24:15.132Z",
+  "status": "running",
+  "intent": "ask me some question",
+  "driver": "claude-code",
+  "model": "opus",
+  "caller": {
+    "runner": {
+      "host": "ubuntu-s-1vcpu-2gb-fra1",
+      "pid": 3151272
+    },
+    "host": "ubuntu-s-1vcpu-2gb-fra1"
+  }
+}
