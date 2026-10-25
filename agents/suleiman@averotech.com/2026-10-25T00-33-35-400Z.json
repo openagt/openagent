@@ -7,7 +7,6 @@
   "title": "Ticket plan rewrite for agent PR comments",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-10-25T00-33-35-400Z",
   "cost": 0.8030619999999999,
   "contextTokens": 63637,
   "caller": {
