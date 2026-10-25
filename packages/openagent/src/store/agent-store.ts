@@ -14,7 +14,11 @@ import { eventsOf, fromRunCard } from './run-record.js'
  * projection of those files and that answer.
  */
 
-export type AgentStatus = 'running' | 'done' | 'stopped' | 'failed' | 'waiting'
+/**
+ * How a run stands. `unknown` is never recorded: it is how a run of another computer reads while
+ * that computer does not answer, whatever its record last said, so it is never taken for working.
+ */
+export type AgentStatus = 'running' | 'done' | 'stopped' | 'failed' | 'waiting' | 'unknown'
 
 /**
  * A queryable snapshot of the agent, derived entirely from the event log. Lets the
@@ -40,6 +44,11 @@ export interface AgentMeta {
   pid?: number
   /** The host the owning {@link pid} lives on, so a pid probe only trusts a match (#716). */
   host?: string
+  /**
+   * Whose run it is, by the email its record is kept under: the git user of the computer that
+   * ran it. A run of this computer's that has no record yet is its project's git user's.
+   */
+  person?: string
   /** What this session was asked for (from the `intent` event). */
   intent?: string
   /** The session's short name, as a list shows it: two to five words a small model gave it. */
@@ -190,6 +199,11 @@ export interface AgentMeta {
   remoteLabel?: string
   /** That saved machine is a person's own computer, reached by the line it keeps open here (reached-by-line.ts): the run is drawn with a computer, not a server. */
   remoteByLine?: true
+  /**
+   * While the run's status is `unknown`: when its computer last answered this one, ISO, when it
+   * did since this computer knows it. Not stored: annotated on the way to the dashboard.
+   */
+  seenAt?: string
   /**
    * The flow this agent started under (#1467): `build` for the scope→build orchestration, `prompt`
    * for the direct-prompt path (research and transparent runs record `prompt` too). Persisted so a

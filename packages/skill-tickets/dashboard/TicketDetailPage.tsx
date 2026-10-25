@@ -152,7 +152,7 @@ export function TicketDetailPage({
                       <button type="button" className="hover:underline" onClick={() => onOpenAgent(ticket.lockedByAgent!.id)}>
                         {holder}
                       </button>
-                      {holderStatus !== undefined && <>&nbsp;· {working ? (holderStatus === 'waiting' ? 'waits on your answer' : 'at work') : `run ${holderStatus}`}</>}
+                      {holderStatus !== undefined && <>&nbsp;· {working ? (holderStatus === 'waiting' ? 'waits on your answer' : 'at work') : holderStatus === 'unknown' ? 'its computer is offline' : `run ${holderStatus}`}</>}
                     </>
                   ) : (
                     <>&nbsp;· {holder}</>

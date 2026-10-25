@@ -130,7 +130,12 @@ test('parseRunCard keeps the shape\'s fields with the right types, and refuses w
     caller: { pid: 1 },
   })
   assert.equal(parseRunCard('{"id":"r1","startedAt":"x","status":"done"}')?.id, 'r1')
+  // The person a provider's list says the run is kept under; a person that is no word is none.
+  assert.equal(parseRunCard({ id: 'r1', startedAt: 'x', status: 'done', person: 'me@x.dev' })?.person, 'me@x.dev')
+  assert.equal(parseRunCard({ id: 'r1', startedAt: 'x', status: 'done', person: 3 })?.person, undefined)
   assert.equal(parseRunCard({ id: 'r1', startedAt: 'x', status: 'sleeping' }), undefined)
+  // `unknown` is how a run reads while its computer does not answer, never what a card says.
+  assert.equal(parseRunCard({ id: 'r1', startedAt: 'x', status: 'unknown' }), undefined)
   assert.equal(parseRunCard({ id: '../r1', startedAt: 'x', status: 'done' }), undefined)
   assert.equal(parseRunCard('not json'), undefined)
 })

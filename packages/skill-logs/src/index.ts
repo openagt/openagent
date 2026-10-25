@@ -15,6 +15,7 @@ export {
   newestFirst,
   publicCard,
   type RunCard,
+  type ListedRun,
   type RunPatch,
   type RunStatus,
   type DiaryLine,

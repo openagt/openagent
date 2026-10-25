@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { membersOf, nameOf, peopleOf, readCommitLines, startOfId, type RecordsReader } from './people.js'
+import { membersOf, nameOf, peopleOf, peopleWithRuns, readCommitLines, startOfId, type RecordsReader } from './people.js'
 
 const DAY = 86_400_000
 const NOW = Date.parse('2026-10-25T12:00:00.000Z')
@@ -86,4 +86,27 @@ test('whoever committed to the main branch is a member too, by the name of their
     ['git@brillout.com', 'Romuald Brillout', 2, new Date(NOW - 2 * DAY).toISOString()],
     ['new@z.dev', 'New Person', 1, new Date(NOW - 3 * DAY).toISOString()],
   ])
+})
+
+test("a project's people with their runs counted as the dashboard lists them: their commits and names kept, a person only the dashboard knows added, older runs and runs of no one left out", () => {
+  const recorded = [{ person: 'S@a.dev', name: 'Suleiman', runs: 1, running: 1, cost: 0.5, commits: 2, lastAt: new Date(NOW - 5 * DAY).toISOString(), you: true as const }]
+  const at = (days: number): string => new Date(NOW - days * DAY).toISOString()
+  const people = peopleWithRuns(
+    recorded,
+    [
+      { person: 's@a.dev', startedAt: at(1), status: 'unknown', cost: 0.5 },
+      { person: 's@a.dev', startedAt: at(0), status: 'running', cost: 0.25 },
+      { person: 's@a.dev', startedAt: at(40), status: 'done', cost: 9 },
+      { person: 'rom@b.dev', startedAt: at(2), status: 'done', cost: 1 },
+      { startedAt: at(0), status: 'running' },
+    ],
+    NOW - 30 * DAY,
+  )
+  assert.deepEqual(
+    people.map(person => [person.person, person.name, person.runs, person.running, person.cost, person.commits, person.lastAt, person.you]),
+    [
+      ['S@a.dev', 'Suleiman', 2, 1, 0.75, 2, at(0), true],
+      ['rom@b.dev', undefined, 1, 0, 1, 0, at(2), undefined],
+    ],
+  )
 })

@@ -324,9 +324,25 @@ export interface ModuleAgent {
   name?: string
   /** What the run was asked, as typed or as queued; absent when its record carries none. */
   ask?: string
+  /** How it stands: `unknown` while the computer it runs on does not answer, whatever its record last said. */
   status: AgentStatus
   /** ISO 8601. */
   startedAt: string
+  /** ISO 8601, once it ended. */
+  endedAt?: string
+  /** Its short name, as a list of runs shows it. */
+  title?: string
+  /** Whose run it is, by the email its record is kept under. */
+  person?: string
+  /** What it cost so far, in US dollars. */
+  cost?: number
+  /** The coding agent that runs it (`claude-code`, `codex`, …) and its model. */
+  driver?: string
+  model?: string
+  /** The saved machine it runs on, by the name it was given; absent for a run of this computer's. */
+  machine?: string
+  /** While its status is `unknown`: when its computer was last seen, ISO, if it was. */
+  seenAt?: string
 }
 
 /** What starting a run answered: the run's id, or in words why there is none. */

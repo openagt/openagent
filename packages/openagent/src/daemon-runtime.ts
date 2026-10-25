@@ -6,14 +6,15 @@ import { OPENAGENT_DIR } from './openagent-dir.js'
 import type { OpenAgentEvent } from './events.js'
 import type { StartAgentOptions, StartAgentResult, AddProjectResult, RemoveProjectResult, StartedInResult } from './dashboard/index.js'
 import type { EventsSource, RemoteAgents, SavedMachine } from './dashboard/rpc-serve.js'
-import { RelayedAgents, remoteFacts, startRemoteAgent, type BringProject, type RelayProject, type RemoteTarget } from './dashboard/remote-run.js'
+import { RelayedAgents, relayRpc, remoteFacts, startRemoteAgent, type BringProject, type RelayProject, type RemoteTarget } from './dashboard/remote-run.js'
+import { MachineRunsKept, type MachineRuns } from './dashboard/machine-runs.js'
 import { cloneProject, cloneTarget } from './clone-project.js'
 import { copyLoginsTo, loginsAreThere, ownLogins, type OwnLogins } from './dashboard/copy-logins.js'
 import { screenInDiary } from './dashboard/screen.js'
 import { dispatchRelayRpc } from './dashboard-rpc/relay-dispatch.js'
 import { asRecorded, onMachine } from './dashboard-rpc/reads.js'
 import { tailAgentEvents } from './dashboard-rpc/events-tail.js'
-import { addProject, isHostName, listMachines, listProjects, nameMachine, projectId, readPreferences, removeProject, type MachineRecord, type Preferences } from './registry.js'
+import { addProject, isHostName, listMachines, listProjects, nameMachine, noteSeen, projectId, readPreferences, removeProject, type MachineRecord, type Preferences } from './registry.js'
 import { repositoryAddress } from './repository-address.js'
 import { writeHookLines } from './built-in.js'
 import { fileBranchRepo, installProject, writeSharing } from '@openagt/agent-data'
@@ -49,6 +50,8 @@ const HOME_KEPT_MS = 10_000
 const OWN_KEPT_MS = 24 * 60 * 60_000
 /** How many runs' machines are kept before the memory starts over. */
 const MAX_HOMES = 5_000
+/** How long a machine gets to say its runs: a page is answered with what it said before meanwhile. */
+const RUNS_ASKED_MS = 8_000
 
 /** How many projects this computer clones at once for other machines; one more is told to ask again. */
 const MAX_COMING = 3
@@ -161,9 +164,38 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     return named.length === 1 ? named[0] : undefined
   }
 
+  // What each saved machine says of its own runs of a project (machine-runs.ts): asked over its
+  // relay with this computer's key there, so a computer's runs read as they stand whether its
+  // records are shared or not. When it last answered is kept with it, for while it does not.
+  const savedAt = (url: string): MachineRecord | undefined => machines.find(machine => machine.url === url)
+  const machineRunsKept = new MachineRunsKept(
+    (machine, address, since) => {
+      const saved = savedAt(machine.url)
+      if (!saved) return Promise.reject(new Error('that machine is no longer saved'))
+      return relayRpc({ url: saved.url, key: saved.key, ...(saved.pin ? { pin: saved.pin } : {}), project: address }, 'onOwnRuns', [null, since ?? null], RUNS_ASKED_MS)
+    },
+    (machine, at) => {
+      const saved = savedAt(machine.url)
+      if (saved) void noteSeen(saved, at, undefined, env).catch(() => {})
+    },
+  )
+  const machineRuns = async (path: string): Promise<MachineRuns[]> => {
+    await machineNames()
+    const address = await addressOf(path)
+    if (address === undefined) return []
+    // A machine that has not said its computer's name, or says one another machine says too, has no runs to say.
+    const asked = machines.flatMap(machine => (machine.host !== undefined && machineOf(machine.host) === machine ? [{ url: machine.url, host: machine.host, ...(machine.seenAt !== undefined ? { seenAt: machine.seenAt } : {}) }] : []))
+    return asked.length > 0 ? machineRunsKept.of(asked, address) : []
+  }
+  // A run of a project by its id: its record here, else what the saved machine it runs on said of
+  // it, for a run whose record was never shared.
+  const runOf = async (path: string, agentId: string): Promise<AgentMeta | undefined> =>
+    (await findAgent(path, agentId).catch(() => undefined)) ?? (await machineRuns(path)).flatMap(machine => machine.runs).find(run => run.id === agentId)
+
   // The machine a run runs on. A run this computer sent is known by what was kept at its start.
-  // Any other is known by its record: the computer it names is this one, a saved machine, or
-  // someone else's, and only a saved machine's run is that machine's to be asked about. A run is
+  // Any other is known by its record, or by what a saved machine said of it: the computer it names
+  // is this one, a saved machine, or someone else's, and only a saved machine's run is that
+  // machine's to be asked about. A run is
   // looked up in its own project, and what is kept is kept by project and run: an id alone says
   // nothing of the project, and a record in one project does not speak for a run of another.
   const homes = new Map<string, { home?: { target: RemoteTarget; label: string }; until: number }>()
@@ -178,7 +210,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
       return home
     }
     const projectCwd = await resolveProject(project)
-    const agent = projectCwd ? await findAgent(projectCwd, agentId).catch(() => undefined) : undefined
+    const agent = projectCwd ? await runOf(projectCwd, agentId) : undefined
     // No record yet: nothing is known, and it is asked again.
     if (!projectCwd || !agent) return undefined
     // A run's computer never changes: this one's own, and one whose record names none, is not looked up again.
@@ -207,7 +239,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
       if (relayedAgents.follows(agentId) || elsewhere()) return
       const home = await homeOf(project, agentId)
       const projectCwd = home ? await resolveProject(project) : undefined
-      const agent = projectCwd ? await findAgent(projectCwd, agentId).catch(() => undefined) : undefined
+      const agent = projectCwd ? await runOf(projectCwd, agentId) : undefined
       if (!home || !agent || relayedAgents.follows(agentId) || elsewhere()) return
       // The row starts as the record may say the run is, and the machine's own events take it from there.
       // Its cost is counted again from what the machine says, from the run's first line on.
@@ -216,6 +248,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     },
     sent: agentId => relayedAgents.isSent(agentId),
     machineNames,
+    machineRuns,
   }
   // The machine side of the relay (#1067 slice 2): run one whitelisted read/steer/handoff RPC against this
   // daemon's own copy of the project the call named, for a daemon that relayed an agent here.

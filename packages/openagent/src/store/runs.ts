@@ -10,7 +10,7 @@ import { providedCommand } from '../built-in.js'
  * it: the project has no finished runs, only the ones still running in a checkout.
  *
  * The command line a provider answers, each printing one JSON document and exiting 0:
- *   `<command> --local --full --limit N`   the runs, newest first, whole cards
+ *   `<command> --local --full --limit N`   the runs, newest first, whole cards, each with the `person` it is kept under
  *   `<command> show <id> --local --full`   one run: the whole card plus `diary`, every line
  *   `<command> delete <id>`                remove a run
  *   `<command> patch <id> [--branch <b>] [--pr <n> --pr-url <url>] [--landed <commit> --from <commit>]`   the late facts
@@ -46,6 +46,8 @@ export interface RunCard {
   /** How much of the model's context the conversation filled at the run's last turn. */
   contextTokens?: number
   caller?: Record<string, unknown>
+  /** Whom the run is kept under, by their email: said by a provider's list, never written on a card. */
+  person?: string
 }
 
 /** The two late facts a finished run's card may still learn: the branch its work landed on, its pull request. */
@@ -113,7 +115,7 @@ export function parseRunCard(input: unknown): RunCard | undefined {
   const status = r['status']
   if (typeof r['id'] !== 'string' || !isRunId(r['id']) || typeof r['startedAt'] !== 'string' || !(STATUSES as readonly unknown[]).includes(status)) return undefined
   const card: RunCard = { id: r['id'], startedAt: r['startedAt'], status: status as RunStatus }
-  for (const key of ['endedAt', 'intent', 'title', 'driver', 'model', 'effort', 'branch', 'ticket'] as const) {
+  for (const key of ['endedAt', 'intent', 'title', 'driver', 'model', 'effort', 'branch', 'ticket', 'person'] as const) {
     if (typeof r[key] === 'string') card[key] = r[key]
   }
   if (typeof r['cost'] === 'number') card.cost = r['cost']

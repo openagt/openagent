@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FilterChips, Page, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn, formatDateTime, formatDuration, useModuleHost, usePolled, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
+import { FilterChips, Page, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn, formatDateTime, formatDuration, useModuleHost, usePolled, type ModuleAgent, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -8,7 +8,55 @@ const LIMIT = 50
 /** One run, with the project it was recorded in. */
 export interface Row {
   project: ModuleProject
-  card: Omit<RunCard, 'caller'>
+  card: Omit<RunCard, 'caller' | 'status'> & {
+    /** As recorded, or `unknown` while the computer it runs on does not answer. */
+    status: RunCard['status'] | 'unknown'
+    /** While it is unknown: which computer, and since when it was not seen. */
+    offline?: string
+  }
+}
+
+/** A project's runs as the dashboard lists them right now. */
+export interface LiveRuns {
+  project: ModuleProject
+  runs: ModuleAgent[]
+}
+
+/**
+ * The recorded runs with how the dashboard says they stand right now: a run's record stops at
+ * what its computer shared last, and the dashboard asks the computers themselves. So a run the
+ * dashboard lists is shown as it lists it, and one it lists that has no record here yet is shown
+ * too, as far back as the project's own rows go.
+ */
+export function withLiveRuns(rows: readonly Row[], live: readonly LiveRuns[]): Row[] {
+  const byId = new Map(live.flatMap(({ project, runs }) => runs.map(run => [`${project.id}/${run.id}`, run] as const)))
+  const shown = rows.map(row => {
+    const run = byId.get(`${row.project.id}/${row.card.id}`)
+    return run ? { ...row, card: { ...row.card, ...cardOf(run) } } : row
+  })
+  const recorded = new Set(rows.map(row => `${row.project.id}/${row.card.id}`))
+  for (const { project, runs } of live) {
+    const own = rows.filter(row => row.project.id === project.id)
+    // Only as far back as the project's own page: past it, its records are not read either.
+    const from = own.length >= LIMIT ? own.reduce((oldest, row) => (row.card.startedAt < oldest ? row.card.startedAt : oldest), own[0]!.card.startedAt) : ''
+    for (const run of runs) if (!recorded.has(`${project.id}/${run.id}`) && run.startedAt >= from) shown.push({ project, card: { id: run.id, startedAt: run.startedAt, ...cardOf(run) } })
+  }
+  return shown.sort((a, b) => b.card.startedAt.localeCompare(a.card.startedAt))
+}
+
+/** What a row takes from the dashboard's word on a run. */
+function cardOf(run: ModuleAgent): Omit<Row['card'], 'id' | 'startedAt'> {
+  return {
+    status: run.status,
+    ...(run.endedAt ? { endedAt: run.endedAt } : {}),
+    ...(run.title ? { title: run.title } : {}),
+    ...(run.ask ? { intent: run.ask } : {}),
+    ...(run.name ? { branch: run.name } : {}),
+    ...(run.cost !== undefined ? { cost: run.cost } : {}),
+    ...(run.driver ? { driver: run.driver } : {}),
+    ...(run.model ? { model: run.model } : {}),
+    ...(run.status === 'unknown' ? { offline: `${run.machine ?? 'Its computer'} offline${run.seenAt ? ` · last seen ${formatDateTime(run.seenAt)}` : ''}` } : {}),
+  }
 }
 
 /** What one read of every project gave: the runs, and the projects whose command failed, with why. */
@@ -28,16 +76,16 @@ const STATUS_TONE: Record<string, { text: string; dot: string }> = {
   failed: { text: 'text-danger', dot: 'bg-danger' },
 }
 
-/** The statuses a chip picks, in this order: what is going, then how runs ended. */
-const STATUSES = ['running', 'waiting', 'done', 'stopped', 'failed']
+/** The statuses a chip picks, in this order: what is going, then how runs ended, then the runs whose computer does not answer. */
+const STATUSES = ['running', 'waiting', 'done', 'stopped', 'failed', 'unknown']
 
-/** A run's status as a dot and its word. */
-function Status({ status }: { status: string }) {
+/** A run's status as a dot and its word; one whose computer does not answer says which, pointed at. */
+function Status({ status, offline }: { status: string; offline?: string | undefined }) {
   const tone = STATUS_TONE[status]
   return (
-    <span className={cn('inline-flex items-center gap-1.5', tone?.text ?? 'text-muted-foreground')}>
+    <span className={cn('inline-flex items-center gap-1.5', tone?.text ?? 'text-muted-foreground')} {...(offline ? { title: offline } : {})}>
       <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', tone?.dot ?? 'bg-muted-foreground')} />
-      {status}
+      {status === 'unknown' ? 'status unknown' : status}
     </span>
   )
 }
@@ -82,13 +130,20 @@ function dollars(cost: number): string {
 
 /**
  * The Logs page: every project's recorded runs, newest first, from `logs --limit 50` in each
- * project. A row opens the run's own page in the dashboard. A project whose command fails is named
- * with the command's own reason, and the other projects still show.
+ * project, each as the dashboard says it stands right now ({@link withLiveRuns}). A row opens the
+ * run's own page in the dashboard. A project whose command fails is named with the command's own
+ * reason, and the other projects still show.
  */
 export function LogsPage({ projects }: ModulePageProps) {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
-  const { value: read, loaded } = usePolled<Read>(
+  const { value: live } = usePolled<LiveRuns[]>(
+    () => Promise.all(projects.map(async project => ({ project, runs: await host.agents(project.id).catch((): ModuleAgent[] => []) }))),
+    [],
+    10_000,
+    [key],
+  )
+  const { value: recorded, loaded } = usePolled<Read>(
     async () => {
       const results = await Promise.all(projects.map(async project => ({ project, result: await host.runCommand(project.id, ['--limit', String(LIMIT)]) })))
       const rows: Row[] = []
@@ -106,6 +161,7 @@ export function LogsPage({ projects }: ModulePageProps) {
     60_000,
     [key],
   )
+  const read = { ...recorded, rows: withLiveRuns(recorded.rows, live) }
 
   // Which status the list shows: every one, until a chip picks one. One no run has any more goes back to all.
   const [picked, setPicked] = useState<string | null>(null)
@@ -154,7 +210,7 @@ export function LogsPage({ projects }: ModulePageProps) {
                 ...rows.map(({ project, card }) => (
                   <TableRow key={`${project.id}/${card.id}`} onClick={() => host.openAgent(project.id, card.id)} className="cursor-pointer">
                     <TableCell>
-                      <Status status={card.status} />
+                      <Status status={card.status} offline={card.offline} />
                     </TableCell>
                     {/* The run's short name, and what it was asked under it; a run with no name yet is its ask. */}
                     <TableCell className="max-w-md">
@@ -204,7 +260,7 @@ export function LogsPage({ projects }: ModulePageProps) {
                     {card.title?.trim() || card.intent?.trim() || card.id}
                   </p>
                   <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
-                    <Status status={card.status} />
+                    <Status status={card.status} offline={card.offline} />
                     {many && <span>{project.name}</span>}
                     {card.pr && (
                       <a href={card.pr.url} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()} className="text-info hover:underline">

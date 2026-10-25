@@ -267,6 +267,16 @@ describe('AgentHistory rows', () => {
     expect(screen.getByLabelText('Runs on Server').querySelector('svg')!.getAttribute('class')).toContain('lucide-server')
   })
 
+  test('a run whose computer does not answer says its status is unknown, which computer is offline and when it was last seen, and does not pulse', () => {
+    const seenAt = new Date(Date.now() - 12 * 60_000).toISOString()
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'unknown', target: 'remote', remoteLabel: 'MacBook', remoteByLine: true, seenAt })]} selectedAgentId={null} onSelect={() => {}} />)
+    expect(screen.getByLabelText('MacBook offline · last seen 12m ago')).toBeTruthy()
+    const dot = screen.getByRole('img', { name: 'status unknown' })
+    expect(dot.getAttribute('class')).toContain('border-dashed')
+    expect(dot.getAttribute('class')).not.toContain('animate-pulse')
+    expect(dot.closest('button')!.getAttribute('aria-label')).toContain('status unknown')
+  })
+
   test('a run another machine started says whose it is; this daemon\'s own does not (#1067, #1648)', () => {
     const rows = [
       { projectId: 'p', projectName: 'gemstack', agent: agent({ id: 'theirs', host: 'rom-thinkpad-x280', otherHost: true }) },

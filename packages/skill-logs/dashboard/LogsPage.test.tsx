@@ -11,10 +11,12 @@ const at = (ms: number) => new Date(ms).toISOString()
 const now = Date.now()
 const noon = new Date(new Date().setHours(12, 0, 0, 0)).getTime()
 
-function hostWith(cards: unknown[]): ModuleHost {
+/** A host whose `logs` prints `cards`, and whose dashboard lists `runs` right now. */
+function hostWith(cards: unknown[], runs: unknown[] = []): ModuleHost {
   return {
     package: '@openagt/skill-logs',
     runCommand: vi.fn(async () => ({ ok: true as const, output: cards })),
+    agents: vi.fn(async () => runs),
     openAgent: vi.fn(),
   } as unknown as ModuleHost
 }
@@ -56,4 +58,26 @@ test('the runs cut by day, each day with its runs and their cost; a run by its n
   // A row opens its run.
   fireEvent.click(screen.getAllByText('Login page')[0]!.closest('tr')!)
   expect(host.openAgent).toHaveBeenCalledWith('p1', 'r1')
+})
+
+test('each run as the dashboard says it stands: a record that still says running reads unknown while its computer is offline, and a run with no record yet is listed', async () => {
+  const seenAt = at(now - HOUR)
+  const host = hostWith(
+    // The records froze while the laptop worked on.
+    [{ id: 'r1', startedAt: at(now - 5000), status: 'running', intent: 'frozen in the records' }],
+    [
+      { id: 'r1', startedAt: at(now - 5000), status: 'unknown', ask: 'frozen in the records', machine: 'MacBook', seenAt },
+      { id: 'r2', startedAt: at(now - 1000), endedAt: at(now), status: 'done', title: 'Only on the laptop', cost: 0.3 },
+    ],
+  )
+  render(
+    <ModuleHostContext.Provider value={host}>
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+    </ModuleHostContext.Provider>,
+  )
+  const added = (await screen.findAllByText('Only on the laptop'))[0]!.closest('tr')!
+  expect(added.textContent).toContain('done')
+  const frozen = screen.getAllByText('frozen in the records')[0]!.closest('tr')!
+  expect(within(frozen).getByText('status unknown').closest('[title]')!.getAttribute('title')).toBe(`MacBook offline · last seen ${new Date(seenAt).toLocaleString()}`)
+  expect(screen.queryAllByText('running')).toHaveLength(0)
 })

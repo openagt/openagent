@@ -107,6 +107,19 @@ describe('HotTicketsCard', () => {
     expect(screen.getAllByRole('region')[0]!.getAttribute('aria-label')).toBe('Claimed, run stopped')
   })
 
+  test("a claim whose run's computer is offline is neither being worked on nor stopped: it says which computer and since when", async () => {
+    const seenAt = '2026-10-25T10:42:00.000Z'
+    render(
+      { p1: { 'list --local': [ticket('far.md', { locked: true, lockedBy: 'run-1' })] }, p2: { 'list --local': [] } },
+      { p1: [{ id: 'run-1', status: 'unknown', startedAt: '2026-10-25T10:00:00.000Z', machine: 'MacBook', seenAt }] },
+    )
+    await screen.findByText('far')
+    expect(screen.getByRole('region', { name: 'Claimed, computer offline' }).textContent).toContain('far')
+    expect(screen.queryByRole('region', { name: 'Being worked on' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Claimed, run stopped' })).toBeNull()
+    expect(screen.getByLabelText(`MacBook is offline, last seen ${new Date(seenAt).toLocaleString()}: how its run stands is unknown, claimed by run-1`)).toBeTruthy()
+  })
+
   test('a claim whose run stopped is gone on with in its run, or let go: the claim is lifted, whoever holds it, and the card reads again; it offers no link action meanwhile', async () => {
     const run = vi.fn<LinkAction['run']>(async () => ({ ok: true as const }))
     render(

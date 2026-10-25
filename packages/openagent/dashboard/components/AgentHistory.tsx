@@ -265,6 +265,7 @@ export function AgentHistory({
       cloudState={cloudRunState(row.agent, Date.now())}
       {...(row.agent.remoteLabel ? { remoteLabel: row.agent.remoteLabel } : {})}
       remoteByLine={row.agent.remoteByLine === true}
+      seenAt={row.agent.seenAt}
       {...(row.agent.pr ? { pr: { number: row.agent.pr.number, ...(row.agent.prState ? { state: row.agent.prState } : {}) } } : {})}
       {...(row.agent.unpublished ? { unpublished: row.agent.unpublished } : {})}
       {...(row.agent.uncommitted ? { uncommitted: row.agent.uncommitted } : {})}
@@ -659,6 +660,7 @@ function AgentHistoryRow({
   cloudState,
   remoteLabel,
   remoteByLine = false,
+  seenAt,
   startedOn,
   fold,
   pr,
@@ -698,6 +700,8 @@ function AgentHistoryRow({
   remoteLabel?: string | undefined
   /** That machine is a person's own computer, reached by the line it keeps open here: the glyph is a computer, not a server. */
   remoteByLine?: boolean
+  /** While the status is unknown: when the run's computer last answered, if it did. */
+  seenAt?: string | undefined
   /** The machine whose daemon started the run, when that is another machine (#1648): a glyph names it. */
   startedOn?: string | undefined
   /** The run's pull request, and how it stands when the git host said: a glyph before the agent's logo. */
@@ -750,7 +754,9 @@ function AgentHistoryRow({
   const titleClass = cn('rail-title min-w-0 flex-1 text-sm font-normal', overflowing && 'is-overflowing')
   // What the row says in a word, the one the status badge used to print: it names the circle, and
   // opens the sentence the row's hover says.
-  const word = parked ? 'waiting' : inCloud ? 'in cloud' : cloudWord ? cloudWord : savingNow ? 'saving…' : status
+  const word = parked ? 'waiting' : inCloud ? 'in cloud' : cloudWord ? cloudWord : savingNow ? 'saving…' : status === 'unknown' ? 'status unknown' : status
+  // A run whose computer does not answer: which computer, and when it was last seen.
+  const offline = status === 'unknown' ? `${remoteLabel ?? 'Its computer'} offline${seenAt ? ` · last seen ${formatRelative(seenAt)}` : ''}` : undefined
   // The circle: filled while something is going on, a ring once nothing is, and the colour is the
   // status vocabulary every list shares (`status-tone.ts`). Only a run that is working pulses — a
   // run parked on you has been still for as long as you have not answered it (#785).
@@ -775,7 +781,7 @@ function AgentHistoryRow({
     subtitle,
     ...(picked ? [DRIVER_LABELS[picked]] : []),
     ...(startedOn ? [`started on ${startedOn}`] : []),
-    ...(remote ? [remoteLabel ? `runs on ${remoteLabel}` : 'runs on another machine'] : []),
+    ...(offline ? [offline] : remote ? [remoteLabel ? `runs on ${remoteLabel}` : 'runs on another machine'] : []),
     ...(cloud ? ['a Claude Code cloud session'] : []),
     ...(prSaid ? [prSaid] : []),
     ...(left ? [left.said] : []),
@@ -827,7 +833,7 @@ function AgentHistoryRow({
         </RowMark>
       )}
       {remote && (
-        <RowMark said={remoteLabel ? `Runs on ${remoteLabel}` : 'Runs on another machine'}>
+        <RowMark said={offline ?? (remoteLabel ? `Runs on ${remoteLabel}` : 'Runs on another machine')}>
           <MachineIcon className="h-3 w-3 text-muted-foreground" />
         </RowMark>
       )}
