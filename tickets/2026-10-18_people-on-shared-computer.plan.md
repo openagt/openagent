@@ -1,5 +1,6 @@
 Effort: 8
 Uncertainty: 6
+Outdated: yes
 
 # [Plan] People on a shared computer: each person's own runs, logins and laptops
 
