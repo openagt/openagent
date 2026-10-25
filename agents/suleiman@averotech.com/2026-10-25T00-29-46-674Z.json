@@ -7,7 +7,6 @@
   "title": "Agent Issue Tracker Sync",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-10-25T00-29-46-674Z",
   "cost": 0.5382256,
   "contextTokens": 44382,
   "caller": {
