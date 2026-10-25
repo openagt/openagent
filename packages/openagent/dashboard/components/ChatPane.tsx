@@ -11,8 +11,10 @@ import { useLayoutEffect, useRef, type ReactNode } from 'react'
 // and under the bar it went behind it. It is written straight to the element as the bar changes its size,
 // with no render in between: the chat moves in the same frame as the bar. The bar's height is read
 // to the part of a pixel, so its fade starts where it ends. The bar stops short of the scroll bar
-// (`--chat-scroll-bar`): its width is read off a probe styled as the chat's scroller is, since a
-// scroll bar that lies over the content takes none.
+// (`--chat-scroll-bar`): its width is read off a probe styled as the chat's scroller is. A scroll
+// bar that lies over the content (a Mac's) takes none, and the bar went over its end: the bar stops
+// at least a strip short of the edge, and pads its left as much more, so the message box stays
+// centered under the chat. On a touch screen the chat ends above the bar and needs no strip.
 //
 // The chat's room is a layer of its own (`isolate`): what the dashboard opens over the page (a
 // file's preview, from the Files pane) stays over the message box's bar. And what lies over the
@@ -46,7 +48,7 @@ export function ChatPane({ top, bottom, children }: { top: ReactNode; bottom: Re
         <div ref={probe} className="scrollbar-thin invisible absolute h-0 w-8 overflow-y-scroll" aria-hidden />
         {children}
         {/* On a window too short for a tall question, the bar scrolls inside itself. */}
-        <div ref={bottomBar} data-testid="chat-bottom" className="absolute right-(--chat-scroll-bar) bottom-0 left-0 z-10 max-h-full overflow-y-auto bg-background">
+        <div ref={bottomBar} data-testid="chat-bottom" className="absolute right-[max(var(--chat-scroll-bar),0.75rem)] bottom-0 left-0 z-10 max-h-full overflow-y-auto bg-background pl-[calc(max(var(--chat-scroll-bar),0.75rem)_-_var(--chat-scroll-bar))] pointer-coarse:right-(--chat-scroll-bar) pointer-coarse:pl-0">
           {bottom}
         </div>
         {/* A short fade at each end, so a row passing out of view is not cut by a straight line. They
