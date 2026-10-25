@@ -1,16 +1,28 @@
 {
   "id": "2026-10-25T00-33-35-400Z",
   "startedAt": "2026-10-25T00:33:33.808Z",
-  "status": "running",
+  "endedAt": "2026-10-25T00:36:20.535Z",
+  "status": "done",
   "intent": "/work-queue",
+  "title": "Ticket plan rewrite for agent PR comments",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "branch": "agent-2026-10-25T00-33-35-400Z",
+  "cost": 0.8030619999999999,
+  "contextTokens": 63637,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
-      "publish": "pr"
+      "pid": 81431,
+      "publish": "pr",
+      "baseCommit": "b6af130be7565047e790dd93a1c986ee5dbbf738"
     },
+    "pid": 81431,
     "host": "Suleimans-MacBook-Pro.local",
-    "publish": "pr"
+    "baseCommit": "b6af130be7565047e790dd93a1c986ee5dbbf738",
+    "publish": "pr",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/gemstack/.branches/agent-2026-10-25T00-33-35-400Z",
+    "sessionId": "cae7b3d8-431f-43be-bbc0-688bfa218e3b"
   }
 }
