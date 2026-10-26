@@ -249,23 +249,26 @@ describe('Composer (#721)', () => {
     await saveMachines(box)
     selectMachine(box.id)
     const { onSubmit } = renderComposer()
-    const words = "Your GitHub and Claude logins are copied to @rom's server. @rom can see what is on it."
-    await waitFor(() => expect(screen.getByText(words)).toBeTruthy())
+    const words = "Your GitHub and Claude logins are copied to @rom's server. @rom can see what is on it. Runs there start once you say OK."
+    const note = (): HTMLElement | null => screen.queryByRole('note')
+    await waitFor(() => expect(note()?.querySelector("p")?.textContent).toBe(words))
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'ship it' } })
     const submit = screen.getByRole('button', { name: 'Send' })
     expect(submit.hasAttribute('disabled')).toBe(true)
+    // Held, it looks held: faded, not the full colour of a press that would start.
+    expect(submit.className).toContain('disabled:opacity-40')
     fireEvent.click(submit)
     fireEvent.click(screen.getByText('editor-submit'))
     expect(onSubmit).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'OK' }))
-    expect(screen.queryByText(words)).toBeNull()
+    expect(note()).toBeNull()
     expect(screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')).toBe(false)
     await waitFor(() => expect(machinesRpc.sendMachineTold).toHaveBeenCalledWith('box'))
     cleanup()
     // Told: the next page says nothing.
     renderComposer()
     await waitFor(() => expect(machinesRpc.onMachines).toHaveBeenCalled())
-    expect(screen.queryByText(words)).toBeNull()
+    expect(note()).toBeNull()
   })
 
   test('an online "Run on" machine leaves Start enabled with no offline note (#1073)', async () => {

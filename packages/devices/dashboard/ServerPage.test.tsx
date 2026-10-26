@@ -878,6 +878,23 @@ describe('Settings › Devices: a server this computer installed', () => {
   })
 })
 
+describe('Settings › Devices opened at one machine, as a link from elsewhere names it', () => {
+  test('its page opens at once, and back is the list', async () => {
+    const SERVER = 'https://203.0.113.5'
+    const BOX = `${SERVER}/_devices/via/b0x1d2`
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: SERVER, label: '203.0.113.5', url: SERVER, version: '1.2.3' }, { id: BOX, label: 'rom-desktop (through 203.0.113.5)', url: BOX, version: '1.2.3', owner: 'rom' }] }
+    const { host } = dashboard(args => (args[0] === 'status' ? ok({ servers: [] }) : args[0] === 'other' ? ok({ other: [{ url: BOX, logins: {}, claude: { there: false, working: false } }] }) : ok({})), saved, { ok: true }, OCTOCAT)
+    render(
+      <ModuleHostContext.Provider value={host}>
+        <DevicesSettings everyMs={40} devicesEveryMs={60} item={BOX} />
+      </ModuleHostContext.Provider>,
+    )
+    expect(await screen.findByRole('list', { name: 'Your logins on rom-desktop (through 203.0.113.5)' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Devices' }))
+    expect(await screen.findByRole('listitem', { name: 'rom-desktop (through 203.0.113.5)' })).toBeTruthy()
+  })
+})
+
 describe('Settings › Devices: a computer at home set up as a server, through a server', () => {
   const VPS = 'https://165.245.244.10'
   const VIA = `${VPS}/_devices/via/line12345678`

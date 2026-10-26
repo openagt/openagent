@@ -160,7 +160,7 @@ export function StartAgentForm({
   const submit = async (text: string) => {
     if (busy) return
     setNote(STARTING)
-    setSentTo(machine?.label ?? null)
+    setSentTo(machine ? machineName(machine) : null)
     const result = await start(projectId, promptWithContext(text, context), {
       ...startPicks(preferences),
       ...cleanupPick(preferences, commands),
