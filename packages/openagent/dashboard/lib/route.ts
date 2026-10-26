@@ -26,6 +26,11 @@ export interface Route {
    * `''` for its first one. Absent when it is closed. Carried as `?settings=<entry>`.
    */
   settings?: string
+  /**
+   * A page inside the Settings entry shown, by what the entry knows it as (a saved machine's id,
+   * under Devices): what a link from elsewhere on the page opens. Carried as `&item=<it>`.
+   */
+  settingsItem?: string
   /** The project whose agent or "New agent" page shows, by id; null for an Overview and a module's page. */
   projectId: string | null
   /** The selected agent, or null for the project's "New agent" page. */
@@ -47,6 +52,7 @@ const ALL_PARAM = 'all'
 
 /** The query parameter that carries {@link Route.settings}. */
 export const SETTINGS_PARAM = 'settings'
+export const SETTINGS_ITEM_PARAM = 'item'
 
 /**
  * Read the route out of a URL's path and query, naming projects by `projects`. A first segment
@@ -57,7 +63,8 @@ export function parseRoute(url: string, projects: ProjectAddresses): Route {
   const [pathname = '', search = ''] = url.split('?')
   const params = new URLSearchParams(search)
   const entry = params.get(SETTINGS_PARAM)
-  const settings = entry !== null ? { settings: entry } : {}
+  const item = params.get(SETTINGS_ITEM_PARAM)
+  const settings = entry !== null ? { settings: entry, ...(item ? { settingsItem: item } : {}) } : {}
   const [first, ...rest] = pathname.split('/').filter(Boolean).map(decodeSegment)
   // The old page's address, `/settings/<entry>` included: the dialog over the Overview.
   if (first === SETTINGS_SEGMENT) return { projectId: null, agentId: null, settings: entry ?? rest[0] ?? '' }
@@ -74,7 +81,7 @@ export function parseRoute(url: string, projects: ProjectAddresses): Route {
 /** The URL for a route, its path and its query — the inverse of {@link parseRoute}. */
 export function formatRoute(route: Route, projects: ProjectAddresses): string {
   const all = !route.page && route.projectId && !route.scope ? [ALL_PARAM] : []
-  const settings = route.settings !== undefined ? [`${SETTINGS_PARAM}=${encodeURIComponent(route.settings)}`] : []
+  const settings = route.settings !== undefined ? [`${SETTINGS_PARAM}=${encodeURIComponent(route.settings)}`, ...(route.settingsItem ? [`${SETTINGS_ITEM_PARAM}=${encodeURIComponent(route.settingsItem)}`] : [])] : []
   const query = [...all, ...settings].join('&')
   return formatPath(route, projects) + (query ? `?${query}` : '')
 }
@@ -87,7 +94,7 @@ export function formatRoute(route: Route, projects: ProjectAddresses): string {
 export function keepPageQuery(url: string, search: string): string {
   const [path = '', own = ''] = url.split('?')
   const params = new URLSearchParams(search)
-  for (const name of [ALL_PARAM, SETTINGS_PARAM, ...new URLSearchParams(own).keys()]) params.delete(name)
+  for (const name of [ALL_PARAM, SETTINGS_PARAM, SETTINGS_ITEM_PARAM, ...new URLSearchParams(own).keys()]) params.delete(name)
   const query = [params.toString(), own].filter(Boolean).join('&')
   return query ? `${path}?${query}` : path
 }

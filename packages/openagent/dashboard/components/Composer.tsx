@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { ArrowUp, Loader2 } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
-import { type DriverName } from '../../src/client.js'
+import { machineName, type DriverName } from '../../src/client.js'
 import {
   usePreferences,
   updatePreferences,
@@ -17,7 +17,7 @@ import { CommandsMenu } from './CommandsMenu.js'
 import { DriverModelMenu, type DriverOption } from './DriverModelMenu.js'
 import { RunOnMenu } from './RunOnMenu.js'
 import { openSettings } from '../lib/use-route.js'
-import { useMachines, removeMachine, tellMachine, type Machine } from '../lib/machines.js'
+import { useMachines, tellMachine, type Machine } from '../lib/machines.js'
 import { useSelectedMachineId, selectMachine } from '../lib/remote-target.js'
 import { useMachineStatus } from '../lib/use-machine-status.js'
 import { takePendingDraft } from '../lib/draft-handoff.js'
@@ -113,7 +113,6 @@ export const Composer = forwardRef<ComposerHandle, {
 ) {
   const [prompt, setPrompt] = useState('')
   const [addingPreset, setAddingPreset] = useState(false)
-  const [machineRefusal, setMachineRefusal] = useState<string | null>(null) // why a machine was not removed
   const editorRef = useRef<PromptEditorHandle>(null)
   // The machines saved on this dashboard's own machine (#1052).
   const machines = useMachines()
@@ -259,13 +258,6 @@ export const Composer = forwardRef<ComposerHandle, {
         onSelectLocal: () => selectMachine(null),
         // A machine is added where every device is: Settings › Devices.
         onAddMachine: () => openSettings('devices'),
-        // #1072: drop a saved machine; it is then no longer the run target either.
-        onRemove: (m: Machine) => {
-          setMachineRefusal(null)
-          void removeMachine(m.id).then(result => {
-            if (!result.ok) setMachineRefusal(result.error)
-          })
-        },
         status: machineStatus,
       }}
     />
@@ -295,7 +287,8 @@ export const Composer = forwardRef<ComposerHandle, {
               // hidden state must force it to 0 and the shown state back to full for the busy spinner.
               'h-8 w-8 shrink-0 transition-[margin,opacity,transform] duration-150 ease-out',
               hasPrompt
-                ? 'ml-0 translate-x-0 opacity-100 disabled:opacity-100'
+                ? // Full while busy, for its spinner; faded while something else holds the start (the note's OK, a machine offline).
+                  cn('ml-0 translate-x-0 opacity-100', busy ? 'disabled:opacity-100' : 'disabled:opacity-40')
                 // The hidden submit takes no room: its own w-8 (2rem) back, and in the compact row the
                 // row's gap-1.5 (0.375rem) too, so the control beside it sits flush.
                 : cn('pointer-events-none translate-x-2 opacity-0 disabled:opacity-0', compact ? '-ml-[2.375rem]' : '-ml-8'),
@@ -316,16 +309,19 @@ export const Composer = forwardRef<ComposerHandle, {
   // #1073: an offline target blocks Start; say so and point back to the pick of where it runs. No auto-fallback.
   const offlineNote = targetOffline && (
     <p role="alert" className="mt-2 text-xs text-danger">
-      {`${selectedMachine?.label ?? 'The selected machine'} is offline. Pick another place to run, then start.`}
+      {`${selectedMachine ? machineName(selectedMachine) : 'The selected machine'} is offline. Pick another place to run, then start.`}
     </p>
   )
   const loginsNote = untold && (
-    <div role="note" className="mb-1 flex items-start gap-2 text-xs text-muted-foreground">
-      <p className="min-w-0 flex-1 pt-1">{`Your GitHub and Claude logins are copied to @${owner}'s server. @${owner} can see what is on it.`}</p>
+    <div role="note" className="mb-1.5 flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-xs">
+      <p className="min-w-0 flex-1">
+        <span className="text-foreground">{`Your GitHub and Claude logins are copied to @${owner}'s server.`}</span>{' '}
+        <span className="text-muted-foreground">{`@${owner} can see what is on it. Runs there start once you say OK.`}</span>
+      </p>
       <Button
         type="button"
         size="xs"
-        variant="ghost"
+        variant="outline"
         onClick={() => {
           setToldNow(selectedMachine!.id)
           void tellMachine(selectedMachine!.id)
@@ -334,11 +330,6 @@ export const Composer = forwardRef<ComposerHandle, {
         OK
       </Button>
     </div>
-  )
-  const machineRefusalNote = machineRefusal && (
-    <p role="alert" className="mt-2 text-xs text-danger">
-      {machineRefusal}
-    </p>
   )
 
   // Compact (#723): a single row for the navbar — editor, then the same controls and submit. It
@@ -399,7 +390,6 @@ export const Composer = forwardRef<ComposerHandle, {
       </div>
 
       {offlineNote}
-      {machineRefusalNote}
 
       {addingPreset && (
         <PresetCreatePanel

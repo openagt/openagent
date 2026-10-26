@@ -190,12 +190,7 @@ export async function leaveRemote(machine: MachineAccess & { door: string }): Pr
   }
 }
 
-/**
- * Where a server's door passes a call down the line of a computer that keeps one open there: a
- * computer at home that nothing on a network reaches is asked at this address, through the
- * server, with this computer's key at the server. To this computer it is one more machine.
- */
-export const THROUGH_PATH = '/_devices/via/'
+export { THROUGH_PATH } from '../reached-by-line.js'
 
 /** A computer that keeps a line open to a server, as the server's door lists it. */
 export interface ComputerOnServer {

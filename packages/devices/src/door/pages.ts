@@ -60,7 +60,7 @@ export function enterPage(path: string, nonce: string, server: boolean): string 
     history.replaceState(null, '', location.pathname)
     fetch(${JSON.stringify(path)}, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) })
       .then(async answer => {
-        if (!answer.ok) return say('This code no longer works', 'A code works once, for five minutes. ' + ${JSON.stringify(howToGetIn(server))})
+        if (!answer.ok) return say('This code no longer works', 'A code works once, for ten minutes. ' + ${JSON.stringify(howToGetIn(server))})
         // Whose device it is now, said a moment before OpenAgent opens.
         const person = (await answer.json().catch(() => ({}))).person
         if (typeof person !== 'string') return location.replace('/')

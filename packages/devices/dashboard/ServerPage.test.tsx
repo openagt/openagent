@@ -864,7 +864,10 @@ describe('Settings › Devices: a server this computer installed', () => {
     expect(await screen.findByText("rom's server, for everyone on 203.0.113.5. Your runs there use your own logins.")).toBeTruthy()
     const logins_ = await screen.findByRole('list', { name: 'Your logins on rom-desktop (through 203.0.113.5)' })
     await waitFor(() => expect(logins_.textContent).toContain('GitHub: copied from vps-1.'))
-    expect(logins_.textContent).toContain('Claude: not on rom-desktop (through 203.0.113.5) yet: it is copied from 203.0.113.5 at your first run there.')
+    expect(logins_.textContent).toContain('Claude: not on rom-desktop (through 203.0.113.5) yet.')
+    // From here nothing is copied by itself: the page says to log in here, or where a first run copies them.
+    expect(screen.getByText('Log them in here before your first run there. A run you start from your page on 203.0.113.5 copies yours from there instead.')).toBeTruthy()
+    expect(within(logins_).getByRole('button', { name: 'Log in to Claude on rom-desktop (through 203.0.113.5) instead' }).textContent).toBe('Log in here')
 
     logins = { github: { source: 'made', account: 'sul' } }
     fireEvent.click(screen.getByRole('button', { name: 'Log in to GitHub on rom-desktop (through 203.0.113.5) instead' }))
@@ -872,6 +875,23 @@ describe('Settings › Devices: a server this computer installed', () => {
     await waitFor(() => expect(logins_.textContent).toContain('GitHub: made here.'))
     fireEvent.click(screen.getByRole('button', { name: 'Log in to Claude on rom-desktop (through 203.0.113.5) instead' }))
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['other-login', BOX, 'claude']))
+  })
+})
+
+describe('Settings › Devices opened at one machine, as a link from elsewhere names it', () => {
+  test('its page opens at once, and back is the list', async () => {
+    const SERVER = 'https://203.0.113.5'
+    const BOX = `${SERVER}/_devices/via/b0x1d2`
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: SERVER, label: '203.0.113.5', url: SERVER, version: '1.2.3' }, { id: BOX, label: 'rom-desktop (through 203.0.113.5)', url: BOX, version: '1.2.3', owner: 'rom' }] }
+    const { host } = dashboard(args => (args[0] === 'status' ? ok({ servers: [] }) : args[0] === 'other' ? ok({ other: [{ url: BOX, logins: {}, claude: { there: false, working: false } }] }) : ok({})), saved, { ok: true }, OCTOCAT)
+    render(
+      <ModuleHostContext.Provider value={host}>
+        <DevicesSettings everyMs={40} devicesEveryMs={60} item={BOX} />
+      </ModuleHostContext.Provider>,
+    )
+    expect(await screen.findByRole('list', { name: 'Your logins on rom-desktop (through 203.0.113.5)' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Devices' }))
+    expect(await screen.findByRole('listitem', { name: 'rom-desktop (through 203.0.113.5)' })).toBeTruthy()
   })
 })
 

@@ -86,6 +86,18 @@ describe('parseRoute', () => {
   })
 })
 
+describe('a page inside a Settings entry, as a link from elsewhere names it', () => {
+  it('rides the address beside its entry, only while Settings is open, and goes when the page under it is kept', () => {
+    const at = 'https://203.0.113.5/_devices/via/b0x1'
+    const route = parse(`/app?settings=devices&item=${encodeURIComponent(at)}`)
+    expect(route).toEqual({ projectId: 'app-a1', agentId: null, scope: 'app-a1', settings: 'devices', settingsItem: at })
+    expect(parse(format(route))).toEqual(route)
+    // Settings closed, no item; an item with no Settings is none.
+    expect(parse(`/app?item=${encodeURIComponent(at)}`)).toEqual({ projectId: 'app-a1', agentId: null, scope: 'app-a1' })
+    expect(keepPageQuery('/app', `?settings=devices&item=x&filter=open`)).toBe('/app?filter=open')
+  })
+})
+
 describe('formatRoute', () => {
   it('writes each route, the project first by its address', () => {
     expect(format({ projectId: null, agentId: null })).toBe('/')

@@ -260,16 +260,21 @@ describe('AgentHistory rows', () => {
     expect(fold).toBeLessThan(marks.indexOf('Codex'))
   })
 
-  test('a run on a person\'s own computer, reached by its line, shows a computer where a server\'s run shows a server, with the same words', () => {
-    const agents = [agent({ id: 'on-computer', target: 'remote', remoteLabel: 'MacBook', remoteByLine: true }), agent({ id: 'on-server', target: 'remote', remoteLabel: 'Server' })]
+  test('a run on another machine shows that machine\'s kind as every list of machines draws it: a computer, a server at home, a server', () => {
+    const agents = [
+      agent({ id: 'on-computer', target: 'remote', remoteLabel: 'MacBook', remoteKind: 'computer' }),
+      agent({ id: 'at-home', target: 'remote', remoteLabel: 'experiment', remoteKind: 'home' }),
+      agent({ id: 'on-server', target: 'remote', remoteLabel: 'Server' }),
+    ]
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={agents} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getByLabelText('Runs on MacBook').querySelector('svg')!.getAttribute('class')).toContain('lucide-laptop')
+    expect(screen.getByLabelText('Runs on experiment').querySelector('svg')!.getAttribute('class')).toContain('lucide-house')
     expect(screen.getByLabelText('Runs on Server').querySelector('svg')!.getAttribute('class')).toContain('lucide-server')
   })
 
   test('a run whose computer does not answer says its status is unknown, which computer is offline and when it was last seen, and does not pulse', () => {
     const seenAt = new Date(Date.now() - 12 * 60_000).toISOString()
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'unknown', target: 'remote', remoteLabel: 'MacBook', remoteByLine: true, seenAt })]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'unknown', target: 'remote', remoteLabel: 'MacBook', remoteKind: 'computer', seenAt })]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getByLabelText('MacBook offline · last seen 12m ago')).toBeTruthy()
     const dot = screen.getByRole('img', { name: 'status unknown' })
     expect(dot.getAttribute('class')).toContain('border-dashed')

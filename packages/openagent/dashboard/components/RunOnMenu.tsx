@@ -1,8 +1,9 @@
-import { Check, ChevronDown, Laptop, Server, Plus, X } from 'lucide-react'
+import { Check, ChevronDown, Laptop, Plus } from 'lucide-react'
 import type { Machine } from '../lib/machines.js'
 import type { MachineStatus } from '../lib/use-machine-status.js'
 import { thisMachineName } from '../lib/this-machine.js'
-import { reachedByLine } from '../../src/client.js'
+import { machineKind, machineName, reachedByLine } from '../../src/client.js'
+import { MACHINE_ICONS, MachineMark } from './MachineMark.js'
 import { cn } from '../lib/utils.js'
 import { buttonVariants } from './ui/button.js'
 import { rowButtonClass } from './ui/row-item.js'
@@ -18,13 +19,12 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
  * shows it: the first row is the computer that runs this OpenAgent, "This machine" on that
  * computer's own screen and its name anywhere else (this-machine.ts).
  *
- * A saved machine can be a person's own computer, reached by the line it keeps open to this
- * server (reached-by-line.ts). It is drawn as a computer and described as one, not by the
- * address that stands for it here, and it has no remove: it goes when the computer is taken out,
- * under Devices.
- *
- * A machine can also be another person's computer, set up as a server and shared with everyone on
- * this one: it says whose it is, and that a run there uses this person's own logins.
+ * Each machine is said as a person knows it: its name, then what it is and where, never the
+ * address that stands for it here. A person's own computer reached by the line it keeps open to
+ * this server is a computer (reached-by-line.ts); a computer at home reached through a server is
+ * a server at home, through that server; another person's computer, shared with everyone on a
+ * server, says whose it is and that a run there uses this person's own logins. A machine is
+ * picked here and removed on its page under Devices, never by a slip of the pointer in a menu.
  */
 export type ConnectionControl = {
   /** The saved machines a run can be sent to. */
@@ -38,15 +38,14 @@ export type ConnectionControl = {
   /** Clear the selection back to the dashboard's own machine (#1067). */
   onSelectLocal: () => void
   onAddMachine: () => void
-  /** Drop a saved machine (#1072). The caller clears the selection if this was the run target. */
-  onRemove: (machine: Machine) => void
   /** Each machine's online/offline status (#1072); an id absent from the map is still being checked. */
   status: Record<string, MachineStatus>
 }
 
-/** A small reachability dot on a machine's row (#1072): green online, muted offline or still unknown. */
-function StatusDot({ status }: { status: MachineStatus | undefined }) {
-  return <span aria-hidden className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', status === 'online' ? 'bg-success' : 'bg-muted-foreground/40')} />
+/** What a saved machine is, as its row says it: what and where, and for another person's computer whose logins a run uses. */
+function wordsOf(machine: Machine): string {
+  const { kind, place } = machineKind(machine)
+  return kind === 'shared' ? `${place}. Runs use your own logins.` : place
 }
 
 // One flat "Run on" list (#1067): this machine, then the saved machines and "Add a machine",
@@ -59,9 +58,9 @@ export function RunOnMenu({ connection, busy, inRow = false }: { connection: Con
   const selectedMachine =
     connection.selectedMachineId && !connection.onlyHere ? connection.machines.find(m => m.id === connection.selectedMachineId) : undefined
   const here = thisMachineName()
-  const summary = selectedMachine?.label ?? here
+  const summary = selectedMachine ? machineName(selectedMachine) : here
   const onThisMachine = !selectedMachine
-  const Icon = onThisMachine || reachedByLine(selectedMachine.url) ? Laptop : Server
+  const Icon = onThisMachine ? Laptop : MACHINE_ICONS[machineKind(selectedMachine).kind]
   return (
     <DropdownMenu>
       <Tooltip>
@@ -95,31 +94,21 @@ export function RunOnMenu({ connection, busy, inRow = false }: { connection: Con
             </>
           )}
         </TooltipTrigger>
-        <TooltipContent>{`Run on — ${summary}`}</TooltipContent>
+        <TooltipContent>{`Run on — ${selectedMachine?.label ?? here}`}</TooltipContent>
       </Tooltip>
       {/* The words are at the row's left, the icon button at the compact row's right: the menu opens inward. */}
       <DropdownMenuContent align={inRow ? 'start' : 'end'} className="min-w-[19rem] max-w-[22rem]">
-        <DropdownMenuItem className="items-start" onClick={() => connection.onSelectLocal()}>
+        <DropdownMenuItem className="items-start gap-2" onClick={() => connection.onSelectLocal()}>
           <Check className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', onThisMachine ? 'opacity-100' : 'opacity-0')} />
-          <OptionLabel label={here} description="Start the run here, through this project's start hook." />
+          <Laptop className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+          <OptionLabel label={here} description="Runs here, through this project's start hook." />
         </DropdownMenuItem>
-        {/* Saved machines: a click SELECTS the machine as the run target (no navigation). The dot
-            shows reachability (#1072) and the X removes the saved machine. */}
+        {/* Saved machines: a click SELECTS the machine as the run target (no navigation). */}
         {connection.machines.map(machine => {
           const status = connection.status[machine.id]
           const offline = status === 'offline'
-          const computer = reachedByLine(machine.url)
-          // Another person's computer, set up as a server and shared with everyone: drawn and described as theirs.
-          const MachineIcon = computer && machine.owner === undefined ? Laptop : Server
-          const description = offline
-            ? computer
-              ? 'Not connected. It must be on, with OpenAgent running.'
-              : `${machine.url} (offline)`
-            : machine.owner !== undefined
-              ? `@${machine.owner}'s server. The run starts there, with your own logins.`
-              : computer
-                ? 'Your computer. The run starts there.'
-                : machine.url
+          const words = wordsOf(machine)
+          const description = offline ? (reachedByLine(machine.url) ? 'Not connected. It must be on, with OpenAgent running.' : `Offline · ${words}`) : words
           return (
             <DropdownMenuItem
               key={machine.id}
@@ -128,30 +117,8 @@ export function RunOnMenu({ connection, busy, inRow = false }: { connection: Con
               onClick={() => connection.onSelect(machine)}
             >
               <Check className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', selectedMachine?.id === machine.id ? 'opacity-100' : 'opacity-0')} />
-              <MachineIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-              <StatusDot status={status} />
-              <OptionLabel label={machine.label} description={description} />
-              {!computer && (
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <button
-                        type="button"
-                        onClick={e => {
-                          // Remove, not select: keep the row's own click out of it (#1072).
-                          e.stopPropagation()
-                          connection.onRemove(machine)
-                        }}
-                        aria-label={`Remove machine ${machine.label}`}
-                        className="mt-0.5 rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-danger"
-                      />
-                    }
-                  >
-                    <X className="h-3.5 w-3.5" aria-hidden />
-                  </TooltipTrigger>
-                  <TooltipContent>Remove {machine.label}</TooltipContent>
-                </Tooltip>
-              )}
+              <MachineMark kind={machineKind(machine).kind} online={status === 'online'} className="mt-0.5" />
+              <OptionLabel label={machineName(machine)} description={description} />
             </DropdownMenuItem>
           )
         })}
@@ -162,7 +129,7 @@ export function RunOnMenu({ connection, busy, inRow = false }: { connection: Con
         )}
         <DropdownMenuItem className="items-start" disabled={busy} onClick={() => connection.onAddMachine()}>
           <Plus className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-          <OptionLabel label="Add a machine…" description="In Settings › Devices: connect a computer, or join with a code." />
+          <OptionLabel label="Add a machine…" description="Connect a computer, or join with a code." />
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

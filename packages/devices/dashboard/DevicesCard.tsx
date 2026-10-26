@@ -1,7 +1,6 @@
-import { Laptop, MonitorSmartphone, Server } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, usePolled, useModuleHost, type Health, type ModuleCardProps, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
+import { MonitorSmartphone } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle, MachineMark, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, machineKind, machineName, usePolled, useModuleHost, type Health, type MachineKind, type ModuleCardProps, type ModuleMachines } from '@openagt/dashboard/module'
 import { loadStatus, type Answer, type DoorStatus } from './devices.js'
-import { THROUGH } from './model.js'
 import { olderThan } from './parts.js'
 
 // The Overview's Devices card: this computer and every computer and server it saved, each with
@@ -40,13 +39,13 @@ export function DevicesCard(_props: ModuleCardProps) {
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : (
           <ul className="space-y-2.5">
-            <Row icon={Laptop} name={machines.name ?? 'This computer'} note="this computer" online health={machines.health} />
+            <Row kind="computer" name={machines.name ?? 'This computer'} note="this computer" online health={machines.health} />
             {machines.machines.map(machine => (
               <Row
                 key={machine.id}
-                icon={kindOf(machine) === 'computer' ? Laptop : Server}
-                name={machine.label}
-                note={machine.owner !== undefined ? `${machine.owner}'s` : kindOf(machine) === 'through' ? 'through a server' : undefined}
+                kind={machineKind(machine).kind}
+                name={machineName(machine)}
+                note={machineKind(machine).place}
                 online={machine.version !== undefined}
                 health={machine.health}
                 behind={machine.version !== undefined && olderThan(machine.version, machines.version) ? machine.version : undefined}
@@ -65,28 +64,19 @@ export function DevicesCard(_props: ModuleCardProps) {
   )
 }
 
-/** What a saved machine is, by where it answers: a computer reached through a server, else a server or a computer of its own address. */
-function kindOf(machine: ModuleMachine): 'through' | 'computer' | 'server' {
-  if (machine.url.includes(THROUGH)) return 'through'
-  return machine.url.startsWith('https://') ? 'server' : 'computer'
-}
-
 /**
- * One computer on one line: its mark, its name, and at the end, when it answers and says, three
+ * One computer on one line: its mark, with whether it answers on it, its name, and at the end, when it answers and says, three
  * small rings, how much of its memory and disk is in use and how busy it is, each with its share
  * inside and its name under; when it does not answer, that it is offline. Laid out to fit a quarter
  * of the Overview: the name gives up its width, the rings never.
  */
-function Row({ icon: Icon, name, note, online, health, behind }: { icon: typeof Laptop; name: string; note?: string | undefined; online: boolean; health: Health | undefined; behind?: string | undefined }) {
+function Row({ kind, name, note, online, health, behind }: { kind: MachineKind; name: string; note?: string | undefined; online: boolean; health: Health | undefined; behind?: string | undefined }) {
   return (
     <li className="flex min-w-0 items-center gap-2">
-      <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      <MachineMark kind={kind} online={online} labelled />
       <div className="min-w-0 flex-1">
-        <p className="flex min-w-0 items-center gap-1.5 text-sm">
-          <span className="min-w-0 truncate font-medium" title={name}>
-            {name}
-          </span>
-          <span aria-label={online ? 'online' : 'offline'} title={online ? 'online' : 'offline'} className={cn('size-1.5 shrink-0 rounded-full', online ? 'bg-success' : 'bg-muted-foreground/50')} />
+        <p className="min-w-0 truncate text-sm font-medium" title={name}>
+          {name}
         </p>
         <p className="truncate text-xs text-muted-foreground">{behind !== undefined ? <span className="text-warning">OpenAgent {behind}: update it</span> : !online ? 'offline' : note}</p>
       </div>

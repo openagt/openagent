@@ -695,6 +695,16 @@ describe('Settings › Devices: a code typed on another computer', () => {
     await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Where' })).toBeNull())
   })
 
+  test('Join with a code: a link pasted whole is said by its address alone, never with the code it holds', async () => {
+    const { host } = door(() => ok(OFF), [], () => ok({ servers: [] }))
+    show(host)
+    fireEvent.click(await screen.findByRole('button', { name: 'Join with a code' }))
+    const where = await screen.findByRole('textbox', { name: 'Where' })
+    fireEvent.change(where, { target: { value: 'https://203.0.113.10/_devices/enter#K7P4QX9M.secretpart' } })
+    expect(screen.getByText('Through 203.0.113.10, while it is on.')).toBeTruthy()
+    expect(document.body.textContent).not.toContain('K7P4QX9M')
+  })
+
   test('Join with a code says why a code did not work, and keeps what was typed; unticked, this computer keeps no line there', async () => {
     const saved: ModuleMachine[] = []
     const { host, serverCommand } = door(() => ok(OFF), saved, () => ok({ servers: [] }))

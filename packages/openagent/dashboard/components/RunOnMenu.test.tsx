@@ -9,6 +9,8 @@ afterEach(cleanup)
 const STUDIO: Machine = { id: 'studio', url: 'http://192.168.1.5:4200', label: 'Studio' }
 // A person's own computer, reached by the line it keeps open to this server: saved by the address that stands for it here.
 const MACBOOK: Machine = { id: 'macbook', url: 'http://127.0.0.1:4210', label: 'MacBook' }
+// A server: what speaks HTTPS.
+const VPS: Machine = { id: 'vps', url: 'https://165.245.244.10', label: '165.245.244.10' }
 
 function renderMenu(over: Partial<ConnectionControl> = {}, inRow = true) {
   const connection: ConnectionControl = {
@@ -18,7 +20,6 @@ function renderMenu(over: Partial<ConnectionControl> = {}, inRow = true) {
     onSelect: vi.fn(),
     onSelectLocal: vi.fn(),
     onAddMachine: vi.fn(),
-    onRemove: vi.fn(),
     status: {},
     ...over,
   }
@@ -78,28 +79,50 @@ describe('the "Run on" pick in the row under the box', () => {
     expect(connection.onSelectLocal).toHaveBeenCalled()
   })
 
-  test('the X on a machine\'s row removes it and does not pick it', async () => {
-    const connection = renderMenu()
+  test('a machine is picked here and never removed: that is on its page under Devices, out of reach of a slip', async () => {
+    renderMenu({ machines: [MACBOOK, STUDIO] })
     await openMenu(trigger())
-    fireEvent.click(screen.getByRole('button', { name: 'Remove machine Studio' }))
-    expect(connection.onRemove).toHaveBeenCalledWith(STUDIO)
-    expect(connection.onSelect).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: /^Remove/ })).toBeNull()
+  })
+
+  test('a computer at home reached through a server says its own name, and what it is and where; the button says its name and the tooltip the whole', async () => {
+    const via: Machine = { id: 'via', url: 'https://165.245.244.10/_devices/via/8687ab858ef6', label: 'experiment (through 165.245.244.10)' }
+    renderMenu({ machines: [via], status: { via: 'online' }, selectedMachineId: 'via' })
+    expect(trigger().textContent).toBe('experiment')
+    expect((await hoverTooltip(trigger())).textContent).toBe('Run on — experiment (through 165.245.244.10)')
+    await openMenu(trigger())
+    const item = screen.getByRole('menuitem', { name: /^experiment/ })
+    expect(item.textContent).toBe('experimentServer at home, through 165.245.244.10')
+    expect(item.querySelector('svg.lucide-house')).toBeTruthy()
+    // Never the address that stands for it.
+    expect(item.textContent).not.toContain('_devices')
+    cleanup()
+    renderMenu({ machines: [via], status: { via: 'offline' } })
+    await openMenu(trigger())
+    expect(screen.getByRole('menuitem', { name: /^experiment/ }).textContent).toBe('experimentOffline · Server at home, through 165.245.244.10')
   })
 })
 
 describe('a saved machine that is a person\'s own computer, reached by the line it keeps open to this server', () => {
   const row = () => screen.getByRole('menuitem', { name: /^MacBook/ })
 
-  test('its row draws a computer and says what it is, not the address that stands for it here; a server\'s row is as it was', async () => {
+  test('its row draws a computer and says what it is, not the address that stands for it here; a computer on the network and a server say theirs', async () => {
     renderMenu({ machines: [MACBOOK, STUDIO], status: { macbook: 'online', studio: 'online' } })
     await openMenu(trigger())
-    expect(row().textContent).toBe('MacBookYour computer. The run starts there.')
+    expect(row().textContent).toBe('MacBookYour computer')
     expect(row().querySelector('svg.lucide-laptop')).toBeTruthy()
     expect(row().querySelector('svg.lucide-server')).toBeNull()
+    // A computer on the network: what is reached by an address of its own there, not HTTPS.
     const studio = screen.getByRole('menuitem', { name: /^Studio/ })
-    expect(studio.textContent).toBe('Studiohttp://192.168.1.5:4200')
-    expect(studio.querySelector('svg.lucide-server')).toBeTruthy()
-    expect(studio.querySelector('svg.lucide-laptop')).toBeNull()
+    expect(studio.textContent).toBe('StudioComputer, 192.168.1.5:4200')
+    expect(studio.querySelector('svg.lucide-laptop')).toBeTruthy()
+    cleanup()
+    // A server named by its address says it once.
+    renderMenu({ machines: [VPS] })
+    await openMenu(trigger())
+    const vps = screen.getByRole('menuitem', { name: /^165\.245\.244\.10/ })
+    expect(vps.textContent).toBe('165.245.244.10Server')
+    expect(vps.querySelector('svg.lucide-server')).toBeTruthy()
   })
 
   test('another person\'s computer, shared with everyone on this server, is drawn as a server and says whose it is and whose logins a run uses', async () => {
@@ -107,7 +130,7 @@ describe('a saved machine that is a person\'s own computer, reached by the line 
     renderMenu({ machines: [box], status: { box: 'online' } })
     await openMenu(trigger())
     const item = screen.getByRole('menuitem', { name: /^rom-desktop/ })
-    expect(item.textContent).toBe("rom-desktop@rom's server. The run starts there, with your own logins.")
+    expect(item.textContent).toBe("rom-desktop@rom's server. Runs use your own logins.")
     expect(item.querySelector('svg.lucide-server')).toBeTruthy()
     expect(item.querySelector('svg.lucide-laptop')).toBeNull()
   })
@@ -118,11 +141,9 @@ describe('a saved machine that is a person\'s own computer, reached by the line 
     expect(row().textContent).toBe('MacBookNot connected. It must be on, with OpenAgent running.')
   })
 
-  test('it has no remove here: it is taken out under Devices. A click still picks it', async () => {
+  test('a click picks it', async () => {
     const connection = renderMenu({ machines: [MACBOOK, STUDIO] })
     await openMenu(trigger())
-    expect(screen.queryByRole('button', { name: 'Remove machine MacBook' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Remove machine Studio' })).toBeTruthy()
     fireEvent.click(row())
     expect(connection.onSelect).toHaveBeenCalledWith(MACBOOK)
   })
@@ -133,7 +154,7 @@ describe('a saved machine that is a person\'s own computer, reached by the line 
       expect(trigger().querySelector('svg.lucide-laptop')).toBeTruthy()
       expect(trigger().querySelector('svg.lucide-server')).toBeNull()
       cleanup()
-      renderMenu({ machines: [MACBOOK, STUDIO], selectedMachineId: 'studio' }, inRow)
+      renderMenu({ machines: [MACBOOK, VPS], selectedMachineId: 'vps' }, inRow)
       expect(trigger().querySelector('svg.lucide-server')).toBeTruthy()
       expect(trigger().querySelector('svg.lucide-laptop')).toBeNull()
       cleanup()
@@ -154,7 +175,7 @@ describe('the page opened from somewhere else than the computer it is on', () =>
     expect((await hoverTooltip(trigger())).textContent).toBe('Run on — 165.245.244.10')
     await openMenu(trigger())
     const items = screen.getAllByRole('menuitem')
-    expect(items[0]!.textContent).toBe('165.245.244.10Start the run here, through this project\'s start hook.')
+    expect(items[0]!.textContent).toBe('165.245.244.10Runs here, through this project\'s start hook.')
     fireEvent.click(items[0]!)
     cleanup()
 

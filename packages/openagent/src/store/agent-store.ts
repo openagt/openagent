@@ -5,6 +5,7 @@ import { OPENAGENT_DIR } from '../openagent-dir.js'
 import { projectBranches, type BranchesFor, type Checkout } from './branches.js'
 import { isRunId, parseRunCard, projectRuns, type AnyDiaryLine, type RunsFor } from './runs.js'
 import { eventsOf, fromRunCard } from './run-record.js'
+import type { MachineKind } from '../reached-by-line.js'
 
 /**
  * The read side of a project's runs (#1774). The daemon runs no agent and writes no run: a run's
@@ -195,10 +196,10 @@ export interface AgentMeta {
    * feed, show a cloud agent's session link after a reload, and gate the browser pane off (#1053).
    */
   target?: 'local' | 'actions' | 'remote' | 'web'
-  /** The saved machine a remote agent (#1067) executes on, for the session list + notice after a reload. */
+  /** The saved machine a remote agent (#1067) executes on, by its own name, for the session list + notice after a reload. */
   remoteLabel?: string
-  /** That saved machine is a person's own computer, reached by the line it keeps open here (reached-by-line.ts): the run is drawn with a computer, not a server. */
-  remoteByLine?: true
+  /** What that saved machine is (reached-by-line.ts): the run is drawn with its kind's icon. */
+  remoteKind?: MachineKind
   /**
    * While the run's status is `unknown`: when its computer last answered this one, ISO, when it
    * did since this computer knows it. Not stored: annotated on the way to the dashboard.

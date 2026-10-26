@@ -147,6 +147,8 @@ export interface ModuleSettingsProps {
    * computer's. A save goes to each of them.
    */
   projects: ModuleProject[]
+  /** A page inside the entry to open, by what the entry knows it as: a link from elsewhere names it (`openSettings(entry, item)`). */
+  item?: string
 }
 
 /**
@@ -580,6 +582,8 @@ export { Markdown } from '../components/Markdown.js'
 export { StartAgentButton } from '../components/StartAgentButton.js'
 export { LinkActions, type ProjectLinks, type LinkTargets } from '../components/LinkActions.js'
 export { cn } from '../lib/utils.js'
+export { MachineMark } from '../components/MachineMark.js'
+export { machineKind, machineName, type MachineKind } from '../../src/client.js'
 export { SettingsSection, SettingsRow, SettingsSelectRow, type SettingsOption } from '../components/SettingsRows.js'
 export { useSettingsCrumb, type SettingsCrumb } from '../lib/settings-crumb.js'
 export { QrCode } from '../components/QrCode.js'
