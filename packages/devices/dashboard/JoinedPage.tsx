@@ -137,10 +137,10 @@ export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; 
 }
 
 /** The words for one of this person's logins on another person's computer: a copy, one made there, or none yet. */
-function otherWords(label: 'GitHub' | 'Claude', login: OtherLogin | undefined, name: string, server: string): string {
-  if (login?.source === 'copied') return `${label}: copied from ${login.from ?? server}.`
+function otherWords(label: 'GitHub' | 'Claude', login: OtherLogin | undefined, name: string): string {
+  if (login?.source === 'copied') return `${label}: copied from ${login.from ?? 'your server'}.`
   if (login?.source === 'made') return `${label}: made here.`
-  return `${label}: not on ${name} yet: it is copied from ${server} at your first run there.`
+  return `${label}: not on ${name} yet.`
 }
 
 /**
@@ -181,17 +181,21 @@ export function OtherPage({ d, item, onBack }: { d: Devices; item: OtherItem; on
         <p className="text-xs text-muted-foreground">{`${owner}'s server, for everyone on ${server}. Your runs there use your own logins.`}</p>
       </Part>
       <Part title="Logins">
+        {/* What a run from this computer needs first: from here, nothing is copied by itself. */}
+        {read?.ok && (row?.github === undefined || row?.claude === undefined) && (
+          <p className="mb-3 text-xs text-muted-foreground">{`Log them in here before your first run there. A run you start from your page on ${server} copies yours from there instead.`}</p>
+        )}
         {row?.error !== undefined && <p className="text-xs text-muted-foreground">{`${name} did not say: ${row.error}`}</p>}
         {read !== undefined && !read.ok && <p className="text-xs text-muted-foreground">{`${name} did not say: ${read.error}`}</p>}
         <ul aria-label={`Your logins on ${name}`} className="space-y-3 text-xs">
-          <LoginLine label="GitHub" words={otherWords('GitHub', row?.github, name, server)} said={undefined}>
+          <LoginLine label="GitHub" words={otherWords('GitHub', row?.github, name)} said={undefined}>
             <Button size="sm" variant="outline" disabled={busy || account === undefined} aria-label={`Log in to GitHub on ${name} instead`} title={account !== undefined ? `Copies the login of ${account} from this computer to your own OpenAgent on ${name}. A copy from ${server} no longer takes its place.` : noLogin} onClick={() => void act(() => otherLogin(host, machine.url, 'github'))}>
-              Log in here instead
+              {row?.github === undefined ? 'Log in here' : 'Log in here instead'}
             </Button>
           </LoginLine>
-          <LoginLine label="Claude" words={making.asking ? "Claude: say yes in the page this computer's browser opened." : making.working ? `Claude: one moment, ${name} is being told.` : otherWords('Claude', row?.claude, name, server)} said={making.working ? undefined : making.said}>
+          <LoginLine label="Claude" words={making.asking ? "Claude: say yes in the page this computer's browser opened." : making.working ? `Claude: one moment, ${name} is being told.` : otherWords('Claude', row?.claude, name)} said={making.working ? undefined : making.said}>
             <Button size="sm" variant="outline" disabled={busy || (making.working && making.asking !== true)} aria-label={`Log in to Claude on ${name} instead`} title={`Opens this computer's browser, where you say yes once. The login is made for your OpenAgent on ${name} alone and lasts a year. A copy from ${server} no longer takes its place.`} onClick={() => void act(() => otherLogin(host, machine.url, 'claude'))}>
-              {making.asking ? 'Start over' : 'Log in here instead'}
+              {making.asking ? 'Start over' : row?.claude === undefined ? 'Log in here' : 'Log in here instead'}
             </Button>
           </LoginLine>
         </ul>

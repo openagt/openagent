@@ -320,10 +320,11 @@ export function App() {
     navigate({ ...route, settings: entry }, { keepQuery: true })
   }
   const showSettingsEntry = (entry: string) => {
-    navigate({ ...route, settings: entry }, { keepQuery: true, replace: true })
+    const { settingsItem: _item, ...rest } = route
+    navigate({ ...rest, settings: entry }, { keepQuery: true, replace: true })
   }
   const closeSettings = () => {
-    const { settings: _settings, ...under } = route
+    const { settings: _settings, settingsItem: _item, ...under } = route
     navigate(under, { keepQuery: true })
   }
 
@@ -704,7 +705,7 @@ export function App() {
           <EveryPage />
         </ModuleSlot>
       ))}
-      {route.settings !== undefined && <SettingsDialog entry={route.settings} onEntry={showSettingsEntry} onClose={closeSettings} scope={scope} projects={projects} />}
+      {route.settings !== undefined && <SettingsDialog entry={route.settings} openItem={route.settingsItem} onEntry={showSettingsEntry} onClose={closeSettings} scope={scope} projects={projects} />}
     </SidebarProvider>
     </ProjectLabelsContext.Provider>
     </OpenProjectContext.Provider>

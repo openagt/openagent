@@ -20,6 +20,15 @@ export function readBoth(pasted: string): { where: string; code: string } | unde
 /** A link a door gave, pasted whole: it holds where and the code already. */
 const isLink = (said: string): boolean => /^https?:\/\/[^#]+#./i.test(said.trim())
 
+/** The address a pasted link is for: what is said of it, without the code it holds. */
+function hostOfLink(link: string): string {
+  try {
+    return new URL(link.trim()).host
+  } catch {
+    return ''
+  }
+}
+
 /** The address typed under Where, as a door's origin: a server's door speaks HTTPS. */
 export function originOf(where: string): string | undefined {
   const host = where.trim().replace(/^https:\/\//i, '').replace(/\/+$/, '')
@@ -49,7 +58,8 @@ export function JoinDialog({ d, onClose }: { d: Devices; onClose: () => void }) 
   const link = linkOf(where, code)
   // Through a server: a link pasted whole may be a computer's on its Wi-Fi, which keeps no line.
   const server = link !== undefined && link.startsWith('https://')
-  const shownWhere = originOf(where)?.replace(/^https:\/\//, '') ?? where.trim()
+  // Where, never the code: a link pasted whole is said by its address alone.
+  const shownWhere = isLink(where) ? hostOfLink(where) : (originOf(where)?.replace(/^https:\/\//, '') ?? where.trim())
 
   // "Copy both" pasted into either field fills both.
   const paste = (event: ClipboardEvent<HTMLInputElement>): void => {

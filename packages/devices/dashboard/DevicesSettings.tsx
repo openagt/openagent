@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronLeft, Ellipsis, House, Monitor, Plus, Server, Smartphone, Tablet, UserRound } from 'lucide-react'
 import { Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, formatDateTime, formatRelative, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
 import { keepPerson, loadMine, removeDevice, removeMine, removePerson, renameDevice, type Answer, type DeviceRow, type DoorStatus, type Mine, type PersonRow } from './devices.js'
@@ -38,9 +38,13 @@ const findOpened = (items: Item[], opened: Opened): Item | undefined =>
   items.find(item => item.key === opened.key) ??
   items.find(item => (opened.machine !== undefined && 'machine' in item && item.machine?.id === opened.machine) || (opened.door !== undefined && item.kind === 'computer' && item.door?.id === opened.door))
 
-export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devicesAnswerMs }: Partial<Paces>) {
+export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devicesAnswerMs, item }: Partial<Paces> & { /** A saved machine to open the page of, by its id: what a link from elsewhere names. */ item?: string }) {
   const d = useDevices({ everyMs, devicesEveryMs, ...(devicesAnswerMs !== undefined ? { devicesAnswerMs } : {}) })
-  const [opened, setOpened] = useState<Opened | undefined>()
+  const [opened, setOpened] = useState<Opened | undefined>(item !== undefined ? { key: '', machine: item } : undefined)
+  // Named again (another link while Settings is open): that machine's page.
+  useEffect(() => {
+    if (item !== undefined) setOpened({ key: '', machine: item })
+  }, [item])
   const [adding, setAdding] = useState<Adding | undefined>()
   // A server just set up opens on its page with Invite open.
   const [inviting, setInviting] = useState(false)

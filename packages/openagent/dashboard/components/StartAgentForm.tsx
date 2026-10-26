@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { CircleAlert, Folder, Puzzle } from 'lucide-react'
 import { onStartCheck } from '../rpc/projects.js'
-import { onMachineStartCheck } from '../rpc/machines.js'
+import { onMachineLogins, onMachineStartCheck } from '../rpc/machines.js'
 import { usePreferences, usePreferencesLoaded, updatePreferences } from '../lib/preferences.js'
-import { DRIVER_LABELS, isDriverName, offeredPublishPicks, publishPickIn } from '../../src/client.js'
+import { DRIVER_LABELS, isDriverName, machineName, offeredPublishPicks, publishPickIn, reachedThrough } from '../../src/client.js'
 import { useMachines } from '../lib/machines.js'
 import { useSelectedMachineId } from '../lib/remote-target.js'
 import { cleanupPick, offersPostMergeCleanup, startPicks, useStartAgent } from '../lib/use-start-agent.js'
@@ -19,6 +19,7 @@ import { RowItem, rowButtonClass } from './ui/row-item.js'
 import { Dots } from './ToolCalls.js'
 import { ACCOUNTS_ENTRY, AgentFix, agentWords, useAgentState } from './Logins.js'
 import { MachineLogins } from './ServerLogins.js'
+import { Button } from './ui/button.js'
 
 /** The note while the start is asked for: what the chat's first line says next. */
 const STARTING = 'Starting session'
@@ -26,6 +27,8 @@ const STARTING = 'Starting session'
 /** How often a picked machine is asked again while it says a run would not start there: its logins come by themselves, or by a press. */
 const MACHINE_MISSING_MS = 8_000
 const MACHINE_SELDOM_MS = 60_000
+/** How often another person's computer is asked which of this person's logins it has, while one is picked. */
+const THEIR_LOGINS_MS = 8_000
 
 // Start a run in the selected project (#405, #1774): a free-text box, where `/` lists the project's
 // commands, and Start, which is the project's own start hook (posted over `sendStart`). The editor +
@@ -142,6 +145,11 @@ export function StartAgentForm({
   const fixable = !machine && readiness?.fix !== undefined
   const { state: agent, reload: reloadAgent } = useAgentState(isDriverName(driver) ? driver : undefined, fixable)
   const agentName = DRIVER_LABELS[isDriverName(driver) ? driver : 'claude-code']
+  // Another person's computer: a run there uses this person's own logins there, and a run from
+  // here copies none. Which are missing is said as soon as it is picked, with where to log in.
+  const theirs = usePolled(machine?.owner !== undefined ? () => onMachineLogins(machine.id) : null, null, THEIR_LOGINS_MS, [machine?.id]).value
+  const missingThere = machine?.owner !== undefined && theirs?.ok ? (['GitHub', 'Claude'] as const).filter(kind => theirs.logins[kind === 'GitHub' ? 'github' : 'claude'] === undefined) : []
+  const name = machine ? machineName(machine) : undefined
   const wasReady = useRef<boolean | undefined>(undefined)
   useEffect(() => {
     const ready = fixable ? agent?.ready : undefined
@@ -232,42 +240,51 @@ export function StartAgentForm({
 
       {/* Feedback right where the action is (#948): above the box, over the page, so the box never moves. */}
       <div className="absolute inset-x-2 bottom-full flex flex-col gap-1.5 pb-1">
-        {error && <Refusal>{error}</Refusal>}
+        {/* A start that hit the missing logins says nothing the box below does not. */}
+        {error && missingThere.length === 0 && <Refusal {...said(error)} />}
+        {machine && missingThere.length > 0 && (
+          <Refusal
+            title={`Your ${missingThere.join(' and ')} ${missingThere.length === 1 ? 'login is' : 'logins are'} not on ${name} yet.`}
+            detail={`Runs there use your own logins. Log ${missingThere.length === 1 ? 'it' : 'them'} in on its page, or start your first run there from your page on ${reachedThrough(machine.url) ?? 'its server'}, which copies yours.`}
+            actions={
+              <Button type="button" size="xs" onClick={() => openSettings('devices', machine.id)}>
+                {`Log in on ${name}`}
+              </Button>
+            }
+          />
+        )}
         {readiness?.problems.map(problem =>
           problem === readiness.fix?.problem ? (
             machine ? (
-              <Refusal key={problem}>
-                {readiness.fix.kind === 'log-in' ? `${agentName} is not logged in on ${machine.label}.` : `${agentName} is not installed on ${machine.label}.`}
-                {readiness.fix.kind === 'log-in' && (
-                  <span className="mt-2 block">
-                    <MachineLogins machineId={machine.id} onAccounts={() => openSettings(ACCOUNTS_ENTRY)} />
-                  </span>
-                )}
-              </Refusal>
+              <Refusal
+                key={problem}
+                title={readiness.fix.kind === 'log-in' ? `${agentName} is not logged in on ${name}.` : `${agentName} is not installed on ${name}.`}
+                {...(readiness.fix.kind === 'log-in' ? { actions: <MachineLogins machineId={machine.id} onAccounts={() => openSettings(ACCOUNTS_ENTRY)} /> } : {})}
+              />
             ) : (
-              <Refusal key={problem}>
-                {agent && !agent.ready ? agentWords(agent) : problem}
-                {agent && !agent.ready && (
-                  <span className="mt-2 block text-foreground">
-                    <AgentFix state={agent} onChanged={() => void reloadAgent()} size="xs" />
-                  </span>
-                )}
-              </Refusal>
+              <Refusal
+                key={problem}
+                {...(agent && !agent.ready ? { title: agentWords(agent), actions: <AgentFix state={agent} onChanged={() => void reloadAgent()} size="xs" /> } : said(problem))}
+              />
             )
           ) : (
-            <Refusal key={problem}>{problem}</Refusal>
+            <Refusal key={problem} {...said(problem)} />
           ),
         )}
         {readiness?.warnings.map(warning => (
-          <p key={warning} role="alert" className="rounded-md bg-background px-1.5 text-xs text-warning">
+          <p key={warning} role="alert" className="rounded-lg border border-warning/30 bg-[color-mix(in_oklab,var(--color-warning)_8%,var(--color-background))] px-3 py-1.5 text-xs text-warning">
             {warning}
           </p>
         ))}
         {noStartHook && (
-          <Refusal>
-            This project has no start hook. Add a <code className="font-mono">start:</code> line to{' '}
-            <code className="font-mono">.openagent/hooks.yml</code>.
-          </Refusal>
+          <Refusal
+            title="This project has no start hook."
+            detail={
+              <>
+                Add a <code className="font-mono">start:</code> line to <code className="font-mono">.openagent/hooks.yml</code>.
+              </>
+            }
+          />
         )}
         {note === STARTING && !error && (
           // The chat's own first line (`SessionLine.tsx`), in its words and its look: the page that
@@ -285,14 +302,33 @@ export function StartAgentForm({
 }
 
 /**
- * Why no run starts, or would not: a box in the page's own text size, so it is not missed above the
- * message box. Opaque under its tint, since it lies over the page.
+ * Why no run starts, or would not, above the message box: what is wrong in one line, then smaller
+ * what to do about it, and the press that does it. Opaque under its tint, since it lies over the page.
  */
-function Refusal({ children }: { children: ReactNode }) {
+function Refusal({ title, detail, actions }: { title: ReactNode; detail?: ReactNode | undefined; actions?: ReactNode | undefined }) {
   return (
-    <div role="alert" className="flex items-start gap-2 rounded-md border border-danger/40 bg-[color-mix(in_oklab,var(--color-danger)_10%,var(--color-background))] px-3 py-2 text-sm text-danger">
-      <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-      <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">{children}</div>
+    <div role="alert" className="flex items-start gap-2.5 rounded-lg border border-danger/30 bg-[color-mix(in_oklab,var(--color-danger)_8%,var(--color-background))] px-3 py-2.5 shadow-sm">
+      <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden />
+      <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+        <p className="text-sm font-medium text-danger">{title}</p>
+        {detail !== undefined && (
+          <>
+            {' '}
+            <p className="mt-0.5 text-xs text-muted-foreground">{detail}</p>
+          </>
+        )}
+        {actions !== undefined && <div className="mt-2 flex flex-wrap items-center gap-2 text-foreground">{actions}</div>}
+      </div>
     </div>
   )
+}
+
+/**
+ * A line said whole, as a title and what follows it: split after its first sentence, when that
+ * sentence is short enough to read as one. A daemon's or a machine's words come as one line.
+ */
+function said(line: string): { title: string; detail?: string } {
+  const end = line.search(/\.\s+(?=[A-Z`@])/)
+  if (end <= 0 || end > 140) return { title: line }
+  return { title: line.slice(0, end + 1), detail: line.slice(end + 1).trim() }
 }

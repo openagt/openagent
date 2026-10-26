@@ -53,6 +53,7 @@ const ALL_PROJECTS = ''
 
 export function SettingsDialog({
   entry,
+  openItem,
   onEntry,
   onClose,
   scope,
@@ -60,6 +61,8 @@ export function SettingsDialog({
 }: {
   /** The entry shown, by id; `''` shows the first one, and on a phone the list. */
   entry: string
+  /** A page inside that entry to open, by what the entry knows it as. */
+  openItem?: string | undefined
   /** Show another entry, or with `''` the list on a phone. */
   onEntry: (id: string) => void
   onClose: () => void
@@ -89,7 +92,7 @@ export function SettingsDialog({
       icon: section.icon,
       body: (
         <ModuleSlot package={section.package} label={`${section.title} settings`}>
-          <Body projects={projectsHaving(section.projects, of)} />
+          <Body projects={projectsHaving(section.projects, of)} {...(openItem !== undefined && section.id === entry ? { item: openItem } : {})} />
         </ModuleSlot>
       ),
     }

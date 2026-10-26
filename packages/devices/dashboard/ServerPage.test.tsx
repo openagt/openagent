@@ -864,7 +864,10 @@ describe('Settings › Devices: a server this computer installed', () => {
     expect(await screen.findByText("rom's server, for everyone on 203.0.113.5. Your runs there use your own logins.")).toBeTruthy()
     const logins_ = await screen.findByRole('list', { name: 'Your logins on rom-desktop (through 203.0.113.5)' })
     await waitFor(() => expect(logins_.textContent).toContain('GitHub: copied from vps-1.'))
-    expect(logins_.textContent).toContain('Claude: not on rom-desktop (through 203.0.113.5) yet: it is copied from 203.0.113.5 at your first run there.')
+    expect(logins_.textContent).toContain('Claude: not on rom-desktop (through 203.0.113.5) yet.')
+    // From here nothing is copied by itself: the page says to log in here, or where a first run copies them.
+    expect(screen.getByText('Log them in here before your first run there. A run you start from your page on 203.0.113.5 copies yours from there instead.')).toBeTruthy()
+    expect(within(logins_).getByRole('button', { name: 'Log in to Claude on rom-desktop (through 203.0.113.5) instead' }).textContent).toBe('Log in here')
 
     logins = { github: { source: 'made', account: 'sul' } }
     fireEvent.click(screen.getByRole('button', { name: 'Log in to GitHub on rom-desktop (through 203.0.113.5) instead' }))

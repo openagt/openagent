@@ -23,7 +23,8 @@ const logins = vi.hoisted(() => ({ onAgentState: vi.fn(), sendAgentFix: vi.fn(),
 vi.mock('../rpc/logins.js', () => logins)
 // A picked machine's own check, and how this computer's logins stand on the machines that take them.
 const onMachineStartCheck = vi.hoisted(() => vi.fn())
-vi.mock('../rpc/machines.js', () => ({ onMachineStartCheck }))
+const onMachineLogins = vi.hoisted(() => vi.fn())
+vi.mock('../rpc/machines.js', () => ({ onMachineStartCheck, onMachineLogins }))
 const serverLogins = vi.hoisted(() => ({ onServerLogins: vi.fn(), sendUseLoginsOn: vi.fn(), sendAllowLogins: vi.fn(), sendSettleLogin: vi.fn() }))
 vi.mock('../rpc/server-logins.js', () => serverLogins)
 const openSettings = vi.hoisted(() => vi.fn())
@@ -70,6 +71,7 @@ const { StartAgentForm } = await import('./StartAgentForm.js')
 beforeEach(() => {
   onStartCheck.mockResolvedValue(null)
   onMachineStartCheck.mockResolvedValue(null)
+  onMachineLogins.mockResolvedValue({ ok: true, logins: { github: { source: 'made' }, claude: { source: 'made' } } })
   serverLogins.onServerLogins.mockResolvedValue({ computer: 'Mac', servers: [] })
 })
 
@@ -82,6 +84,7 @@ afterEach(() => {
   onCommands.mockReset()
   onStartCheck.mockReset()
   onMachineStartCheck.mockReset()
+  onMachineLogins.mockReset()
   for (const fn of Object.values(serverLogins)) fn.mockReset()
   openSettings.mockReset()
   updatePreferences.mockReset()
@@ -150,14 +153,17 @@ describe('StartAgentForm (#1774)', () => {
     expect(screen.getByRole('status').textContent).toBe('Cloning shop on Studio, the first time only')
   })
 
-  test('why no run started is a box in the page\'s own text size above the message box, not a small line, and nothing of the page shows through it', async () => {
+  test('why no run started is a box above the message box: what is wrong as its title, in the page\'s own text size, then what follows smaller; nothing of the page shows through it', async () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
     startSays.error = 'shop could not be cloned on Studio. Studio says: This computer has no login that can read github.com/acme/shop.'
     render(<StartAgentForm {...props} />)
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toBe(startSays.error)
-    for (const part of ['border-danger/40', 'var(--color-danger)_10%,var(--color-background)', 'text-sm', 'text-danger']) expect(alert.className).toContain(part)
-    expect(alert.className).not.toContain('text-xs')
+    for (const part of ['border-danger/30', 'var(--color-danger)_8%,var(--color-background)']) expect(alert.className).toContain(part)
+    const title = within(alert).getByText('shop could not be cloned on Studio.')
+    expect(title.className).toContain('text-sm')
+    expect(title.className).toContain('text-danger')
+    expect(within(alert).getByText('Studio says: This computer has no login that can read github.com/acme/shop.').className).toContain('text-xs')
     expect(alert.parentElement!.className).toContain('bottom-full')
   })
 
@@ -345,7 +351,7 @@ describe('StartAgentForm (#1774)', () => {
     expect(onStartCheck).toHaveBeenCalledWith('p1', 'codex')
     const [problem, warning] = screen.getAllByRole('alert')
     expect(problem!.textContent).toBe('`codex` is not logged in. Run `codex login`, then start again.')
-    expect(problem!.className).toContain('text-danger')
+    expect(within(problem!).getByText('`codex` is not logged in.').className).toContain('text-danger')
     expect(warning!.className).toContain('text-warning')
     expect((screen.getByText('submit-typed') as HTMLButtonElement).disabled).toBe(false)
     // Above the box, over the page: the box does not move when they come.
@@ -372,6 +378,32 @@ describe('StartAgentForm (#1774)', () => {
     expect(screen.queryByRole('button', { name: 'Log in to Claude Code' })).toBeNull()
     fireEvent.click(press)
     await waitFor(() => expect(serverLogins.sendUseLoginsOn).toHaveBeenCalledWith('d1'))
+  })
+
+  test('another person\'s computer that lacks this person\'s logins says so as soon as it is picked, with the way to its page where they are logged in', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true, remote: true, address: 'github.com/acme/shop' })
+    machine.current = { id: 'https://203.0.113.5/_devices/via/b0x1', url: 'https://203.0.113.5/_devices/via/b0x1', label: 'experiment (through 203.0.113.5)', owner: 'Suleiman' } as typeof machine.current
+    onMachineLogins.mockResolvedValue({ ok: true, logins: { github: { source: 'made' } } })
+    // The start a press would make anyway: its refusal says nothing the box does not.
+    startSays.error = 'Your GitHub and Claude logins are not on experiment (through 203.0.113.5) yet.'
+    render(<StartAgentForm {...props} />)
+    const press = await screen.findByRole('button', { name: 'Log in on experiment' })
+    expect(onMachineLogins).toHaveBeenCalledWith('https://203.0.113.5/_devices/via/b0x1')
+    const [box, ...others] = screen.getAllByRole('alert')
+    expect(others).toHaveLength(0)
+    expect(within(box!).getByText('Your Claude login is not on experiment yet.')).toBeTruthy()
+    expect(box!.textContent).toContain('start your first run there from your page on 203.0.113.5, which copies yours')
+    expect(box!.contains(press)).toBe(true)
+    fireEvent.click(press)
+    expect(openSettings).toHaveBeenCalledWith('devices', 'https://203.0.113.5/_devices/via/b0x1')
+  })
+
+  test('another person\'s computer that has this person\'s logins says nothing of them', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true, remote: true, address: 'github.com/acme/shop' })
+    machine.current = { id: 'm2', url: 'https://203.0.113.5/_devices/via/b0x2', label: 'experiment (through 203.0.113.5)', owner: 'Suleiman' } as typeof machine.current
+    render(<StartAgentForm {...props} />)
+    await waitFor(() => expect(onMachineLogins).toHaveBeenCalled())
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   test('a machine that takes no logins of this computer\'s sends the person to Settings, Accounts', async () => {

@@ -121,7 +121,7 @@ export async function install(opts: InstallOptions): Promise<void> {
     for (const step of stepsFor(server.through !== undefined)) {
       await set(step.id, 'running')
       if (step.id === 'line' && server.through !== undefined) {
-        // Asked only now: a link lets the line in for five minutes, and the steps before take longer.
+        // Asked only now: a link lets the line in for ten minutes, and the steps before take longer.
         const asked = await lineFacts(session, { through: server.through, ...(server.who !== undefined ? { who: server.who } : {}) }, ask)
         if (!asked.ok) return void (await set(step.id, 'failed', asked.said))
         facts.through = asked.through
@@ -164,7 +164,7 @@ const LINK_MAX = 512
 const LINK_TIMEOUT_MS = 20_000
 
 /**
- * Ask the server's door for a link a new machine gets in with: good once, for five minutes.
+ * Ask the server's door for a link a new machine gets in with: good once, for ten minutes.
  * Only a link to that very server is one: what a server answers is not trusted to say where
  * this computer goes to be let in.
  */

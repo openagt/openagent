@@ -147,6 +147,8 @@ export interface ModuleSettingsProps {
    * computer's. A save goes to each of them.
    */
   projects: ModuleProject[]
+  /** A page inside the entry to open, by what the entry knows it as: a link from elsewhere names it (`openSettings(entry, item)`). */
+  item?: string
 }
 
 /**

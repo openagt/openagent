@@ -295,7 +295,8 @@ export const Composer = forwardRef<ComposerHandle, {
               // hidden state must force it to 0 and the shown state back to full for the busy spinner.
               'h-8 w-8 shrink-0 transition-[margin,opacity,transform] duration-150 ease-out',
               hasPrompt
-                ? 'ml-0 translate-x-0 opacity-100 disabled:opacity-100'
+                ? // Full while busy, for its spinner; faded while something else holds the start (the note's OK, a machine offline).
+                  cn('ml-0 translate-x-0 opacity-100', busy ? 'disabled:opacity-100' : 'disabled:opacity-40')
                 // The hidden submit takes no room: its own w-8 (2rem) back, and in the compact row the
                 // row's gap-1.5 (0.375rem) too, so the control beside it sits flush.
                 : cn('pointer-events-none translate-x-2 opacity-0 disabled:opacity-0', compact ? '-ml-[2.375rem]' : '-ml-8'),
@@ -320,12 +321,15 @@ export const Composer = forwardRef<ComposerHandle, {
     </p>
   )
   const loginsNote = untold && (
-    <div role="note" className="mb-1 flex items-start gap-2 text-xs text-muted-foreground">
-      <p className="min-w-0 flex-1 pt-1">{`Your GitHub and Claude logins are copied to @${owner}'s server. @${owner} can see what is on it.`}</p>
+    <div role="note" className="mb-1.5 flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-xs">
+      <p className="min-w-0 flex-1">
+        <span className="text-foreground">{`Your GitHub and Claude logins are copied to @${owner}'s server.`}</span>{' '}
+        <span className="text-muted-foreground">{`@${owner} can see what is on it. Runs there start once you say OK.`}</span>
+      </p>
       <Button
         type="button"
         size="xs"
-        variant="ghost"
+        variant="outline"
         onClick={() => {
           setToldNow(selectedMachine!.id)
           void tellMachine(selectedMachine!.id)

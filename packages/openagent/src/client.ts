@@ -31,7 +31,7 @@ export { NOTIFICATION_DEFAULTS, MAX_SPEND_OFFSET, notifies, browserNotifyEnabled
 // How a pasted machine link is read, so the dialog and the daemon read a paste the same way.
 export { parseMachineLink } from './machine-link.js'
 // Which saved machine is a person's own computer that keeps a line open here, so the daemon and the pages say it by one rule.
-export { reachedByLine } from './reached-by-line.js'
+export { machineName, reachedByLine, reachedThrough } from './reached-by-line.js'
 // Which names are this computer's own, so a page knows whether it was opened on the computer it is served from.
 export { isLoopbackHost } from './loopback-host.js'
 // A bridged question as the gate panel renders it (#1554): pure, so the client projects it itself.

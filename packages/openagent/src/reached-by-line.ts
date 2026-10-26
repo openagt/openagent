@@ -19,3 +19,31 @@ export function reachedByLine(url: string): boolean {
     return false
   }
 }
+
+/**
+ * Where a server's door passes a call down the line of a computer that keeps one open there: a
+ * computer at home that nothing on a network reaches is asked at this address, through the
+ * server, with this computer's key at the server. To this computer it is one more machine.
+ */
+export const THROUGH_PATH = '/_devices/via/'
+
+/** The server a saved machine is reached through, by its host (`165.245.244.10`); nothing for a machine reached by an address of its own. */
+export function reachedThrough(url: string): string | undefined {
+  const at = url.indexOf(THROUGH_PATH)
+  if (at === -1) return undefined
+  try {
+    return new URL(url.slice(0, at)).host
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * A saved machine's own name, as a person says it: the name it was saved with, without the
+ * "(through <server>)" a computer reached through a server is saved with, which its row says
+ * apart.
+ */
+export function machineName(machine: { label: string; url: string }): string {
+  const server = reachedThrough(machine.url)
+  return server !== undefined ? machine.label.replace(` (through ${server})`, '') : machine.label
+}

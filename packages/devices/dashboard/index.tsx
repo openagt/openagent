@@ -13,7 +13,7 @@ import { AskPopup } from './Pairing.js'
 import './dashboard.css'
 
 export default defineModule({
-  settings: [{ id: 'devices', title: 'Devices', icon: MonitorSmartphone, order: 10, Section: () => <DevicesSettings /> }],
+  settings: [{ id: 'devices', title: 'Devices', icon: MonitorSmartphone, order: 10, Section: ({ item }) => <DevicesSettings {...(item !== undefined ? { item } : {})} /> }],
   cards: [{ id: 'devices', label: 'Devices', order: 40, width: '1/3', minWidth: '1/4', Card: DevicesCard }],
   everyPage: AskPopup,
   stylesheet: 'dashboard.css',
