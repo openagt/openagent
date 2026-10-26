@@ -183,6 +183,17 @@ export async function sendUseGitHostAccount(host: string, login: string): Promis
   return done.ok ? { ok: true } : done
 }
 
+/**
+ * Take an account off at `host`, on this computer: its tool forgets it, and its token goes on
+ * working wherever else it is. The account runs use is not taken off: another is picked first.
+ */
+export async function sendForgetGitHostAccount(host: string, login: string): Promise<AccountResult> {
+  const runs = (await onGitHosts()).hosts.find(row => row.host === host)?.provider?.accounts.find(account => account.runs)
+  if (runs?.login === login) return { ok: false, error: `Runs use @${login}: pick another account for runs first.` }
+  const done = await act(host, ['forget', login])
+  return done.ok ? { ok: true } : done
+}
+
 /** Log another account in at `host`, in the browser: the code the person types, and where. */
 export async function sendGitHostLogin(host: string): Promise<{ ok: true; code: string; url: string } | { ok: false; error: string }> {
   const done = await act(host, ['login'])

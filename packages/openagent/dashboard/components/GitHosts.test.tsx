@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
 
-const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), sendGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
+const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), sendForgetGitHostAccount: vi.fn(), sendGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
 vi.mock('../rpc/server-logins.js', () => ({ onServerLogins: vi.fn(async () => ({ computer: 'Studio', servers: [] })), sendUseLoginsOn: vi.fn(), sendAllowLogins: vi.fn(), sendSettleLogin: vi.fn() }))
 
@@ -24,6 +24,7 @@ const provider = (over: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
   logins.sendUseGitHostAccount.mockResolvedValue({ ok: true })
+  logins.sendForgetGitHostAccount.mockResolvedValue({ ok: true })
   logins.sendGitHostInstall.mockResolvedValue({ ok: true })
   logins.sendGitHostLogin.mockResolvedValue({ ok: true, code: 'ABCD-1234', url: 'https://github.com/login/device' })
 })
@@ -47,6 +48,18 @@ describe('Git hosts', () => {
     fireEvent.click(within(within(card).getByRole('listitem', { name: '@octo-agent' })).getByRole('button', { name: 'Use for runs' }))
     await waitFor(() => expect(logins.sendUseGitHostAccount).toHaveBeenCalledWith('github.com', 'octo-agent'))
     expect(screen.getByLabelText('gitlab.example.com').textContent).toBe('gitlab.example.com · used by tool · no package for it yet')
+  })
+
+  test('an account runs do not use is removed from this computer with a press; the one runs use has no Remove, and a refusal is said', async () => {
+    logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider() }] })
+    render(<GitHostCards />)
+    const card = await screen.findByRole('region', { name: 'GitHub' })
+    expect(within(within(card).getByRole('listitem', { name: '@octo' })).queryByRole('button', { name: /Remove/ })).toBeNull()
+    fireEvent.click(within(within(card).getByRole('listitem', { name: '@octo-agent' })).getByRole('button', { name: 'Remove @octo-agent' }))
+    await waitFor(() => expect(logins.sendForgetGitHostAccount).toHaveBeenCalledWith('github.com', 'octo-agent'))
+    logins.sendForgetGitHostAccount.mockResolvedValue({ ok: false, error: 'gh could not forget it.' })
+    fireEvent.click(within(within(card).getByRole('listitem', { name: '@octo-agent' })).getByRole('button', { name: 'Remove @octo-agent' }))
+    expect((await within(card).findByRole('alert')).textContent).toBe('gh could not forget it.')
   })
 
   test('Add account asks the package for a code, and the card shows it with the page to type it at while the login waits', async () => {

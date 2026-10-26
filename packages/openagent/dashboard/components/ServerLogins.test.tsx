@@ -4,7 +4,7 @@ import { forgetRemembered } from '../lib/use-async.js'
 
 const accounts = vi.hoisted(() => ({ onAgentAccounts: vi.fn(), sendAddAgentAccount: vi.fn(), sendAgentAccountCode: vi.fn(), sendRemoveAgentAccount: vi.fn(), sendUseAgentAccountFirst: vi.fn() }))
 vi.mock('../rpc/accounts.js', () => accounts)
-const logins = vi.hoisted(() => ({ onAgentState: vi.fn(), sendAgentFix: vi.fn(), onGitHosts: vi.fn(), sendGitHostInstall: vi.fn(), sendGitHostLogin: vi.fn(), sendUseGitHostAccount: vi.fn() }))
+const logins = vi.hoisted(() => ({ onAgentState: vi.fn(), sendAgentFix: vi.fn(), onGitHosts: vi.fn(), sendGitHostInstall: vi.fn(), sendGitHostLogin: vi.fn(), sendUseGitHostAccount: vi.fn(), sendForgetGitHostAccount: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
 const servers = vi.hoisted(() => ({ onServerLogins: vi.fn(), sendUseLoginsOn: vi.fn(), sendAllowLogins: vi.fn(), sendSettleLogin: vi.fn() }))
 vi.mock('../rpc/server-logins.js', () => servers)
@@ -74,7 +74,7 @@ describe('a server that uses this computer\'s logins', () => {
     await waitFor(() => expect(servers.sendAllowLogins).toHaveBeenCalledWith(ID))
   })
 
-  test('one that did not get there is counted out, with why in the bar and a pointer to it on its row', async () => {
+  test('one that did not get there is counted out and named in the bar, which points to its row for why: the reason is said once, not in every bar', async () => {
     views([own])
     server({
       logins: [
@@ -85,7 +85,24 @@ describe('a server that uses this computer\'s logins', () => {
     render(<AccountsSettings />)
     const bar = await screen.findByRole('region', { name: `Your logins on ${LABEL}` })
     expect(bar.textContent).toContain(`${LABEL} uses your logins: 1 of 2 there`)
-    expect(within(bar).getByRole('alert').textContent).toBe("octo-agent: the login gh keeps for octo-agent is octo's on GitHub")
+    expect(bar.textContent).toContain('octo-agent did not get there: see its row below. Tried again every minute.')
+    expect(bar.textContent).not.toContain("is octo's on GitHub")
+    expect(within(bar).queryByRole('alert')).toBeNull()
+  })
+
+  test('on its row, under its name: the servers that have it on one line, and why it is not on the others, once for every server it failed on alike', async () => {
+    views([own, dani])
+    const reason = 'the login is not one of yours'
+    servers.onServerLogins.mockResolvedValue({
+      computer: 'Studio',
+      servers: ['Box', 'Studio PC'].map(label => ({ machineId: `https://${label}`, label, on: true, reachable: true, left: [], logins: [{ kind: 'claude', source: 'own', name: 'Suleiman', state: 'there' }, { kind: 'claude', source: 'Dani', name: 'Dani', state: 'failed', error: reason }] })),
+    })
+    render(<AccountsSettings />)
+    const card = await screen.findByRole('region', { name: 'Claude Code' })
+    await waitFor(() => expect(within(card).getByRole('listitem', { name: 'Suleiman' }).textContent).toContain('✓ on Box · Studio PC'))
+    const daniRow = within(card).getByRole('listitem', { name: 'Dani' })
+    expect(daniRow.textContent).toContain(`Not on Box · Studio PC: ${reason}`)
+    expect(daniRow.textContent!.split(reason)).toHaveLength(2)
   })
 
   test('the login being made says where to say yes, with its link to copy for a private window', async () => {

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Check, Plus } from 'lucide-react'
-import { sendUseGitHostAccount, type GitHostRow } from '../rpc/logins.js'
+import { sendForgetGitHostAccount, sendUseGitHostAccount, type GitHostRow } from '../rpc/logins.js'
 import { cn } from '../lib/utils.js'
 import { ACCOUNTS_ENTRY, DeviceCode, HostFix, PackageLogo, StatePill, hostLoginState, hostWords, useGitHosts, useHostLogin } from './Logins.js'
 import { LeftNotices, ServerNotes } from './ServerLogins.js'
@@ -43,11 +43,17 @@ function HostCard({ row, onChanged }: { row: GitHostRow; onChanged: () => Promis
   const state = hostLoginState(row)!
   const [error, setError] = useState<string | undefined>()
   const login = useHostLogin(onChanged)
-  const use = async (login: string) => {
+  const [busy, setBusy] = useState(false)
+  const act = async (go: () => Promise<{ ok: true } | { ok: false; error: string }>) => {
+    setBusy(true)
     setError(undefined)
-    const done = await sendUseGitHostAccount(row.host, login)
-    if (!done.ok) setError(done.error)
-    await onChanged()
+    try {
+      const done = await go()
+      if (!done.ok) setError(done.error)
+      await onChanged()
+    } finally {
+      setBusy(false)
+    }
   }
   return (
     <section aria-label={p.name} className="rounded-lg border border-border">
@@ -67,14 +73,20 @@ function HostCard({ row, onChanged }: { row: GitHostRow; onChanged: () => Promis
                   {!account.ok ? `${p.name} no longer takes this login: add it again` : account.from !== undefined ? `from ${account.from}` : account.terminal ? "the terminal's account" : `logged in to ${p.tool}`}
                 </p>
               </div>
-              <ServerNotes row={{ kind: 'git', host: row.host, source: account.login }} />
               {account.runs ? (
                 <span className="text-xs font-medium text-success">in use for runs</span>
               ) : (
-                <Button size="xs" variant="ghost" disabled={!account.ok} onClick={() => void use(account.login)}>
-                  Use for runs
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button size="xs" variant="ghost" disabled={busy || !account.ok} onClick={() => void act(() => sendUseGitHostAccount(row.host, account.login))}>
+                    Use for runs
+                  </Button>
+                  {/* The account runs use is never taken off: another is picked first. */}
+                  <Button size="xs" variant="ghost" disabled={busy} aria-label={`Remove @${account.login}`} title={`${p.tool} on this computer forgets it. The login is not ended: it goes on working wherever else it is.`} onClick={() => void act(() => sendForgetGitHostAccount(row.host, account.login))}>
+                    Remove
+                  </Button>
+                </div>
               )}
+              <ServerNotes row={{ kind: 'git', host: row.host, source: account.login }} />
             </li>
           ))}
         </ul>

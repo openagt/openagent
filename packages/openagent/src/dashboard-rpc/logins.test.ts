@@ -9,7 +9,7 @@ import { addAccount } from '@openagt/agent-driver'
 import { addProject, listProjects } from '../registry.js'
 import { readProvider, remoteHost } from '../dashboard/git-hosts.js'
 import { accountsWiring } from './accounts.js'
-import { loginsWiring, onAgentState, onGitHosts, onProjectAccounts, sendAgentFix, sendGitHostLogin, sendProjectAccounts, sendUseGitHostAccount } from './logins.js'
+import { loginsWiring, onAgentState, onGitHosts, onProjectAccounts, sendAgentFix, sendForgetGitHostAccount, sendGitHostLogin, sendProjectAccounts, sendUseGitHostAccount } from './logins.js'
 import { provideTestContext } from './test-context.js'
 
 // Settings › Accounts, the agent's own fix, and a project's own accounts: drawn from what the
@@ -102,6 +102,16 @@ test('Git hosts: one row per host the remotes are on, with its projects; a host 
     assert.deepEqual(asked.at(-1), { root: dirs.github, args: ['use', 'octo-agent'] })
     assert.deepEqual(await sendGitHostLogin('github.com'), { ok: true, code: 'ABCD-1234', url: 'https://github.com/login/device' })
     assert.deepEqual(await sendUseGitHostAccount('gitlab.example.com', 'x'), { ok: false, error: 'No package answers for gitlab.example.com.' })
+  }))
+
+test('Git hosts: an account is taken off this computer by its package; the one runs use is not, until another is picked', () =>
+  withProjects(async (dirs, asked) => {
+    assert.deepEqual(await sendForgetGitHostAccount('github.com', 'octo-agent'), { ok: true })
+    assert.deepEqual(asked.at(-1), { root: dirs.github, args: ['forget', 'octo-agent'] })
+    const before = asked.length
+    assert.deepEqual(await sendForgetGitHostAccount('github.com', 'octo'), { ok: false, error: 'Runs use @octo: pick another account for runs first.' })
+    assert.equal(asked.slice(before).some(call => call.args[0] === 'forget'), false)
+    assert.deepEqual(await sendForgetGitHostAccount('gitlab.example.com', 'x'), { ok: false, error: 'No package answers for gitlab.example.com.' })
   }))
 
 test('Git hosts: the last answer comes at once while the hosts are read again behind it; after a press, the next answer is a fresh one', () => {
