@@ -43,15 +43,24 @@ test('a run another machine\'s daemon started is handed to the dashboard as from
   assert.equal(markOtherHost(run(), 'suleiman-mbp').otherHost, undefined)
 })
 
-test('a run whose record names a saved machine\'s computer runs on that machine, by the name the machine was given, and is not someone else\'s', () => {
+test('a run whose record names a saved machine\'s computer runs on that machine, by the machine\'s own name and its kind, and is not someone else\'s', () => {
   const run = (host?: string): AgentMeta => ({ status: 'done', id: 'r', startedAt: '', updatedAt: '', ...(host ? { host } : {}) }) as AgentMeta
   const machineOf = (host: string): { label: string; url: string } | undefined =>
-    host === 'ubuntu-fra1' ? { label: '203.0.113.5', url: 'https://203.0.113.5' } : host === 'suleimans-macbook-pro' ? { label: 'MacBook', url: 'http://127.0.0.1:4210' } : undefined
+    host === 'ubuntu-fra1'
+      ? { label: '203.0.113.5', url: 'https://203.0.113.5' }
+      : host === 'suleimans-macbook-pro'
+        ? { label: 'MacBook', url: 'http://127.0.0.1:4210' }
+        : host === 'experiment'
+          ? { label: 'experiment (through 203.0.113.5)', url: 'https://203.0.113.5/_devices/via/b0x1' }
+          : undefined
   const onServer = markMachine(run('ubuntu-fra1'), machineOf, 'suleiman-mbp')
-  assert.deepEqual([onServer.target, onServer.remoteLabel, onServer.remoteByLine], ['remote', '203.0.113.5', undefined])
+  assert.deepEqual([onServer.target, onServer.remoteLabel, onServer.remoteKind], ['remote', '203.0.113.5', 'server'])
   // A saved machine at an address on this computer is a person's own computer, reached by the line it keeps open here: the row says so.
   const onComputer = markMachine(run('suleimans-macbook-pro'), machineOf, 'ubuntu-fra1')
-  assert.deepEqual([onComputer.target, onComputer.remoteLabel, onComputer.remoteByLine], ['remote', 'MacBook', true])
+  assert.deepEqual([onComputer.target, onComputer.remoteLabel, onComputer.remoteKind], ['remote', 'MacBook', 'computer'])
+  // A computer at home reached through a server: by its own name, a server at home.
+  const atHome = markMachine(run('experiment'), machineOf, 'suleiman-mbp')
+  assert.deepEqual([atHome.remoteLabel, atHome.remoteKind], ['experiment', 'home'])
   assert.equal(markOtherHost(onServer, 'suleiman-mbp').otherHost, undefined)
   // A computer that is no saved machine: the run stays someone else's, and is not asked of any machine.
   const elsewhere = markMachine(run('rom-thinkpad-x280'), machineOf, 'suleiman-mbp')
@@ -79,7 +88,7 @@ test('a run that ended clean while its process is still alive on this host is ha
 })
 
 test('a record cannot say of its run what only this daemon says: that it runs on a saved machine, that it is another computer\'s, that it is being saved', () => {
-  const written = { status: 'done', id: 'r', startedAt: '', updatedAt: '', host: 'their-laptop', target: 'remote', remoteLabel: 'My server', remoteByLine: true, otherHost: false, saving: true, cloudWaiting: true } as AgentMeta
+  const written = { status: 'done', id: 'r', startedAt: '', updatedAt: '', host: 'their-laptop', target: 'remote', remoteLabel: 'My server', remoteKind: 'computer', otherHost: false, saving: true, cloudWaiting: true } as AgentMeta
   assert.deepEqual(asRecorded(written), { status: 'done', id: 'r', startedAt: '', updatedAt: '', host: 'their-laptop' })
   // So it reads as what it is: a run of a computer that is no saved machine.
   const row = markOtherHost(markMachine(asRecorded(written), () => undefined, 'suleiman-mbp'), 'suleiman-mbp')
@@ -101,8 +110,8 @@ test('a followed run that has a record keeps the record\'s row, in its place, an
   assert.deepEqual(withFollowed([], [mine, record], sent), [mine, record])
   // `b` was sent from here and has no record yet: first. `a` stays where its record is. `gone` was followed by a record that is deleted: not listed.
   assert.deepEqual(withFollowed(followed, [mine, record], sent), [followed[1], mine, { ...record, status: 'running', updatedAt: '2', sessionId: 's-2' }])
-  // That the machine is a person's own computer, reached by its line, comes with the machine's name.
-  assert.equal(withFollowed([{ ...followed[0]!, remoteByLine: true }], [record], sent)[0]!.remoteByLine, true)
+  // What the machine is comes with the machine's name.
+  assert.equal(withFollowed([{ ...followed[0]!, remoteKind: 'computer' }], [record], sent)[0]!.remoteKind, 'computer')
 })
 
 test('each run with a pull request is marked with how it stands; one with no request, or one the git host did not list, is left as it was; no request among the runs, nothing is read', async () => {

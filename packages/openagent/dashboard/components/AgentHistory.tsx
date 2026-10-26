@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Plus, ChevronDown, Bot, ArrowDownUp, Check, Cloud, Laptop, Server, LayoutDashboard, Blocks, FilePen, GitBranch } from 'lucide-react'
+import { Plus, ChevronDown, Bot, ArrowDownUp, Check, Cloud, Laptop, LayoutDashboard, Blocks, FilePen, GitBranch } from 'lucide-react'
+import { MACHINE_ICONS } from './MachineMark.js'
 import type { ComponentType } from 'react'
 import type { AgentMeta, AgentStatus, RecentAgent, ProjectSummary } from '../../src/index.js'
-import { DRIVER_LABELS, driverFromImpl, cloudRunState, type CloudRunState } from '../../src/client.js'
+import { DRIVER_LABELS, driverFromImpl, cloudRunState, type CloudRunState, type MachineKind } from '../../src/client.js'
 import { Button, buttonVariants } from './ui/button.js'
 import { cn } from '../lib/utils.js'
 import { formatRelative } from '../lib/format-date.js'
@@ -264,7 +265,7 @@ export function AgentHistory({
       {...(row.agent.otherHost && row.agent.host ? { startedOn: row.agent.host } : {})}
       cloudState={cloudRunState(row.agent, Date.now())}
       {...(row.agent.remoteLabel ? { remoteLabel: row.agent.remoteLabel } : {})}
-      remoteByLine={row.agent.remoteByLine === true}
+      {...(row.agent.remoteKind ? { remoteKind: row.agent.remoteKind } : {})}
       seenAt={row.agent.seenAt}
       {...(row.agent.pr ? { pr: { number: row.agent.pr.number, ...(row.agent.prState ? { state: row.agent.prState } : {}) } } : {})}
       {...(row.agent.unpublished ? { unpublished: row.agent.unpublished } : {})}
@@ -659,7 +660,7 @@ function AgentHistoryRow({
   cloud = false,
   cloudState,
   remoteLabel,
-  remoteByLine = false,
+  remoteKind = 'server',
   seenAt,
   startedOn,
   fold,
@@ -698,8 +699,8 @@ function AgentHistoryRow({
   cloudState?: CloudRunState | undefined
   /** The machine's label, for the glyph's tooltip. */
   remoteLabel?: string | undefined
-  /** That machine is a person's own computer, reached by the line it keeps open here: the glyph is a computer, not a server. */
-  remoteByLine?: boolean
+  /** What that machine is: the glyph is its kind's icon, as every list of machines draws it. */
+  remoteKind?: MachineKind
   /** While the status is unknown: when the run's computer last answered, if it did. */
   seenAt?: string | undefined
   /** The machine whose daemon started the run, when that is another machine (#1648): a glyph names it. */
@@ -717,7 +718,7 @@ function AgentHistoryRow({
   // session the bridge reports as parked (#1668).
   const parked = status === 'waiting' || cloudState === 'waiting'
   const picked = driverFromImpl(driver)
-  const MachineIcon = remoteByLine ? Laptop : Server
+  const MachineIcon = MACHINE_ICONS[remoteKind]
   // A web agent's local process ends at the hand-off by design, so its `done` is about this
   // machine, not the session (#1264): the cloud side keeps working and opens its own PR. Saying
   // "done" under ten working cloud agents is the lie the demo would put on camera — and "in cloud"

@@ -26,7 +26,7 @@ import { bridgeQuestions } from '../dashboard/bridge-store.js'
 import type { BridgeEvent, BridgeHello, BridgeQuestion } from '../dashboard/bridge-endpoints.js'
 import type { BridgeAnswer, BridgeContact, BridgeVersion } from '../dashboard/bridge-store.js'
 import { isHostName, readBridgeToken, readPreferences, type Preferences } from '../registry.js'
-import { reachedByLine } from '../reached-by-line.js'
+import { machineKind, machineName } from '../reached-by-line.js'
 import type { SavedMachine } from '../dashboard/rpc-serve.js'
 import { hostname } from 'node:os'
 import { nodeGitRunner } from '@openagt/agent-data'
@@ -238,8 +238,8 @@ export function withFollowed(followed: AgentMeta[], local: AgentMeta[], sent: (a
   const rows = local.map(record => {
     const run = live.get(record.id)
     if (!run) return record
-    const { remoteLabel, remoteByLine } = run
-    return { ...record, status: run.status, updatedAt: run.updatedAt, target: 'remote' as const, ...(remoteLabel !== undefined ? { remoteLabel } : {}), ...(remoteByLine ? { remoteByLine } : {}), ...(run.sessionId !== undefined ? { sessionId: run.sessionId } : {}) }
+    const { remoteLabel, remoteKind } = run
+    return { ...record, status: run.status, updatedAt: run.updatedAt, target: 'remote' as const, ...(remoteLabel !== undefined ? { remoteLabel } : {}), ...(remoteKind !== undefined ? { remoteKind } : {}), ...(run.sessionId !== undefined ? { sessionId: run.sessionId } : {}) }
   })
   return [...followed.filter(run => !recorded.has(run.id) && sent(run.id)), ...rows]
 }
@@ -268,11 +268,11 @@ export function markOtherHost(agent: AgentMeta, thisHost: string = hostname()): 
 }
 
 /**
- * What a run's row says of the saved machine it runs on: the name the machine was given, and
- * that it is a person's own computer reached by its line, when it is one.
+ * What a run's row says of the saved machine it runs on: its own name, and what it is, which its
+ * icon draws, as every list of machines says them (reached-by-line.ts).
  */
-export function onMachine(machine: SavedMachine): Pick<AgentMeta, 'remoteLabel' | 'remoteByLine'> {
-  return { remoteLabel: machine.label, ...(reachedByLine(machine.url) ? { remoteByLine: true as const } : {}) }
+export function onMachine(machine: SavedMachine): Pick<AgentMeta, 'remoteLabel' | 'remoteKind'> {
+  return { remoteLabel: machineName(machine), remoteKind: machineKind(machine).kind }
 }
 
 /**
@@ -312,7 +312,7 @@ function forDashboard(agent: AgentMeta, machineOf: (host: string) => SavedMachin
  * no name is none.
  */
 export function asRecorded(agent: AgentMeta): AgentMeta {
-  const { remoteLabel: _label, remoteByLine: _byLine, otherHost: _other, saving: _saving, cloudWaiting: _waiting, seenAt: _seen, ...said } = agent
+  const { remoteLabel: _label, remoteKind: _kind, otherHost: _other, saving: _saving, cloudWaiting: _waiting, seenAt: _seen, ...said } = agent
   if (said.target === 'remote') delete said.target
   if (said.host !== undefined && !isHostName(said.host)) delete said.host
   return said
