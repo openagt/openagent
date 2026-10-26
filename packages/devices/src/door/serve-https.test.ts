@@ -146,7 +146,8 @@ test('on a server the door gets a certificate for its address and opens over HTT
     assert.equal(r.office.issued.length, 1)
     // A server has no screen to press on: its page says where the code comes from.
     const notIn = await ask(`${at}/settings`, r.office.authority, { headers: { accept: 'text/html' } })
-    assert.match(notIn.body, /This device is not in[\s\S]*This computer is a server\. On the computer it was connected from[\s\S]*find Servers, press Add device/)
+    assert.match(notIn.body, /This device is not in[\s\S]*This computer is a server\. On the computer it was connected from[\s\S]*Settings › Devices › Add device › Phone or tablet, pick Anywhere, through this server/)
+    assert.doesNotMatch(notIn.body, /Servers|row/)
     const entering = await ask(`${at}/_devices/enter`, r.office.authority, { headers: { accept: 'text/html' } })
     assert.match(entering.body, /on the internet/)
     assert.doesNotMatch(notIn.body + entering.body, /Wi-Fi/)
