@@ -7,7 +7,6 @@
   "title": "Sleep command naming",
   "driver": "claude-code",
   "model": "claude-sonnet-5-5",
-  "branch": "agent-2026-10-26T17-14-04-966Z",
   "cost": 0.0315392,
   "contextTokens": 17938,
   "caller": {
