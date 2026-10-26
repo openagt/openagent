@@ -339,9 +339,10 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
 
   // The placeholder is absolutely positioned, so it must share the editor's padding to sit exactly
   // where the first typed character will (#721). The full composer's box is one line tall when
-  // empty, as tall as the submit beside it; the compact navbar row stays tight.
+  // empty, as tall as the submit beside it; the compact navbar row stays tight. One line too: on a
+  // phone a long one is cut short, where a second line would hang out of the box.
   const pad = compact ? 'px-2 py-1.5' : 'px-3 py-2.5'
-  const placeholderInset = compact ? 'left-2 top-1.5' : 'left-3 top-2.5'
+  const placeholderInset = compact ? 'inset-x-2 top-1.5' : 'inset-x-3 top-2.5'
   return (
     <div className="relative">
       {/* The scroll rides a ScrollArea (#1046) so a long prompt shows our thin overlay bar, not the
@@ -358,7 +359,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         <EditorContent editor={editor} className={`w-full bg-transparent text-sm pointer-coarse:text-base ${pad}`} />
       </ScrollArea>
       {isEmpty && (
-        <span className={`pointer-events-none absolute text-sm text-muted-foreground pointer-coarse:text-base ${placeholderInset}`}>
+        <span className={`pointer-events-none absolute truncate text-sm text-muted-foreground pointer-coarse:text-base ${placeholderInset}`}>
           {placeholder}
         </span>
       )}
