@@ -24,9 +24,14 @@ export function isText(contentType: string): boolean {
 /** `body` gzipped, once per `key`: a file of the page's code is packed the first time it is asked for. */
 const packed = new Map<string, Promise<Buffer>>()
 
-/** The tag a file is sent with, from its size and when it was last written: a file rebuilt in place gets a new one. */
+/** A file's version, from its size and when it was last written: a file rebuilt in place gets a new one. */
+export function fileVersion(facts: { mtimeMs: number; size: number }): string {
+  return `${Math.floor(facts.mtimeMs).toString(36)}-${facts.size.toString(36)}`
+}
+
+/** The tag a file is sent with: its {@link fileVersion}. */
 export function fileTag(facts: { mtimeMs: number; size: number }): string {
-  return `"${Math.floor(facts.mtimeMs).toString(36)}-${facts.size.toString(36)}"`
+  return `"${fileVersion(facts)}"`
 }
 
 /**

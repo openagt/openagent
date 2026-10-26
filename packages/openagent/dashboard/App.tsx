@@ -227,7 +227,9 @@ export function App() {
   // and Overview card); only the notification is gated, on both the category (`notifyHumanIntervention`,
   // default on) and the browser method (`notifyBrowser`).
   const preferences = usePreferences()
-  useInterventionNotifications(interventionsRead, humanInterventionEnabled(preferences) && notificationsEnabled(preferences))
+  // Only a fresh read: one stored by an earlier visit taken as what was already there would announce
+  // everything that came while the page was closed.
+  useInterventionNotifications(interventionsStale ? EMPTY_INTERVENTIONS : interventionsRead, humanInterventionEnabled(preferences) && notificationsEnabled(preferences))
 
   // The "New activity" category (#627): the default-off feed of agents starting/finishing. Its only
   // client consumer is the browser notification below, so it is polled exactly when that will fire —

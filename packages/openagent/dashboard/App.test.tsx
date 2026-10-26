@@ -139,6 +139,36 @@ describe('module cards on the Overview (#1818)', () => {
     expect(await screen.findByText('@acme/queue card for app')).toBeTruthy()
   })
 
+  test('a Human Queue stored by an earlier visit is not taken as what was already there: what came since is not announced as the page opens', async () => {
+    const announced: string[] = []
+    vi.stubGlobal(
+      'Notification',
+      Object.assign(
+        class {
+          onclick: (() => void) | null = null
+          constructor(title: string) {
+            announced.push(title)
+          }
+          close(): void {}
+        },
+        { permission: 'granted' },
+      ),
+    )
+    try {
+      answerOverview([])
+      // The last visit saw nothing waiting; since then a run asked a question.
+      localStorage.setItem('openagent:read:interventions', JSON.stringify({ items: [], whole: [PROJECT.id] }))
+      answers.set('onInterventions', () => ({ items: [{ projectId: PROJECT.id, projectName: 'app', kind: 'awaiting', title: 'Pick a name', agentId: 'r1' }], whole: [PROJECT.id] }))
+      window.history.replaceState(null, '', '/')
+      render(<App />)
+      expect(await screen.findByText('Pick a name')).toBeTruthy()
+      await new Promise(resolve => setTimeout(resolve, 50))
+      expect(announced).toEqual([])
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   test("a card shows as soon as its own package's code is in, whatever another package's is doing", async () => {
     function QueueCard() {
       return createElement('p', null, 'the queue card')

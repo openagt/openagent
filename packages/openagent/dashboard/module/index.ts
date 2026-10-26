@@ -7,7 +7,7 @@
 // neither: the dashboard's import map points both at the dashboard's own running copies, so a
 // module renders inside the same React tree and uses the same components as the rest of the page.
 //
-// This file IS `@openagt/dashboard/module`: the dashboard's build emits it as its own entry (`/host/module.js`),
+// This file IS `@openagt/dashboard/module`: the dashboard's build emits it as its own entry (`/assets/host/module-<hash>.js`),
 // sharing every chunk with the dashboard itself. Nothing here names a skill.
 import type { Health } from '../../src/health.js'
 import type { CardWidth } from '../../src/overview-layout.js'

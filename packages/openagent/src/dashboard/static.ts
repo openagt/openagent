@@ -50,10 +50,10 @@ export async function serveClientBundle(req: IncomingMessage, res: ServerRespons
     return
   }
   const type = contentTypeFor(target)
-  // Only the fingerprinted files under `assets/` are immutable. Everything at a stable path
-  // (index.html, the host files a module imports as `/host/*.js`) must always revalidate: a
-  // browser that kept `/host/module.js` from the last version would hand every module a host
-  // missing whatever the new version added, until its cache expired a year later.
+  // Only the fingerprinted files under `assets/` are immutable, the host files a module imports
+  // among them: index.html, which names this version's in its import map, and everything else at a
+  // stable path must always revalidate, or a dashboard upgrade would not reach a browser that kept
+  // the old page until its cache expired a year later.
   const cacheControl = target.startsWith(join(root, 'assets') + sep) ? 'public, max-age=31536000, immutable' : 'no-cache'
   // A file's packed copy is kept while the file is the same one.
   await sendBody(req, res, 200, { 'content-type': type, 'cache-control': cacheControl, ...(facts ? { etag: fileTag(facts) } : {}) }, body, facts ? `${target} ${facts.mtimeMs} ${facts.size}` : undefined)

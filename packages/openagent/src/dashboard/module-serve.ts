@@ -1,6 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { fileTag, sendBody } from './compress.js'
+import { join } from 'node:path'
+import { fileTag, fileVersion, sendBody } from './compress.js'
 import { contentTypeFor } from './content-type.js'
 import { defaultProjectsProvider, type ProjectsProvider } from './projects.js'
 import { findComputerModule, findProjectModule, moduleFile, type ProjectModule } from '../project-modules.js'
@@ -23,6 +24,15 @@ export function computerModuleUrl(module: Pick<ProjectModule, 'package' | 'entry
   return `${COMPUTER_MODULES_PREFIX}/${encodeURIComponent(module.package)}/${encoded(module.entry)}`
 }
 
+/**
+ * A module's URL with its entry file's version (`?v=`): a browser keeps that file for good, and
+ * the next version of the module is another URL. Without the file there to read, the URL as it is.
+ */
+export async function versionedModuleUrl(url: string, module: Pick<ProjectModule, 'dir' | 'entry'>): Promise<string> {
+  const facts = await stat(join(module.dir, module.entry)).catch(() => undefined)
+  return facts ? `${url}?v=${fileVersion(facts)}` : url
+}
+
 function decode(segment: string): string | undefined {
   try {
     return decodeURIComponent(segment)
@@ -35,9 +45,11 @@ function decode(segment: string): string | undefined {
  * Serve one module file (#1774): the project must be registered, the package must be a module of
  * that project, and the file must sit inside the module's browser part's own directory. Anything else is a
  * 404, never a fallback: a module URL is asked for by the dashboard's loader, not typed by a person.
- * Served as `no-cache`, since a module is rebuilt in place under the same name, with a tag of the
- * file's own: a page opened again asks with it and is answered "not changed", with no body. Sent
- * gzipped, a module's code being a page's largest file.
+ * Asked for with the file's own version ({@link versionedModuleUrl}), it is kept for good: a page
+ * opened again does not ask for it at all. Otherwise it is served as `no-cache`, since a module is
+ * rebuilt in place under the same name (its stylesheet, a file another of its files imports, a URL
+ * naming a version gone since), with a tag of the file's own: a page opened again asks with it and
+ * is answered "not changed", with no body. Sent gzipped, a module's code being a page's largest file.
  */
 export async function serveModuleFile(
   req: IncomingMessage,
@@ -70,7 +82,9 @@ async function serveFileOf(req: IncomingMessage, res: ServerResponse, [packageSe
   const facts = file ? await stat(file).catch(() => undefined) : undefined
   const body = file && facts ? await readFile(file).catch(() => undefined) : undefined
   if (!file || !facts || body === undefined) return notFound()
-  const headers = { 'content-type': contentTypeFor(file), 'cache-control': 'no-cache', etag: fileTag(facts) }
+  const asked = new URL(req.url ?? '/', 'http://x').searchParams.get('v')
+  const cacheControl = asked === fileVersion(facts) ? 'public, max-age=31536000, immutable' : 'no-cache'
+  const headers = { 'content-type': contentTypeFor(file), 'cache-control': cacheControl, etag: fileTag(facts) }
   if (req.method === 'HEAD') return void res.writeHead(200, headers).end()
   await sendBody(req, res, 200, headers, body, `${file} ${facts.mtimeMs} ${facts.size}`)
 }

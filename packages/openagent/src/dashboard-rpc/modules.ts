@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { contextProjects, resolveProjectPath } from './context.js'
 import { findComputerModule, findProjectModule, readComputerModules, readProjectModules, runModuleCommand as runCommand, type ModuleCommandResult } from '../project-modules.js'
-import { computerModuleUrl, moduleUrl } from '../dashboard/module-serve.js'
+import { computerModuleUrl, moduleUrl, versionedModuleUrl } from '../dashboard/module-serve.js'
 import { providedDataChanged } from '../store/provided.js'
 import { callModuleRead, serverHost, type ModuleReadResult } from '../dashboard/module-host.js'
 import { relayOr } from './relay-agent.js'
@@ -19,7 +19,7 @@ export type { ModuleReadResult } from '../dashboard/module-host.js'
 export interface DashboardModule {
   /** The package that brings it. */
   package: string
-  /** The URL of its browser module, served from the first project that has it, or from OpenAgent's own copy for one of the computer's. */
+  /** The URL of its browser module, served from the first project that has it, or from OpenAgent's own copy for one of the computer's, with its file's version: a browser keeps it for good. */
   url: string
   /** The registered projects whose packages include it, in the registry's order; none for one of the computer's, whose commands run in no project. */
   projects: string[]
@@ -38,14 +38,14 @@ export interface DashboardModule {
 export async function onModules(): Promise<DashboardModule[]> {
   const byPackage = new Map<string, DashboardModule>()
   for (const module of await readComputerModules().catch(() => [])) {
-    byPackage.set(module.package, { package: module.package, url: computerModuleUrl(module), projects: [], computer: true })
+    byPackage.set(module.package, { package: module.package, url: await versionedModuleUrl(computerModuleUrl(module), module), projects: [], computer: true })
   }
   for (const project of await contextProjects().list()) {
     const modules = await readProjectModules(project.path).catch(() => [])
     for (const module of modules) {
       const known = byPackage.get(module.package)
       if (known) known.projects.push(project.id)
-      else byPackage.set(module.package, { package: module.package, url: moduleUrl(project.id, module), projects: [project.id] })
+      else byPackage.set(module.package, { package: module.package, url: await versionedModuleUrl(moduleUrl(project.id, module), module), projects: [project.id] })
     }
   }
   return [...byPackage.values()]

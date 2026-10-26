@@ -5,7 +5,7 @@ import type { AddressInfo } from 'node:net'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { serveComputerModuleFile, serveModuleFile, computerModuleUrl, moduleUrl, COMPUTER_MODULES_PREFIX, MODULES_PREFIX } from './module-serve.js'
+import { serveComputerModuleFile, serveModuleFile, computerModuleUrl, moduleUrl, versionedModuleUrl, COMPUTER_MODULES_PREFIX, MODULES_PREFIX } from './module-serve.js'
 import type { ProjectsProvider } from './projects.js'
 
 test('module files are served per project and package, and nothing outside the module\'s own directory', async () => {
@@ -74,7 +74,14 @@ test('a module file goes gzipped with its own tag, and a browser that holds it i
     assert.equal(again.status, 304, 'the browser holds this very file')
     assert.equal(await again.text(), '')
 
+    // Asked for by its version, as the module list names it: kept for good.
+    const versioned = await versionedModuleUrl(url, { dir: join(dir, 'dist'), entry: 'dashboard.js' })
+    assert.match(versioned, /\?v=/)
+    assert.equal((await fetch(versioned)).headers.get('cache-control'), 'public, max-age=31536000, immutable')
+
     await writeFile(join(dir, 'dist', 'dashboard.js'), `${code}\n// rebuilt`)
+    // A version gone since names another file: the one there now is sent, and asked for again next time.
+    assert.equal((await fetch(versioned)).headers.get('cache-control'), 'no-cache')
     const rebuilt = await fetch(url, { headers: { 'if-none-match': tag } })
     assert.equal(rebuilt.status, 200, 'rebuilt in place: the old copy is not the file any more')
     assert.notEqual(rebuilt.headers.get('etag'), tag)
