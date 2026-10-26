@@ -1,15 +1,27 @@
 {
   "id": "2026-10-26T17-25-14-061Z",
   "startedAt": "2026-10-26T17:25:15.372Z",
-  "status": "running",
+  "endedAt": "2026-10-26T17:25:22.944Z",
+  "status": "waiting",
   "intent": "ask me simple question",
+  "title": "Simple question prompt",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "branch": "agent-2026-10-26T17-25-14-061Z",
+  "cost": 0.0594754,
+  "contextTokens": 18530,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
-      "pid": 70220
+      "pid": 70220,
+      "baseCommit": "34afbe15df74bc3b37ba83960790370650aed3d0"
     },
-    "host": "Suleimans-MacBook-Pro.local"
+    "pid": 70220,
+    "host": "Suleimans-MacBook-Pro.local",
+    "baseCommit": "34afbe15df74bc3b37ba83960790370650aed3d0",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/gemstack/.branches/agent-2026-10-26T17-25-14-061Z",
+    "sessionId": "c45c513a-64d7-4992-a710-7ff5b974a775"
   }
 }
