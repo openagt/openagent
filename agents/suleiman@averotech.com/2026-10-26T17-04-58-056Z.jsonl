@@ -1,0 +1,10 @@
+{"kind":"start","prompt":"Run the shell command: sleep 8. Then reply with the single word OK. Change nothing.","added":"When you finish, if you changed any file, commit your work.","at":"2026-10-26T17:05:00.514Z"}
+{"kind":"session","sessionId":"c1abfa70-802b-4255-99ac-cdf402f9c69f","at":"2026-10-26T17:05:01.141Z"}
+{"kind":"title","text":"Sleep command naming","at":"2026-10-26T17:05:01.893Z"}
+{"kind":"action","label":"Bash","detail":"sleep 8","id":"toolu_01Y5qECH1uBSfw4gziJH8TXL","at":"2026-10-26T17:05:06.297Z"}
+{"kind":"rate-limit","limit":{"status":"allowed","window":"five_hour","resetsAt":1793041200000,"windows":[{"window":"five_hour","percentUsed":8,"resetsAt":1793041200000},{"window":"seven_day","percentUsed":9,"resetsAt":1793419200000}]},"at":"2026-10-26T17:05:06.310Z"}
+{"kind":"output","id":"toolu_01Y5qECH1uBSfw4gziJH8TXL","text":"(Bash completed with no output)","at":"2026-10-26T17:05:14.421Z"}
+{"kind":"said","text":"OK","at":"2026-10-26T17:05:18.826Z"}
+{"kind":"result","text":"OK","sessionId":"c1abfa70-802b-4255-99ac-cdf402f9c69f","at":"2026-10-26T17:05:19.174Z"}
+{"kind":"cost","usd":0.0248568,"at":"2026-10-26T17:05:19.174Z"}
+{"kind":"ended","status":"done","at":"2026-10-26T17:05:19.809Z"}

@@ -1,17 +1,28 @@
 {
   "id": "2026-10-26T17-04-58-056Z",
   "startedAt": "2026-10-26T17:04:59.582Z",
-  "status": "running",
+  "endedAt": "2026-10-26T17:05:19.809Z",
+  "status": "done",
   "intent": "Run the shell command: sleep 8. Then reply with the single word OK. Change nothing.",
+  "title": "Sleep command naming",
   "driver": "claude-code",
-  "model": "sonnet",
+  "model": "claude-sonnet-5-5",
+  "branch": "agent-2026-10-26T17-04-58-056Z",
+  "cost": 0.0248568,
+  "contextTokens": 17766,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
       "pid": 44700,
-      "publish": "commit"
+      "publish": "commit",
+      "baseCommit": "34afbe15df74bc3b37ba83960790370650aed3d0"
     },
+    "pid": 44700,
     "host": "Suleimans-MacBook-Pro.local",
-    "publish": "commit"
+    "baseCommit": "34afbe15df74bc3b37ba83960790370650aed3d0",
+    "publish": "commit",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/gemstack/.branches/agent-2026-10-26T17-04-58-056Z",
+    "sessionId": "c1abfa70-802b-4255-99ac-cdf402f9c69f"
   }
 }
