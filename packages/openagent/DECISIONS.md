@@ -427,6 +427,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   logged out there comes with this computer's logins for the machine, as Settings › Accounts
   offers them. Picked over learning it only after the Start, from the machine's refusal, in
   words written for that machine's own terminal.
+- Another person's computer that lacks the person's own logins says so as soon as it is picked,
+  with a press that opens its page under Devices, where they are logged in. Picked over a refusal
+  after the Start, with no way on from it.
 - A project with no repository address runs on this machine only, and "Run on" says so.
   Picked over sending the repository straight to the other machine, a second road for
   code beside the git host.

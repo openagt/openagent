@@ -47,7 +47,9 @@ function kindOf(machine: Machine): { Icon: LucideIcon; words: string } {
   if (machine.owner !== undefined) return { Icon: Server, words: `@${machine.owner}'s server${through !== undefined ? `, through ${through}` : ''}. Runs use your own logins.` }
   if (reachedByLine(machine.url)) return { Icon: Laptop, words: 'Your computer' }
   if (through !== undefined) return { Icon: House, words: `Server at home, through ${through}` }
-  return { Icon: Server, words: `Server, ${hostOf(machine.url)}` }
+  // Its address, when its name is another: a server named by its address says it once.
+  const host = hostOf(machine.url)
+  return { Icon: Server, words: host === machine.label ? 'Server' : `Server, ${host}` }
 }
 
 function hostOf(url: string): string {

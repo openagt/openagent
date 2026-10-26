@@ -112,6 +112,12 @@ describe('a saved machine that is a person\'s own computer, reached by the line 
     expect(row().querySelector('svg.lucide-server')).toBeNull()
     const studio = screen.getByRole('menuitem', { name: /^Studio/ })
     expect(studio.textContent).toBe('StudioServer, 192.168.1.5:4200')
+    cleanup()
+    // A server named by its address says it once.
+    const vps: Machine = { id: 'vps', url: 'https://165.245.244.10', label: '165.245.244.10' }
+    renderMenu({ machines: [vps] })
+    await openMenu(trigger())
+    expect(screen.getByRole('menuitem', { name: /^165\.245\.244\.10/ }).textContent).toBe('165.245.244.10Server')
     expect(studio.querySelector('svg.lucide-server')).toBeTruthy()
     expect(studio.querySelector('svg.lucide-laptop')).toBeNull()
   })
