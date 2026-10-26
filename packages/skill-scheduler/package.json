@@ -1,6 +1,6 @@
 {
   "name": "@openagt/skill-scheduler",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "description": "Start coding agents on a schedule, with the skill that tells an agent how: a project's skills say which commands can run on a schedule, each with its check, its pace and how many at once, and each person switches them on for their own machine; the scheduler pulls the project's agent-data branch, checks, and asks agent-runner to run one agent per due command; and it brings the dashboard's Automations page, where a person switches each scheduled command, sets its pace and how many agents work on it at once, and picks how far its runs publish, the Scheduler section of its Settings page, the Scheduler card of its Overview and the stop line on its usage bar.",
   "license": "MIT",
   "repository": {
