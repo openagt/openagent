@@ -58,6 +58,7 @@ const waiting = (server: ServerLogins): LoginThere[] => server.logins.filter(log
 /** A server of the person's, above the accounts: offered this computer's logins, or how they stand there, and the press. */
 function ServerBar({ server, computer, onChanged }: { server: ServerLogins; computer: string; onChanged: () => Promise<void> }) {
   const { tone, body } = useStanding(server, computer, onChanged)
+  if (body === null) return null
   return (
     <Bar label={server.label} tone={tone}>
       {body}
@@ -83,7 +84,9 @@ function useStanding(server: ServerLogins, computer: string, onChanged: () => Pr
       setBusy(false)
     }
   }
-  const failed = [error ?? server.failed, ...server.logins.filter(login => login.state === 'failed').map(login => `${login.name}: ${login.error ?? 'it did not get there.'}`)].filter(line => line !== undefined).join('\n') || undefined
+  // What failed for the server is said here; a login that did not get there says why on its own row, once for every server.
+  const failed = error ?? server.failed
+  const missed = server.logins.filter(login => login.state === 'failed').map(login => login.name)
   const wait = waiting(server)
   const there = server.logins.filter(login => login.state === 'there').length
   if (!server.on) {
@@ -133,12 +136,14 @@ function useStanding(server: ServerLogins, computer: string, onChanged: () => Pr
       tone: 'ask',
       body: (
         <>
-          <BarWords title={`${server.label} uses your logins: ${there} of ${server.logins.length} there`} words="These did not get there. They are tried again every minute." />
+          <BarWords title={`${server.label} uses your logins: ${there} of ${server.logins.length} there`} words={missed.length > 0 ? `${missed.join(' and ')} did not get there: see ${missed.length === 1 ? 'its row' : 'their rows'} below. Tried again every minute.` : 'These did not get there. They are tried again every minute.'} />
           <Failed error={failed} />
         </>
       ),
     }
   }
+  // All there: each account's row says where it is, so the bar says nothing more, unless something failed for the server.
+  if (failed === undefined) return { tone: 'quiet', body: null }
   return {
     tone: 'quiet',
     body: (
@@ -219,7 +224,10 @@ export interface RowOf {
 
 const sameRow = (login: RowOf, row: RowOf): boolean => login.kind === row.kind && (login.host ?? '') === (row.host ?? '') && login.source === row.source
 
-/** Beside an account's row: whether each server that uses this computer's logins has it. */
+/**
+ * Under an account's name: the servers that use this computer's logins and have it, on one line;
+ * those it did not get to, with why, once for every server it failed on alike; those it waits for.
+ */
 export function ServerNotes({ row }: { row: RowOf }) {
   const { view } = useServers()
   const notes = (view?.servers ?? []).flatMap(server => {
@@ -227,16 +235,19 @@ export function ServerNotes({ row }: { row: RowOf }) {
     return login && login.state !== 'switched' ? [{ server, login }] : []
   })
   if (notes.length === 0) return null
+  const labels = (state: LoginThere['state']): string[] => notes.filter(note => note.login.state === state).map(note => note.server.label)
+  const there = labels('there')
+  const waits = labels('allow')
+  const failed = new Map<string, string[]>()
+  for (const { server, login } of notes) if (login.state === 'failed') failed.set(login.error ?? 'it did not get there', [...(failed.get(login.error ?? 'it did not get there') ?? []), server.label])
   return (
-    <span className="flex flex-col items-end text-xs max-sm:basis-full max-sm:items-start!">
-      {notes.map(({ server, login }) =>
-        login.state === 'there' ? (
-          <span key={server.machineId} className="text-success">{`✓ on ${server.label}`}</span>
-        ) : (
-          <span key={server.machineId} title={login.error} className={login.state === 'failed' ? 'text-danger' : 'text-warning'}>{login.state === 'failed' ? `not on ${server.label}: see above` : `not on ${server.label} yet`}</span>
-        ),
-      )}
-    </span>
+    <div className="basis-full space-y-0.5 text-xs">
+      {there.length > 0 && <p className="text-success">{`✓ on ${there.join(' · ')}`}</p>}
+      {waits.length > 0 && <p className="text-warning">{`not on ${waits.join(' · ')} yet`}</p>}
+      {[...failed].map(([why, on]) => (
+        <p key={why} className="text-danger">{`Not on ${on.join(' · ')}: ${why}`}</p>
+      ))}
+    </div>
   )
 }
 

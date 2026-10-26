@@ -7,7 +7,7 @@ import { isLoginWord, type MachineLogins } from '../dashboard/machine-logins.js'
 import { errorMessage } from '../error-message.js'
 import { repositoryAddress, repositorySpelling } from '../repository-address.js'
 import { contextRemote, resolveProjectPath } from './context.js'
-import { addMachine, isPersonName, listMachines, noteListed, removeMachine, renameMachine, tellMachine, type MachineRecord } from '../registry.js'
+import { addMachine, isPersonName, listMachines, noteListed, removeMachine, renameMachine, tellMachine, useLoginsOn, type MachineRecord } from '../registry.js'
 import { parseMachineLink } from '../machine-link.js'
 import { openagentVersion } from '../version.js'
 import { readinessOf, type StartReadiness } from '../project-hooks.js'
@@ -139,7 +139,9 @@ export async function onComputersThrough(machineId: string): Promise<ComputersTh
 /**
  * Save a computer that keeps a line open to a saved server, as a machine of its own: reached
  * through the server, with this computer's key there. Nothing is entered anywhere: the server
- * already lets this computer in, and passes its calls down the computer's line.
+ * already lets this computer in, and passes its calls down the computer's line. Saved again,
+ * as every install there ends, an update too, it keeps the person's word that it uses this
+ * computer's logins.
  */
 export async function sendAddComputerThrough(machineId: string, computerId: string): Promise<AddMachineResult> {
   const server = (await listMachines()).find(machine => machine.id === machineId)
@@ -149,7 +151,9 @@ export async function sendAddComputerThrough(machineId: string, computerId: stri
   const computer = asked.computers.find(candidate => candidate.id === computerId)
   if (!computer) return { ok: false, error: `${server.label} has no such computer on a line now.` }
   const url = `${server.url}${THROUGH_PATH}${computer.id}`
+  const before = (await listMachines()).find(machine => machine.id === url)
   const { record } = await addMachine({ url, key: server.key, door: `${url}/_devices/enter`, label: `${computer.name} (through ${server.label})`, ...(server.pin ? { pin: server.pin } : {}), ...(computer.owner !== undefined ? { owner: computer.owner } : {}) })
+  if (before?.logins) await useLoginsOn(record.id, true)
   return { ok: true, machine: shown(record) }
 }
 

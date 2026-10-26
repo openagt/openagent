@@ -10,7 +10,7 @@ import { onComputersThrough, onMachineStartCheck, onMachineVersions, onMachines,
 import { openagentVersion } from '../version.js'
 import { setDashboardContext } from './context.js'
 import { testDashboardContext } from './test-context.js'
-import { REGISTRY_FILE, addMachine, addProject, projectId } from '../registry.js'
+import { REGISTRY_FILE, addMachine, addProject, projectId, useLoginsOn } from '../registry.js'
 
 /** Until `check` holds: what is not waited for (a key taken out of a machine) lands a moment later. */
 async function until(check: () => boolean): Promise<void> {
@@ -419,6 +419,16 @@ test('a saved server\'s computers on a line are listed, and one is saved as a ma
       assert.deepEqual(await onComputersThrough(through), { ok: true, computers: [] })
       const keyOf = async (url: string): Promise<string> => (JSON.parse(await readFile(file, 'utf8')).machines as { url: string; key: string }[]).find(saved => saved.url === url)!.key
       assert.equal(await keyOf(through), await keyOf(server.url))
+
+      // Saved again, as every install there ends, an update too: the person's word that it uses this computer's logins stays.
+      const loginsOf = async (url: string): Promise<unknown> => (JSON.parse(await readFile(file, 'utf8')).machines as { url: string; logins?: true }[]).find(saved => saved.url === url)!.logins
+      assert.equal(await useLoginsOn(through, true), true)
+      assert.deepEqual(await sendAddComputerThrough(server.url, 'abc123def456'), { ok: true, machine: { id: through, label: 'Studio (through Box)', url: through } })
+      assert.equal(await loginsOf(through), true)
+      // One that never said so is saved again without it.
+      await useLoginsOn(through, false)
+      await sendAddComputerThrough(server.url, 'abc123def456')
+      assert.equal(await loginsOf(through), undefined)
 
       // The server saved again, with a new key: the computer through it takes the new one.
       await sendAddMachine(server.link('second'))

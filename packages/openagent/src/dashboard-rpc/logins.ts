@@ -12,6 +12,7 @@ import { accountsWiring, onAgentAccounts, type AccountResult, type AccountsAgent
 import { contextProjects, resolveProjectPath } from './context.js'
 import { readProvider, remoteHost, type GitHostProvider } from '../dashboard/git-hosts.js'
 import { readCopied } from '../dashboard/copied-logins.js'
+import { syncLogins } from '../dashboard/logins-sync.js'
 
 export type { GitHostAccount, GitHostProvider } from '../dashboard/git-hosts.js'
 
@@ -181,6 +182,21 @@ async function act(host: string, args: string[]): Promise<{ ok: true; output: un
 export async function sendUseGitHostAccount(host: string, login: string): Promise<AccountResult> {
   const done = await act(host, ['use', login])
   return done.ok ? { ok: true } : done
+}
+
+/**
+ * Take an account off at `host`, on this computer: its tool forgets it, and its token goes on
+ * working wherever else it is. The account runs use is not taken off: another is picked first.
+ * The servers that use this computer's logins are asked again at once, so what they said of it
+ * goes with it.
+ */
+export async function sendForgetGitHostAccount(host: string, login: string): Promise<AccountResult> {
+  const runs = (await onGitHosts()).hosts.find(row => row.host === host)?.provider?.accounts.find(account => account.runs)
+  if (runs?.login === login) return { ok: false, error: `Runs use @${login}: pick another account for runs first.` }
+  const done = await act(host, ['forget', login])
+  if (!done.ok) return done
+  await syncLogins().catch(() => [])
+  return { ok: true }
 }
 
 /** Log another account in at `host`, in the browser: the code the person types, and where. */
