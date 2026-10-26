@@ -7,16 +7,17 @@ import { projectTickets } from './tickets.js'
 
 /**
  * A package's command just ran in the project at `root` (a module's, through the dashboard), and
- * may have written what one of OpenAgent's provided readers caches: every provided reader
- * forgets that project, so its next read runs the provider again. OpenAgent never knows which
- * command writes what; forgetting is cheap and re-reading is what it does anyway.
+ * may have written what one of OpenAgent's provided readers caches. Given the package, only what
+ * that package provides is forgotten: a card reading the queue leaves the runs read, so the next
+ * read of the runs is not made again for nothing. With no package, every provided reader forgets
+ * that project. Its next read runs the provider again; forgetting is cheap.
  */
-export function providedDataChanged(root: string): void {
-  projectBranches.changed(root)
-  projectGitHost.changed(root)
-  projectQueue.changed(root)
-  projectRuns.changed(root)
-  projectTickets.changed(root)
+export function providedDataChanged(root: string, pkg?: string): void {
+  projectBranches.changed(root, pkg)
+  projectGitHost.changed(root, pkg)
+  projectQueue.changed(root, pkg)
+  projectRuns.changed(root, pkg)
+  projectTickets.changed(root, pkg)
 }
 
 /** The kinds of OpenAgent's data a project's package may provide, one reader each (`git-host` is `git-host.ts`). */

@@ -12,6 +12,8 @@ export interface OverviewCard {
   width: CardWidth
   minWidth: CardWidth
   node: ReactNode
+  /** What it shows was read by an earlier visit, not yet again: it is drawn faded. A read inside the card says so of itself. */
+  stale?: boolean
 }
 
 /**

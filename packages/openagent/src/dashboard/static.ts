@@ -1,5 +1,5 @@
 import { readFile, stat } from 'node:fs/promises'
-import { sendBody } from './compress.js'
+import { fileTag, sendBody } from './compress.js'
 import { join, normalize, sep } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { contentTypeFor } from './content-type.js'
@@ -56,5 +56,5 @@ export async function serveClientBundle(req: IncomingMessage, res: ServerRespons
   // missing whatever the new version added, until its cache expired a year later.
   const cacheControl = target.startsWith(join(root, 'assets') + sep) ? 'public, max-age=31536000, immutable' : 'no-cache'
   // A file's packed copy is kept while the file is the same one.
-  await sendBody(req, res, 200, { 'content-type': type, 'cache-control': cacheControl }, body, facts ? `${target} ${facts.mtimeMs} ${facts.size}` : undefined)
+  await sendBody(req, res, 200, { 'content-type': type, 'cache-control': cacheControl, ...(facts ? { etag: fileTag(facts) } : {}) }, body, facts ? `${target} ${facts.mtimeMs} ${facts.size}` : undefined)
 }

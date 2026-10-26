@@ -30,6 +30,8 @@ export function useQueueReads(projects: ModuleProject[]): { reads: ProjectRead[]
     NOTHING_READ,
     10_000,
     [key],
+    // One read for the tile and the card, kept for the next visit: the page opens with the last count.
+    { remember: `skill-queue:queue:${key}`, stored: true },
   )
   return { reads, loaded }
 }

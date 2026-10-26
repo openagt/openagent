@@ -9,7 +9,8 @@ const PROBE_MS = 5000
 // polled reads keep their last value on failure — so every surface just froze, indistinguishable
 // from a quiet agent. One cheap read on a fixed cadence turns "unreachable" into a fact the
 // shell can say out loud. Recovery needs no action here: the channels reconcile and the polls
-// resume on their own once the daemon answers again.
+// resume on their own once the daemon answers again. The first probe is one cadence after the page
+// opened, which asks the daemon plenty on its own then; a tab not shown asks nothing.
 export function useDaemonHealth(): boolean {
   const [healthy, setHealthy] = useState(true)
 
@@ -17,6 +18,10 @@ export function useDaemonHealth(): boolean {
     let cancelled = false
     let timer: ReturnType<typeof setTimeout> | undefined
     const probe = () => {
+      if (document.visibilityState === 'hidden') {
+        timer = setTimeout(probe, PROBE_MS)
+        return
+      }
       onProjects().then(
         () => {
           if (cancelled) return
@@ -30,7 +35,7 @@ export function useDaemonHealth(): boolean {
         },
       )
     }
-    probe()
+    timer = setTimeout(probe, PROBE_MS)
     return () => {
       cancelled = true
       if (timer) clearTimeout(timer)

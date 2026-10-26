@@ -65,6 +65,12 @@ test('reads within the window share one call; changed() forgets the read; a fail
     reader.changed(root)
     await queue.list()
     assert.equal((await calls(root, 'queue')).length, 3, 'the clock never moved: only the forget explains a fresh read')
+    reader.changed(root, '@acme/tickets')
+    await queue.list()
+    assert.equal((await calls(root, 'queue')).length, 3, 'another package\'s command ran: the queue stays read')
+    reader.changed(root, 'queue')
+    await queue.list()
+    assert.equal((await calls(root, 'queue')).length, 4, 'the providing package\'s command ran: read again')
 
     await writeFile(join(root, 'node_modules', 'queue', 'queue.json'), 'not json')
     reader.changed(root)

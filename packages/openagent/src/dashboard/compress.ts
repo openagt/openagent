@@ -24,11 +24,23 @@ export function isText(contentType: string): boolean {
 /** `body` gzipped, once per `key`: a file of the page's code is packed the first time it is asked for. */
 const packed = new Map<string, Promise<Buffer>>()
 
+/** The tag a file is sent with, from its size and when it was last written: a file rebuilt in place gets a new one. */
+export function fileTag(facts: { mtimeMs: number; size: number }): string {
+  return `"${Math.floor(facts.mtimeMs).toString(36)}-${facts.size.toString(36)}"`
+}
+
 /**
  * Send `body`, gzipped when the caller takes it, it is text and not small. `key` names a body that
- * is the same each time it is sent (a file of the page), so it is packed once.
+ * is the same each time it is sent (a file of the page), so it is packed once. A body sent with an
+ * `etag` the browser already holds (it says so in `if-none-match`) is not sent again: a 304 tells
+ * it to use its copy, which is what a reopened page does with every file of its code.
  */
 export async function sendBody(req: IncomingMessage, res: ServerResponse, status: number, headers: OutgoingHttpHeaders, body: Buffer | string, key?: string): Promise<void> {
+  if (status === 200 && headers.etag !== undefined && req.headers['if-none-match'] === headers.etag) {
+    res.writeHead(304, { ...headers, vary: 'accept-encoding' })
+    res.end()
+    return
+  }
   const raw = typeof body === 'string' ? Buffer.from(body) : body
   if (raw.length < SMALL || !takesGzip(req) || !isText(String(headers['content-type'] ?? ''))) {
     res.writeHead(status, { ...headers, vary: 'accept-encoding' })

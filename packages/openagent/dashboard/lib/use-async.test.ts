@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { act, renderHook } from '@testing-library/react'
-import { forgetRemembered, readAhead, useLoaded, usePolled } from './use-async.js'
+import { act, render, renderHook } from '@testing-library/react'
+import { createElement, type ReactNode } from 'react'
+import { StaleReads, forgetRemembered, readAhead, useLoaded, usePolled } from './use-async.js'
 
 /** Let queued reads settle and React apply the state they resolved with. */
 const settle = (ms = 0): Promise<void> => act(async () => void (await vi.advanceTimersByTimeAsync(ms)))
@@ -248,5 +249,159 @@ describe('reading an answer ahead of its page', () => {
     await settle()
     const again = renderHook(() => usePolled(() => new Promise<string>(() => {}), 'initial', 60_000, ['a'], { remember: 'thing:a' }))
     expect(again.result.current.value).toBe('fresh')
+  })
+})
+
+describe('asking no more than needed', () => {
+  beforeEach(() => forgetRemembered())
+
+  /** Set what the page's tab says of itself, and tell the page. */
+  const tabShown = (shown: boolean): void => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (shown ? 'visible' : 'hidden') })
+    document.dispatchEvent(new Event('visibilitychange'))
+  }
+  afterEach(() => tabShown(true))
+
+  test('a poll never asks again while its answer is on its way, and asks the next time from when it answered', async () => {
+    let answer!: (value: number) => void
+    const load = vi.fn(() => new Promise<number>(resolve => (answer = resolve)))
+    const { result } = renderHook(() => usePolled(load, 0, 5000, []))
+    await settle(20_000)
+    expect(load).toHaveBeenCalledTimes(1) // a slow server: no pile of the same question behind it
+    answer(1)
+    await settle()
+    expect(result.current.value).toBe(1)
+    await settle(4999)
+    expect(load).toHaveBeenCalledTimes(1)
+    await settle(1)
+    expect(load).toHaveBeenCalledTimes(2)
+  })
+
+  test('a tab not shown reads nothing, and reads at once when it is shown again', async () => {
+    const load = vi.fn().mockResolvedValue(1)
+    renderHook(() => usePolled(load, 0, 5000, []))
+    await settle()
+    expect(load).toHaveBeenCalledTimes(1)
+    tabShown(false)
+    await settle(60_000)
+    expect(load).toHaveBeenCalledTimes(1)
+    act(() => tabShown(true))
+    await settle()
+    expect(load).toHaveBeenCalledTimes(2)
+    await settle(5000)
+    expect(load).toHaveBeenCalledTimes(3) // and polls on
+  })
+
+  test('two parts asking under one key wait for one read, and each answer reaches both', async () => {
+    let round = 0
+    const load = vi.fn(() => Promise.resolve(++round))
+    const tile = renderHook(() => usePolled(load, 0, 10_000, [], { remember: 'queue:p1' }))
+    const card = renderHook(() => usePolled(load, 0, 10_000, [], { remember: 'queue:p1' }))
+    await settle()
+    expect(load).toHaveBeenCalledTimes(1)
+    expect([tile.result.current.value, card.result.current.value]).toEqual([1, 1])
+    await settle(10_000)
+    expect(load).toHaveBeenCalledTimes(2)
+    expect([tile.result.current.value, card.result.current.value]).toEqual([2, 2])
+  })
+
+  test('reload asks anew even while a read is out, and the older answer landing after it is dropped', async () => {
+    const answers: ((value: string) => void)[] = []
+    const load = vi.fn(() => new Promise<string>(resolve => answers.push(resolve)))
+    const { result } = renderHook(() => usePolled(load, 'initial', 5000, []))
+    await settle()
+    void result.current.reload()
+    expect(load).toHaveBeenCalledTimes(2) // asked after a change the first read may not hold
+    answers[1]!('after the change')
+    await settle()
+    answers[0]!('before the change')
+    await settle()
+    expect(result.current.value).toBe('after the change')
+  })
+
+  test('new deps under the same key ask anew rather than wait for the read asked before the change', async () => {
+    const load = vi.fn(() => new Promise<string>(() => {}))
+    const { rerender } = renderHook(({ tick }) => usePolled(load, 'initial', 30_000, [tick], { remember: 'projects' }), { initialProps: { tick: 0 } })
+    await settle()
+    rerender({ tick: 1 })
+    await settle()
+    expect(load).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('a poll that changes its pace', () => {
+  test('keeps what it shows and reads at the new pace from then on', async () => {
+    let round = 0
+    const load = vi.fn(() => Promise.resolve(++round))
+    const { result, rerender } = renderHook(({ every }) => usePolled(load, 0, every, ['p1']), { initialProps: { every: 10_000 } })
+    await settle()
+    expect(result.current.value).toBe(1)
+    rerender({ every: 2000 })
+    expect(result.current).toMatchObject({ value: 1, loaded: true }) // the rail does not blank
+    expect(load).toHaveBeenCalledTimes(1)
+    await settle(2000)
+    expect(load).toHaveBeenCalledTimes(2)
+    await settle(2000)
+    expect(load).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('an answer stored for the next visit', () => {
+  beforeEach(() => {
+    forgetRemembered()
+    localStorage.clear()
+  })
+
+  /** A new page: nothing in its memory, what the browser stored still there. */
+  const reopen = (): void => forgetRemembered()
+
+  test('a page opened again shows the stored answer from its first frame, stale, until the fresh one lands', async () => {
+    const first = renderHook(() => usePolled(() => Promise.resolve(3), 0, 10_000, [], { remember: 'queue:p1', stored: true }))
+    await settle()
+    expect(first.result.current).toMatchObject({ value: 3, stale: false })
+    first.unmount()
+    reopen()
+
+    let answer!: (value: number) => void
+    const frames: string[] = []
+    const { result } = renderHook(() => {
+      const read = usePolled(() => new Promise<number>(resolve => (answer = resolve)), 0, 10_000, [], { remember: 'queue:p1', stored: true })
+      frames.push(`${read.value}:${read.loaded}:${read.stale}`)
+      return read
+    })
+    expect(frames[0]).toBe('3:true:true')
+    await settle()
+    expect(result.current.stale).toBe(true)
+    answer(4)
+    await settle()
+    expect(result.current).toMatchObject({ value: 4, loaded: true, stale: false })
+  })
+
+  test('only a read that asks for it is stored', async () => {
+    const plain = renderHook(() => usePolled(() => Promise.resolve(3), 0, 10_000, [], { remember: 'plain' }))
+    await settle()
+    plain.unmount()
+    reopen()
+    const { result } = renderHook(() => usePolled(() => new Promise<number>(() => {}), 0, 10_000, [], { remember: 'plain', stored: true }))
+    expect(result.current).toMatchObject({ value: 0, loaded: false, stale: false })
+  })
+
+  test('the part of the page around a stale read is told, and told again when it is fresh', async () => {
+    localStorage.setItem('openagent:read:queue:p1', '3')
+    const told: boolean[] = []
+    let answer!: (value: number) => void
+    function Card() {
+      const { value } = usePolled(() => new Promise<number>(resolve => (answer = resolve)), 0, 10_000, [], { remember: 'queue:p1', stored: true })
+      return createElement('span', null, value)
+    }
+    const around = (children: ReactNode) => createElement(StaleReads.Provider, { value: (_reader: object, stale: boolean) => void told.push(stale) }, children)
+    const { container } = render(around(createElement(Card)))
+    await settle()
+    expect(container.textContent).toBe('3')
+    expect(told.at(-1)).toBe(true)
+    answer(5)
+    await settle()
+    expect(container.textContent).toBe('5')
+    expect(told.at(-1)).toBe(false)
   })
 })

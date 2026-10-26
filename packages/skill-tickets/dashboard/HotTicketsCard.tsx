@@ -86,6 +86,8 @@ export function HotTicketsCard({ projects }: ModuleCardProps) {
     // A local read per project plus its runs: a glance, not a feed.
     30_000,
     [key],
+    // Kept for the next visit: the page opens with the last tickets, faded until they are read again.
+    { remember: `skill-tickets:hot:${key}`, stored: true },
   )
 
   const title = (

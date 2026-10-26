@@ -461,7 +461,7 @@ export function useSpendOffset(serverOffset: number | undefined, save: (offset: 
 function LimitedWeekBar({ limit, projects, boundary, percentUsed, others }: { limit: MountedUsageLimit; projects: ModuleProject[]; boundary: QuotaBoundary; percentUsed: number; others: DriverQuotaWindow[] }) {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
-  const { value: saved } = usePolled<number | undefined>(() => limit.read(host, projects), undefined, 10_000, [limit.package, key])
+  const { value: saved } = usePolled<number | undefined>(() => limit.read(host, projects), undefined, 10_000, [limit.package, key], { remember: `usage-limit:${limit.package}:${key}`, stored: true })
   const [offset, setOffset, error] = useSpendOffset(saved, points => limit.save(host, projects, points))
   return (
     <>

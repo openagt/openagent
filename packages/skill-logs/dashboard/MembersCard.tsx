@@ -62,6 +62,8 @@ export function MembersCard({ projects }: ModuleCardProps) {
     // A local read of a week of records: a glance, not a feed.
     60_000,
     [key],
+    // Kept for the next visit: the page opens with the last members, faded until they are read again.
+    { remember: `skill-logs:members:${key}`, stored: true },
   )
   return (
     <Card>

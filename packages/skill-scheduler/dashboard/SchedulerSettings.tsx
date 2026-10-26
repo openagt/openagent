@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Input, SettingsRow, SettingsSection, useModuleHost, usePolled, type ModuleSettingsProps } from '@openagt/dashboard/module'
-import { MAX_SPEND_OFFSET, loosestSpendOffset, offsetsThatDiffer, readSchedulers, saveSpendOffset, typedOffset, type SchedulerRow } from './schedulers.js'
+import { MAX_SPEND_OFFSET, loosestSpendOffset, offsetsThatDiffer, readSchedulers, schedulersKey, saveSpendOffset, typedOffset, type SchedulerRow } from './schedulers.js'
 
 // Settings › Scheduler: how far past the quota boundary scheduled work may still start. Each
 // project keeps its own, read with `scheduler status` and saved with `scheduler offset`
@@ -15,7 +15,7 @@ const OFFSET_SAVE_DELAY_MS = 500
 export function SchedulerSettings({ projects }: ModuleSettingsProps) {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
-  const { value: rows, reload } = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key])
+  const { value: rows, reload } = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key], { remember: schedulersKey(key) })
   const [error, setError] = useState<string | undefined>()
 
   // The offset as typed, kept until a read made after the save brings it back.

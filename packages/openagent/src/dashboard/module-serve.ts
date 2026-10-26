@@ -1,5 +1,6 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { fileTag, sendBody } from './compress.js'
 import { contentTypeFor } from './content-type.js'
 import { defaultProjectsProvider, type ProjectsProvider } from './projects.js'
 import { findComputerModule, findProjectModule, moduleFile, type ProjectModule } from '../project-modules.js'
@@ -34,7 +35,9 @@ function decode(segment: string): string | undefined {
  * Serve one module file (#1774): the project must be registered, the package must be a module of
  * that project, and the file must sit inside the module's browser part's own directory. Anything else is a
  * 404, never a fallback: a module URL is asked for by the dashboard's loader, not typed by a person.
- * Served as `no-cache`, since a module is rebuilt in place under the same name.
+ * Served as `no-cache`, since a module is rebuilt in place under the same name, with a tag of the
+ * file's own: a page opened again asks with it and is answered "not changed", with no body. Sent
+ * gzipped, a module's code being a page's largest file.
  */
 export async function serveModuleFile(
   req: IncomingMessage,
@@ -64,8 +67,10 @@ async function serveFileOf(req: IncomingMessage, res: ServerResponse, [packageSe
   if (!pkg || rel.length === 0 || rel.some(part => part === undefined)) return notFound()
   const module = await find(pkg).catch(() => undefined)
   const file = module ? await moduleFile(module, rel.join('/')) : undefined
-  const body = file ? await readFile(file).catch(() => undefined) : undefined
-  if (!file || body === undefined) return notFound()
-  res.writeHead(200, { 'content-type': contentTypeFor(file), 'cache-control': 'no-cache' })
-  res.end(req.method === 'HEAD' ? undefined : body)
+  const facts = file ? await stat(file).catch(() => undefined) : undefined
+  const body = file && facts ? await readFile(file).catch(() => undefined) : undefined
+  if (!file || !facts || body === undefined) return notFound()
+  const headers = { 'content-type': contentTypeFor(file), 'cache-control': 'no-cache', etag: fileTag(facts) }
+  if (req.method === 'HEAD') return void res.writeHead(200, headers).end()
+  await sendBody(req, res, 200, headers, body, `${file} ${facts.mtimeMs} ${facts.size}`)
 }

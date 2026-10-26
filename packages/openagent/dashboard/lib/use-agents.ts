@@ -17,13 +17,38 @@ import { awaitingName } from './agent-label.js'
 export const STARTING_EVERY_MS = 400
 export const STARTING_AT_MOST_MS = 30_000
 
-export function useAgents(projectId: string | null, starting: string | null = null): { agents: AgentMeta[]; reload: () => void; loaded: boolean } {
+/** How long the runs read for one part of the page serve another that asks for them: the cards on the Overview, the rail beside them. */
+const SHARED_MS = 3000
+
+/** Each project's runs as last asked for: the answer, or the read on its way, and when it was asked. */
+const lastRead = new Map<string, { at: number; agents: Promise<AgentMeta[]> }>()
+
+/**
+ * A project's runs, every part of the page reading them through here. `fresh` asks the daemon
+ * now (the rail's own poll, which must see a run just started); otherwise a read on its way or one
+ * answered within {@link SHARED_MS} is the answer, so the Overview's cards and the rail ask once.
+ */
+export function readAgents(projectId: string, { fresh = false }: { fresh?: boolean } = {}): Promise<AgentMeta[]> {
+  const last = lastRead.get(projectId)
+  if (!fresh && last && Date.now() - last.at < SHARED_MS) return last.agents
+  const read = { at: Date.now(), agents: onAgents(projectId) }
+  lastRead.set(projectId, read)
+  // A failed read is not handed to the next asker.
+  read.agents.catch(() => void (lastRead.get(projectId) === read && lastRead.delete(projectId)))
+  return read.agents
+}
+
+/**
+ * `everyMs`: how often the list is read, every two seconds by default, for a run's page whose
+ * status a person watches; a page that only shows the list beside it (the Overview) reads it less.
+ */
+export function useAgents(projectId: string | null, starting: string | null = null, everyMs = 2000): { agents: AgentMeta[]; reload: () => void; loaded: boolean } {
   // `reload` is the shared guarded one now: it used to be a second, unguarded copy of the
   // read, so an agent started just before a project switch could write the old project's agents.
   const { value: agents, reload, loaded } = usePolled<AgentMeta[]>(
-    projectId ? () => onAgents(projectId) : null,
+    projectId ? () => readAgents(projectId, { fresh: true }) : null,
     [],
-    2000,
+    everyMs,
     [projectId],
   )
   const naming = usePreferences().nameRuns !== false

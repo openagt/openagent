@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { createElement } from 'react'
 import { phoneScreen } from './test-utils.js'
 import { useModuleHost, type ModuleCardProps, type ModuleDefinition, type ModulePageProps } from './module/index.js'
+import { forgetRemembered } from './lib/use-async.js'
 
 // The whole transport, stubbed at its one seam: every RPC stub is `rpc(name)`, so a map by name
 // answers every read the shell makes, and the live feed never emits.
@@ -46,6 +47,8 @@ function answerShell(modules: unknown[]): void {
   answers.set('onRecentAgents', () => [])
   answers.set('onAgents', () => [])
   answers.set('onOverview', () => ({ active: [] }))
+  // The Overview draws its cards once the person's layout is read.
+  answers.set('onPreferences', () => ({}))
 }
 
 afterEach(() => {
@@ -134,6 +137,20 @@ describe('module cards on the Overview (#1818)', () => {
     window.history.replaceState(null, '', '/')
     render(<App />)
     expect(await screen.findByText('@acme/queue card for app')).toBeTruthy()
+  })
+
+  test("a card shows as soon as its own package's code is in, whatever another package's is doing", async () => {
+    function QueueCard() {
+      return createElement('p', null, 'the queue card')
+    }
+    answerOverview([
+      // Code that never finishes coming.
+      { package: '@acme/slow', url: 'data:text/javascript,await new Promise(() => {}); export default {}', projects: [PROJECT.id] },
+      { package: '@acme/queue', url: moduleModule('__quickCard', { cards: [{ id: 'queue', label: 'queue', Card: QueueCard }] }), projects: [PROJECT.id] },
+    ])
+    window.history.replaceState(null, '', '/')
+    render(<App />)
+    expect(await screen.findByText('the queue card')).toBeTruthy()
   })
 
   test('a page with no chat scrolls as a page, on any screen, the sidebar fixed beside it; a project\'s own page is pinned, its columns scrolling by themselves', async () => {
@@ -267,14 +284,15 @@ describe('the project select (#1513)', () => {
       whole: [],
     }))
     answers.set('onRetainedWorktrees', () => [])
-    answers.set('onDashboard', () => ({
-      totals: { projects: 2, openTodos: 0 },
-      projects: [],
-      queue: [],
+    answers.set('onDashboard', () => ({ totals: { projects: 2, openTodos: 0 }, projects: [], queue: [], active: [] }))
+    // The agents at work, as the shell reads them for the mark and the Overview alike.
+    answers.set('onOverview', () => ({
       active: [
         { projectId: PROJECT.id, projectName: 'app', agentId: 'a2', status: 'running', intent: 'app works' },
         { projectId: OTHER.id, projectName: 'site', agentId: 's2', status: 'running', intent: 'site works' },
       ],
+      queueOpen: 0,
+      recent: [],
     }))
     answers.set('onRecentAgents', () => [
       { projectId: PROJECT.id, projectName: 'app', agent: { id: '3-a', status: 'done', startedAt: '2026-07-19T16:05:44.756Z', updatedAt: '2026-07-19T16:06:21.000Z', intent: 'app ran' } },
@@ -518,6 +536,9 @@ describe('the project select (#1513)', () => {
 
   test('a link to a project says neither "All projects" nor "No agents yet." while the projects are read, and reads no agents under its address', async () => {
     for (const link of ['/app', '/app/overview']) {
+      // Each link is a page opened afresh: nothing read by the last one.
+      forgetRemembered()
+      localStorage.clear()
       answerTwo()
       // Held back until answered, every read of them: the shell is not the only one making one.
       const held: ((projects: unknown) => void)[] = []

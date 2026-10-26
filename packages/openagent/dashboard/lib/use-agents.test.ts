@@ -5,7 +5,7 @@ import type { AgentMeta } from '../../src/index.js'
 const onAgents = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/reads.js', () => ({ onAgents }))
 
-const { useAgents } = await import('./use-agents.js')
+const { readAgents, useAgents } = await import('./use-agents.js')
 
 const agents = (id: string): AgentMeta[] => [{ id, status: 'done' } as AgentMeta]
 const settle = (ms = 0): Promise<void> => act(async () => void (await vi.advanceTimersByTimeAsync(ms)))
@@ -148,5 +148,35 @@ describe('useAgents', () => {
     await settle()
     await settle(1900)
     expect(onAgents).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('readAgents', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    onAgents.mockReset()
+  })
+  afterEach(() => vi.useRealTimers())
+
+  test('the cards asking at once, and soon after the rail, ask the daemon once; the rail\'s own read always asks', async () => {
+    onAgents.mockResolvedValue(agents('a1'))
+    const [hot, members] = await Promise.all([readAgents('shared-1'), readAgents('shared-1')])
+    expect(hot).toBe(members)
+    expect(onAgents).toHaveBeenCalledTimes(1)
+    await settle(2000)
+    await readAgents('shared-1')
+    expect(onAgents).toHaveBeenCalledTimes(1) // answered a moment ago: that answer serves
+    await readAgents('shared-1', { fresh: true })
+    expect(onAgents).toHaveBeenCalledTimes(2) // the rail must see a run just started
+    await settle(3000)
+    await readAgents('shared-1')
+    expect(onAgents).toHaveBeenCalledTimes(3) // too old to serve
+  })
+
+  test('a failed read is not handed to the next asker', async () => {
+    onAgents.mockRejectedValueOnce(new Error('down')).mockResolvedValue(agents('a1'))
+    await expect(readAgents('shared-2')).rejects.toThrow('down')
+    expect(await readAgents('shared-2')).toEqual(agents('a1'))
+    expect(onAgents).toHaveBeenCalledTimes(2)
   })
 })

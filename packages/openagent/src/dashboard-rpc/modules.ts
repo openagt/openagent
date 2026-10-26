@@ -55,9 +55,9 @@ export async function onModules(): Promise<DashboardModule[]> {
  * Run one of a module package's commands in one project and answer its JSON output: how a module
  * reads (and changes) its own data. Refused for an unknown project and for a package that is not a
  * module of that project, so a page can run only its own package's commands, never an arbitrary
- * program. Once the command has run, OpenAgent forgets what it had read of that project's
- * provided data (its queue, its runs): the command may have written it, and the next read sees
- * that at once instead of a cached copy.
+ * program. Once the command has run, OpenAgent forgets what it had read of that project's data
+ * the package provides (the queue package's queue): the command may have written it, and the next
+ * read sees that at once instead of a cached copy. What other packages provide stays read.
  *
  * `acts` says the command is a module's action on the project (a link action), not a page's read:
  * OpenAgent then also converges the project's data branch with origin, as its clock does
@@ -73,7 +73,7 @@ export async function runModuleCommand(projectId: string, pkg: string, args: str
   if (!module) return { ok: false, error: `${pkg} brings no module to this project` }
   const result = await runCommand(root, module, args, command)
   if (acts) await pullFileBranch(root, DATA_BRANCH, { log: () => {} }).catch(() => {})
-  providedDataChanged(root)
+  providedDataChanged(root, pkg)
   return result
 }
 

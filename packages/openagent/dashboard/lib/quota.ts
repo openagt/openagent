@@ -16,5 +16,6 @@ const REFRESH_MS = 30_000
  * than blanking it: an empty bar reads as "nothing used".
  */
 export function useQuota(): QuotaView | undefined {
-  return usePolled<QuotaView | undefined>(onQuota, undefined, REFRESH_MS, []).value
+  // Kept for the next visit: the page opens with the last usage, faded until it is read again.
+  return usePolled<QuotaView | undefined>(onQuota, undefined, REFRESH_MS, [], { remember: 'quota', stored: true }).value
 }

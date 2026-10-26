@@ -268,6 +268,11 @@ export function schedulerRow(project: ModuleProject, output: unknown): Scheduler
   }
 }
 
+/** The key every part of the page reads {@link readSchedulers} of these projects under (their ids, joined): one read for all of them. */
+export function schedulersKey(projectIds: string): string {
+  return `skill-scheduler:rows:${projectIds}`
+}
+
 /** Every project's scheduler, one row per project in the order given: `scheduler status` run in each. */
 export function readSchedulers(host: ModuleHost, projects: readonly ModuleProject[]): Promise<SchedulerRow[]> {
   return Promise.all(
