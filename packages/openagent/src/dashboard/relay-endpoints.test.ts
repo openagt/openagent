@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import type { AddressInfo } from 'node:net'
 import { test, type TestContext } from 'node:test'
 import type { OpenAgentEvent } from '../events.js'
-import { RELAY_RPC_NAMES, isRelayRead } from '../dashboard-rpc/relay-dispatch.js'
+import { MACHINE_RPC_NAMES, RELAY_RPC_NAMES, isMachineRead, isRelayRead } from '../dashboard-rpc/relay-dispatch.js'
 import { handleRelayRequest, WATCH_HEADER, WATCH_ONLY, type RelayHandlers } from './relay-endpoints.js'
 import { addMachine } from '../registry.js'
 
@@ -44,6 +44,7 @@ async function computer(t: TestContext) {
     start: async prompt => (did.push(`start ${prompt}`), { ok: true, agentId: RUN }),
     tailEvents: (_projectId, _agentId, onEvent) => (onEvent({ kind: 'session-update', sessionId: 's1' } as OpenAgentEvent), () => {}),
     rpc: async (_projectId, fn) => (did.push(`rpc ${fn}`), fn),
+    machine: async (fn, args) => (did.push(`machine ${fn}`), { fn, args }),
     bring: async (_address, bring) => (bring && did.push('clone'), { state: bring ? 'coming' : 'missing' }),
     screen: async () => `${screen}/`,
   }
@@ -111,6 +112,24 @@ test('a call that may only watch runs a relayed function that reads, and no othe
   assert.deepEqual(did, [])
 })
 
+test('a machine-wide call names no project, and one that may only watch runs it only when it reads', async t => {
+  const { did, post } = await computer(t)
+  const call = (fn: string, headers: Record<string, string> = {}): Promise<Response> => post('/_relay/machine', { fn, args: [{ kind: 'git' }, 'secret'] }, headers)
+  for (const fn of MACHINE_RPC_NAMES) {
+    did.length = 0
+    const answer = JSON.stringify({ result: { fn, args: [{ kind: 'git' }, 'secret'] } })
+    assert.deepEqual(await said(await call(fn)), [200, answer], `${fn}, in full`)
+    const watched = await said(await call(fn, WATCH))
+    if (isMachineRead(fn)) assert.deepEqual(watched, [200, answer], `${fn} reads`)
+    else assert.deepEqual(watched, [403, WATCH_ONLY], `${fn} acts`)
+    assert.deepEqual(did, isMachineRead(fn) ? [`machine ${fn}`, `machine ${fn}`] : [`machine ${fn}`], fn)
+  }
+  did.length = 0
+  assert.equal((await call('sendStart', WATCH)).status, 403)
+  assert.equal((await post('/_relay/machine', { args: [] })).status, 400)
+  assert.deepEqual(did, [])
+})
+
 test('the header restricts whatever it says, and a call that is refused anyway is refused as it was', async t => {
   const { did, get, post } = await computer(t)
   for (const value of ['1', '0', '', 'no']) assert.equal((await post('/_relay/start', { prompt: 'x', options: {}, project: SHOP }, { [WATCH_HEADER]: value })).status, 403, JSON.stringify(value))
@@ -118,6 +137,7 @@ test('the header restricts whatever it says, and a call that is refused anyway i
   // A read asked the wrong way, and a path that is no relay call, with the header: what they are without it.
   assert.equal((await get('/_relay/start', WATCH)).status, 405)
   assert.equal((await get('/_relay/rpc', WATCH)).status, 405)
+  assert.equal((await get('/_relay/machine', WATCH)).status, 405)
   assert.equal((await get('/_relay/nothing', WATCH)).status, 404)
 })
 

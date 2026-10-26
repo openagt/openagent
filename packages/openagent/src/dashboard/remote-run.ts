@@ -627,20 +627,21 @@ export async function remoteAddMachine(machine: MachineAccess, link: string, lab
 }
 
 /**
- * Call one of a machine's own functions, as its page calls it, with this computer's key there:
- * what the machine answers is its own words, to read as data. Why not, when it did not answer.
+ * Call one of a machine's own machine-wide functions (relay-dispatch.ts), with this computer's key
+ * there: through the relay, so a computer reached through a server is asked as a server is. What
+ * the machine answers is its own words, to read as data. Why not, when it did not answer.
  */
 export async function machineCall(machine: MachineAccess, fn: string, args: unknown[], timeoutMs = COMMAND_TIMEOUT_MS): Promise<{ ok: true; ret: unknown } | { ok: false; error: string }> {
   try {
-    const res = await machineFetch(`${trimSlashes(machine.url)}/_rpc/${fn}`, machine.pin, {
+    const res = await machineFetch(`${trimSlashes(machine.url)}/_relay/machine`, machine.pin, {
       method: 'POST',
       headers: relayHeaders(machine.key),
-      body: JSON.stringify(args),
+      body: JSON.stringify({ fn, args }),
       signal: AbortSignal.timeout(timeoutMs),
     })
     if (res.status === 401) return { ok: false, error: NOT_IN }
     if (!res.ok) return { ok: false, error: (await refusalOf(res)) ?? `the machine answered ${res.status}` }
-    return { ok: true, ret: ((await res.json()) as { ret?: unknown }).ret }
+    return { ok: true, ret: ((await res.json()) as { result?: unknown }).result }
   } catch (err) {
     return { ok: false, error: errorMessage(err) }
   }

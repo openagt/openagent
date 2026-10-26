@@ -72,8 +72,8 @@ export interface DashboardOptions {
   remote: RemoteAgents
   /**
    * Serve a relay-started run's events back to the daemon that relayed it here (#1067): the
-   * `/_relay/*` endpoints (start, events, the slice-2 `rpc`, a run's screen, and a project asked
-   * for). The daemon listens on its
+   * `/_relay/*` endpoints (start, events, the slice-2 `rpc`, the machine-wide calls, a run's screen,
+   * and a project asked for). The daemon listens on its
    * own computer only, so a call from another machine reaches them through whatever this
    * computer opened to the network, which lets in only a machine that holds a key of its own.
    */
@@ -83,6 +83,8 @@ export interface DashboardOptions {
     tailEvents: (projectId: string, agentId: string, onEvent: (event: import('../events.js').OpenAgentEvent) => void) => () => void
     /** Run one whitelisted run-scoped RPC against this daemon's own checkout (#1067 slice 2). */
     rpc?: (projectId: string, fn: string, args: unknown[]) => Promise<unknown>
+    /** Run one whitelisted machine-wide RPC here, for the person's own computer. */
+    machine?: RelayHandlers['machine']
     /** Where this machine's copy of a project stands, and with `bring` clone it when there is none. */
     bring?: RelayHandlers['bring']
     /** The logins of this OpenAgent's person here, on an OpenAgent that is one person's. */
@@ -161,7 +163,7 @@ export function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
   // The machine-to-daemon relay endpoints (#1067): wired only when an events tail is supplied.
   const localScreen = opts.screen ? kept(opts.screen) : undefined
   const relayHandlers: RelayHandlers | undefined = opts.relay
-    ? { project: opts.relay.project, start: opts.onStart, tailEvents: opts.relay.tailEvents, ...(opts.relay.rpc ? { rpc: opts.relay.rpc } : {}), ...(opts.relay.bring ? { bring: opts.relay.bring } : {}), ...(opts.relay.logins ? { logins: opts.relay.logins } : {}), ...(localScreen ? { screen: localScreen } : {}) }
+    ? { project: opts.relay.project, start: opts.onStart, tailEvents: opts.relay.tailEvents, ...(opts.relay.rpc ? { rpc: opts.relay.rpc } : {}), ...(opts.relay.machine ? { machine: opts.relay.machine } : {}), ...(opts.relay.bring ? { bring: opts.relay.bring } : {}), ...(opts.relay.logins ? { logins: opts.relay.logins } : {}), ...(localScreen ? { screen: localScreen } : {}) }
     : undefined
   const screenHandlers: ScreenHandlers | undefined = localScreen ? { local: localScreen, remote: (projectId, agentId) => opts.remote.target(agentId, projectId) } : undefined
 
