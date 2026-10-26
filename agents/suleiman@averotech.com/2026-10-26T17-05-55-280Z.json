@@ -7,7 +7,6 @@
   "title": "Reply with OK",
   "driver": "claude-code",
   "model": "claude-sonnet-5-5",
-  "branch": "agent-2026-10-26T17-05-55-280Z",
   "cost": 0.0221598,
   "contextTokens": 17662,
   "caller": {
