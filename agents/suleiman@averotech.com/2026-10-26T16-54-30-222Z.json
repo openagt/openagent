@@ -1,16 +1,28 @@
 {
   "id": "2026-10-26T16-54-30-222Z",
   "startedAt": "2026-10-26T16:54:28.654Z",
-  "status": "running",
+  "endedAt": "2026-10-26T16:54:55.921Z",
+  "status": "done",
   "intent": "/plan-tickets",
+  "title": "Queue plan for dashboard tailnet address",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "branch": "agent-2026-10-26T16-54-30-222Z",
+  "cost": 0.1451608,
+  "contextTokens": 26984,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
-      "publish": "commit"
+      "pid": 37427,
+      "publish": "commit",
+      "baseCommit": "34afbe15df74bc3b37ba83960790370650aed3d0"
     },
+    "pid": 37427,
     "host": "Suleimans-MacBook-Pro.local",
-    "publish": "commit"
+    "baseCommit": "34afbe15df74bc3b37ba83960790370650aed3d0",
+    "publish": "commit",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/gemstack/.branches/agent-2026-10-26T16-54-30-222Z",
+    "sessionId": "260d0f38-77a4-4364-932e-20575f92f904"
   }
 }
