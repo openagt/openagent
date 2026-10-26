@@ -1,0 +1,17 @@
+{
+  "id": "2026-10-26T17-14-04-966Z",
+  "startedAt": "2026-10-26T17:14:07.551Z",
+  "status": "running",
+  "intent": "Run the shell command: sleep 15. Then reply with the single word OK. Change nothing.",
+  "driver": "claude-code",
+  "model": "sonnet",
+  "caller": {
+    "runner": {
+      "host": "ubuntu-s-1vcpu-2gb-fra1",
+      "pid": 613783,
+      "publish": "commit"
+    },
+    "host": "ubuntu-s-1vcpu-2gb-fra1",
+    "publish": "commit"
+  }
+}
