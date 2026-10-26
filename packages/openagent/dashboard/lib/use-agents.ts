@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import type { AgentMeta } from '../../src/index.js'
 import { onAgents } from '../rpc/reads.js'
 import { usePolled } from './use-async.js'
+import { runsAgain, useRunsPace } from './runs-changed.js'
 import { usePreferences } from './preferences.js'
 import { awaitingName } from './agent-label.js'
 
@@ -20,6 +21,8 @@ export const STARTING_AT_MOST_MS = 30_000
 /**
  * `everyMs`: how often the list is read, every two seconds by default, for a run's page whose
  * status a person watches; a page that only shows the list beside it (the Overview) reads it less.
+ * While the daemon tells the page of each change of the runs, the list is read at each change, and
+ * polled only as a safety (`runs-changed.ts`).
  */
 export function useAgents(projectId: string | null, starting: string | null = null, everyMs = 2000): { agents: AgentMeta[]; reload: () => void; loaded: boolean } {
   // `reload` is the shared guarded one now: it used to be a second, unguarded copy of the
@@ -27,8 +30,10 @@ export function useAgents(projectId: string | null, starting: string | null = nu
   const { value: agents, reload, loaded } = usePolled<AgentMeta[]>(
     projectId ? () => onAgents(projectId) : null,
     [],
-    everyMs,
+    useRunsPace(everyMs),
     [projectId],
+    undefined,
+    runsAgain(projectId ?? undefined),
   )
   const naming = usePreferences().nameRuns !== false
   const started = starting === null ? undefined : agents.find(agent => agent.id === starting)

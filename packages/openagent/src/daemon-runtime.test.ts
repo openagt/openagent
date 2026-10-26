@@ -760,8 +760,8 @@ test("a saved machine is asked for its own runs over its relay, and a run of its
   try {
     const [laptop] = await runtime.remoteAgents.machineRuns(dir)
     assert.deepEqual([laptop!.host, laptop!.answered, laptop!.runs.map(run => run.id)], ['laptop-box', true, [ONLY_THERE]])
-    // Asked of the project by its address, from the start.
-    assert.deepEqual(asked, [{ fn: 'onOwnRuns', args: [null, null], project: 'github.com/acme/shop' }])
+    // Asked of the project by its address, from the start, for as long as the machine holds the call while nothing changes.
+    assert.deepEqual(asked[0], { fn: 'onOwnRuns', args: [null, null, 25_000], project: 'github.com/acme/shop' })
     // When it answered is kept with it, for while it does not: written behind the list's back.
     for (let i = 0; i < 40 && !(await listMachines(undefined, env))[0]!.seenAt; i++) await new Promise(resolve => setTimeout(resolve, 50))
     assert.ok((await listMachines(undefined, env))[0]!.seenAt)

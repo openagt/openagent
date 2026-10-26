@@ -30,7 +30,8 @@ import { reachedByLine } from '../reached-by-line.js'
 import type { SavedMachine } from '../dashboard/rpc-serve.js'
 import { hostname } from 'node:os'
 import { nodeGitRunner } from '@openagt/agent-data'
-import { RunChanges, withMachineRuns, type MachineRuns, type OwnRuns } from '../dashboard/machine-runs.js'
+import { RUNS_WAIT_MS, RunChanges, withMachineRuns, type MachineRuns, type OwnRuns } from '../dashboard/machine-runs.js'
+import { ownRunsWatch } from '../dashboard/runs-watch.js'
 
 // The read model behind the dashboard (#405): the agent history, an agent's replay, and the
 // surfaced PLAN/TODO docs — each keyed by project id and backed by
@@ -133,13 +134,37 @@ const ownRunChanges = new RunChanges()
 /**
  * This computer's own runs of a project, for another computer that lists them (machine-runs.ts):
  * the ones that changed since `since`, the answer it had last, as they stand right now. Only this
- * computer's: what another computer's records say is that computer's to answer.
+ * computer's: what another computer's records say is that computer's to answer. With `wait` (ms,
+ * up to {@link RUNS_WAIT_MS}) and no change a list shows since `since`, the answer waits for the
+ * first such change, or says what changed otherwise once the wait is up.
  */
-export async function onOwnRuns(projectId: string, since?: unknown): Promise<OwnRuns> {
+export async function onOwnRuns(projectId: string, since?: unknown, wait?: unknown): Promise<OwnRuns> {
   const cwd = await resolveProjectPath(projectId)
   const thisHost = hostname()
-  const own = cwd ? (await recordedRuns(cwd)).filter(run => run.host === thisHost) : []
-  return ownRunChanges.answer(cwd ?? projectId, own, since)
+  const answer = async (): Promise<OwnRuns> => ownRunChanges.answer(cwd ?? projectId, cwd ? (await recordedRuns(cwd)).filter(run => run.host === thisHost) : [], since)
+  if (cwd === undefined || typeof wait !== 'number' || !(wait > 0)) return answer()
+  // Listened to before the runs are read: a change while they are read is a change all the same.
+  let changed = false
+  let woken: (() => void) | undefined
+  const stop = ownRunsWatch.follow(cwd, () => {
+    changed = true
+    woken?.()
+  })
+  try {
+    const now = await answer()
+    // A step of a run (its later time, its cost) is no change a list shows: it waits for one, and goes with it.
+    if (changed || ownRunChanges.shownSince(cwd, since)) return now
+    await new Promise<void>(resolve => {
+      const timer = setTimeout(resolve, Math.min(wait, RUNS_WAIT_MS))
+      woken = () => {
+        clearTimeout(timer)
+        resolve()
+      }
+    })
+    return await answer()
+  } finally {
+    stop()
+  }
 }
 
 /** How long a project's git user is trusted before git is asked again. */

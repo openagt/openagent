@@ -125,6 +125,8 @@ interface ReadLine {
   asked: number
   given: number
   out?: { n: number; settled: Promise<void> }
+  /** The last change it was read again for ({@link Again}): every read under its key is told of it, and it is read once. */
+  changed?: number
   /** Told when a read settles: with its answer, or with nothing when it failed or was dropped. */
   waiting: Set<(answer?: { value: unknown }) => void>
 }
@@ -169,6 +171,13 @@ function ask(line: ReadLine, load: () => Promise<unknown>, key: string | undefin
   return out.settled
 }
 
+/**
+ * Where a read is told that what it shows changed, so it reads again at once rather than at its
+ * next poll: `read` is called with a number per change, the same for every read told of that one
+ * change, until the answer is called. Taken when the deps change, like `load`.
+ */
+export type Again = (read: (change: number) => void) => () => void
+
 /** What each poll does when the tab is shown again: read at once. */
 const onShown = new Set<() => void>()
 if (typeof document !== 'undefined') {
@@ -195,6 +204,7 @@ function useAsyncValue<T>(
   everyMs: number | null,
   deps: DependencyList,
   keep?: Keep,
+  again?: Again,
 ): { value: T; reload: () => Promise<void>; loaded: boolean; stale: boolean } {
   // A remembered answer is there from the very first frame, also on a page just mounted: the
   // effect below runs only after that frame is painted. One stored by an earlier visit stands in
@@ -276,6 +286,12 @@ function useAsyncValue<T>(
     }
     line.waiting.add(told)
     if (everyMs !== null) onShown.add(read)
+    // Told what it shows changed: read again at once, once for every read under the key.
+    const stopAgain = again?.(change => {
+      if (line.changed === change || hidden()) return
+      line.changed = change
+      void ask(line, load, key, true)
+    })
     void ask(line, load, key, anew)
     return () => {
       current.live = false
@@ -283,6 +299,7 @@ function useAsyncValue<T>(
       clearTimeout(timer)
       line.waiting.delete(told)
       onShown.delete(read)
+      stopAgain?.()
     }
     // The caller owns the dep list: `load` closes over exactly these, by contract.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -356,6 +373,7 @@ export function usePolled<T>(
   everyMs: number,
   deps: DependencyList,
   keep?: Keep,
+  again?: Again,
 ): { value: T; reload: () => Promise<void>; loaded: boolean; stale: boolean } {
-  return useAsyncValue(load, initial, everyMs, deps, keep)
+  return useAsyncValue(load, initial, everyMs, deps, keep, again)
 }
