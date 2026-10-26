@@ -2,9 +2,10 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { deviceIdOf, enterRemote, leaveRemote, remoteFacts, remoteProject, startRemoteAgent, streamRemoteEvents, pingRemote, relayRpc, remoteVersion, MachineRefusal, RelayedAgents, foldRelayedEvent, type RemoteTarget } from './remote-run.js'
+import { deviceIdOf, enterRemote, leaveRemote, machineCall, remoteFacts, remoteProject, startRemoteAgent, streamRemoteEvents, pingRemote, relayRpc, remoteVersion, MachineRefusal, RelayedAgents, foldRelayedEvent, type RemoteTarget } from './remote-run.js'
 import { type AgentMeta } from '../store/index.js'
 import type { OpenAgentEvent } from '../events.js'
+import { handleRelayRequest } from './relay-endpoints.js'
 
 /** The project every call here names: a repository's address, the name both machines have for it. */
 const PROJECT = 'github.com/acme/shop'
@@ -631,4 +632,34 @@ test('the id a machine lists this computer under is the word of its key before t
   assert.equal(deviceIdOf('a1b2c3d4e5f6.Zm9vYmFyLXNlY3JldA'), 'a1b2c3d4e5f6')
   // No dot, nothing before it, or what no door makes as an id: no id, so no part of a secret is ever told as one.
   for (const key of ['Zm9vYmFyLXNlY3JldA', '.secret', 'd1.key', 'UPPERCASE12.secret', 'a1b2c3-d4e5f6.secret', `${'a'.repeat(33)}.secret`, '']) assert.equal(deviceIdOf(key), undefined, key)
+})
+
+test('machineCall asks a machine-wide function by the relay, so a computer reached through a server is asked as the server is', async () => {
+  // A server's door passes `<via>/<id>/_relay/…` down a computer's line, and a line carries nothing but
+  // the relay: the computer's own OpenAgent is asked at the same relay path as a server's is.
+  const asked: { path: string; key?: string; fn: string; args: unknown[] }[] = []
+  const via = '/_devices/via/8687ab858ef6'
+  const relay = await server((req, res) => {
+    const path = new URL(req.url ?? '/', 'http://x').pathname
+    const own = path.startsWith(via) ? path.slice(via.length) : path
+    void handleRelayRequest(req, res, own, {
+      project: async () => undefined,
+      start: async () => ({ ok: false, error: 'no' }),
+      tailEvents: () => () => {},
+      machine: async (fn, args) => (asked.push({ path, ...(req.headers.authorization ? { key: req.headers.authorization } : {}), fn, args }), { ok: true, logins: [] }),
+    })
+  })
+  try {
+    for (const url of [relay.url, `${relay.url}${via}`]) {
+      assert.deepEqual(await machineCall({ url, key: 'k1' }, 'onCopiedLogins', []), { ok: true, ret: { ok: true, logins: [] } }, url)
+    }
+    assert.deepEqual(await machineCall({ url: relay.url, key: 'k1' }, 'sendCopiedLogin', [{ kind: 'git', source: 'me' }, 'token']), { ok: true, ret: { ok: true, logins: [] } })
+    assert.deepEqual(asked, [
+      { path: '/_relay/machine', key: 'Bearer k1', fn: 'onCopiedLogins', args: [] },
+      { path: `${via}/_relay/machine`, key: 'Bearer k1', fn: 'onCopiedLogins', args: [] },
+      { path: '/_relay/machine', key: 'Bearer k1', fn: 'sendCopiedLogin', args: [{ kind: 'git', source: 'me' }, 'token'] },
+    ])
+  } finally {
+    await relay.close()
+  }
 })

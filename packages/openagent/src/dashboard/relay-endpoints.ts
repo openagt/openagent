@@ -10,7 +10,7 @@ import { end, readJsonBody, requireGet, sendJson } from './http.js'
 import { passToScreen, screenCallOf, type ScreenCall } from './screen.js'
 import { isRunId } from '../store/index.js'
 import { openagentVersion } from '../version.js'
-import { isRelayRead } from '../dashboard-rpc/relay-dispatch.js'
+import { isMachineRead, isRelayRead } from '../dashboard-rpc/relay-dispatch.js'
 
 /**
  * The machine-side of the remote-agent relay (#1067): the endpoints through which another
@@ -28,6 +28,8 @@ import { isRelayRead } from '../dashboard-rpc/relay-dispatch.js'
  *   machine with its key there.
  * - `POST /_relay/rpc` (#1067 slice 2) runs one whitelisted run-scoped RPC (a read/diff/steer/handoff/
  *   push/PR) against this machine's own checkout for the daemon relaying an agent here, answering {result}.
+ * - `POST /_relay/machine` runs one whitelisted machine-wide RPC, no project's (the logins and settings
+ *   the person's own computer brings up to its own), answering {result}.
  * - `GET /_relay/project?project=<address>` says where this machine's copy of a project stands, and
  *   `POST /_relay/project` has this machine clone the project when it has none: the answer comes at
  *   once and the clone goes on by itself, so the caller asks again until the project is there.
@@ -37,10 +39,10 @@ import { isRelayRead } from '../dashboard-rpc/relay-dispatch.js'
  *   `{github?, claude?, from?}` hands them over (machine-logins.ts). Only an OpenAgent that is one
  *   person's, on another person's computer, answers it.
  *
- * All but the ping name their project by its repository's address, and work in this machine's own
- * project cloned from it. A call that names none, or one this machine does not have, starts and
- * reads nothing: there is no project a call falls back to. Only the call that asks for a project
- * brings one here.
+ * All but the ping and the machine-wide calls name their project by its repository's address, and
+ * work in this machine's own project cloned from it. A call that names none, or one this machine
+ * does not have, starts and reads nothing: there is no project a call falls back to. Only the call
+ * that asks for a project brings one here.
  */
 export const RELAY_PREFIX = '/_relay'
 
@@ -67,6 +69,8 @@ export interface RelayHandlers {
   /** Run one whitelisted read/steer/handoff RPC against THIS machine's own checkout, for the daemon
    *  relaying an agent here (#1067 slice 2); the caller wraps the result as {result}. */
   rpc?: (projectId: string, fn: string, args: unknown[]) => Promise<unknown>
+  /** Run one whitelisted machine-wide RPC here, for the person's own computer; the caller wraps the result as {result}. */
+  machine?: (fn: string, args: unknown[]) => Promise<unknown>
   /** Where the live screen of a run here answers; nothing when the run has none. */
   screen?: (projectId: string, agentId: string) => Promise<string | undefined>
   /** Where this machine's copy of the project at `address` stands; with `bring`, clone and add it when there is none. */
@@ -100,9 +104,9 @@ export async function handleRelayRequest(
   handlers: RelayHandlers | undefined,
 ): Promise<void> {
   // A call that may only watch: a GET reads, and is answered. Anything else acts and is refused,
-  // but for a relayed function, whose name says whether it reads (handleRpc).
+  // but for a relayed function, whose name says whether it reads (handleRpc, handleMachine).
   const watch = req.headers[WATCH_HEADER] !== undefined
-  if (watch && req.method !== 'GET' && pathname !== `${RELAY_PREFIX}/rpc`) return end(res, 403, WATCH_ONLY)
+  if (watch && req.method !== 'GET' && pathname !== `${RELAY_PREFIX}/rpc` && pathname !== `${RELAY_PREFIX}/machine`) return end(res, 403, WATCH_ONLY)
   // Ping is a pure reachability probe (#1072): it needs no wired handlers and starts nothing,
   // so it answers even on a host that enabled no relay.
   if (pathname === `${RELAY_PREFIX}/ping`) return void handlePing(req, res)
@@ -110,6 +114,7 @@ export async function handleRelayRequest(
   if (pathname === `${RELAY_PREFIX}/start`) return handleStart(req, res, handlers)
   if (pathname === `${RELAY_PREFIX}/events`) return handleEvents(req, res, handlers)
   if (pathname === `${RELAY_PREFIX}/rpc`) return handleRpc(req, res, handlers, watch)
+  if (pathname === `${RELAY_PREFIX}/machine`) return handleMachine(req, res, handlers, watch)
   if (pathname === `${RELAY_PREFIX}/project`) return handleProject(req, res, handlers)
   if (pathname === `${RELAY_PREFIX}/logins`) return handleLogins(req, res, handlers)
   const screenCall = screenCallOf(pathname, `${RELAY_PREFIX}/screen`)
@@ -281,3 +286,22 @@ async function handleRpc(req: IncomingMessage, res: ServerResponse, handlers: Re
   }
 }
 
+/** `POST /_relay/machine` `{fn, args}`: run one whitelisted machine-wide RPC here, answering {result}. */
+async function handleMachine(req: IncomingMessage, res: ServerResponse, handlers: RelayHandlers, watch: boolean): Promise<void> {
+  if (req.method !== 'POST') return end(res, 405, 'method not allowed', { allow: 'POST' })
+  if (!handlers.machine) return end(res, 404, 'relay machine calls not enabled')
+  let body: { fn?: unknown; args?: unknown }
+  try {
+    body = (await readJsonBody(req, MAX_RPC_BODY)) as { fn?: unknown; args?: unknown }
+  } catch {
+    return end(res, 400, 'invalid request body')
+  }
+  const fn = typeof body.fn === 'string' ? body.fn : ''
+  if (!fn) return end(res, 400, 'missing rpc name')
+  if (watch && !isMachineRead(fn)) return end(res, 403, WATCH_ONLY)
+  try {
+    sendJson(res, { result: await handlers.machine(fn, Array.isArray(body.args) ? body.args : []) })
+  } catch (err) {
+    end(res, 500, err instanceof Error ? err.message : 'rpc failed')
+  }
+}

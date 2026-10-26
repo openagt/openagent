@@ -2,6 +2,8 @@ import { onProjectFiles, onGitStatus, onAgentWorktree, onAgentHandoff, onAgent, 
 import { readModule } from './modules.js'
 import { sendStop, sendChoice, sendMessage, sendOpenPullRequest, sendPush, sendMerge } from './control.js'
 import { asArrived } from './relay-agent.js'
+import { onCopiedLogins, sendCopiedLogin, sendCopiedUsage, sendForgetCopiedLogin, sendKeepCopiedLogin } from './copied-logins.js'
+import { patchPreferences } from './preferences.js'
 
 // The machine side of the remote-agent relay (#1067 slice 2). A daemon that relayed an agent here asks this
 // to read/steer/hand off THAT run against THIS machine's own checkout. Every entry is a run-scoped RPC
@@ -41,4 +43,27 @@ export async function dispatchRelayRpc(projectId: string, fn: string, args: unkn
   const impl = RELAY_FNS[fn]
   if (!impl) throw new Error(`unknown relay rpc: ${fn}`)
   return asArrived(() => impl(projectId, ...args.slice(1)))
+}
+
+// The machine-wide calls: what the person's own computer asks of a server about the whole of it,
+// not a run (logins-sync.ts brings the server's logins and settings up to its own). They go by the
+// relay too, so a computer that keeps a line open to its server is asked them as any server is:
+// a line carries nothing but the relay. Classed the same way, read or act.
+const MACHINE_READS = { onCopiedLogins }
+const MACHINE_ACTS = { sendCopiedLogin, sendForgetCopiedLogin, sendKeepCopiedLogin, sendCopiedUsage, patchPreferences }
+const MACHINE_FNS = Object.assign(Object.create(null) as Record<string, RelayFn>, MACHINE_READS, MACHINE_ACTS) as unknown as Record<string, RelayFn>
+
+/** The machine-wide names a relay caller may invoke. */
+export const MACHINE_RPC_NAMES: readonly string[] = Object.keys(MACHINE_FNS)
+
+/** Whether a machine-wide call only reads. A name that is not on the whitelist is no read. */
+export function isMachineRead(fn: string): boolean {
+  return Object.hasOwn(MACHINE_READS, fn)
+}
+
+/** Dispatch one machine-wide call, its arguments as the caller gave them. Throws on an unknown name. */
+export async function dispatchMachineRpc(fn: string, args: unknown[]): Promise<unknown> {
+  const impl = MACHINE_FNS[fn]
+  if (!impl) throw new Error(`unknown machine rpc: ${fn}`)
+  return impl(...args)
 }

@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { provideTestContext } from './test-context.js'
-import { dispatchRelayRpc, isRelayRead, RELAY_RPC_NAMES } from './relay-dispatch.js'
+import { dispatchMachineRpc, dispatchRelayRpc, isMachineRead, isRelayRead, MACHINE_RPC_NAMES, RELAY_RPC_NAMES } from './relay-dispatch.js'
 
 // The machine-side whitelist dispatcher (#1067 slice 2): a daemon that relayed an agent here calls one of a
 // fixed set of run-scoped RPCs against this machine's own copy of the project the call named. These assert the whitelist is
@@ -58,4 +58,23 @@ test('dispatchRelayRpc runs a whitelisted rpc against the project id it is given
   provideTestContext()
   const result = await dispatchRelayRpc('openagent:no-such-home', 'onGitStatus', ['remote-project-id', 'run-1'])
   assert.equal(result, null)
+})
+
+test('the machine-wide calls are the logins and settings a computer brings its server up to, each classed a read or an act', () => {
+  // Pinned one by one: a function added to the whitelist fails here until its class is written down.
+  const classes: Record<string, 'read' | 'act'> = {
+    onCopiedLogins: 'read',
+    sendCopiedLogin: 'act',
+    sendForgetCopiedLogin: 'act',
+    sendKeepCopiedLogin: 'act',
+    sendCopiedUsage: 'act',
+    patchPreferences: 'act',
+  }
+  assert.deepEqual([...MACHINE_RPC_NAMES].sort(), Object.keys(classes).sort())
+  for (const [name, said] of Object.entries(classes)) assert.equal(isMachineRead(name) ? 'read' : 'act', said, name)
+  for (const off of ['onAgents', 'sendStart', 'onGitStatus', 'constructor', 'toString', '__proto__', '']) assert.equal(isMachineRead(off), false, off)
+})
+
+test('dispatchMachineRpc rejects a name that is no machine-wide call, a run-scoped one included', async () => {
+  for (const off of ['sendStart', 'onGitStatus', 'constructor', 'nope']) await assert.rejects(dispatchMachineRpc(off, []), /unknown machine rpc/, off)
 })
