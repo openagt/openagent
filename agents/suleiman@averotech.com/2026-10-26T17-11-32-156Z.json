@@ -7,7 +7,6 @@
   "title": "Sleep command run request",
   "driver": "claude-code",
   "model": "claude-sonnet-5-5",
-  "branch": "agent-2026-10-26T17-11-32-156Z",
   "cost": 0.0248568,
   "contextTokens": 17766,
   "caller": {
