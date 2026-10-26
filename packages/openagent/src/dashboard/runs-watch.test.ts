@@ -65,11 +65,22 @@ test('a run started here is seen at once: its checkouts are listed again when po
   assert.equal(listed(), 1)
   watch.poke('/p')
   await until(() => told === 1)
-  assert.equal(listed(), 2)
-  // One started elsewhere than here is seen when the checkouts are listed again, a while later.
+  // The start answers before its checkout is there: one that comes a moment later, and ends at once, is seen too.
+  watch.poke('/p')
+  await settle()
   cards.set('03', card('03', 'running'))
-  now += 15_000
   await until(() => told === 2)
+  cards.delete('03')
+  await until(() => told === 3)
+  // After a while the checkouts are listed only now and then: one started elsewhere than here is seen then.
+  now += 10_000
+  await settle()
+  const before = listed()
+  cards.set('04', card('04', 'running'))
+  await settle()
+  assert.equal([told, listed()].join(), [3, before].join())
+  now += 15_000
+  await until(() => told === 4)
   stop()
 })
 
