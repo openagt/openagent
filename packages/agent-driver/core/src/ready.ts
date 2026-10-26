@@ -26,6 +26,8 @@ export interface DriverFix {
   kind: 'install' | 'log-in'
   /** A shell command line, shown under the button as it is run. */
   command: string
+  /** The line of `problems` this answers: a page that says it in its own words, beside its press, leaves that line out. */
+  problem: string
 }
 
 /**
@@ -88,13 +90,15 @@ export async function checkCliReady(spec: CliSpec, opts: DriverReadyOptions = {}
 
   const version = await probe(bin, ['--version'])
   if (!version.ok) {
-    problems.push(`\`${bin}\` not found — ${spec.install}`)
-    if (spec.fixes?.install !== undefined) fix = { kind: 'install', command: spec.fixes.install }
+    const problem = `\`${bin}\` not found — ${spec.install}`
+    problems.push(problem)
+    if (spec.fixes?.install !== undefined) fix = { kind: 'install', command: spec.fixes.install, problem }
   } else if (spec.loggedIn(await probe(bin, spec.authArgs)) === false) {
     if (opts.accounts !== undefined && readAccounts(opts.accounts).some(account => account.login !== undefined)) ownLoggedOut = true
     else {
-      problems.push(`\`${bin}\` is not logged in. Run \`${spec.login}\`, then start again.`)
-      if (spec.fixes?.login !== undefined) fix = { kind: 'log-in', command: spec.fixes.login }
+      const problem = `\`${bin}\` is not logged in. Run \`${spec.login}\`, then start again.`
+      problems.push(problem)
+      if (spec.fixes?.login !== undefined) fix = { kind: 'log-in', command: spec.fixes.login, problem }
     }
   }
 

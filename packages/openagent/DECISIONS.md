@@ -394,6 +394,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   place that says what starts a run.
 - No cap on a person's runs: the click is the brake. Picked over the one-run-per-checkout
   guard, which existed because runs shared a working tree and they no longer do.
+- What would stop a run is said above the message box, over the page, with the press that
+  fixes it inside the same box: logging the coding agent in, on this computer. Picked over
+  saying it under the box, where it was missed, with the press on a line of its own.
 
 ## Running on another machine
 - The machines a person saved are kept in their home file, beside their projects and their
@@ -419,6 +422,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   says so while it waits; the run then starts. Picked over starting nothing and telling the person to add the project
   there, a step on another computer for every project, and over starting in the folder that
   machine's OpenAgent was started in, which may be another project.
+- With a machine picked, what would stop a run is asked of that machine as soon as it is
+  picked, from its own copy of the project, and said naming the machine. A coding agent
+  logged out there comes with this computer's logins for the machine, as Settings › Accounts
+  offers them. Picked over learning it only after the Start, from the machine's refusal, in
+  words written for that machine's own terminal.
 - A project with no repository address runs on this machine only, and "Run on" says so.
   Picked over sending the repository straight to the other machine, a second road for
   code beside the git host.
