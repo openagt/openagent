@@ -1,17 +1,28 @@
 {
   "id": "2026-10-26T17-05-55-280Z",
   "startedAt": "2026-10-26T17:05:56.507Z",
-  "status": "running",
+  "endedAt": "2026-10-26T17:06:01.381Z",
+  "status": "done",
   "intent": "Reply with the single word OK. Change nothing.",
+  "title": "Reply with OK",
   "driver": "claude-code",
-  "model": "sonnet",
+  "model": "claude-sonnet-5-5",
+  "branch": "agent-2026-10-26T17-05-55-280Z",
+  "cost": 0.0221598,
+  "contextTokens": 17662,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
       "pid": 76172,
-      "publish": "commit"
+      "publish": "commit",
+      "baseCommit": "34afbe15df74bc3b37ba83960790370650aed3d0"
     },
+    "pid": 76172,
     "host": "Suleimans-MacBook-Pro.local",
-    "publish": "commit"
+    "baseCommit": "34afbe15df74bc3b37ba83960790370650aed3d0",
+    "publish": "commit",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/gemstack/.branches/agent-2026-10-26T17-05-55-280Z",
+    "sessionId": "199c44b3-2d79-4b37-b511-99dc0b3b3048"
   }
 }
