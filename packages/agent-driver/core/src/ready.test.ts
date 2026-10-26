@@ -79,9 +79,12 @@ test('root warns, naming the sudo user, and blocks nothing', async () => {
 test('a CLI that declares its fixes gives the one for its problem: the install when it is missing, the login when it is logged out; none when ready', async () => {
   const fixing: CliSpec = { ...spec, fixes: { install: 'curl -fsSL https://example.com/install.sh | bash', login: 'agent login --browser' } }
   const missing = await checkCliReady(fixing, { ...notRoot, probe: () => Promise.resolve({ ok: false, output: '' }) })
-  assert.deepEqual(missing.fix, { kind: 'install', command: 'curl -fsSL https://example.com/install.sh | bash' })
+  assert.deepEqual(missing.fix, { kind: 'install', command: 'curl -fsSL https://example.com/install.sh | bash', problem: missing.problems[0] })
+  assert.equal(missing.problems.length, 1)
   const out = await checkCliReady(fixing, { ...notRoot, probe: probeFor({ auth: { ok: true, output: 'no' } }) })
-  assert.deepEqual(out.fix, { kind: 'log-in', command: 'agent login --browser' })
+  // The line it answers is the problem the page leaves out when it says it in its own words beside the press.
+  assert.deepEqual(out.fix, { kind: 'log-in', command: 'agent login --browser', problem: out.problems[0] })
+  assert.equal(out.problems.length, 1)
   assert.equal((await checkCliReady(fixing, { ...notRoot, probe: probeFor({ auth: { ok: true, output: 'yes' } }) })).fix, undefined)
   // One with none is fixed by hand, as its line says.
   assert.equal((await checkCliReady(spec, { ...notRoot, probe: probeFor({ auth: { ok: true, output: 'no' } }) })).fix, undefined)

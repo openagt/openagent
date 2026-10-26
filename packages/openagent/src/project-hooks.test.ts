@@ -194,6 +194,21 @@ test('the check line gets the picked agent and answers its problems and warnings
   }
 })
 
+test('a check answers the press that fixes one of its problems, naming that line; a fix that names no problem said is none', async () => {
+  const cwd = await project('check: cat answer.json\n')
+  const answer = (fix: Record<string, unknown>) => writeFile(join(cwd, 'answer.json'), JSON.stringify({ problems: ['`claude` is not logged in.', 'another'], warnings: [], fix }))
+  try {
+    await answer({ kind: 'log-in', command: 'claude auth login', problem: '`claude` is not logged in.' })
+    assert.deepEqual(await runCheckHook(cwd, {}), { ok: true, problems: ['`claude` is not logged in.', 'another'], warnings: [], fix: { kind: 'log-in', command: 'claude auth login', problem: '`claude` is not logged in.' } })
+    for (const fix of [{ kind: 'log-in', command: 'claude auth login' }, { kind: 'log-in', command: 'claude auth login', problem: 'not said' }, { kind: 'reboot', command: 'x', problem: 'another' }]) {
+      await answer(fix)
+      assert.deepEqual(await runCheckHook(cwd, {}), { ok: true, problems: ['`claude` is not logged in.', 'another'], warnings: [] }, JSON.stringify(fix))
+    }
+  } finally {
+    await rm(cwd, { recursive: true, force: true })
+  }
+})
+
 test('a line reaches its tool with nothing installed in the project: the dashboard brings the runner, and the project\'s own copy goes first', async () => {
   // An empty folder with the runner's own lines, as adding a project writes them: no package.json, no node_modules.
   const cwd = await project()

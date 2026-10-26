@@ -2,7 +2,7 @@ import { computerHealth, type Health } from '../health.js'
 import { computerName } from '../computer-name.js'
 import { basename } from 'node:path'
 import { readSharing } from '@openagt/agent-data'
-import { THROUGH_PATH, deviceIdOf, enterRemote, giveRemoteLogins, leaveRemote, pingRemote, remoteAddMachine, remoteComputers, remoteDoor, remoteFacts, remoteLogins, remoteProject } from '../dashboard/remote-run.js'
+import { THROUGH_PATH, deviceIdOf, enterRemote, giveRemoteLogins, leaveRemote, pingRemote, remoteAddMachine, remoteComputers, remoteDoor, remoteFacts, remoteLogins, remoteProject, relayRpc, type RemoteTarget } from '../dashboard/remote-run.js'
 import { isLoginWord, type MachineLogins } from '../dashboard/machine-logins.js'
 import { errorMessage } from '../error-message.js'
 import { repositoryAddress, repositorySpelling } from '../repository-address.js'
@@ -10,6 +10,7 @@ import { contextRemote, resolveProjectPath } from './context.js'
 import { addMachine, isPersonName, listMachines, noteListed, removeMachine, renameMachine, tellMachine, type MachineRecord } from '../registry.js'
 import { parseMachineLink } from '../machine-link.js'
 import { openagentVersion } from '../version.js'
+import { readinessOf, type StartReadiness } from '../project-hooks.js'
 
 // The saved machines, for the dashboard: the other computers a run can be sent to. The list is
 // the daemon's, in the person's home file, so every browser on this computer shows the same
@@ -331,14 +332,35 @@ export async function onProjectOnMachine(projectId: string, machineId: string): 
   return projectOnMachine(projectId, machineId, false)
 }
 
-async function projectOnMachine(projectId: string, machineId: string, bring: boolean): Promise<ProjectOnMachine> {
+/** A saved machine and this computer's project, as a call there names it: by the project's repository address. */
+async function onMachine(projectId: string, machineId: string): Promise<{ ok: true; machine: MachineRecord; cwd: string; target: RemoteTarget } | { ok: false; error: string }> {
   const machine = (await listMachines()).find(saved => saved.id === machineId)
   if (!machine) return { ok: false, error: 'That machine is no longer saved. Pick another place to run.' }
   const cwd = typeof projectId === 'string' ? await resolveProjectPath(projectId) : undefined
   if (!cwd) return { ok: false, error: `unknown project: ${String(projectId)}` }
   const project = await repositoryAddress(cwd)
   if (!project) return { ok: false, error: 'This project has no repository address, so it cannot be sent to another machine.' }
-  const target = { url: machine.url, key: machine.key, ...(machine.pin ? { pin: machine.pin } : {}), project }
+  return { ok: true, machine, cwd, target: { url: machine.url, key: machine.key, ...(machine.pin ? { pin: machine.pin } : {}), project } }
+}
+
+/**
+ * What would stop a run sent to a saved machine, as the machine says from its own copy of the
+ * project: its coding agent there, installed and logged in. `null` when there is nothing to say:
+ * a machine that does not answer, does not have the project yet (it clones it at the first run),
+ * or has no check.
+ */
+export async function onMachineStartCheck(projectId: string, machineId: string, driver?: string): Promise<StartReadiness | null> {
+  const there = await onMachine(projectId, machineId)
+  if (!there.ok) return null
+  // The machine reads its own project for the first argument; an absent pick is no argument, never a null one.
+  const said = await relayRpc(there.target, 'onStartCheck', driver !== undefined ? [projectId, driver] : [projectId]).catch(() => undefined)
+  return readinessOf(said) ?? null
+}
+
+async function projectOnMachine(projectId: string, machineId: string, bring: boolean): Promise<ProjectOnMachine> {
+  const there = await onMachine(projectId, machineId)
+  if (!there.ok) return there
+  const { machine, cwd, target } = there
   const from = bring ? await repositorySpelling(cwd) : undefined
   const said = await remoteProject(target, bring ? { share: await readSharing(cwd), ...(from !== undefined ? { from } : {}) } : undefined)
   const name = basename(cwd)

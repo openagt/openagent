@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { CircleAlert, Folder, Puzzle } from 'lucide-react'
 import { onStartCheck } from '../rpc/projects.js'
+import { onMachineStartCheck } from '../rpc/machines.js'
 import { usePreferences, usePreferencesLoaded, updatePreferences } from '../lib/preferences.js'
-import { isDriverName, offeredPublishPicks, publishPickIn } from '../../src/client.js'
+import { DRIVER_LABELS, isDriverName, offeredPublishPicks, publishPickIn } from '../../src/client.js'
 import { useMachines } from '../lib/machines.js'
 import { useSelectedMachineId } from '../lib/remote-target.js'
 import { cleanupPick, offersPostMergeCleanup, startPicks, useStartAgent } from '../lib/use-start-agent.js'
 import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.js'
-import { useLoaded } from '../lib/use-async.js'
+import { useLoaded, usePolled } from '../lib/use-async.js'
+import { openSettings } from '../lib/use-route.js'
 import { promptWithContext } from '../lib/use-context-set.js'
 import { AutoMenu } from './AutoMenu.js'
 import { ProjectContextMenu } from './ContextMenu.js'
@@ -15,10 +17,15 @@ import { Composer, type ComposerHandle } from './Composer.js'
 import { StartFromMenu, type StartFrom } from './StartFromMenu.js'
 import { RowItem, rowButtonClass } from './ui/row-item.js'
 import { Dots } from './ToolCalls.js'
-import { AgentFix, useAgentState } from './Logins.js'
+import { ACCOUNTS_ENTRY, AgentFix, agentWords, useAgentState } from './Logins.js'
+import { MachineLogins } from './ServerLogins.js'
 
 /** The note while the start is asked for: what the chat's first line says next. */
 const STARTING = 'Starting session'
+
+/** How often a picked machine is asked again while it says a run would not start there: its logins come by themselves, or by a press. */
+const MACHINE_MISSING_MS = 8_000
+const MACHINE_SELDOM_MS = 60_000
 
 // Start a run in the selected project (#405, #1774): a free-text box, where `/` lists the project's
 // commands, and Start, which is the project's own start hook (posted over `sendStart`). The editor +
@@ -26,7 +33,10 @@ const STARTING = 'Starting session'
 // A project without a start hook cannot start a run from here, and the form says how to add one:
 // the scheduler's `init` writes its lines, or a person writes a `start:` line of their own.
 // What would stop the run (a coding agent not installed or logged out) is said before the Start,
-// from the project's check hook.
+// from the project's check hook: this computer's, or, with a machine picked, the machine's own,
+// asked there. The line a press fixes is said with its press inside: logging the agent in here, or
+// this computer's logins on the machine. All of it is said above the box, over the page, where
+// the Start's own line is: the box does not move when it comes or goes.
 // The Context picker (#439/#314) narrows the run's focus to other projects and to files: the
 // picked paths ride the prompt as one `Context:` line at its end.
 // The row above the box says where the Start goes: the "Run on" pick, which the Composer draws
@@ -117,13 +127,21 @@ export function StartAgentForm({
   }
 
   // Re-read when the pick changes: `claude` being logged in says nothing about `codex`. A run on
-  // another machine uses that machine's CLIs, so this one's say nothing about it.
+  // another machine uses that machine's CLIs, so this one's say nothing about it: the machine is asked.
   const driver = preferences.driver
   // Asked again once a press fixed what it said: the agent's own state is followed only while the check says a press can.
   const [recheck, setRecheck] = useState(0)
-  const readiness = useLoaded(machine ? null : () => onStartCheck(projectId, driver), null, [projectId, driver, machine === undefined, recheck])
-  const fixable = readiness?.fix !== undefined
+  const here = useLoaded(machine ? null : () => onStartCheck(projectId, driver), null, [projectId, driver, machine === undefined, recheck])
+  const [machineEvery, setMachineEvery] = useState(MACHINE_SELDOM_MS)
+  const there = usePolled(machine ? () => onMachineStartCheck(projectId, machine.id, driver) : null, null, machineEvery, [projectId, driver, machine?.id]).value
+  const readiness = machine ? there : here
+  useEffect(() => {
+    const next = there && there.problems.length > 0 ? MACHINE_MISSING_MS : MACHINE_SELDOM_MS
+    if (next !== machineEvery) setMachineEvery(next)
+  }, [there, machineEvery])
+  const fixable = !machine && readiness?.fix !== undefined
   const { state: agent, reload: reloadAgent } = useAgentState(isDriverName(driver) ? driver : undefined, fixable)
+  const agentName = DRIVER_LABELS[isDriverName(driver) ? driver : 'claude-code']
   const wasReady = useRef<boolean | undefined>(undefined)
   useEffect(() => {
     const ready = fixable ? agent?.ready : undefined
@@ -212,50 +230,69 @@ export function StartAgentForm({
         submitBusyLabel="Starting…"
       />
 
-      {/* Feedback right where the action is (#948). */}
-      {error && <Refusal>{error}</Refusal>}
-      {note === STARTING && !error ? (
-        // The chat's own first line (`SessionLine.tsx`), in its words and its look: the page that
-        // opens a moment later goes on saying it. A machine that does not have the project yet
-        // clones it first, which can take minutes: the line says so for as long as it does.
-        // It lies over the page above the box and takes no room: the box does not move when it
-        // comes, nor when it goes.
-        <p role="status" className="absolute inset-x-2 bottom-full flex items-center gap-2 px-1.5 pb-1 text-sm text-muted-foreground">
-          <Dots />
-          <span className="text-shimmer">{cloning && sentTo ? `Cloning ${projectName ?? 'this project'} on ${sentTo}, the first time only` : note}</span>
-        </p>
-      ) : (
-        note && !error && <p role="status" className="mt-2 text-xs text-muted-foreground">{note}</p>
-      )}
-      {readiness?.problems.map(problem => (
-        <Refusal key={problem}>{problem}</Refusal>
-      ))}
-      {readiness?.fix && agent && !agent.ready && (
-        <div className="mt-2 px-1">
-          <AgentFix state={agent} onChanged={() => void reloadAgent()} size="xs" />
-        </div>
-      )}
-      {readiness?.warnings.map(warning => (
-        <p key={warning} role="alert" className="mt-2 text-xs text-warning">
-          {warning}
-        </p>
-      ))}
-      {noStartHook && (
-        <Refusal>
-          This project has no start hook. Add a <code className="font-mono">start:</code> line to{' '}
-          <code className="font-mono">.openagent/hooks.yml</code>.
-        </Refusal>
-      )}
+      {/* Feedback right where the action is (#948): above the box, over the page, so the box never moves. */}
+      <div className="absolute inset-x-2 bottom-full flex flex-col gap-1.5 pb-1">
+        {error && <Refusal>{error}</Refusal>}
+        {readiness?.problems.map(problem =>
+          problem === readiness.fix?.problem ? (
+            machine ? (
+              <Refusal key={problem}>
+                {readiness.fix.kind === 'log-in' ? `${agentName} is not logged in on ${machine.label}.` : `${agentName} is not installed on ${machine.label}.`}
+                {readiness.fix.kind === 'log-in' && (
+                  <span className="mt-2 block">
+                    <MachineLogins machineId={machine.id} onAccounts={() => openSettings(ACCOUNTS_ENTRY)} />
+                  </span>
+                )}
+              </Refusal>
+            ) : (
+              <Refusal key={problem}>
+                {agent && !agent.ready ? agentWords(agent) : problem}
+                {agent && !agent.ready && (
+                  <span className="mt-2 block text-foreground">
+                    <AgentFix state={agent} onChanged={() => void reloadAgent()} size="xs" />
+                  </span>
+                )}
+              </Refusal>
+            )
+          ) : (
+            <Refusal key={problem}>{problem}</Refusal>
+          ),
+        )}
+        {readiness?.warnings.map(warning => (
+          <p key={warning} role="alert" className="rounded-md bg-background px-1.5 text-xs text-warning">
+            {warning}
+          </p>
+        ))}
+        {noStartHook && (
+          <Refusal>
+            This project has no start hook. Add a <code className="font-mono">start:</code> line to{' '}
+            <code className="font-mono">.openagent/hooks.yml</code>.
+          </Refusal>
+        )}
+        {note === STARTING && !error && (
+          // The chat's own first line (`SessionLine.tsx`), in its words and its look: the page that
+          // opens a moment later goes on saying it. A machine that does not have the project yet
+          // clones it first, which can take minutes: the line says so for as long as it does.
+          <p role="status" className="flex items-center gap-2 px-1.5 text-sm text-muted-foreground">
+            <Dots />
+            <span className="text-shimmer">{cloning && sentTo ? `Cloning ${projectName ?? 'this project'} on ${sentTo}, the first time only` : note}</span>
+          </p>
+        )}
+      </div>
+      {note !== STARTING && note && !error && <p role="status" className="mt-2 text-xs text-muted-foreground">{note}</p>}
     </form>
   )
 }
 
-/** Why no run starts, or would not: a box in the page's own text size, so it is not missed under the message box. */
+/**
+ * Why no run starts, or would not: a box in the page's own text size, so it is not missed above the
+ * message box. Opaque under its tint, since it lies over the page.
+ */
 function Refusal({ children }: { children: ReactNode }) {
   return (
-    <p role="alert" className="mt-2 flex items-start gap-2 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
+    <div role="alert" className="flex items-start gap-2 rounded-md border border-danger/40 bg-[color-mix(in_oklab,var(--color-danger)_10%,var(--color-background))] px-3 py-2 text-sm text-danger">
       <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-      <span className="min-w-0 [overflow-wrap:anywhere]">{children}</span>
-    </p>
+      <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">{children}</div>
+    </div>
   )
 }

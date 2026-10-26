@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { onComputersThrough, onMachineVersions, onMachines, onMachinesReachable, onProjectOnMachine, sendAddComputerThrough, sendAddMachine, sendLetMachineIn, sendProjectToMachine, sendRemoveMachine, sendRenameMachine } from './machines.js'
+import { onComputersThrough, onMachineStartCheck, onMachineVersions, onMachines, onMachinesReachable, onProjectOnMachine, sendAddComputerThrough, sendAddMachine, sendLetMachineIn, sendProjectToMachine, sendRemoveMachine, sendRenameMachine } from './machines.js'
 import { openagentVersion } from '../version.js'
 import { setDashboardContext } from './context.js'
 import { testDashboardContext } from './test-context.js'
@@ -358,6 +358,49 @@ test('a saved machine is asked to clone a project of this computer\'s, by the pr
       await new Promise<void>(r => srv.close(() => r()))
       await rm(shop, { recursive: true, force: true })
       await rm(notes, { recursive: true, force: true })
+    }
+  })
+})
+
+test('a saved machine is asked whether a run would start there, from its own copy of the project, with the agent picked; what does not read as an answer, or no answer, says nothing', async () => {
+  await withHome(async () => {
+    const shop = await realpath(await mkdtemp(join(tmpdir(), 'oa-machines-shop-')))
+    execFileSync('git', ['init', '-q'], { cwd: shop })
+    execFileSync('git', ['remote', 'add', 'origin', 'git@github.com:Acme/Shop.git'], { cwd: shop })
+    const calls: { url?: string | undefined; auth?: string | undefined; body: unknown }[] = []
+    let answer: { status?: number; said?: unknown } = {}
+    const srv: Server = createServer((req, res) => {
+      let raw = ''
+      req.on('data', chunk => (raw += chunk))
+      req.on('end', () => {
+        calls.push({ url: req.url, auth: req.headers.authorization, body: raw ? JSON.parse(raw) : null })
+        res.writeHead(answer.status ?? 200, { 'content-type': 'application/json' }).end(JSON.stringify(answer.said ?? {}))
+      })
+    })
+    await new Promise<void>(r => srv.listen(0, '127.0.0.1', () => r()))
+    const url = `http://127.0.0.1:${(srv.address() as AddressInfo).port}/_devices/via/c1`
+    try {
+      await addProject(shop, new Date().toISOString())
+      await addMachine({ url, key: 'd1.key', door: `${url}${ENTER}`, label: 'experiment' })
+      const line = '`claude` is not logged in. Run `claude auth login`, then start again.'
+      const readiness = { problems: [line], warnings: [], fix: { kind: 'log-in', command: 'claude auth login', problem: line } }
+      answer = { said: { result: readiness } }
+      assert.deepEqual(await onMachineStartCheck(projectId(shop), url, 'claude-code'), readiness)
+      // Asked by the relay, so a computer through a server is asked as a server is; the machine reads its own project for the first argument.
+      assert.deepEqual(calls[0], { url: '/_devices/via/c1/_relay/rpc', auth: 'Bearer d1.key', body: { fn: 'onStartCheck', args: [projectId(shop), 'claude-code'], project: 'github.com/acme/shop' } })
+      // No pick is no argument, never a null one.
+      await onMachineStartCheck(projectId(shop), url)
+      assert.deepEqual((calls[1]!.body as { args: unknown[] }).args, [projectId(shop)])
+
+      // A machine without the project yet, one that runs an older OpenAgent, an answer that is no check, and none: nothing to say.
+      for (const said of [{ status: 404, said: 'no such project on this machine' }, { status: 500, said: 'unknown relay rpc: onStartCheck' }, { said: { result: { problems: 'all' } } }, { said: { result: null } }]) {
+        answer = said
+        assert.equal(await onMachineStartCheck(projectId(shop), url, 'claude-code'), null, JSON.stringify(said))
+      }
+      assert.equal(await onMachineStartCheck(projectId(shop), 'http://127.0.0.1:1'), null)
+    } finally {
+      await new Promise<void>(r => srv.close(() => r()))
+      await rm(shop, { recursive: true, force: true })
     }
   })
 })

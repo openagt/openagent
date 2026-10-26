@@ -11,7 +11,7 @@ import { dispatchMachineRpc, dispatchRelayRpc, isMachineRead, isRelayRead, MACHI
 test('RELAY_RPC_NAMES is the run-scoped read/steer/handoff surface and excludes start/delete (#1067 slice 2)', () => {
   for (const name of [
     'onProjectFiles', 'readModule',
-    'onGitStatus', 'onAgentWorktree', 'onAgentHandoff', 'onAgent', 'onOwnRuns',
+    'onGitStatus', 'onAgentWorktree', 'onAgentHandoff', 'onAgent', 'onOwnRuns', 'onStartCheck',
     'sendStop', 'sendChoice', 'sendMessage', 'sendOpenPullRequest', 'sendPush', 'sendMerge',
   ]) {
     assert.ok(RELAY_RPC_NAMES.includes(name), `expected ${name} on the relay whitelist`)
@@ -34,6 +34,7 @@ test('every relayed rpc is classed as a read or an act, by name: a computer that
     onAgentHandoff: 'read',
     onAgent: 'read',
     onOwnRuns: 'read',
+    onStartCheck: 'read',
     sendStop: 'act',
     sendChoice: 'act',
     sendMessage: 'act',

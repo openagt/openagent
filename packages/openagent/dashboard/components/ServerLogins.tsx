@@ -57,6 +57,19 @@ const waiting = (server: ServerLogins): LoginThere[] => server.logins.filter(log
 
 /** A server of the person's, above the accounts: offered this computer's logins, or how they stand there, and the press. */
 function ServerBar({ server, computer, onChanged }: { server: ServerLogins; computer: string; onChanged: () => Promise<void> }) {
+  const { tone, body } = useStanding(server, computer, onChanged)
+  return (
+    <Bar label={server.label} tone={tone}>
+      {body}
+    </Bar>
+  )
+}
+
+/**
+ * How this computer's logins stand on a server, in words, with the press that moves them on: the
+ * bar's tone, and what it holds. The same words and press wherever a page says them.
+ */
+function useStanding(server: ServerLogins, computer: string, onChanged: () => Promise<void>): { tone: 'ask' | 'quiet'; body: ReactNode } {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
   const act = async (go: () => Promise<{ ok: true } | { ok: false; error: string }>) => {
@@ -74,59 +87,101 @@ function ServerBar({ server, computer, onChanged }: { server: ServerLogins; comp
   const wait = waiting(server)
   const there = server.logins.filter(login => login.state === 'there').length
   if (!server.on) {
-    return (
-      <Bar label={server.label} tone="ask">
-        <BarWords title={`Use your logins on ${server.label}?`} words={`Runs there use the accounts you're logged into on ${computer}, and its page follows your settings. The server gets logins of its own: nothing here is logged out.`} />
-        <Button size="sm" disabled={busy} onClick={() => void act(() => sendUseLoginsOn(server.machineId))}>
-          Use them
-        </Button>
-        <Failed error={failed} />
-      </Bar>
-    )
+    return {
+      tone: 'ask',
+      body: (
+        <>
+          <BarWords title={`Use your logins on ${server.label}?`} words={`Runs there use the accounts you're logged into on ${computer}, and its page follows your settings. The server gets logins of its own: nothing here is logged out.`} />
+          <Button size="sm" disabled={busy} onClick={() => void act(() => sendUseLoginsOn(server.machineId))}>
+            Use them
+          </Button>
+          <Failed error={failed} />
+        </>
+      ),
+    }
   }
   if (server.allowing) {
-    return (
-      <Bar label={server.label} tone="ask">
-        <BarWords title={`Making ${server.allowing.name}'s login for ${server.label}`} words="Say yes in the page your browser opened. If it is signed in to another account, copy the link into a private window." />
-        {server.allowing.url !== undefined && <CopyButton text={server.allowing.url} label="Copy link" />}
-      </Bar>
-    )
+    return {
+      tone: 'ask',
+      body: (
+        <>
+          <BarWords title={`Making ${server.allowing.name}'s login for ${server.label}`} words="Say yes in the page your browser opened. If it is signed in to another account, copy the link into a private window." />
+          {server.allowing.url !== undefined && <CopyButton text={server.allowing.url} label="Copy link" />}
+        </>
+      ),
+    }
   }
   if (!server.reachable) {
-    return (
-      <Bar label={server.label} tone="quiet">
-        <BarWords title={`${server.label} does not answer`} words="Its logins are brought up to date once it does." />
-      </Bar>
-    )
+    return { tone: 'quiet', body: <BarWords title={`${server.label} does not answer`} words="Its logins are brought up to date once it does." /> }
   }
   if (wait.length > 0) {
-    return (
-      <Bar label={server.label} tone="ask">
-        <BarWords title={`${server.label} uses your logins: ${there} of ${server.logins.length} there`} words={`${wait.map(login => login.name).join(' and ')} ${wait.length === 1 ? 'needs' : 'need'} your yes once: your browser opens, you press Allow or Continue.`} />
-        <Button size="sm" disabled={busy} onClick={() => void act(() => sendAllowLogins(server.machineId))}>
-          {wait.length === 1 ? 'Allow 1 login' : `Allow ${wait.length} logins`}
-        </Button>
-        <Failed error={failed} />
-      </Bar>
-    )
+    return {
+      tone: 'ask',
+      body: (
+        <>
+          <BarWords title={`${server.label} uses your logins: ${there} of ${server.logins.length} there`} words={`${wait.map(login => login.name).join(' and ')} ${wait.length === 1 ? 'needs' : 'need'} your yes once: your browser opens, you press Allow or Continue.`} />
+          <Button size="sm" disabled={busy} onClick={() => void act(() => sendAllowLogins(server.machineId))}>
+            {wait.length === 1 ? 'Allow 1 login' : `Allow ${wait.length} logins`}
+          </Button>
+          <Failed error={failed} />
+        </>
+      ),
+    }
   }
   if (there < server.logins.length) {
-    return (
-      <Bar label={server.label} tone="ask">
-        <BarWords title={`${server.label} uses your logins: ${there} of ${server.logins.length} there`} words="These did not get there. They are tried again every minute." />
+    return {
+      tone: 'ask',
+      body: (
+        <>
+          <BarWords title={`${server.label} uses your logins: ${there} of ${server.logins.length} there`} words="These did not get there. They are tried again every minute." />
+          <Failed error={failed} />
+        </>
+      ),
+    }
+  }
+  return {
+    tone: 'quiet',
+    body: (
+      <>
+        <p className="flex flex-1 items-center gap-1.5 text-sm">
+          <Check className="size-3.5 text-success" aria-hidden />
+          {`${server.label} uses your logins: all ${server.logins.length} there`}
+        </p>
         <Failed error={failed} />
-      </Bar>
+      </>
+    ),
+  }
+}
+
+/**
+ * Where a run sent to a machine of the person's would find no login: how this computer's logins
+ * stand there, and the press, as Settings › Accounts says them. A machine that does not take this
+ * computer's logins (another person's) is sent to Settings › Accounts.
+ */
+export function MachineLogins({ machineId, onAccounts }: { machineId: string; onAccounts: () => void }) {
+  return (
+    <ServersProvider>
+      <MachineStanding machineId={machineId} onAccounts={onAccounts} />
+    </ServersProvider>
+  )
+}
+
+function MachineStanding({ machineId, onAccounts }: { machineId: string; onAccounts: () => void }) {
+  const { view, reload } = useServers()
+  const server = view?.servers.find(candidate => candidate.machineId === machineId)
+  if (!view) return null
+  if (!server) {
+    return (
+      <Button size="sm" variant="outline" onClick={onAccounts}>
+        Open Accounts
+      </Button>
     )
   }
-  return (
-    <Bar label={server.label} tone="quiet">
-      <p className="flex flex-1 items-center gap-1.5 text-sm">
-        <Check className="size-3.5 text-success" aria-hidden />
-        {`${server.label} uses your logins: all ${server.logins.length} there`}
-      </p>
-      <Failed error={failed} />
-    </Bar>
-  )
+  return <Standing server={server} computer={view.computer} onChanged={reload} />
+}
+
+function Standing({ server, computer, onChanged }: { server: ServerLogins; computer: string; onChanged: () => Promise<void> }) {
+  return <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-foreground">{useStanding(server, computer, onChanged).body}</div>
 }
 
 function Bar({ label, tone, children }: { label: string; tone: 'ask' | 'quiet'; children: ReactNode }) {

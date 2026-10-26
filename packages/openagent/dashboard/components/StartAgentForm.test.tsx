@@ -21,6 +21,13 @@ vi.mock('../lib/machines.js', () => ({ useMachines: () => (machine.current ? [ma
 vi.mock('../lib/remote-target.js', () => ({ useSelectedMachineId: () => machine.current?.id ?? null }))
 const logins = vi.hoisted(() => ({ onAgentState: vi.fn(), sendAgentFix: vi.fn(), onGitHosts: vi.fn(), sendGitHostInstall: vi.fn(), sendGitHostLogin: vi.fn(), sendUseGitHostAccount: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
+// A picked machine's own check, and how this computer's logins stand on the machines that take them.
+const onMachineStartCheck = vi.hoisted(() => vi.fn())
+vi.mock('../rpc/machines.js', () => ({ onMachineStartCheck }))
+const serverLogins = vi.hoisted(() => ({ onServerLogins: vi.fn(), sendUseLoginsOn: vi.fn(), sendAllowLogins: vi.fn(), sendSettleLogin: vi.fn() }))
+vi.mock('../rpc/server-logins.js', () => serverLogins)
+const openSettings = vi.hoisted(() => vi.fn())
+vi.mock('../lib/use-route.js', async () => ({ ...(await vi.importActual<typeof import('../lib/use-route.js')>('../lib/use-route.js')), openSettings }))
 
 const start = vi.hoisted(() => vi.fn())
 // What the start says of itself beside its answer: that the machine is cloning the project, or why there is no run.
@@ -62,6 +69,8 @@ const { StartAgentForm } = await import('./StartAgentForm.js')
 // No check hook unless a test gives one: nothing to say.
 beforeEach(() => {
   onStartCheck.mockResolvedValue(null)
+  onMachineStartCheck.mockResolvedValue(null)
+  serverLogins.onServerLogins.mockResolvedValue({ computer: 'Mac', servers: [] })
 })
 
 afterEach(() => {
@@ -72,6 +81,9 @@ afterEach(() => {
   startSays.error = null
   onCommands.mockReset()
   onStartCheck.mockReset()
+  onMachineStartCheck.mockReset()
+  for (const fn of Object.values(serverLogins)) fn.mockReset()
+  openSettings.mockReset()
   updatePreferences.mockReset()
   prefs.current = {}
   prefsLoaded.current = true
@@ -138,14 +150,15 @@ describe('StartAgentForm (#1774)', () => {
     expect(screen.getByRole('status').textContent).toBe('Cloning shop on Studio, the first time only')
   })
 
-  test('why no run started is a box in the page\'s own text size under the message box, not a small line', async () => {
+  test('why no run started is a box in the page\'s own text size above the message box, not a small line, and nothing of the page shows through it', async () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
     startSays.error = 'shop could not be cloned on Studio. Studio says: This computer has no login that can read github.com/acme/shop.'
     render(<StartAgentForm {...props} />)
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toBe(startSays.error)
-    for (const part of ['border-danger/40', 'bg-danger/10', 'text-sm', 'text-danger']) expect(alert.className).toContain(part)
+    for (const part of ['border-danger/40', 'var(--color-danger)_10%,var(--color-background)', 'text-sm', 'text-danger']) expect(alert.className).toContain(part)
     expect(alert.className).not.toContain('text-xs')
+    expect(alert.parentElement!.className).toContain('bottom-full')
   })
 
   test('under the box: the Context picker, then the "Auto" menu', async () => {
@@ -335,12 +348,49 @@ describe('StartAgentForm (#1774)', () => {
     expect(problem!.className).toContain('text-danger')
     expect(warning!.className).toContain('text-warning')
     expect((screen.getByText('submit-typed') as HTMLButtonElement).disabled).toBe(false)
+    // Above the box, over the page: the box does not move when they come.
+    expect(problem!.parentElement!.className).toContain('bottom-full')
+  })
+
+  test('with a machine picked, the machine is asked whether a run would start there, and its logged-out agent is said in words naming it, with this computer\'s logins to use there', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true, remote: true, address: 'github.com/acme/shop' })
+    machine.current = { id: 'd1', url: 'https://box/_devices/via/1', label: 'experiment' }
+    const line = '`claude` is not logged in. Run `claude auth login`, then start again.'
+    onMachineStartCheck.mockResolvedValue({ problems: [line, 'something else'], warnings: [], fix: { kind: 'log-in', command: 'claude auth login', problem: line } })
+    serverLogins.onServerLogins.mockResolvedValue({ computer: 'Mac', servers: [{ machineId: 'd1', label: 'experiment', on: false, reachable: true, logins: [], left: [] }] })
+    serverLogins.sendUseLoginsOn.mockResolvedValue({ ok: true })
+    render(<StartAgentForm {...props} />)
+    const press = await screen.findByRole('button', { name: 'Use them' })
+    expect(onMachineStartCheck).toHaveBeenCalledWith('p1', 'd1', undefined)
+    expect(onStartCheck).not.toHaveBeenCalled()
+    const [refusal, other] = screen.getAllByRole('alert')
+    expect(refusal!.textContent).toContain('Claude Code is not logged in on experiment.')
+    expect(refusal!.textContent).not.toContain('claude auth login')
+    expect(refusal!.contains(press)).toBe(true)
+    expect(other!.textContent).toBe('something else')
+    // This computer's own login press is no fix for the machine.
+    expect(screen.queryByRole('button', { name: 'Log in to Claude Code' })).toBeNull()
+    fireEvent.click(press)
+    await waitFor(() => expect(serverLogins.sendUseLoginsOn).toHaveBeenCalledWith('d1'))
+  })
+
+  test('a machine that takes no logins of this computer\'s sends the person to Settings, Accounts', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true, remote: true, address: 'github.com/acme/shop' })
+    machine.current = { id: 'd2', url: 'https://box/_devices/via/2', label: 'Dani\'s PC' }
+    const line = '`codex` is not logged in. Run `codex login`, then start again.'
+    prefs.current = { driver: 'codex' }
+    onMachineStartCheck.mockResolvedValue({ problems: [line], warnings: [], fix: { kind: 'log-in', command: 'codex login', problem: line } })
+    render(<StartAgentForm {...props} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Accounts' }))
+    expect(screen.getByRole('alert').textContent).toContain('Codex is not logged in on Dani\'s PC.')
+    expect(onMachineStartCheck).toHaveBeenCalledWith('p1', 'd2', 'codex')
+    expect(openSettings).toHaveBeenCalledWith('accounts')
   })
 
   test('a problem a press fixes has its button on the red line, with the command it runs; once fixed, the check is asked again and the line goes', async () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
     const line = '`claude` is not logged in. Run `claude auth login`, then start again.'
-    onStartCheck.mockResolvedValue({ problems: [line], warnings: [], fix: { kind: 'log-in', command: 'claude auth login' } })
+    onStartCheck.mockResolvedValue({ problems: [line], warnings: [], fix: { kind: 'log-in', command: 'claude auth login', problem: line } })
     let ready = false
     logins.onAgentState.mockImplementation(async () => (ready ? { driver: 'claude-code', ready: true } : { driver: 'claude-code', ready: false, problem: line, fix: { kind: 'log-in', command: 'claude auth login' } }))
     logins.sendAgentFix.mockImplementation(async () => {
@@ -348,7 +398,13 @@ describe('StartAgentForm (#1774)', () => {
       return { ok: true }
     })
     render(<StartAgentForm {...props} />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Log in to Claude Code' }))
+    const press = await screen.findByRole('button', { name: 'Log in to Claude Code' })
+    // The press is inside the red line, which says it in the agent's own words.
+    const refusal = screen.getByRole('alert')
+    expect(refusal.contains(press)).toBe(true)
+    expect(within(refusal).getByText('Claude Code is not logged in.')).toBeTruthy()
+    expect(refusal.textContent).not.toContain('Run `claude auth login`')
+    fireEvent.click(press)
     expect(screen.getByText('claude auth login')).toBeTruthy()
     await waitFor(() => expect(logins.sendAgentFix).toHaveBeenCalledWith('claude-code'))
     onStartCheck.mockResolvedValue({ problems: [], warnings: [] })
