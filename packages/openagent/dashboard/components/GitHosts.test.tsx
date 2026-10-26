@@ -57,6 +57,16 @@ describe('Git hosts', () => {
     expect(within(within(card).getByRole('listitem', { name: '@octo' })).queryByRole('button', { name: /Remove/ })).toBeNull()
     fireEvent.click(within(within(card).getByRole('listitem', { name: '@octo-agent' })).getByRole('button', { name: 'Remove @octo-agent' }))
     await waitFor(() => expect(logins.sendForgetGitHostAccount).toHaveBeenCalledWith('github.com', 'octo-agent'))
+    // While gh works, the pressed button says so, with a spinner, and no other press is taken.
+    let answer: (value: { ok: true }) => void = () => {}
+    logins.sendForgetGitHostAccount.mockImplementation(() => new Promise(resolve => (answer = resolve)))
+    fireEvent.click(within(within(card).getByRole('listitem', { name: '@octo-agent' })).getByRole('button', { name: 'Remove @octo-agent' }))
+    const removing = within(within(card).getByRole('listitem', { name: '@octo-agent' })).getByRole('button', { name: 'Remove @octo-agent' })
+    await waitFor(() => expect(removing.textContent).toBe('Removing…'))
+    expect(removing.querySelector('.animate-spin')).not.toBeNull()
+    expect((within(within(card).getByRole('listitem', { name: '@octo-agent' })).getByRole('button', { name: 'Use for runs' }) as HTMLButtonElement).disabled).toBe(true)
+    answer({ ok: true })
+    await waitFor(() => expect(removing.textContent).toBe('Remove'))
     logins.sendForgetGitHostAccount.mockResolvedValue({ ok: false, error: 'gh could not forget it.' })
     fireEvent.click(within(within(card).getByRole('listitem', { name: '@octo-agent' })).getByRole('button', { name: 'Remove @octo-agent' }))
     expect((await within(card).findByRole('alert')).textContent).toBe('gh could not forget it.')

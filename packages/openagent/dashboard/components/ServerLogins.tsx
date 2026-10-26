@@ -58,6 +58,7 @@ const waiting = (server: ServerLogins): LoginThere[] => server.logins.filter(log
 /** A server of the person's, above the accounts: offered this computer's logins, or how they stand there, and the press. */
 function ServerBar({ server, computer, onChanged }: { server: ServerLogins; computer: string; onChanged: () => Promise<void> }) {
   const { tone, body } = useStanding(server, computer, onChanged)
+  if (body === null) return null
   return (
     <Bar label={server.label} tone={tone}>
       {body}
@@ -141,6 +142,8 @@ function useStanding(server: ServerLogins, computer: string, onChanged: () => Pr
       ),
     }
   }
+  // All there: each account's row says where it is, so the bar says nothing more, unless something failed for the server.
+  if (failed === undefined) return { tone: 'quiet', body: null }
   return {
     tone: 'quiet',
     body: (

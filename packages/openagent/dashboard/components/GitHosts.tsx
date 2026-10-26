@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { Check, Plus } from 'lucide-react'
+import { Check, Loader2, Plus } from 'lucide-react'
 import { sendForgetGitHostAccount, sendUseGitHostAccount, type GitHostRow } from '../rpc/logins.js'
 import { cn } from '../lib/utils.js'
 import { ACCOUNTS_ENTRY, DeviceCode, HostFix, PackageLogo, StatePill, hostLoginState, hostWords, useGitHosts, useHostLogin } from './Logins.js'
-import { LeftNotices, ServerNotes } from './ServerLogins.js'
+import { LeftNotices, ServerNotes, useServers } from './ServerLogins.js'
 import { Button } from './ui/button.js'
 import { DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from './ui/dropdown-menu.js'
 
@@ -43,18 +43,22 @@ function HostCard({ row, onChanged }: { row: GitHostRow; onChanged: () => Promis
   const state = hostLoginState(row)!
   const [error, setError] = useState<string | undefined>()
   const login = useHostLogin(onChanged)
-  const [busy, setBusy] = useState(false)
-  const act = async (go: () => Promise<{ ok: true } | { ok: false; error: string }>) => {
-    setBusy(true)
+  const servers = useServers()
+  // The press under way, on which account: its button says so until the answer.
+  const [pending, setPending] = useState<{ login: string; press: 'use' | 'remove' } | undefined>()
+  const act = async (login: string, press: 'use' | 'remove', go: () => Promise<{ ok: true } | { ok: false; error: string }>) => {
+    setPending({ login, press })
     setError(undefined)
     try {
       const done = await go()
       if (!done.ok) setError(done.error)
-      await onChanged()
+      // What the servers said of an account goes with it.
+      await Promise.all([onChanged(), servers.reload()])
     } finally {
-      setBusy(false)
+      setPending(undefined)
     }
   }
+  const pressing = (login: string, press: 'use' | 'remove'): boolean => pending?.login === login && pending.press === press
   return (
     <section aria-label={p.name} className="rounded-lg border border-border">
       <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border px-3 py-2.5">
@@ -77,12 +81,14 @@ function HostCard({ row, onChanged }: { row: GitHostRow; onChanged: () => Promis
                 <span className="text-xs font-medium text-success">in use for runs</span>
               ) : (
                 <div className="flex items-center gap-1">
-                  <Button size="xs" variant="ghost" disabled={busy || !account.ok} onClick={() => void act(() => sendUseGitHostAccount(row.host, account.login))}>
-                    Use for runs
+                  <Button size="xs" variant="ghost" disabled={pending !== undefined || !account.ok} onClick={() => void act(account.login, 'use', () => sendUseGitHostAccount(row.host, account.login))}>
+                    {pressing(account.login, 'use') && <Loader2 className="size-3 animate-spin" aria-hidden />}
+                    {pressing(account.login, 'use') ? 'Switching…' : 'Use for runs'}
                   </Button>
                   {/* The account runs use is never taken off: another is picked first. */}
-                  <Button size="xs" variant="ghost" disabled={busy} aria-label={`Remove @${account.login}`} title={`${p.tool} on this computer forgets it. The login is not ended: it goes on working wherever else it is.`} onClick={() => void act(() => sendForgetGitHostAccount(row.host, account.login))}>
-                    Remove
+                  <Button size="xs" variant="ghost" disabled={pending !== undefined} aria-label={`Remove @${account.login}`} title={`${p.tool} on this computer forgets it. The login is not ended: it goes on working wherever else it is.`} onClick={() => void act(account.login, 'remove', () => sendForgetGitHostAccount(row.host, account.login))}>
+                    {pressing(account.login, 'remove') && <Loader2 className="size-3 animate-spin" aria-hidden />}
+                    {pressing(account.login, 'remove') ? 'Removing…' : 'Remove'}
                   </Button>
                 </div>
               )}

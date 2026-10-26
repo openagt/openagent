@@ -105,6 +105,15 @@ describe('a server that uses this computer\'s logins', () => {
     expect(daniRow.textContent!.split(reason)).toHaveLength(2)
   })
 
+  test('a server with all of them there has no bar: the rows say where each is', async () => {
+    views([own])
+    server({ logins: [{ kind: 'claude', source: 'own', name: 'Suleiman', state: 'there' }] })
+    render(<AccountsSettings />)
+    const card = await screen.findByRole('region', { name: 'Claude Code' })
+    await waitFor(() => expect(within(card).getByRole('listitem', { name: 'Suleiman' }).textContent).toContain(`✓ on ${LABEL}`))
+    expect(screen.queryByRole('region', { name: `Your logins on ${LABEL}` })).toBeNull()
+  })
+
   test('the login being made says where to say yes, with its link to copy for a private window', async () => {
     views([own])
     server({ logins: [{ kind: 'claude', source: 'own', name: 'Suleiman', state: 'allow' }], allowing: { name: 'Suleiman', url: 'https://claude.com/cai/oauth/authorize?x' } })
