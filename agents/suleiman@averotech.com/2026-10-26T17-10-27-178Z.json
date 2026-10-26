@@ -7,7 +7,6 @@
   "title": "Running a sleep command",
   "driver": "claude-code",
   "model": "claude-sonnet-5-5",
-  "branch": "agent-2026-10-26T17-10-27-178Z",
   "cost": 0.0252488,
   "contextTokens": 17794,
   "caller": {
