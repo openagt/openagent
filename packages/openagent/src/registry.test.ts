@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import {
   addMachine,
   nameMachine,
+  noteSeen,
   renameMachine,
   addProject,
   ensureBridgeToken,
@@ -717,6 +718,22 @@ test('a machine\'s own computer name is kept as it first said it: a later name i
   assert.equal((await listMachines(fs, ENV))[0]!.host, undefined)
   assert.equal(await nameMachine(asked, 'studio-box', fs, ENV), false)
   assert.equal(await nameMachine({ id: STUDIO, key: 'bbb' }, 'studio-box', fs, ENV), true)
+})
+
+test('when a machine last answered is kept to the minute, for while it does not answer, and only for the machine as it was asked', async () => {
+  const fs = memFs()
+  await addMachine({ url: STUDIO, key: 'aaa', door: DOOR, label: 'Studio' }, fs, ENV)
+  const asked = { id: STUDIO, key: 'aaa' }
+  await noteSeen(asked, '2026-10-25T10:00:00.000Z', fs, ENV)
+  assert.equal((await listMachines(fs, ENV))[0]!.seenAt, '2026-10-25T10:00:00.000Z')
+  // Within the minute the file is not written again.
+  await noteSeen(asked, '2026-10-25T10:00:30.000Z', fs, ENV)
+  assert.equal((await listMachines(fs, ENV))[0]!.seenAt, '2026-10-25T10:00:00.000Z')
+  await noteSeen(asked, '2026-10-25T10:01:00.000Z', fs, ENV)
+  assert.equal((await listMachines(fs, ENV))[0]!.seenAt, '2026-10-25T10:01:00.000Z')
+  // An answer to a key the machine no longer has is not its.
+  await noteSeen({ id: STUDIO, key: 'old' }, '2026-10-25T11:00:00.000Z', fs, ENV)
+  assert.equal((await listMachines(fs, ENV))[0]!.seenAt, '2026-10-25T10:01:00.000Z')
 })
 
 test('a saved machine takes the name the person picked, cut to the length a name may have; an empty name and a machine not saved change nothing', async () => {

@@ -45,7 +45,7 @@ test('a run is recorded under the person the repo commits as, one pushed commit;
     assert.equal((await git(['log', '-1', '--format=%s', DATA_BRANCH], bare)).trim(), `logs: record run ${R1}`)
     assert.equal((await git(['status', '--porcelain'], person)).trim(), '', 'committed, not merely written')
 
-    assert.deepEqual((await listRuns(root)).map(c => c.id), [R2, R1], 'newest first')
+    assert.deepEqual((await listRuns(root)).map(c => [c.id, c.person]), [[R2, 'dev@example.com'], [R1, 'dev@example.com']], 'newest first, each with the person it is kept under')
     assert.deepEqual((await listRuns(root, { since: Date.parse('2026-07-04T12:00:00.000Z') })).map(c => c.id), [R2], 'since keeps the runs started at or after it')
     assert.deepEqual(await findRun(root, R1), { ...card(R1), intent: 'first' })
     assert.equal(await findRun(root, 'nope'), undefined)

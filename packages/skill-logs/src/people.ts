@@ -100,6 +100,37 @@ export async function peopleOf(reader: RecordsReader, dir: string, since: number
   return [...byEmail.values()].sort((a, b) => b.runs + b.commits - (a.runs + a.commits) || b.lastAt.localeCompare(a.lastAt))
 }
 
+/** A run as the dashboard lists it: whose it is, when it started, how it stands, what it cost. */
+export interface RunAsListed {
+  person?: string
+  startedAt: string
+  status: string
+  cost?: number
+}
+
+/**
+ * A project's people with their runs counted from the runs as the dashboard lists them, not from
+ * the records: a record stops at what its computer shared last, and the dashboard asks the
+ * computers themselves how their runs stand. Their commits and names stay as git says them; a
+ * person with runs since `since` that no record has yet is added.
+ */
+export function peopleWithRuns(people: readonly PersonActivity[], runs: readonly RunAsListed[], since: number): PersonActivity[] {
+  const byEmail = new Map(people.map(person => [person.person.toLowerCase(), { ...person, runs: 0, running: 0, cost: 0 }]))
+  for (const run of runs) {
+    if (run.person === undefined || !(Date.parse(run.startedAt) >= since)) continue
+    const key = run.person.toLowerCase()
+    let person = byEmail.get(key)
+    if (!person) byEmail.set(key, (person = { person: run.person, runs: 0, running: 0, cost: 0, commits: 0, lastAt: run.startedAt }))
+    person.runs++
+    if (run.status === 'running') person.running++
+    person.cost += run.cost ?? 0
+    if (run.startedAt > person.lastAt) person.lastAt = run.startedAt
+  }
+  return [...byEmail.values()]
+    .map(person => ({ ...person, cost: Math.round(person.cost * 100) / 100 }))
+    .sort((a, b) => b.runs + b.commits - (a.runs + a.commits) || b.lastAt.localeCompare(a.lastAt))
+}
+
 /** One person, over every project shown. */
 export interface Member extends PersonActivity {
   /** The projects they ran in, by name. */

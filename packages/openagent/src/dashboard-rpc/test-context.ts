@@ -18,7 +18,7 @@ export function testDashboardContext(over: Partial<DashboardContext> = {}): Dash
     startedIn: () => ({ ok: false, error: 'not wired in this test' }),
     removeProject: () => ({ ok: false, error: 'not wired in this test' }),
     eventsSource: () => undefined,
-    remote: { target: () => undefined, list: () => [], working: () => false, rekey: () => {}, sent: () => true, home: async () => undefined, follow: async () => {}, machineNames: async () => () => undefined },
+    remote: { target: () => undefined, list: () => [], working: () => false, rekey: () => {}, sent: () => true, home: async () => undefined, follow: async () => {}, machineNames: async () => () => undefined, machineRuns: async () => [] },
     preferences: registryPreferencesStore(),
     quota: defaultQuotaSource(),
     models: { read: async () => ({ 'claude-code': { models: [] }, codex: { models: [] } }) },

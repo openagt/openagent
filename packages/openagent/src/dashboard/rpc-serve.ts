@@ -14,6 +14,7 @@ import type { ProjectErrorsReader } from '../project-errors.js'
 import type { AddProjectResult, RemoveProjectResult, StartAgentOptions, StartAgentResult, StartedInResult } from './types.js'
 import type { AgentMeta } from '../store/index.js'
 import type { RemoteTarget } from './remote-run.js'
+import type { MachineRuns } from './machine-runs.js'
 
 /** Wired by the daemon so `sendStart` can reach the daemon's own `startAgent` closure. */
 export type StartAgentHandler = (
@@ -70,6 +71,8 @@ export interface RemoteAgents {
    * it was given and its address. Asked of the machines first, when one has not said its name yet.
    */
   machineNames(): Promise<(host: string) => SavedMachine | undefined>
+  /** What each saved machine said last of its own runs of the project at `projectPath`, asked again once that is a few seconds old (machine-runs.ts). */
+  machineRuns(projectPath: string): Promise<MachineRuns[]>
 }
 
 /**

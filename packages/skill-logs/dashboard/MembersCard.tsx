@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { Users } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitleLink, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, useModuleHost, usePolled, type ModuleCardProps, type ModuleHostPerson } from '@openagt/dashboard/module'
-import { membersOf, nameOf, type Member, type PersonActivity } from '../src/people.js'
+import { membersOf, nameOf, peopleWithRuns, type Member, type PersonActivity } from '../src/people.js'
 
 // The Overview's Members card: who worked in the projects shown in the last 30 days, from `logs
 // people --local` in each, the same person in several projects counted once: whoever started agents
 // or committed to the main branch. Each by the name git knows them by, with their runs and what
-// they cost, their commits, whether a run of theirs is going now, and when they last did either;
+// they cost (as the dashboard lists the runs, so another computer's are as it says them), their
+// commits, whether a run of theirs is going now, and when they last did either;
 // the person at this computer marked. Its title opens the Logs page, where each run is. Each with
 // their picture, where the project's git host knows the account behind their email (asked of the
 // shell, which keeps the answer a day); else two letters of their name.
@@ -15,6 +16,9 @@ import { membersOf, nameOf, type Member, type PersonActivity } from '../src/peop
 type Shown = Member & { account?: ModuleHostPerson }
 
 const NONE: Shown[] = []
+
+/** How many days back the card looks. */
+const DAYS = 30
 
 /** Two letters for a person's mark, from their name: "Romuald Brillout" is RB, "suleiman" is SU. */
 function initials(member: Member): string {
@@ -39,8 +43,10 @@ export function MembersCard({ projects }: ModuleCardProps) {
     async () => {
       const reads = await Promise.all(
         projects.map(async project => {
-          const result = await host.runCommand(project.id, ['people', '--local', '--days', '30'])
-          const people = result.ok && Array.isArray(result.output) ? (result.output as PersonActivity[]) : []
+          const [result, runs] = await Promise.all([host.runCommand(project.id, ['people', '--local', '--days', String(DAYS)]), host.agents(project.id).catch(() => undefined)])
+          const recorded = result.ok && Array.isArray(result.output) ? (result.output as PersonActivity[]) : []
+          // The runs as the dashboard lists them, each computer's by its own word: a record stops at what was shared last.
+          const people = runs ? peopleWithRuns(recorded, runs, Date.now() - DAYS * 86_400_000) : recorded
           // Each project's git host is asked of its own people: another project may be on another host.
           const accounts = people.length ? await host.gitHostPeople(project.id, people.map(person => person.person)).catch(() => []) : []
           return { project: project.name, people, accounts }

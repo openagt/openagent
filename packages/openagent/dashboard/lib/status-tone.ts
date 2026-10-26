@@ -22,4 +22,6 @@ export const STATUS_RING: Record<string, string> = {
   stopped: 'border-warning/70',
   merged: 'border-success/70',
   done: 'border-muted-foreground/60',
+  // Its computer does not answer: a broken ring, nothing known to be going.
+  unknown: 'border-dashed border-muted-foreground/60',
 }

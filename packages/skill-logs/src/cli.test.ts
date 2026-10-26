@@ -94,7 +94,7 @@ test('the bare command lists every person\'s runs off origin, newest first, the 
       all.json.map((c: { id: string }) => c.id),
       [R3, R2, R1],
     )
-    assert.deepEqual(all.json[2], { ...card(R1), intent: 'first try', branch: 'agent-r1', status: 'failed' }, 'caller is the writer\'s, not printed')
+    assert.deepEqual(all.json[2], { ...card(R1), intent: 'first try', branch: 'agent-r1', status: 'failed', person: 'a@a' }, 'caller is the writer\'s, not printed; the person the run is kept under is')
     assert.deepEqual((await run(a!, ['--branch', 'agent-r3'])).json.map((c: { id: string }) => c.id), [R3])
     assert.deepEqual((await run(a!, ['--limit', '1'])).json.map((c: { id: string }) => c.id), [R3])
     assert.deepEqual((await run(a!, ['--branch', 'agent-r1', '--limit', '1'])).json.map((c: { id: string }) => c.id), [R1], 'the cap counts matches')
@@ -211,7 +211,13 @@ test('--local reads the checkout kept at .branches/agent-data, no fetch; --full 
     assert.equal(local.json[2].caller, undefined, 'caller only with --full')
     const full = await run(a!, ['--local', '--full', '--limit', '5'])
     assert.deepEqual(full.json[2].caller, { pid: 1, host: 'laptop' })
-    assert.deepEqual((await run(a!, [])).json.map((c: { id: string }) => c.id), [R4, R3, R2, R1], 'without --local: origin, as before')
+    // Each run with the person it is kept under, whichever way the list is read.
+    const people = ['b@b', 'b@b', 'a@a']
+    assert.deepEqual(local.json.map((c: { person: string }) => c.person), people)
+    assert.deepEqual(full.json.map((c: { person: string }) => c.person), people)
+    const fromOrigin = await run(a!, [])
+    assert.deepEqual(fromOrigin.json.map((c: { id: string }) => c.id), [R4, R3, R2, R1], 'without --local: origin, as before')
+    assert.deepEqual(fromOrigin.json.map((c: { person: string }) => c.person), ['b@b', ...people])
     const shown = await run(a!, ['show', R1, '--local', '--full'])
     assert.equal(shown.code, 0)
     assert.deepEqual(shown.json.caller, { pid: 1, host: 'laptop' })

@@ -28,6 +28,8 @@ import { isHostName, readBridgeToken, readPreferences, type Preferences } from '
 import { reachedByLine } from '../reached-by-line.js'
 import type { SavedMachine } from '../dashboard/rpc-serve.js'
 import { hostname } from 'node:os'
+import { nodeGitRunner } from '@openagt/agent-data'
+import { RunChanges, withMachineRuns, type MachineRuns, type OwnRuns } from '../dashboard/machine-runs.js'
 
 // The read model behind the dashboard (#405): the agent history, an agent's replay, and the
 // surfaced PLAN/TODO docs — each keyed by project id and backed by
@@ -89,8 +91,61 @@ export async function onAgents(projectId: string): Promise<AgentMeta[]> {
   const remote = contextRemote()?.list(projectId) ?? []
   const cwd = await resolveProjectPath(projectId)
   const machineOf = await contextRemote().machineNames()
-  const local = cwd ? await withRowMarks(cwd, (await readAllAgents(cwd)).map(agent => forDashboard(agent, machineOf))) : []
+  const local = cwd ? await withRowMarks(cwd, (await projectRuns(cwd)).map(agent => forDashboard(agent, machineOf))) : []
   return withFollowed(remote, local, agentId => contextRemote().sent(agentId))
+}
+
+/**
+ * A project's runs as its records and checkouts say them, each as recorded: the ones this
+ * computer runs, and every other computer's whose record came through the project's shared records.
+ * A run of this computer's that has no record yet is its project's git user's, as its record will be.
+ */
+export async function recordedRuns(cwd: string): Promise<AgentMeta[]> {
+  const runs = (await readAllAgents(cwd)).map(asRecorded)
+  const thisHost = hostname()
+  if (!runs.some(run => run.person === undefined && run.host === thisHost)) return runs
+  const person = await gitUserOf(cwd)
+  return person === undefined ? runs : runs.map(run => (run.person === undefined && run.host === thisHost ? { ...run, person } : run))
+}
+
+/**
+ * A project's runs as the dashboard lists them: its records, with what each saved machine says of
+ * its own runs right now taking over theirs (machine-runs.ts). Not marked yet for the dashboard.
+ */
+export async function projectRuns(cwd: string): Promise<AgentMeta[]> {
+  const [records, machines] = await Promise.all([recordedRuns(cwd), contextRemote().machineRuns(cwd).catch((): MachineRuns[] => [])])
+  return withMachineRuns(records, machines.map(machine => ({ ...machine, runs: machine.runs.map(asRecorded) })))
+}
+
+/** What this computer's own runs answer to another computer that asks for them: counted per project, as they change. */
+const ownRunChanges = new RunChanges()
+
+/**
+ * This computer's own runs of a project, for another computer that lists them (machine-runs.ts):
+ * the ones that changed since `since`, the answer it had last, as they stand right now. Only this
+ * computer's: what another computer's records say is that computer's to answer.
+ */
+export async function onOwnRuns(projectId: string, since?: unknown): Promise<OwnRuns> {
+  const cwd = await resolveProjectPath(projectId)
+  const thisHost = hostname()
+  const own = cwd ? (await recordedRuns(cwd)).filter(run => run.host === thisHost) : []
+  return ownRunChanges.answer(cwd ?? projectId, own, since)
+}
+
+/** How long a project's git user is trusted before git is asked again. */
+const GIT_USER_KEPT_MS = 60_000
+const gitUsers = new Map<string, { person?: string; until: number }>()
+
+/** Whom git commits as in the project, as the runs' records are kept under it: its email, lowered. */
+async function gitUserOf(cwd: string): Promise<string | undefined> {
+  const kept = gitUsers.get(cwd)
+  if (kept && kept.until > Date.now()) return kept.person
+  const said = await nodeGitRunner()(['config', 'user.email'], cwd).then(
+    out => out.trim().toLowerCase(),
+    () => '',
+  )
+  gitUsers.set(cwd, { ...(said ? { person: said } : {}), until: Date.now() + GIT_USER_KEPT_MS })
+  return said || undefined
 }
 
 /**
@@ -209,19 +264,20 @@ export function markSaving(agent: AgentMeta, thisHost: string = hostname(), aliv
   return { ...agent, saving: true }
 }
 
-/** Every annotation a run's record gets on its way to the dashboard: what the daemon knows and the disk cannot. */
+/** Every annotation a run gets on its way to the dashboard, once it is as recorded ({@link projectRuns}): what the daemon knows and the disk cannot. */
 function forDashboard(agent: AgentMeta, machineOf: (host: string) => SavedMachine | undefined): AgentMeta {
-  return markSaving(markOtherHost(markMachine(markCloudWaiting(asRecorded(agent)), machineOf)))
+  return markSaving(markOtherHost(markMachine(markCloudWaiting(agent), machineOf)))
 }
 
 /**
  * A run as its record may say it. A record is a file anyone with the project can write, and its
  * tool's own words are read into the row as they are, so the words only this daemon gives a row
  * are taken off it first: that it runs on a saved machine and which, that it is another
- * computer's, that it is being saved. A computer's name that is no name is none.
+ * computer's, that it is being saved, when its computer was last seen. A computer's name that is
+ * no name is none.
  */
 export function asRecorded(agent: AgentMeta): AgentMeta {
-  const { remoteLabel: _label, remoteByLine: _byLine, otherHost: _other, saving: _saving, cloudWaiting: _waiting, ...said } = agent
+  const { remoteLabel: _label, remoteByLine: _byLine, otherHost: _other, saving: _saving, cloudWaiting: _waiting, seenAt: _seen, ...said } = agent
   if (said.target === 'remote') delete said.target
   if (said.host !== undefined && !isHostName(said.host)) delete said.host
   return said
@@ -339,7 +395,7 @@ export async function onRecentAgents(): Promise<RecentAgent[]> {
     buildRecentAgents(projects, {
       agents: async path => {
         const followed = projects.filter(project => project.path === path).flatMap(project => remote.list(project.id))
-        return withFollowed(followed, await withRowMarks(path, (await readAllAgents(path)).map(agent => forDashboard(agent, machineOf))), agentId => remote.sent(agentId))
+        return withFollowed(followed, await withRowMarks(path, (await projectRuns(path)).map(agent => forDashboard(agent, machineOf))), agentId => remote.sent(agentId))
       },
     }),
   )
@@ -364,7 +420,8 @@ export async function onInterventions(): Promise<ProjectionRead<Intervention>> {
  * first, with the projects that were read whole beside them (#1625) — see {@link onInterventions}.
  */
 export async function onActivity(): Promise<ProjectionRead<Activity>> {
-  return withProjects(buildActivity)
+  // Another computer's runs start and end by its own word, as the lists show them.
+  return withProjects(projects => buildActivity(projects, { readAgents: projectRuns }))
 }
 
 /** The Overview dashboard page (#471): the {@link onOverview} rollup plus agent counts, run-status totals, and activity. */

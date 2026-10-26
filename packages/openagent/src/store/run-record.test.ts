@@ -5,7 +5,7 @@ import type { AgentMeta } from './agent-store.js'
 import { eventsOf, fromDiaryLine, fromRunCard } from './run-record.js'
 
 test('a card unfolds into the meta: the skill\'s fields on top, whatever sits under caller beside them (#1769)', () => {
-  const meta: AgentMeta = {
+  const meta: AgentMeta & { status: 'done' } = {
     status: 'done',
     id: 'r1',
     startedAt: '2026-09-08T18:14:30.651Z',

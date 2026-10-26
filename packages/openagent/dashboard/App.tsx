@@ -352,7 +352,21 @@ export function App() {
         selectProject(inProject)
       },
       agents: async inProject =>
-        (await onAgents(inProject)).map(agent => ({ id: agent.id, status: agent.status, startedAt: agent.startedAt, ...(agent.branch ? { name: agent.branch } : {}), ...(agent.intent ? { ask: agent.intent } : {}) })),
+        (await onAgents(inProject)).map(agent => ({
+          id: agent.id,
+          status: agent.status,
+          startedAt: agent.startedAt,
+          ...(agent.branch ? { name: agent.branch } : {}),
+          ...(agent.intent ? { ask: agent.intent } : {}),
+          ...(agent.endedAt ? { endedAt: agent.endedAt } : {}),
+          ...(agent.title ? { title: agent.title } : {}),
+          ...(agent.person ? { person: agent.person } : {}),
+          ...(agent.cost !== undefined ? { cost: agent.cost } : {}),
+          ...(agent.driver ? { driver: agent.driver } : {}),
+          ...(agent.model ? { model: agent.model } : {}),
+          ...(agent.remoteLabel ? { machine: agent.remoteLabel } : {}),
+          ...(agent.seenAt ? { seenAt: agent.seenAt } : {}),
+        })),
       machines: onMachineVersions,
       // Through the dashboard's own list, so the launcher's "Run on" shows the change at once.
       addMachine: async (link, label) => {

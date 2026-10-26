@@ -2,6 +2,7 @@ import { dirname, join } from 'node:path'
 import { DATA_BRANCH, fileBranchPath, nodeBranchFileFs, nodeGitRunner, withFileBranch, type BranchFileFs, type CommitMessage, type FileBranchWrite, type GitRunner } from '@openagt/agent-data'
 import { RUNS_DIR } from './names.js'
 import {
+  type ListedRun,
   formatDiary,
   formatRunCard,
   newestFirst,
@@ -79,21 +80,21 @@ async function locate(checkout: string, id: string, r: Pick<LogsFiles, 'list'>):
 }
 
 /**
- * Every run of the project, newest first, off the persistent checkout: each person's directory
- * is read, a card that does not parse is skipped. `since` (epoch ms) keeps only the runs started
- * at or after it. Never throws: a missing directory is no runs.
+ * Every run of the project, newest first, off the persistent checkout, each with the person it is
+ * kept under: each person's directory is read, a card that does not parse is skipped. `since`
+ * (epoch ms) keeps only the runs started at or after it. Never throws: a missing directory is no runs.
  */
-export async function listRuns(root: string, opts: { since?: number } = {}, deps: LogsDeps = {}): Promise<RunCard[]> {
+export async function listRuns(root: string, opts: { since?: number } = {}, deps: LogsDeps = {}): Promise<ListedRun[]> {
   const r = resolveLogsDeps(deps)
   const dir = await runsPath(root, r.git)
-  const cards: RunCard[] = []
+  const cards: ListedRun[] = []
   for (const person of await r.list(dir)) {
     for (const name of await r.list(join(dir, person))) {
       if (runIdOfFile(name) === undefined) continue
       const card = parseRunCard(await r.read(join(dir, person, name)).catch(() => ''))
       if (!card) continue
       if (opts.since !== undefined && !(Date.parse(card.startedAt) >= opts.since)) continue
-      cards.push(card)
+      cards.push({ ...card, person })
     }
   }
   return newestFirst(cards)

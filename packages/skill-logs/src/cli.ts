@@ -1,7 +1,7 @@
 import { parseArgs } from 'node:util'
 import { checkoutRoot, gitReason, nodeGitRunner, openBranchReader, type BranchReader, type GitRunner, DATA_BRANCH } from '@openagt/agent-data'
 import { RUNS_DIR } from './names.js'
-import { agentLines, isRunId, newestFirst, parseDiary, parseRunCard, publicCard, runCardFile, runDiaryFile, runIdOfFile, type RunCard, type RunPatch } from './run.js'
+import { agentLines, isRunId, newestFirst, parseDiary, parseRunCard, publicCard, runCardFile, runDiaryFile, runIdOfFile, type ListedRun, type RunCard, type RunPatch } from './run.js'
 import { deleteRun, findRun, listRuns, patchRun, readDiary, resolveLogsDeps, runFiles, runsPath } from './store.js'
 import { peopleOf, readCommitLines } from './people.js'
 import { skillUseOf } from './skill-use.js'
@@ -34,7 +34,8 @@ export const USAGE = `usage: logs [command]
 
   (no command) [--branch <name>] [--limit N]
                                      the runs, newest first (the newest ${DEFAULT_LIMIT} unless --limit says
-                                     otherwise); --branch keeps the runs on one branch
+                                     otherwise), each with the person it is kept under; --branch keeps
+                                     the runs on one branch
   show <id>                          one run: its card, and what the agent said, its result,
                                      how it ended, what it cost
 
@@ -115,19 +116,20 @@ const list: Command = async (args, io, git) => {
   const { values } = parse(args, { branch: { type: 'string' }, limit: { type: 'string' }, ...READ_FLAGS }, 0)
   const limit = values.limit === undefined ? DEFAULT_LIMIT : limitArg(values.limit)
   const keep = (card: RunCard): boolean => values.branch === undefined || card.branch === values.branch
-  const shown = values.full ? (card: RunCard) => card : publicCard
+  // Each card with the person it is kept under, whichever way it is printed.
+  const shown = ({ person, ...card }: ListedRun) => ({ ...(values.full ? card : publicCard(card)), person })
   if (values.local) {
     const root = await inRepo(() => checkoutRoot(io.cwd, git))
     return (await listRuns(root, {}, { git })).filter(keep).slice(0, limit).map(shown)
   }
   const reader = await open(io.cwd, git)
-  const cards: RunCard[] = []
+  const cards: ListedRun[] = []
   // Newest first, and no further than the cap: the cards past it are never read.
   for (const { person, id } of await runEntries(reader)) {
     if (cards.length >= limit) break
     const card = parseRunCard((await reader.read(`${RUNS_DIR}/${person}/${runCardFile(id)}`)) ?? '')
     if (!card || !keep(card)) continue
-    cards.push(card)
+    cards.push({ ...card, person })
   }
   return cards.map(shown)
 }

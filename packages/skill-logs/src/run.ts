@@ -45,6 +45,9 @@ export interface RunCard {
   caller?: Record<string, unknown>
 }
 
+/** A card as a list of runs says it: with the person it is kept under, by their email, the folder its files are in. */
+export type ListedRun = RunCard & { person: string }
+
 /** The two late facts a writer patches onto a card once the run's process is gone. */
 export type RunPatch = Partial<Pick<RunCard, 'branch' | 'pr'>> & {
   /**

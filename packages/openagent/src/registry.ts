@@ -63,6 +63,8 @@ export interface MachineRecord {
    * kept, so it is known to be in at this computer's door too while it does not answer.
    */
   listed?: string[]
+  /** When the machine last answered for its runs, ISO, kept to the minute: what its runs say while it does not answer. */
+  seenAt?: string
 }
 
 /** A GitHub account's name: letters, digits and single dashes, at most 39. */
@@ -440,12 +442,12 @@ function sanitizeMachines(value: unknown): MachineRecord[] {
   for (const raw of value) {
     if (machines.length >= MACHINE_LIMITS.count) break
     if (typeof raw !== 'object' || raw === null) continue
-    const { label, url, key, door, pin, host, owner, told, logins, listed } = raw as Record<string, unknown>
+    const { label, url, key, door, pin, host, owner, told, logins, listed, seenAt } = raw as Record<string, unknown>
     const ids = Array.isArray(listed) ? listed.filter((id): id is string => typeof id === 'string' && DEVICE_ID.test(id)).slice(0, MACHINE_LIMITS.count) : []
     if (typeof label !== 'string' || typeof url !== 'string' || typeof key !== 'string' || typeof door !== 'string') continue
     if (!url || !key || !door || seen.has(url)) continue
     seen.add(url)
-    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, key, door, ...(typeof pin === 'string' && pin ? { pin } : {}), ...(isHostName(host) ? { host } : {}), ...(isPersonName(owner) ? { owner } : {}), ...(told === true ? { told: true as const } : {}), ...(logins === true ? { logins: true as const } : {}), ...(ids.length ? { listed: ids } : {}) })
+    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, key, door, ...(typeof pin === 'string' && pin ? { pin } : {}), ...(isHostName(host) ? { host } : {}), ...(isPersonName(owner) ? { owner } : {}), ...(told === true ? { told: true as const } : {}), ...(logins === true ? { logins: true as const } : {}), ...(ids.length ? { listed: ids } : {}), ...(typeof seenAt === 'string' && !Number.isNaN(Date.parse(seenAt)) ? { seenAt } : {}) })
   }
   return machines
 }
@@ -754,6 +756,19 @@ export async function noteListed(machine: { id: string; key: string }, listed: s
     const { listed: _old, ...rest } = saved
     const kept: MachineRecord = ids.length ? { ...rest, listed: ids } : rest
     await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(candidate => (candidate.id === machine.id ? kept : candidate)) }, fs, env)
+  })
+}
+
+/** How stale the kept time a machine was last seen may be before it is written again. */
+const SEEN_KEPT_MS = 60_000
+
+/** Keep when a saved machine last answered, once a minute at most: the file is not written at each answer. */
+export async function noteSeen(machine: { id: string; key: string }, at: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  await serialize(async () => {
+    const registry = await readRegistry(fs, env)
+    const saved = (registry.machines ?? []).find(candidate => candidate.id === machine.id)
+    if (!saved || saved.key !== machine.key || (saved.seenAt !== undefined && Date.parse(at) - Date.parse(saved.seenAt) < SEEN_KEPT_MS)) return
+    await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(candidate => (candidate.id === machine.id ? { ...saved, seenAt: at } : candidate)) }, fs, env)
   })
 }
 

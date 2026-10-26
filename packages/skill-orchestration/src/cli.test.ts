@@ -180,7 +180,7 @@ test('start: a run for the caller, on one task of the plan, from the caller\'s b
     // Its record is there before its process is, and it carries the task's name and its id: the
     // row a person reads is the heading, not the first line of the prompt.
     assert.deepEqual((await run(checkout, MAIN, ['list'])).out, [
-      { id: FIRST, startedAt: '2026-10-01T10:01:00.000Z', status: 'running', intent: TESTS_PROMPT.slice(0, -SUBAGENT_LINES.length).trimEnd(), title: '1. Add the tests', driver: 'codex', model: 'gpt-5.5' },
+      { id: FIRST, startedAt: '2026-10-01T10:01:00.000Z', status: 'running', intent: TESTS_PROMPT.slice(0, -SUBAGENT_LINES.length).trimEnd(), title: '1. Add the tests', driver: 'codex', model: 'gpt-5.5', person: 'tester@example.com' },
     ])
     assert.equal((await findRun(repo, FIRST))?.caller?.['task'], TESTS)
     assert.equal((await run(checkout, MAIN, ['stop', FIRST])).out.reason, 'no-process')
@@ -556,8 +556,8 @@ test('list: the caller\'s subagents only, newest first, the task without the add
     const listed = await run(repo, MAIN, ['list'])
     assert.equal(listed.code, 0)
     assert.deepEqual(listed.out, [
-      { id: SECOND, startedAt: '2026-10-01T10:00:00.000Z', status: 'running', intent: 'Add the docs', driver: 'claude-code' },
-      { id: FIRST, startedAt: '2026-10-01T10:00:00.000Z', status: 'done', intent: 'Add the tests', driver: 'claude-code', branch: 'tests' },
+      { id: SECOND, startedAt: '2026-10-01T10:00:00.000Z', status: 'running', intent: 'Add the docs', driver: 'claude-code', person: 'tester@example.com' },
+      { id: FIRST, startedAt: '2026-10-01T10:00:00.000Z', status: 'done', intent: 'Add the tests', driver: 'claude-code', branch: 'tests', person: 'tester@example.com' },
     ])
     assert.equal((await run(repo, undefined, ['list'])).out.reason, 'not-a-run')
   } finally {

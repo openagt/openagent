@@ -11,7 +11,7 @@ import { dispatchRelayRpc, isRelayRead, RELAY_RPC_NAMES } from './relay-dispatch
 test('RELAY_RPC_NAMES is the run-scoped read/steer/handoff surface and excludes start/delete (#1067 slice 2)', () => {
   for (const name of [
     'onProjectFiles', 'readModule',
-    'onGitStatus', 'onAgentWorktree', 'onAgentHandoff', 'onAgent',
+    'onGitStatus', 'onAgentWorktree', 'onAgentHandoff', 'onAgent', 'onOwnRuns',
     'sendStop', 'sendChoice', 'sendMessage', 'sendOpenPullRequest', 'sendPush', 'sendMerge',
   ]) {
     assert.ok(RELAY_RPC_NAMES.includes(name), `expected ${name} on the relay whitelist`)
@@ -33,6 +33,7 @@ test('every relayed rpc is classed as a read or an act, by name: a computer that
     onAgentWorktree: 'read',
     onAgentHandoff: 'read',
     onAgent: 'read',
+    onOwnRuns: 'read',
     sendStop: 'act',
     sendChoice: 'act',
     sendMessage: 'act',

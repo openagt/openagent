@@ -1,4 +1,4 @@
-import { onProjectFiles, onGitStatus, onAgentWorktree, onAgentHandoff, onAgent } from './reads.js'
+import { onProjectFiles, onGitStatus, onAgentWorktree, onAgentHandoff, onAgent, onOwnRuns } from './reads.js'
 import { readModule } from './modules.js'
 import { sendStop, sendChoice, sendMessage, sendOpenPullRequest, sendPush, sendMerge } from './control.js'
 import { asArrived } from './relay-agent.js'
@@ -18,7 +18,7 @@ type RelayFn = (...args: unknown[]) => Promise<unknown>
 // lets its server watch answers the reads and refuses the acts (relay-endpoints.ts). An entry goes
 // in one of the two lists, so nothing is relayed that was not classed. `readModule` is a read for
 // as long as a module's read changes nothing, which is what a module's read is.
-const RELAY_READS = { onProjectFiles, readModule, onGitStatus, onAgentWorktree, onAgentHandoff, onAgent }
+const RELAY_READS = { onProjectFiles, readModule, onGitStatus, onAgentWorktree, onAgentHandoff, onAgent, onOwnRuns }
 const RELAY_ACTS = { sendStop, sendChoice, sendMessage, sendOpenPullRequest, sendPush, sendMerge }
 // Null-prototype, like RPC_HANDLERS (R1): the key is a request-controlled string, so a plain object
 // would answer `constructor`/`toString`/`valueOf` off Object.prototype and invoke them as handlers.

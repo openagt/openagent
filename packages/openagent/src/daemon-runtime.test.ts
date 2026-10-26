@@ -723,3 +723,57 @@ test('a run whose record names a saved machine\'s computer is that machine\'s, w
     await rm(base, { recursive: true, force: true })
   }
 })
+
+test("a saved machine is asked for its own runs over its relay, and a run of its own that no record here has is still the machine's to be asked about and followed", async () => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'openagent-machine-runs-')))
+  const env = { XDG_CONFIG_HOME: join(base, 'cfg') }
+  await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
+  const git = nodeGitRunner()
+  const dir = await clone(base, 'shop', 'https://github.com/acme/shop.git')
+  await git(['config', 'user.email', 't@t'], dir)
+  await git(['config', 'user.name', 't'], dir)
+  await git(['commit', '-q', '--allow-empty', '-m', 'init'], dir)
+  await addProject(dir, new Date().toISOString(), undefined, env)
+  const shop = projectId(dir)
+  // A run of the laptop's that never reached this computer's records.
+  const ONLY_THERE = '2026-07-19T11-00-00-000Z'
+  const asked: unknown[] = []
+  const open: ServerResponse[] = []
+  const server = createServer((req, res) => {
+    let body = ''
+    req.on('data', chunk => (body += chunk)).on('end', () => {
+      if (req.url === '/_relay/ping') return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ version: '9.9.9', host: 'laptop-box' }))
+      if (req.url === '/_relay/rpc') {
+        asked.push(JSON.parse(body))
+        const run = { id: ONLY_THERE, startedAt: '2026-07-19T11:00:00.000Z', updatedAt: '2026-07-19T11:00:00.000Z', status: 'running', host: 'laptop-box', person: 'me@laptop' }
+        return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ result: { at: 'b.1', runs: [run], ids: [ONLY_THERE] } }))
+      }
+      res.writeHead(200, { 'content-type': 'application/x-ndjson' })
+      res.write(`${JSON.stringify({ kind: 'session-update', sessionId: 'from the laptop' })}\n`)
+      open.push(res)
+    })
+  })
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  await addMachine({ url, key: 'id.key', door: `${url}/_devices/enter`, label: 'Laptop' }, undefined, env)
+  const runtime = createProjectRuntime({ cwd: dir, env })
+  try {
+    const [laptop] = await runtime.remoteAgents.machineRuns(dir)
+    assert.deepEqual([laptop!.host, laptop!.answered, laptop!.runs.map(run => run.id)], ['laptop-box', true, [ONLY_THERE]])
+    // Asked of the project by its address, from the start.
+    assert.deepEqual(asked, [{ fn: 'onOwnRuns', args: [null, null], project: 'github.com/acme/shop' }])
+    // When it answered is kept with it, for while it does not: written behind the list's back.
+    for (let i = 0; i < 40 && !(await listMachines(undefined, env))[0]!.seenAt; i++) await new Promise(resolve => setTimeout(resolve, 50))
+    assert.ok((await listMachines(undefined, env))[0]!.seenAt)
+    // The run is the machine's: asked of it, and followed from here.
+    assert.deepEqual(await runtime.remoteAgents.home(shop, ONLY_THERE), { url, key: 'id.key', project: 'github.com/acme/shop' })
+    await runtime.remoteAgents.follow(shop, ONLY_THERE)
+    assert.deepEqual(runtime.remoteAgents.list(shop).map(row => [row.id, row.remoteLabel, row.person]), [[ONLY_THERE, 'Laptop', 'me@laptop']])
+  } finally {
+    for (const res of open) res.end()
+    await runtime.dispose()
+    server.closeAllConnections()
+    server.close()
+    await rm(base, { recursive: true, force: true })
+  }
+})

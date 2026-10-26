@@ -304,12 +304,12 @@ const RPC_TIMEOUT_MS = 60_000 // a relayed git push/PR runs over the network on 
  * shape, the same way a failed local read does. A refusal the machine gave a reason for is thrown
  * as a {@link MachineRefusal}, so the reason can be shown in place of that shape's own words.
  */
-export async function relayRpc(target: RemoteTarget, fn: string, args: unknown[]): Promise<unknown> {
+export async function relayRpc(target: RemoteTarget, fn: string, args: unknown[], timeoutMs = RPC_TIMEOUT_MS): Promise<unknown> {
   const res = await machineFetch(`${trimSlashes(target.url)}/_relay/rpc`, target.pin, {
     method: 'POST',
     headers: relayHeaders(target.key),
     body: JSON.stringify({ fn, args, project: target.project }),
-    signal: AbortSignal.timeout(RPC_TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeoutMs),
   })
   if (!res.ok) {
     const why = await refusalOf(res)
