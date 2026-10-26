@@ -7,7 +7,8 @@ import type { OpenAgentEvent } from './events.js'
 import type { StartAgentOptions, StartAgentResult, AddProjectResult, RemoveProjectResult, StartedInResult } from './dashboard/index.js'
 import type { EventsSource, RemoteAgents, SavedMachine } from './dashboard/rpc-serve.js'
 import { RelayedAgents, relayRpc, remoteFacts, startRemoteAgent, type BringProject, type RelayProject, type RemoteTarget } from './dashboard/remote-run.js'
-import { MachineRunsKept, type MachineRuns } from './dashboard/machine-runs.js'
+import { MachineRunsKept, RUNS_WAIT_MS, type MachineRuns } from './dashboard/machine-runs.js'
+import { ownRunsWatch } from './dashboard/runs-watch.js'
 import { cloneProject, cloneTarget } from './clone-project.js'
 import { copyLoginsTo, loginsAreThere, ownLogins, type OwnLogins } from './dashboard/copy-logins.js'
 import { screenInDiary } from './dashboard/screen.js'
@@ -50,8 +51,10 @@ const HOME_KEPT_MS = 10_000
 const OWN_KEPT_MS = 24 * 60 * 60_000
 /** How many runs' machines are kept before the memory starts over. */
 const MAX_HOMES = 5_000
-/** How long a machine gets to say its runs: a page is answered with what it said before meanwhile. */
+/** How long a machine gets to say its runs once it stops holding the call: a page is answered with what it said before meanwhile. */
 const RUNS_ASKED_MS = 8_000
+/** How often the machines' runs of a project someone listens to are asked for again, to keep them followed (machine-runs.ts follows them a minute). */
+const RUNS_FOLLOWED_MS = 30_000
 
 /** How many projects this computer clones at once for other machines; one more is told to ask again. */
 const MAX_COMING = 3
@@ -172,7 +175,8 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     (machine, address, since) => {
       const saved = savedAt(machine.url)
       if (!saved) return Promise.reject(new Error('that machine is no longer saved'))
-      return relayRpc({ url: saved.url, key: saved.key, ...(saved.pin ? { pin: saved.pin } : {}), project: address }, 'onOwnRuns', [null, since ?? null], RUNS_ASKED_MS)
+      // The machine holds the call until its runs change: it is given that long and a while more to answer.
+      return relayRpc({ url: saved.url, key: saved.key, ...(saved.pin ? { pin: saved.pin } : {}), project: address }, 'onOwnRuns', [null, since ?? null, RUNS_WAIT_MS], RUNS_WAIT_MS + RUNS_ASKED_MS)
     },
     (machine, at) => {
       const saved = savedAt(machine.url)
@@ -186,6 +190,23 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     // A machine that has not said its computer's name, or says one another machine says too, has no runs to say.
     const asked = machines.flatMap(machine => (machine.host !== undefined && machineOf(machine.host) === machine ? [{ url: machine.url, host: machine.host, ...(machine.seenAt !== undefined ? { seenAt: machine.seenAt } : {}) }] : []))
     return asked.length > 0 ? machineRunsKept.of(asked, address) : []
+  }
+  // Followed while someone listens: asked for again before the machines stop being followed.
+  const followRuns = (path: string, changed: () => void): (() => void) => {
+    let stopped = false
+    let stopListening: (() => void) | undefined
+    void addressOf(path).then(address => {
+      if (address !== undefined && !stopped) stopListening = machineRunsKept.listen(address, changed)
+    })
+    const keep = (): void => void machineRuns(path).catch(() => {})
+    keep()
+    const timer = setInterval(keep, RUNS_FOLLOWED_MS)
+    timer.unref()
+    return () => {
+      stopped = true
+      clearInterval(timer)
+      stopListening?.()
+    }
   }
   // A run of a project by its id: its record here, else what the saved machine it runs on said of
   // it, for a run whose record was never shared.
@@ -249,6 +270,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     sent: agentId => relayedAgents.isSent(agentId),
     machineNames,
     machineRuns,
+    followRuns,
   }
   // The machine side of the relay (#1067 slice 2): run one whitelisted read/steer/handoff RPC against this
   // daemon's own copy of the project the call named, for a daemon that relayed an agent here.
@@ -361,7 +383,10 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     })
     // The line made a checkout (or is about to): the project's checkouts are read again on the
     // next look rather than a few seconds from now, so the new run's page finds its own.
-    if (started.ok) projectBranches.changed(projectCwd)
+    if (started.ok) {
+      projectBranches.changed(projectCwd)
+      ownRunsWatch.poke(projectCwd)
+    }
     return started.ok ? { ok: true, agentId: started.id, ...(started.driver !== undefined ? { driver: started.driver } : {}) } : { ok: false, error: started.error }
   }
 
@@ -511,6 +536,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
 
   const dispose = async (): Promise<void> => {
     relayedAgents.dispose()
+    machineRunsKept.stop()
   }
 
   return { onStart, onAddProject, onStartedIn, onRemoveProject, remoteEventsSource, projectAt, bringProject, tailRelayEvents, remoteAgents, onRelayRpc, screenOf, dispose }

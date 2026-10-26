@@ -33,6 +33,7 @@ import { useLiveEvents } from './lib/use-live-events.js'
 import { STARTING_AT_MOST_MS, useAgents } from './lib/use-agents.js'
 import { readModuleAgents } from './lib/module-agents.js'
 import { usePolled } from './lib/use-async.js'
+import { runsAgain, useRunsPace } from './lib/runs-changed.js'
 import { useRoute } from './lib/use-route.js'
 import { formatRoute, type Route } from './lib/route.js'
 import { projectAddresses } from '../src/project-address.js'
@@ -236,13 +237,14 @@ export function App() {
   // client consumer is the browser notification below, so it is polled exactly when that will fire —
   // both the category (`notifyNewActivity`) and the browser method (`notifyBrowser`) on.
   const browserActivity = newActivityEnabled(preferences) && notificationsEnabled(preferences)
-  const { value: activity } = usePolled<ProjectionRead<Activity>>(browserActivity ? onActivity : null, EMPTY_ACTIVITY, 15000, [browserActivity])
+  const { value: activity } = usePolled<ProjectionRead<Activity>>(browserActivity ? onActivity : null, EMPTY_ACTIVITY, 15000, [browserActivity], undefined, runsAgain(undefined))
   useActivityNotifications(activity, browserActivity)
 
   // The shared sidebar's recents when all projects show (#shared-shell): the rail pools every
   // project's sessions here. Polled only then — a picked project's own agents (above) carry its rail.
   const allShow = scope === null && !scopePending
-  const { value: recentAgents, reload: reloadRecent, loaded: recentLoaded } = usePolled<RecentAgent[]>(allShow ? onRecentAgents : null, EMPTY_RECENT, 10_000, [allShow])
+  const recentPace = useRunsPace(10_000)
+  const { value: recentAgents, reload: reloadRecent, loaded: recentLoaded } = usePolled<RecentAgent[]>(allShow ? onRecentAgents : null, EMPTY_RECENT, recentPace, [allShow], undefined, runsAgain(undefined))
   // Every project's runs are read every ten seconds, but a run just started is read every second
   // until its row and its name are in, as a project's own list reads it (`use-agents.ts`): the name
   // is the first thing a person waits on. Only for a run just started: one that never shows in that

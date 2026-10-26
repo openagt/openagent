@@ -452,6 +452,7 @@ test('a run on a saved machine reads the same in the project\'s list and in ever
       follow: async () => {},
       machineNames: async () => host => (host === 'server-box' ? { label: 'Server', url: 'https://server.example' } : undefined),
       machineRuns: async () => [],
+      followRuns: () => () => {},
     },
   })
   try {
@@ -490,6 +491,7 @@ test('a call that arrived from another computer is run here whatever the run\'s 
       follow: async () => {},
       machineNames: async () => () => ({ label: 'Server', url: 'https://server.example' }),
       machineRuns: async () => [],
+      followRuns: () => () => {},
     },
   })
   try {
@@ -535,7 +537,7 @@ test('a machine that refuses what would change a run, and says why, is answered 
   await new Promise<void>(resolve => machine.listen(0, '127.0.0.1', resolve))
   const target = { url: `http://127.0.0.1:${(machine.address() as AddressInfo).port}`, key: 'id.key', project: 'github.com/acme/shop' }
   provideTestContext({
-    remote: { target: () => undefined, list: () => [], working: () => false, rekey: () => {}, sent: () => true, home: async () => target, follow: async () => {}, machineNames: async () => () => undefined, machineRuns: async () => [] },
+    remote: { target: () => undefined, list: () => [], working: () => false, rekey: () => {}, sent: () => true, home: async () => target, follow: async () => {}, machineNames: async () => () => undefined, machineRuns: async () => [], followRuns: () => () => {} },
   })
   try {
     assert.deepEqual(await sendMessage(ctx.projectId, 'go on', ctx.agentId), { ok: false, error: WHY })
@@ -596,6 +598,7 @@ test("a saved machine's run is listed as the machine says it, and is never going
       follow: async () => {},
       machineNames: async () => host => (host === 'laptop' ? { label: 'Laptop', url: 'http://127.0.0.1:4310' } : undefined),
       machineRuns: async () => [{ host: 'laptop', answered, runs: answered ? [unrecorded] : [], seenAt: '2026-07-19T12:30:00.000Z' }],
+      followRuns: () => () => {},
     },
   })
   try {
@@ -627,6 +630,34 @@ test('a computer answers another one over the relay with its own runs only, each
     const again = (await dispatchRelayRpc(ctx.projectId, 'onOwnRuns', ['their-id-for-it', first.at])) as { runs: unknown[]; ids: string[] }
     assert.deepEqual(again.runs, [])
     assert.deepEqual(again.ids, [ctx.agentId])
+  } finally {
+    ctx.restore()
+    await rm(ctx.dir, { recursive: true, force: true })
+  }
+})
+
+test('a computer holds the call of another one that waits for its runs, and answers it when a run changes how it stands', async () => {
+  const ctx = await projectWithWorktreeAgent({ pid: 0, host: hostname() }, { status: 'running' })
+  const card = join(worktreePath(ctx.dir, ctx.agentId), OPENAGENT_DIR, `${ctx.agentId}.json`)
+  const write = (status: string, more: Record<string, unknown> = {}): Promise<void> =>
+    writeFile(card, JSON.stringify({ id: ctx.agentId, startedAt: '2026-07-19T10:00:00.000Z', status, caller: { pid: 0, host: hostname() }, ...more }))
+  try {
+    const first = (await dispatchRelayRpc(ctx.projectId, 'onOwnRuns', ['x', null, 5_000])) as { at: string }
+    // Nothing a list shows changes while it waits: the run's step (its cost) goes with the answer at the end of the wait.
+    const started = Date.now()
+    const held = dispatchRelayRpc(ctx.projectId, 'onOwnRuns', ['x', first.at, 1_500]) as Promise<{ at: string; runs: { cost?: number }[] }>
+    await new Promise(resolve => setTimeout(resolve, 300))
+    await write('running', { cost: 0.5 })
+    const quiet = await held
+    assert.ok(Date.now() - started >= 1_400, 'it answered before the wait was up with nothing a list shows changed')
+    assert.deepEqual(quiet.runs.map(run => run.cost), [0.5])
+    // The run waits on the person: answered at once.
+    const asked = Date.now()
+    const waiting = dispatchRelayRpc(ctx.projectId, 'onOwnRuns', ['x', quiet.at, 10_000]) as Promise<{ runs: { status: string }[] }>
+    await new Promise(resolve => setTimeout(resolve, 300))
+    await write('waiting', { cost: 0.5 })
+    assert.deepEqual((await waiting).runs.map(run => run.status), ['waiting'])
+    assert.ok(Date.now() - asked < 3_000, 'it waited past the change')
   } finally {
     ctx.restore()
     await rm(ctx.dir, { recursive: true, force: true })

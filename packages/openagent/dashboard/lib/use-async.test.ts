@@ -305,6 +305,36 @@ describe('asking no more than needed', () => {
     expect([tile.result.current.value, card.result.current.value]).toEqual([2, 2])
   })
 
+  test('told that what it shows changed, a read asks at once, once for every part reading under its key', async () => {
+    let round = 0
+    const load = vi.fn(() => Promise.resolve(++round))
+    const told = new Set<(change: number) => void>()
+    const again = (read: (change: number) => void): (() => void) => {
+      told.add(read)
+      return () => told.delete(read)
+    }
+    const tell = (change: number): void => act(() => told.forEach(read => read(change)))
+    const tile = renderHook(() => usePolled(load, 0, 60_000, [], { remember: 'runs:p1' }, again))
+    const card = renderHook(() => usePolled(load, 0, 60_000, [], { remember: 'runs:p1' }, again))
+    await settle()
+    expect(load).toHaveBeenCalledTimes(1)
+    tell(1)
+    await settle()
+    expect(load).toHaveBeenCalledTimes(2)
+    expect([tile.result.current.value, card.result.current.value]).toEqual([2, 2])
+    // A tab not shown reads nothing when told: it reads when it is shown again.
+    tabShown(false)
+    tell(2)
+    await settle()
+    expect(load).toHaveBeenCalledTimes(2)
+    // Gone from the page, it is told nothing more.
+    tabShown(true)
+    await settle()
+    tile.unmount()
+    card.unmount()
+    expect(told.size).toBe(0)
+  })
+
   test('reload asks anew even while a read is out, and the older answer landing after it is dropped', async () => {
     const answers: ((value: string) => void)[] = []
     const load = vi.fn(() => new Promise<string>(resolve => answers.push(resolve)))

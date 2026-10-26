@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { hostnameFromHostHeader, isLoopbackHost } from '../loopback-host.js'
 import { setDashboardContext } from '../dashboard-rpc/context.js'
 import { RPC_HANDLERS, RPC_EVENT_STREAM } from '../dashboard-rpc/index.js'
+import { followRunsChanged } from '../dashboard-rpc/runs-changed.js'
 import { errorMessage } from '../error-message.js'
 import { PERSON_HEADER, asCaller } from './person.js'
 import { sendBody } from './compress.js'
@@ -71,8 +72,10 @@ export interface RemoteAgents {
    * it was given and its address. Asked of the machines first, when one has not said its name yet.
    */
   machineNames(): Promise<(host: string) => SavedMachine | undefined>
-  /** What each saved machine said last of its own runs of the project at `projectPath`, asked again once that is a few seconds old (machine-runs.ts). */
+  /** What each saved machine says of its own runs of the project at `projectPath`, followed for a while from now on (machine-runs.ts). */
   machineRuns(projectPath: string): Promise<MachineRuns[]>
+  /** Tell `changed` each time a saved machine's runs of the project at `projectPath` change, until the answer is called. */
+  followRuns(projectPath: string, changed: () => void): () => void
 }
 
 /**
@@ -223,9 +226,37 @@ async function serveEventStream(req: IncomingMessage, res: ServerResponse, url: 
 }
 
 /**
+ * Tell the page each time the runs of a project change, here or on a saved machine
+ * (runs-changed.ts), as Server-Sent Events, until it goes away: it reads them again at once. A
+ * comment line now and then keeps whatever passes the page's request on from taking it for idle.
+ */
+function serveChangesStream(req: IncomingMessage, res: ServerResponse): void {
+  res.writeHead(200, {
+    'content-type': 'text/event-stream',
+    'cache-control': 'no-store',
+    connection: 'keep-alive',
+    'x-accel-buffering': 'no',
+  })
+  // Said at once: the page knows it is told from here on.
+  res.write(': listening\n\n')
+  const stop = followRunsChanged(change => void res.write(`data: ${JSON.stringify(change)}\n\n`))
+  const alive = setInterval(() => void res.write(': still\n\n'), CHANGES_ALIVE_MS)
+  const finish = (): void => {
+    clearInterval(alive)
+    stop()
+  }
+  req.on('close', finish)
+  res.on('close', finish)
+}
+
+/** How often the changes stream says it is still there when nothing changed. */
+const CHANGES_ALIVE_MS = 25_000
+
+/**
  * Mount the dashboard's RPC surface (#405) on the daemon's `node:http` server: `POST /_rpc/<name>`
- * for the calls, `GET /_rpc/events` for the live stream. It runs in the daemon process, so
- * `sendStart` reaches the daemon's own `startAgent` through the wired {@link DashboardContext}.
+ * for the calls, `GET /_rpc/events` for the live stream, `GET /_rpc/changes` for when to read the
+ * runs again. It runs in the daemon process, so `sendStart` reaches the daemon's own `startAgent`
+ * through the wired {@link DashboardContext}.
  *
  * Cross-origin POSTs are rejected (CSRF: a page on evil.com must not steer or start a session), as
  * are requests carrying someone else's `Host` (DNS rebinding: the same page must not reach us by
@@ -259,6 +290,10 @@ export function makeRpcMount(context: DashboardContext): (req: IncomingMessage, 
     try {
       if (req.method === 'GET' && name === 'events') {
         await serveEventStream(req, res, url)
+        return true
+      }
+      if (req.method === 'GET' && name === 'changes') {
+        serveChangesStream(req, res)
         return true
       }
       const handler = RPC_HANDLERS[name]

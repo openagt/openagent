@@ -5,6 +5,10 @@ import { connect } from 'node:net'
 import { makeRpcMount, type DashboardContext } from './rpc-serve.js'
 import { RPC_HANDLERS } from '../dashboard-rpc/index.js'
 import { testDashboardContext } from '../dashboard-rpc/test-context.js'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { addProject, projectId } from '../registry.js'
 
 // F3: the dashboard's transport is `POST /_rpc/<name>` and `GET /_rpc/events`, where it used to be
 // Telefunc. The CSRF and rebound-Host guards are covered in server.test.ts, which exercises them
@@ -205,5 +209,54 @@ test('the event stream sends one SSE frame per event', async () => {
     assert.deepEqual(events.map(e => e.sessionId), ['one', 'two'])
   } finally {
     await server.close()
+  }
+})
+
+test("the changes stream tells the page each time a project's runs change on a saved machine, until the page goes", async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'openagent-changes-'))
+  await addProject(dir, new Date().toISOString())
+  const listening = new Map<string, () => void>()
+  let stopped = 0
+  const remote = testDashboardContext().remote
+  const server = await mounted({
+    remote: {
+      ...remote,
+      followRuns: (path, changed) => {
+        listening.set(path, changed)
+        return () => void stopped++
+      },
+    },
+  })
+  const page = new AbortController()
+  try {
+    const res = await fetch(`${server.url}/_rpc/changes`, { signal: page.signal })
+    assert.equal(res.status, 200)
+    assert.match(res.headers.get('content-type') ?? '', /text\/event-stream/)
+    const reader = res.body!.getReader()
+    const decoder = new TextDecoder()
+    let text = ''
+    const frames = async (count: number): Promise<string[]> => {
+      for (;;) {
+        const told = text.split('\n\n').filter(frame => frame.startsWith('data: '))
+        if (told.length >= count) return told.map(frame => frame.slice('data: '.length))
+        const { value, done } = await reader.read()
+        if (done) return told
+        text += decoder.decode(value, { stream: true })
+      }
+    }
+    for (let i = 0; i < 100 && !listening.has(dir); i++) await new Promise(resolve => setTimeout(resolve, 10))
+    // Two changes at once are told once.
+    listening.get(dir)!()
+    listening.get(dir)!()
+    assert.deepEqual((await frames(1)).map(frame => JSON.parse(frame) as unknown), [{ kind: 'runs', projectId: projectId(dir) }])
+    listening.get(dir)!()
+    assert.equal((await frames(2)).length, 2)
+    page.abort()
+    for (let i = 0; i < 100 && stopped === 0; i++) await new Promise(resolve => setTimeout(resolve, 10))
+    assert.equal(stopped, 1)
+  } finally {
+    page.abort()
+    await server.close()
+    await rm(dir, { recursive: true, force: true })
   }
 })

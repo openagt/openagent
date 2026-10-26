@@ -18,9 +18,26 @@ test('a computer answers every run of its own first, then only the ones that cha
   const next = changes.answer('/p', [run('01', 'done', 'laptop')], same.at)
   assert.deepEqual(next.runs.map(r => [r.id, r.status]), [['01', 'done']])
   assert.deepEqual(next.ids, ['01'])
+  // Nothing changed, the count stayed; then what a list shows changed after it: a run ended, and one went.
+  assert.equal(same.at, first.at)
+  assert.equal(changes.shownSince('/p', same.at), true)
+  assert.equal(changes.shownSince('/p', next.at), false)
   // A count from another OpenAgent, or none, is answered with every run.
   assert.equal(new RunChanges().answer('/p', [run('01', 'done', 'laptop')], next.at).runs.length, 1)
   assert.equal(changes.answer('/p', [run('01', 'done', 'laptop')], 'nonsense').runs.length, 1)
+})
+
+test('a step of a run is a change to answer, and no change a list shows', () => {
+  const changes = new RunChanges()
+  const first = changes.answer('/p', [run('01', 'running', 'laptop')])
+  const step = changes.answer('/p', [run('01', 'running', 'laptop', { updatedAt: '2026-10-25T10:05:00.000Z', cost: 0.4 })], first.at)
+  assert.notEqual(step.at, first.at)
+  assert.deepEqual(step.runs.map(r => r.cost), [0.4])
+  assert.equal(changes.shownSince('/p', first.at), false)
+  changes.answer('/p', [run('01', 'running', 'laptop', { title: 'Fix the login', cost: 0.4 })], step.at)
+  assert.equal(changes.shownSince('/p', step.at), true)
+  // From another OpenAgent's count, everything is new.
+  assert.equal(changes.shownSince('/p', 'other.1'), true)
 })
 
 test("a machine's word on its own runs wins over their records, and a run of its own with no record yet is listed", () => {
@@ -60,49 +77,62 @@ test("a machine's word is taken only for its own runs: not for a run it names an
   assert.deepEqual(same.map(r => [r.id, r.status, r.host]), [['01', 'running', 'server']])
 })
 
-test('what a machine said is kept a few seconds, asked again behind the page, and held while it does not answer', async () => {
+test("a machine's runs are followed with one call it holds: what changes a list is told at once, a step is only kept", async () => {
   let now = 1_000_000
-  const asked: (string | undefined)[] = []
-  let answer: () => Promise<OwnRuns> = async () => ({ at: 'a.2', runs: [run('01', 'running', 'laptop'), run('02', 'done', 'laptop'), run('03', 'done', 'elsewhere')], ids: ['01', '02'] })
+  const calls: { since: string | undefined; answer: (said: OwnRuns) => void; fail: (err: Error) => void }[] = []
+  const pauses: number[] = []
   const seen: string[] = []
   const kept = new MachineRunsKept(
-    async (_machine, _address, since) => {
-      asked.push(since)
-      return answer()
-    },
+    (_machine, _address, since) => new Promise((answer, fail) => calls.push({ since, answer, fail })),
     (_machine, at) => seen.push(at),
     () => now,
+    async ms => void pauses.push(ms),
   )
-  const laptop = { url: 'http://127.0.0.1:4310', host: 'laptop' }
-  // The first ask is waited for; a run that names another computer is not the machine's to say.
-  const [first] = await kept.of([laptop], 'github.com/me/p')
-  assert.deepEqual(first!.runs.map(r => r.id), ['01', '02'])
-  assert.equal(first!.answered, true)
-  assert.equal(first!.seenAt, new Date(now).toISOString())
-  assert.equal(seen.length, 1)
-  // Within a few seconds the answer stands: the machine is not asked again.
-  now += 1_000
-  await kept.of([laptop], 'github.com/me/p')
-  assert.deepEqual(asked, [undefined])
-  // Later it is asked from where it left off, and what changed goes in; a run it no longer has goes out.
-  now += 10_000
-  answer = async () => ({ at: 'a.3', runs: [run('01', 'done', 'laptop')], ids: ['01'] })
-  await kept.of([laptop], 'github.com/me/p')
-  await new Promise(resolve => setImmediate(resolve))
-  const [later] = await kept.of([laptop], 'github.com/me/p')
-  assert.deepEqual(asked, [undefined, 'a.2'])
-  assert.deepEqual(later!.runs.map(r => [r.id, r.status]), [['01', 'done']])
-  // It does not answer: what it said last stands, and it is said not to have answered, with when it was seen.
-  now += 10_000
-  answer = async () => {
-    throw new Error('This computer is not connected.')
+  let told = 0
+  kept.listen('github.com/me/p', () => told++)
+  const until = async (done: () => boolean): Promise<void> => {
+    for (let i = 0; i < 100 && !done(); i++) await new Promise(resolve => setImmediate(resolve))
+    assert.ok(done(), 'it never happened')
   }
+  const laptop = { url: 'http://127.0.0.1:4310', host: 'laptop' }
+  // The first answer is waited for; a run that names another computer is not the machine's to say.
+  const reading = kept.of([laptop], 'github.com/me/p')
+  await until(() => calls.length === 1)
+  calls[0]!.answer({ at: 'a.1', runs: [run('01', 'running', 'laptop'), run('03', 'done', 'elsewhere')], ids: ['01'] })
+  const [first] = await reading
+  assert.deepEqual([first!.runs.map(r => r.id), first!.answered, first!.seenAt, told], [['01'], true, new Date(now).toISOString(), 1])
+  // Asked again at once from where it left off, a call the machine holds: a page reading meanwhile is answered with what is kept.
+  await until(() => calls.length === 2)
+  assert.equal(calls[1]!.since, 'a.1')
   await kept.of([laptop], 'github.com/me/p')
-  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(calls.length, 2)
+  // A step of the run (its cost) is kept, and told to no one.
+  calls[1]!.answer({ at: 'a.2', runs: [run('01', 'running', 'laptop', { cost: 0.3 })], ids: ['01'] })
+  await until(() => calls.length === 3)
+  assert.equal(told, 1)
+  assert.equal((await kept.of([laptop], 'github.com/me/p'))[0]!.runs[0]!.cost, 0.3)
+  // It answered at once with nothing a list shows: it does not hold the call, and is asked again later.
+  assert.equal(pauses.at(-1), 5_000)
+  // The run waits on the person: told.
+  calls[2]!.answer({ at: 'a.3', runs: [run('01', 'waiting', 'laptop')], ids: ['01'] })
+  await until(() => told === 2)
+  // The run is gone: told.
+  await until(() => calls.length === 4)
+  calls[3]!.answer({ at: 'a.4', runs: [], ids: [] })
+  await until(() => told === 3)
+  // It does not answer: what it said last stands, it is said not to have answered, and it is left a while.
+  await until(() => calls.length === 5)
+  calls[4]!.fail(new Error('This computer is not connected.'))
+  await until(() => told === 4)
   const [off] = await kept.of([laptop], 'github.com/me/p')
-  assert.equal(off!.answered, false)
-  assert.deepEqual(off!.runs.map(r => r.id), ['01'])
-  assert.equal(off!.seenAt, new Date(now - 10_000).toISOString())
+  assert.deepEqual([off!.answered, off!.seenAt, pauses.at(-1)], [false, new Date(now).toISOString(), 10_000])
+  assert.equal(seen.length, 4)
+  // No page asked for a minute: it is followed no more once its call is answered.
+  await until(() => calls.length === 6)
+  now += 61_000
+  calls[5]!.answer({ at: 'a.5', runs: [], ids: [] })
+  await new Promise(resolve => setTimeout(resolve, 20))
+  assert.equal(calls.length, 6)
 })
 
 test('a machine never asked yet is known by when it was last seen as kept with it', async () => {
