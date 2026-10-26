@@ -121,7 +121,7 @@ test('with no project added, the computer\'s modules are there and run their own
   }
 })
 
-test('a module\'s command may write what OpenAgent reads through a provider: the next read sees it, not a cached copy (#1774)', async () => {
+test('a module\'s action may write what OpenAgent reads through a provider: the next read sees it, not a cached copy (#1774); a read forgets nothing', async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-modules-rpc-')))
   const previous = process.env.XDG_CONFIG_HOME
   process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
@@ -132,8 +132,12 @@ test('a module\'s command may write what OpenAgent reads through a provider: the
     await addProject(a, '2026-09-19T00:00:00.000Z')
     const queue = (await projectQueue(a))!
     assert.deepEqual(await queue.list(), [], 'read once: cached for the window')
-    assert.deepEqual(await runModuleCommand(projectId(a), 'queue', ['add', 'ship it']), { ok: true, output: { ok: true } })
-    assert.deepEqual(await queue.list(), ['ship it'], 'the module wrote through its command, and OpenAgent forgot its read')
+    assert.deepEqual(await runModuleCommand(projectId(a), 'queue', ['add', 'ship it'], undefined, true), { ok: true, output: { ok: true } })
+    assert.deepEqual(await queue.list(), ['ship it'], 'the module wrote through its action, and OpenAgent forgot its read')
+    // Another writer adds an entry; the page then reads the queue through the package's command.
+    await writeFile(join(a, 'node_modules', 'queue', 'queue.json'), JSON.stringify(['ship it', 'and this']))
+    assert.deepEqual(await runModuleCommand(projectId(a), 'queue', ['--local']), { ok: true, output: ['ship it', 'and this'] })
+    assert.deepEqual(await queue.list(), ['ship it'], 'a read wrote nothing: what OpenAgent read stays, until its window ends')
   } finally {
     if (previous === undefined) delete process.env.XDG_CONFIG_HOME
     else process.env.XDG_CONFIG_HOME = previous

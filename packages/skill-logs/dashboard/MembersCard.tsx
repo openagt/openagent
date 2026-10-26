@@ -43,10 +43,12 @@ export function MembersCard({ projects }: ModuleCardProps) {
     async () => {
       const reads = await Promise.all(
         projects.map(async project => {
-          const [result, runs] = await Promise.all([host.runCommand(project.id, ['people', '--local', '--days', String(DAYS)]), host.agents(project.id).catch(() => undefined)])
+          const since = Date.now() - DAYS * 86_400_000
+          // The runs of those days only: a project keeps hundreds, and a phone downloads every one asked for.
+          const [result, runs] = await Promise.all([host.runCommand(project.id, ['people', '--local', '--days', String(DAYS)]), host.agents(project.id, { since: new Date(since).toISOString() }).catch(() => undefined)])
           const recorded = result.ok && Array.isArray(result.output) ? (result.output as PersonActivity[]) : []
           // The runs as the dashboard lists them, each computer's by its own word: a record stops at what was shared last.
-          const people = runs ? peopleWithRuns(recorded, runs, Date.now() - DAYS * 86_400_000) : recorded
+          const people = runs ? peopleWithRuns(recorded, runs, since) : recorded
           // Each project's git host is asked of its own people: another project may be on another host.
           const accounts = people.length ? await host.gitHostPeople(project.id, people.map(person => person.person)).catch(() => []) : []
           return { project: project.name, people, accounts }

@@ -1,4 +1,5 @@
 import { stat } from 'node:fs/promises'
+import { moduleAgents, type ModuleAgent, type ModuleAgentsWanted } from '../dashboard/module-agents.js'
 import { join } from 'node:path'
 import type { BridgeBrowserStatus } from '../bridge-browser.js'
 import { findAgent, findCheckout, readLiveMetas, readAllAgents, readDoing, loadAgentEvents, type AgentDoing, startedAtFromAgentId, isPidAlive, type AgentMeta, type AgentStatus, isRunId, projectBranches, type BranchesFor } from '../store/index.js'
@@ -93,6 +94,15 @@ export async function onAgents(projectId: string): Promise<AgentMeta[]> {
   const machineOf = await contextRemote().machineNames()
   const local = cwd ? await withRowMarks(cwd, (await projectRuns(cwd)).map(agent => forDashboard(agent, machineOf))) : []
   return withFollowed(remote, local, agentId => contextRemote().sent(agentId))
+}
+
+/**
+ * A project's runs as a module sees them ({@link ModuleAgent}), only the ones it asks for: a card
+ * shows a few of the hundreds a project keeps, and each run in the few fields a module reads, so
+ * what a phone downloads for it is that much smaller. The same runs as {@link onAgents}.
+ */
+export async function onModuleAgents(projectId: string, wanted: ModuleAgentsWanted = {}): Promise<ModuleAgent[]> {
+  return moduleAgents(await onAgents(projectId), wanted)
 }
 
 /**

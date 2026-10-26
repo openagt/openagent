@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Button, LinkActions, Page, usePolled, useAction, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject } from '@openagt/dashboard/module'
-import { heldBack, holderAgent, planLink, planTicketPrompt, readListed, ticketLink, workOnTicketPrompt } from '../src/module.js'
+import { heldBack, holderAgent, planLink, planTicketPrompt, ticketLink, workOnTicketPrompt } from '../src/module.js'
 import type { ProjectTickets, WorkspaceTicket } from './lib/types.js'
+import { listTickets } from './lib/list.js'
 import {
   defaultView,
   filterRows,
@@ -49,7 +50,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
     () =>
       Promise.all(
         projects.map(async (project): Promise<ProjectRead> => {
-          const [listed, agents] = await Promise.all([host.runCommand(project.id, ['list', '--local']).then(readListed), host.agents(project.id).catch(() => [])])
+          const [listed, agents] = await Promise.all([listTickets(host, project.id), host.agents(project.id).catch(() => [])])
           if ('error' in listed) return { projectId: project.id, projectName: project.name, tickets: [], error: listed.error }
           const tickets: WorkspaceTicket[] = listed.tickets.map(ticket => {
             const agent = holderAgent(agents, ticket.lockedBy)

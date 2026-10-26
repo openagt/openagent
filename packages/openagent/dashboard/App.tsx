@@ -30,7 +30,8 @@ import { sendToScreen, watchScreen } from './lib/screen.js'
 import { startPicks } from './lib/use-start-agent.js'
 import { stashPendingDraft } from './lib/draft-handoff.js'
 import { useLiveEvents } from './lib/use-live-events.js'
-import { STARTING_AT_MOST_MS, readAgents, useAgents } from './lib/use-agents.js'
+import { STARTING_AT_MOST_MS, useAgents } from './lib/use-agents.js'
+import { readModuleAgents } from './lib/module-agents.js'
 import { usePolled } from './lib/use-async.js'
 import { useRoute } from './lib/use-route.js'
 import { formatRoute, type Route } from './lib/route.js'
@@ -359,23 +360,8 @@ export function App() {
         stashPendingDraft(prompt)
         selectProject(inProject)
       },
-      // The rail's read of the same project, when it is one: the cards and the rail ask once.
-      agents: async inProject =>
-        (await readAgents(inProject)).map(agent => ({
-          id: agent.id,
-          status: agent.status,
-          startedAt: agent.startedAt,
-          ...(agent.branch ? { name: agent.branch } : {}),
-          ...(agent.intent ? { ask: agent.intent } : {}),
-          ...(agent.endedAt ? { endedAt: agent.endedAt } : {}),
-          ...(agent.title ? { title: agent.title } : {}),
-          ...(agent.person ? { person: agent.person } : {}),
-          ...(agent.cost !== undefined ? { cost: agent.cost } : {}),
-          ...(agent.driver ? { driver: agent.driver } : {}),
-          ...(agent.model ? { model: agent.model } : {}),
-          ...(agent.remoteLabel ? { machine: agent.remoteLabel } : {}),
-          ...(agent.seenAt ? { seenAt: agent.seenAt } : {}),
-        })),
+      // Asked at once by two cards, or soon again, the same runs are read once.
+      agents: (inProject, wanted) => readModuleAgents(inProject, wanted),
       machines: onMachineVersions,
       // Through the dashboard's own list, so the launcher's "Run on" shows the change at once.
       addMachine: async (link, label) => {

@@ -55,15 +55,15 @@ export async function onModules(): Promise<DashboardModule[]> {
  * Run one of a module package's commands in one project and answer its JSON output: how a module
  * reads (and changes) its own data. Refused for an unknown project and for a package that is not a
  * module of that project, so a page can run only its own package's commands, never an arbitrary
- * program. Once the command has run, OpenAgent forgets what it had read of that project's data
- * the package provides (the queue package's queue): the command may have written it, and the next
- * read sees that at once instead of a cached copy. What other packages provide stays read.
+ * program.
  *
- * `acts` says the command is a module's action on the project (a link action), not a page's read:
- * OpenAgent then also converges the project's data branch with origin, as its clock does
- * every minute, before forgetting — in a project that shares its records a package's command
- * writes as a remote writer, straight to origin, and this machine's copy would otherwise show the
- * write only at the next sync.
+ * `acts` says the command is a module's action on the project (a claim released, an entry added),
+ * not a page's read. Only then does OpenAgent converge the project's data branch with origin, as
+ * its clock does every minute, and forget what it had read of the data that package provides (the
+ * queue package's queue): in a project that shares its records a package's command writes as a
+ * remote writer, straight to origin, and the next read shows the change at once instead of at the
+ * next sync. A read writes nothing, so what was read stays: the Members card reading the logs
+ * package's people leaves the runs that package provides read.
  */
 export async function runModuleCommand(projectId: string, pkg: string, args: string[], command?: string, acts = false): Promise<ModuleCommandResult> {
   const root = await resolveProjectPath(projectId)
@@ -72,8 +72,10 @@ export async function runModuleCommand(projectId: string, pkg: string, args: str
   const module = await findProjectModule(root, pkg)
   if (!module) return { ok: false, error: `${pkg} brings no module to this project` }
   const result = await runCommand(root, module, args, command)
-  if (acts) await pullFileBranch(root, DATA_BRANCH, { log: () => {} }).catch(() => {})
-  providedDataChanged(root, pkg)
+  if (acts) {
+    await pullFileBranch(root, DATA_BRANCH, { log: () => {} }).catch(() => {})
+    providedDataChanged(root, pkg)
+  }
   return result
 }
 

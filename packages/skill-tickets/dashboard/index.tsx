@@ -11,7 +11,8 @@ import { Ticket } from 'lucide-react'
 import { defineModule } from '@openagt/dashboard/module'
 import { TicketsModulePage } from './TicketsModulePage.js'
 import { HotTicketsCard } from './HotTicketsCard.js'
-import { namesOf, readListed } from '../src/module.js'
+import { namesOf } from '../src/module.js'
+import { listTickets } from './lib/list.js'
 import './dashboard.css'
 
 export default defineModule({
@@ -23,7 +24,7 @@ export default defineModule({
       Page: TicketsModulePage,
       // What another page's `tickets/<file>` is called: the ticket's title, by the same list the page shows.
       names: async (host, projectId, paths) => {
-        const listed = readListed(await host.runCommand(projectId, ['list', '--local']))
+        const listed = await listTickets(host, projectId)
         return 'error' in listed ? {} : namesOf(paths, listed.tickets)
       },
     },

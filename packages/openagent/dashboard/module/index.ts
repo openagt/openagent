@@ -13,10 +13,11 @@ import type { Health } from '../../src/health.js'
 import type { CardWidth } from '../../src/overview-layout.js'
 import { createContext, useContext, useMemo, type ComponentType } from 'react'
 import type { AgentStatus } from '../../src/index.js'
+import type { ModuleAgent, ModuleAgentsWanted } from '../../src/dashboard/module-agents.js'
 import { readModule, runComputerCommand, runComputerCommandOn, runModuleCommand } from '../rpc/modules.js'
 import type { ModuleCommandResult, ModuleReadResult } from '../rpc/modules.js'
 
-export type { ModuleCommandResult, ModuleReadResult, AgentStatus, CardWidth, Health }
+export type { ModuleCommandResult, ModuleReadResult, AgentStatus, CardWidth, Health, ModuleAgent, ModuleAgentsWanted }
 
 /** A registered project that has the module's package, as a page gets it. */
 export interface ModuleProject {
@@ -316,35 +317,6 @@ export function defineModule(definition: ModuleDefinition): ModuleDefinition {
   return definition
 }
 
-/** A run of a project as the dashboard knows it (#1774): enough for a page to name one and link to it. */
-export interface ModuleAgent {
-  /** The run's id, the one {@link ModuleHost.openAgent} takes. */
-  id: string
-  /** The run's branch, the name the agent gave its work, when its record carries one. */
-  name?: string
-  /** What the run was asked, as typed or as queued; absent when its record carries none. */
-  ask?: string
-  /** How it stands: `unknown` while the computer it runs on does not answer, whatever its record last said. */
-  status: AgentStatus
-  /** ISO 8601. */
-  startedAt: string
-  /** ISO 8601, once it ended. */
-  endedAt?: string
-  /** Its short name, as a list of runs shows it. */
-  title?: string
-  /** Whose run it is, by the email its record is kept under. */
-  person?: string
-  /** What it cost so far, in US dollars. */
-  cost?: number
-  /** The coding agent that runs it (`claude-code`, `codex`, …) and its model. */
-  driver?: string
-  model?: string
-  /** The saved machine it runs on, by the name it was given; absent for a run of this computer's. */
-  machine?: string
-  /** While its status is `unknown`: when its computer was last seen, ISO, if it was. */
-  seenAt?: string
-}
-
 /** What starting a run answered: the run's id, or in words why there is none. */
 export type StartRunResult = { ok: true; agentId: string } | { ok: false; error: string }
 
@@ -411,8 +383,12 @@ export interface ModuleHost {
   startRun(projectId: string, prompt: string, opts?: { land?: boolean }): Promise<StartRunResult>
   /** Open the project's launcher with this prompt drafted in, to set it up before sending: "Configure first, then run". */
   configureRun(projectId: string, prompt: string): void
-  /** The project's runs the dashboard knows: the ones running, and the recorded ones when the project records them. */
-  agents(projectId: string): Promise<ModuleAgent[]>
+  /**
+   * The project's runs the dashboard knows: the ones running, and the recorded ones when the
+   * project records them. `wanted` narrows them to the ones a card shows (those holding a claim,
+   * the last 30 days): a project keeps hundreds, and a phone downloads every one asked for.
+   */
+  agents(projectId: string, wanted?: ModuleAgentsWanted): Promise<ModuleAgent[]>
   /**
    * The other computers a run can be sent to, as saved on this one, each with the OpenAgent it
    * runs, beside this computer's own: how a page tells that a machine fell behind this computer.
