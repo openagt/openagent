@@ -1,6 +1,6 @@
 {
   "name": "@openagt/dashboard",
-  "version": "0.37.0",
+  "version": "0.38.0",
   "description": "OpenAgent: a local dashboard and daemon for coding agents. It starts an agent through the project's own start hook and shows every agent from the files it keeps; it runs no coding agent itself.",
   "keywords": [
     "ai",

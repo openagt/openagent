@@ -1,6 +1,6 @@
 {
   "name": "@openagt/skill-queue",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "The agent queue for coding agents: the priority-banded list of what agents work on next, kept on a branch of the project's repository and changed with the queue command.",
   "license": "MIT",
   "repository": {
