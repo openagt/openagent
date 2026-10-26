@@ -1,8 +1,9 @@
-import { Check, ChevronDown, House, Laptop, Server, Plus, type LucideIcon } from 'lucide-react'
+import { Check, ChevronDown, Laptop, Plus } from 'lucide-react'
 import type { Machine } from '../lib/machines.js'
 import type { MachineStatus } from '../lib/use-machine-status.js'
 import { thisMachineName } from '../lib/this-machine.js'
-import { machineName, reachedByLine, reachedThrough } from '../../src/client.js'
+import { machineKind, machineName, reachedByLine } from '../../src/client.js'
+import { MACHINE_ICONS, MachineMark } from './MachineMark.js'
 import { cn } from '../lib/utils.js'
 import { buttonVariants } from './ui/button.js'
 import { rowButtonClass } from './ui/row-item.js'
@@ -41,33 +42,10 @@ export type ConnectionControl = {
   status: Record<string, MachineStatus>
 }
 
-/** What a saved machine is, as its row draws and says it: its icon, and what it is and where. */
-function kindOf(machine: Machine): { Icon: LucideIcon; words: string } {
-  const through = reachedThrough(machine.url)
-  if (machine.owner !== undefined) return { Icon: Server, words: `@${machine.owner}'s server${through !== undefined ? `, through ${through}` : ''}. Runs use your own logins.` }
-  if (reachedByLine(machine.url)) return { Icon: Laptop, words: 'Your computer' }
-  if (through !== undefined) return { Icon: House, words: `Server at home, through ${through}` }
-  // Its address, when its name is another: a server named by its address says it once.
-  const host = hostOf(machine.url)
-  return { Icon: Server, words: host === machine.label ? 'Server' : `Server, ${host}` }
-}
-
-function hostOf(url: string): string {
-  try {
-    return new URL(url).host
-  } catch {
-    return url
-  }
-}
-
-/** A machine's icon with its reachability on it (#1072): green online, muted offline or still unknown. */
-function MachineIcon({ Icon, status }: { Icon: LucideIcon; status: MachineStatus | undefined }) {
-  return (
-    <span className="relative mt-0.5 flex shrink-0">
-      <Icon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-      <span aria-hidden className={cn('absolute -right-0.5 -bottom-0.5 h-1.5 w-1.5 rounded-full ring-2 ring-popover', status === 'online' ? 'bg-success' : 'bg-muted-foreground/50')} />
-    </span>
-  )
+/** What a saved machine is, as its row says it: what and where, and for another person's computer whose logins a run uses. */
+function wordsOf(machine: Machine): string {
+  const { kind, place } = machineKind(machine)
+  return kind === 'shared' ? `${place}. Runs use your own logins.` : place
 }
 
 // One flat "Run on" list (#1067): this machine, then the saved machines and "Add a machine",
@@ -82,7 +60,7 @@ export function RunOnMenu({ connection, busy, inRow = false }: { connection: Con
   const here = thisMachineName()
   const summary = selectedMachine ? machineName(selectedMachine) : here
   const onThisMachine = !selectedMachine
-  const Icon = onThisMachine ? Laptop : kindOf(selectedMachine).Icon
+  const Icon = onThisMachine ? Laptop : MACHINE_ICONS[machineKind(selectedMachine).kind]
   return (
     <DropdownMenu>
       <Tooltip>
@@ -129,7 +107,7 @@ export function RunOnMenu({ connection, busy, inRow = false }: { connection: Con
         {connection.machines.map(machine => {
           const status = connection.status[machine.id]
           const offline = status === 'offline'
-          const { Icon: KindIcon, words } = kindOf(machine)
+          const words = wordsOf(machine)
           const description = offline ? (reachedByLine(machine.url) ? 'Not connected. It must be on, with OpenAgent running.' : `Offline · ${words}`) : words
           return (
             <DropdownMenuItem
@@ -139,7 +117,7 @@ export function RunOnMenu({ connection, busy, inRow = false }: { connection: Con
               onClick={() => connection.onSelect(machine)}
             >
               <Check className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', selectedMachine?.id === machine.id ? 'opacity-100' : 'opacity-0')} />
-              <MachineIcon Icon={KindIcon} status={status} />
+              <MachineMark kind={machineKind(machine).kind} online={status === 'online'} className="mt-0.5" />
               <OptionLabel label={machineName(machine)} description={description} />
             </DropdownMenuItem>
           )

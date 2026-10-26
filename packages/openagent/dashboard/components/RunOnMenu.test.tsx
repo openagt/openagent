@@ -9,6 +9,8 @@ afterEach(cleanup)
 const STUDIO: Machine = { id: 'studio', url: 'http://192.168.1.5:4200', label: 'Studio' }
 // A person's own computer, reached by the line it keeps open to this server: saved by the address that stands for it here.
 const MACBOOK: Machine = { id: 'macbook', url: 'http://127.0.0.1:4210', label: 'MacBook' }
+// A server: what speaks HTTPS.
+const VPS: Machine = { id: 'vps', url: 'https://165.245.244.10', label: '165.245.244.10' }
 
 function renderMenu(over: Partial<ConnectionControl> = {}, inRow = true) {
   const connection: ConnectionControl = {
@@ -104,22 +106,23 @@ describe('the "Run on" pick in the row under the box', () => {
 describe('a saved machine that is a person\'s own computer, reached by the line it keeps open to this server', () => {
   const row = () => screen.getByRole('menuitem', { name: /^MacBook/ })
 
-  test('its row draws a computer and says what it is, not the address that stands for it here; a server\'s row is as it was', async () => {
+  test('its row draws a computer and says what it is, not the address that stands for it here; a computer on the network and a server say theirs', async () => {
     renderMenu({ machines: [MACBOOK, STUDIO], status: { macbook: 'online', studio: 'online' } })
     await openMenu(trigger())
     expect(row().textContent).toBe('MacBookYour computer')
     expect(row().querySelector('svg.lucide-laptop')).toBeTruthy()
     expect(row().querySelector('svg.lucide-server')).toBeNull()
+    // A computer on the network: what is reached by an address of its own there, not HTTPS.
     const studio = screen.getByRole('menuitem', { name: /^Studio/ })
-    expect(studio.textContent).toBe('StudioServer, 192.168.1.5:4200')
+    expect(studio.textContent).toBe('StudioComputer, 192.168.1.5:4200')
+    expect(studio.querySelector('svg.lucide-laptop')).toBeTruthy()
     cleanup()
     // A server named by its address says it once.
-    const vps: Machine = { id: 'vps', url: 'https://165.245.244.10', label: '165.245.244.10' }
-    renderMenu({ machines: [vps] })
+    renderMenu({ machines: [VPS] })
     await openMenu(trigger())
-    expect(screen.getByRole('menuitem', { name: /^165\.245\.244\.10/ }).textContent).toBe('165.245.244.10Server')
-    expect(studio.querySelector('svg.lucide-server')).toBeTruthy()
-    expect(studio.querySelector('svg.lucide-laptop')).toBeNull()
+    const vps = screen.getByRole('menuitem', { name: /^165\.245\.244\.10/ })
+    expect(vps.textContent).toBe('165.245.244.10Server')
+    expect(vps.querySelector('svg.lucide-server')).toBeTruthy()
   })
 
   test('another person\'s computer, shared with everyone on this server, is drawn as a server and says whose it is and whose logins a run uses', async () => {
@@ -151,7 +154,7 @@ describe('a saved machine that is a person\'s own computer, reached by the line 
       expect(trigger().querySelector('svg.lucide-laptop')).toBeTruthy()
       expect(trigger().querySelector('svg.lucide-server')).toBeNull()
       cleanup()
-      renderMenu({ machines: [MACBOOK, STUDIO], selectedMachineId: 'studio' }, inRow)
+      renderMenu({ machines: [MACBOOK, VPS], selectedMachineId: 'vps' }, inRow)
       expect(trigger().querySelector('svg.lucide-server')).toBeTruthy()
       expect(trigger().querySelector('svg.lucide-laptop')).toBeNull()
       cleanup()

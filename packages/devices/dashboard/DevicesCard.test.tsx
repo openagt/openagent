@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { ModuleHostContext, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
+import { ModuleHostContext, forgetRemembered, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
 import { DevicesCard } from './DevicesCard.js'
 
 // The Overview's Devices card: this computer and its saved machines, each with whether it answers
@@ -31,7 +31,12 @@ const show = (host: ModuleHost) =>
     </ModuleHostContext.Provider>,
   )
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  // What one test read would show at once in the next: kept in memory, and stored for the next visit.
+  forgetRemembered()
+  localStorage.clear()
+})
 
 test('this computer and each saved machine: whether it answers, its memory and disk in use, and an OpenAgent behind this one marked', async () => {
   const server: ModuleMachine = { id: 'https://203.0.113.5', label: 'droplet', url: 'https://203.0.113.5', version: '0.36.0', health: { memory: { total: 4 * GB, used: 3.6 * GB }, disk: { total: 50 * GB, used: 10 * GB }, load: 40 } }
@@ -61,4 +66,24 @@ test('this computer and each saved machine: whether it answers, its memory and d
   expect(host.openSettings).toHaveBeenCalledWith('devices')
   // Never a server's SSH: only the door's own status.
   expect(vi.mocked(host.runComputerCommand).mock.calls.map(call => call[0])).toEqual([['status']])
+})
+
+test('each machine is said as the "Run on" menu says it: its own name, then what it is and where, never the address that stands for it', async () => {
+  const via = 'https://165.245.244.10/_devices/via/8687ab858ef6'
+  const machines: ModuleMachine[] = [
+    { id: 'https://165.245.244.10', label: '165.245.244.10', url: 'https://165.245.244.10', version: '0.39.1' },
+    { id: via, label: 'experiment (through 165.245.244.10)', url: via, version: '0.39.1' },
+    { id: 'https://203.0.113.5/_devices/via/b0x1', label: 'rom-desktop (through 203.0.113.5)', url: 'https://203.0.113.5/_devices/via/b0x1', owner: 'rom' },
+  ]
+  show(hostWith({ version: '0.39.1', name: 'Adas-MacBook', machines }))
+  const items = await screen.findAllByRole('listitem')
+  const said = items.map(item => [item.querySelector('.font-medium')!.textContent, item.querySelector('.text-xs.text-muted-foreground')?.textContent])
+  expect(said.slice(1)).toEqual([
+    ['165.245.244.10', 'Server'],
+    ['experiment', 'Server at home, through 165.245.244.10'],
+    ['rom-desktop', 'offline'],
+  ])
+  expect(items[2]!.querySelector('svg.lucide-house')).toBeTruthy()
+  expect(items[1]!.querySelector('svg.lucide-server')).toBeTruthy()
+  expect(document.body.textContent).not.toContain('_devices')
 })

@@ -47,3 +47,27 @@ export function machineName(machine: { label: string; url: string }): string {
   const server = reachedThrough(machine.url)
   return server !== undefined ? machine.label.replace(` (through ${server})`, '') : machine.label
 }
+
+/** What a saved machine is: a computer, a server at home reached through a server, another person's computer shared on a server, or a server. */
+export type MachineKind = 'computer' | 'home' | 'shared' | 'server'
+
+/**
+ * What a saved machine is, and in a few words what and where, as every page says it: never the
+ * address that stands for it here. A computer is one reached by its line, or by an address on its
+ * network; a server is one that speaks HTTPS; an address that is the machine's own name is said once.
+ */
+export function machineKind(machine: { label: string; url: string; owner?: string | undefined }): { kind: MachineKind; place: string } {
+  const through = reachedThrough(machine.url)
+  if (machine.owner !== undefined) return { kind: 'shared', place: `@${machine.owner}'s server${through !== undefined ? `, through ${through}` : ''}` }
+  if (reachedByLine(machine.url)) return { kind: 'computer', place: 'Your computer' }
+  if (through !== undefined) return { kind: 'home', place: `Server at home, through ${through}` }
+  let host = machine.url
+  try {
+    host = new URL(machine.url).host
+  } catch {
+    // An address that does not read as one is said as it is.
+  }
+  const server = machine.url.startsWith('https://')
+  const word = server ? 'Server' : 'Computer'
+  return { kind: server ? 'server' : 'computer', place: host === machine.label ? word : `${word}, ${host}` }
+}
