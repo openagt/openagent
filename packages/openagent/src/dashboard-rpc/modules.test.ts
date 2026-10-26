@@ -42,6 +42,13 @@ else console.log(JSON.stringify(read()))`,
   },
 }
 
+/** The modules listed, each URL without its file's version, once every one is seen to carry one. */
+async function listed(): Promise<Awaited<ReturnType<typeof onModules>>> {
+  const modules = await onModules()
+  for (const module of modules) assert.match(module.url, /\.js\?v=[0-9a-z]+-[0-9a-z]+$/, `${module.package} is listed with its file's version, so a browser keeps it`)
+  return modules.map(module => ({ ...module, url: module.url.replace(/\?v=.*$/, '') }))
+}
+
 test('the dashboard\'s modules are every registered project\'s, one per package, and a module runs only its own package\'s commands', async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-modules-rpc-')))
   const previous = process.env.XDG_CONFIG_HOME
@@ -56,7 +63,7 @@ test('the dashboard\'s modules are every registered project\'s, one per package,
     await addProject(b, '2026-09-19T00:00:01.000Z')
 
     // The computer's module (the Devices and Machines sections) comes first, and is no project's. Then the built-in modules (Changes, Files, the logs package's), which are every project's, from the first; then the projects' own.
-    assert.deepEqual(await onModules(), [
+    assert.deepEqual(await listed(), [
       { package: '@openagt/devices', url: '/_computer-modules/%40openagt%2Fdevices/dashboard.js', projects: [], computer: true },
       { package: '@openagt/changes', url: `/_modules/${projectId(a)}/%40openagt%2Fchanges/dashboard.js`, projects: [projectId(a), projectId(b)] },
       { package: '@openagt/files', url: `/_modules/${projectId(a)}/%40openagt%2Ffiles/dashboard.js`, projects: [projectId(a), projectId(b)] },
@@ -86,7 +93,7 @@ test('with no project added, the computer\'s modules are there and run their own
   delete process.env.OPENAGENT_SERVER
   try {
     await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
-    assert.deepEqual(await onModules(), [
+    assert.deepEqual(await listed(), [
       { package: '@openagt/devices', url: '/_computer-modules/%40openagt%2Fdevices/dashboard.js', projects: [], computer: true },
     ])
     // The door's own command, answering what it keeps for this computer: nobody is in, and it is shut.
@@ -114,7 +121,7 @@ test('with no project added, the computer\'s modules are there and run their own
   }
 })
 
-test('a module\'s command may write what OpenAgent reads through a provider: the next read sees it, not a cached copy (#1774)', async () => {
+test('a module\'s action may write what OpenAgent reads through a provider: the next read sees it, not a cached copy (#1774); a read forgets nothing', async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-modules-rpc-')))
   const previous = process.env.XDG_CONFIG_HOME
   process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
@@ -125,8 +132,12 @@ test('a module\'s command may write what OpenAgent reads through a provider: the
     await addProject(a, '2026-09-19T00:00:00.000Z')
     const queue = (await projectQueue(a))!
     assert.deepEqual(await queue.list(), [], 'read once: cached for the window')
-    assert.deepEqual(await runModuleCommand(projectId(a), 'queue', ['add', 'ship it']), { ok: true, output: { ok: true } })
-    assert.deepEqual(await queue.list(), ['ship it'], 'the module wrote through its command, and OpenAgent forgot its read')
+    assert.deepEqual(await runModuleCommand(projectId(a), 'queue', ['add', 'ship it'], undefined, true), { ok: true, output: { ok: true } })
+    assert.deepEqual(await queue.list(), ['ship it'], 'the module wrote through its action, and OpenAgent forgot its read')
+    // Another writer adds an entry; the page then reads the queue through the package's command.
+    await writeFile(join(a, 'node_modules', 'queue', 'queue.json'), JSON.stringify(['ship it', 'and this']))
+    assert.deepEqual(await runModuleCommand(projectId(a), 'queue', ['--local']), { ok: true, output: ['ship it', 'and this'] })
+    assert.deepEqual(await queue.list(), ['ship it'], 'a read wrote nothing: what OpenAgent read stays, until its window ends')
   } finally {
     if (previous === undefined) delete process.env.XDG_CONFIG_HOME
     else process.env.XDG_CONFIG_HOME = previous

@@ -39,7 +39,9 @@ describe('HotTicketsCard', () => {
     expect(screen.getAllByText(/alpha/)).toHaveLength(2)
     expect(screen.getByText(/beta/)).toBeTruthy()
     expect(host.runCommand).toHaveBeenCalledWith('p1', ['list', '--local'])
-    expect(host.agents).toHaveBeenCalledWith('p2')
+    // Only the runs holding a claim are asked for; a project with none claimed asks for no run.
+    expect(host.agents).toHaveBeenCalledWith('p1', { ids: ['someone'] })
+    expect(host.agents).toHaveBeenCalledTimes(1)
   })
 
   test('a high-priority ticket in review stays off the card; a waiting one, of any priority, is in Waiting with what it waits on', async () => {

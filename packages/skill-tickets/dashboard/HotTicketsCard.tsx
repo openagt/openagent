@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import { ArrowUp, Bot, CirclePause, Clock, Flame, WifiOff, type LucideIcon } from 'lucide-react'
 import { Button, Card, CardContent, CardHeader, CardTitleLink, LinkActions, cn, formatDateTime, usePolled, useModuleHost, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
-import { heldBack, holderAgent, hotLane, readListed, ticketLink } from '../src/module.js'
+import { heldBack, holderAgent, hotLane, ticketLink } from '../src/module.js'
+import { listTickets } from './lib/list.js'
 import type { WorkspaceTicket } from './lib/types.js'
 import { releaseClaim } from './lib/release.js'
 
@@ -59,8 +60,11 @@ export function HotTicketsCard({ projects }: ModuleCardProps) {
     async () => {
       const reads = await Promise.all(
         projects.map(async project => {
-          const [listed, agents] = await Promise.all([host.runCommand(project.id, ['list', '--local']).then(readListed), host.agents(project.id).catch(() => [])])
+          const listed = await listTickets(host, project.id)
           if ('error' in listed) return { project, hot: [], error: listed.error }
+          // Only the runs holding a claim, the few this card names, and none when nothing is claimed.
+          const holders = listed.tickets.flatMap(ticket => (ticket.locked && ticket.lockedBy !== undefined ? [ticket.lockedBy] : []))
+          const agents = holders.length > 0 ? await host.agents(project.id, { ids: holders }).catch(() => []) : []
           const hot: HotTicket[] = []
           for (const ticket of listed.tickets) {
             const hotIn = hotLane(ticket)
@@ -86,6 +90,8 @@ export function HotTicketsCard({ projects }: ModuleCardProps) {
     // A local read per project plus its runs: a glance, not a feed.
     30_000,
     [key],
+    // Kept for the next visit: the page opens with the last tickets, faded until they are read again.
+    { remember: `skill-tickets:hot:${key}`, stored: true },
   )
 
   const title = (

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { CalendarClock } from 'lucide-react'
 import { Button, Card, CardContent, CardHeader, CardTitleLink, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, useModuleHost, usePolled, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
-import { cannotRun, readSchedulers, rowTitle, schedulerStatus, schedulerStopped, startedNow, startsNext, unlistedWords, type Answered, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
+import { cannotRun, readSchedulers, schedulersKey, rowTitle, schedulerStatus, schedulerStopped, startedNow, startsNext, unlistedWords, type Answered, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
 // The Overview's Automations card: what starts by itself in every project that has this package,
 // read with `scheduler status` every 10 seconds. It is called what its page is called, and
@@ -27,7 +27,8 @@ export function offWords(off: number, on: number): string | undefined {
 export function SchedulerCard({ projects }: ModuleCardProps) {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
-  const { value: rows, loaded, reload } = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key])
+  // One read with the Automations page and Settings under the same key, kept for the next visit.
+  const { value: rows, loaded, reload } = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key], { remember: schedulersKey(key), stored: true })
   const open = (): void => host.openPage('automations')
   return (
     <Card>

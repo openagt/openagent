@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import type { Intervention, Activity, ProjectionRead, ProjectSummary, RecentAgent } from '../src/index.js'
-import { onProjectFiles, onInterventions, onActivity, onRecentAgents, onAgents } from './rpc/reads.js'
+import { onProjectFiles, onInterventions, onActivity, onRecentAgents } from './rpc/reads.js'
 import { sendStart } from './rpc/control.js'
 import { onProjects } from './rpc/projects.js'
 import { onComputersThrough, onMachinePerson, onMachineVersions, sendLetMachineIn, sendMachineCode, sendRemoveMachineDevice } from './rpc/machines.js'
@@ -31,6 +31,7 @@ import { startPicks } from './lib/use-start-agent.js'
 import { stashPendingDraft } from './lib/draft-handoff.js'
 import { useLiveEvents } from './lib/use-live-events.js'
 import { STARTING_AT_MOST_MS, useAgents } from './lib/use-agents.js'
+import { readModuleAgents } from './lib/module-agents.js'
 import { usePolled } from './lib/use-async.js'
 import { useRoute } from './lib/use-route.js'
 import { formatRoute, type Route } from './lib/route.js'
@@ -40,7 +41,7 @@ import { useActivityNotifications, useInterventionNotifications } from './lib/us
 import { usePreferences, notificationsEnabled, newActivityEnabled, humanInterventionEnabled, OpenProjectContext } from './lib/preferences.js'
 import { useDocumentTitle } from './lib/document-title.js'
 import { projectLabels, ProjectLabelsContext } from './lib/project-labels.js'
-import { useWorking } from './lib/use-working.js'
+import { useActiveAgents } from './lib/use-working.js'
 import { useFavicon } from './lib/favicon.js'
 import { useDaemonHealth } from './lib/use-daemon-health.js'
 import { useContextSet } from './lib/use-context-set.js'
@@ -98,7 +99,8 @@ export function App() {
   // follow it. Slow, and reloadable so adding a project from the sidebar's "New" reflects at once
   // (bump the key).
   const [projectsKey, setProjectsKey] = useState(0)
-  const { value: projects, loaded: projectsLoaded } = usePolled<ProjectSummary[]>(onProjects, EMPTY_PROJECTS, 30_000, [projectsKey])
+  // Kept for the next visit too: the Overview's cards are drawn for the projects before they are read again.
+  const { value: projects, loaded: projectsLoaded } = usePolled<ProjectSummary[]>(onProjects, EMPTY_PROJECTS, 30_000, [projectsKey], { remember: 'projects', stored: true })
   // Read again when a project is added from the sidebar or removed from its project home: which
   // project has which module changes then.
   const modules = useModules(projectsKey)
@@ -170,8 +172,10 @@ export function App() {
   // The agents of the project on screen, for its pages, or of the picked project, for the sidebar:
   // the same project whenever both are set. Read once the address is: before, it names the project
   // by its address, not by its id.
+  // Every two seconds on the project's own pages, where a run's status is watched; every ten beside
+  // the Overview or a module's page, whose rail only lists them (as every project's rail does).
   const agentsOf = addressesRead ? (projectId ?? scope) : null
-  const { agents: agents, reload, loaded: agentsLoaded } = useAgents(agentsOf, agentStart.id !== null && agentStart.projectId === agentsOf ? agentStart.id : null)
+  const { agents: agents, reload, loaded: agentsLoaded } = useAgents(agentsOf, agentStart.id !== null && agentStart.projectId === agentsOf ? agentStart.id : null, projectId !== null ? 2000 : 10_000)
 
   // The Context set lives in the shell (#492/#504) so the two surfaces that feed it share one
   // source of truth: the launcher's `@`/`#` chips and Context picker, and the Files pane's tree.
@@ -205,7 +209,10 @@ export function App() {
   // The read as a whole goes to the notifier, which tells of every project's items whichever one
   // is picked, and also needs to know which projects the poll actually reached before it calls
   // anything "new" (#1625).
-  const { value: interventionsRead } = usePolled<ProjectionRead<Intervention>>(onInterventions, EMPTY_INTERVENTIONS, 5000, [])
+  const { value: interventionsRead, stale: interventionsStale } = usePolled<ProjectionRead<Intervention>>(onInterventions, EMPTY_INTERVENTIONS, 5000, [], {
+    remember: 'interventions',
+    stored: true,
+  })
 
   const project = projectId ? projects.find(p => p.id === projectId) : undefined
   const projectName = project ? (labels.get(project.id) ?? project.name) : null
@@ -221,7 +228,9 @@ export function App() {
   // and Overview card); only the notification is gated, on both the category (`notifyHumanIntervention`,
   // default on) and the browser method (`notifyBrowser`).
   const preferences = usePreferences()
-  useInterventionNotifications(interventionsRead, humanInterventionEnabled(preferences) && notificationsEnabled(preferences))
+  // Only a fresh read: one stored by an earlier visit taken as what was already there would announce
+  // everything that came while the page was closed.
+  useInterventionNotifications(interventionsStale ? EMPTY_INTERVENTIONS : interventionsRead, humanInterventionEnabled(preferences) && notificationsEnabled(preferences))
 
   // The "New activity" category (#627): the default-off feed of agents starting/finishing. Its only
   // client consumer is the browser notification below, so it is polled exactly when that will fire —
@@ -351,22 +360,8 @@ export function App() {
         stashPendingDraft(prompt)
         selectProject(inProject)
       },
-      agents: async inProject =>
-        (await onAgents(inProject)).map(agent => ({
-          id: agent.id,
-          status: agent.status,
-          startedAt: agent.startedAt,
-          ...(agent.branch ? { name: agent.branch } : {}),
-          ...(agent.intent ? { ask: agent.intent } : {}),
-          ...(agent.endedAt ? { endedAt: agent.endedAt } : {}),
-          ...(agent.title ? { title: agent.title } : {}),
-          ...(agent.person ? { person: agent.person } : {}),
-          ...(agent.cost !== undefined ? { cost: agent.cost } : {}),
-          ...(agent.driver ? { driver: agent.driver } : {}),
-          ...(agent.model ? { model: agent.model } : {}),
-          ...(agent.remoteLabel ? { machine: agent.remoteLabel } : {}),
-          ...(agent.seenAt ? { seenAt: agent.seenAt } : {}),
-        })),
+      // Asked at once by two cards, or soon again, the same runs are read once.
+      agents: (inProject, wanted) => readModuleAgents(inProject, wanted),
       machines: onMachineVersions,
       // Through the dashboard's own list, so the launcher's "Run on" shows the change at once.
       addMachine: async (link, label) => {
@@ -405,8 +400,9 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ends])
 
-  // Is an agent working (#875)? Drives the mark and the tab icon.
-  const working = useWorking()
+  // Is an agent working (#875)? Drives the mark and the tab icon, and the Overview's agents at work.
+  const activeAgents = useActiveAgents()
+  const working = activeAgents.active.length > 0
   useFavicon(working)
 
   // Whether the daemon answers at all (#948). Without this, a dead daemon froze every surface
@@ -459,6 +455,8 @@ export function App() {
           onSelectAgent={selectAgentInProject}
           onAgentStarted={agentStarted}
           interventions={interventions}
+          interventionsStale={interventionsStale}
+          active={activeAgents}
           projects={projects}
           scope={scope}
         />

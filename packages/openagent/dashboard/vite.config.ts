@@ -89,8 +89,10 @@ function openagentDevDaemon(): Plugin {
 // What the dashboard shares with a module (#1774). A module is a package of a project that adds to
 // the dashboard; it imports these by bare name and bundles none of them, and the import map this
 // plugin writes into index.html points each name at the dashboard's own copy, so the module renders
-// in the same React and uses the same components. Each is built as an entry of its own at a fixed
-// name (`/host/<name>.js`) that shares its chunks with the dashboard's main entry.
+// in the same React and uses the same components. Each is built as an entry of its own that shares
+// its chunks with the dashboard's main entry, fingerprinted like them (`/assets/host/<name>-<hash>.js`):
+// the import map, in the page that is always asked for again, names this version's, so a browser
+// keeps them for good and a page opened again asks for none of them.
 //
 // React ships as CommonJS, and a re-export of CommonJS (`export * from 'react'`) keeps none of its
 // names, so each React entry is generated: its names are read off the very package the build uses,
@@ -121,11 +123,20 @@ function openagentHostModules(): Plugin {
       const names = Object.keys(require(spec) as object).filter(name => name !== 'default')
       return [`import M from '${spec}'`, 'export default M', ...names.map(name => `export const ${name} = M.${name}`)].join('\n')
     },
-    transformIndexHtml() {
-      const imports: Record<string, string> = {}
-      for (const [spec, file] of Object.entries(HOST_MODULES)) imports[spec] = serving ? `/@id/${HOST_PREFIX}${spec}` : `/host/${file}.js`
-      imports['@openagt/dashboard/module'] = serving ? '/module/index.ts' : '/host/module.js'
-      return [{ tag: 'script', attrs: { type: 'importmap' }, children: JSON.stringify({ imports }, null, 2), injectTo: 'head-prepend' }]
+    transformIndexHtml: {
+      // After the bundle is written: the map names each host entry by its fingerprinted file.
+      order: 'post',
+      handler(_html, { bundle }) {
+        const built = (name: string): string => {
+          const chunk = Object.values(bundle ?? {}).find(output => output.type === 'chunk' && output.isEntry && output.name === name)
+          if (!chunk) throw new Error(`the build wrote no ${name} entry`)
+          return `/${chunk.fileName}`
+        }
+        const imports: Record<string, string> = {}
+        for (const [spec, file] of Object.entries(HOST_MODULES)) imports[spec] = serving ? `/@id/${HOST_PREFIX}${spec}` : built(`host/${file}`)
+        imports['@openagt/dashboard/module'] = serving ? '/module/index.ts' : built('host/module')
+        return [{ tag: 'script', attrs: { type: 'importmap' }, children: JSON.stringify({ imports }, null, 2), injectTo: 'head-prepend' }]
+      },
     },
   }
 }
@@ -153,9 +164,6 @@ export default defineConfig({
       },
       // The host entries are imported by name from outside the bundle, so their exports must survive.
       preserveEntrySignatures: 'exports-only',
-      output: {
-        entryFileNames: chunk => (chunk.name.startsWith('host/') ? '[name].js' : 'assets/[name]-[hash].js'),
-      },
     },
   },
   server: {

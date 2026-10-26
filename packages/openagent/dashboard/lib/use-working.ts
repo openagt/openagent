@@ -1,4 +1,4 @@
-import type { Overview } from '../../src/index.js'
+import type { ActiveAgent, Overview } from '../../src/index.js'
 import { onOverview } from '../rpc/reads.js'
 import { usePolled } from './use-async.js'
 
@@ -6,15 +6,16 @@ import { usePolled } from './use-async.js'
 // working for you", which is not "is it working on the project you happen to have selected" —
 // an agent left going in another project still means it is working for you.
 //
-// `onOverview` is the read that already answers this (#437, `active` = every running agent across
-// the registry); it was registered but had no client. The Overview page's own `onDashboard` poll
-// is a superset of it, so this adds no read the daemon did not already serve.
+// `onOverview` is the read that answers this (#437, `active` = every running agent across the
+// registry). The shell reads it once for the mark, the tab icon and the Overview's "Working now"
+// and "Agents at work": one small read, where the Overview used to poll `onDashboard`, which
+// builds every project's queue and tickets too, beside it.
 
 /** Stable initial, so the poll does not churn on every render. */
 const IDLE: Overview = { active: [], queueOpen: 0, recent: [] }
 
-/** True while any project has a running agent. */
-export function useWorking(): boolean {
-  const { value } = usePolled<Overview>(onOverview, IDLE, 5000, [])
-  return value.active.length > 0
+/** Every agent going right now, across the projects; `stale` while that is only what an earlier visit read. */
+export function useActiveAgents(): { active: ActiveAgent[]; stale: boolean } {
+  const { value, stale } = usePolled<Overview>(onOverview, IDLE, 5000, [], { remember: 'overview', stored: true })
+  return { active: value.active, stale }
 }

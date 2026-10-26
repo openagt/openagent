@@ -11,6 +11,7 @@ export type * from '../../src/dashboard-rpc/reads.js'
 // file's path; the transport addresses calls by name now, so the path carries no meaning.
 
 export const onAgents = rpc<typeof impl.onAgents>('onAgents')
+export const onModuleAgents = rpc<typeof impl.onModuleAgents>('onModuleAgents')
 export const onRetainedWorktrees = rpc<typeof impl.onRetainedWorktrees>('onRetainedWorktrees')
 export const onAgentWorktree = rpc<typeof impl.onAgentWorktree>('onAgentWorktree')
 export const onAgent = rpc<typeof impl.onAgent>('onAgent')

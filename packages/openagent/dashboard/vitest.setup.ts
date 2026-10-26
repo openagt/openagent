@@ -15,8 +15,12 @@ import { forgetRemembered } from './lib/use-async.js'
 configure({ asyncUtilTimeout: 5000 })
 
 // The answers `use-async` remembers per key live for the page's life, which in a test run is the
-// whole file: forget them before each test, so one test's answer is never another's first frame.
-beforeEach(() => forgetRemembered())
+// whole file, and the ones it stores live in the browser's storage: forget both before each test,
+// so one test's answer is never another's first frame.
+beforeEach(() => {
+  forgetRemembered()
+  localStorage.clear()
+})
 
 // jsdom lays nothing out, and the library behind the shell's resizable panes (`ui/resizable`)
 // measures its panels as they come to the page. In its place: plain elements that say what they

@@ -17,13 +17,17 @@ import { awaitingName } from './agent-label.js'
 export const STARTING_EVERY_MS = 400
 export const STARTING_AT_MOST_MS = 30_000
 
-export function useAgents(projectId: string | null, starting: string | null = null): { agents: AgentMeta[]; reload: () => void; loaded: boolean } {
+/**
+ * `everyMs`: how often the list is read, every two seconds by default, for a run's page whose
+ * status a person watches; a page that only shows the list beside it (the Overview) reads it less.
+ */
+export function useAgents(projectId: string | null, starting: string | null = null, everyMs = 2000): { agents: AgentMeta[]; reload: () => void; loaded: boolean } {
   // `reload` is the shared guarded one now: it used to be a second, unguarded copy of the
   // read, so an agent started just before a project switch could write the old project's agents.
   const { value: agents, reload, loaded } = usePolled<AgentMeta[]>(
     projectId ? () => onAgents(projectId) : null,
     [],
-    2000,
+    everyMs,
     [projectId],
   )
   const naming = usePreferences().nameRuns !== false

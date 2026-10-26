@@ -90,6 +90,8 @@ const NOTHING_MOUNTED: MountedModules = { pages: [], cards: [], linkActions: [],
 
 /** Each module's browser part, imported once per page load, by URL; a module that fails to load is skipped. */
 const imported = new Map<string, Promise<ModuleDefinition | undefined>>()
+/** The same, once imported (or skipped). */
+const importedBy = new Map<string, ModuleDefinition | undefined>()
 
 function load(url: string): Promise<ModuleDefinition | undefined> {
   let loading = imported.get(url)
@@ -113,6 +115,7 @@ function load(url: string): Promise<ModuleDefinition | undefined> {
       },
     )
     imported.set(url, loading)
+    void loading.then(definition => void importedBy.set(url, definition))
   }
   return loading
 }
@@ -129,60 +132,78 @@ export function byMountOrder(a: { order?: number; package: string }, b: { order?
  * modules claim going to the first, the cards (#1818), sorted by their order then their package, the link actions, the panes, the run slots, the Settings sections (sorted as the cards are) and the usage bar's stop line (the first module's that declares one),
  * every one of them, each carrying the package it came from and the projects that have it. `loaded` is false until the module list has
  * been read and every module in it imported, so the shell can tell "no such page" from "not
- * loaded yet". A change of `reloadKey` reads the list again at once; what is mounted stays until
- * it answers.
+ * loaded yet"; what a module brings is there as soon as that module is imported, so a card is not
+ * kept waiting for another package's code. A change of `reloadKey` reads the list again at once;
+ * what is mounted stays until it answers. The list is kept for the next visit too, so a page
+ * opened again imports the modules at once.
  */
 export function useModules(reloadKey = 0): MountedModules {
-  const { value: modules, loaded: listed } = usePolled(onModules, NO_MODULES, 30_000, [reloadKey])
+  const { value: modules, loaded: listed } = usePolled(onModules, NO_MODULES, 30_000, [reloadKey], { remember: 'modules', stored: true })
   const [state, setState] = useState<MountedModules>(NOTHING_MOUNTED)
   useEffect(() => {
     if (!listed) return
+    // Read again with every module imported already (the list is polled): mounted at once, in one go.
+    if (modules.every(module => importedBy.has(module.url))) {
+      setState(mount(modules.map(module => ({ module, definition: importedBy.get(module.url) })), true))
+      return
+    }
     let live = true
-    void Promise.all(modules.map(async module => ({ module, definition: await load(module.url) }))).then(loadedModules => {
-      if (!live) return
-      const pages: MountedPage[] = []
-      const cards: MountedCard[] = []
-      const linkActions: MountedLinkAction[] = []
-      const panels: MountedPanel[] = []
-      const runSlots: MountedRunSlots[] = []
-      const settings: MountedSettings[] = []
-      const everyPage: MountedEveryPage[] = []
-      let usageLimit: MountedUsageLimit | undefined
-      let schedule: MountedSchedule | undefined
-      for (const { module, definition } of loadedModules) {
-        for (const page of definition?.pages ?? []) {
-          if (!isPageSegment(page.segment) || pages.some(p => p.segment === page.segment)) continue
-          pages.push({ ...page, package: module.package, projects: module.projects })
-        }
-        for (const card of definition?.cards ?? []) {
-          cards.push({ ...card, package: module.package, projects: module.projects, computer: module.computer === true })
-        }
-        for (const action of definition?.linkActions ?? []) {
-          linkActions.push({ ...action, package: module.package, projects: module.projects })
-        }
-        for (const panel of definition?.panels ?? []) {
-          panels.push({ ...panel, package: module.package, projects: module.projects })
-        }
-        for (const section of definition?.settings ?? []) {
-          settings.push({ ...section, package: module.package, projects: module.projects, computer: module.computer === true })
-        }
-        // Only a module of this computer's: a project's package does not put things on every page.
-        if (definition?.everyPage && module.computer === true) everyPage.push({ EveryPage: definition.everyPage, package: module.package })
-        if (definition?.usageLimit) usageLimit ??= { ...definition.usageLimit, package: module.package, projects: module.projects }
-        if (definition?.schedule) schedule ??= { ...definition.schedule, package: module.package, projects: module.projects }
-        const run = definition?.run
-        if (run?.summary) runSlots.push({ ...run, package: module.package, projects: module.projects })
-      }
-      // Numbers, not a list the shell keeps: a third package sits between two others without the shell knowing it exists.
-      cards.sort(byMountOrder)
-      settings.sort(byMountOrder)
-      setState({ pages, cards, linkActions, panels, runSlots, settings, everyPage, ...(usageLimit ? { usageLimit } : {}), ...(schedule ? { schedule } : {}), loaded: true })
-    })
+    const definitions = new Map<DashboardModule, ModuleDefinition | undefined>()
+    for (const module of modules) {
+      void load(module.url).then(definition => {
+        if (!live) return
+        definitions.set(module, definition)
+        // In the list's order, whichever came first: a package's place never depends on how fast its code came.
+        const imported = modules.filter(each => definitions.has(each)).map(each => ({ module: each, definition: definitions.get(each) }))
+        setState(mount(imported, imported.length === modules.length))
+      })
+    }
     return () => {
       live = false
     }
   }, [modules, listed])
   return state
+}
+
+/** What the modules imported so far bring, in the list's order; `loaded` once every one of the list is. */
+function mount(loadedModules: { module: DashboardModule; definition: ModuleDefinition | undefined }[], loaded: boolean): MountedModules {
+  const pages: MountedPage[] = []
+  const cards: MountedCard[] = []
+  const linkActions: MountedLinkAction[] = []
+  const panels: MountedPanel[] = []
+  const runSlots: MountedRunSlots[] = []
+  const settings: MountedSettings[] = []
+  const everyPage: MountedEveryPage[] = []
+  let usageLimit: MountedUsageLimit | undefined
+  let schedule: MountedSchedule | undefined
+  for (const { module, definition } of loadedModules) {
+    for (const page of definition?.pages ?? []) {
+      if (!isPageSegment(page.segment) || pages.some(p => p.segment === page.segment)) continue
+      pages.push({ ...page, package: module.package, projects: module.projects })
+    }
+    for (const card of definition?.cards ?? []) {
+      cards.push({ ...card, package: module.package, projects: module.projects, computer: module.computer === true })
+    }
+    for (const action of definition?.linkActions ?? []) {
+      linkActions.push({ ...action, package: module.package, projects: module.projects })
+    }
+    for (const panel of definition?.panels ?? []) {
+      panels.push({ ...panel, package: module.package, projects: module.projects })
+    }
+    for (const section of definition?.settings ?? []) {
+      settings.push({ ...section, package: module.package, projects: module.projects, computer: module.computer === true })
+    }
+    // Only a module of this computer's: a project's package does not put things on every page.
+    if (definition?.everyPage && module.computer === true) everyPage.push({ EveryPage: definition.everyPage, package: module.package })
+    if (definition?.usageLimit) usageLimit ??= { ...definition.usageLimit, package: module.package, projects: module.projects }
+    if (definition?.schedule) schedule ??= { ...definition.schedule, package: module.package, projects: module.projects }
+    const run = definition?.run
+    if (run?.summary) runSlots.push({ ...run, package: module.package, projects: module.projects })
+  }
+  // Numbers, not a list the shell keeps: a third package sits between two others without the shell knowing it exists.
+  cards.sort(byMountOrder)
+  settings.sort(byMountOrder)
+  return { pages, cards, linkActions, panels, runSlots, settings, everyPage, ...(usageLimit ? { usageLimit } : {}), ...(schedule ? { schedule } : {}), loaded }
 }
 
 /**

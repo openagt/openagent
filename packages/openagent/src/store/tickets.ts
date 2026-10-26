@@ -54,7 +54,7 @@ export interface TicketsSource {
 export type TicketsFor = (root: string) => Promise<TicketsSource | undefined>
 
 /** A {@link TicketsFor} that also forgets what it read of one project, for when a module just wrote there. */
-export type TicketsReader = TicketsFor & { changed(root: string): void }
+export type TicketsReader = TicketsFor & { changed(root: string, pkg?: string): void }
 
 /** How long a read is reused: the dashboard polls several reads of every project's tickets every few seconds, and each is a process. */
 const CACHE_MS = 5_000
@@ -100,7 +100,8 @@ function commandTickets(root: string, command: ProvidedCommand, now: () => numbe
  * source per project kept while the same command provides — so the cache holds across the many
  * reads of one poll, and a project that installs, swaps or drops its provider is read the new way
  * within {@link CACHE_MS}. `changed(root)` forgets that project's read, so the next read runs the
- * command again: a module's command just ran there, and may have written.
+ * command again: a module's command just ran there, and may have written. `changed(root, pkg)`
+ * forgets it only when that package is the one providing: another package's command did not write it.
  */
 export function providedTickets(now: () => number = Date.now): TicketsReader {
   const sources = new Map<string, { at: number; command?: ProvidedCommand; source?: ReturnType<typeof commandTickets> }>()
@@ -114,7 +115,12 @@ export function providedTickets(now: () => number = Date.now): TicketsReader {
     }
     return known.source
   }
-  return Object.assign(reader, { changed: (root: string) => sources.get(root)?.source?.drop() })
+  return Object.assign(reader, {
+    changed: (root: string, pkg?: string) => {
+      const known = sources.get(root)
+      if (pkg === undefined || known?.command?.package === pkg) known?.source?.drop()
+    },
+  })
 }
 
 /** OpenAgent's one reader of the tickets, shared by every caller so they share its cache. */

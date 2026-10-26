@@ -4,7 +4,7 @@ import type { ModulePageProps } from '@openagt/dashboard/module'
 import { AutomationForm } from './AutomationForm.js'
 import { EditPanel } from './EditPanel.js'
 import { openedAutomation, type OpenedAutomation } from './automation-form.js'
-import { atOnce, atOnceWords, cannotRun, decided, startedNow, type Answered, isOwn, outcomeWords, ownPace, pace, publishes, readSchedulers, rowTitle, runsOnWords, saysAtOnce, schedulerStatus, unlistedWords, type AgentModels, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
+import { atOnce, atOnceWords, cannotRun, decided, startedNow, type Answered, isOwn, outcomeWords, ownPace, pace, publishes, readSchedulers, schedulersKey, rowTitle, runsOnWords, saysAtOnce, schedulerStatus, unlistedWords, type AgentModels, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
 // The Automations page: what starts by itself while nobody is at the keyboard. One part per
 // project the page is given (every project that has this package, or the one picked in the
@@ -34,7 +34,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
   /** Every coding agent with the models it lists: what a row's agent and model are picked from, and named by. */
   const agents = useCodingAgents()
   const key = projects.map(p => p.id).join(',')
-  const { value: read, loaded, reload } = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key])
+  const { value: read, loaded, reload } = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key], { remember: schedulersKey(key) })
   // A read that fails for a moment keeps the project's rows as they were last read, under the line
   // that says why: a panel open in one of them, and what was typed there, stays.
   const lastRead = useRef(new Map<string, SchedulerRow>())

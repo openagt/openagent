@@ -91,7 +91,7 @@ export interface GitHostSource {
 export type GitHostFor = (root: string) => Promise<GitHostSource | undefined>
 
 /** A {@link GitHostFor} that also forgets what it knows of one project. */
-export type GitHostReader = GitHostFor & { changed(root: string): void }
+export type GitHostReader = GitHostFor & { changed(root: string, pkg?: string): void }
 
 /** How long a provider lookup is reused: the dashboard asks for the git host on every handoff read. */
 const CACHE_MS = 5_000
@@ -187,7 +187,7 @@ function commandGitHost(root: string, command: ProvidedCommand): GitHostSource {
  * The production {@link GitHostReader}: the project's provider, looked up among the packages the project has (`built-in.ts`), one
  * source per project kept while the same command provides, so a project that installs, swaps or
  * drops its git host is read the new way within {@link CACHE_MS}. `changed(root)` forgets the
- * project, so the next ask looks its provider up again.
+ * project, so the next ask looks its provider up again; `changed(root, pkg)` only when that package is the one providing.
  */
 export function providedGitHost(now: () => number = Date.now): GitHostReader {
   const sources = new Map<string, { at: number; command?: ProvidedCommand; source?: GitHostSource }>()
@@ -204,7 +204,11 @@ export function providedGitHost(now: () => number = Date.now): GitHostReader {
     }
     return known.source
   }
-  return Object.assign(reader, { changed: (root: string) => sources.delete(root) })
+  return Object.assign(reader, {
+    changed: (root: string, pkg?: string) => {
+      if (pkg === undefined || sources.get(root)?.command?.package === pkg) sources.delete(root)
+    },
+  })
 }
 
 /** OpenAgent's one reader of the git host, shared by every caller. */

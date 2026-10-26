@@ -76,6 +76,11 @@ test("a member's runs are counted as the dashboard lists them: a run its record 
   const me = await screen.findByRole('listitem', { name: 'Suleiman Shahbari' })
   expect(within(me).getByText('2 runs · $1.50 · 2 commits')).toBeTruthy()
   expect(within(me).queryByText(/working/)).toBeNull()
+  // Only the runs of the days the card counts are asked for: a project keeps hundreds.
+  const [[project, wanted]] = vi.mocked(host.agents).mock.calls as [[string, { since: string }]]
+  expect(project).toBe('p1')
+  expect(Date.now() - Date.parse(wanted.since)).toBeGreaterThanOrEqual(30 * 86_400_000)
+  expect(Date.now() - Date.parse(wanted.since)).toBeLessThan(31 * 86_400_000)
 })
 
 test('a run the dashboard says is going makes its person working, though no record says so yet', async () => {

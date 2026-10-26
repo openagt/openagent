@@ -1,12 +1,10 @@
-import type { DashboardData, Intervention } from '../../src/index.js'
+import type { ActiveAgent, Intervention } from '../../src/index.js'
 import { useState } from 'react'
 import { Inbox, SlidersHorizontal } from 'lucide-react'
-import { onDashboard } from '../rpc/reads.js'
 import { Quota } from './Quota.js'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
 import { HumanQueueList } from './HumanQueueList.js'
-import { usePolled } from '../lib/use-async.js'
-import { updatePreferences, usePreferences } from '../lib/preferences.js'
+import { updatePreferences, usePreferences, usePreferencesLoaded } from '../lib/preferences.js'
 import { OnboardingChecklist } from './OnboardingChecklist.js'
 import { Agents } from './Agents.js'
 import { useModuleCards, type OverviewCard } from './ModuleCards.js'
@@ -22,7 +20,7 @@ import { NEEDS_YOU_ID, StatTile, WORKING_ID, scrollToPart } from './StatTile.js'
 // human (Human Queue) beside the agents working now, then the cards the installed packages
 // declare, in two columns (#1818: the queue package's AI Queue, the tickets package's hot tickets,
 // the scheduler package's Automations). What is empty is not drawn: no card for no agent at work. OpenAgent's own cards are projections of the same .openagent files
-// over the `onDashboard` RPC, polled so they stay live; selecting a row jumps into its project or
+// over the shell's own polls (the agents at work, the Human Queue), so they stay live; selecting a row jumps into its project or
 // straight into a session. With one project picked in the sidebar's project select (#1513), every
 // part but the usage bar shows that project's only, and the cards of packages it does not have are
 // not drawn.
@@ -37,6 +35,8 @@ export function DashboardPage({
   onSelectAgent,
   onAgentStarted,
   interventions,
+  interventionsStale,
+  active,
   projects,
   scope,
 }: {
@@ -47,15 +47,18 @@ export function DashboardPage({
   onAgentStarted: (projectId: string, intent: string, agentId: string) => void
   /** The Human Queue's items, already only the picked project's when one is picked. */
   interventions: Intervention[]
+  /** The Human Queue's items are only what an earlier visit read, not yet read again: its cards are faded. */
+  interventionsStale: boolean
+  /** Every agent going right now, across the projects, and whether that is only what an earlier visit read. */
+  active: { active: ActiveAgent[]; stale: boolean }
   /** Every registered project. The usage bar is given all of them: usage is the account's, not a project's. */
   projects: ProjectSummary[]
   /** The one project the page shows (#1513), or null for all: the agents at work and the packages' cards show only its, and a card of a package it does not have is not drawn. */
   scope: string | null
 }) {
-  const { value: data } = usePolled<DashboardData | null>(onDashboard, null, 5000, [])
   // Its ✕ hides it (#958), and a switch in Settings › Appearance shows it again.
   const onboardingDismissed = usePreferences().onboardingDismissed ?? false
-  const working = (data?.active ?? []).filter(agent => scope === null || agent.projectId === scope)
+  const working = active.active.filter(agent => scope === null || agent.projectId === scope)
   const shownProjects = scope === null ? projects : projects.filter(project => project.id === scope)
   // Every card the Overview can show here, each with the widths it stands at; the person's layout
   // for this page (the picked project's, else all projects') orders them, sizes them, and hides some.
@@ -66,6 +69,7 @@ export function DashboardPage({
     // tile (what waits its turn) is its package's card, beside them by its order.
     {
       id: 'needs-you',
+      stale: interventionsStale,
       label: 'Needs you',
       order: 1,
       width: '1/3',
@@ -82,6 +86,7 @@ export function DashboardPage({
     },
     {
       id: 'working-now',
+      stale: active.stale,
       label: 'Working now',
       order: 2,
       width: '1/3',
@@ -100,6 +105,7 @@ export function DashboardPage({
     { id: 'usage', label: 'Usage', order: 5, width: '1', minWidth: '1/2', node: <Quota projects={projects} /> },
     {
       id: 'human-queue',
+      stale: interventionsStale,
       label: 'Human Queue',
       order: 6,
       width: '1',
@@ -112,6 +118,7 @@ export function DashboardPage({
     },
     {
       id: 'working',
+      stale: active.stale,
       label: 'Agents at work',
       order: 7,
       width: '1/2',
@@ -132,6 +139,9 @@ export function DashboardPage({
   cards.sort((a, b) => a.order - b.order)
   const layoutKey = scope ?? ALL_PROJECTS
   const layouts = usePreferences().overviewLayouts
+  // The cards are drawn once the person's layout is read: a card they took off is never drawn, and
+  // so never reads anything, not even for the moment before the layout is known.
+  const layoutRead = usePreferencesLoaded()
   const arranged = arrangeCards(cards, layouts, layoutKey)
   // Arranging the page, on its cards themselves: the layout of this page (the picked project's, else
   // all projects'), changed at once as the person moves, sizes and hides the cards.
@@ -179,7 +189,7 @@ export function DashboardPage({
         {!onboardingDismissed && !editing && (
           <OnboardingChecklist onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} />
         )}
-        {editing ? <EditOverview arranged={arranged} layouts={layouts} layoutKey={layoutKey} /> : arranged.some(({ hidden }) => !hidden) ? (
+        {!layoutRead ? null : editing ? <EditOverview arranged={arranged} layouts={layouts} layoutKey={layoutKey} /> : arranged.some(({ hidden }) => !hidden) ? (
           <CardGrid cards={arranged.filter(({ hidden }) => !hidden)} />
         ) : (
           <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">Every card is off the Overview. Press Customize to put some back.</p>

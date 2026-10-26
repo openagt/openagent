@@ -76,6 +76,8 @@ export function SkillsCard({ projects, onSelectProject }: { projects: ProjectSum
     // A read of each project's folder, and of its git host only while something is on its way.
     60_000,
     [key],
+    // Kept for the next visit: the page opens with the last skills, faded until they are read again.
+    { remember: `skills-card:${key}`, stored: true },
   )
   const used = usedOver(reads)
   // The skills a project holds that no agent used: each once, over the projects shown.

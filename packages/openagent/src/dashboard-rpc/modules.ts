@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { contextProjects, resolveProjectPath } from './context.js'
 import { findComputerModule, findProjectModule, readComputerModules, readProjectModules, runModuleCommand as runCommand, type ModuleCommandResult } from '../project-modules.js'
-import { computerModuleUrl, moduleUrl } from '../dashboard/module-serve.js'
+import { computerModuleUrl, moduleUrl, versionedModuleUrl } from '../dashboard/module-serve.js'
 import { providedDataChanged } from '../store/provided.js'
 import { callModuleRead, serverHost, type ModuleReadResult } from '../dashboard/module-host.js'
 import { relayOr } from './relay-agent.js'
@@ -19,7 +19,7 @@ export type { ModuleReadResult } from '../dashboard/module-host.js'
 export interface DashboardModule {
   /** The package that brings it. */
   package: string
-  /** The URL of its browser module, served from the first project that has it, or from OpenAgent's own copy for one of the computer's. */
+  /** The URL of its browser module, served from the first project that has it, or from OpenAgent's own copy for one of the computer's, with its file's version: a browser keeps it for good. */
   url: string
   /** The registered projects whose packages include it, in the registry's order; none for one of the computer's, whose commands run in no project. */
   projects: string[]
@@ -38,14 +38,14 @@ export interface DashboardModule {
 export async function onModules(): Promise<DashboardModule[]> {
   const byPackage = new Map<string, DashboardModule>()
   for (const module of await readComputerModules().catch(() => [])) {
-    byPackage.set(module.package, { package: module.package, url: computerModuleUrl(module), projects: [], computer: true })
+    byPackage.set(module.package, { package: module.package, url: await versionedModuleUrl(computerModuleUrl(module), module), projects: [], computer: true })
   }
   for (const project of await contextProjects().list()) {
     const modules = await readProjectModules(project.path).catch(() => [])
     for (const module of modules) {
       const known = byPackage.get(module.package)
       if (known) known.projects.push(project.id)
-      else byPackage.set(module.package, { package: module.package, url: moduleUrl(project.id, module), projects: [project.id] })
+      else byPackage.set(module.package, { package: module.package, url: await versionedModuleUrl(moduleUrl(project.id, module), module), projects: [project.id] })
     }
   }
   return [...byPackage.values()]
@@ -55,15 +55,15 @@ export async function onModules(): Promise<DashboardModule[]> {
  * Run one of a module package's commands in one project and answer its JSON output: how a module
  * reads (and changes) its own data. Refused for an unknown project and for a package that is not a
  * module of that project, so a page can run only its own package's commands, never an arbitrary
- * program. Once the command has run, OpenAgent forgets what it had read of that project's
- * provided data (its queue, its runs): the command may have written it, and the next read sees
- * that at once instead of a cached copy.
+ * program.
  *
- * `acts` says the command is a module's action on the project (a link action), not a page's read:
- * OpenAgent then also converges the project's data branch with origin, as its clock does
- * every minute, before forgetting — in a project that shares its records a package's command
- * writes as a remote writer, straight to origin, and this machine's copy would otherwise show the
- * write only at the next sync.
+ * `acts` says the command is a module's action on the project (a claim released, an entry added),
+ * not a page's read. Only then does OpenAgent converge the project's data branch with origin, as
+ * its clock does every minute, and forget what it had read of the data that package provides (the
+ * queue package's queue): in a project that shares its records a package's command writes as a
+ * remote writer, straight to origin, and the next read shows the change at once instead of at the
+ * next sync. A read writes nothing, so what was read stays: the Members card reading the logs
+ * package's people leaves the runs that package provides read.
  */
 export async function runModuleCommand(projectId: string, pkg: string, args: string[], command?: string, acts = false): Promise<ModuleCommandResult> {
   const root = await resolveProjectPath(projectId)
@@ -72,8 +72,10 @@ export async function runModuleCommand(projectId: string, pkg: string, args: str
   const module = await findProjectModule(root, pkg)
   if (!module) return { ok: false, error: `${pkg} brings no module to this project` }
   const result = await runCommand(root, module, args, command)
-  if (acts) await pullFileBranch(root, DATA_BRANCH, { log: () => {} }).catch(() => {})
-  providedDataChanged(root)
+  if (acts) {
+    await pullFileBranch(root, DATA_BRANCH, { log: () => {} }).catch(() => {})
+    providedDataChanged(root, pkg)
+  }
   return result
 }
 

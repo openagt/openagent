@@ -20,8 +20,9 @@ const AGENT_NAME = /^OpenAgent on /
 
 export function DevicesCard(_props: ModuleCardProps) {
   const host = useModuleHost()
-  const { value: machines, loaded } = usePolled<ModuleMachines | undefined>(() => host.machines(), undefined, EVERY_MS, [])
-  const { value: door } = usePolled<Answer<DoorStatus> | undefined>(() => loadStatus(host), undefined, EVERY_MS, [])
+  // Kept for the next visit: the page opens with the last machines and devices, faded until they are read again.
+  const { value: machines, loaded } = usePolled<ModuleMachines | undefined>(() => host.machines(), undefined, EVERY_MS, [], { remember: 'devices:machines', stored: true })
+  const { value: door } = usePolled<Answer<DoorStatus> | undefined>(() => loadStatus(host), undefined, EVERY_MS, [], { remember: 'devices:door', stored: true })
   const phones = door?.ok ? door.value.devices.filter(device => !device.line && !AGENT_NAME.test(device.name)) : []
   const lastSeen = phones.map(phone => phone.seen ?? '').sort().at(-1)
   return (
