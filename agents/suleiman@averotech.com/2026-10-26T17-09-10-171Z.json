@@ -1,16 +1,28 @@
 {
   "id": "2026-10-26T17-09-10-171Z",
   "startedAt": "2026-10-26T17:08:59.780Z",
-  "status": "running",
+  "endedAt": "2026-10-26T17:09:57.192Z",
+  "status": "done",
   "intent": "/update-tickets",
+  "title": "Tailnet dashboard pairing ticket update",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "branch": "agent-2026-10-26T17-09-10-171Z",
+  "cost": 0.182469,
+  "contextTokens": 26639,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
-      "publish": "commit"
+      "pid": 95531,
+      "publish": "commit",
+      "baseCommit": "34afbe15df74bc3b37ba83960790370650aed3d0"
     },
+    "pid": 95531,
     "host": "Suleimans-MacBook-Pro.local",
-    "publish": "commit"
+    "baseCommit": "34afbe15df74bc3b37ba83960790370650aed3d0",
+    "publish": "commit",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/gemstack/.branches/agent-2026-10-26T17-09-10-171Z",
+    "sessionId": "0f024180-44af-42f5-bacb-1867d6da2f59"
   }
 }
