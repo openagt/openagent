@@ -12,6 +12,7 @@
 - [base-ui rename warnings at install](tickets/2026-10-18_base-ui-rename-warnings.md)
 - Create tickets/2026-10-18_people-on-shared-computer.plan.md
 - [A comment on an agent's pull request resumes that agent](tickets/2026-10-09_pr-comment-resumes-agent.md)
+- Create tickets/2026-10-26_dashboard-on-tailnet-address.plan.md
 
 
 ## Priority 4
