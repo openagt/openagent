@@ -24,7 +24,14 @@
     "tickets": "bin/tickets"
   },
   "openagent": {
-    "tickets": "tickets"
+    "tickets": "tickets",
+    "reads": {
+      "tickets": [
+        "list",
+        "show",
+        "meta"
+      ]
+    }
   },
   "exports": {
     "./package.json": "./package.json",

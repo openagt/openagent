@@ -4,13 +4,16 @@ import { join } from 'node:path'
 import { fileTag, fileVersion, sendBody } from './compress.js'
 import { contentTypeFor } from './content-type.js'
 import { defaultProjectsProvider, type ProjectsProvider } from './projects.js'
-import { findComputerModule, findProjectModule, moduleFile, type ProjectModule } from '../project-modules.js'
+import { findBroughtModule, findComputerModule, findProjectModule, moduleFile, type ProjectModule } from '../project-modules.js'
 
 /** Where module files are served: `/_modules/<project id>/<package>/<file>`, each segment encoded. */
 export const MODULES_PREFIX = '/_modules'
 
 /** Where the files of the computer's modules are served, which are no project's: `/_computer-modules/<package>/<file>`. */
 export const COMPUTER_MODULES_PREFIX = '/_computer-modules'
+
+/** Where the files of the modules OpenAgent brings to projects are served from its own copy: `/_brought-modules/<package>/<file>`. */
+export const BROUGHT_MODULES_PREFIX = '/_brought-modules'
 
 const encoded = (path: string): string => path.split('/').map(encodeURIComponent).join('/')
 
@@ -22,6 +25,11 @@ export function moduleUrl(projectId: string, module: Pick<ProjectModule, 'packag
 /** The URL the browser part of one of the computer's modules is served at. */
 export function computerModuleUrl(module: Pick<ProjectModule, 'package' | 'entry'>): string {
   return `${COMPUTER_MODULES_PREFIX}/${encodeURIComponent(module.package)}/${encoded(module.entry)}`
+}
+
+/** The URL the browser part of a module OpenAgent brings to projects is served at from its own copy. */
+export function broughtModuleUrl(module: Pick<ProjectModule, 'package' | 'entry'>): string {
+  return `${BROUGHT_MODULES_PREFIX}/${encodeURIComponent(module.package)}/${encoded(module.entry)}`
 }
 
 /**
@@ -68,6 +76,11 @@ export async function serveModuleFile(
 /** Serve one file of a module that is the computer's: as {@link serveModuleFile}, with no project to be registered. */
 export async function serveComputerModuleFile(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<void> {
   return serveFileOf(req, res, pathname.slice(COMPUTER_MODULES_PREFIX.length + 1).split('/'), findComputerModule)
+}
+
+/** Serve one file of a module OpenAgent brings to projects, from its own copy: as {@link serveComputerModuleFile}. */
+export async function serveBroughtModuleFile(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<void> {
+  return serveFileOf(req, res, pathname.slice(BROUGHT_MODULES_PREFIX.length + 1).split('/'), findBroughtModule)
 }
 
 /** Answer the file `<package>/<file>` names, of the module `find` knows the package as. */

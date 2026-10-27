@@ -118,6 +118,14 @@ export async function ownPackages(root: string): Promise<ProjectPackage[]> {
   return projectPackages(root, OWN_PACKAGE_NAMES)
 }
 
+/**
+ * Every package OpenAgent brings to projects, the picked ones too, whatever a project holds: the
+ * copy a module's page is served from on a computer where no project of its own has the module.
+ */
+export async function broughtToProjects(): Promise<ProjectPackage[]> {
+  return (await (resolved ??= resolveOwn())).filter(pkg => pkg.of !== 'the computer')
+}
+
 /** The packages that are this computer's: see {@link COMPUTER_PACKAGES}. */
 export async function computerPackages(): Promise<ProjectPackage[]> {
   return (await (resolved ??= resolveOwn())).filter(pkg => pkg.of === 'the computer')

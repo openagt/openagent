@@ -7,6 +7,8 @@ import { addProject, projectId } from '../registry.js'
 import { projectQueue } from '../store/queue.js'
 import { onModules, readModule, runComputerCommand, runModuleCommand } from './modules.js'
 import { asCaller } from '../dashboard/person.js'
+import { setDashboardContext } from './context.js'
+import { NO_ELSEWHERE, testDashboardContext } from './test-context.js'
 
 /** A project with a package.json and installed packages, each `{ exports, bin }` plus files. */
 async function project(dir: string, packages: Record<string, { manifest: Record<string, unknown>; files?: Record<string, string> }>): Promise<void> {
@@ -171,6 +173,33 @@ test('a module reads through its own server part, in its own project; nothing el
     assert.equal(files.ok, true)
     assert.ok(files.ok && Array.isArray(files.output))
   } finally {
+    if (previous === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = previous
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test("another computer's project has the pages its computer said, from a copy here: a project's of this computer's, else OpenAgent's own; one with no copy here has none", async () => {
+  const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-modules-elsewhere-')))
+  const previous = process.env.XDG_CONFIG_HOME
+  process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
+  try {
+    await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
+    const a = join(dir, 'a')
+    await project(a, { logs: module('logs') })
+    await addProject(a, '2026-09-19T00:00:00.000Z')
+    const theirs = { id: 'shop-1~abc', path: '/Users/ada/shop', name: 'shop', activated: true, gitHost: true, machine: 'http://127.0.0.1:4210', modules: ['logs', '@openagt/skill-queue', '@openagt/devices', 'left-pad'] }
+    setDashboardContext(testDashboardContext({ remote: { ...testDashboardContext().remote, ...NO_ELSEWHERE, elsewhere: async () => [theirs] } }))
+    const modules = await listed()
+    // A package a project here has: its page is that one, for theirs too.
+    assert.deepEqual(modules.find(m => m.package === 'logs')?.projects, [projectId(a), 'shop-1~abc'])
+    // One no project here has, that OpenAgent brings: from OpenAgent's own copy.
+    assert.deepEqual(modules.find(m => m.package === '@openagt/skill-queue'), { package: '@openagt/skill-queue', url: '/_brought-modules/%40openagt%2Fskill-queue/dashboard.js', projects: ['shop-1~abc'] })
+    // The computer's own modules are no project's, and a package with no copy here brings nothing.
+    assert.deepEqual(modules.find(m => m.package === '@openagt/devices')?.projects, [])
+    assert.equal(modules.find(m => m.package === 'left-pad'), undefined)
+  } finally {
+    setDashboardContext(testDashboardContext())
     if (previous === undefined) delete process.env.XDG_CONFIG_HOME
     else process.env.XDG_CONFIG_HOME = previous
     await rm(dir, { recursive: true, force: true })

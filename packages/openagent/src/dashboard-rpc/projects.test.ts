@@ -9,7 +9,7 @@ import { PROJECT_HOOKS_FILE } from '../project-hooks.js'
 import { OPENAGENT_DIR } from '../openagent-dir.js'
 import { projectErrorStore } from '../project-errors.js'
 import { provideTestContext } from './test-context.js'
-import { onCloneCheck, onCommands, onProjects, onRecordsReach, sendAddProject, sendRemoveProject, sendShareRecords } from './projects.js'
+import { onCloneCheck, onCommands, onOwnProjects, onProjects, onRecordsReach, sendAddProject, sendRemoveProject, sendShareRecords } from './projects.js'
 import { loginsWiring } from './logins.js'
 
 // Against the real registry, pointed at a temp $XDG_CONFIG_HOME so the user's own is never touched.
@@ -201,5 +201,17 @@ test('a project cloned here first is asked about before it is: the coding agent 
     assert.deepEqual(asked, ['codex', 'claude-code', 'claude-code'])
   } finally {
     Object.assign(loginsWiring, before)
+  }
+})
+
+test("this computer's projects, as another computer of the person's asks for them, say which pages each has", async () => {
+  const { restore } = await registered()
+  try {
+    provideTestContext()
+    const [app] = await onOwnProjects()
+    // The modules OpenAgent brings to every project, here those of a folder that holds nothing else.
+    assert.deepEqual(app!.modules, ['@openagt/changes', '@openagt/files', '@openagt/skill-logs'])
+  } finally {
+    await restore()
   }
 })

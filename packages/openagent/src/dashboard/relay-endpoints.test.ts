@@ -112,6 +112,26 @@ test('a call that may only watch runs a relayed function that reads, and no othe
   assert.deepEqual(did, [])
 })
 
+test('a call that may only watch runs a module command when this computer says it only reads, whatever the call says', async t => {
+  const did: string[] = []
+  const handlers: RelayHandlers = {
+    project: async address => (address === SHOP ? 'shop-here' : undefined),
+    start: async () => ({ ok: true, agentId: RUN }),
+    tailEvents: () => () => {},
+    rpc: async (_projectId, fn, args) => (did.push(`rpc ${fn} ${JSON.stringify(args[2])}`), 'ran'),
+    // This computer's own word: the queue's bare command reads, in this project.
+    reads: async (projectId, fn, args) => projectId === 'shop-here' && fn === 'runModuleCommand' && Array.isArray(args[2]) && args[2].length === 0,
+  }
+  const url = await listen(t, (req, res) => void handleRelayRequest(req, res, new URL(req.url ?? '/', 'http://x').pathname, handlers))
+  const call = (args: unknown[], project = SHOP): Promise<Response> =>
+    fetch(`${url}/_relay/rpc`, { method: 'POST', headers: { ...JSON_BODY, ...WATCH }, body: JSON.stringify({ fn: 'runModuleCommand', args, project }), signal: AbortSignal.timeout(5000) })
+  assert.deepEqual(await said(await call(['callers-id', 'queue', []])), [200, JSON.stringify({ result: 'ran' })])
+  // Called a read by the page (no `acts`): still a change here.
+  assert.deepEqual(await said(await call(['callers-id', 'queue', ['add', 'x'], undefined, false])), [403, WATCH_ONLY])
+  assert.deepEqual(await said(await call(['callers-id', 'queue', []], 'github.com/acme/none')), [404, 'no such project on this machine'])
+  assert.deepEqual(did, ['rpc runModuleCommand []'])
+})
+
 test('a machine-wide call names no project, and one that may only watch runs it only when it reads', async t => {
   const { did, post } = await computer(t)
   const call = (fn: string, headers: Record<string, string> = {}): Promise<Response> => post('/_relay/machine', { fn, args: [{ kind: 'git' }, 'secret'] }, headers)

@@ -8,7 +8,7 @@ import type { BridgeBrowserOwner } from '../bridge-browser.js'
 import { serveClientBundle } from './static.js'
 import { makeRpcMount, RPC_PREFIX, isSameOriginRequest, isExpectedHost, isJsonRequest } from './rpc-serve.js'
 import { requestPathname } from '../request-path.js'
-import { COMPUTER_MODULES_PREFIX, MODULES_PREFIX, serveComputerModuleFile, serveModuleFile } from './module-serve.js'
+import { BROUGHT_MODULES_PREFIX, COMPUTER_MODULES_PREFIX, MODULES_PREFIX, serveBroughtModuleFile, serveComputerModuleFile, serveModuleFile } from './module-serve.js'
 import type { AddProjectResult, RemoveProjectResult, StartAgentOptions, StartAgentResult, StartedInResult } from './types.js'
 import type { EventsSource, RemoteAgents } from './rpc-serve.js'
 import { handleRelayRequest, RELAY_PREFIX, type RelayHandlers } from './relay-endpoints.js'
@@ -83,6 +83,8 @@ export interface DashboardOptions {
     tailEvents: (projectId: string, agentId: string, onEvent: (event: import('../events.js').OpenAgentEvent) => void) => () => void
     /** Run one whitelisted run-scoped RPC against this daemon's own checkout (#1067 slice 2). */
     rpc?: (projectId: string, fn: string, args: unknown[]) => Promise<unknown>
+    /** Whether one relayed call only reads here: what a call that may only watch is answered for. */
+    reads?: RelayHandlers['reads']
     /** Run one whitelisted machine-wide RPC here, for the person's own computer. */
     machine?: RelayHandlers['machine']
     /** Where this machine's copy of a project stands, and with `bring` clone it when there is none. */
@@ -163,7 +165,7 @@ export function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
   // The machine-to-daemon relay endpoints (#1067): wired only when an events tail is supplied.
   const localScreen = opts.screen ? kept(opts.screen) : undefined
   const relayHandlers: RelayHandlers | undefined = opts.relay
-    ? { project: opts.relay.project, start: opts.onStart, tailEvents: opts.relay.tailEvents, ...(opts.relay.rpc ? { rpc: opts.relay.rpc } : {}), ...(opts.relay.machine ? { machine: opts.relay.machine } : {}), ...(opts.relay.bring ? { bring: opts.relay.bring } : {}), ...(opts.relay.logins ? { logins: opts.relay.logins } : {}), ...(localScreen ? { screen: localScreen } : {}) }
+    ? { project: opts.relay.project, start: opts.onStart, tailEvents: opts.relay.tailEvents, ...(opts.relay.rpc ? { rpc: opts.relay.rpc } : {}), ...(opts.relay.reads ? { reads: opts.relay.reads } : {}), ...(opts.relay.machine ? { machine: opts.relay.machine } : {}), ...(opts.relay.bring ? { bring: opts.relay.bring } : {}), ...(opts.relay.logins ? { logins: opts.relay.logins } : {}), ...(localScreen ? { screen: localScreen } : {}) }
     : undefined
   const screenHandlers: ScreenHandlers | undefined = localScreen ? { local: localScreen, remote: (projectId, agentId) => opts.remote.target(agentId, projectId) } : undefined
 
@@ -256,10 +258,12 @@ export function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
     }
     // A project's dashboard modules (#1774): only the files of a package the project brings as a module.
     // The computer's modules are no project's, and are served by their package alone.
+    // So are the ones OpenAgent brings to projects, from its own copy, for another computer's project.
     const ofComputer = pathname.startsWith(`${COMPUTER_MODULES_PREFIX}/`)
-    if (ofComputer || pathname.startsWith(`${MODULES_PREFIX}/`)) {
+    const brought = pathname.startsWith(`${BROUGHT_MODULES_PREFIX}/`)
+    if (ofComputer || brought || pathname.startsWith(`${MODULES_PREFIX}/`)) {
       // Void-dispatched like the bundle: a throw here must answer, not take the daemon down (#938).
-      void (ofComputer ? serveComputerModuleFile : serveModuleFile)(req, res, pathname).catch(() => {
+      void (ofComputer ? serveComputerModuleFile : brought ? serveBroughtModuleFile : serveModuleFile)(req, res, pathname).catch(() => {
         if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain' }).end('module file unreadable')
       })
       return

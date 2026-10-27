@@ -69,6 +69,8 @@ export interface RelayHandlers {
   /** Run one whitelisted read/steer/handoff RPC against THIS machine's own checkout, for the daemon
    *  relaying an agent here (#1067 slice 2); the caller wraps the result as {result}. */
   rpc?: (projectId: string, fn: string, args: unknown[]) => Promise<unknown>
+  /** Whether one relayed call only reads here, which a call that may only watch is answered for: by its name, when unsaid. */
+  reads?: (projectId: string, fn: string, args: readonly unknown[]) => Promise<boolean>
   /** Run one whitelisted machine-wide RPC here, for the person's own computer; the caller wraps the result as {result}. */
   machine?: (fn: string, args: unknown[]) => Promise<unknown>
   /** Where the live screen of a run here answers; nothing when the run has none. */
@@ -263,6 +265,8 @@ async function handleLogins(req: IncomingMessage, res: ServerResponse, handlers:
 }
 
 const MAX_RPC_BODY = 256 * 1024
+/** A relayed call that reads by its name alone. */
+const namedRead = async (_projectId: string, fn: string): Promise<boolean> => isRelayRead(fn)
 /** POST /_relay/rpc: run one whitelisted RPC on this machine and answer {result}. A call that may only `watch` runs a read and no other. */
 async function handleRpc(req: IncomingMessage, res: ServerResponse, handlers: RelayHandlers, watch: boolean): Promise<void> {
   if (req.method !== 'POST') return end(res, 405, 'method not allowed', { allow: 'POST' })
@@ -276,10 +280,10 @@ async function handleRpc(req: IncomingMessage, res: ServerResponse, handlers: Re
   const fn = typeof body.fn === 'string' ? body.fn : ''
   const args = Array.isArray(body.args) ? body.args : []
   if (!fn) return end(res, 400, 'missing rpc name')
-  if (watch && !isRelayRead(fn)) return end(res, 403, WATCH_ONLY)
   try {
     const projectId = await projectNamed(handlers, body.project)
     if (projectId === undefined) return end(res, 404, 'no such project on this machine')
+    if (watch && !(await (handlers.reads ?? namedRead)(projectId, fn, args))) return end(res, 403, WATCH_ONLY)
     sendJson(res, { result: await handlers.rpc(projectId, fn, args) })
   } catch (err) {
     end(res, 500, err instanceof Error ? err.message : 'rpc failed')
