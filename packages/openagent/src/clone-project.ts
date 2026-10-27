@@ -77,6 +77,8 @@ const ownSshCommand = (env: NodeJS.ProcessEnv): Promise<string | undefined> =>
 
 /** How long a clone may take: a large repository over a slow line, not a hang. */
 const CLONE_TIMEOUT_MS = 15 * 60_000
+/** How long asking a repository's host whether it is readable may take. */
+const READ_TIMEOUT_MS = 30_000
 
 /** What git says when it has no login that can read a repository, over the web and over SSH. */
 const NO_LOGIN = /could not read Username|Authentication failed|terminal prompts disabled|Permission denied \(publickey|Repository not found/i
@@ -135,15 +137,7 @@ async function cloneTo({ url, address, path }: CloneTarget, opts: CloneOptions):
   await mkdir(projects, { recursive: true })
   // A name no repository has: one starts with a letter, a digit or an underscore.
   const making = await mkdtemp(join(projects, `.${basename(path)}.cloning-`))
-  const env = opts.env ?? process.env
-  const ssh = env.GIT_SSH_COMMAND ?? (await (opts.sshCommand ?? ownSshCommand)(env)) ?? 'ssh'
-  const said = await (opts.run ?? nodeCloneRunner)(
-    // Only the two ways in a repository's address names: a clone never runs a program an address could name.
-    ['-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', '-c', 'protocol.ssh.allow=always', 'clone', '--', url, making],
-    // Never a question to a person, in a terminal or in a window: nobody is there to answer one. The person's own way to SSH is kept, and told the same.
-    { ...env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', GIT_SSH_COMMAND: `${ssh} -oBatchMode=yes` },
-    opts.timeoutMs ?? CLONE_TIMEOUT_MS,
-  )
+  const said = await askGit(['clone', '--', url, making], opts, CLONE_TIMEOUT_MS)
   if (said.ok) {
     // Moved only where nothing is: a folder that came to be there meanwhile is not written over.
     const landed = (await there()) ?? (await rename(making, path).then(() => undefined, (err: unknown) => (err instanceof Error ? err.message : String(err))))
@@ -153,8 +147,40 @@ async function cloneTo({ url, address, path }: CloneTarget, opts: CloneOptions):
   }
   await rm(making, { recursive: true, force: true })
   if (said.timedOut) return { ok: false, error: `Cloning ${address} took too long, and was stopped.` }
-  const lines = said.said.split('\n').map(line => line.trim().replace(/^(fatal|error): /i, '')).filter(line => line && !SAID_EVERY_TIME.test(line))
-  const words = lines.slice(-2).join(' ') || 'git could not clone it.'
-  if (NOT_MET.test(said.said)) return { ok: false, error: `This computer has never met ${address.split('/')[0]} over SSH, so it does not know it is the real one. Use the address that starts with https://, or connect to it once in a terminal. git said: ${words}` }
-  return { ok: false, error: NO_LOGIN.test(said.said) ? `This computer has no login that can read ${address}, or there is no such repository: a private one needs a login. git said: ${words}` : words }
+  return { ok: false, error: gitRefusal(said.said, address, 'git could not clone it.') }
+}
+
+/**
+ * Whether this computer's logins read the repository at the address, asked of its host without
+ * cloning anything: what a run of a project cloned here first would hit before it starts. The
+ * answer is the clone's own words when they cannot.
+ */
+export async function canRead(typed: string, opts: CloneOptions = {}, subject = 'This computer'): Promise<{ ok: true } | { ok: false; error: string }> {
+  const target = cloneTarget(typed, opts.home)
+  if (!target) return { ok: false, error: `"${typed.trim().slice(0, 80)}" ${NOT_AN_ADDRESS}` }
+  const said = await askGit(['ls-remote', '--heads', '--', target.url], opts, READ_TIMEOUT_MS)
+  if (said.ok) return { ok: true }
+  if (said.timedOut) return { ok: false, error: `${target.address} did not answer in time.` }
+  return { ok: false, error: gitRefusal(said.said, target.address, 'git could not read it.', subject) }
+}
+
+/** Run git about a repository the way a clone does: only the ways in an address, never a question to a person. */
+async function askGit(args: readonly string[], opts: CloneOptions, timeoutMs: number): ReturnType<CloneRunner> {
+  const env = opts.env ?? process.env
+  const ssh = env.GIT_SSH_COMMAND ?? (await (opts.sshCommand ?? ownSshCommand)(env)) ?? 'ssh'
+  return (opts.run ?? nodeCloneRunner)(
+    // Only the two ways in a repository's address names: git never runs a program an address could name.
+    ['-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', '-c', 'protocol.ssh.allow=always', ...args],
+    // Never a question to a person, in a terminal or in a window: nobody is there to answer one. The person's own way to SSH is kept, and told the same.
+    { ...env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', GIT_SSH_COMMAND: `${ssh} -oBatchMode=yes` },
+    opts.timeoutMs ?? timeoutMs,
+  )
+}
+
+/** What git said when it could not reach the repository, in a person's words, of the computer it ran on. */
+function gitRefusal(said: string, address: string, otherwise: string, subject = 'This computer'): string {
+  const lines = said.split('\n').map(line => line.trim().replace(/^(fatal|error): /i, '')).filter(line => line && !SAID_EVERY_TIME.test(line))
+  const words = lines.slice(-2).join(' ') || otherwise
+  if (NOT_MET.test(said)) return `${subject} has never met ${address.split('/')[0]} over SSH, so it does not know it is the real one. Use the address that starts with https://, or connect to it once in a terminal. git said: ${words}`
+  return NO_LOGIN.test(said) ? `${subject} has no login that can read ${address}, or there is no such repository: a private one needs a login. git said: ${words}` : words
 }

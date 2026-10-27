@@ -2,7 +2,7 @@ import { onProjectFiles, onGitStatus, onAgentWorktree, onAgentHandoff, onAgent, 
 import { readModule } from './modules.js'
 import { sendStop, sendChoice, sendMessage, sendOpenPullRequest, sendPush, sendMerge, sendMergeBranch, sendStart } from './control.js'
 import { asArrived } from './relay-agent.js'
-import { onCommands, onOwnProjects, onRecordsReach, onStartCheck } from './projects.js'
+import { onCloneCheck, onCommands, onOwnProjects, onRecordsReach, onStartCheck } from './projects.js'
 import { onProjectSkills } from './skills.js'
 import type { StartAgentOptions } from '../dashboard/types.js'
 import { onCopiedLogins, sendCopiedLogin, sendCopiedUsage, sendForgetCopiedLogin, sendKeepCopiedLogin } from './copied-logins.js'
@@ -70,7 +70,7 @@ export async function dispatchRelayRpc(projectId: string, fn: string, args: unkn
 // not a run (logins-sync.ts brings the server's logins and settings up to its own). They go by the
 // relay too, so a computer that keeps a line open to its server is asked them as any server is:
 // a line carries nothing but the relay. Classed the same way, read or act.
-const MACHINE_READS = { onCopiedLogins, onOwnProjects }
+const MACHINE_READS = { onCopiedLogins, onOwnProjects, onCloneCheck }
 const MACHINE_ACTS = { sendCopiedLogin, sendForgetCopiedLogin, sendKeepCopiedLogin, sendCopiedUsage, patchPreferences }
 const MACHINE_FNS = Object.assign(Object.create(null) as Record<string, RelayFn>, MACHINE_READS, MACHINE_ACTS) as unknown as Record<string, RelayFn>
 

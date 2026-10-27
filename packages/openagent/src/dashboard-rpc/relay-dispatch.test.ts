@@ -97,6 +97,7 @@ test('the machine-wide calls are the logins and settings a computer brings its s
   const classes: Record<string, 'read' | 'act'> = {
     onCopiedLogins: 'read',
     onOwnProjects: 'read',
+    onCloneCheck: 'read',
     sendCopiedLogin: 'act',
     sendForgetCopiedLogin: 'act',
     sendKeepCopiedLogin: 'act',

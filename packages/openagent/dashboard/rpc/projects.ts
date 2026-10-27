@@ -21,3 +21,4 @@ export const sendPickProjectDirectory = rpc<typeof impl.sendPickProjectDirectory
 export const onOnboarding = rpc<typeof impl.onOnboarding>('onOnboarding')
 export const onCommands = rpc<typeof impl.onCommands>('onCommands')
 export const onStartCheck = rpc<typeof impl.onStartCheck>('onStartCheck')
+export const onCloneCheck = rpc<typeof impl.onCloneCheck>('onCloneCheck')

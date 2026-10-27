@@ -377,9 +377,12 @@ test('a saved machine is asked whether a run would start there, from its own cop
       req.on('data', chunk => (raw += chunk))
       req.on('end', () => {
         calls.push({ url: req.url, auth: req.headers.authorization, body: raw ? JSON.parse(raw) : null })
-        res.writeHead(answer.status ?? 200, { 'content-type': 'application/json' }).end(JSON.stringify(answer.said ?? {}))
+        const said = req.url?.endsWith('/_relay/machine') ? cloning : answer
+        res.writeHead(said.status ?? 200, { 'content-type': 'application/json' }).end(JSON.stringify(said.said ?? {}))
       })
     })
+    // What the machine says of a clone of the project, asked when it does not have it: an older OpenAgent knows no such call.
+    let cloning: { status?: number; said?: unknown } = { status: 500, said: { error: 'unknown machine rpc: onCloneCheck' } }
     await new Promise<void>(r => srv.listen(0, '127.0.0.1', () => r()))
     const url = `http://127.0.0.1:${(srv.address() as AddressInfo).port}/_devices/via/c1`
     try {
@@ -401,6 +404,19 @@ test('a saved machine is asked whether a run would start there, from its own cop
         assert.equal(await onMachineStartCheck(projectId(shop), url, 'claude-code'), null, JSON.stringify(said))
       }
       assert.equal(await onMachineStartCheck(projectId(shop), 'http://127.0.0.1:1'), null)
+
+      // A machine without the project yet says what its clone and the run would hit, asked by the repository's address and its name here.
+      const unreadable = 'experiment has no login that can read github.com/acme/shop, or there is no such repository: a private one needs a login. git said: Repository not found.'
+      answer = { status: 404, said: 'no such project on this machine' }
+      cloning = { said: { result: { problems: [unreadable], warnings: [] } } }
+      calls.length = 0
+      assert.deepEqual(await onMachineStartCheck(projectId(shop), url, 'codex'), { problems: [unreadable], warnings: [] })
+      assert.deepEqual(calls[1], { url: '/_devices/via/c1/_relay/machine', auth: 'Bearer d1.key', body: { fn: 'onCloneCheck', args: ['github.com/acme/shop', 'codex', 'experiment'] } })
+      // One that has it is not asked about a clone, whatever it says.
+      answer = { said: { result: null } }
+      calls.length = 0
+      assert.equal(await onMachineStartCheck(projectId(shop), url, 'codex'), null)
+      assert.equal(calls.length, 1)
     } finally {
       await new Promise<void>(r => srv.close(() => r()))
       await rm(shop, { recursive: true, force: true })

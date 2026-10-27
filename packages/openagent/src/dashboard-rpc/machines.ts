@@ -1,7 +1,7 @@
 import { computerHealth, type Health } from '../health.js'
 import { computerName } from '../computer-name.js'
 import { readSharing } from '@openagt/agent-data'
-import { THROUGH_PATH, deviceIdOf, enterRemote, giveRemoteLogins, leaveRemote, pingRemote, remoteAddMachine, remoteComputers, remoteDoor, remoteFacts, remoteLogins, remoteProject, relayRpc, type BringProject, type RelayProject, type RemoteTarget } from '../dashboard/remote-run.js'
+import { THROUGH_PATH, deviceIdOf, enterRemote, giveRemoteLogins, leaveRemote, machineCall, pingRemote, remoteAddMachine, remoteComputers, remoteDoor, remoteFacts, remoteLogins, remoteProject, relayRpc, type BringProject, type RelayProject, type RemoteTarget } from '../dashboard/remote-run.js'
 import { isElsewhereId, lineNameOf } from '../dashboard/elsewhere.js'
 import { isLoginWord, type MachineLogins } from '../dashboard/machine-logins.js'
 import { errorMessage } from '../error-message.js'
@@ -375,16 +375,22 @@ async function onMachine(projectId: string, machineId: string): Promise<{ ok: tr
 
 /**
  * What would stop a run sent to a saved machine, as the machine says from its own copy of the
- * project: its coding agent there, installed and logged in. `null` when there is nothing to say:
- * a machine that does not answer, does not have the project yet (it clones it at the first run),
- * or has no check.
+ * project: its coding agent there, installed and logged in. A machine that does not have the
+ * project yet clones it at the first run, and says before it whether it could: its coding agent,
+ * and whether its logins read the repository. `null` when there is nothing to say: a machine that
+ * does not answer, or one with no check.
  */
 export async function onMachineStartCheck(projectId: string, machineId: string, driver?: string): Promise<StartReadiness | null> {
   const there = await onMachine(projectId, machineId)
   if (!there.ok) return null
   // The machine reads its own project for the first argument; an absent pick is no argument, never a null one.
-  const said = await relayRpc(there.target, 'onStartCheck', driver !== undefined ? [projectId, driver] : [projectId]).catch(() => undefined)
-  return readinessOf(said) ?? null
+  const said = await relayRpc(there.target, 'onStartCheck', driver !== undefined ? [projectId, driver] : [projectId]).then(
+    answer => ({ answer }),
+    () => undefined,
+  )
+  if (said !== undefined || there.project.home?.machine === machineId || !there.project.address) return readinessOf(said?.answer) ?? null
+  const cloning = await machineCall(there.machine, 'onCloneCheck', [there.project.address, driver ?? null, there.machine.label])
+  return cloning.ok ? (readinessOf(cloning.ret) ?? null) : null
 }
 
 async function projectOnMachine(projectId: string, machineId: string, bring: boolean): Promise<ProjectOnMachine> {

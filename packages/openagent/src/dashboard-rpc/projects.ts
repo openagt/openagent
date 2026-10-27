@@ -9,7 +9,9 @@ import { repositoryAddress, repositorySpelling } from '../repository-address.js'
 import { currentBranch } from '../dashboard/git-status.js'
 import { waitingSkills } from '../dashboard/start-branch.js'
 import { homedir } from 'node:os'
-import { cloneProject, cloneTargetOf } from '../clone-project.js'
+import { canRead, cloneProject, cloneTargetOf } from '../clone-project.js'
+import { isDriverName } from '../driver-names.js'
+import { loginsWiring } from './logins.js'
 import { canPickDirectory, pickDirectory, type PickDirectoryResult } from '../pick-directory.js'
 import { projectGitHost } from '../store/git-host.js'
 import type { ProjectSummary } from '../dashboard/projects.js'
@@ -219,5 +221,17 @@ export async function onStartCheck(projectId: string, driver?: string): Promise<
   const checked = await runCheckHook(cwd, driver !== undefined ? { driver } : {})
   if (checked.ok) return { problems: checked.problems, warnings: checked.warnings, ...(checked.fix ? { fix: checked.fix } : {}) }
   return checked.noHook ? null : { problems: [], warnings: [checked.error] }
+}
+
+/**
+ * What would stop a run of a project this computer clones first, asked before it does: its coding
+ * agent, installed and logged in, and whether its logins read the repository at the address. A
+ * computer that does not have the project yet has no check hook of it to run. `as` is what the
+ * asker calls this computer, so the words read right on its page.
+ */
+export async function onCloneCheck(address: string, driver?: string, as?: string): Promise<StartReadiness> {
+  const ready = await loginsWiring.ready(typeof driver === 'string' && isDriverName(driver) ? driver : 'claude-code')
+  const read = await canRead(typeof address === 'string' ? address : '', {}, typeof as === 'string' && as.trim() ? as.trim() : undefined)
+  return { problems: [...ready.problems, ...(read.ok ? [] : [read.error])], warnings: ready.warnings, ...(ready.fix ? { fix: ready.fix } : {}) }
 }
 

@@ -28,6 +28,7 @@ import { useModules, ModulesContext } from './lib/use-modules.js'
 import { HostServicesContext, useSteadyServices } from './lib/host-services.js'
 import { sendToScreen, watchScreen } from './lib/screen.js'
 import { startPicks } from './lib/use-start-agent.js'
+import { ownComputerName } from './lib/this-machine.js'
 import { stashPendingDraft } from './lib/draft-handoff.js'
 import { useLiveEvents } from './lib/use-live-events.js'
 import { STARTING_AT_MOST_MS, useAgents } from './lib/use-agents.js'
@@ -369,7 +370,12 @@ export function App() {
       },
       // Asked at once by two cards, or soon again, the same runs are read once.
       agents: (inProject, wanted) => readModuleAgents(inProject, wanted),
-      machines: onMachineVersions,
+      // This computer by the name the page says it everywhere else: one computer, one name.
+      machines: async () => {
+        const versions = await onMachineVersions()
+        const name = ownComputerName(versions.name)
+        return { ...versions, ...(name !== undefined ? { name } : {}) }
+      },
       // Through the dashboard's own list, so the launcher's "Run on" shows the change at once.
       addMachine: async (link, label) => {
         const added = await addMachine(link, label)

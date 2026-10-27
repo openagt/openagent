@@ -10,3 +10,13 @@ import { isLoopbackHost } from '../../src/client.js'
 export function thisMachineName(hostname: string = typeof window === 'undefined' ? '' : window.location.hostname): string {
   return hostname === '' || isLoopbackHost(hostname) ? 'This machine' : hostname
 }
+
+/**
+ * This computer's name as its own page says it beside the others, as "Run on" does: the name the
+ * page was reached at, when it was reached from anywhere else, which is the name the person's
+ * other computers know it by; its own name when the page is open on the computer itself.
+ */
+export function ownComputerName(own: string | undefined, hostname?: string): string | undefined {
+  const reached = thisMachineName(hostname)
+  return reached === 'This machine' ? own : reached
+}

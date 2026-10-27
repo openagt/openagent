@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { CircleAlert, Folder, Puzzle } from 'lucide-react'
-import { onStartCheck } from '../rpc/projects.js'
+import { onCloneCheck, onStartCheck } from '../rpc/projects.js'
 import { onMachineLogins, onMachineStartCheck } from '../rpc/machines.js'
 import { usePreferences, usePreferencesLoaded, updatePreferences } from '../lib/preferences.js'
 import { DRIVER_LABELS, isDriverName, machineName, offeredPublishPicks, publishPickIn, reachedThrough } from '../../src/client.js'
@@ -144,7 +144,9 @@ export function StartAgentForm({
   const driver = preferences.driver
   // Asked again once a press fixed what it said: the agent's own state is followed only while the check says a press can.
   const [recheck, setRecheck] = useState(0)
-  const here = useLoaded(machine || clonedHere ? null : () => onStartCheck(projectId, driver), null, [projectId, driver, machine === undefined, clonedHere, recheck])
+  // A project cloned here first has no check of its own here yet: this computer is asked what the clone and the run would hit.
+  const address = launcher?.address
+  const here = useLoaded(machine ? null : clonedHere ? (address !== undefined ? () => onCloneCheck(address, driver) : null) : () => onStartCheck(projectId, driver), null, [projectId, driver, machine === undefined, clonedHere, address, recheck])
   const [machineEvery, setMachineEvery] = useState(MACHINE_SELDOM_MS)
   const there = usePolled(machine ? () => onMachineStartCheck(projectId, machine.id, driver) : null, null, machineEvery, [projectId, driver, machine?.id]).value
   const readiness = machine ? there : here
@@ -251,8 +253,8 @@ export function StartAgentForm({
 
       {/* Feedback right where the action is (#948): above the box, over the page, so the box never moves. */}
       <div className="absolute inset-x-2 bottom-full flex flex-col gap-1.5 pb-1">
-        {/* A start that hit the missing logins says nothing the box below does not. */}
-        {error && missingThere.length === 0 && <Refusal {...said(error)} />}
+        {/* A start that hit what the check says, or the missing logins, says nothing the boxes below do not. */}
+        {error && missingThere.length === 0 && !readiness?.problems.length && <Refusal {...said(error)} />}
         {machine && missingThere.length > 0 && (
           <Refusal
             title={`Your ${missingThere.join(' and ')} ${missingThere.length === 1 ? 'login is' : 'logins are'} not on ${name} yet.`}

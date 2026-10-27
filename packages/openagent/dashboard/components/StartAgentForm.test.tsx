@@ -7,8 +7,9 @@ import { openMenu } from '../test-utils.js'
 // unmocked one reaches for `/_rpc/<name>`, and there is no daemon behind jsdom to answer.
 const onCommands = vi.hoisted(() => vi.fn())
 const onStartCheck = vi.hoisted(() => vi.fn())
+const onCloneCheck = vi.hoisted(() => vi.fn())
 const onProjects = vi.hoisted(() => vi.fn(async () => [] as unknown[]))
-vi.mock('../rpc/projects.js', () => ({ onCommands, onStartCheck, onProjects }))
+vi.mock('../rpc/projects.js', () => ({ onCommands, onStartCheck, onCloneCheck, onProjects }))
 
 // Mutable so a test can pick the coding agent and the model; reset after each.
 const prefs = vi.hoisted(() => ({ current: {} as Record<string, unknown> }))
@@ -75,6 +76,7 @@ const { StartAgentForm } = await import('./StartAgentForm.js')
 // No check hook unless a test gives one: nothing to say.
 beforeEach(() => {
   onStartCheck.mockResolvedValue(null)
+  onCloneCheck.mockResolvedValue({ problems: [], warnings: [] })
   onMachineStartCheck.mockResolvedValue(null)
   onMachineLogins.mockResolvedValue({ ok: true, logins: { github: { source: 'made' }, claude: { source: 'made' } } })
   serverLogins.onServerLogins.mockResolvedValue({ computer: 'Mac', servers: [] })
@@ -88,6 +90,7 @@ afterEach(() => {
   startSays.error = null
   onCommands.mockReset()
   onStartCheck.mockReset()
+  onCloneCheck.mockReset()
   onMachineStartCheck.mockReset()
   onMachineLogins.mockReset()
   for (const fn of Object.values(serverLogins)) fn.mockReset()
@@ -548,6 +551,20 @@ describe('StartAgentForm (#1774)', () => {
     expect(onStartCheck).not.toHaveBeenCalled()
     // The run is in that copy, which the page goes to.
     await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r6', undefined, 'shop-here'))
+  })
+
+  test("before another computer's project is cloned here, this computer says what its clone and the run would hit; a start that hit it says nothing more", async () => {
+    onCommands.mockResolvedValue(WITH_BRANCHES)
+    const unread = 'This computer has no login that can read github.com/acme/shop, or there is no such repository: a private one needs a login.'
+    onCloneCheck.mockResolvedValue({ problems: [unread], warnings: [] })
+    startSays.error = 'shop could not be cloned here.'
+    prefs.current = { driver: 'codex' }
+    render(<StartAgentForm {...props} projectName="shop" home="laptop" />)
+    // Asked by the repository's address, with the agent picked: the project is not here to run its own check in.
+    await waitFor(() => expect(onCloneCheck).toHaveBeenCalledWith('github.com/acme/shop', 'codex'))
+    expect(onStartCheck).not.toHaveBeenCalled()
+    await screen.findByText(/no login that can read github.com\/acme\/shop/)
+    expect(screen.queryByText('shop could not be cloned here.')).toBeNull()
   })
 
   test('with a machine picked there is no "start from" chip, and the Start names no branch of this machine', async () => {

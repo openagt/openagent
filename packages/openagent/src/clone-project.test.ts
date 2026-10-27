@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { cloneProject, cloneTarget, cloneTargetOf, type CloneRunner } from './clone-project.js'
+import { canRead, cloneProject, cloneTarget, cloneTargetOf, type CloneRunner } from './clone-project.js'
 
 const HOME = '/home/ada'
 
@@ -189,6 +189,31 @@ test('a clone that fails leaves no folder, and says why in git\'s own last words
   } finally {
     await rm(home, { recursive: true, force: true })
   }
+})
+
+test('whether the logins read a repository is asked of its host the way a clone asks, and said in the clone\'s words of the computer asked', async () => {
+  const calls: { args: readonly string[]; env: NodeJS.ProcessEnv }[] = []
+  const answering = (said?: string, timedOut = false): CloneRunner => async (args, env) => {
+    calls.push({ args, env })
+    return said === undefined ? { ok: true } : { ok: false, said, timedOut }
+  }
+  const none = async () => undefined
+  assert.deepEqual(await canRead('github.com/ada/shop', { run: answering(), env: { PATH: '/bin' }, sshCommand: none }), { ok: true })
+  // Nothing is cloned: the host is asked for its branches, by the same ways in and with no question to a person.
+  assert.deepEqual(calls[0]!.args, ['-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', '-c', 'protocol.ssh.allow=always', 'ls-remote', '--heads', '--', 'https://github.com/ada/shop'])
+  assert.deepEqual(calls[0]!.env, { PATH: '/bin', GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', GIT_SSH_COMMAND: 'ssh -oBatchMode=yes' })
+
+  const noLogin = "fatal: could not read Username for 'https://github.com': terminal prompts disabled\n"
+  assert.deepEqual(await canRead('github.com/ada/private', { run: answering(noLogin), sshCommand: none }), {
+    ok: false,
+    error: "This computer has no login that can read github.com/ada/private, or there is no such repository: a private one needs a login. git said: could not read Username for 'https://github.com': terminal prompts disabled",
+  })
+  assert.deepEqual(await canRead('github.com/ada/private', { run: answering(noLogin), sshCommand: none }, 'experiment'), {
+    ok: false,
+    error: "experiment has no login that can read github.com/ada/private, or there is no such repository: a private one needs a login. git said: could not read Username for 'https://github.com': terminal prompts disabled",
+  })
+  assert.deepEqual(await canRead('github.com/ada/slow', { run: answering('', true), sshCommand: none }), { ok: false, error: 'github.com/ada/slow did not answer in time.' })
+  assert.deepEqual(await canRead('not an address', { run: answering() }), { ok: false, error: '"not an address" is not a repository\'s address. One looks like github.com/you/project.' })
 })
 
 test('the real git refuses a way in an address does not name, even when asked for one', async () => {
