@@ -1,7 +1,7 @@
 import { setDashboardContext } from './context.js'
 import { registryPreferencesStore } from '../registry.js'
 import { defaultQuotaSource } from '../dashboard/quota.js'
-import type { DashboardContext } from '../dashboard/rpc-serve.js'
+import type { DashboardContext, RemoteAgents } from '../dashboard/rpc-serve.js'
 import type { DashboardOptions } from '../dashboard/server.js'
 
 /**
@@ -11,6 +11,18 @@ import type { DashboardOptions } from '../dashboard/server.js'
  * it throws. That makes this the one place a test says what the host would have wired, with only
  * the parts it cares about overridden.
  */
+/** No other computer of the person's: what a test that builds its own `remote` spreads in when it is about none. */
+export const NO_ELSEWHERE: Pick<RemoteAgents, 'elsewhere' | 'elsewhereRuns' | 'followElsewhereRuns' | 'elsewhereHome' | 'bringHere' | 'forward'> = {
+  elsewhere: async () => [],
+  elsewhereRuns: async () => [],
+  followElsewhereRuns: () => () => {},
+  elsewhereHome: async () => undefined,
+  bringHere: async () => ({ state: 'missing' }),
+  forward: async () => {
+    throw new Error('no other computer is wired in this test')
+  },
+}
+
 export function testDashboardContext(over: Partial<DashboardContext> = {}): DashboardContext {
   return {
     startAgent: () => ({ ok: false, error: 'not wired in this test' }),
@@ -18,7 +30,7 @@ export function testDashboardContext(over: Partial<DashboardContext> = {}): Dash
     startedIn: () => ({ ok: false, error: 'not wired in this test' }),
     removeProject: () => ({ ok: false, error: 'not wired in this test' }),
     eventsSource: () => undefined,
-    remote: { target: () => undefined, list: () => [], working: () => false, rekey: () => {}, sent: () => true, home: async () => undefined, follow: async () => {}, machineNames: async () => () => undefined, machineRuns: async () => [], followRuns: () => () => {} },
+    remote: { target: () => undefined, list: () => [], working: () => false, rekey: () => {}, sent: () => true, home: async () => undefined, follow: async () => {}, machineNames: async () => () => undefined, machineRuns: async () => [], followRuns: () => () => {}, ...NO_ELSEWHERE },
     preferences: registryPreferencesStore(),
     quota: defaultQuotaSource(),
     models: { read: async () => ({ 'claude-code': { models: [] }, codex: { models: [] } }) },

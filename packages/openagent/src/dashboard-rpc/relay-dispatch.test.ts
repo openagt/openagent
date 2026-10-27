@@ -1,27 +1,48 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { provideTestContext } from './test-context.js'
-import { dispatchMachineRpc, dispatchRelayRpc, isMachineRead, isRelayRead, MACHINE_RPC_NAMES, RELAY_RPC_NAMES } from './relay-dispatch.js'
+import { dispatchMachineRpc, dispatchRelayRpc, ELSEWHERE_FORWARDED, isMachineRead, isRelayRead, MACHINE_RPC_NAMES, RELAY_RPC_NAMES } from './relay-dispatch.js'
+import type { StartAgentOptions } from '../dashboard/types.js'
 
 // The machine-side whitelist dispatcher (#1067 slice 2): a daemon that relayed an agent here calls one of a
 // fixed set of run-scoped RPCs against this machine's own copy of the project the call named. These assert the whitelist is
 // exactly the run-scoped read/steer/handoff surface (and excludes start/delete), and that an unknown
 // name is refused. The real HTTP round-trip through /_relay/rpc is in remote-run.integration.test.ts.
 
-test('RELAY_RPC_NAMES is the run-scoped read/steer/handoff surface and excludes start/delete (#1067 slice 2)', () => {
+test('RELAY_RPC_NAMES is the run-scoped read/steer/handoff surface and a project\'s reads and start, and excludes delete (#1067 slice 2)', () => {
   for (const name of [
     'onProjectFiles', 'readModule',
     'onGitStatus', 'onAgentWorktree', 'onAgentHandoff', 'onAgent', 'onOwnRuns', 'onStartCheck',
-    'sendStop', 'sendChoice', 'sendMessage', 'sendOpenPullRequest', 'sendPush', 'sendMerge',
+    'onCommands', 'onDocs', 'onAgentsDoing', 'onRetainedWorktrees', 'onGitHostHome', 'onRepositoryOffer', 'onProjectSkills', 'onRecordsReach',
+    'sendStop', 'sendChoice', 'sendMessage', 'sendOpenPullRequest', 'sendPush', 'sendMerge', 'sendMergeBranch', 'sendStart',
   ]) {
     assert.ok(RELAY_RPC_NAMES.includes(name), `expected ${name} on the relay whitelist`)
   }
-  // Starting an agent, deleting a session, and removing a worktree are NOT relayable: a machine runs its
-  // own guarded start, and destroying history/checkouts is not something a relaying daemon may reach.
-  // A module's command may write the project's data, so only its reads are relayable (#1774).
-  for (const off of ['sendStart', 'sendDeleteAgent', 'sendRemoveWorktree', 'sendPreview', 'runModuleCommand']) {
+  // Deleting a session, removing a worktree, and how a project keeps its records are NOT relayable:
+  // destroying history/checkouts is not something a relaying daemon may reach. A start is, as the
+  // guarded start a run sent here gets (the test below). A module's command may write the project's
+  // data, so only its reads are relayable (#1774).
+  for (const off of ['sendDeleteAgent', 'sendRemoveWorktree', 'sendShareRecords', 'sendCreateRepository', 'sendRemoveProject', 'sendPreview', 'runModuleCommand']) {
     assert.ok(!RELAY_RPC_NAMES.includes(off), `${off} must not be relayable`)
   }
+})
+
+test('a start that comes over the relay starts here: the machine it names is the asker\'s and is never sent on', async () => {
+  let started: { options: StartAgentOptions | undefined; project: string | undefined } | undefined
+  provideTestContext({
+    startAgent: (_prompt, options, project) => {
+      started = { options, project }
+      return { ok: true, agentId: 'a' }
+    },
+  })
+  const result = await dispatchRelayRpc('laptop-project', 'sendStart', ['server-project', 'say hi', { machine: 'http://127.0.0.1:4210', base: 'my-branch', driver: 'codex' }])
+  assert.deepEqual(result, { ok: true, agentId: 'a' })
+  assert.deepEqual(started, { options: { base: 'my-branch', driver: 'codex' }, project: 'laptop-project' })
+})
+
+test('a page\'s call about another computer\'s project goes to that computer as it is, but its start and that computer\'s own runs', () => {
+  for (const name of RELAY_RPC_NAMES) assert.equal(ELSEWHERE_FORWARDED.has(name), name !== 'sendStart' && name !== 'onOwnRuns', name)
+  for (const off of ['onAgents', 'sendDeleteAgent', 'onMachineStartCheck', 'onOwnProjects']) assert.equal(ELSEWHERE_FORWARDED.has(off), false, off)
 })
 
 test('every relayed rpc is classed as a read or an act, by name: a computer that only lets its server watch answers the reads alone', () => {
@@ -35,12 +56,22 @@ test('every relayed rpc is classed as a read or an act, by name: a computer that
     onAgent: 'read',
     onOwnRuns: 'read',
     onStartCheck: 'read',
+    onCommands: 'read',
+    onDocs: 'read',
+    onAgentsDoing: 'read',
+    onRetainedWorktrees: 'read',
+    onGitHostHome: 'read',
+    onRepositoryOffer: 'read',
+    onProjectSkills: 'read',
+    onRecordsReach: 'read',
     sendStop: 'act',
     sendChoice: 'act',
     sendMessage: 'act',
     sendOpenPullRequest: 'act',
     sendPush: 'act',
     sendMerge: 'act',
+    sendMergeBranch: 'act',
+    sendStart: 'act',
   }
   assert.deepEqual([...RELAY_RPC_NAMES].sort(), Object.keys(classes).sort())
   for (const [name, said] of Object.entries(classes)) assert.equal(isRelayRead(name) ? 'read' : 'act', said, name)
@@ -49,7 +80,7 @@ test('every relayed rpc is classed as a read or an act, by name: a computer that
 })
 
 test('dispatchRelayRpc rejects an unknown rpc name (#1067 slice 2)', async () => {
-  await assert.rejects(dispatchRelayRpc('home', 'sendStart', ['pid']), /unknown relay rpc/)
+  await assert.rejects(dispatchRelayRpc('home', 'sendDeleteAgent', ['pid']), /unknown relay rpc/)
   await assert.rejects(dispatchRelayRpc('home', 'nope', []), /unknown relay rpc/)
 })
 
@@ -65,6 +96,9 @@ test('the machine-wide calls are the logins and settings a computer brings its s
   // Pinned one by one: a function added to the whitelist fails here until its class is written down.
   const classes: Record<string, 'read' | 'act'> = {
     onCopiedLogins: 'read',
+    onOwnProjects: 'read',
+    onCloneCheck: 'read',
+    onModels: 'read',
     sendCopiedLogin: 'act',
     sendForgetCopiedLogin: 'act',
     sendKeepCopiedLogin: 'act',

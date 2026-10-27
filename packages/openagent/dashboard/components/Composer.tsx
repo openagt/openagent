@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { ArrowUp, Loader2 } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { machineName, type DriverName } from '../../src/client.js'
@@ -18,10 +18,10 @@ import { DriverModelMenu, type DriverOption } from './DriverModelMenu.js'
 import { RunOnMenu } from './RunOnMenu.js'
 import { openSettings } from '../lib/use-route.js'
 import { useMachines, tellMachine, type Machine } from '../lib/machines.js'
-import { useSelectedMachineId, selectMachine } from '../lib/remote-target.js'
+import { runTarget, useSelectedMachineId, selectMachine } from '../lib/remote-target.js'
 import { useMachineStatus } from '../lib/use-machine-status.js'
 import { takePendingDraft } from '../lib/draft-handoff.js'
-import { driverOptions, modelEfforts, useModels } from '../lib/models.js'
+import { driverOptions, modelEfforts, useModelsOn } from '../lib/models.js'
 import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.js'
 import { ClaudeLogo, CodexLogo } from './driver-logos.js'
 import { Button } from './ui/button.js'
@@ -107,8 +107,10 @@ export const Composer = forwardRef<ComposerHandle, {
    *  like Claude Code's composer. Typing swaps it for the arrow (a live send still queues), and
    *  without one the slot keeps its collapse-when-empty behavior for the launcher. */
   idleControl?: ReactNode
+  /** The saved machine the project is on, when only another computer of the person's has it (elsewhere.ts). */
+  home?: string | undefined
 }>(function Composer(
-  { files, addContext, removeContext, startsAt, controls, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, compact = false, showDriverModel = true, inAgent = false, canSubmit = true, idleControl },
+  { files, addContext, removeContext, startsAt, controls, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, compact = false, showDriverModel = true, inAgent = false, canSubmit = true, idleControl, home },
   ref,
 ) {
   const [prompt, setPrompt] = useState('')
@@ -117,23 +119,28 @@ export const Composer = forwardRef<ComposerHandle, {
   // The machines saved on this dashboard's own machine (#1052).
   const machines = useMachines()
   const machineStatus = useMachineStatus(machines) // #1072: online/offline per saved machine
-  // The registered projects for the `@` picker — the same list the launcher reads.
-  const projects = useLoaded<ProjectSummary[]>(onProjects, [], [])
+  // The registered projects for the `@` picker — the same list the launcher reads, but another
+  // computer's: its folder is not here to add (elsewhere.ts).
+  const listed = useLoaded<ProjectSummary[]>(onProjects, [], [])
+  const projects = useMemo(() => listed.filter(p => p.machine === undefined), [listed])
 
   const preferences = usePreferences()
   const model = preferences.model ?? '' // #628: empty = the coding agent's own default model
   const driver = preferences.driver ?? 'claude-code' // which coding agent does the work (#650)
-  const models = useModels()
   const customPresets = preferences.customPresets ?? [] // #626: the user's own saved prompts
   const projectPresets = useProjectPresets() // #1025: saved prompts committed in the open project's repo
   const activeProjectId = useActiveProjectId() // the project whose commands the `/` list offers
   const launcher = useProjectLauncher(activeProjectId)
   const commands = launcher?.commands ?? []
   // A project with no repository address has no name another machine knows it by, so it runs here
-  // only and a machine picked on another project's launcher is not its target.
-  const onlyHere = launcher !== null && launcher.address === undefined
+  // only and a machine picked on another project's launcher is not its target. Another computer's
+  // such project runs on that computer only: this one cannot clone it.
+  const onlyHere = home === undefined && launcher !== null && launcher.address === undefined
+  const onlyThere = home !== undefined && launcher !== null && launcher.address === undefined
   const selectedMachineId = useSelectedMachineId() // #1067: the machine this run targets, if any
-  const selectedMachine = selectedMachineId && !onlyHere ? machines.find(m => m.id === selectedMachineId) : undefined
+  const selectedMachine = runTarget(machines, selectedMachineId, launcher, home)
+  // The agents and models of the machine the run goes to: a run there is given one of its own.
+  const models = useModelsOn(inAgent ? undefined : selectedMachine?.id)
   // #1073: block Start when the target machine is known-offline; an absent/unknown status must not block.
   const targetOffline = !!selectedMachine && machineStatus[selectedMachine.id] === 'offline'
   // Another person's computer: the person is told once that their logins are copied there, and
@@ -253,6 +260,8 @@ export const Composer = forwardRef<ComposerHandle, {
         machines,
         selectedMachineId,
         onlyHere,
+        home,
+        onlyThere,
         // #1067: selecting a machine makes it the run target in place, no navigation.
         onSelect: (m: Machine) => selectMachine(m.id),
         onSelectLocal: () => selectMachine(null),

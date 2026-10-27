@@ -31,6 +31,7 @@ export function ProjectHome({
   errors,
   onProjectRemoved,
   onSkillsChanged,
+  home,
 }: {
   projectId: string
   /** The project's name, for the launcher's chip; absent until the projects are read. */
@@ -39,7 +40,7 @@ export function ProjectHome({
   waiting: Intervention[]
   events: OpenAgentEvent[]
   /** Carries the started agent's id through to the shell; dropping it is what #1169 was. */
-  onAgentStarted?: ((intent: string, agentId: string, runsOn?: string) => void) | undefined
+  onAgentStarted?: ((intent: string, agentId: string, runsOn?: string, startedIn?: string) => void) | undefined
   files: string[]
   /** The Context set and its edits, owned by the shell and shared with the file tree (#492). */
   context: Set<string>
@@ -54,13 +55,15 @@ export function ProjectHome({
   onProjectRemoved?: (() => void) | undefined
   /** Told once the project's skills were written, deleted or committed: its pages may have changed. */
   onSkillsChanged?: (() => void) | undefined
+  /** The saved machine the project is on, when only another computer of the person's has it (elsewhere.ts): it is removed there, not here. */
+  home?: string | undefined
 }) {
   // The project's skills are opened from the row under the box; the list itself is the skills line's, which reads them.
   // Held with the project it was opened for: the page stays mounted when another project is picked, and a list asked for here is not that project's.
   const [skillsFor, setSkillsFor] = useState<string | null>(null)
   return (
     <>
-      <ProjectActions projectId={projectId} onProjectRemoved={onProjectRemoved} />
+      <ProjectActions projectId={projectId} onProjectRemoved={home === undefined ? onProjectRemoved : undefined} />
       {/* Above everything, because an agent started on a project whose agent-data branch cannot
           reach origin (#1599) works from stale tickets and a queue nobody else will see. */}
       <ProjectErrorBanner errors={errors} />
@@ -94,6 +97,7 @@ export function ProjectHome({
         removeContext={removeContext}
         toggleContext={toggleContext}
         onOpenSkills={() => setSkillsFor(projectId)}
+        home={home}
       />
     </>
   )

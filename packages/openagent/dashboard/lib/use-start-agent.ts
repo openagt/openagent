@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Preferences, PublishPick } from '../../src/index.js'
 import { sendStart } from '../rpc/control.js'
-import { onProjectOnMachine, sendProjectToMachine } from '../rpc/machines.js'
+import { onProjectHere, onProjectOnMachine, sendProjectHere, sendProjectToMachine } from '../rpc/machines.js'
 import { useAction } from './use-action.js'
 
 type StartArgs = Parameters<typeof sendStart>
@@ -45,15 +45,16 @@ export function cleanupPick(preferences: Preferences, commands: readonly { name:
 // says what it is waiting for. The wait is for the page it began on: `scope` names what that page
 // is about (the launcher's project), and a person who leaves the page, or goes to another
 // project's launcher, started nothing and is told nothing. The machine goes on cloning, and their
-// next send finds the project there.
+// next send finds the project there. A project only another computer of the person's has is cloned
+// here the same way, for a run on this computer: the run starts in that copy, and the answer names it.
 export function useStartAgent(scope?: string): {
   busy: boolean
   /** The machine the run was sent to is cloning the project, and the start waits for it. */
   cloning: boolean
   error: string | null
   reset: () => void
-  /** Start the run; resolves with its id, or `undefined` (error state set, or the page was left). */
-  start: (projectId: string, text: string, options?: StartArgs[2], fallback?: string) => Promise<{ agentId: string } | undefined>
+  /** Start the run; resolves with its id and the project it started in when that is another, or `undefined` (error state set, or the page was left). */
+  start: (projectId: string, text: string, options?: StartArgs[2], fallback?: string) => Promise<{ agentId: string; projectId?: string } | undefined>
 } {
   const { busy, error, reset, run } = useAction()
   const [cloningFor, setCloningFor] = useState<{ scope: string | undefined } | null>(null)
@@ -71,10 +72,14 @@ export function useStartAgent(scope?: string): {
     const wanted = (): boolean => shown.current && scopeNow.current === began
     const outcome = await run(async () => {
       const refused = await sendStart(projectId, text, options)
-      if (refused.ok || !refused.notThere || options.machine === undefined) return refused
+      if (refused.ok || !refused.notThere) return refused
+      const machine = options.machine
       setCloningFor({ scope: began })
       try {
-        const brought = await projectOnTheMachine(projectId, options.machine, wanted)
+        const brought =
+          machine === undefined
+            ? await projectBrought(() => sendProjectHere(projectId), () => onProjectHere(projectId), wanted)
+            : await projectBrought(() => sendProjectToMachine(projectId, machine), () => onProjectOnMachine(projectId, machine), wanted)
         if (brought === LEFT || !wanted()) return LEFT
         if (!brought.ok) return brought
       } finally {
@@ -95,15 +100,19 @@ export const CLONE_ASKED_EVERY_MS = 2_000
 /** How long a clone is waited for: a little longer than a machine lets one take. */
 const CLONE_WAITED_MS = 16 * 60_000
 
-/** Have the machine clone the project, and wait until it is there: `wanted` says whether anyone still waits. */
-async function projectOnTheMachine(projectId: string, machineId: string, wanted: () => boolean): Promise<{ ok: true } | { ok: false; error: string } | typeof LEFT> {
+/** Have a computer clone the project, and wait until it is there: `wanted` says whether anyone still waits. */
+async function projectBrought(
+  send: () => ReturnType<typeof sendProjectToMachine>,
+  ask: () => ReturnType<typeof onProjectOnMachine>,
+  wanted: () => boolean,
+): Promise<{ ok: true } | { ok: false; error: string } | typeof LEFT> {
   const until = Date.now() + CLONE_WAITED_MS
-  let said = await sendProjectToMachine(projectId, machineId)
+  let said = await send()
   while (said.ok && !said.there) {
-    if (Date.now() > until) return { ok: false, error: 'The machine is still cloning the project. Send again in a few minutes.' }
+    if (Date.now() > until) return { ok: false, error: 'The project is still being cloned. Send again in a few minutes.' }
     await new Promise(resolve => setTimeout(resolve, CLONE_ASKED_EVERY_MS))
     if (!wanted()) return LEFT
-    said = await onProjectOnMachine(projectId, machineId)
+    said = await ask()
   }
   return said.ok ? { ok: true } : said
 }

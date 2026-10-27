@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { CircleAlert, Folder, Puzzle } from 'lucide-react'
-import { onStartCheck } from '../rpc/projects.js'
+import { onCloneCheck, onStartCheck } from '../rpc/projects.js'
+import { thisMachineName } from '../lib/this-machine.js'
 import { onMachineLogins, onMachineStartCheck } from '../rpc/machines.js'
 import { usePreferences, usePreferencesLoaded, updatePreferences } from '../lib/preferences.js'
 import { DRIVER_LABELS, isDriverName, machineName, offeredPublishPicks, publishPickIn, reachedThrough } from '../../src/client.js'
 import { useMachines } from '../lib/machines.js'
-import { useSelectedMachineId } from '../lib/remote-target.js'
+import { followProjectHome, runTarget, useSelectedMachineId } from '../lib/remote-target.js'
 import { cleanupPick, offersPostMergeCleanup, startPicks, useStartAgent } from '../lib/use-start-agent.js'
 import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
@@ -70,12 +71,15 @@ export function StartAgentForm({
   removeContext,
   toggleContext,
   onOpenSkills,
+  home,
 }: {
   projectId: string
+  /** The saved machine the project is on, when only another computer of the person's has it (elsewhere.ts). */
+  home?: string | undefined
   /** The project's name, for the row above the box; absent until the projects are read. */
   projectName?: string | null | undefined
-  /** `runsOn` names the machine a remote agent executes on (#1067), for the "runs on <machine>" marker. */
-  onAgentStarted?: ((intent: string, agentId: string, runsOn?: string) => void) | undefined
+  /** `runsOn` names the machine a remote agent executes on (#1067), for the "runs on <machine>" marker; `startedIn` the project the run started in, when it is not this one. */
+  onAgentStarted?: ((intent: string, agentId: string, runsOn?: string, startedIn?: string) => void) | undefined
   /** The project's files for the `#` picker (#504), owned by the shell. */
   files: string[]
   /** The Context set, shared with the Files pane's tree (#492), owned by the shell. */
@@ -98,28 +102,35 @@ export function StartAgentForm({
   const launcher = useProjectLauncher(projectId)
 
   // The machine this run targets (#1067), if one is picked in "Run on": the start names it by its
-  // id, and the daemon, which holds its key, sends the run there. A project with no repository
-  // address has no name another machine knows it by, so a pick made on another project's launcher
-  // does not hold here; until the launcher is read that is not known, and the pick holds. A
-  // machine runs the start hook of its own copy of the project, so this copy's lack of one does
-  // not block it.
+  // id, and the daemon, which holds its key, sends the run there (runTarget). A machine runs the
+  // start hook of its own copy of the project, so this copy's lack of one does not block it.
+  //
+  // A project only another computer has is that computer's: it is picked when the project is
+  // opened, and the launcher read is that computer's own, so on it the run starts as on a project
+  // of this computer's, its commands and branches and all. On this computer it starts in a copy
+  // cloned here first, which has none of that yet.
   const machines = useMachines()
   const selectedMachineId = useSelectedMachineId()
-  const machine = selectedMachineId && (launcher === null || launcher.address !== undefined) ? machines.find(m => m.id === selectedMachineId) : undefined
-  const noStartHook = launcher !== null && !launcher.startHook && !machine
+  useEffect(() => followProjectHome(home), [projectId, home])
+  const machine = runTarget(machines, selectedMachineId, launcher, home)
+  const atHome = home !== undefined && machine?.id === home
+  // A machine that is not where the launcher was read: its own copy is not read at all.
+  const foreign = machine !== undefined && !atHome
+  const clonedHere = home !== undefined && machine === undefined
+  const noStartHook = launcher !== null && !launcher.startHook && !foreign && !clonedHere
   // A machine starts the run in its own project, whose commands this launcher does not read. A command
   // whose skill has yet to reach the branch the agent starts from is not one the run can follow with.
-  const commands = machine ? [] : readyCommands(launcher?.commands ?? [])
+  const commands = foreign ? [] : readyCommands(launcher?.commands ?? [])
   const offersCleanup = offersPostMergeCleanup(commands)
   // Whether a pull request can be opened here: unknown until the launcher is read, and a machine's
   // own project is not read at all, so both are offered every pick; the daemon that starts the run
   // holds a pull request pick to the branch where its project has no git host.
-  const gitHost = machine ? true : (launcher?.gitHost ?? true)
+  const gitHost = foreign ? true : (launcher?.gitHost ?? true)
   // A project with no remote can publish nothing: its picks stop at the commit.
-  const remote = machine ? true : (launcher?.remote ?? true)
+  const remote = foreign ? true : (launcher?.remote ?? true)
   const publishPick = publishPickIn(preferences.publish, gitHost, remote)
   // The two branches the agent can start from, where the pick is offered at all.
-  const startFrom = machine ? undefined : launcher?.startFrom
+  const startFrom = foreign || clonedHere ? undefined : launcher?.startFrom
   const startFromPick: StartFrom = preferences.startFrom?.[projectId] ?? 'main'
   const preferencesLoaded = usePreferencesLoaded()
   // The whole map is written: a save names keys, and this is one key. The main branch is the
@@ -134,7 +145,9 @@ export function StartAgentForm({
   const driver = preferences.driver
   // Asked again once a press fixed what it said: the agent's own state is followed only while the check says a press can.
   const [recheck, setRecheck] = useState(0)
-  const here = useLoaded(machine ? null : () => onStartCheck(projectId, driver), null, [projectId, driver, machine === undefined, recheck])
+  // A project cloned here first has no check of its own here yet: this computer is asked what the clone and the run would hit.
+  const address = launcher?.address
+  const here = useLoaded(machine ? null : clonedHere ? (address !== undefined ? () => onCloneCheck(address, driver) : null) : () => onStartCheck(projectId, driver), null, [projectId, driver, machine === undefined, clonedHere, address, recheck])
   const [machineEvery, setMachineEvery] = useState(MACHINE_SELDOM_MS)
   const there = usePolled(machine ? () => onMachineStartCheck(projectId, machine.id, driver) : null, null, machineEvery, [projectId, driver, machine?.id]).value
   const readiness = machine ? there : here
@@ -160,7 +173,7 @@ export function StartAgentForm({
   const submit = async (text: string) => {
     if (busy) return
     setNote(STARTING)
-    setSentTo(machine ? machineName(machine) : null)
+    setSentTo(machine ? machineName(machine) : clonedHere ? hereName() : null)
     const result = await start(projectId, promptWithContext(text, context), {
       ...startPicks(preferences),
       ...cleanupPick(preferences, commands),
@@ -172,7 +185,7 @@ export function StartAgentForm({
       // Show the run in the Runs rail immediately (#405): its tool writes the run's card a beat
       // later, so seed an optimistic row with the typed prompt until the real one takes over.
       // A remote agent (#1067) carries the machine label so the view can mark where it executes.
-      onAgentStarted?.(text, result.agentId, machine?.label) // select the run we just started (#761)
+      onAgentStarted?.(text, result.agentId, machine?.label, result.projectId) // select the run we just started (#761)
       composerRef.current?.clear()
     }
   }
@@ -188,6 +201,7 @@ export function StartAgentForm({
     <form onSubmit={e => e.preventDefault()} className="relative mx-auto w-full max-w-3xl p-2">
       <Composer
         ref={composerRef}
+        home={home}
         files={files}
         addContext={addContext}
         removeContext={removeContext}
@@ -240,8 +254,8 @@ export function StartAgentForm({
 
       {/* Feedback right where the action is (#948): above the box, over the page, so the box never moves. */}
       <div className="absolute inset-x-2 bottom-full flex flex-col gap-1.5 pb-1">
-        {/* A start that hit the missing logins says nothing the box below does not. */}
-        {error && missingThere.length === 0 && <Refusal {...said(error)} />}
+        {/* A start that hit what the check says, or the missing logins, says nothing the boxes below do not. */}
+        {error && missingThere.length === 0 && !readiness?.problems.length && <Refusal {...said(error)} />}
         {machine && missingThere.length > 0 && (
           <Refusal
             title={`Your ${missingThere.join(' and ')} ${missingThere.length === 1 ? 'login is' : 'logins are'} not on ${name} yet.`}
@@ -299,6 +313,12 @@ export function StartAgentForm({
       {note !== STARTING && note && !error && <p role="status" className="mt-2 text-xs text-muted-foreground">{note}</p>}
     </form>
   )
+}
+
+/** This computer, in "Cloning … on …": by the name the page was reached at, or as this computer when it is open on it. */
+function hereName(): string {
+  const name = thisMachineName()
+  return name === 'This machine' ? 'this computer' : name
 }
 
 /**

@@ -22,7 +22,9 @@ const agent = (id: string, updatedAt: string): AgentMeta => ({
   updatedAt,
 })
 
-test('summarizeProject derives name from the path basename', async () => {
+test("summarizeProject names the project as its repository is named, and one with no repository by its folder", async () => {
+  assert.equal((await summarizeProject(RECORD, deps({ name: async () => 'shop' }))).name, 'shop')
+  assert.equal((await summarizeProject(RECORD, deps({ name: async () => Promise.reject(new Error('no git')) }))).name, 'app-a')
   const summary = await summarizeProject(RECORD, deps({}))
   assert.equal(summary.name, 'app-a')
   assert.equal(summary.id, 'app-a-1')

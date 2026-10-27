@@ -6,10 +6,12 @@ import { execFileSync } from 'node:child_process'
 import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { onComputersThrough, onMachineStartCheck, onMachineVersions, onMachines, onMachinesReachable, onProjectOnMachine, sendAddComputerThrough, sendAddMachine, sendLetMachineIn, sendProjectToMachine, sendRemoveMachine, sendRenameMachine } from './machines.js'
+import { onComputersThrough, onMachineModels, onMachineStartCheck, onMachineVersions, onMachines, onMachinesReachable, onProjectHere, onProjectOnMachine, sendAddComputerThrough, sendAddMachine, sendLetMachineIn, sendProjectHere, sendProjectToMachine, sendRemoveMachine, sendRenameMachine } from './machines.js'
+import { elsewhereId, type OwnProject } from '../dashboard/elsewhere.js'
+import type { BringProject } from '../dashboard/remote-run.js'
 import { openagentVersion } from '../version.js'
 import { setDashboardContext } from './context.js'
-import { testDashboardContext } from './test-context.js'
+import { NO_ELSEWHERE, testDashboardContext } from './test-context.js'
 import { REGISTRY_FILE, addMachine, addProject, projectId, useLoginsOn } from '../registry.js'
 
 /** Until `check` holds: what is not waited for (a key taken out of a machine) lands a moment later. */
@@ -167,7 +169,7 @@ test('a machine a run is at work on is not removed and not added again: the key 
     const studio = await machine(['first', 'second'])
     const rekeyed: string[][] = []
     let working = true
-    setDashboardContext(testDashboardContext({ remote: { target: () => undefined, list: () => [], working: url => working && url === studio.url, rekey: (url, key, pin) => void rekeyed.push([url, key, ...(pin ? [pin] : [])]), sent: () => true, home: async () => undefined, follow: async () => {}, machineNames: async () => () => undefined, machineRuns: async () => [], followRuns: () => () => {} } }))
+    setDashboardContext(testDashboardContext({ remote: { ...NO_ELSEWHERE, target: () => undefined, list: () => [], working: url => working && url === studio.url, rekey: (url, key, pin) => void rekeyed.push([url, key, ...(pin ? [pin] : [])]), sent: () => true, home: async () => undefined, follow: async () => {}, machineNames: async () => () => undefined, machineRuns: async () => [], followRuns: () => () => {} } }))
     try {
       await sendAddMachine(studio.link('first'), 'Studio')
       assert.deepEqual(rekeyed, [[studio.url, 'd1.key-first']])
@@ -330,7 +332,8 @@ test('a saved machine is asked to clone a project of this computer\'s, by the pr
       await addProject(shop, at)
       await addProject(notes, at)
       await addMachine({ url, key: 'd1.key', door: `${url}${ENTER}`, label: 'Studio' })
-      const name = shop.split('/').at(-1)!
+      // Named as its repository is, whatever its folder here is called.
+      const name = 'Shop'
 
       assert.deepEqual(await sendProjectToMachine(projectId(shop), url), { ok: true, there: false })
       // This computer's own answer on the records, and its spelling of the address, ride the ask.
@@ -374,9 +377,12 @@ test('a saved machine is asked whether a run would start there, from its own cop
       req.on('data', chunk => (raw += chunk))
       req.on('end', () => {
         calls.push({ url: req.url, auth: req.headers.authorization, body: raw ? JSON.parse(raw) : null })
-        res.writeHead(answer.status ?? 200, { 'content-type': 'application/json' }).end(JSON.stringify(answer.said ?? {}))
+        const said = req.url?.endsWith('/_relay/machine') ? cloning : answer
+        res.writeHead(said.status ?? 200, { 'content-type': 'application/json' }).end(JSON.stringify(said.said ?? {}))
       })
     })
+    // What the machine says of a clone of the project, asked when it does not have it: an older OpenAgent knows no such call.
+    let cloning: { status?: number; said?: unknown } = { status: 500, said: { error: 'unknown machine rpc: onCloneCheck' } }
     await new Promise<void>(r => srv.listen(0, '127.0.0.1', () => r()))
     const url = `http://127.0.0.1:${(srv.address() as AddressInfo).port}/_devices/via/c1`
     try {
@@ -398,9 +404,103 @@ test('a saved machine is asked whether a run would start there, from its own cop
         assert.equal(await onMachineStartCheck(projectId(shop), url, 'claude-code'), null, JSON.stringify(said))
       }
       assert.equal(await onMachineStartCheck(projectId(shop), 'http://127.0.0.1:1'), null)
+
+      // A machine without the project yet says what its clone and the run would hit, asked by the repository's address and its name here.
+      const unreadable = 'experiment has no login that can read github.com/acme/shop, or there is no such repository: a private one needs a login. git said: Repository not found.'
+      answer = { status: 404, said: 'no such project on this machine' }
+      cloning = { said: { result: { problems: [unreadable], warnings: [] } } }
+      calls.length = 0
+      assert.deepEqual(await onMachineStartCheck(projectId(shop), url, 'codex'), { problems: [unreadable], warnings: [] })
+      assert.deepEqual(calls[1], { url: '/_devices/via/c1/_relay/machine', auth: 'Bearer d1.key', body: { fn: 'onCloneCheck', args: ['github.com/acme/shop', 'codex', 'experiment'] } })
+      // One that has it is not asked about a clone, whatever it says.
+      answer = { said: { result: null } }
+      calls.length = 0
+      assert.equal(await onMachineStartCheck(projectId(shop), url, 'codex'), null)
+      assert.equal(calls.length, 1)
+
+      // The models its agents offer, which a run sent there is given one of; none from a machine that is not asked this.
+      const models = { 'claude-code': { models: [{ id: 'opus', name: 'Opus 5.5' }] }, codex: { models: [{ id: 'gpt-5.6', name: 'GPT-5.6' }] } }
+      cloning = { said: { result: models } }
+      calls.length = 0
+      assert.deepEqual(await onMachineModels(url), models)
+      assert.deepEqual(calls[0], { url: '/_devices/via/c1/_relay/machine', auth: 'Bearer d1.key', body: { fn: 'onModels', args: [] } })
+      cloning = { status: 500, said: { error: 'unknown machine rpc: onModels' } }
+      assert.equal(await onMachineModels(url), null)
+      cloning = { said: { result: ['no', 'models'] } }
+      assert.equal(await onMachineModels(url), null)
+      assert.equal(await onMachineModels('http://127.0.0.1:1'), null)
     } finally {
       await new Promise<void>(r => srv.close(() => r()))
       await rm(shop, { recursive: true, force: true })
+    }
+  })
+})
+
+test("another computer's project is named to that computer as it knows it, and to any other by its address; this computer clones it from its spelling, with its records' answer", async () => {
+  await withHome(async () => {
+    const calls: { url?: string | undefined; body: unknown }[] = []
+    const srv: Server = createServer((req, res) => {
+      let raw = ''
+      req.on('data', chunk => (raw += chunk))
+      req.on('end', () => {
+        calls.push({ url: req.url, body: raw ? JSON.parse(raw) : null })
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(req.url?.endsWith('/_relay/project') ? { state: 'coming' } : { result: { problems: [], warnings: [] } }))
+      })
+    })
+    await new Promise<void>(r => srv.listen(0, '127.0.0.1', () => r()))
+    const laptop = `http://127.0.0.1:${(srv.address() as AddressInfo).port}`
+    const studio = `${laptop}/studio`
+    const shop: OwnProject = { id: 'shop-1abc', name: 'shop', path: '/Users/me/shop', address: 'github.com/acme/shop', spelling: 'github.com/Acme/Shop', share: false, gitHost: true, activated: true }
+    const notes: OwnProject = { id: 'notes-2def', name: 'notes', path: '/Users/me/notes', share: true, gitHost: false, activated: true }
+    const brought: [string, BringProject | undefined][] = []
+    const base = testDashboardContext()
+    setDashboardContext(
+      testDashboardContext({
+        remote: {
+          ...base.remote,
+          ...NO_ELSEWHERE,
+          elsewhereHome: async id => (id === elsewhereId(shop.id, laptop) ? { machine: laptop, project: shop } : id === elsewhereId(notes.id, laptop) ? { machine: laptop, project: notes } : undefined),
+          bringHere: async (address, bring) => {
+            brought.push([address, bring])
+            return { state: bring ? 'coming' : 'there' }
+          },
+        },
+      }),
+    )
+    try {
+      await addMachine({ url: laptop, key: 'd1.laptop', door: `${laptop}${ENTER}`, label: 'MacBook' })
+      await addMachine({ url: studio, key: 'd1.studio', door: `${studio}${ENTER}`, label: 'Studio' })
+      const shopHere = elsewhereId(shop.id, laptop)
+      const notesHere = elsewhereId(notes.id, laptop)
+
+      await onMachineStartCheck(shopHere, laptop, 'codex')
+      await onMachineStartCheck(notesHere, laptop)
+      await onMachineStartCheck(shopHere, studio)
+      assert.deepEqual(
+        calls.map(call => (call.body as { project: string }).project),
+        // Its own computer by its address, or its id there when it has none; another by its address.
+        ['github.com/acme/shop', '#notes-2def', 'github.com/acme/shop'],
+      )
+      // A project with no address goes to no other computer.
+      assert.equal(await onMachineStartCheck(notesHere, studio), null)
+      assert.equal(calls.length, 3)
+
+      // Another computer clones it as it would one of this computer's: from its spelling, with its records' answer.
+      assert.deepEqual(await sendProjectToMachine(shopHere, studio), { ok: true, there: false })
+      assert.deepEqual(calls[3], { url: '/studio/_relay/project', body: { project: 'github.com/acme/shop', share: false, from: 'github.com/Acme/Shop' } })
+
+      // And this computer the same way.
+      assert.deepEqual(await sendProjectHere(shopHere), { ok: true, there: false })
+      assert.deepEqual(await onProjectHere(shopHere), { ok: true, there: true })
+      assert.deepEqual(brought, [
+        ['github.com/acme/shop', { share: false, from: 'github.com/Acme/Shop' }],
+        ['github.com/acme/shop', undefined],
+      ])
+      assert.deepEqual(await sendProjectHere(notesHere), { ok: false, error: 'notes has no repository address, so it cannot be cloned here.' })
+      assert.deepEqual(await sendProjectHere(projectId('/somewhere/shop')), { ok: false, error: `unknown project: ${projectId('/somewhere/shop')}` })
+      assert.equal(brought.length, 2)
+    } finally {
+      await new Promise<void>(r => srv.close(() => r()))
     }
   })
 })

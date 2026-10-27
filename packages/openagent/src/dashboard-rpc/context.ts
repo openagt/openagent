@@ -38,7 +38,7 @@ function fromContext<K extends keyof DashboardContext>(key: K): DashboardContext
 }
 
 /** No run is relayed from here — see {@link contextRemote}. */
-const NO_RELAYED_RUNS: RemoteAgents = { target: () => undefined, list: () => [], working: () => false, rekey: () => {}, sent: () => true, home: async () => undefined, follow: async () => {}, machineNames: async () => () => undefined, machineRuns: async () => [], followRuns: () => () => {} }
+const NO_RELAYED_RUNS: RemoteAgents = { target: () => undefined, list: () => [], working: () => false, rekey: () => {}, sent: () => true, home: async () => undefined, follow: async () => {}, machineNames: async () => () => undefined, machineRuns: async () => [], followRuns: () => () => {}, elsewhere: async () => [], elsewhereRuns: async () => [], followElsewhereRuns: () => () => {}, elsewhereHome: async () => undefined, bringHere: async () => ({ state: 'missing' }), forward: async () => { throw new Error('no other computer is wired here') } }
 
 /** The projects every RPC resolves a project id against: the global registry. */
 export function contextProjects(): ProjectsProvider {

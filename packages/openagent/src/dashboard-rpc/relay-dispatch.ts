@@ -1,10 +1,13 @@
-import { onProjectFiles, onGitStatus, onAgentWorktree, onAgentHandoff, onAgent, onOwnRuns } from './reads.js'
+import { onProjectFiles, onGitStatus, onAgentWorktree, onAgentHandoff, onAgent, onOwnRuns, onDocs, onAgentsDoing, onRetainedWorktrees, onGitHostHome, onRepositoryOffer } from './reads.js'
 import { readModule } from './modules.js'
-import { sendStop, sendChoice, sendMessage, sendOpenPullRequest, sendPush, sendMerge } from './control.js'
+import { sendStop, sendChoice, sendMessage, sendOpenPullRequest, sendPush, sendMerge, sendMergeBranch, sendStart } from './control.js'
 import { asArrived } from './relay-agent.js'
-import { onStartCheck } from './projects.js'
+import { onCloneCheck, onCommands, onOwnProjects, onRecordsReach, onStartCheck } from './projects.js'
+import { onProjectSkills } from './skills.js'
+import type { StartAgentOptions } from '../dashboard/types.js'
 import { onCopiedLogins, sendCopiedLogin, sendCopiedUsage, sendForgetCopiedLogin, sendKeepCopiedLogin } from './copied-logins.js'
 import { patchPreferences } from './preferences.js'
+import { onModels } from './models.js'
 
 // The machine side of the remote-agent relay (#1067 slice 2). A daemon that relayed an agent here asks this
 // to read/steer/hand off THAT run against THIS machine's own checkout. Every entry is a run-scoped RPC
@@ -21,14 +24,32 @@ type RelayFn = (...args: unknown[]) => Promise<unknown>
 // lets its server watch answers the reads and refuses the acts (relay-endpoints.ts). An entry goes
 // in one of the two lists, so nothing is relayed that was not classed. `readModule` is a read for
 // as long as a module's read changes nothing, which is what a module's read is.
-const RELAY_READS = { onProjectFiles, readModule, onGitStatus, onAgentWorktree, onAgentHandoff, onAgent, onOwnRuns, onStartCheck }
-const RELAY_ACTS = { sendStop, sendChoice, sendMessage, sendOpenPullRequest, sendPush, sendMerge }
+//
+// Besides a run's own calls, a project's: what the person's other computer lists of a project only
+// this computer has (elsewhere.ts) is read here, and a run of it is started here, by the same
+// guarded start a run sent here gets: on this computer, never sent on. What destroys a run's
+// history or checkout, or changes how the project keeps its records, is still no other computer's to do.
+const RELAY_READS = { onProjectFiles, readModule, onGitStatus, onAgentWorktree, onAgentHandoff, onAgent, onOwnRuns, onStartCheck, onCommands, onDocs, onAgentsDoing, onRetainedWorktrees, onGitHostHome, onRepositoryOffer, onProjectSkills, onRecordsReach }
+const RELAY_ACTS = { sendStop, sendChoice, sendMessage, sendOpenPullRequest, sendPush, sendMerge, sendMergeBranch, sendStart: startHere }
 // Null-prototype, like RPC_HANDLERS (R1): the key is a request-controlled string, so a plain object
 // would answer `constructor`/`toString`/`valueOf` off Object.prototype and invoke them as handlers.
 const RELAY_FNS = Object.assign(Object.create(null) as Record<string, RelayFn>, RELAY_READS, RELAY_ACTS) as unknown as Record<string, RelayFn>
 
+/** A start that came from another computer runs here: the machine it names is the asker's, never sent on from here. */
+function startHere(projectId: string, prompt: string, options?: StartAgentOptions): ReturnType<typeof sendStart> {
+  const { machine: _askers, ...here } = options && typeof options === 'object' ? options : ({} as StartAgentOptions)
+  return sendStart(projectId, prompt, here)
+}
+
 /** The names a relay caller may invoke. */
 export const RELAY_RPC_NAMES: readonly string[] = Object.keys(RELAY_FNS)
+
+/**
+ * The calls a page makes about another computer's project (elsewhere.ts) that this computer passes
+ * on to that computer as they are: every relayed one but a start, which goes where "Run on" says,
+ * and a computer's own runs, which only a computer asks for.
+ */
+export const ELSEWHERE_FORWARDED: ReadonlySet<string> = new Set(RELAY_RPC_NAMES.filter(name => name !== 'sendStart' && name !== 'onOwnRuns'))
 
 /** Whether a relayed RPC only reads. A name that is not on the whitelist is no read. */
 export function isRelayRead(fn: string): boolean {
@@ -50,7 +71,7 @@ export async function dispatchRelayRpc(projectId: string, fn: string, args: unkn
 // not a run (logins-sync.ts brings the server's logins and settings up to its own). They go by the
 // relay too, so a computer that keeps a line open to its server is asked them as any server is:
 // a line carries nothing but the relay. Classed the same way, read or act.
-const MACHINE_READS = { onCopiedLogins }
+const MACHINE_READS = { onCopiedLogins, onOwnProjects, onCloneCheck, onModels }
 const MACHINE_ACTS = { sendCopiedLogin, sendForgetCopiedLogin, sendKeepCopiedLogin, sendCopiedUsage, patchPreferences }
 const MACHINE_FNS = Object.assign(Object.create(null) as Record<string, RelayFn>, MACHINE_READS, MACHINE_ACTS) as unknown as Record<string, RelayFn>
 

@@ -1,3 +1,4 @@
+import { basename } from 'node:path'
 import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 
 /**
@@ -43,6 +44,15 @@ export function spellingOfRemote(remote: string): string | undefined {
  */
 export async function repositoryAddress(cwd: string, git: GitRunner = nodeGitRunner()): Promise<string | undefined> {
   return git(['remote', 'get-url', 'origin'], cwd).then(addressOfRemote, () => undefined)
+}
+
+/**
+ * A project's name: its repository's, the last part of its address in the letters `origin` writes
+ * it with, so the project reads the same on every computer whatever its folder there is called.
+ * A project with no address is its folder's.
+ */
+export async function projectNameOf(cwd: string, git: GitRunner = nodeGitRunner()): Promise<string> {
+  return (await repositorySpelling(cwd, git))?.split('/').at(-1) ?? basename(cwd)
 }
 
 /** The same address in the letters the `origin` remote is written with: see {@link spellingOfRemote}. */

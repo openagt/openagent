@@ -28,6 +28,7 @@ import { useModules, ModulesContext } from './lib/use-modules.js'
 import { HostServicesContext, useSteadyServices } from './lib/host-services.js'
 import { sendToScreen, watchScreen } from './lib/screen.js'
 import { startPicks } from './lib/use-start-agent.js'
+import { ownComputerName } from './lib/this-machine.js'
 import { stashPendingDraft } from './lib/draft-handoff.js'
 import { useLiveEvents } from './lib/use-live-events.js'
 import { STARTING_AT_MOST_MS, useAgents } from './lib/use-agents.js'
@@ -281,7 +282,11 @@ export function App() {
   }
 
   /** The same, for the surfaces that start an agent inside the selected project. */
-  const onAgentStarted = (intent: string, startedId: string, runsOn?: string) => agentStarted(projectId, intent, startedId, runsOn)
+  // A run of another computer's project started on this one starts in the copy cloned here: a project the list has yet to read.
+  const onAgentStarted = (intent: string, startedId: string, runsOn?: string, startedIn?: string) => {
+    if (startedIn !== undefined && startedIn !== projectId) setProjectsKey(k => k + 1)
+    agentStarted(startedIn ?? projectId, intent, startedId, runsOn)
+  }
 
   // Selecting a session (or the Live/Home row) is always an explicit choice, so it ends the
   // just-started follow.
@@ -365,7 +370,12 @@ export function App() {
       },
       // Asked at once by two cards, or soon again, the same runs are read once.
       agents: (inProject, wanted) => readModuleAgents(inProject, wanted),
-      machines: onMachineVersions,
+      // This computer by the name the page says it everywhere else: one computer, one name.
+      machines: async () => {
+        const versions = await onMachineVersions()
+        const name = ownComputerName(versions.name)
+        return { ...versions, ...(name !== undefined ? { name } : {}) }
+      },
       // Through the dashboard's own list, so the launcher's "Run on" shows the change at once.
       addMachine: async (link, label) => {
         const added = await addMachine(link, label)
@@ -479,6 +489,7 @@ export function App() {
         <ProjectHome
           projectId={projectId}
           projectName={projectName}
+          home={project?.machine}
           waiting={interventions}
           events={events}
           onAgentStarted={onAgentStarted}

@@ -9,7 +9,8 @@ import { PROJECT_HOOKS_FILE } from '../project-hooks.js'
 import { OPENAGENT_DIR } from '../openagent-dir.js'
 import { projectErrorStore } from '../project-errors.js'
 import { provideTestContext } from './test-context.js'
-import { onCommands, onProjects, onRecordsReach, sendAddProject, sendRemoveProject, sendShareRecords } from './projects.js'
+import { onCloneCheck, onCommands, onProjects, onRecordsReach, sendAddProject, sendRemoveProject, sendShareRecords } from './projects.js'
+import { loginsWiring } from './logins.js'
 
 // Against the real registry, pointed at a temp $XDG_CONFIG_HOME so the user's own is never touched.
 async function registered(): Promise<{ dir: string; restore: () => Promise<void> }> {
@@ -181,4 +182,24 @@ test('sendRemoveProject hands the project’s id to the daemon, with whether its
   assert.deepEqual(await sendRemoveProject('busy-1', false), { ok: false, error: 'An agent is working in this project. Stop it, then remove the project.' })
   assert.deepEqual(await sendRemoveProject('', true), { ok: false, error: 'a project id is required' })
   assert.deepEqual(asked, ['app-1', 'app-2 with files', 'app-3', 'busy-1'])
+})
+
+test('a project cloned here first is asked about before it is: the coding agent picked, with its fix, and whether the repository can be read, in words of the computer as its asker calls it', async () => {
+  const before = { ...loginsWiring }
+  const asked: string[] = []
+  const missing = '`codex` not found: install the Codex CLI.'
+  Object.assign(loginsWiring, {
+    ready: async (driver: string) => (asked.push(driver), { problems: [missing], warnings: ['a warning'], fix: { kind: 'install', command: 'npm i -g @openai/codex', problem: missing } }),
+  })
+  try {
+    // An address no repository has is refused before git is asked: nothing here reaches a network.
+    const unread = '"nowhere" is not a repository\'s address. One looks like github.com/you/project.'
+    assert.deepEqual(await onCloneCheck('nowhere', 'codex', 'experiment'), { problems: [missing, unread], warnings: ['a warning'], fix: { kind: 'install', command: 'npm i -g @openai/codex', problem: missing } })
+    // No pick, or one that is no agent: Claude Code, as a run without one.
+    await onCloneCheck('nowhere')
+    await onCloneCheck('nowhere', 'rm -rf')
+    assert.deepEqual(asked, ['codex', 'claude-code', 'claude-code'])
+  } finally {
+    Object.assign(loginsWiring, before)
+  }
 })

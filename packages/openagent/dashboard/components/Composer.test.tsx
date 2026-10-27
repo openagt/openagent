@@ -229,6 +229,18 @@ describe('Composer (#721)', () => {
 
   // #1073: pressing Start on an offline "Run on" machine would silently attempt the ~15s relay, so
   // Start is blocked with a reason pointing back to the "Run on" pick. No auto-fallback: the target stays.
+  test('the agents and models offered are those of the machine picked in "Run on"; inside a session, never', async () => {
+    await saveMachines(STUDIO_MACHINE)
+    selectMachine(STUDIO)
+    renderComposer()
+    await waitFor(() => expect(machinesRpc.onMachineModels).toHaveBeenCalledWith(STUDIO))
+    cleanup()
+    machinesRpc.onMachineModels.mockClear()
+    renderComposer({ inAgent: true })
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(machinesRpc.onMachineModels).not.toHaveBeenCalled()
+  })
+
   test('an offline "Run on" machine disables Start and shows the reason (#1073)', async () => {
     await saveMachines(STUDIO_MACHINE)
     daemon.reachable = { [STUDIO]: false }

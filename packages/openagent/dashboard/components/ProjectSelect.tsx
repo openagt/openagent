@@ -3,6 +3,9 @@ import { Check, ChevronsUpDown, Layers, Plus } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { cn } from '../lib/utils.js'
 import { useProjectLabel } from '../lib/project-labels.js'
+import { useMachines } from '../lib/machines.js'
+import { machineKind, machineName } from '../../src/client.js'
+import { MACHINE_ICONS } from './MachineMark.js'
 import { AddProjectPanel } from './AddProjectPanel.js'
 import { projectErrorTitle } from './ProjectErrorBanner.js'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from './ui/dropdown-menu.js'
@@ -24,6 +27,19 @@ function ProjectName({ name, label }: { name: string; label: string }) {
     <span className="block truncate">
       {folders && <span className="text-muted-foreground">{folders}</span>}
       {folders ? name : label}
+    </span>
+  )
+}
+
+/** Where a project only another computer of the person's has is (elsewhere.ts): that computer, by its name and its kind's icon. */
+function ElsewhereLine({ machineId }: { machineId: string }) {
+  const machine = useMachines().find(saved => saved.id === machineId)
+  if (!machine) return null
+  const Icon = MACHINE_ICONS[machineKind(machine).kind]
+  return (
+    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+      <Icon className="h-3 w-3 shrink-0" aria-hidden />
+      <span className="truncate">on {machineName(machine)}</span>
     </span>
   )
 }
@@ -87,6 +103,7 @@ export function ProjectSelect({
               <ProjectDot project={p} />
               <span className="min-w-0 flex-1">
                 <ProjectName name={p.name} label={label(p.id, p.name)} />
+                {p.machine !== undefined && <ElsewhereLine machineId={p.machine} />}
                 {/* What the daemon finds wrong with it, in words: the project's own page carries the detail. */}
                 {p.errors?.map(e => (
                   <span key={e.code} title={e.message} className="block truncate text-xs text-danger">

@@ -2,8 +2,9 @@ import { ownRunsWatch } from '../dashboard/runs-watch.js'
 import { contextProjects, contextRemote } from './context.js'
 
 // What the page is told the moment it should read the runs again (`GET /_rpc/changes`): a run of
-// one of the projects changed, here or on a saved machine. The page reads the list itself, as it
-// always does; this only says when, so it reads at once instead of at its next poll.
+// one of the projects changed, here or on a saved machine, or a run of another computer's project
+// (elsewhere.ts) changed there. The page reads the list itself, as it always does; this only says
+// when, so it reads at once instead of at its next poll.
 
 /** One thing the page is told: the runs of the project changed. */
 export interface RunsChanged {
@@ -32,10 +33,16 @@ export function followRunsChanged(send: (change: RunsChanged) => void): () => vo
     )
   }
   const follow = async (): Promise<void> => {
-    const projects = await contextProjects()
-      .list()
-      .catch(() => undefined)
-    if (stopped || projects === undefined) return
+    const [own, elsewhere] = await Promise.all([
+      contextProjects()
+        .list()
+        .catch(() => undefined),
+      contextRemote()
+        .elsewhere()
+        .catch(() => []),
+    ])
+    if (stopped || own === undefined) return
+    const projects = [...own, ...elsewhere]
     const paths = new Map(projects.map(project => [project.id, project.path]))
     for (const [id, one] of followed) {
       if (paths.get(id) === one.path) continue
@@ -44,8 +51,10 @@ export function followRunsChanged(send: (change: RunsChanged) => void): () => vo
     }
     for (const project of projects) {
       if (followed.has(project.id)) continue
-      const own = ownRunsWatch.follow(project.path, () => tell(project.id))
-      const machines = contextRemote().followRuns(project.path, () => tell(project.id))
+      // Another computer's project has no runs here: that computer's are all it has.
+      const elsewhere = project.machine !== undefined
+      const own = elsewhere ? () => {} : ownRunsWatch.follow(project.path, () => tell(project.id))
+      const machines = elsewhere ? contextRemote().followElsewhereRuns(project.id, () => tell(project.id)) : contextRemote().followRuns(project.path, () => tell(project.id))
       followed.set(project.id, {
         path: project.path,
         stop: () => {

@@ -4,8 +4,10 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 const sendStart = vi.hoisted(() => vi.fn())
 const sendProjectToMachine = vi.hoisted(() => vi.fn())
 const onProjectOnMachine = vi.hoisted(() => vi.fn())
+const sendProjectHere = vi.hoisted(() => vi.fn())
+const onProjectHere = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/control.js', () => ({ sendStart }))
-vi.mock('../rpc/machines.js', () => ({ sendProjectToMachine, onProjectOnMachine }))
+vi.mock('../rpc/machines.js', () => ({ sendProjectToMachine, onProjectOnMachine, sendProjectHere, onProjectHere }))
 
 import { CLONE_ASKED_EVERY_MS, useStartAgent } from './use-start-agent.js'
 
@@ -19,7 +21,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
-  for (const mock of [sendStart, sendProjectToMachine, onProjectOnMachine]) mock.mockReset()
+  for (const mock of [sendStart, sendProjectToMachine, onProjectOnMachine, sendProjectHere, onProjectHere]) mock.mockReset()
 })
 
 /** Let what is waited for land, and the page draw it. */
@@ -90,14 +92,30 @@ describe('useStartAgent', () => {
     expect(sendStart).toHaveBeenCalledTimes(1)
   })
 
-  test('any other refusal is shown as it is, and a start that named no machine clones nothing', async () => {
+  test('any other refusal is shown as it is, and clones nothing', async () => {
     sendStart.mockResolvedValue({ ok: false, error: 'the start hook: claude is not logged in' })
     const { result } = renderHook(() => useStartAgent())
     await act(async () => void (await result.current.start('p1', 'go', ON_STUDIO)))
     expect(result.current.error).toBe('the start hook: claude is not logged in')
-    sendStart.mockResolvedValue(NOT_THERE)
     await act(async () => void (await result.current.start('p1', 'go')))
-    expect(result.current.error).toBe('shop is not on Studio yet.')
+    expect(sendProjectToMachine).not.toHaveBeenCalled()
+    expect(sendProjectHere).not.toHaveBeenCalled()
+  })
+
+  test("another computer's project started on this one is cloned here first, and the run starts in that copy, which the answer names", async () => {
+    sendStart.mockResolvedValueOnce({ ok: false, error: 'shop is not on this computer yet.', notThere: true }).mockResolvedValueOnce({ ok: true, agentId: 'r4', projectId: 'shop-here' })
+    sendProjectHere.mockResolvedValue({ ok: true, there: false })
+    onProjectHere.mockResolvedValue({ ok: true, there: true })
+    const { result } = renderHook(() => useStartAgent())
+    let started: unknown = 'not yet'
+    act(() => void result.current.start('shop~laptop', 'go').then(value => (started = value)))
+    await settle()
+    expect(sendProjectHere).toHaveBeenCalledWith('shop~laptop')
+    expect(result.current.cloning).toBe(true)
+    await nextAsk()
+    expect(onProjectHere).toHaveBeenCalledWith('shop~laptop')
+    expect(sendStart).toHaveBeenLastCalledWith('shop~laptop', 'go', {})
+    expect(started).toEqual({ ok: true, agentId: 'r4', projectId: 'shop-here' })
     expect(sendProjectToMachine).not.toHaveBeenCalled()
   })
 

@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto'
 import { isDriverName } from './driver-names.js'
 import { isPublishPick, type PublishPick } from './publish-levels.js'
 import { nodeFs } from './node-fs.js'
+import { ownProjectsOf, type OwnProject } from './dashboard/elsewhere.js'
 
 /**
  * The multi-project registry (#390): the list of projects the user has
@@ -65,6 +66,8 @@ export interface MachineRecord {
   listed?: string[]
   /** When the machine last answered for its runs, ISO, kept to the minute: what its runs say while it does not answer. */
   seenAt?: string
+  /** Its own projects, as it said them last (elsewhere.ts): a computer of the person's own lists them while it does not answer. */
+  projects?: OwnProject[]
 }
 
 /** A GitHub account's name: letters, digits and single dashes, at most 39. */
@@ -442,12 +445,12 @@ function sanitizeMachines(value: unknown): MachineRecord[] {
   for (const raw of value) {
     if (machines.length >= MACHINE_LIMITS.count) break
     if (typeof raw !== 'object' || raw === null) continue
-    const { label, url, key, door, pin, host, owner, told, logins, listed, seenAt } = raw as Record<string, unknown>
+    const { label, url, key, door, pin, host, owner, told, logins, listed, seenAt, projects } = raw as Record<string, unknown>
     const ids = Array.isArray(listed) ? listed.filter((id): id is string => typeof id === 'string' && DEVICE_ID.test(id)).slice(0, MACHINE_LIMITS.count) : []
     if (typeof label !== 'string' || typeof url !== 'string' || typeof key !== 'string' || typeof door !== 'string') continue
     if (!url || !key || !door || seen.has(url)) continue
     seen.add(url)
-    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, key, door, ...(typeof pin === 'string' && pin ? { pin } : {}), ...(isHostName(host) ? { host } : {}), ...(isPersonName(owner) ? { owner } : {}), ...(told === true ? { told: true as const } : {}), ...(logins === true ? { logins: true as const } : {}), ...(ids.length ? { listed: ids } : {}), ...(typeof seenAt === 'string' && !Number.isNaN(Date.parse(seenAt)) ? { seenAt } : {}) })
+    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, key, door, ...(typeof pin === 'string' && pin ? { pin } : {}), ...(isHostName(host) ? { host } : {}), ...(isPersonName(owner) ? { owner } : {}), ...(told === true ? { told: true as const } : {}), ...(logins === true ? { logins: true as const } : {}), ...(ids.length ? { listed: ids } : {}), ...(typeof seenAt === 'string' && !Number.isNaN(Date.parse(seenAt)) ? { seenAt } : {}), ...(Array.isArray(projects) ? { projects: ownProjectsOf(projects) } : {}) })
   }
   return machines
 }
@@ -769,6 +772,16 @@ export async function noteSeen(machine: { id: string; key: string }, at: string,
     const saved = (registry.machines ?? []).find(candidate => candidate.id === machine.id)
     if (!saved || saved.key !== machine.key || (saved.seenAt !== undefined && Date.parse(at) - Date.parse(saved.seenAt) < SEEN_KEPT_MS)) return
     await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(candidate => (candidate.id === machine.id ? { ...saved, seenAt: at } : candidate)) }, fs, env)
+  })
+}
+
+/** Keep what a saved machine said of its own projects: the same machine, by its key, or nothing is written. */
+export async function noteProjects(machine: { id: string; key: string }, projects: OwnProject[], fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  await serialize(async () => {
+    const registry = await readRegistry(fs, env)
+    const saved = (registry.machines ?? []).find(candidate => candidate.id === machine.id)
+    if (!saved || saved.key !== machine.key) return
+    await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(candidate => (candidate.id === machine.id ? { ...saved, projects } : candidate)) }, fs, env)
   })
 }
 
