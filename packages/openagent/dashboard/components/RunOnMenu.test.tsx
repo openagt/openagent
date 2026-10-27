@@ -51,6 +51,26 @@ describe('the "Run on" pick in the row under the box', () => {
     expect(trigger().textContent).toBe('This machine')
   })
 
+  test("another computer's project: this machine clones it first, and one with no address goes to its own computer only", async () => {
+    renderMenu({ machines: [STUDIO, MACBOOK], selectedMachineId: 'macbook', home: 'macbook' })
+    expect(trigger().textContent).toBe('MacBook')
+    await openMenu(trigger())
+    expect(screen.getByRole('menuitem', { name: /^This machine/ }).textContent).toContain('Cloned here first, then runs here.')
+    expect(screen.getByRole('menuitem', { name: /^Studio/ }).getAttribute('aria-disabled')).toBeNull()
+    cleanup()
+
+    const connection = renderMenu({ machines: [STUDIO, MACBOOK], selectedMachineId: 'macbook', home: 'macbook', onlyThere: true })
+    expect(trigger().textContent).toBe('MacBook')
+    await openMenu(trigger())
+    const here = screen.getByRole('menuitem', { name: /^This machine/ })
+    expect(here.textContent).toContain('It has no repository address to clone it here from.')
+    expect(here.getAttribute('aria-disabled')).toBe('true')
+    expect(screen.getByRole('menuitem', { name: /^Studio/ }).getAttribute('aria-disabled')).toBe('true')
+    expect(screen.getByRole('menuitem', { name: /^MacBook/ }).getAttribute('aria-disabled')).toBeNull()
+    fireEvent.click(here)
+    expect(connection.onSelectLocal).not.toHaveBeenCalled()
+  })
+
   test('a project with no repository address runs here only: the machines cannot be picked, a pick made elsewhere does not hold, and the menu says why', async () => {
     const connection = renderMenu({ onlyHere: true, selectedMachineId: 'studio' })
     expect(trigger().textContent).toBe('This machine')

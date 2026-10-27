@@ -17,8 +17,13 @@ import { projectGitHost, type GitHostFor } from '../store/git-host.js'
 export interface ProjectSummary {
   /** Registry id (stable, URL-safe). */
   id: string
-  /** Absolute repo path. */
+  /** Absolute repo path: on the computer the project is on. */
   path: string
+  /**
+   * The saved machine the project is on, when it is not on this computer (elsewhere.ts): what the
+   * page asks of it is asked there, and a run of it starts there unless another computer is picked.
+   */
+  machine?: string
   /** Display name (the path's basename). */
   name: string
   /** True when the repo still has its `.openagent/` marker. */

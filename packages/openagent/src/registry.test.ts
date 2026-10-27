@@ -5,6 +5,7 @@ import {
   addMachine,
   nameMachine,
   noteSeen,
+  noteProjects,
   renameMachine,
   addProject,
   ensureBridgeToken,
@@ -734,6 +735,22 @@ test('when a machine last answered is kept to the minute, for while it does not 
   // An answer to a key the machine no longer has is not its.
   await noteSeen({ id: STUDIO, key: 'old' }, '2026-10-25T11:00:00.000Z', fs, ENV)
   assert.equal((await listMachines(fs, ENV))[0]!.seenAt, '2026-10-25T10:01:00.000Z')
+})
+
+test("what a machine said of its own projects is kept with it, read back as projects only, and only for the machine as it was asked", async () => {
+  const fs = memFs()
+  await addMachine({ url: STUDIO, key: 'aaa', door: DOOR, label: 'Studio' }, fs, ENV)
+  const shop = { id: 'shop-1abc', name: 'shop', path: '/Users/me/shop', address: 'github.com/acme/shop', share: true, gitHost: true, activated: true }
+  await noteProjects({ id: STUDIO, key: 'aaa' }, [shop], fs, ENV)
+  assert.deepEqual((await listMachines(fs, ENV))[0]!.projects, [shop])
+  // An answer to a key the machine no longer has is not its.
+  await noteProjects({ id: STUDIO, key: 'old' }, [], fs, ENV)
+  assert.deepEqual((await listMachines(fs, ENV))[0]!.projects, [shop])
+  // What the file holds is read as projects: anything else in it is dropped.
+  const file = JSON.parse(await fs.read(FILE))
+  file.machines[0].projects.push({ id: '../x', name: 'x', path: '/x' }, 'nope')
+  await fs.write(FILE, JSON.stringify(file))
+  assert.deepEqual((await listMachines(fs, ENV))[0]!.projects, [shop])
 })
 
 test('a saved machine takes the name the person picked, cut to the length a name may have; an empty name and a machine not saved change nothing', async () => {

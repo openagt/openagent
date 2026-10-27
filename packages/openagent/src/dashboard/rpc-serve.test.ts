@@ -4,7 +4,8 @@ import { createServer, type Server } from 'node:http'
 import { connect } from 'node:net'
 import { makeRpcMount, type DashboardContext } from './rpc-serve.js'
 import { RPC_HANDLERS } from '../dashboard-rpc/index.js'
-import { testDashboardContext } from '../dashboard-rpc/test-context.js'
+import { NO_ELSEWHERE, testDashboardContext } from '../dashboard-rpc/test-context.js'
+import { elsewhereId } from './elsewhere.js'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -88,6 +89,34 @@ test('a call reaches its handler and comes back as JSON', async () => {
     assert.equal(status, 200)
     // The stub context refuses the start, which is the handler's own answer travelling back.
     assert.deepEqual(JSON.parse(body), { ret: { ok: false, error: 'not wired in this test' } })
+  } finally {
+    await server.close()
+  }
+})
+
+test("a call about another computer's project goes to that computer, as it is; a start, and any call about a project of this computer's, run here", async () => {
+  const forwarded: [string, string, unknown[]][] = []
+  const base = testDashboardContext()
+  const server = await mounted({
+    remote: {
+      ...base.remote,
+      ...NO_ELSEWHERE,
+      forward: async (project, fn, args) => {
+        forwarded.push([project, fn, args])
+        return { said: 'by the laptop' }
+      },
+    },
+  })
+  const there = elsewhereId('shop-1abc', 'http://127.0.0.1:4210')
+  try {
+    assert.deepEqual(JSON.parse((await call(server.url, 'onCommands', [there])).body), { ret: { said: 'by the laptop' } })
+    assert.deepEqual(forwarded, [[there, 'onCommands', [there]]])
+    // A start goes where "Run on" says, which the daemon decides: the handler runs.
+    assert.deepEqual(JSON.parse((await call(server.url, 'sendStart', [there, 'do a thing'])).body), { ret: { ok: false, error: 'not wired in this test' } })
+    // A call no other computer answers, and one about a project of this computer's, are this computer's.
+    await call(server.url, 'onAgents', [there])
+    await call(server.url, 'onCommands', ['shop-1abc'])
+    assert.equal(forwarded.length, 1)
   } finally {
     await server.close()
   }

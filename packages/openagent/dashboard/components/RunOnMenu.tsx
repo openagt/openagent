@@ -33,6 +33,10 @@ export type ConnectionControl = {
   selectedMachineId: string | null
   /** The project has no repository address, the one name another machine would know it by: it runs here only. */
   onlyHere: boolean
+  /** The saved machine the project is on, when only another computer of the person's has it (elsewhere.ts): this computer clones it first. */
+  home?: string | undefined
+  /** Such a project with no repository address: it runs on its own computer only. */
+  onlyThere?: boolean | undefined
   /** Select a saved machine as the run target, with no navigation (#1067). */
   onSelect: (machine: Machine) => void
   /** Clear the selection back to the dashboard's own machine (#1067). */
@@ -56,7 +60,9 @@ export function RunOnMenu({ connection, busy, inRow = false }: { connection: Con
   // The selected machine (#1067). An id pointing at a removed machine reads as none, and so does
   // any pick on a project that runs here only.
   const selectedMachine =
-    connection.selectedMachineId && !connection.onlyHere ? connection.machines.find(m => m.id === connection.selectedMachineId) : undefined
+    connection.selectedMachineId && !connection.onlyHere && (!connection.onlyThere || connection.selectedMachineId === connection.home)
+      ? connection.machines.find(m => m.id === connection.selectedMachineId)
+      : undefined
   const here = thisMachineName()
   const summary = selectedMachine ? machineName(selectedMachine) : here
   const onThisMachine = !selectedMachine
@@ -98,10 +104,13 @@ export function RunOnMenu({ connection, busy, inRow = false }: { connection: Con
       </Tooltip>
       {/* The words are at the row's left, the icon button at the compact row's right: the menu opens inward. */}
       <DropdownMenuContent align={inRow ? 'start' : 'end'} className="min-w-[19rem] max-w-[22rem]">
-        <DropdownMenuItem className="items-start gap-2" onClick={() => connection.onSelectLocal()}>
+        <DropdownMenuItem className={cn('items-start gap-2', connection.onlyThere && 'opacity-60')} disabled={connection.onlyThere} onClick={() => connection.onSelectLocal()}>
           <Check className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', onThisMachine ? 'opacity-100' : 'opacity-0')} />
           <Laptop className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-          <OptionLabel label={here} description="Runs here, through this project's start hook." />
+          <OptionLabel
+            label={here}
+            description={connection.home === undefined ? "Runs here, through this project's start hook." : connection.onlyThere ? 'It has no repository address to clone it here from.' : 'Cloned here first, then runs here.'}
+          />
         </DropdownMenuItem>
         {/* Saved machines: a click SELECTS the machine as the run target (no navigation). */}
         {connection.machines.map(machine => {
@@ -109,11 +118,13 @@ export function RunOnMenu({ connection, busy, inRow = false }: { connection: Con
           const offline = status === 'offline'
           const words = wordsOf(machine)
           const description = offline ? (reachedByLine(machine.url) ? 'Not connected. It must be on, with OpenAgent running.' : `Offline · ${words}`) : words
+          // Another computer's project with no address goes nowhere but its own computer.
+          const closed = connection.onlyHere || (connection.onlyThere === true && machine.id !== connection.home)
           return (
             <DropdownMenuItem
               key={machine.id}
-              className={cn('items-start gap-2', (offline || connection.onlyHere) && 'opacity-60')}
-              disabled={connection.onlyHere}
+              className={cn('items-start gap-2', (offline || closed) && 'opacity-60')}
+              disabled={closed}
               onClick={() => connection.onSelect(machine)}
             >
               <Check className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', selectedMachine?.id === machine.id ? 'opacity-100' : 'opacity-0')} />

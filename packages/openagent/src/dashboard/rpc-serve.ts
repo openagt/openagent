@@ -3,6 +3,9 @@ import { hostnameFromHostHeader, isLoopbackHost } from '../loopback-host.js'
 import { setDashboardContext } from '../dashboard-rpc/context.js'
 import { RPC_HANDLERS, RPC_EVENT_STREAM } from '../dashboard-rpc/index.js'
 import { followRunsChanged } from '../dashboard-rpc/runs-changed.js'
+import { ELSEWHERE_FORWARDED } from '../dashboard-rpc/relay-dispatch.js'
+import { isElsewhereId, type OwnProject } from './elsewhere.js'
+import type { ProjectSummary } from './projects.js'
 import { errorMessage } from '../error-message.js'
 import { PERSON_HEADER, asCaller } from './person.js'
 import { sendBody } from './compress.js'
@@ -14,7 +17,7 @@ import type { BridgeBrowserOwner } from '../bridge-browser.js'
 import type { ProjectErrorsReader } from '../project-errors.js'
 import type { AddProjectResult, RemoveProjectResult, StartAgentOptions, StartAgentResult, StartedInResult } from './types.js'
 import type { AgentMeta } from '../store/index.js'
-import type { RemoteTarget } from './remote-run.js'
+import type { BringProject, RelayProject, RemoteTarget } from './remote-run.js'
 import type { MachineRuns } from './machine-runs.js'
 
 /** Wired by the daemon so `sendStart` can reach the daemon's own `startAgent` closure. */
@@ -76,6 +79,18 @@ export interface RemoteAgents {
   machineRuns(projectPath: string): Promise<MachineRuns[]>
   /** Tell `changed` each time a saved machine's runs of the project at `projectPath` change, until the answer is called. */
   followRuns(projectPath: string, changed: () => void): () => void
+  /** The projects of the person's other computers that this one does not have, each marked with the saved machine it is on (elsewhere.ts). */
+  elsewhere(): Promise<ProjectSummary[]>
+  /** What the computer another computer's project is on says of its own runs of it, followed for a while from now on. */
+  elsewhereRuns(projectId: string): Promise<MachineRuns[]>
+  /** Tell `changed` each time the runs of another computer's project change there, until the answer is called. */
+  followElsewhereRuns(projectId: string, changed: () => void): () => void
+  /** Another computer's project by its id here: the saved machine it is on, and the project as that computer said it. */
+  elsewhereHome(projectId: string): Promise<{ machine: string; project: OwnProject } | undefined>
+  /** Make a page's call about another computer's project on that computer, and answer what it answered. */
+  forward(projectId: string, fn: string, args: unknown[]): Promise<unknown>
+  /** Where this computer's copy of the project at `address` stands; with `bring`, cloned and added when there is none, on its own. */
+  bringHere(address: string, bring?: BringProject): Promise<RelayProject>
 }
 
 /**
@@ -289,11 +304,13 @@ export function makeRpcMount(context: DashboardContext): (req: IncomingMessage, 
     const name = url.pathname.slice(RPC_PREFIX.length + 1)
     try {
       if (req.method === 'GET' && name === 'events') {
-        await serveEventStream(req, res, url)
+        // As the person whose device asks: a run of the owner's other computer is not followed for a person the owner invited.
+        await asCaller(req.headers[PERSON_HEADER], () => serveEventStream(req, res, url))
         return true
       }
       if (req.method === 'GET' && name === 'changes') {
-        serveChangesStream(req, res)
+        // As the person whose device asks, for as long as it listens: the owner's other computers' projects are no one else's to hear of.
+        await asCaller(req.headers[PERSON_HEADER], async () => serveChangesStream(req, res))
         return true
       }
       const handler = RPC_HANDLERS[name]
@@ -311,7 +328,9 @@ export function makeRpcMount(context: DashboardContext): (req: IncomingMessage, 
         await sendJson(req, res, 400, { error: 'the request body must be a JSON array of arguments' })
         return true
       }
-      await sendJson(req, res, 200, { ret: await asCaller(req.headers[PERSON_HEADER], () => Promise.resolve(handler(...(args as never[])))) })
+      // A call about another computer's project is that computer's to answer (elsewhere.ts).
+      const call = isElsewhereId(args[0]) && ELSEWHERE_FORWARDED.has(name) ? () => context.remote.forward(args[0] as string, name, args) : () => Promise.resolve(handler(...(args as never[])))
+      await sendJson(req, res, 200, { ret: await asCaller(req.headers[PERSON_HEADER], call) })
     } catch (err) {
       // An RPC that throws is a failed call, not a dead daemon: answer it and stay up. Without
       // this a rejected promise inside the mount became an unhandled rejection.

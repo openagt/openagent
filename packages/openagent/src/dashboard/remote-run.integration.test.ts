@@ -12,6 +12,10 @@ import type { Cloned } from '../clone-project.js'
 import { readSharing } from '@openagt/agent-data'
 import { createProjectRuntime, type ProjectRuntime } from '../daemon-runtime.js'
 import { forwardStream } from '../dashboard-rpc/stream-forward.js'
+import { dispatchMachineRpc } from '../dashboard-rpc/relay-dispatch.js'
+import { asCaller } from './person.js'
+import { elsewhereId } from './elsewhere.js'
+import type { ProjectLauncher } from '../dashboard-rpc/projects.js'
 import { addMachine, addProject, projectId } from '../registry.js'
 import type { StartAgentOptions, StartAgentResult } from './types.js'
 import type { OpenAgentEvent } from '../events.js'
@@ -35,6 +39,11 @@ async function fakeBundle(): Promise<string> {
   await mkdir(join(dir, 'assets'), { recursive: true })
   await writeFile(join(dir, 'assets', 'app.js'), '')
   return dir
+}
+
+/** B's other project, the one A does not have. */
+function otherOf(shopB: string): string {
+  return join(shopB, '..', 'other')
 }
 
 /** A repository in a folder of its own, cloned (as far as its `origin` says) from `origin`, or with none. */
@@ -124,7 +133,7 @@ async function twoMachines(opts: { shopOnB?: boolean } = {}): Promise<TwoMachine
     testDashboardOptions({
       clientBundleDir: bundle,
       onStart: bStart,
-      relay: { project: runtimeB.projectAt, tailEvents: bTail, rpc: runtimeB.onRelayRpc, bring: runtimeB.bringProject },
+      relay: { project: runtimeB.projectAt, tailEvents: bTail, rpc: runtimeB.onRelayRpc, machine: dispatchMachineRpc, bring: runtimeB.bringProject },
     }),
   )
 
@@ -349,6 +358,67 @@ test('a machine that is no longer saved is refused, and the run does not start h
     assert.equal(result.ok, false)
     assert.match(result.ok ? '' : result.error, /no longer saved/)
     assert.equal(m.bStarts.length, 0)
+  } finally {
+    await m.close()
+  }
+})
+
+test("a project only the other machine has is listed here, marked with that machine, and a run of it starts there in its own copy, from a branch of its own", async () => {
+  const m = await twoMachines()
+  try {
+    // The shop is A's too, by its address: only B's other project is B's alone.
+    const listed = await m.a.remoteAgents.elsewhere()
+    const otherB = otherOf(m.shopB)
+    const id = elsewhereId(projectId(otherB), m.machineB)
+    assert.deepEqual(listed, [{ id, path: otherB, name: 'other', activated: false, gitHost: true, machine: m.machineB }])
+
+    // On B, the run starts in B's own project, and the branch picked is B's to read: it goes with it.
+    const result = await m.a.onStart('fix the other', { machine: m.machineB, base: 'a-branch-of-b', model: 'opus' }, id)
+    assert.deepEqual(result, { ok: true, agentId: B_RUN, driver: 'claude-code' })
+    assert.equal(m.bStarts.length, 1)
+    assert.equal(m.bStarts[0]!.projectId, projectId(otherB))
+    assert.deepEqual(m.bStarts[0]!.options, { base: 'a-branch-of-b', model: 'opus' })
+    // Followed from here as a run of that project, marked as B's.
+    assert.deepEqual(
+      m.a.remoteAgents.list(id).map(run => [run.id, run.remoteLabel]),
+      [[B_RUN, 'Studio']],
+    )
+
+    // What the page asks of the project is asked of B, of B's own copy.
+    const launcher = (await m.a.remoteAgents.forward(id, 'onCommands', [id])) as ProjectLauncher | null
+    assert.equal(launcher?.address, 'github.com/acme/other')
+
+    // On this computer, the run waits for a copy here: the page is told it can have one cloned.
+    assert.deepEqual(await m.a.onStart('fix the other', {}, id), { ok: false, error: 'other is not on this computer yet.', notThere: true })
+    assert.equal(m.bStarts.length, 1)
+  } finally {
+    await m.close()
+  }
+})
+
+test("a person the owner invited is listed none of the owner's other computers' projects, and reaches none of them", async () => {
+  const m = await twoMachines()
+  try {
+    const id = elsewhereId(projectId(otherOf(m.shopB)), m.machineB)
+    assert.equal((await m.a.remoteAgents.elsewhere()).length, 1)
+    assert.deepEqual(await asCaller('Tester', () => m.a.remoteAgents.elsewhere()), [])
+    assert.deepEqual(await asCaller('Tester', () => m.a.onStart('run on the owner\'s computer', { machine: m.machineB }, id)), { ok: false, error: 'That project is no longer listed on any of your computers.' })
+    await assert.rejects(asCaller('Tester', () => m.a.remoteAgents.forward(id, 'onCommands', [id])), /no longer listed/)
+    assert.equal(m.bStarts.length, 0)
+  } finally {
+    await m.close()
+  }
+})
+
+test("what the other machine said of its projects is kept: they stay listed while it does not answer", async () => {
+  const m = await twoMachines()
+  try {
+    assert.equal((await m.a.remoteAgents.elsewhere()).length, 1)
+    await m.b.close()
+    assert.deepEqual(
+      (await m.a.remoteAgents.elsewhere()).map(project => project.name),
+      ['other'],
+    )
   } finally {
     await m.close()
   }

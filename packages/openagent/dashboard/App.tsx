@@ -281,7 +281,11 @@ export function App() {
   }
 
   /** The same, for the surfaces that start an agent inside the selected project. */
-  const onAgentStarted = (intent: string, startedId: string, runsOn?: string) => agentStarted(projectId, intent, startedId, runsOn)
+  // A run of another computer's project started on this one starts in the copy cloned here: a project the list has yet to read.
+  const onAgentStarted = (intent: string, startedId: string, runsOn?: string, startedIn?: string) => {
+    if (startedIn !== undefined && startedIn !== projectId) setProjectsKey(k => k + 1)
+    agentStarted(startedIn ?? projectId, intent, startedId, runsOn)
+  }
 
   // Selecting a session (or the Live/Home row) is always an explicit choice, so it ends the
   // just-started follow.
@@ -479,6 +483,7 @@ export function App() {
         <ProjectHome
           projectId={projectId}
           projectName={projectName}
+          home={project?.machine}
           waiting={interventions}
           events={events}
           onAgentStarted={onAgentStarted}

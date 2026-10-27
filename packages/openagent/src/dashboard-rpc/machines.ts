@@ -2,7 +2,8 @@ import { computerHealth, type Health } from '../health.js'
 import { computerName } from '../computer-name.js'
 import { basename } from 'node:path'
 import { readSharing } from '@openagt/agent-data'
-import { THROUGH_PATH, deviceIdOf, enterRemote, giveRemoteLogins, leaveRemote, pingRemote, remoteAddMachine, remoteComputers, remoteDoor, remoteFacts, remoteLogins, remoteProject, relayRpc, type RemoteTarget } from '../dashboard/remote-run.js'
+import { THROUGH_PATH, deviceIdOf, enterRemote, giveRemoteLogins, leaveRemote, pingRemote, remoteAddMachine, remoteComputers, remoteDoor, remoteFacts, remoteLogins, remoteProject, relayRpc, type BringProject, type RelayProject, type RemoteTarget } from '../dashboard/remote-run.js'
+import { isElsewhereId, lineNameOf } from '../dashboard/elsewhere.js'
 import { isLoginWord, type MachineLogins } from '../dashboard/machine-logins.js'
 import { errorMessage } from '../error-message.js'
 import { repositoryAddress, repositorySpelling } from '../repository-address.js'
@@ -336,15 +337,41 @@ export async function onProjectOnMachine(projectId: string, machineId: string): 
   return projectOnMachine(projectId, machineId, false)
 }
 
-/** A saved machine and this computer's project, as a call there names it: by the project's repository address. */
-async function onMachine(projectId: string, machineId: string): Promise<{ ok: true; machine: MachineRecord; cwd: string; target: RemoteTarget } | { ok: false; error: string }> {
+/**
+ * A project as a call to another computer names it, and what that computer clones it from: one of
+ * this computer's, or one only another computer of the person's has (elsewhere.ts), which is
+ * named on that computer by its id there when it has no address.
+ */
+interface ProjectToSend {
+  name: string
+  address: string | undefined
+  /** The saved machine the project is on, for another computer's: what it is named by there. */
+  home?: { machine: string; line: string }
+  from: () => Promise<string | undefined>
+  share: () => Promise<boolean>
+}
+
+async function projectToSend(projectId: string): Promise<ProjectToSend | undefined> {
+  if (isElsewhereId(projectId)) {
+    const at = await contextRemote().elsewhereHome(projectId)
+    if (!at) return undefined
+    const { project } = at
+    return { name: project.name, address: project.address, home: { machine: at.machine, line: lineNameOf(project) }, from: async () => project.spelling, share: async () => project.share }
+  }
+  const cwd = typeof projectId === 'string' ? await resolveProjectPath(projectId) : undefined
+  if (!cwd) return undefined
+  return { name: basename(cwd), address: await repositoryAddress(cwd), from: () => repositorySpelling(cwd), share: () => readSharing(cwd) }
+}
+
+/** A saved machine and a project, as a call there names it: by the project's repository address, or as its own computer names it. */
+async function onMachine(projectId: string, machineId: string): Promise<{ ok: true; machine: MachineRecord; project: ProjectToSend; target: RemoteTarget } | { ok: false; error: string }> {
   const machine = (await listMachines()).find(saved => saved.id === machineId)
   if (!machine) return { ok: false, error: 'That machine is no longer saved. Pick another place to run.' }
-  const cwd = typeof projectId === 'string' ? await resolveProjectPath(projectId) : undefined
-  if (!cwd) return { ok: false, error: `unknown project: ${String(projectId)}` }
-  const project = await repositoryAddress(cwd)
-  if (!project) return { ok: false, error: 'This project has no repository address, so it cannot be sent to another machine.' }
-  return { ok: true, machine, cwd, target: { url: machine.url, key: machine.key, ...(machine.pin ? { pin: machine.pin } : {}), project } }
+  const project = await projectToSend(projectId)
+  if (!project) return { ok: false, error: `unknown project: ${String(projectId)}` }
+  const name = project.home?.machine === machine.id ? project.home.line : project.address
+  if (!name) return { ok: false, error: 'This project has no repository address, so it cannot be sent to another machine.' }
+  return { ok: true, machine, project, target: { url: machine.url, key: machine.key, ...(machine.pin ? { pin: machine.pin } : {}), project: name } }
 }
 
 /**
@@ -364,10 +391,42 @@ export async function onMachineStartCheck(projectId: string, machineId: string, 
 async function projectOnMachine(projectId: string, machineId: string, bring: boolean): Promise<ProjectOnMachine> {
   const there = await onMachine(projectId, machineId)
   if (!there.ok) return there
-  const { machine, cwd, target } = there
-  const from = bring ? await repositorySpelling(cwd) : undefined
-  const said = await remoteProject(target, bring ? { share: await readSharing(cwd), ...(from !== undefined ? { from } : {}) } : undefined)
-  const name = basename(cwd)
+  const { machine, project, target } = there
+  return standing(await remoteProject(target, bring ? await bringing(project) : undefined), project.name, machine.label)
+}
+
+/**
+ * Have this computer clone a project only another computer of the person's has (elsewhere.ts),
+ * for a run here: on its own, as for a machine that is sent a run. {@link onProjectHere} says when
+ * it is here. Nothing happens when it is here already, or on its way.
+ */
+export async function sendProjectHere(projectId: string): Promise<ProjectOnMachine> {
+  return projectHere(projectId, true)
+}
+
+/** Whether this computer has another computer's project by now, or why it will not. */
+export async function onProjectHere(projectId: string): Promise<ProjectOnMachine> {
+  return projectHere(projectId, false)
+}
+
+async function projectHere(projectId: string, bring: boolean): Promise<ProjectOnMachine> {
+  const project = isElsewhereId(projectId) ? await projectToSend(projectId) : undefined
+  if (!project) return { ok: false, error: `unknown project: ${String(projectId)}` }
+  if (!project.address) return { ok: false, error: `${project.name} has no repository address, so it cannot be cloned here.` }
+  const said = await contextRemote()
+    .bringHere(project.address, bring ? await bringing(project) : undefined)
+    .catch((err: unknown) => ({ state: 'failed' as const, error: errorMessage(err) }))
+  return standing(said, project.name, 'this computer')
+}
+
+/** How a computer clones the project: with the records' answer it has, from the address in the letters it is written with. */
+async function bringing(project: ProjectToSend): Promise<BringProject> {
+  const [share, from] = await Promise.all([project.share(), project.from()])
+  return { share, ...(from !== undefined ? { from } : {}) }
+}
+
+/** Where a computer's copy of the project stands, as the page is told it. */
+function standing(said: RelayProject | { state: 'unasked'; error: string }, name: string, label: string): ProjectOnMachine {
   switch (said.state) {
     case 'there':
       return { ok: true, there: true }
@@ -375,11 +434,11 @@ async function projectOnMachine(projectId: string, machineId: string, bring: boo
       return { ok: true, there: false }
     case 'missing':
       // The machine was restarted while it cloned: what it had made is gone, and a new send starts over.
-      return { ok: false, error: `${machine.label} is no longer cloning ${name}. Send again.` }
+      return { ok: false, error: `${label} is no longer cloning ${name}. Send again.` }
     case 'failed':
       // The machine's own words: "this computer" in them is the machine.
-      return { ok: false, error: `${name} could not be cloned on ${machine.label}. ${machine.label} says: ${said.error}` }
+      return { ok: false, error: `${name} could not be cloned on ${label}. ${label} says: ${said.error}` }
     case 'unasked':
-      return { ok: false, error: `${machine.label} could not be asked for ${name}: ${said.error}` }
+      return { ok: false, error: `${label} could not be asked for ${name}: ${said.error}` }
   }
 }

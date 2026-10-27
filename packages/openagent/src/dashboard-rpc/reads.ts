@@ -32,6 +32,7 @@ import { hostname } from 'node:os'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { RUNS_WAIT_MS, RunChanges, withMachineRuns, type MachineRuns, type OwnRuns } from '../dashboard/machine-runs.js'
 import { ownRunsWatch } from '../dashboard/runs-watch.js'
+import { isElsewhereId } from '../dashboard/elsewhere.js'
 
 // The read model behind the dashboard (#405): the agent history, an agent's replay, and the
 // surfaced PLAN/TODO docs — each keyed by project id and backed by
@@ -93,8 +94,16 @@ export async function onAgents(projectId: string): Promise<AgentMeta[]> {
   const remote = contextRemote()?.list(projectId) ?? []
   const cwd = await resolveProjectPath(projectId)
   const machineOf = await contextRemote().machineNames()
-  const local = cwd ? await withRowMarks(cwd, (await projectRuns(cwd)).map(agent => forDashboard(agent, machineOf))) : []
+  const local = cwd ? await withRowMarks(cwd, (await projectRuns(cwd)).map(agent => forDashboard(agent, machineOf))) : isElsewhereId(projectId) ? (await elsewhereRuns(projectId)).map(agent => forDashboard(agent, machineOf)) : []
   return withFollowed(remote, local, agentId => contextRemote().sent(agentId))
+}
+
+/** The runs of another computer's project (elsewhere.ts), as that computer says them: there are no records of them here. */
+async function elsewhereRuns(projectId: string): Promise<AgentMeta[]> {
+  const machines = await contextRemote()
+    .elsewhereRuns(projectId)
+    .catch((): MachineRuns[] => [])
+  return withMachineRuns([], machines.map(machine => ({ ...machine, runs: machine.runs.map(asRecorded) })))
 }
 
 /**

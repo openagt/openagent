@@ -6,7 +6,9 @@ import { OPENAGENT_DIR } from './openagent-dir.js'
 import type { OpenAgentEvent } from './events.js'
 import type { StartAgentOptions, StartAgentResult, AddProjectResult, RemoveProjectResult, StartedInResult } from './dashboard/index.js'
 import type { EventsSource, RemoteAgents, SavedMachine } from './dashboard/rpc-serve.js'
-import { RelayedAgents, relayRpc, remoteFacts, startRemoteAgent, type BringProject, type RelayProject, type RemoteTarget } from './dashboard/remote-run.js'
+import { RelayedAgents, machineCall, relayRpc, remoteFacts, startRemoteAgent, type BringProject, type RelayProject, type RemoteTarget } from './dashboard/remote-run.js'
+import { OwnProjectsAsked, elsewhereHomes, elsewhereSummary, homeOf as elsewhereHomeOf, idInLineName, isElsewhereId, lineNameOf, type ElsewhereHome } from './dashboard/elsewhere.js'
+import type { ProjectSummary } from './dashboard/projects.js'
 import { MachineRunsKept, RUNS_WAIT_MS, type MachineRuns } from './dashboard/machine-runs.js'
 import { ownRunsWatch } from './dashboard/runs-watch.js'
 import { cloneProject, cloneTarget } from './clone-project.js'
@@ -15,7 +17,7 @@ import { screenInDiary } from './dashboard/screen.js'
 import { dispatchRelayRpc } from './dashboard-rpc/relay-dispatch.js'
 import { asRecorded, onMachine } from './dashboard-rpc/reads.js'
 import { tailAgentEvents } from './dashboard-rpc/events-tail.js'
-import { addProject, isHostName, listMachines, listProjects, nameMachine, noteSeen, projectId, readPreferences, removeProject, type MachineRecord, type Preferences } from './registry.js'
+import { addProject, isHostName, listMachines, listProjects, nameMachine, noteProjects, noteSeen, projectId, readPreferences, removeProject, type MachineRecord, type Preferences } from './registry.js'
 import { repositoryAddress } from './repository-address.js'
 import { writeHookLines } from './built-in.js'
 import { fileBranchRepo, installProject, writeSharing } from '@openagt/agent-data'
@@ -27,6 +29,7 @@ import { hasRemote } from './has-remote.js'
 import { projectGitHost } from './store/git-host.js'
 import { providedDataChanged } from './store/provided.js'
 import { projectAddresses } from './project-address.js'
+import { callerAtPage } from './dashboard/person.js'
 
 /**
  * What the daemon does for a project (#393): start a run, add a project, and relay a run to and
@@ -55,6 +58,9 @@ const MAX_HOMES = 5_000
 const RUNS_ASKED_MS = 8_000
 /** How often the machines' runs of a project someone listens to are asked for again, to keep them followed (machine-runs.ts follows them a minute). */
 const RUNS_FOLLOWED_MS = 30_000
+
+/** How long one of the person's computers gets to say its projects: a list does not wait on it past the first time (elsewhere.ts). */
+const PROJECTS_ASKED_MS = 8_000
 
 /** How many projects this computer clones at once for other machines; one more is told to ask again. */
 const MAX_COMING = 3
@@ -183,22 +189,33 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
       if (saved) void noteSeen(saved, at, undefined, env).catch(() => {})
     },
   )
-  const machineRuns = async (path: string): Promise<MachineRuns[]> => {
+  // The machines' runs of the project they name `address` (`#<id>` for one of a machine's own with no address), of the
+  // ones `only` keeps: every saved machine for a project of this computer's, the one it is on for another computer's.
+  const runsAt = async (address: string, only: (machine: MachineRecord) => boolean = () => true): Promise<MachineRuns[]> => {
     await machineNames()
-    const address = await addressOf(path)
-    if (address === undefined) return []
     // A machine that has not said its computer's name, or says one another machine says too, has no runs to say.
-    const asked = machines.flatMap(machine => (machine.host !== undefined && machineOf(machine.host) === machine ? [{ url: machine.url, host: machine.host, ...(machine.seenAt !== undefined ? { seenAt: machine.seenAt } : {}) }] : []))
+    const asked = machines.flatMap(machine => (only(machine) && machine.host !== undefined && machineOf(machine.host) === machine ? [{ url: machine.url, host: machine.host, ...(machine.seenAt !== undefined ? { seenAt: machine.seenAt } : {}) }] : []))
     return asked.length > 0 ? machineRunsKept.of(asked, address) : []
   }
+  const machineRuns = async (path: string): Promise<MachineRuns[]> => {
+    const address = await addressOf(path)
+    return address === undefined ? [] : runsAt(address)
+  }
+  const elsewhereRuns = async (id: string): Promise<MachineRuns[]> => {
+    const at = await elsewhereAt(id)
+    return at ? runsAt(at.target.project, machine => machine.url === at.home.machine.url) : []
+  }
   // Followed while someone listens: asked for again before the machines stop being followed.
-  const followRuns = (path: string, changed: () => void): (() => void) => {
+  const followRuns = (path: string, changed: () => void): (() => void) => followAt(() => addressOf(path), () => machineRuns(path), changed)
+  const followElsewhereRuns = (id: string, changed: () => void): (() => void) =>
+    followAt(async () => (await elsewhereAt(id))?.target.project, () => elsewhereRuns(id), changed)
+  const followAt = (address: () => Promise<string | undefined>, read: () => Promise<MachineRuns[]>, changed: () => void): (() => void) => {
     let stopped = false
     let stopListening: (() => void) | undefined
-    void addressOf(path).then(address => {
-      if (address !== undefined && !stopped) stopListening = machineRunsKept.listen(address, changed)
+    void address().then(said => {
+      if (said !== undefined && !stopped) stopListening = machineRunsKept.listen(said, changed)
     })
-    const keep = (): void => void machineRuns(path).catch(() => {})
+    const keep = (): void => void read().catch(() => {})
     keep()
     const timer = setInterval(keep, RUNS_FOLLOWED_MS)
     timer.unref()
@@ -208,6 +225,34 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
       stopListening?.()
     }
   }
+  // The projects of the person's other computers (elsewhere.ts): each computer of the person's own,
+  // a saved machine that is no other person's, says its projects, and what it said is kept with it,
+  // so they stay listed while it is off. One whose repository is a project here is listed as this computer's.
+  // They are the owner's: a person the owner invited, whose device the door passes to this OpenAgent,
+  // is listed none and reaches none of them.
+  const ownMachines = async (): Promise<MachineRecord[]> => (await listMachines(undefined, env).catch(() => machines)).filter(machine => machine.owner === undefined)
+  const projectsAsked = new OwnProjectsAsked<MachineRecord>(
+    async machine => {
+      const said = await machineCall(machine, 'onOwnProjects', [], PROJECTS_ASKED_MS)
+      if (!said.ok) throw new Error(said.error)
+      return said.ret
+    },
+    (machine, projects) => noteProjects(machine, projects, undefined, env),
+  )
+  const elsewhereProjects = async (): Promise<ProjectSummary[]> => {
+    if (callerAtPage() !== undefined) return []
+    await projectsAsked.refresh(await ownMachines())
+    const own = await ownMachines()
+    const addresses = await Promise.all((await listProjects(undefined, env).catch(() => [])).map(record => addressOf(record.path)))
+    return elsewhereHomes(own, new Set(addresses.filter(address => address !== undefined))).map(elsewhereSummary)
+  }
+  // Another computer's project by its id here, and how a call reaches it there.
+  const elsewhereAt = async (id: string): Promise<{ home: ElsewhereHome<MachineRecord>; target: RemoteTarget } | undefined> => {
+    if (callerAtPage() !== undefined) return undefined
+    const home = elsewhereHomeOf(await ownMachines(), id)
+    return home && { home, target: { url: home.machine.url, key: home.machine.key, ...(home.machine.pin ? { pin: home.machine.pin } : {}), project: lineNameOf(home.project) } }
+  }
+
   // A run of a project by its id: its record here, else what the saved machine it runs on said of
   // it, for a run whose record was never shared.
   const runOf = async (path: string, agentId: string): Promise<AgentMeta | undefined> =>
@@ -222,6 +267,11 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
   const homes = new Map<string, { home?: { target: RemoteTarget; label: string }; until: number }>()
   const homeOf = async (project: string, agentId: string): Promise<{ target: RemoteTarget; label: string } | undefined> => {
     if (!isRunId(agentId)) return undefined
+    // Another computer's project: its runs are that computer's.
+    if (isElsewhereId(project)) {
+      const at = await elsewhereAt(project)
+      return at && { target: at.target, label: at.home.machine.label }
+    }
     const key = `${project} ${agentId}`
     const kept = homes.get(key)
     if (kept && kept.until > Date.now()) return kept.home
@@ -259,8 +309,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
       const elsewhere = (): boolean => relayedAgents.target(agentId) !== undefined && relayedAgents.target(agentId, project) === undefined
       if (relayedAgents.follows(agentId) || elsewhere()) return
       const home = await homeOf(project, agentId)
-      const projectCwd = home ? await resolveProject(project) : undefined
-      const agent = projectCwd ? await runOf(projectCwd, agentId) : undefined
+      const agent = home ? await runIn(project, agentId) : undefined
       if (!home || !agent || relayedAgents.follows(agentId) || elsewhere()) return
       // The row starts as the record may say the run is, and the machine's own events take it from there.
       // Its cost is counted again from what the machine says, from the run's first line on.
@@ -271,6 +320,25 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     machineNames,
     machineRuns,
     followRuns,
+    elsewhere: elsewhereProjects,
+    elsewhereRuns,
+    followElsewhereRuns,
+    elsewhereHome: async project => {
+      const at = await elsewhereAt(project)
+      return at && { machine: at.home.machine.id, project: at.home.project }
+    },
+    bringHere: (address, bring) => bringProject(address, bring),
+    forward: async (project, fn, args) => {
+      const at = await elsewhereAt(project)
+      if (!at) throw new Error('That project is no longer listed on any of your computers.')
+      return relayRpc(at.target, fn, args)
+    },
+  }
+  // A run of a project by its id, this computer's project or another's.
+  async function runIn(project: string, agentId: string): Promise<AgentMeta | undefined> {
+    if (isElsewhereId(project)) return (await elsewhereRuns(project)).flatMap(machine => machine.runs).find(run => run.id === agentId)
+    const projectCwd = await resolveProject(project)
+    return projectCwd ? runOf(projectCwd, agentId) : undefined
   }
   // The machine side of the relay (#1067 slice 2): run one whitelisted read/steer/handoff RPC against this
   // daemon's own copy of the project the call named, for a daemon that relayed an agent here.
@@ -298,6 +366,9 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     return address
   }
   const projectAt = async (address: string): Promise<string | undefined> => {
+    // A project with no address is named by its id here, by the person's other computer that lists it.
+    const id = idInLineName(address)
+    if (id !== undefined) return (await listProjects(undefined, env).catch(() => [])).some(record => record.id === id) ? id : undefined
     for (const record of await listProjects(undefined, env).catch(() => [])) {
       if ((await addressOf(record.path)) === address) return record.id
     }
@@ -308,57 +379,16 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
   // The daemon names no tool and holds nothing about the run: no slot, no cap (a person's click is
   // the brake), no process to stop at shutdown. A project without the line cannot start a run here.
   const onStart = async (prompt: string, options: StartAgentOptions = {}, targetProjectId?: string): Promise<StartAgentResult> => {
+    if (isElsewhereId(targetProjectId)) return startElsewhere(prompt, options, targetProjectId)
     const projectCwd = await resolveProject(targetProjectId)
     if (!projectCwd) return { ok: false, error: `unknown project: ${targetProjectId}` }
     // Run on a saved machine (#1067): forward the start to its daemon, which runs the hook of its
     // own copy of this project, and relay the run's events back. The project is named by its
-    // repository's address, the one name both machines have for it. `machine` is stripped so the
-    // other side does not relay onward, and `base` because a branch of this machine names nothing
-    // there (it drops both too).
+    // repository's address, the one name both machines have for it.
     if (options.machine !== undefined) {
-      const { machine: id, base: _thisMachines, ...forwarded } = options
-      const machine = (await listMachines(undefined, env)).find(saved => saved.id === id)
-      if (!machine) return { ok: false, error: 'That machine is no longer saved. Pick another place to run.' }
       const project = await repositoryAddress(projectCwd)
       if (!project) return { ok: false, error: 'This project has no repository address, so it cannot be sent to another machine.' }
-      const target = { url: machine.url, key: machine.key, ...(machine.pin ? { pin: machine.pin } : {}), project }
-      // Another person's computer: a run there uses this person's own logins, which this server
-      // copies there first. Only a server's OpenAgent copies: a laptop's logins are made for it
-      // alone, so a laptop only looks that they are there.
-      if (machine.owner !== undefined) {
-        // Copied only once the person read that they are, and said OK: the page says so before a first run there.
-        if (env.OPENAGENT_SERVER === '1' && machine.told !== true) return { ok: false, error: `Your logins are copied to @${machine.owner}'s server for a run there: say OK to that above the message box first.` }
-        const there = env.OPENAGENT_SERVER === '1' ? await copyLoginsTo({ ...target, label: machine.label }, { own: () => logins(env) }) : await loginsAreThere({ ...target, label: machine.label })
-        if (!there.ok) return there
-      }
-      const result = await startRemoteAgent(target, { prompt, options: forwarded })
-      if (!result.ok) {
-        // The one refusal the page can do something about: it has the machine clone the project, and starts again.
-        return 'noProject' in result ? { ok: false, error: `${basename(projectCwd)} is not on ${machine.label} yet.`, notThere: true } : result
-      }
-      // The run's id is the machine's word, and from here on every call about that id goes to the
-      // machine: what the person reads of the run, and what they click and type in its browser.
-      // An id that is no run's, or that is a run of this computer's own, is not taken.
-      if (!isRunId(result.agentId) || (await findCheckout(projectCwd, result.agentId, projectBranches))) {
-        return { ok: false, error: `${machine.label} answered with a run this computer cannot follow.` }
-      }
-      // A relayed agent has no local checkout or pid, so its list row is a memory-only stub (#1077):
-      // registered here so onAgents can show it and a dashboard reload re-opens it. Never written to disk.
-      const now = new Date().toISOString()
-      const meta: AgentMeta = {
-        status: 'running',
-        id: result.agentId,
-        startedAt: now,
-        updatedAt: now,
-        target: 'remote',
-        intent: prompt,
-        ...onMachine(machine),
-        // The machine's word, as the run is: its record, which names the coding agent, never comes here.
-        ...(typeof result.driver === 'string' && result.driver.length <= MAX_DRIVER_NAME ? { driver: result.driver } : {}),
-      }
-      relayedAgents.register(result.agentId, target, meta, targetProjectId ?? homeId)
-      // Only what was checked goes on to the page, not whatever else the machine answered.
-      return { ok: true, agentId: result.agentId, ...(meta.driver !== undefined ? { driver: meta.driver } : {}) }
+      return sendToMachine(prompt, options, options.machine, { id: targetProjectId ?? homeId, name: basename(projectCwd), address: project, cwd: projectCwd })
     }
     // The branch to start from ends up on the line's command line: only a branch name goes there.
     // Refused, not dropped: a run started from the main branch instead would be a silent swap.
@@ -388,6 +418,88 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
       ownRunsWatch.poke(projectCwd)
     }
     return started.ok ? { ok: true, agentId: started.id, ...(started.driver !== undefined ? { driver: started.driver } : {}) } : { ok: false, error: started.error }
+  }
+
+  // Send a start to a saved machine, which runs the hook of its own copy of the project and is
+  // followed from here. `machine` is stripped so the other side does not relay onward, and `base`
+  // because a branch of this machine names nothing there (it drops both too).
+  const sendToMachine = async (prompt: string, options: StartAgentOptions, id: string, project: { id: string; name: string; address: string; cwd?: string }): Promise<StartAgentResult> => {
+    const { machine: _id, base: _thisMachines, ...forwarded } = options
+    const machine = (await listMachines(undefined, env)).find(saved => saved.id === id)
+    if (!machine) return { ok: false, error: 'That machine is no longer saved. Pick another place to run.' }
+    const target = { url: machine.url, key: machine.key, ...(machine.pin ? { pin: machine.pin } : {}), project: project.address }
+    // Another person's computer: a run there uses this person's own logins, which this server
+    // copies there first. Only a server's OpenAgent copies: a laptop's logins are made for it
+    // alone, so a laptop only looks that they are there.
+    if (machine.owner !== undefined) {
+      // Copied only once the person read that they are, and said OK: the page says so before a first run there.
+      if (env.OPENAGENT_SERVER === '1' && machine.told !== true) return { ok: false, error: `Your logins are copied to @${machine.owner}'s server for a run there: say OK to that above the message box first.` }
+      const there = env.OPENAGENT_SERVER === '1' ? await copyLoginsTo({ ...target, label: machine.label }, { own: () => logins(env) }) : await loginsAreThere({ ...target, label: machine.label })
+      if (!there.ok) return there
+    }
+    const result = await startRemoteAgent(target, { prompt, options: forwarded })
+    if (!result.ok) {
+      // The one refusal the page can do something about: it has the machine clone the project, and starts again.
+      return 'noProject' in result ? { ok: false, error: `${project.name} is not on ${machine.label} yet.`, notThere: true } : result
+    }
+    // The run's id is the machine's word, and from here on every call about that id goes to the
+    // machine: what the person reads of the run, and what they click and type in its browser.
+    // An id that is no run's, or that is a run of this computer's own, is not taken.
+    if (!isRunId(result.agentId) || (project.cwd !== undefined && (await findCheckout(project.cwd, result.agentId, projectBranches)))) {
+      return { ok: false, error: `${machine.label} answered with a run this computer cannot follow.` }
+    }
+    return followSent(result.agentId, result.driver, prompt, machine, target, project.id)
+  }
+
+  // A run this computer sent to a machine, followed from here as a run of the project.
+  const followSent = (agentId: string, driver: unknown, prompt: string, machine: MachineRecord, target: RemoteTarget, project: string): StartAgentResult => {
+    // A relayed agent has no local checkout or pid, so its list row is a memory-only stub (#1077):
+    // registered here so onAgents can show it and a dashboard reload re-opens it. Never written to disk.
+    const now = new Date().toISOString()
+    const meta: AgentMeta = {
+      status: 'running',
+      id: agentId,
+      startedAt: now,
+      updatedAt: now,
+      target: 'remote',
+      intent: prompt,
+      ...onMachine(machine),
+      // The machine's word, as the run is: its record, which names the coding agent, never comes here.
+      ...(typeof driver === 'string' && driver.length <= MAX_DRIVER_NAME ? { driver } : {}),
+    }
+    relayedAgents.register(agentId, target, meta, project)
+    // Only what was checked goes on to the page, not whatever else the machine answered.
+    return { ok: true, agentId, ...(meta.driver !== undefined ? { driver: meta.driver } : {}) }
+  }
+
+  // A project only another computer of the person's has (elsewhere.ts). On that computer, the run
+  // starts there as its own page starts one: in the project as it stands there, from the branch
+  // picked among its own. On this computer, in its copy here once there is one: the page has it
+  // cloned when there is none, and is told the project the run started in. On any other, as a
+  // project of this computer's is sent there, by its address.
+  const startElsewhere = async (prompt: string, options: StartAgentOptions, id: string): Promise<StartAgentResult> => {
+    const at = await elsewhereAt(id)
+    if (!at) return { ok: false, error: 'That project is no longer listed on any of your computers.' }
+    const { home, target } = at
+    const { address, name } = home.project
+    if (options.machine === home.machine.id) {
+      const { machine: _there, ...there } = options
+      const said = await relayRpc(target, 'sendStart', [null, prompt, there]).then(
+        answer => answer as StartAgentResult,
+        (err: unknown): StartAgentResult => ({ ok: false, error: `could not reach ${home.machine.label}: ${err instanceof Error ? err.message : String(err)}` }),
+      )
+      if (!said.ok) return { ok: false, error: typeof said.error === 'string' ? said.error : `${home.machine.label} did not start the run.` }
+      if (!isRunId(said.agentId)) return { ok: false, error: `${home.machine.label} answered with a run this computer cannot follow.` }
+      return followSent(said.agentId, said.driver, prompt, home.machine, target, id)
+    }
+    if (address === undefined) return { ok: false, error: `${name} has no repository address, so it runs on ${home.machine.label} only.` }
+    if (options.machine === undefined) {
+      const here = await projectAt(address)
+      if (here === undefined) return { ok: false, error: `${name} is not on this computer yet.`, notThere: true }
+      const started = await onStart(prompt, options, here)
+      return started.ok ? { ...started, projectId: here } : started
+    }
+    return sendToMachine(prompt, options, options.machine, { id, name, address })
   }
 
   // Add a project (#396): install the repo, then register it so it appears in the Projects

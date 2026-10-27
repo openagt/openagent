@@ -15,7 +15,8 @@ import { worktreePath, addWorktree, agentBranchName } from '@openagt/skill-branc
 import { OPENAGENT_DIR } from '../openagent-dir.js'
 import { RUN_INBOX_FILE } from '../dashboard/run-inbox.js'
 import { PROJECT_HOOKS_FILE } from '../project-hooks.js'
-import { provideTestContext } from './test-context.js'
+import { NO_ELSEWHERE, provideTestContext } from './test-context.js'
+import { elsewhereId } from '../dashboard/elsewhere.js'
 
 // #749, #1774: what is addressed at a RUN has to resolve the run's own checkout, not the project:
 // the run's card is there, and so is the inbox its tool reads. Addressed at the project root, a
@@ -439,6 +440,7 @@ test('a run on a saved machine reads the same in the project\'s list and in ever
   const asked: string[] = []
   provideTestContext({
     remote: {
+      ...NO_ELSEWHERE,
       target: () => undefined,
       // And one followed by a record that was deleted since: it is listed no longer.
       list: projectId => (projectId === ctx.projectId ? [sent, { ...sent, id: 'followed-by-a-record-that-is-gone' }] : []),
@@ -482,6 +484,7 @@ test('a call that arrived from another computer is run here whatever the run\'s 
   let asked = 0
   provideTestContext({
     remote: {
+      ...NO_ELSEWHERE,
       target: () => undefined,
       list: () => [],
       working: () => false,
@@ -537,7 +540,7 @@ test('a machine that refuses what would change a run, and says why, is answered 
   await new Promise<void>(resolve => machine.listen(0, '127.0.0.1', resolve))
   const target = { url: `http://127.0.0.1:${(machine.address() as AddressInfo).port}`, key: 'id.key', project: 'github.com/acme/shop' }
   provideTestContext({
-    remote: { target: () => undefined, list: () => [], working: () => false, rekey: () => {}, sent: () => true, home: async () => target, follow: async () => {}, machineNames: async () => () => undefined, machineRuns: async () => [], followRuns: () => () => {} },
+    remote: { ...NO_ELSEWHERE, target: () => undefined, list: () => [], working: () => false, rekey: () => {}, sent: () => true, home: async () => target, follow: async () => {}, machineNames: async () => () => undefined, machineRuns: async () => [], followRuns: () => () => {} },
   })
   try {
     assert.deepEqual(await sendMessage(ctx.projectId, 'go on', ctx.agentId), { ok: false, error: WHY })
@@ -589,6 +592,7 @@ test("a saved machine's run is listed as the machine says it, and is never going
   let answered = true
   provideTestContext({
     remote: {
+      ...NO_ELSEWHERE,
       target: () => undefined,
       list: () => [],
       working: () => false,
@@ -617,6 +621,43 @@ test("a saved machine's run is listed as the machine says it, and is never going
     ctx.restore()
     await rm(ctx.dir, { recursive: true, force: true })
   }
+})
+
+test("another computer's project lists that computer's runs as it says them, marked as its, and the runs this computer sent there", async () => {
+  const laptopRun = { id: '2026-07-19T12-00-00-000Z', startedAt: '2026-07-19T12:00:00.000Z', updatedAt: '2026-07-19T12:00:00.000Z', status: 'running' as const, host: 'laptop', person: 'me@laptop' }
+  const sent = { id: '2026-07-19T13-00-00-000Z', startedAt: '2026-07-19T13:00:00.000Z', updatedAt: '2026-07-19T13:00:00.000Z', status: 'running' as const, target: 'remote' as const, remoteLabel: 'Laptop' }
+  const there = elsewhereId('shop-1abc', 'http://127.0.0.1:4310')
+  const askedFor: string[] = []
+  provideTestContext({
+    remote: {
+      ...NO_ELSEWHERE,
+      target: () => undefined,
+      list: project => (project === there ? [sent] : []),
+      working: () => false,
+      rekey: () => {},
+      sent: () => true,
+      home: async () => undefined,
+      follow: async () => {},
+      machineNames: async () => host => (host === 'laptop' ? { label: 'Laptop', url: 'http://127.0.0.1:4310' } : undefined),
+      machineRuns: async () => [],
+      followRuns: () => () => {},
+      elsewhereRuns: async project => {
+        askedFor.push(project)
+        return [{ host: 'laptop', answered: true, runs: [laptopRun] }]
+      },
+    },
+  })
+  assert.deepEqual(
+    (await onAgents(there)).map(row => [row.id, row.status, row.remoteLabel, row.person]),
+    [
+      [sent.id, 'running', 'Laptop', undefined],
+      [laptopRun.id, 'running', 'Laptop', 'me@laptop'],
+    ],
+  )
+  assert.deepEqual(askedFor, [there])
+  // A project of this computer's that is not there has no runs, and asks no other computer for any.
+  assert.deepEqual(await onAgents('shop-1abc'), [])
+  assert.deepEqual(askedFor, [there])
 })
 
 test('a computer answers another one over the relay with its own runs only, each with whose it is', async () => {

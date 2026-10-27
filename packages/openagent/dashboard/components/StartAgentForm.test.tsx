@@ -18,7 +18,12 @@ const prefsLoaded = vi.hoisted(() => ({ current: true }))
 vi.mock('../lib/preferences.js', () => ({ usePreferences: () => prefs.current, usePreferencesLoaded: () => prefsLoaded.current, updatePreferences }))
 const machine = vi.hoisted(() => ({ current: null as null | { id: string; url: string; label: string } }))
 vi.mock('../lib/machines.js', () => ({ useMachines: () => (machine.current ? [machine.current] : []) }))
-vi.mock('../lib/remote-target.js', () => ({ useSelectedMachineId: () => machine.current?.id ?? null }))
+const followProjectHome = vi.hoisted(() => vi.fn())
+vi.mock('../lib/remote-target.js', async () => ({
+  ...(await vi.importActual<typeof import('../lib/remote-target.js')>('../lib/remote-target.js')),
+  useSelectedMachineId: () => machine.current?.id ?? null,
+  followProjectHome,
+}))
 const logins = vi.hoisted(() => ({ onAgentState: vi.fn(), sendAgentFix: vi.fn(), onGitHosts: vi.fn(), sendGitHostInstall: vi.fn(), sendGitHostLogin: vi.fn(), sendUseGitHostAccount: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
 // A picked machine's own check, and how this computer's logins stand on the machines that take them.
@@ -87,6 +92,7 @@ afterEach(() => {
   onMachineLogins.mockReset()
   for (const fn of Object.values(serverLogins)) fn.mockReset()
   openSettings.mockReset()
+  followProjectHome.mockReset()
   updatePreferences.mockReset()
   prefs.current = {}
   prefsLoaded.current = true
@@ -122,7 +128,7 @@ describe('StartAgentForm (#1774)', () => {
     const onAgentStarted = vi.fn()
     render(<StartAgentForm {...props} onAgentStarted={onAgentStarted} />)
     fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r1', undefined))
+    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r1', undefined, undefined))
     expect(start).toHaveBeenCalledWith('p1', 'do the thing', { driver: 'codex', model: 'gpt-5' })
   })
 
@@ -324,7 +330,7 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(onCommands).toHaveBeenCalled())
     expect(screen.queryByRole('alert')).toBeNull()
     fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r2', 'box'))
+    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r2', 'box', undefined))
     expect(start).toHaveBeenCalledWith('p1', 'do the thing', { machine: 'd1' })
     expect(onStartCheck).not.toHaveBeenCalled()
   })
@@ -339,7 +345,7 @@ describe('StartAgentForm (#1774)', () => {
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalled())
     expect(start.mock.calls[0]![2]).not.toHaveProperty('machine')
-    expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r3', undefined)
+    expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r3', undefined, undefined)
   })
 
   test('what would stop the run is said before the Start, for the coding agent picked; a warning is said too, and neither turns Start off', async () => {
@@ -511,6 +517,37 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', {}))
     expect(startFromChip()).toBeNull()
     expect(startsAt()).toBe('gemstack')
+  })
+
+  test("another computer's project has its computer picked, and on it the run starts as on a project here: that computer's branches and start line, and its own check", async () => {
+    onCommands.mockResolvedValue(WITH_BRANCHES)
+    machine.current = { id: 'laptop', url: 'http://127.0.0.1:4210', label: 'MacBook' }
+    start.mockResolvedValue({ agentId: 'r5' })
+    prefs.current = { startFrom: { p1: 'local' } }
+    render(<StartAgentForm {...props} projectName="shop" home="laptop" />)
+    expect(followProjectHome).toHaveBeenCalledWith('laptop')
+    await waitFor(() => expect(startFromChip()).not.toBeNull())
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', { base: 'my/work', machine: 'laptop' }))
+    // Its own check is that computer's, asked as of a machine: never this one's.
+    await waitFor(() => expect(onMachineStartCheck).toHaveBeenCalledWith('p1', 'laptop', undefined))
+    expect(onStartCheck).not.toHaveBeenCalled()
+  })
+
+  test("another computer's project started on this one is cloned here first: no branch of that computer, and no check of a copy that is not here yet", async () => {
+    onCommands.mockResolvedValue({ ...WITH_BRANCHES, startHook: false })
+    start.mockResolvedValue({ agentId: 'r6', projectId: 'shop-here' })
+    const onAgentStarted = vi.fn()
+    render(<StartAgentForm {...props} projectName="shop" home="laptop" onAgentStarted={onAgentStarted} />)
+    await waitFor(() => expect(onCommands).toHaveBeenCalled())
+    expect(startFromChip()).toBeNull()
+    // The copy cloned here gets its start line as it is added.
+    expect(screen.queryByText(/no start hook/)).toBeNull()
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', {}))
+    expect(onStartCheck).not.toHaveBeenCalled()
+    // The run is in that copy, which the page goes to.
+    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r6', undefined, 'shop-here'))
   })
 
   test('with a machine picked there is no "start from" chip, and the Start names no branch of this machine', async () => {

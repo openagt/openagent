@@ -1,11 +1,11 @@
-import { contextAddProject, contextProjectErrors, contextProjects, contextRemoveProject, contextStartedIn, resolveProjectPath } from './context.js'
+import { contextAddProject, contextProjectErrors, contextProjects, contextRemote, contextRemoveProject, contextStartedIn, resolveProjectPath } from './context.js'
 import { readProjectCommands, type ProjectCommand } from '../project-commands.js'
-import { DATA_BRANCH, branchReach, originDefaultBranch, pullFileBranch, writeSharing, type BranchReach } from '@openagt/agent-data'
+import { DATA_BRANCH, branchReach, originDefaultBranch, pullFileBranch, readSharing, writeSharing, type BranchReach } from '@openagt/agent-data'
 import { readProjectHooks, runCheckHook, startLineTakesBase, type StartReadiness } from '../project-hooks.js'
 import { isPublishPick, publishPickIn, type PublishPick } from '../publish-levels.js'
 import { hasRemote } from '../has-remote.js'
 import { openagentVersion } from '../version.js'
-import { repositoryAddress } from '../repository-address.js'
+import { repositoryAddress, repositorySpelling } from '../repository-address.js'
 import { currentBranch } from '../dashboard/git-status.js'
 import { waitingSkills } from '../dashboard/start-branch.js'
 import { homedir } from 'node:os'
@@ -13,6 +13,7 @@ import { cloneProject, cloneTargetOf } from '../clone-project.js'
 import { canPickDirectory, pickDirectory, type PickDirectoryResult } from '../pick-directory.js'
 import { projectGitHost } from '../store/git-host.js'
 import type { ProjectSummary } from '../dashboard/projects.js'
+import type { OwnProject } from '../dashboard/elsewhere.js'
 import type { AddProjectResult, OnboardingSuggestion, RemoveProjectResult, StartedInResult } from '../dashboard/types.js'
 
 // The Projects sidebar behind the new dashboard (#405): the global registry (#390) the
@@ -27,10 +28,36 @@ import type { AddProjectResult, OnboardingSuggestion, RemoveProjectResult, Start
 // nothing new to subscribe to.
 export async function onProjects(): Promise<ProjectSummary[]> {
   const state = contextProjectErrors()
-  return (await contextProjects().list()).map(project => {
+  const [own, elsewhere] = await Promise.all([contextProjects().list(), contextRemote().elsewhere()])
+  const here = own.map(project => {
     const { errors, local } = state(project.path)
     return { ...project, ...(errors.length > 0 ? { errors } : {}), ...(local ? { local } : {}) }
   })
+  return [...here, ...elsewhere]
+}
+
+/**
+ * This computer's own projects, for another computer of the person's that lists them beside its
+ * own (elsewhere.ts): each with the address another computer names it by and clones it from, and
+ * whether its agents' records are shared. Never the projects this computer lists of others.
+ */
+export async function onOwnProjects(): Promise<OwnProject[]> {
+  return Promise.all(
+    (await contextProjects().list()).map(async project => {
+      const [address, spelling, share] = await Promise.all([repositoryAddress(project.path), repositorySpelling(project.path), readSharing(project.path).catch(() => false)])
+      return {
+        id: project.id,
+        name: project.name,
+        path: project.path,
+        ...(address !== undefined ? { address } : {}),
+        ...(spelling !== undefined ? { spelling } : {}),
+        share,
+        gitHost: project.gitHost,
+        activated: project.activated,
+        ...(project.lastActivityAt !== undefined ? { lastActivityAt: project.lastActivityAt } : {}),
+      }
+    }),
+  )
 }
 
 /**
