@@ -1,0 +1,15 @@
+{
+  "id": "2026-10-27T00-08-09-680Z",
+  "startedAt": "2026-10-27T00:08:14.730Z",
+  "status": "running",
+  "intent": "Reply with the single word OK and nothing else. syncb2",
+  "driver": "claude-code",
+  "model": "opus",
+  "caller": {
+    "runner": {
+      "host": "ubuntu-s-1vcpu-2gb-fra1",
+      "pid": 784310
+    },
+    "host": "ubuntu-s-1vcpu-2gb-fra1"
+  }
+}
