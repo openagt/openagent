@@ -1,0 +1,8 @@
+{"kind":"start","prompt":"Reply with the single word OK and nothing else. synca3","at":"2026-10-27T00:06:43.181Z"}
+{"kind":"session","sessionId":"c0520df4-a15a-4b59-8d80-75537beb58b0","at":"2026-10-27T00:06:43.375Z"}
+{"kind":"title","text":"Reply with OK","at":"2026-10-27T00:06:44.845Z"}
+{"kind":"said","text":"OK","at":"2026-10-27T00:06:45.776Z"}
+{"kind":"rate-limit","limit":{"status":"allowed","window":"five_hour","resetsAt":1793077200000,"windows":[{"window":"five_hour","percentUsed":0,"resetsAt":1793077200000},{"window":"seven_day","percentUsed":11,"resetsAt":1793419200000}]},"at":"2026-10-27T00:06:45.782Z"}
+{"kind":"result","text":"OK","sessionId":"c0520df4-a15a-4b59-8d80-75537beb58b0","at":"2026-10-27T00:06:46.582Z"}
+{"kind":"cost","usd":0.0462296,"at":"2026-10-27T00:06:46.582Z"}
+{"kind":"ended","status":"done","at":"2026-10-27T00:06:47.791Z"}
