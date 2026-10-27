@@ -9,6 +9,7 @@ import { interventionKey } from './keys.js'
 import { runName } from '../run-name.js'
 import { bridgeChoiceRequest, type BridgeQuestion } from './bridge-question.js'
 import { bridgeQuestions } from './bridge-store.js'
+import type { MachineKind } from '../reached-by-line.js'
 
 // Pure identity + diff, in the leaf `keys.ts` so the dashboard shares them rather than copying.
 export { interventionKey } from './keys.js'
@@ -57,6 +58,8 @@ export interface Intervention {
   files?: number
   /** When the PR was opened (`pr`) or the agent last updated (the other two), ISO, for ordering. */
   createdAt?: string
+  /** The computer the run it is about runs on, when that is one of the person's other computers: the saved machine's name and kind. */
+  computer?: { name: string; kind: MachineKind }
 }
 
 /** Injectable seam so {@link buildInterventions} is unit-testable off disk. */

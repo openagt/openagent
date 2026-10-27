@@ -91,7 +91,7 @@ interface TwoMachines {
  * Stand the two machines up. B's home file is the one `process.env` names, since the calls a
  * relayed read lands in find a project's folder through it; A's is handed to its runtime.
  */
-async function twoMachines(opts: { shopOnB?: boolean } = {}): Promise<TwoMachines> {
+async function twoMachines(opts: { shopOnB?: boolean; machineCalls?: (fn: string, args: unknown[]) => Promise<unknown> | undefined } = {}): Promise<TwoMachines> {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'relay-two-')))
   const envA = { ...process.env, XDG_CONFIG_HOME: join(root, 'home-a') }
   const envB = { ...process.env, XDG_CONFIG_HOME: join(root, 'home-b') }
@@ -133,7 +133,7 @@ async function twoMachines(opts: { shopOnB?: boolean } = {}): Promise<TwoMachine
     testDashboardOptions({
       clientBundleDir: bundle,
       onStart: bStart,
-      relay: { project: runtimeB.projectAt, tailEvents: bTail, rpc: runtimeB.onRelayRpc, machine: dispatchMachineRpc, bring: runtimeB.bringProject },
+      relay: { project: runtimeB.projectAt, tailEvents: bTail, rpc: runtimeB.onRelayRpc, machine: (fn, args) => opts.machineCalls?.(fn, args) ?? dispatchMachineRpc(fn, args), bring: runtimeB.bringProject },
     }),
   )
 
@@ -407,6 +407,48 @@ test("a person the owner invited is listed none of the owner's other computers' 
     assert.deepEqual(await asCaller('Tester', () => m.a.onStart('run on the owner\'s computer', { machine: m.machineB }, id)), { ok: false, error: 'That project is no longer listed on any of your computers.' })
     await assert.rejects(asCaller('Tester', () => m.a.remoteAgents.forward(id, 'onCommands', [id])), /no longer listed/)
     assert.equal(m.bStarts.length, 0)
+  } finally {
+    await m.close()
+  }
+})
+
+test("the other machine's Human Queue is named here by the projects as they are listed here, and a run's item says it is on that machine", async () => {
+  let asked = 0
+  const said = (otherId: string, shopId: string) => ({
+    items: [
+      { projectId: shopId, projectName: 'work-shop', kind: 'awaiting', title: 'Asks on B', question: 'Which one?', awaitId: 'q1', agentId: B_RUN, createdAt: '2026-10-27T10:00:00.000Z' },
+      { projectId: otherId, projectName: 'other', kind: 'pr', title: 'Opened by hand', number: 7, url: 'https://github.com/acme/other/pull/7' },
+      { projectId: 'gone-1', projectName: 'gone', kind: 'pr', title: 'Of a project B no longer says', url: 'https://github.com/acme/gone/pull/1' },
+      { projectId: shopId, kind: 'awaiting', title: 'No project name, no item' },
+    ],
+    whole: [otherId, shopId, 'gone-1'],
+  })
+  let ids: [string, string] = ['', '']
+  const m = await twoMachines({ machineCalls: fn => (fn === 'onOwnInterventions' ? (asked++, Promise.resolve(said(...ids))) : undefined) })
+  try {
+    ids = [projectId(otherOf(m.shopB)), projectId(m.shopB)]
+    // B's projects are known first: it says them when the list is read.
+    await m.a.remoteAgents.elsewhere()
+    const queue = await m.a.remoteAgents.machinesQueue()
+    const other = elsewhereId(projectId(otherOf(m.shopB)), m.machineB)
+    // B's shop is A's shop, by its address; B's other project is listed here under B's mark.
+    assert.deepEqual(queue, {
+      said: [
+        {
+          items: [
+            { projectId: projectId(m.shopA), projectName: 'work-shop', kind: 'awaiting', title: 'Asks on B', question: 'Which one?', awaitId: 'q1', agentId: B_RUN, createdAt: '2026-10-27T10:00:00.000Z', computer: { name: 'Studio', kind: 'computer' } },
+            { projectId: other, projectName: 'other', kind: 'pr', title: 'Opened by hand', number: 7, url: 'https://github.com/acme/other/pull/7' },
+          ],
+          whole: [other, projectId(m.shopA)],
+        },
+      ],
+      unread: [],
+    })
+    // What B said is kept a while: a page reading every few seconds does not ask B each time.
+    await m.a.remoteAgents.machinesQueue()
+    assert.equal(asked, 1)
+    // A person the owner invited is shown none of it.
+    assert.deepEqual(await asCaller('Tester', () => m.a.remoteAgents.machinesQueue()), { said: [], unread: [] })
   } finally {
     await m.close()
   }

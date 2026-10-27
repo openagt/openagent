@@ -48,6 +48,22 @@ describe('the Human Queue\'s rows', () => {
     expect(screen.getByText('shop')).toBeTruthy()
   })
 
+  test('a run on another of the person\'s computers says which; one of this computer\'s says nothing more', () => {
+    render(
+      <HumanQueueList
+        items={[item({ kind: 'awaiting', title: 'Asks there', question: 'q?', agentId: 'r1', awaitId: 'q', computer: { name: 'Suleimans-MacBook-Pro', kind: 'computer' } }), item({ kind: 'uncommitted', title: 'Left here', agentId: 'r2' })]}
+        onOpenAgent={() => {}}
+      />,
+    )
+    const rows = screen.getAllByRole('listitem').map(row => row.textContent)
+    expect(rows).toEqual(['Needs answerAsks thereq?', 'Needs commitLeft here'])
+    // The icon of the computer's kind, as the list of runs marks a run there, named to a screen reader.
+    const [there, here] = screen.getAllByRole('listitem')
+    expect(there!.querySelector('.lucide-laptop')).toBeTruthy()
+    expect(screen.getByRole('img', { name: 'Runs on Suleimans-MacBook-Pro' })).toBeTruthy()
+    expect(here!.querySelector('.lucide-laptop')).toBeNull()
+  })
+
   test('the words are one rule, for every list that shows these rows', () => {
     expect(['awaiting', 'uncommitted', 'unpushed', 'pr'].map(kind => needsWord(kind as Intervention['kind']))).toEqual(['Needs answer', 'Needs commit', 'Needs PR', 'Needs merge'])
     expect(needsWord('unpushed', false)).toBe('Needs push')

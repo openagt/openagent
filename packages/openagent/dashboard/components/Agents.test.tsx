@@ -60,9 +60,15 @@ describe('Agents (#1139)', () => {
 })
 
 describe('Agents (#1648)', () => {
-  test('a run another machine started says whose it is; this daemon\'s own does not', () => {
-    render(<Agents working={[active('theirs', { host: 'rom-thinkpad-x280' }), active('mine')]} onSelectAgent={vi.fn()} />)
-    expect(screen.getByText('from rom-thinkpad-x280')).toBeTruthy()
-    expect(screen.getAllByText(/^from /)).toHaveLength(1)
+  test('a run on another computer says which; this computer\'s own does not', () => {
+    render(<Agents working={[active('theirs', { computer: { name: 'rom-thinkpad-x280' } }), active('mine')]} onSelectAgent={vi.fn()} />)
+    expect(screen.getByText('on rom-thinkpad-x280')).toBeTruthy()
+    expect(screen.getAllByText(/^on /)).toHaveLength(1)
+    // A computer whose kind is not known is drawn a laptop; a server as a server.
+    expect(document.querySelector('.lucide-laptop')).toBeTruthy()
+    cleanup()
+    render(<Agents working={[active('sent', { computer: { name: 'Droplet', kind: 'server' } })]} onSelectAgent={vi.fn()} />)
+    expect(screen.getByText('on Droplet')).toBeTruthy()
+    expect(document.querySelector('.lucide-server')).toBeTruthy()
   })
 })

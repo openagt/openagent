@@ -19,7 +19,7 @@ test('buildActivity maps a running run to started and a terminal run to finished
     '/a': [agent({ id: 'r1', status: 'running', intent: 'add cart', updatedAt: '2026-07-16T03:00:00Z' })],
     '/b': [agent({ id: 'r2', status: 'done', intent: 'fix login', updatedAt: '2026-07-16T01:00:00Z' })],
   }
-  const readAgents = async (cwd: string): Promise<AgentMeta[]> => agentsByPath[cwd] ?? []
+  const readAgents = async ({ path }: ProjectSummary): Promise<AgentMeta[]> => agentsByPath[path] ?? []
   const { items } = await buildActivity([project('a', '/a'), project('b', '/b')], { readAgents })
 
   // Newest first.
@@ -57,8 +57,8 @@ test('buildActivity caps each project to the most recent runs', async () => {
 })
 
 test('buildActivity skips a project whose run read throws, and does not call it read (#1623)', async () => {
-  const readAgents = async (cwd: string): Promise<AgentMeta[]> => {
-    if (cwd === '/boom') throw new Error('disk exploded')
+  const readAgents = async ({ path }: ProjectSummary): Promise<AgentMeta[]> => {
+    if (path === '/boom') throw new Error('disk exploded')
     return [agent({ id: 'ok', status: 'done' })]
   }
   const { items, whole } = await buildActivity([project('boom', '/boom'), project('ok', '/ok')], { readAgents })
