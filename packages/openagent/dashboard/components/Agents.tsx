@@ -3,6 +3,7 @@ import { Bot } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { formatAge, formatDateTime } from '../lib/format-date.js'
+import { OnComputer } from './MachineMark.js'
 
 // The Overview's Agents card (#1139): the sessions working right now. Each row is the whole line,
 // clickable straight into that session — its label is the one-liner the sidebar shows, and its age
@@ -70,7 +71,7 @@ function AgentRow({
   /** A web run's cloud side at work (#1668): say where it is, since no local process backs the row. */
   cloud?: 'in-cloud' | 'waiting' | undefined
   /** The computer it runs on, when that is not this one (#1648). */
-  computer?: string | undefined
+  computer?: ActiveAgent['computer']
   /** ISO: the session's last activity. */
   at: string | undefined
   projectName: string
@@ -90,7 +91,7 @@ function AgentRow({
         <span className="min-w-0 flex-1 truncate text-sm">{label}</span>
         {cloud && <span className="shrink-0 text-[10px] uppercase text-muted-foreground">{cloud === 'waiting' ? 'waiting' : 'in cloud'}</span>}
         <span className="shrink-0 text-xs text-muted-foreground">{projectName}</span>
-        {computer && <span className="shrink-0 text-xs text-muted-foreground">on {computer}</span>}
+        {computer && <OnComputer computer={computer} />}
 
         {at && (
           <Tooltip>

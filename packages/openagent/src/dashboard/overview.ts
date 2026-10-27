@@ -4,6 +4,7 @@ import { collectQueue, type ProjectQueue } from './queue.js'
 import { cloudRunState } from '../cloud-run-state.js'
 import { bridgeQuestions } from './bridge-store.js'
 import { hostname } from 'node:os'
+import type { MachineKind } from '../reached-by-line.js'
 
 // The first-sidebar Overview (#437, part of #314): a cross-project glance at what the agent
 // is working on right now, the size of the backlog, and the recently active projects. It
@@ -32,10 +33,10 @@ export interface ActiveAgent {
    */
   cloud?: 'in-cloud' | 'waiting'
   /**
-   * The computer it runs on, only when that is not this one: the saved machine's name for a run of
-   * one of the person's other computers, else the computer its record names (#1648).
+   * The computer it runs on, only when that is not this one: the saved machine's name and kind for
+   * a run of one of the person's other computers, else the computer its record names (#1648).
    */
-  computer?: string
+  computer?: { name: string; kind?: MachineKind }
 }
 
 /** One recently active project, most-recent first. */
@@ -143,7 +144,11 @@ export async function buildOverview(projects: ProjectSummary[], deps: OverviewDe
     ...(meta.updatedAt ? { updatedAt: meta.updatedAt } : {}),
     // A saved machine's run by the machine's name; another computer's daemon started it otherwise
     // (#1648): the shared data branch shows its runs here too.
-    ...(meta.remoteLabel !== undefined ? { computer: meta.remoteLabel } : meta.host !== undefined && meta.host !== thisHost ? { computer: meta.host } : {}),
+    ...(meta.remoteLabel !== undefined
+      ? { computer: { name: meta.remoteLabel, ...(meta.remoteKind !== undefined ? { kind: meta.remoteKind } : {}) } }
+      : meta.host !== undefined && meta.host !== thisHost
+        ? { computer: { name: meta.host } }
+        : {}),
   })
   const own = projects.filter(project => project.machine === undefined)
   // What the person's other computers run, once each: a run listed here as this computer's is not listed again.

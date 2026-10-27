@@ -60,7 +60,7 @@ export function interventionsOf(said: unknown): ProjectionRead<Intervention> {
  * A computer's Human Queue as named here: each item by `idHere` of its project's id there, and one
  * about a run marked with the computer it runs on. An item of a project not listed here is dropped.
  */
-export function namedHere(said: ProjectionRead<Intervention>, idHere: (theirs: string) => string | undefined, computer: string): ProjectionRead<Intervention> {
+export function namedHere(said: ProjectionRead<Intervention>, idHere: (theirs: string) => string | undefined, computer: NonNullable<Intervention['computer']>): ProjectionRead<Intervention> {
   const items = said.items.flatMap(item => {
     const projectId = idHere(item.projectId)
     return projectId === undefined ? [] : [{ ...item, projectId, ...(item.agentId !== undefined ? { computer } : {}) }]

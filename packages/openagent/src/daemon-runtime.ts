@@ -32,7 +32,7 @@ import { projectGitHost } from './store/git-host.js'
 import { providedDataChanged } from './store/provided.js'
 import { projectAddresses } from './project-address.js'
 import { callerAtPage } from './dashboard/person.js'
-import { machineName } from './reached-by-line.js'
+import { machineKind, machineName } from './reached-by-line.js'
 
 /**
  * What the daemon does for a project (#393): start a run, add a project, and relay a run to and
@@ -278,7 +278,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
         return project && listed.get(keyOf(machine, project))
       }
       const said = answers.get(machine.id)
-      if (said) queue.said.push(namedHere(said, idHere, machineName(machine)))
+      if (said) queue.said.push(namedHere(said, idHere, { name: machineName(machine), kind: machineKind(machine).kind }))
       else queue.unread.push(...(machine.projects ?? []).flatMap(project => idHere(project.id) ?? []))
     }
     return queue

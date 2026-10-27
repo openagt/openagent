@@ -19,3 +19,18 @@ export function MachineMark({ kind, online, labelled = false, className }: { kin
     </span>
   )
 }
+
+/**
+ * Where a row's run runs, when that is another of the person's computers: the icon of its kind (a
+ * laptop for a computer whose kind is not known) and its name, as the project picker marks a
+ * project of another computer's. The name is the first part of the row to give up width.
+ */
+export function OnComputer({ computer }: { computer: { name: string; kind?: MachineKind | undefined } }) {
+  const Icon = computer.kind ? MACHINE_ICONS[computer.kind] : Laptop
+  return (
+    <span className="flex min-w-0 max-w-40 shrink-[4] items-center gap-1 text-xs text-muted-foreground">
+      <Icon className="h-3 w-3 shrink-0" aria-hidden />
+      <span className="truncate">on {computer.name}</span>
+    </span>
+  )
+}

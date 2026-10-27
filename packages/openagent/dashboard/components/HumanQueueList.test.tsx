@@ -51,12 +51,16 @@ describe('the Human Queue\'s rows', () => {
   test('a run on another of the person\'s computers says which; one of this computer\'s says nothing more', () => {
     render(
       <HumanQueueList
-        items={[item({ kind: 'awaiting', title: 'Asks there', question: 'q?', agentId: 'r1', awaitId: 'q', computer: 'Suleimans-MacBook-Pro' }), item({ kind: 'uncommitted', title: 'Left here', agentId: 'r2' })]}
+        items={[item({ kind: 'awaiting', title: 'Asks there', question: 'q?', agentId: 'r1', awaitId: 'q', computer: { name: 'Suleimans-MacBook-Pro', kind: 'computer' } }), item({ kind: 'uncommitted', title: 'Left here', agentId: 'r2' })]}
         onOpenAgent={() => {}}
       />,
     )
     const rows = screen.getAllByRole('listitem').map(row => row.textContent)
     expect(rows).toEqual(['Needs answerAsks thereq?on Suleimans-MacBook-Pro', 'Needs commitLeft here'])
+    // The icon of the computer's kind, as the project picker marks another computer's project.
+    const [there, here] = screen.getAllByRole('listitem')
+    expect(there!.querySelector('.lucide-laptop')).toBeTruthy()
+    expect(here!.querySelector('.lucide-laptop')).toBeNull()
   })
 
   test('the words are one rule, for every list that shows these rows', () => {

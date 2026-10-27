@@ -33,10 +33,10 @@ test('a computer\'s items are named by the projects here, a run\'s marked with i
   const named = namedHere(
     { items: [item({ projectId: 'shop-b', kind: 'awaiting', agentId: 'r1' }), item({ projectId: 'other-b', url: 'https://x/1' }), item({ projectId: 'gone' })], whole: ['shop-b', 'gone'] },
     id => here[id],
-    'MacBook',
+    { name: 'MacBook', kind: 'computer' },
   )
   assert.deepEqual(named, {
-    items: [item({ projectId: 'shop-a', kind: 'awaiting', agentId: 'r1', computer: 'MacBook' }), item({ projectId: 'other-b~m1', url: 'https://x/1' })],
+    items: [item({ projectId: 'shop-a', kind: 'awaiting', agentId: 'r1', computer: { name: 'MacBook', kind: 'computer' } }), item({ projectId: 'other-b~m1', url: 'https://x/1' })],
     whole: ['shop-a'],
   })
 })
@@ -50,8 +50,8 @@ test('the Human Queue with the other computers\': named as listed here, once eac
     said: [
       {
         items: [
-          item({ url: 'https://x/1', title: 'the run that opened it', agentId: 'theirs', computer: 'MacBook', createdAt: '2026-10-27T09:00:00Z' }),
-          item({ kind: 'awaiting', projectId: 'other~m1', projectName: 'as there', agentId: 'r2', awaitId: 'q', computer: 'MacBook', createdAt: '2026-10-27T10:00:00Z' }),
+          item({ url: 'https://x/1', title: 'the run that opened it', agentId: 'theirs', computer: { name: 'MacBook', kind: 'computer' }, createdAt: '2026-10-27T09:00:00Z' }),
+          item({ kind: 'awaiting', projectId: 'other~m1', projectName: 'as there', agentId: 'r2', awaitId: 'q', computer: { name: 'MacBook', kind: 'computer' }, createdAt: '2026-10-27T10:00:00Z' }),
           item({ projectId: 'not-listed', url: 'https://x/9' }),
         ],
         whole: ['shop', 'other~m1'],
@@ -65,7 +65,7 @@ test('the Human Queue with the other computers\': named as listed here, once eac
   ])
   const merged = withMachinesQueue(own, theirs, names)
   assert.deepEqual(
-    merged.items.map(one => [one.projectName, one.title, one.computer]),
+    merged.items.map(one => [one.projectName, one.title, one.computer?.name]),
     [
       ['other', 't', 'MacBook'],
       ['shop', 'the run that opened it', 'MacBook'],

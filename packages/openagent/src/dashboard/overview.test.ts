@@ -149,7 +149,7 @@ test('buildOverview names the machine that started a run when it is not this one
     overview.active.map(r => ({ id: r.agentId, computer: r.computer })),
     [
       { id: 'mine', computer: undefined },
-      { id: 'theirs', computer: 'rom-thinkpad-x280' },
+      { id: 'theirs', computer: { name: 'rom-thinkpad-x280' } },
       { id: 'unknown', computer: undefined },
     ],
   )
@@ -166,14 +166,14 @@ test('buildOverview lists the runs the other computers say are running, by the m
     queue: async () => [],
     machineRuns: async ({ id }) =>
       id === 'a'
-        ? [run('sent', 'running', 2, { remoteLabel: 'Droplet' }), run('asked', 'waiting', 3, { remoteLabel: 'Droplet' }), run('here', 'running', 1, { remoteLabel: 'Droplet' })]
+        ? [run('sent', 'running', 2, { remoteLabel: 'Droplet', remoteKind: 'server' }), run('asked', 'waiting', 3, { remoteLabel: 'Droplet' }), run('here', 'running', 1, { remoteLabel: 'Droplet' })]
         : [run('there', 'running', 4, { remoteLabel: 'MacBook' }), run('gone', 'unknown', 5, { remoteLabel: 'MacBook' })],
   })
   assert.deepEqual(
     overview.active.map(r => ({ project: r.projectId, id: r.agentId, computer: r.computer })),
     [
-      { project: 'them~m1', id: 'there', computer: 'MacBook' },
-      { project: 'a', id: 'sent', computer: 'Droplet' },
+      { project: 'them~m1', id: 'there', computer: { name: 'MacBook' } },
+      { project: 'a', id: 'sent', computer: { name: 'Droplet', kind: 'server' } },
       { project: 'a', id: 'here', computer: undefined },
     ],
   )
