@@ -99,9 +99,10 @@ export function HumanQueueList({
                   has a line of its own under what is needed, where, and since when. */}
               <span className={cn('min-w-0 shrink truncate text-foreground md:max-w-[50%]', grouped ? 'max-md:flex-1' : 'max-md:order-1 max-md:basis-full')}>{item.title}</span>
               <span className="min-w-0 truncate text-muted-foreground md:flex-auto max-md:order-2 max-md:basis-full">{detail}</span>
+              {/* A run on another of the person's computers is marked by its kind's icon before the
+                  project, as the list of runs marks it: a row has no room for its name too. */}
+              {item.computer && <OnComputer computer={item.computer} named={false} />}
               {projects && <span className="shrink-0 text-xs text-muted-foreground">{item.projectName}</span>}
-              {/* A run on another of the person's computers says which, as the list of runs does. */}
-              {item.computer && <OnComputer computer={item.computer} />}
               <span className="min-w-14 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{since}</span>
               <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
             </>
@@ -126,7 +127,7 @@ export function HumanQueueList({
                 >
                   {row}
                 </TooltipTrigger>
-                <TooltipContent>{hoverOf(item)}</TooltipContent>
+                <TooltipContent>{item.computer ? `${hoverOf(item)} · runs on ${item.computer.name}` : hoverOf(item)}</TooltipContent>
               </Tooltip>
             </li>
           )

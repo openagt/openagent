@@ -56,10 +56,11 @@ describe('the Human Queue\'s rows', () => {
       />,
     )
     const rows = screen.getAllByRole('listitem').map(row => row.textContent)
-    expect(rows).toEqual(['Needs answerAsks thereq?on Suleimans-MacBook-Pro', 'Needs commitLeft here'])
-    // The icon of the computer's kind, as the project picker marks another computer's project.
+    expect(rows).toEqual(['Needs answerAsks thereq?', 'Needs commitLeft here'])
+    // The icon of the computer's kind, as the list of runs marks a run there, named to a screen reader.
     const [there, here] = screen.getAllByRole('listitem')
     expect(there!.querySelector('.lucide-laptop')).toBeTruthy()
+    expect(screen.getByRole('img', { name: 'Runs on Suleimans-MacBook-Pro' })).toBeTruthy()
     expect(here!.querySelector('.lucide-laptop')).toBeNull()
   })
 
