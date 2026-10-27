@@ -1,15 +1,26 @@
 {
   "id": "2026-10-27T00-07-28-125Z",
   "startedAt": "2026-10-27T00:07:31.284Z",
-  "status": "running",
+  "endedAt": "2026-10-27T00:07:45.437Z",
+  "status": "done",
   "intent": "Reply with the single word OK and nothing else. syncb1",
+  "title": "Reply OK sync check",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "branch": "agent-2026-10-27T00-07-28-125Z",
+  "cost": 0.058277999999999996,
+  "contextTokens": 17488,
   "caller": {
     "runner": {
       "host": "ubuntu-s-1vcpu-2gb-fra1",
-      "pid": 783073
+      "pid": 783073,
+      "baseCommit": "f462407c501c69c6f142934d998217f6b3c9fe28"
     },
-    "host": "ubuntu-s-1vcpu-2gb-fra1"
+    "pid": 783073,
+    "host": "ubuntu-s-1vcpu-2gb-fra1",
+    "baseCommit": "f462407c501c69c6f142934d998217f6b3c9fe28",
+    "kind": "prompt",
+    "workspace": "/home/openagent/projects/openagent/.branches/agent-2026-10-27T00-07-28-125Z",
+    "sessionId": "c46ac737-e1df-4d65-8f2a-55496a4934b9"
   }
 }
