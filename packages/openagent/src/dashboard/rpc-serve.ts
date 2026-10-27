@@ -5,6 +5,7 @@ import { RPC_HANDLERS, RPC_EVENT_STREAM } from '../dashboard-rpc/index.js'
 import { followRunsChanged } from '../dashboard-rpc/runs-changed.js'
 import { ELSEWHERE_FORWARDED } from '../dashboard-rpc/relay-dispatch.js'
 import { isElsewhereId, type OwnProject } from './elsewhere.js'
+import type { MachinesQueue } from './machine-interventions.js'
 import type { ProjectSummary } from './projects.js'
 import { errorMessage } from '../error-message.js'
 import { PERSON_HEADER, asCaller } from './person.js'
@@ -89,6 +90,8 @@ export interface RemoteAgents {
   elsewhereHome(projectId: string): Promise<{ machine: string; project: OwnProject } | undefined>
   /** Make a page's call about another computer's project on that computer, and answer what it answered. */
   forward(projectId: string, fn: string, args: unknown[]): Promise<unknown>
+  /** What the person's other computers say of their Human Queues, each named as its project is here (machine-interventions.ts). */
+  machinesQueue(): Promise<MachinesQueue>
   /** Where this computer's copy of the project at `address` stands; with `bring`, cloned and added when there is none, on its own. */
   bringHere(address: string, bring?: BringProject): Promise<RelayProject>
 }

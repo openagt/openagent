@@ -7,8 +7,10 @@ import type { OpenAgentEvent } from './events.js'
 import type { StartAgentOptions, StartAgentResult, AddProjectResult, RemoveProjectResult, StartedInResult } from './dashboard/index.js'
 import type { EventsSource, RemoteAgents, SavedMachine } from './dashboard/rpc-serve.js'
 import { RelayedAgents, machineCall, relayRpc, remoteFacts, startRemoteAgent, type BringProject, type RelayProject, type RemoteTarget } from './dashboard/remote-run.js'
-import { OwnProjectsAsked, elsewhereHomes, elsewhereSummary, homeOf as elsewhereHomeOf, idInLineName, isElsewhereId, lineNameOf, type ElsewhereHome } from './dashboard/elsewhere.js'
-import type { ProjectSummary } from './dashboard/projects.js'
+import { OwnProjectsAsked, elsewhereHomes, elsewhereId, elsewhereSummary, homeOf as elsewhereHomeOf, idInLineName, isElsewhereId, lineNameOf, type ElsewhereHome, type OwnProject } from './dashboard/elsewhere.js'
+import { AnswersKept, interventionsOf, namedHere, type MachinesQueue } from './dashboard/machine-interventions.js'
+import type { Intervention } from './dashboard/interventions.js'
+import type { ProjectSummary, ProjectionRead } from './dashboard/projects.js'
 import { MachineRunsKept, RUNS_WAIT_MS, type MachineRuns } from './dashboard/machine-runs.js'
 import { ownRunsWatch } from './dashboard/runs-watch.js'
 import { cloneProject, cloneTarget } from './clone-project.js'
@@ -30,6 +32,7 @@ import { projectGitHost } from './store/git-host.js'
 import { providedDataChanged } from './store/provided.js'
 import { projectAddresses } from './project-address.js'
 import { callerAtPage } from './dashboard/person.js'
+import { machineName } from './reached-by-line.js'
 
 /**
  * What the daemon does for a project (#393): start a run, add a project, and relay a run to and
@@ -61,6 +64,8 @@ const RUNS_FOLLOWED_MS = 30_000
 
 /** How long one of the person's computers gets to say its projects: a list does not wait on it past the first time (elsewhere.ts). */
 const PROJECTS_ASKED_MS = 8_000
+/** How long one of the person's computers gets to say its Human Queue: its PRs are asked of the git host (machine-interventions.ts). */
+const QUEUE_ASKED_MS = 15_000
 
 /** How many projects this computer clones at once for other machines; one more is told to ask again. */
 const MAX_COMING = 3
@@ -246,6 +251,38 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     const addresses = await Promise.all((await listProjects(undefined, env).catch(() => [])).map(record => addressOf(record.path)))
     return elsewhereHomes(own, new Set(addresses.filter(address => address !== undefined))).map(elsewhereSummary)
   }
+  // The Human Queues of the person's other computers (machine-interventions.ts): each says its own
+  // projects' items, named here by the project as it is listed here, one of a run there marked with
+  // its computer. None for a person the owner invited, as their projects are none.
+  const queuesAsked = new AnswersKept<MachineRecord, ProjectionRead<Intervention>>(async machine => {
+    const said = await machineCall(machine, 'onOwnInterventions', [], QUEUE_ASKED_MS)
+    if (!said.ok) throw new Error(said.error)
+    return interventionsOf(said.ret)
+  })
+  const machinesQueue = async (): Promise<MachinesQueue> => {
+    if (callerAtPage() !== undefined) return { said: [], unread: [] }
+    const own = (await ownMachines()).filter(machine => (machine.projects ?? []).length > 0)
+    const [answers, records] = await Promise.all([queuesAsked.of(own), listProjects(undefined, env).catch(() => [])])
+    // A project as it is listed here, by its repository's address, else by its computer and its id there: as elsewhereHomes lists them.
+    const keyOf = (machine: MachineRecord, project: OwnProject): string => project.address ?? `${machine.url} ${lineNameOf(project)}`
+    const listed = new Map<string, string>()
+    for (const record of records) {
+      const address = await addressOf(record.path)
+      if (address !== undefined && !listed.has(address)) listed.set(address, record.id)
+    }
+    for (const home of elsewhereHomes(own, new Set(listed.keys()))) listed.set(keyOf(home.machine, home.project), elsewhereId(home.project.id, home.machine.id))
+    const queue: MachinesQueue = { said: [], unread: [] }
+    for (const machine of own) {
+      const idHere = (theirs: string): string | undefined => {
+        const project = machine.projects?.find(one => one.id === theirs)
+        return project && listed.get(keyOf(machine, project))
+      }
+      const said = answers.get(machine.id)
+      if (said) queue.said.push(namedHere(said, idHere, machineName(machine)))
+      else queue.unread.push(...(machine.projects ?? []).flatMap(project => idHere(project.id) ?? []))
+    }
+    return queue
+  }
   // Another computer's project by its id here, and how a call reaches it there.
   const elsewhereAt = async (id: string): Promise<{ home: ElsewhereHome<MachineRecord>; target: RemoteTarget } | undefined> => {
     if (callerAtPage() !== undefined) return undefined
@@ -328,6 +365,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
       return at && { machine: at.home.machine.id, project: at.home.project }
     },
     bringHere: (address, bring) => bringProject(address, bring),
+    machinesQueue,
     forward: async (project, fn, args) => {
       const at = await elsewhereAt(project)
       if (!at) throw new Error('That project is no longer listed on any of your computers.')

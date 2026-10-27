@@ -10,7 +10,8 @@ import { readDocs, type WorkspaceDoc } from '../dashboard/docs.js'
 import { collectQueue, type ProjectQueue } from '../dashboard/queue.js'
 import { buildOverview, buildRecentAgents, type Overview, type RecentAgent } from '../dashboard/overview.js'
 import { buildInterventions, type Intervention } from '../dashboard/interventions.js'
-import type { ProjectionRead } from '../dashboard/projects.js'
+import { withMachinesQueue, type MachinesQueue } from '../dashboard/machine-interventions.js'
+import type { ProjectionRead, ProjectSummary } from '../dashboard/projects.js'
 import { buildActivity, type Activity } from '../dashboard/activity.js'
 import { buildDashboard, type DashboardData } from '../dashboard/dashboard.js'
 import { readGitStatus, type GitStatus } from '../dashboard/git-status.js'
@@ -87,22 +88,29 @@ async function withProjects<T>(build: (projects: Awaited<ReturnType<ReturnType<t
  * instead of losing it.
  */
 export async function onAgents(projectId: string): Promise<AgentMeta[]> {
+  return runRows(projectId, await resolveProjectPath(projectId))
+}
+
+/** A project's runs as its list shows them: off its folder here (`cwd`), else as the computer it is on says them. */
+async function runRows(projectId: string, cwd: string | undefined): Promise<AgentMeta[]> {
   // The relayed-agent stubs (#1077). Read up front by habit rather than by necessity now: the
   // context was request-scoped and evaporated at the first await, so reading it late dropped
   // every remote agent from the list on a reload. It is wired once at start-up (F3), so an await
   // no longer costs anything — nothing here depends on this staying above one.
   const remote = contextRemote()?.list(projectId) ?? []
-  const cwd = await resolveProjectPath(projectId)
   const machineOf = await contextRemote().machineNames()
   const local = cwd ? await withRowMarks(cwd, (await projectRuns(cwd)).map(agent => forDashboard(agent, machineOf))) : isElsewhereId(projectId) ? (await elsewhereRuns(projectId)).map(agent => forDashboard(agent, machineOf)) : []
   return withFollowed(remote, local, agentId => contextRemote().sent(agentId))
 }
 
 /** The runs of another computer's project (elsewhere.ts), as that computer says them: there are no records of them here. */
-async function elsewhereRuns(projectId: string): Promise<AgentMeta[]> {
-  const machines = await contextRemote()
-    .elsewhereRuns(projectId)
-    .catch((): MachineRuns[] => [])
+function elsewhereRuns(projectId: string): Promise<AgentMeta[]> {
+  return saidByMachines(contextRemote().elsewhereRuns(projectId))
+}
+
+/** The runs the saved machines say they run, as recorded: one a machine that does not answer runs is not known to go on. */
+async function saidByMachines(asked: Promise<MachineRuns[]>): Promise<AgentMeta[]> {
+  const machines = await asked.catch((): MachineRuns[] => [])
   return withMachineRuns([], machines.map(machine => ({ ...machine, runs: machine.runs.map(asRecorded) })))
 }
 
@@ -427,22 +435,24 @@ export async function onQueue(): Promise<ProjectQueue[]> {
 
 /** The cross-project Overview (#437): what is running now, the queue size, and recent projects. */
 export async function onOverview(): Promise<Overview> {
-  return withProjects(buildOverview)
+  // The runs going on the person's other computers too, of a project here and of one only they have.
+  const remote = contextRemote()
+  const [machineOf, elsewhere] = await Promise.all([remote.machineNames(), remote.elsewhere().catch((): ProjectSummary[] => [])])
+  return withProjects(projects =>
+    buildOverview([...projects, ...elsewhere], {
+      machineRuns: async project =>
+        (await saidByMachines(project.machine === undefined ? remote.machineRuns(project.path) : remote.elsewhereRuns(project.id))).map(agent => markMachine(agent, machineOf)),
+    }),
+  )
 }
 
 /** Recent sessions pooled across every project (#shared-shell), newest first, for the home rail. */
 export async function onRecentAgents(): Promise<RecentAgent[]> {
-  // The runs this daemon follows on a machine live in its memory only: listed with each project's own, as in the project's list.
-  const remote = contextRemote()
-  const machineOf = await remote.machineNames()
-  return withProjects(projects =>
-    buildRecentAgents(projects, {
-      agents: async path => {
-        const followed = projects.filter(project => project.path === path).flatMap(project => remote.list(project.id))
-        return withFollowed(followed, await withRowMarks(path, (await projectRuns(path)).map(agent => forDashboard(agent, machineOf))), agentId => remote.sent(agentId))
-      },
-    }),
-  )
+  // Each project's runs as its own list shows them, the projects only the person's other computers have too.
+  const elsewhere = await contextRemote()
+    .elsewhere()
+    .catch((): ProjectSummary[] => [])
+  return withProjects(projects => buildRecentAgents([...projects, ...elsewhere], { agents: project => runRows(project.id, project.machine === undefined ? project.path : undefined) }))
 }
 
 
@@ -456,6 +466,22 @@ export async function onRecentAgents(): Promise<RecentAgent[]> {
  * backlog the moment the git host answers.
  */
 export async function onInterventions(): Promise<ProjectionRead<Intervention>> {
+  // What needs the person on their other computers too: a run's question there, the PRs of a project only they have.
+  const remote = contextRemote()
+  const [own, machines, elsewhere] = await Promise.all([
+    withProjects(projects => buildInterventions(projects).then(read => ({ read, projects }))),
+    remote.machinesQueue().catch((): MachinesQueue => ({ said: [], unread: [] })),
+    remote.elsewhere().catch((): ProjectSummary[] => []),
+  ])
+  return withMachinesQueue(own.read, machines, new Map([...own.projects, ...elsewhere].map(project => [project.id, project.name])))
+}
+
+/**
+ * This computer's own Human Queue, for another computer of the person's that shows it beside its
+ * own (machine-interventions.ts): the items of this computer's projects only, never of the
+ * projects it lists of other computers, so no computer asks back the one that asked it.
+ */
+export async function onOwnInterventions(): Promise<ProjectionRead<Intervention>> {
   return withProjects(buildInterventions)
 }
 
@@ -464,8 +490,12 @@ export async function onInterventions(): Promise<ProjectionRead<Intervention>> {
  * first, with the projects that were read whole beside them (#1625) — see {@link onInterventions}.
  */
 export async function onActivity(): Promise<ProjectionRead<Activity>> {
-  // Another computer's runs start and end by its own word, as the lists show them.
-  return withProjects(projects => buildActivity(projects, { readAgents: projectRuns }))
+  // Another computer's runs start and end by its own word, as the lists show them, and so do the
+  // runs of a project only another computer has.
+  const elsewhere = await contextRemote()
+    .elsewhere()
+    .catch((): ProjectSummary[] => [])
+  return withProjects(projects => buildActivity([...projects, ...elsewhere], { readAgents: project => (project.machine === undefined ? projectRuns(project.path) : elsewhereRuns(project.id)) }))
 }
 
 /** The Overview dashboard page (#471): the {@link onOverview} rollup plus agent counts, run-status totals, and activity. */

@@ -40,8 +40,8 @@ export interface Activity {
 
 /** Injectable seam so {@link buildActivity} is unit-testable off disk. */
 export interface ActivityDeps {
-  /** A project's runs, live prepended to the archived history, newest-first. Defaults to disk. */
-  readAgents?: (cwd: string) => Promise<AgentMeta[]>
+  /** A project's runs, live prepended to the archived history, newest-first: off its folder by default, as its computer says them for another computer's. */
+  readAgents?: (project: ProjectSummary) => Promise<AgentMeta[]>
 }
 
 /** Map one agent to its current activity item: `started` while running, else `finished`. */
@@ -74,11 +74,11 @@ export async function buildActivity(
   projects: ProjectSummary[],
   deps: ActivityDeps = {},
 ): Promise<ProjectionRead<Activity>> {
-  const readAgents = deps.readAgents ?? readAllAgents
+  const readAgents = deps.readAgents ?? (project => readAllAgents(project.path))
   const items: Activity[] = []
   const whole: string[] = []
   for (const project of projects) {
-    const read = await readAgents(project.path).catch(() => undefined)
+    const read = await readAgents(project).catch(() => undefined)
     if (!read) continue
     whole.push(project.id)
     for (const agent of read.slice(0, RECENT_RUNS)) items.push(activityFor(project, agent))

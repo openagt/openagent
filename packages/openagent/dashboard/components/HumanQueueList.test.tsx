@@ -48,6 +48,17 @@ describe('the Human Queue\'s rows', () => {
     expect(screen.getByText('shop')).toBeTruthy()
   })
 
+  test('a run on another of the person\'s computers says which; one of this computer\'s says nothing more', () => {
+    render(
+      <HumanQueueList
+        items={[item({ kind: 'awaiting', title: 'Asks there', question: 'q?', agentId: 'r1', awaitId: 'q', computer: 'Suleimans-MacBook-Pro' }), item({ kind: 'uncommitted', title: 'Left here', agentId: 'r2' })]}
+        onOpenAgent={() => {}}
+      />,
+    )
+    const rows = screen.getAllByRole('listitem').map(row => row.textContent)
+    expect(rows).toEqual(['Needs answerAsks thereq?on Suleimans-MacBook-Pro', 'Needs commitLeft here'])
+  })
+
   test('the words are one rule, for every list that shows these rows', () => {
     expect(['awaiting', 'uncommitted', 'unpushed', 'pr'].map(kind => needsWord(kind as Intervention['kind']))).toEqual(['Needs answer', 'Needs commit', 'Needs PR', 'Needs merge'])
     expect(needsWord('unpushed', false)).toBe('Needs push')

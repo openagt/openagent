@@ -71,7 +71,7 @@ test('buildRecentAgents pools every project newest-first and tags each with its 
     '/b': [agent('b1', '2026-07-13T11:00:00Z')],
   }
   const recent = await buildRecentAgents([project('alpha', '/a'), project('beta', '/b')], {
-    agents: async cwd => agents[cwd] ?? [],
+    agents: async ({ path }) => agents[path] ?? [],
   })
   assert.deepEqual(
     recent.map(r => ({ project: r.projectName, id: r.agent.id })),
@@ -85,8 +85,8 @@ test('buildRecentAgents pools every project newest-first and tags each with its 
 
 test('buildRecentAgents tolerates a project whose runs cannot be read', async () => {
   const recent = await buildRecentAgents([project('ok', '/ok'), project('bad', '/bad')], {
-    agents: async cwd => {
-      if (cwd === '/bad') throw new Error('unreadable')
+    agents: async ({ path }) => {
+      if (path === '/bad') throw new Error('unreadable')
       return [agent('x', '2026-07-13T10:00:00Z')]
     },
   })
@@ -146,11 +146,62 @@ test('buildOverview names the machine that started a run when it is not this one
     host: 'this-mac',
   })
   assert.deepEqual(
-    overview.active.map(r => ({ id: r.agentId, host: r.host })),
+    overview.active.map(r => ({ id: r.agentId, computer: r.computer })),
     [
-      { id: 'mine', host: undefined },
-      { id: 'theirs', host: 'rom-thinkpad-x280' },
-      { id: 'unknown', host: undefined },
+      { id: 'mine', computer: undefined },
+      { id: 'theirs', computer: 'rom-thinkpad-x280' },
+      { id: 'unknown', computer: undefined },
+    ],
+  )
+})
+
+test('buildOverview lists the runs the other computers say are running, by the machine they are on', async () => {
+  const at = (minute: number) => `2026-07-13T12:${String(minute).padStart(2, '0')}:00Z`
+  const run = (id: string, status: AgentMeta['status'], minute: number, over: Partial<AgentMeta> = {}): AgentMeta =>
+    ({ version: 1, status, id, startedAt: at(minute), updatedAt: at(minute), intent: id, ...over }) as AgentMeta
+  const theirs = { ...project('them~m1', '/home/them'), machine: 'http://laptop' }
+  const overview = await buildOverview([project('a', '/a'), theirs], {
+    liveAgents: async cwd => (cwd === '/a' ? [{ ...run('here', 'running', 1), cwd: '/wt/here' }] : []),
+    agents: async () => [],
+    queue: async () => [],
+    machineRuns: async ({ id }) =>
+      id === 'a'
+        ? [run('sent', 'running', 2, { remoteLabel: 'Droplet' }), run('asked', 'waiting', 3, { remoteLabel: 'Droplet' }), run('here', 'running', 1, { remoteLabel: 'Droplet' })]
+        : [run('there', 'running', 4, { remoteLabel: 'MacBook' }), run('gone', 'unknown', 5, { remoteLabel: 'MacBook' })],
+  })
+  assert.deepEqual(
+    overview.active.map(r => ({ project: r.projectId, id: r.agentId, computer: r.computer })),
+    [
+      { project: 'them~m1', id: 'there', computer: 'MacBook' },
+      { project: 'a', id: 'sent', computer: 'Droplet' },
+      { project: 'a', id: 'here', computer: undefined },
+    ],
+  )
+})
+
+test('buildOverview reads no folder of a project only another computer has', async () => {
+  const read: string[] = []
+  const theirs = { ...project('them~m1', '/home/them'), machine: 'http://laptop' }
+  const queued: string[][] = []
+  await buildOverview([project('a', '/a'), theirs], {
+    liveAgents: async cwd => (read.push(cwd), []),
+    agents: async cwd => (read.push(cwd), []),
+    queue: async projects => (queued.push(projects.map(p => p.id)), []),
+  })
+  assert.deepEqual(read, ['/a', '/a'])
+  assert.deepEqual(queued, [['a']])
+})
+
+test('buildRecentAgents asks for the runs by the project, so another computer\'s project is read as its computer says it', async () => {
+  const theirs = { ...project('them~m1', '/home/them'), machine: 'http://laptop' }
+  const recent = await buildRecentAgents([project('a', '/a'), theirs], {
+    agents: async ({ machine }) => (machine ? [agent('there', '2026-07-13T11:00:00Z')] : [agent('here', '2026-07-13T10:00:00Z')]),
+  })
+  assert.deepEqual(
+    recent.map(r => [r.projectId, r.agent.id]),
+    [
+      ['them~m1', 'there'],
+      ['a', 'here'],
     ],
   )
 })

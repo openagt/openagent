@@ -57,6 +57,8 @@ export interface Intervention {
   files?: number
   /** When the PR was opened (`pr`) or the agent last updated (the other two), ISO, for ordering. */
   createdAt?: string
+  /** The computer the run it is about runs on, when that is one of the person's other computers: the saved machine's name. */
+  computer?: string
 }
 
 /** Injectable seam so {@link buildInterventions} is unit-testable off disk. */

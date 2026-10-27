@@ -44,7 +44,7 @@ export function Agents({
                 key={`${a.projectId}:${a.agentId}`}
                 label={activeLabel(a)}
                 cloud={a.cloud}
-                host={a.host}
+                computer={a.computer}
                 at={a.updatedAt}
                 projectName={a.projectName}
                 onOpen={() => onSelectAgent(a.projectId, a.agentId)}
@@ -60,7 +60,7 @@ export function Agents({
 function AgentRow({
   label,
   cloud,
-  host,
+  computer,
   at,
   projectName,
   onOpen,
@@ -69,8 +69,8 @@ function AgentRow({
   label: string
   /** A web run's cloud side at work (#1668): say where it is, since no local process backs the row. */
   cloud?: 'in-cloud' | 'waiting' | undefined
-  /** The machine whose daemon started it (#1648), when that is not this one. */
-  host?: string | undefined
+  /** The computer it runs on, when that is not this one (#1648). */
+  computer?: string | undefined
   /** ISO: the session's last activity. */
   at: string | undefined
   projectName: string
@@ -90,7 +90,7 @@ function AgentRow({
         <span className="min-w-0 flex-1 truncate text-sm">{label}</span>
         {cloud && <span className="shrink-0 text-[10px] uppercase text-muted-foreground">{cloud === 'waiting' ? 'waiting' : 'in cloud'}</span>}
         <span className="shrink-0 text-xs text-muted-foreground">{projectName}</span>
-        {host && <span className="shrink-0 text-xs text-muted-foreground">from {host}</span>}
+        {computer && <span className="shrink-0 text-xs text-muted-foreground">on {computer}</span>}
 
         {at && (
           <Tooltip>

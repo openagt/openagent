@@ -12,8 +12,9 @@ import type { DashboardOptions } from '../dashboard/server.js'
  * the parts it cares about overridden.
  */
 /** No other computer of the person's: what a test that builds its own `remote` spreads in when it is about none. */
-export const NO_ELSEWHERE: Pick<RemoteAgents, 'elsewhere' | 'elsewhereRuns' | 'followElsewhereRuns' | 'elsewhereHome' | 'bringHere' | 'forward'> = {
+export const NO_ELSEWHERE: Pick<RemoteAgents, 'elsewhere' | 'elsewhereRuns' | 'followElsewhereRuns' | 'elsewhereHome' | 'bringHere' | 'forward' | 'machinesQueue'> = {
   elsewhere: async () => [],
+  machinesQueue: async () => ({ said: [], unread: [] }),
   elsewhereRuns: async () => [],
   followElsewhereRuns: () => () => {},
   elsewhereHome: async () => undefined,

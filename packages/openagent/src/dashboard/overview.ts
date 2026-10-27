@@ -31,8 +31,11 @@ export interface ActiveAgent {
    * cloud side is the agent, and "no agents working" over a waiting cloud session was a lie.
    */
   cloud?: 'in-cloud' | 'waiting'
-  /** The machine whose daemon started it (#1648), only when that is not this one. */
-  host?: string
+  /**
+   * The computer it runs on, only when that is not this one: the saved machine's name for a run of
+   * one of the person's other computers, else the computer its record names (#1648).
+   */
+  computer?: string
 }
 
 /** One recently active project, most-recent first. */
@@ -67,7 +70,8 @@ const RECENT_RUNS_LIMIT = 30
 
 /** Injectable reader so {@link buildRecentAgents} is unit-testable off disk. */
 export interface RecentAgentsDeps {
-  agents?: (cwd: string) => Promise<AgentMeta[]>
+  /** A project's runs: off its folder for one of this computer's, as its computer says them for another's. */
+  agents?: (project: ProjectSummary) => Promise<AgentMeta[]>
 }
 
 /**
@@ -77,11 +81,11 @@ export interface RecentAgentsDeps {
  * whose agents cannot be read simply contributes nothing.
  */
 export async function buildRecentAgents(projects: ProjectSummary[], deps: RecentAgentsDeps = {}): Promise<RecentAgent[]> {
-  const readAgents = deps.agents ?? readAllAgents
+  const readAgents = deps.agents ?? (project => readAllAgents(project.path))
   // Every project at once: each one's read is a git read of its branches too (the rows' marks), and
   // one after the other the list waited for all of them in turn. Kept in the projects' order, so
   // the first project to list a run still keeps it below.
-  const read = await Promise.all(projects.map(project => readAgents(project.path).catch((): AgentMeta[] => [])))
+  const read = await Promise.all(projects.map(project => readAgents(project).catch((): AgentMeta[] => [])))
   const all: RecentAgent[] = projects.flatMap((project, at) => (read[at] ?? []).map(agent => ({ projectId: project.id, projectName: project.name, agent })))
   all.sort((a, b) => (b.agent.startedAt ?? '').localeCompare(a.agent.startedAt ?? ''))
   // One row per run (#1648): two checkouts of one repository share their archive, so every run
@@ -99,14 +103,21 @@ export interface OverviewDeps {
   /** Whether the bridge holds a question for that cloud session (default: the daemon's bridge store). */
   waiting?: (sessionId: string) => boolean
   now?: () => number
+  /**
+   * The runs the person's other computers say they run of a project, each marked with the saved
+   * machine it is (`remoteLabel`): of a project this computer has too, and of one only they have.
+   */
+  machineRuns?: (project: ProjectSummary) => Promise<AgentMeta[]>
   /** This machine's hostname; `node:os` in production. */
   host?: string
 }
 
 /**
  * Build the cross-project Overview: the running agents (every live agent of each project, one per
- * worktree since #736), the total of open queue entries (from {@link collectQueue}), and the most
- * recently active projects (by {@link ProjectSummary.lastActivityAt}). Forgiving — a project
+ * worktree since #736, and every run the person's other computers say is running), the total of
+ * open queue entries (from {@link collectQueue}), and the most recently active projects (by
+ * {@link ProjectSummary.lastActivityAt}). A project of another computer's ({@link ProjectSummary.machine})
+ * has no folder here: only what its computer says of its runs is read. Forgiving — a project
  * with no live run, or none running, simply contributes nothing to `active`.
  */
 export async function buildOverview(projects: ProjectSummary[], deps: OverviewDeps = {}): Promise<Overview> {
@@ -114,6 +125,7 @@ export async function buildOverview(projects: ProjectSummary[], deps: OverviewDe
   const queue = deps.queue ?? (p => collectQueue(p))
   const agents = deps.agents ?? readAllAgents
   const waiting = deps.waiting ?? (sessionId => bridgeQuestions().waiting(sessionId))
+  const machineRuns = deps.machineRuns ?? (async () => [])
   const now = (deps.now ?? Date.now)()
   const thisHost = deps.host ?? hostname()
 
@@ -129,11 +141,14 @@ export async function buildOverview(projects: ProjectSummary[], deps: OverviewDe
     status: meta.status,
     ...(meta.intent ? { intent: meta.intent } : {}),
     ...(meta.updatedAt ? { updatedAt: meta.updatedAt } : {}),
-    // Another machine's daemon started it (#1648): the shared data branch shows its runs here too.
-    ...(meta.host !== undefined && meta.host !== thisHost ? { host: meta.host } : {}),
-
+    // A saved machine's run by the machine's name; another computer's daemon started it otherwise
+    // (#1648): the shared data branch shows its runs here too.
+    ...(meta.remoteLabel !== undefined ? { computer: meta.remoteLabel } : meta.host !== undefined && meta.host !== thisHost ? { computer: meta.host } : {}),
   })
-  for (const project of projects) {
+  const own = projects.filter(project => project.machine === undefined)
+  // What the person's other computers run, once each: a run listed here as this computer's is not listed again.
+  const theirs = await Promise.all(projects.map(project => machineRuns(project).catch((): AgentMeta[] => [])))
+  for (const project of own) {
     // Every live agent of the project (#738), not just the one that used to sit at its path.
     for (const meta of await liveAgents(project.path).catch(() => [])) {
       if (meta.status !== 'running') continue
@@ -149,9 +164,17 @@ export async function buildOverview(projects: ProjectSummary[], deps: OverviewDe
       active.push({ ...entry(project, meta, project.path), cloud: state })
     }
   }
+  const listed = new Set(active.map(agent => agent.agentId))
+  projects.forEach((project, at) => {
+    for (const meta of theirs[at] ?? []) {
+      if (meta.status !== 'running' || listed.has(meta.id)) continue
+      listed.add(meta.id)
+      active.push(entry(project, meta, project.path))
+    }
+  })
   active.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
 
-  const queues = await queue(projects)
+  const queues = await queue(own)
   const queueOpen = queues.reduce((sum, q) => sum + q.entries.length, 0)
 
   const recent = projects
