@@ -5,6 +5,7 @@ import { isActivated } from '../project.js'
 import { readAllAgents, type AgentMeta } from '../store/index.js'
 import type { ProjectError, StaysLocal } from '../project-errors.js'
 import { projectGitHost, type GitHostFor } from '../store/git-host.js'
+import { projectNameOf } from '../repository-address.js'
 
 /**
  * The multi-project read side (#392): projects the daemon serves come from the registry (#390),
@@ -68,11 +69,13 @@ export interface SummarizeDeps {
   readAgents?: (path: string) => Promise<AgentMeta[]>
   /** The project's git host. Defaults to {@link projectGitHost}. */
   gitHost?: GitHostFor
+  /** The project's name. Defaults to {@link projectNameOf}: its repository's. */
+  name?: (path: string) => Promise<string>
 }
 
 /** A project's runs, live prepended to the archived history. Forgiving: a failed read is `[]`. */
 /**
- * Derive a {@link ProjectSummary} from a registry record: its display name, whether
+ * Derive a {@link ProjectSummary} from a registry record: its name (its repository's), whether
  * it is still activated, and its last activity. Forgiving: a failed read reads as an
  * inactive project with no activity, never a throw.
  *
@@ -91,7 +94,7 @@ export async function summarizeProject(record: ProjectRecord, deps: SummarizeDep
   const summary: ProjectSummary = {
     id: record.id,
     path: record.path,
-    name: basename(record.path),
+    name: await (deps.name ?? projectNameOf)(record.path).catch(() => basename(record.path)),
     activated,
     gitHost: (await (deps.gitHost ?? projectGitHost)(record.path).catch(() => undefined)) !== undefined,
   }

@@ -332,7 +332,8 @@ test('a saved machine is asked to clone a project of this computer\'s, by the pr
       await addProject(shop, at)
       await addProject(notes, at)
       await addMachine({ url, key: 'd1.key', door: `${url}${ENTER}`, label: 'Studio' })
-      const name = shop.split('/').at(-1)!
+      // Named as its repository is, whatever its folder here is called.
+      const name = 'Shop'
 
       assert.deepEqual(await sendProjectToMachine(projectId(shop), url), { ok: true, there: false })
       // This computer's own answer on the records, and its spelling of the address, ride the ask.

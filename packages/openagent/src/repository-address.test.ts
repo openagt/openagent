@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { addressOfRemote, spellingOfRemote, repositoryAddress } from './repository-address.js'
+import { addressOfRemote, projectNameOf, spellingOfRemote, repositoryAddress } from './repository-address.js'
 
 test('one repository reads the same however it was cloned', () => {
   for (const remote of [
@@ -50,6 +50,13 @@ test('repositoryAddress reads origin, and a repository with none has no address'
     throw new Error("error: No such remote 'origin'")
   }
   assert.equal(await repositoryAddress('/repo', none), undefined)
+})
+
+test("a project is named as its repository is, in the letters origin writes it with, so it reads the same on every computer; one with no address by its folder", async () => {
+  assert.equal(await projectNameOf('/Users/me/Projects/gemstack', async () => 'https://github.com/openagt/OpenAgent.git\n'), 'OpenAgent')
+  assert.equal(await projectNameOf('/home/openagent/projects/openagent', async () => 'git@github.com:openagt/OpenAgent.git\n'), 'OpenAgent')
+  assert.equal(await projectNameOf('/Users/me/notes', async () => Promise.reject(new Error("error: No such remote 'origin'"))), 'notes')
+  assert.equal(await projectNameOf('/Users/me/mirror', async () => '/srv/git/shop.git\n'), 'mirror')
 })
 
 test('a remote\'s spelling keeps the letters it was written with: what another machine is given to clone from', () => {

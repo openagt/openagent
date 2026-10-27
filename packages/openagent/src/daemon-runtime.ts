@@ -1,4 +1,4 @@
-import { basename, join, resolve, sep } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import { hostname } from 'node:os'
 import { stat } from 'node:fs/promises'
 import { findAgent, findCheckout, fromDiaryLine, isPidAlive, isRunId, projectBranches, readLiveMetas, resolveAgentDiary, type AgentMeta, type AnyDiaryLine } from './store/index.js'
@@ -18,7 +18,7 @@ import { dispatchRelayRpc } from './dashboard-rpc/relay-dispatch.js'
 import { asRecorded, onMachine } from './dashboard-rpc/reads.js'
 import { tailAgentEvents } from './dashboard-rpc/events-tail.js'
 import { addProject, isHostName, listMachines, listProjects, nameMachine, noteProjects, noteSeen, projectId, readPreferences, removeProject, type MachineRecord, type Preferences } from './registry.js'
-import { repositoryAddress } from './repository-address.js'
+import { projectNameOf, repositoryAddress } from './repository-address.js'
 import { writeHookLines } from './built-in.js'
 import { fileBranchRepo, installProject, writeSharing } from '@openagt/agent-data'
 import { removeProjectFiles } from './remove-files.js'
@@ -388,7 +388,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     if (options.machine !== undefined) {
       const project = await repositoryAddress(projectCwd)
       if (!project) return { ok: false, error: 'This project has no repository address, so it cannot be sent to another machine.' }
-      return sendToMachine(prompt, options, options.machine, { id: targetProjectId ?? homeId, name: basename(projectCwd), address: project, cwd: projectCwd })
+      return sendToMachine(prompt, options, options.machine, { id: targetProjectId ?? homeId, name: await projectNameOf(projectCwd), address: project, cwd: projectCwd })
     }
     // The branch to start from ends up on the line's command line: only a branch name goes there.
     // Refused, not dropped: a run started from the main branch instead would be a silent swap.

@@ -1,12 +1,11 @@
 import { computerHealth, type Health } from '../health.js'
 import { computerName } from '../computer-name.js'
-import { basename } from 'node:path'
 import { readSharing } from '@openagt/agent-data'
 import { THROUGH_PATH, deviceIdOf, enterRemote, giveRemoteLogins, leaveRemote, pingRemote, remoteAddMachine, remoteComputers, remoteDoor, remoteFacts, remoteLogins, remoteProject, relayRpc, type BringProject, type RelayProject, type RemoteTarget } from '../dashboard/remote-run.js'
 import { isElsewhereId, lineNameOf } from '../dashboard/elsewhere.js'
 import { isLoginWord, type MachineLogins } from '../dashboard/machine-logins.js'
 import { errorMessage } from '../error-message.js'
-import { repositoryAddress, repositorySpelling } from '../repository-address.js'
+import { projectNameOf, repositoryAddress, repositorySpelling } from '../repository-address.js'
 import { contextRemote, resolveProjectPath } from './context.js'
 import { addMachine, isPersonName, listMachines, noteListed, removeMachine, renameMachine, tellMachine, useLoginsOn, type MachineRecord } from '../registry.js'
 import { parseMachineLink } from '../machine-link.js'
@@ -360,7 +359,7 @@ async function projectToSend(projectId: string): Promise<ProjectToSend | undefin
   }
   const cwd = typeof projectId === 'string' ? await resolveProjectPath(projectId) : undefined
   if (!cwd) return undefined
-  return { name: basename(cwd), address: await repositoryAddress(cwd), from: () => repositorySpelling(cwd), share: () => readSharing(cwd) }
+  return { name: await projectNameOf(cwd), address: await repositoryAddress(cwd), from: () => repositorySpelling(cwd), share: () => readSharing(cwd) }
 }
 
 /** A saved machine and a project, as a call there names it: by the project's repository address, or as its own computer names it. */
