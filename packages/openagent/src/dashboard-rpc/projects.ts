@@ -14,6 +14,7 @@ import { isDriverName } from '../driver-names.js'
 import { loginsWiring } from './logins.js'
 import { canPickDirectory, pickDirectory, type PickDirectoryResult } from '../pick-directory.js'
 import { projectGitHost } from '../store/git-host.js'
+import { readProjectModules } from '../project-modules.js'
 import type { ProjectSummary } from '../dashboard/projects.js'
 import type { OwnProject } from '../dashboard/elsewhere.js'
 import type { AddProjectResult, OnboardingSuggestion, RemoveProjectResult, StartedInResult } from '../dashboard/types.js'
@@ -46,7 +47,12 @@ export async function onProjects(): Promise<ProjectSummary[]> {
 export async function onOwnProjects(): Promise<OwnProject[]> {
   return Promise.all(
     (await contextProjects().list()).map(async project => {
-      const [address, spelling, share] = await Promise.all([repositoryAddress(project.path), repositorySpelling(project.path), readSharing(project.path).catch(() => false)])
+      const [address, spelling, share, modules] = await Promise.all([
+        repositoryAddress(project.path),
+        repositorySpelling(project.path),
+        readSharing(project.path).catch(() => false),
+        readProjectModules(project.path).catch(() => []),
+      ])
       return {
         id: project.id,
         name: project.name,
@@ -57,6 +63,7 @@ export async function onOwnProjects(): Promise<OwnProject[]> {
         gitHost: project.gitHost,
         activated: project.activated,
         ...(project.lastActivityAt !== undefined ? { lastActivityAt: project.lastActivityAt } : {}),
+        modules: modules.map(module => module.package),
       }
     }),
   )

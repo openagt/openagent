@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { BUILT_IN_PACKAGES } from './built-in.js'
-import { readProjectModules, runModuleCommand, moduleFile, findProjectModule } from './project-modules.js'
+import { commandReads, findBroughtModule, readProjectModules, runModuleCommand, moduleFile, findProjectModule } from './project-modules.js'
 
 async function tempDir(prefix: string): Promise<string> {
   return realpath(await mkdtemp(join(tmpdir(), prefix)))
@@ -138,4 +138,45 @@ console.log(JSON.stringify({ args, cwd: process.cwd() }))`),
   } finally {
     await rm(root, { recursive: true, force: true })
   }
+})
+
+test('a package says which of its commands only read; any other command, or a word after flags, changes something', async () => {
+  const root = await tempDir('openagent-modules-reads-')
+  try {
+    await pkg(root, { dependencies: { tool: '1' } })
+    await pkg(
+      join(root, 'node_modules', 'tool'),
+      {
+        name: 'tool',
+        exports: { './dashboard': './w.js' },
+        bin: { tool: 'bin/tool', other: 'bin/other' },
+        // A command it does not have, a list that is no list, a flag for a word: dropped.
+        openagent: { tool: 'tool', reads: { tool: ['list', '', '--local', 7], nope: ['list'], other: 'status' } },
+      },
+      { 'w.js': 'export default {}' },
+    )
+    const module = (await findProjectModule(root, 'tool'))!
+    assert.deepEqual(module.reads, { tool: ['list', ''] })
+    for (const args of [['list'], ['list', '--local'], [], ['--local', '--full']]) assert.equal(commandReads(module, args, 'tool'), true, JSON.stringify(args))
+    for (const args of [['add', 'x'], ['--local', 'add', 'x'], ['list', 7]]) assert.equal(commandReads(module, args, 'tool'), false, JSON.stringify(args))
+    // A command of the package that names no reads, and a package of several commands asked with none named.
+    assert.equal(commandReads(module, ['status'], 'other'), false)
+    assert.equal(commandReads(module, ['list']), false)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test("the Queue's, Tickets' and Automations' packages say their reads: everything that writes, starts a run or runs a line is a change", async () => {
+  const queue = (await findBroughtModule('@openagt/skill-queue'))!
+  const tickets = (await findBroughtModule('@openagt/skill-tickets'))!
+  const scheduler = (await findBroughtModule('@openagt/skill-scheduler'))!
+  assert.deepEqual([queue.reads, tickets.reads, scheduler.reads], [{ queue: [''] }, { tickets: ['list', 'show', 'meta'] }, { scheduler: ['status', 'show'] }])
+  const reads = (module: typeof queue, ...args: string[]): boolean => commandReads(module, args)
+  assert.deepEqual([reads(queue, '--local', '--full'), reads(queue, 'add', 'x'), reads(queue, 'done', 'x')], [true, false, false])
+  assert.deepEqual([reads(tickets, 'list', '--local'), reads(tickets, 'show', 'a.md', '--local'), reads(tickets, 'meta'), reads(tickets, 'release', 'a.md', '--force'), reads(tickets, 'put', 'a.md')], [true, true, true, false, false])
+  assert.deepEqual([reads(scheduler, 'status'), reads(scheduler, 'show', 'x'), reads(scheduler, 'now', 'x'), reads(scheduler, 'try', '--when=ls'), reads(scheduler, 'write-line', '--words=x'), reads(scheduler, 'switch', 'x', 'on')], [true, true, false, false, false, false])
+  // OpenAgent's own copy is only of the packages it brings to projects.
+  assert.equal(await findBroughtModule('@openagt/devices'), undefined)
+  assert.equal(await findBroughtModule('left-pad'), undefined)
 })

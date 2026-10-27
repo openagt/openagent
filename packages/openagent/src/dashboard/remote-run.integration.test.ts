@@ -370,7 +370,7 @@ test("a project only the other machine has is listed here, marked with that mach
     const listed = await m.a.remoteAgents.elsewhere()
     const otherB = otherOf(m.shopB)
     const id = elsewhereId(projectId(otherB), m.machineB)
-    assert.deepEqual(listed, [{ id, path: otherB, name: 'other', activated: false, gitHost: true, machine: m.machineB }])
+    assert.deepEqual(listed, [{ id, path: otherB, name: 'other', activated: false, gitHost: true, machine: m.machineB, modules: ['@openagt/changes', '@openagt/files', '@openagt/skill-logs'] }])
 
     // On B, the run starts in B's own project, and the branch picked is B's to read: it goes with it.
     const result = await m.a.onStart('fix the other', { machine: m.machineB, base: 'a-branch-of-b', model: 'opus' }, id)
@@ -387,6 +387,8 @@ test("a project only the other machine has is listed here, marked with that mach
     // What the page asks of the project is asked of B, of B's own copy.
     const launcher = (await m.a.remoteAgents.forward(id, 'onCommands', [id])) as ProjectLauncher | null
     assert.equal(launcher?.address, 'github.com/acme/other')
+    // So is a module's command: B runs it in its own copy, with its own modules.
+    assert.deepEqual(await m.a.remoteAgents.forward(id, 'runModuleCommand', [id, 'left-pad', []]), { ok: false, error: 'left-pad brings no module to this project' })
 
     // On this computer, the run waits for a copy here: the page is told it can have one cloned.
     assert.deepEqual(await m.a.onStart('fix the other', {}, id), { ok: false, error: 'other is not on this computer yet.', notThere: true })

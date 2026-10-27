@@ -1,7 +1,11 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { provideTestContext } from './test-context.js'
-import { dispatchMachineRpc, dispatchRelayRpc, ELSEWHERE_FORWARDED, isMachineRead, isRelayRead, MACHINE_RPC_NAMES, RELAY_RPC_NAMES } from './relay-dispatch.js'
+import { dispatchMachineRpc, dispatchRelayRpc, ELSEWHERE_FORWARDED, isMachineRead, isRelayRead, isRelayReadCall, MACHINE_RPC_NAMES, RELAY_RPC_NAMES } from './relay-dispatch.js'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { addProject, projectId } from '../registry.js'
 import type { StartAgentOptions } from '../dashboard/types.js'
 
 // The machine-side whitelist dispatcher (#1067 slice 2): a daemon that relayed an agent here calls one of a
@@ -14,15 +18,15 @@ test('RELAY_RPC_NAMES is the run-scoped read/steer/handoff surface and a project
     'onProjectFiles', 'readModule',
     'onGitStatus', 'onAgentWorktree', 'onAgentHandoff', 'onAgent', 'onOwnRuns', 'onStartCheck',
     'onCommands', 'onDocs', 'onAgentsDoing', 'onRetainedWorktrees', 'onGitHostHome', 'onRepositoryOffer', 'onProjectSkills', 'onRecordsReach',
-    'sendStop', 'sendChoice', 'sendMessage', 'sendOpenPullRequest', 'sendPush', 'sendMerge', 'sendMergeBranch', 'sendStart',
+    'sendStop', 'sendChoice', 'sendMessage', 'sendOpenPullRequest', 'sendPush', 'sendMerge', 'sendMergeBranch', 'sendStart', 'runModuleCommand',
   ]) {
     assert.ok(RELAY_RPC_NAMES.includes(name), `expected ${name} on the relay whitelist`)
   }
   // Deleting a session, removing a worktree, and how a project keeps its records are NOT relayable:
   // destroying history/checkouts is not something a relaying daemon may reach. A start is, as the
-  // guarded start a run sent here gets (the test below). A module's command may write the project's
-  // data, so only its reads are relayable (#1774).
-  for (const off of ['sendDeleteAgent', 'sendRemoveWorktree', 'sendShareRecords', 'sendCreateRepository', 'sendRemoveProject', 'sendPreview', 'runModuleCommand']) {
+  // guarded start a run sent here gets (the test below). A module's command is, as an act unless
+  // this computer's own copy of the module says it only reads (isRelayReadCall).
+  for (const off of ['sendDeleteAgent', 'sendRemoveWorktree', 'sendShareRecords', 'sendCreateRepository', 'sendRemoveProject', 'sendPreview']) {
     assert.ok(!RELAY_RPC_NAMES.includes(off), `${off} must not be relayable`)
   }
 })
@@ -72,6 +76,7 @@ test('every relayed rpc is classed as a read or an act, by name: a computer that
     sendMerge: 'act',
     sendMergeBranch: 'act',
     sendStart: 'act',
+    runModuleCommand: 'act',
   }
   assert.deepEqual([...RELAY_RPC_NAMES].sort(), Object.keys(classes).sort())
   for (const [name, said] of Object.entries(classes)) assert.equal(isRelayRead(name) ? 'read' : 'act', said, name)
@@ -112,4 +117,34 @@ test('the machine-wide calls are the logins and settings a computer brings its s
 
 test('dispatchMachineRpc rejects a name that is no machine-wide call, a run-scoped one included', async () => {
   for (const off of ['sendStart', 'onGitStatus', 'constructor', 'nope']) await assert.rejects(dispatchMachineRpc(off, []), /unknown machine rpc/, off)
+})
+
+test("a relayed module command is a read when this computer's own copy of the module says so, in the project the call names", async () => {
+  const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-relay-reads-')))
+  const previous = process.env.XDG_CONFIG_HOME
+  process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
+  try {
+    provideTestContext()
+    const shop = join(dir, 'shop')
+    const tool = join(shop, 'node_modules', 'tool')
+    await mkdir(tool, { recursive: true })
+    await writeFile(join(shop, 'package.json'), JSON.stringify({ dependencies: { tool: '1' } }))
+    await writeFile(join(tool, 'package.json'), JSON.stringify({ name: 'tool', exports: { './dashboard': './w.js' }, bin: { tool: 'bin/tool' }, openagent: { reads: { tool: ['list'] } } }))
+    await writeFile(join(tool, 'w.js'), 'export default {}')
+    await addProject(shop, '2026-10-27T00:00:00.000Z')
+    const here = projectId(shop)
+    // The caller's own project id comes first and is no matter: the call is read in the project here.
+    assert.equal(await isRelayReadCall(here, 'runModuleCommand', ['callers-id', 'tool', ['list']]), true)
+    assert.equal(await isRelayReadCall(here, 'runModuleCommand', ['callers-id', 'tool', ['add', 'x'], undefined, false]), false)
+    assert.equal(await isRelayReadCall(here, 'runModuleCommand', ['callers-id', 'nope', ['list']]), false)
+    assert.equal(await isRelayReadCall('nowhere-1', 'runModuleCommand', ['callers-id', 'tool', ['list']]), false)
+    assert.equal(await isRelayReadCall(here, 'runModuleCommand', ['callers-id', 'tool', 'list']), false)
+    // A read by its name, and any other act.
+    assert.equal(await isRelayReadCall(here, 'onGitStatus', []), true)
+    assert.equal(await isRelayReadCall(here, 'sendStop', ['callers-id', 'tool', ['list']]), false)
+  } finally {
+    if (previous === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = previous
+    await rm(dir, { recursive: true, force: true })
+  }
 })

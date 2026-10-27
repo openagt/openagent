@@ -1,7 +1,7 @@
 import { realpath, stat } from 'node:fs/promises'
 import { dirname, join, normalize, sep } from 'node:path'
 import { packageBins, runPackageCommand, type PackageCommandResult, type ProjectPackage } from '@openagt/agent-data'
-import { builtInPackagesOf, computerPackages, ownPackages } from './built-in.js'
+import { broughtToProjects, builtInPackagesOf, computerPackages, ownPackages } from './built-in.js'
 
 /**
  * A package that adds to the dashboard (#1774): its browser part, named by its
@@ -24,6 +24,40 @@ export interface ProjectModule {
   bins: Record<string, string>
   /** The module's server part, an absolute path inside the package, when it has one. */
   server?: string
+  /**
+   * The commands that only read, by command name: the first word of the arguments, or `""` for
+   * the command with no word (flags only). What a computer that lets its server only watch answers
+   * of the module; any other command changes something there, and is refused. The package says
+   * them: `"openagent": { "reads": { "<command>": ["list", ""] } }`.
+   */
+  reads: Record<string, string[]>
+}
+
+/** The commands a package says only read, of the ones it has: anything else in its word is dropped. */
+function readsOf(openagent: unknown, bins: Record<string, string>): Record<string, string[]> {
+  const said = openagent && typeof openagent === 'object' ? (openagent as Record<string, unknown>)['reads'] : undefined
+  if (!said || typeof said !== 'object' || Array.isArray(said)) return {}
+  const reads: Record<string, string[]> = {}
+  for (const [name, words] of Object.entries(said)) {
+    if (!Object.hasOwn(bins, name) || !Array.isArray(words)) continue
+    reads[name] = words.filter((word): word is string => typeof word === 'string' && !word.startsWith('-'))
+  }
+  return reads
+}
+
+/**
+ * Whether running the module's command with these arguments only reads, as its package says
+ * ({@link ProjectModule.reads}): its first word is a read, or it has no word and its bare form is
+ * one, every argument then being a flag.
+ */
+export function commandReads(module: Pick<ProjectModule, 'bins' | 'reads'>, args: readonly unknown[], command?: string): boolean {
+  const names = Object.keys(module.bins)
+  const name = command ?? (names.length === 1 ? names[0] : undefined)
+  const words = name !== undefined && Object.hasOwn(module.reads, name) ? module.reads[name]! : []
+  if (!args.every(arg => typeof arg === 'string')) return false
+  const first = args[0] as string | undefined
+  if (first === undefined || first.startsWith('-')) return words.includes('') && (args as string[]).every(arg => arg.startsWith('-'))
+  return words.includes(first)
 }
 
 /** The file an `exports[key]` entry names: a plain path, or the first of `conditions` it has. */
@@ -71,13 +105,15 @@ async function readModule({ name, dir: pkgDir, manifest: pkg }: ProjectPackage):
   const file = await fileInside(pkgDir, exportedFile(pkg.exports, './dashboard', ['browser', 'import', 'default']))
   if (!file) return undefined
   const server = await fileInside(pkgDir, exportedFile(pkg.exports, './server', ['node', 'import', 'default']))
+  const bins = packageBins(name, pkg.bin, pkgDir)
   return {
     package: name,
     ...(typeof pkg.version === 'string' ? { version: pkg.version } : {}),
     dir: dirname(file),
     entry: file.slice(dirname(file).length + 1),
-    bins: packageBins(name, pkg.bin, pkgDir),
+    bins,
     ...(server ? { server } : {}),
+    reads: readsOf(pkg.openagent, bins),
   }
 }
 
@@ -102,6 +138,16 @@ export async function readComputerModules(): Promise<ProjectModule[]> {
 /** The one module of this computer's that `name` names, or undefined. */
 export async function findComputerModule(name: string): Promise<ProjectModule | undefined> {
   return (await readComputerModules()).find(module => module.package === name)
+}
+
+/**
+ * The module of a package OpenAgent brings to projects, from OpenAgent's own copy: the page of
+ * another computer's project, on a computer where no project of its own has it. Undefined for any
+ * other package.
+ */
+export async function findBroughtModule(name: string): Promise<ProjectModule | undefined> {
+  const pkg = (await broughtToProjects()).find(brought => brought.name === name)
+  return pkg ? readModule(pkg) : undefined
 }
 
 /**

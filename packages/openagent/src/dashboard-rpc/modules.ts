@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
-import { contextProjects, resolveProjectPath } from './context.js'
-import { findComputerModule, findProjectModule, readComputerModules, readProjectModules, runModuleCommand as runCommand, type ModuleCommandResult } from '../project-modules.js'
-import { computerModuleUrl, moduleUrl, versionedModuleUrl } from '../dashboard/module-serve.js'
+import { contextProjects, contextRemote, resolveProjectPath } from './context.js'
+import { findBroughtModule, findComputerModule, findProjectModule, readComputerModules, readProjectModules, runModuleCommand as runCommand, type ModuleCommandResult } from '../project-modules.js'
+import { broughtModuleUrl, computerModuleUrl, moduleUrl, versionedModuleUrl } from '../dashboard/module-serve.js'
 import { providedDataChanged } from '../store/provided.js'
 import { callModuleRead, serverHost, type ModuleReadResult } from '../dashboard/module-host.js'
 import { relayOr } from './relay-agent.js'
@@ -46,6 +46,20 @@ export async function onModules(): Promise<DashboardModule[]> {
       const known = byPackage.get(module.package)
       if (known) known.projects.push(project.id)
       else byPackage.set(module.package, { package: module.package, url: await versionedModuleUrl(moduleUrl(project.id, module), module), projects: [project.id] })
+    }
+  }
+  // Another computer's projects have the pages their computer said they have, from a copy of the
+  // module here: a project's of this computer's, else OpenAgent's own. One with no copy here has none.
+  for (const project of await contextRemote().elsewhere().catch(() => [])) {
+    for (const pkg of project.modules ?? []) {
+      const known = byPackage.get(pkg)
+      if (known?.computer) continue
+      if (known) {
+        known.projects.push(project.id)
+        continue
+      }
+      const brought = await findBroughtModule(pkg).catch(() => undefined)
+      if (brought) byPackage.set(pkg, { package: pkg, url: await versionedModuleUrl(broughtModuleUrl(brought), brought), projects: [project.id] })
     }
   }
   return [...byPackage.values()]

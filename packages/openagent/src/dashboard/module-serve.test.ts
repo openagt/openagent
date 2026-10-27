@@ -5,7 +5,7 @@ import type { AddressInfo } from 'node:net'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { serveComputerModuleFile, serveModuleFile, computerModuleUrl, moduleUrl, versionedModuleUrl, COMPUTER_MODULES_PREFIX, MODULES_PREFIX } from './module-serve.js'
+import { broughtModuleUrl, serveBroughtModuleFile, serveComputerModuleFile, serveModuleFile, computerModuleUrl, moduleUrl, versionedModuleUrl, BROUGHT_MODULES_PREFIX, COMPUTER_MODULES_PREFIX, MODULES_PREFIX } from './module-serve.js'
 import type { ProjectsProvider } from './projects.js'
 
 test('module files are served per project and package, and nothing outside the module\'s own directory', async () => {
@@ -114,6 +114,25 @@ test('the computer\'s module files are served by their package alone, with no pr
     ])
       assert.equal((await fetch(base + path)).status, 404, path)
     assert.equal((await fetch(base + url, { method: 'POST' })).status, 405)
+  } finally {
+    await new Promise(resolve => server.close(resolve))
+  }
+})
+
+test("the files of a module OpenAgent brings to projects are served from its own copy, by package alone, and no other package's are", async () => {
+  const server = createServer((req, res) => void serveBroughtModuleFile(req, res, new URL(req.url ?? '/', 'http://x').pathname))
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  try {
+    const url = broughtModuleUrl({ package: '@openagt/skill-queue', entry: 'dashboard.js' })
+    assert.equal(url, `${BROUGHT_MODULES_PREFIX}/%40openagt%2Fskill-queue/dashboard.js`)
+    assert.equal((await fetch(base + url)).status, 200)
+    for (const path of [
+      `${BROUGHT_MODULES_PREFIX}/%40openagt%2Fdevices/dashboard.js`, // the computer's, not a project's
+      `${BROUGHT_MODULES_PREFIX}/left-pad/index.js`, // not OpenAgent's
+      `${BROUGHT_MODULES_PREFIX}/%40openagt%2Fskill-queue/..%2F..%2Fpackage.json`, // out of the module's directory
+    ])
+      assert.equal((await fetch(base + path)).status, 404, path)
   } finally {
     await new Promise(resolve => server.close(resolve))
   }

@@ -31,11 +31,15 @@ export interface OwnProject {
   gitHost: boolean
   activated: boolean
   lastActivityAt?: string
+  /** The packages that bring it a module's pages there (Queue, Tickets, Automations): the pages it has here too. */
+  modules?: string[]
 }
 
 /** The longest list a computer is taken at its word for, and the longest strings in it. */
 const MAX_PROJECTS = 200
 const MAX_WORD = 512
+/** The most module packages a project is taken to have. */
+const MAX_MODULES = 50
 
 /** What a computer answered as its projects, the ones that read as projects: anything else is dropped. */
 export function ownProjectsOf(said: unknown): OwnProject[] {
@@ -44,7 +48,7 @@ export function ownProjectsOf(said: unknown): OwnProject[] {
   const projects: OwnProject[] = []
   for (const raw of said.slice(0, MAX_PROJECTS)) {
     if (!raw || typeof raw !== 'object') continue
-    const { id, name, path, address, spelling, share, gitHost, activated, lastActivityAt } = raw as Record<string, unknown>
+    const { id, name, path, address, spelling, share, gitHost, activated, lastActivityAt, modules } = raw as Record<string, unknown>
     // An id is a word of the URL-safe kind a computer makes its ids of: it goes in this computer's ids too.
     if (!word(id) || !/^[a-z0-9-]+$/.test(id) || !word(name) || !word(path)) continue
     projects.push({
@@ -57,6 +61,7 @@ export function ownProjectsOf(said: unknown): OwnProject[] {
       gitHost: gitHost === true,
       activated: activated === true,
       ...(word(lastActivityAt) && !Number.isNaN(Date.parse(lastActivityAt)) ? { lastActivityAt } : {}),
+      ...(Array.isArray(modules) ? { modules: modules.slice(0, MAX_MODULES).filter(word) } : {}),
     })
   }
   return projects
@@ -116,6 +121,7 @@ export function elsewhereSummary(home: ElsewhereHome): ProjectSummary {
     gitHost: project.gitHost,
     machine: machine.id,
     ...(project.lastActivityAt !== undefined ? { lastActivityAt: project.lastActivityAt } : {}),
+    ...(project.modules !== undefined ? { modules: project.modules } : {}),
   }
 }
 

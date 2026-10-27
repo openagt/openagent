@@ -18,7 +18,13 @@
     "SKILL.md"
   ],
   "openagent": {
-    "cleanup": "scheduler"
+    "cleanup": "scheduler",
+    "reads": {
+      "scheduler": [
+        "status",
+        "show"
+      ]
+    }
   },
   "bin": {
     "scheduler": "bin/scheduler"
