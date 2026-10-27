@@ -114,7 +114,13 @@ test('a machine is asked again only once what it said is old, answered with that
 
 test('a machine never answered is waited for a little, not for long', async () => {
   const kept = new AnswersKept<{ id: string }, string>(() => new Promise(() => {}))
-  const started = Date.now()
-  assert.deepEqual([...(await kept.of([{ id: 'm' }]))], [])
-  assert.ok(Date.now() - started < 5_000)
+  // The wait's own timer does not hold the process, as a daemon's must not: the test does, meanwhile.
+  const held = setInterval(() => {}, 1_000)
+  try {
+    const started = Date.now()
+    assert.deepEqual([...(await kept.of([{ id: 'm' }]))], [])
+    assert.ok(Date.now() - started < 5_000)
+  } finally {
+    clearInterval(held)
+  }
 })
