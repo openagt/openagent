@@ -21,7 +21,7 @@ import { useMachines, tellMachine, type Machine } from '../lib/machines.js'
 import { runTarget, useSelectedMachineId, selectMachine } from '../lib/remote-target.js'
 import { useMachineStatus } from '../lib/use-machine-status.js'
 import { takePendingDraft } from '../lib/draft-handoff.js'
-import { driverOptions, modelEfforts, useModels } from '../lib/models.js'
+import { driverOptions, modelEfforts, useModelsOn } from '../lib/models.js'
 import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.js'
 import { ClaudeLogo, CodexLogo } from './driver-logos.js'
 import { Button } from './ui/button.js'
@@ -127,7 +127,6 @@ export const Composer = forwardRef<ComposerHandle, {
   const preferences = usePreferences()
   const model = preferences.model ?? '' // #628: empty = the coding agent's own default model
   const driver = preferences.driver ?? 'claude-code' // which coding agent does the work (#650)
-  const models = useModels()
   const customPresets = preferences.customPresets ?? [] // #626: the user's own saved prompts
   const projectPresets = useProjectPresets() // #1025: saved prompts committed in the open project's repo
   const activeProjectId = useActiveProjectId() // the project whose commands the `/` list offers
@@ -140,6 +139,8 @@ export const Composer = forwardRef<ComposerHandle, {
   const onlyThere = home !== undefined && launcher !== null && launcher.address === undefined
   const selectedMachineId = useSelectedMachineId() // #1067: the machine this run targets, if any
   const selectedMachine = runTarget(machines, selectedMachineId, launcher, home)
+  // The agents and models of the machine the run goes to: a run there is given one of its own.
+  const models = useModelsOn(inAgent ? undefined : selectedMachine?.id)
   // #1073: block Start when the target machine is known-offline; an absent/unknown status must not block.
   const targetOffline = !!selectedMachine && machineStatus[selectedMachine.id] === 'offline'
   // Another person's computer: the person is told once that their logins are copied there, and

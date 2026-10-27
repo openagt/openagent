@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { onComputersThrough, onMachineStartCheck, onMachineVersions, onMachines, onMachinesReachable, onProjectHere, onProjectOnMachine, sendAddComputerThrough, sendAddMachine, sendLetMachineIn, sendProjectHere, sendProjectToMachine, sendRemoveMachine, sendRenameMachine } from './machines.js'
+import { onComputersThrough, onMachineModels, onMachineStartCheck, onMachineVersions, onMachines, onMachinesReachable, onProjectHere, onProjectOnMachine, sendAddComputerThrough, sendAddMachine, sendLetMachineIn, sendProjectHere, sendProjectToMachine, sendRemoveMachine, sendRenameMachine } from './machines.js'
 import { elsewhereId, type OwnProject } from '../dashboard/elsewhere.js'
 import type { BringProject } from '../dashboard/remote-run.js'
 import { openagentVersion } from '../version.js'
@@ -417,6 +417,18 @@ test('a saved machine is asked whether a run would start there, from its own cop
       calls.length = 0
       assert.equal(await onMachineStartCheck(projectId(shop), url, 'codex'), null)
       assert.equal(calls.length, 1)
+
+      // The models its agents offer, which a run sent there is given one of; none from a machine that is not asked this.
+      const models = { 'claude-code': { models: [{ id: 'opus', name: 'Opus 5.5' }] }, codex: { models: [{ id: 'gpt-5.6', name: 'GPT-5.6' }] } }
+      cloning = { said: { result: models } }
+      calls.length = 0
+      assert.deepEqual(await onMachineModels(url), models)
+      assert.deepEqual(calls[0], { url: '/_devices/via/c1/_relay/machine', auth: 'Bearer d1.key', body: { fn: 'onModels', args: [] } })
+      cloning = { status: 500, said: { error: 'unknown machine rpc: onModels' } }
+      assert.equal(await onMachineModels(url), null)
+      cloning = { said: { result: ['no', 'models'] } }
+      assert.equal(await onMachineModels(url), null)
+      assert.equal(await onMachineModels('http://127.0.0.1:1'), null)
     } finally {
       await new Promise<void>(r => srv.close(() => r()))
       await rm(shop, { recursive: true, force: true })

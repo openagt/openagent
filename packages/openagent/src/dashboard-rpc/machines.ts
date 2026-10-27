@@ -11,6 +11,7 @@ import { addMachine, isPersonName, listMachines, noteListed, removeMachine, rena
 import { parseMachineLink } from '../machine-link.js'
 import { openagentVersion } from '../version.js'
 import { readinessOf, type StartReadiness } from '../project-hooks.js'
+import type { ModelsView } from '../dashboard/models.js'
 
 // The saved machines, for the dashboard: the other computers a run can be sent to. The list is
 // the daemon's, in the person's home file, so every browser on this computer shows the same
@@ -391,6 +392,17 @@ export async function onMachineStartCheck(projectId: string, machineId: string, 
   if (said !== undefined || there.project.home?.machine === machineId || !there.project.address) return readinessOf(said?.answer) ?? null
   const cloning = await machineCall(there.machine, 'onCloneCheck', [there.project.address, driver ?? null, there.machine.label])
   return cloning.ok ? (readinessOf(cloning.ret) ?? null) : null
+}
+
+/**
+ * The models each coding agent offers on a saved machine, as it asked its own: a run sent there is
+ * given one of these. `null` when it does not answer, or runs an OpenAgent that is not asked this.
+ */
+export async function onMachineModels(machineId: string): Promise<ModelsView | null> {
+  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  if (!machine) return null
+  const said = await machineCall(machine, 'onModels', [])
+  return said.ok && said.ret !== null && typeof said.ret === 'object' && !Array.isArray(said.ret) ? (said.ret as ModelsView) : null
 }
 
 async function projectOnMachine(projectId: string, machineId: string, bring: boolean): Promise<ProjectOnMachine> {

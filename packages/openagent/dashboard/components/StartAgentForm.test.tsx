@@ -146,6 +146,18 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(screen.queryByRole('status')).toBeNull())
   })
 
+  test("while this computer clones another computer's project for the run, the form says so, naming this computer", async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true, address: 'github.com/acme/shop' })
+    start.mockReturnValue(new Promise(() => {}))
+    const { rerender } = render(<StartAgentForm {...props} projectName="shop" home="laptop" />)
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Starting session'))
+    startSays.cloning = true
+    rerender(<StartAgentForm {...props} projectName="shop" home="laptop" />)
+    // The page is open on the computer itself here: a phone's says the name the page was reached at.
+    expect(screen.getByRole('status').textContent).toBe('Cloning shop on this computer, the first time only')
+  })
+
   test('while the machine the run was sent to clones the project, the form says so, with the project and the machine by name', async () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true, address: 'github.com/acme/shop' })
     machine.current = { id: 'm1', label: 'Studio', url: 'https://studio.example' }

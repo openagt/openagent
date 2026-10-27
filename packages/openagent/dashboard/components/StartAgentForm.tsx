@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { CircleAlert, Folder, Puzzle } from 'lucide-react'
 import { onCloneCheck, onStartCheck } from '../rpc/projects.js'
+import { thisMachineName } from '../lib/this-machine.js'
 import { onMachineLogins, onMachineStartCheck } from '../rpc/machines.js'
 import { usePreferences, usePreferencesLoaded, updatePreferences } from '../lib/preferences.js'
 import { DRIVER_LABELS, isDriverName, machineName, offeredPublishPicks, publishPickIn, reachedThrough } from '../../src/client.js'
@@ -172,7 +173,7 @@ export function StartAgentForm({
   const submit = async (text: string) => {
     if (busy) return
     setNote(STARTING)
-    setSentTo(machine ? machineName(machine) : null)
+    setSentTo(machine ? machineName(machine) : clonedHere ? hereName() : null)
     const result = await start(projectId, promptWithContext(text, context), {
       ...startPicks(preferences),
       ...cleanupPick(preferences, commands),
@@ -312,6 +313,12 @@ export function StartAgentForm({
       {note !== STARTING && note && !error && <p role="status" className="mt-2 text-xs text-muted-foreground">{note}</p>}
     </form>
   )
+}
+
+/** This computer, in "Cloning … on …": by the name the page was reached at, or as this computer when it is open on it. */
+function hereName(): string {
+  const name = thisMachineName()
+  return name === 'This machine' ? 'this computer' : name
 }
 
 /**

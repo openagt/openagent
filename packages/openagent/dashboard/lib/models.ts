@@ -2,6 +2,7 @@ import { DRIVERS, DRIVER_LABELS, type DriverName } from '../../src/client.js'
 import type { DriverOption } from '../components/DriverModelMenu.js'
 import { useLoaded } from './use-async.js'
 import { onModels, type DriverModels, type ModelsView } from '../rpc/models.js'
+import { onMachineModels } from '../rpc/machines.js'
 
 // Which models each coding agent offers, as the daemon asked the agents themselves. The daemon
 // asks once and keeps the answer, so every surface that names a model reads it freely.
@@ -13,6 +14,17 @@ import { onModels, type DriverModels, type ModelsView } from '../rpc/models.js'
  */
 export function useModels(): ModelsView | undefined {
   return useLoaded<ModelsView | undefined>(onModels, undefined, [], { remember: 'models' })
+}
+
+/**
+ * The models a run started on the machine picked in "Run on" can be given: that machine's own, as
+ * it asked its agents, which need not be this computer's. `undefined` while it is asked; this
+ * computer's when none is picked, or the machine does not say (an OpenAgent that is not asked this).
+ */
+export function useModelsOn(machineId: string | undefined): ModelsView | undefined {
+  const own = useModels()
+  const theirs = useLoaded<ModelsView | null | undefined>(machineId === undefined ? null : () => onMachineModels(machineId), undefined, [machineId])
+  return machineId === undefined || theirs === null ? own : theirs
 }
 
 /**

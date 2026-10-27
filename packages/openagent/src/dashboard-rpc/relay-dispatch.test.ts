@@ -98,6 +98,7 @@ test('the machine-wide calls are the logins and settings a computer brings its s
     onCopiedLogins: 'read',
     onOwnProjects: 'read',
     onCloneCheck: 'read',
+    onModels: 'read',
     sendCopiedLogin: 'act',
     sendForgetCopiedLogin: 'act',
     sendKeepCopiedLogin: 'act',
