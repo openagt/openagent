@@ -57,6 +57,8 @@ describe('the "Run on" pick in the row under the box', () => {
     await openMenu(trigger())
     expect(screen.getByRole('menuitem', { name: /^This machine/ }).textContent).toContain('Cloned here first, then runs here.')
     expect(screen.getByRole('menuitem', { name: /^Studio/ }).getAttribute('aria-disabled')).toBeNull()
+    expect(screen.getByRole('menuitem', { name: /^Studio/ }).textContent).toContain('Cloned there first, then runs there.')
+    expect(screen.getByRole('menuitem', { name: /^MacBook/ }).textContent).toContain('Has this project.')
     cleanup()
 
     const connection = renderMenu({ machines: [STUDIO, MACBOOK], selectedMachineId: 'macbook', home: 'macbook', onlyThere: true })

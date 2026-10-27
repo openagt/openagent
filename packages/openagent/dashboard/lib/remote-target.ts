@@ -8,8 +8,9 @@ import { useSyncExternalStore } from 'react'
 let selectedMachineId: string | null = null
 const listeners = new Set<() => void>()
 // On a project only another computer of the person's has (its `home`, elsewhere.ts), that computer
-// is picked when the project is opened: a run of it goes there unless the person picks otherwise.
-// A pick made so is let go again on a project of this computer's, where this computer is the default.
+// is picked each time the project is opened, whatever was picked before: a run of it goes there
+// unless the person picks otherwise on its page. A pick made so is let go again on a project of
+// this computer's, where this computer is the default.
 let pickedForHome = false
 
 /** Pick a saved machine (by id) as the run's target, or null to go back to this machine. */
@@ -36,10 +37,9 @@ export function useSelectedMachineId(): string | null {
   return useSyncExternalStore(subscribe, getSelectedMachineId, () => null)
 }
 
-/** Pick the computer a project is on, when it is another's, or let go of such a pick on one of this computer's. */
+/** Pick the computer a project is on, when it is another's, or let go of such a pick on one of this computer's. Called as a project is opened. */
 export function followProjectHome(home: string | undefined): void {
   if (home !== undefined) {
-    if (selectedMachineId !== null && !pickedForHome) return
     selectMachine(home)
     pickedForHome = true
   } else if (pickedForHome) {

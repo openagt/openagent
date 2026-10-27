@@ -117,7 +117,9 @@ export function RunOnMenu({ connection, busy, inRow = false }: { connection: Con
           const status = connection.status[machine.id]
           const offline = status === 'offline'
           const words = wordsOf(machine)
-          const description = offline ? (reachedByLine(machine.url) ? 'Not connected. It must be on, with OpenAgent running.' : `Offline · ${words}`) : words
+          // On another computer's project, what each computer does with it: it has it, or clones it first.
+          const withProject = connection.home === undefined ? words : machine.id === connection.home ? `${words}. Has this project.` : `${words}. Cloned there first, then runs there.`
+          const description = offline ? (reachedByLine(machine.url) ? 'Not connected. It must be on, with OpenAgent running.' : `Offline · ${withProject}`) : withProject
           // Another computer's project with no address goes nowhere but its own computer.
           const closed = connection.onlyHere || (connection.onlyThere === true && machine.id !== connection.home)
           return (

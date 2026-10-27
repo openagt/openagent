@@ -13,15 +13,15 @@ describe('where a run goes', () => {
     expect(getSelectedMachineId()).toBeNull()
   })
 
-  test("the person's own pick holds: over another computer's project, and on one of this computer's after it", () => {
+  test("another computer's project picks its computer whatever was picked before; the person's own pick on its page, and on a project of this computer's, holds", () => {
     selectMachine('studio')
     followProjectHome('laptop')
-    expect(getSelectedMachineId()).toBe('studio')
-    followProjectHome(undefined)
-    expect(getSelectedMachineId()).toBe('studio')
+    expect(getSelectedMachineId()).toBe('laptop')
 
-    // Picked over the project's own pick: that is the person's now.
+    // Picked on the project's page: the person's now, kept on a project of this computer's.
     selectMachine(null)
+    followProjectHome(undefined)
+    expect(getSelectedMachineId()).toBeNull()
     followProjectHome('laptop')
     selectMachine('studio')
     followProjectHome(undefined)
