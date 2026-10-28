@@ -6,7 +6,6 @@
   "intent": "Hello Tell me what this machine is",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-10-28T16-38-41-092Z",
   "caller": {
     "runner": {
       "host": "rom-thinkpad-x280",
