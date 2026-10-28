@@ -1,7 +1,0 @@
-{"kind":"start","prompt":"Hand test. Change nothing, commit nothing, run no command. Reply with the single word ok.","at":"2026-10-02T10:08:36.662Z"}
-{"kind":"session","sessionId":"f40f6f0e-8370-4f06-b50f-0bc7fad0c9f0","at":"2026-10-02T10:08:37.477Z"}
-{"kind":"said","text":"ok","at":"2026-10-02T10:08:38.217Z"}
-{"kind":"rate-limit","limit":{"status":"allowed","window":"five_hour","resetsAt":1790949000000},"at":"2026-10-02T10:08:38.219Z"}
-{"kind":"result","text":"ok","sessionId":"f40f6f0e-8370-4f06-b50f-0bc7fad0c9f0","at":"2026-10-02T10:08:39.007Z"}
-{"kind":"cost","usd":0.0423802,"at":"2026-10-02T10:08:39.007Z"}
-{"kind":"ended","status":"done","at":"2026-10-02T10:08:39.604Z"}

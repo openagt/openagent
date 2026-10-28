@@ -1,4 +1,0 @@
-{"kind":"start","prompt":"Read packages/framework/package.json and tell me the package's name and how many scripts it has.","at":"2026-09-27T14:54:03.374Z"}
-{"kind":"session","sessionId":"01a0e35b-dcc0-70f0-84b8-483a1840746c","at":"2026-09-27T14:54:03.552Z"}
-{"kind":"error","message":"Reading prompt from stdin...","at":"2026-09-27T14:54:05.737Z"}
-{"kind":"ended","status":"failed","detail":"codex exited (1): Reading prompt from stdin...","at":"2026-09-27T14:54:06.245Z"}

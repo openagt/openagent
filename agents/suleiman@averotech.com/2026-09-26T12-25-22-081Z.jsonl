@@ -1,1 +1,0 @@
-{"kind":"ended","status":"failed","detail":"its process died before the run started: [agent-runner] the run's record could not be written: Command failed: git commit -m logs: record run 2026-09-26T12-25-22-081Z","at":"2026-09-26T12:26:13.321Z"}

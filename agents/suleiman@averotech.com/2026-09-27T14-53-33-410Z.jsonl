@@ -1,4 +1,0 @@
-{"kind":"start","prompt":"http://127.0.0.1:4200/gemstack-st99l0/2026-09-27T14-52-15-315Z","at":"2026-09-27T14:53:36.726Z"}
-{"kind":"session","sessionId":"01a0e35b-7971-7561-a498-38d445fd5ccc","at":"2026-09-27T14:53:38.169Z"}
-{"kind":"error","message":"Reading prompt from stdin...","at":"2026-09-27T14:53:40.056Z"}
-{"kind":"ended","status":"failed","detail":"codex exited (1): Reading prompt from stdin...","at":"2026-09-27T14:53:40.642Z"}

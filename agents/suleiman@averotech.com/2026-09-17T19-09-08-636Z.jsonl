@@ -1,4 +1,0 @@
-{"kind":"start","prompt":"Read every LOGIC.md under packages/framework/src one by one, and for each write one sentence of summary to stdout. Change no file. Do not stop until all are read."}
-{"kind":"session","sessionId":"b1ccbef2-88cc-403d-80e6-c1a3c24596be"}
-{"kind":"rate-limit","limit":{"status":"allowed","window":"five_hour","resetsAt":1789682400000}}
-{"kind":"ended","status":"stopped","detail":"stopped by a signal to its process"}

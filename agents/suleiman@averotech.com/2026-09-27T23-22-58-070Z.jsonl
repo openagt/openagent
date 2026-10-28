@@ -1,7 +1,0 @@
-{"kind":"start","prompt":"Hand test of the model id: reply with the single word ok. Do not change any file, do not commit, do not open a pull request.","at":"2026-09-27T23:23:01.467Z"}
-{"kind":"session","sessionId":"107b5814-43cd-48f0-9cc7-2e6df4b41225","at":"2026-09-27T23:23:02.349Z"}
-{"kind":"said","text":"ok","at":"2026-09-27T23:23:04.140Z"}
-{"kind":"rate-limit","limit":{"status":"allowed","window":"five_hour","resetsAt":1790559600000},"at":"2026-09-27T23:23:04.142Z"}
-{"kind":"result","text":"ok","sessionId":"107b5814-43cd-48f0-9cc7-2e6df4b41225","at":"2026-09-27T23:23:05.130Z"}
-{"kind":"cost","usd":0.050815599999999995,"at":"2026-09-27T23:23:05.130Z"}
-{"kind":"ended","status":"done","at":"2026-09-27T23:23:05.661Z"}

@@ -1,5 +1,0 @@
-{"kind":"start","prompt":"Say hi in one word.","at":"2026-09-27T15:38:25.453Z"}
-{"kind":"session","sessionId":"01a0e384-7b86-7ab3-aabc-c7cff5b34145","at":"2026-09-27T15:38:25.647Z"}
-{"kind":"said","text":"Hi!","at":"2026-09-27T15:38:28.150Z"}
-{"kind":"result","text":"Hi!","sessionId":"01a0e384-7b86-7ab3-aabc-c7cff5b34145","at":"2026-09-27T15:38:28.922Z"}
-{"kind":"ended","status":"done","at":"2026-09-27T15:38:29.471Z"}

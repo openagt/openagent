@@ -1,7 +1,0 @@
-{"kind":"start","prompt":"Tell me “hi”, nothing else","added":"When you finish, if you changed any file, commit your work.","at":"2026-10-13T15:49:02.987Z"}
-{"kind":"session","sessionId":"96334348-1bd1-48eb-9cae-8994bcb66adc","at":"2026-10-13T15:49:08.811Z"}
-{"kind":"said","text":"hi","at":"2026-10-13T15:49:13.565Z"}
-{"kind":"rate-limit","limit":{"status":"allowed","window":"five_hour","resetsAt":1791921600000},"at":"2026-10-13T15:49:13.605Z"}
-{"kind":"result","text":"hi","sessionId":"96334348-1bd1-48eb-9cae-8994bcb66adc","at":"2026-10-13T15:49:14.413Z"}
-{"kind":"cost","usd":0.0281939,"at":"2026-10-13T15:49:14.413Z"}
-{"kind":"ended","status":"done","at":"2026-10-13T15:49:16.050Z"}

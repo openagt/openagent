@@ -1,3 +1,0 @@
-{"kind":"handoff-armed","push":true,"pr":false}
-{"kind":"branch","branch":"the-framework/run-2026-07-28T20-33-52-792Z"}
-{"kind":"ended","status":"failed","detail":"--run-on actions needs a GitHub user token in GH_TOKEN (repo + workflow scopes)."}

@@ -1,7 +1,0 @@
-{"kind":"start","prompt":"say hello, nothing else","at":"2026-10-05T13:46:07.468Z"}
-{"kind":"session","sessionId":"9a342a18-065a-4285-95cb-89a6d8e50175","at":"2026-10-05T13:46:08.344Z"}
-{"kind":"said","text":"Hello!","at":"2026-10-05T13:46:09.141Z"}
-{"kind":"rate-limit","limit":{"status":"allowed","window":"five_hour","resetsAt":1791216600000},"at":"2026-10-05T13:46:09.143Z"}
-{"kind":"result","text":"Hello!","sessionId":"9a342a18-065a-4285-95cb-89a6d8e50175","at":"2026-10-05T13:46:09.935Z"}
-{"kind":"cost","usd":0.04274,"at":"2026-10-05T13:46:09.935Z"}
-{"kind":"ended","status":"done","at":"2026-10-05T13:46:10.522Z"}

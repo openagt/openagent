@@ -1,5 +1,0 @@
-{"kind":"start","prompt":"ask me what color i perfer with choices","at":"2026-10-03T16:54:42.651Z"}
-{"kind":"session","sessionId":"01a102b0-81ce-74c3-83a2-ac8384fab781","at":"2026-10-03T16:54:44.569Z"}
-{"kind":"said","text":"What color do you prefer?\n\n- Blue\n- Green\n- Red\n- Purple\n- Yellow\n- Orange\n- Black\n- White\n- Pink","at":"2026-10-03T16:54:47.279Z"}
-{"kind":"result","text":"What color do you prefer?\n\n- Blue\n- Green\n- Red\n- Purple\n- Yellow\n- Orange\n- Black\n- White\n- Pink","sessionId":"01a102b0-81ce-74c3-83a2-ac8384fab781","at":"2026-10-03T16:54:47.352Z"}
-{"kind":"ended","status":"done","at":"2026-10-03T16:54:47.968Z"}

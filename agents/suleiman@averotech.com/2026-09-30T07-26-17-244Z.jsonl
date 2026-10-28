@@ -1,7 +1,0 @@
-{"kind":"start","prompt":"Don't use any tools. Say hi in one sentence.","at":"2026-09-30T07:26:20.671Z"}
-{"kind":"session","sessionId":"490d07bf-dff9-4c4d-8cb3-17de38db094b","at":"2026-09-30T07:26:21.324Z"}
-{"kind":"said","text":"Hi, what would you like to work on in gemstack today?","at":"2026-09-30T07:26:23.117Z"}
-{"kind":"rate-limit","limit":{"status":"allowed","window":"five_hour","resetsAt":1790767800000},"at":"2026-09-30T07:26:23.122Z"}
-{"kind":"result","text":"Hi, what would you like to work on in gemstack today?","sessionId":"490d07bf-dff9-4c4d-8cb3-17de38db094b","at":"2026-09-30T07:26:24.014Z"}
-{"kind":"cost","usd":0.0424492,"at":"2026-09-30T07:26:24.014Z"}
-{"kind":"ended","status":"done","at":"2026-09-30T07:26:24.659Z"}

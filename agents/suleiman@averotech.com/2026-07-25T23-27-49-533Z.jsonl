@@ -1,5 +1,0 @@
-{"kind":"handoff-armed","push":false,"pr":false}
-{"kind":"session","driver":"claude-web","workspace":"/Users/suleiman/Projects/gemstack/.the-framework/worktrees/2026-07-25T23-27-49-533Z","fake":false,"sessionLink":"https://claude.ai/code"}
-{"kind":"system-prompt","text":""}
-{"kind":"driver","event":{"type":"start","prompt":"hi"}}
-{"kind":"ended","status":"failed","detail":"[framework] claude-web: no cloud session was created.\n^D\b\b\u001b7\u001b8\u001b[>0q\u001b[>4m\u001b[<uError:--cloudrequiresadescription.\r\r\nUsage:claude--cloud\"yourtaskdescription\"\r\r\n\u000f\u001b[>4m\u001b[<u\u001b7\u001b8\u000f\u001b[>4m\u001b[<u\u001b7\u001b8"}

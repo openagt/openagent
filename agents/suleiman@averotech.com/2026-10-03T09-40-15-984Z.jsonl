@@ -1,5 +1,0 @@
-{"kind":"start","prompt":"/work-queue\n\nWhen you finish, if you committed anything, push your branch and open its pull request, set to merge on its own once its checks pass.","at":"2026-10-03T09:40:20.285Z"}
-{"kind":"session","sessionId":"246d2caa-9691-4af1-87e4-92588b21781c","at":"2026-10-03T09:40:21.165Z"}
-{"kind":"said","text":"API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)","at":"2026-10-03T10:30:28.243Z"}
-{"kind":"error","message":"API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)","at":"2026-10-03T10:30:28.522Z"}
-{"kind":"ended","status":"failed","detail":"claude-code exited (1)","at":"2026-10-03T10:30:28.648Z"}
