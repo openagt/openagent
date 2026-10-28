@@ -124,7 +124,7 @@ test('a skill text naming its package provides through it, fetched with npx and 
   process.env.PATH = `${join(tools, 'bin')}${delimiter}${path}`
   try {
     const found = await lookupProvidedCommand(bare, 'git-host')
-    assert.deepEqual(found.command, { package: 'texthost', name: 'cmd', bin: join(cache, 'texthost', 'cmd.cjs') })
+    assert.deepEqual(found.command, { package: 'texthost', name: 'cmd', bin: join(cache, 'texthost', 'cmd.cjs'), dir: join(cache, 'texthost') })
     assert.equal((await readProvidedCommand(bare, 'runs'))?.package, '@scope/textlogs', 'a scoped name, quoted either way')
     assert.deepEqual(await asked(), ['--package=texthost@0.1', '--package=@scope/textlogs@0.2'], 'each text once, its link in .claude/skills asking nothing more')
     assert.deepEqual(await runPackageCommand(bare, found.command!, ['home']), { ok: true, output: ['home'] }, 'the fetched command runs')

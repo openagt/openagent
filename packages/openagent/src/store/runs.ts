@@ -1,4 +1,4 @@
-import { runPackageCommand, type ProvidedCommand } from '@openagt/agent-data'
+import { callPackageCommand, type ProvidedCommand } from '@openagt/agent-data'
 import { providedCommand } from '../built-in.js'
 
 /**
@@ -14,7 +14,9 @@ import { providedCommand } from '../built-in.js'
  *   `<command> show <id> --local --full`   one run: the whole card plus `diary`, every line
  *   `<command> delete <id>`                remove a run
  *   `<command> patch <id> [--branch <b>] [--pr <n> --pr-url <url>] [--landed <commit> --from <commit>]`   the late facts
- * `--local` reads the copy on this machine, no network: OpenAgent polls.
+ * `--local` reads the copy on this machine, no network: OpenAgent polls. A provider whose package
+ * exports the function its command calls, `runCli(argv, io)`, is answered inside OpenAgent's own
+ * process: a read every few seconds is no Node started each time, which a small server cannot carry.
  *
  * The shapes, owned here: {@link RunCard} and {@link AnyDiaryLine}. A running agent's own card in
  * its checkout is the same shape, written by the tool that runs it.
@@ -140,10 +142,10 @@ function diaryLines(value: unknown): AnyDiaryLine[] {
  */
 const LIST_LIMIT = 10_000
 
-/** How long a read is reused: the dashboard polls many reads of the same list every few seconds, and each is a process. */
+/** How long a read is reused: the dashboard polls many reads of the same list every few seconds. */
 const CACHE_MS = 5_000
 
-/** The runs source over one provider command: each call one run of the command, reads cached per {@link CACHE_MS}. */
+/** The runs source over one provider command: each call one answer of the command, reads cached per {@link CACHE_MS}. */
 function commandRuns(root: string, command: ProvidedCommand, now: () => number): RunsSource & { drop(): void } {
   let listed: { at: number; cards: Promise<RunCard[]> } | undefined
   const shown = new Map<string, { at: number; run: Promise<FinishedRun | undefined> }>()
@@ -154,10 +156,10 @@ function commandRuns(root: string, command: ProvidedCommand, now: () => number):
   return {
     drop,
     list(opts = {}) {
-      // Concurrent reads share one process; a read that failed is not kept.
+      // Concurrent reads share one answer; a read that failed is not kept.
       if (listed && !opts.fresh && now() - listed.at < CACHE_MS) return listed.cards
       const read: { at: number; cards: Promise<RunCard[]> } = { at: now(), cards: Promise.resolve([]) }
-      read.cards = runPackageCommand(root, command, ['--local', '--full', '--limit', String(LIST_LIMIT)]).then(result => {
+      read.cards = callPackageCommand(root, command, ['--local', '--full', '--limit', String(LIST_LIMIT)]).then(result => {
         if (!result.ok || !Array.isArray(result.output)) {
           if (listed === read) listed = undefined
           return []
@@ -172,7 +174,7 @@ function commandRuns(root: string, command: ProvidedCommand, now: () => number):
       const known = shown.get(id)
       if (known && now() - known.at < CACHE_MS) return known.run
       const read: { at: number; run: Promise<FinishedRun | undefined> } = { at: now(), run: Promise.resolve(undefined) }
-      read.run = runPackageCommand(root, command, ['show', id, '--local', '--full']).then(result => {
+      read.run = callPackageCommand(root, command, ['show', id, '--local', '--full']).then(result => {
         const output = result.ok ? result.output : undefined
         const card = parseRunCard(output)
         if (!card) {
@@ -186,14 +188,14 @@ function commandRuns(root: string, command: ProvidedCommand, now: () => number):
     },
     async remove(id) {
       if (!isRunId(id)) return { ok: false, error: `not a run id: ${id}` }
-      const result = await runPackageCommand(root, command, ['delete', id])
+      const result = await callPackageCommand(root, command, ['delete', id])
       drop()
       return result.ok ? { ok: true } : { ok: false, error: result.error }
     },
     async patch(id, patch) {
       if (!isRunId(id)) return { ok: false, error: `not a run id: ${id}` }
       const args = ['patch', id, ...(patch.branch !== undefined ? ['--branch', patch.branch] : []), ...(patch.pr ? ['--pr', String(patch.pr.number), '--pr-url', patch.pr.url] : []), ...(patch.landed ? ['--landed', patch.landed.commit, '--from', patch.landed.from] : [])]
-      const result = await runPackageCommand(root, command, args)
+      const result = await callPackageCommand(root, command, args)
       drop()
       return result.ok ? { ok: true } : { ok: false, error: result.error }
     },

@@ -169,6 +169,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   and a Machines entry for where its runs go, two ends of one link under two names.
 - A computer is one row whichever way runs go: runs go there, it starts runs here, or both.
   Picked over a row for each way.
+- A computer's name is its own: renamed from any page, it is kept on that computer, and every
+  page, on every device, shows the name it says. Picked over each page keeping a name of its
+  own for it, which showed one computer under another name on each device.
 - Each server this computer is in at has its switch for reaching this computer from
   anywhere, whoever set the server up: the person's other computers too. Picked over the
   switch on the computer that installed the server alone.

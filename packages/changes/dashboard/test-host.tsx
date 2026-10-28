@@ -28,6 +28,7 @@ export function fakeHost(): ModuleHost {
     addMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     removeMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     renameMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
+    renameComputer: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     letMachineIn: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     machineCode: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     computersThrough: vi.fn(async () => ({ ok: true as const, computers: [] })),

@@ -189,38 +189,50 @@ export function Problem({ children }: { children: ReactNode }) {
   )
 }
 
-/** The top of a device's page: its icon, name and facts, and Rename. */
-export function Head({ icon: Icon, name, badge, facts, rename }: { icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; name: string; badge?: string; facts: ReactNode[]; rename?: (name: string) => Promise<{ ok: true } | { ok: false; error: string }> }) {
-  const [renaming, setRenaming] = useState(false)
+/** A rename: the person's picked name, and what saving it answered. */
+export type Rename = (name: string) => Promise<{ ok: true } | { ok: false; error: string }>
+
+/** A name being changed in place: the field, Save and Cancel; a refusal is said below the field. */
+export function RenameForm({ name, rename, onClose }: { name: string; rename: Rename; onClose: () => void }) {
   const [picked, setPicked] = useState(name)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
   const save = async (event: FormEvent): Promise<void> => {
     event.preventDefault()
-    if (!rename) return
     setBusy(true)
     setError(undefined)
     const answer = await rename(picked.trim())
     setBusy(false)
-    if (answer.ok) setRenaming(false)
+    if (answer.ok) onClose()
     else setError(answer.error)
   }
+  return (
+    <div className="space-y-1">
+      <form className="flex flex-wrap items-center gap-2" onSubmit={event => void save(event)}>
+        <Input autoFocus aria-label="Name" value={picked} maxLength={60} onChange={event => setPicked(event.target.value)} className="h-8 w-56" />
+        <Button size="sm" type="submit" disabled={busy || !picked.trim()}>
+          {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
+          Save
+        </Button>
+        <Button size="sm" type="button" variant="ghost" onClick={onClose}>
+          Cancel
+        </Button>
+      </form>
+      {error !== undefined && <Problem>{error}</Problem>}
+    </div>
+  )
+}
+
+/** The top of a device's page: its icon, name and facts, and Rename. */
+export function Head({ icon: Icon, name, badge, facts, rename }: { icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; name: string; badge?: string; facts: ReactNode[]; rename?: Rename }) {
+  const [renaming, setRenaming] = useState(false)
   return (
     <div className="space-y-1 py-2">
       <div className="flex items-center gap-3">
         <Icon aria-hidden className="h-5 w-5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
-          {renaming ? (
-            <form className="flex flex-wrap items-center gap-2" onSubmit={event => void save(event)}>
-              <Input autoFocus aria-label="Name" value={picked} maxLength={60} onChange={event => setPicked(event.target.value)} className="h-8 w-56" />
-              <Button size="sm" type="submit" disabled={busy || !picked.trim()}>
-                {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
-                Save
-              </Button>
-              <Button size="sm" type="button" variant="ghost" onClick={() => setRenaming(false)}>
-                Cancel
-              </Button>
-            </form>
+          {renaming && rename ? (
+            <RenameForm name={name} rename={rename} onClose={() => setRenaming(false)} />
           ) : (
             <p className="flex min-w-0 items-center gap-2 text-base font-semibold">
               <span className="truncate">{name}</span>
@@ -230,13 +242,12 @@ export function Head({ icon: Icon, name, badge, facts, rename }: { icon: Compone
           <Facts>{facts}</Facts>
         </div>
         {rename && !renaming && (
-          <Button size="sm" variant="ghost" onClick={() => (setPicked(name), setRenaming(true))}>
+          <Button size="sm" variant="ghost" onClick={() => setRenaming(true)}>
             <Pencil className="h-3.5 w-3.5" aria-hidden />
             Rename
           </Button>
         )}
       </div>
-      {error !== undefined && <Problem>{error}</Problem>}
     </div>
   )
 }

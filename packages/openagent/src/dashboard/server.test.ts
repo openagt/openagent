@@ -11,6 +11,7 @@ import { isExpectedHost, isSameOriginRequest } from './rpc-serve.js'
 import { testDashboardOptions } from '../dashboard-rpc/test-context.js'
 import type { OpenAgentEvent } from '../events.js'
 import { openagentVersion } from '../version.js'
+import { computerName } from '../computer-name.js'
 import type { StartAgentOptions, StartAgentResult } from './types.js'
 import type { IncomingMessage } from 'node:http'
 import { EXPECTED_EXTENSION_VERSION, EXTENSION_VERSION_HEADER } from './bridge-endpoints.js'
@@ -439,7 +440,8 @@ test('/_relay/ping answers 200 with this OpenAgent\'s version and how this compu
     assert.equal(ok.status, 200)
     // What a computer that added this one reads: whether this one fell behind it, which runs in a project's shared records are this computer's, whether it is in at that computer too, and how it stands.
     const { health, ...said } = JSON.parse(ok.body) as Record<string, unknown>
-    assert.deepEqual(said, { version: openagentVersion(), host: hostname(), listed: [] })
+    // The name it is shown under: its host name, as nobody named it in this test's home.
+    assert.deepEqual(said, { version: openagentVersion(), host: hostname(), name: computerName(), listed: [] })
     assert.ok(readHealth(health), 'its memory, disk and load, as another computer reads them')
     assert.equal(starts.length, 0) // a health check must never spawn a run
   } finally {

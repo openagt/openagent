@@ -104,6 +104,36 @@ test('a provider is read through its command: whole cards with caller, one run w
   }
 })
 
+/** The provider's command line as the function its command calls, exported by the package: each answer logged as `in <args>` with where it ran. */
+const PROVIDER_CLI = `
+import { appendFileSync, readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+const dir = dirname(fileURLToPath(import.meta.url))
+export async function runCli(args, io) {
+  appendFileSync(join(dir, 'calls.log'), 'in ' + args.join(' ') + ' @' + io.cwd + '\\n')
+  const runs = JSON.parse(readFileSync(join(dir, 'runs.json'), 'utf8'))
+  if (args[0] !== 'show') return io.stdout(JSON.stringify(runs)), 0
+  const run = runs.find(r => r.id === args[1])
+  if (!run) return io.stdout(JSON.stringify({ ok: false, reason: 'no-run' })), io.stderr('no run ' + args[1]), 1
+  return io.stdout(JSON.stringify({ ...run, diary: [{ kind: 'said', text: 'hi' }] })), 0
+}
+`
+
+test('a provider whose package exports its command\'s function is answered in this process: no command is run', async () => {
+  const root = await project({ inlogs: { type: 'module', exports: { '.': './cli.mjs' }, bin: { logs: 'provider.cjs' }, openagent: { runs: 'logs' } } })
+  try {
+    await writeFile(join(root, 'node_modules', 'inlogs', 'cli.mjs'), PROVIDER_CLI)
+    const runs = (await providedRuns(() => 0)(root))!
+    assert.deepEqual((await runs.list()).map(card => card.id), ['r2', 'r1'])
+    assert.deepEqual((await runs.show('r1'))?.diary, [{ kind: 'said', text: 'hi' }])
+    assert.equal(await runs.show('nope'), undefined, 'a refusal is no run')
+    assert.deepEqual(await calls(root, 'inlogs'), [`in --local --full --limit 10000 @${root}`, `in show r1 --local --full @${root}`, `in show nope --local --full @${root}`], 'every answer came from the function, in the project; the command never ran')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('a patch and a delete go through the command and drop what was read, so the next read sees them', async () => {
   const root = await project({ logs: { bin: { logs: 'provider.cjs' }, openagent: { runs: 'logs' } } })
   try {

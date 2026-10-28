@@ -5,7 +5,7 @@ import type { AgentMeta } from '../store/index.js'
 import type { StartAgentOptions, StartAgentResult } from './types.js'
 import { errorMessage } from '../error-message.js'
 import { machineFetch } from './machine-call.js'
-import { isHostName, isPersonName } from '../registry.js'
+import { computerNameOf, isHostName, isPersonName } from '../registry.js'
 import { readLogins, type GivenLogins, type MachineLogins } from './machine-logins.js'
 
 /**
@@ -76,19 +76,22 @@ export async function pingRemote(target: MachineAccess): Promise<boolean> {
 }
 
 /**
- * What a saved machine says of itself in its ping: the OpenAgent it runs, the computer's own
- * name, which the records of its runs carry, the ids it is listed under at the doors of the
- * machines it saved, and whether it is a server. Nothing for a machine that does not answer, or does not say.
+ * What a saved machine says of itself in its ping: the OpenAgent it runs, the computer's host
+ * name, which the records of its runs carry, the name it is shown under, the ids it is listed
+ * under at the doors of the machines it saved, and whether it is a server. Nothing for a machine
+ * that does not answer, or does not say.
  */
-export async function remoteFacts(target: MachineAccess): Promise<{ version?: string; host?: string; listed?: string[]; server?: true; health?: Health }> {
+export async function remoteFacts(target: MachineAccess): Promise<{ version?: string; host?: string; name?: string; listed?: string[]; server?: true; health?: Health }> {
   const said: unknown = await (await ping(target))?.json().catch(() => undefined)
-  const { version, host, listed, server, health } = (said && typeof said === 'object' ? said : {}) as Record<string, unknown>
+  const { version, host, name, listed, server, health } = (said && typeof said === 'object' ? said : {}) as Record<string, unknown>
+  const shownAs = computerNameOf(name)
   const stands = readHealth(health)
   const ids = Array.isArray(listed) ? listed.filter((id): id is string => typeof id === 'string' && DEVICE_ID.test(id)).slice(0, MAX_LISTED) : []
   return {
     // What a machine says is shown on a page: only what reads as a version is one.
     ...(typeof version === 'string' && /^[0-9A-Za-z.+-]{1,64}$/.test(version) ? { version } : {}),
     ...(isHostName(host) ? { host } : {}),
+    ...(shownAs !== undefined ? { name: shownAs } : {}),
     ...(ids.length ? { listed: ids } : {}),
     ...(server === true ? { server: true as const } : {}),
     ...(stands ? { health: stands } : {}),

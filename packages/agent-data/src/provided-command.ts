@@ -1,7 +1,9 @@
 import { execFile } from 'node:child_process'
 import { readdir, readFile, realpath } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { delimiter, join } from 'node:path'
+import { delimiter, join, sep } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 /**
  * Which of a project's packages provides one kind of OpenAgent's data, and how its command is
@@ -172,6 +174,8 @@ export interface ProvidedCommand {
   name: string
   /** The command's script, an absolute path inside the package. */
   bin: string
+  /** The package's folder. */
+  dir: string
 }
 
 /**
@@ -225,7 +229,7 @@ export function declaring(packages: readonly ProjectPackage[], kind: string): Pr
     const declared = declaredFor(manifest, kind)
     if (typeof declared !== 'string') continue
     const bin = packageBins(name, manifest.bin, dir)[declared]
-    if (bin !== undefined) providers.push({ package: name, name: declared, bin })
+    if (bin !== undefined) providers.push({ package: name, name: declared, bin, dir })
   }
   return providers
 }
@@ -277,5 +281,58 @@ export async function runPackageCommand(root: string, command: { name: string; b
     return { ok: true, output: JSON.parse(run.stdout) as unknown }
   } catch {
     return { ok: false, error: `${name} printed no JSON` }
+  }
+}
+
+/** The function a package's command script calls, exported beside it: the same command line, the same JSON on `stdout`, the exit code it answers. */
+type PackageCli = (argv: string[], io: { cwd: string; stdout(line: string): void; stderr(line: string): void }) => Promise<number>
+
+/** Each package's exported `runCli`, by folder, loaded once; `undefined` for a package that exports none. */
+const clis = new Map<string, Promise<PackageCli | undefined>>()
+
+function packageCli({ package: name, dir }: ProvidedCommand): Promise<PackageCli | undefined> {
+  let known = clis.get(dir)
+  if (!known) {
+    known = (async () => {
+      // The package by its own name from its own folder: its main export, never another copy found further up.
+      const entry = createRequire(join(dir, 'package.json')).resolve(name)
+      if (!entry.startsWith(dir + sep)) return undefined
+      const loaded = (await import(pathToFileURL(entry).href)) as { runCli?: unknown }
+      return typeof loaded.runCli === 'function' ? (loaded.runCli as PackageCli) : undefined
+    })().catch(() => undefined)
+    clis.set(dir, known)
+  }
+  return known
+}
+
+/**
+ * {@link runPackageCommand}, answered inside this process when the package exports the function its
+ * command's script calls, `runCli(argv, io)`: no Node is started for it, which is most of what a
+ * command costs on a small computer, for a caller that reads every few seconds. A package that
+ * exports none is run as its command. Takes neither an environment nor an input: a call that
+ * needs either runs the command.
+ */
+export async function callPackageCommand(root: string, command: ProvidedCommand, args: readonly string[]): Promise<PackageCommandResult> {
+  const cli = await packageCli(command)
+  if (!cli) return runPackageCommand(root, command, args)
+  let stdout = ''
+  let said = ''
+  const code = await cli([...args], {
+    cwd: root,
+    stdout: line => {
+      stdout += `${line}\n`
+    },
+    stderr: line => {
+      said = line
+    },
+  }).catch((err: unknown) => {
+    said = err instanceof Error ? err.message : String(err)
+    return 1
+  })
+  if (code !== 0) return { ok: false, error: said.trim().split('\n').at(-1)?.trim() || `${command.name} failed` }
+  try {
+    return { ok: true, output: JSON.parse(stdout) as unknown }
+  } catch {
+    return { ok: false, error: `${command.name} printed no JSON` }
   }
 }

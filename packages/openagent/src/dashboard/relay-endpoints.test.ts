@@ -8,7 +8,8 @@ import { test, type TestContext } from 'node:test'
 import type { OpenAgentEvent } from '../events.js'
 import { MACHINE_RPC_NAMES, RELAY_RPC_NAMES, isMachineRead, isRelayRead } from '../dashboard-rpc/relay-dispatch.js'
 import { handleRelayRequest, WATCH_HEADER, WATCH_ONLY, type RelayHandlers } from './relay-endpoints.js'
-import { addMachine } from '../registry.js'
+import { addMachine, renameThisComputer } from '../registry.js'
+import { computerName } from '../computer-name.js'
 
 // A call that may only watch (WATCH_HEADER): a computer that keeps a line open to its server adds
 // the header to every call it passes on to its own OpenAgent, while its person lets the server
@@ -178,4 +179,8 @@ test('the ping says the ids this OpenAgent is listed under at the doors of the m
   const body = await answer.text()
   assert.deepEqual((JSON.parse(body) as { listed: string[] }).listed, ['a1b2c3d4e5f6'])
   assert.doesNotMatch(body, /s3cret/)
+  // The name every page shows this computer under is said from here: its host name until the person names it.
+  assert.equal((JSON.parse(body) as { name?: string }).name, computerName())
+  await renameThisComputer('Studio at home')
+  assert.equal(((await (await get('/_relay/ping')).json()) as { name?: string }).name, 'Studio at home')
 })

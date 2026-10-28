@@ -6,7 +6,7 @@ import { onProjects } from './rpc/projects.js'
 import { onComputersThrough, onMachinePerson, onMachineVersions, sendLetMachineIn, sendMachineCode, sendRemoveMachineDevice } from './rpc/machines.js'
 import { onGitHostPeople } from './rpc/people.js'
 import { sendUseLoginsOn } from './rpc/server-logins.js'
-import { addComputerThrough, addMachine, removeMachine, renameMachine } from './lib/machines.js'
+import { addComputerThrough, addMachine, removeMachine, renameComputer, renameMachine } from './lib/machines.js'
 import { AgentHistory } from './components/AgentHistory.js'
 import { SidebarProvider } from './components/ui/sidebar.js'
 import { setSidebarHidden, useSidebarHidden, useSidebarWidth } from './lib/sidebar-width.js'
@@ -384,6 +384,10 @@ export function App() {
       removeMachine,
       renameMachine: async (id, label) => {
         const renamed = await renameMachine(id, label)
+        return renamed.ok ? { ok: true } : renamed
+      },
+      renameComputer: async name => {
+        const renamed = await renameComputer(name)
         return renamed.ok ? { ok: true } : renamed
       },
       letMachineIn: sendLetMachineIn,

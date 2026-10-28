@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Monitor, Server } from 'lucide-react'
 import { Button, ConfirmDialog, Input, Switch } from '@openagt/dashboard/module'
-import { addDevice, removeDevice, renameDevice } from './devices.js'
+import { addDevice, removeDevice } from './devices.js'
 import { hasDoor, reachedAt, type ComputerItem } from './model.js'
 import { ComputersThrough } from './ServerPage.js'
 import { Head, Part, Problem, State, SwitchLine } from './parts.js'
@@ -47,11 +47,16 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
         icon={Monitor}
         name={item.name}
         facts={[state, 'Computer', where, runs, machine?.version !== undefined ? `OpenAgent ${machine.version}` : undefined]}
-        rename={async name => {
-          const renamed = machine ? await host.renameMachine(machine.id, name) : door ? await renameDevice(host, door.id, name) : { ok: false as const, error: 'Nothing to rename.' }
-          await Promise.all([d.reloadMachines(), d.reloadDoor()]).catch(() => {})
-          return renamed.ok ? { ok: true } : renamed
-        }}
+        // Its name is its own: renamed on it, and read from it everywhere. One that only got in here is renamed on it.
+        {...(machine
+          ? {
+              rename: async (name: string) => {
+                const renamed = await host.renameMachine(machine.id, name)
+                await Promise.all([d.reloadMachines(), d.reloadDoor()]).catch(() => {})
+                return renamed
+              },
+            }
+          : {})}
       />
       {item.line ? (
         <Part>

@@ -1,6 +1,6 @@
 {
   "name": "@openagt/devices",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Your devices and OpenAgent, in one Settings entry, Devices: a phone or another browser gets in by scanning a QR code once, each with its own key, and one switch, On this Wi-Fi, opens the door on the network the computer is on; on a server the door is open over HTTPS, with a certificate it asks for and renews itself. Your other computers send their runs here and get yours, listed once whichever way runs go: one on the same Wi-Fi is found there and connected once someone at it presses Allow, both screens showing the same number. A server is set up from this computer over SSH, with its own SSH keys: OpenAgent installs itself there, starts by itself, gets its GitHub and Claude logins from this computer, and your devices reach each other through it from anywhere.",
   "license": "MIT",
   "repository": {

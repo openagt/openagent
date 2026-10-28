@@ -7,7 +7,8 @@ import { isLoginWord, type MachineLogins } from '../dashboard/machine-logins.js'
 import { errorMessage } from '../error-message.js'
 import { projectNameOf, repositoryAddress, repositorySpelling } from '../repository-address.js'
 import { contextRemote, resolveProjectPath } from './context.js'
-import { addMachine, forgetMachine, isPersonName, listMachines, noteListed, removeMachine, renameMachine, tellMachine, unforgetMachine, useLoginsOn, type MachineRecord } from '../registry.js'
+import { addMachine, forgetMachine, isPersonName, listMachines, noteListed, noteName, removeMachine, renameThisComputer, tellMachine, thisComputerName, unforgetMachine, useLoginsOn, type MachineRecord } from '../registry.js'
+import { sayName } from '../dashboard/machine-call.js'
 import { syncComputersSoon } from '../dashboard/computers-sync.js'
 import { parseMachineLink } from '../machine-link.js'
 import { openagentVersion } from '../version.js'
@@ -48,8 +49,8 @@ function throughOf(server: Pick<MachineRecord, 'url'>, saved: readonly MachineRe
 }
 
 /** This computer's name as the other machine lists it, among the devices that are in there. */
-function ownName(): string {
-  return computerName() || 'another computer'
+async function ownName(): Promise<string> {
+  return (await thisComputerName().catch(() => computerName())) || 'another computer'
 }
 
 /**
@@ -76,7 +77,7 @@ export async function saveMachine(pasted: string, label?: string, owner?: string
   // Asked before the link is spent: the key a run at work is read with is not replaced under it.
   const saved = (await listMachines()).find(machine => machine.id === link.url)
   if (saved && contextRemote().working(saved.url)) return { ok: false, error: `An agent is working on ${saved.label}. Stop it, or wait until it ends, then add the machine again.` }
-  const entered = await enterRemote(link.door, link.code, ownName(), link.pin)
+  const entered = await enterRemote(link.door, link.code, await ownName(), link.pin)
   if (!entered.ok) return entered
   const access = { url: link.url, key: entered.key, door: link.door, ...(link.pin ? { pin: link.pin } : {}) }
   let added: Awaited<ReturnType<typeof addMachine>>
@@ -308,23 +309,45 @@ export interface MachineVersions {
 export async function onMachineVersions(): Promise<MachineVersions> {
   const machines = await Promise.all(
     (await listMachines()).map(async machine => {
-      const { version, health, listed: said } = await remoteFacts(machine)
+      const { version, health, listed: said, name } = await remoteFacts(machine)
       // What it says now is kept; one that does not answer is known by what it said last.
       if (version !== undefined) await noteListed(machine, said ?? []).catch(() => {})
+      if (name !== undefined) await noteName(machine, name).catch(() => {})
       const listed = version !== undefined ? said : machine.listed
       const device = deviceIdOf(machine.key)
-      return { ...shown(machine), ...(version !== undefined ? { version } : {}), ...(health ? { health } : {}), ...(device !== undefined ? { device } : {}), ...(listed !== undefined ? { listed } : {}) }
+      return { ...shown(machine), ...(name !== undefined ? { label: name } : {}), ...(version !== undefined ? { version } : {}), ...(health ? { health } : {}), ...(device !== undefined ? { device } : {}), ...(listed !== undefined ? { listed } : {}) }
     }),
   )
   const health = await computerHealth().catch(() => undefined)
-  return { version: openagentVersion(), name: ownName(), ...(health ? { health } : {}), machines }
+  return { version: openagentVersion(), name: await ownName(), ...(health ? { health } : {}), machines }
 }
 
-/** Give a saved machine the name the person picked. */
+/**
+ * Give a saved machine the name the person picked: the machine keeps it, as its own, and every
+ * page reads it from there. Kept here too, as what it is shown under while it does not answer.
+ */
 export async function sendRenameMachine(id: string, label: string): Promise<AddMachineResult> {
   if (typeof id !== 'string' || typeof label !== 'string' || !label.trim()) return { ok: false, error: 'Give it a name.' }
-  const renamed = await renameMachine(id, label)
-  return renamed ? { ok: true, machine: shown(renamed) } : { ok: false, error: 'That machine is no longer saved.' }
+  const machine = (await listMachines()).find(saved => saved.id === id)
+  if (!machine) return { ok: false, error: 'That machine is no longer saved.' }
+  const asked = await machineCall(machine, 'sendRenameComputer', [label])
+  const said = asked.ok ? (asked.ret as RenameComputerResult | undefined) : undefined
+  if (!said?.ok) return { ok: false, error: `${machine.label} did not take the name: ${asked.ok ? (said?.error ?? 'it said nothing') : asked.error}` }
+  await noteName(machine, said.name)
+  return { ok: true, machine: shown({ ...machine, label: said.name }) }
+}
+
+export type RenameComputerResult = { ok: true; name: string } | { ok: false; error: string }
+
+/**
+ * Give this computer the name the person picked, here or from a page of another of their
+ * computers: kept here, said in every call to a machine from now on, so a door lists it by it.
+ */
+export async function sendRenameComputer(picked: unknown): Promise<RenameComputerResult> {
+  const name = typeof picked === 'string' ? await renameThisComputer(picked) : undefined
+  if (name === undefined) return { ok: false, error: 'Give it a name.' }
+  sayName(name)
+  return { ok: true, name }
 }
 
 /**
@@ -337,7 +360,7 @@ export async function sendLetMachineIn(machineId: string, link: string): Promise
   const machine = (await listMachines()).find(saved => saved.id === machineId)
   if (!machine) return { ok: false, error: 'That machine is no longer saved.' }
   if (machine.url.includes(THROUGH_PATH)) return { ok: false, error: `${machine.label} is reached through a server: its runs come here through that server.` }
-  const added = await remoteAddMachine(machine, link, ownName())
+  const added = await remoteAddMachine(machine, link, await ownName())
   return added.ok ? added : { ok: false, error: `${machine.label} could not save this computer: ${added.error}` }
 }
 

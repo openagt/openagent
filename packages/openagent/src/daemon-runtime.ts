@@ -89,11 +89,11 @@ export interface ProjectRuntimeOptions {
 /** The per-project surface the dashboard drives, plus its teardown. */
 export interface ProjectRuntime {
   onStart: (prompt: string, options?: StartAgentOptions, targetProjectId?: string) => Promise<StartAgentResult>
-  onAddProject: (path: string, share: boolean) => Promise<AddProjectResult>
+  onAddProject: (path: string, share?: boolean) => Promise<AddProjectResult>
   /**
    * The folder `openagent` was started in: the listed project that holds it, so starting again
    * inside a project, or inside one of its folders, adds nothing; else the folder, added as Add
-   * project adds one. Asked in-process by the daemon that starts there, and over RPC (`sendStartedAgain`) by
+   * project adds one, with no answer on the agents' records: the repository keeps the one it has. Asked in-process by the daemon that starts there, and over RPC (`sendStartedAgain`) by
    * a second `openagent` that finds the dashboard running already.
    */
   onStartedIn: (folder: string) => Promise<StartedInResult>
@@ -543,8 +543,9 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
   // Add a project (#396): install the repo, then register it so it appears in the Projects
   // list. installProject is idempotent (an already-activated repo is a no-op success). `share`
   // is the person's answer on the agents' records, written before the project is registered:
-  // the first sync of a project added with `false` sends nothing.
-  const onAddProject = async (path: string, share: boolean): Promise<AddProjectResult> => {
+  // the first sync of a project added with `false` sends nothing. No answer leaves the
+  // repository's own as it is: one never asked reads as kept, and a yes given before stays a yes.
+  const onAddProject = async (path: string, share?: boolean): Promise<AddProjectResult> => {
     // Resolve relative input against the daemon cwd, and check the directory really
     // exists first: without this a bad path reaches git as a missing cwd, which
     // surfaces as the confusing "spawn git ENOENT" rather than a path error.
@@ -555,9 +556,11 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     if (!result.ok) return { ok: false, error: result.error }
     // A yes is to the remote that is there: with none the records are kept, so a remote the
     // project gets later is asked about, in the project's menu, before anything goes to it.
-    const shared = share && (await hasRemote(abs))
-    const written = await writeSharing(abs, shared).then(() => undefined, (err: unknown) => (err instanceof Error ? err.message : String(err)))
-    if (written !== undefined) return { ok: false, error: written }
+    const shared = share === true && (await hasRemote(abs))
+    if (share !== undefined) {
+      const written = await writeSharing(abs, shared).then(() => undefined, (err: unknown) => (err instanceof Error ? err.message : String(err)))
+      if (written !== undefined) return { ok: false, error: written }
+    }
     // Each package that writes hook lines writes its own (the built-in runner's start, resume and
     // check among them), so the new project starts an agent with nothing typed by hand. A writer
     // keeps every line already there, so adding a project again only fills what is missing.
@@ -573,7 +576,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     const path = resolve(folder)
     const holding = (await listProjects(undefined, env).catch(() => [])).find(project => path === project.path || path.startsWith(project.path + sep))
     if (!holding) {
-      const added = await onAddProject(path, false)
+      const added = await onAddProject(path)
       if (!added.ok) return added
     }
     const id = holding?.id ?? projectId(path)

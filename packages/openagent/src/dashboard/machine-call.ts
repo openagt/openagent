@@ -30,11 +30,23 @@ const HANDSHAKE_MS = 10_000
 /** How this computer says which one it is to a machine's door, with every call: the door lists it once by it. */
 export const COMPUTER_HEADER = 'x-openagent-computer'
 
+/**
+ * How this computer says its own name to a machine's door, with every call: the door lists it under
+ * the name it has now. URI-encoded: a header carries plain letters only, and a name is any language's.
+ */
+export const COMPUTER_NAME_HEADER = 'x-openagent-computer-name'
+
 let computer: string | undefined
+let named: string | undefined
 
 /** Say which computer this is from here on, with every call to a machine. Set once, when OpenAgent starts. */
 export function sayComputer(id: string | undefined): void {
   computer = id
+}
+
+/** Say this computer's own name from here on, with every call to a machine: when OpenAgent starts, and when the person renames it. */
+export function sayName(name: string | undefined): void {
+  named = name
 }
 
 /** The word OpenAgent was told to say, as the home file keeps it: what its own packages are handed, to say the same. */
@@ -59,7 +71,8 @@ export interface MachineCall {
 }
 
 export function machineFetch(url: string, pin: string | undefined, call: MachineCall = {}): Promise<Response> {
-  const init: MachineCall = computer === undefined ? call : { ...call, headers: { ...call.headers, [COMPUTER_HEADER]: computerWordFor(computer, url) } }
+  const said = { ...(computer !== undefined ? { [COMPUTER_HEADER]: computerWordFor(computer, url) } : {}), ...(named !== undefined ? { [COMPUTER_NAME_HEADER]: encodeURIComponent(named) } : {}) }
+  const init: MachineCall = { ...call, headers: { ...call.headers, ...said } }
   const target = new URL(url)
   if (target.protocol !== 'https:' || pin === undefined) return fetch(url, { ...init, redirect: 'error' })
   return new Promise<Response>((resolve, reject) => {

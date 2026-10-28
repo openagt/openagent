@@ -9,7 +9,7 @@ import { doorFingerprint, type Secured } from './certificate.js'
 import { deviceName } from './device-name.js'
 import { LINE_FOR_HEADER, LINE_PATH, LINE_PROTOCOL } from './line-out.js'
 import { enterPage, notInPage, type DoorKind } from './pages.js'
-import { COMPUTER_HEADER, PERSON_HEADER, addAsk, addCode, askOf, dropAsk, nameWord, shownCode, enter, isComputerId, isIn, listedDevices, personOf, portOf, readStore, removeComputer, removeDevice, sha256, shareLine, storePath, update, type Entry, type ListedDevice, type Store } from './store.js'
+import { COMPUTER_HEADER, COMPUTER_NAME_HEADER, PERSON_HEADER, addAsk, addCode, askOf, dropAsk, nameWord, shownCode, enter, isComputerId, isIn, listedDevices, nameComputer, personOf, portOf, readStore, removeComputer, removeDevice, sha256, shareLine, storePath, update, type Entry, type ListedDevice, type Store } from './store.js'
 
 /**
  * The door: the one thing that lets anything in from the network. A request from a device that is in is
@@ -99,6 +99,19 @@ const ASK_LOOK_MS = 500
 function saidComputer(req: IncomingMessage): string | undefined {
   const said = req.headers[COMPUTER_HEADER]
   return isComputerId(said) ? sha256(said) : undefined
+}
+
+/** The name a request says its computer has now, safe to show, when it says one. */
+function saidComputerName(req: IncomingMessage): string | undefined {
+  const said = req.headers[COMPUTER_NAME_HEADER]
+  if (typeof said !== 'string') return undefined
+  let name: string
+  try {
+    name = saidName(decodeURIComponent(said))
+  } catch {
+    return undefined
+  }
+  return name || undefined
 }
 
 /** How another computer's OpenAgent sends its key: the scheme of its `Authorization` header. */
@@ -300,6 +313,8 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
   const seen = new Map<string, number>()
   // Which computer each device that called with its key says it is: written with the times, for an entry that does not say yet.
   const said = new Map<string, string>()
+  // The name each computer that called with its key said last: its entries are named again only when it says another.
+  const names = new Map<string, string>()
   const cookieSent = new Map<string, number>()
   // When each address last tried wrong codes, within the last minute. Only the guesser waits: the code itself goes on working.
   const wrongTries = new Map<string, number[]>()
@@ -464,6 +479,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     // OpenAgent never sees a key, a computer's no more than a device's, nor what a computer says it is to this door.
     if (byBearer) delete headers.authorization
     delete headers[COMPUTER_HEADER]
+    delete headers[COMPUTER_NAME_HEADER]
     // Who the call is from is the door's to say, never the request's.
     delete headers[PERSON_HEADER]
     // A name is any language's letters: a header carries only plain ones.
@@ -525,6 +541,12 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       const computer = byBearer ? saidComputer(req) : undefined
       // The first word counts: what an entry says it is, is not changed by what its key's holder says later.
       if (computer !== undefined && !said.has(entry.id)) said.set(entry.id, computer)
+      // A computer's name is its own, said with every call: renamed there, it is listed here by the new one.
+      const heard = byBearer ? saidComputerName(req) : undefined
+      if (heard !== undefined && names.get(entry.id) !== heard) {
+        names.set(entry.id, heard)
+        void nameComputer(env, entry.id, device => (device.line ? heard : computerName(heard))).catch(() => names.delete(entry.id))
+      }
       let held = sockets.get(entry.id)
       if (!held) sockets.set(entry.id, (held = new Set()))
       if (!held.has(req.socket)) {

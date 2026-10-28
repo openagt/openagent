@@ -406,8 +406,10 @@ export interface ModuleHost {
    * there stops working. Refused, with the reason, while a run is at work there.
    */
   removeMachine(id: string): Promise<MachineRemoved>
-  /** Give a saved machine the name the person picked. */
+  /** Give a saved machine the name the person picked: the machine keeps it as its own, and every page reads it from there. */
   renameMachine(id: string, label: string): Promise<MachineAdded>
+  /** Give this computer the name the person picked: kept here, and every page reads it from here. */
+  renameComputer(name: string): Promise<MachineAdded>
   /**
    * Have a saved machine save this computer, with the link this computer's door gave for a new
    * device: that machine then starts runs here too. Not for a computer reached through a server.

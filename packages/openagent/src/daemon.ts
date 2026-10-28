@@ -6,8 +6,8 @@ import { defaultModelsSource } from './dashboard/models.js'
 import { startBackgroundServices } from './daemon-services.js'
 import { projectErrorStore } from './project-errors.js'
 import { resolveDashboardBundle } from './dashboard/bundle.js'
-import { ensureBridgeToken, ensureComputerId, listProjects, nodeRegistryFs, readPreferences, registryPreferencesStore, type Preferences } from './registry.js'
-import { sayComputer } from './dashboard/machine-call.js'
+import { ensureBridgeToken, ensureComputerId, listProjects, nodeRegistryFs, readPreferences, registryPreferencesStore, thisComputerName, type Preferences } from './registry.js'
+import { sayComputer, sayName } from './dashboard/machine-call.js'
 import { bridgeSessionsFrom } from './dashboard/bridge-sessions.js'
 import { bridgeQuestions } from './dashboard/bridge-store.js'
 import { bridgeBrowserDir, bridgeBrowserOwner, startBridgeBrowser, type BridgeBrowser, type BridgeBrowserOptions } from './bridge-browser.js'
@@ -107,6 +107,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   // a machine lists this computer once by it. A home file that cannot be written says nothing.
   const computer = await ensureComputerId(undefined, env).catch(() => undefined)
   sayComputer(computer)
+  sayName(await thisComputerName(undefined, env).catch(() => undefined))
   // Everything the dashboard drives per project (a run's start, project install, the machine
   // relay) lives in the runtime, so this body stays about the daemon's own lifecycle.
   const runtime = createProjectRuntime({ cwd, env })

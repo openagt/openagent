@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { DEVICE_COOKIE, ENTER_PATH, ME_CODE_PATH, ME_LINE_PATH, ME_PATH, ME_REMOVE_PATH, TOO_MANY_TRIES, openDoor, readBearer, readEntry, type Door, type DoorOptions } from './door.js'
-import { COMPUTER_HEADER, PERSON_HEADER, addCode, addPerson, enter, nameOwner, readStore, removeDevice, sha256, update, type Entry } from './store.js'
+import { COMPUTER_HEADER, COMPUTER_NAME_HEADER, PERSON_HEADER, addCode, addPerson, enter, nameOwner, readStore, removeDevice, sha256, update, type Entry } from './store.js'
 import { testHome } from './test-home.js'
 
 // The door in front of a stand-in for OpenAgent: a real server on this machine that records what
@@ -433,6 +433,39 @@ test('a computer that got in before it said which one it is says so with its key
   await r.close()
   assert.deepEqual(said, { [entry.id]: sha256(MAC), [phone.id]: undefined })
   assert.equal(kept, sha256(MAC))
+})
+
+test('a computer is listed under the name it says with its key: renamed there, renamed here, in any language; a page\'s word is not taken, nor passed on to OpenAgent', async () => {
+  const r = await rig()
+  try {
+    const { entry } = await r.letIn('OpenAgent on a laptop')
+    const { entry: phone, cookie } = await r.letIn()
+    const authorization = `Bearer ${entry.id}.${entry.key}`
+    const nameOf = async (id: string): Promise<string | undefined> => (await readStore(r.env)).devices.find(device => device.id === id)?.name
+    const settled = async (id: string, name: string): Promise<void> => {
+      for (let i = 0; i < 100 && (await nameOf(id)) !== name; i++) await new Promise(resolve => setTimeout(resolve, 10))
+    }
+    // Its line here too, the same computer's: named by the name alone, as a line is listed.
+    await update(r.env, store => {
+      store.devices.find(device => device.id === entry.id)!.computer = sha256('a'.repeat(32))
+      store.devices.push({ id: 'line00000001', name: 'a laptop', key: 'f'.repeat(64), added: new Date(0).toISOString(), computer: sha256('a'.repeat(32)), line: { port: 4310 } })
+    })
+    await fetch(`${r.at}/_relay/ping`, { headers: { authorization, [COMPUTER_NAME_HEADER]: encodeURIComponent('Studio') } })
+    await settled(entry.id, 'OpenAgent on Studio')
+    assert.equal(await nameOf(entry.id), 'OpenAgent on Studio')
+    assert.equal(await nameOf('line00000001'), 'Studio')
+    await fetch(`${r.at}/_relay/ping`, { headers: { authorization, [COMPUTER_NAME_HEADER]: encodeURIComponent('המחשב של רום') } })
+    await settled(entry.id, 'OpenAgent on המחשב של רום')
+    assert.equal(await nameOf(entry.id), 'OpenAgent on המחשב של רום')
+    // A device's page says nothing of a name: a cookie's word is not taken.
+    await fetch(`${r.at}/`, { headers: { cookie, [COMPUTER_NAME_HEADER]: 'Fake' } })
+    await new Promise(resolve => setTimeout(resolve, 50))
+    assert.notEqual(await nameOf(phone.id), 'OpenAgent on Fake')
+    assert.notEqual(await nameOf(phone.id), 'Fake')
+    for (const asked of r.asked) assert.equal(asked.headers[COMPUTER_NAME_HEADER], undefined)
+  } finally {
+    await r.close()
+  }
 })
 
 test('a key that says it is a computer already listed with a key of that kind is not put in that computer\'s row: the list names every key that is in', async () => {

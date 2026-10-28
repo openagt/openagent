@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react'
-import { onMachines, sendAddComputerThrough, sendAddMachine, sendMachineTold, sendRemoveMachine, sendRenameMachine, type AddMachineResult, type Machine, type RemoveMachineResult } from '../rpc/machines.js'
+import { onMachines, sendAddComputerThrough, sendAddMachine, sendMachineTold, sendRemoveMachine, sendRenameComputer, sendRenameMachine, type AddMachineResult, type Machine, type RemoveMachineResult } from '../rpc/machines.js'
 import { getSelectedMachineId, selectMachine } from './remote-target.js'
 
 // The saved machines: the other computers running OpenAgent that a run can be sent to. The list
@@ -60,6 +60,13 @@ export async function renameMachine(id: string, label: string): Promise<AddMachi
   const result = await sendRenameMachine(id, label)
   if (result.ok) await refreshMachines()
   return result
+}
+
+/** Give this computer the name the person picked; the list is read again, so every place this page names it says it. */
+export async function renameComputer(name: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await sendRenameComputer(name)
+  if (result.ok) await refreshMachines()
+  return result.ok ? { ok: true } : result
 }
 
 /** Save a computer that keeps a line open to a saved server, reached through it; the list is read again once the daemon has it. */

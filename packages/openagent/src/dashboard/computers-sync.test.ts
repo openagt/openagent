@@ -93,7 +93,7 @@ function wired(over: { machines: MachineRecord[]; forgotten?: ForgottenMachine[]
     },
     ownCode: async () => (codes.push('self'), 'https://laptop.tail1234.ts.net/_devices/enter#SELFCODE'),
     codeAt: async (machine: MachineRecord) => (codes.push(machine.url), `${machine.url}/_devices/enter#CODE`),
-    name: () => 'Laptop',
+    name: async () => 'Laptop',
     forget: async (gone: readonly ForgottenMachine[]) => void forgot.push([...gone]),
     lineComputers: async (server: MachineRecord) => over.lines?.[server.url],
     saveThrough: async (server: MachineRecord, id: string) => void through.push(`${server.url} ${id}`),
