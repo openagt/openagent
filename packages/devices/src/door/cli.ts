@@ -8,6 +8,8 @@ import { askAt, cancelAt, doorOrigin, hearAt, mayAnswerAsks, waitingAsks } from 
 import { startPersonWork } from './persons.js'
 import { HTTPS_PORT, serve } from './serve.js'
 import { announce, find } from './wifi.js'
+import { tailscaleName, tailscaleRun, type TailscaleRun } from './tailscale.js'
+import { renderUnicodeCompact } from 'uqr'
 import { MAX_LINES, Unreadable, answerAsk, readStoreStrict, nameFromWord, nameOf, nameWord, addCode, shownCode, addPerson, addressOf, computerWordFor, isComputerId, listedDevices, nameOwner, pidAlive, readStore, removeComputer, removePerson, renameComputer, samePerson, update, type Line, type ListedDevice, type Store } from './store.js'
 
 /**
@@ -21,10 +23,11 @@ export const USAGE = `usage: devices <command>
   status         whether On this Wi-Fi is on, whether the door listens, and the devices that are in
   on             On this Wi-Fi on: the door opens on the network this computer is on, over plain HTTP
   off            On this Wi-Fi off: nothing listens on the network; the devices stay in the list
-  add [--for <name>]
+  add [--for <name>] [--qr]
                  a code a new device gets in with, once, for ten minutes, and the link a QR code holds; with --for,
                  the device is that person's, by their name (the owner is named first); where
-                 OPENAGENT_PERSON_HELPER names the helper, the person gets a user and an OpenAgent of their own
+                 OPENAGENT_PERSON_HELPER names the helper, the person gets a user and an OpenAgent of their own;
+                 with --qr, the QR code is drawn on standard error too, for a computer with no screen of its own
   remove <id>    take one device out, by its id as status names it; it is out at once, a computer with all it holds here
   rename <id> <name>
                  call a device by another name, by its id as status names it; a computer under all it holds here
@@ -37,6 +40,9 @@ export const USAGE = `usage: devices <command>
   https <at>     this computer is a server, reached at this number or name: the door is open to every network,
                  over HTTPS, with a certificate it asks for and renews itself (ports 80 and 443 must be reachable)
   https off      no longer a server: On this Wi-Fi decides again
+  tailscale on   the door is open to your own devices on your Tailscale network, over HTTPS, at this computer's
+                 name there; Tailscale must run here, signed in, and Serve be on for your Tailscale network
+  tailscale off  no longer on Tailscale: On this Wi-Fi decides again
   line add <link> [watch]
                  keep a line open to a server, so a run can be started on this computer from the server's page;
                  the link is the one the server gives for a new device, or - to read it from standard input;
@@ -95,6 +101,8 @@ export interface CliIO {
   helper?: (path: string, args: string[]) => Promise<HelperAnswer>
   /** How the making of a person's user is started on its own, answering its process; this command again, detached, when unsaid. */
   startWork?: (env: NodeJS.ProcessEnv, person: string) => number | undefined
+  /** How the `tailscale` command is run; the computer's own when unsaid. */
+  tailscale?: TailscaleRun
 }
 
 class Refused extends Error {}
@@ -108,6 +116,10 @@ export interface Status {
   problem?: string
   /** On a server: the address the door is open at. */
   https?: { address: string }
+  /** Behind Tailscale: this computer's name on the person's Tailscale network, which the door is open at. */
+  tailscale?: { address: string }
+  /** Where the person fixes the problem themselves, in an account of theirs: Tailscale's page that turns Serve on. */
+  fixAt?: string
   /**
    * Set on the OpenAgent of one person on a computer several people use, to their name:
    * that person's devices are in the owner's door, and this one's own file is not theirs.
@@ -145,7 +157,10 @@ export interface Status {
   lines: { url: string; mode: Line['mode']; for?: 'everyone'; person?: string; id?: string; refused?: true }[]
 }
 
-const isListening = (store: Store): boolean => (store.on || store.https !== undefined) && store.listening !== undefined && pidAlive(store.listening.pid)
+/** Whether the door should be open: the switch is on, or the computer is a server, or it is reached over Tailscale. */
+const wanted = (store: Store): boolean => store.on || store.https !== undefined || store.tailscale !== undefined
+
+const isListening = (store: Store): boolean => wanted(store) && store.listening !== undefined && pidAlive(store.listening.pid)
 
 /** Why a door that should be open does not listen, when its own process said nothing: that process is not running. */
 const NOT_RUNNING = 'The door opens once OpenAgent runs on this computer.'
@@ -171,14 +186,15 @@ function goneFrom(store: Store, person: string, from: string): boolean {
 
 function statusOf(store: Store, env: NodeJS.ProcessEnv): Status {
   const listening = isListening(store)
-  const wanted = store.on || store.https !== undefined
-  const problem = !wanted ? undefined : listening ? (store.https ? store.problem : undefined) : (store.problem ?? NOT_RUNNING)
+  const problem = !wanted(store) ? undefined : listening ? (store.https ? store.problem : undefined) : (store.problem ?? NOT_RUNNING)
   const person = ownPerson(env)
   return {
     on: store.on,
     listening,
     ...(problem ? { problem } : {}),
     ...(store.https ? { https: { address: store.https.address } } : {}),
+    ...(store.tailscale ? { tailscale: { address: store.tailscale.address } } : {}),
+    ...(problem !== undefined && store.fixAt !== undefined ? { fixAt: store.fixAt } : {}),
     ...(person !== undefined ? { person } : {}),
     devices: listedDevices(store),
     persons: store.persons.map(({ name, owner, port, ready, problem, worker, from, kept }) => ({
@@ -232,6 +248,37 @@ async function setHttps(io: CliIO, address: string | undefined): Promise<Status>
   }
 }
 
+/**
+ * Behind Tailscale or not: this computer's name on the person's Tailscale network is asked of
+ * Tailscale, and the answer waits a moment for the door's process to open the door there. A
+ * server's door is open on the internet already, and stays as it is.
+ */
+async function setTailscale(io: CliIO, on: boolean): Promise<Status> {
+  let address: string | undefined
+  if (on) {
+    const store = await readStore(io.env)
+    if (store.https) throw new Refused('This computer is a server: its door is open on the internet already.')
+    const name = await tailscaleName(io.tailscale ?? tailscaleRun(io.env))
+    if (!name.ok) throw new Refused(name.problem)
+    address = name.value
+  }
+  await update(io.env, store => {
+    if (address === undefined) delete store.tailscale
+    else store.tailscale = { address }
+    delete store.problem
+    delete store.fixAt
+    // Where the door listened until now is not where it will: its process says so anew.
+    delete store.listening
+  })
+  const deadline = Date.now() + (io.followMs ?? 3_000)
+  for (;;) {
+    const store = await readStore(io.env)
+    const settled = address === undefined ? !isListening(store) || store.on : isListening(store) || store.problem !== undefined
+    if (settled || Date.now() > deadline) return statusOf(store, io.env)
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
+}
+
 /** A code as a command answers it: the link a camera opens, and what is typed instead, where and the code. */
 interface Given {
   url: string
@@ -247,6 +294,13 @@ async function addDevice(io: CliIO, said?: string): Promise<Given> {
   const status = statusOf(store, io.env)
   // Asked once the door can give a link: a person's user is made on the way, which takes a while and is not undone.
   const whose = (): Promise<string | undefined> => (said === undefined ? Promise.resolve(undefined) : forPerson(io, store, said))
+  if (store.tailscale) {
+    if (!status.listening) throw new Refused(status.problem ?? 'the door is not open')
+    const person = await whose()
+    const { code, expires } = await addCode(io.env, Date.now(), person)
+    // Tailscale's certificate is one every device trusts: a device that opens the link needs no key of the door's to know it by.
+    return { url: `https://${store.tailscale.address}${ENTER_PATH}#${code}`, where: store.tailscale.address, code: shownCode(code), expires, ...(person !== undefined ? { person } : {}) }
+  }
   if (store.https) {
     if (!status.listening) throw new Refused(status.problem ?? 'the door is not open')
     const fingerprint = await doorFingerprint(io.env)
@@ -493,7 +547,7 @@ async function runServe(io: CliIO): Promise<void> {
   }
   try {
     if (io.signal?.aborted) stop()
-    await serve({ env: io.env, target, signal: controller.signal, log: io.stderr, ...(port !== undefined ? { port } : {}), ...(proofPort !== undefined ? { proofPort } : {}), ...(directory ? { directory } : {}), ...(io.host !== undefined ? { host: io.host } : {}), ...(io.address ? { address: io.address } : {}), ...(io.announce ? { announce: io.announce } : {}) })
+    await serve({ env: io.env, target, signal: controller.signal, log: io.stderr, ...(port !== undefined ? { port } : {}), ...(proofPort !== undefined ? { proofPort } : {}), ...(directory ? { directory } : {}), ...(io.host !== undefined ? { host: io.host } : {}), ...(io.address ? { address: io.address } : {}), ...(io.announce ? { announce: io.announce } : {}), ...(io.tailscale ? { tailscale: io.tailscale } : {}) })
   } finally {
     // Whatever ended it, nothing of it is left to keep the process alive.
     clearInterval(watch)
@@ -522,10 +576,14 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         if (rest.length) break
         return print(await setSwitch(io, command === 'on'))
       case 'add': {
-        const [flag, person] = rest
-        if (rest.length === 0) return print(await addDevice(io))
-        if (rest.length !== 2 || flag !== '--for' || !person) break
-        return print(await addDevice(io, person))
+        // With --qr, the code the link holds is drawn too: a computer with no screen of its own is paired from a terminal.
+        const qr = rest.at(-1) === '--qr'
+        const said = qr ? rest.slice(0, -1) : rest
+        const [flag, person] = said
+        if (said.length !== 0 && (said.length !== 2 || flag !== '--for' || !person)) break
+        const given = await addDevice(io, said.length === 2 ? person : undefined)
+        if (qr) io.stderr(`${renderUnicodeCompact(given.url)}\nScan it with the device's camera, or open ${given.url} on it, within ten minutes.`)
+        return print(given)
       }
       case 'me': {
         if (rest.length) break
@@ -588,6 +646,11 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         const at = address === 'off' ? undefined : addressOf(address)
         if (address !== 'off' && at === undefined) throw new Refused(`${address} is not a server's number or name`)
         return print(await setHttps(io, at))
+      }
+      case 'tailscale': {
+        const [how] = rest
+        if (rest.length !== 1 || (how !== 'on' && how !== 'off')) break
+        return print(await setTailscale(io, how === 'on'))
       }
       case 'line': {
         const [what, at, how] = rest

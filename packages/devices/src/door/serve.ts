@@ -2,13 +2,14 @@ import { stat } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { hostname } from 'node:os'
 import { CHALLENGE_PREFIX, LETS_ENCRYPT } from './acme.js'
-import { numberAddress, onOwnNetwork, urlHost, type AddressDeps } from './address.js'
+import { numberAddress, onOwnNetwork, plainAddress, urlHost, type AddressDeps } from './address.js'
 import { keepCertificate, type KeepOptions, type Keeper, type Secured } from './certificate.js'
 import { openDoor, type Door } from './door.js'
 import { linePorts, openLines, tellOpenAgent, whomToTell } from './line-in.js'
 import { askMe, keepLine, type MeThere, type Route } from './line-out.js'
 import { startPersonWork } from './persons.js'
 import { announce, type Announcing } from './wifi.js'
+import { servedAt, serveDoor, stopServing, tailscaleRun, type TailscaleRun } from './tailscale.js'
 import { addPerson, computerWordFor, isComputerId, pidAlive, readStore, readStoreStrict, shareLine, storePath, update, type Line, type Store } from './store.js'
 
 /**
@@ -21,8 +22,13 @@ import { addPerson, computerWordFor, isComputerId, pidAlive, readStore, readStor
  * certificate is asked for here and renewed here, and the proof its office reads is shown on
  * port 80, which otherwise only sends a browser on to the door.
  *
+ * Behind Tailscale (the file names this computer's name on the person's Tailscale network) the
+ * switch is not looked at either: the door listens on this computer alone, and Tailscale's Serve
+ * takes it to the person's devices there (tailscale.ts). Serve is asked for here, again until
+ * Tailscale serves it, and let go of when the door is no longer behind Tailscale.
+ *
  * While the door is open on the Wi-Fi, it is announced there, so another computer's OpenAgent
- * finds it (wifi.ts); a server's door is not.
+ * finds it (wifi.ts); a server's door is not, nor one behind Tailscale.
  *
  * The lines are kept here too. To each server the file names, this computer keeps a line open,
  * whatever its own door does. And on a server, each computer that keeps a line here gets its
@@ -106,6 +112,8 @@ export interface ServeOptions {
   startWork?: (env: NodeJS.ProcessEnv, person: string) => number | undefined
   /** How the door is announced on the Wi-Fi; on the network itself when unsaid. */
   announce?: typeof announce
+  /** How the `tailscale` command is run; the computer's own when unsaid. */
+  tailscale?: TailscaleRun
 }
 
 /** OpenAgent's version, as its own ping says it: what the Wi-Fi is told beside this computer's name. */
@@ -165,6 +173,18 @@ async function openProof(port: number, host: string | undefined, proofs: Readonl
   return server
 }
 
+/** Whether a request comes from this computer itself: the only caller a door behind Tailscale lets knock, Tailscale's Serve. */
+function fromThisComputer(peer: string | undefined): boolean {
+  const address = plainAddress(peer ?? '')
+  return address === '::1' || /^127\./.test(address)
+}
+
+/** What the door behind Tailscale says while Tailscale is first asked to serve it. */
+export const ASKING_TAILSCALE = 'Tailscale is being asked to serve the door. One moment.'
+
+/** How long a door behind Tailscale waits before asking Serve again, when it did not serve the door: Tailscale waits each time to be turned on. */
+const SERVE_AGAIN_MS = 30_000
+
 /** Run until `signal` aborts. */
 export async function serve(opts: ServeOptions): Promise<void> {
   const { env, signal } = opts
@@ -183,6 +203,10 @@ export async function serve(opts: ServeOptions): Promise<void> {
   /** Set when the certificate changed or could not be had: the next look is not skipped. */
   let turned = false
   const proofs = new Map<string, string>()
+
+  // Behind Tailscale: the name the door is served at, and whether Tailscale serves it yet.
+  let behind: { address: string; serving: boolean; askedAt?: number } | undefined
+  const tailscale = opts.tailscale ?? tailscaleRun(env, signal)
 
   // Said on the Wi-Fi while the door is open there.
   let announcing: Promise<Announcing | undefined> | undefined
@@ -448,6 +472,93 @@ export async function serve(opts: ServeOptions): Promise<void> {
     if (door) await lines.follow(store)
   }
 
+  /** The door behind Tailscale at `address`: open on this computer alone, then served by Tailscale. */
+  const reconcileBehind = async (store: Store, address: string): Promise<void> => {
+    let problem: string | undefined
+    let fixAt: string | undefined
+    if (!behind) {
+      // A door opened for the Wi-Fi listened on every network: this one listens on this computer alone.
+      await stopAnnouncing()
+      await door?.close()
+      door = undefined
+      try {
+        door = await openDoor({ env, target: opts.target, port, host: '127.0.0.1', knocks: fromThisComputer, proxied: true, origin: `https://${address}` })
+        behind = { address, serving: false }
+        failedAt = undefined
+        log(`devices: the door is open on port ${door.port} of this computer, for Tailscale to serve at ${address}`)
+      } catch (err) {
+        failedAt = Date.now()
+        problem = startingOver(err, store) ? store.problem : whyNot(err, port)
+      }
+    }
+    // Asked of Tailscale until it serves the door, not more often than it waits each time to be turned on.
+    if (door && behind && !behind.serving && Date.now() - (behind.askedAt ?? -Infinity) >= (opts.retryMs ?? SERVE_AGAIN_MS)) {
+      behind.askedAt = Date.now()
+      // Tailscale takes a while to answer when Serve is off: meanwhile the file says what is under way.
+      if (store.problem === undefined) {
+        await update(env, s => void (s.problem ??= ASKING_TAILSCALE))
+        // What the file says now, so the answer below replaces it.
+        store.problem = ASKING_TAILSCALE
+      }
+      const ours = `http://127.0.0.1:${door.port}`
+      const at = await servedAt(tailscale, address)
+      if (!at.ok) problem = at.problem
+      else if (at.value === ours) behind.serving = true
+      else if (at.value !== undefined) problem = `Tailscale already serves something else at https://${address}, so OpenAgent's door is not served there. Stop that with tailscale serve --https=443 off, and the door is served next.`
+      else {
+        const served = await serveDoor(tailscale, door.port)
+        if (served.ok) behind.serving = true
+        else {
+          problem = served.problem
+          fixAt = served.enable
+        }
+      }
+      if (behind.serving) log(`devices: Tailscale serves the door at https://${address}`)
+    } else if (door && behind && !behind.serving) {
+      // Between two asks, the last answer stands.
+      problem = store.problem
+      fixAt = store.fixAt
+    }
+    // Looked at again soon: the next ask of Tailscale is not left waiting for the file to change.
+    if (behind && !behind.serving) turned = true
+    const listening = door && behind?.serving && (store.listening === undefined || store.listening.pid !== process.pid || store.listening.port !== door.port) ? { pid: process.pid, port: door.port } : undefined
+    if (listening || store.problem !== problem || store.fixAt !== fixAt || (!behind?.serving && store.listening?.pid === process.pid)) {
+      stamp = undefined
+      await update(env, s => {
+        if (listening) s.listening = listening
+        else if (!behind?.serving) delete s.listening
+        if (problem === undefined) delete s.problem
+        else s.problem = problem
+        if (fixAt === undefined) delete s.fixAt
+        else s.fixAt = fixAt
+      })
+      if (problem !== undefined && store.problem !== problem) log(`devices: ${problem}`)
+    }
+    door?.dropRemoved(store)
+  }
+
+  /** The door no longer behind Tailscale: Tailscale serves it no more, when it was the door it served, and it is closed. */
+  const leaveTailscale = async (): Promise<void> => {
+    const was = behind
+    behind = undefined
+    if (was && door) {
+      const at = await servedAt(tailscale, was.address)
+      if (at.ok && at.value === `http://127.0.0.1:${door.port}`) {
+        const stopped = await stopServing(tailscale)
+        if (!stopped.ok) log(`devices: ${stopped.problem}`)
+      }
+    }
+    await door?.close()
+    door = undefined
+    failedAt = undefined
+    await update(env, s => {
+      delete s.listening
+      delete s.problem
+      delete s.fixAt
+    })
+    log('devices: the door is closed')
+  }
+
   const reconcile = async (): Promise<void> => {
     const now = await stat(storePath(env)).then(s => `${s.mtimeMs}:${s.size}`, () => 'none')
     const retry = failedAt !== undefined && Date.now() - failedAt > (opts.retryMs ?? 10_000)
@@ -472,7 +583,14 @@ export async function serve(opts: ServeOptions): Promise<void> {
       log('devices: the door is closed')
       return
     }
+    // No longer behind Tailscale, or at another name: Tailscale lets go of the door, and it is closed.
+    if (behind && behind.address !== store.tailscale?.address) {
+      await leaveTailscale()
+      stamp = undefined
+      return
+    }
     if (store.https) return reconcileServed(store, store.https.address)
+    if (store.tailscale) return reconcileBehind(store, store.tailscale.address)
     if (store.on && !door) {
       try {
         const knocks = opts.address

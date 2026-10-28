@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Monitor, Server } from 'lucide-react'
 import { Button, ConfirmDialog, Input, Switch } from '@openagt/dashboard/module'
 import { addDevice, removeDevice, renameDevice } from './devices.js'
-import { hasDoor, type ComputerItem } from './model.js'
+import { hasDoor, reachedAt, type ComputerItem } from './model.js'
 import { ComputersThrough } from './ServerPage.js'
 import { Head, Part, Problem, State, SwitchLine } from './parts.js'
 import type { Devices } from './use-devices.js'
@@ -37,7 +37,7 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
     return mine.ok ? host.letMachineIn(machine.id, mine.value.url) : mine
   }
 
-  const where = item.line ? 'keeps a line open here' : through ? `through ${through.label}` : machine?.url.startsWith('https://') ? 'on the internet' : 'on this Wi-Fi'
+  const where = item.line ? 'keeps a line open here' : through ? `through ${through.label}` : reachedAt(machine)
   const runs = item.line ? undefined : machine && door ? 'runs go both ways' : machine ? 'your runs go there' : 'starts runs here'
   const state = machine ? (machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Offline</State>) : undefined
 

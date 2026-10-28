@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
-import { Globe, Laptop, UserRound, Wifi } from 'lucide-react'
-import { Button, Switch, cn } from '@openagt/dashboard/module'
-import { setSwitch } from './devices.js'
+import { Globe, Laptop, UserRound, Waypoints, Wifi } from 'lucide-react'
+import { Button, Switch, buttonVariants, cn } from '@openagt/dashboard/module'
+import { setSwitch, setTailscale } from './devices.js'
 import { reach, sharedReach } from './servers.js'
 import { hasDoor, hasServer } from './model.js'
 import { Problem } from './parts.js'
@@ -62,6 +62,7 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
     setConfirming(false)
     void change(() => d.changeDoor(() => setSwitch(host, on)), async () => {})
   }
+  const onTailscale = (on: boolean): void => void change(() => d.changeDoor(() => setTailscale(host, on)), async () => {})
 
   // Each server this computer is in at, by the line it keeps there: installed here, or set up elsewhere.
   const lines: Line[] = [
@@ -116,6 +117,34 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
               {null}
             </Way>
           ) : (
+            // Your own devices on your Tailscale network, from anywhere, with or without a server: the door
+            // listens on this computer alone, and Tailscale serves it there, with a lock.
+            <Way
+              icon={Waypoints}
+              label="On your Tailscale network"
+              words={
+                status?.tailscale
+                  ? status.listening
+                    ? `Your devices on Tailscale open OpenAgent at https://${status.tailscale.address}, from anywhere, with a lock.`
+                    : `At https://${status.tailscale.address} once Tailscale serves it.`
+                  : 'Your own phones and computers on Tailscale, from anywhere, with a lock. Tailscale must run on this computer.'
+              }
+            >
+              <Switch aria-label="On your Tailscale network" checked={status?.tailscale !== undefined} disabled={busy || !status} onCheckedChange={onTailscale} />
+            </Way>
+          )}
+          {where === undefined && status?.tailscale !== undefined && !status.listening && status.problem !== undefined && !busy && (
+            <div className="space-y-2 py-1 pl-6">
+              <Problem>{status.problem}</Problem>
+              {status.fixAt !== undefined && (
+                <a href={status.fixAt} target="_blank" rel="noreferrer" className={buttonVariants({ size: 'sm', variant: 'outline' })}>
+                  Turn on Serve
+                </a>
+              )}
+            </div>
+          )}
+          {/* The switch is not looked at behind Tailscale: this computer's devices reach it there. */}
+          {where === undefined && status?.tailscale === undefined && (
             <Way icon={Wifi} label="On this Wi-Fi" words="Phones and computers at home, with no lock on the link.">
               <Switch
                 aria-label="On this Wi-Fi"
@@ -141,7 +170,7 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
               </div>
             </div>
           )}
-          {(status?.on || status?.https) && status.problem !== undefined && !busy && <Problem>{status.problem}</Problem>}
+          {(status?.on || status?.https) && status.tailscale === undefined && status.problem !== undefined && !busy && <Problem>{status.problem}</Problem>}
           {lines.map(line => (
             <Way
               key={line.key}

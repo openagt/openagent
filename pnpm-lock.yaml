@@ -193,6 +193,9 @@ importers:
       '@openagt/agent-driver-claude':
         specifier: workspace:*
         version: link:../agent-driver/claude
+      uqr:
+        specifier: 0.1.3
+        version: 0.1.3
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.0.0

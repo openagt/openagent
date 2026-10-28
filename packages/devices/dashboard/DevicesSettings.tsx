@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import { ChevronLeft, Ellipsis, House, Monitor, Plus, Server, Smartphone, Tablet, UserRound } from 'lucide-react'
 import { Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, formatDateTime, formatRelative, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
-import { keepPerson, loadMine, removeDevice, removeMine, removePerson, renameDevice, type Answer, type DeviceRow, type DoorStatus, type Mine, type PersonRow } from './devices.js'
+import { keepPerson, loadMine, removeDevice, removeMine, removePerson, renameDevice, setTailscale, type Answer, type DeviceRow, type DoorStatus, type Mine, type PersonRow } from './devices.js'
 import { removeDevice as removeServerDevice } from './servers.js'
 import { AddDevice, type Adding } from './AddDevice.js'
 import { ComputerPage } from './ComputerPage.js'
 import { JoinedPage, OtherPage } from './JoinedPage.js'
 import { ServerPage } from './ServerPage.js'
 import { ThisComputer } from './ThisComputer.js'
-import { hasServer, type Item, type PhoneItem } from './model.js'
+import { hasServer, reachedAt, type Item, type PhoneItem } from './model.js'
 import { Problem, Row, State, hostOf, olderThan } from './parts.js'
 import { useDevices, type Devices, type Paces } from './use-devices.js'
 
@@ -94,7 +94,7 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
     )
 
   const persons = status?.persons ?? []
-  const start = d.items.length === 0 && !status?.on && status?.https === undefined && persons.length === 0
+  const start = d.items.length === 0 && !status?.on && status?.https === undefined && status?.tailscale === undefined && persons.length === 0
   return (
     <div className="space-y-4 pt-1">
       <ThisComputer d={d} start={start} />
@@ -108,8 +108,18 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
   )
 }
 
-/** With no device yet: the three things a person starts with, and a code someone gave them. */
+/** With no device yet: the three things a person starts with, a code someone gave them, and Tailscale for one who has it. */
 function Start({ d, onAdd }: { d: Devices; onAdd: (adding: Adding) => void }) {
+  const [turning, setTurning] = useState(false)
+  const [why, setWhy] = useState<string | undefined>()
+  // The door behind Tailscale: from then on, This computer says how devices reach it there.
+  const onTailscale = async (): Promise<void> => {
+    setTurning(true)
+    setWhy(undefined)
+    const turned = await d.changeDoor(() => setTailscale(d.host, true))
+    if (!turned.ok) setWhy(turned.error)
+    setTurning(false)
+  }
   return (
     <>
       <div>
@@ -127,6 +137,14 @@ function Start({ d, onAdd }: { d: Devices; onAdd: (adding: Adding) => void }) {
           Join with a code
         </button>
       </p>
+      <p className="text-xs text-muted-foreground">
+        On Tailscale?{' '}
+        <button type="button" className="underline hover:text-foreground disabled:opacity-50" disabled={turning} onClick={() => void onTailscale()}>
+          Reach this computer on your Tailscale network
+        </button>
+        , from anywhere, with no server.
+      </p>
+      {why !== undefined && <Problem>{why}</Problem>}
     </>
   )
 }
@@ -160,7 +178,7 @@ function List({ d, onOpen, onAdd }: { d: Devices; onOpen: (item: Item) => void; 
           Add device
         </Button>
       </div>
-      {items.length === 0 && !persons.length && <p className="text-xs text-muted-foreground">{server ? 'None yet. Add device: a phone from anywhere, or a computer.' : 'None yet. Add device: a phone or a computer on the same Wi-Fi.'}</p>}
+      {items.length === 0 && !persons.length && <p className="text-xs text-muted-foreground">{server ? 'None yet. Add device: a phone from anywhere, or a computer.' : status?.tailscale ? 'None yet. Add device: a phone or a computer on your Tailscale network.' : 'None yet. Add device: a phone or a computer on the same Wi-Fi.'}</p>}
       <ul aria-label="Your devices" className="divide-y divide-border">
         {items.map(item => (
           <ItemRow key={item.key} d={d} item={item} onOpen={() => onOpen(item)} />
@@ -177,7 +195,7 @@ function ItemRow({ d, item, onOpen }: { d: Devices; item: Item; onOpen: () => vo
   if (item.kind === 'phone') return <PhoneRow d={d} item={item} />
   if (item.kind === 'computer') {
     const { machine, door, through } = item
-    const where = item.line ? 'keeps a line open here' : through ? `through ${through.label}` : machine?.url.startsWith('https://') ? 'on the internet' : 'on this Wi-Fi'
+    const where = item.line ? 'keeps a line open here' : through ? `through ${through.label}` : reachedAt(machine)
     const runs = item.line ? undefined : machine && door ? 'runs go both ways' : machine ? 'your runs go there' : 'starts runs here'
     const state = machine ? machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Offline</State> : undefined
     return <Row icon={Monitor} name={item.name} facts={[state, 'Computer', where, runs]} onOpen={onOpen} />
@@ -212,7 +230,7 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
   const [name, setName] = useState(item.name)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
-  const where = 'wifi' in item.via ? 'on this Wi-Fi' : 'internet' in item.via ? 'from anywhere' : `through ${item.via.label}`
+  const where = 'wifi' in item.via ? 'on this Wi-Fi' : 'internet' in item.via ? 'from anywhere' : 'tailscale' in item.via ? 'on your Tailscale network' : `through ${item.via.label}`
   const act = async (change: () => Promise<Answer<unknown> | { ok: true } | { ok: false; error: string }>): Promise<boolean> => {
     setBusy(true)
     setError(undefined)
