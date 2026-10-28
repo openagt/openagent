@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ChevronLeft, Ellipsis, House, Monitor, Plus, Server, Smartphone, Tablet, UserRound } from 'lucide-react'
 import { Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, formatDateTime, formatRelative, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
-import { keepPerson, loadMine, removeDevice, removeMine, removePerson, renameDevice, type Answer, type DeviceRow, type DoorStatus, type Mine, type PersonRow } from './devices.js'
+import { keepPerson, loadMine, removeDevice, removeMine, removePerson, renameDevice, setTailscale, type Answer, type DeviceRow, type DoorStatus, type Mine, type PersonRow } from './devices.js'
 import { removeDevice as removeServerDevice } from './servers.js'
 import { AddDevice, type Adding } from './AddDevice.js'
 import { ComputerPage } from './ComputerPage.js'
@@ -108,8 +108,18 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
   )
 }
 
-/** With no device yet: the three things a person starts with, and a code someone gave them. */
+/** With no device yet: the three things a person starts with, a code someone gave them, and Tailscale for one who has it. */
 function Start({ d, onAdd }: { d: Devices; onAdd: (adding: Adding) => void }) {
+  const [turning, setTurning] = useState(false)
+  const [why, setWhy] = useState<string | undefined>()
+  // The door behind Tailscale: from then on, This computer says how devices reach it there.
+  const onTailscale = async (): Promise<void> => {
+    setTurning(true)
+    setWhy(undefined)
+    const turned = await d.changeDoor(() => setTailscale(d.host, true))
+    if (!turned.ok) setWhy(turned.error)
+    setTurning(false)
+  }
   return (
     <>
       <div>
@@ -127,6 +137,14 @@ function Start({ d, onAdd }: { d: Devices; onAdd: (adding: Adding) => void }) {
           Join with a code
         </button>
       </p>
+      <p className="text-xs text-muted-foreground">
+        On Tailscale?{' '}
+        <button type="button" className="underline hover:text-foreground disabled:opacity-50" disabled={turning} onClick={() => void onTailscale()}>
+          Reach this computer on your Tailscale network
+        </button>
+        , from anywhere, with no server.
+      </p>
+      {why !== undefined && <Problem>{why}</Problem>}
     </>
   )
 }

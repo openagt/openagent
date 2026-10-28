@@ -268,6 +268,24 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     expect(await copiedLink()).toBe(link.url)
   })
 
+  test('with nothing in, the start page offers Tailscale too: one press puts the door behind it, and says why when it cannot', async () => {
+    const BEHIND = { on: false, listening: true, tailscale: { address: 'laptop.tail1234.ts.net' }, devices: [], persons: [] }
+    let state: unknown = OFF
+    const { host, runComputerCommand } = door(args => {
+      if (args[0] === 'tailscale') state = BEHIND
+      return ok(state)
+    })
+    show(host)
+    fireEvent.click(await screen.findByRole('button', { name: 'Reach this computer on your Tailscale network' }))
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['tailscale', 'on']))
+    expect(await screen.findByText(/open OpenAgent at https:\/\/laptop\.tail1234\.ts\.net, from anywhere/)).toBeTruthy()
+    cleanup()
+    const signedOut = door(args => (args[0] === 'tailscale' ? { ok: false, error: 'Tailscale is not signed in on this computer. Sign in to Tailscale, then turn this on again.' } : ok(OFF)))
+    show(signedOut.host)
+    fireEvent.click(await screen.findByRole('button', { name: 'Reach this computer on your Tailscale network' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('Tailscale is not signed in on this computer. Sign in to Tailscale, then turn this on again.')
+  })
+
   test('behind Tailscale with Serve off for the network: what is in the way is said, with a press to the page in Tailscale that turns it on; Add phone says the same', async () => {
     const OFF_THERE = { on: false, listening: false, tailscale: { address: 'laptop.tail1234.ts.net' }, problem: 'Serve is off on your Tailscale network. Turn it on once in your Tailscale account; the door opens by itself then.', fixAt: 'https://login.tailscale.com/f/serve?node=n1', devices: [PHONE], persons: [] }
     show(door(() => ok(OFF_THERE)).host)
