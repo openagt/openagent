@@ -1,0 +1,27 @@
+{
+  "id": "2026-10-26T17-14-04-966Z",
+  "startedAt": "2026-10-26T17:14:07.551Z",
+  "endedAt": "2026-10-26T17:14:33.958Z",
+  "status": "done",
+  "intent": "Run the shell command: sleep 15. Then reply with the single word OK. Change nothing.",
+  "title": "Sleep command naming",
+  "driver": "claude-code",
+  "model": "claude-sonnet-5-5",
+  "cost": 0.0315392,
+  "contextTokens": 17938,
+  "caller": {
+    "runner": {
+      "host": "ubuntu-s-1vcpu-2gb-fra1",
+      "pid": 613783,
+      "publish": "commit",
+      "baseCommit": "34afbe15df74bc3b37ba83960790370650aed3d0"
+    },
+    "pid": 613783,
+    "host": "ubuntu-s-1vcpu-2gb-fra1",
+    "baseCommit": "34afbe15df74bc3b37ba83960790370650aed3d0",
+    "publish": "commit",
+    "kind": "prompt",
+    "workspace": "/home/openagent/projects/openagent/.branches/agent-2026-10-26T17-14-04-966Z",
+    "sessionId": "8b7440f4-da71-48fd-ba96-1ffaa3f07291"
+  }
+}

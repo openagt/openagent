@@ -1,0 +1,25 @@
+{
+  "id": "2026-10-26T17-24-21-812Z",
+  "startedAt": "2026-10-26T17:24:25.131Z",
+  "endedAt": "2026-10-26T17:24:40.696Z",
+  "status": "done",
+  "intent": "Say hi, nothing else",
+  "title": "Greeting Exchange",
+  "driver": "claude-code",
+  "model": "claude-opus-5-5",
+  "cost": 0.057886,
+  "contextTokens": 17436,
+  "caller": {
+    "runner": {
+      "host": "ubuntu-s-1vcpu-2gb-fra1",
+      "pid": 618718,
+      "baseCommit": "34afbe15df74bc3b37ba83960790370650aed3d0"
+    },
+    "pid": 618718,
+    "host": "ubuntu-s-1vcpu-2gb-fra1",
+    "baseCommit": "34afbe15df74bc3b37ba83960790370650aed3d0",
+    "kind": "prompt",
+    "workspace": "/home/openagent/projects/openagent/.branches/agent-2026-10-26T17-24-21-812Z",
+    "sessionId": "8df842c3-58c4-4b05-93ab-8d715d88be91"
+  }
+}
