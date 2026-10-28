@@ -7,7 +7,8 @@ import { isLoginWord, type MachineLogins } from '../dashboard/machine-logins.js'
 import { errorMessage } from '../error-message.js'
 import { projectNameOf, repositoryAddress, repositorySpelling } from '../repository-address.js'
 import { contextRemote, resolveProjectPath } from './context.js'
-import { addMachine, isPersonName, listMachines, noteListed, removeMachine, renameMachine, tellMachine, useLoginsOn, type MachineRecord } from '../registry.js'
+import { addMachine, forgetMachine, isPersonName, listMachines, noteListed, removeMachine, renameMachine, tellMachine, unforgetMachine, useLoginsOn, type MachineRecord } from '../registry.js'
+import { syncComputersSoon } from '../dashboard/computers-sync.js'
 import { parseMachineLink } from '../machine-link.js'
 import { openagentVersion } from '../version.js'
 import { readinessOf, type StartReadiness } from '../project-hooks.js'
@@ -61,6 +62,15 @@ function ownName(): string {
  * everyone: the door says whose it is when it tells this OpenAgent of it.
  */
 export async function sendAddMachine(pasted: string, label?: string, owner?: string): Promise<AddMachineResult> {
+  const added = await saveMachine(pasted, label, owner)
+  // Saved by the person: one they removed before is theirs again, and the others take it back too.
+  if (added.ok) await unforgetMachine(added.machine.url)
+  if (added.ok) syncComputersSoon()
+  return added
+}
+
+/** Get in at the machine a link names and save it, with this computer's own key there. */
+export async function saveMachine(pasted: string, label?: string, owner?: string): Promise<AddMachineResult> {
   const link = typeof pasted === 'string' ? parseMachineLink(pasted) : null
   if (!link) return { ok: false, error: 'That is not a link another OpenAgent gives: on the other machine, open Settings, find Devices, and press Add device.' }
   // Asked before the link is spent: the key a run at work is read with is not replaced under it.
@@ -106,6 +116,11 @@ export async function sendRemoveMachine(id: string): Promise<RemoveMachineResult
   for (const machine of through) await removeMachine(machine.id)
   const removed = await removeMachine(id)
   if (removed) void leaveRemote(removed)
+  // Removed by the person: the person's other computers take it out too, and do not bring it back here.
+  if (removed) {
+    await forgetMachine(removed.url, new Date().toISOString())
+    syncComputersSoon()
+  }
   return { ok: true }
 }
 
@@ -145,6 +160,13 @@ export async function onComputersThrough(machineId: string): Promise<ComputersTh
  * computer's logins.
  */
 export async function sendAddComputerThrough(machineId: string, computerId: string): Promise<AddMachineResult> {
+  const added = await saveComputerThrough(machineId, computerId)
+  if (added.ok) await unforgetMachine(added.machine.url)
+  return added
+}
+
+/** Save a computer on a line at a saved server, through that server. */
+export async function saveComputerThrough(machineId: string, computerId: string): Promise<AddMachineResult> {
   const server = (await listMachines()).find(machine => machine.id === machineId)
   if (!server || server.url.includes(THROUGH_PATH)) return { ok: false, error: 'That server is no longer saved.' }
   const asked = await remoteComputers(server)
