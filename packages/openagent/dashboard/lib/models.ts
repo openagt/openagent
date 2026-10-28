@@ -18,24 +18,26 @@ export function useModels(): ModelsView | undefined {
 
 /**
  * The models a run started on the machine picked in "Run on" can be given: that machine's own, as
- * it asked its agents, which need not be this computer's. `undefined` while it is asked; this
+ * it asked its agents, which need not be this computer's (`theirs`). `undefined` while it is asked; this
  * computer's when none is picked, or the machine does not say (an OpenAgent that is not asked this).
  */
-export function useModelsOn(machineId: string | undefined): ModelsView | undefined {
+export function useModelsOn(machineId: string | undefined): { models: ModelsView | undefined; theirs: boolean } {
   const own = useModels()
   const theirs = useLoaded<ModelsView | null | undefined>(machineId === undefined ? null : () => onMachineModels(machineId), undefined, [machineId])
-  return machineId === undefined || theirs === null ? own : theirs
+  return machineId === undefined || theirs === null ? { models: own, theirs: false } : { models: theirs, theirs: true }
 }
 
 /**
  * Every coding agent with the models it listed, by the names it gives them, or a line saying why
  * there are none: the one list every surface that picks a model offers (the start menu, Settings),
  * so the two can never disagree on what a pick may be. No icons: those are the menu's own.
+ * `on` names the computer the models are another's of, for an agent not installed there.
  */
-export function driverOptions(models: ModelsView | undefined): DriverOption[] {
+export function driverOptions(models: ModelsView | undefined, on?: string): DriverOption[] {
   return DRIVERS.map(name => {
     const answer = models?.[name]
-    const modelsNote = !answer ? `Asking ${DRIVER_LABELS[name]}…` : 'error' in answer ? answer.error : 'No models listed'
+    const missing = `${DRIVER_LABELS[name]} is not installed${on !== undefined ? ` on ${on}` : ''}.`
+    const modelsNote = !answer ? `Asking ${DRIVER_LABELS[name]}…` : 'error' in answer ? (answer.missing ? missing : answer.error) : 'No models listed'
     return {
       value: name,
       label: DRIVER_LABELS[name],

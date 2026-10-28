@@ -38,6 +38,12 @@ test('an agent that could not say is named with its reason and asked again at th
   assert.equal(codex.asks, 2)
 })
 
+test('an agent whose CLI is not on this computer is marked missing, by the code its error carries', async () => {
+  const codex = driver(Object.assign(new Error('`codex` could not start: spawn codex ENOENT'), { code: 'ENOENT' }))
+  const source = cachedModelsSource({ 'claude-code': driver([]), codex })
+  assert.deepEqual((await source.read()).codex, { models: [], error: '`codex` could not start: spawn codex ENOENT', missing: true })
+})
+
 test('an agent without a way to list its models says so', async () => {
   const source = cachedModelsSource({ 'claude-code': driver([]), codex: {} })
   assert.deepEqual((await source.read()).codex, { models: [], error: 'this agent cannot list its models' })

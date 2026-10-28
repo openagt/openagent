@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -89,8 +89,65 @@ test('the helper puts the rules in place in one go, and waits its turn behind an
   assert.match(HELPER, /^lock\(\) \{ exec 9>\/run\/openagent-person\.lock; flock -w 600 9 /m)
   // Root finds its programs in the system's own folders only.
   assert.match(HELPER, /^export PATH=\/usr\/local\/sbin:\/usr\/local\/bin:\/usr\/sbin:\/usr\/bin:\/sbin:\/bin$/m)
-  // Claude Code is installed as the person, with nothing of root's around it.
+  // Claude Code and Codex are installed as the person, with nothing of root's around it.
   assert.match(HELPER, /runuser -u "\$user" -- env -i HOME="\$home" /)
+})
+
+test('a person gets Claude Code and Codex in their own home by each one\'s installer, only what is not there yet, and a failed one is said', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'helper-agents-'))
+  // What the person's user would run, said instead of run.
+  const agents = only('as_person() { echo "$1 $2 $3"; [ -z "${FAILS:-}" ] || [[ $3 != *"$FAILS"* ]]; }\nagents oa-rom-1f268826 "$1"')
+  try {
+    assert.deepEqual((await helper([home], agents)).out.trim().split('\n'), [
+      `oa-rom-1f268826 ${home} curl -fsSL https://claude.ai/install.sh | bash`,
+      `oa-rom-1f268826 ${home} curl -fsSL https://chatgpt.com/codex/install.sh | sh`,
+    ])
+    // A person made before Codex came has Claude Code already: Codex alone.
+    await mkdir(join(home, '.local/bin'), { recursive: true })
+    await writeFile(join(home, '.local/bin/claude'), '')
+    assert.deepEqual((await helper([home], agents)).out.trim().split('\n'), [`oa-rom-1f268826 ${home} curl -fsSL https://chatgpt.com/codex/install.sh | sh`])
+    const failed = await helper([home], `FAILS=codex\n${agents}`)
+    assert.equal(failed.code, 1)
+    assert.equal(failed.err, 'Codex could not be installed for oa-rom-1f268826.\n')
+    await writeFile(join(home, '.local/bin/codex'), '')
+    assert.deepEqual(await helper([home], agents), { code: 0, out: '', err: '' })
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+  // Codex's installer asks nothing, with no one there to answer.
+  assert.match(HELPER, /^  runuser -u "\$user" -- env -i HOME="\$home" USER="\$user" LOGNAME="\$user" CODEX_NON_INTERACTIVE=1 PATH=\/usr\/local\/bin:\/usr\/bin:\/bin bash -o pipefail -c "cd && \$3" <\/dev\/null >\/dev\/null 2>&1$/m)
+  // A new person gets both as their user is made.
+  assert.match(HELPER, /^  agents "\$user" "\$home"$/m)
+})
+
+test('at an update, every person whose user the helper made gets what a new one gets, and nobody else', async () => {
+  const persons = await mkdtemp(join(tmpdir(), 'helper-persons-'))
+  try {
+    for (const name of ['oa-rom-1f268826', 'oa-dani-0a1b2c3d', 'oa-gone-00000000', 'oa-odd-11111111', 'root', 'Not-A-User']) await writeFile(join(persons, `${name}.env`), 'PORT=4300\n')
+    const said = await helper(
+      [persons],
+      only(
+        [
+          'PERSONS=$1',
+          'lock() { :; }',
+          // A user that is gone, and one whose home is not its own folder.
+          'is_user() { [ "$1" != oa-gone-00000000 ]; }',
+          'getent() { [ "$2" = oa-odd-11111111 ] && echo "$2:x:1:1::/var/odd:/bin/bash" || echo "$2:x:1:1::/home/$2:/bin/bash"; }',
+          'agents() { echo "$1 $2"; }',
+          'all_agents',
+        ].join('\n'),
+      ),
+    )
+    assert.equal(said.err, '')
+    assert.deepEqual(said.out.trim().split('\n').sort(), ['oa-dani-0a1b2c3d /home/oa-dani-0a1b2c3d', 'oa-rom-1f268826 /home/oa-rom-1f268826'])
+  } finally {
+    await rm(persons, { recursive: true, force: true })
+  }
+  assert.match(HELPER, /^  agents\) \[ \$# -eq 1 \] \|\| usage; all_agents ;;$/m)
+  // The install asks it at every update, once the helper is in place.
+  const text = STEPS.find(step => step.id === 'people')!.script({ address: '203.0.113.5', version: '1.2.3' })
+  assert.match(text, /\n  \/opt\/openagent\/bin\/openagent-person agents\n/)
+  assert.ok(text.indexOf(`${PERSON_HELPER} agents`) > text.indexOf(`put ${PERSON_HELPER} 755`))
 })
 
 test('the server\'s user may run the helper as root, and nothing else', () => {

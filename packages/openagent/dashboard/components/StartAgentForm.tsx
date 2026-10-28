@@ -270,11 +270,21 @@ export function StartAgentForm({
         {readiness?.problems.map(problem =>
           problem === readiness.fix?.problem ? (
             machine ? (
-              <Refusal
-                key={problem}
-                title={readiness.fix.kind === 'log-in' ? `${agentName} is not logged in on ${name}.` : `${agentName} is not installed on ${name}.`}
-                {...(readiness.fix.kind === 'log-in' ? { actions: <MachineLogins machineId={machine.id} onAccounts={() => openSettings(ACCOUNTS_ENTRY)} /> } : {})}
-              />
+              readiness.fix.kind === 'log-in' ? (
+                <Refusal key={problem} title={`${agentName} is not logged in on ${name}.`} actions={<MachineLogins machineId={machine.id} onAccounts={() => openSettings(ACCOUNTS_ENTRY)} />} />
+              ) : (
+                // The install brings every coding agent, and an update brings one added since.
+                <Refusal
+                  key={problem}
+                  title={`${agentName} is not installed on ${name}.`}
+                  detail={`Update ${name} to get it.`}
+                  actions={
+                    <Button type="button" size="xs" onClick={() => openSettings('devices', machine.id)}>
+                      {`Update ${name}`}
+                    </Button>
+                  }
+                />
+              )
             ) : (
               <Refusal
                 key={problem}

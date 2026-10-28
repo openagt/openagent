@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -74,6 +74,42 @@ test('root finds its programs in the system\'s own folders, holds the install al
   // The version is read off a file: OpenAgent itself is not started by root, and no package's script is.
   assert.doesNotMatch(text('openagent'), /bin\/openagent --version/)
   assert.match(text('openagent'), /npm install --global --ignore-scripts /)
+})
+
+test('the server\'s user gets Claude Code and Codex by each one\'s own installer, asking nothing, only what it lacks, and an installer that brings none is said', async () => {
+  const agent = STEPS.find(step => step.id === 'agent')!
+  assert.equal(agent.label, 'Claude Code and Codex')
+  const home = await mkdtemp(join(tmpdir(), 'servers-agent-'))
+  const bin = join(home, '.local/bin')
+  // The user's own folder comes first on the step's way to its programs: a curl there answers what the installer would do.
+  const curl = (brings: boolean) =>
+    writeFile(
+      join(bin, 'curl'),
+      `#!/bin/sh\necho "$*" >> "$HOME/asked"\necho 'echo "$CODEX_NON_INTERACTIVE" > "$HOME/quiet"${brings ? '; printf "#!/bin/sh\\n" > "$HOME/.local/bin/codex"; chmod +x "$HOME/.local/bin/codex"' : ''}'\n`,
+      { mode: 0o755 },
+    )
+  const step = () => sh(agent.script(FACTS), [], { env: { HOME: home }, cwd: home })
+  try {
+    await mkdir(bin, { recursive: true })
+    await writeFile(join(bin, 'claude'), '#!/bin/sh\n', { mode: 0o755 })
+    await curl(false)
+    await assert.rejects(step(), (error: { stderr: string }) => {
+      assert.equal(error.stderr, "Codex's installer ended without a codex command.\n")
+      return true
+    })
+    await curl(true)
+    await rm(join(home, 'asked'))
+    await step()
+    // Claude Code was there: Codex's installer alone, told no one is there to answer.
+    assert.equal(await readFile(join(home, 'asked'), 'utf8'), '-fsSL https://chatgpt.com/codex/install.sh\n')
+    assert.equal(await readFile(join(home, 'quiet'), 'utf8'), '1\n')
+    // Asked again, as at an update: both are there, and nothing is fetched.
+    await rm(join(home, 'asked'))
+    await step()
+    await assert.rejects(readFile(join(home, 'asked')), { code: 'ENOENT' })
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
 })
 
 test('the first step refuses a server that is no Ubuntu or Debian in words, before anything is installed', async () => {

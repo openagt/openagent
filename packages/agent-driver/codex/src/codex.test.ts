@@ -583,6 +583,8 @@ test('CodexDriver.listModels asks `codex debug models`, and says why when Codex 
   assert.deepEqual(asked, ['debug', 'models'])
   assert.equal(models.length, 3)
   await assert.rejects(new CodexDriver({ spawn: fakeSpawn([], undefined, 1) }).listModels(), /`codex debug models` failed \(code 1\)/)
+  // A Codex that is not on this computer: its error carries the code, for the reader to say so.
+  await assert.rejects(new CodexDriver({ bin: '/nonexistent-openagent-test/codex' }).listModels(), { code: 'ENOENT', message: /could not start/ })
 })
 
 test('a Codex change to files that finished says each file it changed: lines added and removed, and the files it made', async () => {

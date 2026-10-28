@@ -32,6 +32,12 @@ describe('driverOptions', () => {
     ])
   })
 
+  test('an agent whose CLI is not on the computer is said not installed, on the computer the models are of', () => {
+    const models = { 'claude-code': { models: [] as [], error: 'not logged in' }, codex: { models: [] as [], error: '`codex` could not start: spawn codex ENOENT', missing: true as const } }
+    expect(driverOptions(models).map(o => o.modelsNote)).toEqual(['not logged in', 'Codex is not installed.'])
+    expect(driverOptions(models, 'experiment').map(o => o.modelsNote)).toEqual(['not logged in', 'Codex is not installed on experiment.'])
+  })
+
   test('before the daemon answers, each agent says it is being asked', () => {
     expect(driverOptions(undefined).map(o => o.modelsNote)).toEqual(['Asking Claude Code…', 'Asking Codex…'])
   })
