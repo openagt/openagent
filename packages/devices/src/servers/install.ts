@@ -1,6 +1,6 @@
 import { askOpenAgent } from './shared.js'
 import { exec as realExec, lastLines, openSession, withAdvice, type Exec, type Session } from './ssh.js'
-import { PERSON_TIMEOUT_MS, SERVER_USER, devicesScript, linkScript, stepsFor, type Facts, type StepId } from './steps.js'
+import { PERSON_TIMEOUT_MS, SERVER_USER, devicesScript, linkScript, reachedOf, stepsFor, type Facts, type StepId } from './steps.js'
 import { BEAT_MS, changeServer, doorUrl, heartbeat, working, type Server, type StepState } from './store.js'
 import { nameOf } from '../door/store.js'
 
@@ -108,7 +108,7 @@ export async function install(opts: InstallOptions): Promise<void> {
   const server = await change(kept => {
     if (working(kept) && !mine(kept) && kept.worker!.pid !== process.ppid) throw new AlreadyWorking(address)
     kept.worker = { pid: process.pid, seen: new Date().toISOString() }
-    return { address: kept.address, user: kept.user, ...(kept.through !== undefined ? { through: kept.through } : {}), ...(kept.who !== undefined ? { who: kept.who } : {}) }
+    return { address: kept.address, user: kept.user, ...(kept.through !== undefined ? { through: kept.through } : {}), ...(kept.who !== undefined ? { who: kept.who } : {}), ...(kept.tailscale ? { tailscale: true as const } : {}) }
   })
   if (!server) throw new Error(`no server at ${address}`)
   const ask = opts.ask ?? ((fn: string, args: unknown[]) => askOpenAgent(env, fn, args))
@@ -116,9 +116,10 @@ export async function install(opts: InstallOptions): Promise<void> {
   let session: Session | undefined
   try {
     session = await openSession(server, { ...(opts.exec ? { exec: opts.exec } : {}), ...(opts.signal ? { signal: opts.signal } : {}) })
-    // The person logs in as their own user on a computer reached through a server: the one at its screen.
-    const facts: Facts = { address, version, ...(await ownGitIdentity(opts.exec)), ...(server.through !== undefined && server.user !== 'root' ? { desktop: server.user } : {}) }
-    for (const step of stepsFor(server.through !== undefined)) {
+    // The person logs in as their own user on a computer reached through a server, or on Tailscale: the one at its screen.
+    const reached = reachedOf(server)
+    const facts: Facts = { address, version, ...(await ownGitIdentity(opts.exec)), ...(reached !== 'internet' && server.user !== 'root' ? { desktop: server.user } : {}), ...(reached === 'tailscale' ? { tailscale: true as const } : {}) }
+    for (const step of stepsFor(reached)) {
       await set(step.id, 'running')
       if (step.id === 'line' && server.through !== undefined) {
         // Asked only now: a link lets the line in for ten minutes, and the steps before take longer.

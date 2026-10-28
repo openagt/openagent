@@ -75,7 +75,7 @@ export function ServerPage({ d, item, onBack, invite = false }: { d: Devices; it
         icon={home ? House : Server}
         name={item.name}
         badge={home ? 'Server at home' : 'Server'}
-        facts={[state, home ? `through ${hostOf(server.through!)}` : item.name !== server.address ? server.address : undefined, machine?.version !== undefined ? `OpenAgent ${machine.version}` : undefined]}
+        facts={[state, home ? `through ${hostOf(server.through!)}` : server.tailscale ? 'on your Tailscale network' : item.name !== server.address ? server.address : undefined, machine?.version !== undefined ? `OpenAgent ${machine.version}` : undefined]}
         {...(machine ? { rename: async (name: string) => {
           const renamed = await host.renameMachine(machine.id, name)
           await d.reloadMachines().catch(() => {})
@@ -109,6 +109,7 @@ export function ServerPage({ d, item, onBack, invite = false }: { d: Devices; it
       {inviting && (
         <Invite
           label={item.name}
+          tailscale={server.tailscale === true}
           ask={person => askLink(host, server.address, person)}
           persons={{
             owner,
@@ -199,7 +200,8 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
           <WhoCanStart host={host} server={{ ...server, through: server.through }} busy={busy} onChange={d.act} />
         </Part>
       )}
-      {done && machine && server.through === undefined && <ComputersThrough host={host} machine={machine} busy={busy} everyMs={30_000} />}
+      {/* A computer on Tailscale keeps no lines: no computer is reached through it. */}
+      {done && machine && server.through === undefined && !server.tailscale && <ComputersThrough host={host} machine={machine} busy={busy} everyMs={30_000} />}
       {!server.working && (
         <div className="pt-4">
           <ConfirmDialog

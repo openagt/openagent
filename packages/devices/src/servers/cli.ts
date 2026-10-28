@@ -8,7 +8,7 @@ import { ownDoor, type OwnDoor } from './own-door.js'
 import { OwnAtWork, giveOwnClaude, giveOwnGithub, personHere, removeOwn, startOverSoon } from './own.js'
 import { askOpenAgent, copyGithubToOther, isOtherUrl, isSharedUrl, lineTo, mintFor, otherLogins, setSharedReach, startMint } from './shared.js'
 import { lastLines, openSession, withAdvice, type Exec } from './ssh.js'
-import { PERSON_TIMEOUT_MS, SERVER_MARK, SERVER_USER, devicesScript, stepLabel, stepsFor, whoScript, type Who } from './steps.js'
+import { PERSON_TIMEOUT_MS, SERVER_MARK, SERVER_USER, devicesScript, reachedOf, stepLabel, stepsFor, whoScript, type Who } from './steps.js'
 import { LOGIN_KINDS, Unreadable, addressOf, isServerName, atWork, doorUrl, freshSteps, isMachineUrl, isUser, isVersion, keepDevices, keptDevices, readStore, throughUrl, update, working, type Login, type LoginKind, type Reach, type Server, type StepState, type Store } from './store.js'
 import { nameOf } from '../door/store.js'
 
@@ -22,13 +22,15 @@ export const USAGE = `usage: devices server <command>
 
   status                               the servers this computer installed OpenAgent on and how far each install is; and
                                        whether this computer is itself such a server
-  connect <address> <user> <version> [--through <url>]
+  connect <address> <user> <version> [--through <url> | --tailscale]
                                        install OpenAgent at this version on the server at this number or name, logging in
                                        over SSH as this user (root, or one that becomes root without a password) with this
                                        computer's own SSH keys; run again, it goes on where it failed, and brings a server
                                        that fell behind to this version; with --through, the computer has no door of its
                                        own on the internet (a computer at home): it keeps a line open to the server at that
-                                       address among OpenAgent's machines instead, as this computer's person's
+                                       address among OpenAgent's machines instead, as this computer's person's; with
+                                       --tailscale, the computer is on your Tailscale network, connected by its name there
+                                       (name.tail1234.ts.net): its door is there, behind Tailscale, not on the internet
   test <address> <user>                log in to the server once over SSH as this user, with this computer's own SSH keys,
                                        as the install's first step does, and change nothing there: what it runs, or what
                                        failed (unreachable, no-ssh, key, no-key, sudo, host-key, system) with what ssh said
@@ -173,6 +175,8 @@ export interface ServerStatus {
   through?: string
   /** A computer reached through a server: who there may start runs on it. */
   who?: Who
+  /** A computer on the person's Tailscale network, at its door there. */
+  tailscale?: true
   steps: { id: string; label: string; state: StepState; said?: string }[]
 }
 
@@ -215,7 +219,8 @@ function statusOf(store: Store, env: NodeJS.ProcessEnv): Status {
         adding: server.adding,
         ...(server.reach ? { reach: server.reach } : {}),
         ...(server.through !== undefined ? { through: server.through, who: server.who ?? 'me' } : {}),
-        steps: stepsFor(server.through !== undefined).map(def => {
+        ...(server.tailscale ? { tailscale: true as const } : {}),
+        steps: stepsFor(reachedOf(server)).map(def => {
           const [id, label] = [def.id, stepLabel(def, server.through)]
           const step = server.steps.find(candidate => candidate.id === id)!
           // A step that still reads as running with no process behind it: the install died there.
@@ -240,9 +245,10 @@ function startWork(words: string[], env: NodeJS.ProcessEnv): number {
 /** Whether `said` is a server's door among OpenAgent's machines: the only kind a computer keeps its line to. */
 const isDoor = (said: string | undefined): said is string => said !== undefined && isMachineUrl(said) && said.startsWith('https://')
 
-async function connect(io: CliIO, said: { address: string; user: string; version: string; through?: string }): Promise<Status> {
+async function connect(io: CliIO, said: { address: string; user: string; version: string; through?: string; tailscale?: true }): Promise<Status> {
   const address = addressOf(said.address)
   if (address === undefined) throw new Refused(`${said.address} is not a server's number or name`)
+  if (said.tailscale && !/\.ts\.net$/.test(address)) throw new Refused(`${said.address} is not a name on Tailscale: connect it by its name there, like name.tail1234.ts.net`)
   if (!isUser(said.user)) throw new Refused(`${said.user} is not a user name`)
   if (!isVersion(said.version)) throw new Refused(`${said.version} is not a version of OpenAgent`)
   if (said.through !== undefined && !isDoor(said.through)) throw new Refused(`${said.through} is not a server's address among OpenAgent's machines`)
@@ -253,7 +259,17 @@ async function connect(io: CliIO, said: { address: string; user: string; version
     if (known && working(known)) throw new Refused(`OpenAgent is being installed on ${address} right now`)
     // Reached the way it was first connected: an update says nothing of it.
     const through = said.through ?? known?.through
-    const fresh: Server = { address, user: said.user, ...(known?.fingerprint ? { fingerprint: known.fingerprint } : {}), steps: freshSteps(through !== undefined), worker: { pid: process.pid, seen: new Date().toISOString() }, adding: true, ...(through !== undefined ? { through } : {}) }
+    const tailscale = through === undefined && (said.tailscale ?? known?.tailscale) === true
+    const fresh: Server = {
+      address,
+      user: said.user,
+      ...(known?.fingerprint ? { fingerprint: known.fingerprint } : {}),
+      steps: freshSteps(reachedOf({ ...(through !== undefined ? { through } : {}), ...(tailscale ? { tailscale: true as const } : {}) })),
+      worker: { pid: process.pid, seen: new Date().toISOString() },
+      adding: true,
+      ...(through !== undefined ? { through } : {}),
+      ...(tailscale ? { tailscale: true as const } : {}),
+    }
     if (known) Object.assign(known, fresh)
     else store.servers.unshift(fresh)
   })
@@ -294,6 +310,7 @@ async function still(io: CliIO, said: string): Promise<Server> {
 async function setReach(io: CliIO, said: string, mode: Reach): Promise<Status> {
   const server = await still(io, said)
   if (server.through !== undefined) throw new Refused(`${server.address} is reached through a server: this computer keeps no line to it`)
+  if (server.tailscale) throw new Refused(`${server.address} is on your Tailscale network: this computer keeps no line to it`)
   const door = io.door ?? ownDoor
   // A line this computer already keeps is told what the server may do. One it lost since is asked for anew.
   const kept = server.reach !== undefined && (await door(['line', mode, server.address], io.env)).ok
@@ -500,12 +517,13 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         if (rest.length) break
         return print(statusOf(await readStore(io.env), io.env))
       case 'connect': {
-        // The through server's address comes last, after its flag.
+        // The through server's address comes last, after its flag; --tailscale is a flag alone.
         const flagged = rest.at(-2) === '--through'
-        const words = flagged ? rest.slice(0, -2) : rest
+        const tailscale = !flagged && rest.at(-1) === '--tailscale'
+        const words = flagged ? rest.slice(0, -2) : tailscale ? rest.slice(0, -1) : rest
         const [address, user, version] = words
         if (words.length !== 3 || !address || !user || !version) break
-        return print(await connect(io, { address, user, version, ...(flagged ? { through: rest.at(-1)! } : {}) }))
+        return print(await connect(io, { address, user, version, ...(flagged ? { through: rest.at(-1)! } : {}), ...(tailscale ? { tailscale: true as const } : {}) }))
       }
       case 'test': {
         const [address, user] = rest

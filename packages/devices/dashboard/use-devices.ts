@@ -81,7 +81,8 @@ export interface Devices {
    * whether the server uses this computer's logins once it is saved among the machines; unsaid, as
    * the person last said for it.
    */
-  install: (address: string, user: string, through?: string, logins?: boolean) => Promise<boolean>
+  /** `through`: the server a computer at home is reached through, or `tailscale` for one on the person's Tailscale network. */
+  install: (address: string, user: string, through?: string | 'tailscale', logins?: boolean) => Promise<boolean>
   /** Save a server whose install ended among the machines. */
   addToMachines: (server: ServerRow) => Promise<void>
   removeServer: (server: ServerRow) => Promise<void>
@@ -199,7 +200,7 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
     return answer.ok
   }
 
-  const install = async (at: string, as: string, through?: string, useLogins?: boolean): Promise<boolean> => {
+  const install = async (at: string, as: string, through?: string | 'tailscale', useLogins?: boolean): Promise<boolean> => {
     if (!machines || machines.version === 'unknown') {
       setError('This computer could not say which OpenAgent it runs.')
       return false
@@ -254,7 +255,8 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
       if (!told.ok) return stopped(told.error)
       // A server just connected can start runs on this computer, until the person says otherwise:
       // the switch under This computer. One that could not be given its line shows the switch off.
-      if (told.value.find(row => row.address === server.address)?.reach === undefined) await reach(host, server.address, 'full')
+      // A computer on Tailscale keeps no lines: it is reached at its door there.
+      if (!server.tailscale && told.value.find(row => row.address === server.address)?.reach === undefined) await reach(host, server.address, 'full')
       await Promise.all([reloadServers(), reloadMachines()]).catch(() => {})
       // A machine is saved by its address.
       await useLoginsOn(server.address, server.url)

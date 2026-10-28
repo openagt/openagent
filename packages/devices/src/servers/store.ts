@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { isIP } from 'node:net'
 import { dirname, join } from 'node:path'
-import { stepIdsFor, type StepId, type Who } from './steps.js'
+import { reachedOf, stepIdsFor, type Reached, type StepId, type Who } from './steps.js'
 
 /**
  * The servers this computer installed OpenAgent on, in the person's home folder: where each is,
@@ -85,6 +85,8 @@ export interface Server {
   who?: Who
   /** For a computer reached through a server: the id its line has among that server's devices, once it is among OpenAgent's machines through it. */
   line?: string
+  /** Set for a computer on the person's Tailscale network, connected by its name there: its door is there, behind Tailscale. */
+  tailscale?: true
 }
 
 export type Reach = 'full' | 'watch'
@@ -228,7 +230,7 @@ export function doorUrl(address: string): string {
 }
 
 /** Every step, not started: a computer reached through a server has its line where a server has its door. */
-export const freshSteps = (through = false): Step[] => stepIdsFor(through).map(id => ({ id, state: 'waiting' }))
+export const freshSteps = (reached: Reached = 'internet'): Step[] => stepIdsFor(reached).map(id => ({ id, state: 'waiting' }))
 
 /** Where a computer reached through a server is among OpenAgent's machines: through that server's door, down its line. */
 export function throughUrl(server: Pick<Server, 'through' | 'line'>): string | undefined {
@@ -274,7 +276,7 @@ export function sanitize(value: unknown): Store {
   for (const entry of Array.isArray(obj.servers) ? obj.servers : []) {
     if (servers.length >= MAX_SERVERS) break
     if (!entry || typeof entry !== 'object') continue
-    const { address, user, fingerprint, steps, worker, adding, reach, through, who, line } = entry as Record<string, unknown>
+    const { address, user, fingerprint, steps, worker, adding, reach, through, who, line, tailscale } = entry as Record<string, unknown>
     if (typeof address !== 'string' || addressOf(address) !== address || !isUser(user)) continue
     if (servers.some(server => server.address === address)) continue
     // Every step, in the install's own order: a step the file does not know has not started.
@@ -287,15 +289,18 @@ export function sanitize(value: unknown): Store {
     }
     // Only a server's door on the internet is one a computer keeps its line to.
     const via = typeof through === 'string' && isMachineUrl(through) && through.startsWith('https://') ? through : undefined
+    // Only one connected by its name on Tailscale is one there.
+    const onTailscale = via === undefined && tailscale === true && /\.ts\.net$/.test(address)
     servers.push({
       address,
       user,
       ...(typeof fingerprint === 'string' && /^SHA256:[A-Za-z0-9+/=]{20,64}$/.test(fingerprint) ? { fingerprint } : {}),
-      steps: stepIdsFor(via !== undefined).map(id => known.get(id) ?? { id, state: 'waiting' }),
+      steps: stepIdsFor(reachedOf({ ...(via !== undefined ? { through: via } : {}), ...(onTailscale ? { tailscale: true as const } : {}) })).map(id => known.get(id) ?? { id, state: 'waiting' }),
       ...(readWorker(worker) ?? {}),
       adding: adding === true,
       ...(reach === 'full' || reach === 'watch' ? { reach } : {}),
       ...(via !== undefined ? { through: via, ...(WHO.includes(who as Who) ? { who: who as Who } : {}), ...(typeof line === 'string' && /^[a-z0-9]{6,32}$/.test(line) ? { line } : {}) } : {}),
+      ...(onTailscale ? { tailscale: true as const } : {}),
     })
   }
   const own: NonNullable<Store['own']> = {}

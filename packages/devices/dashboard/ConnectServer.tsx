@@ -1,5 +1,5 @@
 import { useEffect, useState, type ComponentType, type FormEvent, type ReactNode } from 'react'
-import { Check, CircleCheck, CircleX, Cloud, House, Loader2, PlugZap } from 'lucide-react'
+import { Check, CircleCheck, CircleX, Cloud, House, Loader2, PlugZap, Waypoints } from 'lucide-react'
 import { Button, Checkbox, Dialog, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn } from '@openagt/dashboard/module'
 import { testConnection, type Answer, type ServerRow, type Tested } from './servers.js'
 import { CopyButton } from './codes.js'
@@ -24,7 +24,7 @@ const STAGES: readonly { id: Stage; title: string }[] = [
   { id: 'ready', title: 'Ready' },
 ]
 
-type Kind = 'vps' | 'home'
+type Kind = 'vps' | 'home' | 'tailscale'
 
 export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: () => void; /** Invite people to the server just set up: its page, inviting. */ onInvite: (address: string) => void }) {
   const doors = (d.machines?.machines ?? []).filter(hasDoor)
@@ -40,14 +40,16 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
   const [useMine, setUseMine] = useState(true)
   const [installed, setInstalled] = useState<string | undefined>()
   const through = kind === 'home' ? (via ?? doors[0]?.url) : undefined
+  // A PC the person sits at, reached through a server or on Tailscale: installed by their own user there.
+  const pc = kind !== 'vps'
   const at = address.trim()
   const as = user.trim()
   const current = tested?.for === `${at} ${as}` ? tested.answer : undefined
 
   const pickKind = (next: Kind): void => {
     setKind(next)
-    // root on a server on the internet; on a PC at home, the person's own user there.
-    if (next === 'home' && user === 'root') setUser('')
+    // root on a server on the internet; on a PC, the person's own user there.
+    if (next !== 'vps' && user === 'root') setUser('')
     if (next === 'vps' && user === '') setUser('root')
   }
 
@@ -61,7 +63,7 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
   }
 
   const install = async (): Promise<void> => {
-    if (await d.install(at, as, through, useMine)) {
+    if (await d.install(at, as, kind === 'tailscale' ? 'tailscale' : through, useMine)) {
       setInstalled(at)
       setStage('install')
     }
@@ -77,16 +79,16 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
           <form onSubmit={event => void test(event)} className="space-y-3">
             <div className="grid grid-cols-[1fr_8rem] gap-2">
               <label className="space-y-1 text-xs text-muted-foreground">
-                <span>{kind === 'home' ? 'Its address on its network' : 'Its address'}</span>
-                <Input autoFocus aria-label="The server's address" placeholder={kind === 'home' ? '192.168.1.40' : '203.0.113.5'} value={address} onChange={event => setAddress(event.target.value)} />
+                <span>{kind === 'tailscale' ? 'Its name on Tailscale' : kind === 'home' ? 'Its address on its network' : 'Its address'}</span>
+                <Input autoFocus aria-label="The server's address" placeholder={kind === 'tailscale' ? 'homepc.tail1234.ts.net' : kind === 'home' ? '192.168.1.40' : '203.0.113.5'} value={address} onChange={event => setAddress(event.target.value)} />
               </label>
               <label className="space-y-1 text-xs text-muted-foreground">
                 <span>User</span>
-                <Input aria-label="User name" placeholder={kind === 'home' ? 'yours on it' : 'root'} value={user} onChange={event => setUser(event.target.value)} />
+                <Input aria-label="User name" placeholder={pc ? 'yours on it' : 'root'} value={user} onChange={event => setUser(event.target.value)} />
               </label>
             </div>
             <p className="text-xs text-muted-foreground">
-              {kind === 'home'
+              {pc
                 ? 'Your own user on the PC, which becomes root without a password: only to install and to update. What runs there afterwards runs as a user of its own, openagent.'
                 : 'root, or a user that becomes root without a password: only to install and to update. What runs there afterwards runs as a user of its own, openagent.'}
             </p>
@@ -94,12 +96,13 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
               {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <PlugZap className="h-3.5 w-3.5" aria-hidden />}
               Test connection
             </Button>
-            {current !== undefined && !testing && <TestResult answer={current} address={at} user={as} home={kind === 'home'} />}
+            {kind === 'tailscale' && at !== '' && !/\.ts\.net$/i.test(at) && <p className="text-xs text-muted-foreground">Its full name on Tailscale, as Tailscale shows it, like homepc.tail1234.ts.net: the door is at that name.</p>}
+            {current !== undefined && !testing && <TestResult answer={current} address={at} user={as} home={pc} />}
             <Footer>
               <Button size="sm" type="button" variant="ghost" onClick={() => setStage('where')}>
                 Back
               </Button>
-              <Button size="sm" type="button" disabled={!current?.ok || !current.value.ok} onClick={() => setStage('logins')}>
+              <Button size="sm" type="button" disabled={!current?.ok || !current.value.ok || (kind === 'tailscale' && !/\.ts\.net$/i.test(at))} onClick={() => setStage('logins')}>
                 Continue
               </Button>
             </Footer>
@@ -191,6 +194,13 @@ function Where({ kind, onKind, doors, through, onVia, onCancel, onNext }: { kind
     <div className="space-y-2">
       <div role="radiogroup" aria-label="Where the server is" className="space-y-2">
         <Choice picked={kind === 'vps'} icon={Cloud} title="A cloud server (VPS)" words="DigitalOcean, Hetzner and the like, with Ubuntu or Debian. Reached from anywhere, with a lock." onPick={() => onKind('vps')} />
+        <Choice
+          picked={kind === 'tailscale'}
+          icon={Waypoints}
+          title="A PC on your Tailscale network"
+          words="Ubuntu or Debian, with Tailscale on it, signed in as you. Your devices on Tailscale reach it from anywhere, with a lock: no cloud server needed."
+          onPick={() => onKind('tailscale')}
+        />
         <Choice
           picked={kind === 'home'}
           disabled={doors.length === 0}

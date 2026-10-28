@@ -42,6 +42,8 @@ export interface ServerRow {
   through?: string
   /** For a computer reached through a server: who there may start runs on it. */
   who?: Who
+  /** A computer on the person's Tailscale network, at its door there: no line is kept to it. */
+  tailscale?: true
   steps: StepRow[]
 }
 
@@ -124,7 +126,7 @@ export function readServers(output: unknown): ServerRow[] | undefined {
   const rows: ServerRow[] = []
   for (const entry of servers) {
     if (!entry || typeof entry !== 'object') continue
-    const { address, url, user, fingerprint, working, adding, reach, through, who, steps } = entry as Record<string, unknown>
+    const { address, url, user, fingerprint, working, adding, reach, through, who, tailscale, steps } = entry as Record<string, unknown>
     const [at, door, by, known] = [text(address), text(url), text(user), text(fingerprint)]
     if (!at || !door || !by || !Array.isArray(steps)) continue
     const list: StepRow[] = []
@@ -135,7 +137,7 @@ export function readServers(output: unknown): ServerRow[] | undefined {
       if (stepId && name && STATES.includes(state as string)) list.push({ id: stepId, label: name, state: state as StepState, ...(words ? { said: words } : {}) })
     }
     const via = text(through)
-    rows.push({ address: at, url: door, user: by, ...(known ? { fingerprint: known } : {}), working: working === true, adding: adding === true, ...(reach === 'full' || reach === 'watch' ? { reach } : {}), ...(via ? { through: via, who: WHO.includes(who as string) ? (who as Who) : 'me' } : {}), steps: list })
+    rows.push({ address: at, url: door, user: by, ...(known ? { fingerprint: known } : {}), working: working === true, adding: adding === true, ...(reach === 'full' || reach === 'watch' ? { reach } : {}), ...(via ? { through: via, who: WHO.includes(who as string) ? (who as Who) : 'me' } : {}), ...(!via && tailscale === true ? { tailscale: true as const } : {}), steps: list })
   }
   return rows
 }
@@ -193,8 +195,9 @@ export const loadServers = (host: ModuleHost): Promise<Answer<ServersRead>> => r
  * Install OpenAgent at `version` on the server, or go on where the install failed, or bring a server that fell behind to it.
  * With `through`, the computer has no door of its own on the internet: it keeps a line to that server instead.
  */
-export const connect = (host: ModuleHost, address: string, user: string, version: string, through?: string): Promise<Answer<ServerRow[]>> =>
-  run(host, ['connect', address, user, version, ...(through !== undefined ? ['--through', through] : [])], readServers)
+/** Install OpenAgent on a server: one on the internet, one reached through the server at `through`, or one on the person's Tailscale network. */
+export const connect = (host: ModuleHost, address: string, user: string, version: string, through?: string | 'tailscale'): Promise<Answer<ServerRow[]>> =>
+  run(host, ['connect', address, user, version, ...(through === 'tailscale' ? ['--tailscale'] : through !== undefined ? ['--through', through] : [])], readServers)
 /** What failed at a "Test connection", by what a person does about it. */
 export type Trouble = 'unreachable' | 'no-ssh' | 'key' | 'no-key' | 'sudo' | 'host-key' | 'system'
 const TROUBLES: readonly string[] = ['unreachable', 'no-ssh', 'key', 'no-key', 'sudo', 'host-key', 'system']
