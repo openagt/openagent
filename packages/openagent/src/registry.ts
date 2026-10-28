@@ -68,6 +68,19 @@ export interface MachineRecord {
   seenAt?: string
   /** Its own projects, as it said them last (elsewhere.ts): a computer of the person's own lists them while it does not answer. */
   projects?: OwnProject[]
+  /** When it was first saved here, ISO: of two computers' word on it, a removal after this is the one that stands (computers-sync.ts). */
+  added?: string
+}
+
+/**
+ * A computer the person removed, by its address: one of their other computers that still has it
+ * does not bring it back here, and takes it out too (computers-sync.ts). Saved again by the person,
+ * it is no longer one.
+ */
+export interface ForgottenMachine {
+  url: string
+  /** When it was removed, ISO. */
+  at: string
 }
 
 /** A GitHub account's name: letters, digits and single dashes, at most 39. */
@@ -226,7 +239,12 @@ export interface Registry {
    * in again. Top-level, and never part of what the browser is handed. Absent until first needed.
    */
   computer?: string
+  /** The computers the person removed, the newest last (computers-sync.ts). */
+  forgotten?: ForgottenMachine[]
 }
+
+/** How many removed computers are remembered: the oldest is let go first. */
+const MAX_FORGOTTEN = 64
 
 /** What a computer says it is: made here, and read back only as what was made. */
 const isComputerId = (value: unknown): value is string => typeof value === 'string' && /^[a-z0-9]{16,64}$/.test(value)
@@ -445,14 +463,29 @@ function sanitizeMachines(value: unknown): MachineRecord[] {
   for (const raw of value) {
     if (machines.length >= MACHINE_LIMITS.count) break
     if (typeof raw !== 'object' || raw === null) continue
-    const { label, url, key, door, pin, host, owner, told, logins, listed, seenAt, projects } = raw as Record<string, unknown>
+    const { label, url, key, door, pin, host, owner, told, logins, listed, seenAt, projects, added } = raw as Record<string, unknown>
     const ids = Array.isArray(listed) ? listed.filter((id): id is string => typeof id === 'string' && DEVICE_ID.test(id)).slice(0, MACHINE_LIMITS.count) : []
     if (typeof label !== 'string' || typeof url !== 'string' || typeof key !== 'string' || typeof door !== 'string') continue
     if (!url || !key || !door || seen.has(url)) continue
     seen.add(url)
-    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, key, door, ...(typeof pin === 'string' && pin ? { pin } : {}), ...(isHostName(host) ? { host } : {}), ...(isPersonName(owner) ? { owner } : {}), ...(told === true ? { told: true as const } : {}), ...(logins === true ? { logins: true as const } : {}), ...(ids.length ? { listed: ids } : {}), ...(typeof seenAt === 'string' && !Number.isNaN(Date.parse(seenAt)) ? { seenAt } : {}), ...(Array.isArray(projects) ? { projects: ownProjectsOf(projects) } : {}) })
+    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, key, door, ...(typeof pin === 'string' && pin ? { pin } : {}), ...(isHostName(host) ? { host } : {}), ...(isPersonName(owner) ? { owner } : {}), ...(told === true ? { told: true as const } : {}), ...(logins === true ? { logins: true as const } : {}), ...(ids.length ? { listed: ids } : {}), ...(typeof seenAt === 'string' && !Number.isNaN(Date.parse(seenAt)) ? { seenAt } : {}), ...(Array.isArray(projects) ? { projects: ownProjectsOf(projects) } : {}), ...(isTime(added) ? { added } : {}) })
   }
   return machines
+}
+
+const isTime = (value: unknown): value is string => typeof value === 'string' && !Number.isNaN(Date.parse(value))
+
+/** The removed computers as the file keeps them: one each, by address, the newest last. */
+function sanitizeForgotten(value: unknown): ForgottenMachine[] {
+  if (!Array.isArray(value)) return []
+  const kept = new Map<string, ForgottenMachine>()
+  for (const raw of value) {
+    const { url, at } = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+    if (typeof url !== 'string' || !/^https?:\/\//.test(url) || !isTime(at)) continue
+    kept.delete(url)
+    kept.set(url, { url, at })
+  }
+  return [...kept.values()].slice(-MAX_FORGOTTEN)
 }
 
 /** What a door names a device by. */
@@ -478,6 +511,7 @@ export async function readRegistry(
   const obj = parsed as Record<string, unknown>
   const projects = Array.isArray(obj.projects) ? dedupeProjects(obj.projects) : []
   const machines = sanitizeMachines(obj.machines)
+  const forgotten = sanitizeForgotten(obj.forgotten)
   return {
     projects,
     preferences: sanitizePreferences(obj.preferences),
@@ -485,6 +519,7 @@ export async function readRegistry(
     ...(typeof obj.bridgeToken === 'string' && obj.bridgeToken ? { bridgeToken: obj.bridgeToken } : {}),
     ...(machines.length ? { machines } : {}),
     ...(isComputerId(obj.computer) ? { computer: obj.computer } : {}),
+    ...(forgotten.length ? { forgotten } : {}),
   }
 }
 
@@ -505,13 +540,14 @@ export async function readRegistry(
  */
 async function writeRegistry(registry: Registry, fs: RegistryFs, env: NodeJS.ProcessEnv): Promise<void> {
   const file = registryPath(env)
-  const { projects, preferences, bridgeToken, machines, computer } = registry
+  const { projects, preferences, bridgeToken, machines, computer, forgotten } = registry
   const contents = {
     projects,
     preferences,
     ...(bridgeToken ? { bridgeToken } : {}),
     ...(machines?.length ? { machines } : {}),
     ...(computer ? { computer } : {}),
+    ...(forgotten?.length ? { forgotten } : {}),
   }
   const json = JSON.stringify(contents, null, 2)
   await fs.mkdir(dirname(file))
@@ -712,6 +748,7 @@ export async function addMachine(
 ): Promise<{ record: MachineRecord; displaced: MachineRecord[] }> {
   return serialize(async () => {
     const registry = await readRegistry(fs, env)
+    const before = registry.machines ?? []
     const record: MachineRecord = {
       id: machine.url,
       label: machine.label?.trim().slice(0, MACHINE_LIMITS.label) || hostOf(machine.url),
@@ -720,8 +757,9 @@ export async function addMachine(
       door: machine.door,
       ...(machine.pin ? { pin: machine.pin } : {}),
       ...(isPersonName(machine.owner) ? { owner: machine.owner } : {}),
+      // Saved again (a new key), it was saved here all the same since then.
+      added: before.find(saved => saved.id === machine.url)?.added ?? new Date().toISOString(),
     }
-    const before = registry.machines ?? []
     const machines = [record, ...before.filter(saved => saved.id !== record.id)].slice(0, MACHINE_LIMITS.count)
     await writeRegistry({ ...registry, machines }, fs, env)
     return { record, displaced: before.filter(saved => !machines.includes(saved)) }
@@ -836,6 +874,30 @@ export async function removeMachine(
     if (!removed) return undefined
     await writeRegistry({ ...registry, machines: (registry.machines ?? []).filter(saved => saved.id !== id) }, fs, env)
     return removed
+  })
+}
+
+/** The computers the person removed, the newest last. */
+export async function listForgotten(fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<ForgottenMachine[]> {
+  return (await readRegistry(fs, env)).forgotten ?? []
+}
+
+/** Remember that the person removed the computer at `url`, at `at`; a later removal of it replaces an earlier one. */
+export async function forgetMachine(url: string, at: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  await serialize(async () => {
+    const registry = await readRegistry(fs, env)
+    const was = (registry.forgotten ?? []).find(gone => gone.url === url)
+    if (was && Date.parse(was.at) >= Date.parse(at)) return
+    await writeRegistry({ ...registry, forgotten: [...(registry.forgotten ?? []).filter(gone => gone.url !== url), { url, at }].slice(-MAX_FORGOTTEN) }, fs, env)
+  })
+}
+
+/** The person saved the computer at `url` again: it is no longer one they removed. */
+export async function unforgetMachine(url: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  await serialize(async () => {
+    const registry = await readRegistry(fs, env)
+    if (!(registry.forgotten ?? []).some(gone => gone.url === url)) return
+    await writeRegistry({ ...registry, forgotten: (registry.forgotten ?? []).filter(gone => gone.url !== url) }, fs, env)
   })
 }
 

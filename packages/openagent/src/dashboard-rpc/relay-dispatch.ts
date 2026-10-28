@@ -10,6 +10,7 @@ import type { StartAgentOptions } from '../dashboard/types.js'
 import { onCopiedLogins, sendCopiedLogin, sendCopiedUsage, sendForgetCopiedLogin, sendKeepCopiedLogin } from './copied-logins.js'
 import { patchPreferences } from './preferences.js'
 import { onModels } from './models.js'
+import { onOwnComputers, sendAddComputer, sendForgetComputers } from './computers.js'
 
 // The machine side of the remote-agent relay (#1067 slice 2). A daemon that relayed an agent here asks this
 // to read/steer/hand off THAT run against THIS machine's own checkout. Every entry is a run-scoped RPC
@@ -87,8 +88,8 @@ export async function dispatchRelayRpc(projectId: string, fn: string, args: unkn
 // not a run (logins-sync.ts brings the server's logins and settings up to its own). They go by the
 // relay too, so a computer that keeps a line open to its server is asked them as any server is:
 // a line carries nothing but the relay. Classed the same way, read or act.
-const MACHINE_READS = { onCopiedLogins, onOwnProjects, onOwnInterventions, onCloneCheck, onModels }
-const MACHINE_ACTS = { sendCopiedLogin, sendForgetCopiedLogin, sendKeepCopiedLogin, sendCopiedUsage, patchPreferences }
+const MACHINE_READS = { onCopiedLogins, onOwnProjects, onOwnInterventions, onOwnComputers, onCloneCheck, onModels }
+const MACHINE_ACTS = { sendCopiedLogin, sendForgetCopiedLogin, sendKeepCopiedLogin, sendCopiedUsage, patchPreferences, sendAddComputer, sendForgetComputers }
 const MACHINE_FNS = Object.assign(Object.create(null) as Record<string, RelayFn>, MACHINE_READS, MACHINE_ACTS) as unknown as Record<string, RelayFn>
 
 /** The machine-wide names a relay caller may invoke. */

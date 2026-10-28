@@ -28,6 +28,9 @@ import {
   type Preferences,
   type ProjectRecord,
   type RegistryFs,
+  forgetMachine,
+  listForgotten,
+  unforgetMachine,
 } from './registry.js'
 
 /**
@@ -597,8 +600,12 @@ const OFFICE = 'http://10.0.0.2:4201'
 
 test('addMachine saves a machine with its key, newest first, named by its host when no name is given', async () => {
   const fs = memFs()
+  const before = Date.now()
   const saved = await addMachine({ url: STUDIO, key: 'aaa', door: DOOR }, fs, ENV)
-  assert.deepEqual(saved, { record: { id: STUDIO, label: '192.168.1.5:4201', url: STUDIO, key: 'aaa', door: DOOR }, displaced: [] })
+  const { added, ...record } = saved.record
+  assert.deepEqual({ record, displaced: saved.displaced }, { record: { id: STUDIO, label: '192.168.1.5:4201', url: STUDIO, key: 'aaa', door: DOOR }, displaced: [] })
+  // When it was saved here: what a removal on another of the person's computers is weighed against.
+  assert.ok(Date.parse(added!) >= before - 1000)
   await addMachine({ url: OFFICE, key: 'bbb', door: `${OFFICE}/_devices/enter`, label: '  Office  ' }, fs, ENV)
   assert.deepEqual((await listMachines(fs, ENV)).map(machine => machine.label), ['Office', '192.168.1.5:4201'])
   // The file itself holds the list, top-level, beside the projects and the preferences.
@@ -609,11 +616,14 @@ test('addMachine saves a machine with its key, newest first, named by its host w
 
 test('saving an address again replaces its name and its key and keeps one entry', async () => {
   const fs = memFs()
-  await addMachine({ url: STUDIO, key: 'old', door: DOOR, label: 'Studio' }, fs, ENV)
+  const first = await addMachine({ url: STUDIO, key: 'old', door: DOOR, label: 'Studio' }, fs, ENV)
+  const added = first.record.added!
+  await new Promise(resolve => setTimeout(resolve, 5))
   const again = await addMachine({ url: STUDIO, key: 'new', door: DOOR, label: 'Studio 2' }, fs, ENV)
-  assert.deepEqual(await listMachines(fs, ENV), [{ id: STUDIO, label: 'Studio 2', url: STUDIO, key: 'new', door: DOOR }])
+  // Saved again with a new key, it was saved here since the first time all the same.
+  assert.deepEqual(await listMachines(fs, ENV), [{ id: STUDIO, label: 'Studio 2', url: STUDIO, key: 'new', door: DOOR, added }])
   // The record it took the place of is answered: its key is the caller's to take out of the machine.
-  assert.deepEqual(again.displaced, [{ id: STUDIO, label: 'Studio', url: STUDIO, key: 'old', door: DOOR }])
+  assert.deepEqual(again.displaced, [{ id: STUDIO, label: 'Studio', url: STUDIO, key: 'old', door: DOOR, added }])
 })
 
 test('a machine saved past the cap takes the place of the oldest, which is answered too', async () => {
@@ -628,7 +638,8 @@ test('removeMachine takes one machine off the list and answers the one that was 
   const fs = memFs()
   await addMachine({ url: STUDIO, key: 'aaa', door: DOOR }, fs, ENV)
   await addMachine({ url: OFFICE, key: 'bbb', door: `${OFFICE}/_devices/enter` }, fs, ENV)
-  assert.deepEqual(await removeMachine(STUDIO, fs, ENV), { id: STUDIO, label: '192.168.1.5:4201', url: STUDIO, key: 'aaa', door: DOOR })
+  const { added: _added, ...removed } = (await removeMachine(STUDIO, fs, ENV))!
+  assert.deepEqual(removed, { id: STUDIO, label: '192.168.1.5:4201', url: STUDIO, key: 'aaa', door: DOOR })
   assert.deepEqual((await listMachines(fs, ENV)).map(machine => machine.id), [OFFICE])
   assert.equal(await removeMachine(STUDIO, fs, ENV), undefined)
 })
@@ -636,7 +647,8 @@ test('removeMachine takes one machine off the list and answers the one that was 
 test('what a server\'s key is known by is kept with the machine, and left out for a machine whose link named none', async () => {
   const fs = memFs()
   const server = { url: 'https://203.0.113.5', key: 'kkk', door: 'https://203.0.113.5/_devices/enter', pin: 'Zm9v' }
-  assert.deepEqual((await addMachine(server, fs, ENV)).record, { id: server.url, label: '203.0.113.5', ...server })
+  const { added: _added, ...record } = (await addMachine(server, fs, ENV)).record
+  assert.deepEqual(record, { id: server.url, label: '203.0.113.5', ...server })
   await addMachine({ url: STUDIO, key: 'aaa', door: DOOR }, fs, ENV)
   const [studio, saved] = await listMachines(fs, ENV)
   assert.equal(saved!.pin, 'Zm9v')
@@ -753,6 +765,28 @@ test("what a machine said of its own projects is kept with it, read back as proj
   assert.deepEqual((await listMachines(fs, ENV))[0]!.projects, [shop])
 })
 
+test('a computer the person removed is remembered once by its address, the later removal standing; let go, it is no longer one; the file keeps it', async () => {
+  const fs = memFs()
+  await forgetMachine(STUDIO, '2026-10-27T10:00:00.000Z', fs, ENV)
+  // An earlier removal of it, heard later, does not take the later one's place.
+  await forgetMachine(STUDIO, '2026-10-26T10:00:00.000Z', fs, ENV)
+  assert.deepEqual(await listForgotten(fs, ENV), [{ url: STUDIO, at: '2026-10-27T10:00:00.000Z' }])
+  await forgetMachine(OFFICE, '2026-10-27T11:00:00.000Z', fs, ENV)
+  await forgetMachine(STUDIO, '2026-10-28T10:00:00.000Z', fs, ENV)
+  assert.deepEqual(await listForgotten(fs, ENV), [
+    { url: OFFICE, at: '2026-10-27T11:00:00.000Z' },
+    { url: STUDIO, at: '2026-10-28T10:00:00.000Z' },
+  ])
+  // Written whole: a write of anything else keeps it.
+  await addMachine({ url: 'http://10.0.0.9:4201', key: 'k', door: 'http://10.0.0.9:4201/_devices/enter' }, fs, ENV)
+  assert.equal((await listForgotten(fs, ENV)).length, 2)
+  await unforgetMachine(STUDIO, fs, ENV)
+  assert.deepEqual(await listForgotten(fs, ENV), [{ url: OFFICE, at: '2026-10-27T11:00:00.000Z' }])
+  // What is no address or no time is not kept.
+  fs.files.set(FILE, JSON.stringify({ projects: [], preferences: {}, forgotten: [{ url: 'javascript:x', at: '2026-10-27T11:00:00.000Z' }, { url: STUDIO, at: 'never' }, { url: OFFICE, at: '2026-10-27T11:00:00.000Z' }] }))
+  assert.deepEqual(await listForgotten(fs, ENV), [{ url: OFFICE, at: '2026-10-27T11:00:00.000Z' }])
+})
+
 test('a saved machine takes the name the person picked, cut to the length a name may have; an empty name and a machine not saved change nothing', async () => {
   const fs = memFs()
   await addMachine({ url: STUDIO, key: 'aaa', door: DOOR, label: 'Studio' }, fs, ENV)
@@ -762,5 +796,8 @@ test('a saved machine takes the name the person picked, cut to the length a name
   assert.equal(await renameMachine(STUDIO, '   ', fs, ENV), undefined)
   assert.equal(await renameMachine('http://10.0.0.9:4201', 'Other', fs, ENV), undefined)
   // The key and where it was let in stay.
-  assert.deepEqual(await listMachines(fs, ENV), [{ id: STUDIO, label: 'x'.repeat(60), url: STUDIO, key: 'aaa', door: DOOR }])
+  assert.deepEqual(
+    (await listMachines(fs, ENV)).map(({ added: _added, ...machine }) => machine),
+    [{ id: STUDIO, label: 'x'.repeat(60), url: STUDIO, key: 'aaa', door: DOOR }],
+  )
 })
