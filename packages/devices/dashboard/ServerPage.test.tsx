@@ -14,8 +14,8 @@ const LINK = { url: 'https://203.0.113.5/_devices/enter#K7P4QX9M.pin', where: '2
 /** The server's people, with its owner named. */
 const OWNED = (): ModuleCommandResult => ({ ok: true, output: { devices: [], persons: [{ name: 'Ada', owner: true }] } })
 /** Invite, then their name, then the code. */
-async function invite(name: string): Promise<void> {
-  fireEvent.click(await screen.findByRole('button', { name: 'Invite to 203.0.113.5' }))
+async function invite(name: string, at = '203.0.113.5'): Promise<void> {
+  fireEvent.click(await screen.findByRole('button', { name: `Invite to ${at}` }))
   fireEvent.change(await screen.findByRole('textbox', { name: 'Their name' }), { target: { value: name } })
   fireEvent.click(screen.getByRole('button', { name: 'Make the code' }))
 }
@@ -180,6 +180,22 @@ describe('Settings › Devices: a server this computer installed', () => {
     expect(useLoginsOn).not.toHaveBeenCalled()
   })
 
+  test('a PC on Tailscale, once every step is done, is saved by the link its door gives there, and no line is kept to it', async () => {
+    let adding = true
+    const PC = 'homepc.tail1234.ts.net'
+    const link = { ...LINK, url: `https://${PC}/_devices/enter#K7P4QX9M`, where: PC }
+    const { host, ran, addMachine } = dashboard(args => {
+      if (args[0] === 'link') return ok(link)
+      if (args[0] === 'added') adding = false
+      return ok({ servers: [{ ...server(ALL_DONE, { address: PC, url: `https://${PC}`, user: 'rom', adding }), tailscale: true }] })
+    })
+    show(host)
+    await waitFor(() => expect(addMachine).toHaveBeenCalledWith(link.url, PC))
+    await waitFor(() => expect(ran()).toContain(`added ${PC}`))
+    await new Promise(resolve => setTimeout(resolve, 150))
+    expect(ran().filter(line => line.startsWith('reach '))).toEqual([])
+  })
+
   test('an update leaves the switch as the person set it: a server that was told to only watch is not let start runs again by itself', async () => {
     let adding = true
     const { host, ran } = dashboard(args => {
@@ -191,6 +207,20 @@ describe('Settings › Devices: a server this computer installed', () => {
     await waitFor(() => expect(ran()).toContain('added 203.0.113.5'))
     await new Promise(resolve => setTimeout(resolve, 150))
     expect(ran().filter(line => line.startsWith('reach '))).toEqual([])
+  })
+
+  test('a PC on Tailscale says so on its page, lists no computer through it, and Invite says it is reached once shared with them in Tailscale', async () => {
+    const PC = 'homepc.tail1234.ts.net'
+    const saved: ModuleMachines = { version: '1.2.3', machines: [{ id: `https://${PC}`, label: PC, url: `https://${PC}`, version: '1.2.3' }] }
+    const { host, ran } = dashboard(args => (args[0] === 'link' ? ok({ ...LINK, url: `https://${PC}/_devices/enter#K7P4QX9M`, where: PC }) : ok({ servers: [{ ...server(ALL_DONE, { address: PC, url: `https://${PC}`, user: 'rom', adding: false }), tailscale: true }] })), saved, { ok: true }, NO_GH, OWNED)
+    show(host)
+    await open(PC)
+    expect(await screen.findByText('on your Tailscale network')).toBeTruthy()
+    expect(vi.mocked(host.computersThrough)).not.toHaveBeenCalled()
+    await tab('People')
+    await invite('Rom', PC)
+    expect(await screen.findByText(`${PC} is on your Tailscale network: Rom reaches it only once you share it with them in Tailscale (its machine in the Tailscale admin › Share), with Tailscale on their device.`)).toBeTruthy()
+    expect(ran()).toContain(`link ${PC} --for Rom`)
   })
 
   test('Invite gives someone else where and a code to type, asked of the server for them; their phone scans it as a QR code instead; the code runs out, and a server that does not answer is told', async () => {
@@ -1198,6 +1228,27 @@ describe('Settings › Devices: Set up a server, in steps', () => {
     expect(screen.queryByText('203.0.113.5 is ready.')).toBeNull()
     fireEvent.click(button('Continue'))
     expect(await screen.findByText('203.0.113.5 is ready.')).toBeTruthy()
+  })
+
+  test('a PC on your Tailscale network, with no cloud server: picked by its name there, installed by the person\'s own user, with --tailscale', async () => {
+    const { host, ran } = dashboard(() => ok({ servers: [] }))
+    show(host)
+    await openConnect()
+    fireEvent.click(await screen.findByRole('radio', { name: /A PC on your Tailscale network/ }))
+    fireEvent.click(button('Continue'))
+    expect(await screen.findByText('Its name on Tailscale')).toBeTruthy()
+    // The person's own user there, not root.
+    expect((screen.getByLabelText('User name') as HTMLInputElement).value).toBe('')
+    // A number is no name on Tailscale: the door is at that name.
+    testAs('100.64.0.9', 'rom')
+    expect(await screen.findByText(/Its full name on Tailscale, as Tailscale shows it/)).toBeTruthy()
+    await waitFor(() => expect(ran()).toContain('test 100.64.0.9 rom'))
+    expect(button('Continue').disabled).toBe(true)
+    testAs('homepc.tail1234.ts.net', 'rom')
+    await waitFor(() => expect(button('Continue').disabled).toBe(false))
+    fireEvent.click(button('Continue'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Install' }))
+    await waitFor(() => expect(ran()).toContain('connect homepc.tail1234.ts.net rom 1.2.3 --tailscale'))
   })
 
   test('a PC at home: through a cloud server this computer is in at; Install sends it through that one, and Ready asks who else uses it', async () => {

@@ -453,9 +453,12 @@ export function Invite({
   joined,
   onCode,
   onClose,
+  tailscale = false,
 }: {
   /** The server's name. */
   label: string
+  /** The server is on the person's Tailscale network: the one invited reaches it only once it is shared with them there. */
+  tailscale?: boolean
   ask: (person: string) => Promise<GivenAnswer>
   persons: Persons
   /** The name of a device that got in with the code. */
@@ -515,6 +518,7 @@ export function Invite({
         ) : (
           <>
             <p className="text-xs text-muted-foreground">{`${person} gets a user of their own on ${label}: their own runs, with their own logins. Send them this:`}</p>
+            {tailscale && <p className="text-xs">{`${label} is on your Tailscale network: ${person} reaches it only once you share it with them in Tailscale (its machine in the Tailscale admin › Share), with Tailscale on their device.`}</p>}
             {qr ? (
               <div className="flex justify-center">
                 <QrCode text={code.url} label="The code a new device scans" />

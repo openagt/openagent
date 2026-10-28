@@ -40,9 +40,9 @@ async function withDoor(script: string, answer = ''): Promise<string[]> {
 }
 
 test('a computer reached through a server has its line where a server has its door, and opens nothing to the internet', async () => {
-  assert.deepEqual(stepsFor(true).map(step => step.id), [...THROUGH_STEP_IDS])
-  assert.deepEqual(stepsFor(false), STEPS)
-  for (const step of stepsFor(true)) await run('bash', ['-n', '-c', step.script(FACTS)])
+  assert.deepEqual(stepsFor('through').map(step => step.id), [...THROUGH_STEP_IDS])
+  assert.deepEqual(stepsFor('internet'), STEPS)
+  for (const step of stepsFor('through')) await run('bash', ['-n', '-c', step.script(FACTS)])
   const service = (facts: Facts): string => STEPS.find(step => step.id === 'service')!.script(facts)
   assert.match(service({ address: '203.0.113.5', version: '1.2.3' }), /ufw allow 443\/tcp/)
   assert.doesNotMatch(service(FACTS), /ufw/)
@@ -106,7 +106,7 @@ const isStatus = (call: Call): boolean => call.script.includes(`${DOOR} status`)
 test('the install of a computer reached through a server gives it its line as the person\'s there, with a link asked for only at that step', async () => {
   const home = await testHome()
   try {
-    await update(home.env, store => void store.servers.push({ ...BOX, through: VPS, steps: freshSteps(true), adding: true }))
+    await update(home.env, store => void store.servers.push({ ...BOX, through: VPS, steps: freshSteps('through'), adding: true }))
     const { exec, calls } = pretendServer(call => (isStatus(call) ? { out: statusWith([]) } : undefined))
     const openagent = pretendOpenAgent({ onMachinePerson: { ok: true, said: { person: 'Rom', owner: false, devices: [] } }, sendMachineLineLink: { ok: true, url: LINK } })
     await install({ env: home.env, address: BOX.address, version: '1.2.3', exec, ask: openagent.ask })
@@ -121,7 +121,7 @@ test('the install of a computer reached through a server gives it its line as th
     assert.match(calls.find(call => call.script.includes('DESKTOP='))!.script, /^DESKTOP='rom'$/m)
 
     // Again, with its line kept and everyone let in: no link is spent, and what it was told is kept.
-    await update(home.env, store => Object.assign(store.servers[0]!, { steps: freshSteps(true), who: 'everyone' }))
+    await update(home.env, store => Object.assign(store.servers[0]!, { steps: freshSteps('through'), who: 'everyone' }))
     const kept = pretendServer(call => (isStatus(call) ? { out: statusWith([{ url: VPS, mode: 'full', for: 'everyone', id: 'line12345678' }]) } : undefined))
     const again = pretendOpenAgent({ onMachinePerson: { ok: true, said: { person: 'rom', owner: false, devices: [] } } })
     await install({ env: home.env, address: BOX.address, version: '1.2.3', exec: kept.exec, ask: again.ask })
@@ -136,14 +136,14 @@ test('the install of a computer reached through a server gives it its line as th
 test('a server that does not say who the person is there stops the line step, in words, and the steps before are done', async () => {
   const home = await testHome()
   try {
-    await update(home.env, store => void store.servers.push({ ...BOX, through: VPS, steps: freshSteps(true), adding: true }))
+    await update(home.env, store => void store.servers.push({ ...BOX, through: VPS, steps: freshSteps('through'), adding: true }))
     const { exec } = pretendServer(call => (isStatus(call) ? { out: statusWith([]) } : undefined))
     await install({ env: home.env, address: BOX.address, version: '1.2.3', exec, ask: pretendOpenAgent({ onMachinePerson: { ok: true, said: { owner: true, devices: [] } } }).ask })
     const steps = (await readStore(home.env)).servers[0]!.steps
     assert.deepEqual(steps.at(-1), { id: 'line', state: 'failed', said: '165.245.244.10 does not say who you are there. Press Invite on its row once: it names you its owner.' })
     assert.ok(steps.slice(0, -1).every(step => step.state === 'done'))
 
-    await update(home.env, store => void (store.servers[0]!.steps = freshSteps(true)))
+    await update(home.env, store => void (store.servers[0]!.steps = freshSteps('through')))
     await install({ env: home.env, address: BOX.address, version: '1.2.3', exec, ask: pretendOpenAgent({ onMachinePerson: { ok: true, said: { person: 'rom', owner: false, devices: [] } }, sendMachineLineLink: { ok: false, error: 'only a computer that is in at a server asks for a line' } }).ask })
     assert.equal((await readStore(home.env)).servers[0]!.steps.at(-1)!.said, '165.245.244.10 gave no link for the line: only a computer that is in at a server asks for a line')
   } finally {
@@ -190,7 +190,7 @@ test('connect --through saves a computer reached through a server; an update kee
 test('add-through saves the computer among the machines through its server, by its line there', async () => {
   const home = await testHome()
   try {
-    await update(home.env, store => void store.servers.push({ ...BOX, through: VPS, steps: freshSteps(true).map(step => ({ ...step, state: 'done' })), adding: true }))
+    await update(home.env, store => void store.servers.push({ ...BOX, through: VPS, steps: freshSteps('through').map(step => ({ ...step, state: 'done' })), adding: true }))
     const { exec } = pretendServer(call => (isStatus(call) ? { out: statusWith([{ url: VPS, mode: 'full', id: 'line12345678' }]) } : undefined))
     const openagent = pretendOpenAgent({ sendAddComputerThrough: { ok: true, machine: {} } })
     const added = await cli(home.env, ['add-through', BOX.address], { exec, ask: openagent.ask })
@@ -212,7 +212,7 @@ test('add-through saves the computer among the machines through its server, by i
 test('who says who may start runs; with remove, the users the line made for the others go, and nobody else\'s', async () => {
   const home = await testHome()
   try {
-    await update(home.env, store => void store.servers.push({ ...BOX, through: VPS, who: 'everyone', steps: freshSteps(true).map(step => ({ ...step, state: 'done' })), adding: false }))
+    await update(home.env, store => void store.servers.push({ ...BOX, through: VPS, who: 'everyone', steps: freshSteps('through').map(step => ({ ...step, state: 'done' })), adding: false }))
     const persons = [{ name: 'rom', owner: true }, { name: 'dani', from: VPS }, { name: 'sam', from: 'https://other.example' }, { name: 'lee', from: VPS, removed: true }]
     const listed = `${JSON.stringify({ devices: [], persons })}\n`
     const { exec, calls } = pretendServer(call => (call.script.includes(`${DOOR} status`) ? { out: listed } : undefined))

@@ -67,7 +67,7 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
   // Each server this computer is in at, by the line it keeps there: installed here, or set up elsewhere.
   const lines: Line[] = [
     ...d.servers
-      .filter(server => server.through === undefined && d.machines?.machines.some(machine => machine.url === server.url))
+      .filter(server => server.through === undefined && !server.tailscale && d.machines?.machines.some(machine => machine.url === server.url))
       .map(server => ({
         key: server.address,
         label: d.machines?.machines.find(machine => machine.url === server.url)?.label ?? server.address,

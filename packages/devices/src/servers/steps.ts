@@ -10,10 +10,21 @@
 export const STEP_IDS = ['login', 'user', 'tools', 'name', 'openagent', 'agent', 'people', 'service', 'door'] as const
 /** The steps of a computer reached through a server: its line to that server in place of a door of its own. */
 export const THROUGH_STEP_IDS = ['login', 'user', 'tools', 'name', 'openagent', 'agent', 'people', 'service', 'line'] as const
-export type StepId = (typeof STEP_IDS)[number] | (typeof THROUGH_STEP_IDS)[number]
+/** The steps of a computer on the person's Tailscale network: Tailscale made ready for the door, then the door behind it. */
+export const TAILSCALE_STEP_IDS = ['login', 'user', 'tools', 'name', 'openagent', 'agent', 'people', 'service', 'tailscale', 'door'] as const
+export type StepId = (typeof STEP_IDS)[number] | (typeof THROUGH_STEP_IDS)[number] | (typeof TAILSCALE_STEP_IDS)[number]
 
-/** The steps of a server, by whether it is reached through another server. */
-export const stepIdsFor = (through: boolean): readonly StepId[] => (through ? THROUGH_STEP_IDS : STEP_IDS)
+/**
+ * How a computer OpenAgent is installed on is reached: on the internet, at a door of its own; through
+ * a server, by the line it keeps there; or on the person's Tailscale network, at its door there.
+ */
+export type Reached = 'internet' | 'through' | 'tailscale'
+
+/** How a saved install's computer is reached. */
+export const reachedOf = (server: { through?: string | undefined; tailscale?: true | undefined }): Reached => (server.through !== undefined ? 'through' : server.tailscale ? 'tailscale' : 'internet')
+
+/** The steps of a server, by how it is reached. */
+export const stepIdsFor = (reached: Reached): readonly StepId[] => (reached === 'through' ? THROUGH_STEP_IDS : reached === 'tailscale' ? TAILSCALE_STEP_IDS : STEP_IDS)
 
 /** Who may start runs on a computer reached through a server, from that server: nobody, its own person, or every person there. */
 export type Who = 'nobody' | 'me' | 'everyone'
@@ -44,6 +55,8 @@ export interface Facts {
   email?: string
   /** Set for a computer reached through a server, with no door of its own on the internet. */
   through?: Through
+  /** Set for a computer on the person's Tailscale network: its door is there, not on the internet. */
+  tailscale?: true
   /**
    * The user the person logs in over SSH as, on a computer reached through a server: the person
    * at that computer, who opens its OpenAgent in its own browser. Never set for a server on the internet.
@@ -606,7 +619,7 @@ export const STEPS: readonly StepDef[] = [
     label: 'Starts by itself',
     as: 'root',
     timeoutMs: 3 * MINUTE,
-    script: ({ through }) =>
+    script: ({ through, tailscale }) =>
       script(
         'root',
         { UNIT: SERVICE_UNIT },
@@ -617,8 +630,8 @@ export const STEPS: readonly StepDef[] = [
     systemctl daemon-reload
     touch ${ROOT}/restart
   fi${
-    // A computer reached through a server opens no door to the internet: its own firewall is left as it is.
-    through
+    // A computer reached through a server, or on Tailscale, opens no door to the internet: its own firewall is left as it is.
+    through || tailscale
       ? ''
       : `
   # A firewall that is on lets the door's two ports through; one that is off is left off.
@@ -694,9 +707,62 @@ export const LINE_STEP: StepDef = {
   },
 }
 
-/** The steps of a server, in order: a computer reached through a server has its line where a server on the internet has its door. */
-export function stepsFor(through: boolean): readonly StepDef[] {
-  return through ? [...STEPS.filter(step => step.id !== 'door'), LINE_STEP] : STEPS
+/**
+ * Tailscale on a computer on the person's Tailscale network, made ready for the door: it is there
+ * and signed in, and the server's user may have Tailscale serve the door, as only root may otherwise.
+ */
+export const TAILSCALE_STEP: StepDef = {
+  id: 'tailscale',
+  label: 'Tailscale',
+  as: 'root',
+  timeoutMs: MINUTE,
+  script: () =>
+    script(
+      'root',
+      {},
+      `
+  command -v tailscale >/dev/null || fail "Tailscale is not installed on this computer. Install it from tailscale.com, sign in with tailscale up, then try again."
+  tailscale status --json 2>/dev/null | grep -q '"BackendState": *"Running"' || fail "Tailscale is not signed in on this computer. Sign in with tailscale up, then try again."
+  # The door is the server's user's: Tailscale lets that user serve it.
+  tailscale set --operator=${SERVER_USER}
+`,
+    ),
+}
+
+/**
+ * The door of a computer on the person's Tailscale network, in place of one on the internet: behind
+ * Tailscale, at the computer's name there, which is what the person connected it by. Serve, off for
+ * the person's network until they turn it on once, is said with the page in Tailscale that does.
+ */
+export const TAILSCALE_DOOR_STEP: StepDef = {
+  id: 'door',
+  label: 'The door, on your Tailscale network',
+  as: 'openagent',
+  timeoutMs: 3 * MINUTE,
+  script: ({ address }) =>
+    script(
+      'openagent',
+      { ADDRESS: address },
+      `
+  open() { case "$(${DOOR} status)" in *'"listening":true'*'"tailscale":{"address":"'"$ADDRESS"'"'*) return 0 ;; *) return 1 ;; esac; }
+  open && exit 0
+  ${DOOR} tailscale on >/dev/null
+  # Tailscale is asked to serve the door: a moment, or longer while it waits for Serve to be turned on.
+  for _ in $(seq 45); do
+    open && exit 0
+    sleep 2
+  done
+  ${DOOR} status | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const t=JSON.parse(s);console.error([t.problem??"The door did not open.",t.fixAt?"Turn Serve on once at "+t.fixAt+", then try again.":""].filter(Boolean).join(" "))})' || true
+  exit 1
+`,
+    ),
+}
+
+/** The steps of a server, in order: a computer reached through a server has its line where a server on the internet has its door, and one on Tailscale its door there. */
+export function stepsFor(reached: Reached): readonly StepDef[] {
+  if (reached === 'through') return [...STEPS.filter(step => step.id !== 'door'), LINE_STEP]
+  if (reached === 'tailscale') return [...STEPS.filter(step => step.id !== 'door'), TAILSCALE_STEP, TAILSCALE_DOOR_STEP]
+  return STEPS
 }
 
 /** The label a step is shown with on a server's row: the line names the server it goes to. */
