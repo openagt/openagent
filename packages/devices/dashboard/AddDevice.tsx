@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react'
-import { Globe, Loader2, Monitor, Server, Smartphone, Ticket, Wifi } from 'lucide-react'
-import { Button, Dialog, cn, type ModuleMachine } from '@openagt/dashboard/module'
+import { Globe, Loader2, Monitor, Server, Smartphone, Ticket, Waypoints, Wifi } from 'lucide-react'
+import { Button, Dialog, buttonVariants, cn, type ModuleMachine } from '@openagt/dashboard/module'
 import { addDevice, findComputers, myName, nameOwner, setSwitch, type FoundComputer } from './devices.js'
 import { readPersonThere } from './servers.js'
 import { CodeCard, Joined, NoCodeYet, PhoneCode, RanOut, Waiting, clock, useCode, type Given, type GivenAnswer } from './codes.js'
@@ -137,7 +137,11 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
             {servers.map(server => (
               <Choice key={server.id} on={picked === server.id} icon={Globe} title={`Anywhere, through ${server.label}`} recommended={server.id === servers[0]!.id} words={`It opens ${server.label}, with a lock. From there it starts runs on this computer and on all your devices that are on.`} onPick={() => setPicked(server.id)} />
             ))}
-            <Choice on={picked === ''} icon={Wifi} title="Only on this Wi-Fi" words="It opens this computer directly. No lock on the link: someone on the same Wi-Fi could listen. Use it at home." onPick={() => setPicked('')} />
+            {status?.tailscale ? (
+              <Choice on={picked === ''} icon={Waypoints} title="On your Tailscale network" words={`It opens this computer at https://${status.tailscale.address}, with a lock, wherever it is. Tailscale must run on it, signed in as on this computer.`} onPick={() => setPicked('')} />
+            ) : (
+              <Choice on={picked === ''} icon={Wifi} title="Only on this Wi-Fi" words="It opens this computer directly. No lock on the link: someone on the same Wi-Fi could listen. Use it at home." onPick={() => setPicked('')} />
+            )}
           </div>
           <div className="flex justify-end gap-2">
             <Button size="sm" variant="ghost" onClick={onClose}>
@@ -146,6 +150,26 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
             <Button size="sm" onClick={() => setWhere(picked)}>
               Show the code
             </Button>
+          </div>
+        </div>
+      </Dialog>
+    )
+
+  // Behind Tailscale with the door not served yet: what is in the way, and where the person clears it.
+  if (where === '' && status?.tailscale && !status.listening)
+    return (
+      <Dialog open onOpenChange={open => !open && onClose()} title="Add phone">
+        <div className="space-y-4 text-sm">
+          <p>{status.problem ?? 'The door on your Tailscale network is opening. One moment.'}</p>
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+            {status.fixAt !== undefined && (
+              <a href={status.fixAt} target="_blank" rel="noreferrer" className={buttonVariants({ size: 'sm' })}>
+                Turn on Serve
+              </a>
+            )}
           </div>
         </div>
       </Dialog>

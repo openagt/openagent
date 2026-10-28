@@ -8,7 +8,7 @@ import { nameAddress, onOwnNetwork, plainAddress, urlHost, type AddressDeps } fr
 import { doorFingerprint, type Secured } from './certificate.js'
 import { deviceName } from './device-name.js'
 import { LINE_FOR_HEADER, LINE_PATH, LINE_PROTOCOL } from './line-out.js'
-import { enterPage, notInPage } from './pages.js'
+import { enterPage, notInPage, type DoorKind } from './pages.js'
 import { COMPUTER_HEADER, PERSON_HEADER, addAsk, addCode, askOf, dropAsk, nameWord, shownCode, enter, isComputerId, isIn, listedDevices, personOf, portOf, readStore, removeComputer, removeDevice, sha256, shareLine, storePath, update, type Entry, type ListedDevice, type Store } from './store.js'
 
 /**
@@ -115,6 +115,18 @@ export interface DoorOptions {
   knocks?: (peer: string | undefined) => boolean
   /** The key and certificate the door speaks HTTPS with; plain HTTP when unsaid. */
   secured?: Secured
+  /**
+   * Set when the door is reached through a program on this computer that speaks HTTPS for it
+   * (Tailscale's Serve, tailscale.ts): a browser sees an HTTPS door, and each request's caller is
+   * the one that program names in `X-Forwarded-For`, not the program itself.
+   */
+  proxied?: boolean
+  /**
+   * Where a browser opens the door, as an origin, when its requests may name another address
+   * (behind a program that passes them on): `https://laptop.tail1234.ts.net`. A page of the door
+   * is one of that origin; the address each request names (`Host`) when unsaid.
+   */
+  origin?: string
   /** How this computer's name on the network is read, for the code an allowed computer is handed; the real network when unsaid. */
   address?: AddressDeps
   /** What takes a computer's line, and the ports such computers are given; a door with none gives no line. */
@@ -197,9 +209,9 @@ function withoutDeviceCookie(header: string | undefined): string | undefined {
  * plain read) or with the door's own address as the browser knows it. A page on another site
  * that makes this device's browser call the door is turned away here.
  */
-function fromOwnPage(req: IncomingMessage, secure: boolean): boolean {
+function fromOwnPage(req: IncomingMessage, secure: boolean, own?: string): boolean {
   const origin = req.headers.origin
-  return !origin || origin === `${secure ? 'https' : 'http'}://${req.headers.host ?? ''}`
+  return !origin || origin === (own ?? `${secure ? 'https' : 'http'}://${req.headers.host ?? ''}`)
 }
 
 function refuse(res: ServerResponse, status: number, text: string): void {
@@ -263,8 +275,17 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
   const { env } = opts
   const now = opts.now ?? Date.now
   const knocks = opts.knocks ?? (peer => onOwnNetwork(peer))
-  const secure = opts.secured !== undefined
+  const secure = opts.secured !== undefined || opts.proxied === true
+  const kind: DoorKind = opts.secured ? 'server' : opts.proxied ? 'tailscale' : 'wifi'
   const ownTarget = new URL(opts.target)
+  // Who a request is from: behind a program that passes it on, the caller that program names (the
+  // last address it added), else the socket's other end. Only a program on this computer reaches a
+  // door behind one, so the name is that program's to give.
+  const callerOf = (req: IncomingMessage): string => {
+    const forwarded = opts.proxied ? req.headers['x-forwarded-for'] : undefined
+    const last = (Array.isArray(forwarded) ? forwarded.at(-1) : forwarded)?.split(',').at(-1)?.trim()
+    return last || (req.socket.remoteAddress ?? '')
+  }
 
   // The file as last read, read again only once it has changed: a device removed a moment ago is
   // out at its next request.
@@ -318,10 +339,10 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
   const letIn = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (req.method === 'GET' || req.method === 'HEAD') {
       const nonce = randomBytes(16).toString('base64')
-      return sendPage(res, 200, enterPage(ENTER_PATH, nonce, secure), nonce)
+      return sendPage(res, 200, enterPage(ENTER_PATH, nonce, kind), nonce)
     }
     if (req.method !== 'POST') return refuse(res, 405, 'method not allowed')
-    if (!fromOwnPage(req, secure)) return refuse(res, 403, 'forbidden')
+    if (!fromOwnPage(req, secure, opts.origin)) return refuse(res, 403, 'forbidden')
     const body = await readBody(req, MAX_ENTER_BODY)
     let code: unknown
     let computer: unknown
@@ -337,7 +358,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     const forLine = byComputer && line === true
     if (forLine && !opts.lines) return refuse(res, 403, 'this door gives no line: only a server does')
     // Asked before the code is looked at: an address that is waiting is not told whether its next guess was right.
-    const peer = req.socket.remoteAddress ?? ''
+    const peer = callerOf(req)
     if (triesOf(peer).length >= WRONG_TRIES) return refuse(res, 429, TOO_MANY_TRIES)
     const name = forLine ? saidName(computer as string) : byComputer ? computerName(computer as string) : deviceName(req.headers['user-agent'])
     const entry = typeof code === 'string' && code ? await enter(env, code, name, now(), forLine ? opts.lines!.ports : undefined, byComputer ? saidComputer(req) : undefined) : undefined
@@ -428,7 +449,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
 
   /** A device that is in takes itself out: what a computer does when it is removed from the other's list of machines. */
   const leave = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-    if (!fromOwnPage(req, secure)) return refuse(res, 403, 'forbidden')
+    if (!fromOwnPage(req, secure, opts.origin)) return refuse(res, 403, 'forbidden')
     const who = await whoIsIn(req)
     if (!who) return refuse(res, 401, 'this device is not in')
     await removeDevice(env, who.entry.id)
@@ -494,9 +515,9 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       const who = await whoIsIn(req)
       if (!who) {
         const wantsPage = req.method === 'GET' && (req.headers.accept ?? '').includes('text/html')
-        return wantsPage ? sendPage(res, 401, notInPage(secure)) : refuse(res, 401, 'this device is not in')
+        return wantsPage ? sendPage(res, 401, notInPage(kind)) : refuse(res, 401, 'this device is not in')
       }
-      if (!fromOwnPage(req, secure)) return refuse(res, 403, 'forbidden')
+      if (!fromOwnPage(req, secure, opts.origin)) return refuse(res, 403, 'forbidden')
 
       const { entry, byBearer, person, owner, port } = who
       seen.set(entry.id, now())
@@ -565,7 +586,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
   const aboutMe = async (req: IncomingMessage, res: ServerResponse, path: string): Promise<void> => {
     const who = await whoIsIn(req)
     if (!who) return refuse(res, 401, 'this device is not in')
-    if (who.byBearer ? req.headers.origin !== undefined || req.headers.cookie !== undefined : !fromOwnPage(req, secure)) return refuse(res, 403, 'forbidden')
+    if (who.byBearer ? req.headers.origin !== undefined || req.headers.cookie !== undefined : !fromOwnPage(req, secure, opts.origin)) return refuse(res, 403, 'forbidden')
     seen.set(who.entry.id, now())
     const json = (status: number, value: unknown): void => void res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify(value))
     const whose = { person: who.person }
@@ -678,7 +699,7 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
   return {
     port: (server.address() as AddressInfo).port,
     renew(secured) {
-      if (secure) (server as SecureServer).setSecureContext(secured)
+      if (opts.secured) (server as SecureServer).setSecureContext(secured)
     },
     dropRemoved(store) {
       const stillIn = new Set(store.devices.map(device => device.id))

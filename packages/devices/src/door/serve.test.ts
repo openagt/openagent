@@ -2,11 +2,11 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { doorPort, serve } from './serve.js'
+import { ASKING_TAILSCALE, doorPort, serve } from './serve.js'
 import { readFile, writeFile } from 'node:fs/promises'
 import { DEVICE_COOKIE } from './door.js'
 import { addCode, enter, readStore, removeDevice, storePath, update, type Store } from './store.js'
-import { quietAnnounce, testHome } from './test-home.js'
+import { fakeTailscale, quietAnnounce, testHome } from './test-home.js'
 
 /** Wait until the file reads as `until` wants, looking often; fails after five seconds. */
 async function fileSays(env: NodeJS.ProcessEnv, until: (store: Store) => boolean): Promise<Store> {
@@ -211,3 +211,131 @@ async function until(done: () => boolean): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, 20))
   }
 }
+
+test('behind Tailscale: the door listens on this computer alone, Tailscale serves it, and a device in sees an HTTPS door; off, Tailscale lets go of it', async () => {
+  const home = await testHome()
+  const tailscale = fakeTailscale()
+  const stop = new AbortController()
+  // The Wi-Fi switch is on too: behind Tailscale it is not looked at.
+  await update(home.env, store => {
+    store.on = true
+    store.tailscale = { address: 'laptop.tail1234.ts.net' }
+  })
+  const running = serve({ env: home.env, target: 'http://127.0.0.1:1', port: 0, signal: stop.signal, announce: quietAnnounce, pollMs: 20, retryMs: 50, tailscale: tailscale.run })
+  try {
+    const open = await fileSays(home.env, store => store.listening !== undefined)
+    const port = open.listening!.port
+    assert.equal(tailscale.served(), `http://127.0.0.1:${port}`)
+
+    // A device gets in with a code, as Tailscale passes its request on: the cookie is one a browser keeps for HTTPS only.
+    const { code } = await addCode(home.env, Date.now())
+    const at = `http://127.0.0.1:${port}`
+    const headers = { host: 'laptop.tail1234.ts.net', origin: 'https://laptop.tail1234.ts.net', 'x-forwarded-for': '100.64.0.7', 'content-type': 'application/json' }
+    const entered = await fetch(`${at}/_devices/enter`, { method: 'POST', headers, body: JSON.stringify({ code }) })
+    assert.equal(entered.status, 200)
+    assert.match(entered.headers.get('set-cookie') ?? '', /; Secure/)
+    // A page of another site, or of the door as plain HTTP, is turned away.
+    const cookie = (entered.headers.get('set-cookie') ?? '').split(';')[0]!
+    assert.equal((await fetch(`${at}/`, { headers: { ...headers, cookie, origin: 'http://laptop.tail1234.ts.net' } })).status, 403)
+    // No computer on a Wi-Fi asks to get in here without a code.
+    assert.equal((await fetch(`${at}/_devices/ask`, { method: 'POST', headers, body: '{}' })).status, 404)
+
+    // The door on every network is not open: only this computer reaches it.
+    assert.equal((await readStore(home.env)).problem, undefined)
+
+    await update(home.env, store => {
+      delete store.tailscale
+      store.on = false
+    })
+    await fileSays(home.env, store => store.listening === undefined)
+    assert.equal(tailscale.served(), undefined, 'Tailscale serves the door no more')
+    assert.deepEqual(tailscale.calls.at(-1), ['serve', '--https=443', 'off'])
+    await assert.rejects(fetch(`${at}/`))
+  } finally {
+    stop.abort()
+    await running
+    await home.remove()
+  }
+})
+
+test('behind Tailscale with Serve off for the network: the door says so with the page that turns it on, and opens by itself once it is on', async () => {
+  const home = await testHome()
+  const tailscale = fakeTailscale('laptop.tail1234.ts.net', { serveOff: true })
+  const stop = new AbortController()
+  await update(home.env, store => {
+    store.tailscale = { address: 'laptop.tail1234.ts.net' }
+  })
+  const running = serve({ env: home.env, target: 'http://127.0.0.1:1', port: 0, signal: stop.signal, announce: quietAnnounce, pollMs: 20, retryMs: 50, tailscale: tailscale.run })
+  try {
+    const off = await fileSays(home.env, store => store.problem !== undefined)
+    assert.equal(off.listening, undefined, 'a door Tailscale does not serve is not said to listen')
+    assert.match(off.problem!, /^Serve is off on your Tailscale network/)
+    assert.equal(off.fixAt, 'https://login.tailscale.com/f/serve?node=n1234CNTRL')
+
+    tailscale.enable()
+    const open = await fileSays(home.env, store => store.listening !== undefined)
+    assert.equal(open.problem, undefined)
+    assert.equal(open.fixAt, undefined)
+    assert.equal(tailscale.served(), `http://127.0.0.1:${open.listening!.port}`)
+  } finally {
+    stop.abort()
+    await running
+    await home.remove()
+  }
+})
+
+test('behind Tailscale, what the person serves on that port themselves is left as it is, and said', async () => {
+  const home = await testHome()
+  const tailscale = fakeTailscale()
+  tailscale.serveOther('http://127.0.0.1:3000')
+  const stop = new AbortController()
+  await update(home.env, store => {
+    store.tailscale = { address: 'laptop.tail1234.ts.net' }
+  })
+  const running = serve({ env: home.env, target: 'http://127.0.0.1:1', port: 0, signal: stop.signal, announce: quietAnnounce, pollMs: 20, retryMs: 50, tailscale: tailscale.run })
+  try {
+    const said = await fileSays(home.env, store => store.problem !== undefined)
+    assert.match(said.problem!, /^Tailscale already serves something else at https:\/\/laptop\.tail1234\.ts\.net/)
+    assert.equal(tailscale.served(), 'http://127.0.0.1:3000')
+    assert.equal(tailscale.calls.some(args => args[1] === '--bg'), false)
+    // Leaving Tailscale does not stop what is the person's own.
+    await update(home.env, store => {
+      delete store.tailscale
+    })
+    await fileSays(home.env, store => store.problem === undefined)
+    assert.equal(tailscale.served(), 'http://127.0.0.1:3000')
+  } finally {
+    stop.abort()
+    await running
+    await home.remove()
+  }
+})
+
+test('behind Tailscale, while Tailscale is first asked to serve the door the file says so, and then what it answered', async () => {
+  const home = await testHome()
+  const tailscale = fakeTailscale()
+  let release: () => void = () => {}
+  const held = new Promise<void>(resolve => (release = resolve))
+  const slow = async (args: string[], ms: number): Promise<{ code: number | null; out: string }> => {
+    if (args[1] === '--bg') await held
+    return tailscale.run(args)
+  }
+  const stop = new AbortController()
+  await update(home.env, store => {
+    store.tailscale = { address: 'laptop.tail1234.ts.net' }
+  })
+  const running = serve({ env: home.env, target: 'http://127.0.0.1:1', port: 0, signal: stop.signal, announce: quietAnnounce, pollMs: 20, retryMs: 50, tailscale: slow })
+  try {
+    const asking = await fileSays(home.env, store => store.problem !== undefined)
+    assert.equal(asking.problem, ASKING_TAILSCALE)
+    assert.equal(asking.listening, undefined)
+    release()
+    const open = await fileSays(home.env, store => store.listening !== undefined)
+    assert.equal(open.problem, undefined)
+  } finally {
+    release()
+    stop.abort()
+    await running
+    await home.remove()
+  }
+})

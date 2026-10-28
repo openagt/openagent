@@ -31,19 +31,24 @@ ${script ? `<script nonce="${nonce}">${script}</script>` : ''}
 `
 }
 
+/** Which door a page is of: one on the Wi-Fi, a server's, or one behind Tailscale. */
+export type DoorKind = 'wifi' | 'server' | 'tailscale'
+
 /**
  * How to get in, in the words both pages use. A server has no screen of its own to press on:
  * the code comes from the computer the server was connected from, or from a device that is in.
  */
-export function howToGetIn(server: boolean): string {
-  return server
-    ? "This computer is a server. On the computer it was connected from, open OpenAgent's Settings › Devices › Add device › Phone or tablet, pick Anywhere, through this server, and scan the code with this device. A device that is already in can also make a code: its Settings › Devices › Add device."
-    : 'On the computer that runs OpenAgent, open Settings › Devices › Add device › Phone or tablet, and scan the code with this device.'
+export function howToGetIn(kind: DoorKind): string {
+  if (kind === 'server')
+    return "This computer is a server. On the computer it was connected from, open OpenAgent's Settings › Devices › Add device › Phone or tablet, pick Anywhere, through this server, and scan the code with this device. A device that is already in can also make a code: its Settings › Devices › Add device."
+  if (kind === 'tailscale')
+    return 'This computer is on your Tailscale network. On it, open OpenAgent\'s Settings › Devices › Add device › Phone or tablet, and scan the code with this device; on a computer with no screen, run npx @openagt/devices add --qr. A device that is already in can also make a code: its Settings › Devices › Add device.'
+  return 'On the computer that runs OpenAgent, open Settings › Devices › Add device › Phone or tablet, and scan the code with this device.'
 }
 
-/** What a device that is not in sees when it opens the door's address; `server` says the door is a server's. */
-export function notInPage(server: boolean): string {
-  return page('This device is not in', howToGetIn(server))
+/** What a device that is not in sees when it opens the door's address. */
+export function notInPage(kind: DoorKind): string {
+  return page('This device is not in', howToGetIn(kind))
 }
 
 /**
@@ -52,15 +57,16 @@ export function notInPage(server: boolean): string {
  * preview does that) spends nothing. What follows the code after a dot is for a computer that
  * pastes the link, not for a browser.
  */
-export function enterPage(path: string, nonce: string, server: boolean): string {
-  const unreachable = server ? 'Check that this device is on the internet, then scan the code again.' : 'Check that this device is on the same Wi-Fi as the computer, then scan the code again.'
+export function enterPage(path: string, nonce: string, kind: DoorKind): string {
+  const unreachable =
+    kind === 'server' ? 'Check that this device is on the internet, then scan the code again.' : kind === 'tailscale' ? 'Check that Tailscale is on on this device, signed in as on the computer, then scan the code again.' : 'Check that this device is on the same Wi-Fi as the computer, then scan the code again.'
   const script = `
     const say = (title, text) => { document.getElementById('title').textContent = title; document.getElementById('text').textContent = text }
     const code = location.hash.slice(1).split('.')[0]
     history.replaceState(null, '', location.pathname)
     fetch(${JSON.stringify(path)}, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) })
       .then(async answer => {
-        if (!answer.ok) return say('This code no longer works', 'A code works once, for ten minutes. ' + ${JSON.stringify(howToGetIn(server))})
+        if (!answer.ok) return say('This code no longer works', 'A code works once, for ten minutes. ' + ${JSON.stringify(howToGetIn(kind))})
         // Whose device it is now, said a moment before OpenAgent opens.
         const person = (await answer.json().catch(() => ({}))).person
         if (typeof person !== 'string') return location.replace('/')

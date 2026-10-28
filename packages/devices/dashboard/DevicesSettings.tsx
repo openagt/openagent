@@ -8,7 +8,7 @@ import { ComputerPage } from './ComputerPage.js'
 import { JoinedPage, OtherPage } from './JoinedPage.js'
 import { ServerPage } from './ServerPage.js'
 import { ThisComputer } from './ThisComputer.js'
-import { hasServer, type Item, type PhoneItem } from './model.js'
+import { hasServer, reachedAt, type Item, type PhoneItem } from './model.js'
 import { Problem, Row, State, hostOf, olderThan } from './parts.js'
 import { useDevices, type Devices, type Paces } from './use-devices.js'
 
@@ -94,7 +94,7 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
     )
 
   const persons = status?.persons ?? []
-  const start = d.items.length === 0 && !status?.on && status?.https === undefined && persons.length === 0
+  const start = d.items.length === 0 && !status?.on && status?.https === undefined && status?.tailscale === undefined && persons.length === 0
   return (
     <div className="space-y-4 pt-1">
       <ThisComputer d={d} start={start} />
@@ -177,7 +177,7 @@ function ItemRow({ d, item, onOpen }: { d: Devices; item: Item; onOpen: () => vo
   if (item.kind === 'phone') return <PhoneRow d={d} item={item} />
   if (item.kind === 'computer') {
     const { machine, door, through } = item
-    const where = item.line ? 'keeps a line open here' : through ? `through ${through.label}` : machine?.url.startsWith('https://') ? 'on the internet' : 'on this Wi-Fi'
+    const where = item.line ? 'keeps a line open here' : through ? `through ${through.label}` : reachedAt(machine)
     const runs = item.line ? undefined : machine && door ? 'runs go both ways' : machine ? 'your runs go there' : 'starts runs here'
     const state = machine ? machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Offline</State> : undefined
     return <Row icon={Monitor} name={item.name} facts={[state, 'Computer', where, runs]} onOpen={onOpen} />
@@ -212,7 +212,7 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
   const [name, setName] = useState(item.name)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
-  const where = 'wifi' in item.via ? 'on this Wi-Fi' : 'internet' in item.via ? 'from anywhere' : `through ${item.via.label}`
+  const where = 'wifi' in item.via ? 'on this Wi-Fi' : 'internet' in item.via ? 'from anywhere' : 'tailscale' in item.via ? 'on your Tailscale network' : `through ${item.via.label}`
   const act = async (change: () => Promise<Answer<unknown> | { ok: true } | { ok: false; error: string }>): Promise<boolean> => {
     setBusy(true)
     setError(undefined)

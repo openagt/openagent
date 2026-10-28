@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { DEVICE_COOKIE, ENTER_PATH, ME_CODE_PATH, ME_LINE_PATH, ME_PATH, ME_REMOVE_PATH, TOO_MANY_TRIES, openDoor, readBearer, readEntry, type Door } from './door.js'
+import { DEVICE_COOKIE, ENTER_PATH, ME_CODE_PATH, ME_LINE_PATH, ME_PATH, ME_REMOVE_PATH, TOO_MANY_TRIES, openDoor, readBearer, readEntry, type Door, type DoorOptions } from './door.js'
 import { COMPUTER_HEADER, PERSON_HEADER, addCode, addPerson, enter, nameOwner, readStore, removeDevice, sha256, update, type Entry } from './store.js'
 import { testHome } from './test-home.js'
 
@@ -32,7 +32,7 @@ interface Rig {
   close(): Promise<void>
 }
 
-async function rig(knocks?: (peer: string | undefined) => boolean): Promise<Rig> {
+async function rig(knocks?: (peer: string | undefined) => boolean, more: Pick<DoorOptions, 'proxied' | 'origin'> = {}): Promise<Rig> {
   const home = await testHome()
   const asked: Asked[] = []
   const clock = { now: Date.now() }
@@ -48,7 +48,7 @@ async function rig(knocks?: (peer: string | undefined) => boolean): Promise<Rig>
   })
   await new Promise<void>(resolve => upstream.listen(0, '127.0.0.1', resolve))
   const target = `http://127.0.0.1:${(upstream.address() as AddressInfo).port}`
-  const door = await openDoor({ env: home.env, target, port: 0, host: '127.0.0.1', now: () => clock.now, ...(knocks ? { knocks } : {}) })
+  const door = await openDoor({ env: home.env, target, port: 0, host: '127.0.0.1', now: () => clock.now, ...(knocks ? { knocks } : {}), ...more })
   self = {
     env: home.env,
     door,
@@ -601,6 +601,40 @@ test('an address that tries five wrong codes in a minute waits a minute, the rig
     assert.equal((await readStore(r.env)).codes.length, 1, 'the code is not spent, nor taken away')
     r.clock.now += 60_000
     assert.equal((await send(code)).status, 200, 'a minute later')
+  } finally {
+    await r.close()
+  }
+})
+
+test('behind a program that passes requests on, wrong codes are counted by the caller it names: one guesser waits, the next device gets in', async () => {
+  const r = await rig(undefined, { proxied: true, origin: 'https://laptop.tail1234.ts.net' })
+  try {
+    const { code } = await addCode(r.env)
+    const send = (sent: string, from: string): Promise<Response> =>
+      fetch(`${r.at}${ENTER_PATH}`, { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://laptop.tail1234.ts.net', 'x-forwarded-for': from }, body: JSON.stringify({ code: sent }) })
+    for (let guess = 0; guess < 5; guess++) assert.equal((await send(`WRONG${guess}`, '100.64.0.9')).status, 403)
+    assert.equal((await send(code, '100.64.0.9')).status, 429)
+    // The last address the program added is the caller: one the guesser wrote before it counts for nothing.
+    assert.equal((await send(code, '100.64.0.7, 100.64.0.9')).status, 429)
+    const entered = await send(code, '100.64.0.7')
+    assert.equal(entered.status, 200)
+    assert.match(entered.headers.get('set-cookie') ?? '', /; Secure/)
+  } finally {
+    await r.close()
+  }
+})
+
+test('behind a program that passes requests on, a page is one of the address the door is served at, whatever address a request names', async () => {
+  const r = await rig(undefined, { proxied: true, origin: 'https://laptop.tail1234.ts.net' })
+  try {
+    const phone = await r.letIn()
+    const post = (origin: string): Promise<Response> => fetch(`${r.at}/_rpc/onProjects`, { method: 'POST', headers: { cookie: phone.cookie, origin } })
+    assert.equal((await post('https://laptop.tail1234.ts.net')).status, 200)
+    assert.equal((await post(r.at.replace('http:', 'https:'))).status, 403, 'the address the request names is not the door\'s')
+    assert.equal((await post('https://evil.example')).status, 403)
+    // A device that is not in is told how to get one in, on Tailscale.
+    const page = await fetch(`${r.at}/`, { headers: { accept: 'text/html' } })
+    assert.match(await page.text(), /on your Tailscale network/)
   } finally {
     await r.close()
   }

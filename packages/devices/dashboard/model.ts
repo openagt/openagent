@@ -20,7 +20,7 @@ export interface PhoneItem {
   key: string
   name: string
   /** Where it reaches this computer: on its Wi-Fi, at this server's own address, or through a server. */
-  via: { wifi: true } | { internet: true } | { server: string; label: string }
+  via: { wifi: true } | { internet: true } | { tailscale: true } | { server: string; label: string }
   added: string
   seen?: string
   /** In at this computer's door, by its id there. */
@@ -91,8 +91,14 @@ export interface Sources {
   devices: Readonly<Record<string, DevicesRead | undefined>>
 }
 
+/** A computer reached over the person's Tailscale network, at its name there: its door is its own, and it keeps no line for anyone. */
+export const onTailscale = (machine: Pick<ModuleMachine, 'url'>): boolean => /^https:\/\/[^/]+\.ts\.net(:\d+)?$/i.test(machine.url)
+
 /** A server with a door of its own on the internet: one that can say who this computer's person is there. */
-export const hasDoor = (machine: Pick<ModuleMachine, 'url'>): boolean => machine.url.startsWith('https://') && !machine.url.includes(THROUGH)
+export const hasDoor = (machine: Pick<ModuleMachine, 'url'>): boolean => machine.url.startsWith('https://') && !machine.url.includes(THROUGH) && !onTailscale(machine)
+
+/** Where a saved computer is reached from here, in the words its row says it with. */
+export const reachedAt = (machine: Pick<ModuleMachine, 'url'> | undefined): string => (machine && onTailscale(machine) ? 'on your Tailscale network' : machine?.url.startsWith('https://') ? 'on the internet' : 'on this Wi-Fi')
 
 /** The server a machine reached through one is reached through, by its address. */
 export const throughOf = (machine: Pick<ModuleMachine, 'url'>): string | undefined => (machine.url.includes(THROUGH) ? machine.url.slice(0, machine.url.indexOf(THROUGH)) : undefined)
@@ -111,7 +117,7 @@ export function itemsOf(sources: Sources): Item[] {
   const doorDevices = door?.devices ?? []
   const installed = (machine: ModuleMachine): ServerRow | undefined => servers.find(server => server.url === machine.url)
   const labelOf = (url: string): string => machines.find(machine => machine.url === url)?.label ?? url.replace(/^https?:\/\//, '')
-  const here: PhoneItem['via'] = door?.https ? { internet: true } : { wifi: true }
+  const here: PhoneItem['via'] = door?.https ? { internet: true } : door?.tailscale ? { tailscale: true } : { wifi: true }
 
   // This computer's door: phones and browsers, and computers that start runs here.
   const matched = new Set<string>()

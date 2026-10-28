@@ -34,7 +34,8 @@
     "clean": "rm -rf dist dist-test"
   },
   "dependencies": {
-    "@openagt/agent-driver-claude": "workspace:*"
+    "@openagt/agent-driver-claude": "workspace:*",
+    "uqr": "0.1.3"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",

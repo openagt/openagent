@@ -46,6 +46,10 @@ export interface DoorStatus {
   problem?: string
   /** On a server: the address its door is open at, over HTTPS, to every network. */
   https?: { address: string }
+  /** Behind Tailscale: this computer's name on the person's Tailscale network, which its door is open at. */
+  tailscale?: { address: string }
+  /** Where the person fixes the problem themselves, in an account of theirs: Tailscale's page that turns Serve on. */
+  fixAt?: string
   devices: DeviceRow[]
   /** None until the owner is named. */
   persons: PersonRow[]
@@ -70,7 +74,7 @@ const text = (value: unknown): string | undefined => (typeof value === 'string' 
 
 export function readStatus(output: unknown): DoorStatus | undefined {
   if (!output || typeof output !== 'object') return undefined
-  const { on, listening, problem, https, devices, persons, person } = output as Record<string, unknown>
+  const { on, listening, problem, https, tailscale, fixAt, devices, persons, person } = output as Record<string, unknown>
   if (typeof on !== 'boolean' || !Array.isArray(devices)) return undefined
   const rows = readDevices(devices)
   const people: PersonRow[] = []
@@ -91,8 +95,21 @@ export function readStatus(output: unknown): DoorStatus | undefined {
   }
   const why = text(problem)
   const address = https && typeof https === 'object' ? text((https as Record<string, unknown>).address) : undefined
+  const named = tailscale && typeof tailscale === 'object' ? text((tailscale as Record<string, unknown>).address) : undefined
+  // Only Tailscale's own page: what the page links to is no address a command could name.
+  const fix = text(fixAt)?.startsWith('https://login.tailscale.com/') ? text(fixAt) : undefined
   const own = text(person)
-  return { on, listening: listening === true, ...(why ? { problem: why } : {}), ...(address ? { https: { address } } : {}), devices: rows, persons: people, ...(own ? { person: own } : {}) }
+  return {
+    on,
+    listening: listening === true,
+    ...(why ? { problem: why } : {}),
+    ...(why && fix ? { fixAt: fix } : {}),
+    ...(address ? { https: { address } } : {}),
+    ...(named ? { tailscale: { address: named } } : {}),
+    devices: rows,
+    persons: people,
+    ...(own ? { person: own } : {}),
+  }
 }
 
 /** The devices of a list, read forgivingly: an entry that is not one is left out. */
@@ -163,6 +180,8 @@ async function run<T>(host: ModuleHost, args: string[], read: (output: unknown) 
 
 export const loadStatus = (host: ModuleHost): Promise<Answer<DoorStatus>> => run(host, ['status'], readStatus)
 export const setSwitch = (host: ModuleHost, on: boolean): Promise<Answer<DoorStatus>> => run(host, [on ? 'on' : 'off'], readStatus)
+/** Behind Tailscale or not: the door is open to the person's own devices on their Tailscale network. */
+export const setTailscale = (host: ModuleHost, on: boolean): Promise<Answer<DoorStatus>> => run(host, ['tailscale', on ? 'on' : 'off'], readStatus)
 export const addDevice = (host: ModuleHost, person?: string): Promise<Answer<AddLink>> => run(host, ['add', ...(person !== undefined ? ['--for', person] : [])], readLink)
 export const nameOwner = (host: ModuleHost, name: string): Promise<Answer<DoorStatus>> => run(host, ['owner', name], readStatus)
 export const removePerson = (host: ModuleHost, name: string): Promise<Answer<DoorStatus>> => run(host, ['remove-person', name], readStatus)

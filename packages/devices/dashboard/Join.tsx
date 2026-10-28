@@ -56,8 +56,8 @@ export function JoinDialog({ d, onClose }: { d: Devices; onClose: () => void }) 
   const [joining, setJoining] = useState(false)
   const [error, setError] = useState<string | undefined>()
   const link = linkOf(where, code)
-  // Through a server: a link pasted whole may be a computer's on its Wi-Fi, which keeps no line.
-  const server = link !== undefined && link.startsWith('https://')
+  // Through a server: a link pasted whole may be a computer's on its Wi-Fi, or one on Tailscale, which keeps no line.
+  const server = link !== undefined && hasDoor({ url: new URL(link).origin })
   // Where, never the code: a link pasted whole is said by its address alone.
   const shownWhere = isLink(where) ? hostOfLink(where) : (originOf(where)?.replace(/^https:\/\//, '') ?? where.trim())
 

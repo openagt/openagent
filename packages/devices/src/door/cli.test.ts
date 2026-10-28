@@ -10,7 +10,7 @@ import { keyFingerprint } from './der.js'
 import { ENTER_PATH } from './door.js'
 import { readFile, writeFile } from 'node:fs/promises'
 import { readStore, storePath, update } from './store.js'
-import { quietAnnounce, testHome } from './test-home.js'
+import { fakeTailscale, quietAnnounce, testHome } from './test-home.js'
 import { testOffice } from './test-office.js'
 
 /** A laptop on a Wi-Fi that answers to its name. */
@@ -513,5 +513,74 @@ test('pairing on the Wi-Fi: find leaves this computer out, ask shows a number, t
     await new Promise<void>(resolve => openagent.close(() => resolve()))
     await there.remove()
     await here.remove()
+  }
+})
+
+test('tailscale on: the door opens at this computer\'s name on Tailscale, add answers its HTTPS link with no key of the door\'s, --qr draws it; tailscale off undoes it', async () => {
+  const home = await testHome()
+  const tailscale = fakeTailscale()
+  const stop = new AbortController()
+  const env = { ...home.env, OPENAGENT_URL: 'http://127.0.0.1:1', OPENAGENT_REMOTE_ACCESS_PORT: '0' }
+  const serving = run(env, ['serve'], { signal: stop.signal, tailscale: tailscale.run })
+  try {
+    const on = await run(home.env, ['tailscale', 'on'], { followMs: 5_000, tailscale: tailscale.run })
+    assert.deepEqual(on.out, { on: false, listening: true, tailscale: { address: 'laptop.tail1234.ts.net' }, devices: [], lines: [], persons: [] })
+
+    const link = (await run(home.env, ['add'])).out as { url: string; numberUrl?: string; where: string; code: string }
+    const [at, code] = link.url.split('#') as [string, string]
+    // Tailscale's certificate is one every device trusts: nothing follows the code.
+    assert.equal(at, `https://laptop.tail1234.ts.net${ENTER_PATH}`)
+    assert.match(code, /^[2-9A-HJKMNP-TV-Z]{8}$/)
+    assert.deepEqual([link.numberUrl, link.where], [undefined, 'laptop.tail1234.ts.net'])
+
+    const drawn = await run(home.env, ['add', '--qr'])
+    assert.equal(drawn.code, 0)
+    assert.match(drawn.err.join('\n'), /[▀▄█]/)
+    assert.match(drawn.err.join('\n'), new RegExp(`open ${(drawn.out as { url: string }).url.replace(/[.?*+^$[\]\\(){}|-]/g, '\\$&')} on it, within ten minutes\\.$`))
+
+    const off = await run(home.env, ['tailscale', 'off'], { followMs: 5_000, tailscale: tailscale.run })
+    assert.deepEqual(off.out, { on: false, listening: false, devices: [], lines: [], persons: [] })
+    for (let i = 0; i < 250 && tailscale.served() !== undefined; i++) await new Promise(resolve => setTimeout(resolve, 20))
+    assert.equal(tailscale.served(), undefined)
+  } finally {
+    stop.abort()
+    await serving
+    await home.remove()
+  }
+})
+
+test('tailscale on is refused on a server, and where Tailscale is not signed in, in words; tailscale with anything else prints the usage', async () => {
+  const home = await testHome()
+  try {
+    const signedOut = await run(home.env, ['tailscale', 'on'], { tailscale: fakeTailscale('laptop.tail1234.ts.net', { state: 'NeedsLogin' }).run })
+    assert.equal(signedOut.code, 1)
+    assert.deepEqual(signedOut.err, ['Tailscale is not signed in on this computer. Sign in to Tailscale, then turn this on again.'])
+    assert.equal((await readStore(home.env)).tailscale, undefined)
+
+    await update(home.env, store => {
+      store.https = { address: '203.0.113.7' }
+    })
+    const server = await run(home.env, ['tailscale', 'on'], { tailscale: fakeTailscale().run })
+    assert.deepEqual([server.code, server.err], [1, ['This computer is a server: its door is open on the internet already.']])
+
+    assert.equal((await run(home.env, ['tailscale'])).code, 2)
+    assert.equal((await run(home.env, ['tailscale', 'maybe'])).code, 2)
+    assert.equal((await run(home.env, ['add', '--qr', '--for'])).code, 2)
+  } finally {
+    await home.remove()
+  }
+})
+
+test('the file keeps a name on Tailscale only, and only Tailscale\'s own page as where a problem is fixed', async () => {
+  const home = await testHome()
+  try {
+    await writeFile(storePath(home.env), JSON.stringify({ on: false, tailscale: { address: 'laptop.tail1234.ts.net' }, problem: 'Serve is off', fixAt: 'https://login.tailscale.com/f/serve?node=n1' }))
+    const kept = await readStore(home.env)
+    assert.deepEqual([kept.tailscale, kept.fixAt], [{ address: 'laptop.tail1234.ts.net' }, 'https://login.tailscale.com/f/serve?node=n1'])
+    await writeFile(storePath(home.env), JSON.stringify({ on: false, tailscale: { address: 'evil.example.com' }, problem: 'x', fixAt: 'https://evil.example.com/login.tailscale.com/' }))
+    const dropped = await readStore(home.env)
+    assert.deepEqual([dropped.tailscale, dropped.fixAt], [undefined, undefined])
+  } finally {
+    await home.remove()
   }
 })

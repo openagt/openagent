@@ -248,6 +248,42 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     expect((await screen.findByRole('alert')).textContent).toBe('No certificate for 203.0.113.5 yet: port 80 cannot be reached')
   })
 
+  test('On your Tailscale network: its switch puts the door behind Tailscale, the card says where, the Wi-Fi switch is gone, and a phone gets the link on Tailscale', async () => {
+    const BEHIND = { on: false, listening: true, tailscale: { address: 'laptop.tail1234.ts.net' }, devices: [PHONE], persons: [] }
+    const link = { url: 'https://laptop.tail1234.ts.net/_devices/enter#code', expires: LINK.expires }
+    let state: unknown = OPEN
+    const { host, runComputerCommand } = door(args => {
+      if (args[0] === 'tailscale') state = args[1] === 'on' ? BEHIND : OPEN
+      return args[0] === 'add' ? ok(link) : ok(state)
+    })
+    show(host)
+    fireEvent.click(await screen.findByRole('switch', { name: 'On your Tailscale network' }))
+    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['tailscale', 'on']))
+    expect(await screen.findByText(/open OpenAgent at https:\/\/laptop\.tail1234\.ts\.net, from anywhere/)).toBeTruthy()
+    expect(screen.queryByRole('switch', { name: 'On this Wi-Fi' })).toBeNull()
+    // The phones in reach it there now.
+    expect(await screen.findByText(/on your Tailscale network/)).toBeTruthy()
+    await addPhone()
+    await screen.findByRole('img', { name: 'The code a new device scans' })
+    expect(await copiedLink()).toBe(link.url)
+  })
+
+  test('behind Tailscale with Serve off for the network: what is in the way is said, with a press to the page in Tailscale that turns it on; Add phone says the same', async () => {
+    const OFF_THERE = { on: false, listening: false, tailscale: { address: 'laptop.tail1234.ts.net' }, problem: 'Serve is off on your Tailscale network. Turn it on once in your Tailscale account; the door opens by itself then.', fixAt: 'https://login.tailscale.com/f/serve?node=n1', devices: [PHONE], persons: [] }
+    show(door(() => ok(OFF_THERE)).host)
+    expect((await screen.findByRole('alert')).textContent).toBe(OFF_THERE.problem)
+    expect(screen.getByRole('link', { name: 'Turn on Serve' }).getAttribute('href')).toBe('https://login.tailscale.com/f/serve?node=n1')
+    await addPhone()
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(OFF_THERE.problem)).toBeTruthy()
+    expect(within(dialog).getByRole('link', { name: 'Turn on Serve' }).getAttribute('href')).toBe('https://login.tailscale.com/f/serve?node=n1')
+    cleanup()
+    // Only Tailscale's own page is linked to.
+    show(door(() => ok({ ...OFF_THERE, fixAt: 'https://evil.example/' })).host)
+    await screen.findByRole('alert')
+    expect(screen.queryByRole('link', { name: 'Turn on Serve' })).toBeNull()
+  })
+
   test('a computer with no name offers no second code', async () => {
     const { host } = door(args => (args[0] === 'add' ? ok({ url: LINK.numberUrl, expires: LINK.expires }) : ok(OPEN)))
     show(host)
@@ -693,6 +729,24 @@ describe('Settings › Devices: a code typed on another computer', () => {
     // Another person's computer there is theirs to share: never saved by itself.
     expect(host.addComputerThrough).not.toHaveBeenCalledWith(VPS.id, ROMS.id)
     await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Where' })).toBeNull())
+  })
+
+  test('Join with a code: a computer on Tailscale is saved by its link, asked for no line, and listed as on your Tailscale network', async () => {
+    const OTHER_MAC: ModuleMachine = { id: 'https://studio.tail1234.ts.net', label: 'Studio', url: 'https://studio.tail1234.ts.net', version: '0.0.0' }
+    const saved: ModuleMachine[] = []
+    const { host, serverCommand } = door(() => ok(OFF), saved, args => ok(args[0] === 'shared' ? { shared: [] } : { servers: [] }))
+    vi.mocked(host.addMachine).mockImplementation(async () => (saved.push(OTHER_MAC), { ok: true }))
+    show(host)
+    fireEvent.click(await screen.findByRole('button', { name: 'Join with a code' }))
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Where' }), { target: { value: 'https://studio.tail1234.ts.net/_devices/enter#K7P4QX9M' } })
+    // Its door keeps no line for anyone: nothing to tick.
+    expect(screen.queryByRole('checkbox', { name: 'Your other devices can start runs on this computer' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Join' }))
+    await waitFor(() => expect(host.addMachine).toHaveBeenCalledWith('https://studio.tail1234.ts.net/_devices/enter#K7P4QX9M'))
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Where' })).toBeNull())
+    expect(serverCommand).not.toHaveBeenCalledWith(['shared-reach', 'https://studio.tail1234.ts.net', 'full'])
+    expect(host.computersThrough).not.toHaveBeenCalled()
+    expect(await screen.findByText(/on your Tailscale network/)).toBeTruthy()
   })
 
   test('Join with a code: a link pasted whole is said by its address alone, never with the code it holds', async () => {

@@ -263,11 +263,19 @@ export interface Https {
   address: string
 }
 
+/** The door of a computer reached over Tailscale (tailscale.ts): open only to Tailscale on this computer, which serves it to the person's own devices. */
+export interface Tailscale {
+  /** This computer's name on the person's Tailscale network, as a browser types it: `laptop.tail1234.ts.net`. */
+  address: string
+}
+
 export interface Store {
   /** The "On this Wi-Fi" switch. */
   on: boolean
   /** Set on a server: the door is always open there, and the switch is not looked at. */
   https?: Https
+  /** Set on a computer reached over Tailscale: the door is open there, behind Tailscale, and the switch is not looked at. */
+  tailscale?: Tailscale
   /** The persons on this computer, the owner first; none until the owner is named. */
   persons: Person[]
   devices: Device[]
@@ -279,6 +287,8 @@ export interface Store {
   listening?: Listening
   /** Why the door is not listening although it should, in words; on a server also why its certificate could not be renewed. */
   problem?: string
+  /** Where the person fixes that problem themselves, when it is theirs to fix in an account of theirs: Tailscale's page that turns Serve on. */
+  fixAt?: string
 }
 
 /** How long a code is good for: time to walk to the other computer and type it there. */
@@ -343,6 +353,11 @@ export function addressOf(said: string): string | undefined {
     return new URL(`http://[${said}]`).hostname.slice(1, -1)
   }
   return /^(?=.*[a-z])[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(said) ? said.toLowerCase() : undefined
+}
+
+/** Whether a name is one Tailscale gives a computer on a person's network: a name under `ts.net`. */
+export function isTailscaleName(said: string): boolean {
+  return /\.ts\.net$/.test(said) && addressOf(said) === said
 }
 
 const isIso = (value: unknown): value is string => typeof value === 'string' && !Number.isNaN(Date.parse(value))
@@ -434,9 +449,11 @@ export function sanitize(value: unknown): Store {
   }
   const listening = obj.listening && typeof obj.listening === 'object' ? (obj.listening as Record<string, unknown>) : undefined
   const https = obj.https && typeof obj.https === 'object' ? (obj.https as Record<string, unknown>).address : undefined
+  const tailscale = obj.tailscale && typeof obj.tailscale === 'object' ? (obj.tailscale as Record<string, unknown>).address : undefined
   return {
     on: obj.on === true,
     ...(isAddress(https) ? { https: { address: https } } : {}),
+    ...(typeof tailscale === 'string' && isTailscaleName(tailscale) ? { tailscale: { address: tailscale } } : {}),
     persons,
     devices,
     codes: codes.slice(-MAX_CODES),
@@ -444,6 +461,7 @@ export function sanitize(value: unknown): Store {
     lines,
     ...(listening && Number.isInteger(listening.pid) && Number.isInteger(listening.port) ? { listening: { pid: listening.pid as number, port: listening.port as number } } : {}),
     ...(typeof obj.problem === 'string' && obj.problem ? { problem: obj.problem } : {}),
+    ...(typeof obj.fixAt === 'string' && /^https:\/\/login\.tailscale\.com\//.test(obj.fixAt) ? { fixAt: obj.fixAt } : {}),
   }
 }
 
