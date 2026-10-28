@@ -1,15 +1,26 @@
 {
   "id": "2026-10-28T15-53-35-086Z",
   "startedAt": "2026-10-28T15:53:36.596Z",
-  "status": "running",
+  "endedAt": "2026-10-28T15:53:45.432Z",
+  "status": "done",
   "intent": "what is your name?",
+  "title": "Asking my name",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "branch": "agent-2026-10-28T15-53-35-086Z",
+  "cost": 0.060138,
+  "contextTokens": 17477,
   "caller": {
     "runner": {
       "host": "OpenAgentVPS",
-      "pid": 37951
+      "pid": 37951,
+      "baseCommit": "b194b35b2f0b23b5e6c8b64f67ba311884805934"
     },
-    "host": "OpenAgentVPS"
+    "pid": 37951,
+    "host": "OpenAgentVPS",
+    "baseCommit": "b194b35b2f0b23b5e6c8b64f67ba311884805934",
+    "kind": "prompt",
+    "workspace": "/home/openagent/projects/openagent/.branches/agent-2026-10-28T15-53-35-086Z",
+    "sessionId": "4f2e93ad-125f-4747-a1f8-670b54b28008"
   }
 }

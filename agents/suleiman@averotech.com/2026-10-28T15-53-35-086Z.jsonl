@@ -1,0 +1,9 @@
+{"kind":"start","prompt":"what is your name?","at":"2026-10-28T15:53:38.373Z"}
+{"kind":"title","text":"Asking my name","at":"2026-10-28T15:53:39.157Z"}
+{"kind":"session","sessionId":"4f2e93ad-125f-4747-a1f8-670b54b28008","at":"2026-10-28T15:53:39.492Z"}
+{"kind":"thought","text":"This is a simple question—I'm Claude, running as Opus 5.5, an agent in this environment.","at":"2026-10-28T15:53:43.989Z"}
+{"kind":"said","text":"I'm Claude, an AI assistant made by Anthropic. In this session I'm running as the Opus 5.5 model, working as a coding agent in your `openagent` repository.","at":"2026-10-28T15:53:44.001Z"}
+{"kind":"rate-limit","limit":{"status":"allowed","window":"five_hour","resetsAt":1793216400000,"windows":[{"window":"five_hour","percentUsed":2,"resetsAt":1793216400000},{"window":"seven_day","percentUsed":15,"resetsAt":1793419200000}]},"at":"2026-10-28T15:53:44.009Z"}
+{"kind":"result","text":"I'm Claude, an AI assistant made by Anthropic. In this session I'm running as the Opus 5.5 model, working as a coding agent in your `openagent` repository.","sessionId":"4f2e93ad-125f-4747-a1f8-670b54b28008","at":"2026-10-28T15:53:44.655Z"}
+{"kind":"cost","usd":0.060138,"at":"2026-10-28T15:53:44.655Z"}
+{"kind":"ended","status":"done","at":"2026-10-28T15:53:45.432Z"}
