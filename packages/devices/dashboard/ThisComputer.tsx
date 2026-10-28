@@ -124,7 +124,9 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
               label="On your Tailscale network"
               words={
                 status?.tailscale
-                  ? `Your devices on Tailscale open OpenAgent at https://${status.tailscale.address}, from anywhere, with a lock.`
+                  ? status.listening
+                    ? `Your devices on Tailscale open OpenAgent at https://${status.tailscale.address}, from anywhere, with a lock.`
+                    : `At https://${status.tailscale.address} once Tailscale serves it.`
                   : 'Your own phones and computers on Tailscale, from anywhere, with a lock. Tailscale must run on this computer.'
               }
             >

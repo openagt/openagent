@@ -178,7 +178,7 @@ function List({ d, onOpen, onAdd }: { d: Devices; onOpen: (item: Item) => void; 
           Add device
         </Button>
       </div>
-      {items.length === 0 && !persons.length && <p className="text-xs text-muted-foreground">{server ? 'None yet. Add device: a phone from anywhere, or a computer.' : 'None yet. Add device: a phone or a computer on the same Wi-Fi.'}</p>}
+      {items.length === 0 && !persons.length && <p className="text-xs text-muted-foreground">{server ? 'None yet. Add device: a phone from anywhere, or a computer.' : status?.tailscale ? 'None yet. Add device: a phone or a computer on your Tailscale network.' : 'None yet. Add device: a phone or a computer on the same Wi-Fi.'}</p>}
       <ul aria-label="Your devices" className="divide-y divide-border">
         {items.map(item => (
           <ItemRow key={item.key} d={d} item={item} onOpen={() => onOpen(item)} />

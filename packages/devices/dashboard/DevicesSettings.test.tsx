@@ -279,6 +279,7 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     fireEvent.click(await screen.findByRole('button', { name: 'Reach this computer on your Tailscale network' }))
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['tailscale', 'on']))
     expect(await screen.findByText(/open OpenAgent at https:\/\/laptop\.tail1234\.ts\.net, from anywhere/)).toBeTruthy()
+    expect(screen.getByText('None yet. Add device: a phone or a computer on your Tailscale network.')).toBeTruthy()
     cleanup()
     const signedOut = door(args => (args[0] === 'tailscale' ? { ok: false, error: 'Tailscale is not signed in on this computer. Sign in to Tailscale, then turn this on again.' } : ok(OFF)))
     show(signedOut.host)
@@ -290,6 +291,8 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     const OFF_THERE = { on: false, listening: false, tailscale: { address: 'laptop.tail1234.ts.net' }, problem: 'Serve is off on your Tailscale network. Turn it on once in your Tailscale account; the door opens by itself then.', fixAt: 'https://login.tailscale.com/f/serve?node=n1', devices: [PHONE], persons: [] }
     show(door(() => ok(OFF_THERE)).host)
     expect((await screen.findByRole('alert')).textContent).toBe(OFF_THERE.problem)
+    // Not open yet: where it will be, not that devices open it there.
+    expect(screen.getByText('At https://laptop.tail1234.ts.net once Tailscale serves it.')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Turn on Serve' }).getAttribute('href')).toBe('https://login.tailscale.com/f/serve?node=n1')
     await addPhone()
     const dialog = await screen.findByRole('dialog')
