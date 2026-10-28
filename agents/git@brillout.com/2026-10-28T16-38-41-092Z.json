@@ -1,16 +1,25 @@
 {
   "id": "2026-10-28T16-38-41-092Z",
   "startedAt": "2026-10-28T16:38:42.717Z",
-  "status": "running",
+  "endedAt": "2026-10-28T16:38:48.519Z",
+  "status": "failed",
   "intent": "Hello Tell me what this machine is",
   "driver": "claude-code",
+  "model": "claude-opus-5-5",
+  "branch": "agent-2026-10-28T16-38-41-092Z",
   "caller": {
     "runner": {
       "host": "rom-thinkpad-x280",
       "pid": 81131,
-      "publish": "commit"
+      "publish": "commit",
+      "baseCommit": "b194b35b2f0b23b5e6c8b64f67ba311884805934"
     },
+    "pid": 81131,
     "host": "rom-thinkpad-x280",
-    "publish": "commit"
+    "baseCommit": "b194b35b2f0b23b5e6c8b64f67ba311884805934",
+    "publish": "commit",
+    "kind": "prompt",
+    "workspace": "/home/rom/code/openagent/.branches/agent-2026-10-28T16-38-41-092Z",
+    "sessionId": "cd59465b-3ef3-40f3-a8bb-c21e501584e7"
   }
 }
