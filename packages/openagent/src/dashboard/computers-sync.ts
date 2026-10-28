@@ -1,5 +1,4 @@
-import { computerName } from '../computer-name.js'
-import { forgetMachine, listForgotten, listMachines, type ForgottenMachine, type MachineRecord } from '../registry.js'
+import { forgetMachine, listForgotten, listMachines, thisComputerName, type ForgottenMachine, type MachineRecord } from '../registry.js'
 import { THROUGH_PATH, machineCall } from './remote-run.js'
 
 /**
@@ -123,7 +122,7 @@ export const computersWiring: {
   ownCode: () => Promise<string | undefined>
   codeAt: (machine: MachineRecord) => Promise<string | undefined>
   /** This computer's name, as a computer it is handed to saves it by. */
-  name: () => string
+  name: () => Promise<string>
   /** Take out here what the person removed on another of their computers. */
   forget: (gone: readonly ForgottenMachine[]) => Promise<void>
   /** The computers on a line at a saved server, and how one is saved through it. */
@@ -141,7 +140,7 @@ export const computersWiring: {
     const asked = await (await import('../dashboard-rpc/machines.js')).sendMachineCode(machine.id)
     return asked.ok ? asked.value.url : undefined
   },
-  name: () => computerName(),
+  name: () => thisComputerName(undefined, computersWiring.env),
   forget: async gone => (await import('../dashboard-rpc/computers.js')).sendForgetComputers(gone).then(() => {}),
   lineComputers: async server => {
     const asked = await (await import('../dashboard-rpc/machines.js')).onComputersThrough(server.id)
@@ -176,7 +175,7 @@ export async function syncComputers(): Promise<void> {
       tried.set(key, w.now())
       const link = handed.self ? await w.ownCode().catch(() => undefined) : await w.codeAt(handed.machine).catch(() => undefined)
       if (link === undefined) continue
-      const label = handed.self ? w.name() : handed.machine.label
+      const label = handed.self ? await w.name() : handed.machine.label
       const took = await w.call(there, 'sendAddComputer', [link, label, handed.self ? null : (handed.machine.added ?? null)])
       // Taken: it may be handed again, should it ever lack it.
       if (took.ok && (took.ret as { ok?: unknown } | undefined)?.ok === true) tried.delete(key)

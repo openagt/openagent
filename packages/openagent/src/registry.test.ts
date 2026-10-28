@@ -1,12 +1,15 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { join } from 'node:path'
+import { computerName } from './computer-name.js'
 import {
   addMachine,
   nameMachine,
   noteSeen,
   noteProjects,
-  renameMachine,
+  noteName,
+  renameThisComputer,
+  thisComputerName,
   addProject,
   ensureBridgeToken,
   ensureComputerId,
@@ -787,17 +790,28 @@ test('a computer the person removed is remembered once by its address, the later
   assert.deepEqual(await listForgotten(fs, ENV), [{ url: OFFICE, at: '2026-10-27T11:00:00.000Z' }])
 })
 
-test('a saved machine takes the name the person picked, cut to the length a name may have; an empty name and a machine not saved change nothing', async () => {
+test('this computer is named by its host name until the person names it, kept cut to the length a name may have; any write keeps the name', async () => {
+  const fs = memFs()
+  assert.equal(await thisComputerName(fs, ENV), computerName())
+  assert.equal(await renameThisComputer('  Studio\nMac  ', fs, ENV), 'Studio Mac')
+  assert.equal(await thisComputerName(fs, ENV), 'Studio Mac')
+  assert.equal(await renameThisComputer('   ', fs, ENV), undefined)
+  assert.equal(await renameThisComputer('x'.repeat(100), fs, ENV), 'x'.repeat(60))
+  // Written whole: a write of anything else keeps it.
+  await addMachine({ url: STUDIO, key: 'aaa', door: DOOR, label: 'Studio' }, fs, ENV)
+  assert.equal(await thisComputerName(fs, ENV), 'x'.repeat(60))
+})
+
+test('a saved machine keeps the name it says it has now, asked with the key it is saved with; a machine saved anew since keeps its own', async () => {
   const fs = memFs()
   await addMachine({ url: STUDIO, key: 'aaa', door: DOOR, label: 'Studio' }, fs, ENV)
-  assert.equal((await renameMachine(STUDIO, '  Studio Mac  ', fs, ENV))?.label, 'Studio Mac')
+  await noteName({ id: STUDIO, key: 'aaa' }, '  Studio Mac ', fs, ENV)
   assert.equal((await listMachines(fs, ENV))[0]!.label, 'Studio Mac')
-  assert.equal((await renameMachine(STUDIO, 'x'.repeat(100), fs, ENV))?.label, 'x'.repeat(60))
-  assert.equal(await renameMachine(STUDIO, '   ', fs, ENV), undefined)
-  assert.equal(await renameMachine('http://10.0.0.9:4201', 'Other', fs, ENV), undefined)
+  await noteName({ id: STUDIO, key: 'old' }, 'Old name', fs, ENV)
+  await noteName({ id: STUDIO, key: 'aaa' }, '   ', fs, ENV)
   // The key and where it was let in stay.
   assert.deepEqual(
     (await listMachines(fs, ENV)).map(({ added: _added, ...machine }) => machine),
-    [{ id: STUDIO, label: 'x'.repeat(60), url: STUDIO, key: 'aaa', door: DOOR }],
+    [{ id: STUDIO, label: 'Studio Mac', url: STUDIO, key: 'aaa', door: DOOR }],
   )
 })

@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { readFile, stat, writeFile } from 'node:fs/promises'
-import { CODE_LIFETIME_MS, MAX_DEVICES, Unreadable, nameOf, addCode, addPerson, computerWordFor, enter, isComputerId, isIn, nameOwner, personLinePorts, personOf, portOf, portsOf, readStore, readStoreStrict, removeComputer, removeDevice, removePerson, sanitize, sha256, shareLine, shownCode, storePath, update } from './store.js'
+import { CODE_LIFETIME_MS, MAX_DEVICES, Unreadable, nameOf, addCode, addPerson, computerWordFor, enter, isComputerId, isIn, nameComputer, nameOwner, personLinePorts, personOf, portOf, portsOf, readStore, readStoreStrict, removeComputer, removeDevice, removePerson, sanitize, sha256, shareLine, shownCode, storePath, update } from './store.js'
 import { testHome } from './test-home.js'
 
 test('no file reads as a closed door with nobody in', async () => {
@@ -242,6 +242,27 @@ test('a full list still lets a computer in again in its own place, and nobody ne
     const store = await readStore(home.env)
     assert.equal(store.devices.length, MAX_DEVICES)
     assert.equal(isIn(store, mac), false)
+  } finally {
+    await home.remove()
+  }
+})
+
+test('a computer\'s entries are named by the name it says: its line by the name alone, its OpenAgent as one, no other computer\'s; the same name writes nothing', async () => {
+  const home = await testHome()
+  try {
+    const phone = (await enter(home.env, await code(home.env), 'iPhone, Safari'))!
+    const key = (await enter(home.env, await code(home.env), 'OpenAgent on Mac', undefined, undefined, MAC))!
+    const line = (await enter(home.env, await code(home.env), 'Mac', undefined, PORTS, MAC))!
+    const other = (await enter(home.env, await code(home.env), 'OpenAgent on Studio', undefined, undefined, OTHER))!
+    const named = (device: { line?: unknown }): string => (device.line ? 'Laptop' : 'OpenAgent on Laptop')
+    assert.equal(await nameComputer(home.env, key.id, named), true)
+    const names = async (): Promise<Record<string, string>> => Object.fromEntries((await readStore(home.env)).devices.map(device => [device.id, device.name]))
+    assert.deepEqual(await names(), { [phone.id]: 'iPhone, Safari', [key.id]: 'OpenAgent on Laptop', [line.id]: 'Laptop', [other.id]: 'OpenAgent on Studio' })
+    const written = (await stat(storePath(home.env))).mtimeMs
+    await new Promise(resolve => setTimeout(resolve, 20))
+    assert.equal(await nameComputer(home.env, line.id, named), false)
+    assert.equal((await stat(storePath(home.env))).mtimeMs, written, 'nothing changed: nothing written')
+    assert.equal(await nameComputer(home.env, 'nobody', named), false)
   } finally {
     await home.remove()
   }

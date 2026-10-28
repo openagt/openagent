@@ -1,4 +1,4 @@
-import { computerName } from '../computer-name.js'
+import { thisComputerName } from '../registry.js'
 import { useLoginsOn } from '../registry.js'
 import { allowLogins, serverLogins, settleLeft, syncLogins, type ServerLogins } from '../dashboard/logins-sync.js'
 import type { CopiedKind } from '../dashboard/copied-logins.js'
@@ -20,8 +20,8 @@ export interface ServerLoginsView {
 /** Each saved server of the person's, and how this computer's logins stand there. */
 export async function onServerLogins(): Promise<ServerLoginsView> {
   // A server uses the logins of the person's computers, and makes none for another.
-  if (process.env['OPENAGENT_SERVER'] === '1') return { computer: computerName(), servers: [] }
-  return { computer: computerName(), servers: await serverLogins() }
+  if (process.env['OPENAGENT_SERVER'] === '1') return { computer: await thisComputerName(), servers: [] }
+  return { computer: await thisComputerName(), servers: await serverLogins() }
 }
 
 /** A server uses this computer's logins from now on: what can go there goes now. */

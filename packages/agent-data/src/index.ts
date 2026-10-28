@@ -50,6 +50,7 @@ export {
   lookupProvidedCommand,
   readProvidedCommand,
   runPackageCommand,
+  callPackageCommand,
   type PackageManifest,
   type ProjectPackage,
   type ProvidedCommand,

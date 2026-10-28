@@ -40,6 +40,7 @@ function door(answer: (args: string[], input?: string) => ModuleCommandResult | 
     addMachine: vi.fn(async () => ({ ok: true as const })),
     removeMachine: vi.fn(async () => ({ ok: true as const })),
     renameMachine: vi.fn(async () => ({ ok: true as const })),
+    renameComputer: vi.fn(async () => ({ ok: true as const })),
     letMachineIn: vi.fn(async () => ({ ok: true as const })),
     machineCode: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     computersThrough: vi.fn(async () => ({ ok: true as const, computers: [] })),
@@ -419,21 +420,40 @@ describe('Settings › Devices: another computer, once', () => {
     await waitFor(() => expect(host.removeMachine).toHaveBeenCalledWith(STUDIO.id))
   })
 
-  test('a computer is renamed on its page: a saved one as OpenAgent saves it, one only in here as the door calls it', async () => {
+  test('a computer is renamed on itself: a saved one is asked to take the name; one only in here is named by what it says, with no Rename here', async () => {
     const { host, runComputerCommand } = door(() => ok({ ...OPEN, devices: [{ ...IN_HERE, id: 'bbbb00000000' }] }), [STUDIO])
+    vi.mocked(host.renameMachine).mockResolvedValueOnce({ ok: false, error: 'Studio Mac did not take the name: the call was given up on' })
     show(host)
     await open('Studio Mac')
     fireEvent.click(await screen.findByRole('button', { name: 'Rename' }))
     fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'Studio' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(host.renameMachine).toHaveBeenCalledWith(STUDIO.id, 'Studio'))
+    // One that does not answer keeps its name, and says why under the field.
+    expect(await screen.findByText('Studio Mac did not take the name: the call was given up on')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(host.renameMachine).toHaveBeenCalledTimes(2))
+    expect(host.renameMachine).toHaveBeenLastCalledWith(STUDIO.id, 'Studio')
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull())
     fireEvent.click(screen.getByRole('button', { name: 'Back to Devices' }))
 
     await open('Studio')
-    fireEvent.click(await screen.findByRole('button', { name: 'Rename' }))
-    fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'Old iMac' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['rename', 'bbbb00000000', 'Old iMac']))
+    expect(screen.queryByRole('button', { name: 'Rename' })).toBeNull()
+    expect(runComputerCommand).not.toHaveBeenCalledWith(expect.arrayContaining(['rename']))
+  })
+
+  test('this computer is renamed in its own row: kept here, and the row reads it again', async () => {
+    const { host } = door(() => ok(OPEN), [])
+    let name = 'MacBook-Pro'
+    vi.mocked(host.machines).mockImplementation(async () => ({ version: '0.42.0', name, machines: [] }))
+    vi.mocked(host.renameComputer).mockImplementation(async picked => ((name = picked), { ok: true }))
+    show(host)
+    const row = await screen.findByRole('region', { name: 'This computer' })
+    await within(row).findByText('MacBook-Pro')
+    fireEvent.click(within(row).getByRole('button', { name: 'Rename' }))
+    fireEvent.change(within(row).getByRole('textbox', { name: 'Name' }), { target: { value: '  Suleiman’s MacBook ' } })
+    fireEvent.click(within(row).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(host.renameComputer).toHaveBeenCalledWith('Suleiman’s MacBook'))
+    expect(await within(row).findByText('Suleiman’s MacBook')).toBeTruthy()
   })
 
   const FOUND = { name: 'Studio Mac', version: '0.36.0', url: 'http://192.168.1.5:4201' }
@@ -737,6 +757,8 @@ describe('Settings › Devices: a code typed on another computer', () => {
     show(host)
     fireEvent.click(await screen.findByRole('button', { name: 'Join with a code' }))
     const where = await screen.findByRole('textbox', { name: 'Where' })
+    // Where takes a link as it is, with its code inside: the field says so before anything is typed.
+    expect(screen.getByText('An address, or the whole link the other device gave.')).toBeTruthy()
     expect((screen.getByRole('button', { name: 'Join' }) as HTMLButtonElement).disabled).toBe(true)
     fireEvent.paste(where, { clipboardData: { getData: () => 'Where: 203.0.113.10\nCode: K7P4-QX9M' } })
     expect((where as HTMLInputElement).value).toBe('203.0.113.10')

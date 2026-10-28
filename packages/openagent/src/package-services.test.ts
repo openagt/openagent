@@ -39,7 +39,7 @@ const starts = async (dir: string): Promise<{ pid: number; args: string[]; url: 
 test('a declared service runs `serve`, is told where OpenAgent is, and ends with it', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'package-services-'))
   const log: string[] = []
-  const services = startPackageServices({ commands: [{ package: 'a-package', name: 'a-command', bin: await service(dir) }], url: 'http://127.0.0.1:4200', env: { XDG_CONFIG_HOME: '/a/home' }, log: line => log.push(line) })
+  const services = startPackageServices({ commands: [{ package: 'a-package', name: 'a-command', bin: await service(dir), dir }], url: 'http://127.0.0.1:4200', env: { XDG_CONFIG_HOME: '/a/home' }, log: line => log.push(line) })
   try {
     const [started] = await eventually(async () => starts(dir))
     assert.deepEqual({ ...started, pid: 0 }, { pid: 0, args: ['serve'], url: 'http://127.0.0.1:4200', home: '/a/home' })
@@ -57,7 +57,7 @@ test('a declared service runs `serve`, is told where OpenAgent is, and ends with
 test('a service that ends by itself is started again, and not once OpenAgent has ended', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'package-services-'))
   const log: string[] = []
-  const services = startPackageServices({ commands: [{ package: 'a-package', name: 'a-command', bin: await service(dir, 'process.exit(3)') }], url: 'http://127.0.0.1:4200', env: {}, log: line => log.push(line), restartMs: 30 })
+  const services = startPackageServices({ commands: [{ package: 'a-package', name: 'a-command', bin: await service(dir, 'process.exit(3)'), dir }], url: 'http://127.0.0.1:4200', env: {}, log: line => log.push(line), restartMs: 30 })
   try {
     await eventually(async () => ((await starts(dir)).length >= 3 ? true : undefined))
     assert.ok(log.includes('a-package: its service ended (exit 3); it is started again shortly'))

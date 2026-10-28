@@ -13,7 +13,7 @@ import { addMachine, addProject, listMachines, listProjects, projectId, removePr
 import type { OpenAgentEvent } from './events.js'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { addWorktree, agentBranchName, worktreePath } from '@openagt/skill-branches'
-import { DATA_BRANCH, excludeFromGit, readSharing, withFileBranch } from '@openagt/agent-data'
+import { DATA_BRANCH, SHARE_SETTING, excludeFromGit, readSharing, withFileBranch, writeSharing } from '@openagt/agent-data'
 
 // A Start, as the daemon does it (#1774): the project's own start hook line, nothing else. The
 // relay half of onStart has its own loopback test (dashboard/remote-run.integration.test.ts).
@@ -151,6 +151,36 @@ test('adding a project writes the runner\'s start, resume and check lines, an em
     }
     await rm(folder, { recursive: true, force: true })
     await rm(cfg, { recursive: true, force: true })
+  }
+})
+
+test('starting inside a folder not on the list adds it and leaves the repository\'s answer on the records as it is', async () => {
+  const folder = await realpath(await mkdtemp(join(tmpdir(), 'openagent-started-')))
+  const other = await realpath(await mkdtemp(join(tmpdir(), 'openagent-started-other-')))
+  const cfg = await realpath(await mkdtemp(join(tmpdir(), 'openagent-started-cfg-')))
+  const env = { XDG_CONFIG_HOME: cfg, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' }
+  const before = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]))
+  Object.assign(process.env, env)
+  const runtime = createProjectRuntime({ cwd: cfg, env })
+  try {
+    // A clone whose person said yes before: its folder moved, so it is not on the list any more.
+    execFileSync('git', ['init', '-q'], { cwd: folder })
+    execFileSync('git', ['remote', 'add', 'origin', join(cfg, 'origin.git')], { cwd: folder })
+    await writeSharing(folder, true)
+    const started = await runtime.onStartedIn(folder)
+    assert.equal(started.ok && started.added, true)
+    assert.equal(await readSharing(folder), true, 'the yes stays: starting there is no answer')
+    // A repository never asked stays unasked: it reads as kept, and nothing is written for it.
+    const fresh = await runtime.onStartedIn(other)
+    assert.equal(fresh.ok && fresh.added, true)
+    assert.throws(() => execFileSync('git', ['config', '--local', '--get', SHARE_SETTING], { cwd: other, stdio: 'pipe' }))
+  } finally {
+    await runtime.dispose()
+    for (const [key, value] of Object.entries(before)) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+    for (const dir of [folder, other, cfg]) await rm(dir, { recursive: true, force: true })
   }
 })
 

@@ -179,6 +179,12 @@ export const PERSON_HEADER = 'x-openagent-person'
  */
 export const COMPUTER_HEADER = 'x-openagent-computer'
 
+/**
+ * How a computer says its own name, with every call it makes with its key: URI-encoded, a name is
+ * any language's. Its entries here are named by it, so a rename made on that computer shows here.
+ */
+export const COMPUTER_NAME_HEADER = 'x-openagent-computer-name'
+
 /** What a computer says it is: a word of its own making, the same for all that gets in from it. */
 export const isComputerId = (value: unknown): value is string => typeof value === 'string' && /^[a-z0-9]{16,64}$/.test(value)
 
@@ -734,6 +740,28 @@ export async function renameComputer(env: NodeJS.ProcessEnv, id: string, name: s
     if (!named) return false
     for (const device of store.devices) if (device === named || (named.computer !== undefined && device.computer === named.computer && device.person === named.person)) device.name = picked
     return true
+  })
+}
+
+/**
+ * Name a computer's entries by the name it says it has now: the entry with this id and the other
+ * entries of the same computer and person, each as `named` words it. Nothing is written when every
+ * name is already that. Answers whether one changed.
+ */
+export async function nameComputer(env: NodeJS.ProcessEnv, id: string, named: (device: Device) => string): Promise<boolean> {
+  const renamed = (store: Store): [Device, string][] => {
+    const entry = store.devices.find(device => device.id === id)
+    if (!entry) return []
+    return store.devices
+      .filter(device => device === entry || (entry.computer !== undefined && device.computer === entry.computer && device.person === entry.person))
+      .map((device): [Device, string] => [device, named(device).slice(0, MAX_NAME)])
+      .filter(([device, name]) => device.name !== name)
+  }
+  if (!renamed(await readStore(env)).length) return false
+  return update(env, store => {
+    const changes = renamed(store)
+    for (const [device, name] of changes) device.name = name
+    return changes.length > 0
   })
 }
 

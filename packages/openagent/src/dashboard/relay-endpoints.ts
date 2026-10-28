@@ -4,7 +4,7 @@ import { hostname } from 'node:os'
 import type { OpenAgentEvent } from '../events.js'
 import type { StartAgentOptions, StartAgentResult } from './types.js'
 import { THROUGH_PATH, deviceIdOf, type BringProject, type RelayProject, type RelayStartResult } from './remote-run.js'
-import { listMachines } from '../registry.js'
+import { listMachines, thisComputerName } from '../registry.js'
 import { isLoginWord, isServerName, type GivenLogins, type MachineLogins } from './machine-logins.js'
 import { end, readJsonBody, requireGet, sendJson } from './http.js'
 import { passToScreen, screenCallOf, type ScreenCall } from './screen.js'
@@ -135,7 +135,7 @@ async function handleScreen(req: IncomingMessage, res: ServerResponse, handlers:
   await passToScreen(req, res, call, await handlers.screen(projectId, agentId).catch(() => undefined))
 }
 
-/** `GET /_relay/ping` (#1072): answer 200 with this OpenAgent's version, this computer's own name, whether it is a server, and how it stands (its memory, disk and load). Starts
+/** `GET /_relay/ping` (#1072): answer 200 with this OpenAgent's version, this computer's host name and the name it is shown under, whether it is a server, and how it stands (its memory, disk and load). Starts
  * nothing; it proves this daemon is reachable, and to another machine that its key still lets it in, tells that
  * machine whether this one fell behind it, and which runs in a project's shared records are this computer's:
  * a run's record carries the name of the computer that ran it. */
@@ -148,7 +148,9 @@ async function handlePing(req: IncomingMessage, res: ServerResponse): Promise<vo
     .flatMap(machine => deviceIdOf(machine.key) ?? [])
   // A server says so: a computer of its person's offers it its logins (`logins-sync.ts`).
   const health = await computerHealth().catch(() => undefined)
-  sendJson(res, { version: openagentVersion(), host: hostname(), listed, ...(process.env.OPENAGENT_SERVER === '1' ? { server: true } : {}), ...(health ? { health } : {}) })
+  // The name every page shows this computer under is its own, said here: a rename made anywhere is read from it.
+  const name = await thisComputerName().catch(() => undefined)
+  sendJson(res, { version: openagentVersion(), host: hostname(), ...(name !== undefined ? { name } : {}), listed, ...(process.env.OPENAGENT_SERVER === '1' ? { server: true } : {}), ...(health ? { health } : {}) })
 }
 
 /** `POST /_relay/start`: read the agent request, start it locally, and answer with the result JSON. */

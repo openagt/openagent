@@ -1,10 +1,10 @@
 import { useState, type ReactNode } from 'react'
-import { Globe, Laptop, UserRound, Waypoints, Wifi } from 'lucide-react'
+import { Globe, Laptop, Pencil, UserRound, Waypoints, Wifi } from 'lucide-react'
 import { Button, Switch, buttonVariants, cn } from '@openagt/dashboard/module'
 import { setSwitch, setTailscale } from './devices.js'
 import { reach, sharedReach } from './servers.js'
 import { hasDoor, hasServer } from './model.js'
-import { Problem } from './parts.js'
+import { Problem, RenameForm } from './parts.js'
 import type { Devices } from './use-devices.js'
 
 // Settings › Devices, at the top: this computer, and how the person's devices reach it. On this
@@ -47,6 +47,7 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
+  const [renaming, setRenaming] = useState(false)
   const name = d.machines?.name ?? 'This computer'
 
   const change = async (run: () => Promise<{ ok: true } | { ok: false; error: string }>, reload: () => Promise<unknown>): Promise<boolean> => {
@@ -102,12 +103,31 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
     <section aria-label="This computer" className="space-y-1 rounded-lg border border-border bg-card p-3">
       <div className="flex items-center gap-3">
         <Laptop aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium">
-            {name} <span className="text-xs font-normal text-muted-foreground">· this computer</span>
-          </p>
+        <div className="min-w-0 flex-1">
+          {renaming ? (
+            // Its name is its own: every page, on every device, reads it from here.
+            <RenameForm
+              name={name}
+              rename={async picked => {
+                const renamed = await host.renameComputer(picked)
+                await d.reloadMachines().catch(() => {})
+                return renamed
+              }}
+              onClose={() => setRenaming(false)}
+            />
+          ) : (
+            <p className="truncate text-sm font-medium">
+              {name} <span className="text-xs font-normal text-muted-foreground">· this computer</span>
+            </p>
+          )}
           {start && <p className="text-xs text-muted-foreground">Nothing reaches it yet: only this computer's own browser opens OpenAgent.</p>}
         </div>
+        {!renaming && d.machines !== undefined && (
+          <Button size="sm" variant="ghost" onClick={() => setRenaming(true)}>
+            <Pencil className="h-3.5 w-3.5" aria-hidden />
+            Rename
+          </Button>
+        )}
       </div>
       {!start && (
         <div className="pt-2">

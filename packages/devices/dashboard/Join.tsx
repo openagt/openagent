@@ -111,6 +111,7 @@ export function JoinDialog({ d, onClose }: { d: Devices; onClose: () => void }) 
         <label className="block space-y-1">
           <span className="text-xs text-muted-foreground">Where</span>
           <Input autoFocus aria-label="Where" placeholder="203.0.113.10" value={where} onPaste={paste} onChange={event => setWhere(event.target.value)} className="bg-background font-mono" />
+          <span className="block text-xs text-muted-foreground">An address, or the whole link the other device gave.</span>
         </label>
         {!isLink(where) && (
           <label className="block space-y-1">

@@ -39,6 +39,9 @@ export const INERT_HOST_SERVICES: HostServices = {
   async renameMachine() {
     return { ok: false, error: 'no dashboard to rename a machine in' }
   },
+  async renameComputer() {
+    return { ok: false, error: 'no dashboard to rename this computer in' }
+  },
   async letMachineIn() {
     return { ok: false, error: 'no dashboard to ask a machine from' }
   },

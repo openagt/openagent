@@ -86,6 +86,7 @@ function dashboard(
     addMachine,
     removeMachine,
     renameMachine: vi.fn(async () => ({ ok: true as const })),
+    renameComputer: vi.fn(async () => ({ ok: true as const })),
     letMachineIn: vi.fn(async () => ({ ok: true as const })),
     machineCode: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
     computersThrough,

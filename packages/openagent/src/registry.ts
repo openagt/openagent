@@ -5,6 +5,7 @@ import { isDriverName } from './driver-names.js'
 import { isPublishPick, type PublishPick } from './publish-levels.js'
 import { nodeFs } from './node-fs.js'
 import { ownProjectsOf, type OwnProject } from './dashboard/elsewhere.js'
+import { computerName } from './computer-name.js'
 
 /**
  * The multi-project registry (#390): the list of projects the user has
@@ -239,6 +240,8 @@ export interface Registry {
    * in again. Top-level, and never part of what the browser is handed. Absent until first needed.
    */
   computer?: string
+  /** This computer's name as the person named it, the one every page shows it under: absent, its host name. */
+  name?: string
   /** The computers the person removed, the newest last (computers-sync.ts). */
   forgotten?: ForgottenMachine[]
 }
@@ -519,6 +522,7 @@ export async function readRegistry(
     ...(typeof obj.bridgeToken === 'string' && obj.bridgeToken ? { bridgeToken: obj.bridgeToken } : {}),
     ...(machines.length ? { machines } : {}),
     ...(isComputerId(obj.computer) ? { computer: obj.computer } : {}),
+    ...(computerNameOf(obj.name) !== undefined ? { name: computerNameOf(obj.name)! } : {}),
     ...(forgotten.length ? { forgotten } : {}),
   }
 }
@@ -540,13 +544,14 @@ export async function readRegistry(
  */
 async function writeRegistry(registry: Registry, fs: RegistryFs, env: NodeJS.ProcessEnv): Promise<void> {
   const file = registryPath(env)
-  const { projects, preferences, bridgeToken, machines, computer, forgotten } = registry
+  const { projects, preferences, bridgeToken, machines, computer, name, forgotten } = registry
   const contents = {
     projects,
     preferences,
     ...(bridgeToken ? { bridgeToken } : {}),
     ...(machines?.length ? { machines } : {}),
     ...(computer ? { computer } : {}),
+    ...(name ? { name } : {}),
     ...(forgotten?.length ? { forgotten } : {}),
   }
   const json = JSON.stringify(contents, null, 2)
@@ -719,6 +724,28 @@ export async function ensureComputerId(
   })
 }
 
+/** A computer's name as it may be kept and shown: no control characters, trimmed, capped; `undefined` for none. */
+export function computerNameOf(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const name = value.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, MACHINE_LIMITS.label).trim()
+  return name || undefined
+}
+
+/** This computer's own name: the one the person gave it, else its host name. */
+export async function thisComputerName(fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<string> {
+  return (await readRegistry(fs, env)).name ?? computerName()
+}
+
+/** Give this computer the name the person picked. Answers the name as kept; nothing for an empty one. */
+export async function renameThisComputer(picked: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<string | undefined> {
+  const name = computerNameOf(picked)
+  if (name === undefined) return undefined
+  return serialize(async () => {
+    await writeRegistry({ ...(await readRegistry(fs, env)), name }, fs, env)
+    return name
+  })
+}
+
 /** The persisted bridge key, or `undefined` when none exists. A pure read: it never generates one. */
 export async function readBridgeToken(
   fs: RegistryFs = nodeRegistryFs(),
@@ -800,6 +827,22 @@ export async function noteListed(machine: { id: string; key: string }, listed: s
   })
 }
 
+/**
+ * Keep the name a saved machine says it has now, when it changed: a page shows a machine under its
+ * own name, and the one kept here is what it is shown under while it does not answer. `key` is the
+ * key the machine was asked with: a machine saved anew since says its own.
+ */
+export async function noteName(machine: { id: string; key: string }, said: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  const label = computerNameOf(said)
+  if (label === undefined) return
+  await serialize(async () => {
+    const registry = await readRegistry(fs, env)
+    const saved = (registry.machines ?? []).find(candidate => candidate.id === machine.id)
+    if (!saved || saved.key !== machine.key || saved.label === label) return
+    await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(candidate => (candidate.id === machine.id ? { ...saved, label } : candidate)) }, fs, env)
+  })
+}
+
 /** How stale the kept time a machine was last seen may be before it is written again. */
 const SEEN_KEPT_MS = 60_000
 
@@ -845,20 +888,6 @@ export async function useLoginsOn(id: string, on: boolean, fs: RegistryFs = node
     const next: MachineRecord = on ? { ...rest, logins: true } : rest
     await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(machine => (machine.id === id ? next : machine)) }, fs, env)
     return true
-  })
-}
-
-/** Give a saved machine the name the person picked. Answers the machine as saved; nothing when it is not saved, or the name is empty. */
-export async function renameMachine(id: string, label: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<MachineRecord | undefined> {
-  const name = label.trim().slice(0, MACHINE_LIMITS.label)
-  if (!name) return undefined
-  return serialize(async () => {
-    const registry = await readRegistry(fs, env)
-    const saved = (registry.machines ?? []).find(candidate => candidate.id === id)
-    if (!saved) return undefined
-    const renamed = { ...saved, label: name }
-    await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(machine => (machine.id === id ? renamed : machine)) }, fs, env)
-    return renamed
   })
 }
 
