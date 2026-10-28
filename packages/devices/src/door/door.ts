@@ -609,14 +609,20 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
       if (!(await removeComputer(env, id, whose))) return refuse(res, 404, 'no device of yours has that id')
       return json(200, me(await currentStore(), who.person))
     }
-    // A code for a line, or for a device of the computer's person: only a computer asks, and only a server, which has an address to say where.
+    // A code for a line, or for a device of the computer's person: only a computer asks, and only a
+    // door with an address to say where: a server's, or one behind Tailscale.
     const forLine = path === ME_LINE_PATH
     if (!who.byBearer || (forLine && !opts.lines)) return refuse(res, 403, forLine ? 'only a computer that is in at a server asks for a line' : 'only a computer that is in asks for a code')
     req.resume()
     const store = await currentStore()
+    const owner = store.persons.find(person => person.owner)?.name
+    if (opts.proxied && store.tailscale) {
+      const { code, expires } = await addCode(env, now(), who.person === owner ? undefined : who.person)
+      // Tailscale's certificate is one every device trusts: nothing of the door's key follows the code.
+      return json(200, { url: `https://${store.tailscale.address}${ENTER_PATH}#${code}`, where: store.tailscale.address, code: shownCode(code), expires })
+    }
     const fingerprint = await doorFingerprint(env)
     if (!store.https || !fingerprint) return refuse(res, 503, 'the door has no address or no key yet')
-    const owner = store.persons.find(person => person.owner)?.name
     const { code, expires } = await addCode(env, now(), who.person === owner ? undefined : who.person, forLine)
     const port = (server.address() as AddressInfo).port
     const where = `${urlHost(store.https.address)}${port === 443 ? '' : `:${port}`}`

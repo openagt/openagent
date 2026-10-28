@@ -640,6 +640,27 @@ test('behind a program that passes requests on, a page is one of the address the
   }
 })
 
+test('behind Tailscale, a computer that is in asks for a code one more device of its person gets in with, at the door\'s name there', async () => {
+  const r = await rig(undefined, { proxied: true, origin: 'https://laptop.tail1234.ts.net' })
+  try {
+    await update(r.env, store => {
+      store.tailscale = { address: 'laptop.tail1234.ts.net' }
+    })
+    const laptop = (await enter(r.env, (await addCode(r.env)).code, 'a laptop'))!
+    const asked = await fetch(`${r.at}${ME_CODE_PATH}`, { method: 'POST', headers: { authorization: `Bearer ${laptop.id}.${laptop.key}` } })
+    assert.equal(asked.status, 200)
+    const given = (await asked.json()) as { url: string; where: string; code: string }
+    const [at, code] = given.url.split('#') as [string, string]
+    assert.equal(at, `https://laptop.tail1234.ts.net${ENTER_PATH}`)
+    assert.equal(given.where, 'laptop.tail1234.ts.net')
+    // The code lets one more device in, once.
+    assert.ok(await enter(r.env, code, 'a phone'))
+    assert.equal(await enter(r.env, code, 'another phone'), undefined)
+  } finally {
+    await r.close()
+  }
+})
+
 test('a code for one more device is asked for by a computer only, and only at a door with an address to say', async () => {
   const r = await rig()
   try {
