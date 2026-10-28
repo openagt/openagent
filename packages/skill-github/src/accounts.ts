@@ -224,17 +224,37 @@ export function loginUnderWay(files = jobFiles('login')): LoggingIn | undefined 
 }
 
 /**
+ * Once logged in, give git the name and email of the terminal's account, when it has none: git
+ * makes no commit without them, and a user a shared computer made for a person starts with none.
+ * Only what git lacks is given. The email is GitHub's own address for the account, which hides the
+ * person's own. The login stands whether or not git could be given them.
+ */
+const NAMED = `{
+  has() { [ -n "$(cd / && git config --get "$1")" ]; }
+  if ! has user.name || ! has user.email; then
+    facts=$(gh api --hostname ${HOST} user --jq '[.login, (.id | tostring), (.name // "")] | @tsv') &&
+      login=$(printf '%s' "$facts" | cut -f1) && id=$(printf '%s' "$facts" | cut -f2) && name=$(printf '%s' "$facts" | cut -f3) &&
+      [ -n "$login" ] && [ -n "$id" ] && {
+        has user.name || git config --global -- user.name "\${name:-$login}"
+        has user.email || git config --global -- user.email "$id+$login@users.noreply.github.com"
+      }
+  fi
+  true
+}`
+
+/**
  * Log an account in to `gh` in the browser: GitHub's device login, whose code the person types at
  * github.com/login/device, wherever they are. `gh` makes the new account the terminal's, so once
  * the browser said yes, the terminal's account before it is made the terminal's again: logging an
- * account in for runs leaves the terminal as it was. Answers once `gh` showed the code; `gh`
- * waits on, in a process of its own, for the yes.
+ * account in for runs leaves the terminal as it was. Git is given a name then when it has none
+ * ({@link NAMED}). Answers once `gh` showed the code; `gh` waits on, in a process of its own, for
+ * the yes.
  */
 export async function startLogin(terminal: string | undefined, files = jobFiles('login'), waitMs = 20_000): Promise<LoggingIn> {
   const under = loginUnderWay(files)
   if (under) return under
   const back = terminal !== undefined ? ` && gh auth switch --hostname ${HOST} --user "$1"` : ''
-  await startJob(files, `gh auth login --hostname ${HOST} --git-protocol https --web${back}`, terminal !== undefined ? [terminal] : [])
+  await startJob(files, `gh auth login --hostname ${HOST} --git-protocol https --web${back} && ${NAMED}`, terminal !== undefined ? [terminal] : [])
   const until = Date.now() + waitMs
   for (;;) {
     const state = jobState(files)

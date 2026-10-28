@@ -1,11 +1,11 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { GhRunner } from './gh.js'
-import { ghState, installCommand, jobState, loginUnderWay, runEnv, runsAccount, startJob, useForRuns, type GhAccount } from './accounts.js'
+import { ghState, installCommand, jobState, loginUnderWay, runEnv, runsAccount, startJob, startLogin, useForRuns, type GhAccount } from './accounts.js'
 import { runCli, type CliDeps } from './cli.js'
 
 // The accounts gh knows and the one runs use: picked once from the terminal's, kept from then on,
@@ -265,4 +265,72 @@ test('a job goes on after the command answered, says how it ended, and a failed 
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+/**
+ * A browser login run for real, with a stand-in `gh` that writes down what it is asked and a git
+ * of its own: `gh` answers its login as `login` says (`ok`, or `no` for a login the browser did not
+ * say yes to), and its account as `api` says (`ok`, or `no` for a GitHub that does not answer).
+ */
+async function loggedIn(opts: { login: 'ok' | 'no'; api: 'ok' | 'no'; terminal?: string; git?: Record<string, string> }): Promise<{ asked: string[]; git: string; state: ReturnType<typeof jobState> }> {
+  const dir = mkdtempSync(join(tmpdir(), 'gh-login-'))
+  const kept = { PATH: process.env['PATH'], GIT_CONFIG_GLOBAL: process.env['GIT_CONFIG_GLOBAL'], GIT_CONFIG_NOSYSTEM: process.env['GIT_CONFIG_NOSYSTEM'] }
+  try {
+    const log = join(dir, 'asked')
+    writeFileSync(
+      join(dir, 'gh'),
+      [
+        '#!/bin/sh',
+        `echo "$*" >> '${log}'`,
+        'case "$1 $2" in',
+        `  "auth login") echo "! First copy your one-time code: ABCD-1234"; sleep 0.3; [ ${opts.login} = ok ] ;;`,
+        `  "api --hostname") [ ${opts.api} = ok ] && printf 'octo\t42\tOcto Cat\n' ;;`,
+        'esac',
+        '',
+      ].join('\n'),
+    )
+    chmodSync(join(dir, 'gh'), 0o755)
+    const config = join(dir, 'gitconfig')
+    process.env['PATH'] = `${dir}:${process.env['PATH']}`
+    process.env['GIT_CONFIG_GLOBAL'] = config
+    process.env['GIT_CONFIG_NOSYSTEM'] = '1'
+    for (const [key, value] of Object.entries(opts.git ?? {})) execFileSync('git', ['config', '--global', key, value])
+    const files = { log: join(dir, 'l.log'), pid: join(dir, 'l.pid'), exit: join(dir, 'l.exit') }
+    assert.deepEqual(await startLogin(opts.terminal, files), { code: 'ABCD-1234', url: 'https://github.com/login/device' })
+    for (let waited = 0; jobState(files)?.running && waited < 10_000; waited += 100) await new Promise(resolve => setTimeout(resolve, 100))
+    return { asked: readFileSync(log, 'utf8').trim().split('\n'), git: existsSync(config) ? execFileSync('git', ['config', '--global', '--list'], { encoding: 'utf8' }) : '', state: jobState(files) }
+  } finally {
+    for (const [key, value] of Object.entries(kept)) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+test('a browser login gives a git with no name the account’s name and GitHub’s address for it, once the terminal has its account back', async () => {
+  const given = await loggedIn({ login: 'ok', api: 'ok', terminal: 'octo-old' })
+  assert.equal(given.state?.running, false)
+  assert.equal(given.state && 'failed' in given.state ? given.state.failed : undefined, undefined)
+  assert.deepEqual(given.asked, ['auth login --hostname github.com --git-protocol https --web', 'auth switch --hostname github.com --user octo-old', "api --hostname github.com user --jq [.login, (.id | tostring), (.name // \"\")] | @tsv"])
+  assert.equal(given.git, 'user.name=Octo Cat\nuser.email=42+octo@users.noreply.github.com\n')
+})
+
+test('a browser login gives git only what it lacks, asks GitHub nothing when git has both, and stands when GitHub does not answer', async () => {
+  const named = await loggedIn({ login: 'ok', api: 'ok', git: { 'user.name': 'Ada' } })
+  assert.equal(named.git, 'user.name=Ada\nuser.email=42+octo@users.noreply.github.com\n')
+
+  const both = await loggedIn({ login: 'ok', api: 'ok', git: { 'user.name': 'Ada', 'user.email': 'ada@example.com' } })
+  assert.equal(both.git, 'user.name=Ada\nuser.email=ada@example.com\n')
+  assert.ok(!both.asked.some(line => line.startsWith('api ')))
+
+  const unanswered = await loggedIn({ login: 'ok', api: 'no' })
+  assert.deepEqual([unanswered.state?.running, unanswered.state && 'failed' in unanswered.state ? unanswered.state.failed : undefined], [false, undefined])
+  assert.equal(unanswered.git, '')
+
+  // A login the browser did not say yes to gives git nothing, and fails.
+  const refused = await loggedIn({ login: 'no', api: 'ok' })
+  assert.ok(refused.state && 'failed' in refused.state && refused.state.failed !== undefined)
+  assert.ok(!refused.asked.some(line => line.startsWith('api ')))
+  assert.equal(refused.git, '')
 })
