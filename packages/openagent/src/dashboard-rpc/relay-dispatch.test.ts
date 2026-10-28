@@ -113,6 +113,7 @@ test('the machine-wide calls are the logins and settings a computer brings its s
     patchPreferences: 'act',
     sendAddComputer: 'act',
     sendForgetComputers: 'act',
+    sendRenameComputer: 'act',
   }
   assert.deepEqual([...MACHINE_RPC_NAMES].sort(), Object.keys(classes).sort())
   for (const [name, said] of Object.entries(classes)) assert.equal(isMachineRead(name) ? 'read' : 'act', said, name)
