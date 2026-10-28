@@ -160,7 +160,7 @@ export const SUDOERS_FILE = '/etc/sudoers.d/openagent-person'
 export const PERSON_UNIT_FILE = '/etc/systemd/system/openagent-person@.service'
 /** The service that puts the firewall's rules in place as the server starts, before OpenAgent does. */
 export const FIREWALL_UNIT_FILE = '/etc/systemd/system/openagent-firewall.service'
-/** How long the server gets for what makes or takes away a person's user: the first one installs Claude Code for them. */
+/** How long the server gets for what makes or takes away a person's user: the first one installs Claude Code and Codex for them. */
 export const PERSON_TIMEOUT_MS = 5 * MINUTE
 
 /** What the service file holds. `KillMode=process`: a run is a process of its own and goes on when OpenAgent starts again, as on a laptop. */
@@ -240,12 +240,14 @@ export const SUDOERS = `${SERVER_USER} ALL=(root) NOPASSWD: ${PERSON_HELPER}`
  * The helper itself, a script root runs:
  *
  * - `add <name> <port>` makes the person's user (`oa-<letters of the name>-<a mark of all of it>`),
- *   the name as `nameWord` writes it, puts Claude Code in its home,
+ *   the name as `nameWord` writes it, puts Claude Code and Codex in its home,
  *   and starts the person's OpenAgent on `<port>`, the first of a block of 100 ports that are
  *   theirs: their OpenAgent, and the lines of their computers. It answers the user's name once
  *   that OpenAgent answers. Asked again, it does only what is not done yet.
  * - `remove <name>` stops it all and deletes the user with everything in its home.
  * - `firewall` puts the rules in place anew.
+ * - `agents` puts in each person's home what a new person's gets, where it is not yet: a coding
+ *   agent the install brings since their user was made reaches them at the next update.
  *
  * The rules: a call on this server to the owner's ports (4200–4299) is made only by the server's
  * own user or root, and on a computer reached through a server also by the person's own user
@@ -266,7 +268,7 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 PERSONS=${PERSONS_DIR}
 
 fail() { echo "$1" >&2; exit 1; }
-usage() { echo "usage: openagent-person add <name> <port> | remove <name> | firewall" >&2; exit 2; }
+usage() { echo "usage: openagent-person add <name> <port> | remove <name> | firewall | agents" >&2; exit 2; }
 
 # A person's name as the door hands it over: plain letters, and % with the number of any other.
 name_ok() { [ \${#1} -le 480 ] && [[ $1 =~ ^[A-Za-z0-9%._~-]+$ ]]; }
@@ -320,6 +322,34 @@ $said
 EOF
 }
 
+# A command as a person's user, in their home, with nothing of root's around it.
+as_person() {
+  local user=$1 home=$2
+  runuser -u "$user" -- env -i HOME="$home" USER="$user" LOGNAME="$user" CODEX_NON_INTERACTIVE=1 PATH=/usr/local/bin:/usr/bin:/bin bash -o pipefail -c "cd && $3" </dev/null >/dev/null 2>&1
+}
+# Claude Code's and Codex's own installers, into the person's home, as for the server's own user: each keeps itself up to date there.
+agents() {
+  local user=$1 home=$2
+  if [ ! -e "$home/.local/bin/claude" ]; then
+    as_person "$user" "$home" 'curl -fsSL https://claude.ai/install.sh | bash' || fail "Claude Code could not be installed for $user."
+  fi
+  if [ ! -e "$home/.local/bin/codex" ]; then
+    as_person "$user" "$home" 'curl -fsSL https://chatgpt.com/codex/install.sh | sh' || fail "Codex could not be installed for $user."
+  fi
+}
+# Every person's, by the users this helper made.
+all_agents() {
+  local file user
+  lock
+  for file in "$PERSONS"/*.env; do
+    [ -e "$file" ] || continue
+    user=$(basename "$file" .env)
+    user_ok "$user" && is_user "$user" || continue
+    [ "$(getent passwd "$user" | cut -d: -f6)" = "/home/$user" ] || continue
+    agents "$user" "/home/$user"
+  done
+}
+
 add() {
   local name=$1 port=$2 user file home unit before tmp other
   name_ok "$name" || fail "$name is not a person's name as the door hands it over."
@@ -343,11 +373,7 @@ add() {
   is_user "$user" || useradd --create-home --shell /bin/bash "$user"
   home=$(getent passwd "$user" | cut -d: -f6)
   [ "$home" = "/home/$user" ] || fail "The user $user has no home of its own."
-  # Claude Code's own installer, into the person's home, as for the server's own user: it keeps itself up to date there.
-  if [ ! -e "$home/.local/bin/claude" ]; then
-    runuser -u "$user" -- env -i HOME="$home" USER="$user" LOGNAME="$user" PATH=/usr/local/bin:/usr/bin:/bin bash -c 'cd && curl -fsSL https://claude.ai/install.sh | bash' </dev/null >/dev/null 2>&1 ||
-      fail "Claude Code could not be installed for $user."
-  fi
+  agents "$user" "$home"
   systemctl enable --quiet "$unit"
   apply_firewall
   if [ "$before" != "$(cat "$file")" ] || ! systemctl is-active --quiet "$unit"; then systemctl restart "$unit"; fi
@@ -387,6 +413,7 @@ case "\${1:-}" in
   add) [ $# -eq 3 ] || usage; add "$2" "$3" ;;
   remove) [ $# -eq 2 ] || usage; remove "$2" ;;
   firewall) [ $# -eq 1 ] || usage; lock; apply_firewall ;;
+  agents) [ $# -eq 1 ] || usage; all_agents ;;
   *) usage ;;
 esac`
 
@@ -547,7 +574,7 @@ export const STEPS: readonly StepDef[] = [
   },
   {
     id: 'agent',
-    label: 'Claude Code',
+    label: 'Claude Code and Codex',
     as: 'openagent',
     timeoutMs: 10 * MINUTE,
     script: () =>
@@ -555,9 +582,11 @@ export const STEPS: readonly StepDef[] = [
         'openagent',
         {},
         `
-  # Claude Code's own installer, into this user's home: it keeps itself up to date there, as on a laptop.
+  # Claude Code's and Codex's own installers, into this user's home: each keeps itself up to date there, as on a laptop.
   command -v claude >/dev/null || curl -fsSL https://claude.ai/install.sh | bash
   command -v claude >/dev/null || fail "Claude Code's installer ended without a claude command."
+  command -v codex >/dev/null || curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh
+  command -v codex >/dev/null || fail "Codex's installer ended without a codex command."
 `,
       ),
   },
@@ -565,7 +594,8 @@ export const STEPS: readonly StepDef[] = [
     id: 'people',
     label: 'Users for invited people',
     as: 'root',
-    timeoutMs: 3 * MINUTE,
+    // Each person who has no Codex yet gets it here.
+    timeoutMs: 10 * MINUTE,
     script: ({ desktop = '' }) =>
       script(
         'root',
@@ -611,6 +641,8 @@ export const STEPS: readonly StepDef[] = [
       systemctl restart "$unit"
     done
   fi
+  # Each person who has a user already gets what a new one gets: a coding agent the install brings since then.
+  ${PERSON_HELPER} agents
 `,
       ),
   },

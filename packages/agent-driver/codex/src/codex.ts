@@ -168,14 +168,14 @@ export class CodexDriver implements Driver {
       const spawn = this.opts.spawn ?? (nodeSpawn as unknown as SpawnLike)
       const child = spawn(bin, ['debug', 'models'], { cwd: process.cwd(), env: this.opts.env ?? process.env })
       let settled = false
-      const settle = (answer: { models: DriverModel[] } | { error: string }) => {
+      const settle = (answer: { models: DriverModel[] } | { error: string; code?: string }) => {
         if (settled) return
         settled = true
         clearTimeout(timer)
         opts.signal?.removeEventListener('abort', onAbort)
         child.kill('SIGTERM')
         if ('models' in answer) resolvePromise(answer.models)
-        else rejectPromise(new Error(answer.error))
+        else rejectPromise(Object.assign(new Error(answer.error), answer.code !== undefined ? { code: answer.code } : {}))
       }
       const onAbort = () => settle({ error: 'Codex was not asked for its models: the read was stopped' })
       if (opts.signal?.aborted) return onAbort()
@@ -185,7 +185,11 @@ export class CodexDriver implements Driver {
       const err: Buffer[] = []
       child.stdout?.on('data', (chunk: Buffer | string) => out.push(Buffer.from(chunk)))
       child.stderr?.on('data', (chunk: Buffer | string) => err.push(Buffer.from(chunk)))
-      child.on('error', e => settle({ error: `\`${bin}\` could not start: ${e.message}` }))
+      // A Codex that is not on this computer says so by the code: the reader says it in its own words.
+      child.on('error', e => {
+        const { code } = e as NodeJS.ErrnoException
+        settle({ error: `\`${bin}\` could not start: ${e.message}`, ...(code !== undefined ? { code } : {}) })
+      })
       child.on('close', code => {
         const said = oneLine(Buffer.concat(err).toString('utf8'))
         if (code !== 0) return settle({ error: `\`${bin} debug models\` failed (code ${code})${said ? `: ${said}` : ''}` })

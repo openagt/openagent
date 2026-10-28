@@ -3,8 +3,8 @@ import { CodexDriver } from '@openagt/agent-driver-codex'
 import type { Driver, DriverModel } from '@openagt/agent-driver'
 import { DRIVERS, type DriverName } from '../driver-names.js'
 
-/** What one coding agent offers: its models, or why it could not say. */
-export type DriverModels = { models: DriverModel[] } | { models: []; error: string }
+/** What one coding agent offers: its models, or why it could not say; `missing` when its CLI is not on the computer at all. */
+export type DriverModels = { models: DriverModel[] } | { models: []; error: string; missing?: true }
 
 /** The models of every coding agent a person can pick, by driver. */
 export type ModelsView = Record<DriverName, DriverModels>
@@ -32,7 +32,7 @@ export function cachedModelsSource(drivers: Record<DriverName, Pick<Driver, 'lis
     }
     return answer.then(
       models => ({ models }),
-      (err: unknown) => ({ models: [], error: err instanceof Error ? err.message : String(err) }),
+      (err: unknown) => ({ models: [], error: err instanceof Error ? err.message : String(err), ...((err as NodeJS.ErrnoException).code === 'ENOENT' ? { missing: true as const } : {}) }),
     )
   }
   return {

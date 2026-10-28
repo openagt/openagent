@@ -140,7 +140,7 @@ export const Composer = forwardRef<ComposerHandle, {
   const selectedMachineId = useSelectedMachineId() // #1067: the machine this run targets, if any
   const selectedMachine = runTarget(machines, selectedMachineId, launcher, home)
   // The agents and models of the machine the run goes to: a run there is given one of its own.
-  const models = useModelsOn(inAgent ? undefined : selectedMachine?.id)
+  const { models, theirs } = useModelsOn(inAgent ? undefined : selectedMachine?.id)
   // #1073: block Start when the target machine is known-offline; an absent/unknown status must not block.
   const targetOffline = !!selectedMachine && machineStatus[selectedMachine.id] === 'offline'
   // Another person's computer: the person is told once that their logins are copied there, and
@@ -226,7 +226,7 @@ export const Composer = forwardRef<ComposerHandle, {
   // controls in either place read and write the same state.
   const driverModelEl = showDriverModel && (
     <DriverModelMenu
-      drivers={driverOptions(models).map(d => ({ ...d, ...DRIVER_UI[d.value as DriverName] }))}
+      drivers={driverOptions(models, theirs && selectedMachine ? machineName(selectedMachine) : undefined).map(d => ({ ...d, ...DRIVER_UI[d.value as DriverName] }))}
       driver={driver}
       model={model}
       onChange={(a, m) => updatePreferences({ driver: a, model: m })}

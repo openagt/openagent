@@ -408,7 +408,7 @@ function stopWork(worker: number | undefined): void {
 /** What the helper answered: done, or why not in its own last words. */
 export type HelperAnswer = { ok: true } | { ok: false; error: string }
 
-/** How long the helper may take: making a person's user installs Claude Code for them. */
+/** How long the helper may take: making a person's user installs Claude Code and Codex for them. */
 const HELPER_TIMEOUT_MS = 10 * 60_000
 
 /**

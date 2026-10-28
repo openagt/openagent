@@ -440,6 +440,24 @@ describe('StartAgentForm (#1774)', () => {
     expect(openSettings).toHaveBeenCalledWith('accounts')
   })
 
+  test('a machine without the picked agent says so in words naming it, and the press opens its page, where an update brings it', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true, remote: true, address: 'github.com/acme/shop' })
+    machine.current = { id: 'd3', url: 'https://box/_devices/via/3', label: 'experiment' }
+    const line = '`codex` not found — install the Codex CLI and make sure `codex` is on your PATH: https://developers.openai.com/codex/cli'
+    prefs.current = { driver: 'codex' }
+    onMachineStartCheck.mockResolvedValue({ problems: [line], warnings: [], fix: { kind: 'install', command: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh', problem: line } })
+    render(<StartAgentForm {...props} />)
+    const press = await screen.findByRole('button', { name: 'Update experiment' })
+    const box = screen.getByRole('alert')
+    expect(within(box).getByText('Codex is not installed on experiment.')).toBeTruthy()
+    expect(within(box).getByText('Update experiment to get it.')).toBeTruthy()
+    // This computer's install command is no fix for the machine.
+    expect(box.textContent).not.toContain('install.sh')
+    expect(box.contains(press)).toBe(true)
+    fireEvent.click(press)
+    expect(openSettings).toHaveBeenCalledWith('devices', 'd3')
+  })
+
   test('a problem a press fixes has its button on the red line, with the command it runs; once fixed, the check is asked again and the line goes', async () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
     const line = '`claude` is not logged in. Run `claude auth login`, then start again.'

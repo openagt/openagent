@@ -241,6 +241,18 @@ describe('Composer (#721)', () => {
     expect(machinesRpc.onMachineModels).not.toHaveBeenCalled()
   })
 
+  test('an agent not installed on the machine picked in "Run on" is said so in the menu, naming that machine', async () => {
+    await saveMachines(STUDIO_MACHINE)
+    selectMachine(STUDIO)
+    machinesRpc.onMachineModels.mockResolvedValueOnce({ 'claude-code': { models: [{ id: 'opus', name: 'Opus 5.5' }] }, codex: { models: [], error: '`codex` could not start: spawn codex ENOENT', missing: true } })
+    renderComposer()
+    await waitFor(() => expect(machinesRpc.onMachineModels).toHaveBeenCalledWith(STUDIO))
+    fireEvent.click(await screen.findByRole('button', { name: /^Driver: / }))
+    fireEvent.click(await screen.findByText('Codex'))
+    expect(await screen.findByText('Codex is not installed on Studio.')).toBeTruthy()
+    expect(screen.queryByText(/ENOENT/)).toBeNull()
+  })
+
   test('an offline "Run on" machine disables Start and shows the reason (#1073)', async () => {
     await saveMachines(STUDIO_MACHINE)
     daemon.reachable = { [STUDIO]: false }
