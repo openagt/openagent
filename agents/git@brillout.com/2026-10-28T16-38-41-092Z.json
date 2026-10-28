@@ -1,0 +1,16 @@
+{
+  "id": "2026-10-28T16-38-41-092Z",
+  "startedAt": "2026-10-28T16:38:42.717Z",
+  "status": "running",
+  "intent": "Hello Tell me what this machine is",
+  "driver": "claude-code",
+  "caller": {
+    "runner": {
+      "host": "rom-thinkpad-x280",
+      "pid": 81131,
+      "publish": "commit"
+    },
+    "host": "rom-thinkpad-x280",
+    "publish": "commit"
+  }
+}
