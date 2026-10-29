@@ -74,6 +74,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   Wi-Fi fills the screen with asks, and over a day's wait after Deny.
 - An ask shows on the computer's own screen and on its owner's devices, never on an invited
   person's. Picked over the computer's own screen alone, and over every device that is in.
+- On this Wi-Fi works beside Tailscale: its switch shows and opens the Wi-Fi's door at its own
+  port, plain HTTP with Wi-Fi knocks, while the door behind Tailscale listens on this computer
+  alone, at the port after it. A device that got in on the Wi-Fi keeps its address, and a new
+  one not on Tailscale gets the same code on the Wi-Fi. Picked over hiding the switch while
+  Tailscale is on.
 
 ## On a server
 - On a server the door speaks HTTPS, with a certificate for the server's number that it

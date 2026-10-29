@@ -164,8 +164,8 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
               )}
             </div>
           )}
-          {/* The switch is not looked at behind Tailscale: this computer's devices reach it there. */}
-          {where === undefined && status?.tailscale === undefined && (
+          {/* Beside Tailscale too: a phone at home that is not on Tailscale, and the devices that got in on this Wi-Fi, at the address they know. */}
+          {where === undefined && (
             <Way icon={Wifi} label="On this Wi-Fi" words="Phones and computers at home, with no lock on the link.">
               <Switch
                 aria-label="On this Wi-Fi"
@@ -192,6 +192,7 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
             </div>
           )}
           {(status?.on || status?.https) && status.tailscale === undefined && status.problem !== undefined && !busy && <Problem>{status.problem}</Problem>}
+          {status?.tailscale !== undefined && status.wifi?.problem !== undefined && !busy && <Problem>{status.wifi.problem}</Problem>}
           {lines.map(line => (
             <Way
               key={line.key}

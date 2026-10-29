@@ -41,8 +41,9 @@ export const USAGE = `usage: devices <command>
                  over HTTPS, with a certificate it asks for and renews itself (ports 80 and 443 must be reachable)
   https off      no longer a server: On this Wi-Fi decides again
   tailscale on   the door is open to your own devices on your Tailscale network, over HTTPS, at this computer's
-                 name there; Tailscale must run here, signed in, and Serve be on for your Tailscale network
-  tailscale off  no longer on Tailscale: On this Wi-Fi decides again
+                 name there; Tailscale must run here, signed in, and Serve be on for your Tailscale network.
+                 On this Wi-Fi goes on beside it, as its switch says
+  tailscale off  no longer on Tailscale: On this Wi-Fi goes on as its switch says
   line add <link> [watch]
                  keep a line open to a server, so a run can be started on this computer from the server's page;
                  the link is the one the server gives for a new device, or - to read it from standard input;
@@ -118,6 +119,8 @@ export interface Status {
   https?: { address: string }
   /** Behind Tailscale: this computer's name on the person's Tailscale network, which the door is open at. */
   tailscale?: { address: string }
+  /** Behind Tailscale with the switch on: the Wi-Fi's door beside it, which {@link listening} and {@link problem} do not say. */
+  wifi?: { listening: boolean; problem?: string }
   /** Where the person fixes the problem themselves, in an account of theirs: Tailscale's page that turns Serve on. */
   fixAt?: string
   /**
@@ -162,6 +165,12 @@ const wanted = (store: Store): boolean => store.on || store.https !== undefined 
 
 const isListening = (store: Store): boolean => wanted(store) && store.listening !== undefined && pidAlive(store.listening.pid)
 
+/** Where the Wi-Fi's door listens, when it does: the door, or behind Tailscale the one beside it. */
+const wifiListening = (store: Store): Store['listening'] => {
+  const said = store.tailscale ? store.wifiListening : store.listening
+  return store.on && !store.https && said !== undefined && pidAlive(said.pid) ? said : undefined
+}
+
 /** Why a door that should be open does not listen, when its own process said nothing: that process is not running. */
 const NOT_RUNNING = 'The door opens once OpenAgent runs on this computer.'
 
@@ -194,6 +203,7 @@ function statusOf(store: Store, env: NodeJS.ProcessEnv): Status {
     ...(problem ? { problem } : {}),
     ...(store.https ? { https: { address: store.https.address } } : {}),
     ...(store.tailscale ? { tailscale: { address: store.tailscale.address } } : {}),
+    ...(store.tailscale && store.on ? { wifi: { listening: wifiListening(store) !== undefined, ...(wifiListening(store) === undefined ? { problem: store.wifiProblem ?? NOT_RUNNING } : {}) } } : {}),
     ...(problem !== undefined && store.fixAt !== undefined ? { fixAt: store.fixAt } : {}),
     ...(person !== undefined ? { person } : {}),
     devices: listedDevices(store),
@@ -218,12 +228,16 @@ function statusOf(store: Store, env: NodeJS.ProcessEnv): Status {
 async function setSwitch(io: CliIO, on: boolean): Promise<Status> {
   await update(io.env, store => {
     store.on = on
-    if (!on) delete store.problem
+    // Behind Tailscale its problem is the Wi-Fi's door's own, and the one behind Tailscale keeps its.
+    if (!on && store.tailscale) delete store.wifiProblem
+    else if (!on) delete store.problem
   })
   const deadline = Date.now() + (io.followMs ?? 3_000)
   for (;;) {
     const store = await readStore(io.env)
-    const settled = on ? isListening(store) || store.problem !== undefined : store.listening === undefined || !pidAlive(store.listening.pid)
+    // Behind Tailscale the Wi-Fi's door is the one beside it, and the file says it apart.
+    const said = store.tailscale ? store.wifiListening : store.listening
+    const settled = on ? wifiListening(store) !== undefined || (store.tailscale ? store.wifiProblem : store.problem) !== undefined : said === undefined || !pidAlive(said.pid)
     if (settled || Date.now() > deadline) return statusOf(store, io.env)
     await new Promise(resolve => setTimeout(resolve, 100))
   }
@@ -283,6 +297,8 @@ async function setTailscale(io: CliIO, on: boolean): Promise<Status> {
 interface Given {
   url: string
   numberUrl?: string
+  /** Behind Tailscale with the Wi-Fi's door open beside it: the link on this Wi-Fi, for a device not on Tailscale. The code is the same. */
+  wifiUrl?: string
   where: string
   code: string
   expires: string
@@ -298,8 +314,12 @@ async function addDevice(io: CliIO, said?: string): Promise<Given> {
     if (!status.listening) throw new Refused(status.problem ?? 'the door is not open')
     const person = await whose()
     const { code, expires } = await addCode(io.env, Date.now(), person)
+    // The same code at the Wi-Fi's door beside it, for a device on this Wi-Fi that is not on Tailscale.
+    const wifi = wifiListening(store)
+    const host = wifi ? ((await nameAddress(io.address)) ?? numberAddress(io.address)) : undefined
+    const wifiUrl = wifi && host ? `http://${urlHost(host)}:${wifi.port}${ENTER_PATH}#${code}` : undefined
     // Tailscale's certificate is one every device trusts: a device that opens the link needs no key of the door's to know it by.
-    return { url: `https://${store.tailscale.address}${ENTER_PATH}#${code}`, where: store.tailscale.address, code: shownCode(code), expires, ...(person !== undefined ? { person } : {}) }
+    return { url: `https://${store.tailscale.address}${ENTER_PATH}#${code}`, ...(wifiUrl ? { wifiUrl } : {}), where: store.tailscale.address, code: shownCode(code), expires, ...(person !== undefined ? { person } : {}) }
   }
   if (store.https) {
     if (!status.listening) throw new Refused(status.problem ?? 'the door is not open')
@@ -665,7 +685,7 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         const store = await readStore(io.env)
         // Not this computer's own door, which it announces too.
         const own = ownAddresses(io.address)
-        const port = isListening(store) && !store.https ? store.listening!.port : undefined
+        const port = wifiListening(store)?.port
         const found = await (io.find ?? find)().catch((err: unknown) => {
           throw new Refused(`This Wi-Fi could not be looked at: ${err instanceof Error ? err.message : String(err)}`)
         })

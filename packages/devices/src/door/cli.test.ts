@@ -549,6 +549,33 @@ test('tailscale on: the door opens at this computer\'s name on Tailscale, add an
   }
 })
 
+test("behind Tailscale the Wi-Fi switch still works: status says its door apart, add gives the Wi-Fi's link beside Tailscale's for the same code, and off closes it alone", async () => {
+  const home = await testHome()
+  const tailscale = fakeTailscale()
+  const stop = new AbortController()
+  const env = { ...home.env, OPENAGENT_URL: 'http://127.0.0.1:1', OPENAGENT_REMOTE_ACCESS_PORT: '0' }
+  const serving = run(env, ['serve'], { signal: stop.signal, tailscale: tailscale.run })
+  try {
+    await run(home.env, ['tailscale', 'on'], { followMs: 5_000, tailscale: tailscale.run })
+    const on = await run(home.env, ['on'], { followMs: 5_000 })
+    assert.deepEqual(on.out, { on: true, listening: true, tailscale: { address: 'laptop.tail1234.ts.net' }, wifi: { listening: true }, devices: [], lines: [], persons: [] })
+    const port = (await readStore(home.env)).wifiListening!.port
+
+    const link = (await run(home.env, ['add'])).out as { url: string; wifiUrl?: string }
+    const [tailscaleAt, code] = link.url.split('#') as [string, string]
+    assert.equal(tailscaleAt, `https://laptop.tail1234.ts.net${ENTER_PATH}`)
+    assert.equal(link.wifiUrl, `http://adas-macbook.local:${port}${ENTER_PATH}#${code}`)
+
+    const off = await run(home.env, ['off'], { followMs: 5_000 })
+    assert.deepEqual(off.out, { on: false, listening: true, tailscale: { address: 'laptop.tail1234.ts.net' }, devices: [], lines: [], persons: [] })
+    assert.equal(((await run(home.env, ['add'])).out as { wifiUrl?: string }).wifiUrl, undefined, 'no Wi-Fi link while its door is closed')
+  } finally {
+    stop.abort()
+    await serving
+    await home.remove()
+  }
+})
+
 test('tailscale on is refused on a server, and where Tailscale is not signed in, in words; tailscale with anything else prints the usage', async () => {
   const home = await testHome()
   try {

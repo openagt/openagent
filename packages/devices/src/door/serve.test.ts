@@ -216,7 +216,7 @@ test('behind Tailscale: the door listens on this computer alone, Tailscale serve
   const home = await testHome()
   const tailscale = fakeTailscale()
   const stop = new AbortController()
-  // The Wi-Fi switch is on too: behind Tailscale it is not looked at.
+  // The Wi-Fi switch is on too: its door is open beside it, said apart (the next test).
   await update(home.env, store => {
     store.on = true
     store.tailscale = { address: 'laptop.tail1234.ts.net' }
@@ -247,10 +247,72 @@ test('behind Tailscale: the door listens on this computer alone, Tailscale serve
       delete store.tailscale
       store.on = false
     })
-    await fileSays(home.env, store => store.listening === undefined)
+    await fileSays(home.env, store => store.listening === undefined && store.wifiListening === undefined)
     assert.equal(tailscale.served(), undefined, 'Tailscale serves the door no more')
     assert.deepEqual(tailscale.calls.at(-1), ['serve', '--https=443', 'off'])
     await assert.rejects(fetch(`${at}/`))
+  } finally {
+    stop.abort()
+    await running
+    await home.remove()
+  }
+})
+
+/** A port nothing listens on, with the one after it. */
+async function freePorts(): Promise<number> {
+  for (;;) {
+    const port = await new Promise<number>(resolve => {
+      const probe = createServer().listen(0, '127.0.0.1', () => {
+        const { port } = probe.address() as AddressInfo
+        probe.close(() => resolve(port))
+      })
+    })
+    const next = await new Promise<boolean>(resolve => {
+      const probe = createServer().once('error', () => resolve(false)).listen(port + 1, '127.0.0.1', () => probe.close(() => resolve(true)))
+    })
+    if (next && port < 65535) return port
+  }
+}
+
+test("behind Tailscale with the switch on, the Wi-Fi's door goes on beside it at its own port, by its own rules; each closes alone, and Serve that took the Wi-Fi's port before is moved to the port after it", async () => {
+  const home = await testHome()
+  const tailscale = fakeTailscale()
+  const stop = new AbortController()
+  const port = await freePorts()
+  // Serve as it was before the door behind Tailscale had a port of its own: at the Wi-Fi's.
+  tailscale.serveOther(`http://127.0.0.1:${port}`)
+  await update(home.env, store => {
+    store.on = true
+    store.tailscale = { address: 'laptop.tail1234.ts.net' }
+  })
+  const running = serve({ env: home.env, target: 'http://127.0.0.1:1', port, signal: stop.signal, announce: quietAnnounce, pollMs: 20, retryMs: 50, tailscale: tailscale.run })
+  try {
+    const both = await fileSays(home.env, store => store.listening !== undefined && store.wifiListening !== undefined)
+    assert.equal(both.listening!.port, port + 1, 'behind Tailscale: the port after the Wi-Fi\'s')
+    assert.equal(both.wifiListening!.port, port, 'the Wi-Fi\'s, where its devices know it')
+    assert.equal(tailscale.served(), `http://127.0.0.1:${port + 1}`)
+    assert.equal(both.problem, undefined)
+    // The Wi-Fi's door is plain HTTP and lets a device in with no lock: its cookie is no HTTPS-only one.
+    const { code } = await addCode(home.env, Date.now())
+    const entered = await fetch(`http://127.0.0.1:${port}/_devices/enter`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) })
+    assert.equal(entered.status, 200)
+    assert.doesNotMatch(entered.headers.get('set-cookie') ?? '', /; Secure/)
+
+    // The switch off closes the Wi-Fi's door alone.
+    await turn(home.env, false)
+    const alone = await fileSays(home.env, store => store.wifiListening === undefined)
+    assert.equal(alone.listening?.port, port + 1)
+    await assert.rejects(fetch(`http://127.0.0.1:${port}/`))
+    assert.equal((await fetch(`http://127.0.0.1:${port + 1}/`)).status, 401)
+
+    // On again, then Tailscale off: the Wi-Fi's door is the door, as before.
+    await turn(home.env, true)
+    await fileSays(home.env, store => store.wifiListening !== undefined)
+    await update(home.env, store => void delete store.tailscale)
+    const wifi = await fileSays(home.env, store => store.listening?.port === port && store.wifiListening === undefined)
+    assert.equal(wifi.on, true)
+    assert.equal(tailscale.served(), undefined)
+    assert.equal((await fetch(`http://127.0.0.1:${port}/`)).status, 401)
   } finally {
     stop.abort()
     await running

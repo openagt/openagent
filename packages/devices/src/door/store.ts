@@ -287,7 +287,7 @@ export interface Store {
   on: boolean
   /** Set on a server: the door is always open there, and the switch is not looked at. */
   https?: Https
-  /** Set on a computer reached over Tailscale: the door is open there, behind Tailscale, and the switch is not looked at. */
+  /** Set on a computer reached over Tailscale: a door is open there, behind Tailscale, beside the Wi-Fi's when the switch is on. */
   tailscale?: Tailscale
   /** The persons on this computer, the owner first; none until the owner is named. */
   persons: Person[]
@@ -302,6 +302,9 @@ export interface Store {
   problem?: string
   /** Where the person fixes that problem themselves, when it is theirs to fix in an account of theirs: Tailscale's page that turns Serve on. */
   fixAt?: string
+  /** Behind Tailscale, the Wi-Fi's door beside it, which {@link listening} and {@link problem} then do not say: where it listens, or why it does not. */
+  wifiListening?: Listening
+  wifiProblem?: string
 }
 
 /** How long a code is good for: time to walk to the other computer and type it there. */
@@ -461,6 +464,7 @@ export function sanitize(value: unknown): Store {
     asks.push({ id, secret, name: name.trim().slice(0, MAX_NAME) || 'A computer', number, from, expires, ...(answer === 'allowed' || answer === 'denied' ? { answer } : {}) })
   }
   const listening = obj.listening && typeof obj.listening === 'object' ? (obj.listening as Record<string, unknown>) : undefined
+  const wifiListening = obj.wifiListening && typeof obj.wifiListening === 'object' ? (obj.wifiListening as Record<string, unknown>) : undefined
   const https = obj.https && typeof obj.https === 'object' ? (obj.https as Record<string, unknown>).address : undefined
   const tailscale = obj.tailscale && typeof obj.tailscale === 'object' ? (obj.tailscale as Record<string, unknown>).address : undefined
   return {
@@ -475,6 +479,8 @@ export function sanitize(value: unknown): Store {
     ...(listening && Number.isInteger(listening.pid) && Number.isInteger(listening.port) ? { listening: { pid: listening.pid as number, port: listening.port as number } } : {}),
     ...(typeof obj.problem === 'string' && obj.problem ? { problem: obj.problem } : {}),
     ...(typeof obj.fixAt === 'string' && /^https:\/\/login\.tailscale\.com\//.test(obj.fixAt) ? { fixAt: obj.fixAt } : {}),
+    ...(wifiListening && Number.isInteger(wifiListening.pid) && Number.isInteger(wifiListening.port) ? { wifiListening: { pid: wifiListening.pid as number, port: wifiListening.port as number } } : {}),
+    ...(typeof obj.wifiProblem === 'string' && obj.wifiProblem ? { wifiProblem: obj.wifiProblem } : {}),
   }
 }
 

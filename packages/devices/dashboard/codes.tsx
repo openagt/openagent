@@ -12,6 +12,8 @@ export interface Given {
   url: string
   /** The same link by the computer's number, when `url` goes by its name. */
   numberUrl?: string
+  /** Behind Tailscale, the same code at the Wi-Fi's door beside it, for a device not on Tailscale. */
+  wifiUrl?: string
   where?: string
   code?: string
   expires: string
@@ -218,8 +220,9 @@ export function PhoneCode({
   // Who the code is for: asked first when the computer tells persons apart; `null` until it is said, "" for the person at the page.
   const [person, setPerson] = useState<string | null>(persons ? null : '')
   const [byNumber, setByNumber] = useState(false)
-  const { code, asking, error, left, expired, again } = useCode(ask, !persons, next => (setByNumber(false), onCode?.(next)), joined !== undefined)
-  const link = code && byNumber && code.numberUrl ? code.numberUrl : code?.url
+  const [byWifi, setByWifi] = useState(false)
+  const { code, asking, error, left, expired, again } = useCode(ask, !persons, next => (setByNumber(false), setByWifi(false), onCode?.(next)), joined !== undefined)
+  const link = code && byWifi && code.wifiUrl ? code.wifiUrl : code && byNumber && code.numberUrl ? code.numberUrl : code?.url
   const forWhom = person || undefined
 
   if (persons && person === null) return <ForWhom title={title} persons={persons} onClose={onClose} onPicked={picked => (setPerson(picked), void again(picked || undefined))} />
@@ -247,6 +250,11 @@ export function PhoneCode({
                   </Step>
                 ))}
               </ol>
+              {code.wifiUrl !== undefined && !byWifi && (
+                <button type="button" className="mr-3 text-xs underline" onClick={() => setByWifi(true)}>
+                  Not on Tailscale? Use this Wi-Fi.
+                </button>
+              )}
               {code.numberUrl !== undefined && !byNumber && (
                 <button type="button" className="text-xs underline" onClick={() => setByNumber(true)}>
                   Phone does not open it? Use the number.
