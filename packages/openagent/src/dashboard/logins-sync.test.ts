@@ -94,7 +94,7 @@ test('what can go as it is reaches the server with nothing pressed; the person\'
     assert.ok(!rig.calls.includes('sendCopiedLogin'))
     assert.deepEqual(await allowLogins(server!.machineId), { ok: true })
     await pressed()
-    assert.deepEqual((await serverLogins())[0]!.logins.map(l => l.state), ['there', 'there', 'there'])
+    assert.deepEqual((await serverLogins())[0]!.logins.map(l => [l.state, l.anew]), [['there', true], ['there', undefined], ['there', undefined]])
     assert.deepEqual(readAccounts(rig.serverPath('claude')).map(a => [a.name, a.login]), [['Dani', LOGIN], ['Suleiman', MINTED], ['This computer', undefined]])
     // How full the person's own login is goes with it: the server's page shows it.
     assert.deepEqual(readCopied().find(l => l.source === 'own')?.usage, { windows: [{ label: 'week', percent: 62 }], at: 5 })
@@ -126,7 +126,7 @@ test('another account logged in here under the same one is a switch the person a
     await pressed()
     rig.local = [{ ...own, name: 'Work', who: 'uuid-2' }]
     const [after] = await syncLogins()
-    assert.deepEqual(after!.logins, [{ kind: 'claude', source: 'own', name: 'Work', state: 'switched', was: 'Suleiman' }])
+    assert.deepEqual(after!.logins, [{ kind: 'claude', source: 'own', name: 'Work', anew: true, state: 'switched', was: 'Suleiman' }])
     assert.deepEqual(after!.left, [{ kind: 'claude', source: 'Dani', name: 'Dani' }])
     assert.deepEqual(readAccounts(rig.serverPath('claude')).map(a => a.name), ['Dani', 'Suleiman', 'This computer'])
     // Kept: it is no longer asked about, and stays.
@@ -136,6 +136,20 @@ test('another account logged in here under the same one is a switch the person a
     await allowLogins(after!.machineId)
     await pressed()
     assert.deepEqual(readAccounts(rig.serverPath('claude')).map(a => a.name), ['Dani', 'Work', 'This computer'])
+  }))
+
+test('a login made anew for the server, taken off there while this computer still has it, waits for the press again: it is not made by itself', () =>
+  withRig(async rig => {
+    rig.local = [own, dani]
+    const [server] = await syncLogins()
+    await allowLogins(server!.machineId)
+    await pressed()
+    assert.deepEqual(await settleLeft(server!.machineId, { kind: 'claude', source: 'own' }, false), { ok: true })
+    assert.deepEqual(readAccounts(rig.serverPath('claude')).map(a => a.name), ['Dani', 'This computer'])
+    assert.deepEqual((await serverLogins())[0]!.logins.map(l => [l.name, l.state]), [['Suleiman', 'allow'], ['Dani', 'there']])
+    rig.calls.length = 0
+    await syncLogins()
+    assert.deepEqual(readAccounts(rig.serverPath('claude')).map(a => a.name), ['Dani', 'This computer'])
   }))
 
 test('one taken off there is deleted there', () =>

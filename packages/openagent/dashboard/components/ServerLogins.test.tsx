@@ -114,6 +114,22 @@ describe('a server that uses this computer\'s logins', () => {
     expect(screen.queryByRole('region', { name: `Your logins on ${LABEL}` })).toBeNull()
   })
 
+  test('a login made for the server with a press is taken off there from its row, and waits for the press again; one that goes as it is has no such menu', async () => {
+    views([own, dani])
+    server({ logins: [{ kind: 'claude', source: 'own', name: 'Suleiman', state: 'there', anew: true }, { kind: 'claude', source: 'Dani', name: 'Dani', state: 'there' }] })
+    render(<AccountsSettings />)
+    const card = await screen.findByRole('region', { name: 'Claude Code' })
+    const trigger = await within(card).findByRole('button', { name: `Suleiman on ${LABEL}` })
+    expect(within(card).queryByRole('button', { name: `Dani on ${LABEL}` })).toBeNull()
+    expect(within(card).getByRole('listitem', { name: 'Dani' }).textContent).toContain(`✓ on ${LABEL}`)
+    server({ logins: [{ kind: 'claude', source: 'own', name: 'Suleiman', state: 'allow', anew: true }, { kind: 'claude', source: 'Dani', name: 'Dani', state: 'there' }] })
+    fireEvent.click(trigger)
+    fireEvent.click(await screen.findByRole('menuitem', { name: `Take off ${LABEL}` }))
+    await waitFor(() => expect(servers.sendSettleLogin).toHaveBeenCalledWith(ID, { kind: 'claude', source: 'own' }, false))
+    await waitFor(() => expect(within(card).getByRole('listitem', { name: 'Suleiman' }).textContent).toContain(`not on ${LABEL} yet`))
+    expect((await screen.findByRole('region', { name: `Your logins on ${LABEL}` })).textContent).toContain('Allow 1 login')
+  })
+
   test('the login being made says where to say yes, with its link to copy for a private window', async () => {
     views([own])
     server({ logins: [{ kind: 'claude', source: 'own', name: 'Suleiman', state: 'allow' }], allowing: { name: 'Suleiman', url: 'https://claude.com/cai/oauth/authorize?x' } })

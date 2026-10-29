@@ -60,6 +60,8 @@ export interface LoginThere {
    * person no longer is here: the press makes this one's. `failed`: it did not get there.
    */
   state: 'there' | 'allow' | 'switched' | 'failed'
+  /** Its login is made anew for the server, with the person's press: taken off there, it stays off until that press. */
+  anew?: true
   /** `switched`: the account the server has. */
   was?: string
   error?: string
@@ -221,7 +223,7 @@ async function syncServer(machine: MachineRecord, local: LocalLogin[], usage: Aw
   const logins: LoginThere[] = []
   for (const login of local) {
     const has = mine.find(other => same(other, login))
-    const row = { kind: login.kind, ...(login.host !== undefined ? { host: login.host } : {}), source: login.source, name: login.name }
+    const row = { kind: login.kind, ...(login.host !== undefined ? { host: login.host } : {}), source: login.source, name: login.name, ...(login.secret ? {} : { anew: true as const }) }
     if (has?.who === login.who) {
       logins.push({ ...row, state: 'there' })
       continue
@@ -394,6 +396,8 @@ export async function allowLogins(machineId: string): Promise<{ ok: true } | { o
 }
 
 /** Keep, or take off, a login the server has of this computer's that this computer no longer has. */
+// A login the server still has of this computer's is taken off the same way: one made anew with a
+// press then waits for it, as one the server never had.
 export async function settleLeft(machineId: string, which: { kind: CopiedKind; host?: string; source: string }, keep: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
   const machine = (await syncWiring.machines()).find(saved => saved.id === machineId)
   if (!machine) return { ok: false, error: 'That server is no longer saved.' }
