@@ -3,7 +3,7 @@ import type { Intervention, Activity, ProjectionRead, ProjectSummary, RecentAgen
 import { onProjectFiles, onInterventions, onActivity, onRecentAgents } from './rpc/reads.js'
 import { sendStart } from './rpc/control.js'
 import { onProjects } from './rpc/projects.js'
-import { onComputersThrough, onMachinePerson, onMachineVersions, sendLetMachineIn, sendMachineCode, sendRemoveMachineDevice } from './rpc/machines.js'
+import { onComputersThrough, onMachineAgentAccounts, onMachinePerson, onMachineVersions, sendLetMachineIn, sendMachineCode, sendMachineRemoveAgentAccount, sendRemoveMachineDevice } from './rpc/machines.js'
 import { onGitHostPeople } from './rpc/people.js'
 import { sendUseLoginsOn } from './rpc/server-logins.js'
 import { addComputerThrough, addMachine, removeMachine, renameComputer, renameMachine } from './lib/machines.js'
@@ -395,6 +395,11 @@ export function App() {
       computersThrough: onComputersThrough,
       machinePerson: onMachinePerson,
       removeMachineDevice: sendRemoveMachineDevice,
+      machineAccounts: async (machineId, agent) => {
+        const view = await onMachineAgentAccounts(machineId, agent)
+        return view && view.accounts.map((account, i) => ({ id: account.id, name: account.name, own: account.own, ...(account.from !== undefined ? { from: account.from } : {}), first: account.state === 'in-use' || (i === 0 && view.accounts.length === 1) }))
+      },
+      removeMachineAccount: sendMachineRemoveAgentAccount,
       useLoginsOn: sendUseLoginsOn,
       addComputerThrough: async (machineId, computerId) => {
         const added = await addComputerThrough(machineId, computerId)

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { ModuleHostContext, type MachineAdded, type MachineRemoved, type ModuleCommandResult, type ModuleComputersThrough, type ModuleHost, type ModuleMachinePerson, type ModuleMachines } from '@openagt/dashboard/module'
+import { ModuleHostContext, type MachineAdded, type MachineRemoved, type ModuleCommandResult, type ModuleComputersThrough, type ModuleAccountsAgent, type ModuleHost, type ModuleMachineAccount, type ModuleMachinePerson, type ModuleMachines } from '@openagt/dashboard/module'
 import { DevicesSettings } from './DevicesSettings.js'
 import { olderThan } from './parts.js'
 import type { DeviceRow, ServerRow, StepState } from './servers.js'
@@ -66,6 +66,9 @@ function dashboard(
   const machinePerson = vi.fn(async (_id: string): Promise<ModuleMachinePerson> => ({ ok: false, error: 'not said', unknown: true }))
   const removeMachineDevice = vi.fn(async (_id: string, _device: string): Promise<ModuleMachinePerson> => ({ ok: false, error: 'not said' }))
   const runComputerCommandOn = vi.fn(async (_machine: string, _args: string[]): Promise<ModuleCommandResult> => ({ ok: false, error: 'not there' }))
+  // A machine says no accounts, unless a test says otherwise.
+  const machineAccounts = vi.fn(async (_id: string, _agent: ModuleAccountsAgent): Promise<ModuleMachineAccount[] | null> => null)
+  const removeMachineAccount = vi.fn(async (_id: string, _agent: ModuleAccountsAgent, _account: string): Promise<MachineAdded> => ({ ok: true }))
   // The page asks `devices server …` of a server, and `devices …` of this computer's door.
   const host: ModuleHost = {
     package: '@openagt/devices',
@@ -94,12 +97,14 @@ function dashboard(
     machinePerson,
     removeMachineDevice,
     useLoginsOn,
+    machineAccounts,
+    removeMachineAccount,
     watchScreen: vi.fn(async () => undefined),
     sendToScreen: vi.fn(async () => false),
   }
   // What was asked of the `devices server` command, without the reads a page makes again and again by itself.
   const ran = (): string[] => runComputerCommand.mock.calls.map(([args]) => args.join(' ')).filter(line => !line.startsWith('devices '))
-  return { host, runComputerCommand, runComputerCommandOn, doorCommand, machines, addMachine, removeMachine, computersThrough, addComputerThrough, machinePerson, removeMachineDevice, useLoginsOn, ran }
+  return { host, runComputerCommand, runComputerCommandOn, doorCommand, machines, addMachine, removeMachine, computersThrough, addComputerThrough, machinePerson, removeMachineDevice, useLoginsOn, machineAccounts, removeMachineAccount, ran }
 }
 
 function show(host: ModuleHost) {
@@ -346,6 +351,35 @@ describe('Settings › Devices: a server this computer installed', () => {
     show(silent.host)
     await open('203.0.113.5')
     expect(await screen.findByText('Does not answer right now')).toBeTruthy()
+  })
+
+  test('a server that answers lists its Claude Code and Codex accounts; Remove takes one off there, never its own login, and the list is read again', async () => {
+    const page = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false })] }), BOX_SAVED())
+    let claude: ModuleMachineAccount[] = [
+      { id: 'Suleiman', name: 'Suleiman', own: false, from: 'Suleimans-MacBook-Pro', first: true },
+      { id: 'This computer', name: 'Claude login on droplet', own: true, first: false },
+    ]
+    page.machineAccounts.mockImplementation(async (_id, agent) => (agent === 'claude' ? claude : null))
+    page.removeMachineAccount.mockImplementation(async () => ((claude = claude.slice(1)), { ok: true }))
+    show(page.host)
+    await open('203.0.113.5')
+    const list = await screen.findByRole('list', { name: 'Claude Code accounts on 203.0.113.5' })
+    expect([...list.querySelectorAll('li')].map(row => row.textContent)).toEqual(['Suleimanfrom Suleimans-MacBook-Pro · runs take it firstRemove', "Claude login on droplet203.0.113.5's own login"])
+    expect(screen.queryByRole('list', { name: 'Codex accounts on 203.0.113.5' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: "Remove Suleiman's Claude Code account on 203.0.113.5" }))
+    await waitFor(() => expect(page.removeMachineAccount).toHaveBeenCalledWith('https://203.0.113.5', 'claude', 'Suleiman'))
+    await waitFor(() => expect(screen.getByRole('list', { name: 'Claude Code accounts on 203.0.113.5' }).querySelectorAll('li')).toHaveLength(1))
+    expect(screen.queryByRole('button', { name: /^Remove .* account on/ })).toBeNull()
+
+    // One the server refused says why.
+    cleanup()
+    const refusing = dashboard(() => ok({ servers: [server(ALL_DONE, { adding: false })] }), BOX_SAVED())
+    refusing.machineAccounts.mockImplementation(async (_id, agent) => (agent === 'codex' ? [{ id: 'Dani', name: 'Dani', own: false, first: true }] : null))
+    refusing.removeMachineAccount.mockImplementation(async () => ({ ok: false, error: '203.0.113.5 says: no such account' }))
+    show(refusing.host)
+    await open('203.0.113.5')
+    fireEvent.click(await screen.findByRole('button', { name: "Remove Dani's Codex account on 203.0.113.5" }))
+    expect(await screen.findByText('203.0.113.5 says: no such account')).toBeTruthy()
   })
 
   test('an update shows each step on its own as it runs: the folded steps open, the page says which step runs, and they fold again once all is done', async () => {

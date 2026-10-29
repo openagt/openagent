@@ -60,6 +60,12 @@ export const INERT_HOST_SERVICES: HostServices = {
   async removeMachineDevice() {
     return { ok: false, error: 'no dashboard to ask a machine from' }
   },
+  async machineAccounts() {
+    return null
+  },
+  async removeMachineAccount() {
+    return { ok: false, error: 'no dashboard to ask a machine from' }
+  },
   async useLoginsOn() {
     return { ok: false, error: 'no dashboard to give a server logins from' }
   },
