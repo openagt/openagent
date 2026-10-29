@@ -4,6 +4,7 @@ import type { ProjectSummary } from '../../src/index.js'
 import { machineName, type DriverName } from '../../src/client.js'
 import {
   usePreferences,
+  usePreferencesLoaded,
   updatePreferences,
   useProjectPresets,
   saveProjectPresetList,
@@ -17,13 +18,16 @@ import { CommandsMenu } from './CommandsMenu.js'
 import { DriverModelMenu, type DriverOption } from './DriverModelMenu.js'
 import { RunOnMenu } from './RunOnMenu.js'
 import { openSettings } from '../lib/use-route.js'
-import { useMachines, tellMachine, type Machine } from '../lib/machines.js'
-import { runTarget, useSelectedMachineId, selectMachine } from '../lib/remote-target.js'
+import { useMachines, useMachinesRead, tellMachine, type Machine } from '../lib/machines.js'
+import { restoreRunOn, runTarget, useRunOnFallback, useSelectedMachineId, selectMachine } from '../lib/remote-target.js'
+import { thisMachineName } from '../lib/this-machine.js'
 import { useMachineStatus } from '../lib/use-machine-status.js'
 import { takePendingDraft } from '../lib/draft-handoff.js'
 import { driverOptions, modelEfforts, useModelsOn } from '../lib/models.js'
 import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.js'
 import { ClaudeLogo, CodexLogo } from './driver-logos.js'
+import { AgentAccountItems, firstAccount, useAccountsOn } from './AgentAccounts.js'
+import { ACCOUNTS_ENTRY } from './Logins.js'
 import { Button } from './ui/button.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { cn } from '../lib/utils.js'
@@ -72,6 +76,8 @@ export const Composer = forwardRef<ComposerHandle, {
   /** Where the agent starts, in the row above the box after the "Run on" pick: the launcher's
    *  project and the branch it starts from. */
   startsAt?: ReactNode
+  /** At that row's other end: who the run pushes as, the launcher's git host account. */
+  startsAtEnd?: ReactNode
   /** The caller's controls in the row under the box: the launcher's Context picker and "Auto" menu. */
   controls?: ReactNode
   /** Inside a session: the model it runs on, said at the right of the row under the box, where
@@ -110,7 +116,7 @@ export const Composer = forwardRef<ComposerHandle, {
   /** The saved machine the project is on, when only another computer of the person's has it (elsewhere.ts). */
   home?: string | undefined
 }>(function Composer(
-  { files, addContext, removeContext, startsAt, controls, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, compact = false, showDriverModel = true, inAgent = false, canSubmit = true, idleControl, home },
+  { files, addContext, removeContext, startsAt, startsAtEnd, controls, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, compact = false, showDriverModel = true, inAgent = false, canSubmit = true, idleControl, home },
   ref,
 ) {
   const [prompt, setPrompt] = useState('')
@@ -138,9 +144,35 @@ export const Composer = forwardRef<ComposerHandle, {
   const onlyHere = home === undefined && launcher !== null && launcher.address === undefined
   const onlyThere = home !== undefined && launcher !== null && launcher.address === undefined
   const selectedMachineId = useSelectedMachineId() // #1067: the machine this run targets, if any
+  // The pick saved at the last opening is picked again, once the preferences and the machines are
+  // read; one gone, or offline at its first check, is not, and the note under the box says so.
+  const preferencesLoaded = usePreferencesLoaded()
+  const machinesRead = useMachinesRead()
+  useEffect(() => {
+    if (!inAgent) restoreRunOn(preferences.runOn, preferencesLoaded && machinesRead ? machines : null, machineStatus)
+  }, [inAgent, preferences.runOn, preferencesLoaded, machinesRead, machines, machineStatus])
+  const fallback = useRunOnFallback()
+  const fellBackFrom = fallback?.why === 'offline' ? machines.find(machine => machine.id === fallback.id) : undefined
   const selectedMachine = runTarget(machines, selectedMachineId, launcher, home)
   // The agents and models of the machine the run goes to: a run there is given one of its own.
   const { models, theirs } = useModelsOn(inAgent ? undefined : selectedMachine?.id)
+  // Each agent's accounts on that computer, in its part of the agent picker: the one picked is the
+  // one its runs take first there, so the run goes with it. An agent not installed there has none
+  // to pick, and Codex's accounts are there once it is installed or has some added, as on Settings.
+  const accountsOn = inAgent || !showDriverModel ? undefined : selectedMachine?.id
+  const claudeAccounts = useAccountsOn('claude', accountsOn, !inAgent && showDriverModel)
+  const codexAccounts = useAccountsOn('codex', accountsOn, !inAgent && showDriverModel)
+  const accountsOf = (name: DriverName): Pick<DriverOption, 'account' | 'accounts'> => {
+    const { view, pick } = name === 'codex' ? codexAccounts : claudeAccounts
+    const answer = models?.[name]
+    const installed = answer !== undefined && !('error' in answer && answer.missing)
+    if (!view || view.accounts.length === 0 || (name === 'codex' && view.accounts.length < 2 && !installed)) return {}
+    const on = selectedMachine ? machineName(selectedMachine) : undefined
+    return {
+      account: firstAccount(view),
+      accounts: <AgentAccountItems view={view} on={on} onPick={account => void pick(account)} onAdd={() => (selectedMachine ? openSettings('devices', selectedMachine.id) : openSettings(ACCOUNTS_ENTRY))} />,
+    }
+  }
   // #1073: block Start when the target machine is known-offline; an absent/unknown status must not block.
   const targetOffline = !!selectedMachine && machineStatus[selectedMachine.id] === 'offline'
   // Another person's computer: the person is told once that their logins are copied there, and
@@ -226,7 +258,7 @@ export const Composer = forwardRef<ComposerHandle, {
   // controls in either place read and write the same state.
   const driverModelEl = showDriverModel && (
     <DriverModelMenu
-      drivers={driverOptions(models, theirs && selectedMachine ? machineName(selectedMachine) : undefined).map(d => ({ ...d, ...DRIVER_UI[d.value as DriverName] }))}
+      drivers={driverOptions(models, theirs && selectedMachine ? machineName(selectedMachine) : undefined).map(d => ({ ...d, ...DRIVER_UI[d.value as DriverName], ...accountsOf(d.value as DriverName) }))}
       driver={driver}
       model={model}
       onChange={(a, m) => updatePreferences({ driver: a, model: m })}
@@ -321,6 +353,15 @@ export const Composer = forwardRef<ComposerHandle, {
       {`${selectedMachine ? machineName(selectedMachine) : 'The selected machine'} is offline. Pick another place to run, then start.`}
     </p>
   )
+  // The saved pick, let go as the page opened: where the run goes instead, and why.
+  const here = thisMachineName() === 'This machine' ? 'this machine' : thisMachineName()
+  const fallbackNote = !inAgent && !compact && fallback && !selectedMachine && (
+    <p role="status" className="mt-2 text-xs text-muted-foreground">
+      {fallback.why === 'gone'
+        ? `The computer you last picked to run on is no longer saved, so runs start on ${here}.`
+        : `${fellBackFrom ? machineName(fellBackFrom) : 'The computer you last picked'} is offline, so runs start on ${here}. Pick it again once it is on.`}
+    </p>
+  )
   const loginsNote = untold && (
     <div role="note" className="mb-1.5 flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-xs">
       <p className="min-w-0 flex-1">
@@ -366,6 +407,7 @@ export const Composer = forwardRef<ComposerHandle, {
             {runOnEl}
             {startsAt}
           </div>
+          {startsAtEnd && <div className="shrink-0">{startsAtEnd}</div>}
         </div>
       )}
 
@@ -399,6 +441,7 @@ export const Composer = forwardRef<ComposerHandle, {
       </div>
 
       {offlineNote}
+      {fallbackNote}
 
       {addingPreset && (
         <PresetCreatePanel

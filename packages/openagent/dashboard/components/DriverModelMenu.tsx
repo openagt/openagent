@@ -22,7 +22,9 @@ import {
 // each driver's submenu holds only its own models. Picking a model sets both the driver and the
 // model together, so an incompatible pair (e.g. Codex + a Claude model) can't be chosen. Under
 // them, how hard the model may think: the levels are the model's own, so a model that offers none
-// has no such part. The trigger says all three as Claude Code's does: the driver's logo, the
+// has no such part. Each driver's part also holds its accounts on the computer the run goes to,
+// under its models, and its row says the one its runs take first: who runs it is picked where what
+// runs is. The trigger says all three as Claude Code's does: the driver's logo, the
 // model, and the level in a quieter tone ("Opus 5.5 High"); the agent's default level says nothing.
 
 export interface ModelOption {
@@ -39,6 +41,10 @@ export interface DriverOption {
   models: ModelOption[]
   /** Why {@link models} is empty, said in its place: the agent is still being asked, or could not say. */
   modelsNote?: string
+  /** The account its runs take first on the computer the run goes to, said on its row: a name and how full it is (" · 16%"). */
+  account?: { name: string; percent: string } | undefined
+  /** Its accounts, under its models in its part: which one is first, and adding one. */
+  accounts?: ReactNode
 }
 
 function driverOf(drivers: DriverOption[], value: string): DriverOption | undefined {
@@ -127,8 +133,15 @@ export function DriverModelMenu({
               <Check className={cn('h-3.5 w-3.5 shrink-0', a.value === driver ? 'opacity-100' : 'opacity-0')} />
               {a.icon && <span className="flex h-4 w-4 items-center justify-center">{a.icon}</span>}
               <span className="flex-1">{a.label}</span>
+              {/* A long name gives way, never how full the account is. */}
+              {a.account && (
+                <span className="flex max-w-36 min-w-0 text-muted-foreground">
+                  <span className="truncate">{a.account.name}</span>
+                  <span className="shrink-0 whitespace-pre">{a.account.percent}</span>
+                </span>
+              )}
             </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
+            <DropdownMenuSubContent className="min-w-[15rem]">
               {a.models.length === 0 && a.modelsNote && <DropdownMenuItem disabled>{a.modelsNote}</DropdownMenuItem>}
               {a.models.map(m => (
                 <DropdownMenuItem key={m.value} onClick={() => onChange(a.value, m.value)}>
@@ -141,6 +154,7 @@ export function DriverModelMenu({
                   {m.label}
                 </DropdownMenuItem>
               ))}
+              {a.accounts}
             </DropdownMenuSubContent>
           </DropdownMenuSub>
         ))}

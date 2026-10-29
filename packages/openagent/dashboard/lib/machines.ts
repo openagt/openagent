@@ -97,6 +97,13 @@ export async function removeMachine(id: string): Promise<RemoveMachineResult> {
   return result
 }
 
+/** Whether the daemon has answered the list yet: an empty list is then no machines, not one unread. */
+export function useMachinesRead(): boolean {
+  const read = useSyncExternalStore(subscribe, () => cache !== null, () => false)
+  useEffect(ensureLoaded, [])
+  return read
+}
+
 /** The saved machines as reactive state: empty until the daemon has answered. */
 export function useMachines(): Machine[] {
   const machines = useSyncExternalStore(subscribe, () => cache ?? EMPTY, () => EMPTY)

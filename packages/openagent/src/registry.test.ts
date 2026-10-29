@@ -276,6 +276,10 @@ test('sanitizePreferences reads only the current spellings', async () => {
   assert.deepEqual(await stored({ startFrom: 'local' }), {})
   const many = Object.fromEntries(Array.from({ length: 250 }, (_, i) => [`p-${i}`, 'local']))
   assert.equal(Object.keys((await stored({ startFrom: many })).startFrom ?? {}).length, 200, 'bounded, like the presets')
+  // Where a run goes: a saved machine by its id, its address; this machine is the absent entry.
+  assert.deepEqual(await stored({ runOn: ' https://165.245.244.10 ' }), { runOn: 'https://165.245.244.10' })
+  assert.deepEqual(await stored({ runOn: 'http://127.0.0.1:4300/_devices/via/c1' }), { runOn: 'http://127.0.0.1:4300/_devices/via/c1' })
+  for (const off of ['', 'This machine', 'javascript:alert(1)', 'https://a b', 42, null, `https://${'a'.repeat(2048)}`]) assert.deepEqual(await stored({ runOn: off }), {}, String(off))
 })
 
 test('the sidebar\'s order keeps only the orders it offers; the default, by creation, is stored as nothing', async () => {
