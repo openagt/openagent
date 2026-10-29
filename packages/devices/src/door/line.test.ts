@@ -105,6 +105,9 @@ test('a call down a line goes to this computer\'s own OpenAgent for its own pers
   assert.deepEqual(route(everyone, 'ada', {}), { status: 403, text: NOT_A_SERVER })
   assert.deepEqual(route(everyone, 'ada', helper, { ...store, persons: [] }), { status: 503, text: NO_OWNER })
   assert.deepEqual(route(everyone, 'ada'), { target: 'http://127.0.0.1:4300' })
+  // Their own OpenAgent goes by the computer's name as its owner named it; the owner's own is told nothing.
+  assert.deepEqual(routeFor(everyone, store, target, helper, 'ada', start, () => {}, 'OpenAgentVPS'), { target: 'http://127.0.0.1:4300', ownersName: 'OpenAgentVPS' })
+  assert.deepEqual(routeFor(line, store, target, helper, 'rom', start, () => {}, 'OpenAgentVPS'), { target })
   // Someone with no user here yet has one made; one whose making failed says why, and is tried again.
   assert.deepEqual(route(everyone, 'lee'), { status: 503, text: making('lee') })
   assert.match((route(everyone, 'kim') as { text: string }).text, /^@kim's place on this computer could not be made: useradd failed\. It is tried again at the next run\.$/)

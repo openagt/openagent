@@ -1,4 +1,5 @@
 import { computerHealth } from '../health.js'
+import { asCaller, PERSON_HEADER } from './person.js'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { hostname } from 'node:os'
 import type { OpenAgentEvent } from '../events.js'
@@ -306,7 +307,8 @@ async function handleMachine(req: IncomingMessage, res: ServerResponse, handlers
   if (!fn) return end(res, 400, 'missing rpc name')
   if (watch && !isMachineRead(fn)) return end(res, 403, WATCH_ONLY)
   try {
-    sendJson(res, { result: await handlers.machine(fn, Array.isArray(body.args) ? body.args : []) })
+    // Said as the call of the person the door says made it, as a page's call is: a person the owner invited is no owner here either.
+    sendJson(res, { result: await asCaller(req.headers[PERSON_HEADER], () => handlers.machine!(fn, Array.isArray(body.args) ? body.args : [])) })
   } catch (err) {
     end(res, 500, err instanceof Error ? err.message : 'rpc failed')
   }

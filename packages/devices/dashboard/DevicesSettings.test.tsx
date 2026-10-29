@@ -441,10 +441,19 @@ describe('Settings › Devices: another computer, once', () => {
     expect(runComputerCommand).not.toHaveBeenCalledWith(expect.arrayContaining(['rename']))
   })
 
+  test("a person the owner invited sees the owner's name for this computer, and no Rename: its owner names it", async () => {
+    const { host } = door(() => ok(OPEN), [])
+    vi.mocked(host.machines).mockImplementation(async () => ({ version: '0.42.0', name: 'OpenAgentVPS', renames: false, machines: [] }))
+    show(host)
+    const row = await screen.findByRole('region', { name: 'This computer' })
+    await within(row).findByText('OpenAgentVPS')
+    expect(within(row).queryByRole('button', { name: 'Rename' })).toBeNull()
+  })
+
   test('this computer is renamed in its own row: kept here, and the row reads it again', async () => {
     const { host } = door(() => ok(OPEN), [])
     let name = 'MacBook-Pro'
-    vi.mocked(host.machines).mockImplementation(async () => ({ version: '0.42.0', name, machines: [] }))
+    vi.mocked(host.machines).mockImplementation(async () => ({ version: '0.42.0', name, renames: true, machines: [] }))
     vi.mocked(host.renameComputer).mockImplementation(async picked => ((name = picked), { ok: true }))
     show(host)
     const row = await screen.findByRole('region', { name: 'This computer' })

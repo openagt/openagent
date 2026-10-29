@@ -486,6 +486,8 @@ export interface ModuleMachines {
   version: string
   /** This computer's own name, as another machine lists it: "Suleimans-MacBook-Pro". */
   name?: string
+  /** Whether the person at the page names this computer: its owner, never a person the owner invited. */
+  renames?: boolean
   /** How this computer stands: its memory, disk and load. */
   health?: Health
   machines: ModuleMachine[]

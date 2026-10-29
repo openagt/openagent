@@ -185,6 +185,13 @@ export const COMPUTER_HEADER = 'x-openagent-computer'
  */
 export const COMPUTER_NAME_HEADER = 'x-openagent-computer-name'
 
+/**
+ * How the door says this computer's name, as its owner named it, to the OpenAgent of each person
+ * the owner invited: the computer has one name, and that OpenAgent goes by it. URI-encoded. Said by
+ * the door alone, never passed on from a request.
+ */
+export const OWNERS_NAME_HEADER = 'x-openagent-owners-name'
+
 /** What a computer says it is: a word of its own making, the same for all that gets in from it. */
 export const isComputerId = (value: unknown): value is string => typeof value === 'string' && /^[a-z0-9]{16,64}$/.test(value)
 

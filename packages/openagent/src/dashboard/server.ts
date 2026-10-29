@@ -12,6 +12,7 @@ import { BROUGHT_MODULES_PREFIX, COMPUTER_MODULES_PREFIX, MODULES_PREFIX, serveB
 import type { AddProjectResult, RemoveProjectResult, StartAgentOptions, StartAgentResult, StartedInResult } from './types.js'
 import type { EventsSource, RemoteAgents } from './rpc-serve.js'
 import { handleRelayRequest, RELAY_PREFIX, type RelayHandlers } from './relay-endpoints.js'
+import { noteOwnersName, OWNERS_NAME_HEADER } from './machine-call.js'
 import { handleScreenRequest, kept, SCREEN_PREFIX, type ScreenHandlers } from './screen.js'
 import { BRIDGE_PREFIX, EXPECTED_EXTENSION_VERSION, handleBridgeRequest, type BridgeHandlers } from './bridge-endpoints.js'
 import { bridgeQuestions } from './bridge-store.js'
@@ -216,6 +217,9 @@ export function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
       res.writeHead(400, { 'content-type': 'text/plain' }).end('bad request')
       return
     }
+    // A person's own OpenAgent on a computer several people use goes by the name its owner gave the
+    // computer: the door says it with each call it passes on.
+    noteOwnersName(req.headers[OWNERS_NAME_HEADER])
     // The browser bridge (#1237) presents its own bearer token.
     if (pathname === BRIDGE_PREFIX || pathname.startsWith(`${BRIDGE_PREFIX}/`)) {
       void handleBridgeRequest(req, res, pathname, bridgeHandlers)

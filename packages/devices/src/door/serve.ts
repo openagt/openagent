@@ -58,7 +58,7 @@ const MIRROR_MS = 60_000
  * page that only looks whether the computer is there, or which logins it has, makes nobody a user:
  * it asks for every machine it lists, every few seconds, whether its person ever runs one there.
  */
-export function routeFor(line: Line, store: Store, target: string, env: NodeJS.ProcessEnv, person: string | undefined, call: { method: string; path: string }, make: (name: string) => void): Route {
+export function routeFor(line: Line, store: Store, target: string, env: NodeJS.ProcessEnv, person: string | undefined, call: { method: string; path: string }, make: (name: string) => void, ownersName?: string): Route {
   const owner = store.persons.find(candidate => candidate.owner)?.name
   // A line that never heard who its person is takes every call as theirs, as before persons; a line for everyone does not.
   if (person === undefined || person === line.person || person === owner || (line.person === undefined && line.for !== 'everyone')) return { target }
@@ -66,7 +66,8 @@ export function routeFor(line: Line, store: Store, target: string, env: NodeJS.P
   if (!env.OPENAGENT_PERSON_HELPER) return { status: 403, text: NOT_A_SERVER }
   if (owner === undefined) return { status: 503, text: NO_OWNER }
   const theirs = store.persons.find(candidate => candidate.name === person && !candidate.owner)
-  if (theirs?.ready && theirs.port !== undefined) return { target: `http://127.0.0.1:${theirs.port}` }
+  // Their OpenAgent goes by this computer's name, as its owner named it.
+  if (theirs?.ready && theirs.port !== undefined) return { target: `http://127.0.0.1:${theirs.port}`, ...(ownersName !== undefined ? { ownersName } : {}) }
   const route = call.path.split('?')[0]
   // Whether the computer is there: its own OpenAgent says so, with its version and name and nothing else.
   if (call.method === 'GET' && route === '/_relay/ping') return { target }
@@ -114,18 +115,34 @@ export interface ServeOptions {
   announce?: typeof announce
   /** How the `tailscale` command is run; the computer's own when unsaid. */
   tailscale?: TailscaleRun
+  /** How often the owner's OpenAgent is asked the computer's name; for a test. */
+  ownersNameMs?: number
 }
 
 /** OpenAgent's version, as its own ping says it: what the Wi-Fi is told beside this computer's name. */
 async function versionAt(target: string): Promise<string | undefined> {
+  const { version } = await pingAt(target)
+  return typeof version === 'string' && /^[\w.+-]{1,40}$/.test(version) ? version : undefined
+}
+
+/** This computer's name as its owner named it, as the owner's OpenAgent says it in its ping. */
+async function nameAt(target: string): Promise<string | undefined> {
+  const { name } = await pingAt(target)
+  return typeof name === 'string' && name.trim() !== '' && name.length <= 200 ? name : undefined
+}
+
+/** What OpenAgent's own ping says; nothing when it does not answer. */
+async function pingAt(target: string): Promise<{ version?: unknown; name?: unknown }> {
   try {
     const res = await fetch(`${target}/_relay/ping`, { signal: AbortSignal.timeout(5_000) })
-    const { version } = (await res.json()) as { version?: unknown }
-    return typeof version === 'string' && /^[\w.+-]{1,40}$/.test(version) ? version : undefined
+    return ((await res.json()) ?? {}) as { version?: unknown; name?: unknown }
   } catch {
-    return undefined
+    return {}
   }
 }
+
+/** How often the owner's OpenAgent is asked the computer's name, to say it to each person's own. */
+const OWNERS_NAME_MS = 60_000
 
 /** The door's port for an OpenAgent at `target`. */
 export function doorPort(target: string): number {
@@ -207,6 +224,16 @@ export async function serve(opts: ServeOptions): Promise<void> {
   // Behind Tailscale: the name the door is served at, and whether Tailscale serves it yet.
   let behind: { address: string; serving: boolean; askedAt?: number } | undefined
   const tailscale = opts.tailscale ?? tailscaleRun(env, signal)
+
+  // This computer's name as its owner named it, asked of the owner's OpenAgent now and then: the
+  // door says it to each person's own OpenAgent, which goes by it.
+  let ownersName: string | undefined
+  let ownersNameAt = -Infinity
+  const hearOwnersName = async (): Promise<void> => {
+    if (Date.now() - ownersNameAt < (opts.ownersNameMs ?? OWNERS_NAME_MS)) return
+    ownersNameAt = Date.now()
+    ownersName = (await nameAt(opts.target)) ?? ownersName
+  }
 
   // Said on the Wi-Fi while the door is open there.
   let announcing: Promise<Announcing | undefined> | undefined
@@ -307,7 +334,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
         // The line as the file says it now: who its person is may have been heard since it was asked for.
         route: (person, call) => {
           const now = latest ?? store
-          return routeFor(now.lines.find(candidate => candidate.url === line.url) ?? line, now, opts.target, env, person, call, name => make(name, line.url))
+          return routeFor(now.lines.find(candidate => candidate.url === line.url) ?? line, now, opts.target, env, person, call, name => make(name, line.url), ownersName)
         },
         watch: () => modes.get(line.url) !== 'full',
         signal: controller.signal,
@@ -441,7 +468,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
     if (served && !door && secured) {
       try {
         const using = secured
-        door = await openDoor({ env, target: opts.target, port: httpsPort, ...(opts.host !== undefined ? { host: opts.host } : {}), knocks: () => true, secured: using, lines: { take: lines.take, ports, connected: lines.connected, pass: lines.pass } })
+        door = await openDoor({ env, target: opts.target, port: httpsPort, ...(opts.host !== undefined ? { host: opts.host } : {}), knocks: () => true, secured: using, lines: { take: lines.take, ports, connected: lines.connected, pass: lines.pass }, ownersName: () => ownersName })
         // OpenAgent may have started anew since it was last told.
         untold = true
         // A certificate renewed while the door was being opened is the one it speaks with.
@@ -482,7 +509,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
       await door?.close()
       door = undefined
       try {
-        door = await openDoor({ env, target: opts.target, port, host: '127.0.0.1', knocks: fromThisComputer, proxied: true, origin: `https://${address}` })
+        door = await openDoor({ env, target: opts.target, port, host: '127.0.0.1', knocks: fromThisComputer, proxied: true, origin: `https://${address}`, ownersName: () => ownersName })
         behind = { address, serving: false }
         failedAt = undefined
         log(`devices: the door is open on port ${door.port} of this computer, for Tailscale to serve at ${address}`)
@@ -594,7 +621,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
     if (store.on && !door) {
       try {
         const knocks = opts.address
-        door = await openDoor({ env, target: opts.target, port, ...(opts.host !== undefined ? { host: opts.host } : {}), ...(knocks ? { knocks: peer => onOwnNetwork(peer, knocks), address: knocks } : {}) })
+        door = await openDoor({ env, target: opts.target, port, ...(opts.host !== undefined ? { host: opts.host } : {}), ...(knocks ? { knocks: peer => onOwnNetwork(peer, knocks), address: knocks } : {}), ownersName: () => ownersName })
         failedAt = undefined
         log(`devices: the door is open on port ${door.port}`)
       } catch (err) {
@@ -641,6 +668,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
   let looking: Promise<void> = Promise.resolve()
   const look = (): void => {
     looking = looking
+      .then(hearOwnersName)
       .then(reconcile)
       .then(tell)
       .then(mirror)

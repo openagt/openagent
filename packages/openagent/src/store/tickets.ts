@@ -1,4 +1,4 @@
-import { runPackageCommand, type ProvidedCommand } from '@openagt/agent-data'
+import { callPackageCommand, type ProvidedCommand } from '@openagt/agent-data'
 import { providedCommand } from '../built-in.js'
 
 /**
@@ -79,10 +79,10 @@ function commandTickets(root: string, command: ProvidedCommand, now: () => numbe
       listed = undefined
     },
     list() {
-      // Concurrent reads share one process; a read that failed is not kept.
+      // Concurrent reads share one; a read that failed is not kept.
       if (listed && now() - listed.at < CACHE_MS) return listed.tickets
       const read: { at: number; tickets: Promise<Ticket[]> } = { at: now(), tickets: Promise.resolve([]) }
-      read.tickets = runPackageCommand(root, command, ['list', '--local']).then(result => {
+      read.tickets = callPackageCommand(root, command, ['list', '--local']).then(result => {
         if (!result.ok || !Array.isArray(result.output)) {
           if (listed === read) listed = undefined
           return []

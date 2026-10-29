@@ -122,7 +122,8 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
           )}
           {start && <p className="text-xs text-muted-foreground">Nothing reaches it yet: only this computer's own browser opens OpenAgent.</p>}
         </div>
-        {!renaming && d.machines !== undefined && (
+        {/* Its owner names it, and everyone sees that name: a person the owner invited has no Rename. */}
+        {!renaming && d.machines?.renames === true && (
           <Button size="sm" variant="ghost" onClick={() => setRenaming(true)}>
             <Pencil className="h-3.5 w-3.5" aria-hidden />
             Rename

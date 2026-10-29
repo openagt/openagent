@@ -172,6 +172,10 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A computer's name is its own: renamed from any page, it is kept on that computer, and every
   page, on every device, shows the name it says. Picked over each page keeping a name of its
   own for it, which showed one computer under another name on each device.
+- A computer several people use has one name, its owner's: everyone sees it, a person's own
+  OpenAgent there goes by it too, and only the owner renames it. A person the owner invited has
+  no Rename, and a rename from them is refused. Picked over each person's OpenAgent keeping a
+  name of its own, and over letting a guest with full access rename the owner's computer.
 - Each server this computer is in at has its switch for reaching this computer from
   anywhere, whoever set the server up: the person's other computers too. Picked over the
   switch on the computer that installed the server alone.
