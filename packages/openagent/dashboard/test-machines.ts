@@ -30,6 +30,11 @@ export const machinesRpc = {
   onMachinesReachable: vi.fn(async (): Promise<Record<string, boolean>> => ({ ...daemon.reachable })),
   // The models a saved machine's agents offer: none said unless a test gives some.
   onMachineModels: vi.fn(async (_id: string): Promise<unknown> => null),
+  // The accounts a saved machine's runs take, an agent's and a git host's: none said unless a test gives some.
+  onMachineAgentAccounts: vi.fn(async (_id: string, _agent: string): Promise<unknown> => null),
+  sendMachineAgentAccountFirst: vi.fn(async (_id: string, _agent: string, _account: string): Promise<{ ok: true }> => ({ ok: true })),
+  onMachineGitHosts: vi.fn(async (_id: string): Promise<unknown> => null),
+  sendMachineGitHostAccount: vi.fn(async (_id: string, _host: string, _login: string): Promise<{ ok: true }> => ({ ok: true })),
   sendMachineTold: vi.fn(async (id: string): Promise<{ ok: boolean }> => {
     const told = daemon.machines.some(saved => saved.id === id)
     daemon.machines = daemon.machines.map(saved => (saved.id === id ? { ...saved, told: true as const } : saved))

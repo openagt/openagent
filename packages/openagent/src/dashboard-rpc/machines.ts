@@ -14,6 +14,8 @@ import { parseMachineLink } from '../machine-link.js'
 import { openagentVersion } from '../version.js'
 import { readinessOf, type StartReadiness } from '../project-hooks.js'
 import type { ModelsView } from '../dashboard/models.js'
+import type { AccountResult, AccountsAgent, AccountsView } from './accounts.js'
+import type { GitHostsView } from './logins.js'
 
 // The saved machines, for the dashboard: the other computers a run can be sent to. The list is
 // the daemon's, in the person's home file, so every browser on this computer shows the same
@@ -448,6 +450,49 @@ export async function onMachineModels(machineId: string): Promise<ModelsView | n
   if (!machine) return null
   const said = await machineCall(machine, 'onModels', [])
   return said.ok && said.ret !== null && typeof said.ret === 'object' && !Array.isArray(said.ret) ? (said.ret as ModelsView) : null
+}
+
+/**
+ * The accounts a coding agent's runs use on a saved machine, in the order it tries them, as it says:
+ * a run sent there takes the first. `null` when it does not answer, or runs an OpenAgent that is not
+ * asked this.
+ */
+export async function onMachineAgentAccounts(machineId: string, agent: AccountsAgent): Promise<AccountsView | null> {
+  const machine = agent === 'claude' || agent === 'codex' ? (await listMachines()).find(saved => saved.id === machineId) : undefined
+  if (!machine) return null
+  const said = await machineCall(machine, 'onAgentAccounts', [agent])
+  const view = said.ok ? (said.ret as Partial<AccountsView> | null) : null
+  return view !== null && typeof view === 'object' && Array.isArray(view.accounts) ? (view as AccountsView) : null
+}
+
+/** Have a saved machine's runs of a coding agent take one of its accounts first, by its id there. */
+export async function sendMachineAgentAccountFirst(machineId: string, agent: AccountsAgent, account: string): Promise<AccountResult> {
+  return actOn(machineId, (agent === 'claude' || agent === 'codex') && typeof account === 'string' ? ['sendUseAgentAccountFirst', [agent, account]] : undefined)
+}
+
+/** The git hosts a saved machine's runs push to, with the accounts it has at each, as it says. `null` when it does not answer, or is not asked this. */
+export async function onMachineGitHosts(machineId: string): Promise<GitHostsView | null> {
+  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  if (!machine) return null
+  const said = await machineCall(machine, 'onGitHosts', [])
+  const view = said.ok ? (said.ret as Partial<GitHostsView> | null) : null
+  return view !== null && typeof view === 'object' && Array.isArray(view.hosts) ? (view as GitHostsView) : null
+}
+
+/** Have a saved machine's runs push to a git host with one of the accounts it has there. */
+export async function sendMachineGitHostAccount(machineId: string, host: string, login: string): Promise<AccountResult> {
+  return actOn(machineId, typeof host === 'string' && typeof login === 'string' ? ['sendUseGitHostAccount', [host, login]] : undefined)
+}
+
+/** One machine-wide act on a saved machine, answered in its own words, or why it was not. */
+async function actOn(machineId: string, call: [string, unknown[]] | undefined): Promise<AccountResult> {
+  if (call === undefined) return { ok: false, error: 'That is no account.' }
+  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  if (!machine) return { ok: false, error: 'That machine is no longer saved.' }
+  const said = await machineCall(machine, call[0], call[1])
+  if (!said.ok) return { ok: false, error: `${machine.label} could not be asked: ${said.error}` }
+  const ret = said.ret as Partial<AccountResult> | null
+  return ret?.ok === true ? { ok: true } : { ok: false, error: `${machine.label} says: ${(ret as { error?: unknown } | null)?.error ?? 'nothing'}` }
 }
 
 async function projectOnMachine(projectId: string, machineId: string, bring: boolean): Promise<ProjectOnMachine> {

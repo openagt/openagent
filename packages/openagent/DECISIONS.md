@@ -313,9 +313,14 @@ already made, and lists it in its pull request; for anything else it proposes an
   while something is missing (install the tool, then log in), the same press on the start
   form's red line, and a dot on the person's picture whose menu says what. Picked over a
   login step every new install walks through: the onboarding is heavy enough.
+- The accounts a run takes are picked beside the message box, for the computer the run goes
+  to: a coding agent's in the agent picker, under its models; the git host's at the end of the
+  row above the box. A pick there is the one that computer's runs take from then on, as on
+  Settings › Accounts. The person's menu has none of them. Picked over a row per account in the
+  person's menu, which said this computer's alone, and over having them in both places.
 - A project's own accounts are a Settings page of that project, shown only for a kind the
   computer has two or more of, "same as this computer" until one is picked.
-- Every coding agent's accounts are the same card, menu row and pick, with the agent's own
+- Every coding agent's accounts are the same card, picker part and pick, with the agent's own
   words: adding one asks whose it is, then the agent's sign-in in this computer's browser.
   Picked over showing the email Codex's sign-in tells, which only Codex could, and would
   have made one button work two ways. The email only refuses an account added twice.
@@ -429,6 +434,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   words written for that machine's own terminal.
 - A machine is picked in "Run on" and removed on its page under Devices. Picked over a remove
   in the menu, one slip of the pointer from picking it.
+- The machine picked in "Run on" is kept for the next opening of the page, as the model is.
+  One no longer saved, or offline as the page opens, is not picked: the run starts on this
+  machine, and the page says so. Picked over going back to this machine at each opening.
 - Another person's computer that lacks the person's own logins says so as soon as it is picked,
   with a press that opens its page under Devices, where they are logged in. Picked over a refusal
   after the Start, with no way on from it.

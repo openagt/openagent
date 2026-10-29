@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { onComputersThrough, onMachineModels, onMachineStartCheck, onMachineVersions, onMachines, onMachinesReachable, onProjectHere, onProjectOnMachine, sendAddComputerThrough, sendAddMachine, sendLetMachineIn, sendProjectHere, sendProjectToMachine, sendRemoveMachine, sendRenameComputer, sendRenameMachine } from './machines.js'
+import { onComputersThrough, onMachineAgentAccounts, onMachineGitHosts, onMachineModels, sendMachineAgentAccountFirst, sendMachineGitHostAccount, onMachineStartCheck, onMachineVersions, onMachines, onMachinesReachable, onProjectHere, onProjectOnMachine, sendAddComputerThrough, sendAddMachine, sendLetMachineIn, sendProjectHere, sendProjectToMachine, sendRemoveMachine, sendRenameComputer, sendRenameMachine } from './machines.js'
 import { sayName } from '../dashboard/machine-call.js'
 import { elsewhereId, type OwnProject } from '../dashboard/elsewhere.js'
 import type { BringProject } from '../dashboard/remote-run.js'
@@ -475,6 +475,38 @@ test('a saved machine is asked whether a run would start there, from its own cop
       cloning = { said: { result: ['no', 'models'] } }
       assert.equal(await onMachineModels(url), null)
       assert.equal(await onMachineModels('http://127.0.0.1:1'), null)
+
+      // The accounts its runs take, a coding agent's and a git host's: asked there, and picked there.
+      const view = { now: 0, computer: 'experiment', accounts: [{ id: 'Dani', name: 'Dani', own: false, windows: [] }] }
+      cloning = { said: { result: view } }
+      calls.length = 0
+      assert.deepEqual(await onMachineAgentAccounts(url, 'claude'), view)
+      assert.deepEqual(calls[0], { url: '/_devices/via/c1/_relay/machine', auth: 'Bearer d1.key', body: { fn: 'onAgentAccounts', args: ['claude'] } })
+      assert.equal(await onMachineAgentAccounts(url, 'gemini' as never), null)
+      cloning = { said: { result: { ok: true } } }
+      calls.length = 0
+      assert.deepEqual(await sendMachineAgentAccountFirst(url, 'codex', 'Dani'), { ok: true })
+      assert.deepEqual(calls[0]!.body, { fn: 'sendUseAgentAccountFirst', args: ['codex', 'Dani'] })
+      cloning = { said: { result: { ok: false, error: 'No account is called Nope.' } } }
+      assert.deepEqual(await sendMachineAgentAccountFirst(url, 'codex', 'Nope'), { ok: false, error: 'experiment says: No account is called Nope.' })
+      const hosts = { hosts: [{ host: 'github.com', projects: ['shop'] }] }
+      cloning = { said: { result: hosts } }
+      calls.length = 0
+      assert.deepEqual(await onMachineGitHosts(url), hosts)
+      assert.deepEqual(calls[0]!.body, { fn: 'onGitHosts', args: [] })
+      cloning = { said: { result: { ok: true } } }
+      calls.length = 0
+      assert.deepEqual(await sendMachineGitHostAccount(url, 'github.com', 'octo'), { ok: true })
+      assert.deepEqual(calls[0]!.body, { fn: 'sendUseGitHostAccount', args: ['github.com', 'octo'] })
+      // A machine not asked this says nothing, and a pick there is not taken; nothing is sent for what is no account.
+      cloning = { status: 500, said: { error: 'unknown machine rpc: onAgentAccounts' } }
+      assert.equal(await onMachineAgentAccounts(url, 'claude'), null)
+      assert.equal(await onMachineGitHosts(url), null)
+      assert.equal((await sendMachineGitHostAccount(url, 'github.com', 'octo')).ok, false)
+      calls.length = 0
+      assert.deepEqual(await sendMachineGitHostAccount(url, 'github.com', 42 as never), { ok: false, error: 'That is no account.' })
+      assert.equal(calls.length, 0)
+      assert.deepEqual(await sendMachineAgentAccountFirst('http://127.0.0.1:1', 'claude', 'Dani'), { ok: false, error: 'That machine is no longer saved.' })
     } finally {
       await new Promise<void>(r => srv.close(() => r()))
       await rm(shop, { recursive: true, force: true })

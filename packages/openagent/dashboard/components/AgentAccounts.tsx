@@ -1,23 +1,23 @@
 import { useState } from 'react'
 import { Check, Copy, Plus } from 'lucide-react'
+import { onMachineAgentAccounts, sendMachineAgentAccountFirst } from '../rpc/machines.js'
 import { onAgentAccounts, sendAddAgentAccount, sendAgentAccountCode, sendRemoveAgentAccount, sendUseAgentAccountFirst, type AccountAdding, type AccountRow, type AccountWindow, type AccountsAgent, type AccountsView } from '../rpc/accounts.js'
 import type { DriverName } from '../../src/client.js'
 import { usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { ClaudeLogo, CodexLogo } from './driver-logos.js'
-import type { AgentState } from '../rpc/logins.js'
 import { AgentFix, DeviceCode, StatePill, agentLoginState, agentWords, useAgentState } from './Logins.js'
 import { LeftNotices, ServerNotes, SwitchNotice } from './ServerLogins.js'
 import { Button } from './ui/button.js'
 import { Input } from './ui/input.js'
-import { DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from './ui/dropdown-menu.js'
+import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from './ui/dropdown-menu.js'
 
 // The accounts runs use, per coding agent, in the order they try them (`accounts.ts` in the driver
 // core): the person's own login and the ones added beside it. When one hits its limit, the next free
 // one takes the run over in the same conversation. Three places show them: Settings › Accounts
-// (a card per agent, where they are added and removed), a row per agent in the person's menu at
-// the sidebar's foot (which one is first), and the Overview's usage card (how full each added
-// Claude one is). Every agent's card and row are the same, with the agent's own words. A row never
+// (a card per agent, where they are added and removed), the agent's part of the agent picker under
+// the message box (which one is first, on the computer the run goes to), and the Overview's usage
+// card (how full each added Claude one is). Every agent's card and row are the same, with the agent's own words. A row never
 // says "this computer", which reads as whichever computer the page is open on: it names the one.
 
 /** How often a page that shows the accounts asks again: often while one is being added, the sign-in being the person's. */
@@ -298,51 +298,57 @@ export function AccountsCard({ agent }: { agent: AccountsAgent }) {
 }
 
 /**
- * An agent's row of the person's menu: which account runs use first and how full it is; its submenu
- * picks another first. Codex's is there only when Codex is on this computer or has accounts added.
+ * An agent's accounts on the computer a run goes to: this computer's, read as Settings reads them,
+ * or a saved machine's, asked there; `unanswered` when that machine does not say. A pick makes one
+ * the first its runs take, there, as Settings › Accounts does: the next run goes with it.
  */
-/** Whether the person's menu has a row for an agent's accounts: once one is read, and for an agent other than Claude Code, once it is installed or has accounts added. */
-export function accountsInMenu(agent: AccountsAgent, view: AccountsView | undefined, state: AgentState | undefined): boolean {
-  const accounts = view?.accounts ?? []
-  if (accounts.length === 0) return false
-  return agent === 'claude' || accounts.length >= 2 || (state !== undefined && agentLoginState(state) !== 'not-installed')
+export function useAccountsOn(
+  agent: AccountsAgent,
+  machineId: string | undefined,
+  on = true,
+): {
+  view: AccountsView | undefined
+  unanswered: boolean
+  pick: (account: string) => Promise<void>
+} {
+  const own = usePolled<AccountsView | undefined>(on && machineId === undefined ? () => onAgentAccounts(agent) : null, undefined, SELDOM_MS, [agent, on, machineId === undefined], { remember: `agent-accounts:${agent}` })
+  const theirs = usePolled<AccountsView | null | undefined>(on && machineId !== undefined ? () => onMachineAgentAccounts(machineId, agent) : null, undefined, SELDOM_MS, [agent, on, machineId])
+  if (machineId === undefined) return { view: own.value, unanswered: false, pick: account => sendUseAgentAccountFirst(agent, account).then(own.reload) }
+  return { view: theirs.value ?? undefined, unanswered: theirs.value === null, pick: account => sendMachineAgentAccountFirst(machineId, agent, account).then(theirs.reload) }
 }
 
-export function AgentAccountsSubmenu({ agent, onAdd }: { agent: AccountsAgent; onAdd: () => void }) {
-  const words = AGENTS[agent]
-  const { view, reload } = useAgentAccounts(agent)
-  const { state } = useAgentState(words.driver, agent !== 'claude')
-  const accounts = view?.accounts ?? []
-  const first = accounts[0]
-  if (!first || !accountsInMenu(agent, view, state)) return null
+/** The account an agent's runs take first, as its row in the agent picker says it: its name, and how full it is. */
+export function firstAccount(view: AccountsView | undefined): { name: string; percent: string } | undefined {
+  const first = view?.accounts[0]
+  if (!first) return undefined
   const window = longest(first)
-  const percent = window !== undefined ? ` · ${Math.round(window.percent)}%` : ''
+  return { name: first.name, percent: first.state === 'limited' ? ' · limited' : window !== undefined ? ` · ${Math.round(window.percent)}%` : '' }
+}
+
+/**
+ * An agent's accounts in its part of the agent picker, under its models: the one its runs take
+ * first checked, how full each is, and adding one. `on` names the computer they are another's of.
+ * A pick keeps the menu open, so the check is seen to move.
+ */
+export function AgentAccountItems({ view, on, onPick, onAdd }: { view: AccountsView; on?: string | undefined; onPick: (account: string) => void; onAdd: () => void }) {
   return (
-    <DropdownMenuSub>
-      <DropdownMenuSubTrigger>
-        <words.Logo className="h-3.5 w-3.5 shrink-0" />
-        <span className="flex-1">{words.short}</span>
-        {/* A long name gives way, never how full the account is. */}
-        <span className="flex max-w-36 min-w-0 text-muted-foreground">
-          <span className="truncate">{first.name}</span>
-          <span className="shrink-0 whitespace-pre">{percent}</span>
-        </span>
-      </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="min-w-[15rem]">
-        {accounts.map((account, i) => (
-          <DropdownMenuItem key={account.id} closeOnClick={false} onClick={() => void sendUseAgentAccountFirst(agent, account.id).then(reload)}>
+    <>
+      <DropdownMenuSeparator />
+      <DropdownMenuGroup>
+        <DropdownMenuLabel>{on !== undefined ? `Accounts on ${on}` : 'Accounts'}</DropdownMenuLabel>
+        {view.accounts.map((account, i) => (
+          <DropdownMenuItem key={account.id} closeOnClick={false} onClick={() => onPick(account.id)}>
             <Check className={cn('h-3.5 w-3.5 shrink-0', i === 0 ? 'opacity-100' : 'opacity-0')} aria-hidden />
             <span className="flex-1 truncate">{account.name}</span>
             <span className="text-xs text-muted-foreground">{account.state === 'limited' ? 'limited' : longest(account) !== undefined ? `${Math.round(longest(account)!.percent)}%` : ''}</span>
           </DropdownMenuItem>
         ))}
-        <DropdownMenuSeparator />
         <DropdownMenuItem onClick={onAdd}>
           <Plus className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
           Add account…
         </DropdownMenuItem>
-      </DropdownMenuSubContent>
-    </DropdownMenuSub>
+      </DropdownMenuGroup>
+    </>
   )
 }
 

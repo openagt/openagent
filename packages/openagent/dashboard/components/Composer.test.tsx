@@ -9,6 +9,7 @@ const updatePreferences = vi.hoisted(() => vi.fn())
 let prefs: Preferences = {}
 vi.mock('../lib/preferences.js', () => ({
   usePreferences: () => prefs,
+  usePreferencesLoaded: () => true,
   updatePreferences,
   // #1025: the project's saved prompts; none here.
   useProjectPresets: () => [],

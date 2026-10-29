@@ -1,11 +1,15 @@
 import { useState } from 'react'
-import { Check, Loader2, Plus } from 'lucide-react'
-import { sendForgetGitHostAccount, sendUseGitHostAccount, type GitHostRow } from '../rpc/logins.js'
+import { Check, ChevronDown, Loader2, Plus } from 'lucide-react'
+import { sendForgetGitHostAccount, sendUseGitHostAccount, type GitHostRow, type GitHostsView } from '../rpc/logins.js'
+import { onMachineGitHosts, sendMachineGitHostAccount } from '../rpc/machines.js'
+import { usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
-import { ACCOUNTS_ENTRY, DeviceCode, HostFix, PackageLogo, StatePill, hostLoginState, hostWords, useGitHosts, useHostLogin } from './Logins.js'
+import { DeviceCode, HostFix, PackageLogo, StatePill, hostLoginState, hostWords, useGitHosts, useHostLogin } from './Logins.js'
 import { LeftNotices, ServerNotes, useServers } from './ServerLogins.js'
 import { Button } from './ui/button.js'
-import { DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from './ui/dropdown-menu.js'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
+import { rowButtonClass } from './ui/row-item.js'
 
 // The git hosts of Settings › Accounts: one card per host the projects' remotes are on, and the
 // host of the git host package OpenAgent brings, drawn from what the host's package answers (its
@@ -125,48 +129,63 @@ function HostCard({ row, onChanged }: { row: GitHostRow; onChanged: () => Promis
   )
 }
 
-/** The person's menu: a row per git host with an account, the one runs use; its submenu picks another, or adds one. */
-export function GitHostsSubmenu({ onSettings }: { onSettings: (entry: string) => void }) {
-  const { view, reload } = useGitHosts()
-  const rows = (view?.hosts ?? []).filter(row => row.provider)
-  if (rows.length === 0) return null
+/** A git host's accounts on the computer a run goes to: this computer's, or a saved machine's, asked there. A pick is the one its runs push with, there. */
+export function useGitHostsOn(machineId: string | undefined): { view: GitHostsView | undefined; pick: (host: string, login: string) => Promise<void> } {
+  const own = useGitHosts()
+  const theirs = usePolled<GitHostsView | null | undefined>(machineId !== undefined ? () => onMachineGitHosts(machineId) : null, undefined, 30_000, [machineId])
+  if (machineId === undefined) return { view: own.view, pick: (host, login) => sendUseGitHostAccount(host, login).then(own.reload) }
+  return { view: theirs.value ?? undefined, pick: (host, login) => sendMachineGitHostAccount(machineId, host, login).then(theirs.reload) }
+}
+
+/**
+ * The git host account a run pushes and opens its pull request with, at the end of the row above
+ * the message box: the project's host, on the computer the run goes to. Its menu picks another of
+ * the accounts there, the one its runs use from then on, as Settings › Accounts does; or adds one.
+ * A host with no account logged in says so, and its press goes where one is. Nothing for a project
+ * with no remote, or a host no package answers for.
+ */
+export function GitAccountMenu({ address, machineId, on, busy, onAdd }: { address: string | undefined; machineId: string | undefined; on: string | undefined; busy: boolean; onAdd: () => void }) {
+  const { view, pick } = useGitHostsOn(machineId)
+  const host = address?.split('/')[0]
+  const row = host === undefined ? undefined : view?.hosts.find(one => one.host === host)
+  const p = row?.provider
+  if (!row || !p) return null
+  const runs = p.accounts.find(account => account.runs)
+  if (!runs)
+    return (
+      <button type="button" disabled={busy} onClick={onAdd} className={cn(rowButtonClass, 'text-warning')}>
+        <PackageLogo svg={p.logo} className="size-3.5" />
+        <span className="truncate">{p.installed ? `Log in to ${p.name}` : `${p.tool} not installed`}</span>
+      </button>
+    )
+  const said = `Runs push and open pull requests as @${runs.login}${on !== undefined ? ` on ${on}` : ''}`
   return (
-    <>
-      {rows.map(row => {
-        const p = row.provider!
-        const runs = p.accounts.find(a => a.runs)
-        if (!runs)
-          return (
-            <DropdownMenuItem key={row.host} onClick={() => onSettings(ACCOUNTS_ENTRY)}>
-              <PackageLogo svg={p.logo} className="size-3.5" />
-              <span className="flex-1">{p.name}</span>
-              <span className="text-warning">{p.installed ? 'Log in' : 'Not installed'}</span>
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy} aria-label={`${p.name} account: @${runs.login}`} className={rowButtonClass} />}>
+          <PackageLogo svg={p.logo} className="size-3.5" />
+          <span className="max-w-32 truncate">@{runs.login}</span>
+          <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+        </TooltipTrigger>
+        <TooltipContent>{said}</TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="end" className="min-w-[14rem]">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>{`${p.name} account${on !== undefined ? ` on ${on}` : ''}`}</DropdownMenuLabel>
+          {p.accounts.map(account => (
+            <DropdownMenuItem key={account.login} closeOnClick={false} disabled={!account.ok} onClick={() => void pick(row.host, account.login)}>
+              <Check className={cn('h-3.5 w-3.5 shrink-0', account.runs ? 'opacity-100' : 'opacity-0')} aria-hidden />
+              <span className="flex-1 truncate">@{account.login}</span>
+              {account.terminal && <span className="text-xs text-muted-foreground">terminal</span>}
             </DropdownMenuItem>
-          )
-        return (
-          <DropdownMenuSub key={row.host}>
-            <DropdownMenuSubTrigger>
-              <PackageLogo svg={p.logo} className="size-3.5" />
-              <span className="flex-1">{p.name}</span>
-              <span className="max-w-32 truncate text-muted-foreground">@{runs.login}</span>
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="min-w-[14rem]">
-              {p.accounts.map(account => (
-                <DropdownMenuItem key={account.login} closeOnClick={false} disabled={!account.ok} onClick={() => void sendUseGitHostAccount(row.host, account.login).then(reload)}>
-                  <Check className={cn('h-3.5 w-3.5 shrink-0', account.runs ? 'opacity-100' : 'opacity-0')} aria-hidden />
-                  <span className="flex-1 truncate">@{account.login}</span>
-                  {account.terminal && <span className="text-xs text-muted-foreground">terminal</span>}
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => onSettings(ACCOUNTS_ENTRY)}>
-                <Plus className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
-                Add account…
-              </DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-        )
-      })}
-    </>
+          ))}
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={onAdd}>
+          <Plus className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+          Add account…
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

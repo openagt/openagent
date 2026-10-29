@@ -162,6 +162,12 @@ export interface Preferences {
    */
   startFrom?: Record<string, 'local'>
   /**
+   * Where a run started from the launcher goes: a saved machine, by its id. The "Run on" pick
+   * writes it, and the page picks it again at its next opening. **Absent = this machine.** A
+   * machine no longer saved, or offline when the page opens, is not picked: the run starts here.
+   */
+  runOn?: string
+  /**
    * Post-merge cleanup: a run started from the launcher, in a project that has the
    * `post-merge-cleanup` command, is followed by a fresh agent running it on the run's branch
    * before the run's pull request merges. The default of the launcher's box, which writes it
@@ -398,6 +404,9 @@ function sanitizePreferences(value: unknown): Preferences {
   if (isDriverName(input['driver'] as string | undefined)) preferences.driver = input['driver'] as string
   // `publish` is constrained to the picks the launcher's menu lists.
   if (isPublishPick(input['publish'])) preferences.publish = input['publish']
+  // `runOn` names a saved machine by its id, which is its address; a blank one is this machine, the absent entry.
+  const runOn = typeof input['runOn'] === 'string' ? input['runOn'].trim() : ''
+  if (/^https?:\/\/\S+$/.test(runOn) && runOn.length <= 2048) preferences.runOn = runOn
   const startFrom = sanitizeStartFrom(input['startFrom'])
   if (Object.keys(startFrom).length) preferences.startFrom = startFrom
   // `editor` (#727) is a free-form CLI name, trimmed and length-capped so junk / a huge string

@@ -29,3 +29,7 @@ export const sendLetMachineIn = rpc<typeof impl.sendLetMachineIn>('sendLetMachin
 export const sendMachineCode = rpc<typeof impl.sendMachineCode>('sendMachineCode')
 export const sendMachineTold = rpc<typeof impl.sendMachineTold>('sendMachineTold')
 export const onMachineLogins = rpc<typeof impl.onMachineLogins>('onMachineLogins')
+export const onMachineAgentAccounts = rpc<typeof impl.onMachineAgentAccounts>('onMachineAgentAccounts')
+export const sendMachineAgentAccountFirst = rpc<typeof impl.sendMachineAgentAccountFirst>('sendMachineAgentAccountFirst')
+export const onMachineGitHosts = rpc<typeof impl.onMachineGitHosts>('onMachineGitHosts')
+export const sendMachineGitHostAccount = rpc<typeof impl.sendMachineGitHostAccount>('sendMachineGitHostAccount')

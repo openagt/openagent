@@ -20,6 +20,7 @@ import { RowItem, rowButtonClass } from './ui/row-item.js'
 import { Dots } from './ToolCalls.js'
 import { ACCOUNTS_ENTRY, AgentFix, agentWords, useAgentState } from './Logins.js'
 import { MachineLogins } from './ServerLogins.js'
+import { GitAccountMenu } from './GitHosts.js'
 import { Button } from './ui/button.js'
 
 /** The note while the start is asked for: what the chat's first line says next. */
@@ -44,7 +45,8 @@ const THEIR_LOGINS_MS = 8_000
 // The Context picker (#439/#314) narrows the run's focus to other projects and to files: the
 // picked paths ride the prompt as one `Context:` line at its end.
 // The row above the box says where the Start goes: the "Run on" pick, which the Composer draws
-// first, then the project's name, then the branch the agent starts from.
+// first, then the project's name, then the branch the agent starts from; at its other end, the git
+// host account the run pushes as, on the computer it goes to.
 // That branch is a menu: the project's main branch (origin's default branch, fetched fresh), or
 // "My local branch", the branch the project's folder is on, as committed on this machine. The pick
 // is saved per project. The local pick hands the start hook the branch's name as `BASE`; the main
@@ -219,6 +221,9 @@ export function StartAgentForm({
             </>
           ) : null
         }
+        // Who it pushes as, at the row's other end: the project's git host account on the computer
+        // the run goes to. Its own end of the row, so the branch landing moves nothing.
+        startsAtEnd={remote && <GitAccountMenu address={address} machineId={machine?.id} on={name} busy={busy} onAdd={() => (machine ? openSettings('devices', machine.id) : openSettings(ACCOUNTS_ENTRY))} />}
         // How it runs, under the box: the Context picker, the "Auto" menu, then the project's skills (his pick).
         controls={
           <>
