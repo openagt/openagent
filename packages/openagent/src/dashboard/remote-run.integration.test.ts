@@ -436,7 +436,7 @@ test("the other machine's Human Queue is named here by the projects as they are 
       said: [
         {
           items: [
-            { projectId: projectId(m.shopA), projectName: 'work-shop', kind: 'awaiting', title: 'Asks on B', question: 'Which one?', awaitId: 'q1', agentId: B_RUN, createdAt: '2026-10-27T10:00:00.000Z', computer: { name: 'Studio', kind: 'computer' } },
+            { projectId: projectId(m.shopA), projectName: 'work-shop', kind: 'awaiting', title: 'Asks on B', question: 'Which one?', awaitId: 'q1', agentId: B_RUN, createdAt: '2026-10-27T10:00:00.000Z', computer: { name: 'Studio', kind: 'computer', id: m.machineB } },
             { projectId: other, projectName: 'other', kind: 'pr', title: 'Opened by hand', number: 7, url: 'https://github.com/acme/other/pull/7' },
           ],
           whole: [other, projectId(m.shopA)],

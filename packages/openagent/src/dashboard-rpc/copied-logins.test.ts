@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { addAccount, OWN_NAME, readAccounts } from '@openagt/agent-driver'
-import { accountsWiring, onAgentAccounts } from './accounts.js'
+import { accountsWiring, onAgentAccounts, sendRemoveAgentAccount } from './accounts.js'
 import { copiedWiring, onCopiedLogins, sendCopiedLogin, sendCopiedUsage, sendForgetCopiedLogin, sendKeepCopiedLogin } from './copied-logins.js'
 import { copiedPath, readCopied } from '../dashboard/copied-logins.js'
 import { provideTestContext } from './test-context.js'
@@ -86,6 +86,17 @@ test('the person\'s own Claude login keeps who it is at Claude, as the computer 
     assert.deepEqual(readAccounts(path('claude')).map(a => [a.name, a.accountId]), [['Suleiman', id], ['Dani', undefined], [OWN_NAME, undefined]])
     // A page reads the accounts, never who they are.
     assert.equal(JSON.stringify(await onAgentAccounts('claude')).includes(id), false)
+  }))
+
+test('an account a computer handed over, removed here, is no longer said to be here: the computer offers it again', () =>
+  onServer(async ({ path }) => {
+    await sendCopiedLogin({ kind: 'claude', source: 'own', name: 'Suleiman', who: 'uuid-1', ...laptop }, LOGIN)
+    await sendCopiedLogin({ kind: 'claude', source: 'Dani', name: 'Dani', who: 'mark', ...laptop }, OTHER)
+    assert.deepEqual(await sendRemoveAgentAccount('claude', 'Suleiman'), { ok: true })
+    assert.deepEqual(readAccounts(path('claude')).map(a => a.name), ['Dani', OWN_NAME])
+    const said = await onCopiedLogins()
+    assert.ok(said.ok)
+    assert.deepEqual(said.logins.map(login => login.name), ['Dani'])
   }))
 
 test('a name an account here has already gets the computer\'s name beside it', () =>

@@ -29,12 +29,16 @@ export interface MachineLogins {
   claude?: LoginThere
 }
 
-/** Logins handed to that computer: each as its own word, with the server they are copies from, when they are. */
+/** Logins handed to that computer: each as its own word, who the Claude login is when known, with the server they are copies from, when they are. */
 export interface GivenLogins {
   github?: string
   claude?: string
+  claudeAccount?: string
   from?: string
 }
+
+/** An account's id at Claude, as Claude Code keeps it: what goes beside a Claude login. */
+export const isClaudeAccountId = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
 
 /** How long a mark is: as the devices package keeps it. */
 const MARK_LENGTH = 16
@@ -90,7 +94,10 @@ export function loginsOfOwn(said: unknown): MachineLogins {
  * Which of this OpenAgent's own logins go to that computer: one it has none of, and one it has a
  * copy of that is no longer this one. Never one the person made there.
  */
-export function loginsToCopy(own: { github?: string; claude?: string }, there: MachineLogins): { github?: string; claude?: string } {
+export function loginsToCopy(own: { github?: string; claude?: string; claudeAccount?: string }, there: MachineLogins): Omit<GivenLogins, 'from'> {
   const wanted = (mine: string | undefined, theirs: LoginThere | undefined): mine is string => mine !== undefined && (theirs === undefined || (theirs.source === 'copied' && theirs.mark !== markOf(mine)))
-  return { ...(wanted(own.github, there.github) ? { github: own.github } : {}), ...(wanted(own.claude, there.claude) ? { claude: own.claude } : {}) }
+  return {
+    ...(wanted(own.github, there.github) ? { github: own.github } : {}),
+    ...(wanted(own.claude, there.claude) ? { claude: own.claude, ...(own.claudeAccount !== undefined ? { claudeAccount: own.claudeAccount } : {}) } : {}),
+  }
 }

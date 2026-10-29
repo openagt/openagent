@@ -5,7 +5,7 @@ import { testConnection } from './connection.js'
 import type { Mint } from '@openagt/agent-driver-claude'
 import { ownGithubAccount } from './logins.js'
 import { ownDoor, type OwnDoor } from './own-door.js'
-import { OwnAtWork, giveOwnClaude, giveOwnGithub, personHere, removeOwn, startOverSoon } from './own.js'
+import { OwnAtWork, giveOwnClaude, giveOwnGithub, isClaudeAccountId, personHere, removeOwn, startOverSoon } from './own.js'
 import { askOpenAgent, copyGithubToOther, isOtherUrl, isSharedUrl, lineTo, mintFor, otherLogins, setSharedReach, startMint } from './shared.js'
 import { lastLines, openSession, withAdvice, type Exec } from './ssh.js'
 import { PERSON_TIMEOUT_MS, SERVER_MARK, SERVER_USER, devicesScript, reachedOf, stepLabel, stepsFor, whoScript, type Who } from './steps.js'
@@ -62,7 +62,9 @@ On a computer several people use, where this OpenAgent is one person's (OPENAGEN
   own                                  this OpenAgent's own GitHub and Claude logins
   own login github [--from <server>]   log in to GitHub with the login given on standard input;
                                        --from names the server whose OpenAgent of the same person copied it
-  own login claude [--from <server>]   log in to Claude with the login given on standard input; OpenAgent starts again with it
+  own login claude [--from <server>] [--account <id>]
+                                       log in to Claude with the login given on standard input; OpenAgent starts again with it;
+                                       --account is who the login is at Claude, which Claude Code needs to offer its models
   own logout github|claude             delete that login here
 
 On this computer, for a server someone invited this computer's person to (by its address among the machines):
@@ -104,6 +106,18 @@ export interface CliIO {
 async function ownStdin(): Promise<string> {
   let said = ''
   for await (const chunk of process.stdin.setEncoding('utf8')) said += chunk
+  return said
+}
+
+/** What `own login` is told beside the login: the server it is a copy from, and for a Claude login who it is. Nothing for words it does not take. */
+function loginFlags(flags: string[], claude: boolean): { from?: string; account?: string } | undefined {
+  const said: { from?: string; account?: string } = {}
+  for (let i = 0; i < flags.length; i += 2) {
+    const [flag, value] = [flags[i], flags[i + 1]]
+    if (flag === '--from' && said.from === undefined && isServerName(value)) said.from = value
+    else if (flag === '--account' && claude && said.account === undefined && isClaudeAccountId(value)) said.account = value
+    else return undefined
+  }
   return said
 }
 
@@ -627,14 +641,14 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
       case 'own': {
         const name = person(io)
         const own = { env: io.env, ...(io.exec ? { exec: io.exec } : {}) }
-        const [what, kind, how, from] = rest
+        const [what, kind, ...flags] = rest
         if (rest.length === 0) return print(ownStatusOf(await readStore(io.env), name))
-        // A login handed over may be a copy from the person's own OpenAgent on a server, which names that server.
-        const copy = rest.length === 2 || (rest.length === 4 && how === '--from' && isServerName(from))
-        const copiedFrom = rest.length === 4 ? from : undefined
-        if (what === 'login' && kind === 'github' && copy) await giveOwnGithub(own, await (io.stdin ?? ownStdin)(), copiedFrom)
-        else if (what === 'login' && kind === 'claude' && copy) {
-          if (await giveOwnClaude(own, await (io.stdin ?? ownStdin)(), copiedFrom)) (io.startOver ?? startOverSoon)()
+        // A login handed over may be a copy from the person's own OpenAgent on a server, which names
+        // that server; a Claude login may say who it is.
+        const said = loginFlags(flags, kind === 'claude')
+        if (what === 'login' && kind === 'github' && said) await giveOwnGithub(own, await (io.stdin ?? ownStdin)(), said.from)
+        else if (what === 'login' && kind === 'claude' && said) {
+          if (await giveOwnClaude(own, await (io.stdin ?? ownStdin)(), said.from, said.account)) (io.startOver ?? startOverSoon)()
         } else if (what === 'logout' && isKind(kind) && rest.length === 2) {
           if (await removeOwn(own, kind)) (io.startOver ?? startOverSoon)()
         } else break

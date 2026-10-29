@@ -1,4 +1,4 @@
-import { mintClaude, type Mint } from '@openagt/agent-driver-claude'
+import { claudeAccountHere, mintClaude, type Mint } from '@openagt/agent-driver-claude'
 import { ownGithubLogin } from './logins.js'
 import { ownDoor, type OwnDoor } from './own-door.js'
 import type { Exec } from './ssh.js'
@@ -52,7 +52,7 @@ function sharedIn(store: Store, url: string): Shared {
 }
 
 /** Hand a login made here to the person's own OpenAgent on another person's computer: no copy, so no server's copy takes its place. */
-async function toOther(env: NodeJS.ProcessEnv, machine: string, given: { github?: string; claude?: string }): Promise<Answered> {
+async function toOther(env: NodeJS.ProcessEnv, machine: string, given: { github?: string; claude?: string; claudeAccount?: string }): Promise<Answered> {
   try {
     const said = (await askOpenAgent(env, 'sendMachineLogins', [machine, given])) as { ok?: unknown; logins?: unknown; error?: unknown } | undefined
     if (said?.ok === true) return { ok: true, output: said.logins }
@@ -100,7 +100,9 @@ export async function mintFor(opts: { env: NodeJS.ProcessEnv; machine: string; m
     const minted = await (opts.mint ?? mintClaude)(opts.signal ? { signal: opts.signal } : {})
     await change(login => void delete login.asking)
     if (!minted.ok) return void (after = login => void (login.failed = minted.error))
-    const given = await toOther(env, machine, { claude: minted.login })
+    // Who the login is goes with it, as Claude Code here knows it: there, it offers that account's models.
+    const account = claudeAccountHere(env)
+    const given = await toOther(env, machine, { claude: minted.login, ...(account !== undefined ? { claudeAccount: account } : {}) })
     after = given.ok ? login => void delete login.failed : login => void (login.failed = given.error)
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err)

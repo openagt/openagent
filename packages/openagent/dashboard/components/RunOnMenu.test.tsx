@@ -147,13 +147,14 @@ describe('a saved machine that is a person\'s own computer, reached by the line 
     expect(vps.querySelector('svg.lucide-server')).toBeTruthy()
   })
 
-  test('another person\'s computer, shared with everyone on this server, is drawn as a server and says whose it is and whose logins a run uses', async () => {
+  test('another person\'s computer, shared with everyone on this server, is drawn as a shared one, never as a server of your own, and says whose it is and whose logins a run uses', async () => {
     const box: Machine = { id: 'box', url: 'http://127.0.0.1:4311', label: 'rom-desktop', owner: 'rom' }
     renderMenu({ machines: [box], status: { box: 'online' } })
     await openMenu(trigger())
     const item = screen.getByRole('menuitem', { name: /^rom-desktop/ })
     expect(item.textContent).toBe("rom-desktop@rom's server. Runs use your own logins.")
-    expect(item.querySelector('svg.lucide-server')).toBeTruthy()
+    expect(item.querySelector('svg.lucide-users')).toBeTruthy()
+    expect(item.querySelector('svg.lucide-server')).toBeNull()
     expect(item.querySelector('svg.lucide-laptop')).toBeNull()
   })
 
