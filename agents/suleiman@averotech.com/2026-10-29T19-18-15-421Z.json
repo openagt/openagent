@@ -1,16 +1,28 @@
 {
   "id": "2026-10-29T19-18-15-421Z",
   "startedAt": "2026-10-29T19:18:04.998Z",
-  "status": "running",
+  "endedAt": "2026-10-29T19:19:23.824Z",
+  "status": "done",
   "intent": "/update-tickets",
+  "title": "Ticket tracker sync and personal installation",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "branch": "agent-2026-10-29T19-18-15-421Z",
+  "cost": 0.1878918,
+  "contextTokens": 25794,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
-      "publish": "commit"
+      "pid": 26726,
+      "publish": "commit",
+      "baseCommit": "c89a587e5fe517515efe34a1329e74e24ab9ac54"
     },
+    "pid": 26726,
     "host": "Suleimans-MacBook-Pro.local",
-    "publish": "commit"
+    "baseCommit": "c89a587e5fe517515efe34a1329e74e24ab9ac54",
+    "publish": "commit",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-10-29T19-18-15-421Z",
+    "sessionId": "ff09cc6b-d2f3-43fa-9e25-e74331630e87"
   }
 }
