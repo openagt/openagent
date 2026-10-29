@@ -9,11 +9,13 @@ Let one person use OpenAgent on a project without adding it to the project's rep
 
 OA is already mostly personal: `npx @openagt/start` pushes nothing on its own. The records (tickets, queue, logs) stay on the machine unless sharing is turned on, the default skills are linked into each run and hidden from git, and other devices read the laptop's runs live. The one gap: a skill ticked in the dashboard is committed into the repository, and reaches agents only once pushed.
 
-Proposed rule (in the issue, awaiting the requester's thoughts): everything stays on your machine until you share it.
+Proposed rule (in the issue): everything stays on your machine until you share it.
 
 - A ticked skill is "Just me" by default, linked into runs like the default ones; "Add to the project" commits it for everyone.
 - One Sharing page per project lists it all: records on this computer or on origin, and each skill Just me or Everyone.
 - Later: records kept in a private repository of one's own (e.g. `brillout/vike-openagent`), so the history stays while the laptop is off.
+
+The requester's answer: since everything is a skill, a personal installation is simply installing the skills globally on the user's system, which the `skills` CLI already supports (from memory, to be checked). So the direction is to install OA's skills user-wide rather than into the project, instead of the per-project Sharing page above.
 
 ## Why it matters
 
