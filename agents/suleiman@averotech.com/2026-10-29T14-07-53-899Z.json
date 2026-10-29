@@ -7,7 +7,6 @@
   "title": "Queued personal-installation plan",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-10-29T14-07-53-899Z",
   "cost": 0.15027500000000002,
   "contextTokens": 27408,
   "caller": {
