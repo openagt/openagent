@@ -1,0 +1,17 @@
+{
+  "id": "2026-10-29T13-13-24-000Z",
+  "startedAt": "2026-10-29T13:13:27.582Z",
+  "status": "running",
+  "intent": "hello 6",
+  "driver": "claude-code",
+  "model": "opus",
+  "caller": {
+    "runner": {
+      "host": "experiment",
+      "pid": 538720,
+      "publish": "commit"
+    },
+    "host": "experiment",
+    "publish": "commit"
+  }
+}
