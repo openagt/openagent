@@ -1,8 +1,7 @@
 {
   "id": "2026-10-29T13-13-24-000Z",
   "startedAt": "2026-10-29T13:13:27.582Z",
-  "endedAt": "2026-10-29T13:13:32.606Z",
-  "status": "done",
+  "status": "running",
   "intent": "hello 6",
   "title": "Greeting test session",
   "driver": "claude-code",
@@ -13,11 +12,11 @@
   "caller": {
     "runner": {
       "host": "experiment",
-      "pid": 538720,
-      "publish": "commit",
-      "baseCommit": "b6634e2d768c64df8a7e0d08a0700cd7c346ea61"
+      "pid": 539695,
+      "baseCommit": "b6634e2d768c64df8a7e0d08a0700cd7c346ea61",
+      "publish": "commit"
     },
-    "pid": 538720,
+    "pid": 539695,
     "host": "experiment",
     "baseCommit": "b6634e2d768c64df8a7e0d08a0700cd7c346ea61",
     "publish": "commit",
