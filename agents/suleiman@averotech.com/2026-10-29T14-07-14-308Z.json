@@ -7,7 +7,6 @@
   "title": "Sync tickets with GitHub",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-10-29T14-07-14-308Z",
   "cost": 0.21348999999999999,
   "contextTokens": 29007,
   "caller": {
