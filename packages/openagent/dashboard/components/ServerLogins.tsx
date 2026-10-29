@@ -6,6 +6,7 @@ import { usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { CopyButton } from './ui/copy-button.js'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 
 // The servers of the person's that use this computer's logins, in Settings › Accounts: a bar for
 // each above the accounts, offering this computer's logins or saying how they stand there, with
@@ -229,24 +230,58 @@ const sameRow = (login: RowOf, row: RowOf): boolean => login.kind === row.kind &
  * those it did not get to, with why, once for every server it failed on alike; those it waits for.
  */
 export function ServerNotes({ row }: { row: RowOf }) {
-  const { view } = useServers()
+  const { view, reload } = useServers()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | undefined>()
   const notes = (view?.servers ?? []).flatMap(server => {
     const login = server.on && server.reachable ? server.logins.find(other => sameRow(other, row)) : undefined
     return login && login.state !== 'switched' ? [{ server, login }] : []
   })
   if (notes.length === 0) return null
   const labels = (state: LoginThere['state']): string[] => notes.filter(note => note.login.state === state).map(note => note.server.label)
-  const there = labels('there')
+  const there = notes.filter(note => note.login.state === 'there')
   const waits = labels('allow')
   const failed = new Map<string, string[]>()
   for (const { server, login } of notes) if (login.state === 'failed') failed.set(login.error ?? 'it did not get there', [...(failed.get(login.error ?? 'it did not get there') ?? []), server.label])
+  // A login made anew for the server with a press can be taken off there: it waits for the press again.
+  // One that goes as it is would be handed over again at once, so it has no menu.
+  const takeOff = async (machineId: string) => {
+    setBusy(true)
+    setError(undefined)
+    const done = await sendSettleLogin(machineId, row, false)
+    if (!done.ok) setError(done.error)
+    await reload()
+    setBusy(false)
+  }
   return (
     <div className="basis-full space-y-0.5 text-xs">
-      {there.length > 0 && <p className="text-success">{`✓ on ${there.join(' · ')}`}</p>}
+      {there.length > 0 && (
+        <p className="text-success">
+          {'✓ on '}
+          {there.map(({ server, login }, i) => (
+            <span key={server.machineId}>
+              {i > 0 && ' · '}
+              {login.anew ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger type="button" disabled={busy} aria-label={`${login.name} on ${server.label}`} className="rounded-sm underline decoration-dotted underline-offset-2 hover:text-foreground">
+                    {server.label}
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="min-w-[14rem]">
+                    <DropdownMenuItem onClick={() => void takeOff(server.machineId)}>{`Take off ${server.label}`}</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                server.label
+              )}
+            </span>
+          ))}
+        </p>
+      )}
       {waits.length > 0 && <p className="text-warning">{`not on ${waits.join(' · ')} yet`}</p>}
       {[...failed].map(([why, on]) => (
         <p key={why} className="text-danger">{`Not on ${on.join(' · ')}: ${why}`}</p>
       ))}
+      {error !== undefined && <p role="alert" className="text-danger">{error}</p>}
     </div>
   )
 }
