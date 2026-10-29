@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Check, ChevronDown, Loader2, Plus } from 'lucide-react'
 import { sendForgetGitHostAccount, sendUseGitHostAccount, type GitHostRow, type GitHostsView } from '../rpc/logins.js'
 import { onMachineGitHosts, sendMachineGitHostAccount } from '../rpc/machines.js'
-import { usePolled } from '../lib/use-async.js'
+import { readAhead, usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { DeviceCode, HostFix, PackageLogo, StatePill, hostLoginState, hostWords, useGitHosts, useHostLogin } from './Logins.js'
 import { LeftNotices, ServerNotes, useServers } from './ServerLogins.js'
@@ -129,10 +129,18 @@ function HostCard({ row, onChanged }: { row: GitHostRow; onChanged: () => Promis
   )
 }
 
+/** Where a saved machine's git hosts are remembered on the page: a switch back to it shows its account at once. */
+const machineGitHostsKey = (machineId: string): string => `machine-git-hosts:${machineId}`
+
+/** Ask a saved machine for its git hosts before it is picked, so the pick shows its account from its first frame. */
+export function readMachineGitHostsAhead(machineId: string): void {
+  readAhead(machineGitHostsKey(machineId), () => onMachineGitHosts(machineId))
+}
+
 /** A git host's accounts on the computer a run goes to: this computer's, or a saved machine's, asked there. A pick is the one its runs push with, there. */
 export function useGitHostsOn(machineId: string | undefined): { view: GitHostsView | undefined; pick: (host: string, login: string) => Promise<void> } {
   const own = useGitHosts()
-  const theirs = usePolled<GitHostsView | null | undefined>(machineId !== undefined ? () => onMachineGitHosts(machineId) : null, undefined, 30_000, [machineId])
+  const theirs = usePolled<GitHostsView | null | undefined>(machineId !== undefined ? () => onMachineGitHosts(machineId) : null, undefined, 30_000, [machineId], machineId !== undefined ? { remember: machineGitHostsKey(machineId) } : undefined)
   if (machineId === undefined) return { view: own.view, pick: (host, login) => sendUseGitHostAccount(host, login).then(own.reload) }
   return { view: theirs.value ?? undefined, pick: (host, login) => sendMachineGitHostAccount(machineId, host, login).then(theirs.reload) }
 }

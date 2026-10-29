@@ -78,6 +78,16 @@ test('a Claude login handed over is an account runs take before the server\'s ow
     assert.deepEqual(said.logins, [{ kind: 'claude', source: 'own', name: 'Work', who: 'uuid-2', from: 'Suleimans-MacBook-Pro' }])
   }))
 
+test('the person\'s own Claude login keeps who it is at Claude, as the computer said it: Claude Code here is told it beside the login; an added account\'s mark is no such id', () =>
+  onServer(async ({ path }) => {
+    const id = '0f8e7d6c-5b4a-4392-8a1b-2c3d4e5f6a7b'
+    assert.deepEqual(await sendCopiedLogin({ kind: 'claude', source: 'own', name: 'Suleiman', who: id, ...laptop }, LOGIN), { ok: true })
+    assert.deepEqual(await sendCopiedLogin({ kind: 'claude', source: 'Dani', name: 'Dani', who: '0123456789abcdef', ...laptop }, OTHER), { ok: true })
+    assert.deepEqual(readAccounts(path('claude')).map(a => [a.name, a.accountId]), [['Suleiman', id], ['Dani', undefined], [OWN_NAME, undefined]])
+    // A page reads the accounts, never who they are.
+    assert.equal(JSON.stringify(await onAgentAccounts('claude')).includes(id), false)
+  }))
+
 test('a name an account here has already gets the computer\'s name beside it', () =>
   onServer(async ({ path }) => {
     addAccount('Dani', LOGIN, path('claude'))

@@ -4,8 +4,8 @@ import { Readable, Writable } from 'node:stream'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { addAccount, goOn, markLimited, nameOwnAccount, OWN_NAME, readAccounts, usableAccounts, UsageLimitError, type DriverEvent, type SpawnLike, type SpawnedProcess } from '@openagt/agent-driver'
-import { CLAUDE_TOKEN_ENV, claudeAccountsPath } from './claude-accounts.js'
+import { addAccount, goOn, markLimited, nameOwnAccount, OWN_NAME, readAccounts, usableAccounts, useFirst, UsageLimitError, type DriverEvent, type SpawnLike, type SpawnedProcess } from '@openagt/agent-driver'
+import { CLAUDE_ACCOUNT_ENV, CLAUDE_TOKEN_ENV, claudeAccountsPath } from './claude-accounts.js'
 import { ClaudeCodeDriver } from './claude-code.js'
 
 const HOUR = 60 * 60_000
@@ -154,4 +154,37 @@ test('a project’s own few: its runs use only the accounts it names, in the fil
   assert.deepEqual(one.map(s => s.env[CLAUDE_TOKEN_ENV]), ['sk-ant-oat01-rom'])
 
   assert.deepEqual(usableAccounts(readAccounts(path), ['Gone']).map(a => a.name), [OWN_NAME, 'Dani', 'Rom'])
+}))
+
+/** Claude Code's answer to the `initialize` a model list asks with. */
+const INITIALIZED = [JSON.stringify({ type: 'control_response', response: { subtype: 'success', request_id: 'models', response: { models: [{ value: 'opus', displayName: 'Opus 5.5', resolvedModel: 'claude-opus-5-5' }] } } })]
+
+test('an added account whose Claude account is known runs with it beside its login; one not known runs with none, never another\'s', withFile(async path => {
+  addAccount('Dani', 'sk-ant-oat01-dani', path, new Date(NOW), 'dani-account-id')
+  addAccount('Rom', 'sk-ant-oat01-rom', path)
+  useFirst('Dani', path)
+  const seen: Spawned[] = []
+  const env = { [CLAUDE_ACCOUNT_ENV]: 'the-servers-own-account' }
+  const session = await new ClaudeCodeDriver({ spawn: turns([{ lines: LIMITED(NOW + HOUR), code: 1 }, { lines: LIMITED(NOW + HOUR), code: 1 }, { lines: DONE('done') }], seen), env, accounts: { path, now: () => NOW } }).start({ cwd: '/ws' })
+  assert.equal((await session.prompt('go')).text, 'done')
+  assert.deepEqual(seen.map(s => [s.env[CLAUDE_TOKEN_ENV], s.env[CLAUDE_ACCOUNT_ENV]]), [
+    ['sk-ant-oat01-dani', 'dani-account-id'],
+    // The person's own: as Claude Code keeps it, with what the computer's own login says of itself.
+    [undefined, 'the-servers-own-account'],
+    ['sk-ant-oat01-rom', undefined],
+  ])
+}))
+
+test('the models are asked on the account runs take first, with who it is: what a run there is given', withFile(async path => {
+  addAccount('Dani', 'sk-ant-oat01-dani', path, new Date(NOW), 'dani-account-id')
+  useFirst('Dani', path)
+  const seen: Spawned[] = []
+  const models = await new ClaudeCodeDriver({ spawn: turns([{ lines: INITIALIZED }], seen), env: {}, accounts: { path, now: () => NOW } }).listModels()
+  assert.deepEqual(models.map(m => m.name), ['Opus 5.5'])
+  assert.deepEqual([seen[0]!.env[CLAUDE_TOKEN_ENV], seen[0]!.env[CLAUDE_ACCOUNT_ENV]], ['sk-ant-oat01-dani', 'dani-account-id'])
+
+  // Without accounts, on whatever login Claude Code has.
+  const plain: Spawned[] = []
+  await new ClaudeCodeDriver({ spawn: turns([{ lines: INITIALIZED }], plain), env: {} }).listModels()
+  assert.equal(plain[0]!.env[CLAUDE_TOKEN_ENV], undefined)
 }))

@@ -1,6 +1,6 @@
 import { DRIVERS, DRIVER_LABELS, type DriverName } from '../../src/client.js'
 import type { DriverOption } from '../components/DriverModelMenu.js'
-import { useLoaded } from './use-async.js'
+import { readAhead, useLoaded } from './use-async.js'
 import { onModels, type DriverModels, type ModelsView } from '../rpc/models.js'
 import { onMachineModels } from '../rpc/machines.js'
 
@@ -16,14 +16,23 @@ export function useModels(): ModelsView | undefined {
   return useLoaded<ModelsView | undefined>(onModels, undefined, [], { remember: 'models' })
 }
 
+/** Where a saved machine's models are remembered on the page: a switch back to it shows them at once. */
+const machineModelsKey = (machineId: string): string => `machine-models:${machineId}`
+
+/** Ask a saved machine for its models before it is picked, so the pick names them from its first frame. */
+export function readMachineModelsAhead(machineId: string): void {
+  readAhead(machineModelsKey(machineId), () => onMachineModels(machineId))
+}
+
 /**
  * The models a run started on the machine picked in "Run on" can be given: that machine's own, as
- * it asked its agents, which need not be this computer's (`theirs`). `undefined` while it is asked; this
- * computer's when none is picked, or the machine does not say (an OpenAgent that is not asked this).
+ * it asked its agents, which need not be this computer's (`theirs`). `undefined` while it is first
+ * asked, the last answer while it is asked again; this computer's when none is picked, or the
+ * machine does not say (an OpenAgent that is not asked this).
  */
 export function useModelsOn(machineId: string | undefined): { models: ModelsView | undefined; theirs: boolean } {
   const own = useModels()
-  const theirs = useLoaded<ModelsView | null | undefined>(machineId === undefined ? null : () => onMachineModels(machineId), undefined, [machineId])
+  const theirs = useLoaded<ModelsView | null | undefined>(machineId === undefined ? null : () => onMachineModels(machineId), undefined, [machineId], machineId === undefined ? undefined : { remember: machineModelsKey(machineId) })
   return machineId === undefined || theirs === null ? { models: own, theirs: false } : { models: theirs, theirs: true }
 }
 

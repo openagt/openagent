@@ -3,7 +3,7 @@ import { Check, Copy, Plus } from 'lucide-react'
 import { onMachineAgentAccounts, sendMachineAgentAccountFirst } from '../rpc/machines.js'
 import { onAgentAccounts, sendAddAgentAccount, sendAgentAccountCode, sendRemoveAgentAccount, sendUseAgentAccountFirst, type AccountAdding, type AccountRow, type AccountWindow, type AccountsAgent, type AccountsView } from '../rpc/accounts.js'
 import type { DriverName } from '../../src/client.js'
-import { usePolled } from '../lib/use-async.js'
+import { readAhead, usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { ClaudeLogo, CodexLogo } from './driver-logos.js'
 import { AgentFix, DeviceCode, StatePill, agentLoginState, agentWords, useAgentState } from './Logins.js'
@@ -297,6 +297,14 @@ export function AccountsCard({ agent }: { agent: AccountsAgent }) {
   )
 }
 
+/** Where a saved machine's accounts of an agent are remembered on the page: a switch back to it shows them at once. */
+const machineAccountsKey = (machineId: string, agent: AccountsAgent): string => `machine-agent-accounts:${machineId}:${agent}`
+
+/** Ask a saved machine for each agent's accounts before it is picked, so the pick shows them from its first frame. */
+export function readMachineAccountsAhead(machineId: string): void {
+  for (const agent of ['claude', 'codex'] as const) readAhead(machineAccountsKey(machineId, agent), () => onMachineAgentAccounts(machineId, agent))
+}
+
 /**
  * An agent's accounts on the computer a run goes to: this computer's, read as Settings reads them,
  * or a saved machine's, asked there; `unanswered` when that machine does not say. A pick makes one
@@ -312,7 +320,7 @@ export function useAccountsOn(
   pick: (account: string) => Promise<void>
 } {
   const own = usePolled<AccountsView | undefined>(on && machineId === undefined ? () => onAgentAccounts(agent) : null, undefined, SELDOM_MS, [agent, on, machineId === undefined], { remember: `agent-accounts:${agent}` })
-  const theirs = usePolled<AccountsView | null | undefined>(on && machineId !== undefined ? () => onMachineAgentAccounts(machineId, agent) : null, undefined, SELDOM_MS, [agent, on, machineId])
+  const theirs = usePolled<AccountsView | null | undefined>(on && machineId !== undefined ? () => onMachineAgentAccounts(machineId, agent) : null, undefined, SELDOM_MS, [agent, on, machineId], machineId !== undefined ? { remember: machineAccountsKey(machineId, agent) } : undefined)
   if (machineId === undefined) return { view: own.value, unanswered: false, pick: account => sendUseAgentAccountFirst(agent, account).then(own.reload) }
   return { view: theirs.value ?? undefined, unanswered: theirs.value === null, pick: account => sendMachineAgentAccountFirst(machineId, agent, account).then(theirs.reload) }
 }
