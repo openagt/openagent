@@ -1,16 +1,28 @@
 {
   "id": "2026-10-29T14-07-14-308Z",
   "startedAt": "2026-10-29T14:07:00.902Z",
-  "status": "running",
+  "endedAt": "2026-10-29T14:08:00.609Z",
+  "status": "done",
   "intent": "/update-tickets",
+  "title": "Sync tickets with GitHub",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "branch": "agent-2026-10-29T14-07-14-308Z",
+  "cost": 0.21348999999999999,
+  "contextTokens": 29007,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
-      "publish": "commit"
+      "pid": 88535,
+      "publish": "commit",
+      "baseCommit": "b6634e2d768c64df8a7e0d08a0700cd7c346ea61"
     },
+    "pid": 88535,
     "host": "Suleimans-MacBook-Pro.local",
-    "publish": "commit"
+    "baseCommit": "b6634e2d768c64df8a7e0d08a0700cd7c346ea61",
+    "publish": "commit",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-10-29T14-07-14-308Z",
+    "sessionId": "3deca328-4c21-4a1d-b6d4-67e108ea09e9"
   }
 }
