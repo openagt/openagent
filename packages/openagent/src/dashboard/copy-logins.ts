@@ -1,11 +1,11 @@
 import { execFile } from 'node:child_process'
 import { hostname } from 'node:os'
 import { readAccounts } from '@openagt/agent-driver'
-import { claudeAccountsPath } from '@openagt/agent-driver-claude'
+import { CLAUDE_ACCOUNT_ENV, CLAUDE_TOKEN_ENV, claudeAccountsPath } from '@openagt/agent-driver-claude'
 import type { ModuleCommandResult } from '../project-modules.js'
 import type { RelayHandlers } from './relay-endpoints.js'
 import { giveRemoteLogins, pingRemote, remoteLogins, type MachineAccess } from './remote-run.js'
-import { isServerName, loginsOfOwn, loginsToCopy, type MachineLogins } from './machine-logins.js'
+import { isClaudeAccountId, isServerName, loginsOfOwn, loginsToCopy, type MachineLogins } from './machine-logins.js'
 
 /**
  * Both ends of copying a person's logins to another person's computer (machine-logins.ts).
@@ -43,7 +43,8 @@ export function personLogins(run: RunComputerCommand): NonNullable<RelayHandlers
       for (const kind of ['github', 'claude'] as const) {
         const login = given[kind]
         if (login === undefined) continue
-        const said = await run(DEVICES, ['server', 'own', 'login', kind, ...from], null, login)
+        const account = kind === 'claude' && given.claudeAccount !== undefined ? ['--account', given.claudeAccount] : []
+        const said = await run(DEVICES, ['server', 'own', 'login', kind, ...from, ...account], null, login)
         if (!said.ok) return { ok: false, error: said.error }
         const status = (said.output as { logins?: Record<string, { there?: unknown; said?: unknown }> } | null)?.logins?.[kind]
         if (status?.there !== true || typeof status.said === 'string') return { ok: false, error: typeof status?.said === 'string' ? status.said : `The ${kind === 'github' ? 'GitHub' : 'Claude'} login was not taken.` }
@@ -66,10 +67,11 @@ function ownGithub(said: NodeJS.ProcessEnv): Promise<string | undefined> {
   })
 }
 
-/** This OpenAgent's own logins: what it would copy. */
+/** This OpenAgent's own logins: what it would copy, and who the Claude login is when known. */
 export interface OwnLogins {
   github?: string
   claude?: string
+  claudeAccount?: string
 }
 
 /**
@@ -79,8 +81,10 @@ export interface OwnLogins {
  */
 export async function ownLogins(env: NodeJS.ProcessEnv = process.env): Promise<OwnLogins> {
   const github = await ownGithub(env)
-  const claude = readAccounts(claudeAccountsPath(env)).find(account => account.login !== undefined)?.login ?? env.CLAUDE_CODE_OAUTH_TOKEN?.trim()
-  return { ...(github ? { github } : {}), ...(claude ? { claude } : {}) }
+  const added = readAccounts(claudeAccountsPath(env)).find(account => account.login !== undefined)
+  const claude = added?.login ?? env[CLAUDE_TOKEN_ENV]?.trim()
+  const claudeAccount = added ? added.accountId : env[CLAUDE_ACCOUNT_ENV]?.trim()
+  return { ...(github ? { github } : {}), ...(claude ? { claude, ...(isClaudeAccountId(claudeAccount) ? { claudeAccount } : {}) } : {}) }
 }
 
 /** This server's name, as a copy says where it came from. */

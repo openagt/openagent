@@ -6,7 +6,7 @@ import type { OpenAgentEvent } from '../events.js'
 import type { StartAgentOptions, StartAgentResult } from './types.js'
 import { THROUGH_PATH, deviceIdOf, type BringProject, type RelayProject, type RelayStartResult } from './remote-run.js'
 import { listMachines, thisComputerName } from '../registry.js'
-import { isLoginWord, isServerName, type GivenLogins, type MachineLogins } from './machine-logins.js'
+import { isClaudeAccountId, isLoginWord, isServerName, type GivenLogins, type MachineLogins } from './machine-logins.js'
 import { end, readJsonBody, requireGet, sendJson } from './http.js'
 import { passToScreen, screenCallOf, type ScreenCall } from './screen.js'
 import { isRunId } from '../store/index.js'
@@ -37,7 +37,7 @@ import { isMachineRead, isRelayRead } from '../dashboard-rpc/relay-dispatch.js'
  * - `GET /_relay/screen/stream?run=<id>&project=<address>` and `POST /_relay/screen/input?…` pass
  *   one call on to the live screen of a run here (screen.ts), for the daemon whose person watches it.
  * - `GET /_relay/logins` says which logins this OpenAgent's person has here, and `POST /_relay/logins`
- *   `{github?, claude?, from?}` hands them over (machine-logins.ts). Only an OpenAgent that is one
+ *   `{github?, claude?, claudeAccount?, from?}` hands them over (machine-logins.ts). Only an OpenAgent that is one
  *   person's, on another person's computer, answers it.
  *
  * All but the ping and the machine-wide calls name their project by its repository's address, and
@@ -253,16 +253,16 @@ async function handleLogins(req: IncomingMessage, res: ServerResponse, handlers:
   if (!handlers.logins) return end(res, 404, 'this OpenAgent is no person\'s on another person\'s computer')
   if (req.method === 'GET') return sendJson(res, await handlers.logins.read())
   if (req.method !== 'POST') return end(res, 405, 'method not allowed', { allow: 'GET, POST' })
-  let body: { github?: unknown; claude?: unknown; from?: unknown } | null
+  let body: { github?: unknown; claude?: unknown; claudeAccount?: unknown; from?: unknown } | null
   try {
     body = (await readJsonBody(req, MAX_LOGINS_BODY)) as typeof body
   } catch {
     return end(res, 400, 'invalid request body')
   }
-  const { github, claude, from } = body ?? {}
-  if ((github !== undefined && !isLoginWord(github)) || (claude !== undefined && !isLoginWord(claude)) || (from !== undefined && !isServerName(from))) return end(res, 400, 'that is no login')
+  const { github, claude, claudeAccount, from } = body ?? {}
+  if ((github !== undefined && !isLoginWord(github)) || (claude !== undefined && !isLoginWord(claude)) || (claudeAccount !== undefined && (claude === undefined || !isClaudeAccountId(claudeAccount))) || (from !== undefined && !isServerName(from))) return end(res, 400, 'that is no login')
   if (github === undefined && claude === undefined) return end(res, 400, 'no login was handed over')
-  const given = await handlers.logins.give({ ...(github !== undefined ? { github } : {}), ...(claude !== undefined ? { claude } : {}), ...(from !== undefined ? { from } : {}) })
+  const given = await handlers.logins.give({ ...(github !== undefined ? { github } : {}), ...(claude !== undefined ? { claude } : {}), ...(claudeAccount !== undefined ? { claudeAccount } : {}), ...(from !== undefined ? { from } : {}) })
   if (!given.ok) return end(res, 422, given.error)
   sendJson(res, given.logins)
 }

@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { accountsPath, type AgentAccount } from '@openagt/agent-driver'
 
 // The Claude accounts runs may use (`accounts.ts` in the driver core keeps the list): the person's
@@ -25,4 +28,19 @@ export function accountEnv(account: AgentAccount, env: NodeJS.ProcessEnv): NodeJ
   if (account.login === undefined) return env
   const { [CLAUDE_ACCOUNT_ENV]: _other, ...rest } = env
   return { ...rest, [CLAUDE_TOKEN_ENV]: account.login, ...(account.accountId !== undefined ? { [CLAUDE_ACCOUNT_ENV]: account.accountId } : {}) }
+}
+
+/**
+ * Who the person's own Claude login on this computer is, as Claude Code keeps it after a browser
+ * login: what a login this computer makes for another goes with. Nothing when it is logged in to
+ * no account, or keeps no id.
+ */
+export function claudeAccountHere(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  try {
+    const kept = JSON.parse(readFileSync(join(env['CLAUDE_CONFIG_DIR'] ?? env['HOME'] ?? homedir(), '.claude.json'), 'utf8')) as { oauthAccount?: { accountUuid?: unknown } }
+    const id = kept.oauthAccount?.accountUuid
+    return typeof id === 'string' && id.trim() !== '' ? id.trim() : undefined
+  } catch {
+    return undefined
+  }
 }

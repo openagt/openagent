@@ -278,7 +278,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
         return project && listed.get(keyOf(machine, project))
       }
       const said = answers.get(machine.id)
-      if (said) queue.said.push(namedHere(said, idHere, { name: machineName(machine), kind: machineKind(machine).kind }))
+      if (said) queue.said.push(namedHere(said, idHere, { name: machineName(machine), kind: machineKind(machine).kind, id: machine.id }))
       else queue.unread.push(...(machine.projects ?? []).flatMap(project => idHere(project.id) ?? []))
     }
     return queue
@@ -319,8 +319,14 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     }
     const projectCwd = await resolveProject(project)
     const agent = projectCwd ? await runOf(projectCwd, agentId) : undefined
-    // No record yet: nothing is known, and it is asked again.
-    if (!projectCwd || !agent) return undefined
+    if (!projectCwd) return undefined
+    // No record of it here: a run a saved machine's Human Queue names is that machine's, else nothing is known, and it is asked again.
+    if (!agent) {
+      const queued = (await machinesQueue()).said.flatMap(said => said.items).find(item => item.projectId === project && item.agentId === agentId)?.computer?.id
+      const machine = queued === undefined ? undefined : (await ownMachines()).find(saved => saved.id === queued)
+      const address = machine ? await addressOf(projectCwd) : undefined
+      return machine && address !== undefined ? keep({ target: { url: machine.url, key: machine.key, ...(machine.pin ? { pin: machine.pin } : {}), project: address }, label: machine.label }, HOME_KEPT_MS) : undefined
+    }
     // A run's computer never changes: this one's own, and one whose record names none, is not looked up again.
     if (!isHostName(agent.host) || agent.host === hostname()) return keep(undefined, OWN_KEPT_MS)
     await machineNames()

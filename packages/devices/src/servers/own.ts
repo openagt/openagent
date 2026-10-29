@@ -76,23 +76,30 @@ function script(vars: Record<string, string>, body: string): string {
   ].join('\n')
 }
 
+/** The name Claude Code reads who such a login is under: without it, it offers only its four plain models. */
+const CLAUDE_ACCOUNT_NAME = 'CLAUDE_CODE_ACCOUNT_UUID'
+
+/** An account's id at Claude, as Claude Code keeps it: what goes beside a login in the file. */
+export const isClaudeAccountId = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+
 /**
- * Give this OpenAgent's user a Claude login: Claude Code is first asked whether it reads it, then
- * it is written to the user's own file, which only that user reads. The file is written whole or
- * not at all.
+ * Give this OpenAgent's user a Claude login, and who it is when the computer that made it knew:
+ * Claude Code is first asked whether it reads it, then it is written to the user's own file, which
+ * only that user reads. The file is written whole or not at all.
  */
-export function ownClaudeLoginScript(login: string): LoginScript {
+export function ownClaudeLoginScript(login: string, account?: string): LoginScript {
   return {
     as: SERVER_USER,
     script: script(
-      { LOGIN: login, FILE: OWN_CLAUDE_FILE },
+      { LOGIN: login, ACCOUNT: account ?? '', FILE: OWN_CLAUDE_FILE },
       `
   # What is written where the service reads its settings is a login's letters and nothing else.
   case "$LOGIN" in '' | *[!A-Za-z0-9_-]*) fail "What was sent is no Claude login." ;; esac
+  case "$ACCOUNT" in *[!0-9a-fA-F-]*) fail "What was sent is no Claude account." ;; esac
   said=$(${CLAUDE_NAME}="$LOGIN" timeout 30 claude auth status 2>&1 || true)
   printf '%s' "$said" | grep -Eq '"loggedIn": *true' || fail "Claude Code on this computer does not take the login."
   mkdir -p "$HOME/$(dirname "$FILE")"
-  (umask 077 && printf '${CLAUDE_NAME}=%s\\n' "$LOGIN" > "$HOME/$FILE.new")
+  (umask 077 && { printf '${CLAUDE_NAME}=%s\\n' "$LOGIN"; [ -z "$ACCOUNT" ] || printf '${CLAUDE_ACCOUNT_NAME}=%s\\n' "$ACCOUNT"; } > "$HOME/$FILE.new")
   mv "$HOME/$FILE.new" "$HOME/$FILE"
 `,
     ),
@@ -198,13 +205,13 @@ export async function giveOwnGithub(opts: OwnOptions, login: string, from?: stri
   }
 }
 
-/** Give this OpenAgent's user the Claude login handed over on standard input; `from` names the server it is a copy from. Answers whether OpenAgent is to be started again with it. */
-export async function giveOwnClaude(opts: OwnOptions, login: string, from?: string): Promise<boolean> {
+/** Give this OpenAgent's user the Claude login handed over on standard input; `from` names the server it is a copy from, `account` who it is. Answers whether OpenAgent is to be started again with it. */
+export async function giveOwnClaude(opts: OwnOptions, login: string, from?: string, account?: string): Promise<boolean> {
   await take(opts.env, 'claude')
   const word = login.trim()
   let given: { ok: true } | Failed = { ok: false, error: 'The work stopped before it ended.' }
   try {
-    given = await send(localSession(opts.exec), ownClaudeLoginScript(word), word)
+    given = await send(localSession(opts.exec), ownClaudeLoginScript(word, account), word)
   } finally {
     const after = given
     await update(opts.env, store => {

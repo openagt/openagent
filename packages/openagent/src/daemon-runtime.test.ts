@@ -807,3 +807,51 @@ test("a saved machine is asked for its own runs over its relay, and a run of its
     await rm(base, { recursive: true, force: true })
   }
 })
+
+test("a run a saved machine's Human Queue names, which no record here has, is that machine's: its row opens it there", async () => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'openagent-machine-queue-')))
+  const env = { XDG_CONFIG_HOME: join(base, 'cfg') }
+  await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
+  const git = nodeGitRunner()
+  const dir = await clone(base, 'shop', 'https://github.com/acme/shop.git')
+  await git(['config', 'user.email', 't@t'], dir)
+  await git(['config', 'user.name', 't'], dir)
+  await git(['commit', '-q', '--allow-empty', '-m', 'init'], dir)
+  await addProject(dir, new Date().toISOString(), undefined, env)
+  const shop = projectId(dir)
+  // An old run of the server's, waiting on a question: in no list of runs, in its Human Queue only.
+  const ASKING = '2026-07-13T00-22-59-512Z'
+  const server = createServer((req, res) => {
+    let body = ''
+    req.on('data', chunk => (body += chunk)).on('end', () => {
+      const answer = (result: unknown) => void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ result }))
+      if (req.url === '/_relay/ping') return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ version: '9.9.9', host: 'server-box' }))
+      const { fn } = JSON.parse(body) as { fn: string }
+      if (fn === 'onOwnProjects') return answer([{ id: 'shop-there', name: 'shop', path: '/srv/shop', address: 'github.com/acme/shop', share: false, gitHost: true, activated: true }])
+      if (fn === 'onOwnInterventions') return answer({ items: [{ projectId: 'shop-there', projectName: 'shop', kind: 'awaiting', title: 'Pick a colour', question: 'Which colour?', agentId: ASKING }], whole: ['shop-there'] })
+      if (fn === 'onOwnRuns') return answer({ at: 'b.1', runs: [], ids: [] })
+      answer(null)
+    })
+  })
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  await addMachine({ url, key: 'id.key', door: `${url}/_devices/enter`, label: 'Server' }, undefined, env)
+  const runtime = createProjectRuntime({ cwd: dir, env })
+  try {
+    // The machine said its projects, as the page's lists ask them.
+    for (let i = 0; i < 40 && !(await listMachines(undefined, env))[0]!.projects; i++) {
+      await runtime.remoteAgents.elsewhere()
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
+    const queue = await runtime.remoteAgents.machinesQueue()
+    assert.deepEqual(queue.said[0]!.items.map(item => [item.projectId, item.agentId, item.computer]), [[shop, ASKING, { name: 'Server', kind: 'computer', id: url }]])
+    assert.deepEqual(await runtime.remoteAgents.home(shop, ASKING), { url, key: 'id.key', project: 'github.com/acme/shop' })
+    // A run nobody names is still nobody's.
+    assert.equal(await runtime.remoteAgents.home(shop, '2026-07-13T00-22-59-999Z'), undefined)
+  } finally {
+    await runtime.dispose()
+    server.closeAllConnections()
+    server.close()
+    await rm(base, { recursive: true, force: true })
+  }
+})

@@ -16,6 +16,8 @@ import { handleRelayRequest, WATCH_HEADER, type RelayHandlers } from './relay-en
 
 const GITHUB = 'gho_mine123'
 const CLAUDE = 'sk-ant-oat01-mine'
+/** Who the Claude login is at Claude, as Claude Code keeps it. */
+const ACCOUNT = '0f8e7d6c-5b4a-4392-8a1b-2c3d4e5f6a7b'
 
 test('a login is copied when the computer has none, or has an older copy; never over one the person made there', () => {
   const own = { github: GITHUB, claude: CLAUDE }
@@ -26,6 +28,9 @@ test('a login is copied when the computer has none, or has an older copy; never 
   assert.deepEqual(loginsToCopy(own, { github: { source: 'copied' } }), own)
   // What this OpenAgent does not have, it does not copy.
   assert.deepEqual(loginsToCopy({}, {}), {})
+  // Who the Claude login is goes with it, and only with it.
+  assert.deepEqual(loginsToCopy({ ...own, claudeAccount: ACCOUNT }, { github: { source: 'copied', mark: markOf(GITHUB) } }), { claude: CLAUDE, claudeAccount: ACCOUNT })
+  assert.deepEqual(loginsToCopy({ ...own, claudeAccount: ACCOUNT }, { claude: { source: 'made' } }), { github: GITHUB })
 })
 
 test('what another computer says of the logins there is read as its data; the devices package\'s own answer reads as copies and logins made there', () => {
@@ -85,7 +90,11 @@ test('the logins are answered and taken at /_relay/logins; a login that is not a
   assert.equal((await post({ github: GITHUB, from: 'not a name' })).status, 400)
   assert.equal((await post({})).status, 400)
   assert.equal((await post({ claude: CLAUDE }, { [WATCH_HEADER]: '1' })).status, 403)
-  assert.deepEqual(machine.given, [{ github: GITHUB, from: 'vps-1' }])
+  // Who a Claude login is goes with it; a word that is no account, or one with no Claude login, takes nothing.
+  assert.equal((await post({ claude: CLAUDE, claudeAccount: ACCOUNT })).status, 200)
+  assert.equal((await post({ claude: CLAUDE, claudeAccount: 'x\nPORT=1' })).status, 400)
+  assert.equal((await post({ github: GITHUB, claudeAccount: ACCOUNT })).status, 400)
+  assert.deepEqual(machine.given, [{ github: GITHUB, from: 'vps-1' }, { claude: CLAUDE, claudeAccount: ACCOUNT }])
 
   const refused = await theirs(t, { give: async () => ({ ok: false, error: 'That is the GitHub login of @octocat.' }) })
   const no = await fetch(`${refused.url}/_relay/logins`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ github: GITHUB }) })
@@ -140,6 +149,11 @@ test('a person\'s OpenAgent takes logins as the devices package does, GitHub fir
   assert.deepEqual(ran.map(call => call.input), [GITHUB, CLAUDE, undefined])
   assert.deepEqual(given, { ok: true, logins: { github: { source: 'copied', from: 'vps-1', mark: markOf(GITHUB) }, claude: { source: 'copied', from: 'vps-1', mark: markOf(CLAUDE) } } })
 
+  // Who the Claude login is goes to the package beside it.
+  ran.length = 0
+  await logins.give({ claude: CLAUDE, claudeAccount: ACCOUNT })
+  assert.deepEqual(ran[0]!.args, ['server', 'own', 'login', 'claude', '--account', ACCOUNT])
+
   // One the package did not take is said in its words, and nothing after it is given.
   const refusing: RunComputerCommand = async () => status({ github: { there: false, working: false, said: 'That is the GitHub login of @octocat.' }, claude: { there: false, working: false } })
   assert.deepEqual(await personLogins(refusing).give({ github: GITHUB, claude: CLAUDE }), { ok: false, error: 'That is the GitHub login of @octocat.' })
@@ -153,8 +167,13 @@ test('the Claude login a server copies is the one its runs take first: an added 
     // No gh here: only the Claude login is asked about.
     const env = { HOME: dir, XDG_CONFIG_HOME: dir, PATH: '/nonexistent', CLAUDE_CODE_OAUTH_TOKEN: 'sk-ant-oat01-service' }
     assert.deepEqual(await ownLogins(env), { claude: 'sk-ant-oat01-service' })
+    // Who its service's login is, as its service was told.
+    assert.deepEqual(await ownLogins({ ...env, CLAUDE_CODE_ACCOUNT_UUID: ACCOUNT }), { claude: 'sk-ant-oat01-service', claudeAccount: ACCOUNT })
     writeFileSync(join(dir, 'openagent-claude-accounts.json'), JSON.stringify({ accounts: [{ name: 'Suleiman', login: CLAUDE }, { name: 'This computer' }] }))
     assert.deepEqual(await ownLogins(env), { claude: CLAUDE })
+    // An added account says who it is, never the service's.
+    writeFileSync(join(dir, 'openagent-claude-accounts.json'), JSON.stringify({ accounts: [{ name: 'Suleiman', login: CLAUDE, accountId: ACCOUNT }, { name: 'This computer' }] }))
+    assert.deepEqual(await ownLogins({ ...env, CLAUDE_CODE_ACCOUNT_UUID: '1f8e7d6c-5b4a-4392-8a1b-2c3d4e5f6a7b' }), { claude: CLAUDE, claudeAccount: ACCOUNT })
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

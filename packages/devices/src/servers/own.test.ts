@@ -109,10 +109,19 @@ test('a Claude login handed over is written, and OpenAgent is started again with
     assert.equal((refused.out as OwnStatus).logins.claude.there, true, 'the one written before is still there')
     assert.equal(over, 1)
 
-    await run(env, ['own', 'logout', 'github'], { exec: shell.exec, startOver: () => void over++ })
-    assert.equal(over, 1)
-    const gone = await run(env, ['own', 'logout', 'claude'], { exec: shell.exec, startOver: () => void over++ })
+    // Said who it is, the login goes with its account; a word that is no account takes nothing.
+    const named = pretendShell()
+    assert.equal((await run(env, ['own', 'login', 'claude', '--account', '0f8e7d6c-5b4a-4392-8a1b-2c3d4e5f6a7b'], { exec: named.exec, stdin: async () => CLAUDE_LOGIN, startOver: () => void over++ })).code, 0)
+    assert.match(named.scripts[0]!, /^ACCOUNT='0f8e7d6c-5b4a-4392-8a1b-2c3d4e5f6a7b'$/m)
     assert.equal(over, 2)
+    assert.equal((await run(env, ['own', 'login', 'claude', '--account', 'nobody'], { exec: named.exec, stdin: async () => CLAUDE_LOGIN })).code, 2)
+    assert.equal((await run(env, ['own', 'login', 'github', '--account', '0f8e7d6c-5b4a-4392-8a1b-2c3d4e5f6a7b'], { exec: named.exec, stdin: async () => GH_LOGIN })).code, 2)
+    assert.equal(named.scripts.length, 1)
+
+    await run(env, ['own', 'logout', 'github'], { exec: shell.exec, startOver: () => void over++ })
+    assert.equal(over, 2)
+    const gone = await run(env, ['own', 'logout', 'claude'], { exec: shell.exec, startOver: () => void over++ })
+    assert.equal(over, 3)
     assert.deepEqual((gone.out as OwnStatus).logins.claude, { there: false, working: false })
   } finally {
     await home.remove()
@@ -145,6 +154,13 @@ test('the Claude login is written to a file of the user\'s own that only it read
     assert.equal(odd.code, 1)
     assert.match(odd.stderr, /What was sent is no Claude login\./)
     assert.equal(await readFile(file, 'utf8'), `CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_LOGIN}\n`)
+    // Who the login is, when the computer that made it said: beside it, where Claude Code reads it too.
+    assert.deepEqual(await sh(ownClaudeLoginScript(CLAUDE_LOGIN, '0f8e7d6c-5b4a-4392-8a1b-2c3d4e5f6a7b').script), { code: 0, stderr: '' })
+    assert.equal(await readFile(file, 'utf8'), `CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_LOGIN}\nCLAUDE_CODE_ACCOUNT_UUID=0f8e7d6c-5b4a-4392-8a1b-2c3d4e5f6a7b\n`)
+    const oddAccount = await sh(ownClaudeLoginScript(CLAUDE_LOGIN, 'x\nPORT=4200').script)
+    assert.equal(oddAccount.code, 1)
+    assert.match(oddAccount.stderr, /What was sent is no Claude account\./)
+    assert.equal(await readFile(file, 'utf8'), `CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_LOGIN}\nCLAUDE_CODE_ACCOUNT_UUID=0f8e7d6c-5b4a-4392-8a1b-2c3d4e5f6a7b\n`)
     assert.deepEqual(await sh(ownClaudeLogoutScript().script), { code: 0, stderr: '' })
     await assert.rejects(stat(file))
     await new Promise<void>((resolve, reject) => execFile('bash', ['-n', '-c', ownIdentityScript().script], error => (error ? reject(error) : resolve())))
@@ -268,8 +284,15 @@ test('for another person\'s computer, the logins there are read through OpenAgen
     const started: string[][] = []
     await run(env, ['other-login', BOX_URL, 'claude'], { startWork: words => (started.push(words), 4242) })
     assert.deepEqual(started, [['other-work', BOX_URL]])
-    assert.equal((await run(env, ['other-work', BOX_URL], { mint: async () => ({ ok: true, login: CLAUDE_LOGIN }) })).code, 0)
+    // Claude Code here keeps no account of its own: the login goes alone.
+    const claudeHome = await mkdtemp(join(tmpdir(), 'servers-own-claude-json-'))
+    assert.equal((await run({ ...env, CLAUDE_CONFIG_DIR: claudeHome }, ['other-work', BOX_URL], { mint: async () => ({ ok: true, login: CLAUDE_LOGIN }) })).code, 0)
     assert.deepEqual(agent.asked.at(-1), { fn: 'sendMachineLogins', args: [BOX_URL, { claude: CLAUDE_LOGIN }], origin: agent.url })
+    // Claude Code here knows who its own login is: the login made goes with that account.
+    await writeFile(join(claudeHome, '.claude.json'), JSON.stringify({ oauthAccount: { accountUuid: '0f8e7d6c-5b4a-4392-8a1b-2c3d4e5f6a7b', emailAddress: 'rom@example.com' } }))
+    assert.equal((await run({ ...env, CLAUDE_CONFIG_DIR: claudeHome }, ['other-work', BOX_URL], { mint: async () => ({ ok: true, login: CLAUDE_LOGIN }) })).code, 0)
+    assert.deepEqual(agent.asked.at(-1)?.args, [BOX_URL, { claude: CLAUDE_LOGIN, claudeAccount: '0f8e7d6c-5b4a-4392-8a1b-2c3d4e5f6a7b' }])
+    await rm(claudeHome, { recursive: true, force: true })
     assert.equal((await readFile(storePath(env), 'utf8')).includes(CLAUDE_LOGIN), false)
 
     // What names no computer of another person's is not one.

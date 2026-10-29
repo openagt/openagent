@@ -7,7 +7,7 @@ import { addAccount, isLimited, nameOwnAccount, nameRefused, OWN_NAME, readAccou
 import { claudeAccountsPath, mintClaude, type Mint } from '@openagt/agent-driver-claude'
 import { accountFolder, codexAccountsDir, codexAccountsPath, codexWho, loginCodex, personalCodexHome, readCodexUsage, type CodexLogin, type CodexLoginOptions, type CodexWho } from '@openagt/agent-driver-codex'
 import { contextQuota } from './context.js'
-import { readCopied, type CopiedLogin } from '../dashboard/copied-logins.js'
+import { readCopied, writeCopied, type CopiedLogin } from '../dashboard/copied-logins.js'
 
 // The accounts runs use, per coding agent (`accounts.ts` in the driver core): the person's own
 // login, which the agent keeps, and the ones added beside it. A page sees each one's name, how full
@@ -331,6 +331,8 @@ export async function sendRemoveAgentAccount(agent: AccountsAgent, name: string)
   const gone = readAccounts(accountsWiring.path(agent)).find(a => a.name === name && a.login !== undefined)
   const done = change(() => removeAccount(name, accountsWiring.path(agent)))
   if (done.ok && gone && agent === 'codex') await rm(accountsWiring.codexFolder(gone), { recursive: true, force: true })
+  // One a computer of the person's handed over is no longer here: that computer offers it again.
+  if (done.ok && gone) writeCopied(readCopied().filter(login => login.kind !== agent || login.name !== name))
   return done
 }
 

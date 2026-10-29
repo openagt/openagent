@@ -3,7 +3,7 @@ import { computerName } from '../computer-name.js'
 import { readSharing } from '@openagt/agent-data'
 import { THROUGH_PATH, deviceIdOf, enterRemote, giveRemoteLogins, leaveRemote, machineCall, pingRemote, remoteAddMachine, remoteComputers, remoteDoor, remoteFacts, remoteLogins, remoteProject, relayRpc, type BringProject, type RelayProject, type RemoteTarget } from '../dashboard/remote-run.js'
 import { isElsewhereId, lineNameOf } from '../dashboard/elsewhere.js'
-import { isLoginWord, type MachineLogins } from '../dashboard/machine-logins.js'
+import { isClaudeAccountId, isLoginWord, type MachineLogins } from '../dashboard/machine-logins.js'
 import { errorMessage } from '../error-message.js'
 import { projectNameOf, repositoryAddress, repositorySpelling } from '../repository-address.js'
 import { contextRemote, resolveProjectPath } from './context.js'
@@ -206,13 +206,14 @@ export async function onMachineLogins(machineId: string): Promise<MachineLoginsR
  * Hand this person's own logins to a saved machine of another person's: the person made them for
  * it, here, so they are no copies, and no server's copy takes their place later.
  */
-export async function sendMachineLogins(machineId: string, given: { github?: unknown; claude?: unknown }): Promise<MachineLoginsResult> {
+export async function sendMachineLogins(machineId: string, given: { github?: unknown; claude?: unknown; claudeAccount?: unknown }): Promise<MachineLoginsResult> {
   const machine = (await listMachines()).find(saved => saved.id === machineId)
   if (!machine) return { ok: false, error: 'That machine is no longer saved.' }
   if (machine.owner === undefined) return { ok: false, error: 'That machine is no other person\'s computer.' }
-  const { github, claude } = given && typeof given === 'object' ? given : {}
+  const { github, claude, claudeAccount } = given && typeof given === 'object' ? given : {}
   if ((github !== undefined && !isLoginWord(github)) || (claude !== undefined && !isLoginWord(claude)) || (github === undefined && claude === undefined)) return { ok: false, error: 'That is no login.' }
-  return giveRemoteLogins(machine, { ...(github !== undefined ? { github } : {}), ...(claude !== undefined ? { claude } : {}) })
+  if (claudeAccount !== undefined && (claude === undefined || !isClaudeAccountId(claudeAccount))) return { ok: false, error: 'That is no Claude account.' }
+  return giveRemoteLogins(machine, { ...(github !== undefined ? { github } : {}), ...(claude !== undefined ? { claude } : {}), ...(claudeAccount !== undefined ? { claudeAccount } : {}) })
 }
 
 /**
