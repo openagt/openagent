@@ -48,3 +48,14 @@ test('an agent without a way to list its models says so', async () => {
   const source = cachedModelsSource({ 'claude-code': driver([]), codex: {} })
   assert.deepEqual((await source.read()).codex, { models: [], error: 'this agent cannot list its models' })
 })
+
+test('an agent is asked again once its runs take another account first: each account lists what it may use', async () => {
+  const claude = driver([{ id: 'opus', name: 'Opus' }], [{ id: 'opus', name: 'Opus 5.5' }])
+  let first = 'This computer'
+  const source = cachedModelsSource({ 'claude-code': claude, codex: driver([]) }, name => (name === 'claude-code' ? first : ''))
+  assert.deepEqual((await source.read())['claude-code'], { models: [{ id: 'opus', name: 'Opus' }] })
+  assert.deepEqual((await source.read())['claude-code'], { models: [{ id: 'opus', name: 'Opus' }] })
+  first = 'Suleiman'
+  assert.deepEqual((await source.read())['claude-code'], { models: [{ id: 'opus', name: 'Opus 5.5' }] })
+  assert.equal(claude.asks, 2)
+})

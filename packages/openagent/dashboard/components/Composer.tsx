@@ -23,10 +23,11 @@ import { restoreRunOn, runTarget, useRunOnFallback, useSelectedMachineId, select
 import { thisMachineName } from '../lib/this-machine.js'
 import { useMachineStatus } from '../lib/use-machine-status.js'
 import { takePendingDraft } from '../lib/draft-handoff.js'
-import { driverOptions, modelEfforts, useModelsOn } from '../lib/models.js'
+import { driverOptions, modelEfforts, readMachineModelsAhead, useModelsOn } from '../lib/models.js'
 import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.js'
 import { ClaudeLogo, CodexLogo } from './driver-logos.js'
-import { AgentAccountItems, firstAccount, useAccountsOn } from './AgentAccounts.js'
+import { AgentAccountItems, firstAccount, readMachineAccountsAhead, useAccountsOn } from './AgentAccounts.js'
+import { readMachineGitHostsAhead } from './GitHosts.js'
 import { ACCOUNTS_ENTRY } from './Logins.js'
 import { Button } from './ui/button.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
@@ -151,6 +152,17 @@ export const Composer = forwardRef<ComposerHandle, {
   useEffect(() => {
     if (!inAgent) restoreRunOn(preferences.runOn, preferencesLoaded && machinesRead ? machines : null, machineStatus)
   }, [inAgent, preferences.runOn, preferencesLoaded, machinesRead, machines, machineStatus])
+  // Each saved machine that answers is asked once, ahead, what the pickers show of it: a switch
+  // in "Run on" then shows its models and accounts from its first frame, never a blank or an id.
+  useEffect(() => {
+    if (inAgent) return
+    for (const machine of machines) {
+      if (machineStatus[machine.id] !== 'online') continue
+      readMachineModelsAhead(machine.id)
+      readMachineAccountsAhead(machine.id)
+      readMachineGitHostsAhead(machine.id)
+    }
+  }, [inAgent, machines, machineStatus])
   const fallback = useRunOnFallback()
   const fellBackFrom = fallback?.why === 'offline' ? machines.find(machine => machine.id === fallback.id) : undefined
   const selectedMachine = runTarget(machines, selectedMachineId, launcher, home)

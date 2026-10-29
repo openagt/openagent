@@ -9,12 +9,20 @@ import { accountsPath, type AgentAccount } from '@openagt/agent-driver'
 /** The name Claude Code reads a login under that was made for a computer nobody sits at. */
 export const CLAUDE_TOKEN_ENV = 'CLAUDE_CODE_OAUTH_TOKEN'
 
+/**
+ * The name Claude Code reads who such a login is under. The login cannot say it itself, and
+ * without it Claude Code offers only its four plain models, not the ones the account may use.
+ */
+export const CLAUDE_ACCOUNT_ENV = 'CLAUDE_CODE_ACCOUNT_UUID'
+
 /** Where the Claude accounts are kept: `$XDG_CONFIG_HOME/openagent-claude-accounts.json`, else dotted under the home. */
 export function claudeAccountsPath(env: NodeJS.ProcessEnv = process.env): string {
   return accountsPath('claude', env)
 }
 
-/** The environment a turn on `account` runs with: an added account's login in it, the person's own as Claude Code keeps it. */
+/** The environment a turn on `account` runs with: an added account's login in it, and who it is when known; the person's own as Claude Code keeps it. */
 export function accountEnv(account: AgentAccount, env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  return account.login !== undefined ? { ...env, [CLAUDE_TOKEN_ENV]: account.login } : env
+  if (account.login === undefined) return env
+  const { [CLAUDE_ACCOUNT_ENV]: _other, ...rest } = env
+  return { ...rest, [CLAUDE_TOKEN_ENV]: account.login, ...(account.accountId !== undefined ? { [CLAUDE_ACCOUNT_ENV]: account.accountId } : {}) }
 }

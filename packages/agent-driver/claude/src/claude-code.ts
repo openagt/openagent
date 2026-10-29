@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { readClaudeQuota } from './claude-code-quota.js'
 import { readClaudeModels } from './claude-code-models.js'
 import { accountEnv, claudeAccountsPath } from './claude-accounts.js'
-import { turnOnAccounts, type AccountsOption, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, cutOutput, callArgument, lineCount, patchSize, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, finishTurn, agentEnv, oneLine, attachLog, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverQuota, type DriverRateLimit, type DriverRateWindow, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
+import { turnOnAccounts, pickAccount, readAccounts, type AccountsOption, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, cutOutput, callArgument, lineCount, patchSize, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, finishTurn, agentEnv, oneLine, attachLog, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverQuota, type DriverRateLimit, type DriverRateWindow, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
 
 /** Claude Code permission modes we pass through to the CLI. */
 export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan'
@@ -86,9 +86,14 @@ export class ClaudeCodeDriver implements Driver {
     })
   }
 
-  /** The models Claude Code's own `/model` picker offers, with the person's setup parts as a session loads them. */
+  /**
+   * The models Claude Code's own `/model` picker offers, with the person's setup parts as a session
+   * loads them: on accounts, those of the account a run takes first, which is what a run is given.
+   */
   listModels(opts: { signal?: AbortSignal } = {}): Promise<DriverModel[]> {
-    const { bin, env, extraArgs, spawn } = withPersonal(this.opts)
+    const { bin, env: setupEnv, extraArgs, spawn, accounts } = withPersonal(this.opts)
+    const first = accounts ? pickAccount(readAccounts(accounts.path ?? claudeAccountsPath(setupEnv ?? process.env)), (accounts.now ?? Date.now)(), accounts.prefer) : undefined
+    const env = first ? accountEnv(first, setupEnv ?? process.env) : setupEnv
     return readClaudeModels({
       ...(bin !== undefined ? { bin } : {}),
       ...(env !== undefined ? { env } : {}),

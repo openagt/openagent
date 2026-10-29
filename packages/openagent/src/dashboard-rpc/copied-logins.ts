@@ -129,12 +129,22 @@ export async function sendCopiedLogin(given: GivenLogin, secret: string): Promis
       if (!made.ok) return made
       kept = made.folder
     }
-    addAccount(row, kept, path, new Date(accountsWiring.now()))
+    addAccount(row, kept, path, new Date(accountsWiring.now()), kind === 'claude' ? claudeAccountId(who) : undefined)
     ownLast(path)
     login.name = row
   }
   writeCopied([...readCopied().filter(other => !same(other, login)), login])
   return { ok: true }
+}
+
+/**
+ * Who a Claude login is at Claude, from what the computer said of it: the person's own login is
+ * said by its account's id when Claude Code there knows it (`claudeOwnAccount`), which Claude Code
+ * here needs beside the login to offer what the account may use. An added account is said by a
+ * mark of its login, which is no id.
+ */
+function claudeAccountId(who: string): string | undefined {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(who) ? who : undefined
 }
 
 /** Take a login a computer handed over off this server: it is deleted here, and goes on working wherever else it is. */

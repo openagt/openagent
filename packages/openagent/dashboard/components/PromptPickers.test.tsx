@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { Preferences } from '../../src/index.js'
 import { forgetRemembered } from '../lib/use-async.js'
 
@@ -186,6 +186,33 @@ describe('the agent picker holds each agent\'s accounts, on the computer the run
     expect(accounts.sendUseAgentAccountFirst).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add account…' }))
     expect(route.openSettings).toHaveBeenCalledWith('devices', STUDIO)
+  })
+})
+
+describe('each saved computer that answers is asked ahead what the pickers show of it', () => {
+  test('picked, it shows its model names, its accounts and its git account from the first frame, never this computer\'s or a blank', async () => {
+    await saveMachines(STUDIO_MACHINE)
+    daemon.reachable = { [STUDIO]: true }
+    prefs = { model: 'opus' }
+    machinesRpc.onMachineModels.mockResolvedValue({ ...MODELS, 'claude-code': { models: [{ id: 'opus', name: 'Opus' }] } })
+    machinesRpc.onMachineAgentAccounts.mockImplementation(async (_id: string, agent: string) => (agent === 'claude' ? { ...CLAUDE, computer: 'studio' } : null))
+    machinesRpc.onMachineGitHosts.mockResolvedValue({ hosts: [{ ...GITHUB, provider: { ...GITHUB.provider, accounts: [{ login: 'octo-vps', terminal: false, runs: true, ok: true }] } }] })
+    renderComposer()
+    await waitFor(() => expect(machinesRpc.onMachineGitHosts).toHaveBeenCalledWith(STUDIO))
+    await waitFor(() => expect(machinesRpc.onMachineAgentAccounts).toHaveBeenCalledWith(STUDIO, 'codex'))
+    expect(machinesRpc.onMachineModels).toHaveBeenCalledWith(STUDIO)
+    await new Promise(resolve => setTimeout(resolve, 20))
+    // From here on the computer never answers again: what shows is what was asked ahead.
+    const never = () => new Promise<never>(() => {})
+    machinesRpc.onMachineModels.mockImplementation(never)
+    machinesRpc.onMachineAgentAccounts.mockImplementation(never)
+    machinesRpc.onMachineGitHosts.mockImplementation(never)
+    act(() => selectMachine(STUDIO))
+    expect(screen.getByRole('button', { name: /^Driver: / }).getAttribute('aria-label')).toBe('Driver: Claude Code · Model: Opus')
+    render(<GitAccountMenu address="github.com/acme/shop" machineId={STUDIO} on="Studio" busy={false} onAdd={vi.fn()} />)
+    expect(screen.getByRole('button', { name: 'GitHub account: @octo-vps' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /^Driver: / }))
+    expect(screen.getByRole('menuitem', { name: /Claude Code/ }).textContent).toBe('Claude CodeAda · 22%')
   })
 })
 

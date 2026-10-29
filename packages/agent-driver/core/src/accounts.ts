@@ -22,6 +22,8 @@ export interface AgentAccount {
   name: string
   /** An added account's login, as its agent keeps it. None for the person's own: the agent has that one. */
   login?: string
+  /** Who the login is at its agent's service, when the computer that made it knew: an agent told it lists what that account may use. */
+  accountId?: string
   /** When it was added, ISO 8601. */
   added?: string
   /** When a limit it hit frees, epoch milliseconds: until then no run picks it. */
@@ -66,7 +68,7 @@ export function readAccounts(path: string): AgentAccount[] {
 function isAccount(value: unknown): value is AgentAccount {
   if (typeof value !== 'object' || value === null) return false
   const a = value as Record<string, unknown>
-  return typeof a['name'] === 'string' && (a['login'] === undefined || typeof a['login'] === 'string')
+  return typeof a['name'] === 'string' && (a['login'] === undefined || typeof a['login'] === 'string') && (a['accountId'] === undefined || typeof a['accountId'] === 'string')
 }
 
 /** The file as `change` leaves the accounts read now: written whole, then moved over the old one. */
@@ -88,12 +90,12 @@ export function nameRefused(name: string, accounts: AgentAccount[]): string | un
   return undefined
 }
 
-/** An added account, last in the order. Refused when the name is taken or empty. */
-export function addAccount(name: string, login: string, path: string, now: Date = new Date()): AgentAccount[] {
+/** An added account, last in the order, with who it is when that is known. Refused when the name is taken or empty. */
+export function addAccount(name: string, login: string, path: string, now: Date = new Date(), accountId?: string): AgentAccount[] {
   return changeAccounts(accounts => {
     const refused = nameRefused(name, accounts)
     if (refused) throw new Error(refused)
-    return [...accounts, { name: name.trim(), login: login.trim(), added: now.toISOString() }]
+    return [...accounts, { name: name.trim(), login: login.trim(), ...(accountId !== undefined ? { accountId } : {}), added: now.toISOString() }]
   }, path)
 }
 
