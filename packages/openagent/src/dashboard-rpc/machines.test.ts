@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { onComputersThrough, onMachineAgentAccounts, onMachineGitHosts, onMachineModels, sendMachineAgentAccountFirst, sendMachineGitHostAccount, onMachineStartCheck, onMachineVersions, onMachines, onMachinesReachable, onProjectHere, onProjectOnMachine, sendAddComputerThrough, sendAddMachine, sendLetMachineIn, sendProjectHere, sendProjectToMachine, sendRemoveMachine, sendRenameComputer, sendRenameMachine, ONLY_THE_OWNER } from './machines.js'
+import { onComputersThrough, onMachineAgentAccounts, onMachineGitHosts, onMachineModels, sendMachineAgentAccountFirst, sendMachineGitHostAccount, sendMachineRemoveAgentAccount, onMachineStartCheck, onMachineVersions, onMachines, onMachinesReachable, onProjectHere, onProjectOnMachine, sendAddComputerThrough, sendAddMachine, sendLetMachineIn, sendProjectHere, sendProjectToMachine, sendRemoveMachine, sendRenameComputer, sendRenameMachine, ONLY_THE_OWNER } from './machines.js'
 import { asCaller } from '../dashboard/person.js'
 import { sayName } from '../dashboard/machine-call.js'
 import { elsewhereId, type OwnProject } from '../dashboard/elsewhere.js'
@@ -513,6 +513,14 @@ test('a saved machine is asked whether a run would start there, from its own cop
       assert.deepEqual(calls[0]!.body, { fn: 'sendUseAgentAccountFirst', args: ['codex', 'Dani'] })
       cloning = { said: { result: { ok: false, error: 'No account is called Nope.' } } }
       assert.deepEqual(await sendMachineAgentAccountFirst(url, 'codex', 'Nope'), { ok: false, error: 'experiment says: No account is called Nope.' })
+      // One is removed there, as its own page removes it.
+      cloning = { said: { result: { ok: true } } }
+      calls.length = 0
+      assert.deepEqual(await sendMachineRemoveAgentAccount(url, 'claude', 'Dani'), { ok: true })
+      assert.deepEqual(calls[0]!.body, { fn: 'sendRemoveAgentAccount', args: ['claude', 'Dani'] })
+      calls.length = 0
+      assert.equal((await sendMachineRemoveAgentAccount(url, 'gemini' as never, 'Dani')).ok, false)
+      assert.equal(calls.length, 0)
       const hosts = { hosts: [{ host: 'github.com', projects: ['shop'] }] }
       cloning = { said: { result: hosts } }
       calls.length = 0

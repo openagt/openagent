@@ -33,3 +33,4 @@ export const onMachineAgentAccounts = rpc<typeof impl.onMachineAgentAccounts>('o
 export const sendMachineAgentAccountFirst = rpc<typeof impl.sendMachineAgentAccountFirst>('sendMachineAgentAccountFirst')
 export const onMachineGitHosts = rpc<typeof impl.onMachineGitHosts>('onMachineGitHosts')
 export const sendMachineGitHostAccount = rpc<typeof impl.sendMachineGitHostAccount>('sendMachineGitHostAccount')
+export const sendMachineRemoveAgentAccount = rpc<typeof impl.sendMachineRemoveAgentAccount>('sendMachineRemoveAgentAccount')

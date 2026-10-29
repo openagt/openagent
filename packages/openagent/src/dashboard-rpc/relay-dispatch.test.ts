@@ -117,6 +117,7 @@ test('the machine-wide calls are the logins and settings a computer brings its s
     sendForgetComputers: 'act',
     sendRenameComputer: 'act',
     sendUseAgentAccountFirst: 'act',
+    sendRemoveAgentAccount: 'act',
     sendUseGitHostAccount: 'act',
   }
   assert.deepEqual([...MACHINE_RPC_NAMES].sort(), Object.keys(classes).sort())

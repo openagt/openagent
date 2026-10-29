@@ -486,6 +486,11 @@ export async function sendMachineAgentAccountFirst(machineId: string, agent: Acc
   return actOn(machineId, (agent === 'claude' || agent === 'codex') && typeof account === 'string' ? ['sendUseAgentAccountFirst', [agent, account]] : undefined)
 }
 
+/** Take one of a coding agent's accounts off a saved machine, by its id there, as its own page does: one this computer handed it, it offers again. */
+export async function sendMachineRemoveAgentAccount(machineId: string, agent: AccountsAgent, account: string): Promise<AccountResult> {
+  return actOn(machineId, (agent === 'claude' || agent === 'codex') && typeof account === 'string' ? ['sendRemoveAgentAccount', [agent, account]] : undefined)
+}
+
 /** The git hosts a saved machine's runs push to, with the accounts it has at each, as it says. `null` when it does not answer, or is not asked this. */
 export async function onMachineGitHosts(machineId: string): Promise<GitHostsView | null> {
   const machine = (await listMachines()).find(saved => saved.id === machineId)

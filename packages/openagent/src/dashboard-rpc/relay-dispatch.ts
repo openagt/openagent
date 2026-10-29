@@ -12,7 +12,7 @@ import { patchPreferences } from './preferences.js'
 import { onModels } from './models.js'
 import { onOwnComputers, sendAddComputer, sendForgetComputers } from './computers.js'
 import { sendRenameComputer } from './machines.js'
-import { onAgentAccounts, sendUseAgentAccountFirst } from './accounts.js'
+import { onAgentAccounts, sendRemoveAgentAccount, sendUseAgentAccountFirst } from './accounts.js'
 import { onGitHosts, sendUseGitHostAccount } from './logins.js'
 
 // The machine side of the remote-agent relay (#1067 slice 2). A daemon that relayed an agent here asks this
@@ -92,9 +92,10 @@ export async function dispatchRelayRpc(projectId: string, fn: string, args: unkn
 // relay too, so a computer that keeps a line open to its server is asked them as any server is:
 // a line carries nothing but the relay. Classed the same way, read or act.
 // Which of a computer's accounts its runs take, a coding agent's and a git host's, is asked and picked
-// from the page of the computer that sends it a run: the run goes with the one picked there.
+// from the page of the computer that sends it a run: the run goes with the one picked there. One is
+// removed from there too, as its own page removes it.
 const MACHINE_READS = { onCopiedLogins, onOwnProjects, onOwnInterventions, onOwnComputers, onCloneCheck, onModels, onAgentAccounts, onGitHosts }
-const MACHINE_ACTS = { sendCopiedLogin, sendForgetCopiedLogin, sendKeepCopiedLogin, sendCopiedUsage, patchPreferences, sendAddComputer, sendForgetComputers, sendRenameComputer, sendUseAgentAccountFirst, sendUseGitHostAccount }
+const MACHINE_ACTS = { sendCopiedLogin, sendForgetCopiedLogin, sendKeepCopiedLogin, sendCopiedUsage, patchPreferences, sendAddComputer, sendForgetComputers, sendRenameComputer, sendUseAgentAccountFirst, sendRemoveAgentAccount, sendUseGitHostAccount }
 const MACHINE_FNS = Object.assign(Object.create(null) as Record<string, RelayFn>, MACHINE_READS, MACHINE_ACTS) as unknown as Record<string, RelayFn>
 
 /** The machine-wide names a relay caller may invoke. */

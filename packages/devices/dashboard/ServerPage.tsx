@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ChevronRight, CircleCheck, House, Laptop, Loader2, Server, UserPlus, UserRound } from 'lucide-react'
-import { Button, ConfirmDialog, Dialog, RadioGroup, RadioGroupOption, formatDateTime, formatRelative, usePolled, type ModuleComputersThrough, type ModuleHost, type ModuleMachine } from '@openagt/dashboard/module'
+import { Button, ConfirmDialog, Dialog, RadioGroup, RadioGroupOption, formatDateTime, formatRelative, usePolled, type ModuleAccountsAgent, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachineAccount } from '@openagt/dashboard/module'
 import { idsOf, loadDevices, nameOwner, removeDevice, removePerson, setWho, askLink, type Answer, type DeviceRow, type ServerRow, type Who } from './servers.js'
 import type { ServerItem } from './model.js'
 import { Invite } from './codes.js'
@@ -200,6 +200,7 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
           <WhoCanStart host={host} server={{ ...server, through: server.through }} busy={busy} onChange={d.act} />
         </Part>
       )}
+      {done && machine?.version !== undefined && <Accounts host={host} machine={machine} name={item.name} busy={busy} />}
       {/* A computer on Tailscale keeps no lines: no computer is reached through it. */}
       {done && machine && server.through === undefined && !server.tailscale && <ComputersThrough host={host} machine={machine} busy={busy} everyMs={30_000} />}
       {!server.working && (
@@ -219,6 +220,58 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
         </div>
       )}
     </>
+  )
+}
+
+const AGENTS: { agent: ModuleAccountsAgent; title: string }[] = [
+  { agent: 'claude', title: 'Claude Code' },
+  { agent: 'codex', title: 'Codex' },
+]
+
+/**
+ * The coding agents' accounts on the server, as it says them, each in the order its runs take
+ * them. One is removed here as on the server's own page: one this computer handed it, this computer
+ * offers again under Settings › Accounts. The server's own login stays: Claude Code or Codex keeps it.
+ */
+function Accounts({ host, machine, name, busy }: { host: ModuleHost; machine: ModuleMachine; name: string; busy: boolean }) {
+  const { value: read, reload } = usePolled<(ModuleMachineAccount[] | null)[] | undefined>(() => Promise.all(AGENTS.map(({ agent }) => host.machineAccounts(machine.id, agent))), undefined, 30_000, [machine.id])
+  const [removing, setRemoving] = useState<string | undefined>()
+  const [error, setError] = useState<string | undefined>()
+  const remove = async (agent: ModuleAccountsAgent, account: ModuleMachineAccount) => {
+    setRemoving(`${agent} ${account.id}`)
+    setError(undefined)
+    const done = await host.removeMachineAccount(machine.id, agent, account.id)
+    if (!done.ok) setError(done.error)
+    await reload()
+    setRemoving(undefined)
+  }
+  const shown = AGENTS.map((one, i) => ({ ...one, accounts: read?.[i] ?? [] })).filter(one => one.accounts.length > 0)
+  if (read === undefined || shown.length === 0) return null
+  return (
+    <Part title="Accounts">
+      {shown.map(({ agent, title, accounts }) => (
+        <div key={agent} className="space-y-1.5">
+          <p className="text-xs text-muted-foreground">{title}</p>
+          <ul aria-label={`${title} accounts on ${name}`} className="space-y-1.5">
+            {accounts.map(account => (
+              <li key={account.id} className="flex items-center justify-between gap-3 text-sm">
+                <span className="min-w-0 truncate">
+                  {account.name}
+                  <span className="ml-2 text-xs text-muted-foreground">{[account.from !== undefined ? `from ${account.from}` : account.own ? `${name}'s own login` : undefined, account.first ? 'runs take it first' : undefined].filter(Boolean).join(' · ')}</span>
+                </span>
+                {!account.own && (
+                  <Button size="xs" variant="ghost" disabled={busy || removing !== undefined} aria-label={`Remove ${account.name}'s ${title} account on ${name}`} title={account.from !== undefined ? `Runs on ${name} no longer use it. ${account.from} offers it again under Settings › Accounts.` : `Runs on ${name} no longer use it.`} onClick={() => void remove(agent, account)}>
+                    {removing === `${agent} ${account.id}` && <Loader2 className="h-3 w-3 animate-spin" aria-hidden />}
+                    Remove
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+      {error !== undefined && <Problem>{error}</Problem>}
+    </Part>
   )
 }
 

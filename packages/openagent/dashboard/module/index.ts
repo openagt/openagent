@@ -439,6 +439,16 @@ export interface ModuleHost {
    * computer is logged in to gets a login of the server's own there, as Settings › Accounts says.
    */
   useLoginsOn(machineId: string): Promise<MachineAdded>
+  /**
+   * A coding agent's accounts on a saved machine, in the order its runs take them, as it says.
+   * `null` for a machine that does not answer, or runs an OpenAgent that is not asked this.
+   */
+  machineAccounts(machineId: string, agent: ModuleAccountsAgent): Promise<ModuleMachineAccount[] | null>
+  /**
+   * Take one of them off the machine, by its id there, as its own page does: its runs no longer use
+   * it. One this computer handed the machine, this computer offers it again (Settings › Accounts).
+   */
+  removeMachineAccount(machineId: string, agent: ModuleAccountsAgent, id: string): Promise<MachineAdded>
   /** Take one of that person's devices out at the machine, by its id there; answers as {@link machinePerson} does, after. */
   removeMachineDevice(machineId: string, deviceId: string): Promise<ModuleMachinePerson>
   /**
@@ -449,6 +459,22 @@ export interface ModuleHost {
   watchScreen(projectId: string, agentId: string, signal: AbortSignal): Promise<ReadableStream<Uint8Array> | undefined>
   /** Send the live screen of a run what the person did on it, as JSON; whether the screen took it. */
   sendToScreen(projectId: string, agentId: string, input: unknown): Promise<boolean>
+}
+
+/** A coding agent whose accounts a page reads: Claude Code's, or Codex's. */
+export type ModuleAccountsAgent = 'claude' | 'codex'
+
+/** One of a coding agent's accounts on a saved machine, as {@link ModuleHost.machineAccounts} answers it. */
+export interface ModuleMachineAccount {
+  /** Its id there: what {@link ModuleHost.removeMachineAccount} takes. */
+  id: string
+  name: string
+  /** The machine's own login, which Claude Code or Codex keeps there: not removed from here. */
+  own: boolean
+  /** The computer of the person's it came from, for one that computer handed over. */
+  from?: string
+  /** Runs there take it first. */
+  first: boolean
 }
 
 /** A person of a project, as its git host knows them. */
