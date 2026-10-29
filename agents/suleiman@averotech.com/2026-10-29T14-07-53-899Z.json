@@ -1,16 +1,28 @@
 {
   "id": "2026-10-29T14-07-53-899Z",
   "startedAt": "2026-10-29T14:07:51.853Z",
-  "status": "running",
+  "endedAt": "2026-10-29T14:08:20.550Z",
+  "status": "done",
   "intent": "/plan-tickets",
+  "title": "Queued personal-installation plan",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "branch": "agent-2026-10-29T14-07-53-899Z",
+  "cost": 0.15027500000000002,
+  "contextTokens": 27408,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
-      "publish": "commit"
+      "pid": 33374,
+      "publish": "commit",
+      "baseCommit": "b6634e2d768c64df8a7e0d08a0700cd7c346ea61"
     },
+    "pid": 33374,
     "host": "Suleimans-MacBook-Pro.local",
-    "publish": "commit"
+    "baseCommit": "b6634e2d768c64df8a7e0d08a0700cd7c346ea61",
+    "publish": "commit",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-10-29T14-07-53-899Z",
+    "sessionId": "bc8c3337-6c3f-4240-aaf9-84feaf47057f"
   }
 }
