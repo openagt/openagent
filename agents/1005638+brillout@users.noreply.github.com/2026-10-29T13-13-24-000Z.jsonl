@@ -1,0 +1,8 @@
+{"kind":"start","prompt":"hello 6","added":"When you finish, if you changed any file, commit your work.","at":"2026-10-29T13:13:28.311Z"}
+{"kind":"session","sessionId":"4b4d2a67-f8e1-4be4-a162-f69040199538","at":"2026-10-29T13:13:29.122Z"}
+{"kind":"title","text":"Greeting test session","at":"2026-10-29T13:13:30.583Z"}
+{"kind":"said","text":"Hello! I haven't changed any files, so there's nothing to commit. What would you like me to work on?","at":"2026-10-29T13:13:31.314Z"}
+{"kind":"rate-limit","limit":{"status":"allowed_warning","window":"seven_day","resetsAt":1793732400000,"windows":[{"window":"five_hour","percentUsed":0,"resetsAt":1793297400000},{"window":"seven_day","percentUsed":99,"resetsAt":1793732400000}]},"at":"2026-10-29T13:13:31.329Z"}
+{"kind":"result","text":"Hello! I haven't changed any files, so there's nothing to commit. What would you like me to work on?","sessionId":"4b4d2a67-f8e1-4be4-a162-f69040199538","at":"2026-10-29T13:13:32.042Z"}
+{"kind":"cost","usd":0.0914296,"at":"2026-10-29T13:13:32.042Z"}
+{"kind":"ended","status":"done","at":"2026-10-29T13:13:32.606Z"}

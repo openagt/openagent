@@ -1,17 +1,29 @@
 {
   "id": "2026-10-29T13-13-24-000Z",
   "startedAt": "2026-10-29T13:13:27.582Z",
-  "status": "running",
+  "endedAt": "2026-10-29T13:13:32.606Z",
+  "status": "done",
   "intent": "hello 6",
+  "title": "Greeting test session",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "effort": "low",
+  "branch": "agent-2026-10-29T13-13-24-000Z",
+  "cost": 0.0914296,
+  "contextTokens": 22336,
   "caller": {
     "runner": {
       "host": "experiment",
       "pid": 538720,
-      "publish": "commit"
+      "publish": "commit",
+      "baseCommit": "b6634e2d768c64df8a7e0d08a0700cd7c346ea61"
     },
+    "pid": 538720,
     "host": "experiment",
-    "publish": "commit"
+    "baseCommit": "b6634e2d768c64df8a7e0d08a0700cd7c346ea61",
+    "publish": "commit",
+    "kind": "prompt",
+    "workspace": "/home/oa-rom-1f268826/projects/openagent/.branches/agent-2026-10-29T13-13-24-000Z",
+    "sessionId": "4b4d2a67-f8e1-4be4-a162-f69040199538"
   }
 }
