@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { callerAtPage, PERSON_HEADER } from './person.js'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -45,7 +46,7 @@ async function computer(t: TestContext) {
     start: async prompt => (did.push(`start ${prompt}`), { ok: true, agentId: RUN }),
     tailEvents: (_projectId, _agentId, onEvent) => (onEvent({ kind: 'session-update', sessionId: 's1' } as OpenAgentEvent), () => {}),
     rpc: async (_projectId, fn) => (did.push(`rpc ${fn}`), fn),
-    machine: async (fn, args) => (did.push(`machine ${fn}`), { fn, args }),
+    machine: async (fn, args) => (did.push(`machine ${fn}${callerAtPage() !== undefined ? ` as ${callerAtPage()}` : ''}`), { fn, args }),
     bring: async (_address, bring) => (bring && did.push('clone'), { state: bring ? 'coming' : 'missing' }),
     screen: async () => `${screen}/`,
   }
@@ -149,6 +150,13 @@ test('a machine-wide call names no project, and one that may only watch runs it 
   assert.equal((await call('sendStart', WATCH)).status, 403)
   assert.equal((await post('/_relay/machine', { args: [] })).status, 400)
   assert.deepEqual(did, [])
+})
+
+test('a machine-wide call is made as the person the door says it is from, as a page\'s call is', async t => {
+  const { did, post } = await computer(t)
+  await post('/_relay/machine', { fn: 'sendRenameComputer', args: ['x'] }, { [PERSON_HEADER]: encodeURIComponent('Dani') })
+  await post('/_relay/machine', { fn: 'sendRenameComputer', args: ['x'] })
+  assert.deepEqual(did, ['machine sendRenameComputer as Dani', 'machine sendRenameComputer'])
 })
 
 test('the header restricts whatever it says, and a call that is refused anyway is refused as it was', async t => {

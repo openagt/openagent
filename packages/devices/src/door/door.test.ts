@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { DEVICE_COOKIE, ENTER_PATH, ME_CODE_PATH, ME_LINE_PATH, ME_PATH, ME_REMOVE_PATH, TOO_MANY_TRIES, openDoor, readBearer, readEntry, type Door, type DoorOptions } from './door.js'
-import { COMPUTER_HEADER, COMPUTER_NAME_HEADER, PERSON_HEADER, addCode, addPerson, enter, nameOwner, readStore, removeDevice, sha256, update, type Entry } from './store.js'
+import { COMPUTER_HEADER, COMPUTER_NAME_HEADER, OWNERS_NAME_HEADER, PERSON_HEADER, addCode, addPerson, enter, nameOwner, readStore, removeDevice, sha256, update, type Entry } from './store.js'
 import { testHome } from './test-home.js'
 
 // The door in front of a stand-in for OpenAgent: a real server on this machine that records what
@@ -32,7 +32,7 @@ interface Rig {
   close(): Promise<void>
 }
 
-async function rig(knocks?: (peer: string | undefined) => boolean, more: Pick<DoorOptions, 'proxied' | 'origin'> = {}): Promise<Rig> {
+async function rig(knocks?: (peer: string | undefined) => boolean, more: Pick<DoorOptions, 'proxied' | 'origin' | 'ownersName'> = {}): Promise<Rig> {
   const home = await testHome()
   const asked: Asked[] = []
   const clock = { now: Date.now() }
@@ -564,6 +564,32 @@ test('a person with an OpenAgent of their own reaches it and no other; the owner
     // The owner's device is the owner at their own page: said by nobody.
     assert.deepEqual(r.asked.map(one => one.headers[PERSON_HEADER]), [undefined, 'eve'])
     assert.equal(roms.asked.length, 1)
+  } finally {
+    await roms.close()
+    await r.close()
+  }
+})
+
+test("a person's own OpenAgent is told the computer's name as its owner named it, by the door alone; the owner's own is not", async () => {
+  let owners: string | undefined = 'שרת של עדה'
+  const r = await rig(undefined, { ownersName: () => owners })
+  const roms = await standIn()
+  try {
+    await nameOwner(r.env, 'ada')
+    await addPerson(r.env, 'rom')
+    await update(r.env, store => void (store.persons.find(person => person.name === 'rom')!.port = roms.port))
+    const cookieOf = async (person?: string): Promise<string> => {
+      const entry = (await enter(r.env, (await addCode(r.env, Date.now(), person)).code, 'a phone'))!
+      return `${DEVICE_COOKIE}=${entry.id}.${entry.key}`
+    }
+    const [ada, rom] = [await cookieOf(), await cookieOf('rom')]
+    await fetch(`${r.at}/`, { headers: { cookie: rom, [OWNERS_NAME_HEADER]: 'mallory' } })
+    assert.equal(decodeURIComponent(String(roms.asked.at(-1)!.headers[OWNERS_NAME_HEADER])), 'שרת של עדה')
+    await fetch(`${r.at}/`, { headers: { cookie: ada, [OWNERS_NAME_HEADER]: 'mallory' } })
+    assert.equal(r.asked.at(-1)!.headers[OWNERS_NAME_HEADER], undefined, 'never passed on from a request')
+    owners = undefined
+    await fetch(`${r.at}/`, { headers: { cookie: rom, [OWNERS_NAME_HEADER]: 'mallory' } })
+    assert.equal(roms.asked.at(-1)!.headers[OWNERS_NAME_HEADER], undefined, 'nothing while the name is not known')
   } finally {
     await roms.close()
     await r.close()

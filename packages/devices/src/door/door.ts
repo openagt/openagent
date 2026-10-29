@@ -9,7 +9,7 @@ import { doorFingerprint, type Secured } from './certificate.js'
 import { deviceName } from './device-name.js'
 import { LINE_FOR_HEADER, LINE_PATH, LINE_PROTOCOL } from './line-out.js'
 import { enterPage, notInPage, type DoorKind } from './pages.js'
-import { COMPUTER_HEADER, COMPUTER_NAME_HEADER, PERSON_HEADER, addAsk, addCode, askOf, dropAsk, nameWord, shownCode, enter, isComputerId, isIn, listedDevices, nameComputer, personOf, portOf, readStore, removeComputer, removeDevice, sha256, shareLine, storePath, update, type Entry, type ListedDevice, type Store } from './store.js'
+import { COMPUTER_HEADER, COMPUTER_NAME_HEADER, OWNERS_NAME_HEADER, PERSON_HEADER, addAsk, addCode, askOf, dropAsk, nameWord, shownCode, enter, isComputerId, isIn, listedDevices, nameComputer, personOf, portOf, readStore, removeComputer, removeDevice, sha256, shareLine, storePath, update, type Entry, type ListedDevice, type Store } from './store.js'
 
 /**
  * The door: the one thing that lets anything in from the network. A request from a device that is in is
@@ -154,6 +154,8 @@ export interface DoorOptions {
   now?: () => number
   /** How long a look at an ask is held open for its answer; for a test that cannot wait. */
   askHoldMs?: number
+  /** This computer's name, as its owner named it, said to a person's own OpenAgent with each call passed to it; nothing while it is not known. */
+  ownersName?: () => string | undefined
 }
 
 export interface Door {
@@ -480,8 +482,11 @@ export async function openDoor(opts: DoorOptions): Promise<Door> {
     if (byBearer) delete headers.authorization
     delete headers[COMPUTER_HEADER]
     delete headers[COMPUTER_NAME_HEADER]
-    // Who the call is from is the door's to say, never the request's.
+    // Who the call is from is the door's to say, never the request's, and so is this computer's name.
     delete headers[PERSON_HEADER]
+    delete headers[OWNERS_NAME_HEADER]
+    const owners = port !== undefined ? opts.ownersName?.() : undefined
+    if (owners !== undefined) headers[OWNERS_NAME_HEADER] = encodeURIComponent(owners)
     // A name is any language's letters: a header carries only plain ones.
     if (person !== undefined) headers[PERSON_HEADER] = nameWord(person)
     // OpenAgent is asked as its own browser asks it: at its own address, from its own page.

@@ -74,6 +74,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   Wi-Fi fills the screen with asks, and over a day's wait after Deny.
 - An ask shows on the computer's own screen and on its owner's devices, never on an invited
   person's. Picked over the computer's own screen alone, and over every device that is in.
+- On this Wi-Fi works beside Tailscale: its switch shows and opens the Wi-Fi's door at its own
+  port, plain HTTP with Wi-Fi knocks, while the door behind Tailscale listens on this computer
+  alone, at the port after it. A device that got in on the Wi-Fi keeps its address, and a new
+  one not on Tailscale gets the same code on the Wi-Fi. Picked over hiding the switch while
+  Tailscale is on.
 
 ## On a server
 - On a server the door speaks HTTPS, with a certificate for the server's number that it
@@ -172,6 +177,10 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A computer's name is its own: renamed from any page, it is kept on that computer, and every
   page, on every device, shows the name it says. Picked over each page keeping a name of its
   own for it, which showed one computer under another name on each device.
+- A computer several people use has one name, its owner's: everyone sees it, a person's own
+  OpenAgent there goes by it too, and only the owner renames it. A person the owner invited has
+  no Rename, and a rename from them is refused. Picked over each person's OpenAgent keeping a
+  name of its own, and over letting a guest with full access rename the owner's computer.
 - Each server this computer is in at has its switch for reaching this computer from
   anywhere, whoever set the server up: the person's other computers too. Picked over the
   switch on the computer that installed the server alone.

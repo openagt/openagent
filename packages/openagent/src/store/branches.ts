@@ -1,4 +1,4 @@
-import { runPackageCommand, type ProvidedCommand } from '@openagt/agent-data'
+import { callPackageCommand, runPackageCommand, type ProvidedCommand } from '@openagt/agent-data'
 import { providedCommand } from '../built-in.js'
 import { isRunId } from './runs.js'
 
@@ -249,7 +249,7 @@ function commandBranches(root: string, command: ProvidedCommand, now: () => numb
     listed.clear()
     read.clear()
   }
-  // A read of branches by name, `show` or `ahead`: concurrent and recent asks of the same branches share one process; a read that failed is not kept.
+  // A read of branches by name, `show` or `ahead`: concurrent and recent asks of the same branches share one read; a read that failed is not kept.
   const branchRead = <T>(verb: 'show' | 'ahead', parse: (output: unknown) => T[], branches: readonly string[], from: string | undefined): Promise<T[]> => {
     const asked = branches.filter(branch => branch !== '')
     if (asked.length === 0) return Promise.resolve([])
@@ -257,7 +257,7 @@ function commandBranches(root: string, command: ProvidedCommand, now: () => numb
     const known = read.get(key)
     if (known && now() - known.at < CACHE_MS) return known.answer as Promise<T[]>
     const entry: { at: number; answer: Promise<T[]> } = { at: now(), answer: Promise.resolve([]) }
-    entry.answer = runPackageCommand(root, command, [verb, ...(from ? ['--from', from] : []), ...asked]).then(result => {
+    entry.answer = callPackageCommand(root, command, [verb, ...(from ? ['--from', from] : []), ...asked]).then(result => {
       if (!result.ok || !Array.isArray(result.output)) {
         if (read.get(key) === entry) read.delete(key)
         return []
@@ -270,12 +270,12 @@ function commandBranches(root: string, command: ProvidedCommand, now: () => numb
   return {
     drop,
     list(opts = {}) {
-      // Concurrent reads share one process; a read that failed is not kept.
+      // Concurrent reads share one; a read that failed is not kept.
       const key = opts.sizes ? 'sizes' : 'plain'
       const known = listed.get(key)
       if (known && now() - known.at < (opts.fresh ? FRESH_MS : CACHE_MS)) return known.rows
       const read: { at: number; rows: Promise<Checkout[]> } = { at: now(), rows: Promise.resolve([]) }
-      read.rows = runPackageCommand(root, command, ['list', ...(opts.sizes ? ['--sizes'] : [])]).then(result => {
+      read.rows = callPackageCommand(root, command, ['list', ...(opts.sizes ? ['--sizes'] : [])]).then(result => {
         if (!result.ok || !Array.isArray(result.output)) {
           if (listed.get(key) === read) listed.delete(key)
           return []

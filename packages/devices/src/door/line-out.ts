@@ -4,7 +4,7 @@ import type { Duplex } from 'node:stream'
 import { connect } from 'node:tls'
 import { keyFingerprint } from './der.js'
 import { DATA, END, HEAD, Link, RESET, carriedHeaders, carriedPath, carriedValue, readHead, sendBody, type Frame } from './frames.js'
-import { COMPUTER_HEADER, PERSON_HEADER, nameFromWord, nameOf } from './store.js'
+import { COMPUTER_HEADER, OWNERS_NAME_HEADER, PERSON_HEADER, nameFromWord, nameOf } from './store.js'
 
 /**
  * This computer's end of a line: it calls its server, says who it is with the key it has there,
@@ -116,7 +116,8 @@ export function knock(socket: Duplex, url: string, key: string, computer?: strin
 }
 
 /** Where one call down a line goes: an OpenAgent on this computer, or nowhere, with the answer the server is given instead (plain words, unless it says its type). */
-export type Route = { target: string } | { status: number; text: string; type?: string }
+/** Where a call goes: an OpenAgent here, with this computer's name as its owner named it for a person's own one, or an answer given here. */
+export type Route = { target: string; ownersName?: string } | { status: number; text: string; type?: string }
 
 export interface CarryOptions {
   /**
@@ -160,6 +161,7 @@ export function carry(socket: Duplex, rest: Buffer, opts: CarryOptions): Promise
         if (value !== undefined) passed[name] = value
       }
       if (opts.watch()) passed[WATCH_HEADER] = '1'
+      if (route.ownersName !== undefined) passed[OWNERS_NAME_HEADER] = encodeURIComponent(route.ownersName)
       let answered = false
       let upstream: ClientRequest
       // Whether this call is still the one under its number: a number the server uses again is the newer call's.

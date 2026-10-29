@@ -78,3 +78,26 @@ test('parseTickets keeps the rows with the five plain facts and drops the rest',
   assert.deepEqual(parseTickets('nope'), [])
   assert.deepEqual(parseTickets([ROW, { file: 'x.md' }, null, 'row', { ...ROW, file: '' }]), [ROW])
 })
+
+/** The provider's command line as the function its command calls, exported by the package: each call logged as `in <args>` with where it ran. */
+const PROVIDER_CLI = `
+import { appendFileSync, readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+const dir = dirname(fileURLToPath(import.meta.url))
+export async function runCli(args, io) {
+  appendFileSync(join(dir, 'calls.log'), 'in ' + args.join(' ') + ' @' + io.cwd + '\\n')
+  return io.stdout(readFileSync(join(dir, 'tickets.json'), 'utf8')), 0
+}
+`
+
+test("a provider whose package exports its command's function is read in this process: no command is run", async () => {
+  const root = await project({ intickets: { type: 'module', exports: { '.': './cli.mjs' }, bin: { tickets: 'provider.cjs' }, openagent: { tickets: 'tickets' } } })
+  try {
+    await writeFile(join(root, 'node_modules', 'intickets', 'cli.mjs'), PROVIDER_CLI)
+    assert.deepEqual(await (await providedTickets()(root))!.list(), [ROW])
+    assert.deepEqual(await calls(root, 'intickets'), [`in list --local @${root}`], 'the answer came from the function, in the project; the command never ran')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})

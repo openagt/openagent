@@ -147,3 +147,29 @@ test('parseBranchesAhead keeps the counts with a branch, a number and every verd
   assert.deepEqual(parseBranchesAhead('nope'), [])
   assert.deepEqual(parseBranchesAhead([counted, { ...counted, ahead: '2' }, { ...counted, uncommitted: undefined }, { ...counted, gone: undefined }, { ...counted, branch: '' }, null, { ...counted, extra: 1 }]), [counted, counted])
 })
+
+/** The provider's command line as the function its command calls, exported by the package: each call logged as `in <args>` with where it ran. */
+const PROVIDER_CLI = `
+import { appendFileSync, readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+const dir = dirname(fileURLToPath(import.meta.url))
+export async function runCli(args, io) {
+  appendFileSync(join(dir, 'calls.log'), 'in ' + args.join(' ') + ' @' + io.cwd + '\\n')
+  return io.stdout(readFileSync(join(dir, args[0] === 'list' ? 'list.json' : 'show.json'), 'utf8')), 0
+}
+`
+
+test("a provider whose package exports its command's function is read in this process: no command is run for a read", async () => {
+  const root = await project({ inbranches: { type: 'module', exports: { '.': './cli.mjs' }, bin: { branches: 'provider.cjs' }, openagent: { branches: 'branches' } } })
+  try {
+    await writeFile(join(root, 'node_modules', 'inbranches', 'cli.mjs'), PROVIDER_CLI)
+    const branches = (await providedBranches()(root))!
+    assert.deepEqual(await branches.list(), [{ id: 'run-1', path: ROW.path, branch: ROW.branch }])
+    assert.deepEqual(await branches.show(['agent-run-1']), [STATE])
+    assert.deepEqual(await branches.ahead(['agent-run-1'], 'abc123'), [])
+    assert.deepEqual(await calls(root, 'inbranches'), [`in list @${root}`, `in show agent-run-1 @${root}`, `in ahead --from abc123 agent-run-1 @${root}`], 'every answer came from the function, in the project; the command never ran')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})

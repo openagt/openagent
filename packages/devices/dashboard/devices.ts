@@ -48,6 +48,8 @@ export interface DoorStatus {
   https?: { address: string }
   /** Behind Tailscale: this computer's name on the person's Tailscale network, which its door is open at. */
   tailscale?: { address: string }
+  /** Behind Tailscale with the switch on: the Wi-Fi's door beside it, whether it listens, and why not. */
+  wifi?: { listening: boolean; problem?: string }
   /** Where the person fixes the problem themselves, in an account of theirs: Tailscale's page that turns Serve on. */
   fixAt?: string
   devices: DeviceRow[]
@@ -65,6 +67,8 @@ export interface AddLink {
   url: string
   /** The same link by this computer's number, when `url` goes by its name. */
   numberUrl?: string
+  /** Behind Tailscale, the same code at the Wi-Fi's door beside it, for a device not on Tailscale. */
+  wifiUrl?: string
   expires: string
 }
 
@@ -74,7 +78,7 @@ const text = (value: unknown): string | undefined => (typeof value === 'string' 
 
 export function readStatus(output: unknown): DoorStatus | undefined {
   if (!output || typeof output !== 'object') return undefined
-  const { on, listening, problem, https, tailscale, fixAt, devices, persons, person } = output as Record<string, unknown>
+  const { on, listening, problem, https, tailscale, wifi, fixAt, devices, persons, person } = output as Record<string, unknown>
   if (typeof on !== 'boolean' || !Array.isArray(devices)) return undefined
   const rows = readDevices(devices)
   const people: PersonRow[] = []
@@ -99,6 +103,8 @@ export function readStatus(output: unknown): DoorStatus | undefined {
   // Only Tailscale's own page: what the page links to is no address a command could name.
   const fix = text(fixAt)?.startsWith('https://login.tailscale.com/') ? text(fixAt) : undefined
   const own = text(person)
+  const beside = wifi && typeof wifi === 'object' ? (wifi as Record<string, unknown>) : undefined
+  const wifiWhy = text(beside?.problem)
   return {
     on,
     listening: listening === true,
@@ -106,6 +112,7 @@ export function readStatus(output: unknown): DoorStatus | undefined {
     ...(why && fix ? { fixAt: fix } : {}),
     ...(address ? { https: { address } } : {}),
     ...(named ? { tailscale: { address: named } } : {}),
+    ...(named && beside ? { wifi: { listening: beside.listening === true, ...(wifiWhy ? { problem: wifiWhy } : {}) } } : {}),
     devices: rows,
     persons: people,
     ...(own ? { person: own } : {}),
@@ -166,9 +173,9 @@ export const removeMine = (id: string, fetchFn?: typeof fetch): Promise<Answer<M
 
 function readLink(output: unknown): AddLink | undefined {
   if (!output || typeof output !== 'object') return undefined
-  const { url, numberUrl, expires } = output as Record<string, unknown>
-  const [link, byNumber, until] = [text(url), text(numberUrl), text(expires)]
-  return link && until ? { url: link, ...(byNumber ? { numberUrl: byNumber } : {}), expires: until } : undefined
+  const { url, numberUrl, wifiUrl, expires } = output as Record<string, unknown>
+  const [link, byNumber, byWifi, until] = [text(url), text(numberUrl), text(wifiUrl), text(expires)]
+  return link && until ? { url: link, ...(byNumber ? { numberUrl: byNumber } : {}), ...(byWifi ? { wifiUrl: byWifi } : {}), expires: until } : undefined
 }
 
 async function run<T>(host: ModuleHost, args: string[], read: (output: unknown) => T | undefined): Promise<Answer<T>> {

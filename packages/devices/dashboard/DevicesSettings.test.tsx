@@ -249,7 +249,7 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     expect((await screen.findByRole('alert')).textContent).toBe('No certificate for 203.0.113.5 yet: port 80 cannot be reached')
   })
 
-  test('On your Tailscale network: its switch puts the door behind Tailscale, the card says where, the Wi-Fi switch is gone, and a phone gets the link on Tailscale', async () => {
+  test('On your Tailscale network: its switch puts the door behind Tailscale, the card says where, the Wi-Fi switch stays as it was, and a phone gets the link on Tailscale', async () => {
     const BEHIND = { on: false, listening: true, tailscale: { address: 'laptop.tail1234.ts.net' }, devices: [PHONE], persons: [] }
     const link = { url: 'https://laptop.tail1234.ts.net/_devices/enter#code', expires: LINK.expires }
     let state: unknown = OPEN
@@ -261,12 +261,30 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     fireEvent.click(await screen.findByRole('switch', { name: 'On your Tailscale network' }))
     await waitFor(() => expect(runComputerCommand).toHaveBeenCalledWith(['tailscale', 'on']))
     expect(await screen.findByText(/open OpenAgent at https:\/\/laptop\.tail1234\.ts\.net, from anywhere/)).toBeTruthy()
-    expect(screen.queryByRole('switch', { name: 'On this Wi-Fi' })).toBeNull()
+    expect(screen.getByRole('switch', { name: 'On this Wi-Fi' }).getAttribute('aria-checked')).toBe('false')
     // The phones in reach it there now.
     expect(await screen.findByText(/on your Tailscale network/)).toBeTruthy()
     await addPhone()
     await screen.findByRole('img', { name: 'The code a new device scans' })
     expect(await copiedLink()).toBe(link.url)
+  })
+
+  test("behind Tailscale with the Wi-Fi switch on, a phone not on Tailscale gets the same code at this Wi-Fi's door; a Wi-Fi door that does not open says why", async () => {
+    const BOTH = { on: true, listening: true, tailscale: { address: 'laptop.tail1234.ts.net' }, wifi: { listening: true }, devices: [PHONE], persons: [] }
+    const link = { url: 'https://laptop.tail1234.ts.net/_devices/enter#code', wifiUrl: 'http://adas-macbook.local:4201/_devices/enter#code', expires: LINK.expires }
+    const { host } = door(args => (args[0] === 'add' ? ok(link) : ok(BOTH)))
+    show(host)
+    expect((await screen.findByRole('switch', { name: 'On this Wi-Fi' })).getAttribute('aria-checked')).toBe('true')
+    await addPhone()
+    await screen.findByRole('img', { name: 'The code a new device scans' })
+    expect(await copiedLink()).toBe(link.url)
+    fireEvent.click(screen.getByRole('button', { name: 'Not on Tailscale? Use this Wi-Fi.' }))
+    expect(await copiedLink()).toBe(link.wifiUrl)
+    expect(screen.queryByRole('button', { name: 'Not on Tailscale? Use this Wi-Fi.' })).toBeNull()
+    cleanup()
+    const taken = door(() => ok({ ...BOTH, wifi: { listening: false, problem: 'Port 4201 is taken by another program on this computer.' } }))
+    show(taken.host)
+    expect(await screen.findByText('Port 4201 is taken by another program on this computer.')).toBeTruthy()
   })
 
   test('with nothing in, the start page offers Tailscale too: one press puts the door behind it, and says why when it cannot', async () => {
@@ -441,10 +459,19 @@ describe('Settings › Devices: another computer, once', () => {
     expect(runComputerCommand).not.toHaveBeenCalledWith(expect.arrayContaining(['rename']))
   })
 
+  test("a person the owner invited sees the owner's name for this computer, and no Rename: its owner names it", async () => {
+    const { host } = door(() => ok(OPEN), [])
+    vi.mocked(host.machines).mockImplementation(async () => ({ version: '0.42.0', name: 'OpenAgentVPS', renames: false, machines: [] }))
+    show(host)
+    const row = await screen.findByRole('region', { name: 'This computer' })
+    await within(row).findByText('OpenAgentVPS')
+    expect(within(row).queryByRole('button', { name: 'Rename' })).toBeNull()
+  })
+
   test('this computer is renamed in its own row: kept here, and the row reads it again', async () => {
     const { host } = door(() => ok(OPEN), [])
     let name = 'MacBook-Pro'
-    vi.mocked(host.machines).mockImplementation(async () => ({ version: '0.42.0', name, machines: [] }))
+    vi.mocked(host.machines).mockImplementation(async () => ({ version: '0.42.0', name, renames: true, machines: [] }))
     vi.mocked(host.renameComputer).mockImplementation(async picked => ((name = picked), { ok: true }))
     show(host)
     const row = await screen.findByRole('region', { name: 'This computer' })

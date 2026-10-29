@@ -1,4 +1,4 @@
-import { runPackageCommand, type ProvidedCommand } from '@openagt/agent-data'
+import { callPackageCommand, type ProvidedCommand } from '@openagt/agent-data'
 import { providedCommand } from '../built-in.js'
 
 /**
@@ -51,10 +51,10 @@ function commandQueue(root: string, command: ProvidedCommand, now: () => number)
       listed = undefined
     },
     list() {
-      // Concurrent reads share one process; a read that failed is not kept.
+      // Concurrent reads share one; a read that failed is not kept.
       if (listed && now() - listed.at < CACHE_MS) return listed.entries
       const read: { at: number; entries: Promise<string[]> } = { at: now(), entries: Promise.resolve([]) }
-      read.entries = runPackageCommand(root, command, ['--local']).then(result => {
+      read.entries = callPackageCommand(root, command, ['--local']).then(result => {
         if (!result.ok || !Array.isArray(result.output)) {
           if (listed === read) listed = undefined
           return []

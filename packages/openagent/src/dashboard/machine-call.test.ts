@@ -8,7 +8,7 @@ import { createServer, type Server } from 'node:https'
 import { createServer as createTcpServer, type AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { COMPUTER_HEADER, computerSaid, computerWordFor, machineFetch, NOT_THE_MACHINE, sayComputer } from './machine-call.js'
+import { COMPUTER_HEADER, computerSaid, computerWordFor, machineFetch, noteOwnersName, NOT_THE_MACHINE, sayComputer } from './machine-call.js'
 import { enterRemote, pingRemote, startRemoteAgent, streamRemoteEvents } from './remote-run.js'
 import type { OpenAgentEvent } from '../events.js'
 
@@ -202,4 +202,20 @@ test('once OpenAgent said which computer this is, every call to a machine says i
     await studio.close()
     await new Promise<void>(resolve => plain.close(() => resolve()))
   }
+})
+
+test("a person's own OpenAgent keeps the computer's name its door says, once for each new name; any other OpenAgent does not read it", () => {
+  const kept: string[] = []
+  const keep = async (name: string) => void kept.push(name)
+  const person = { OPENAGENT_PERSON: 'Dani' }
+  noteOwnersName(encodeURIComponent('OpenAgentVPS'), {}, keep)
+  assert.deepEqual(kept, [], "the owner's OpenAgent names the computer itself")
+  noteOwnersName(encodeURIComponent('OpenAgentVPS'), person, keep)
+  noteOwnersName(encodeURIComponent('OpenAgentVPS'), person, keep)
+  noteOwnersName(undefined, person, keep)
+  noteOwnersName(['a', 'b'], person, keep)
+  noteOwnersName('%E0%A4%A', person, keep)
+  noteOwnersName(encodeURIComponent('  '), person, keep)
+  noteOwnersName(encodeURIComponent('שרת של סולימאן'), person, keep)
+  assert.deepEqual(kept, ['OpenAgentVPS', 'שרת של סולימאן'], 'a new name once, in any language; what is no name is not kept')
 })

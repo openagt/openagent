@@ -87,3 +87,26 @@ test('parseQueueEntries keeps the non-empty strings of an array, trimmed, and no
   assert.deepEqual(parseQueueEntries({ entries: ['a'] }), [])
   assert.deepEqual(parseQueueEntries('a'), [])
 })
+
+/** The provider's command line as the function its command calls, exported by the package: each call logged as `in <args>` with where it ran. */
+const PROVIDER_CLI = `
+import { appendFileSync, readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+const dir = dirname(fileURLToPath(import.meta.url))
+export async function runCli(args, io) {
+  appendFileSync(join(dir, 'calls.log'), 'in ' + args.join(' ') + ' @' + io.cwd + '\\n')
+  return io.stdout(readFileSync(join(dir, 'queue.json'), 'utf8')), 0
+}
+`
+
+test("a provider whose package exports its command's function is read in this process: no command is run", async () => {
+  const root = await project({ inqueue: { type: 'module', exports: { '.': './cli.mjs' }, bin: { queue: 'provider.cjs' }, openagent: { queue: 'queue' } } })
+  try {
+    await writeFile(join(root, 'node_modules', 'inqueue', 'cli.mjs'), PROVIDER_CLI)
+    assert.deepEqual(await (await providedQueue()(root))!.list(), ['- one', 'two'])
+    assert.deepEqual(await calls(root, 'inqueue'), [`in --local @${root}`], 'the answer came from the function, in the project; the command never ran')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})

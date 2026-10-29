@@ -6,7 +6,8 @@ import { execFileSync } from 'node:child_process'
 import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { onComputersThrough, onMachineAgentAccounts, onMachineGitHosts, onMachineModels, sendMachineAgentAccountFirst, sendMachineGitHostAccount, onMachineStartCheck, onMachineVersions, onMachines, onMachinesReachable, onProjectHere, onProjectOnMachine, sendAddComputerThrough, sendAddMachine, sendLetMachineIn, sendProjectHere, sendProjectToMachine, sendRemoveMachine, sendRenameComputer, sendRenameMachine } from './machines.js'
+import { onComputersThrough, onMachineAgentAccounts, onMachineGitHosts, onMachineModels, sendMachineAgentAccountFirst, sendMachineGitHostAccount, onMachineStartCheck, onMachineVersions, onMachines, onMachinesReachable, onProjectHere, onProjectOnMachine, sendAddComputerThrough, sendAddMachine, sendLetMachineIn, sendProjectHere, sendProjectToMachine, sendRemoveMachine, sendRenameComputer, sendRenameMachine, ONLY_THE_OWNER } from './machines.js'
+import { asCaller } from '../dashboard/person.js'
 import { sayName } from '../dashboard/machine-call.js'
 import { elsewhereId, type OwnProject } from '../dashboard/elsewhere.js'
 import type { BringProject } from '../dashboard/remote-run.js'
@@ -323,6 +324,29 @@ test('this computer is renamed here and says its name in every call to a machine
     } finally {
       sayName(undefined)
       await studio.close()
+    }
+  })
+})
+
+test("only this computer's owner names it: a person the owner invited is refused, at the owner's OpenAgent and on one of their own here, and their page offers no Rename", async () => {
+  await withHome(async () => {
+    try {
+      assert.deepEqual(await sendRenameComputer('Studio'), { ok: true, name: 'Studio' })
+      assert.equal((await onMachineVersions()).renames, true)
+      // A call the door says a person the owner invited made.
+      assert.deepEqual(await asCaller('Dani', () => sendRenameComputer('Dani’s now')), { ok: false, error: ONLY_THE_OWNER })
+      assert.equal((await asCaller('Dani', () => onMachineVersions())).renames, false)
+      // An OpenAgent of a person's own on this computer.
+      process.env.OPENAGENT_PERSON = 'Dani'
+      try {
+        assert.deepEqual(await sendRenameComputer('Dani’s now'), { ok: false, error: ONLY_THE_OWNER })
+        assert.equal((await onMachineVersions()).renames, false)
+      } finally {
+        delete process.env.OPENAGENT_PERSON
+      }
+      assert.equal((await onMachineVersions()).name, 'Studio', 'the name stays the owner\'s')
+    } finally {
+      sayName(undefined)
     }
   })
 })

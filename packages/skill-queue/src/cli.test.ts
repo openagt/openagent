@@ -192,3 +192,8 @@ test('a repository with no remote reads and writes its local branch; outside a r
     await rm(solo, RETRIED_RM)
   }
 })
+
+test("the package's main export is the function its command calls: OpenAgent reads the queue in its own process", async () => {
+  const main = await import('./index.js')
+  assert.equal(main.runCli, runCli)
+})

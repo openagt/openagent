@@ -22,13 +22,15 @@ import { addPerson, computerWordFor, isComputerId, pidAlive, readStore, readStor
  * certificate is asked for here and renewed here, and the proof its office reads is shown on
  * port 80, which otherwise only sends a browser on to the door.
  *
- * Behind Tailscale (the file names this computer's name on the person's Tailscale network) the
- * switch is not looked at either: the door listens on this computer alone, and Tailscale's Serve
- * takes it to the person's devices there (tailscale.ts). Serve is asked for here, again until
- * Tailscale serves it, and let go of when the door is no longer behind Tailscale.
+ * Behind Tailscale (the file names this computer's name on the person's Tailscale network) a door
+ * listens on this computer alone, at the port after the Wi-Fi's, and Tailscale's Serve takes it to
+ * the person's devices there (tailscale.ts). Serve is asked for here, again until Tailscale serves
+ * it, and let go of when the door is no longer behind Tailscale. The switch still opens the Wi-Fi's
+ * door beside it, with its own rules (plain HTTP, a knock from this Wi-Fi), at the port its devices
+ * know it by; the file says that one apart (`wifiListening`, `wifiProblem`).
  *
  * While the door is open on the Wi-Fi, it is announced there, so another computer's OpenAgent
- * finds it (wifi.ts); a server's door is not, nor one behind Tailscale.
+ * finds it (wifi.ts); a server's door is not, nor the one behind Tailscale.
  *
  * The lines are kept here too. To each server the file names, this computer keeps a line open,
  * whatever its own door does. And on a server, each computer that keeps a line here gets its
@@ -58,7 +60,7 @@ const MIRROR_MS = 60_000
  * page that only looks whether the computer is there, or which logins it has, makes nobody a user:
  * it asks for every machine it lists, every few seconds, whether its person ever runs one there.
  */
-export function routeFor(line: Line, store: Store, target: string, env: NodeJS.ProcessEnv, person: string | undefined, call: { method: string; path: string }, make: (name: string) => void): Route {
+export function routeFor(line: Line, store: Store, target: string, env: NodeJS.ProcessEnv, person: string | undefined, call: { method: string; path: string }, make: (name: string) => void, ownersName?: string): Route {
   const owner = store.persons.find(candidate => candidate.owner)?.name
   // A line that never heard who its person is takes every call as theirs, as before persons; a line for everyone does not.
   if (person === undefined || person === line.person || person === owner || (line.person === undefined && line.for !== 'everyone')) return { target }
@@ -66,7 +68,8 @@ export function routeFor(line: Line, store: Store, target: string, env: NodeJS.P
   if (!env.OPENAGENT_PERSON_HELPER) return { status: 403, text: NOT_A_SERVER }
   if (owner === undefined) return { status: 503, text: NO_OWNER }
   const theirs = store.persons.find(candidate => candidate.name === person && !candidate.owner)
-  if (theirs?.ready && theirs.port !== undefined) return { target: `http://127.0.0.1:${theirs.port}` }
+  // Their OpenAgent goes by this computer's name, as its owner named it.
+  if (theirs?.ready && theirs.port !== undefined) return { target: `http://127.0.0.1:${theirs.port}`, ...(ownersName !== undefined ? { ownersName } : {}) }
   const route = call.path.split('?')[0]
   // Whether the computer is there: its own OpenAgent says so, with its version and name and nothing else.
   if (call.method === 'GET' && route === '/_relay/ping') return { target }
@@ -114,18 +117,34 @@ export interface ServeOptions {
   announce?: typeof announce
   /** How the `tailscale` command is run; the computer's own when unsaid. */
   tailscale?: TailscaleRun
+  /** How often the owner's OpenAgent is asked the computer's name; for a test. */
+  ownersNameMs?: number
 }
 
 /** OpenAgent's version, as its own ping says it: what the Wi-Fi is told beside this computer's name. */
 async function versionAt(target: string): Promise<string | undefined> {
+  const { version } = await pingAt(target)
+  return typeof version === 'string' && /^[\w.+-]{1,40}$/.test(version) ? version : undefined
+}
+
+/** This computer's name as its owner named it, as the owner's OpenAgent says it in its ping. */
+async function nameAt(target: string): Promise<string | undefined> {
+  const { name } = await pingAt(target)
+  return typeof name === 'string' && name.trim() !== '' && name.length <= 200 ? name : undefined
+}
+
+/** What OpenAgent's own ping says; nothing when it does not answer. */
+async function pingAt(target: string): Promise<{ version?: unknown; name?: unknown }> {
   try {
     const res = await fetch(`${target}/_relay/ping`, { signal: AbortSignal.timeout(5_000) })
-    const { version } = (await res.json()) as { version?: unknown }
-    return typeof version === 'string' && /^[\w.+-]{1,40}$/.test(version) ? version : undefined
+    return ((await res.json()) ?? {}) as { version?: unknown; name?: unknown }
   } catch {
-    return undefined
+    return {}
   }
 }
+
+/** How often the owner's OpenAgent is asked the computer's name, to say it to each person's own. */
+const OWNERS_NAME_MS = 60_000
 
 /** The door's port for an OpenAgent at `target`. */
 export function doorPort(target: string): number {
@@ -193,6 +212,10 @@ export async function serve(opts: ServeOptions): Promise<void> {
   const httpsPort = opts.port ?? HTTPS_PORT
   const proofPort = opts.proofPort ?? PROOF_PORT
   let door: Door | undefined
+  // Behind Tailscale, a door of its own, on this computer alone, at the port after the Wi-Fi's: the
+  // Wi-Fi's goes on beside it, at the port its devices know it by, while the switch is on.
+  let behindDoor: Door | undefined
+  const behindPort = port === 0 ? 0 : port + 1
   let failedAt: number | undefined
   let stamp: string | undefined
 
@@ -207,6 +230,18 @@ export async function serve(opts: ServeOptions): Promise<void> {
   // Behind Tailscale: the name the door is served at, and whether Tailscale serves it yet.
   let behind: { address: string; serving: boolean; askedAt?: number } | undefined
   const tailscale = opts.tailscale ?? tailscaleRun(env, signal)
+
+  // This computer's name as its owner named it, asked of the owner's OpenAgent now and then: the
+  // door says it to each person's own OpenAgent, which goes by it.
+  // Asked only where a person has an OpenAgent of their own, and never waited for: a look goes on.
+  let ownersName: string | undefined
+  let ownersNameAt = -Infinity
+  const hearOwnersName = (): void => {
+    if (!latest?.persons.some(person => !person.owner && person.port !== undefined)) return
+    if (Date.now() - ownersNameAt < (opts.ownersNameMs ?? OWNERS_NAME_MS)) return
+    ownersNameAt = Date.now()
+    void nameAt(opts.target).then(name => void (ownersName = name ?? ownersName))
+  }
 
   // Said on the Wi-Fi while the door is open there.
   let announcing: Promise<Announcing | undefined> | undefined
@@ -307,7 +342,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
         // The line as the file says it now: who its person is may have been heard since it was asked for.
         route: (person, call) => {
           const now = latest ?? store
-          return routeFor(now.lines.find(candidate => candidate.url === line.url) ?? line, now, opts.target, env, person, call, name => make(name, line.url))
+          return routeFor(now.lines.find(candidate => candidate.url === line.url) ?? line, now, opts.target, env, person, call, name => make(name, line.url), ownersName)
         },
         watch: () => modes.get(line.url) !== 'full',
         signal: controller.signal,
@@ -441,7 +476,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
     if (served && !door && secured) {
       try {
         const using = secured
-        door = await openDoor({ env, target: opts.target, port: httpsPort, ...(opts.host !== undefined ? { host: opts.host } : {}), knocks: () => true, secured: using, lines: { take: lines.take, ports, connected: lines.connected, pass: lines.pass } })
+        door = await openDoor({ env, target: opts.target, port: httpsPort, ...(opts.host !== undefined ? { host: opts.host } : {}), knocks: () => true, secured: using, lines: { take: lines.take, ports, connected: lines.connected, pass: lines.pass }, ownersName: () => ownersName })
         // OpenAgent may have started anew since it was last told.
         untold = true
         // A certificate renewed while the door was being opened is the one it speaks with.
@@ -477,20 +512,17 @@ export async function serve(opts: ServeOptions): Promise<void> {
     let problem: string | undefined
     let fixAt: string | undefined
     if (!behind) {
-      // A door opened for the Wi-Fi listened on every network: this one listens on this computer alone.
-      await stopAnnouncing()
-      await door?.close()
-      door = undefined
       try {
-        door = await openDoor({ env, target: opts.target, port, host: '127.0.0.1', knocks: fromThisComputer, proxied: true, origin: `https://${address}` })
+        behindDoor = await openDoor({ env, target: opts.target, port: behindPort, host: '127.0.0.1', knocks: fromThisComputer, proxied: true, origin: `https://${address}`, ownersName: () => ownersName })
         behind = { address, serving: false }
         failedAt = undefined
-        log(`devices: the door is open on port ${door.port} of this computer, for Tailscale to serve at ${address}`)
+        log(`devices: the door is open on port ${behindDoor.port} of this computer, for Tailscale to serve at ${address}`)
       } catch (err) {
         failedAt = Date.now()
-        problem = startingOver(err, store) ? store.problem : whyNot(err, port)
+        problem = startingOver(err, store) ? store.problem : whyNot(err, behindPort)
       }
     }
+    const door = behindDoor
     // Asked of Tailscale until it serves the door, not more often than it waits each time to be turned on.
     if (door && behind && !behind.serving && Date.now() - (behind.askedAt ?? -Infinity) >= (opts.retryMs ?? SERVE_AGAIN_MS)) {
       behind.askedAt = Date.now()
@@ -504,7 +536,8 @@ export async function serve(opts: ServeOptions): Promise<void> {
       const at = await servedAt(tailscale, address)
       if (!at.ok) problem = at.problem
       else if (at.value === ours) behind.serving = true
-      else if (at.value !== undefined) problem = `Tailscale already serves something else at https://${address}, so OpenAgent's door is not served there. Stop that with tailscale serve --https=443 off, and the door is served next.`
+      // The door Tailscale served before it had a port of its own, at the Wi-Fi's: served here instead.
+      else if (at.value !== undefined && (port === 0 || at.value !== `http://127.0.0.1:${port}`)) problem = `Tailscale already serves something else at https://${address}, so OpenAgent's door is not served there. Stop that with tailscale serve --https=443 off, and the door is served next.`
       else {
         const served = await serveDoor(tailscale, door.port)
         if (served.ok) behind.serving = true
@@ -541,22 +574,25 @@ export async function serve(opts: ServeOptions): Promise<void> {
   const leaveTailscale = async (): Promise<void> => {
     const was = behind
     behind = undefined
-    if (was && door) {
+    if (was && behindDoor) {
       const at = await servedAt(tailscale, was.address)
-      if (at.ok && at.value === `http://127.0.0.1:${door.port}`) {
+      if (at.ok && at.value === `http://127.0.0.1:${behindDoor.port}`) {
         const stopped = await stopServing(tailscale)
         if (!stopped.ok) log(`devices: ${stopped.problem}`)
       }
     }
-    await door?.close()
-    door = undefined
+    await behindDoor?.close()
+    behindDoor = undefined
     failedAt = undefined
+    // The Wi-Fi's door, when it is open, is said in the file as the door at the next look.
     await update(env, s => {
       delete s.listening
       delete s.problem
       delete s.fixAt
+      delete s.wifiListening
+      delete s.wifiProblem
     })
-    log('devices: the door is closed')
+    log('devices: the door behind Tailscale is closed')
   }
 
   const reconcile = async (): Promise<void> => {
@@ -590,48 +626,57 @@ export async function serve(opts: ServeOptions): Promise<void> {
       return
     }
     if (store.https) return reconcileServed(store, store.https.address)
-    if (store.tailscale) return reconcileBehind(store, store.tailscale.address)
+    if (store.tailscale) await reconcileBehind(store, store.tailscale.address)
+    // The Wi-Fi's door, by the switch: the door, or one beside the door behind Tailscale, whose
+    // place in the file it then leaves alone.
+    const beside = store.tailscale !== undefined
+    const heard = beside ? store.wifiListening : store.listening
+    const said = beside ? store.wifiProblem : store.problem
+    const note = (s: Store, listening: Store['listening'], problem: string | undefined): void => {
+      if (beside) {
+        if (listening) s.wifiListening = listening
+        else delete s.wifiListening
+        if (problem === undefined) delete s.wifiProblem
+        else s.wifiProblem = problem
+      } else {
+        if (listening) s.listening = listening
+        else delete s.listening
+        if (problem === undefined) delete s.problem
+        else s.problem = problem
+      }
+    }
     if (store.on && !door) {
       try {
         const knocks = opts.address
-        door = await openDoor({ env, target: opts.target, port, ...(opts.host !== undefined ? { host: opts.host } : {}), ...(knocks ? { knocks: peer => onOwnNetwork(peer, knocks), address: knocks } : {}) })
+        door = await openDoor({ env, target: opts.target, port, ...(opts.host !== undefined ? { host: opts.host } : {}), ...(knocks ? { knocks: peer => onOwnNetwork(peer, knocks), address: knocks } : {}), ownersName: () => ownersName })
         failedAt = undefined
-        log(`devices: the door is open on port ${door.port}`)
+        log(`devices: the door is open on port ${door.port}${beside ? ', on this Wi-Fi' : ''}`)
       } catch (err) {
         failedAt = Date.now()
         const problem = whyNot(err, port)
         // Another door's process holding the port (the one of an OpenAgent that just ended) is no
         // problem to tell: it goes by itself, and the door is tried again.
-        const othersDoor = store.listening !== undefined && store.listening.pid !== process.pid && pidAlive(store.listening.pid)
-        if (!othersDoor && store.problem !== problem) {
-          await update(env, s => {
-            delete s.listening
-            s.problem = problem
-          })
+        const othersDoor = heard !== undefined && heard.pid !== process.pid && pidAlive(heard.pid)
+        if (!othersDoor && said !== problem) {
+          await update(env, s => note(s, undefined, problem))
           log(`devices: ${problem}`)
         }
       }
-    } else if (!store.on && (door || store.listening || store.problem)) {
+    } else if (!store.on && (door || heard || said)) {
       await stopAnnouncing()
       await door?.close()
       door = undefined
       failedAt = undefined
-      await update(env, s => {
-        delete s.listening
-        delete s.problem
-      })
-      log('devices: the door is closed')
+      await update(env, s => note(s, undefined, undefined))
+      log(beside ? 'devices: the door on this Wi-Fi is closed' : 'devices: the door is closed')
     }
     if (!door) return
     // Said in the file once the door is open, and again when a write of it failed: by this the command knows the door listens.
-    if (store.on && (store.listening === undefined || !pidAlive(store.listening.pid))) {
+    if (store.on && (heard === undefined || !pidAlive(heard.pid) || heard.port !== door.port)) {
       const listening = { pid: process.pid, port: door.port }
       // A write that failed is tried at the next look, not taken for a door that did not open.
       stamp = undefined
-      await update(env, s => {
-        s.listening = listening
-        delete s.problem
-      })
+      await update(env, s => note(s, listening, undefined))
     }
     startAnnouncing(door.port)
     door.dropRemoved(store)
@@ -642,6 +687,7 @@ export async function serve(opts: ServeOptions): Promise<void> {
   const look = (): void => {
     looking = looking
       .then(reconcile)
+      .then(hearOwnersName)
       .then(tell)
       .then(mirror)
       .catch(err => log(`devices: ${err instanceof Error ? err.message : String(err)}`))
@@ -659,10 +705,12 @@ export async function serve(opts: ServeOptions): Promise<void> {
   kept.clear()
   await closeServed()
   await stopAnnouncing()
-  if (door) {
-    await door.close()
+  await behindDoor?.close()
+  if (door || behindDoor) {
+    await door?.close()
     await update(env, s => {
       delete s.listening
+      delete s.wifiListening
     }).catch(() => {})
   }
 }

@@ -9,6 +9,7 @@ import { projectNameOf, repositoryAddress, repositorySpelling } from '../reposit
 import { contextRemote, resolveProjectPath } from './context.js'
 import { addMachine, forgetMachine, isPersonName, listMachines, noteListed, noteName, removeMachine, renameThisComputer, tellMachine, thisComputerName, unforgetMachine, useLoginsOn, type MachineRecord } from '../registry.js'
 import { sayName } from '../dashboard/machine-call.js'
+import { callerAtPage } from '../dashboard/person.js'
 import { syncComputersSoon } from '../dashboard/computers-sync.js'
 import { parseMachineLink } from '../machine-link.js'
 import { openagentVersion } from '../version.js'
@@ -289,6 +290,8 @@ export interface MachineVersions {
   version: string
   /** This computer's own name, as another machine lists it. */
   name: string
+  /** Whether the person at the page names this computer: its owner only. */
+  renames: boolean
   /** How this computer stands: its memory, disk and load. */
   health?: Health
   /**
@@ -321,7 +324,7 @@ export async function onMachineVersions(): Promise<MachineVersions> {
     }),
   )
   const health = await computerHealth().catch(() => undefined)
-  return { version: openagentVersion(), name: await ownName(), ...(health ? { health } : {}), machines }
+  return { version: openagentVersion(), name: await ownName(), renames: ownerAsks(), ...(health ? { health } : {}), machines }
 }
 
 /**
@@ -341,11 +344,23 @@ export async function sendRenameMachine(id: string, label: string): Promise<AddM
 
 export type RenameComputerResult = { ok: true; name: string } | { ok: false; error: string }
 
+/** Said to anyone but the owner who renames this computer. */
+export const ONLY_THE_OWNER = "Only this computer's owner names it."
+
+/**
+ * Whether the person asking is this computer's owner, who alone names it: not a person the owner
+ * invited, at the owner's OpenAgent (the door says who), nor on an OpenAgent of their own here.
+ */
+function ownerAsks(): boolean {
+  return callerAtPage() === undefined && !process.env.OPENAGENT_PERSON
+}
+
 /**
  * Give this computer the name the person picked, here or from a page of another of their
  * computers: kept here, said in every call to a machine from now on, so a door lists it by it.
  */
 export async function sendRenameComputer(picked: unknown): Promise<RenameComputerResult> {
+  if (!ownerAsks()) return { ok: false, error: ONLY_THE_OWNER }
   const name = typeof picked === 'string' ? await renameThisComputer(picked) : undefined
   if (name === undefined) return { ok: false, error: 'Give it a name.' }
   sayName(name)

@@ -3,6 +3,7 @@ import { request } from 'node:https'
 import { isIP } from 'node:net'
 import { Readable } from 'node:stream'
 import { connect, type TLSSocket } from 'node:tls'
+import { computerNameOf, renameThisComputer } from '../registry.js'
 
 /**
  * One call to a saved machine. A machine reached over HTTPS whose link carried what its key is
@@ -47,6 +48,34 @@ export function sayComputer(id: string | undefined): void {
 /** Say this computer's own name from here on, with every call to a machine: when OpenAgent starts, and when the person renames it. */
 export function sayName(name: string | undefined): void {
   named = name
+}
+
+/**
+ * On a computer several people use, the name its owner gave it, as the door says it to the
+ * OpenAgent of each person the owner invited (`OPENAGENT_PERSON`), with every call it passes on:
+ * the computer has one name, the owner's, and that OpenAgent goes by it. URI-encoded, as above.
+ */
+export const OWNERS_NAME_HEADER = 'x-openagent-owners-name'
+
+let heard: string | undefined
+
+/**
+ * On a person's own OpenAgent: keep the computer's name the door said, when it changed, and say it
+ * from here on. Anywhere else the header is nobody's to say, and is not read.
+ */
+export function noteOwnersName(header: string | string[] | undefined, env: NodeJS.ProcessEnv = process.env, keep: (name: string) => Promise<unknown> = name => renameThisComputer(name, undefined, env)): void {
+  if (!env.OPENAGENT_PERSON || typeof header !== 'string') return
+  let name: string | undefined
+  try {
+    name = computerNameOf(decodeURIComponent(header))
+  } catch {
+    return
+  }
+  if (name === undefined || name === heard) return
+  heard = name
+  named = name
+  // One that could not be kept is kept at the next call.
+  void keep(name).catch(() => (heard = undefined))
 }
 
 /** The word OpenAgent was told to say, as the home file keeps it: what its own packages are handed, to say the same. */
