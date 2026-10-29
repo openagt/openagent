@@ -7,7 +7,6 @@
   "title": "Ticket sync and account rotation",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-10-29T17-21-25-081Z",
   "cost": 0.2333564,
   "contextTokens": 28529,
   "caller": {
