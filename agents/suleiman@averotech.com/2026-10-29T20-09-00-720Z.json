@@ -7,7 +7,6 @@
   "title": "Queue account-rotation plan",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-10-29T20-09-00-720Z",
   "cost": 0.11920539999999999,
   "contextTokens": 22894,
   "caller": {
