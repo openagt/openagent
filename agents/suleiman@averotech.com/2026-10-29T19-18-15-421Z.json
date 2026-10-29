@@ -7,7 +7,6 @@
   "title": "Ticket tracker sync and personal installation",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-10-29T19-18-15-421Z",
   "cost": 0.1878918,
   "contextTokens": 25794,
   "caller": {
