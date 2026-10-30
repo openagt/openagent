@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { Readable, Writable } from 'node:stream'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { addAccount, goOn, markLimited, nameOwnAccount, OWN_NAME, readAccounts, usableAccounts, useFirst, UsageLimitError, type DriverEvent, type SpawnLike, type SpawnedProcess } from '@openagt/agent-driver'
@@ -187,4 +187,38 @@ test('the models are asked on the account runs take first, with who it is: what 
   const plain: Spawned[] = []
   await new ClaudeCodeDriver({ spawn: turns([{ lines: INITIALIZED }], plain), env: {} }).listModels()
   assert.equal(plain[0]!.env[CLAUDE_TOKEN_ENV], undefined)
+}))
+
+test('the models of a login in the environment are asked in a folder of their own, removed after; the person\'s own login in their folder', withFile(async path => {
+  addAccount('Dani', 'sk-ant-oat01-dani', path, new Date(NOW), 'dani-account-id')
+  useFirst('Dani', path)
+  const there: boolean[] = []
+  const asked = (seen: Spawned[]): SpawnLike => {
+    const spawn = turns([{ lines: INITIALIZED }], seen)
+    return (cmd, args, opts) => {
+      const folder = opts.env?.['CLAUDE_CONFIG_DIR']
+      there.push(folder !== undefined && existsSync(folder))
+      return spawn(cmd, args, opts)
+    }
+  }
+  const closed = () => new Promise(resolve => setImmediate(resolve))
+  const own = { CLAUDE_CONFIG_DIR: '/home/me/.claude' }
+
+  const dani: Spawned[] = []
+  await new ClaudeCodeDriver({ spawn: asked(dani), env: own, accounts: { path, now: () => NOW } }).listModels()
+  await closed()
+  const folder = dani[0]!.env['CLAUDE_CONFIG_DIR']!
+  assert.notEqual(folder, own.CLAUDE_CONFIG_DIR)
+  assert.equal(there[0], true)
+  assert.equal(existsSync(folder), false)
+
+  // A server person's login, in the environment Claude Code is started with.
+  const person: Spawned[] = []
+  await new ClaudeCodeDriver({ spawn: asked(person), env: { ...own, [CLAUDE_TOKEN_ENV]: 'sk-ant-oat01-rom' } }).listModels()
+  assert.notEqual(person[0]!.env['CLAUDE_CONFIG_DIR'], own.CLAUDE_CONFIG_DIR)
+
+  useFirst(OWN_NAME, path)
+  const mine: Spawned[] = []
+  await new ClaudeCodeDriver({ spawn: asked(mine), env: own, accounts: { path, now: () => NOW } }).listModels()
+  assert.equal(mine[0]!.env['CLAUDE_CONFIG_DIR'], own.CLAUDE_CONFIG_DIR)
 }))

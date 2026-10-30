@@ -1,4 +1,7 @@
 import { spawn as nodeSpawn } from 'node:child_process'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { DriverModel, SpawnLike } from '@openagt/agent-driver'
 
 /** How long {@link readClaudeModels} waits for the CLI's answer. */
@@ -21,6 +24,13 @@ export interface ReadClaudeModelsOptions {
   signal?: AbortSignal
   /** Override the timeout. Default {@link MODELS_TIMEOUT_MS}. */
   timeoutMs?: number
+  /**
+   * Ask in an empty Claude Code folder of its own (`CLAUDE_CONFIG_DIR`), removed once the CLI has
+   * exited. Claude Code answers the list from what its folder keeps of an earlier ask, and is
+   * stopped before it refreshes that: for a login in the environment, which keeps nothing there,
+   * the folder's would be whatever login asked first.
+   */
+  freshFolder?: boolean
 }
 
 /**
@@ -37,7 +47,12 @@ export function readClaudeModels(opts: ReadClaudeModelsOptions = {}): Promise<Dr
     }
     const spawn = opts.spawn ?? (nodeSpawn as unknown as SpawnLike)
     const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', ...(opts.extraArgs ?? [])]
-    const child = spawn(opts.bin ?? 'claude', args, { cwd: process.cwd(), env: opts.env ?? process.env })
+    const folder = opts.freshFolder ? mkdtempSync(join(tmpdir(), 'openagent-claude-models-')) : undefined
+    const env = folder !== undefined ? { ...(opts.env ?? process.env), CLAUDE_CONFIG_DIR: folder } : (opts.env ?? process.env)
+    const child = spawn(opts.bin ?? 'claude', args, { cwd: process.cwd(), env })
+    const removeFolder = () => {
+      if (folder !== undefined) rmSync(folder, { recursive: true, force: true })
+    }
 
     let settled = false
     const settle = (answer: { models: DriverModel[] } | { error: string }) => {
@@ -65,8 +80,15 @@ export function readClaudeModels(opts: ReadClaudeModelsOptions = {}): Promise<Dr
         if (answer) settle(answer)
       }
     })
-    child.on('error', err => settle({ error: `\`${opts.bin ?? 'claude'}\` could not start: ${err.message}` }))
-    child.on('close', code => settle({ error: `Claude Code exited (code ${code}) before it listed its models` }))
+    child.on('error', err => {
+      removeFolder()
+      settle({ error: `\`${opts.bin ?? 'claude'}\` could not start: ${err.message}` })
+    })
+    // Removed once the CLI is gone, not when it answered: until then it may still write there.
+    child.on('close', code => {
+      removeFolder()
+      settle({ error: `Claude Code exited (code ${code}) before it listed its models` })
+    })
     // A CLI that exits before it reads the request closes the pipe under the write: `close` above
     // says so, and the EPIPE, with no one listening for it, would be thrown at the process.
     child.stdin?.on('error', () => {})

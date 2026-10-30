@@ -5,7 +5,7 @@ import { homedir, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { readClaudeQuota } from './claude-code-quota.js'
 import { readClaudeModels } from './claude-code-models.js'
-import { accountEnv, claudeAccountsPath } from './claude-accounts.js'
+import { accountEnv, CLAUDE_TOKEN_ENV, claudeAccountsPath } from './claude-accounts.js'
 import { turnOnAccounts, pickAccount, readAccounts, type AccountsOption, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, cutOutput, callArgument, lineCount, patchSize, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, finishTurn, agentEnv, oneLine, attachLog, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverQuota, type DriverRateLimit, type DriverRateWindow, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
 
 /** Claude Code permission modes we pass through to the CLI. */
@@ -97,6 +97,8 @@ export class ClaudeCodeDriver implements Driver {
     return readClaudeModels({
       ...(bin !== undefined ? { bin } : {}),
       ...(env !== undefined ? { env } : {}),
+      // A login in the environment is asked in a folder of its own; the person's own login lives in theirs.
+      freshFolder: (env ?? process.env)[CLAUDE_TOKEN_ENV] !== undefined,
       ...(extraArgs !== undefined ? { extraArgs } : {}),
       ...(spawn !== undefined ? { spawn } : {}),
       ...(opts.signal !== undefined ? { signal: opts.signal } : {}),

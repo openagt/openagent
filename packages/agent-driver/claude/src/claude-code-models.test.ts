@@ -1,5 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
+import { existsSync } from 'node:fs'
 import { Readable, Writable } from 'node:stream'
 import { contextWindowOf, parseInitializeLine, readClaudeModels } from './claude-code-models.js'
 import { ClaudeCodeDriver } from './claude-code.js'
@@ -91,6 +92,34 @@ test('readClaudeModels rejects with the reason when the CLI never answers', asyn
   const seen: Seen = { sent: [], killed: false }
   await assert.rejects(readClaudeModels({ spawn: fakeCli([], seen), timeoutMs: 20 }), /did not list its models within/)
   assert.equal(seen.killed, true)
+})
+
+test('readClaudeModels asks in a fresh folder when told, and removes it once the CLI is gone, not when it answered', async () => {
+  let env: NodeJS.ProcessEnv = {}
+  let close: (code: number | null) => void = () => undefined
+  const spawn: SpawnLike = (_command, _args, opts) => {
+    env = opts.env ?? {}
+    const out = new Readable({ read: () => undefined })
+    const proc: SpawnedProcess = {
+      stdout: out,
+      stderr: Readable.from([]),
+      stdin: new Writable({ write: (_chunk, _e, cb) => (out.push(`${ANSWER}\n`), cb()) }),
+      on: (event, listener) => {
+        if (event === 'close') close = listener as (code: number | null) => void
+        return proc
+      },
+      kill: () => undefined,
+    }
+    return proc
+  }
+  await readClaudeModels({ spawn, env: { CLAUDE_CONFIG_DIR: '/the/persons/own' }, freshFolder: true })
+  const folder = env['CLAUDE_CONFIG_DIR']
+  assert.ok(folder !== undefined && folder !== '/the/persons/own' && existsSync(folder), 'the CLI asks in a folder of its own, there while it runs')
+  close(0)
+  assert.equal(existsSync(folder), false, 'removed once the CLI has exited')
+
+  await readClaudeModels({ spawn, env: { CLAUDE_CONFIG_DIR: '/the/persons/own' } })
+  assert.equal(env['CLAUDE_CONFIG_DIR'], '/the/persons/own', 'otherwise in the folder it is given')
 })
 
 test('ClaudeCodeDriver.listModels starts the CLI with the switches that keep the person\'s settings out', async () => {
