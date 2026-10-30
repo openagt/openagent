@@ -114,6 +114,23 @@ describe('a server that uses this computer\'s logins', () => {
     expect(screen.queryByRole('region', { name: `Your logins on ${LABEL}` })).toBeNull()
   })
 
+  test('while a press starts and ends, the page keeps what it read: the rows and the bar never blank out between two reads', async () => {
+    views([own, dani])
+    const rows = (suleiman: string) => [{ kind: 'claude', source: 'own', name: 'Suleiman', state: suleiman, anew: true }, { kind: 'claude', source: 'Dani', name: 'Dani', state: 'there' }]
+    server({ logins: rows('allow') })
+    render(<AccountsSettings />)
+    const card = await screen.findByRole('region', { name: 'Claude Code' })
+    await waitFor(() => expect(within(card).getByRole('listitem', { name: 'Dani' }).textContent).toContain(`✓ on ${LABEL}`))
+    // The press: the server says it is under way, then answers nothing more for a while.
+    servers.onServerLogins.mockResolvedValueOnce({ computer: 'Studio', servers: [{ machineId: ID, label: LABEL, on: true, reachable: true, logins: rows('allow'), left: [], allowing: { name: 'Suleiman' } }] })
+    fireEvent.click(await screen.findByRole('button', { name: 'Allow 1 login' }))
+    servers.onServerLogins.mockReturnValue(new Promise(() => {}))
+    expect(await screen.findByText(`Making Suleiman's login for ${LABEL}`)).toBeTruthy()
+    await new Promise(resolve => setTimeout(resolve, 100))
+    expect(screen.getByText(`Making Suleiman's login for ${LABEL}`)).toBeTruthy()
+    expect(within(card).getByRole('listitem', { name: 'Dani' }).textContent).toContain(`✓ on ${LABEL}`)
+  })
+
   test('a login made for the server with a press is taken off there from its row, and waits for the press again; one that goes as it is has no such menu', async () => {
     views([own, dani])
     server({ logins: [{ kind: 'claude', source: 'own', name: 'Suleiman', state: 'there', anew: true }, { kind: 'claude', source: 'Dani', name: 'Dani', state: 'there' }] })

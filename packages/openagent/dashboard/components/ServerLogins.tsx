@@ -33,7 +33,8 @@ export function useServers(): Servers {
 /** The servers as read for the page, asked often while a press is under way. */
 export function ServersProvider({ children }: { children: ReactNode }) {
   const [often, setOften] = useState(false)
-  const { value, reload } = usePolled<ServerLoginsView | undefined>(onServerLogins, undefined, often ? OFTEN_MS : SELDOM_MS, [often])
+  // The pace changes, the servers do not: what was read stays on the page until the next read.
+  const { value, reload } = usePolled<ServerLoginsView | undefined>(onServerLogins, undefined, often ? OFTEN_MS : SELDOM_MS, [often], 'previous')
   const busy = value?.servers.some(server => server.allowing) ?? false
   useEffect(() => {
     if (busy !== often) setOften(busy)

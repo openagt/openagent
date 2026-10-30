@@ -100,6 +100,30 @@ test('what can go as it is reaches the server with nothing pressed; the person\'
     assert.deepEqual(readCopied().find(l => l.source === 'own')?.usage, { windows: [{ label: 'week', percent: 62 }], at: 5 })
   }))
 
+test('a server that misses a ping is shown as it last was, for a while, then as not reached; only one that answers it is no server leaves the list', () =>
+  withRig(async rig => {
+    rig.local = [dani]
+    let clock = 1_000
+    let facts: { server?: true; version?: string } = { server: true }
+    Object.assign(syncWiring, { facts: async () => facts, now: () => clock })
+    const [before] = await syncLogins()
+    assert.deepEqual([before!.reachable, before!.logins.map(l => l.state)], [true, ['there']])
+    facts = {}
+    assert.deepEqual(await syncLogins(), [before])
+    assert.deepEqual(await serverLogins(), [before])
+    clock += 89_000
+    assert.deepEqual(await syncLogins(), [before])
+    clock += 2_000
+    assert.deepEqual((await syncLogins()).map(server => [server.reachable, server.logins.length]), [[false, 1]])
+    // It answers again: read as ever.
+    facts = { server: true }
+    assert.deepEqual((await syncLogins()).map(server => server.reachable), [true])
+    // It answers that it is no server: it leaves the list.
+    facts = { version: '1.2.3' }
+    assert.deepEqual(await syncLogins(), [])
+    assert.deepEqual(await serverLogins(), [])
+  }))
+
 test('a login that cannot be read here says why, in the words of what was asked for it', () =>
   withRig(async rig => {
     rig.local = [{ ...octo, secret: async () => Promise.reject(new Error("the login gh keeps for octo is octo-agent's on GitHub")) }]
@@ -114,7 +138,8 @@ test('a server that is not told to use this computer\'s logins gets none, and a 
     const [server] = await syncLogins()
     assert.deepEqual([server!.on, server!.logins], [false, []])
     assert.deepEqual(rig.calls, [])
-    syncWiring.facts = async () => ({})
+    // It answers, and says no server.
+    syncWiring.facts = async () => ({ version: '1.2.3' })
     assert.deepEqual(await syncLogins(), [])
   }))
 
