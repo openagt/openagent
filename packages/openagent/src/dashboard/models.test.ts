@@ -81,3 +81,13 @@ test('the account each agent\'s runs take first is read from that agent\'s own l
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+test('an agent forgotten is asked again at the next read, the other is not: a new version can offer other models', async () => {
+  const claude = driver([{ id: 'opus', name: 'Opus' }])
+  const codex = driver([{ id: 'gpt-5.6-terra', name: 'GPT-5.6-Terra' }], [{ id: 'gpt-6-luna', name: 'GPT-6-Luna' }])
+  const source = cachedModelsSource({ 'claude-code': claude, codex })
+  await source.read()
+  source.forget('codex')
+  assert.deepEqual((await source.read()).codex, { models: [{ id: 'gpt-6-luna', name: 'GPT-6-Luna' }] })
+  assert.deepEqual([claude.asks, codex.asks], [1, 2])
+})

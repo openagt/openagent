@@ -352,7 +352,7 @@ export const ONLY_THE_OWNER = "Only this computer's owner names it."
  * Whether the person asking is this computer's owner, who alone names it: not a person the owner
  * invited, at the owner's OpenAgent (the door says who), nor on an OpenAgent of their own here.
  */
-function ownerAsks(): boolean {
+export function ownerAsks(): boolean {
   return callerAtPage() === undefined && !process.env.OPENAGENT_PERSON
 }
 

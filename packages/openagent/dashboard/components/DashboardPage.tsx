@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
 import { HumanQueueList } from './HumanQueueList.js'
 import { updatePreferences, usePreferences, usePreferencesLoaded } from '../lib/preferences.js'
 import { OnboardingChecklist } from './OnboardingChecklist.js'
+import { AgentUpdates } from './AgentUpdates.js'
 import { Agents } from './Agents.js'
 import { useModuleCards, type OverviewCard } from './ModuleCards.js'
 import { SkillsCard } from './SkillsCard.js'
@@ -189,6 +190,7 @@ export function DashboardPage({
         {!onboardingDismissed && !editing && (
           <OnboardingChecklist onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} />
         )}
+        {!editing && <AgentUpdates />}
         {!layoutRead ? null : editing ? <EditOverview arranged={arranged} layouts={layouts} layoutKey={layoutKey} /> : arranged.some(({ hidden }) => !hidden) ? (
           <CardGrid cards={arranged.filter(({ hidden }) => !hidden)} />
         ) : (
