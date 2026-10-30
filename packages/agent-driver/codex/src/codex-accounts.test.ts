@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { test } from 'node:test'
 import { PassThrough, Readable } from 'node:stream'
-import { addAccount, goOn, nameOwnAccount, readAccounts, UsageLimitError, type DriverEvent, type SpawnLike, type SpawnedProcess } from '@openagt/agent-driver'
+import { addAccount, goOn, nameOwnAccount, OWN_NAME, readAccounts, useFirst, UsageLimitError, type DriverEvent, type SpawnLike, type SpawnedProcess } from '@openagt/agent-driver'
 import { accountHome, codexAccountsDir, codexAccountsPath, codexWho, codexWindows, loginCodex, readCodexUsage } from './codex-accounts.js'
 import { CodexDriver } from './codex.js'
 
@@ -316,4 +316,42 @@ test('with every Codex account at its limit the turn ends, saying which frees fi
     await assert.rejects(failed.prompt('go'), /not supported/)
     assert.equal(failing.length, 1)
     assert.equal(readAccounts(codexAccountsPath(otherEnv)).some(a => a.limitedUntil !== undefined), false)
+  }))
+
+test('Codex\'s models are asked from the home a turn on the account runs take first runs from: Codex fetches them for each login', () =>
+  inDir(async dir => {
+    const env = { HOME: join(dir, 'home'), XDG_CONFIG_HOME: join(dir, 'config'), XDG_STATE_HOME: join(dir, 'state') }
+    const path = codexAccountsPath(env)
+    addAccount('Dani', 'codex-dani', path)
+    useFirst('Dani', path)
+    const folder = join(codexAccountsDir(env), 'codex-dani')
+    await mkdir(folder, { recursive: true })
+    const homes: (string | undefined)[] = []
+    const spawn: SpawnLike = (_command, _args, opts) => {
+      homes.push(opts.env?.['CODEX_HOME'])
+      const stdout = Readable.from([JSON.stringify({ models: [{ slug: 'gpt-6', display_name: 'GPT-6', visibility: 'list', priority: 1 }] })])
+      const proc: SpawnedProcess = {
+        stdout,
+        stderr: Readable.from([]),
+        stdin: new PassThrough(),
+        on(event, listener) {
+          if (event === 'close') stdout.on('end', () => (listener as (c: number | null) => void)(0))
+          return proc
+        },
+        kill: () => undefined,
+      }
+      return proc
+    }
+    const models = await new CodexDriver({ spawn, env, accounts: { now: () => NOW } }).listModels()
+    assert.deepEqual(models.map(m => m.name), ['GPT-6'])
+    assert.equal(homes[0], join(folder, 'home'))
+    await new CodexDriver({ spawn, env, personal: { memory: true, connectors: true, skills: false }, accounts: { now: () => NOW } }).listModels()
+    assert.equal(homes[1], join(folder, 'plain'))
+    assert.equal(await readlink(join(folder, 'plain', 'sessions')), join(env.XDG_STATE_HOME, 'agent-driver', 'codex-home', 'sessions'))
+
+    // The person's own login, in their own home; and without accounts, whatever login Codex has.
+    useFirst(OWN_NAME, path)
+    await new CodexDriver({ spawn, env, accounts: { now: () => NOW } }).listModels()
+    await new CodexDriver({ spawn, env }).listModels()
+    assert.deepEqual(homes.slice(2), [undefined, undefined])
   }))
