@@ -4,9 +4,8 @@ import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { DriverQuota } from '@openagt/agent-driver'
-import { claudeAccountsPath, readClaudeQuota } from '@openagt/agent-driver-claude'
-import { accountFolder, codexAccountsPath, personalCodexHome, readCodexUsage } from '@openagt/agent-driver-codex'
-import { readAccounts, usableAccounts } from '@openagt/agent-driver'
+import { readClaudeQuota } from '@openagt/agent-driver-claude'
+import { accountFolder, personalCodexHome, readCodexUsage } from '@openagt/agent-driver-codex'
 import { isPidAlive, lockHolder, markerCard, readProjectAccounts, readyToRun, resumeDetached, runIdFrom, spawnResume, spawnRun, sweep, withdrawMarker, writeMarker } from '@openagt/agent-runner'
 import { findRun } from '@openagt/skill-logs'
 import { DATA_BRANCH, nodeGitRunner, pullFileBranch, type GitRunner } from '@openagt/agent-data'
@@ -16,6 +15,7 @@ import { readSchedule, type Schedule, type ScheduledCommand } from './schedule.j
 import { isSwitchedOn, namesGivenUp, readState, stateDir, updateState, withoutListed, withoutName, withoutPid, type ListedCommand, type State, type TickRecord } from './state.js'
 import { atStartOf } from './start-point.js'
 import { glance, listed, runCheck, startNow, tick, type StartedNow, type TickDeps } from './tick.js'
+import { accountsPath, readAccounts, usableAccounts } from '@openagt/skill-account-rotation'
 
 /**
  * The tool's process side (#1774): a tick wired to the real project, and the scheduler's own small
@@ -74,7 +74,7 @@ function projectDeps(repo: string, state: State, schedule: Schedule, opts: { git
     // The project's own few when it names some (`accounts:` in its runner config), else all of the person's.
     accounts: async agent => {
       const own = await readProjectAccounts(repo, log)
-      return agent === 'codex' ? usableAccounts(readAccounts(codexAccountsPath()), own.codex) : usableAccounts(readAccounts(claudeAccountsPath()), own.claude)
+      return agent === 'codex' ? usableAccounts(readAccounts(accountsPath('codex')), own.codex) : usableAccounts(readAccounts(accountsPath('claude')), own.claude)
     },
     // The person's own Codex login from their own home; an added one from its folder, where its login is.
     codexUsage: account => readCodexUsage({ home: account.login === undefined ? personalCodexHome() : accountFolder(account) }),

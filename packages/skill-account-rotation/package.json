@@ -1,0 +1,50 @@
+{
+  "name": "@openagt/skill-account-rotation",
+  "version": "0.1.0",
+  "description": "Several Claude Code and Codex accounts for a coding agent's runs, the next free one taking over at a usage limit, with the skill that tells an agent how to add and list them.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openagt/openagent.git",
+    "directory": "packages/skill-account-rotation"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "files": [
+    "dist",
+    "bin/account-rotation",
+    "SKILL.md"
+  ],
+  "bin": {
+    "account-rotation": "bin/account-rotation"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./SKILL.md": "./SKILL.md"
+  },
+  "scripts": {
+    "build": "cp ../../skills/account-rotation/SKILL.md SKILL.md && tsc -p tsconfig.build.json",
+    "prepack": "node -e \"if(!process.env.npm_config_user_agent?.startsWith('pnpm/')){console.error('Pack and publish with pnpm: it replaces workspace:* with the real version, npm does not');process.exit(1)}\" && cp ../../skills/account-rotation/SKILL.md SKILL.md",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc -p tsconfig.test.json && node --test --test-timeout=60000 'dist-test/**/*.test.js'",
+    "clean": "rm -rf dist dist-test SKILL.md"
+  },
+  "dependencies": {
+    "@openagt/agent-driver": "workspace:*",
+    "@openagt/agent-driver-claude": "workspace:*",
+    "@openagt/agent-driver-codex": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^7.0.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

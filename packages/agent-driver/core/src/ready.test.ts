@@ -1,8 +1,5 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { checkCliReady, type CliProbe, type CliSpec } from './ready.js'
 
 /**
@@ -49,18 +46,10 @@ test('a logged-out CLI is a problem naming the command that fixes it', async () 
   assert.deepEqual(ready.problems, ['`agent` is not logged in. Run `agent login`, then start again.'])
 })
 
-test('a logged-out CLI is ready when its accounts file holds an added account: runs use that login, as on a server with only the person\'s own computers\' logins', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'ready-'))
-  try {
-    const accounts = join(dir, 'accounts.json')
-    writeFileSync(accounts, JSON.stringify({ accounts: [{ name: 'This computer' }] }))
-    const loggedOut = probeFor({ auth: { ok: true, output: 'no' } })
-    assert.equal((await checkCliReady(spec, { ...notRoot, probe: loggedOut, accounts })).problems.length, 1)
-    writeFileSync(accounts, JSON.stringify({ accounts: [{ name: 'Suleiman', login: 'sk-ant-oat01-x' }, { name: 'This computer' }] }))
-    assert.deepEqual(await checkCliReady(spec, { ...notRoot, probe: loggedOut, accounts }), { problems: [], warnings: [], ownLoggedOut: true })
-  } finally {
-    rmSync(dir, { recursive: true, force: true })
-  }
+test('a logged-out CLI is ready when an account is added beside it: runs use that login, as on a server with only the person\'s own computers\' logins', async () => {
+  const loggedOut = probeFor({ auth: { ok: true, output: 'no' } })
+  assert.equal((await checkCliReady(spec, { ...notRoot, probe: loggedOut, addedAccount: false })).problems.length, 1)
+  assert.deepEqual(await checkCliReady(spec, { ...notRoot, probe: loggedOut, addedAccount: true }), { problems: [], warnings: [], ownLoggedOut: true })
 })
 
 test('a CLI that will not say whether it is logged in is ready', async () => {

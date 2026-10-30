@@ -44,7 +44,8 @@
     "@openagt/skill-branches": "workspace:*",
     "@openagt/skill-logs": "workspace:*",
     "@openagt/agent-driver": "workspace:*",
-    "yaml": "^2.5.0"
+    "yaml": "^2.5.0",
+    "@openagt/skill-account-rotation": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

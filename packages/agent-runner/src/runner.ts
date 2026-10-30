@@ -3,14 +3,15 @@ import { closeSync, mkdirSync, openSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { probeCli, type CliProbe, type Driver, type DriverReadiness, type PersonalSetup } from '@openagt/agent-driver'
-import { ClaudeCodeDriver, claudeAccountsPath, claudeCodeReady } from '@openagt/agent-driver-claude'
-import { CodexDriver, codexAccountsPath, codexReady } from '@openagt/agent-driver-codex'
+import { ClaudeCodeDriver, claudeCodeReady } from '@openagt/agent-driver-claude'
+import { CodexDriver, codexReady } from '@openagt/agent-driver-codex'
 import { findRun } from '@openagt/skill-logs'
 import { readPersonal, readProjectAccounts } from './config.js'
 import { gitHostEnv } from './git-host.js'
 import { resumeRun, runCommand, runIdFrom, type RunOutcome } from './run.js'
 import { publishChange, type NO_PUBLISH, type Publish } from './records.js'
 import { acquireRunLock, handOverRunLock, isPidAlive, releaseRunLock, runStderrPath } from './run-lock.js'
+import { accountRotation, hasAddedAccount } from '@openagt/skill-account-rotation'
 
 /**
  * The tool's process side: a run in this process, the same run detached in its own process and
@@ -44,7 +45,7 @@ export function isDriverName(name: string): name is DriverName {
 export async function readyToRun(repo: string, driver: DriverName, deps: { probe?: CliProbe; isRoot?: () => boolean; agentsSkills?: string; gitHostEnv?: typeof gitHostEnv } = {}): Promise<DriverReadiness> {
   const opts = { probe: deps.probe ?? probeCli, ...(deps.isRoot ? { isRoot: deps.isRoot } : {}) }
   // An added account is a login runs use: a server with only the person's own computers' logins runs on them.
-  const ready = await (driver === 'claude-code' ? claudeCodeReady({ ...opts, accounts: claudeAccountsPath() }) : codexReady({ ...opts, accounts: codexAccountsPath(), personal: await readPersonal(repo, () => {}), ...(deps.agentsSkills !== undefined ? { agentsSkills: deps.agentsSkills } : {}) }))
+  const ready = await (driver === 'claude-code' ? claudeCodeReady({ ...opts, addedAccount: hasAddedAccount('claude') }) : codexReady({ ...opts, addedAccount: hasAddedAccount('codex'), personal: await readPersonal(repo, () => {}), ...(deps.agentsSkills !== undefined ? { agentsSkills: deps.agentsSkills } : {}) }))
   // The project's own account at the git host, when it names one: a run never works as someone else.
   const user = (await readProjectAccounts(repo, () => {})).gitHost
   if (user !== undefined) {
@@ -313,8 +314,8 @@ export function driverFor(name: DriverName, id: string, personal: PersonalSetup,
   const accounts = (only: string[] | undefined) => ({ ...(prefer ? { prefer } : {}), ...(only ? { only } : {}) })
   switch (name) {
     case 'claude-code':
-      return new ClaudeCodeDriver({ permissionMode: 'bypassPermissions', env, personal, accounts: accounts(as.claude) })
+      return new ClaudeCodeDriver({ permissionMode: 'bypassPermissions', env, personal, accounts: accountRotation('claude', accounts(as.claude)) })
     case 'codex':
-      return new CodexDriver({ sandbox: 'danger-full-access', env, personal, accounts: accounts(as.codex) })
+      return new CodexDriver({ sandbox: 'danger-full-access', env, personal, accounts: accountRotation('codex', accounts(as.codex)) })
   }
 }

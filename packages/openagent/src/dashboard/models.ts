@@ -1,7 +1,8 @@
-import { ClaudeCodeDriver, claudeAccountsPath } from '@openagt/agent-driver-claude'
-import { CodexDriver, codexAccountsPath } from '@openagt/agent-driver-codex'
-import { pickAccount, readAccounts, type Driver, type DriverModel } from '@openagt/agent-driver'
+import { ClaudeCodeDriver } from '@openagt/agent-driver-claude'
+import { CodexDriver } from '@openagt/agent-driver-codex'
+import { type Driver, type DriverModel } from '@openagt/agent-driver'
 import { DRIVERS, type DriverName } from '../driver-names.js'
+import { accountRotation, accountsPath, pickAccount, readAccounts } from '@openagt/skill-account-rotation'
 
 /** What one coding agent offers: its models, or why it could not say; `missing` when its CLI is not on the computer at all. */
 export type DriverModels = { models: DriverModel[] } | { models: []; error: string; missing?: true }
@@ -52,11 +53,16 @@ export function cachedModelsSource(drivers: Record<DriverName, Pick<Driver, 'lis
 
 /** Which account a coding agent's runs take first on this machine, as {@link cachedModelsSource} tells two apart. */
 export function firstAccount(name: DriverName, env: NodeJS.ProcessEnv = process.env): string {
-  const account = pickAccount(readAccounts(name === 'claude-code' ? claudeAccountsPath(env) : codexAccountsPath(env)), Date.now())
+  const account = pickAccount(readAccounts(name === 'claude-code' ? accountsPath('claude', env) : accountsPath('codex', env)), Date.now())
   return account ? `${account.name} ${account.accountId ?? ''}` : ''
 }
 
-/** The daemon's own source: the coding agents on this machine, each on the account its runs take first. */
+/** The coding agents on this machine, each on the account its runs take first. */
+export function modelDrivers(): Record<DriverName, Driver> {
+  return { 'claude-code': new ClaudeCodeDriver({ accounts: accountRotation('claude') }), codex: new CodexDriver({ accounts: accountRotation('codex') }) }
+}
+
+/** The daemon's own source. */
 export function defaultModelsSource(): ModelsSource {
-  return cachedModelsSource({ 'claude-code': new ClaudeCodeDriver({ accounts: {} }), codex: new CodexDriver({ accounts: {} }) }, name => firstAccount(name))
+  return cachedModelsSource(modelDrivers(), name => firstAccount(name))
 }

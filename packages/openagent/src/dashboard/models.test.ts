@@ -3,10 +3,9 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { addAccount, useFirst, type DriverModel } from '@openagt/agent-driver'
-import { claudeAccountsPath } from '@openagt/agent-driver-claude'
-import { codexAccountsPath } from '@openagt/agent-driver-codex'
-import { cachedModelsSource, firstAccount } from './models.js'
+import type { AccountRotation, DriverModel } from '@openagt/agent-driver'
+import { cachedModelsSource, firstAccount, modelDrivers } from './models.js'
+import { accountsPath, addAccount, useFirst } from '@openagt/skill-account-rotation'
 
 /** A driver that answers each ask with the next of `answers`, counting the asks. */
 function driver(...answers: Array<DriverModel[] | Error>) {
@@ -70,13 +69,28 @@ test('the account each agent\'s runs take first is read from that agent\'s own l
   try {
     const env = { XDG_CONFIG_HOME: dir }
     const own = firstAccount('codex', env)
-    addAccount('Dani', 'codex-dani', codexAccountsPath(env))
-    useFirst('Dani', codexAccountsPath(env))
+    addAccount('Dani', 'codex-dani', accountsPath('codex', env))
+    useFirst('Dani', accountsPath('codex', env))
     assert.equal(firstAccount('codex', env), 'Dani ')
     assert.equal(firstAccount('claude-code', env), own, 'not the other agent\'s')
-    addAccount('Rom', 'sk-ant-oat01-rom', claudeAccountsPath(env), new Date(), 'rom-account-id')
-    useFirst('Rom', claudeAccountsPath(env))
+    addAccount('Rom', 'sk-ant-oat01-rom', accountsPath('claude', env), new Date(), 'rom-account-id')
+    useFirst('Rom', accountsPath('claude', env))
     assert.equal(firstAccount('claude-code', env), 'Rom rom-account-id')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('the daemon asks each agent on the account its runs take first, from that agent\'s own list', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'models-drivers-'))
+  try {
+    const env = { XDG_CONFIG_HOME: dir }
+    addAccount('Dani', 'x', accountsPath('claude', env))
+    useFirst('Dani', accountsPath('claude', env))
+    const firstOf = (driver: unknown) => (driver as { opts: { accounts: AccountRotation } }).opts.accounts.first(env)?.name
+    const drivers = modelDrivers()
+    assert.equal(firstOf(drivers['claude-code']), 'Dani')
+    assert.equal(firstOf(drivers.codex), 'This computer')
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

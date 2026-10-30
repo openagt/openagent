@@ -1,11 +1,11 @@
 import { execFile } from 'node:child_process'
 import { hostname } from 'node:os'
-import { readAccounts } from '@openagt/agent-driver'
-import { CLAUDE_ACCOUNT_ENV, CLAUDE_TOKEN_ENV, claudeAccountsPath } from '@openagt/agent-driver-claude'
+import { CLAUDE_ACCOUNT_ENV, CLAUDE_TOKEN_ENV } from '@openagt/agent-driver-claude'
 import type { ModuleCommandResult } from '../project-modules.js'
 import type { RelayHandlers } from './relay-endpoints.js'
 import { giveRemoteLogins, pingRemote, remoteLogins, type MachineAccess } from './remote-run.js'
 import { isClaudeAccountId, isServerName, loginsOfOwn, loginsToCopy, type MachineLogins } from './machine-logins.js'
+import { accountsPath, readAccounts } from '@openagt/skill-account-rotation'
 
 /**
  * Both ends of copying a person's logins to another person's computer (machine-logins.ts).
@@ -81,7 +81,7 @@ export interface OwnLogins {
  */
 export async function ownLogins(env: NodeJS.ProcessEnv = process.env): Promise<OwnLogins> {
   const github = await ownGithub(env)
-  const added = readAccounts(claudeAccountsPath(env)).find(account => account.login !== undefined)
+  const added = readAccounts(accountsPath('claude', env)).find(account => account.login !== undefined)
   const claude = added?.login ?? env[CLAUDE_TOKEN_ENV]?.trim()
   const claudeAccount = added ? added.accountId : env[CLAUDE_ACCOUNT_ENV]?.trim()
   return { ...(github ? { github } : {}), ...(claude ? { claude, ...(isClaudeAccountId(claudeAccount) ? { claudeAccount } : {}) } : {}) }

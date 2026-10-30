@@ -1,12 +1,13 @@
 import { chmod, mkdir, rm, writeFile } from 'node:fs/promises'
 import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
-import { addAccount, changeAccounts, readAccounts, removeAccount, type AgentAccount } from '@openagt/agent-driver'
+import { type AgentAccount } from '@openagt/agent-driver'
 import { codexWho } from '@openagt/agent-driver-codex'
 import { isServerName } from '../dashboard/machine-logins.js'
 import { isKind, isWord, readCopied, readUsage, same, writeCopied, type CopiedKind, type CopiedLogin, type GivenLogin, type UsageWindow } from '../dashboard/copied-logins.js'
 import { accountsWiring, type AccountResult } from './accounts.js'
 import { gitHostPackages } from './logins.js'
+import { addAccount, changeAccounts, readAccounts, removeAccount } from '@openagt/skill-account-rotation'
 
 // What a server answers the person's own computers about their logins here (the logins, and what
 // is kept of them: `dashboard/copied-logins.ts`): what it keeps, a login handed over, one taken

@@ -1,11 +1,13 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { findRun } from '@openagt/skill-logs'
-import { FakeDriver, type Driver } from '@openagt/agent-driver'
+import { FakeDriver, type AccountRotation, type Driver, type DriverTurn } from '@openagt/agent-driver'
 import { ClaudeCodeDriver } from '@openagt/agent-driver-claude'
 import { CodexDriver } from '@openagt/agent-driver-codex'
+import { accountsPath, addAccount } from '@openagt/skill-account-rotation'
 import { markerCard, writeMarker } from './records.js'
 import { runCommand } from './run.js'
 import { ACCOUNT_ENV, detachResume, detachRun, driverFor, readyToRun, resumeArgs, resumeProject, runArgs, workAs } from './runner.js'
@@ -96,20 +98,45 @@ test('a run\'s coding agent is unrestricted, has the run\'s id, and gets this ma
   assert.deepEqual(optsOf(claude).personal, personal)
 })
 
-test('a run goes on its agent\'s accounts, or the project\'s own few of them, starting on the one whoever started it named, on Claude and on Codex alike', () => {
-  const accountsOf = (driver: Driver) => (driver as unknown as { opts: { accounts?: unknown } }).opts.accounts
+test('a run goes on its agent\'s accounts, or the project\'s own few of them, starting on the one whoever started it named, on Claude and on Codex alike', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'runner-accounts-'))
+  const env = { XDG_CONFIG_HOME: dir }
+  for (const agent of ['claude', 'codex'] as const) {
+    addAccount('Dani', 'x', accountsPath(agent, env))
+    addAccount('Rom', 'y', accountsPath(agent, env))
+  }
+  /** The account a turn of the driver's sessions is run on, in this test's lists. */
+  const takes = async (driver: Driver): Promise<string> => {
+    let on = ''
+    await (driver as unknown as { opts: { accounts: AccountRotation } }).opts.accounts.turn(env, {
+      current: {},
+      text: 'go',
+      opts: {},
+      emit: () => {},
+      stopped: () => false,
+      continueFrom: () => {},
+      run: async account => {
+        on = account.name
+        return { turn: { text: '', sessionId: 's' } as DriverTurn, limited: false }
+      },
+    })
+    return on
+  }
   const personal = { memory: true, connectors: true, skills: true }
   const before = process.env[ACCOUNT_ENV]
   try {
     delete process.env[ACCOUNT_ENV]
-    assert.deepEqual(accountsOf(driverFor('codex', 'run-1', personal)), {})
-    assert.deepEqual(accountsOf(driverFor('claude-code', 'run-1', personal)), {})
+    assert.equal(await takes(driverFor('codex', 'run-1', personal)), 'This computer')
+    assert.equal(await takes(driverFor('claude-code', 'run-1', personal)), 'This computer')
     process.env[ACCOUNT_ENV] = ' Dani '
-    assert.deepEqual(accountsOf(driverFor('codex', 'run-1', personal, { claude: ['Rom'], codex: ['Dani', 'Rom'] })), { prefer: 'Dani', only: ['Dani', 'Rom'] })
-    assert.deepEqual(accountsOf(driverFor('claude-code', 'run-1', personal, { claude: ['Rom'], codex: ['Dani', 'Rom'] })), { prefer: 'Dani', only: ['Rom'] })
+    assert.equal(await takes(driverFor('codex', 'run-1', personal)), 'Dani')
+    assert.equal(await takes(driverFor('claude-code', 'run-1', personal)), 'Dani')
+    assert.equal(await takes(driverFor('codex', 'run-1', personal, { claude: ['Rom'], codex: ['Dani', 'Rom'] })), 'Dani')
+    assert.equal(await takes(driverFor('claude-code', 'run-1', personal, { claude: ['Rom'], codex: ['Dani', 'Rom'] })), 'Rom')
   } finally {
     if (before === undefined) delete process.env[ACCOUNT_ENV]
     else process.env[ACCOUNT_ENV] = before
+    await rm(dir, { recursive: true, force: true })
   }
 })
 
@@ -167,6 +194,30 @@ test('ready to run: the coding agent\'s problems stop a run; nothing else is pro
     const out = await readyToRun(repo, 'claude-code', { probe: answers(false), isRoot: notRoot })
     assert.match(out.problems[0]!, /claude auth login/)
   } finally {
+    await removeRepo(repo)
+  }
+})
+
+test('ready to run with the CLI logged out: an account added beside it is a login runs use, on each agent\'s own list', async () => {
+  const repo = await testRepo()
+  const dir = await mkdtemp(join(tmpdir(), 'runner-added-'))
+  const before = process.env['XDG_CONFIG_HOME']
+  const probe = async (_bin: string, args: readonly string[]) => ({ ok: true, output: args[0] === '--version' ? '1.0.0' : JSON.stringify({ loggedIn: false }) })
+  const codexProbe = async (_bin: string, args: readonly string[]) => ({ ok: args[0] === '--version', output: args[0] === '--version' ? '1.0.0' : 'Not logged in' })
+  const deps = { isRoot: () => false, agentsSkills: join(repo, 'no-such-dir') }
+  try {
+    process.env['XDG_CONFIG_HOME'] = dir
+    assert.equal((await readyToRun(repo, 'claude-code', { ...deps, probe })).problems.length, 1)
+    assert.equal((await readyToRun(repo, 'codex', { ...deps, probe: codexProbe })).problems.length, 1)
+    addAccount('Dani', 'x', accountsPath('claude'))
+    assert.deepEqual((await readyToRun(repo, 'claude-code', { ...deps, probe })).problems, [])
+    assert.equal((await readyToRun(repo, 'codex', { ...deps, probe: codexProbe })).problems.length, 1)
+    addAccount('Dani', 'codex-dani', accountsPath('codex'))
+    assert.deepEqual((await readyToRun(repo, 'codex', { ...deps, probe: codexProbe })).problems, [])
+  } finally {
+    if (before === undefined) delete process.env['XDG_CONFIG_HOME']
+    else process.env['XDG_CONFIG_HOME'] = before
+    await rm(dir, { recursive: true, force: true })
     await removeRepo(repo)
   }
 })

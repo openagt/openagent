@@ -1,5 +1,4 @@
 import { execFile } from 'node:child_process'
-import { readAccounts } from './accounts.js'
 
 /**
  * Whether a coding agent's CLI can start a session at all, asked before a run spends a checkout
@@ -65,11 +64,11 @@ export interface DriverReadyOptions {
   /** The user `sudo` recorded, named in the root warning. Default `SUDO_USER`. */
   sudoUser?: string | undefined
   /**
-   * The agent's accounts file (`accounts.ts`): one that holds an added account is a login runs
-   * use, so the CLI's own login is not needed, as on a server that has only the person's own
-   * computers' logins. Unsaid, only the CLI's own login counts.
+   * Whether the person added an account beside the CLI's own login: one is a login runs use, so the
+   * CLI's own is not needed, as on a server that has only the person's own computers' logins.
+   * Unsaid, only the CLI's own login counts.
    */
-  accounts?: string
+  addedAccount?: boolean
 }
 
 /**
@@ -94,7 +93,7 @@ export async function checkCliReady(spec: CliSpec, opts: DriverReadyOptions = {}
     problems.push(problem)
     if (spec.fixes?.install !== undefined) fix = { kind: 'install', command: spec.fixes.install, problem }
   } else if (spec.loggedIn(await probe(bin, spec.authArgs)) === false) {
-    if (opts.accounts !== undefined && readAccounts(opts.accounts).some(account => account.login !== undefined)) ownLoggedOut = true
+    if (opts.addedAccount) ownLoggedOut = true
     else {
       const problem = `\`${bin}\` is not logged in. Run \`${spec.login}\`, then start again.`
       problems.push(problem)

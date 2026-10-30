@@ -5,9 +5,8 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { test } from 'node:test'
 import { PassThrough, Readable } from 'node:stream'
-import { addAccount, goOn, nameOwnAccount, OWN_NAME, readAccounts, useFirst, UsageLimitError, type DriverEvent, type SpawnLike, type SpawnedProcess } from '@openagt/agent-driver'
-import { accountHome, codexAccountsDir, codexAccountsPath, codexWho, codexWindows, loginCodex, readCodexUsage } from './codex-accounts.js'
-import { CodexDriver } from './codex.js'
+import type { SpawnLike, SpawnedProcess } from '@openagt/agent-driver'
+import { accountHome, codexAccountsDir, codexWho, codexWindows, loginCodex, readCodexUsage } from './codex-accounts.js'
 
 const HOUR = 60 * 60_000
 const NOW = Date.parse('2026-10-22T12:00:00Z')
@@ -73,8 +72,7 @@ function fakeServer(reply: Reply, seen: Seen[] = []): SpawnLike {
   }
 }
 
-test('the Codex accounts list is beside OpenAgent\'s own, and their logins under the state directory, a folder each', () => {
-  assert.equal(codexAccountsPath({ XDG_CONFIG_HOME: '/x' }), '/x/openagent-codex-accounts.json')
+test('the Codex accounts\' logins are under the state directory, a folder each', () => {
   assert.equal(codexAccountsDir({ XDG_STATE_HOME: '/s' }), '/s/agent-driver/codex-accounts')
   assert.equal(codexAccountsDir({ HOME: '/home/rom' }), '/home/rom/.local/state/agent-driver/codex-accounts')
 })
@@ -217,141 +215,4 @@ test('with no browser here, a new account signs in with a code typed on another 
     assert.deepEqual(codes, [['KQ7M-4XPD', 'https://auth.example/codex/device']])
     assert.deepEqual(opened, [])
     assert.equal(signedIn.who.name, 'Dani')
-  }))
-
-/** One turn of a fake Codex app server, by the account (Codex home) it runs on. */
-function turns(byHome: (home: string, turn: number) => 'limit' | 'done', seen: Seen[], frees = NOW + 2 * HOUR): SpawnLike {
-  let turn = 0
-  return fakeServer((method, params, send, home) => {
-    if (method === 'thread/start' || method === 'thread/resume') return send({ id: params['id'], result: { thread: { id: method === 'thread/resume' ? params['threadId'] : 'thread-1' }, model: 'gpt-5.5', reasoningEffort: 'medium' } })
-    if (method !== 'turn/start') return
-    send({ id: params['id'], result: { turn: { id: 'turn-1' } } })
-    const outcome = byHome(home, turn++)
-    if (outcome === 'limit') {
-      send({ method: 'account/rateLimits/updated', params: { rateLimits: { primary: { usedPercent: 100, windowDurationMins: 300, resetsAt: frees / 1000 }, secondary: { usedPercent: 61, windowDurationMins: 10080, resetsAt: (NOW + 48 * HOUR) / 1000 } } } })
-      send({ method: 'turn/completed', params: { turn: { id: 'turn-1', status: 'failed', error: { message: "You've hit your usage limit. Try again at Oct 22nd, 2026 2:00 PM.", codexErrorInfo: 'usageLimitExceeded', additionalDetails: null } } } })
-    } else {
-      send({ method: 'account/rateLimits/updated', params: { rateLimits: { primary: { usedPercent: 20, windowDurationMins: 300, resetsAt: (NOW + HOUR) / 1000 }, secondary: null } } })
-      send({ method: 'item/completed', params: { item: { type: 'agentMessage', id: 'm', text: 'finished' } } })
-      send({ method: 'turn/completed', params: { turn: { id: 'turn-1', status: 'completed', error: null } } })
-    }
-  }, seen)
-}
-
-/** The text a fake server was given to say, in its turn. */
-const said = (s: Seen): unknown => (s.messages.find(m => m.method === 'turn/start')?.params?.['input'] as { text: string }[])[0]!.text
-
-test('a turn the account\'s limit stops goes on in the same conversation on the next free account, from its own home, told so; the chat says why, each account keeps its windows', () =>
-  inDir(async dir => {
-    const env = { HOME: join(dir, 'home'), XDG_CONFIG_HOME: join(dir, 'config'), XDG_STATE_HOME: join(dir, 'state') }
-    const path = codexAccountsPath(env)
-    addAccount('Dani', 'codex-dani', path)
-    nameOwnAccount('Rom', path)
-    const folder = join(codexAccountsDir(env), 'codex-dani')
-    await mkdir(folder, { recursive: true })
-    await writeFile(join(folder, 'auth.json'), auth('dani', 'ws'))
-    const seen: Seen[] = []
-    const events: DriverEvent[] = []
-    const session = await new CodexDriver({ spawn: turns(home => (home === '' ? 'limit' : 'done'), seen), env, accounts: { now: () => NOW } }).start({ cwd: dir, onEvent: e => events.push(e) })
-    const turn = await session.prompt('fix the bug')
-    assert.equal(turn.text, 'finished')
-    assert.equal(seen.length, 2)
-    // The person's own Codex home as it is, then Dani's own, which shares the person's conversations.
-    assert.equal(seen[0]!.env['CODEX_HOME'], undefined)
-    assert.equal(seen[1]!.env['CODEX_HOME'], join(folder, 'home'))
-    assert.equal(await readlink(join(folder, 'home', 'sessions')), join(env.HOME, '.codex', 'sessions'))
-    assert.equal(await readlink(join(folder, 'home', 'auth.json')), join(folder, 'auth.json'))
-    // The same conversation, told to go on: the prompt is in it already.
-    assert.deepEqual(seen[1]!.messages.find(m => m.method === 'thread/resume')?.params?.['threadId'], 'thread-1')
-    assert.equal(said(seen[1]!), goOn('Codex'))
-    assert.deepEqual(events.filter(e => e.type === 'notice'), [{ type: 'notice', message: "↻ Switched to Dani's Codex: Rom's hit its limit, free again in 2 h." }])
-    const after = readAccounts(path)
-    assert.equal(after.find(a => a.name === 'Rom')?.limitedUntil, NOW + 2 * HOUR)
-    assert.deepEqual(after.find(a => a.name === 'Rom')?.windows?.map(w => [w.window, w.percentUsed]), [['five_hour', 100], ['seven_day', 61]])
-    assert.deepEqual(after.find(a => a.name === 'Dani')?.windows?.map(w => [w.window, w.percentUsed]), [['five_hour', 20]])
-    // The session stays on Dani's.
-    await session.prompt('and the test')
-    assert.equal(seen[2]!.env['CODEX_HOME'], join(folder, 'home'))
-  }))
-
-test('a Codex run with skills off goes on an added account from a home with only the conversations of OpenAgent\'s own kept home', () =>
-  inDir(async dir => {
-    const env = { HOME: join(dir, 'home'), XDG_CONFIG_HOME: join(dir, 'config'), XDG_STATE_HOME: join(dir, 'state') }
-    const path = codexAccountsPath(env)
-    addAccount('Dani', 'codex-dani', path)
-    const folder = join(codexAccountsDir(env), 'codex-dani')
-    await mkdir(folder, { recursive: true })
-    const seen: Seen[] = []
-    const session = await new CodexDriver({ spawn: turns(() => 'done', seen), env, personal: { memory: false, connectors: true, skills: false }, accounts: { prefer: 'Dani', now: () => NOW } }).start({ cwd: dir })
-    await session.prompt('go')
-    assert.equal(seen[0]!.env['CODEX_HOME'], join(folder, 'plain'))
-    assert.equal(await readlink(join(folder, 'plain', 'sessions')), join(env.XDG_STATE_HOME, 'agent-driver', 'codex-home', 'sessions'))
-  }))
-
-test('with every Codex account at its limit the turn ends, saying which frees first; another failure is no limit to switch over', () =>
-  inDir(async dir => {
-    const env = { HOME: join(dir, 'home'), XDG_CONFIG_HOME: join(dir, 'config'), XDG_STATE_HOME: join(dir, 'state') }
-    const path = codexAccountsPath(env)
-    addAccount('Dani', 'codex-dani', path)
-    await mkdir(join(codexAccountsDir(env), 'codex-dani'), { recursive: true })
-    const seen: Seen[] = []
-    const session = await new CodexDriver({ spawn: turns(() => 'limit', seen), env, accounts: { now: () => NOW } }).start({ cwd: dir })
-    await assert.rejects(session.prompt('go'), (err: unknown) => err instanceof UsageLimitError && err.message === "All 2 Codex accounts are at their limit: This computer's is free again in 2 h.")
-    assert.equal(seen.length, 2)
-
-    const other = join(dir, 'other')
-    const otherEnv = { ...env, XDG_CONFIG_HOME: other }
-    addAccount('Dani', 'codex-dani', codexAccountsPath(otherEnv))
-    const failing: Seen[] = []
-    const failed = await new CodexDriver({
-      spawn: fakeServer((method, params, send) => {
-        if (method === 'thread/start') return send({ id: params['id'], result: { thread: { id: 'thread-1' } } })
-        if (method !== 'turn/start') return
-        send({ id: params['id'], result: { turn: { id: 'turn-1' } } })
-        send({ method: 'turn/completed', params: { turn: { id: 'turn-1', status: 'failed', error: { message: 'The model is not supported.', codexErrorInfo: 'badRequest' } } } })
-      }, failing),
-      env: otherEnv,
-      accounts: { now: () => NOW },
-    }).start({ cwd: dir })
-    await assert.rejects(failed.prompt('go'), /not supported/)
-    assert.equal(failing.length, 1)
-    assert.equal(readAccounts(codexAccountsPath(otherEnv)).some(a => a.limitedUntil !== undefined), false)
-  }))
-
-test('Codex\'s models are asked from the home a turn on the account runs take first runs from: Codex fetches them for each login', () =>
-  inDir(async dir => {
-    const env = { HOME: join(dir, 'home'), XDG_CONFIG_HOME: join(dir, 'config'), XDG_STATE_HOME: join(dir, 'state') }
-    const path = codexAccountsPath(env)
-    addAccount('Dani', 'codex-dani', path)
-    useFirst('Dani', path)
-    const folder = join(codexAccountsDir(env), 'codex-dani')
-    await mkdir(folder, { recursive: true })
-    const homes: (string | undefined)[] = []
-    const spawn: SpawnLike = (_command, _args, opts) => {
-      homes.push(opts.env?.['CODEX_HOME'])
-      const stdout = Readable.from([JSON.stringify({ models: [{ slug: 'gpt-6', display_name: 'GPT-6', visibility: 'list', priority: 1 }] })])
-      const proc: SpawnedProcess = {
-        stdout,
-        stderr: Readable.from([]),
-        stdin: new PassThrough(),
-        on(event, listener) {
-          if (event === 'close') stdout.on('end', () => (listener as (c: number | null) => void)(0))
-          return proc
-        },
-        kill: () => undefined,
-      }
-      return proc
-    }
-    const models = await new CodexDriver({ spawn, env, accounts: { now: () => NOW } }).listModels()
-    assert.deepEqual(models.map(m => m.name), ['GPT-6'])
-    assert.equal(homes[0], join(folder, 'home'))
-    await new CodexDriver({ spawn, env, personal: { memory: true, connectors: true, skills: false }, accounts: { now: () => NOW } }).listModels()
-    assert.equal(homes[1], join(folder, 'plain'))
-    assert.equal(await readlink(join(folder, 'plain', 'sessions')), join(env.XDG_STATE_HOME, 'agent-driver', 'codex-home', 'sessions'))
-
-    // The person's own login, in their own home; and without accounts, whatever login Codex has.
-    useFirst(OWN_NAME, path)
-    await new CodexDriver({ spawn, env, accounts: { now: () => NOW } }).listModels()
-    await new CodexDriver({ spawn, env }).listModels()
-    assert.deepEqual(homes.slice(2), [undefined, undefined])
   }))

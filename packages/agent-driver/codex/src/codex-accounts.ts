@@ -3,21 +3,16 @@ import { randomBytes } from 'node:crypto'
 import { chmod, lstat, mkdir, readFile, readlink, rm, symlink } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { accountsPath, type AgentAccount, type DriverRateWindow } from '@openagt/agent-driver'
+import type { AgentAccount, DriverRateWindow } from '@openagt/agent-driver'
 import { askCodex, askOnce, type AskOptions } from './codex-ask.js'
 import { prepareCodexHome } from './codex.js'
 
-// The Codex accounts runs may use (`accounts.ts` in the driver core keeps the list): the person's
+// The Codex accounts runs may use (`@openagt/skill-account-rotation` keeps the list): the person's
 // own login, in their own Codex home, and the ones added beside it. Codex keeps a login and the
 // conversations in one home, so an added account is a folder of OpenAgent's own holding that
 // account's login, where Codex renews it, and a turn on it runs from a home that has that login and
 // links to the conversations of the home the person's own login runs from: a conversation one
 // account started, the next goes on with. The person's own Codex home is never written.
-
-/** Where the Codex accounts are kept: `$XDG_CONFIG_HOME/openagent-codex-accounts.json`, else dotted under the home. */
-export function codexAccountsPath(env: NodeJS.ProcessEnv = process.env): string {
-  return accountsPath('codex', env)
-}
 
 /** The folder added accounts' logins are kept in, one folder each: `$XDG_STATE_HOME/agent-driver/codex-accounts`, or under `~/.local/state`. */
 export function codexAccountsDir(env: NodeJS.ProcessEnv = process.env): string {
