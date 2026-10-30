@@ -1,5 +1,5 @@
 import { ClaudeCodeDriver, claudeAccountsPath } from '@openagt/agent-driver-claude'
-import { CodexDriver } from '@openagt/agent-driver-codex'
+import { CodexDriver, codexAccountsPath } from '@openagt/agent-driver-codex'
 import { pickAccount, readAccounts, type Driver, type DriverModel } from '@openagt/agent-driver'
 import { DRIVERS, type DriverName } from '../driver-names.js'
 
@@ -47,11 +47,13 @@ export function cachedModelsSource(drivers: Record<DriverName, Pick<Driver, 'lis
   }
 }
 
-/** The daemon's own source: the coding agents on this machine, asked as the person's own login, on the Claude account runs take first. */
+/** Which account a coding agent's runs take first on this machine, as {@link cachedModelsSource} tells two apart. */
+export function firstAccount(name: DriverName, env: NodeJS.ProcessEnv = process.env): string {
+  const account = pickAccount(readAccounts(name === 'claude-code' ? claudeAccountsPath(env) : codexAccountsPath(env)), Date.now())
+  return account ? `${account.name} ${account.accountId ?? ''}` : ''
+}
+
+/** The daemon's own source: the coding agents on this machine, each on the account its runs take first. */
 export function defaultModelsSource(): ModelsSource {
-  const claudeFirst = (): string => {
-    const first = pickAccount(readAccounts(claudeAccountsPath()), Date.now())
-    return first ? `${first.name} ${first.accountId ?? ''}` : ''
-  }
-  return cachedModelsSource({ 'claude-code': new ClaudeCodeDriver({ accounts: {} }), codex: new CodexDriver() }, name => (name === 'claude-code' ? claudeFirst() : ''))
+  return cachedModelsSource({ 'claude-code': new ClaudeCodeDriver({ accounts: {} }), codex: new CodexDriver({ accounts: {} }) }, name => firstAccount(name))
 }

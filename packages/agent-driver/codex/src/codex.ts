@@ -3,7 +3,7 @@ import { copyFile, lstat, mkdir, readlink, readdir, realpath, rename, rm, stat, 
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { accountFolder, accountHome, codexAccountsPath, codexWindows } from './codex-accounts.js'
-import { turnOnAccounts, type AccountsOption, type DriverRateWindow, runCliSession, continuingTurn, finishTurn, agentEnv, attachLog, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, checkCliReady, type AgentCliParser, type CliIo, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
+import { turnOnAccounts, pickAccount, readAccounts, type AccountsOption, type DriverRateWindow, runCliSession, continuingTurn, finishTurn, agentEnv, attachLog, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, checkCliReady, type AgentCliParser, type CliIo, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
 
 /**
  * Codex's sandbox policy for the shell commands the model writes.
@@ -159,14 +159,26 @@ export class CodexDriver implements Driver {
   /**
    * The models Codex's own picker offers: `codex debug models`, the catalog for the person's
    * login, cut to the entries it lists (`visibility: list`) in its own order (`priority`). Asked
-   * from the person's own Codex home, where their login is. The catalog is Codex's word, not a
-   * guarantee: a listed model can still be refused when a turn runs.
+   * from the person's own Codex home, where their login is; on accounts, from the home a turn on
+   * the account runs take first runs from, since Codex fetches the catalog for each login. The
+   * catalog is Codex's word, not a guarantee: a listed model can still be refused when a turn runs.
    */
-  listModels(opts: { signal?: AbortSignal } = {}): Promise<DriverModel[]> {
+  async listModels(opts: { signal?: AbortSignal } = {}): Promise<DriverModel[]> {
+    const env = this.opts.env ?? process.env
+    const accounts = this.opts.accounts
+    const first = accounts ? pickAccount(readAccounts(accounts.path ?? codexAccountsPath(env)), (accounts.now ?? Date.now)(), accounts.prefer) : undefined
+    // The same home a turn on it runs from, so the two never undo each other's links.
+    const setup = this.opts.personal?.skills !== false
+    const base = setup ? personalCodexHome(env) : resolve(this.opts.codexHome ?? defaultCodexHome(env))
+    const home = first?.login !== undefined ? await accountHome(accountFolder(first, env), base, setup) : undefined
+    return this.askModels(home !== undefined ? { ...env, CODEX_HOME: home } : env, opts)
+  }
+
+  private askModels(env: NodeJS.ProcessEnv, opts: { signal?: AbortSignal }): Promise<DriverModel[]> {
     return new Promise<DriverModel[]>((resolvePromise, rejectPromise) => {
       const bin = this.opts.bin ?? 'codex'
       const spawn = this.opts.spawn ?? (nodeSpawn as unknown as SpawnLike)
-      const child = spawn(bin, ['debug', 'models'], { cwd: process.cwd(), env: this.opts.env ?? process.env })
+      const child = spawn(bin, ['debug', 'models'], { cwd: process.cwd(), env })
       let settled = false
       const settle = (answer: { models: DriverModel[] } | { error: string; code?: string }) => {
         if (settled) return

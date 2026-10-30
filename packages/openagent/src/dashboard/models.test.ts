@@ -1,7 +1,12 @@
 import { strict as assert } from 'node:assert'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { test } from 'node:test'
-import type { DriverModel } from '@openagt/agent-driver'
-import { cachedModelsSource } from './models.js'
+import { addAccount, useFirst, type DriverModel } from '@openagt/agent-driver'
+import { claudeAccountsPath } from '@openagt/agent-driver-claude'
+import { codexAccountsPath } from '@openagt/agent-driver-codex'
+import { cachedModelsSource, firstAccount } from './models.js'
 
 /** A driver that answers each ask with the next of `answers`, counting the asks. */
 function driver(...answers: Array<DriverModel[] | Error>) {
@@ -58,4 +63,21 @@ test('an agent is asked again once its runs take another account first: each acc
   first = 'Suleiman'
   assert.deepEqual((await source.read())['claude-code'], { models: [{ id: 'opus', name: 'Opus 5.5' }] })
   assert.equal(claude.asks, 2)
+})
+
+test('the account each agent\'s runs take first is read from that agent\'s own list', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'models-first-'))
+  try {
+    const env = { XDG_CONFIG_HOME: dir }
+    const own = firstAccount('codex', env)
+    addAccount('Dani', 'codex-dani', codexAccountsPath(env))
+    useFirst('Dani', codexAccountsPath(env))
+    assert.equal(firstAccount('codex', env), 'Dani ')
+    assert.equal(firstAccount('claude-code', env), own, 'not the other agent\'s')
+    addAccount('Rom', 'sk-ant-oat01-rom', claudeAccountsPath(env), new Date(), 'rom-account-id')
+    useFirst('Rom', claudeAccountsPath(env))
+    assert.equal(firstAccount('claude-code', env), 'Rom rom-account-id')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
