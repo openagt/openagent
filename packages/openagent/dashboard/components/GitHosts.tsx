@@ -70,61 +70,64 @@ function HostCard({ row, onChanged }: { row: GitHostRow; onChanged: () => Promis
         <h3 className="text-sm font-medium">{p.name}</h3>
         <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{`${row.host} · ${usedBy(row)}`}</span>
         <StatePill state={state} />
+        {p.installed && p.accounts.length > 0 && !p.loggingIn && (
+          <Button size="xs" variant="ghost" disabled={login.busy} title={`Logs another account in to ${p.tool} with a code you type at ${p.name}. The terminal's account stays as it is.`} onClick={() => void login.start(row.host)}>
+            {login.busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Plus className="size-3.5" aria-hidden />}
+            Add account
+          </Button>
+        )}
       </header>
       {p.accounts.length > 0 && (
         <ul className="divide-y divide-border">
           {p.accounts.map(account => (
-            <li key={account.login} aria-label={`@${account.login}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm">@{account.login}</p>
-                <p className={cn('truncate text-xs', account.ok ? 'text-muted-foreground' : 'text-warning')}>
-                  {!account.ok ? `${p.name} no longer takes this login: add it again` : account.from !== undefined ? `from ${account.from}` : account.terminal ? "the terminal's account" : `logged in to ${p.tool}`}
-                </p>
-              </div>
-              {account.runs ? (
-                <span className="text-xs font-medium text-success">in use for runs</span>
-              ) : (
-                <div className="flex items-center gap-1">
-                  <Button size="xs" variant="ghost" disabled={pending !== undefined || !account.ok} onClick={() => void act(account.login, 'use', () => sendUseGitHostAccount(row.host, account.login))}>
-                    {pressing(account.login, 'use') && <Loader2 className="size-3 animate-spin" aria-hidden />}
-                    {pressing(account.login, 'use') ? 'Switching…' : 'Use for runs'}
-                  </Button>
-                  {/* The account runs use is never taken off: another is picked first. */}
-                  <Button size="xs" variant="ghost" disabled={pending !== undefined} aria-label={`Remove @${account.login}`} title={`${p.tool} on this computer forgets it. The login is not ended: it goes on working wherever else it is.`} onClick={() => void act(account.login, 'remove', () => sendForgetGitHostAccount(row.host, account.login))}>
-                    {pressing(account.login, 'remove') && <Loader2 className="size-3 animate-spin" aria-hidden />}
-                    {pressing(account.login, 'remove') ? 'Removing…' : 'Remove'}
-                  </Button>
+            <li key={account.login} aria-label={`@${account.login}`} className="space-y-2 px-3 py-2.5">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm">@{account.login}</p>
+                  <p className={cn('truncate text-xs', account.ok ? 'text-muted-foreground' : 'text-warning')}>
+                    {!account.ok ? `${p.name} no longer takes this login: add it again` : account.from !== undefined ? `from ${account.from}` : account.terminal ? "the terminal's account" : `logged in to ${p.tool}`}
+                  </p>
                 </div>
-              )}
+                {account.runs ? (
+                  <span className="text-xs font-medium text-success">in use for runs</span>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <Button size="xs" variant="ghost" disabled={pending !== undefined || !account.ok} onClick={() => void act(account.login, 'use', () => sendUseGitHostAccount(row.host, account.login))}>
+                      {pressing(account.login, 'use') && <Loader2 className="size-3 animate-spin" aria-hidden />}
+                      {pressing(account.login, 'use') ? 'Switching…' : 'Use for runs'}
+                    </Button>
+                    {/* The account runs use is never taken off: another is picked first. */}
+                    <Button size="xs" variant="ghost" disabled={pending !== undefined} aria-label={`Remove @${account.login}`} title={`${p.tool} on this computer forgets it. The login is not ended: it goes on working wherever else it is.`} onClick={() => void act(account.login, 'remove', () => sendForgetGitHostAccount(row.host, account.login))}>
+                      {pressing(account.login, 'remove') && <Loader2 className="size-3 animate-spin" aria-hidden />}
+                      {pressing(account.login, 'remove') ? 'Removing…' : 'Remove'}
+                    </Button>
+                  </div>
+                )}
+              </div>
               <ServerNotes row={{ kind: 'git', host: row.host, source: account.login }} />
             </li>
           ))}
         </ul>
       )}
       <LeftNotices kind="git" host={row.host} />
-      <div className={cn('px-3 py-2.5', p.accounts.length > 0 && 'border-t border-border')}>
-        {!p.installed || p.accounts.length === 0 ? (
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">{hostWords(row)}</p>
-            <HostFix row={row} onChanged={onChanged} />
-          </div>
-        ) : p.loggingIn ? (
-          <DeviceCode code={p.loggingIn.code} url={p.loggingIn.url} />
-        ) : (
-          <>
-            <Button size="sm" variant="ghost" disabled={login.busy} onClick={() => void login.start(row.host)}>
-              <Plus className="size-3.5" aria-hidden />
-              Add account
-            </Button>
-            <p className="mt-1.5 text-xs text-muted-foreground">{`Logs another account in to ${p.tool} with a code you type at ${p.name}. The terminal's account stays as it is.`}</p>
-          </>
-        )}
-        {(error ?? login.error) !== undefined && (
-          <p role="alert" className="mt-1.5 text-xs text-danger">
-            {error ?? login.error}
-          </p>
-        )}
-      </div>
+      {/* The foot holds what is missing, or the code of the account being added: "Add account" is in the header once there is one. */}
+      {(!p.installed || p.accounts.length === 0 || p.loggingIn || (error ?? login.error) !== undefined) && (
+        <div className={cn('px-3 py-2.5', p.accounts.length > 0 && 'border-t border-border')}>
+          {!p.installed || p.accounts.length === 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">{hostWords(row)}</p>
+              <HostFix row={row} onChanged={onChanged} />
+            </div>
+          ) : (
+            p.loggingIn && <DeviceCode code={p.loggingIn.code} url={p.loggingIn.url} />
+          )}
+          {(error ?? login.error) !== undefined && (
+            <p role="alert" className="mt-1.5 text-xs text-danger">
+              {error ?? login.error}
+            </p>
+          )}
+        </div>
+      )}
     </section>
   )
 }
