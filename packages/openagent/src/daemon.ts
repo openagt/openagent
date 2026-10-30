@@ -3,6 +3,7 @@ import { startDashboard, type Dashboard } from './dashboard/index.js'
 import { createProjectRuntime } from './daemon-runtime.js'
 import { defaultQuotaSource } from './dashboard/quota.js'
 import { defaultModelsSource } from './dashboard/models.js'
+import { agentUpdates } from './dashboard/agent-updates.js'
 import { startBackgroundServices } from './daemon-services.js'
 import { projectErrorStore } from './project-errors.js'
 import { resolveDashboardBundle } from './dashboard/bundle.js'
@@ -140,11 +141,13 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     }
     return (opts.bridgeBrowser ?? (o => startBridgeBrowser(o)))({ daemonUrl, token: bridgeToken, dir: bridgeBrowserDir(env), report, signal })
   }, console.log)
+  // Which models each coding agent offers: asked on the menu's first read, then kept.
+  const models = defaultModelsSource()
   const dashboard: Dashboard = await startDashboard({
     port,
     quota,
-    // Which models each coding agent offers: asked on the menu's first read, then kept.
-    models: defaultModelsSource(),
+    models,
+    agentUpdates: agentUpdates({ models }),
     onStart: runtime.onStart,
     onAddProject: runtime.onAddProject,
     onStartedIn: runtime.onStartedIn,

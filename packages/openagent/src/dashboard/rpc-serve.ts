@@ -14,6 +14,7 @@ import type { OpenAgentEvent } from '../events.js'
 import type { PreferencesStore } from '../registry.js'
 import type { QuotaSource } from './quota.js'
 import type { ModelsSource } from './models.js'
+import type { AgentUpdates } from './agent-updates.js'
 import type { BridgeBrowserOwner } from '../bridge-browser.js'
 import type { ProjectErrorsReader } from '../project-errors.js'
 import type { AddProjectResult, RemoveProjectResult, StartAgentOptions, StartAgentResult, StartedInResult } from './types.js'
@@ -120,6 +121,8 @@ export interface DashboardContext {
   quota: QuotaSource
   /** Which models each coding agent offers, for the agent and model menu. */
   models: ModelsSource
+  /** Whether a newer version of a coding agent on this computer is out, and its update. */
+  agentUpdates: AgentUpdates
   /** What a project currently suffers from (#1500): the daemon's error state, read per project. */
   projectErrors: ProjectErrorsReader
   /** The daemon's own bridge browser (#1332): status, and show/hide/restart on request. */

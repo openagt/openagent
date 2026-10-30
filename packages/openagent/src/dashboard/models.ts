@@ -12,6 +12,8 @@ export type ModelsView = Record<DriverName, DriverModels>
 /** Where the dashboard reads which models each coding agent offers. */
 export interface ModelsSource {
   read(): Promise<ModelsView>
+  /** Ask the agent again at the next read: a new version of it can offer other models. */
+  forget(name: DriverName): void
 }
 
 /**
@@ -44,6 +46,7 @@ export function cachedModelsSource(drivers: Record<DriverName, Pick<Driver, 'lis
   }
   return {
     read: async () => Object.fromEntries(await Promise.all(DRIVERS.map(async name => [name, await ask(name)] as const))) as ModelsView,
+    forget: name => void asked.delete(name),
   }
 }
 

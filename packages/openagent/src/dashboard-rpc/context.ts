@@ -4,6 +4,7 @@ import type { DashboardContext, EventsSource, RemoteAgents } from '../dashboard/
 import type { PreferencesStore } from '../registry.js'
 import type { QuotaSource } from '../dashboard/quota.js'
 import type { ModelsSource } from '../dashboard/models.js'
+import type { AgentUpdates } from '../dashboard/agent-updates.js'
 import type { ProjectErrorsReader } from '../project-errors.js'
 import type { BridgeBrowserOwner } from '../bridge-browser.js'
 
@@ -94,6 +95,11 @@ export function contextPreferences(): PreferencesStore {
 /** The quota source behind the usage panel (#533). */
 export function contextQuota(): QuotaSource {
   return fromContext('quota')
+}
+
+/** Whether a newer version of a coding agent on this computer is out, and its update. */
+export function contextAgentUpdates(): AgentUpdates {
+  return fromContext('agentUpdates')
 }
 
 /** Which models each coding agent offers. */

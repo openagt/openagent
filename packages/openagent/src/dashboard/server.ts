@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net'
 import type { PreferencesStore } from '../registry.js'
 import type { QuotaSource } from './quota.js'
 import type { ModelsSource } from './models.js'
+import type { AgentUpdates } from './agent-updates.js'
 import type { ProjectErrorsReader } from '../project-errors.js'
 import type { BridgeBrowserOwner } from '../bridge-browser.js'
 import { serveClientBundle } from './static.js'
@@ -50,6 +51,8 @@ export interface DashboardOptions {
   quota: QuotaSource
   /** Which models each coding agent offers, for the agent and model menu. */
   models: ModelsSource
+  /** Whether a newer version of a coding agent on this computer is out, for the Overview's line. */
+  agentUpdates: AgentUpdates
   /** What a project currently suffers from (#1500), for the project list to carry. */
   projectErrors: ProjectErrorsReader
   /** The daemon's own bridge browser (#1332): its status, and the show/hide/restart Settings asks for. */
@@ -161,6 +164,7 @@ export function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
     bridgeBrowser: opts.bridgeBrowser,
     quota,
     models: opts.models,
+    agentUpdates: opts.agentUpdates,
   })
 
   // The machine-to-daemon relay endpoints (#1067): wired only when an events tail is supplied.
