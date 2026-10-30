@@ -62,20 +62,25 @@ export function hostLoginState(row: GitHostRow): LoginState | undefined {
   return p.accounts.length > 0 && p.accounts.every(a => a.ok) ? 'connected' : 'step'
 }
 
-const PILL: Record<LoginState, { words: string; tone: string; dot: string }> = {
-  connected: { words: 'Connected', tone: 'bg-success/10 text-success', dot: 'bg-success' },
+const PILL: Record<Exclude<LoginState, 'connected'>, { words: string; tone: string; dot: string }> = {
   step: { words: 'Log in', tone: 'bg-warning/10 text-warning', dot: 'bg-warning' },
   'not-installed': { words: 'Not installed', tone: 'bg-muted text-muted-foreground', dot: 'bg-muted-foreground' },
 }
 
-export function StatePill({ state }: { state: LoginState }) {
-  const pill = PILL[state]
+/** A state in a word or two, on a pill of its colour. */
+export function Pill({ words, tone, dot }: { words: string; tone: string; dot: string }) {
   return (
-    <span className={cn('inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium', pill.tone)}>
-      <span aria-hidden className={cn('size-1.5 rounded-full', pill.dot)} />
-      {pill.words}
+    <span className={cn('inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium', tone)}>
+      <span aria-hidden className={cn('size-1.5 rounded-full', dot)} />
+      {words}
     </span>
   )
+}
+
+/** A card's state beside its name; none when connected: each account's row says where it is used. */
+export function StatePill({ state }: { state: LoginState }) {
+  if (state === 'connected') return null
+  return <Pill {...PILL[state]} />
 }
 
 /** A package's logo, an SVG it gave: drawn as a mask in the text's colour, never put in the page as markup. */

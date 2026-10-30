@@ -1,17 +1,17 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { Check } from 'lucide-react'
+import { Check, Loader2, Server as ServerIcon } from 'lucide-react'
 import { onServerLogins, sendAllowLogins, sendSettleLogin, sendUseLoginsOn, type LoginThere, type ServerLogins, type ServerLoginsView } from '../rpc/server-logins.js'
 import type { CopiedKind } from '../../src/dashboard/copied-logins.js'
 import { usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
+import { Pill } from './Logins.js'
 import { CopyButton } from './ui/copy-button.js'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 
 // The servers of the person's that use this computer's logins, in Settings › Accounts: a bar for
 // each above the accounts, offering this computer's logins or saying how they stand there, with
-// the press that makes the server a login of its own in this computer's browser; on each account's
-// row, whether each server has it; and the person's answer when a server has an account of theirs
+// the press that makes the server a login of its own in this computer's browser; under each
+// account's row, a row for each server saying whether it has it, with its press; and the person's answer when a server has an account of theirs
 // that they left here. None on a server: it uses the logins of the person's computers.
 
 /** How often the servers are asked: often while a press is under way, the sign-in being the person's. */
@@ -226,63 +226,84 @@ export interface RowOf {
 
 const sameRow = (login: RowOf, row: RowOf): boolean => login.kind === row.kind && (login.host ?? '') === (row.host ?? '') && login.source === row.source
 
+/** What a server's row under an account says of it there. */
+const THERE_PILL: Record<'there' | 'allow' | 'failed', { words: string; tone: string; dot: string }> = {
+  there: { words: 'Connected', tone: 'bg-success/10 text-success', dot: 'bg-success' },
+  allow: { words: 'Needs your yes', tone: 'bg-warning/10 text-warning', dot: 'bg-warning' },
+  failed: { words: 'Not connected', tone: 'bg-danger/10 text-danger', dot: 'bg-danger' },
+}
+
 /**
- * Under an account's name: the servers that use this computer's logins and have it, on one line;
- * those it did not get to, with why, once for every server it failed on alike; those it waits for.
+ * Under an account's name: a row for each server that uses this computer's logins, saying how the
+ * account stands there, with its press: Allow where it waits for the person's yes, Take off where
+ * it was made anew for the server. Why it did not get to a server is said under the rows, once for
+ * every server it failed on alike.
  */
 export function ServerNotes({ row }: { row: RowOf }) {
   const { view, reload } = useServers()
-  const [busy, setBusy] = useState(false)
+  // The press under way, on which server: its button says so until the answer.
+  const [pending, setPending] = useState<{ machineId: string; press: 'allow' | 'off' } | undefined>()
   const [error, setError] = useState<string | undefined>()
   const notes = (view?.servers ?? []).flatMap(server => {
     const login = server.on && server.reachable ? server.logins.find(other => sameRow(other, row)) : undefined
     return login && login.state !== 'switched' ? [{ server, login }] : []
   })
   if (notes.length === 0) return null
-  const labels = (state: LoginThere['state']): string[] => notes.filter(note => note.login.state === state).map(note => note.server.label)
-  const there = notes.filter(note => note.login.state === 'there')
-  const waits = labels('allow')
   const failed = new Map<string, string[]>()
   for (const { server, login } of notes) if (login.state === 'failed') failed.set(login.error ?? 'it did not get there', [...(failed.get(login.error ?? 'it did not get there') ?? []), server.label])
-  // A login made anew for the server with a press can be taken off there: it waits for the press again.
-  // One that goes as it is would be handed over again at once, so it has no menu.
-  const takeOff = async (machineId: string) => {
-    setBusy(true)
+  const pressable = notes.some(({ login }) => login.state === 'allow' || (login.state === 'there' && login.anew))
+  const act = async (machineId: string, press: 'allow' | 'off', go: () => Promise<{ ok: true } | { ok: false; error: string }>) => {
+    setPending({ machineId, press })
     setError(undefined)
-    const done = await sendSettleLogin(machineId, row, false)
-    if (!done.ok) setError(done.error)
-    await reload()
-    setBusy(false)
+    try {
+      const done = await go()
+      if (!done.ok) setError(done.error)
+      await reload()
+    } finally {
+      setPending(undefined)
+    }
   }
   return (
-    <div className="basis-full space-y-0.5 text-xs">
-      {there.length > 0 && (
-        <p className="text-success">
-          {'✓ on '}
-          {there.map(({ server, login }, i) => (
-            <span key={server.machineId}>
-              {i > 0 && ' · '}
-              {login.anew ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger type="button" disabled={busy} aria-label={`${login.name} on ${server.label}`} className="rounded-sm underline decoration-dotted underline-offset-2 hover:text-foreground">
-                    {server.label}
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="min-w-[14rem]">
-                    <DropdownMenuItem onClick={() => void takeOff(server.machineId)}>{`Take off ${server.label}`}</DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : (
-                server.label
-              )}
-            </span>
-          ))}
-        </p>
-      )}
-      {waits.length > 0 && <p className="text-warning">{`not on ${waits.join(' · ')} yet`}</p>}
+    <div className="space-y-1">
+      <ul className="rounded-md bg-muted/50 py-1">
+        {notes.map(({ server, login }) => {
+          // The login being made for the server keeps its press busy until the browser's yes is in.
+          const allowing = (pending?.machineId === server.machineId && pending.press === 'allow') || server.allowing?.name === login.name
+          const takingOff = pending?.machineId === server.machineId && pending.press === 'off'
+          return (
+            <li key={server.machineId} aria-label={`${login.name} on ${server.label}`} className="flex min-h-9 flex-wrap items-center gap-x-2 gap-y-1 px-2.5 py-1 text-xs">
+              <ServerIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+              {/* The name stays whole: on a narrow page the state and the press go under it, to the right. */}
+              <span className="max-w-[calc(100%-1.5rem)] flex-[1_0_auto] truncate">{server.label}</span>
+              <div className="ml-auto flex items-center gap-2">
+                <Pill {...THERE_PILL[login.state as keyof typeof THERE_PILL]} />
+                {/* The pills line up whichever row has a press. */}
+                {pressable && (
+                  <div className="flex w-24 shrink-0 justify-end max-sm:w-auto">
+                    {login.state === 'allow' && (
+                      <Button size="xs" disabled={pending !== undefined || allowing} onClick={() => void act(server.machineId, 'allow', () => sendAllowLogins(server.machineId))}>
+                        {allowing && <Loader2 className="size-3 animate-spin" aria-hidden />}
+                        {allowing ? 'Allowing…' : 'Allow'}
+                      </Button>
+                    )}
+                    {/* One that goes as it is would be handed over again at once: only one made anew for the server is taken off. */}
+                    {login.state === 'there' && login.anew && (
+                      <Button size="xs" variant="ghost" className="text-muted-foreground" disabled={pending !== undefined} title={`${server.label} no longer has it; it waits for your yes again.`} onClick={() => void act(server.machineId, 'off', () => sendSettleLogin(server.machineId, row, false))}>
+                        {takingOff && <Loader2 className="size-3 animate-spin" aria-hidden />}
+                        {takingOff ? 'Taking off…' : 'Take off'}
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </li>
+          )
+        })}
+      </ul>
       {[...failed].map(([why, on]) => (
-        <p key={why} className="text-danger">{`Not on ${on.join(' · ')}: ${why}`}</p>
+        <p key={why} className="text-xs text-danger">{`Not on ${on.join(' · ')}: ${why}`}</p>
       ))}
-      {error !== undefined && <p role="alert" className="text-danger">{error}</p>}
+      {error !== undefined && <p role="alert" className="text-xs text-danger">{error}</p>}
     </div>
   )
 }

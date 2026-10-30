@@ -75,8 +75,10 @@ describe('Agent accounts', () => {
     accounts.sendRemoveAgentAccount.mockResolvedValue({ ok: true })
     render(<AccountsSettings />)
     const card = screen.getByRole('region', { name: 'Claude Code' })
-    expect(await within(card).findByText('Connected')).toBeTruthy()
     const own = await within(card).findByRole('listitem', { name: 'Suleiman' })
+    // Connected says nothing a row does not: the header holds Add account instead.
+    expect(within(card).queryByText('Connected')).toBeNull()
+    expect(within(card.querySelector('header')!).getByRole('button', { name: 'Add account' })).toBeTruthy()
     expect(own.textContent).toContain("login on Studio")
     expect(own.textContent).toContain('22% this week')
     expect(own.textContent).toContain('limited, free in 2 h 10 min')

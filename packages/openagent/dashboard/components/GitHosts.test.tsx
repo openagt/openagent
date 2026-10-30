@@ -40,7 +40,7 @@ describe('Git hosts', () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site', 'gemskills'], provider: provider() }, { host: 'gitlab.example.com', projects: ['tool'] }] })
     render(<GitHostCards />)
     const card = await screen.findByRole('region', { name: 'GitHub' })
-    expect(within(card).getByText('Connected')).toBeTruthy()
+    expect(within(card).queryByText('Connected')).toBeNull()
     expect(within(card).getByText('github.com · used by site, gemskills')).toBeTruthy()
     const octo = within(card).getByRole('listitem', { name: '@octo' })
     expect(octo.textContent).toContain("the terminal's account")
@@ -75,9 +75,17 @@ describe('Git hosts', () => {
   test('Add account asks the package for a code, and the card shows it with the page to type it at while the login waits', async () => {
     logins.onGitHosts.mockResolvedValueOnce({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider() }] })
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider({ loggingIn: { code: 'ABCD-1234', url: 'https://github.com/login/device' } }) }] })
+    let answer: (value: { ok: true }) => void = () => {}
+    logins.sendGitHostLogin.mockImplementation(() => new Promise(resolve => (answer = resolve)))
     render(<GitHostCards />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Add account' }))
+    const card = await screen.findByRole('region', { name: 'GitHub' })
+    const add = within(card.querySelector('header')!).getByRole('button', { name: 'Add account' }) as HTMLButtonElement
+    fireEvent.click(add)
     await waitFor(() => expect(logins.sendGitHostLogin).toHaveBeenCalledWith('github.com'))
+    // While the package asks for a code, the press spins and takes no other.
+    await waitFor(() => expect(add.disabled).toBe(true))
+    expect(add.querySelector('.animate-spin')).not.toBeNull()
+    answer({ ok: true })
     expect(await screen.findByText('ABCD-1234')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'github.com/login/device' }).getAttribute('href')).toBe('https://github.com/login/device')
   })

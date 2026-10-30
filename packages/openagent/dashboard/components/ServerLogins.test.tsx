@@ -55,7 +55,7 @@ describe('a server that uses this computer\'s logins', () => {
     await waitFor(() => expect(servers.sendUseLoginsOn).toHaveBeenCalledWith(ID))
   })
 
-  test('what waits for the press is said in the bar and on its row; what is there is ticked on its row', async () => {
+  test('what waits for the press is said in the bar and on its server\'s row under the account; what is there is ticked on its row', async () => {
     views([own, dani])
     server({
       logins: [
@@ -68,8 +68,9 @@ describe('a server that uses this computer\'s logins', () => {
     expect(bar.textContent).toContain(`${LABEL} uses your logins: 1 of 2 there`)
     expect(bar.textContent).toContain('Suleiman needs your yes once')
     const card = screen.getByRole('region', { name: 'Claude Code' })
-    await waitFor(() => expect(within(card).getByRole('listitem', { name: 'Suleiman' }).textContent).toContain(`not on ${LABEL} yet`))
-    expect(within(card).getByRole('listitem', { name: 'Dani' }).textContent).toContain(`✓ on ${LABEL}`)
+    const waits = await within(card).findByRole('listitem', { name: `Suleiman on ${LABEL}` })
+    expect(waits.textContent).toBe(`${LABEL}Needs your yesAllow`)
+    expect(within(card).getByRole('listitem', { name: `Dani on ${LABEL}` }).textContent).toBe(`${LABEL}Connected`)
     fireEvent.click(within(bar).getByRole('button', { name: 'Allow 1 login' }))
     await waitFor(() => expect(servers.sendAllowLogins).toHaveBeenCalledWith(ID))
   })
@@ -90,7 +91,7 @@ describe('a server that uses this computer\'s logins', () => {
     expect(within(bar).queryByRole('alert')).toBeNull()
   })
 
-  test('on its row, under its name: the servers that have it on one line, and why it is not on the others, once for every server it failed on alike', async () => {
+  test('under its name, a row for each server saying whether it has it; why it is not on the others is said once for every server it failed on alike', async () => {
     views([own, dani])
     const reason = 'the login is not one of yours'
     servers.onServerLogins.mockResolvedValue({
@@ -99,7 +100,10 @@ describe('a server that uses this computer\'s logins', () => {
     })
     render(<AccountsSettings />)
     const card = await screen.findByRole('region', { name: 'Claude Code' })
-    await waitFor(() => expect(within(card).getByRole('listitem', { name: 'Suleiman' }).textContent).toContain('✓ on Box · Studio PC'))
+    for (const label of ['Box', 'Studio PC']) {
+      expect((await within(card).findByRole('listitem', { name: `Suleiman on ${label}` })).textContent).toBe(`${label}Connected`)
+      expect(within(card).getByRole('listitem', { name: `Dani on ${label}` }).textContent).toBe(`${label}Not connected`)
+    }
     const daniRow = within(card).getByRole('listitem', { name: 'Dani' })
     expect(daniRow.textContent).toContain(`Not on Box · Studio PC: ${reason}`)
     expect(daniRow.textContent!.split(reason)).toHaveLength(2)
@@ -110,7 +114,7 @@ describe('a server that uses this computer\'s logins', () => {
     server({ logins: [{ kind: 'claude', source: 'own', name: 'Suleiman', state: 'there' }] })
     render(<AccountsSettings />)
     const card = await screen.findByRole('region', { name: 'Claude Code' })
-    await waitFor(() => expect(within(card).getByRole('listitem', { name: 'Suleiman' }).textContent).toContain(`✓ on ${LABEL}`))
+    expect((await within(card).findByRole('listitem', { name: `Suleiman on ${LABEL}` })).textContent).toBe(`${LABEL}Connected`)
     expect(screen.queryByRole('region', { name: `Your logins on ${LABEL}` })).toBeNull()
   })
 
@@ -120,7 +124,7 @@ describe('a server that uses this computer\'s logins', () => {
     server({ logins: rows('allow') })
     render(<AccountsSettings />)
     const card = await screen.findByRole('region', { name: 'Claude Code' })
-    await waitFor(() => expect(within(card).getByRole('listitem', { name: 'Dani' }).textContent).toContain(`✓ on ${LABEL}`))
+    await within(card).findByRole('listitem', { name: `Dani on ${LABEL}` })
     // The press: the server says it is under way, then answers nothing more for a while.
     servers.onServerLogins.mockResolvedValueOnce({ computer: 'Studio', servers: [{ machineId: ID, label: LABEL, on: true, reachable: true, logins: rows('allow'), left: [], allowing: { name: 'Suleiman' } }] })
     fireEvent.click(await screen.findByRole('button', { name: 'Allow 1 login' }))
@@ -128,23 +132,53 @@ describe('a server that uses this computer\'s logins', () => {
     expect(await screen.findByText(`Making Suleiman's login for ${LABEL}`)).toBeTruthy()
     await new Promise(resolve => setTimeout(resolve, 100))
     expect(screen.getByText(`Making Suleiman's login for ${LABEL}`)).toBeTruthy()
-    expect(within(card).getByRole('listitem', { name: 'Dani' }).textContent).toContain(`✓ on ${LABEL}`)
+    expect(within(card).getByRole('listitem', { name: `Dani on ${LABEL}` }).textContent).toBe(`${LABEL}Connected`)
   })
 
-  test('a login made for the server with a press is taken off there from its row, and waits for the press again; one that goes as it is has no such menu', async () => {
+  test('a login made for the server with a press is taken off there from its row, which spins until the server answers, and waits for the press again; one that goes as it is has no Take off', async () => {
     views([own, dani])
     server({ logins: [{ kind: 'claude', source: 'own', name: 'Suleiman', state: 'there', anew: true }, { kind: 'claude', source: 'Dani', name: 'Dani', state: 'there' }] })
     render(<AccountsSettings />)
     const card = await screen.findByRole('region', { name: 'Claude Code' })
-    const trigger = await within(card).findByRole('button', { name: `Suleiman on ${LABEL}` })
-    expect(within(card).queryByRole('button', { name: `Dani on ${LABEL}` })).toBeNull()
-    expect(within(card).getByRole('listitem', { name: 'Dani' }).textContent).toContain(`✓ on ${LABEL}`)
+    const takeOff = within(await within(card).findByRole('listitem', { name: `Suleiman on ${LABEL}` })).getByRole('button', { name: 'Take off' }) as HTMLButtonElement
+    expect(within(within(card).getByRole('listitem', { name: `Dani on ${LABEL}` })).queryByRole('button')).toBeNull()
+    let answer: (value: { ok: true }) => void = () => {}
+    servers.sendSettleLogin.mockImplementation(() => new Promise(resolve => (answer = resolve)))
+    fireEvent.click(takeOff)
+    await waitFor(() => expect(takeOff.textContent).toBe('Taking off…'))
+    expect(takeOff.disabled).toBe(true)
+    expect(takeOff.querySelector('.animate-spin')).not.toBeNull()
+    expect(servers.sendSettleLogin).toHaveBeenCalledWith(ID, { kind: 'claude', source: 'own' }, false)
     server({ logins: [{ kind: 'claude', source: 'own', name: 'Suleiman', state: 'allow', anew: true }, { kind: 'claude', source: 'Dani', name: 'Dani', state: 'there' }] })
-    fireEvent.click(trigger)
-    fireEvent.click(await screen.findByRole('menuitem', { name: `Take off ${LABEL}` }))
-    await waitFor(() => expect(servers.sendSettleLogin).toHaveBeenCalledWith(ID, { kind: 'claude', source: 'own' }, false))
-    await waitFor(() => expect(within(card).getByRole('listitem', { name: 'Suleiman' }).textContent).toContain(`not on ${LABEL} yet`))
+    answer({ ok: true })
+    await waitFor(() => expect(within(card).getByRole('listitem', { name: `Suleiman on ${LABEL}` }).textContent).toBe(`${LABEL}Needs your yesAllow`))
     expect((await screen.findByRole('region', { name: `Your logins on ${LABEL}` })).textContent).toContain('Allow 1 login')
+  })
+
+  test('one account on two servers: Take off is only where its login was made for that server', async () => {
+    views([own])
+    const there = (anew: boolean) => [{ kind: 'claude', source: 'own', name: 'Suleiman', state: 'there', ...(anew ? { anew } : {}) }]
+    servers.onServerLogins.mockResolvedValue({ computer: 'Studio', servers: [{ machineId: 'https://Box', label: 'Box', on: true, reachable: true, left: [], logins: there(true) }, { machineId: 'https://Studio PC', label: 'Studio PC', on: true, reachable: true, left: [], logins: there(false) }] })
+    render(<AccountsSettings />)
+    const card = await screen.findByRole('region', { name: 'Claude Code' })
+    expect(within(await within(card).findByRole('listitem', { name: 'Suleiman on Box' })).getByRole('button', { name: 'Take off' })).toBeTruthy()
+    expect(within(within(card).getByRole('listitem', { name: 'Suleiman on Studio PC' })).queryByRole('button')).toBeNull()
+  })
+
+  test('Allow on a server\'s row makes the login there, and spins while the browser\'s yes is awaited', async () => {
+    views([own])
+    server({ logins: [{ kind: 'claude', source: 'own', name: 'Suleiman', state: 'allow' }] })
+    render(<AccountsSettings />)
+    const card = await screen.findByRole('region', { name: 'Claude Code' })
+    const row = await within(card).findByRole('listitem', { name: `Suleiman on ${LABEL}` })
+    server({ logins: [{ kind: 'claude', source: 'own', name: 'Suleiman', state: 'allow' }], allowing: { name: 'Suleiman' } })
+    fireEvent.click(within(row).getByRole('button', { name: 'Allow' }))
+    await waitFor(() => expect(servers.sendAllowLogins).toHaveBeenCalledWith(ID))
+    // The press answered, the server makes it: the row still spins until the login is there.
+    await new Promise(resolve => setTimeout(resolve, 100))
+    const allowing = within(card).getByRole('button', { name: 'Allowing…' })
+    expect((allowing as HTMLButtonElement).disabled).toBe(true)
+    expect(allowing.querySelector('.animate-spin')).not.toBeNull()
   })
 
   test('the login being made says where to say yes, with its link to copy for a private window', async () => {

@@ -220,6 +220,12 @@ export function AccountsCard({ agent }: { agent: AccountsAgent }) {
         <words.Logo className="size-4 shrink-0" />
         <h3 className="flex-1 text-sm font-medium">{words.title}</h3>
         {state && <StatePill state={agentLoginState(state)!} />}
+        {!absent && accounts.length > 0 && !naming && !adding && (
+          <Button size="xs" variant="ghost" onClick={() => setNaming(true)}>
+            <Plus className="size-3.5" aria-hidden />
+            Add account
+          </Button>
+        )}
       </header>
       {state && !state.ready && (state.fix !== undefined || agentLoginState(state) === 'not-installed') && (
         <div className={cn('space-y-2 px-3 py-2.5', !absent && 'border-b border-border', absent && 'pt-0')}>
@@ -232,25 +238,27 @@ export function AccountsCard({ agent }: { agent: AccountsAgent }) {
           <ul className="divide-y divide-border">
             {accounts.map(account => (
               <li key={account.id} aria-label={account.name}>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5">
-                  <div className="min-w-0 flex-1 max-sm:basis-full!">
-                    <p className="truncate text-sm">{account.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">{source(account, view!.computer)}</p>
-                  </div>
-                  {/* A login with no reading of its usage has no bar: an empty one read as nothing used. */}
-                  {usageWords(account) !== undefined && (
-                    <div className="flex items-center gap-2">
-                      <AccountBar percent={longest(account)?.percent} />
-                      <span className="w-44 truncate text-xs text-muted-foreground max-sm:w-auto">{usageWords(account)}</span>
+                <div className="space-y-2 px-3 py-2.5">
+                  <div>
+                    <div className="flex min-h-7 items-center gap-2">
+                      <p className="min-w-0 truncate text-sm">{account.name}</p>
+                      {view && <StateWords account={account} now={view.now} />}
+                      {!account.own && account.from === undefined && (
+                        <Button size="xs" variant="ghost" className="ml-auto text-muted-foreground" disabled={busy} aria-label={`Remove ${account.name}'s account`} title={words.remove} onClick={() => void act(() => sendRemoveAgentAccount(agent, account.id))}>
+                          Remove
+                        </Button>
+                      )}
                     </div>
-                  )}
-                  <div className="flex w-36 items-center justify-end gap-2 max-sm:w-auto">
-                    {view && <StateWords account={account} now={view.now} />}
-                    {!account.own && account.from === undefined && (
-                      <Button size="xs" variant="ghost" disabled={busy} aria-label={`Remove ${account.name}'s account`} title={words.remove} onClick={() => void act(() => sendRemoveAgentAccount(agent, account.id))}>
-                        Remove
-                      </Button>
-                    )}
+                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                      <p className="min-w-0 truncate text-xs text-muted-foreground">{source(account, view!.computer)}</p>
+                      {/* A login with no reading of its usage has no bar: an empty one read as nothing used. */}
+                      {usageWords(account) !== undefined && (
+                        <div className="ml-auto flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">{usageWords(account)}</span>
+                          <AccountBar percent={longest(account)?.percent} />
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <ServerNotes row={{ kind: agent, source: account.own ? 'own' : account.id }} />
                 </div>
@@ -259,38 +267,43 @@ export function AccountsCard({ agent }: { agent: AccountsAgent }) {
             ))}
           </ul>
           <LeftNotices kind={agent} />
-          <div className={cn('px-3 py-2.5', accounts.length > 0 && 'border-t border-border')}>
-            {adding ? (
-              <Adding agent={agent} adding={adding} words={words.adding(adding.name)} />
-            ) : naming ? (
-              <form
-                className="flex flex-wrap items-center gap-2"
-                onSubmit={event => {
-                  event.preventDefault()
-                  void add()
-                }}
-              >
-                <Input autoFocus aria-label="Whose account" placeholder="Whose account, e.g. Dani" value={name} onChange={event => setName(event.target.value)} className="h-8 w-56 max-sm:w-full" />
-                <Button size="sm" type="submit" disabled={busy || name.trim() === ''}>
-                  {words.logIn}
-                </Button>
-                <Button size="sm" variant="ghost" type="button" onClick={() => (setNaming(false), setError(undefined))}>
-                  Cancel
-                </Button>
-              </form>
-            ) : (
-              <Button size="sm" variant={accounts.length === 0 ? 'default' : 'ghost'} onClick={() => setNaming(true)}>
-                <Plus className="size-3.5" aria-hidden />
-                {accounts.length === 0 ? words.logIn : 'Add account'}
-              </Button>
-            )}
-            {naming && !adding && <p className="mt-1.5 text-xs text-muted-foreground">{words.help}</p>}
-            {(error ?? view?.failed) !== undefined && (
-              <p role="alert" className="mt-1.5 whitespace-pre-line text-xs text-danger">
-                {error ?? view?.failed}
-              </p>
-            )}
-          </div>
+          {/* The foot holds the account being added, or the first one's press: "Add account" is in the header once there is one. */}
+          {(accounts.length === 0 || naming || adding || (error ?? view?.failed) !== undefined) && (
+            <div className={cn('px-3 py-2.5', accounts.length > 0 && 'border-t border-border')}>
+              {adding ? (
+                <Adding agent={agent} adding={adding} words={words.adding(adding.name)} />
+              ) : naming ? (
+                <form
+                  className="flex flex-wrap items-center gap-2"
+                  onSubmit={event => {
+                    event.preventDefault()
+                    void add()
+                  }}
+                >
+                  <Input autoFocus aria-label="Whose account" placeholder="Whose account, e.g. Dani" value={name} onChange={event => setName(event.target.value)} className="h-8 w-56 max-sm:w-full" />
+                  <Button size="sm" type="submit" disabled={busy || name.trim() === ''}>
+                    {words.logIn}
+                  </Button>
+                  <Button size="sm" variant="ghost" type="button" onClick={() => (setNaming(false), setError(undefined))}>
+                    Cancel
+                  </Button>
+                </form>
+              ) : (
+                accounts.length === 0 && (
+                  <Button size="sm" onClick={() => setNaming(true)}>
+                    <Plus className="size-3.5" aria-hidden />
+                    {words.logIn}
+                  </Button>
+                )
+              )}
+              {naming && !adding && <p className="mt-1.5 text-xs text-muted-foreground">{words.help}</p>}
+              {(error ?? view?.failed) !== undefined && (
+                <p role="alert" className="mt-1.5 whitespace-pre-line text-xs text-danger">
+                  {error ?? view?.failed}
+                </p>
+              )}
+            </div>
+          )}
         </>
       )}
     </section>
