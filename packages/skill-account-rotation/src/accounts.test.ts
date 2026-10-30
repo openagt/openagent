@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { addAccount, accountsPath, freesIn, markLimited, nameOwnAccount, OWN_NAME, pickAccount, readAccounts, removeAccount, shownAccounts, useFirst } from './accounts.js'
+import { accountRotation, addAccount, accountsPath, hasAddedAccount, freesIn, markLimited, nameOwnAccount, OWN_NAME, pickAccount, readAccounts, removeAccount, shownAccounts, useFirst } from './accounts.js'
 
 const HOUR = 60 * 60_000
 const NOW = Date.parse('2026-10-22T12:00:00Z')
@@ -70,3 +70,32 @@ test('a run takes the first account not at a limit, or the one it was told to wh
   assert.equal(freesIn(NOW + 20 * 24 * HOUR, NOW), '20 days')
 }))
 
+test('whether an account is added is asked of the agent\'s own list: the person\'s own login alone is none', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'accounts-added-'))
+  try {
+    const env = { XDG_CONFIG_HOME: dir }
+    assert.equal(hasAddedAccount('claude', env), false)
+    addAccount('Dani', 'x', accountsPath('claude', env))
+    assert.equal(hasAddedAccount('claude', env), true)
+    assert.equal(hasAddedAccount('codex', env), false)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('a rotation reads the list of the environment it is asked in, or the file it was given, and takes the one it was told to first', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'accounts-first-'))
+  try {
+    const env = { XDG_CONFIG_HOME: dir }
+    addAccount('Dani', 'x', accountsPath('codex', env))
+    addAccount('Rom', 'y', accountsPath('codex', env))
+    assert.equal(accountRotation('codex').first(env)?.name, 'This computer')
+    assert.equal(accountRotation('claude').first(env)?.name, 'This computer')
+    assert.equal(accountRotation('codex', { prefer: 'Rom' }).first(env)?.name, 'Rom')
+    assert.equal(accountRotation('claude', { path: accountsPath('codex', env), prefer: 'Rom' }).first({})?.name, 'Rom')
+    markLimited('This computer', NOW + HOUR, NOW, accountsPath('codex', env))
+    assert.equal(accountRotation('codex', { now: () => NOW }).first(env)?.name, 'Dani')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

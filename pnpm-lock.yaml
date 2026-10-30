@@ -116,6 +116,9 @@ importers:
       '@openagt/agent-driver-codex':
         specifier: workspace:*
         version: link:../agent-driver/codex
+      '@openagt/skill-account-rotation':
+        specifier: workspace:*
+        version: link:../skill-account-rotation
       '@openagt/skill-branches':
         specifier: workspace:*
         version: link:../skill-branches
@@ -318,6 +321,9 @@ importers:
       '@openagt/files':
         specifier: workspace:*
         version: link:../files
+      '@openagt/skill-account-rotation':
+        specifier: workspace:*
+        version: link:../skill-account-rotation
       '@openagt/skill-branches':
         specifier: workspace:*
         version: link:../skill-branches
@@ -524,6 +530,25 @@ importers:
       vite:
         specifier: ^8.0.0
         version: 8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
+
+  packages/skill-account-rotation:
+    dependencies:
+      '@openagt/agent-driver':
+        specifier: workspace:*
+        version: link:../agent-driver/core
+      '@openagt/agent-driver-claude':
+        specifier: workspace:*
+        version: link:../agent-driver/claude
+      '@openagt/agent-driver-codex':
+        specifier: workspace:*
+        version: link:../agent-driver/codex
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
 
   packages/skill-branches:
     dependencies:
@@ -804,6 +829,9 @@ importers:
       '@openagt/agent-runner':
         specifier: workspace:*
         version: link:../agent-runner
+      '@openagt/skill-account-rotation':
+        specifier: workspace:*
+        version: link:../skill-account-rotation
       '@openagt/skill-branches':
         specifier: workspace:*
         version: link:../skill-branches
@@ -930,6 +958,9 @@ importers:
       '@openagt/dashboard':
         specifier: workspace:*
         version: link:../openagent
+      '@openagt/skill-account-rotation':
+        specifier: workspace:*
+        version: link:../skill-account-rotation
       '@openagt/skill-github':
         specifier: workspace:*
         version: link:../skill-github

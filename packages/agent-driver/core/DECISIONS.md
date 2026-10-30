@@ -75,20 +75,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   plain tool row it was: a row with no name on it, and on Codex one that never resolved.
 
 ## Accounts
-- A person may give an agent several accounts of its own, kept in a list in their order: a
-  run is on the first one free, and one that hits its limit hands the same conversation to
-  the next free one, which is told to go on where it stopped. Only the runs an agent's
-  driver starts change account: the account's login reaches that turn alone, and the
-  person's own login, the one their terminal uses, is never touched. How it reaches the turn
-  is the agent's own (Claude Code reads a login from the turn's environment; Codex keeps one
-  in its home folder, so an added account has a folder of its own that links to the
-  conversations of the person's home); the list, its order and the hand-over are one piece
-  every agent shares. Picked over
-  switching the whole computer's login when a limit is hit (every session moves, the
-  person's terminal included, and a Mac keeps its login where such a switch cannot reach),
-  and over a pooled account that people lend to an agent through a link (later, maybe).
-- An account hands over only to an account of the same agent: a conversation is kept in
-  each agent's own format, so moving it to another agent would lose it.
+- Which of a person's accounts takes a turn is `@openagt/skill-account-rotation`'s, handed to
+  a driver when it starts; what an added account's login is and how a turn runs on it is the
+  driver's. Picked over keeping the rotation in this package.
 - An agent's package declares how its CLI is installed and logged in, each one command a
   press runs with no terminal and no admin (Claude Code: its own `install.sh` into
   `~/.local/bin`, and `claude auth login` in this computer's browser; Codex: its own

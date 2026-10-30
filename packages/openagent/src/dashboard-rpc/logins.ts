@@ -2,8 +2,8 @@ import { spawn } from 'node:child_process'
 import { homedir } from 'node:os'
 import { nodeGitRunner, runPackageCommand, type ProvidedCommand } from '@openagt/agent-data'
 import type { DriverFix, DriverReadiness } from '@openagt/agent-driver'
-import { claudeAccountsPath, claudeCodeReady } from '@openagt/agent-driver-claude'
-import { codexAccountsPath, codexReady } from '@openagt/agent-driver-codex'
+import { claudeCodeReady } from '@openagt/agent-driver-claude'
+import { codexReady } from '@openagt/agent-driver-codex'
 import { readProjectAccounts, writeProjectAccounts } from '@openagt/agent-runner'
 import { providedCommand } from '../built-in.js'
 import { isDriverName, type DriverName } from '../driver-names.js'
@@ -13,6 +13,7 @@ import { contextProjects, resolveProjectPath } from './context.js'
 import { readProvider, remoteHost, type GitHostProvider } from '../dashboard/git-hosts.js'
 import { readCopied } from '../dashboard/copied-logins.js'
 import { syncLogins } from '../dashboard/logins-sync.js'
+import { hasAddedAccount } from '@openagt/skill-account-rotation'
 
 export type { GitHostAccount, GitHostProvider } from '../dashboard/git-hosts.js'
 
@@ -57,7 +58,7 @@ export const loginsWiring: {
   gitHost: root => providedCommand(root, 'git-host').catch(() => undefined),
   run: runPackageCommand,
   home: () => homedir(),
-  ready: driver => (driver === 'codex' ? codexReady({ accounts: codexAccountsPath() }) : claudeCodeReady({ accounts: claudeAccountsPath() })),
+  ready: driver => (driver === 'codex' ? codexReady({ addedAccount: hasAddedAccount('codex') }) : claudeCodeReady({ addedAccount: hasAddedAccount('claude') })),
   fix: runFix,
   driver: async () => {
     const picked = (await readPreferences().catch(() => ({}) as { driver?: string })).driver

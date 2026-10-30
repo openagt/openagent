@@ -5,8 +5,8 @@ import { homedir, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { readClaudeQuota } from './claude-code-quota.js'
 import { readClaudeModels } from './claude-code-models.js'
-import { accountEnv, CLAUDE_TOKEN_ENV, claudeAccountsPath } from './claude-accounts.js'
-import { turnOnAccounts, pickAccount, readAccounts, type AccountsOption, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, cutOutput, callArgument, lineCount, patchSize, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, finishTurn, agentEnv, oneLine, attachLog, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverQuota, type DriverRateLimit, type DriverRateWindow, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
+import { accountEnv, CLAUDE_TOKEN_ENV } from './claude-accounts.js'
+import { type AccountRotation, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, cutOutput, callArgument, lineCount, patchSize, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, finishTurn, agentEnv, oneLine, attachLog, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverQuota, type DriverRateLimit, type DriverRateWindow, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
 
 /** Claude Code permission modes we pass through to the CLI. */
 export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan'
@@ -48,10 +48,11 @@ export interface ClaudeCodeDriverOptions {
    */
   personal?: PersonalSetup
   /**
-   * Run on the person's Claude accounts (`claude-accounts.ts`), switching to the next free one when
-   * one hits its limit. Off, every turn runs on whatever login Claude Code has, as it always did.
+   * Run on the person's Claude accounts (`claude-accounts.ts`), the rotation switching to the next
+   * free one when one hits its limit. Off, every turn runs on whatever login Claude Code has, as it
+   * always did.
    */
-  accounts?: AccountsOption
+  accounts?: AccountRotation
   /** `spawn` override for tests. Default `node:child_process.spawn`. */
   spawn?: SpawnLike
 }
@@ -92,7 +93,7 @@ export class ClaudeCodeDriver implements Driver {
    */
   listModels(opts: { signal?: AbortSignal } = {}): Promise<DriverModel[]> {
     const { bin, env: setupEnv, extraArgs, spawn, accounts } = withPersonal(this.opts)
-    const first = accounts ? pickAccount(readAccounts(accounts.path ?? claudeAccountsPath(setupEnv ?? process.env)), (accounts.now ?? Date.now)(), accounts.prefer) : undefined
+    const first = accounts?.first(setupEnv ?? process.env)
     const env = first ? accountEnv(first, setupEnv ?? process.env) : setupEnv
     return readClaudeModels({
       ...(bin !== undefined ? { bin } : {}),
@@ -206,10 +207,7 @@ export class ClaudeCodeSession implements DriverSession {
 
     const accounts = this.config.accounts
     const turn = accounts
-      ? await turnOnAccounts({
-          option: accounts,
-          path: accounts.path ?? claudeAccountsPath(env),
-          agent: 'Claude',
+      ? await accounts.turn(env, {
           current: this.current,
           text,
           opts,

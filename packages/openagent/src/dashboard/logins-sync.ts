@@ -3,15 +3,15 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { computerName } from '../computer-name.js'
 import { dirname, join } from 'node:path'
-import { readAccounts, OWN_NAME } from '@openagt/agent-driver'
-import { claudeAccountsPath, mintClaude, type Mint } from '@openagt/agent-driver-claude'
-import { codexAccountsPath, codexWho, loginCodex, personalCodexHome, accountFolder, type CodexLogin, type CodexLoginOptions, type CodexWho } from '@openagt/agent-driver-codex'
+import { mintClaude, type Mint } from '@openagt/agent-driver-claude'
+import { codexWho, loginCodex, personalCodexHome, accountFolder, type CodexLogin, type CodexLoginOptions, type CodexWho } from '@openagt/agent-driver-codex'
 import { listMachines, readPreferences, type MachineRecord, type Preferences } from '../registry.js'
 import { machineCall, remoteFacts, type MachineAccess } from './remote-run.js'
 import { markOf } from './machine-logins.js'
 import { isKind, isWord, type CopiedKind, type CopiedLogin, type GivenLogin, type UsageWindow } from './copied-logins.js'
 import { onAgentAccounts } from '../dashboard-rpc/accounts.js'
 import { gitHostPackages, onGitHosts } from '../dashboard-rpc/logins.js'
+import { accountsPath, OWN_NAME, readAccounts } from '@openagt/skill-account-rotation'
 
 /**
  * A computer's side of a server that uses its logins (`copied-logins.ts` is the server's side).
@@ -156,7 +156,7 @@ async function ownUsage(): Promise<{ kind: CopiedKind; source: string; windows: 
 /** Every account this computer is logged in to: its coding agents' and its git hosts'. */
 export async function localLogins(env: NodeJS.ProcessEnv = process.env): Promise<LocalLogin[]> {
   const logins: LocalLogin[] = []
-  for (const account of readAccounts(claudeAccountsPath(env))) {
+  for (const account of readAccounts(accountsPath('claude', env))) {
     if (account.login === undefined) {
       const own = claudeOwnAccount(env)
       if (own) logins.push({ kind: 'claude', source: 'own', name: account.name === OWN_NAME ? own.name : account.name, who: own.who })
@@ -165,7 +165,7 @@ export async function localLogins(env: NodeJS.ProcessEnv = process.env): Promise
       logins.push({ kind: 'claude', source: account.name, name: account.name, who: markOf(login), secret: async () => login })
     }
   }
-  for (const account of readAccounts(codexAccountsPath(env))) {
+  for (const account of readAccounts(accountsPath('codex', env))) {
     const own = account.login === undefined
     const who: CodexWho = await codexWho(own ? personalCodexHome(env) : accountFolder(account, env)).catch(() => ({}))
     if (who.key === undefined) continue

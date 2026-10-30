@@ -39,7 +39,8 @@
     "@openagt/skill-orchestration": "workspace:*",
     "@openagt/skill-question": "workspace:*",
     "@openagt/skill-queue": "workspace:*",
-    "@openagt/skill-tickets": "workspace:*"
+    "@openagt/skill-tickets": "workspace:*",
+    "@openagt/skill-account-rotation": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

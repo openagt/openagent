@@ -52,7 +52,8 @@
     "@openagt/skill-logs": "workspace:*",
     "@openagt/agent-driver": "workspace:*",
     "@openagt/agent-runner": "workspace:*",
-    "yaml": "^2.5.0"
+    "yaml": "^2.5.0",
+    "@openagt/skill-account-rotation": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",

@@ -4,11 +4,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { type Mint } from '@openagt/agent-driver-claude'
-import { addAccount, markLimited, noteWindows, OWN_NAME, readAccounts } from '@openagt/agent-driver'
 import type { CodexLogin, CodexLoginOptions } from '@openagt/agent-driver-codex'
-import { accountsWiring, onAgentAccounts, sendAddAgentAccount, sendNameOwnAgentAccount, sendRemoveAgentAccount, sendUseAgentAccountFirst } from './accounts.js'
+import { accountsWiring, onAgentAccounts, sendAddAgentAccount, sendAgentAccountCode, sendNameOwnAgentAccount, sendRemoveAgentAccount, sendUseAgentAccountFirst } from './accounts.js'
 import { provideTestContext } from './test-context.js'
 import type { QuotaView } from '../dashboard/quota.js'
+import { addAccount, markLimited, noteWindows, OWN_NAME, readAccounts } from '@openagt/skill-account-rotation'
 
 const HOUR = 60 * 60_000
 const NOW = Date.parse('2026-10-22T12:00:00Z')
@@ -94,6 +94,30 @@ test('one add at a time: a second waits for the browser yes of the first', () =>
     assert.equal((await sendAddAgentAccount('claude', 'Rom')).ok, false)
     release()
     await settled()
+  }))
+
+test('on a server with no browser, adding a Claude account shows the page to sign in at, and the code the person pastes back goes to Claude Code', () =>
+  withAccounts(async path => {
+    const pasted: string[] = []
+    let finish: (login: string) => void = () => {}
+    const mint: Mint = ({ onLink } = {}) =>
+      new Promise(resolve => {
+        onLink?.('https://claude.example/sign-in', code => {
+          pasted.push(code)
+          return true
+        })
+        finish = login => resolve({ ok: true, login })
+      })
+    Object.assign(accountsWiring, { mint, headless: () => true })
+    assert.deepEqual(await sendAgentAccountCode('claude', 'nothing-waits'), { ok: false, error: 'No login waits for a code: start it again.' })
+    assert.deepEqual(await sendAddAgentAccount('claude', 'Dani'), { ok: true })
+    assert.deepEqual((await onAgentAccounts('claude')).adding, { name: 'Dani', url: 'https://claude.example/sign-in', paste: true })
+    assert.deepEqual(await sendAgentAccountCode('claude', 'the-code'), { ok: true })
+    assert.deepEqual(pasted, ['the-code'])
+    finish(LOGIN)
+    await settled()
+    assert.equal(readAccounts(path).find(a => a.name === 'Dani')?.login, LOGIN)
+    assert.deepEqual(await sendAgentAccountCode('claude', 'too-late'), { ok: false, error: 'No login waits for a code: start it again.' })
   }))
 
 test('an added account is removed, another put first, and the person\'s own named; never the person\'s own removed', () =>

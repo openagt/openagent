@@ -109,7 +109,8 @@
     "tailwind-merge": "^2.6.0",
     "tiptap-markdown": "^0.8.10",
     "uqr": "0.1.3",
-    "yaml": "^2.5.0"
+    "yaml": "^2.5.0",
+    "@openagt/skill-account-rotation": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",

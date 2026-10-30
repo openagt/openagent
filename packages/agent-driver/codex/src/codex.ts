@@ -2,8 +2,8 @@ import { execFile, spawn as nodeSpawn } from 'node:child_process'
 import { copyFile, lstat, mkdir, readlink, readdir, realpath, rename, rm, stat, symlink } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { accountFolder, accountHome, codexAccountsPath, codexWindows } from './codex-accounts.js'
-import { turnOnAccounts, pickAccount, readAccounts, type AccountsOption, type DriverRateWindow, runCliSession, continuingTurn, finishTurn, agentEnv, attachLog, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, checkCliReady, type AgentCliParser, type CliIo, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
+import { accountFolder, accountHome, codexWindows } from './codex-accounts.js'
+import { type AccountRotation, type DriverRateWindow, runCliSession, continuingTurn, finishTurn, agentEnv, attachLog, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, checkCliReady, type AgentCliParser, type CliIo, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
 
 /**
  * Codex's sandbox policy for the shell commands the model writes.
@@ -42,10 +42,11 @@ export interface CodexDriverOptions {
    */
   codexHome?: string
   /**
-   * Run on the person's Codex accounts (`codex-accounts.ts`), switching to the next free one when
-   * one hits its limit. Off, every turn runs on whatever login Codex has, as it always did.
+   * Run on the person's Codex accounts (`codex-accounts.ts`), the rotation switching to the next
+   * free one when one hits its limit. Off, every turn runs on whatever login Codex has, as it
+   * always did.
    */
-  accounts?: AccountsOption
+  accounts?: AccountRotation
   /** `spawn` override for tests. Default `node:child_process.spawn`. */
   spawn?: SpawnLike
 }
@@ -165,8 +166,7 @@ export class CodexDriver implements Driver {
    */
   async listModels(opts: { signal?: AbortSignal } = {}): Promise<DriverModel[]> {
     const env = this.opts.env ?? process.env
-    const accounts = this.opts.accounts
-    const first = accounts ? pickAccount(readAccounts(accounts.path ?? codexAccountsPath(env)), (accounts.now ?? Date.now)(), accounts.prefer) : undefined
+    const first = this.opts.accounts?.first(env)
     // The same home a turn on it runs from, so the two never undo each other's links.
     const setup = this.opts.personal?.skills !== false
     const base = setup ? personalCodexHome(env) : resolve(this.opts.codexHome ?? defaultCodexHome(env))
@@ -294,10 +294,7 @@ export class CodexSession implements DriverSession {
     const emit = this.withDefaultEffort(makeEmit(this.startOpts.onEvent, 'codex'))
     const accounts = this.config.accounts
     const turn = accounts
-      ? await turnOnAccounts({
-          option: accounts,
-          path: accounts.path ?? codexAccountsPath(env),
-          agent: 'Codex',
+      ? await accounts.turn(env, {
           current: this.current,
           text,
           opts,

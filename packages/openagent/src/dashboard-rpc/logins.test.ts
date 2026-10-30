@@ -1,16 +1,19 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ProvidedCommand } from '@openagt/agent-data'
-import { addAccount } from '@openagt/agent-driver'
 import { addProject, listProjects } from '../registry.js'
 import { readProvider, remoteHost } from '../dashboard/git-hosts.js'
 import { accountsWiring } from './accounts.js'
 import { loginsWiring, onAgentState, onGitHosts, onProjectAccounts, sendAgentFix, sendForgetGitHostAccount, sendGitHostLogin, sendProjectAccounts, sendUseGitHostAccount } from './logins.js'
 import { provideTestContext } from './test-context.js'
+import { accountsPath, addAccount } from '@openagt/skill-account-rotation'
+
+/** The real readiness question, before a test swaps it. */
+const realReady = loginsWiring.ready
 
 // Settings › Accounts, the agent's own fix, and a project's own accounts: drawn from what the
 // git host's package and the agent's package answer, never naming either.
@@ -199,3 +202,26 @@ test('a project’s own git host account is not offered while the computer has o
     },
     [{ login: 'octo', terminal: true, runs: true }],
   ))
+
+test('the real readiness question: with the CLI logged out, an account added on that agent\'s own list is a login runs use', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'oa-ready-'))
+  const before = { PATH: process.env['PATH'], XDG_CONFIG_HOME: process.env['XDG_CONFIG_HOME'] }
+  writeFileSync(join(dir, 'claude'), '#!/bin/sh\nif [ "$1" = --version ]; then echo 2.1.0; else echo \'{"loggedIn":false}\'; fi\n', { mode: 0o755 })
+  writeFileSync(join(dir, 'codex'), '#!/bin/sh\nif [ "$1" = --version ]; then echo 0.1.0; else echo "Not logged in"; exit 1; fi\n', { mode: 0o755 })
+  try {
+    process.env['PATH'] = `${dir}:/usr/bin:/bin`
+    process.env['XDG_CONFIG_HOME'] = dir
+    assert.equal((await realReady('claude-code')).problems.length, 1)
+    assert.equal((await realReady('codex')).problems.length, 1)
+    addAccount('Dani', 'x', accountsPath('claude'))
+    assert.equal((await realReady('claude-code')).ownLoggedOut, true)
+    assert.equal((await realReady('codex')).problems.length, 1)
+    addAccount('Dani', 'codex-dani', accountsPath('codex'))
+    assert.equal((await realReady('codex')).ownLoggedOut, true)
+  } finally {
+    process.env['PATH'] = before.PATH
+    if (before.XDG_CONFIG_HOME === undefined) delete process.env['XDG_CONFIG_HOME']
+    else process.env['XDG_CONFIG_HOME'] = before.XDG_CONFIG_HOME
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
