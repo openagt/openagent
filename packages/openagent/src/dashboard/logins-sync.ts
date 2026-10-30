@@ -101,6 +101,8 @@ export const syncWiring: {
   mint: Mint
   loginCodex: (opts: CodexLoginOptions) => Promise<CodexLogin>
   computer: () => string
+  /** The clock. */
+  now: () => number
 } = {
   env: process.env,
   machines: () => listMachines(undefined, syncWiring.env),
@@ -112,6 +114,7 @@ export const syncWiring: {
   mint: mintClaude,
   loginCodex,
   computer: computerName,
+  now: Date.now,
 }
 
 /** The person's own Claude login here, as Claude Code keeps who it is: none when it is logged in to no account. */
@@ -317,7 +320,19 @@ export async function syncLogins(): Promise<ServerLogins[]> {
   let local: LocalLogin[] | undefined
   let usage: Awaited<ReturnType<typeof syncWiring.usage>> | undefined
   for (const machine of machines) {
-    if (!(await syncWiring.facts(access(machine))).server) {
+    const facts = await syncWiring.facts(access(machine))
+    // One that did not answer is not known to be no server: what it said last stays, for a while as
+    // it was, then as not reached. Only one that answers it is no server leaves the list.
+    if (!facts.server && facts.version === undefined && last.has(machine.id)) {
+      const since = missed.get(machine.id) ?? syncWiring.now()
+      missed.set(machine.id, since)
+      const kept = syncWiring.now() - since < MISSED_MS ? last.get(machine.id)! : { ...last.get(machine.id)!, reachable: false }
+      last.set(machine.id, kept)
+      servers.push(kept)
+      continue
+    }
+    missed.delete(machine.id)
+    if (!facts.server) {
       last.delete(machine.id)
       continue
     }
@@ -330,6 +345,11 @@ export async function syncLogins(): Promise<ServerLogins[]> {
   for (const id of last.keys()) if (!machines.some(machine => machine.id === id)) last.delete(id)
   return servers
 }
+
+/** How long a server that does not answer is shown as it last was: a missed ping is no reason to change the page. */
+const MISSED_MS = 90_000
+/** Since when each server has not answered, by its id. */
+const missed = new Map<string, number>()
 
 /** The servers as last read, with the press under way on each: read anew when none were read yet. */
 export async function serverLogins(): Promise<ServerLogins[]> {
