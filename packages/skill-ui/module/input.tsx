@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'react'
-import { cn } from '@openagt/skill-ui/module'
+import { cn } from './utils.js'
 
-// A trimmed shadcn input. The sidebar's SidebarInput builds on it for an in-rail search field.
+// A trimmed shadcn input.
 export function Input({ className, type, ...props }: ComponentProps<'input'>) {
   return (
     <input

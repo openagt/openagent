@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import type { AgentAccount, DriverQuota, DriverRateWindow } from '@openagt/agent-driver'
 import { ClaudeCodeDriver, mintClaude, type Mint } from '@openagt/agent-driver-claude'
 import { accountFolder, codexAccountsDir, codexWho, loginCodex, personalCodexHome, readCodexUsage, type CodexLogin, type CodexLoginOptions, type CodexWho } from '@openagt/agent-driver-codex'
+import { addingPath, startAddingProcess } from './adding.js'
 import { accountsPath, addAccount, nameRefused, OWN_NAME, readAccounts, removeAccount, type AccountsAgent } from './accounts.js'
 import { claudeUsagePath } from './usage.js'
 
@@ -31,6 +32,18 @@ export interface LoginWiring {
   claudeQuota: () => Promise<DriverQuota>
   /** How full the Codex login in a home is, now. */
   codexUsage: (home: string) => Promise<DriverRateWindow[]>
+  /** No browser on this computer: a server's. The person signs in on another device. */
+  headless: () => boolean
+  /** Where an agent's sign-in says how it goes. */
+  addingPath: (agent: AccountsAgent) => string
+  /** Start an agent's sign-in, on its own: what the sign-in itself runs is {@link signIn}. */
+  startAdding: (agent: AccountsAgent, name: string) => void
+  /** This process, as a sign-in says it runs in it. */
+  ownPid: () => number
+  /** Whether a sign-in's process is still there. */
+  isRunning: (pid: number) => boolean
+  /** Stop a sign-in's process. */
+  stopAdding: (pid: number) => void
 }
 
 /** The logins of the user `env` is. */
@@ -49,6 +62,25 @@ export function loginWiring(env: NodeJS.ProcessEnv = process.env): LoginWiring {
     claudeSignedIn: () => claudeOwnName(wiring) !== undefined,
     claudeQuota: () => new ClaudeCodeDriver().readQuota(),
     codexUsage: home => readCodexUsage({ home }),
+    headless: () => env['OPENAGENT_SERVER'] === '1',
+    addingPath: agent => addingPath(agent, env),
+    startAdding: startAddingProcess,
+    ownPid: () => process.pid,
+    isRunning: pid => {
+      try {
+        process.kill(pid, 0)
+        return true
+      } catch {
+        return false
+      }
+    },
+    stopAdding: pid => {
+      try {
+        process.kill(pid, 'SIGTERM')
+      } catch {
+        // Gone already.
+      }
+    },
   }
   return wiring
 }
@@ -96,18 +128,20 @@ export interface SignInSaid {
   onUrl?: (url: string) => void
   /** Codex's code, on a computer with no browser: the person types it at `url`. */
   onCode?: (code: string, url: string) => void
+  /** Stop it: Claude Code or Codex ends, and nothing is kept. */
+  signal?: AbortSignal
 }
 
 /** Sign the account in, and keep it under `name`. Why not, when it did not go through. */
 export async function signIn(agent: AccountsAgent, name: string, wiring: LoginWiring, said: SignInSaid = {}): Promise<string | undefined> {
   const path = wiring.path(agent)
   if (agent === 'claude') {
-    const minted = await wiring.mint(said.onLink ? { onLink: said.onLink } : {})
+    const minted = await wiring.mint({ ...(said.onLink ? { onLink: said.onLink } : {}), ...(said.signal ? { signal: said.signal } : {}) })
     if (!minted.ok) return minted.error
     addAccount(name, minted.login, path, new Date(wiring.now()))
     return undefined
   }
-  const signed = await wiring.loginCodex({ dir: wiring.codexDir(), ...(said.onCode ? { onCode: said.onCode } : {}), ...(said.onUrl ? { onUrl: said.onUrl } : {}) })
+  const signed = await wiring.loginCodex({ dir: wiring.codexDir(), ...(said.onCode ? { onCode: said.onCode } : {}), ...(said.onUrl ? { onUrl: said.onUrl } : {}), ...(said.signal ? { signal: said.signal } : {}) })
   if (!signed.ok) return signed.error
   const folder = join(wiring.codexDir(), signed.login)
   // The browser may have been signed in to an account on the list already: that one is not added twice.

@@ -10,7 +10,7 @@ import {
   saveProjectPresetList,
   useActiveProjectId,
 } from '../lib/preferences.js'
-import { useLoaded, Button, cn } from '@openagt/skill-ui/module'
+import { useLoaded, Button, cn, ClaudeLogo, CodexLogo } from '@openagt/skill-ui/module'
 import { onProjects } from '../rpc/projects.js'
 import { PromptEditor, type PromptEditorHandle } from './PromptEditor.js'
 import { PresetCreatePanel } from './PresetCreatePanel.js'
@@ -25,7 +25,6 @@ import { useMachineStatus } from '../lib/use-machine-status.js'
 import { takePendingDraft } from '../lib/draft-handoff.js'
 import { driverOptions, modelEfforts, readMachineModelsAhead, useModelsOn } from '../lib/models.js'
 import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.js'
-import { ClaudeLogo, CodexLogo } from '@openagt/skill-ui/module'
 import { AgentAccountItems, firstAccount, readMachineAccountsAhead, useAccountsOn } from './AgentAccounts.js'
 import { readMachineGitHostsAhead } from './GitHosts.js'
 import { ACCOUNTS_ENTRY } from './Logins.js'

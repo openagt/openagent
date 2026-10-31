@@ -570,6 +570,9 @@ importers:
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1
+      lucide-react:
+        specifier: ^0.469.0
+        version: 0.469.0(react@19.2.7)
       react:
         specifier: ^19.2.0
         version: 19.2.7

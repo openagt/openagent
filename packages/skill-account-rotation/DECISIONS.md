@@ -18,15 +18,19 @@ already made, and lists it in its pull request; for anything else it proposes an
   the drivers, with only the list moved out.
 - Every run gets the skill: accounts are the computer's, so no project ticks it.
 - An Accounts card built only on the command and `@openagt/skill-ui`, the first skill that shows
-  the same on OpenAgent's Overview and on its own page. Adding and removing stay in Settings ›
-  Accounts for now. Picked over moving the whole Settings page first; that it overlaps the Usage
-  card is accepted, and Customize hides either.
+  the same on OpenAgent's Overview and on its own page. Removing stays in Settings › Accounts for
+  now. Picked over moving the whole Settings page first; that it overlaps the Usage card is
+  accepted, and Customize hides either.
 - The card says the same numbers as Settings › Accounts, and the skill reads them itself, with the
   `usage` command. Picked over the card showing only what the last run saved, which on one account
   is nothing, and over OpenAgent handing the card its own reading, which a skill's own page does
   not have. The servers' rows stay in Settings for now.
-- On a server `add` and `remove` are refused and say where to do it: a server's sign-in needs
-  the page's paste step, and the page keeps its own record of logins copied from a computer.
+- One way to add an account, the same for an agent, a card and Settings, here and on a server: the
+  sign-in runs in a process of its own, and commands start it, read it and hand it the code. Picked
+  over the sign-in staying in OpenAgent's process, where only Settings could reach it, and over
+  refusing to add on a server.
+- On a server `remove` is refused and says where to do it: the page keeps its own record of logins
+  copied from a computer.
 
 ## Accounts
 - A person may give an agent several accounts of its own, kept in a list in their order: a

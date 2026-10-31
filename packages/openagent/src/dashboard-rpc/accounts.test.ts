@@ -8,7 +8,7 @@ import type { CodexLogin, CodexLoginOptions } from '@openagt/agent-driver-codex'
 import { accountsWiring, onAgentAccounts, sendAddAgentAccount, sendAgentAccountCode, sendNameOwnAgentAccount, sendRemoveAgentAccount, sendUseAgentAccountFirst } from './accounts.js'
 import { provideTestContext } from './test-context.js'
 import type { QuotaView } from '../dashboard/quota.js'
-import { addAccount, markLimited, noteWindows, OWN_NAME, readAccounts } from '@openagt/skill-account-rotation'
+import { addAccount, markLimited, noteWindows, OWN_NAME, readAccounts, runAdding, type AccountsAgent } from '@openagt/skill-account-rotation'
 
 const HOUR = 60 * 60_000
 const NOW = Date.parse('2026-10-22T12:00:00Z')
@@ -20,7 +20,7 @@ async function withAccounts(body: (path: string) => Promise<void>, claude: objec
   const path = join(dir, 'accounts.json')
   writeFileSync(join(dir, '.claude.json'), JSON.stringify(claude))
   const before = { ...accountsWiring }
-  Object.assign(accountsWiring, { path: () => path, claudeJson: () => join(dir, '.claude.json'), now: () => NOW, codexWho: async () => ({}), codexUsage: async () => [], computer: () => 'Studio', headless: () => false })
+  Object.assign(accountsWiring, { path: () => path, claudeJson: () => join(dir, '.claude.json'), now: () => NOW, codexWho: async () => ({}), codexUsage: async () => [], computer: () => 'Studio', headless: () => false, addingPath: (agent: AccountsAgent) => join(dir, `${agent}-adding.json`), startAdding: (agent: AccountsAgent, name: string) => void runAdding(agent, name, accountsWiring), ownPid: () => process.pid, isRunning: () => true, stopAdding: () => {} })
   provideTestContext({ quota: { read: async () => live, stop: () => {} } })
   try {
     await body(path)
@@ -113,6 +113,7 @@ test('on a server with no browser, adding a Claude account shows the page to sig
     assert.deepEqual(await sendAddAgentAccount('claude', 'Dani'), { ok: true })
     assert.deepEqual((await onAgentAccounts('claude')).adding, { name: 'Dani', url: 'https://claude.example/sign-in', paste: true })
     assert.deepEqual(await sendAgentAccountCode('claude', 'the-code'), { ok: true })
+    for (let i = 0; i < 100 && pasted.length === 0; i++) await new Promise(resolve => setTimeout(resolve, 20))
     assert.deepEqual(pasted, ['the-code'])
     finish(LOGIN)
     await settled()

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '@openagt/skill-ui/module'
 
-const accounts = vi.hoisted(() => ({ onAgentAccounts: vi.fn(), sendAddAgentAccount: vi.fn(), sendRemoveAgentAccount: vi.fn(), sendUseAgentAccountFirst: vi.fn() }))
+const accounts = vi.hoisted(() => ({ onAgentAccounts: vi.fn(), sendAddAgentAccount: vi.fn(), sendCancelAddingAccount: vi.fn(), sendRemoveAgentAccount: vi.fn(), sendUseAgentAccountFirst: vi.fn() }))
 vi.mock('../rpc/accounts.js', () => accounts)
 const logins = vi.hoisted(() => ({ onAgentState: vi.fn(), sendAgentFix: vi.fn(), onGitHosts: vi.fn(), sendGitHostInstall: vi.fn(), sendGitHostLogin: vi.fn(), sendUseGitHostAccount: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
