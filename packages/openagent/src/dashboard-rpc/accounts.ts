@@ -1,6 +1,6 @@
 import { computerName } from '../computer-name.js'
 import type { AgentAccount, DriverQuotaWindow, DriverRateWindow } from '@openagt/agent-driver'
-import { addingNow, beginAdding, bringCode, cancelAdding, isLimited, loginWiring, nameOwnAccount, OWN_NAME, ownName, readAccounts, removeAdded, useFirst, type AccountsAgent, type LoginWiring } from '@openagt/skill-account-rotation'
+import { addingNow, beginAdding, bringCode, cancelAdding, isLimited, loginWiring, nameOwnAccount, OWN_NAME, ownLoginThere, ownName, readAccounts, removeAdded, useFirst, type AccountsAgent, type LoginWiring } from '@openagt/skill-account-rotation'
 import { contextQuota } from './context.js'
 import { readCopied, writeCopied, type CopiedLogin } from '../dashboard/copied-logins.js'
 
@@ -34,6 +34,8 @@ export interface AccountRow {
   from?: string
   /** The person's own login, which the agent keeps: it is never removed. */
   own: boolean
+  /** The person's own, and the agent has no such login: runs skip it while another account is there, and no page offers it then. */
+  loggedOut?: true
   /** When an added one was added, ISO 8601. */
   added?: string
   /** How full it is, shortest window first; none when nothing said it yet. */
@@ -138,6 +140,7 @@ async function row(agent: AccountsAgent, account: AgentAccount, liveOwn: DriverQ
     name,
     ...(copy ? { from: copy.from } : {}),
     own,
+    ...(own && !ownLoginThere(agent, accountsWiring) ? { loggedOut: true as const } : {}),
     ...(account.added !== undefined ? { added: account.added } : {}),
     ...reading,
     ...(isLimited(account, now) ? { limitedUntil: account.limitedUntil! } : {}),
@@ -158,7 +161,7 @@ export async function onAgentAccounts(agent: AccountsAgent): Promise<AccountsVie
   const rows = await Promise.all(readAccounts(accountsWiring.path(agent)).map(account => row(agent, account, liveOwn, copies, now)))
   // The first free one is the one a run takes; with one account there is no order to say.
   if (rows.length > 1) {
-    const free = rows.filter(r => r.limitedUntil === undefined)
+    const free = rows.filter(r => r.limitedUntil === undefined && (!r.loggedOut || rows.every(other => other.own)))
     for (const r of rows) if (r.limitedUntil !== undefined) r.state = 'limited'
     if (free[0]) free[0].state = 'in-use'
     if (free[1]) free[1].state = 'next'

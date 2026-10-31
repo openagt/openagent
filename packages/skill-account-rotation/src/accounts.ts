@@ -1,6 +1,7 @@
 import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { loginWiring, ownLoginThere } from './login.js'
 import type { AccountRotation, AccountTurn, AgentAccount, DriverRateWindow, DriverTurn, RotatedTurn } from '@openagt/agent-driver'
 
 // The accounts an agent's runs may use, when a person has more than one: their own login, which the
@@ -114,6 +115,17 @@ export function isLimited(account: AgentAccount, now: number): boolean {
   return account.limitedUntil !== undefined && account.limitedUntil > now
 }
 
+/**
+ * The accounts that have a login: the person's own is on the list whether or not the agent has one,
+ * and a run on one it does not have dies at once, while the next account is free. With no other
+ * account the list stays: the run says what is wrong.
+ */
+export function withLogin(accounts: AgentAccount[], ownThere: boolean): AgentAccount[] {
+  if (ownThere) return accounts
+  const added = accounts.filter(a => a.login !== undefined)
+  return added.length > 0 ? added : accounts
+}
+
 /** The accounts a project's runs may use, by name, in the file's order; all of them when it names none, or none that is still there. */
 export function usableAccounts(accounts: AgentAccount[], only: readonly string[] | undefined): AgentAccount[] {
   if (only === undefined) return accounts
@@ -164,6 +176,8 @@ export interface AccountsOption {
   only?: readonly string[]
   /** The clock, for tests. */
   now?: () => number
+  /** Whether the agent has a login of the person's own here. Default what it keeps in the session's environment. */
+  ownLoginThere?: (env: NodeJS.ProcessEnv) => boolean
 }
 
 /** Every account the session may use is at its limit: the turn cannot go on. */
@@ -183,6 +197,8 @@ export interface TurnOnAccounts extends RotatedTurn {
   path: string
   /** The agent's name as a person reads it: "Claude", "Codex". */
   agent: string
+  /** Whether the agent has a login of the person's own here: without one, the turn takes an added account. */
+  ownThere?: boolean
 }
 
 /** Why no account can take the turn: each is at its limit, and the first to free says when. */
@@ -201,7 +217,7 @@ function allLimited(accounts: AgentAccount[], agent: string, now: number): strin
  */
 export async function turnOnAccounts(on: TurnOnAccounts): Promise<DriverTurn> {
   const now = on.option.now ?? Date.now
-  const usable = (all: AgentAccount[]): AgentAccount[] => usableAccounts(all, on.option.only)
+  const usable = (all: AgentAccount[]): AgentAccount[] => withLogin(usableAccounts(all, on.option.only), on.ownThere ?? true)
   const ended = (result: AccountTurn): DriverTurn => {
     if (result.turn === undefined) throw result.failure
     return result.turn
@@ -239,9 +255,10 @@ const AGENT_NAMES: Record<AccountsAgent, string> = { claude: 'Claude', codex: 'C
 /** The accounts of `agent`, as a driver is handed them: what its sessions run on. */
 export function accountRotation(agent: AccountsAgent, option: AccountsOption = {}): AccountRotation {
   const path = (env: NodeJS.ProcessEnv): string => option.path ?? accountsPath(agent, env)
+  const ownThere = (env: NodeJS.ProcessEnv): boolean => (option.ownLoginThere ?? (given => ownLoginThere(agent, loginWiring(given))))(env)
   return {
-    first: env => pickAccount(readAccounts(path(env)), (option.now ?? Date.now)(), option.prefer),
-    turn: (env, on) => turnOnAccounts({ ...on, option, path: path(env), agent: AGENT_NAMES[agent] }),
+    first: env => pickAccount(withLogin(readAccounts(path(env)), ownThere(env)), (option.now ?? Date.now)(), option.prefer),
+    turn: (env, on) => turnOnAccounts({ ...on, option, path: path(env), agent: AGENT_NAMES[agent], ownThere: ownThere(env) }),
   }
 }
 

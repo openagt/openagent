@@ -191,8 +191,18 @@ test('ready to run: the coding agent\'s problems stop a run; nothing else is pro
     assert.deepEqual(await readyToRun(repo, 'codex', { probe: answers(true), isRoot: notRoot, agentsSkills: join(repo, 'no-such-dir') }), { problems: [], warnings: [] })
     assert.ok(probed.every(bin => bin === 'claude' || bin === 'codex'), `only the coding agent's CLI is asked, not ${probed.join(', ')}`)
 
-    const out = await readyToRun(repo, 'claude-code', { probe: answers(false), isRoot: notRoot })
-    assert.match(out.problems[0]!, /claude auth login/)
+    // Whether the person added an account is read off their files: here, none of the real ones.
+    const config = process.env['XDG_CONFIG_HOME']
+    process.env['XDG_CONFIG_HOME'] = join(repo, 'config')
+    try {
+      const out = await readyToRun(repo, 'claude-code', { probe: answers(false), isRoot: notRoot })
+      assert.match(out.problems[0]!, /claude auth login/)
+      addAccount('Dani', 'sk-ant-oat01-dani', accountsPath('claude'))
+      assert.deepEqual(await readyToRun(repo, 'claude-code', { probe: answers(false), isRoot: notRoot }), { problems: [], warnings: [], ownLoggedOut: true })
+    } finally {
+      if (config === undefined) delete process.env['XDG_CONFIG_HOME']
+      else process.env['XDG_CONFIG_HOME'] = config
+    }
   } finally {
     await removeRepo(repo)
   }

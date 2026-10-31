@@ -179,7 +179,7 @@ export function AccountsCard({ agent }: { agent: AccountsAgent }) {
   const absent = agentLoginState(state) === 'not-installed' && (view?.accounts.length ?? 0) < 2
   // Its own login is out: nothing of the agent's own to show, whether or not another account covers for it.
   const ownOut = state?.ownLoggedOut === true || agentLoginState(state) === 'step'
-  const accounts = (view?.accounts ?? []).filter(account => !(account.own && ownOut))
+  const accounts = (view?.accounts ?? []).filter(account => !(account.own && (ownOut || account.loggedOut)))
 
   const act = async (go: () => Promise<{ ok: true } | { ok: false; error: string }>): Promise<boolean> => {
     setBusy(true)
@@ -329,9 +329,15 @@ export function useAccountsOn(
   return { view: theirs.value ?? undefined, unanswered: theirs.value === null, pick: account => sendMachineAgentAccountFirst(machineId, agent, account).then(theirs.reload) }
 }
 
+/** The accounts a run can take: the person's own is left out when the agent has no such login and another account is there. */
+export function runAccounts(view: AccountsView): AccountRow[] {
+  const there = view.accounts.filter(account => !account.loggedOut)
+  return there.length > 0 ? there : view.accounts
+}
+
 /** The account an agent's runs take first, as its row in the agent picker says it: its name, and how full it is. */
 export function firstAccount(view: AccountsView | undefined): { name: string; percent: string } | undefined {
-  const first = view?.accounts[0]
+  const first = view && runAccounts(view)[0]
   if (!first) return undefined
   const window = longest(first)
   return { name: first.name, percent: first.state === 'limited' ? ' · limited' : window !== undefined ? ` · ${Math.round(window.percent)}%` : '' }
@@ -348,7 +354,7 @@ export function AgentAccountItems({ view, on, onPick, onAdd }: { view: AccountsV
       <DropdownMenuSeparator />
       <DropdownMenuGroup>
         <DropdownMenuLabel>{on !== undefined ? `Accounts on ${on}` : 'Accounts'}</DropdownMenuLabel>
-        {view.accounts.map((account, i) => (
+        {runAccounts(view).map((account, i) => (
           <DropdownMenuItem key={account.id} closeOnClick={false} onClick={() => onPick(account.id)}>
             <Check className={cn('h-3.5 w-3.5 shrink-0', i === 0 ? 'opacity-100' : 'opacity-0')} aria-hidden />
             <span className="flex-1 truncate">{account.name}</span>

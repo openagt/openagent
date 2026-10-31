@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -24,10 +24,10 @@ export interface LoginWiring {
   codexOwnHome: () => string
   codexFolder: (account: AgentAccount) => string
   codexWho: (home: string) => Promise<CodexWho>
+  /** The environment an agent's own login may be given in. */
+  env: NodeJS.ProcessEnv
   /** Where the person's own Claude login's reading is kept. */
   claudeUsagePath: () => string
-  /** Whether Claude Code has a login of the person's own to ask about. */
-  claudeSignedIn: () => boolean
   /** Claude Code's `/usage`, of the person's own login. */
   claudeQuota: () => Promise<DriverQuota>
   /** How full the Codex login in a home is, now. */
@@ -48,7 +48,7 @@ export interface LoginWiring {
 
 /** The logins of the user `env` is. */
 export function loginWiring(env: NodeJS.ProcessEnv = process.env): LoginWiring {
-  const wiring: LoginWiring = {
+  return {
     mint: mintClaude,
     claudeJson: () => join(env['CLAUDE_CONFIG_DIR'] ?? env['HOME'] ?? homedir(), '.claude.json'),
     path: agent => accountsPath(agent, env),
@@ -58,8 +58,8 @@ export function loginWiring(env: NodeJS.ProcessEnv = process.env): LoginWiring {
     codexOwnHome: () => personalCodexHome(env),
     codexFolder: account => accountFolder(account, env),
     codexWho,
+    env,
     claudeUsagePath: () => claudeUsagePath(env),
-    claudeSignedIn: () => claudeOwnName(wiring) !== undefined,
     claudeQuota: () => new ClaudeCodeDriver().readQuota(),
     codexUsage: home => readCodexUsage({ home }),
     headless: () => env['OPENAGENT_SERVER'] === '1',
@@ -82,7 +82,6 @@ export function loginWiring(env: NodeJS.ProcessEnv = process.env): LoginWiring {
       }
     },
   }
-  return wiring
 }
 
 /** The person's own name as Claude Code knows it: its account's display name, else its email. */
@@ -103,6 +102,18 @@ function claudeOwnName(wiring: LoginWiring): string | undefined {
 /** The person's own name as the agent knows it. */
 export async function ownName(agent: AccountsAgent, wiring: LoginWiring): Promise<string | undefined> {
   return agent === 'codex' ? (await wiring.codexWho(wiring.codexOwnHome())).name : claudeOwnName(wiring)
+}
+
+/** Logins an agent takes from its environment rather than its own files. */
+const ENV_LOGINS: Record<AccountsAgent, readonly string[]> = { claude: ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN'], codex: ['CODEX_API_KEY', 'OPENAI_API_KEY'] }
+
+/**
+ * Whether the agent has a login of the person's own here, from what it keeps: quick enough to ask
+ * before each turn, as asking the agent itself is not. A server mostly has none, only added accounts.
+ */
+export function ownLoginThere(agent: AccountsAgent, wiring: LoginWiring): boolean {
+  if (ENV_LOGINS[agent].some(name => wiring.env[name])) return true
+  return agent === 'claude' ? claudeOwnName(wiring) !== undefined : existsSync(join(wiring.codexOwnHome(), 'auth.json'))
 }
 
 /** The name refused before the browser opens: empty, or one an account has, the person's own by the name it shows. */

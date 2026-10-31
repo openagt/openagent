@@ -38,17 +38,22 @@ const login = `${userAt(address)}@${address}`
 
 /** Every package of the repository by its name: its folder and what it says of itself. */
 const packages = new Map()
-for (const folder of readdirSync(join(repo, 'packages'))) {
-  const file = join(repo, 'packages', folder, 'package.json')
-  if (!existsSync(file)) continue
-  const manifest = JSON.parse(readFileSync(file, 'utf8'))
-  if (!manifest.private) packages.set(manifest.name, { dir: join(repo, 'packages', folder), manifest })
+// The same folders as pnpm-workspace.yaml: the drivers sit one level deeper.
+for (const parent of ['packages', join('packages', 'agent-driver')]) {
+  for (const folder of readdirSync(join(repo, parent))) {
+    const file = join(repo, parent, folder, 'package.json')
+    if (!existsSync(file)) continue
+    const manifest = JSON.parse(readFileSync(file, 'utf8'))
+    if (!manifest.private) packages.set(manifest.name, { dir: join(repo, parent, folder), manifest })
+  }
 }
 
 /** `@openagt/start` and every package of the repository it needs, however deep. */
 const needed = new Set()
 const visit = name => {
-  if (needed.has(name) || !packages.has(name)) return
+  if (needed.has(name)) return
+  // One left out would come from npm, and pass for this build under its stamp.
+  if (!packages.has(name)) throw new Error(`${name} is a workspace package this script did not find`)
   needed.add(name)
   const { dependencies = {}, optionalDependencies = {} } = packages.get(name).manifest
   for (const [dep, spec] of Object.entries({ ...dependencies, ...optionalDependencies })) if (String(spec).startsWith('workspace:')) visit(dep)
