@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { accountsPath, addAccount, markLimited, nameOwnAccount, readAccounts } from './accounts.js'
@@ -134,10 +134,13 @@ test('list says who the own login is while it goes by no given name, and use-fir
     const said = JSON.parse((await run(['list'], env)).out[0]!) as Record<string, { name: string; who?: string }[]>
     assert.deepEqual(said['claude']!.map(a => [a.name, a.who]), [['This computer', 'Ada'], ['Dani', undefined]])
     assert.equal(said['codex']![0]!.who, undefined)
+    assert.equal((said['codex']![0] as { signedOut?: true }).signedOut, true)
     assert.equal((await run(['use-first', 'claude', 'This computer'], env)).code, 0)
     nameOwnAccount('Me', accountsPath('claude', env))
     const named = JSON.parse((await run(['list'], env)).out[0]!) as Record<string, { name: string; who?: string }[]>
-    assert.deepEqual(named['claude']![0], { name: 'Me', own: true })
+    assert.equal(named['claude']![0]!.name, 'Me')
+    assert.equal(named['claude']![0]!.who, undefined)
+    assert.equal((named['claude']![0] as { computer?: string }).computer, hostname().replace(/\.local$/i, ''))
   }))
 
 test('use-first moves the account to the front; a name not there is refused, and the list stays', () =>

@@ -3,8 +3,7 @@ import { Check, Copy, Plus } from 'lucide-react'
 import { onMachineAgentAccounts, sendMachineAgentAccountFirst } from '../rpc/machines.js'
 import { onAgentAccounts, sendAddAgentAccount, sendAgentAccountCode, sendRemoveAgentAccount, sendUseAgentAccountFirst, type AccountAdding, type AccountRow, type AccountWindow, type AccountsAgent, type AccountsView } from '../rpc/accounts.js'
 import type { DriverName } from '../../src/client.js'
-import { readAhead, usePolled, cn, Button } from '@openagt/skill-ui/module'
-import { ClaudeLogo, CodexLogo } from './driver-logos.js'
+import { AccountBar, ClaudeLogo, CodexLogo, readAhead, usePolled, cn, Button } from '@openagt/skill-ui/module'
 import { AgentFix, DeviceCode, StatePill, agentLoginState, agentWords, useAgentState } from './Logins.js'
 import { LeftNotices, ServerNotes, SwitchNotice } from './ServerLogins.js'
 import { Input } from './ui/input.js'
@@ -92,16 +91,6 @@ export function usageWords(account: AccountRow): string | undefined {
   const window = longest(account)
   if (window === undefined) return account.own ? undefined : 'not used yet'
   return `${Math.round(window.percent)}% ${window.label === '5 h' ? 'of 5 h' : `this ${window.label}`}${account.asOf !== undefined ? ` · as of ${clock(account.asOf)}` : ''}`
-}
-
-/** A bar as thin as a line, filled as far as the window is gone; amber near the end, red at it. */
-export function AccountBar({ percent, className }: { percent: number | undefined; className?: string }) {
-  const used = Math.min(100, Math.max(0, percent ?? 0))
-  return (
-    <span aria-hidden className={cn('relative block h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-muted-foreground/15', className)}>
-      <span className={cn('absolute inset-y-0 left-0 rounded-full', used >= 100 ? 'bg-danger' : used >= 80 ? 'bg-warning' : 'bg-success')} style={{ width: `${used}%` }} />
-    </span>
-  )
 }
 
 function StateWords({ account, now }: { account: AccountRow; now: number }) {

@@ -2,10 +2,11 @@ import { readFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { AgentAccount } from '@openagt/agent-driver'
-import { mintClaude, type Mint } from '@openagt/agent-driver-claude'
-import { accountFolder, codexAccountsDir, codexWho, loginCodex, personalCodexHome, type CodexLogin, type CodexLoginOptions, type CodexWho } from '@openagt/agent-driver-codex'
+import type { AgentAccount, DriverQuota, DriverRateWindow } from '@openagt/agent-driver'
+import { ClaudeCodeDriver, mintClaude, type Mint } from '@openagt/agent-driver-claude'
+import { accountFolder, codexAccountsDir, codexWho, loginCodex, personalCodexHome, readCodexUsage, type CodexLogin, type CodexLoginOptions, type CodexWho } from '@openagt/agent-driver-codex'
 import { accountsPath, addAccount, nameRefused, OWN_NAME, readAccounts, removeAccount, type AccountsAgent } from './accounts.js'
+import { claudeUsagePath } from './usage.js'
 
 // Adding an account and taking one off: a name first, then the person signs in to the account being
 // added. How is the agent's own: Claude Code makes a login that lasts a year; Codex keeps the
@@ -22,11 +23,19 @@ export interface LoginWiring {
   codexOwnHome: () => string
   codexFolder: (account: AgentAccount) => string
   codexWho: (home: string) => Promise<CodexWho>
+  /** Where the person's own Claude login's reading is kept. */
+  claudeUsagePath: () => string
+  /** Whether Claude Code has a login of the person's own to ask about. */
+  claudeSignedIn: () => boolean
+  /** Claude Code's `/usage`, of the person's own login. */
+  claudeQuota: () => Promise<DriverQuota>
+  /** How full the Codex login in a home is, now. */
+  codexUsage: (home: string) => Promise<DriverRateWindow[]>
 }
 
 /** The logins of the user `env` is. */
 export function loginWiring(env: NodeJS.ProcessEnv = process.env): LoginWiring {
-  return {
+  const wiring: LoginWiring = {
     mint: mintClaude,
     claudeJson: () => join(env['CLAUDE_CONFIG_DIR'] ?? env['HOME'] ?? homedir(), '.claude.json'),
     path: agent => accountsPath(agent, env),
@@ -36,7 +45,12 @@ export function loginWiring(env: NodeJS.ProcessEnv = process.env): LoginWiring {
     codexOwnHome: () => personalCodexHome(env),
     codexFolder: account => accountFolder(account, env),
     codexWho,
+    claudeUsagePath: () => claudeUsagePath(env),
+    claudeSignedIn: () => claudeOwnName(wiring) !== undefined,
+    claudeQuota: () => new ClaudeCodeDriver().readQuota(),
+    codexUsage: home => readCodexUsage({ home }),
   }
+  return wiring
 }
 
 /** The person's own name as Claude Code knows it: its account's display name, else its email. */

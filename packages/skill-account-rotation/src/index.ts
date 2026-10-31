@@ -25,4 +25,5 @@ export {
   type AccountsOption,
   type TurnOnAccounts,
 } from './accounts.js'
+export { claudeUsagePath, keepClaudeReading, readUsage, READING_KEPT_MS, type AccountUsage, type UsageWindow } from './usage.js'
 export { loginWiring, nameTaken, ownName, removeAdded, signIn, type LoginWiring, type SignInSaid } from './login.js'

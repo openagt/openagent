@@ -23,7 +23,8 @@
   "openagent": {
     "reads": {
       "account-rotation": [
-        "list"
+        "list",
+        "usage"
       ]
     }
   },
