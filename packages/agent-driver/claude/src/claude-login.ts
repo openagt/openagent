@@ -7,18 +7,103 @@ import { spawn } from 'node:child_process'
 export type Failed = { ok: false; error: string }
 
 /** What Claude Code writes before and after the login it made, and what such a login reads as. The gap between two words is of any width. */
-const MINTED = /Your\s+OAuth\s+token[^\n]*:\s*(sk-ant-[A-Za-z0-9_-]{40,400})\s+Store\s+this\s+token\s+securely/
-/** What a terminal is told beside words: colours, where the cursor goes, a link's address. */
-const TERMINAL = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]/g
-/** A colour: the one thing a terminal is told that leaves the words on its two sides together. */
-const COLOUR = /\x1b\[[0-9;:]*m/g
+const MINTED = /Your\s+OAuth\s+token[^\n]*:[\s\S]*?^\s*(sk-ant-[A-Za-z0-9_-]{40,400})\s+Store\s+this\s+token\s+securely/m
+/** The columns and rows the lent terminal says it has. */
+const COLUMNS = 250
+const ROWS = 50
+/** What a terminal is told that draws nothing and moves nothing here: a link's address, a title, a character set. */
+const NOT_DRAWN = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][0-9A-Za-z]|\x1b[=>]|[\x0e\x0f\x07]/g
+/** A move, an erase, a colour: what stands between two pieces of a screen. */
+const CONTROL = /\x1b\[([0-?]*)[ -/]*([@-~])/y
 
 /**
- * The words Claude Code showed, without what only a terminal reads. A colour goes; anything else
- * a terminal is told is a gap: Claude Code's screen puts a word at its column where a plain line
- * holds a space, and a login the cursor moved in is not one login.
+ * The words on Claude Code's screen, as a terminal shows them. Claude Code redraws only the cells
+ * that changed: a letter already there is passed over with a move of the cursor, so what it wrote is
+ * not what is on the screen, least of all after the sign-in page and the box for its code were
+ * drawn where the login then comes. Lines past the top stay, as a terminal's scrollback does.
  */
-const words = (shown: string): string => shown.replace(COLOUR, '').replace(TERMINAL, ' ').replaceAll('\r', '\n')
+export const words = (shown: string): string => {
+  const lines: string[][] = [[]]
+  let row = 0
+  let column = 0
+  const top = (): number => Math.max(0, lines.length - ROWS)
+  const go = (to: number): void => {
+    row = Math.max(top(), to)
+    while (lines.length <= row) lines.push([])
+  }
+  const erase = (from: number, to: number): void => {
+    const line = lines[row]!
+    for (let at = from; at < Math.min(to, line.length); at++) line[at] = ' '
+  }
+  const text = shown.replace(NOT_DRAWN, '')
+  for (let at = 0; at < text.length; ) {
+    if (text[at] === '\x1b') {
+      CONTROL.lastIndex = at
+      const control = CONTROL.exec(text)
+      if (!control) {
+        // Another two-character sequence: of those, only "a line up" moves anything.
+        if (text[at + 1] === 'M') go(row - 1)
+        at += 2
+        continue
+      }
+      at = CONTROL.lastIndex
+      const args = control[1]!
+      const count = Number(args.split(';')[0]) || 1
+      switch (control[2]) {
+        case 'A':
+          go(row - count)
+          break
+        case 'B':
+          go(row + count)
+          break
+        case 'C':
+          column += count
+          break
+        case 'D':
+          column = Math.max(0, column - count)
+          break
+        case 'G':
+          column = count - 1
+          break
+        case 'H':
+        case 'f': {
+          const [down, across] = args.split(';')
+          go(top() + (Number(down) || 1) - 1)
+          column = (Number(across) || 1) - 1
+          break
+        }
+        case 'K':
+          if (args === '1') erase(0, column + 1)
+          else if (args === '2') erase(0, COLUMNS)
+          else erase(column, COLUMNS)
+          break
+        case 'J':
+          if (args === '2' || args === '3') {
+            lines.length = 0
+            lines.push([])
+            row = 0
+          } else {
+            erase(column, COLUMNS)
+            lines.length = row + 1
+          }
+          break
+      }
+      continue
+    }
+    const character = String.fromCodePoint(text.codePointAt(at)!)
+    at += character.length
+    if (character === '\r') column = 0
+    else if (character === '\n') go(row + 1)
+    else if (character === '\b') column = Math.max(0, column - 1)
+    else if (character >= ' ') {
+      const line = lines[row]!
+      while (line.length < column) line.push(' ')
+      line[column] = character
+      column += 1
+    }
+  }
+  return lines.map(line => line.join('').trimEnd()).join('\n')
+}
 
 /** The login among what Claude Code showed, once all of it is there. */
 export function mintedIn(shown: string): string | undefined {
@@ -96,7 +181,7 @@ const STARTED_AS = /^started as \d+$/
  */
 export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command = 'claude setup-token', onLink, onRefused } = {}) =>
   new Promise(resolve => {
-    const inner = `echo "started as $$"; stty cols 250 rows 50; command -v ${command.split(' ')[0]} >/dev/null || { echo "Claude Code is not on this computer."; exit 1; }; exec ${command}`
+    const inner = `echo "started as $$"; stty cols ${COLUMNS} rows ${ROWS}; command -v ${command.split(' ')[0]} >/dev/null || { echo "Claude Code is not on this computer."; exit 1; }; exec ${command}`
     const lent = process.platform === 'darwin' ? 'script -q /dev/null sh -c "$0"' : 'script -q -e -c "$0" /dev/null'
     // On Linux `script` starts its program with the person's own shell, and the line above is written for sh.
     const child = spawn('sh', ['-c', `cat | { ${lent}; kill 0; }`, inner], { stdio: ['pipe', 'pipe', 'pipe'], detached: true, env: { ...process.env, SHELL: '/bin/sh' } })
