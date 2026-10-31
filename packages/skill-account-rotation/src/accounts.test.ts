@@ -86,7 +86,8 @@ test('whether an account is added is asked of the agent\'s own list: the person\
 test('a rotation reads the list of the environment it is asked in, or the file it was given, and takes the one it was told to first', () => {
   const dir = mkdtempSync(join(tmpdir(), 'accounts-first-'))
   try {
-    const env = { XDG_CONFIG_HOME: dir }
+    // The person's own login is there, in the environment: without one, a run takes the added accounts.
+    const env = { XDG_CONFIG_HOME: dir, CLAUDE_CODE_OAUTH_TOKEN: 'own', CODEX_API_KEY: 'own' }
     addAccount('Dani', 'x', accountsPath('codex', env))
     addAccount('Rom', 'y', accountsPath('codex', env))
     assert.equal(accountRotation('codex').first(env)?.name, 'This computer')
@@ -95,6 +96,7 @@ test('a rotation reads the list of the environment it is asked in, or the file i
     assert.equal(accountRotation('claude', { path: accountsPath('codex', env), prefer: 'Rom' }).first({})?.name, 'Rom')
     markLimited('This computer', NOW + HOUR, NOW, accountsPath('codex', env))
     assert.equal(accountRotation('codex', { now: () => NOW }).first(env)?.name, 'Dani')
+    assert.equal(accountRotation('claude', { path: accountsPath('codex', env), now: () => NOW, ownLoginThere: () => false }).first(env)?.name, 'Dani')
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

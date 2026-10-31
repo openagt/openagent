@@ -100,7 +100,8 @@ test('a run\'s coding agent is unrestricted, has the run\'s id, and gets this ma
 
 test('a run goes on its agent\'s accounts, or the project\'s own few of them, starting on the one whoever started it named, on Claude and on Codex alike', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'runner-accounts-'))
-  const env = { XDG_CONFIG_HOME: dir }
+  // The person's own login is there, in the environment: without one, a run takes the added accounts.
+  const env = { XDG_CONFIG_HOME: dir, CLAUDE_CODE_OAUTH_TOKEN: 'own', CODEX_API_KEY: 'own' }
   for (const agent of ['claude', 'codex'] as const) {
     addAccount('Dani', 'x', accountsPath(agent, env))
     addAccount('Rom', 'y', accountsPath(agent, env))
