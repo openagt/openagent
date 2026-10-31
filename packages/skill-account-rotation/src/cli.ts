@@ -1,6 +1,7 @@
 import { hostname } from 'node:os'
 import { OWN_NAME, readAccounts, shownAccounts, useFirst, type AccountsAgent, type ShownAccount } from './accounts.js'
-import { loginWiring, nameTaken, ownName, removeAdded, signIn, type LoginWiring } from './login.js'
+import { addingNow, beginAdding, bringCode, cancelAdding, runAdding } from './adding.js'
+import { loginWiring, ownName, removeAdded, type LoginWiring } from './login.js'
 import { readUsage } from './usage.js'
 
 /**
@@ -13,7 +14,10 @@ export const USAGE = `usage: account-rotation <command>
 
   list                          the accounts of each agent in the order runs try them, never a login
   usage                         how full each account is, read now where it can be
-  add <claude|codex> <name>     a new account under <name>: the browser opens, and it waits for the person to sign in
+  add <claude|codex> <name>     start adding a new account under <name>: the person signs in, and this answers at once
+  adding                        how adding stands for each agent: where to sign in, and why the last one did not go through
+  add-code <claude|codex>       hand the sign-in the code its page showed, on standard input
+  add-cancel <claude|codex>     stop adding
   remove <claude|codex> <name>  take an added account off the list
   use-first <claude|codex> <name>
                                 the account runs try first from now on`
@@ -25,12 +29,21 @@ export interface CliIo {
   env?: NodeJS.ProcessEnv
   /** What adding and removing reach for, for tests. Default the logins of {@link env}. */
   wiring?: LoginWiring
+  /** What was handed to the command on standard input; the process's own when unsaid. */
+  stdin?: () => Promise<string>
+}
+
+/** All of the process's standard input, as text. */
+async function readStdin(): Promise<string> {
+  let said = ''
+  for await (const chunk of process.stdin.setEncoding('utf8')) said += chunk as string
+  return said
 }
 
 const isAgent = (value: string | undefined): value is AccountsAgent => value === 'claude' || value === 'codex'
 
-/** Why a list only a server's page can change is refused here: a server's own logins go through its page. */
-const ON_SERVER = 'On a server, accounts are added and removed in Settings › Accounts.'
+/** Why removing is refused on a server: the page keeps a record of the logins copied there. */
+const ON_SERVER = 'On a server, accounts are removed in Settings › Accounts.'
 
 /**
  * An agent's accounts as `list` says them. The person's own says the computer it is a login on, and
@@ -65,25 +78,44 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
     return answer({ claude: await listed('claude', wiring), codex: await listed('codex', wiring) })
   }
   if (command === 'usage' && argv.length === 1) return answer(await readUsage(wiring))
-  if ((command !== 'add' && command !== 'remove' && command !== 'use-first') || !isAgent(agent) || name === undefined || argv.length !== 3) {
+  if (command === 'adding' && argv.length === 1) return answer({ claude: addingNow('claude', wiring), codex: addingNow('codex', wiring) })
+  if (!isAgent(agent)) {
     io.stderr(USAGE)
     return 2
+  }
+  if (command === 'add-code' && argv.length === 2) {
+    const brought = bringCode(agent, await (io.stdin ?? readStdin)(), wiring)
+    return brought.ok ? answer(addingNow(agent, wiring)) : refuse(brought.error)
+  }
+  if (command === 'add-cancel' && argv.length === 2) {
+    cancelAdding(agent, wiring)
+    return answer(addingNow(agent, wiring))
+  }
+  if (name === undefined || argv.length !== 3) {
+    io.stderr(USAGE)
+    return 2
+  }
+  if (command === 'add') {
+    const begun = await beginAdding(agent, name, wiring)
+    return begun.ok ? answer(addingNow(agent, wiring)) : refuse(begun.error)
+  }
+  // The sign-in's own process, which `add` starts: it ends when the person has signed in, or stopped.
+  if (command === 'add-worker') {
+    const stop = new AbortController()
+    process.once('SIGTERM', () => stop.abort())
+    await runAdding(agent, name, wiring, stop.signal)
+    return 0
   }
   if (command === 'use-first') {
     if (!readAccounts(wiring.path(agent)).some(a => a.name === name)) return refuse(`There is no ${agent} account named ${name}.`)
     return answer(shownAccounts(useFirst(name, wiring.path(agent))))
   }
-  if (env['OPENAGENT_SERVER'] === '1') return refuse(ON_SERVER)
   if (command === 'remove') {
+    if (env['OPENAGENT_SERVER'] === '1') return refuse(ON_SERVER)
     const gone = await removeAdded(agent, name, wiring)
     if (!gone) return refuse(`There is no added ${agent} account named ${name}.`)
     return answer(shownAccounts(readAccounts(wiring.path(agent))))
   }
-  const said = name.trim()
-  const taken = await nameTaken(agent, said, wiring)
-  if (taken) return refuse(taken)
-  io.stderr('Sign in to the account being added in the browser that opens.')
-  const failed = await signIn(agent, said, wiring, agent === 'codex' ? { onUrl: url => io.stderr(`If the browser is signed in to another account, open this in a private window: ${url}`) } : {})
-  if (failed !== undefined) return refuse(failed)
-  return answer(shownAccounts(readAccounts(wiring.path(agent))))
+  io.stderr(USAGE)
+  return 2
 }

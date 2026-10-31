@@ -1,13 +1,13 @@
 import { computerName } from '../computer-name.js'
 import type { AgentAccount, DriverQuotaWindow, DriverRateWindow } from '@openagt/agent-driver'
-import { isLimited, loginWiring, nameOwnAccount, nameTaken, OWN_NAME, ownName, readAccounts, removeAdded, signIn, useFirst, type AccountsAgent, type LoginWiring, type SignInSaid } from '@openagt/skill-account-rotation'
+import { addingNow, beginAdding, bringCode, cancelAdding, isLimited, loginWiring, nameOwnAccount, OWN_NAME, ownName, readAccounts, removeAdded, useFirst, type AccountsAgent, type LoginWiring } from '@openagt/skill-account-rotation'
 import { contextQuota } from './context.js'
 import { readCopied, writeCopied, type CopiedLogin } from '../dashboard/copied-logins.js'
 
 // The accounts runs use, per coding agent (`@openagt/skill-account-rotation`): the person's own
 // login, which the agent keeps, and the ones added beside it. A page sees each one's name, how full
-// it is and whether a limit keeps it out, never a login. Adding one is the same for every agent: a
-// name first, then this computer's browser, where the person signs in to the account being added.
+// it is and whether a limit keeps it out, never a login. Adding one is the skill's own: a name first,
+// then a sign-in that goes on by itself, in this computer's browser or on the person's own device.
 // Claude Code makes a login that lasts a year; Codex keeps the account's login in a folder of its
 // own, where it renews it. A server has no browser: there the person signs in on the device they
 // read its page on, from a link, and pastes back the code Claude's page shows, or types Codex's
@@ -72,20 +72,12 @@ export interface AccountsView {
 
 /** What the RPCs reach for, swapped in tests: the logins, how full a Codex account is. */
 export const accountsWiring: LoginWiring & {
-  /** No browser on this computer: a server's. */
-  headless: () => boolean
   /** This computer's own name. */
   computer: () => string
 } = {
   ...loginWiring(),
-  headless: () => process.env['OPENAGENT_SERVER'] === '1',
   computer: computerName,
 }
-
-const adding = new Map<AccountsAgent, AccountAdding>()
-const failed = new Map<AccountsAgent, string>()
-/** Where a code the person pastes back goes: Claude Code, waiting for it on a server. */
-const pastes = new Map<AccountsAgent, (code: string) => boolean>()
 
 /** How long a Codex reading is kept: the page asks every few seconds, and each reading starts a Codex. */
 const CODEX_KEPT_MS = 60_000
@@ -171,8 +163,7 @@ export async function onAgentAccounts(agent: AccountsAgent): Promise<AccountsVie
     if (free[0]) free[0].state = 'in-use'
     if (free[1]) free[1].state = 'next'
   }
-  const beingAdded = adding.get(agent)
-  const lastFailed = failed.get(agent)
+  const { adding: beingAdded, failed: lastFailed } = addingNow(agent, accountsWiring)
   const from = rows.find(r => r.from !== undefined)?.from
   return {
     accounts: rows,
@@ -186,55 +177,20 @@ export async function onAgentAccounts(agent: AccountsAgent): Promise<AccountsVie
 
 export type AccountResult = { ok: true } | { ok: false; error: string }
 
-/** How the page follows a sign-in: on a server it shows where to sign in, and takes back Claude's code. */
-function signInSaid(agent: AccountsAgent, name: string): SignInSaid {
-  if (agent === 'codex') return accountsWiring.headless() ? { onCode: (code, url) => void adding.set(agent, { name, url, code }) } : { onUrl: url => void adding.set(agent, { name, url }) }
-  return accountsWiring.headless()
-    ? {
-        onLink: (url, paste) => {
-          pastes.set(agent, paste)
-          adding.set(agent, { name, url, paste: true })
-        },
-      }
-    : {}
-}
-
-/**
- * Add an account: this computer's browser opens on the agent's page, the person signs in there to
- * the account being added, and its login is kept under `name`. Answers at once; the page follows it
- * in {@link onAgentAccounts}.
- */
+/** Start adding an account: the skill's own sign-in, which goes on by itself and which {@link onAgentAccounts} follows. */
 export async function sendAddAgentAccount(agent: AccountsAgent, name: string): Promise<AccountResult> {
-  const busy = adding.get(agent)
-  if (busy)
-    return {
-      ok: false,
-      error: `${busy.name}'s account is being added: sign in on the page it gave, or wait for it to end.`,
-    }
-  const refused = await nameTaken(agent, name, accountsWiring)
-  if (refused) return { ok: false, error: refused }
-  const said = name.trim()
-  adding.set(agent, { name: said })
-  failed.delete(agent)
-  void signIn(agent, said, accountsWiring, signInSaid(agent, said))
-    .then(error => {
-      if (error !== undefined) failed.set(agent, error)
-    })
-    .catch((err: unknown) => {
-      failed.set(agent, err instanceof Error ? err.message : String(err))
-    })
-    .finally(() => {
-      adding.delete(agent)
-      pastes.delete(agent)
-    })
-  return { ok: true }
+  return beginAdding(agent, name, accountsWiring)
 }
 
-/** Hand Claude Code the code its page showed the person, on a computer with no browser of its own. */
+/** Hand the sign-in the code its page showed the person, on a computer with no browser of its own. */
 export async function sendAgentAccountCode(agent: AccountsAgent, code: string): Promise<AccountResult> {
-  const paste = pastes.get(agent)
-  if (!paste) return { ok: false, error: 'No login waits for a code: start it again.' }
-  return typeof code === 'string' && paste(code) ? { ok: true } : { ok: false, error: 'That is not the code the page shows: copy it whole, and paste it here.' }
+  return bringCode(agent, code, accountsWiring)
+}
+
+/** Stop adding an account. */
+export async function sendCancelAddingAccount(agent: AccountsAgent): Promise<AccountResult> {
+  cancelAdding(agent, accountsWiring)
+  return { ok: true }
 }
 
 /** Remove an added account (`removeAdded`). */

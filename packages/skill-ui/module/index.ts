@@ -85,6 +85,7 @@ export function useSkillHost(): SkillHost {
 export { Button, buttonVariants, type ButtonProps } from './button.js'
 export { Card, CardHeader, CardTitle, CardContent } from './card.js'
 export { Skeleton } from './skeleton.js'
+export { Input } from './input.js'
 export { AccountBar } from './account-bar.js'
 export { ClaudeLogo, CodexLogo } from './logos.js'
 export { cn } from './utils.js'

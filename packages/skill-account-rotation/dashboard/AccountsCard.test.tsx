@@ -18,6 +18,25 @@ function renderCard(list: (args: string[]) => ModuleCommandResult, usage: Agents
   return runComputerCommand
 }
 
+/** A card with one account each on a computer where `adding` answers what the test says, recording what was asked. */
+function renderAdding(addingNow: () => Record<string, unknown>, more: (args: string[], input: string | undefined) => ModuleCommandResult = () => ({ ok: true, output: {} })) {
+  const calls: { args: string[]; input: string | undefined }[] = []
+  const runComputerCommand = vi.fn(async (args: string[], _command?: string, input?: string): Promise<ModuleCommandResult> => {
+    calls.push({ args, input })
+    if (args[0] === 'list') return { ok: true, output: { claude: [{ name: 'This computer', who: 'Ada', own: true }], codex: [] } }
+    if (args[0] === 'usage') return { ok: true, output: { claude: [], codex: [] } }
+    if (args[0] === 'adding') return { ok: true, output: addingNow() }
+    return more(args, input)
+  })
+  const host: SkillHost = { package: '@openagt/skill-account-rotation', runCommand: async () => ({ ok: false, error: 'not in a project' }), runComputerCommand }
+  render(
+    <SkillHostContext.Provider value={host}>
+      <AccountsCard projects={[]} />
+    </SkillHostContext.Provider>,
+  )
+  return calls
+}
+
 const listed = (claude: unknown[], codex: unknown[] = []) => (): ModuleCommandResult => ({ ok: true, output: { claude, codex } })
 
 describe('AccountsCard', () => {
@@ -83,15 +102,12 @@ describe('AccountsCard', () => {
     expect(screen.queryByText('in use')).toBeNull()
   })
 
-  test('an agent with no login is left out, and with none at all it says so', async () => {
+  test('an agent with no login has no row, and still its press: a fresh server adds its first account here', async () => {
     renderCard(listed([{ name: 'This computer', who: 'Ada', own: true }], [{ name: 'This computer', signedOut: true, own: true }]))
     expect(await screen.findByText('Ada')).toBeTruthy()
-    expect(screen.queryByText('Codex')).toBeNull()
-    cleanup()
-    forgetRemembered()
-    localStorage.clear()
-    renderCard(listed([{ name: 'This computer', signedOut: true, own: true }], [{ name: 'This computer', signedOut: true, own: true }]))
-    expect(await screen.findByText('No coding agent is logged in on this computer.')).toBeTruthy()
+    const codex = screen.getByRole('region', { name: 'Codex' })
+    expect(within(codex).queryByText('This computer')).toBeNull()
+    expect(within(codex).getByRole('button', { name: 'Add account' })).toBeTruthy()
   })
 
   test("calls the person's own login who it is, and the press still names it as the command knows it", async () => {
@@ -122,5 +138,64 @@ describe('AccountsCard', () => {
     localStorage.clear()
     renderCard(() => ({ ok: false, error: 'account-rotation did not answer' }))
     await waitFor(() => expect(screen.getByText('account-rotation did not answer')).toBeTruthy())
+  })
+
+  test('adding asks whose account it is, starts the sign-in, follows it, and shows the account once it ended', async () => {
+    let now: Record<string, unknown> = { claude: {}, codex: {} }
+    const calls = renderAdding(() => now, args => {
+      if (args[0] === 'add') now = { claude: { adding: { name: 'Dani' } }, codex: {} }
+      return { ok: true, output: {} }
+    })
+    fireEvent.click(within(await screen.findByRole('region', { name: 'Claude Code' })).getByRole('button', { name: 'Add account' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Whose account' }), { target: { value: 'Dani' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Log in to Claude' }))
+    expect(await screen.findByText(/Adding Dani's account: say yes/)).toBeTruthy()
+    expect(calls.some(call => call.args.join(' ') === 'add claude Dani')).toBe(true)
+    expect(within(screen.getByRole('region', { name: 'Claude Code' })).queryByRole('button', { name: 'Add account' })).toBeNull()
+    const listsBefore = calls.filter(call => call.args[0] === 'list').length
+    now = { claude: {}, codex: {} }
+    await waitFor(() => expect(screen.queryByText(/Adding Dani's account/)).toBeNull(), { timeout: 5000 })
+    await waitFor(() => expect(calls.filter(call => call.args[0] === 'list').length).toBeGreaterThan(listsBefore))
+  })
+
+  test("says the command's refusal of a name, and keeps asking", async () => {
+    renderAdding(() => ({ claude: {}, codex: {} }), () => ({ ok: false, error: 'There is an account named Dani already.' }))
+    fireEvent.click(within(await screen.findByRole('region', { name: 'Claude Code' })).getByRole('button', { name: 'Add account' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Whose account' }), { target: { value: 'Dani' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Log in to Claude' }))
+    expect(await screen.findByText('There is an account named Dani already.')).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: 'Whose account' })).toBeTruthy()
+  })
+
+  test('on a server, Claude: the page to open, and the code goes to the command on standard input, never among its arguments', async () => {
+    const calls = renderAdding(() => ({ claude: { adding: { name: 'Dani', url: 'https://claude.example/sign-in', paste: true } }, codex: {} }))
+    const link = await screen.findByRole('link', { name: /Open Claude and press Authorize/ })
+    expect(link.getAttribute('href')).toBe('https://claude.example/sign-in')
+    fireEvent.change(screen.getByRole('textbox', { name: 'Code from Claude' }), { target: { value: 'the-code' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    await waitFor(() => expect(calls.find(call => call.args[0] === 'add-code')).toEqual({ args: ['add-code', 'claude'], input: 'the-code' }))
+  })
+
+  test('on a server, Codex: the code to type, and where', async () => {
+    renderAdding(() => ({ claude: { adding: { name: 'Dani', url: 'https://auth.example/device', code: 'ABCD-1234' } }, codex: {} }))
+    expect(await screen.findByText('ABCD-1234')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'auth.example/device' })).toBeTruthy()
+  })
+
+  test('Cancel stops the sign-in, and why the last one did not go through is said', async () => {
+    const calls = renderAdding(() => ({ claude: { adding: { name: 'Dani' } }, codex: {} }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(calls.some(call => call.args.join(' ') === 'add-cancel claude')).toBe(true))
+    cleanup()
+    forgetRemembered()
+    localStorage.clear()
+    renderAdding(() => ({ claude: { failed: 'Nobody signed in in time.' }, codex: {} }))
+    expect(await screen.findByText('Nobody signed in in time.')).toBeTruthy()
+  })
+
+  test('what adding answers is never kept in the browser: it may hold a page to sign in at', async () => {
+    renderAdding(() => ({ claude: { adding: { name: 'Dani', url: 'https://claude.example/secret-sign-in', paste: true } }, codex: {} }))
+    await screen.findByRole('link', { name: /Open Claude/ })
+    expect(JSON.stringify({ ...localStorage })).not.toContain('secret-sign-in')
   })
 })

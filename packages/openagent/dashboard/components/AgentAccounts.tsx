@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import { Check, Copy, Plus } from 'lucide-react'
 import { onMachineAgentAccounts, sendMachineAgentAccountFirst } from '../rpc/machines.js'
-import { onAgentAccounts, sendAddAgentAccount, sendAgentAccountCode, sendRemoveAgentAccount, sendUseAgentAccountFirst, type AccountAdding, type AccountRow, type AccountWindow, type AccountsAgent, type AccountsView } from '../rpc/accounts.js'
+import { onAgentAccounts, sendAddAgentAccount, sendAgentAccountCode, sendCancelAddingAccount, sendRemoveAgentAccount, sendUseAgentAccountFirst, type AccountAdding, type AccountRow, type AccountWindow, type AccountsAgent, type AccountsView } from '../rpc/accounts.js'
 import type { DriverName } from '../../src/client.js'
-import { AccountBar, ClaudeLogo, CodexLogo, readAhead, usePolled, cn, Button } from '@openagt/skill-ui/module'
+import { AccountBar, ClaudeLogo, CodexLogo, readAhead, usePolled, cn, Button, Input } from '@openagt/skill-ui/module'
 import { AgentFix, DeviceCode, StatePill, agentLoginState, agentWords, useAgentState } from './Logins.js'
 import { LeftNotices, ServerNotes, SwitchNotice } from './ServerLogins.js'
-import { Input } from './ui/input.js'
 import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from './ui/dropdown-menu.js'
 
 // The accounts runs use, per coding agent, in the order they try them (`accounts.ts` in the driver
@@ -258,7 +257,12 @@ export function AccountsCard({ agent }: { agent: AccountsAgent }) {
           {(accounts.length === 0 || naming || adding || (error ?? view?.failed) !== undefined) && (
             <div className={cn('px-3 py-2.5', accounts.length > 0 && 'border-t border-border')}>
               {adding ? (
-                <Adding agent={agent} adding={adding} words={words.adding(adding.name)} />
+                <div className="space-y-2">
+                  <Adding agent={agent} adding={adding} words={words.adding(adding.name)} />
+                  <Button size="xs" variant="ghost" className="text-muted-foreground" disabled={busy} onClick={() => void act(() => sendCancelAddingAccount(agent))}>
+                    Cancel
+                  </Button>
+                </div>
               ) : naming ? (
                 <form
                   className="flex flex-wrap items-center gap-2"
