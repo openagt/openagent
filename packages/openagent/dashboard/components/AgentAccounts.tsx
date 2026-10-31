@@ -106,7 +106,13 @@ function StateWords({ account, now }: { account: AccountRow; now: number }) {
 function Adding({ agent, adding, words }: { agent: AccountsAgent; adding: AccountAdding; words: string }) {
   const [code, setCode] = useState('')
   const [error, setError] = useState<string | undefined>()
-  if (adding.code !== undefined && adding.url !== undefined) return <DeviceCode code={adding.code} url={adding.url} />
+  if (adding.code !== undefined && adding.url !== undefined)
+    return (
+      <div className="space-y-1.5">
+        <DeviceCode code={adding.code} url={adding.url} />
+        <p className="text-xs text-muted-foreground">If it asks, first allow device code sign-in in ChatGPT's security settings.</p>
+      </div>
+    )
   if (adding.paste && adding.url !== undefined) {
     const send = async () => {
       setError(undefined)

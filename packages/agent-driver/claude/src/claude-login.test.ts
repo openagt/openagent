@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { isSignInCode, mintClaude, mintedIn, notMinted, signInUrl, startedAs } from './claude-login.js'
+import { isSignInCode, mintClaude, mintedIn, notMinted, signInUrl, startedAs, words } from './claude-login.js'
 
 const CLAUDE_LOGIN = `sk-ant-oat01-${'Zx9_-q'.repeat(16)}`
 
@@ -36,8 +36,8 @@ test('the Claude login is read off what Claude Code shows once all of it is ther
   // Other letters in the login's place are not one, and neither is a login with something drawn into it.
   assert.equal(mintedIn(screen('a'.repeat(80))), undefined)
   assert.equal(mintedIn(screen(`${CLAUDE_LOGIN.slice(0, 50)} ${CLAUDE_LOGIN.slice(50)}`)), undefined)
-  // Whatever moves the cursor inside a login: two pieces put side by side are not the login that was made.
-  for (const moved of ['\x1b[60G', '\x1b[1C', '\x1b[5D', '\x1b[2;60H', '\x1b[K', '\x1b[1B', '\x1bM']) {
+  // A move that leaves a gap or another line in a login, on a screen with nothing there before: what shows is not the login that was made.
+  for (const moved of ['\x1b[60G', '\x1b[1C', '\x1b[2;60H', '\x1b[1B', '\x1bM']) {
     assert.equal(mintedIn(screen(`${CLAUDE_LOGIN.slice(0, 50)}${moved}${CLAUDE_LOGIN.slice(50)}`)), undefined, JSON.stringify(moved))
   }
   // A colour inside it is only a colour.
@@ -123,6 +123,23 @@ else setTimeout(() => {
 const SIGN_IN = 'https://claude.com/cai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e&response_type=code&redirect_uri=https%3A%2F%2Fplatform.claude.com%2Foauth%2Fcode%2Fcallback&scope=user%3Ainference&state=abc'
 const linkScreen = `\x1b[38;2;153;153;153mBrowser didn't open? Use the url below to sign in (c to copy)\x1b[39m\r\n\r\n\x1b]8;id=x;${SIGN_IN}\x07\x1b[38;2;153;153;153m${SIGN_IN.slice(0, 120)}\x1b[39m\x1b]8;;\x07\r\n\x1b]8;id=x;${SIGN_IN}\x07${SIGN_IN.slice(120)}\x1b]8;;\x07\r\n\x1b[2GPaste\x1b[8Gcode\x1b[13Ghere\x1b[18Gif\x1b[21Gprompted\x1b[30G>`
 
+test('the screen is read as a terminal shows it: a letter Claude Code passes over because it is there already still counts', () => {
+  const login = CLAUDE_LOGIN
+  // What was there before: the box for the code, with a line that has some of the login's own letters where it then comes.
+  const before = `\x1b[2GPaste\x1b[8Gcode\r\r\n\r\r\n\x1b[2G${login.slice(0, 20)}\x1b[K\r\r\n`
+  // As Claude Code draws over it: up, the words with moves for gaps, and the login with the cells that match left out.
+  const redrawn = `\x1b[3A\r\x1b[K\x1b[2GYour\x1b[7GOAuth\x1b[13Gtoken:\x1b[K\r\x1b[2B\x1b[2G\x1b[1C${login.slice(1, 10)}\x1b[${2 + 12}G${login.slice(12)}\r\x1b[2B\x1b[2GStore\x1b[8Gthis\x1b[13Gtoken\x1b[19Gsecurely\r\n`
+  assert.equal(mintedIn(before + redrawn), login)
+})
+
+test('a word is whole however it was drawn, and what was erased is gone', () => {
+  assert.equal(words('OAuth\x1b[7Gerror:\x1b[14Gfull\x1b[19Gcode\r\x1b[19C\x1b[55D'), 'OAuth error: full code')
+  assert.equal(words('\x1b[55Gcode\r\x1b[1Bnext\x1b[1A\r\x1b[55Gc\x1b[57Gde').trim(), 'code\nnext')
+  assert.equal(words('keep this\r\x1b[K'), '')
+  assert.equal(words('one\r\nto go\x1b[2K\r'), 'one\n')
+  assert.equal(words('\x1b]8;;https://a.example\x07link\x1b]8;;\x07 \x1b[1mbold\x1b[0m'), 'link bold')
+})
+
 test('the sign-in page is read whole off the link Claude Code draws, however its words wrap; a code to paste back is a word and nothing else', () => {
   assert.equal(signInUrl(linkScreen), SIGN_IN)
   assert.equal(signInUrl("Browser didn't open? Use the url below\r\nhttps://example.com/x\r\n"), undefined)
@@ -149,7 +166,7 @@ process.stdin.on('data', key => {
   // As Claude Code reads a terminal: what comes at once is a paste, and an Enter in it is no Enter.
   if (chunk !== '\\r') { typed += chunk.replaceAll('\\r', ''); return }
   if (waiting) { waiting = false; return }
-  if (typed === 'Good-code_42#state') process.stdout.write(${JSON.stringify(screen(CLAUDE_LOGIN))})
+  if (typed === 'Good-code_42#state') process.stdout.write('\\x1b[2J\\x1b[H' + ${JSON.stringify(screen(CLAUDE_LOGIN))})
   else { console.log('OAuth error: Invalid code. Please make sure the full code was copied'); console.log('Press Enter to retry.'); waiting = true }
   typed = ''
 })

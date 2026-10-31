@@ -135,7 +135,7 @@ function SigningIn({ agent, adding, onChanged }: { agent: (typeof AGENTS)[number
   if (adding.code !== undefined && adding.url !== undefined)
     return (
       <div role="status" className="space-y-1.5 text-xs">
-        <p className="text-muted-foreground">Type this code at the page below, signed in to the account to add:</p>
+        <p className="text-muted-foreground">Type this code at the page below, signed in to the account to add. If it asks, first allow device code sign-in in ChatGPT's security settings.</p>
         <div className="flex flex-wrap items-center gap-2">
           <code className="rounded bg-muted px-2 py-1 font-mono text-sm font-medium tracking-wider">{adding.code}</code>
           <Button size="xs" variant="ghost" aria-label="Copy the code" onClick={() => copy(adding.code!)}>
