@@ -135,6 +135,8 @@ async function codexKeys(wiring: LoginWiring): Promise<string[]> {
 export interface SignInSaid {
   /** Claude's page, on a computer with no browser: its code is pasted back through `paste`. */
   onLink?: (url: string, paste: (code: string) => boolean) => void
+  /** Claude did not take the code pasted: it waits for another. */
+  onRefused?: () => void
   /** Codex's page, as the browser opens on it: what a person copies into a private window. */
   onUrl?: (url: string) => void
   /** Codex's code, on a computer with no browser: the person types it at `url`. */
@@ -147,7 +149,7 @@ export interface SignInSaid {
 export async function signIn(agent: AccountsAgent, name: string, wiring: LoginWiring, said: SignInSaid = {}): Promise<string | undefined> {
   const path = wiring.path(agent)
   if (agent === 'claude') {
-    const minted = await wiring.mint({ ...(said.onLink ? { onLink: said.onLink } : {}), ...(said.signal ? { signal: said.signal } : {}) })
+    const minted = await wiring.mint({ ...(said.onLink ? { onLink: said.onLink } : {}), ...(said.onRefused ? { onRefused: said.onRefused } : {}), ...(said.signal ? { signal: said.signal } : {}) })
     if (!minted.ok) return minted.error
     addAccount(name, minted.login, path, new Date(wiring.now()))
     return undefined

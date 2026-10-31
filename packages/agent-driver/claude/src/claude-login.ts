@@ -62,12 +62,22 @@ export interface MintOptions {
    * `paste` answers whether the code was handed to Claude Code.
    */
   onLink?: (url: string, paste: (code: string) => boolean) => void
+  /** Told when Claude Code did not take the code pasted: it is ready for another, at the same page. */
+  onRefused?: () => void
 }
 
 /** How a Claude login is made: Claude Code's own, or a stand-in for tests. */
 export type Mint = (opts?: MintOptions) => Promise<{ ok: true; login: string } | Failed>
 
 const MINT_TIMEOUT_MS = 10 * 60_000
+/**
+ * How long after a code its Enter is pressed. Claude Code reads what comes at once as a paste, an
+ * Enter in it included, and a code is long enough that it then only sits there: it needs the Enter
+ * as a key of its own.
+ */
+const ENTER_AFTER_MS = 600
+/** What Claude Code says of a code it did not take, then waiting for an Enter to ask again. */
+const REFUSED = /OAuth\s+error/
 /** How much of what Claude Code showed is kept: its end, where the login is. */
 const SHOWN = 256 * 1024
 /** The line the lent terminal's first program writes of itself, before it becomes Claude Code. */
@@ -84,7 +94,7 @@ const STARTED_AS = /^started as \d+$/
  * program first says which process it is: at the end both groups are ended, whether or not Claude
  * Code heeds a terminal that went away.
  */
-export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command = 'claude setup-token', onLink } = {}) =>
+export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command = 'claude setup-token', onLink, onRefused } = {}) =>
   new Promise(resolve => {
     const inner = `echo "started as $$"; stty cols 250 rows 50; command -v ${command.split(' ')[0]} >/dev/null || { echo "Claude Code is not on this computer."; exit 1; }; exec ${command}`
     const lent = process.platform === 'darwin' ? 'script -q /dev/null sh -c "$0"' : 'script -q -e -c "$0" /dev/null'
@@ -95,10 +105,14 @@ export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command 
     let lentTo: number | undefined
     let linked = false
     let ended = false
+    /** Where in what is shown the words about the last code pasted start; none while no code waits for an answer. */
+    let answerFrom: number | undefined
+    let enter: NodeJS.Timeout | undefined
     const end = (answer: { ok: true; login: string } | Failed): void => {
       if (ended) return
       ended = true
       clearTimeout(timer)
+      clearTimeout(enter)
       signal?.removeEventListener('abort', stopped)
       for (const group of [lentTo, child.pid]) {
         if (group === undefined || group <= 1) continue
@@ -117,8 +131,21 @@ export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command 
     const timer = setTimeout(() => end({ ok: false, error: `No yes came from the browser in ${Math.round(timeoutMs / 60_000)} minutes.` }), timeoutMs)
     signal?.addEventListener('abort', stopped, { once: true })
     if (signal?.aborted) stopped()
+    /** How much was ever shown: what is kept of it is only its end. */
+    let shownEver = 0
+    let answer = ''
     const read = (said: string): void => {
       shown = (shown + said).slice(-SHOWN)
+      shownEver += said.length
+      if (answerFrom !== undefined) {
+        answer = (answer + said).slice(-SHOWN)
+        if (REFUSED.test(words(answer))) {
+          answerFrom = undefined
+          answer = ''
+          child.stdin.write('\r')
+          onRefused?.()
+        }
+      }
       // Read once, as it comes: it is the first thing written, and a long wait scrolls it out of what is kept.
       lentTo ??= startedAs(shown)
       const url = linked || !onLink ? undefined : signInUrl(shown)
@@ -127,7 +154,12 @@ export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command 
         onLink!(url, code => {
           const word = code.trim()
           if (ended || !isSignInCode(word)) return false
-          child.stdin.write(`${word}\r`)
+          child.stdin.write(word)
+          enter = setTimeout(() => {
+            answerFrom = shownEver
+            answer = ''
+            child.stdin.write('\r')
+          }, ENTER_AFTER_MS)
           return true
         })
       }
