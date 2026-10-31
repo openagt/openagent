@@ -27,4 +27,4 @@ export {
 } from './accounts.js'
 export { addingNow, addingPath, beginAdding, bringCode, cancelAdding, runAdding, type Adding, type AddingNow } from './adding.js'
 export { claudeUsagePath, keepClaudeReading, readUsage, READING_KEPT_MS, type AccountUsage, type UsageWindow } from './usage.js'
-export { loginWiring, nameTaken, ownName, removeAdded, signIn, type LoginWiring, type SignInSaid } from './login.js'
+export { loginWiring, nameTaken, ownLoginThere, ownName, removeAdded, signIn, type LoginWiring, type SignInSaid } from './login.js'

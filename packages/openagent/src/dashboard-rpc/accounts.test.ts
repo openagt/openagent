@@ -58,7 +58,18 @@ test('the page sees each account by name and how full it is, never a login: the 
 test('with one account there is no order to say; a Claude Code that does not say who the person is names the login by the computer it is on, never "this computer"', () =>
   withAccounts(
     async () => {
-      assert.deepEqual((await onAgentAccounts('claude')).accounts, [{ id: OWN_NAME, name: 'Claude login on Studio', own: true, windows: [] }])
+      assert.deepEqual((await onAgentAccounts('claude')).accounts, [{ id: OWN_NAME, name: 'Claude login on Studio', own: true, loggedOut: true, windows: [] }])
+    },
+    {},
+  ))
+
+test('the person\'s own login not there: it says so, and the first account with a login is the one in use, though the own is first on the list', () =>
+  withAccounts(
+    async path => {
+      addAccount('Dani', LOGIN, path, new Date(NOW))
+      addAccount('Rom', LOGIN, path, new Date(NOW))
+      const { accounts } = await onAgentAccounts('claude')
+      assert.deepEqual(accounts.map(a => [a.name, a.loggedOut, a.state]), [['Claude login on Studio', true, undefined], ['Dani', undefined, 'in-use'], ['Rom', undefined, 'next']])
     },
     {},
   ))
@@ -139,6 +150,8 @@ function codexWiring(dir: string, who: Record<string, { name?: string; key?: str
   const own = join(dir, 'own-codex')
   const folders = join(dir, 'codex-accounts')
   mkdirSync(folders, { recursive: true })
+  mkdirSync(own, { recursive: true })
+  writeFileSync(join(own, 'auth.json'), '{}')
   Object.assign(accountsWiring, {
     codexDir: () => folders,
     codexOwnHome: () => own,

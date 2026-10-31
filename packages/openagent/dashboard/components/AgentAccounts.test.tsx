@@ -173,4 +173,14 @@ describe('Agent accounts', () => {
     expect(within(card).queryByRole('button', { name: 'Add account' })).toBeNull()
     expect(within(card).queryByRole('listitem')).toBeNull()
   })
+
+  test("the agent picker offers no login the agent does not have, and names the one runs really take; alone it stays", async () => {
+    const { firstAccount, runAccounts } = await import('./AgentAccounts.js')
+    const row = (name: string, own: boolean, more: object = {}) => ({ id: name, name, own, windows: [], ...more })
+    const view = { computer: 'Mac', now: 0, accounts: [row('Claude login on VPS', true, { loggedOut: true }), row('test', false), row('Suleiman', false)] }
+    expect(runAccounts(view).map(account => account.name)).toEqual(['test', 'Suleiman'])
+    expect(firstAccount(view)?.name).toBe('test')
+    const alone = { computer: 'Mac', now: 0, accounts: [row('Claude login on VPS', true, { loggedOut: true })] }
+    expect(runAccounts(alone).map(account => account.name)).toEqual(['Claude login on VPS'])
+  })
 })

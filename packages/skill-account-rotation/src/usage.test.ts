@@ -36,7 +36,7 @@ function computer(env: NodeJS.ProcessEnv, more: Partial<LoginWiring> = {}, quota
   const wiring: LoginWiring = {
     ...loginWiring(env),
     now: () => NOW,
-    claudeSignedIn: () => true,
+    env: { ...env, CLAUDE_CODE_OAUTH_TOKEN: 'a login in the environment' },
     claudeQuota: () => {
       reads += 1
       return quota()
@@ -105,7 +105,7 @@ test('a reading that throws, and a kept file that does not read, are the same as
 
 test('nobody signed in to Claude: it is not asked', () =>
   inDir(async env => {
-    const { wiring, reads } = computer(env, { claudeSignedIn: () => false })
+    const { wiring, reads } = computer(env, { env })
     await usage(env, wiring)
     assert.equal(reads(), 0)
   }))

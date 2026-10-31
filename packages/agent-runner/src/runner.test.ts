@@ -100,7 +100,8 @@ test('a run\'s coding agent is unrestricted, has the run\'s id, and gets this ma
 
 test('a run goes on its agent\'s accounts, or the project\'s own few of them, starting on the one whoever started it named, on Claude and on Codex alike', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'runner-accounts-'))
-  const env = { XDG_CONFIG_HOME: dir }
+  // The person's own login is there, in the environment: without one, a run takes the added accounts.
+  const env = { XDG_CONFIG_HOME: dir, CLAUDE_CODE_OAUTH_TOKEN: 'own', CODEX_API_KEY: 'own' }
   for (const agent of ['claude', 'codex'] as const) {
     addAccount('Dani', 'x', accountsPath(agent, env))
     addAccount('Rom', 'y', accountsPath(agent, env))
@@ -191,8 +192,18 @@ test('ready to run: the coding agent\'s problems stop a run; nothing else is pro
     assert.deepEqual(await readyToRun(repo, 'codex', { probe: answers(true), isRoot: notRoot, agentsSkills: join(repo, 'no-such-dir') }), { problems: [], warnings: [] })
     assert.ok(probed.every(bin => bin === 'claude' || bin === 'codex'), `only the coding agent's CLI is asked, not ${probed.join(', ')}`)
 
-    const out = await readyToRun(repo, 'claude-code', { probe: answers(false), isRoot: notRoot })
-    assert.match(out.problems[0]!, /claude auth login/)
+    // Whether the person added an account is read off their files: here, none of the real ones.
+    const config = process.env['XDG_CONFIG_HOME']
+    process.env['XDG_CONFIG_HOME'] = join(repo, 'config')
+    try {
+      const out = await readyToRun(repo, 'claude-code', { probe: answers(false), isRoot: notRoot })
+      assert.match(out.problems[0]!, /claude auth login/)
+      addAccount('Dani', 'sk-ant-oat01-dani', accountsPath('claude'))
+      assert.deepEqual(await readyToRun(repo, 'claude-code', { probe: answers(false), isRoot: notRoot }), { problems: [], warnings: [], ownLoggedOut: true })
+    } finally {
+      if (config === undefined) delete process.env['XDG_CONFIG_HOME']
+      else process.env['XDG_CONFIG_HOME'] = config
+    }
   } finally {
     await removeRepo(repo)
   }

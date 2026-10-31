@@ -106,7 +106,7 @@ test('a turn the account\'s limit stops goes on in the same conversation on the 
     await writeFile(join(folder, 'auth.json'), auth('dani', 'ws'))
     const seen: Seen[] = []
     const events: DriverEvent[] = []
-    const session = await new CodexDriver({ spawn: turns(home => (home === '' ? 'limit' : 'done'), seen), env, accounts: accountRotation('codex', { now: () => NOW }) }).start({ cwd: dir, onEvent: e => events.push(e) })
+    const session = await new CodexDriver({ spawn: turns(home => (home === '' ? 'limit' : 'done'), seen), env, accounts: accountRotation('codex', { ownLoginThere: () => true, now: () => NOW }) }).start({ cwd: dir, onEvent: e => events.push(e) })
     const turn = await session.prompt('fix the bug')
     assert.equal(turn.text, 'finished')
     assert.equal(seen.length, 2)
@@ -136,7 +136,7 @@ test('a Codex run with skills off goes on an added account from a home with only
     const folder = join(codexAccountsDir(env), 'codex-dani')
     await mkdir(folder, { recursive: true })
     const seen: Seen[] = []
-    const session = await new CodexDriver({ spawn: turns(() => 'done', seen), env, personal: { memory: false, connectors: true, skills: false }, accounts: accountRotation('codex', { prefer: 'Dani', now: () => NOW }) }).start({ cwd: dir })
+    const session = await new CodexDriver({ spawn: turns(() => 'done', seen), env, personal: { memory: false, connectors: true, skills: false }, accounts: accountRotation('codex', { ownLoginThere: () => true, prefer: 'Dani', now: () => NOW }) }).start({ cwd: dir })
     await session.prompt('go')
     assert.equal(seen[0]!.env['CODEX_HOME'], join(folder, 'plain'))
     assert.equal(await readlink(join(folder, 'plain', 'sessions')), join(env.XDG_STATE_HOME, 'agent-driver', 'codex-home', 'sessions'))
@@ -149,7 +149,7 @@ test('with every Codex account at its limit the turn ends, saying which frees fi
     addAccount('Dani', 'codex-dani', path)
     await mkdir(join(codexAccountsDir(env), 'codex-dani'), { recursive: true })
     const seen: Seen[] = []
-    const session = await new CodexDriver({ spawn: turns(() => 'limit', seen), env, accounts: accountRotation('codex', { now: () => NOW }) }).start({ cwd: dir })
+    const session = await new CodexDriver({ spawn: turns(() => 'limit', seen), env, accounts: accountRotation('codex', { ownLoginThere: () => true, now: () => NOW }) }).start({ cwd: dir })
     await assert.rejects(session.prompt('go'), (err: unknown) => err instanceof UsageLimitError && err.message === "All 2 Codex accounts are at their limit: This computer's is free again in 2 h.")
     assert.equal(seen.length, 2)
 
@@ -165,7 +165,7 @@ test('with every Codex account at its limit the turn ends, saying which frees fi
         send({ method: 'turn/completed', params: { turn: { id: 'turn-1', status: 'failed', error: { message: 'The model is not supported.', codexErrorInfo: 'badRequest' } } } })
       }, failing),
       env: otherEnv,
-      accounts: accountRotation('codex', { now: () => NOW }),
+      accounts: accountRotation('codex', { ownLoginThere: () => true, now: () => NOW }),
     }).start({ cwd: dir })
     await assert.rejects(failed.prompt('go'), /not supported/)
     assert.equal(failing.length, 1)
@@ -196,16 +196,16 @@ test('Codex\'s models are asked from the home a turn on the account runs take fi
       }
       return proc
     }
-    const models = await new CodexDriver({ spawn, env, accounts: accountRotation('codex', { now: () => NOW }) }).listModels()
+    const models = await new CodexDriver({ spawn, env, accounts: accountRotation('codex', { ownLoginThere: () => true, now: () => NOW }) }).listModels()
     assert.deepEqual(models.map(m => m.name), ['GPT-6'])
     assert.equal(homes[0], join(folder, 'home'))
-    await new CodexDriver({ spawn, env, personal: { memory: true, connectors: true, skills: false }, accounts: accountRotation('codex', { now: () => NOW }) }).listModels()
+    await new CodexDriver({ spawn, env, personal: { memory: true, connectors: true, skills: false }, accounts: accountRotation('codex', { ownLoginThere: () => true, now: () => NOW }) }).listModels()
     assert.equal(homes[1], join(folder, 'plain'))
     assert.equal(await readlink(join(folder, 'plain', 'sessions')), join(env.XDG_STATE_HOME, 'agent-driver', 'codex-home', 'sessions'))
 
     // The person's own login, in their own home; and without accounts, whatever login Codex has.
     useFirst(OWN_NAME, path)
-    await new CodexDriver({ spawn, env, accounts: accountRotation('codex', { now: () => NOW }) }).listModels()
+    await new CodexDriver({ spawn, env, accounts: accountRotation('codex', { ownLoginThere: () => true, now: () => NOW }) }).listModels()
     await new CodexDriver({ spawn, env }).listModels()
     assert.deepEqual(homes.slice(2), [undefined, undefined])
   }))

@@ -1,7 +1,7 @@
 import { hostname } from 'node:os'
 import { OWN_NAME, readAccounts, shownAccounts, useFirst, type AccountsAgent, type ShownAccount } from './accounts.js'
 import { addingNow, beginAdding, bringCode, cancelAdding, runAdding } from './adding.js'
-import { loginWiring, ownName, removeAdded, type LoginWiring } from './login.js'
+import { loginWiring, ownLoginThere, ownName, removeAdded, type LoginWiring } from './login.js'
 import { readUsage } from './usage.js'
 
 /**
@@ -46,19 +46,19 @@ const isAgent = (value: string | undefined): value is AccountsAgent => value ===
 const ON_SERVER = 'On a server, accounts are removed in Settings › Accounts.'
 
 /**
- * An agent's accounts as `list` says them. The person's own says the computer it is a login on, and
- * while it goes by no name they gave it, who it is, as `who`, or `signedOut` when the agent has no
- * login of theirs: an agent this computer may not even have. Commands still take its `name`.
+ * An agent's accounts as `list` says them. The person's own says the computer it is a login on, who
+ * it is while it goes by no name they gave it, as `who`, and `signedOut` when the agent has no login
+ * of theirs: runs skip it then. Commands still take its `name`.
  */
 async function listed(agent: AccountsAgent, wiring: LoginWiring): Promise<(ShownAccount & { who?: string; signedOut?: true; computer?: string })[]> {
   const accounts = shownAccounts(readAccounts(wiring.path(agent)))
-  const unnamed = (a: ShownAccount): boolean => a.own && a.name === OWN_NAME
-  const who = accounts.some(unnamed) ? await ownName(agent, wiring) : undefined
+  const there = ownLoginThere(agent, wiring)
+  const unnamed = (a: ShownAccount): boolean => a.name === OWN_NAME
+  const who = accounts.some(a => a.own && unnamed(a)) ? await ownName(agent, wiring) : undefined
   const computer = hostname().replace(/\.local$/i, '')
   return accounts.map(a => {
     if (!a.own) return a
-    if (!unnamed(a)) return { ...a, computer }
-    return who !== undefined ? { ...a, who, computer } : { ...a, signedOut: true, computer }
+    return { ...a, computer, ...(unnamed(a) && who !== undefined ? { who } : {}), ...(there ? {} : { signedOut: true as const }) }
   })
 }
 
