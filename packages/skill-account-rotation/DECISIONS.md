@@ -21,6 +21,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   the same on OpenAgent's Overview and on its own page. Adding and removing stay in Settings ›
   Accounts for now. Picked over moving the whole Settings page first; that it overlaps the Usage
   card is accepted, and Customize hides either.
+- The card says the same numbers as Settings › Accounts, and the skill reads them itself, with the
+  `usage` command. Picked over the card showing only what the last run saved, which on one account
+  is nothing, and over OpenAgent handing the card its own reading, which a skill's own page does
+  not have. The servers' rows stay in Settings for now.
 - On a server `add` and `remove` are refused and say where to do it: a server's sign-in needs
   the page's paste step, and the page keeps its own record of logins copied from a computer.
 

@@ -12,13 +12,14 @@ Run the `account-rotation` command, always by its full name: `npx @openagt/skill
 
 ```
 npx @openagt/skill-account-rotation@0.1 list                         {"claude":[…],"codex":[…]}, each in the order runs try them
+npx @openagt/skill-account-rotation@0.1 usage                        how full each account is now, where it can be read; can take 20 seconds
 npx @openagt/skill-account-rotation@0.1 add <claude|codex> <name>    a new account, last in the order
 npx @openagt/skill-account-rotation@0.1 remove <claude|codex> <name> take an added account off
 npx @openagt/skill-account-rotation@0.1 use-first <claude|codex> <name>
                                                                      the account runs try first from now on
 ```
 
-`add`, `remove` and `use-first` answer with that agent's list. An account in a list has `name`, `own` (true for the person's own login, which cannot be removed), and, when known, `who` (who a login the person gave no name is: show it, but commands take `name`), `limitedUntil` (epoch milliseconds, no run picks it before then) and `windows` (how full it is).
+`add`, `remove` and `use-first` answer with that agent's list. An account in a list has `name`, `own` (true for the person's own login, which cannot be removed), and, when known, `who` (who a login the person gave no name is: show it, but commands take `name`), `signedOut` (the agent has no login of the person's), `computer` (the computer the person's own login is on), `limitedUntil` (epoch milliseconds, no run picks it before then) and `windows` (how full it was on its last run; `usage` says now: `windows` shortest first, and `at`, epoch milliseconds, when that is still from a last run).
 
 `add` opens the browser on this computer and waits up to 10 minutes for the person to sign in, so tell them to, and give the command that long to end. They must sign in to the account being added, not one they are already signed in to.
 

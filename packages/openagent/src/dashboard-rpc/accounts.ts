@@ -1,6 +1,5 @@
 import { computerName } from '../computer-name.js'
 import type { AgentAccount, DriverQuotaWindow, DriverRateWindow } from '@openagt/agent-driver'
-import { readCodexUsage } from '@openagt/agent-driver-codex'
 import { isLimited, loginWiring, nameOwnAccount, nameTaken, OWN_NAME, ownName, readAccounts, removeAdded, signIn, useFirst, type AccountsAgent, type LoginWiring, type SignInSaid } from '@openagt/skill-account-rotation'
 import { contextQuota } from './context.js'
 import { readCopied, writeCopied, type CopiedLogin } from '../dashboard/copied-logins.js'
@@ -73,14 +72,12 @@ export interface AccountsView {
 
 /** What the RPCs reach for, swapped in tests: the logins, how full a Codex account is. */
 export const accountsWiring: LoginWiring & {
-  codexUsage: (home: string) => Promise<DriverRateWindow[]>
   /** No browser on this computer: a server's. */
   headless: () => boolean
   /** This computer's own name. */
   computer: () => string
 } = {
   ...loginWiring(),
-  codexUsage: home => readCodexUsage({ home }),
   headless: () => process.env['OPENAGENT_SERVER'] === '1',
   computer: computerName,
 }

@@ -1,5 +1,7 @@
+import { hostname } from 'node:os'
 import { OWN_NAME, readAccounts, shownAccounts, useFirst, type AccountsAgent, type ShownAccount } from './accounts.js'
 import { loginWiring, nameTaken, ownName, removeAdded, signIn, type LoginWiring } from './login.js'
+import { readUsage } from './usage.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -10,6 +12,7 @@ import { loginWiring, nameTaken, ownName, removeAdded, signIn, type LoginWiring 
 export const USAGE = `usage: account-rotation <command>
 
   list                          the accounts of each agent in the order runs try them, never a login
+  usage                         how full each account is, read now where it can be
   add <claude|codex> <name>     a new account under <name>: the browser opens, and it waits for the person to sign in
   remove <claude|codex> <name>  take an added account off the list
   use-first <claude|codex> <name>
@@ -29,11 +32,21 @@ const isAgent = (value: string | undefined): value is AccountsAgent => value ===
 /** Why a list only a server's page can change is refused here: a server's own logins go through its page. */
 const ON_SERVER = 'On a server, accounts are added and removed in Settings › Accounts.'
 
-/** An agent's accounts as `list` says them: the person's own, while it goes by no name they gave it, also says who it is, as `who`; commands still take its `name`. */
-async function listed(agent: AccountsAgent, wiring: LoginWiring): Promise<(ShownAccount & { who?: string })[]> {
+/**
+ * An agent's accounts as `list` says them. The person's own says the computer it is a login on, and
+ * while it goes by no name they gave it, who it is, as `who`, or `signedOut` when the agent has no
+ * login of theirs: an agent this computer may not even have. Commands still take its `name`.
+ */
+async function listed(agent: AccountsAgent, wiring: LoginWiring): Promise<(ShownAccount & { who?: string; signedOut?: true; computer?: string })[]> {
   const accounts = shownAccounts(readAccounts(wiring.path(agent)))
-  const who = accounts.some(a => a.own && a.name === OWN_NAME) ? await ownName(agent, wiring) : undefined
-  return accounts.map(a => (a.own && a.name === OWN_NAME && who !== undefined ? { ...a, who } : a))
+  const unnamed = (a: ShownAccount): boolean => a.own && a.name === OWN_NAME
+  const who = accounts.some(unnamed) ? await ownName(agent, wiring) : undefined
+  const computer = hostname().replace(/\.local$/i, '')
+  return accounts.map(a => {
+    if (!a.own) return a
+    if (!unnamed(a)) return { ...a, computer }
+    return who !== undefined ? { ...a, who, computer } : { ...a, signedOut: true, computer }
+  })
 }
 
 export async function runCli(argv: readonly string[], io: CliIo): Promise<number> {
@@ -51,6 +64,7 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
   if (command === 'list' && argv.length === 1) {
     return answer({ claude: await listed('claude', wiring), codex: await listed('codex', wiring) })
   }
+  if (command === 'usage' && argv.length === 1) return answer(await readUsage(wiring))
   if ((command !== 'add' && command !== 'remove' && command !== 'use-first') || !isAgent(agent) || name === undefined || argv.length !== 3) {
     io.stderr(USAGE)
     return 2

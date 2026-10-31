@@ -1,6 +1,7 @@
 import { QuotaPoller } from '../quota-poller.js'
 import { weekBoundary, type QuotaBoundary } from '../quota-boundary.js'
 import { ClaudeCodeDriver } from '@openagt/agent-driver-claude'
+import { keepClaudeReading } from '@openagt/skill-account-rotation'
 import type { DriverQuotaUnavailableReason, DriverQuotaWindow } from '@openagt/agent-driver'
 
 /**
@@ -72,7 +73,14 @@ export function pollerQuotaSource(poller: QuotaPoller, now: () => number = () =>
  */
 export function defaultQuotaSource(): QuotaSource {
   const driver = new ClaudeCodeDriver()
-  const poller = new QuotaPoller({ read: () => driver.readQuota() })
+  // Kept for the account-rotation command too: Claude refuses this read when asked too often, whoever asks.
+  const poller = new QuotaPoller({
+    read: async () => {
+      const quota = await driver.readQuota()
+      keepClaudeReading(quota)
+      return quota
+    },
+  })
   poller.start()
   return pollerQuotaSource(poller)
 }
