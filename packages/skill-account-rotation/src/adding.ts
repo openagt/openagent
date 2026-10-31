@@ -155,8 +155,6 @@ export async function runAdding(agent: AccountsAgent, name: string, wiring: Logi
     rmSync(`${path}.code`, { force: true })
     paste?.(code)
   }, CODE_EVERY_MS)
-  // Claude Code or Codex is what keeps the process up, for as long as the person takes.
-  looking.unref()
   const onScreen: SignInSaid = !wiring.headless()
     ? agent === 'codex'
       ? { onUrl: url => say({ url }) }
