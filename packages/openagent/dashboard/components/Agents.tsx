@@ -1,6 +1,6 @@
 import type { ActiveAgent } from '../../src/index.js'
 import { Bot } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
+import { Card, CardContent, CardHeader, CardTitle } from '@openagt/skill-ui/module'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { formatAge, formatDateTime } from '../lib/format-date.js'
 import { OnComputer } from './MachineMark.js'

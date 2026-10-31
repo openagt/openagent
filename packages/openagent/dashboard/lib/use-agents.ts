@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import type { AgentMeta } from '../../src/index.js'
 import { onAgents } from '../rpc/reads.js'
-import { usePolled } from './use-async.js'
+import { usePolled } from '@openagt/skill-ui/module'
 import { runsAgain, useRunsPace } from './runs-changed.js'
 import { usePreferences } from './preferences.js'
 import { awaitingName } from './agent-label.js'

@@ -1,4 +1,4 @@
-import { cn } from '../lib/utils.js'
+import { cn } from '@openagt/skill-ui/module'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 
 // How full the session's context is, as the small circle Claude Code on the web has under its box:

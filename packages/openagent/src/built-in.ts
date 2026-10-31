@@ -18,11 +18,11 @@ import { declaring, SKILLS_DIRS, SKILLS_ENV, lookupProvidedCommand, packageBins,
 export const BUILT_IN_PACKAGES: readonly string[] = ['@openagt/changes', '@openagt/files', '@openagt/skill-branches', '@openagt/skill-github', '@openagt/skill-logs', '@openagt/agent-runner']
 
 /**
- * The packages that are this computer's and no project's: the door to it, and the servers it
- * installed OpenAgent on. Their pages show and their commands run with no project added, and
+ * The packages that are this computer's and no project's: the door to it, the servers it
+ * installed OpenAgent on, and the accounts its runs use. Their pages show and their commands run with no project added, and
  * what one keeps is in the person's home folder.
  */
-export const COMPUTER_PACKAGES: readonly string[] = ['@openagt/devices']
+export const COMPUTER_PACKAGES: readonly string[] = ['@openagt/devices', '@openagt/skill-account-rotation']
 
 /**
  * The packages a project has once it picked them (#2023). A skill's package is every project's

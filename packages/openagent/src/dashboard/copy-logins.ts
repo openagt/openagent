@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { hostname } from 'node:os'
 import { CLAUDE_ACCOUNT_ENV, CLAUDE_TOKEN_ENV } from '@openagt/agent-driver-claude'
-import type { ModuleCommandResult } from '../project-modules.js'
+import type { ModuleCommandResult } from '@openagt/skill-ui'
 import type { RelayHandlers } from './relay-endpoints.js'
 import { giveRemoteLogins, pingRemote, remoteLogins, type MachineAccess } from './remote-run.js'
 import { isClaudeAccountId, isServerName, loginsOfOwn, loginsToCopy, type MachineLogins } from './machine-logins.js'

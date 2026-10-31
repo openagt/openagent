@@ -18,7 +18,7 @@ npx @openagt/skill-account-rotation@0.1 use-first <claude|codex> <name>
                                                                      the account runs try first from now on
 ```
 
-`add`, `remove` and `use-first` answer with that agent's list. An account in a list has `name`, `own` (true for the person's own login, which cannot be removed), and, when known, `limitedUntil` (epoch milliseconds, no run picks it before then) and `windows` (how full it is).
+`add`, `remove` and `use-first` answer with that agent's list. An account in a list has `name`, `own` (true for the person's own login, which cannot be removed), and, when known, `who` (who a login the person gave no name is: show it, but commands take `name`), `limitedUntil` (epoch milliseconds, no run picks it before then) and `windows` (how full it is).
 
 `add` opens the browser on this computer and waits up to 10 minutes for the person to sign in, so tell them to, and give the command that long to end. They must sign in to the account being added, not one they are already signed in to.
 

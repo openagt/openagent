@@ -1,9 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { DRIVER_LABELS, type DriverName } from '../../src/client.js'
 import { onAgentState, onGitHosts, sendAgentFix, sendGitHostInstall, sendGitHostLogin, type AgentState, type GitHostRow, type GitHostsView } from '../rpc/logins.js'
-import { usePolled } from '../lib/use-async.js'
-import { cn } from '../lib/utils.js'
-import { Button } from './ui/button.js'
+import { usePolled, cn, Button } from '@openagt/skill-ui/module'
 import { CopyButton } from './ui/copy-button.js'
 
 // What runs log in with, and what is missing for them to (#2194's accounts, a step further): the

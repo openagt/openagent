@@ -31,10 +31,10 @@ test('a project with nothing installed gets its runs, its branches and a reposit
   }
 })
 
-test('the devices package is the computer\'s: its pages are there with no project, and no project has it', async () => {
+test('devices and account rotation are the computer\'s: their parts are there with no project, and no project has them', async () => {
   assert.deepEqual((await computerPackages()).map(pkg => pkg.name), [...COMPUTER_PACKAGES])
-  assert.deepEqual((await readComputerModules()).map(module => module.package), ['@openagt/devices'])
-  assert.deepEqual((await readComputerModules()).map(module => Object.keys(module.bins)), [['devices']])
+  assert.deepEqual((await readComputerModules()).map(module => module.package), ['@openagt/devices', '@openagt/skill-account-rotation'])
+  assert.deepEqual((await readComputerModules()).map(module => Object.keys(module.bins)), [['devices'], ['account-rotation']])
 })
 
 /** A skill's text in a project, as init writes it: the folder named after the skill, with its `SKILL.md`. */

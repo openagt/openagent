@@ -10,7 +10,7 @@ import {
   saveProjectPresetList,
   useActiveProjectId,
 } from '../lib/preferences.js'
-import { useLoaded } from '../lib/use-async.js'
+import { useLoaded, Button, cn } from '@openagt/skill-ui/module'
 import { onProjects } from '../rpc/projects.js'
 import { PromptEditor, type PromptEditorHandle } from './PromptEditor.js'
 import { PresetCreatePanel } from './PresetCreatePanel.js'
@@ -29,9 +29,7 @@ import { ClaudeLogo, CodexLogo } from './driver-logos.js'
 import { AgentAccountItems, firstAccount, readMachineAccountsAhead, useAccountsOn } from './AgentAccounts.js'
 import { readMachineGitHostsAhead } from './GitHosts.js'
 import { ACCOUNTS_ENTRY } from './Logins.js'
-import { Button } from './ui/button.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { cn } from '../lib/utils.js'
 
 // The driver + model tree (#650/#656/#658): each driver lists ONLY its own models, since the
 // model passes straight through to that coding agent. Picking a model in a driver's submenu sets both, so an

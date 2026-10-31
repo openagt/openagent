@@ -1,3 +1,5 @@
+import type { CardWidth } from '@openagt/skill-ui/module'
+
 // How the Overview lays out its cards: which show, in what order, how wide. A layout is kept per
 // project and one for "All projects" (his pick); a project never arranged is laid out as all
 // projects are, without the cards it does not have. A card a layout does not name (a package
@@ -6,8 +8,8 @@
 // them.
 
 /** How wide a card stands, as a share of the Overview's column. */
-export const CARD_WIDTHS = ['1/4', '1/3', '1/2', '2/3', '3/4', '1'] as const
-export type CardWidth = (typeof CARD_WIDTHS)[number]
+export const CARD_WIDTHS = ['1/4', '1/3', '1/2', '2/3', '3/4', '1'] as const satisfies readonly CardWidth[]
+export type { CardWidth }
 
 /** One card's place in a layout: its id, and what was picked for it. */
 export interface CardPlace {

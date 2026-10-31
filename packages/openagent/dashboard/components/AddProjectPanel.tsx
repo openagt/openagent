@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent 
 import { onCloneTarget, sendAddProject, sendAddProjectFromAddress, sendPickProjectDirectory } from '../rpc/projects.js'
 import { useAction } from '../lib/use-action.js'
 import { AddProjectEffects } from './AddProjectEffects.js'
-import { Button } from './ui/button.js'
+import { Button } from '@openagt/skill-ui/module'
 import { Input } from './ui/input.js'
 import { RadioGroup, RadioGroupOption } from './ui/radio-group.js'
 

@@ -1,5 +1,5 @@
-import { readAccounts, shownAccounts, useFirst, type AccountsAgent } from './accounts.js'
-import { loginWiring, nameTaken, removeAdded, signIn, type LoginWiring } from './login.js'
+import { OWN_NAME, readAccounts, shownAccounts, useFirst, type AccountsAgent, type ShownAccount } from './accounts.js'
+import { loginWiring, nameTaken, ownName, removeAdded, signIn, type LoginWiring } from './login.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -29,6 +29,13 @@ const isAgent = (value: string | undefined): value is AccountsAgent => value ===
 /** Why a list only a server's page can change is refused here: a server's own logins go through its page. */
 const ON_SERVER = 'On a server, accounts are added and removed in Settings › Accounts.'
 
+/** An agent's accounts as `list` says them: the person's own, while it goes by no name they gave it, also says who it is, as `who`; commands still take its `name`. */
+async function listed(agent: AccountsAgent, wiring: LoginWiring): Promise<(ShownAccount & { who?: string })[]> {
+  const accounts = shownAccounts(readAccounts(wiring.path(agent)))
+  const who = accounts.some(a => a.own && a.name === OWN_NAME) ? await ownName(agent, wiring) : undefined
+  return accounts.map(a => (a.own && a.name === OWN_NAME && who !== undefined ? { ...a, who } : a))
+}
+
 export async function runCli(argv: readonly string[], io: CliIo): Promise<number> {
   const env = io.env ?? process.env
   const wiring = io.wiring ?? loginWiring(env)
@@ -42,7 +49,7 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
     return 0
   }
   if (command === 'list' && argv.length === 1) {
-    return answer({ claude: shownAccounts(readAccounts(wiring.path('claude'))), codex: shownAccounts(readAccounts(wiring.path('codex'))) })
+    return answer({ claude: await listed('claude', wiring), codex: await listed('codex', wiring) })
   }
   if ((command !== 'add' && command !== 'remove' && command !== 'use-first') || !isAgent(agent) || name === undefined || argv.length !== 3) {
     io.stderr(USAGE)

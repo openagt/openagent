@@ -1,6 +1,7 @@
 import { homedir } from 'node:os'
 import { contextProjects, contextRemote, resolveProjectPath } from './context.js'
-import { findBroughtModule, findComputerModule, findProjectModule, readComputerModules, readProjectModules, runModuleCommand as runCommand, type ModuleCommandResult } from '../project-modules.js'
+import { runModuleCommand as runCommand, type ModuleCommandResult } from '@openagt/skill-ui'
+import { findBroughtModule, findComputerModule, findProjectModule, readComputerModules, readProjectModules } from '../project-modules.js'
 import { broughtModuleUrl, computerModuleUrl, moduleUrl, versionedModuleUrl } from '../dashboard/module-serve.js'
 import { providedDataChanged } from '../store/provided.js'
 import { callModuleRead, serverHost, type ModuleReadResult } from '../dashboard/module-host.js'
@@ -12,7 +13,7 @@ import { THROUGH_PATH, remoteComputerCommand } from '../dashboard/remote-run.js'
 import { listMachines } from '../registry.js'
 import { DATA_BRANCH, pullFileBranch } from '@openagt/agent-data'
 
-export type { ModuleCommandResult } from '../project-modules.js'
+export type { ModuleCommandResult } from '@openagt/skill-ui'
 export type { ModuleReadResult } from '../dashboard/module-host.js'
 
 /** One module as the dashboard loads it: where its module is, and which projects have it. */

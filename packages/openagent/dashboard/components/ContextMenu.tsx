@@ -1,7 +1,7 @@
 import type { ProjectSummary } from '../../src/index.js'
 import { Layers } from 'lucide-react'
 import { onProjects } from '../rpc/projects.js'
-import { useLoaded } from '../lib/use-async.js'
+import { useLoaded } from '@openagt/skill-ui/module'
 import { rowButtonClass } from './ui/row-item.js'
 import { ContextFiles } from './ContextFiles.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'

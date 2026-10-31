@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import type { WorkspaceDoc } from '../../src/index.js'
-import { Button } from './ui/button.js'
+import { Button, cn } from '@openagt/skill-ui/module'
 import { Markdown } from './Markdown.js'
-import { cn } from '../lib/utils.js'
 import { ScrollArea } from './ui/scroll-area.js'
 
 // The surfaced documents (#319/#328): the PLAN/TODO the agent writes, rendered beside the agent.

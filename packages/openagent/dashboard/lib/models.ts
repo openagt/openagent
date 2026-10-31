@@ -1,6 +1,6 @@
 import { DRIVERS, DRIVER_LABELS, type DriverName } from '../../src/client.js'
 import type { DriverOption } from '../components/DriverModelMenu.js'
-import { readAhead, useLoaded } from './use-async.js'
+import { readAhead, useLoaded } from '@openagt/skill-ui/module'
 import { onModels, type DriverModels, type ModelsView } from '../rpc/models.js'
 import { onMachineModels } from '../rpc/machines.js'
 

@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
-import { Button } from './ui/button.js'
+import { Button } from '@openagt/skill-ui/module'
 
 // The white blank screen (#1194). When a render error escapes every boundary React unmounts the
 // whole tree to the root, and the dashboard had none — so one bad line off the live feed, or one

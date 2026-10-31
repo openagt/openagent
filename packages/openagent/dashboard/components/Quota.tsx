@@ -5,7 +5,7 @@ import { MAX_SPEND_OFFSET } from '../../src/client.js'
 import { useQuota } from '../lib/quota.js'
 import { useModuleHost, type ModuleProject, type UsageLimitSaved } from '../module/index.js'
 import { useMountedModules, type MountedUsageLimit } from '../lib/use-modules.js'
-import { usePolled } from '../lib/use-async.js'
+import { usePolled, Card, CardContent, CardHeader, CardTitle, cn } from '@openagt/skill-ui/module'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
 import { formatRelative, formatResetDay, formatResetTooltip, formatDuration, formatDurationLong } from '../lib/format-date.js'
 import {
@@ -19,9 +19,7 @@ import {
   ONE_DAY_PERCENT,
   type QuotaTone,
 } from '../lib/quota-bar.js'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { cn } from '../lib/utils.js'
 import { AddedAccountsUsage, useAgentAccounts } from './AgentAccounts.js'
 
 // The usage bar (#960): one week-long track, so "am I ahead or behind?" is a glance rather than a

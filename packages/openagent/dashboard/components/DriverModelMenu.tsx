@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { ChevronDown, Check } from 'lucide-react'
-import { cn } from '../lib/utils.js'
+import { cn } from '@openagt/skill-ui/module'
 import { NO_MODEL_PINNED } from '../lib/agent-settings.js'
 import { effortLabel } from '../lib/effort.js'
 import { rowButtonClass } from './ui/row-item.js'

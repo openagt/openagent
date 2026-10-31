@@ -6,7 +6,7 @@ import {
   useMessageScrollerScrollable,
   useMessageScrollerVisibility,
 } from '@shadcn/react/message-scroller'
-import { cn } from '../../lib/utils.js'
+import { cn } from '@openagt/skill-ui/module'
 
 // shadcn's Base UI `message-scroller`, ported (no components.json here, #712). The behavior —
 // follow the live edge, preserve visible rows, anchor on turn boundaries, an inert-when-not-

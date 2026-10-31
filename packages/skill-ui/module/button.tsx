@@ -1,6 +1,6 @@
 import { cva, type VariantProps } from 'class-variance-authority'
 import type { ButtonHTMLAttributes } from 'react'
-import { cn } from '../../lib/utils.js'
+import { cn } from './utils.js'
 
 // A trimmed shadcn/ui Button — enough to judge the component model + tokens (#406).
 const buttonVariants = cva(

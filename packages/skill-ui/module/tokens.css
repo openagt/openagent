@@ -1,0 +1,92 @@
+/* Design tokens, light + dark, on the landing page's Everforest identity (#1118) so the
+   dashboard and openagent.build read as one product. The dark theme mirrors the page's exact
+   palette (packages/openagent.build/pages/index/styles.css); the light theme is Everforest
+   Light, so the theme toggle still works rather than dropping to a single dark mode. Components
+   read the `--color-*` tokens surfaced in `@theme inline` (module/theme.css), so this is a
+   palette swap only. */
+:root {
+  /* Let the browser paint native theme-matched scrollbars + form controls (the shadcn way).
+     `.dark` flips it below. */
+  color-scheme: light;
+  /* Everforest's greens on a white canvas (#1141). Everforest Light is paper-coloured (#fdf6e3),
+     which reads as orange next to any other app; the identity people recognise is the green, not
+     the paper, so the hues stay and the canvas goes near-white, in the greens' own cool grey. As
+     in Claude Code's light, the levels are close: the sidebar a step below the page, and the
+     message box and the panes in pure white, a step above it, told apart by their border too.
+     The greens are darkened from Everforest Light, which was mixed for cream: #8da101 is 2.9:1 on
+     white, below readable for the small text these tokens carry. */
+  --background: #fafbf9;
+  --sidebar: #f3f5f2;
+  --foreground: #3a4248;
+  --card: #ffffff;
+  --card-foreground: #3a4248;
+  --muted: #f3f5f2;
+  --muted-foreground: #66756c;
+  --border: #e3e7e1;
+  /* A code word in an answer (Markdown.tsx): a dark red, as Claude Code on the web sets them. */
+  --code-foreground: #a63a36;
+  --primary: #6f7f00;
+  --primary-foreground: #ffffff;
+  /* The hover and active fill: a step below the sidebar too, so a row there still lights up. */
+  --accent: #e9ede6;
+  --accent-foreground: #3a4248;
+
+  /* Status. Every status colour used to be a raw palette value, so "good" was six different
+     greens and `amber-500` meant both "stopped" and "building, fine". These four are the whole
+     vocabulary: Everforest's four hues, each darkened to stay readable on white (the shipped
+     Light tones run 2.3-3.4:1 there, which is why they are not used verbatim). */
+  --success: #6f7f00;
+  --warning: #9a6b00;
+  --danger: #d1403d;
+  --info: #2b7ba5;
+  /* A merged pull request: Everforest's purple, darkened like the four above. */
+  --merged: #a24f8c;
+
+  /* The brand mark's six strands (#757), darkest first, exactly as the brand ships them.
+     Kept as variables so the mark can be re-ramped for a dark canvas without touching the SVG. */
+  --logo-1: #0a0a0a;
+  --logo-2: #171717;
+  --logo-3: #262626;
+  --logo-4: #404040;
+  --logo-5: #525252;
+  --logo-6: #737373;
+}
+
+.dark {
+  color-scheme: dark;
+  /* Everforest Dark on its darker steps (his pick, after Claude Code's dark): the page on
+     Everforest's dimmest background, panes one step above it, fills and lines a step or two above
+     that, so the levels sit close together on a near-black. The hue, the text (#d3c6aa) and the
+     accents are Everforest's as on the landing page, whose surfaces are the medium ones. */
+  --background: #1e2326;
+  /* The sidebar a step above the page, as Claude Code's dark lays it: the panes' old step. */
+  --sidebar: #232a2e;
+  --foreground: #d3c6aa;
+  --code-foreground: #e67e80;
+  --card: #232a2e;
+  --card-foreground: #d3c6aa;
+  --muted: #2e383c;
+  --muted-foreground: #9da9a0;
+  --border: #374145;
+  --primary: #a7c080;
+  --primary-foreground: #1e2326;
+  --accent: #2e383c;
+  --accent-foreground: #d3c6aa;
+
+  /* Same four meanings on the Everforest Dark accents. */
+  --success: #a7c080;
+  --warning: #dbbc7f;
+  --danger: #e67e80;
+  --info: #7fbbb3;
+  --merged: #d699b6;
+
+  /* The ramp inverted for a dark canvas: the shipped one starts at near-black, which would sink
+     the leading strands into the background. Same order (leading strand lightest against dark),
+     so the knot's depth reads the same way round. */
+  --logo-1: #fafafa;
+  --logo-2: #ededed;
+  --logo-3: #d4d4d4;
+  --logo-4: #a3a3a3;
+  --logo-5: #8a8a8a;
+  --logo-6: #737373;
+}

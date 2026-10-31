@@ -1,5 +1,5 @@
 import { PanelLeft } from 'lucide-react'
-import { Button } from './ui/button.js'
+import { Button } from '@openagt/skill-ui/module'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import { useOptionalSidebar, useSidebar } from './ui/sidebar.js'
 
