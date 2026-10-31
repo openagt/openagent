@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { cn } from '../../lib/utils.js'
+import { cn } from '@openagt/skill-ui/module'
 
 // The look of what stands in the rows above and under the message box, as in Claude Code's: plain
 // words with an icon, no border, every one the same height and size, a little smaller than the

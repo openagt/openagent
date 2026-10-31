@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react'
 import { ChevronDown, Loader2 } from 'lucide-react'
 import { stashPendingDraft } from '../lib/draft-handoff.js'
-import { cn } from '../lib/utils.js'
-import { Button, buttonVariants } from './ui/button.js'
+import { cn, Button, buttonVariants } from '@openagt/skill-ui/module'
 import { OptionLabel } from './ui/option-label.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import {

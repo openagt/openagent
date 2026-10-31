@@ -1,6 +1,6 @@
-import { Component, type ReactNode } from 'react'
+import { Component, useMemo, type ReactNode } from 'react'
 import type { ProjectSummary } from '../../src/index.js'
-import { ModuleHostContext, type ModuleProject } from '../module/index.js'
+import { ModuleHostContext, moduleHost, type ModuleProject } from '../module/index.js'
 import type { MountedPage } from '../lib/use-modules.js'
 import { useHostServices } from '../lib/host-services.js'
 
@@ -27,7 +27,9 @@ class ModuleBoundary extends Component<{ label: string; children: ReactNode }, {
  * names the piece in the boundary's line: "Logs page", "queue card".
  */
 export function ModuleSlot({ package: pkg, label, children }: { package: string; label: string; children: ReactNode }) {
-  const host = useHostServices(pkg)
+  const base = useHostServices(pkg)
+  // The same host from render to render, so an effect keyed on it does not start over.
+  const host = useMemo(() => moduleHost(base), [base])
   return (
     <ModuleHostContext.Provider value={host}>
       <ModuleBoundary label={label}>{children}</ModuleBoundary>

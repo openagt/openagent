@@ -1,4 +1,4 @@
-import { cn } from '../lib/utils.js'
+import { cn } from '@openagt/skill-ui/module'
 import { BY_EXTENSION, BY_NAME, DEFAULT_ICON, ICONS, LIGHT } from './file-icons.generated.js'
 
 // A file's icon from Material Icon Theme (MIT; `scripts/file-icons.mjs` writes the ones used): by

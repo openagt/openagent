@@ -1,9 +1,8 @@
 import { ArrowUpCircle } from 'lucide-react'
 import { DRIVER_LABELS } from '../../src/client.js'
 import { onAgentUpdates, onModels, sendAgentUpdate, type AgentUpdate } from '../rpc/models.js'
-import { forgetRemembered, readAhead, usePolled } from '../lib/use-async.js'
+import { forgetRemembered, readAhead, usePolled, Button } from '@openagt/skill-ui/module'
 import { useAction } from '../lib/use-action.js'
-import { Button } from './ui/button.js'
 
 // The Overview's line for a coding agent on this computer with a newer version out: the version it
 // has, the newest, and the press that runs the agent's own update. Nothing when every agent is up

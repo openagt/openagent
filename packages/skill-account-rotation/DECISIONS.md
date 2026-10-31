@@ -17,6 +17,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   drivers calling this package, a circle of packages, and over the switching staying in
   the drivers, with only the list moved out.
 - Every run gets the skill: accounts are the computer's, so no project ticks it.
+- An Accounts card built only on the command and `@openagt/skill-ui`, the first skill that shows
+  the same on OpenAgent's Overview and on its own page. Adding and removing stay in Settings ›
+  Accounts for now. Picked over moving the whole Settings page first; that it overlaps the Usage
+  card is accepted, and Customize hides either.
 - On a server `add` and `remove` are refused and say where to do it: a server's sign-in needs
   the page's paste step, and the page keeps its own record of logins copied from a computer.
 

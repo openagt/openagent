@@ -3,8 +3,7 @@ import { flushSync } from 'react-dom'
 import { ChevronLeft, ChevronRight, GripVertical, Plus, X } from 'lucide-react'
 import { widthsFor, type CardWidth, type OverviewLayouts } from '../../src/client.js'
 import { updatePreferences } from '../lib/preferences.js'
-import { StaleReads } from '../lib/use-async.js'
-import { cn } from '../lib/utils.js'
+import { StaleReads, cn } from '@openagt/skill-ui/module'
 import type { OverviewCard } from './ModuleCards.js'
 
 /** A card as the layout placed it: its width, and whether it is hidden. */

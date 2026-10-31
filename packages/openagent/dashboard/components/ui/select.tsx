@@ -2,7 +2,7 @@
 import type { ComponentProps } from 'react'
 import { Select as SelectPrimitive } from '@base-ui/react/select'
 import { Check, ChevronDown } from 'lucide-react'
-import { cn } from '../../lib/utils.js'
+import { cn } from '@openagt/skill-ui/module'
 
 // A shadcn-style Select on Base UI, matching the DropdownMenu already here (no Radix pulled in).
 // Replaces the bare `<select>` the forms and the Settings rows drew by hand: its list was the

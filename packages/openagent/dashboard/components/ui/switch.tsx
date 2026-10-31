@@ -1,7 +1,7 @@
 'use client'
 import type { ComponentProps } from 'react'
 import { Switch as SwitchPrimitive } from '@base-ui/react/switch'
-import { cn } from '../../lib/utils.js'
+import { cn } from '@openagt/skill-ui/module'
 
 // A shadcn-style Switch on Base UI, beside the Checkbox: for a setting that is on or off and takes
 // effect at once, where a checkbox reads as one line of a form still to be sent. The track takes

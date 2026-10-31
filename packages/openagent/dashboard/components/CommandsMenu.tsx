@@ -1,8 +1,7 @@
 import type { CustomPreset } from '../../src/index.js'
 import type { ProjectLauncher } from '../rpc/projects.js'
 import { Plus, X } from 'lucide-react'
-import { cn } from '../lib/utils.js'
-import { buttonVariants } from './ui/button.js'
+import { cn, buttonVariants } from '@openagt/skill-ui/module'
 import { OptionLabel } from './ui/option-label.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import {

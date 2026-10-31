@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { cn } from '../lib/utils.js'
+import { cn } from '@openagt/skill-ui/module'
 
 // One collapsible-section toggle (#659), shared so every disclosure under the agent controls
 // ("See actual prompt sent", "Context") reads the same: a chevron that rotates when open, then

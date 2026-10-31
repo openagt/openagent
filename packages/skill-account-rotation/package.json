@@ -20,8 +20,16 @@
   "bin": {
     "account-rotation": "bin/account-rotation"
   },
+  "openagent": {
+    "reads": {
+      "account-rotation": [
+        "list"
+      ]
+    }
+  },
   "exports": {
     "./package.json": "./package.json",
+    "./dashboard": "./dist/dashboard/dashboard.js",
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
@@ -29,20 +37,32 @@
     "./SKILL.md": "./SKILL.md"
   },
   "scripts": {
-    "build": "cp ../../skills/account-rotation/SKILL.md SKILL.md && tsc -p tsconfig.build.json",
+    "build": "cp ../../skills/account-rotation/SKILL.md SKILL.md && tsc -p tsconfig.build.json && vite build -c dashboard/vite.config.ts",
     "prepack": "node -e \"if(!process.env.npm_config_user_agent?.startsWith('pnpm/')){console.error('Pack and publish with pnpm: it replaces workspace:* with the real version, npm does not');process.exit(1)}\" && cp ../../skills/account-rotation/SKILL.md SKILL.md",
-    "typecheck": "tsc --noEmit",
-    "test": "tsc -p tsconfig.test.json && node --test --test-timeout=60000 'dist-test/**/*.test.js'",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p dashboard/tsconfig.json",
+    "test": "tsc -p tsconfig.test.json && node --test --test-timeout=60000 'dist-test/**/*.test.js' && cd dashboard && vitest run",
     "clean": "rm -rf dist dist-test SKILL.md"
   },
   "dependencies": {
     "@openagt/agent-driver": "workspace:*",
     "@openagt/agent-driver-claude": "workspace:*",
-    "@openagt/agent-driver-codex": "workspace:*"
+    "@openagt/agent-driver-codex": "workspace:*",
+    "@openagt/skill-ui": "workspace:*"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^20.0.0",
-    "typescript": "^7.0.2"
+    "@types/react": "^19.2.0",
+    "@vitejs/plugin-react": "^6.0.3",
+    "jsdom": "^29.1.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.0.0",
+    "vitest": "^4.1.10"
   },
   "publishConfig": {
     "access": "public"

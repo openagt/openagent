@@ -1,7 +1,7 @@
 import { Menu } from '@base-ui/react/menu'
 import { ChevronRight, Check } from 'lucide-react'
 import type { ComponentProps, ReactNode } from 'react'
-import { cn } from '../../lib/utils.js'
+import { cn } from '@openagt/skill-ui/module'
 import { ScrollArea } from './scroll-area.js'
 
 // The shadcn "base" dropdown menu (built on Base UI, not Radix) — trimmed to what the Start

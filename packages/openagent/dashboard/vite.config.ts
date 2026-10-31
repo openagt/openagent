@@ -1,6 +1,7 @@
 import http from 'node:http'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
+import { hostInputs, hostModules, type HostFile } from '@openagt/skill-ui/host-modules'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, type Plugin, type UserConfig } from 'vite'
@@ -86,59 +87,11 @@ function openagentDevDaemon(): Plugin {
   }
 }
 
-// What the dashboard shares with a module (#1774). A module is a package of a project that adds to
-// the dashboard; it imports these by bare name and bundles none of them, and the import map this
-// plugin writes into index.html points each name at the dashboard's own copy, so the module renders
-// in the same React and uses the same components. Each is built as an entry of its own that shares
-// its chunks with the dashboard's main entry, fingerprinted like them (`/assets/host/<name>-<hash>.js`):
-// the import map, in the page that is always asked for again, names this version's, so a browser
-// keeps them for good and a page opened again asks for none of them.
-//
-// React ships as CommonJS, and a re-export of CommonJS (`export * from 'react'`) keeps none of its
-// names, so each React entry is generated: its names are read off the very package the build uses,
-// here, so an upgrade that adds a name can never leave it out. `@openagt/dashboard/module` is a real file.
-const HOST_MODULES: Record<string, string> = {
-  react: 'react',
-  'react/jsx-runtime': 'react-jsx-runtime',
-  'react-dom': 'react-dom',
-  'react-dom/client': 'react-dom-client',
-}
-const HOST_PREFIX = 'virtual:openagent-host:'
-const MODULE_API = fileURLToPath(new URL('./module/index.ts', import.meta.url))
-
-function openagentHostModules(): Plugin {
-  const require = createRequire(import.meta.url)
-  let serving = false
-  return {
-    name: 'openagent:host-modules',
-    configResolved(config) {
-      serving = config.command === 'serve'
-    },
-    resolveId(id) {
-      return id.startsWith(HOST_PREFIX) ? id : undefined
-    },
-    load(id) {
-      if (!id.startsWith(HOST_PREFIX)) return undefined
-      const spec = id.slice(HOST_PREFIX.length)
-      const names = Object.keys(require(spec) as object).filter(name => name !== 'default')
-      return [`import M from '${spec}'`, 'export default M', ...names.map(name => `export const ${name} = M.${name}`)].join('\n')
-    },
-    transformIndexHtml: {
-      // After the bundle is written: the map names each host entry by its fingerprinted file.
-      order: 'post',
-      handler(_html, { bundle }) {
-        const built = (name: string): string => {
-          const chunk = Object.values(bundle ?? {}).find(output => output.type === 'chunk' && output.isEntry && output.name === name)
-          if (!chunk) throw new Error(`the build wrote no ${name} entry`)
-          return `/${chunk.fileName}`
-        }
-        const imports: Record<string, string> = {}
-        for (const [spec, file] of Object.entries(HOST_MODULES)) imports[spec] = serving ? `/@id/${HOST_PREFIX}${spec}` : built(`host/${file}`)
-        imports['@openagt/dashboard/module'] = serving ? '/module/index.ts' : built('host/module')
-        return [{ tag: 'script', attrs: { type: 'importmap' }, children: JSON.stringify({ imports }, null, 2), injectTo: 'head-prepend' }]
-      },
-    },
-  }
+// What the dashboard shares with a module (#1774), beside React: the two names a module builds on,
+// `@openagt/skill-ui/module`, which is also what the dashboard's own is built from, and the dashboard's own.
+const SHARED: Record<string, HostFile> = {
+  '@openagt/dashboard/module': { entry: 'module', file: fileURLToPath(new URL('./module/index.ts', import.meta.url)) },
+  '@openagt/skill-ui/module': { entry: 'skill-ui', file: createRequire(import.meta.url).resolve('@openagt/skill-ui/module') },
 }
 
 // Dashboard (#405): a plain Vite SPA — React + Tailwind v4 + shadcn, talking to the daemon over
@@ -149,7 +102,7 @@ export default defineConfig({
   // (A7), so `root` is pinned to this file's directory instead of inherited from the cwd — the
   // scripts that run it live one level up.
   root: fileURLToPath(new URL('.', import.meta.url)),
-  plugins: [openagentDevDaemon(), openagentHostModules(), react(), tailwindcss()],
+  plugins: [openagentDevDaemon(), hostModules(SHARED), react(), tailwindcss()],
   build: {
     // Straight into the package's own dist, where the daemon serves it from. There used to be a
     // copy step between the two — a whole turbo task — because the bundle was built in a
@@ -159,8 +112,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
-        'host/module': MODULE_API,
-        ...Object.fromEntries(Object.entries(HOST_MODULES).map(([spec, file]) => [`host/${file}`, `${HOST_PREFIX}${spec}`])),
+        ...hostInputs(SHARED),
       },
       // The host entries are imported by name from outside the bundle, so their exports must survive.
       preserveEntrySignatures: 'exports-only',

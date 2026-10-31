@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { cn } from '../lib/utils.js'
+import { cn } from '@openagt/skill-ui/module'
 
 // A number that says how things stand, as a small card of the Overview's: its name, the number, and
 // a line under it. The Overview's own (what needs the person, who is at work) and a package's (the

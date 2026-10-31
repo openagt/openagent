@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Check, ChevronsUpDown, Layers, Plus } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
-import { cn } from '../lib/utils.js'
+import { cn } from '@openagt/skill-ui/module'
 import { useProjectLabel } from '../lib/project-labels.js'
 import { useMachines } from '../lib/machines.js'
 import { machineKind, machineName } from '../../src/client.js'

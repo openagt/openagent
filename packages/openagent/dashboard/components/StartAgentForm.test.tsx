@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { forgetRemembered } from '../lib/use-async.js'
+import { forgetRemembered } from '@openagt/skill-ui/module'
 import { openMenu } from '../test-utils.js'
 
 // Everything the form reads goes through a lib module, so the mocks stop at the `rpc/` stubs: an

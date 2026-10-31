@@ -10,22 +10,15 @@
 // This file IS `@openagt/dashboard/module`: the dashboard's build emits it as its own entry (`/assets/host/module-<hash>.js`),
 // sharing every chunk with the dashboard itself. Nothing here names a skill.
 import type { Health } from '../../src/health.js'
-import type { CardWidth } from '../../src/overview-layout.js'
-import { createContext, useContext, useMemo, type ComponentType } from 'react'
+import { SkillHostContext, useSkillHost, type CardWidth, type ModuleCommandResult, type ModuleProject, type SkillHost, type SkillUi } from '@openagt/skill-ui/module'
+import type { ComponentType, Context } from 'react'
 import type { AgentStatus } from '../../src/index.js'
 import type { ModuleAgent, ModuleAgentsWanted } from '../../src/dashboard/module-agents.js'
 import { readModule, runComputerCommand, runComputerCommandOn, runModuleCommand } from '../rpc/modules.js'
-import type { ModuleCommandResult, ModuleReadResult } from '../rpc/modules.js'
+import type { ModuleReadResult } from '../rpc/modules.js'
 
-export type { ModuleCommandResult, ModuleReadResult, AgentStatus, CardWidth, Health, ModuleAgent, ModuleAgentsWanted }
-
-/** A registered project that has the module's package, as a page gets it. */
-export interface ModuleProject {
-  id: string
-  name: string
-  /** Whether one of the project's packages provides a git host; without one no pull request can be opened there. */
-  gitHost: boolean
-}
+export type { ModuleReadResult, AgentStatus, Health, ModuleAgent, ModuleAgentsWanted }
+export type { CardWidth, ModuleCard, ModuleCardProps, ModuleCommandResult, ModuleProject, SkillHost, SkillUi } from '@openagt/skill-ui/module'
 
 /**
  * What a module page is rendered with. A page reads its sub-path and navigates within itself
@@ -111,32 +104,6 @@ export interface LinkAction {
    * own commands in that project. A batch stops at its first failure and says why.
    */
   run(host: ModuleHost, projectId: string, links: ModuleLink[]): Promise<LinkActionResult>
-}
-
-/** What a module card is rendered with: the projects that have its package, never none: the card is not drawn then. With a project picked in the dashboard, that project alone. A card has no URL and no sub-path. */
-export interface ModuleCardProps {
-  /** The registered projects that have the module's package, in the registry's order; with a project picked in the dashboard, that project alone. Never empty. */
-  projects: ModuleProject[]
-}
-
-/**
- * A card a module adds to the Overview (#1818): the package's own summary of its data across the
- * projects that have it, drawn beside the dashboard's own cards. Drawn only when one of the
- * projects the Overview shows has the package: with a project picked, only when that project has it.
- */
-export interface ModuleCard {
-  /** Which card this is, for the shell's key and its error line; never shown as a title. */
-  id: string
-  /** Its name where the person arranges the Overview's cards: what its title says ("Hot tickets"). */
-  label: string
-  /** How wide it stands until the person picks: half the Overview when unsaid. */
-  width?: CardWidth
-  /** The narrowest it fits: a third of the Overview when unsaid. */
-  minWidth?: CardWidth
-  /** Its place among every installed package's cards, lower first; 50 when unsaid, ties by package name. */
-  order?: number
-  /** The card itself. */
-  Card: ComponentType<ModuleCardProps>
 }
 
 /** What a Settings section is rendered with: the projects whose settings it shows and saves. */
@@ -287,11 +254,9 @@ export interface ModuleRunSlots {
 }
 
 /** What a module's browser part default-exports. */
-export interface ModuleDefinition {
+export interface ModuleDefinition extends SkillUi {
   /** The pages the module adds, each with a sidebar row. */
   pages?: ModulePage[]
-  /** The cards the module adds to the Overview. */
-  cards?: ModuleCard[]
   /** The actions the module offers on the links dashboard pages show, wherever the link's project has the module's package. */
   linkActions?: LinkAction[]
   /** The panes the module adds beside the chat. */
@@ -310,8 +275,6 @@ export interface ModuleDefinition {
   usageLimit?: ModuleUsageLimit
   /** The commands the module starts by itself, for the other pages to say. */
   schedule?: ModuleSchedule
-  /** A stylesheet to load with the module, relative to the module's browser part's own URL. */
-  stylesheet?: string
 }
 
 /** Type the default export: `export default defineModule({ ... })`. */
@@ -326,14 +289,7 @@ export type StartRunResult = { ok: true; agentId: string } | { ok: false; error:
  * What the dashboard gives the module it is rendering. Every service is generic — a project, a
  * run, a page, a command — and none names a skill: what a module composes out of them is its own.
  */
-export interface ModuleHost {
-  /** The package the module came from: the one whose commands {@link runCommand} runs. */
-  package: string
-  /**
-   * Run one of the module package's own commands in one project and get its JSON output: the
-   * same command an agent runs (`npx <command> …`). `command` names one when the package has several.
-   */
-  runCommand(projectId: string, args: string[], command?: string): Promise<ModuleCommandResult>
+export interface ModuleHost extends SkillHost {
   /**
    * The same, for a command that changes the project's data (a claim released, an entry added):
    * the dashboard then syncs the project's data with origin and forgets what it had read, so the
@@ -341,15 +297,7 @@ export interface ModuleHost {
    */
   act(projectId: string, args: string[], command?: string): Promise<ModuleCommandResult>
   /**
-   * Run one of the module package's own commands in no project, for a package that is this
-   * computer's (the door to it, its servers): what such a package keeps is the computer's, so
-   * its page reads and changes it with no project added. Refused for any other package.
-   * `input` is what the command reads on standard input: a secret, which no other program on
-   * this computer sees there, as it would among the arguments.
-   */
-  runComputerCommand(args: string[], command?: string, input?: string): Promise<ModuleCommandResult>
-  /**
-   * The same, on a saved machine whose package of the same name is that computer's: what the
+   * {@link SkillHost.runComputerCommand}, on a saved machine whose package of the same name is that computer's: what the
    * package keeps over there, read and changed with this computer's key there, as that machine's
    * own page would. Not for a computer reached through a server.
    */
@@ -567,26 +515,19 @@ export function moduleHost(base: ModuleHostBase, opts: { acts?: boolean } = {}):
 }
 
 /**
- * Set by the dashboard around every module page it renders: the module's package and the
- * dashboard's services. A test of a module page provides a whole host here, commands included,
- * and {@link useModuleHost} hands it over as it is.
+ * Set by the dashboard around every module piece it renders, with the module's whole host; a test
+ * of a module page provides one here. The one context a skill built on `@openagt/skill-ui/module`
+ * reads too: only the dashboard provides it with this much.
  */
-export const ModuleHostContext = createContext<ModuleHostBase | ModuleHost | null>(null)
+export const ModuleHostContext = SkillHostContext as unknown as Context<ModuleHost | null>
 
 /** The dashboard's services for the module being rendered. Only valid inside a module page. */
-export function useModuleHost(): ModuleHost {
-  const host = useContext(ModuleHostContext)
-  // The same host from render to render, so an effect keyed on it does not start over.
-  const bound = useMemo(() => (host && !('runCommand' in host) ? moduleHost(host) : undefined), [host])
-  if (!host) throw new Error('useModuleHost is only available inside a module page')
-  return bound ?? (host as ModuleHost)
-}
+export const useModuleHost = useSkillHost as () => ModuleHost
 
 // The dashboard's own building blocks, so a module looks like the rest of the page.
-export { Button, buttonVariants, type ButtonProps } from '../components/ui/button.js'
+export { Button, buttonVariants, type ButtonProps, Card, CardHeader, CardTitle, CardContent, Skeleton, cn, usePolled, useLoaded, forgetRemembered, SkillHostContext, useSkillHost } from '@openagt/skill-ui/module'
 export { Badge } from '../components/ui/badge.js'
-export { Card, CardHeader, CardTitle, CardTitleLink, CardContent } from '../components/ui/card.js'
-export { Skeleton } from '../components/ui/skeleton.js'
+export { CardTitleLink } from '../components/ui/card.js'
 export { Checkbox } from '../components/ui/checkbox.js'
 export { Switch } from '../components/ui/switch.js'
 export { Input } from '../components/ui/input.js'
@@ -611,7 +552,6 @@ export { FileIcon } from '../components/FileIcon.js'
 export { Markdown } from '../components/Markdown.js'
 export { StartAgentButton } from '../components/StartAgentButton.js'
 export { LinkActions, type ProjectLinks, type LinkTargets } from '../components/LinkActions.js'
-export { cn } from '../lib/utils.js'
 export { MachineMark } from '../components/MachineMark.js'
 export { machineKind, machineName, type MachineKind } from '../../src/client.js'
 export { SettingsSection, SettingsRow, SettingsSelectRow, type SettingsOption } from '../components/SettingsRows.js'
@@ -622,7 +562,6 @@ export { reachedByLine } from '../../src/client.js'
 export { useCodingAgents, type CodingAgent } from '../lib/models.js'
 export { MAX_SPEND_OFFSET } from '../../src/preference-defaults.js'
 export { formatRelative, formatDateTime, formatDuration, formatAge } from '../lib/format-date.js'
-export { usePolled, useLoaded, forgetRemembered } from '../lib/use-async.js'
 export { useNarrow } from '../lib/use-narrow.js'
 export { Waiting } from '../components/Waiting.js'
 export { useHighlighted, Pieces, type Piece } from '../lib/highlight.js'

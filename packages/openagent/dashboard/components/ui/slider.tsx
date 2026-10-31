@@ -1,6 +1,6 @@
 'use client'
 import { Slider as SliderPrimitive } from '@base-ui/react/slider'
-import { cn } from '../../lib/utils.js'
+import { cn } from '@openagt/skill-ui/module'
 
 // A two-thumb range slider on Base UI, matching the Checkbox/Tooltip already here (no Radix pulled
 // in). Built for the tickets filter's fine-grained 0-10 ranges (#1144); minimal on purpose — one

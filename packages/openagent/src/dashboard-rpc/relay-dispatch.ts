@@ -1,6 +1,7 @@
 import { onProjectFiles, onGitStatus, onAgentWorktree, onAgentHandoff, onAgent, onOwnRuns, onOwnInterventions, onDocs, onAgentsDoing, onRetainedWorktrees, onGitHostHome, onRepositoryOffer } from './reads.js'
 import { readModule, runModuleCommand } from './modules.js'
-import { commandReads, findProjectModule } from '../project-modules.js'
+import { commandReads } from '@openagt/skill-ui'
+import { findProjectModule } from '../project-modules.js'
 import { resolveProjectPath } from './context.js'
 import { sendStop, sendChoice, sendMessage, sendOpenPullRequest, sendPush, sendMerge, sendMergeBranch, sendStart } from './control.js'
 import { asArrived } from './relay-agent.js'

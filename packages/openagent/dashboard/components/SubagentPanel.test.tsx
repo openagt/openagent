@@ -10,7 +10,7 @@ vi.mock('../rpc/models.js', () => ({ onModels: () => new Promise(() => {}) }))
 const { SubagentPanel } = await import('./SubagentPanel.js')
 const { PaneHeaderContext } = await import('./PaneHeader.js')
 const { forgetRevealedChanges, revealSubagent } = await import('../lib/reveal-change.js')
-const { forgetRemembered } = await import('../lib/use-async.js')
+const { forgetRemembered } = await import('@openagt/skill-ui/module')
 
 beforeEach(() => {
   forgetRevealedChanges()

@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { createElement } from 'react'
 import { phoneScreen } from './test-utils.js'
 import { useModuleHost, type ModuleCardProps, type ModuleDefinition, type ModulePageProps } from './module/index.js'
-import { forgetRemembered } from './lib/use-async.js'
+import { forgetRemembered } from '@openagt/skill-ui/module'
 
 // The whole transport, stubbed at its one seam: every RPC stub is `rpc(name)`, so a map by name
 // answers every read the shell makes, and the live feed never emits.

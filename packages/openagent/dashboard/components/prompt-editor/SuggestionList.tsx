@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
-import { cn } from '../../lib/utils.js'
+import { cn } from '@openagt/skill-ui/module'
 
 // The floating command/reference menu (#470) the `/` and `@` triggers open. A shadcn-style
 // popover surface driven imperatively by @tiptap/suggestion (which owns positioning), so it

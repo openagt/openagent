@@ -1,5 +1,5 @@
 import { createContext, Fragment, useContext, type ReactNode } from 'react'
-import { cn } from '../lib/utils.js'
+import { cn } from '@openagt/skill-ui/module'
 import { CopyButton } from './ui/copy-button.js'
 
 // A tiny, dependency-free Markdown renderer for an agent's replies, the surfaced PLAN/TODO docs

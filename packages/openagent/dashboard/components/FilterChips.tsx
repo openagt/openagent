@@ -1,4 +1,4 @@
-import { cn } from '../lib/utils.js'
+import { cn } from '@openagt/skill-ui/module'
 
 // A list told apart by one of its fields (what a row needs, how a run ended): a chip for all and
 // one per value the list holds, each with how many rows it shows. Drawn only when the list holds

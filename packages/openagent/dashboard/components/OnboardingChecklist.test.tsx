@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { forgetRemembered } from '../lib/use-async.js'
+import { forgetRemembered } from '@openagt/skill-ui/module'
 import type { DashboardData } from '../../src/index.js'
 import { configureFirst } from '../test-utils.js'
 import { checked } from '../test-controls.js'

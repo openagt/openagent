@@ -11,12 +11,11 @@ import {
   sendDeleteAgent,
   sendCreateRepository,
 } from '../rpc/control.js'
-import { useLoaded } from '../lib/use-async.js'
+import { useLoaded, buttonVariants } from '@openagt/skill-ui/module'
 import { useAction } from '../lib/use-action.js'
 import { isAgentActive } from '../lib/live-state.js'
 import { describeSessionLink } from '../lib/session-link.js'
 import { buildResumeCommand } from '../lib/resume-command.js'
-import { buttonVariants } from './ui/button.js'
 import { PreferredEditorItems } from './PreferredEditorItems.js'
 import { ConfirmDialog } from './ui/confirm-dialog.js'
 import { RemoveProjectDialog } from './RemoveProjectDialog.js'

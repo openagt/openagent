@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { cn } from '../lib/utils.js'
+import { cn } from '@openagt/skill-ui/module'
 
 /** How long a read may take before the line saying it is waiting shows. */
 const WAIT_MS = 500

@@ -3,12 +3,9 @@ import { CircleCheck, Puzzle } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { onProjectSkills, sendProjectSkills, type ProjectSkills } from '../rpc/skills.js'
 import { runModuleCommand } from '../rpc/modules.js'
-import { usePolled } from '../lib/use-async.js'
+import { usePolled, cn, Button, Card, CardContent, CardHeader, CardTitle } from '@openagt/skill-ui/module'
 import { useAction } from '../lib/use-action.js'
-import { cn } from '../lib/utils.js'
 import { sendWord, skillsSay, updateSkills } from './ProjectSkills.js'
-import { Button } from './ui/button.js'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
 
 // The Overview's Skills card: for each project shown, how its skills stand, and the one press that
 // brings them where they should be. Said as the project's own page says it (`skillsSay`): a newer

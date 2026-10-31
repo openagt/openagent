@@ -3,7 +3,7 @@ import { Check } from 'lucide-react'
 import { moduleHost, type LinkActionResult, type ModuleLink } from '../module/index.js'
 import { useMountedModules, type MountedLinkAction } from '../lib/use-modules.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
-import { Button, type ButtonProps } from './ui/button.js'
+import { Button, type ButtonProps } from '@openagt/skill-ui/module'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 
 // The slot for the actions the installed modules offer on links (#1774 Q3). A page that shows

@@ -1,4 +1,4 @@
-import { Button } from './ui/button.js'
+import { Button } from '@openagt/skill-ui/module'
 
 // What a URL that no longer resolves renders (#784). Now that a session is a link you can bookmark
 // and paste, the link outlives the thing: a removed worktree, a project dropped from the registry.

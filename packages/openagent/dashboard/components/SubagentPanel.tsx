@@ -7,12 +7,10 @@ import { callRow, callSubagents, runRow, subagentTranscript, type SubagentRow } 
 import { formatElapsed } from '../lib/format-date.js'
 import { anyModelName, useModels } from '../lib/models.js'
 import { STATUS_TONE } from '../lib/status-tone.js'
-import { usePolled } from '../lib/use-async.js'
-import { cn } from '../lib/utils.js'
+import { usePolled, cn, Button } from '@openagt/skill-ui/module'
 import { EventList } from './EventList.js'
 import { PaneActions, PaneTitle } from './PaneHeader.js'
 import { Seconds } from './ToolCalls.js'
-import { Button } from './ui/button.js'
 
 // The pane beside a main agent's chat that shows one of its subagents, opened from the subagent's
 // row: what it runs on and how it stands, the whole prompt it was given, then what it said and did.

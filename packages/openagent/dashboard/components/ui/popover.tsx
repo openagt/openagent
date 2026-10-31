@@ -1,6 +1,6 @@
 import { Popover as BasePopover } from '@base-ui/react/popover'
 import type { ComponentProps, ReactNode } from 'react'
-import { cn } from '../../lib/utils.js'
+import { cn } from '@openagt/skill-ui/module'
 import { ScrollArea } from './scroll-area.js'
 
 // The shadcn "base" popover (Base UI, not Radix) — the floating panel for rich content a menu can't

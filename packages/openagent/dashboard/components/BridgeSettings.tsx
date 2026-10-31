@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { onBridgeStatus, onBridgeToken } from '../rpc/reads.js'
-import { Button } from './ui/button.js'
+import { Button } from '@openagt/skill-ui/module'
 import { CopyButton } from './ui/copy-button.js'
 
 /**

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { accountsPath, addAccount, markLimited, readAccounts } from './accounts.js'
+import { accountsPath, addAccount, markLimited, nameOwnAccount, readAccounts } from './accounts.js'
 import { runCli } from './cli.js'
 import { loginWiring, type LoginWiring } from './login.js'
 
@@ -124,6 +124,20 @@ test('remove takes an added account off, a Codex one with its folder; the person
     assert.equal(removed.code, 0)
     assert.deepEqual(names(removed), ['This computer'])
     await assert.rejects(stat(folder))
+  }))
+
+test('list says who the own login is while it goes by no given name, and use-first still takes its name', () =>
+  inDir(async env => {
+    await mkdir(env['HOME']!, { recursive: true })
+    await writeFile(join(env['HOME']!, '.claude.json'), JSON.stringify({ oauthAccount: { displayName: 'Ada' } }))
+    addAccount('Dani', 'sk-ant-oat01-secret', accountsPath('claude', env))
+    const said = JSON.parse((await run(['list'], env)).out[0]!) as Record<string, { name: string; who?: string }[]>
+    assert.deepEqual(said['claude']!.map(a => [a.name, a.who]), [['This computer', 'Ada'], ['Dani', undefined]])
+    assert.equal(said['codex']![0]!.who, undefined)
+    assert.equal((await run(['use-first', 'claude', 'This computer'], env)).code, 0)
+    nameOwnAccount('Me', accountsPath('claude', env))
+    const named = JSON.parse((await run(['list'], env)).out[0]!) as Record<string, { name: string; who?: string }[]>
+    assert.deepEqual(named['claude']![0], { name: 'Me', own: true })
   }))
 
 test('use-first moves the account to the front; a name not there is refused, and the list stays', () =>

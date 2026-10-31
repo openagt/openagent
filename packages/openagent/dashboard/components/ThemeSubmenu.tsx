@@ -1,6 +1,6 @@
 import { Monitor, Sun, Moon, Check, type LucideIcon } from 'lucide-react'
 import { usePreferences, updatePreferences, themePreference, type ThemePreference } from '../lib/preferences.js'
-import { cn } from '../lib/utils.js'
+import { cn } from '@openagt/skill-ui/module'
 import { DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from './ui/dropdown-menu.js'
 
 // The appearance control (#754), a row of the person's menu at the foot of the sidebar: "Theme",

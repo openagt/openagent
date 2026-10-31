@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react'
-import { cn } from '../../lib/utils.js'
+import { cn } from '@openagt/skill-ui/module'
 
 // A trimmed shadcn Table: a real `<table>` with the page's own lines and type, so a list with
 // columns looks the same wherever one is drawn. A row that opens something takes its own

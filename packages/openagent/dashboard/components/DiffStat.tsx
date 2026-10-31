@@ -1,4 +1,4 @@
-import { cn } from '../lib/utils.js'
+import { cn } from '@openagt/skill-ui/module'
 
 // A change's size as the `+12 −3` pair, the one way the dashboard says it: in a run's handoff and,
 // through `@openagt/dashboard/module`, wherever a module shows a change.
