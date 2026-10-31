@@ -1,0 +1,8 @@
+{"kind":"start","prompt":"tell me hi, nothing else","at":"2026-10-31T19:08:07.047Z"}
+{"kind":"session","sessionId":"2eaf22bb-5b47-49f3-9d0e-e447fdaf8514","at":"2026-10-31T19:08:08.519Z"}
+{"kind":"title","text":"Greeting Exchange","at":"2026-10-31T19:08:09.281Z"}
+{"kind":"said","text":"hi","at":"2026-10-31T19:08:11.653Z"}
+{"kind":"rate-limit","limit":{"status":"allowed","window":"seven_day","resetsAt":1794024000000,"windows":[{"window":"seven_day","percentUsed":1,"resetsAt":1794024000000}]},"at":"2026-10-31T19:08:11.670Z"}
+{"kind":"result","text":"hi","sessionId":"2eaf22bb-5b47-49f3-9d0e-e447fdaf8514","at":"2026-10-31T19:08:12.308Z"}
+{"kind":"cost","usd":0.058429999999999996,"at":"2026-10-31T19:08:12.308Z"}
+{"kind":"ended","status":"done","at":"2026-10-31T19:08:13.055Z"}
