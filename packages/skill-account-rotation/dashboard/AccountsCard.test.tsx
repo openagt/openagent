@@ -176,6 +176,19 @@ describe('AccountsCard', () => {
     await waitFor(() => expect(calls.find(call => call.args[0] === 'add-code')).toEqual({ args: ['add-code', 'claude'], input: 'the-code' }))
   })
 
+  test('Done says the code is being checked, and a code Claude did not take is said, with the box ready for another', async () => {
+    let now: Record<string, unknown> = { claude: { adding: { name: 'Dani', url: 'https://claude.example/sign-in', paste: true, checking: true } }, codex: {} }
+    renderAdding(() => now)
+    const checking = await screen.findByRole('button', { name: 'Checking…' })
+    expect((checking as HTMLButtonElement).disabled).toBe(true)
+    cleanup()
+    forgetRemembered()
+    now = { claude: { adding: { name: 'Dani', url: 'https://claude.example/sign-in', paste: true, refused: true } }, codex: {} }
+    renderAdding(() => now)
+    expect(await screen.findByText(/Claude didn't take that code/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Done' })).toBeTruthy()
+  })
+
   test('on a server, Codex: the code to type, and where', async () => {
     renderAdding(() => ({ claude: { adding: { name: 'Dani', url: 'https://auth.example/device', code: 'ABCD-1234' } }, codex: {} }))
     expect(await screen.findByText('ABCD-1234')).toBeTruthy()

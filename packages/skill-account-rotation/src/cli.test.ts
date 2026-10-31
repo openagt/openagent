@@ -207,6 +207,37 @@ test('on a server adding a Claude account says the page to open, and the code br
     await assert.rejects(stat(`${loginWiring(server).addingPath('claude')}.code`))
   }))
 
+test('on a server a code is said to be with Claude while it checks it, and to be refused when it does not take it, ready for another', () =>
+  inDir(async env => {
+    const server = { ...env, OPENAGENT_SERVER: '1' }
+    const said: (AddingNow | undefined)[] = []
+    const wait = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
+    const mint: LoginWiring['mint'] = ({ onLink, onRefused } = {}) =>
+      new Promise(resolve => {
+        let codes = 0
+        onLink!('https://claude.example/sign-in', () => {
+          codes += 1
+          if (codes === 1) setTimeout(() => void wait(400).then(() => onRefused!()), 0)
+          else resolve({ ok: true, login: 'sk-ant-oat01-new' })
+          return true
+        })
+        void (async () => {
+          await run(['add-code', 'claude'], server, {}, 'first-code-here')
+          await wait(300)
+          said.push(await adding(server))
+          await wait(500)
+          said.push(await adding(server))
+          await run(['add-code', 'claude'], server, {}, 'second-code-here')
+        })()
+      })
+    await run(['add', 'claude', 'Dani'], server, { mint })
+    assert.deepEqual(said, [
+      { adding: { name: 'Dani', url: 'https://claude.example/sign-in', paste: true, checking: true } },
+      { adding: { name: 'Dani', url: 'https://claude.example/sign-in', paste: true, refused: true } },
+    ])
+    assert.deepEqual(names(await run(['list'], server), 'claude'), ['This computer', 'Dani'])
+  }))
+
 test('on a server adding a Codex account says the code to type and where', () =>
   inDir(async env => {
     const server = { ...env, OPENAGENT_SERVER: '1' }

@@ -143,29 +143,40 @@ test('with no browser here, the sign-in page is handed over, and the code pasted
 process.stdin.setRawMode(true)
 process.stdout.write(${JSON.stringify(linkScreen)})
 let typed = ''
+let waiting = false
 process.stdin.on('data', key => {
-  typed += String(key)
-  if (!typed.endsWith('\\r')) return
-  if (typed === 'Good-code_42#state\\r') process.stdout.write(${JSON.stringify(screen(CLAUDE_LOGIN))})
-  else console.log('Invalid code')
+  const chunk = String(key)
+  // As Claude Code reads a terminal: what comes at once is a paste, and an Enter in it is no Enter.
+  if (chunk !== '\\r') { typed += chunk.replaceAll('\\r', ''); return }
+  if (waiting) { waiting = false; return }
+  if (typed === 'Good-code_42#state') process.stdout.write(${JSON.stringify(screen(CLAUDE_LOGIN))})
+  else { console.log('OAuth error: Invalid code. Please make sure the full code was copied'); console.log('Press Enter to retry.'); waiting = true }
   typed = ''
 })
 setInterval(() => {}, 1000)
 `,
     )
     const links: string[] = []
+    let refused = 0
+    let hand: (code: string) => boolean = () => false
     const login = await mintClaude({
       command: `node ${stub}`,
       timeoutMs: 20_000,
       onLink: (url, paste) => {
         links.push(url)
-        // A code that is no code never reaches Claude Code; a good one does.
+        hand = paste
+        // A code that is no code never reaches Claude Code; one it does not take is said, and another can follow.
         assert.equal(paste('bad\rcode'), false)
-        assert.equal(paste(' Good-code_42#state '), true)
+        assert.equal(paste('a-code-it-will-not-take'), true)
+      },
+      onRefused: () => {
+        refused += 1
+        setTimeout(() => assert.equal(hand(' Good-code_42#state '), true), 100)
       },
     })
     assert.deepEqual(login, { ok: true, login: CLAUDE_LOGIN })
     assert.deepEqual(links, [SIGN_IN])
+    assert.equal(refused, 1)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

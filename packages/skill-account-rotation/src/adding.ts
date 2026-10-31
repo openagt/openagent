@@ -25,6 +25,10 @@ interface AddingFile {
   code?: string
   /** Claude's page gives a code to bring back. */
   paste?: true
+  /** The code brought back is with Claude. */
+  checking?: true
+  /** Claude did not take the code brought back: it waits for another. */
+  refused?: true
   /** Why it did not go through. */
   failed?: string
   at: number
@@ -36,6 +40,8 @@ export interface Adding {
   url?: string
   code?: string
   paste?: true
+  checking?: true
+  refused?: true
 }
 
 /** How adding stands for one agent: under way, why the last one did not go through, or neither. */
@@ -96,7 +102,7 @@ export function addingNow(agent: AccountsAgent, wiring: LoginWiring): AddingNow 
   if (!file) return {}
   if (file.failed !== undefined) return wiring.now() - file.at < FAILED_SAID_MS ? { failed: file.failed } : {}
   if (!underWay(file, wiring)) return {}
-  return { adding: { name: file.name, ...(file.url !== undefined ? { url: file.url } : {}), ...(file.code !== undefined ? { code: file.code } : {}), ...(file.paste ? { paste: true } : {}) } }
+  return { adding: { name: file.name, ...(file.url !== undefined ? { url: file.url } : {}), ...(file.code !== undefined ? { code: file.code } : {}), ...(file.paste ? { paste: true } : {}), ...(file.checking ? { checking: true } : {}), ...(file.refused ? { refused: true } : {}) } }
 }
 
 /** Start adding an account under `name`, and answer as soon as it is started. Refused while one is being added, and for a name that cannot be used. */
@@ -145,6 +151,7 @@ export async function runAdding(agent: AccountsAgent, name: string, wiring: Logi
   const say = (more: Partial<AddingFile>): void => writeFile(path, { name, pid, at: wiring.now(), ...more })
   say({})
   let paste: ((code: string) => boolean) | undefined
+  let link: string | undefined
   const looking = setInterval(() => {
     let code: string
     try {
@@ -153,7 +160,7 @@ export async function runAdding(agent: AccountsAgent, name: string, wiring: Logi
       return
     }
     rmSync(`${path}.code`, { force: true })
-    paste?.(code)
+    if (paste?.(code) && link !== undefined) say({ url: link, paste: true, checking: true })
   }, CODE_EVERY_MS)
   const onScreen: SignInSaid = !wiring.headless()
     ? agent === 'codex'
@@ -164,8 +171,10 @@ export async function runAdding(agent: AccountsAgent, name: string, wiring: Logi
       : {
           onLink: (url, handIn) => {
             paste = handIn
+            link = url
             say({ url, paste: true })
           },
+          onRefused: () => say({ ...(link !== undefined ? { url: link } : {}), paste: true, refused: true }),
         }
   const failed = await signIn(agent, name, wiring, { ...onScreen, ...(signal ? { signal } : {}) }).catch((err: unknown) => (err instanceof Error ? err.message : String(err)))
   clearInterval(looking)

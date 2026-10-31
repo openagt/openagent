@@ -57,6 +57,10 @@ export interface AccountAdding {
   code?: string
   /** No browser here: Claude's page shows a code once the person said yes, which they paste back. */
   paste?: true
+  /** The code pasted back is with Claude. */
+  checking?: true
+  /** Claude did not take the code pasted back: it waits for another. */
+  refused?: true
 }
 
 export interface AccountsView {

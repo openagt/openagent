@@ -62,7 +62,7 @@ interface Usage {
 
 /** How adding stands for one agent, as `account-rotation adding` prints it. Never kept in the browser: it may hold a page to sign in at. */
 interface AddingNow {
-  adding?: { name: string; url?: string; code?: string; paste?: true }
+  adding?: { name: string; url?: string; code?: string; paste?: true; checking?: true; refused?: true }
   failed?: string
 }
 
@@ -111,6 +111,9 @@ function StateWords({ account, accounts, now }: { account: Account; accounts: Ac
   return null
 }
 
+/** What a code Claude did not take is told as: its page still has the right one. */
+const REFUSED_WORDS = "Claude didn't take that code. Copy it whole from its page, and paste it again."
+
 /** A sign-in under way: this computer's browser, or on a computer with none, the person's own device: Codex's code typed at its page, or Claude's page opened and its code pasted back here. */
 function SigningIn({ agent, adding, onChanged }: { agent: (typeof AGENTS)[number]; adding: NonNullable<AddingNow['adding']>; onChanged: () => void }) {
   const host = useSkillHost()
@@ -158,13 +161,13 @@ function SigningIn({ agent, adding, onChanged }: { agent: (typeof AGENTS)[number
           }}
         >
           <Input aria-label="Code from Claude" placeholder="2. Paste the code it shows" value={code} onChange={event => setCode(event.target.value)} className="h-9 min-w-0 flex-1 basis-40 text-sm" />
-          <Button size="sm" type="submit" disabled={code.trim() === ''}>
-            Done
+          <Button size="sm" type="submit" disabled={code.trim() === '' || adding.checking === true}>
+            {adding.checking ? 'Checking…' : 'Done'}
           </Button>
         </form>
-        {error !== undefined && (
+        {(error ?? (adding.refused ? REFUSED_WORDS : undefined)) !== undefined && (
           <p role="alert" className="text-xs text-danger">
-            {error}
+            {error ?? REFUSED_WORDS}
           </p>
         )}
       </div>

@@ -126,11 +126,11 @@ function Adding({ agent, adding, words }: { agent: AccountsAgent; adding: Accoun
           }}
         >
           <Input aria-label="Code from Claude" placeholder="2. Paste the code it shows" value={code} onChange={event => setCode(event.target.value)} className="h-9 min-w-0 flex-1 basis-48 text-base sm:text-sm" />
-          <Button size="sm" type="submit" disabled={code.trim() === ''}>
-            Done
+          <Button size="sm" type="submit" disabled={code.trim() === '' || adding.checking === true}>
+            {adding.checking ? 'Checking…' : 'Done'}
           </Button>
         </form>
-        {error !== undefined && <p role="alert" className="text-xs text-danger">{error}</p>}
+        {(error !== undefined || adding.refused) && <p role="alert" className="text-xs text-danger">{error ?? "Claude didn't take that code. Copy it whole from its page, and paste it again."}</p>}
       </div>
     )
   }
