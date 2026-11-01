@@ -7,6 +7,7 @@ export type * from '../../src/dashboard-rpc/accounts.js'
 export const onAgentAccounts = rpc<typeof impl.onAgentAccounts>('onAgentAccounts')
 export const sendAddAgentAccount = rpc<typeof impl.sendAddAgentAccount>('sendAddAgentAccount')
 export const sendRemoveAgentAccount = rpc<typeof impl.sendRemoveAgentAccount>('sendRemoveAgentAccount')
+export const sendLogOutAgent = rpc<typeof impl.sendLogOutAgent>('sendLogOutAgent')
 export const sendUseAgentAccountFirst = rpc<typeof impl.sendUseAgentAccountFirst>('sendUseAgentAccountFirst')
 export const sendNameOwnAgentAccount = rpc<typeof impl.sendNameOwnAgentAccount>('sendNameOwnAgentAccount')
 export const sendAgentAccountCode = rpc<typeof impl.sendAgentAccountCode>('sendAgentAccountCode')

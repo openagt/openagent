@@ -26,9 +26,7 @@ export function AccountsSettings() {
 
 /** On a server: whose computer's logins it uses. Nothing elsewhere. */
 function FromLine() {
-  const claude = useAgentAccounts('claude').view?.from
-  const codex = useAgentAccounts('codex').view?.from
-  const from = claude ?? codex
+  const from = useAgentAccounts('claude').view?.from
   if (from === undefined) return null
   return (
     <div className="rounded-lg bg-muted px-3 py-2.5">

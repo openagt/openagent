@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '@openagt/skill-ui/module'
 
-const accounts = vi.hoisted(() => ({ onAgentAccounts: vi.fn(), sendAddAgentAccount: vi.fn(), sendAgentAccountCode: vi.fn(), sendRemoveAgentAccount: vi.fn(), sendUseAgentAccountFirst: vi.fn() }))
+const accounts = vi.hoisted(() => ({ onAgentAccounts: vi.fn(), sendAddAgentAccount: vi.fn(), sendAgentAccountCode: vi.fn(), sendRemoveAgentAccount: vi.fn(), sendLogOutAgent: vi.fn(), sendUseAgentAccountFirst: vi.fn() }))
 vi.mock('../rpc/accounts.js', () => accounts)
 const logins = vi.hoisted(() => ({ onAgentState: vi.fn(), sendAgentFix: vi.fn(), onGitHosts: vi.fn(), sendGitHostInstall: vi.fn(), sendGitHostLogin: vi.fn(), sendUseGitHostAccount: vi.fn(), sendForgetGitHostAccount: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
@@ -34,7 +34,7 @@ beforeEach(() => {
   logins.onAgentState.mockImplementation(async (driver: string) => ({ driver, ready: true }))
   logins.onGitHosts.mockResolvedValue({ hosts: [] })
   servers.onServerLogins.mockResolvedValue({ computer: 'Studio', servers: [] })
-  for (const fn of [servers.sendUseLoginsOn, servers.sendAllowLogins, servers.sendSettleLogin, accounts.sendAgentAccountCode]) fn.mockResolvedValue({ ok: true })
+  for (const fn of [servers.sendUseLoginsOn, servers.sendAllowLogins, servers.sendSettleLogin, accounts.sendAgentAccountCode, accounts.sendRemoveAgentAccount, accounts.sendLogOutAgent]) fn.mockResolvedValue({ ok: true })
 })
 
 afterEach(() => {
@@ -217,8 +217,8 @@ describe('a server that uses this computer\'s logins', () => {
 })
 
 describe('on the server itself', () => {
-  test('it says whose computer\'s logins it uses; their rows say where from and are not removed here; its own login, logged out, has no row', async () => {
-    views([{ id: 'Suleiman', name: 'Suleiman', own: false, from: 'Suleimans-MacBook-Pro', windows: [{ label: 'week', percent: 62 }], asOf: NOW - 60_000 }, { id: 'This computer', name: 'Claude login on droplet', own: true, windows: [] }], [], { from: 'Suleimans-MacBook-Pro' })
+  test('it says whose computer\'s logins it uses; their rows say where from; one that would only come back is not removed here; its own login, logged out, has no row', async () => {
+    views([{ id: 'Suleiman', name: 'Suleiman', own: false, from: 'Suleimans-MacBook-Pro', comesBack: true, windows: [{ label: 'week', percent: 62 }], asOf: NOW - 60_000 }, { id: 'This computer', name: 'Claude login on droplet', own: true, windows: [] }], [], { from: 'Suleimans-MacBook-Pro' })
     logins.onAgentState.mockImplementation(async (driver: string) => ({ driver, ready: true, ...(driver === 'claude-code' ? { ownLoggedOut: true } : {}) }))
     render(<AccountsSettings />)
     expect(await screen.findByText('Your logins and settings from Suleimans-MacBook-Pro')).toBeTruthy()
@@ -228,6 +228,41 @@ describe('on the server itself', () => {
     expect(row.textContent).toContain('62% this week')
     expect(within(row).queryByRole('button', { name: /Remove/ })).toBeNull()
     expect(within(card).queryByRole('listitem', { name: 'Claude login on droplet' })).toBeNull()
+  })
+
+  test('one a computer waits for a press to hand over again can be removed here, and says so; the person\'s own login asks before it logs out, naming the terminal', async () => {
+    views([{ id: 'This computer', name: 'Ada', own: true, windows: [] }, { id: 'Suleiman', name: 'Suleiman', own: false, from: 'Studio', windows: [] }], [], { computer: 'Mac' })
+    render(<AccountsSettings />)
+    const card = await screen.findByRole('region', { name: 'Claude Code' })
+    const remove = await within(card).findByRole('button', { name: "Remove Suleiman's account" })
+    expect(remove.getAttribute('title')).toContain('It stays off until you press Allow on Studio.')
+    fireEvent.click(remove)
+    await waitFor(() => expect(accounts.sendRemoveAgentAccount).toHaveBeenCalledWith('claude', 'Suleiman'))
+    fireEvent.click(within(card).getByRole('button', { name: 'Log out Ada' }))
+    const asked = within(card).getByRole('group', { name: 'Log out Ada' })
+    expect(within(asked).getByText('Logs Claude Code out on Mac, your terminal too.')).toBeTruthy()
+    expect(accounts.sendLogOutAgent).not.toHaveBeenCalled()
+    fireEvent.click(within(asked).getByRole('button', { name: 'Log out' }))
+    await waitFor(() => expect(accounts.sendLogOutAgent).toHaveBeenCalledWith('claude'))
+    await waitFor(() => expect(within(card).queryByRole('group', { name: 'Log out Ada' })).toBeNull())
+  })
+
+  test('Add account says adding it on the computer first, in each agent\'s words; the paste steps are under Sign in here instead', async () => {
+    views([{ id: 'Suleiman', name: 'Suleiman', own: false, from: 'Studio', windows: [] }], [{ id: 'Sam', name: 'Sam', own: false, from: 'Studio', windows: [] }], { from: 'Studio', noBrowser: true })
+    render(<AccountsSettings />)
+    const claude = await screen.findByRole('region', { name: 'Claude Code' })
+    fireEvent.click(await within(claude).findByRole('button', { name: 'Add account' }))
+    expect(within(claude).getByText('Easiest: add it on Studio, and it comes here by itself.')).toBeTruthy()
+    expect(within(claude).queryByRole('textbox', { name: 'Whose account' })).toBeNull()
+    fireEvent.click(within(claude).getByRole('button', { name: 'Sign in here instead' }))
+    expect(within(claude).getByRole('textbox', { name: 'Whose account' })).toBeTruthy()
+    expect(within(claude).getByText(/press Authorize there.*paste the code/)).toBeTruthy()
+    fireEvent.click(within(claude).getByRole('button', { name: 'Cancel' }))
+    fireEvent.click(within(claude).getByRole('button', { name: 'Add account' }))
+    expect(within(claude).getByText(/^Easiest:/)).toBeTruthy()
+    const codex = screen.getByRole('region', { name: 'Codex' })
+    fireEvent.click(await within(codex).findByRole('button', { name: 'Add account' }))
+    expect(within(codex).getByText('Easiest: add it on Studio and press Allow there, and it comes here.')).toBeTruthy()
   })
 
   test('with no browser here, Claude\'s page opens on the person\'s device and its code is pasted back; Codex\'s code is typed at its page', async () => {

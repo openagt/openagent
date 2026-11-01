@@ -27,7 +27,7 @@ export { onGitHostPeople, type HostPerson } from './people.js'
 export { onGitHosts, sendUseGitHostAccount, sendForgetGitHostAccount, sendGitHostLogin, sendGitHostInstall, onAgentState, sendAgentFix, onProjectAccounts, sendProjectAccounts, type GitHostsView, type GitHostRow, type GitHostAccount, type GitHostProvider, type AgentState, type ProjectAccountsView, type ProjectAgentAccounts } from './logins.js'
 export { onServerLogins, sendUseLoginsOn, sendAllowLogins, sendSettleLogin, type ServerLoginsView, type ServerLogins, type LoginThere } from './server-logins.js'
 export { onCopiedLogins, sendCopiedLogin, sendForgetCopiedLogin, sendKeepCopiedLogin, sendCopiedUsage, type CopiedView } from './copied-logins.js'
-export { onAgentAccounts, sendAddAgentAccount, sendAgentAccountCode, sendCancelAddingAccount, sendRemoveAgentAccount, sendUseAgentAccountFirst, sendNameOwnAgentAccount, type AccountsAgent, type AccountRow, type AccountWindow, type AccountAdding, type AccountsView, type AccountResult } from './accounts.js'
+export { onAgentAccounts, sendAddAgentAccount, sendAgentAccountCode, sendCancelAddingAccount, sendLogOutAgent, sendRemoveAgentAccount, sendUseAgentAccountFirst, sendNameOwnAgentAccount, type AccountsAgent, type AccountRow, type AccountWindow, type AccountAdding, type AccountsView, type AccountResult } from './accounts.js'
 
 import * as reads from './reads.js'
 import * as control from './control.js'

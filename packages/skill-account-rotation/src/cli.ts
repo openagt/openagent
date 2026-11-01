@@ -1,7 +1,7 @@
 import { hostname } from 'node:os'
-import { OWN_NAME, readAccounts, shownAccounts, useFirst, type AccountsAgent, type ShownAccount } from './accounts.js'
+import { handedOverBy, OWN_NAME, readAccounts, shownAccounts, useFirst, type AccountsAgent, type ShownAccount } from './accounts.js'
 import { addingNow, beginAdding, bringCode, cancelAdding, runAdding } from './adding.js'
-import { loginWiring, ownLoginThere, ownName, removeAdded, type LoginWiring } from './login.js'
+import { comesBackFrom, logOut, loginWiring, ownLoginThere, ownName, removeAdded, type LoginWiring } from './login.js'
 import { readUsage } from './usage.js'
 
 /**
@@ -19,6 +19,7 @@ export const USAGE = `usage: account-rotation <command>
   add-code <claude|codex>       hand the sign-in the code its page showed, on standard input
   add-cancel <claude|codex>     stop adding
   remove <claude|codex> <name>  take an added account off the list
+  logout <claude|codex>         log the person's own login out, their terminal too
   use-first <claude|codex> <name>
                                 the account runs try first from now on`
 
@@ -42,23 +43,23 @@ async function readStdin(): Promise<string> {
 
 const isAgent = (value: string | undefined): value is AccountsAgent => value === 'claude' || value === 'codex'
 
-/** Why removing is refused on a server: the page keeps a record of the logins copied there. */
-const ON_SERVER = 'On a server, accounts are removed in Settings › Accounts.'
-
 /**
  * An agent's accounts as `list` says them. The person's own says the computer it is a login on, who
  * it is while it goes by no name they gave it, as `who`, and `signedOut` when the agent has no login
- * of theirs: runs skip it then. Commands still take its `name`.
+ * of theirs: runs skip it then. Commands still take its `name`. On a server, one a computer of the
+ * person's handed over says which, as `from`, and `comesBack` when removing it here would only bring it back.
  */
-async function listed(agent: AccountsAgent, wiring: LoginWiring): Promise<(ShownAccount & { who?: string; signedOut?: true; computer?: string })[]> {
+async function listed(agent: AccountsAgent, wiring: LoginWiring): Promise<(ShownAccount & { who?: string; signedOut?: true; computer?: string; from?: string; comesBack?: true })[]> {
   const accounts = shownAccounts(readAccounts(wiring.path(agent)))
   const there = ownLoginThere(agent, wiring)
   const unnamed = (a: ShownAccount): boolean => a.name === OWN_NAME
   const who = accounts.some(a => a.own && unnamed(a)) ? await ownName(agent, wiring) : undefined
   const computer = hostname().replace(/\.local$/i, '')
+  const handedOver = handedOverBy(agent, wiring.env)
   return accounts.map(a => {
-    if (!a.own) return a
-    return { ...a, computer, ...(unnamed(a) && who !== undefined ? { who } : {}), ...(there ? {} : { signedOut: true as const }) }
+    if (a.own) return { ...a, computer, ...(unnamed(a) && who !== undefined ? { who } : {}), ...(there ? {} : { signedOut: true as const }) }
+    const handed = handedOver.get(a.name)
+    return handed ? { ...a, from: handed.from, ...(handed.comesBack ? { comesBack: true as const } : {}) } : a
   })
 }
 
@@ -91,6 +92,10 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
     cancelAdding(agent, wiring)
     return answer(addingNow(agent, wiring))
   }
+  if (command === 'logout' && argv.length === 2) {
+    const failed = await logOut(agent, wiring)
+    return failed === undefined ? answer(await listed(agent, wiring)) : refuse(failed)
+  }
   if (name === undefined || argv.length !== 3) {
     io.stderr(USAGE)
     return 2
@@ -111,7 +116,8 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
     return answer(shownAccounts(useFirst(name, wiring.path(agent))))
   }
   if (command === 'remove') {
-    if (env['OPENAGENT_SERVER'] === '1') return refuse(ON_SERVER)
+    const from = comesBackFrom(agent, name, wiring)
+    if (from !== undefined) return refuse(`${name}'s account comes from ${from}: remove it there.`)
     const gone = await removeAdded(agent, name, wiring)
     if (!gone) return refuse(`There is no added ${agent} account named ${name}.`)
     return answer(shownAccounts(readAccounts(wiring.path(agent))))

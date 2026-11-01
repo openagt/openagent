@@ -18,9 +18,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   the drivers, with only the list moved out.
 - Every run gets the skill: accounts are the computer's, so no project ticks it.
 - An Accounts card built only on the command and `@openagt/skill-ui`, the first skill that shows
-  the same on OpenAgent's Overview and on its own page. Removing stays in Settings › Accounts for
-  now. Picked over moving the whole Settings page first; that it overlaps the Usage card is
-  accepted, and Customize hides either.
+  the same on OpenAgent's Overview and on its own page. Picked over moving the whole Settings page
+  first; that it overlaps the Usage card is accepted, and Customize hides either.
+- The person's own login can be logged out from the card and Settings, their terminal with it.
+  Picked over never offering it: an account on the list cannot be added a second time, so there
+  has to be a way to take any row off.
 - The card says the same numbers as Settings › Accounts, and the skill reads them itself, with the
   `usage` command. Picked over the card showing only what the last run saved, which on one account
   is nothing, and over OpenAgent handing the card its own reading, which a skill's own page does

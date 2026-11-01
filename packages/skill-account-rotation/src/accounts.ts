@@ -34,6 +34,47 @@ export function accountsPath(agent: AccountsAgent, env: NodeJS.ProcessEnv = proc
   return join(env['HOME'] ?? homedir(), `.openagent-${agent}-accounts.json`)
 }
 
+/** Where a server keeps what it knows of the logins the person's computers handed it, never a login: OpenAgent writes it, beside the accounts. */
+export function copiedPath(env: NodeJS.ProcessEnv = process.env): string {
+  return env['XDG_CONFIG_HOME'] ? join(env['XDG_CONFIG_HOME'], 'openagent-copied-logins.json') : join(env['HOME'] ?? homedir(), '.openagent-copied-logins.json')
+}
+
+/** Where an account a computer of the person's handed to this server came from. */
+export interface HandedOver {
+  from: string
+  /** Taken off here it is handed over again at once: a Claude account added there goes as it is. Any other waits for the person's press there. */
+  comesBack: boolean
+}
+
+function readHandedOver(env: NodeJS.ProcessEnv): unknown[] {
+  try {
+    const logins = (JSON.parse(readFileSync(copiedPath(env), 'utf8')) as { logins?: unknown }).logins
+    return Array.isArray(logins) ? logins : []
+  } catch {
+    return []
+  }
+}
+
+/** An agent's accounts a computer handed over, by the account's name. None but on a server that uses a computer's logins. */
+export function handedOverBy(agent: AccountsAgent, env: NodeJS.ProcessEnv = process.env): Map<string, HandedOver> {
+  const entries = (readHandedOver(env) as { kind?: unknown; name?: unknown; from?: unknown; source?: unknown }[]).flatMap(login =>
+    login?.kind === agent && typeof login.name === 'string' && typeof login.from === 'string' ? [[login.name, { from: login.from, comesBack: agent === 'claude' && login.source !== 'own' }] as const] : [],
+  )
+  return new Map(entries)
+}
+
+/** The account is no longer here: the computer that handed it over offers it again. */
+export function forgetHandedOver(agent: AccountsAgent, name: string, env: NodeJS.ProcessEnv = process.env): void {
+  const logins = readHandedOver(env) as { kind?: unknown; name?: unknown }[]
+  const left = logins.filter(login => login?.kind !== agent || login.name !== name)
+  if (left.length === logins.length) return
+  const path = copiedPath(env)
+  const next = `${path}.${process.pid}.new`
+  writeFileSync(next, `${JSON.stringify({ logins: left }, null, 2)}\n`, { mode: 0o600 })
+  chmodSync(next, 0o600)
+  renameSync(next, path)
+}
+
 /**
  * The accounts, in order, the person's own always among them: first when the file does not say
  * otherwise. The person's own is the one with no login, and there is one: another with none is no

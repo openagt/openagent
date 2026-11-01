@@ -48,6 +48,8 @@ export interface Adding {
 export interface AddingNow {
   adding?: Adding
   failed?: string
+  /** This computer has no browser, a server: the person signs in on their own device. */
+  noBrowser?: true
 }
 
 /** How long the process that was just started gets to say which it is. */
@@ -98,11 +100,12 @@ function underWay(file: AddingFile, wiring: LoginWiring): boolean {
 
 /** How adding stands for an agent. */
 export function addingNow(agent: AccountsAgent, wiring: LoginWiring): AddingNow {
+  const where: AddingNow = wiring.headless() ? { noBrowser: true } : {}
   const file = readFile(wiring.addingPath(agent))
-  if (!file) return {}
-  if (file.failed !== undefined) return wiring.now() - file.at < FAILED_SAID_MS ? { failed: file.failed } : {}
-  if (!underWay(file, wiring)) return {}
-  return { adding: { name: file.name, ...(file.url !== undefined ? { url: file.url } : {}), ...(file.code !== undefined ? { code: file.code } : {}), ...(file.paste ? { paste: true } : {}), ...(file.checking ? { checking: true } : {}), ...(file.refused ? { refused: true } : {}) } }
+  if (!file) return where
+  if (file.failed !== undefined) return wiring.now() - file.at < FAILED_SAID_MS ? { ...where, failed: file.failed } : where
+  if (!underWay(file, wiring)) return where
+  return { ...where, adding: { name: file.name, ...(file.url !== undefined ? { url: file.url } : {}), ...(file.code !== undefined ? { code: file.code } : {}), ...(file.paste ? { paste: true } : {}), ...(file.checking ? { checking: true } : {}), ...(file.refused ? { refused: true } : {}) } }
 }
 
 /** Start adding an account under `name`, and answer as soon as it is started. Refused while one is being added, and for a name that cannot be used. */

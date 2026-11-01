@@ -4,7 +4,7 @@ import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { runAdding, type AddingNow } from './adding.js'
-import { accountsPath, addAccount, markLimited, nameOwnAccount, readAccounts } from './accounts.js'
+import { accountsPath, addAccount, copiedPath, markLimited, nameOwnAccount, readAccounts } from './accounts.js'
 import { runCli } from './cli.js'
 import { loginWiring, type LoginWiring } from './login.js'
 
@@ -116,6 +116,43 @@ test('adding a Codex account says the page to copy into a private window, and an
     assert.deepEqual(readAccounts(accountsPath('codex', env)).map(a => a.name), ['This computer', 'Dani'])
   }))
 
+test('on a server, the account on the list already is told apart in words a code sign-in can follow: it has no link to copy', () =>
+  inDir(async env => {
+    const server = { ...env, OPENAGENT_SERVER: '1' }
+    const wiring = loginWiring(server)
+    const loginCodex: LoginWiring['loginCodex'] = async opts => {
+      opts.onCode?.('ABCD-1234', 'https://auth.example/device')
+      await mkdir(join(wiring.codexDir(), 'codex-new'), { recursive: true })
+      return { ok: true, login: 'codex-new', who: { key: 'same/ws' } }
+    }
+    await run(['add', 'codex', 'Rom'], server, { loginCodex, codexWho: () => Promise.resolve({ key: 'same/ws' }) })
+    const failed = (await adding(server, 'codex')).failed ?? ''
+    assert.match(failed, /on the list already/)
+    assert.match(failed, /open the page in a private window/)
+    assert.doesNotMatch(failed, /copy the link/)
+  }))
+
+test('list says which computer handed an account over, only the agent it is of, and only on a row it has', () =>
+  inDir(async env => {
+    addAccount('Dani', 'login-dani', accountsPath('claude', env))
+    addAccount('Rom', 'login-rom', accountsPath('claude', env))
+    addAccount('Dani', 'codex-dani', accountsPath('codex', env))
+    await mkdir(env['XDG_CONFIG_HOME']!, { recursive: true })
+    await writeFile(copiedPath(env), JSON.stringify({ logins: [{ kind: 'claude', name: 'Dani', from: 'Studio' }, { kind: 'git', host: 'github.com', name: 'Rom', from: 'Studio' }, { kind: 'claude', name: 'Gone', from: 'Studio' }, 'not a login', null] }))
+    const answer = JSON.parse((await run(['list'], env)).out[0]!) as Record<string, { name: string; from?: string }[]>
+    assert.equal(answer['claude']!.find(a => a.name === 'Dani')!.from, 'Studio')
+    assert.equal(answer['claude']!.find(a => a.name === 'Rom')!.from, undefined)
+    assert.equal(answer['codex']!.find(a => a.name === 'Dani')!.from, undefined)
+    await writeFile(copiedPath(env), 'not json')
+    assert.equal((await run(['list'], env)).code, 0)
+  }))
+
+test('adding says a computer has no browser only on a server', () =>
+  inDir(async env => {
+    assert.deepEqual(await adding(env), {})
+    assert.deepEqual(await adding({ ...env, OPENAGENT_SERVER: '1' }), { noBrowser: true })
+  }))
+
 test('remove takes an added account off, a Codex one with its folder; the person\'s own and a name not there are refused', () =>
   inDir(async env => {
     const wiring = loginWiring(env)
@@ -164,16 +201,68 @@ test('use-first moves the account to the front; a name not there is refused, and
     assert.deepEqual(readAccounts(accountsPath('claude', env)).map(a => a.name), ['Dani', 'This computer'])
   }))
 
-test('on a server remove is refused and says where it is done; list and use-first still work', () =>
+test('on a server an account made here is removed; one a computer handed over is too, and forgotten, unless it would only come back', () =>
   inDir(async env => {
     const server = { ...env, OPENAGENT_SERVER: '1' }
-    addAccount('Dani', 'x', accountsPath('claude', server))
-    const refused = await run(['remove', 'claude', 'Dani'], server)
-    assert.equal(refused.code, 1)
-    assert.match(refused.err.join('\n'), /Settings › Accounts/)
-    assert.deepEqual(readAccounts(accountsPath('claude', server)).map(a => a.name), ['This computer', 'Dani'])
-    assert.equal((await run(['list'], server)).code, 0)
-    assert.equal((await run(['use-first', 'claude', 'Dani'], server)).code, 0)
+    addAccount('Here', 'x', accountsPath('claude', server))
+    addAccount('Added there', 'y', accountsPath('claude', server))
+    addAccount('Own there', 'z', accountsPath('claude', server))
+    addAccount('Sam', 'codex-sam', accountsPath('codex', server))
+    const handed = [
+      { kind: 'claude', source: 'Dani', name: 'Added there', from: 'Studio' },
+      { kind: 'claude', source: 'own', name: 'Own there', from: 'Studio' },
+      { kind: 'codex', source: 'own', name: 'Sam', from: 'Studio' },
+    ]
+    await mkdir(env['XDG_CONFIG_HOME']!, { recursive: true })
+    await writeFile(copiedPath(server), JSON.stringify({ logins: handed }))
+    const said = JSON.parse((await run(['list'], server)).out[0]!) as Record<string, { name: string; comesBack?: true }[]>
+    assert.deepEqual(said['claude']!.filter(a => a.comesBack).map(a => a.name), ['Added there'])
+    assert.deepEqual(said['codex']!.filter(a => a.comesBack).map(a => a.name), [])
+    assert.equal((await run(['remove', 'claude', 'Here'], server)).code, 0)
+    const back = await run(['remove', 'claude', 'Added there'], server)
+    assert.equal(back.code, 1)
+    assert.match(back.err.join('\n'), /comes from Studio: remove it there/)
+    assert.equal((await run(['remove', 'claude', 'Own there'], server)).code, 0)
+    assert.equal((await run(['remove', 'codex', 'Sam'], server)).code, 0)
+    assert.deepEqual(readAccounts(accountsPath('claude', server)).map(a => a.name), ['This computer', 'Added there'])
+    assert.deepEqual(readAccounts(accountsPath('codex', server)).map(a => a.name), ['This computer'])
+    // Forgotten here: that computer sees it gone, and offers it again.
+    assert.deepEqual((JSON.parse(await readFile(copiedPath(server), 'utf8')) as { logins: { name: string }[] }).logins.map(login => login.name), ['Added there'])
+    assert.equal((await stat(copiedPath(server))).mode & 0o777, 0o600)
+    assert.equal((await run(['use-first', 'claude', 'Added there'], server)).code, 0)
+  }))
+
+test('logout runs the agent\'s own logout, of the person\'s own login: the row says it is out, and what was read of it goes', () =>
+  inDir(async (env, dir) => {
+    const bin = join(dir, 'bin')
+    await mkdir(bin, { recursive: true })
+    const calls = join(dir, 'calls')
+    const home = join(dir, 'codex-home')
+    await mkdir(home, { recursive: true })
+    await writeFile(join(home, 'auth.json'), '{}')
+    // Stand-ins: never the real commands, which would log this computer's person out.
+    for (const name of ['claude', 'codex']) await writeFile(join(bin, name), `#!/bin/sh\necho "${name} $* home=$CODEX_HOME" >> "${calls}"\n[ "${name}" = codex ] && rm -f "$CODEX_HOME/auth.json"\nexit 0\n`, { mode: 0o755 })
+    const full = { ...env, PATH: `${bin}:${process.env['PATH']}`, CODEX_HOME: home }
+    assert.equal(JSON.parse((await run(['list'], full)).out[0]!).codex[0].signedOut, undefined)
+    const out = await run(['logout', 'codex'], full)
+    assert.equal(out.code, 0)
+    assert.equal((JSON.parse(out.out[0]!) as { signedOut?: true }[])[0]!.signedOut, true)
+    const reading = loginWiring(full).claudeUsagePath()
+    await mkdir(join(reading, '..'), { recursive: true })
+    await writeFile(reading, '{}')
+    assert.equal((await run(['logout', 'claude'], full)).code, 0)
+    await assert.rejects(stat(reading))
+    assert.deepEqual((await readFile(calls, 'utf8')).trim().split('\n'), [`codex logout home=${home}`, `claude auth logout home=${home}`])
+  }))
+
+test('logout says why not: a login from the environment is not the agent\'s to end, and a logout that fails is said', () =>
+  inDir(async env => {
+    const given = await run(['logout', 'claude'], { ...env, CLAUDE_CODE_OAUTH_TOKEN: 'x' }, { logOutAgent: () => assert.fail('no logout for a login from the environment') })
+    assert.equal(given.code, 1)
+    assert.match(given.err.join('\n'), /CLAUDE_CODE_OAUTH_TOKEN in the environment/)
+    const broke = await run(['logout', 'codex'], env, { logOutAgent: () => Promise.reject(new Error('no codex here')) })
+    assert.equal(broke.code, 1)
+    assert.match(broke.err.join('\n'), /did not go through: no codex here/)
   }))
 
 test('on a server adding a Claude account says the page to open, and the code brought back on standard input goes to Claude Code', () =>
@@ -198,7 +287,7 @@ test('on a server adding a Claude account says the page to open, and the code br
       })
     assert.equal((await run(['add-code', 'claude'], server, {}, 'the-code-here')).code, 1)
     assert.equal((await run(['add', 'claude', 'Dani'], server, { mint })).code, 0)
-    assert.deepEqual(during, { adding: { name: 'Dani', url: 'https://claude.example/sign-in', paste: true } })
+    assert.deepEqual(during, { noBrowser: true, adding: { name: 'Dani', url: 'https://claude.example/sign-in', paste: true } })
     assert.match(refusedCode!.err.join('\n'), /not the code the page shows/)
     assert.equal(goodCode!.code, 0)
     assert.deepEqual(pasted, ['the-code-here'])
@@ -232,8 +321,8 @@ test('on a server a code is said to be with Claude while it checks it, and to be
       })
     await run(['add', 'claude', 'Dani'], server, { mint })
     assert.deepEqual(said, [
-      { adding: { name: 'Dani', url: 'https://claude.example/sign-in', paste: true, checking: true } },
-      { adding: { name: 'Dani', url: 'https://claude.example/sign-in', paste: true, refused: true } },
+      { noBrowser: true, adding: { name: 'Dani', url: 'https://claude.example/sign-in', paste: true, checking: true } },
+      { noBrowser: true, adding: { name: 'Dani', url: 'https://claude.example/sign-in', paste: true, refused: true } },
     ])
     assert.deepEqual(names(await run(['list'], server), 'claude'), ['This computer', 'Dani'])
   }))
@@ -248,7 +337,7 @@ test('on a server adding a Codex account says the code to type and where', () =>
       return { ok: false, error: 'stopped' }
     }
     await run(['add', 'codex', 'Dani'], server, { loginCodex })
-    assert.deepEqual(during, { adding: { name: 'Dani', url: 'https://auth.example/device', code: 'ABCD-1234' } })
+    assert.deepEqual(during, { noBrowser: true, adding: { name: 'Dani', url: 'https://auth.example/device', code: 'ABCD-1234' } })
   }))
 
 test('one sign-in at a time for an agent, and a sign-in whose process is gone is no longer under way', () =>
