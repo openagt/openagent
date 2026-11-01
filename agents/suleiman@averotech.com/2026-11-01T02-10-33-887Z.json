@@ -1,16 +1,28 @@
 {
   "id": "2026-11-01T02-10-33-887Z",
   "startedAt": "2026-11-01T02:10:35.050Z",
-  "status": "running",
+  "endedAt": "2026-11-01T02:10:40.017Z",
+  "status": "done",
   "intent": "tell me hi, nothing else",
+  "title": "Greeting Exchange",
   "driver": "claude-code",
+  "model": "claude-opus-5-5",
+  "branch": "agent-2026-11-01T02-10-33-887Z",
+  "cost": 0.0543248,
+  "contextTokens": 17882,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
       "pid": 49271,
-      "publish": "commit"
+      "publish": "commit",
+      "baseCommit": "e2edcc3370e1c412bcd00427905167ca9a8dde5b"
     },
+    "pid": 49271,
     "host": "Suleimans-MacBook-Pro.local",
-    "publish": "commit"
+    "baseCommit": "e2edcc3370e1c412bcd00427905167ca9a8dde5b",
+    "publish": "commit",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-11-01T02-10-33-887Z",
+    "sessionId": "daa67ba8-99dd-4e5d-b3fb-1a343e5ba750"
   }
 }
