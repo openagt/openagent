@@ -1,15 +1,26 @@
 {
   "id": "2026-11-01T01-18-51-264Z",
   "startedAt": "2026-11-01T01:18:52.404Z",
-  "status": "running",
+  "endedAt": "2026-11-01T01:19:05.927Z",
+  "status": "waiting",
   "intent": "ask me some random question using question skill",
+  "title": "Random Question Prompt",
   "driver": "codex",
   "model": "gpt-6-luna",
+  "effort": "high",
+  "branch": "agent-2026-11-01T01-18-51-264Z",
+  "contextTokens": 14709,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
-      "pid": 16118
+      "pid": 16118,
+      "baseCommit": "5aad28eb3fc0f41e5595e40807ab0bfd93d11f91"
     },
-    "host": "Suleimans-MacBook-Pro.local"
+    "pid": 16118,
+    "host": "Suleimans-MacBook-Pro.local",
+    "baseCommit": "5aad28eb3fc0f41e5595e40807ab0bfd93d11f91",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-11-01T01-18-51-264Z",
+    "sessionId": "01a194b0-2650-7251-83f9-9b673639eb01"
   }
 }
