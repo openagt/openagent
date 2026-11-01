@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { execFile } from 'node:child_process'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -6,7 +7,7 @@ import type { AgentAccount, DriverQuota, DriverRateWindow } from '@openagt/agent
 import { ClaudeCodeDriver, mintClaude, type Mint } from '@openagt/agent-driver-claude'
 import { accountFolder, codexAccountsDir, codexWho, loginCodex, personalCodexHome, readCodexUsage, type CodexLogin, type CodexLoginOptions, type CodexWho } from '@openagt/agent-driver-codex'
 import { addingPath, startAddingProcess } from './adding.js'
-import { accountsPath, addAccount, nameRefused, OWN_NAME, readAccounts, removeAccount, type AccountsAgent } from './accounts.js'
+import { accountsPath, addAccount, forgetHandedOver, handedOverBy, nameRefused, OWN_NAME, readAccounts, removeAccount, type AccountsAgent } from './accounts.js'
 import { claudeUsagePath } from './usage.js'
 
 // Adding an account and taking one off: a name first, then the person signs in to the account being
@@ -44,7 +45,14 @@ export interface LoginWiring {
   isRunning: (pid: number) => boolean
   /** Stop a sign-in's process. */
   stopAdding: (pid: number) => void
+  /** Run the agent's own logout, of the person's own login. */
+  logOutAgent: (agent: AccountsAgent) => Promise<void>
 }
+
+/** The agents' own logouts. */
+const LOG_OUT: Record<AccountsAgent, readonly [string, ...string[]]> = { claude: ['claude', 'auth', 'logout'], codex: ['codex', 'logout'] }
+/** How long an agent's logout gets: a page's call ends at 30 seconds. */
+const LOG_OUT_MS = 25_000
 
 /** The logins of the user `env` is. */
 export function loginWiring(env: NodeJS.ProcessEnv = process.env): LoginWiring {
@@ -81,6 +89,11 @@ export function loginWiring(env: NodeJS.ProcessEnv = process.env): LoginWiring {
         // Gone already.
       }
     },
+    logOutAgent: agent =>
+      new Promise((resolve, reject) => {
+        const [bin, ...args] = LOG_OUT[agent]
+        execFile(bin, args, { env, timeout: LOG_OUT_MS }, err => (err ? reject(err) : resolve()))
+      }),
   }
 }
 
@@ -114,6 +127,22 @@ const ENV_LOGINS: Record<AccountsAgent, readonly string[]> = { claude: ['CLAUDE_
 export function ownLoginThere(agent: AccountsAgent, wiring: LoginWiring): boolean {
   if (ENV_LOGINS[agent].some(name => wiring.env[name])) return true
   return agent === 'claude' ? claudeOwnName(wiring) !== undefined : existsSync(join(wiring.codexOwnHome(), 'auth.json'))
+}
+
+/**
+ * Log the person's own login out, with the agent's own logout: their terminal is logged out with it.
+ * Why not, when it did not go through.
+ */
+export async function logOut(agent: AccountsAgent, wiring: LoginWiring): Promise<string | undefined> {
+  const given = ENV_LOGINS[agent].find(name => wiring.env[name])
+  if (given !== undefined) return `This login comes from ${given} in the environment: take it out of there to log out.`
+  try {
+    await wiring.logOutAgent(agent)
+  } catch (err) {
+    return `The logout did not go through: ${err instanceof Error ? err.message : String(err)}`
+  }
+  if (agent === 'claude') rmSync(wiring.claudeUsagePath(), { force: true })
+  return undefined
 }
 
 /** The name refused before the browser opens: empty, or one an account has, the person's own by the name it shows. */
@@ -160,7 +189,8 @@ export async function signIn(agent: AccountsAgent, name: string, wiring: LoginWi
   // The browser may have been signed in to an account on the list already: that one is not added twice.
   if (signed.who.key !== undefined && (await codexKeys(wiring)).includes(signed.who.key)) {
     await rm(folder, { recursive: true, force: true })
-    return 'That account is on the list already. If the browser was signed in to it, copy the link into a private window and sign in to the other account there.'
+    const elsewhere = said.onCode ? 'open the page in a private window, and sign in to the other account there' : 'copy the link into a private window and sign in to the other account there'
+    return `That account is on the list already. If the browser was signed in to it, ${elsewhere}.`
   }
   try {
     addAccount(name, signed.login, path, new Date(wiring.now()))
@@ -171,14 +201,22 @@ export async function signIn(agent: AccountsAgent, name: string, wiring: LoginWi
   return undefined
 }
 
+/** The computer an account came from, when taking it off here would only bring it back. */
+export function comesBackFrom(agent: AccountsAgent, name: string, wiring: LoginWiring): string | undefined {
+  const handed = handedOverBy(agent, wiring.env).get(name)
+  return handed?.comesBack ? handed.from : undefined
+}
+
 /**
  * Take an added account off the list, and say which it was: none when no added account has the name.
  * A Claude login is not ended: it is good until its year is over, or until it is taken back on
- * claude.ai. A Codex account's folder, its login in it, goes with it.
+ * claude.ai. A Codex account's folder, its login in it, goes with it. One a computer handed over is
+ * forgotten here too: that computer offers it again.
  */
 export async function removeAdded(agent: AccountsAgent, name: string, wiring: LoginWiring): Promise<AgentAccount | undefined> {
   const gone = readAccounts(wiring.path(agent)).find(a => a.name === name && a.login !== undefined)
   removeAccount(name, wiring.path(agent))
   if (gone && agent === 'codex') await rm(wiring.codexFolder(gone), { recursive: true, force: true })
+  if (gone) forgetHandedOver(agent, name, wiring.env)
   return gone
 }

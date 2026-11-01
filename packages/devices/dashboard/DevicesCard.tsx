@@ -1,5 +1,5 @@
 import { MonitorSmartphone } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, MachineMark, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, machineKind, machineName, usePolled, useModuleHost, type Health, type MachineKind, type ModuleCardProps, type ModuleMachines } from '@openagt/dashboard/module'
+import { Card, CardContent, CardHeader, CardTitle, GaugeFace, MachineMark, Tooltip, TooltipContent, TooltipTrigger, formatAge, machineKind, machineName, usePolled, useModuleHost, type Health, type MachineKind, type ModuleCardProps, type ModuleMachines } from '@openagt/dashboard/module'
 import { loadStatus, type Answer, type DoorStatus } from './devices.js'
 import { olderThan } from './parts.js'
 
@@ -95,23 +95,12 @@ const GB = 1024 ** 3
 const size = (bytes: number): string => (bytes >= 100 * GB ? `${Math.round(bytes / GB)} GB` : `${(bytes / GB).toFixed(1)} GB`)
 const share = (part: { total: number; used: number }): number => Math.round((part.used / part.total) * 100)
 
-/** A small ring, filled as far as the share in use, the share inside it, its name under it; amber near full, red at it. */
+/** A ring of how much is in use, saying what that is on a hover. */
 function Gauge({ label, share, said }: { label: string; share: number; said: string }) {
-  const r = 12
-  const around = 2 * Math.PI * r
-  // Whole class names, as the stylesheet's build finds them in the source.
-  const tone = share >= 95 ? { ring: 'stroke-danger', text: 'text-danger' } : share >= 80 ? { ring: 'stroke-warning', text: 'text-warning' } : { ring: 'stroke-success', text: 'text-foreground' }
   return (
     <Tooltip>
       <TooltipTrigger render={<div role="meter" aria-label={label} aria-valuenow={share} aria-valuemin={0} aria-valuemax={100} className="flex w-8 flex-col items-center" />}>
-        <span className="relative size-8">
-          <svg viewBox="0 0 32 32" className="size-8" aria-hidden>
-            <circle cx="16" cy="16" r={r} fill="none" strokeWidth="3" className="stroke-muted-foreground/15" />
-            <circle cx="16" cy="16" r={r} fill="none" strokeWidth="3" strokeLinecap="round" strokeDasharray={`${(around * Math.min(share, 100)) / 100} ${around}`} transform="rotate(-90 16 16)" className={cn('transition-[stroke-dasharray] duration-500', tone.ring)} />
-          </svg>
-          <span className={cn('absolute inset-0 flex items-center justify-center text-[9px] font-medium tabular-nums', tone.text)}>{share}</span>
-        </span>
-        <span className="text-[9px] leading-tight text-muted-foreground">{label}</span>
+        <GaugeFace label={label} share={share} />
       </TooltipTrigger>
       <TooltipContent>
         {label}: {said}

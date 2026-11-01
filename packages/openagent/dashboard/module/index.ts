@@ -525,7 +525,7 @@ export const ModuleHostContext = SkillHostContext as unknown as Context<ModuleHo
 export const useModuleHost = useSkillHost as () => ModuleHost
 
 // The dashboard's own building blocks, so a module looks like the rest of the page.
-export { Button, buttonVariants, type ButtonProps, Card, CardHeader, CardTitle, CardContent, Skeleton, Input, cn, usePolled, useLoaded, forgetRemembered, SkillHostContext, useSkillHost } from '@openagt/skill-ui/module'
+export { GaugeFace, Button, buttonVariants, type ButtonProps, Card, CardHeader, CardTitle, CardContent, Skeleton, Input, cn, usePolled, useLoaded, forgetRemembered, SkillHostContext, useSkillHost } from '@openagt/skill-ui/module'
 export { Badge } from '../components/ui/badge.js'
 export { CardTitleLink } from '../components/ui/card.js'
 export { Checkbox } from '../components/ui/checkbox.js'

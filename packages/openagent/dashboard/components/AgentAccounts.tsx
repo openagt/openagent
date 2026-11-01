@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Check, Copy, Plus } from 'lucide-react'
 import { onMachineAgentAccounts, sendMachineAgentAccountFirst } from '../rpc/machines.js'
-import { onAgentAccounts, sendAddAgentAccount, sendAgentAccountCode, sendCancelAddingAccount, sendRemoveAgentAccount, sendUseAgentAccountFirst, type AccountAdding, type AccountRow, type AccountWindow, type AccountsAgent, type AccountsView } from '../rpc/accounts.js'
+import { onAgentAccounts, sendAddAgentAccount, sendAgentAccountCode, sendCancelAddingAccount, sendLogOutAgent, sendRemoveAgentAccount, sendUseAgentAccountFirst, type AccountAdding, type AccountRow, type AccountWindow, type AccountsAgent, type AccountsView } from '../rpc/accounts.js'
 import type { DriverName } from '../../src/client.js'
 import { AccountBar, ClaudeLogo, CodexLogo, readAhead, usePolled, cn, Button, Input } from '@openagt/skill-ui/module'
 import { AgentFix, DeviceCode, StatePill, agentLoginState, agentWords, useAgentState } from './Logins.js'
@@ -21,7 +21,7 @@ const OFTEN_MS = 2_000
 const SELDOM_MS = 30_000
 
 /** What each agent's card and row say of it. */
-const AGENTS: Record<AccountsAgent, { title: string; short: string; driver: DriverName; Logo: typeof ClaudeLogo; logIn: string; adding: (name: string) => string; help: string; remove: string }> = {
+const AGENTS: Record<AccountsAgent, { title: string; short: string; driver: DriverName; Logo: typeof ClaudeLogo; logIn: string; adding: (name: string) => string; help: string; helpNoBrowser: string; easiest: (computer: string) => string; remove: string }> = {
   claude: {
     title: 'Claude Code',
     short: 'Claude',
@@ -30,6 +30,8 @@ const AGENTS: Record<AccountsAgent, { title: string; short: string; driver: Driv
     logIn: 'Log in to Claude',
     adding: name => `Adding ${name}'s account: say yes in the page this computer's browser opened, signed in to ${name}'s Claude account.`,
     help: "Opens this computer's browser, where you say yes once, signed in to that account. The login is kept on this computer alone and lasts a year.",
+    helpNoBrowser: "Gives you a page to open on your own device: press Authorize there, signed in to that account, and paste the code it shows back here. The login is kept on this server alone and lasts a year.",
+    easiest: computer => `Easiest: add it on ${computer}, and it comes here by itself.`,
     remove: 'Runs no longer use it. Its login is not ended: take it back on claude.ai to end it.',
   },
   codex: {
@@ -40,6 +42,8 @@ const AGENTS: Record<AccountsAgent, { title: string; short: string; driver: Driv
     logIn: 'Log in to Codex',
     adding: name => `Adding ${name}'s account: sign in to ${name}'s ChatGPT account in the page this computer's browser opened.`,
     help: "Opens this computer's browser, where you sign in once to that account. If the browser is signed in to another account, copy the link into a private window. The login is kept on this computer alone, and Codex renews it.",
+    helpNoBrowser: "Gives you a code to type at ChatGPT's page on your own device, signed in to that account: in a private window if the browser is signed in to another. If it asks, first allow device code sign-in in ChatGPT's security settings. The login is kept on this server alone, and Codex renews it.",
+    easiest: computer => `Easiest: add it on ${computer} and press Allow there, and it comes here.`,
     remove: 'Runs no longer use it, and its login is taken off this computer.',
   },
 }
@@ -179,9 +183,18 @@ export function AccountsCard({ agent }: { agent: AccountsAgent }) {
   const [name, setName] = useState('')
   const [error, setError] = useState<string | undefined>()
   const [busy, setBusy] = useState(false)
+  // On a server that uses a computer's logins, adding it there is said first: signing in here is the longer way.
+  const [here, setHere] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
   const { view, reload } = useAgentAccounts(agent, true)
   const { state, reload: reloadState } = useAgentState(words.driver)
   const adding = view?.adding
+  const from = view?.from
+  const stopNaming = () => {
+    setNaming(false)
+    setHere(false)
+    setError(undefined)
+  }
   const absent = agentLoginState(state) === 'not-installed' && (view?.accounts.length ?? 0) < 2
   // Its own login is out: nothing of the agent's own to show, whether or not another account covers for it.
   const ownOut = state?.ownLoggedOut === true || agentLoginState(state) === 'step'
@@ -201,7 +214,7 @@ export function AccountsCard({ agent }: { agent: AccountsAgent }) {
   }
   const add = async () => {
     if (await act(() => sendAddAgentAccount(agent, name))) {
-      setNaming(false)
+      stopNaming()
       setName('')
     }
   }
@@ -235,8 +248,14 @@ export function AccountsCard({ agent }: { agent: AccountsAgent }) {
                     <div className="flex min-h-7 items-center gap-2">
                       <p className="min-w-0 truncate text-sm">{account.name}</p>
                       {view && <StateWords account={account} now={view.now} />}
-                      {!account.own && account.from === undefined && (
-                        <Button size="xs" variant="ghost" className="ml-auto text-muted-foreground" disabled={busy} aria-label={`Remove ${account.name}'s account`} title={words.remove} onClick={() => void act(() => sendRemoveAgentAccount(agent, account.id))}>
+                      {account.own && !loggingOut && (
+                        <Button size="xs" variant="ghost" className="ml-auto text-muted-foreground" disabled={busy} aria-label={`Log out ${account.name}`} onClick={() => setLoggingOut(true)}>
+                          Log out
+                        </Button>
+                      )}
+                      {/* One a computer hands over as it is would be back within a minute: it is removed there. */}
+                      {!account.own && !account.comesBack && (
+                        <Button size="xs" variant="ghost" className="ml-auto text-muted-foreground" disabled={busy} aria-label={`Remove ${account.name}'s account`} title={account.from !== undefined ? `${words.remove} It stays off until you press Allow on ${account.from}.` : words.remove} onClick={() => void act(() => sendRemoveAgentAccount(agent, account.id))}>
                           Remove
                         </Button>
                       )}
@@ -252,6 +271,17 @@ export function AccountsCard({ agent }: { agent: AccountsAgent }) {
                       )}
                     </div>
                   </div>
+                  {account.own && loggingOut && (
+                    <div role="group" aria-label={`Log out ${account.name}`} className="flex flex-wrap items-center gap-2">
+                      <p className="min-w-0 flex-1 basis-48 text-xs text-muted-foreground">{`Logs ${words.title} out on ${view!.computer}, your terminal too.`}</p>
+                      <Button size="xs" variant="destructive" disabled={busy} onClick={() => void act(() => sendLogOutAgent(agent)).then(() => setLoggingOut(false))}>
+                        Log out
+                      </Button>
+                      <Button size="xs" variant="ghost" disabled={busy} onClick={() => setLoggingOut(false)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  )}
                   <ServerNotes row={{ kind: agent, source: account.own ? 'own' : account.id }} />
                 </div>
                 <SwitchNotice row={{ kind: agent, source: account.own ? 'own' : account.id }} />
@@ -264,10 +294,22 @@ export function AccountsCard({ agent }: { agent: AccountsAgent }) {
             <div className={cn('px-3 py-2.5', accounts.length > 0 && 'border-t border-border')}>
               {adding ? (
                 <div className="space-y-2">
-                  <Adding agent={agent} adding={adding} words={words.adding(adding.name)} />
+                  <Adding agent={agent} adding={adding} words={view?.noBrowser ? `Adding ${adding.name}'s account: getting the page to sign in at…` : words.adding(adding.name)} />
                   <Button size="xs" variant="ghost" className="text-muted-foreground" disabled={busy} onClick={() => void act(() => sendCancelAddingAccount(agent))}>
                     Cancel
                   </Button>
+                </div>
+              ) : naming && from !== undefined && !here ? (
+                <div className="space-y-2">
+                  <p className="text-sm">{words.easiest(from)}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setHere(true)}>
+                      Sign in here instead
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={stopNaming}>
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
               ) : naming ? (
                 <form
@@ -281,7 +323,7 @@ export function AccountsCard({ agent }: { agent: AccountsAgent }) {
                   <Button size="sm" type="submit" disabled={busy || name.trim() === ''}>
                     {words.logIn}
                   </Button>
-                  <Button size="sm" variant="ghost" type="button" onClick={() => (setNaming(false), setError(undefined))}>
+                  <Button size="sm" variant="ghost" type="button" onClick={stopNaming}>
                     Cancel
                   </Button>
                 </form>
@@ -293,7 +335,7 @@ export function AccountsCard({ agent }: { agent: AccountsAgent }) {
                   </Button>
                 )
               )}
-              {naming && !adding && <p className="mt-1.5 text-xs text-muted-foreground">{words.help}</p>}
+              {naming && !adding && (from === undefined || here) && <p className="mt-1.5 text-xs text-muted-foreground">{view?.noBrowser ? words.helpNoBrowser : words.help}</p>}
               {(error ?? view?.failed) !== undefined && (
                 <p role="alert" className="mt-1.5 whitespace-pre-line text-xs text-danger">
                   {error ?? view?.failed}

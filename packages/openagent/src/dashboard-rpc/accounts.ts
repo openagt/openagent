@@ -1,8 +1,8 @@
 import { computerName } from '../computer-name.js'
 import type { AgentAccount, DriverQuotaWindow, DriverRateWindow } from '@openagt/agent-driver'
-import { addingNow, beginAdding, bringCode, cancelAdding, isLimited, loginWiring, nameOwnAccount, OWN_NAME, ownLoginThere, ownName, readAccounts, removeAdded, useFirst, type AccountsAgent, type LoginWiring } from '@openagt/skill-account-rotation'
+import { addingNow, beginAdding, bringCode, cancelAdding, comesBackFrom, handedOverBy, isLimited, logOut, loginWiring, nameOwnAccount, OWN_NAME, ownLoginThere, ownName, readAccounts, removeAdded, useFirst, type AccountsAgent, type LoginWiring } from '@openagt/skill-account-rotation'
 import { contextQuota } from './context.js'
-import { readCopied, writeCopied, type CopiedLogin } from '../dashboard/copied-logins.js'
+import { readCopied, type CopiedLogin } from '../dashboard/copied-logins.js'
 
 // The accounts runs use, per coding agent (`@openagt/skill-account-rotation`): the person's own
 // login, which the agent keeps, and the ones added beside it. A page sees each one's name, how full
@@ -32,7 +32,9 @@ export interface AccountRow {
   name: string
   /** A login of the person's own computer, by that computer's name: a server's copy of it. */
   from?: string
-  /** The person's own login, which the agent keeps: it is never removed. */
+  /** Removed here it would only be handed over again: it is removed on that computer. */
+  comesBack?: true
+  /** The person's own login, which the agent keeps: logged out, never removed. */
   own: boolean
   /** The person's own, and the agent has no such login: runs skip it while another account is there, and no page offers it then. */
   loggedOut?: true
@@ -72,6 +74,8 @@ export interface AccountsView {
   adding?: AccountAdding
   /** Why the last add did not go through. */
   failed?: string
+  /** This computer has no browser, a server: the person signs in on their own device. */
+  noBrowser?: true
   /** The daemon's clock, so "free in 2 h" is counted from the same now. */
   now: number
 }
@@ -143,6 +147,7 @@ async function row(agent: AccountsAgent, account: AgentAccount, liveOwn: DriverQ
     id: account.name,
     name,
     ...(copy ? { from: copy.from } : {}),
+    ...(!own && handedOverBy(agent, accountsWiring.env).get(account.name)?.comesBack ? { comesBack: true as const } : {}),
     own,
     ...(own && !ownLoginThere(agent, accountsWiring) ? { loggedOut: true as const } : {}),
     ...(account.added !== undefined ? { added: account.added } : {}),
@@ -161,7 +166,8 @@ export async function onAgentAccounts(agent: AccountsAgent): Promise<AccountsVie
           .then(view => view.windows)
           .catch(() => [])
       : []
-  const copies = readCopied().filter(login => login.kind === agent)
+  const copied = readCopied()
+  const copies = copied.filter(login => login.kind === agent)
   const rows = await Promise.all(readAccounts(accountsWiring.path(agent)).map(account => row(agent, account, liveOwn, copies, now)))
   // The first free one is the one a run takes; with one account there is no order to say.
   if (rows.length > 1) {
@@ -170,14 +176,15 @@ export async function onAgentAccounts(agent: AccountsAgent): Promise<AccountsVie
     if (free[0]) free[0].state = 'in-use'
     if (free[1]) free[1].state = 'next'
   }
-  const { adding: beingAdded, failed: lastFailed } = addingNow(agent, accountsWiring)
-  const from = rows.find(r => r.from !== undefined)?.from
+  const { adding: beingAdded, failed: lastFailed, noBrowser } = addingNow(agent, accountsWiring)
+  const from = copied[0]?.from
   return {
     accounts: rows,
     computer: accountsWiring.computer(),
     ...(from !== undefined ? { from } : {}),
     ...(beingAdded ? { adding: beingAdded } : {}),
     ...(lastFailed !== undefined ? { failed: lastFailed } : {}),
+    ...(noBrowser ? { noBrowser } : {}),
     now,
   }
 }
@@ -200,12 +207,18 @@ export async function sendCancelAddingAccount(agent: AccountsAgent): Promise<Acc
   return { ok: true }
 }
 
+/** Log the person's own login out (`logOut`): their terminal too. */
+export async function sendLogOutAgent(agent: AccountsAgent): Promise<AccountResult> {
+  const failed = await logOut(agent, accountsWiring)
+  return failed === undefined ? { ok: true } : { ok: false, error: failed }
+}
+
 /** Remove an added account (`removeAdded`). */
 export async function sendRemoveAgentAccount(agent: AccountsAgent, name: string): Promise<AccountResult> {
   try {
-    const gone = await removeAdded(agent, name, accountsWiring)
-    // One a computer of the person's handed over is no longer here: that computer offers it again.
-    if (gone) writeCopied(readCopied().filter(login => login.kind !== agent || login.name !== name))
+    const from = comesBackFrom(agent, name, accountsWiring)
+    if (from !== undefined) return { ok: false, error: `${name}'s account comes from ${from}: remove it there.` }
+    await removeAdded(agent, name, accountsWiring)
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }

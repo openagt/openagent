@@ -1,6 +1,6 @@
 import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname } from 'node:path'
+import { copiedPath } from '@openagt/skill-account-rotation'
 import { isServerName } from './machine-logins.js'
 
 // On a server, the logins of the person's own computers (`logins-sync.ts` is a computer's side).
@@ -50,11 +50,6 @@ export interface GivenLogin {
   who: string
   from: string
   runs?: boolean
-}
-
-/** Where the file is: beside OpenAgent's other files in the person's config folder. */
-export function copiedPath(env: NodeJS.ProcessEnv = process.env): string {
-  return env['XDG_CONFIG_HOME'] ? join(env['XDG_CONFIG_HOME'], 'openagent-copied-logins.json') : join(env['HOME'] ?? homedir(), '.openagent-copied-logins.json')
 }
 
 const KINDS: readonly string[] = ['claude', 'codex', 'git']

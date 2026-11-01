@@ -19,11 +19,11 @@ function renderCard(list: (args: string[]) => ModuleCommandResult, usage: Agents
 }
 
 /** A card with one account each on a computer where `adding` answers what the test says, recording what was asked. */
-function renderAdding(addingNow: () => Record<string, unknown>, more: (args: string[], input: string | undefined) => ModuleCommandResult = () => ({ ok: true, output: {} })) {
+function renderAdding(addingNow: () => Record<string, unknown>, more: (args: string[], input: string | undefined) => ModuleCommandResult = () => ({ ok: true, output: {} }), list: Agents = { claude: [{ name: 'This computer', who: 'Ada', own: true }], codex: [] }) {
   const calls: { args: string[]; input: string | undefined }[] = []
   const runComputerCommand = vi.fn(async (args: string[], _command?: string, input?: string): Promise<ModuleCommandResult> => {
     calls.push({ args, input })
-    if (args[0] === 'list') return { ok: true, output: { claude: [{ name: 'This computer', who: 'Ada', own: true }], codex: [] } }
+    if (args[0] === 'list') return { ok: true, output: list }
     if (args[0] === 'usage') return { ok: true, output: { claude: [], codex: [] } }
     if (args[0] === 'adding') return { ok: true, output: addingNow() }
     return more(args, input)
@@ -36,6 +36,9 @@ function renderAdding(addingNow: () => Record<string, unknown>, more: (args: str
   )
   return calls
 }
+
+/** Open an account's row, where what can be done with it is. */
+const openRow = async (name: string): Promise<void> => void fireEvent.click(await screen.findByRole('button', { name: `Details of ${name}` }))
 
 const listed = (claude: unknown[], codex: unknown[] = []) => (): ModuleCommandResult => ({ ok: true, output: { claude, codex } })
 
@@ -56,18 +59,25 @@ describe('AccountsCard', () => {
       ],
       codex: [{ name: 'This computer', windows: [{ window: 'thirty_day', percentUsed: 10 }] }],
     })
-    expect(await screen.findByText('61% this week')).toBeTruthy()
+    const ring = (row: string, label: string): string | null | undefined => within(screen.getByRole('button', { name: `Details of ${row}` })).queryByRole('meter', { name: label })?.getAttribute('aria-valuenow')
+    await screen.findByRole('button', { name: 'Details of Ada' })
+    await waitFor(() => expect(ring('Ada', 'week')).toBe('61'))
+    expect(ring('Ada', '5 h')).toBe('2')
     expect(screen.getByText('limited, free in 3 h')).toBeTruthy()
-    expect(screen.getByText('not used yet')).toBeTruthy()
-    expect(screen.getByText(/^40% of 5 h · as of /)).toBeTruthy()
-    expect(screen.getByText('Codex')).toBeTruthy()
-    expect(screen.getByText('10% this month')).toBeTruthy()
-    // Work is at its limit, so the next two are the ones runs take.
+    expect(ring('Old', '5 h')).toBe('40')
+    expect(within(screen.getByRole('region', { name: 'Codex' })).getByRole('meter', { name: 'month' }).getAttribute('aria-valuenow')).toBe('10')
+    // Work is at its limit, so Ada is the one runs take.
     expect(within(screen.getByRole('region', { name: 'Claude Code' })).getByText('in use').closest('li')!.textContent).toContain('Ada')
-    expect(screen.getByText('next').closest('li')!.textContent).toContain('Spare')
-    expect(screen.getByText('login on Mac')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Use Work first' })).toBeNull()
+    // A row says where it comes from; its presses are behind it.
+    expect(screen.getByRole('button', { name: 'Details of Ada' }).textContent).toContain('login on Mac')
+    expect(screen.queryByRole('button', { name: 'Use Spare first' })).toBeNull()
+    await openRow('Spare')
+    expect(screen.getByText('Not used yet. Next in line.')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Use Spare first' })).toBeTruthy()
+    await openRow('Old')
+    expect(screen.getByText(/^Usage as of /)).toBeTruthy()
+    await openRow('Work')
+    expect(screen.queryByRole('button', { name: 'Use Work first' })).toBeNull()
   })
 
   test('an answer an earlier version of the card kept in the browser still draws', async () => {
@@ -84,9 +94,9 @@ describe('AccountsCard', () => {
     let answer!: (usage: Agents) => void
     renderCard(listed([{ name: 'This computer', who: 'Ada', own: true }]), new Promise<Agents>(resolve => (answer = resolve)))
     expect(await screen.findByText('Ada')).toBeTruthy()
-    expect(screen.queryByText(/this week/)).toBeNull()
+    expect(screen.queryByRole('meter')).toBeNull()
     answer({ claude: [{ name: 'This computer', windows: [{ window: 'seven_day', percentUsed: 7 }] }], codex: [] })
-    expect(await screen.findByText('7% this week')).toBeTruthy()
+    expect((await screen.findByRole('meter', { name: 'week' })).getAttribute('aria-valuenow')).toBe('7')
   })
 
   test("the person's own login with nothing read says no usage at all, and nothing false", async () => {
@@ -105,14 +115,14 @@ describe('AccountsCard', () => {
   test('an agent with no login has no row, and still its press: a fresh server adds its first account here', async () => {
     renderCard(listed([{ name: 'This computer', who: 'Ada', own: true }], [{ name: 'This computer', signedOut: true, own: true }]))
     expect(await screen.findByText('Ada')).toBeTruthy()
-    const codex = screen.getByRole('region', { name: 'Codex' })
-    expect(within(codex).queryByText('This computer')).toBeNull()
-    expect(within(codex).getByRole('button', { name: 'Add account' })).toBeTruthy()
+    expect(within(screen.getByRole('region', { name: 'Codex' })).queryByText('This computer')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Add Codex account' })).toBeTruthy()
   })
 
   test("calls the person's own login who it is, and the press still names it as the command knows it", async () => {
     const run = renderCard(listed([{ name: 'Work', own: false }, { name: 'This computer', who: 'Ada', own: true }]))
-    fireEvent.click(await screen.findByRole('button', { name: 'Use Ada first' }))
+    await openRow('Ada')
+    fireEvent.click(screen.getByRole('button', { name: 'Use Ada first' }))
     expect(screen.queryByText('This computer')).toBeNull()
     await waitFor(() => expect(run).toHaveBeenCalledWith(['use-first', 'claude', 'This computer']))
   })
@@ -124,14 +134,16 @@ describe('AccountsCard', () => {
       const accounts = ['Work', 'Spare'].sort(a => (a === first ? -1 : 1)).map(name => ({ name, own: false }))
       return { ok: true, output: { claude: accounts, codex: [] } }
     })
-    fireEvent.click(await screen.findByRole('button', { name: 'Use Spare first' }))
-    expect(await screen.findByRole('button', { name: 'Use Work first' })).toBeTruthy()
-    expect(run).toHaveBeenCalledWith(['use-first', 'claude', 'Spare'])
+    await openRow('Spare')
+    fireEvent.click(screen.getByRole('button', { name: 'Use Spare first' }))
+    await waitFor(() => expect(run).toHaveBeenCalledWith(['use-first', 'claude', 'Spare']))
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /^Details of / })[0]!.getAttribute('aria-label')).toBe('Details of Spare'))
   })
 
   test("says the command's refusal, of the read and of the press", async () => {
     renderCard(args => (args[0] === 'list' ? { ok: true, output: { claude: [{ name: 'A', own: true }, { name: 'B', own: false }], codex: [] } } : { ok: false, error: 'There is no claude account named B.' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Use B first' }))
+    await openRow('B')
+    fireEvent.click(screen.getByRole('button', { name: 'Use B first' }))
     expect(await screen.findByText('There is no claude account named B.')).toBeTruthy()
     cleanup()
     forgetRemembered()
@@ -146,12 +158,12 @@ describe('AccountsCard', () => {
       if (args[0] === 'add') now = { claude: { adding: { name: 'Dani' } }, codex: {} }
       return { ok: true, output: {} }
     })
-    fireEvent.click(within(await screen.findByRole('region', { name: 'Claude Code' })).getByRole('button', { name: 'Add account' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Claude Code account' }))
     fireEvent.change(screen.getByRole('textbox', { name: 'Whose account' }), { target: { value: 'Dani' } })
     fireEvent.click(screen.getByRole('button', { name: 'Log in to Claude' }))
     expect(await screen.findByText(/Adding Dani's account: say yes/)).toBeTruthy()
     expect(calls.some(call => call.args.join(' ') === 'add claude Dani')).toBe(true)
-    expect(within(screen.getByRole('region', { name: 'Claude Code' })).queryByRole('button', { name: 'Add account' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Add Claude Code account' })).toBeNull()
     const listsBefore = calls.filter(call => call.args[0] === 'list').length
     now = { claude: {}, codex: {} }
     await waitFor(() => expect(screen.queryByText(/Adding Dani's account/)).toBeNull(), { timeout: 5000 })
@@ -160,7 +172,7 @@ describe('AccountsCard', () => {
 
   test("says the command's refusal of a name, and keeps asking", async () => {
     renderAdding(() => ({ claude: {}, codex: {} }), () => ({ ok: false, error: 'There is an account named Dani already.' }))
-    fireEvent.click(within(await screen.findByRole('region', { name: 'Claude Code' })).getByRole('button', { name: 'Add account' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Claude Code account' }))
     fireEvent.change(screen.getByRole('textbox', { name: 'Whose account' }), { target: { value: 'Dani' } })
     fireEvent.click(screen.getByRole('button', { name: 'Log in to Claude' }))
     expect(await screen.findByText('There is an account named Dani already.')).toBeTruthy()
@@ -193,6 +205,80 @@ describe('AccountsCard', () => {
     renderAdding(() => ({ claude: { adding: { name: 'Dani', url: 'https://auth.example/device', code: 'ABCD-1234' } }, codex: {} }))
     expect(await screen.findByText('ABCD-1234')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'auth.example/device' })).toBeTruthy()
+  })
+
+  test('on a server using a computer\'s logins, adding there is said first, and signing in here is one press further', async () => {
+    const calls = renderAdding(() => ({ claude: { noBrowser: true }, codex: { noBrowser: true } }), () => ({ ok: true, output: {} }), { claude: [], codex: [{ name: 'Sam', own: false, from: 'Studio' }] })
+    const claude = await screen.findByRole('region', { name: 'Claude Code' })
+    await openRow('Sam')
+    expect(screen.getByRole('button', { name: 'Details of Sam' }).textContent).toContain('from Studio')
+    fireEvent.click(screen.getByRole('button', { name: 'Add Claude Code account' }))
+    // No Claude account came from Studio, yet this server uses Studio's logins.
+    expect(within(claude).getByText('Easiest: add it on Studio, and it comes here by itself.')).toBeTruthy()
+    expect(within(claude).queryByRole('textbox', { name: 'Whose account' })).toBeNull()
+    fireEvent.click(within(claude).getByRole('button', { name: 'Sign in here instead' }))
+    expect(within(claude).getByText(/press Authorize there.*paste the code/)).toBeTruthy()
+    expect(within(claude).queryByText(/Opens this computer's browser/)).toBeNull()
+    fireEvent.change(within(claude).getByRole('textbox', { name: 'Whose account' }), { target: { value: 'Dani' } })
+    fireEvent.click(within(claude).getByRole('button', { name: 'Log in to Claude' }))
+    await waitFor(() => expect(calls.some(call => call.args.join(' ') === 'add claude Dani')).toBe(true))
+    // Pressed again, it starts from the easiest way.
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Claude Code account' }))
+    expect(within(claude).getByText(/^Easiest:/)).toBeTruthy()
+    fireEvent.click(within(claude).getByRole('button', { name: 'Cancel' }))
+    // A Codex account made there waits for that computer's press: "by itself" would be false.
+    const codex = screen.getByRole('region', { name: 'Codex' })
+    fireEvent.click(screen.getByRole('button', { name: 'Add Codex account' }))
+    expect(within(codex).getByText('Easiest: add it on Studio and press Allow there, and it comes here.')).toBeTruthy()
+  })
+
+  test('on a server with no computer\'s logins, signing in here is the only way, in its own words', async () => {
+    renderAdding(() => ({ claude: { noBrowser: true }, codex: { noBrowser: true } }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Codex account' }))
+    expect(screen.queryByText(/^Easiest:/)).toBeNull()
+    expect(await screen.findByText(/Gives you a code to type at ChatGPT's page/)).toBeTruthy()
+  })
+
+  test('an added account has Remove; one a computer would only hand back has none; the press runs the command', async () => {
+    const run = renderCard(
+      listed([{ name: 'This computer', who: 'Ada', own: true, signedOut: true }, { name: 'Here', own: false }, { name: 'Back', own: false, from: 'Studio', comesBack: true }], [{ name: 'Sam', own: false, from: 'Studio' }]),
+    )
+    await openRow('Here')
+    fireEvent.click(screen.getByRole('button', { name: "Remove Here's account" }))
+    expect(screen.getByText(/take it back on claude.ai/)).toBeTruthy()
+    expect(run).not.toHaveBeenCalledWith(['remove', 'claude', 'Here'])
+    fireEvent.click(within(screen.getByRole('group', { name: "Remove Here's account" })).getByRole('button', { name: 'Remove' }))
+    await waitFor(() => expect(run).toHaveBeenCalledWith(['remove', 'claude', 'Here']))
+    await openRow('Back')
+    expect(screen.queryByRole('button', { name: "Remove Back's account" })).toBeNull()
+    await openRow('Sam')
+    fireEvent.click(screen.getByRole('button', { name: "Remove Sam's account" }))
+    expect(screen.getByText(/It stays off until you press Allow on Studio\./)).toBeTruthy()
+  })
+
+  test('Log out of the person\'s own login first says the terminal goes with it, and only the second press runs it', async () => {
+    const run = renderCard(listed([{ name: 'This computer', who: 'Ada', own: true, computer: 'Mac' }, { name: 'Spare', own: false }]))
+    await openRow('Ada')
+    fireEvent.click(screen.getByRole('button', { name: 'Log out Ada' }))
+    const asked = screen.getByRole('group', { name: 'Log out Ada' })
+    expect(screen.getByText('Logs Claude Code out on Mac, your terminal too.')).toBeTruthy()
+    expect(run).not.toHaveBeenCalledWith(['logout', 'claude'])
+    fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('group', { name: 'Log out Ada' })).toBeNull()
+    expect(run).not.toHaveBeenCalledWith(['logout', 'claude'])
+    fireEvent.click(screen.getByRole('button', { name: 'Log out Ada' }))
+    fireEvent.click(within(screen.getByRole('group', { name: 'Log out Ada' })).getByRole('button', { name: 'Log out' }))
+    await waitFor(() => expect(run).toHaveBeenCalledWith(['logout', 'claude']))
+    expect(screen.queryByRole('button', { name: "Remove Ada's account" })).toBeNull()
+  })
+
+  test('no reading has an empty ring with a dash: a row lines up, and claims no number', async () => {
+    renderCard(listed([{ name: 'Fresh', own: false }, { name: 'Other', own: false }]))
+    await screen.findByRole('button', { name: 'Details of Fresh' })
+    await waitFor(() => expect(document.querySelector('.animate-pulse')).toBeNull())
+    expect(screen.queryByRole('meter')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Details of Fresh' }).textContent).toContain('–')
+    expect(screen.getByRole('button', { name: 'Details of Fresh' }).querySelector('[title="Not used yet"]')).toBeTruthy()
   })
 
   test('Cancel stops the sign-in, and why the last one did not go through is said', async () => {

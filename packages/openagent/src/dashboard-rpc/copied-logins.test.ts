@@ -5,9 +5,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { accountsWiring, onAgentAccounts, sendRemoveAgentAccount } from './accounts.js'
 import { copiedWiring, onCopiedLogins, sendCopiedLogin, sendCopiedUsage, sendForgetCopiedLogin, sendKeepCopiedLogin } from './copied-logins.js'
-import { copiedPath, readCopied } from '../dashboard/copied-logins.js'
+import { readCopied } from '../dashboard/copied-logins.js'
 import { provideTestContext } from './test-context.js'
-import { addAccount, OWN_NAME, readAccounts } from '@openagt/skill-account-rotation'
+import { addAccount, copiedPath, OWN_NAME, readAccounts } from '@openagt/skill-account-rotation'
 
 // A server takes the logins of the person's own computers: each goes where its tool reads it, and
 // the server keeps what the computer said of it, never the login. Taking one off ends nothing.
