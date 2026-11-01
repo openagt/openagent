@@ -68,21 +68,27 @@ test('QuotaPoller returns to the normal gap once the fetch works again (#525)', 
   assert.equal(poller.intervalMs, DEFAULT_POLL_MS)
 })
 
-test('QuotaPoller gives up on an authoritative failure (#525)', async () => {
-  const { poller } = pollerOf([goodAt(10), { available: false, reason: 'no-subscription' }])
+test('QuotaPoller drops the reading on an authoritative failure and heals on the next good one', async () => {
+  const { poller } = pollerOf([goodAt(10), { available: false, reason: 'no-subscription' }, goodAt(12)])
   await poller.poll()
   await poller.poll()
-  // Nothing changes by asking an API-key account again, and the retained
-  // reading would misrepresent it.
-  assert.equal(poller.isStopped, true)
+  // The retained reading would misrepresent an account with no subscription.
   assert.equal(poller.current().lastGood, undefined)
   assert.equal(poller.current().lastGoodAt, undefined)
+  // It keeps asking, slower: a login, or an update swapping the CLI, changes the answer.
+  assert.equal(poller.isStopped, false)
+  assert.equal(poller.intervalMs, DEFAULT_POLL_MS * 2)
+  await poller.poll()
+  assert.equal(poller.current().lastGood?.available, true)
+  assert.equal(poller.intervalMs, DEFAULT_POLL_MS)
 })
 
-test('QuotaPoller gives up when the agent is missing (#525)', async () => {
-  const { poller } = pollerOf([{ available: false, reason: 'agent-not-found' }])
+test('QuotaPoller keeps asking when the agent is missing: an update swapping the CLI looks the same', async () => {
+  const { poller } = pollerOf([{ available: false, reason: 'agent-not-found' }, goodAt(10)])
   await poller.poll()
-  assert.equal(poller.isStopped, true)
+  assert.equal(poller.isStopped, false)
+  await poller.poll()
+  assert.equal(poller.current().lastGood?.available, true)
 })
 
 test('QuotaPoller keeps polling after a readout it did not recognize (#960)', async () => {
