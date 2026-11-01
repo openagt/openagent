@@ -1,15 +1,26 @@
 {
   "id": "2026-11-01T01-54-01-960Z",
   "startedAt": "2026-11-01T01:54:03.281Z",
-  "status": "running",
+  "endedAt": "2026-11-01T01:54:08.492Z",
+  "status": "done",
   "intent": "tell me hi, nothing else",
+  "title": "Simple Greeting",
   "driver": "codex",
   "model": "gpt-6-luna",
+  "effort": "high",
+  "branch": "agent-2026-11-01T01-54-01-960Z",
+  "contextTokens": 13762,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
-      "pid": 25385
+      "pid": 25385,
+      "baseCommit": "5aad28eb3fc0f41e5595e40807ab0bfd93d11f91"
     },
-    "host": "Suleimans-MacBook-Pro.local"
+    "pid": 25385,
+    "host": "Suleimans-MacBook-Pro.local",
+    "baseCommit": "5aad28eb3fc0f41e5595e40807ab0bfd93d11f91",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-11-01T01-54-01-960Z",
+    "sessionId": "01a194d0-5bc4-7703-8330-3f9dfed55268"
   }
 }
