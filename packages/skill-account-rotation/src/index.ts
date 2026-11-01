@@ -10,7 +10,6 @@ export {
   nameRefused,
   addAccount,
   removeAccount,
-  nameOwnAccount,
   useFirst,
   isLimited,
   usableAccounts,
@@ -28,6 +27,5 @@ export {
   type AccountsOption,
   type TurnOnAccounts,
 } from './accounts.js'
-export { addingNow, addingPath, beginAdding, bringCode, cancelAdding, runAdding, type Adding, type AddingNow } from './adding.js'
 export { claudeUsagePath, keepClaudeReading, readUsage, READING_KEPT_MS, type AccountUsage, type UsageWindow } from './usage.js'
-export { comesBackFrom, logOut, loginWiring, nameTaken, ownLoginThere, ownName, removeAdded, signIn, type LoginWiring, type SignInSaid } from './login.js'
+export { comesBackFrom, loginWiring, ownLoginThere, ownName, removeAdded, type LoginWiring } from './login.js'

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '@openagt/skill-ui/module'
 
-const accounts = vi.hoisted(() => ({ onAgentAccounts: vi.fn(), sendAddAgentAccount: vi.fn(), sendCancelAddingAccount: vi.fn(), sendRemoveAgentAccount: vi.fn(), sendUseAgentAccountFirst: vi.fn() }))
+const accounts = vi.hoisted(() => ({ onAgentAccounts: vi.fn(), sendUseAgentAccountFirst: vi.fn() }))
 vi.mock('../rpc/accounts.js', () => accounts)
 const logins = vi.hoisted(() => ({ onAgentState: vi.fn(), sendAgentFix: vi.fn(), onGitHosts: vi.fn(), sendGitHostInstall: vi.fn(), sendGitHostLogin: vi.fn(), sendUseGitHostAccount: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
@@ -11,6 +11,7 @@ vi.mock('../rpc/server-logins.js', () => servers)
 
 const { AddedAccountsUsage, freeIn } = await import('./AgentAccounts.js')
 const { AccountsSettings } = await import('./Accounts.js')
+const { ModulesContext } = await import('../lib/use-modules.js')
 
 const HOUR = 60 * 60_000
 const NOW = Date.parse('2026-10-22T12:00:00Z')
@@ -56,7 +57,7 @@ describe('Agent accounts', () => {
     states({ driver: 'claude-code', ready: false, problem: '`claude` not found', fix: { kind: 'install', command: 'curl -fsSL https://claude.ai/install.sh | bash' } })
     logins.sendAgentFix.mockResolvedValue({ ok: true })
     render(<AccountsSettings />)
-    const card = screen.getByRole('region', { name: 'Claude Code' })
+    const card = await screen.findByRole('region', { name: 'Claude Code' })
     expect(await within(card).findByText('Not installed')).toBeTruthy()
     expect(within(card).getByText('curl -fsSL https://claude.ai/install.sh | bash')).toBeTruthy()
     fireEvent.click(within(card).getByRole('button', { name: 'Install Claude Code' }))
@@ -65,60 +66,9 @@ describe('Agent accounts', () => {
 
     states({ driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' }, fixing: 'log-in' })
     render(<AccountsSettings />)
-    const out = screen.getByRole('region', { name: 'Claude Code' })
+    const out = await screen.findByRole('region', { name: 'Claude Code' })
     expect(await within(out).findByText('Log in')).toBeTruthy()
     expect(within(out).getByRole('status').textContent).toMatch(/Say yes in the page this computer's browser opened/)
-  })
-
-  test('a Claude Code card lists the accounts in the order runs use them: whose, how full their longest window is, which one runs use now and when a limited one frees; only an added one is removed', async () => {
-    views(TWO)
-    accounts.sendRemoveAgentAccount.mockResolvedValue({ ok: true })
-    render(<AccountsSettings />)
-    const card = screen.getByRole('region', { name: 'Claude Code' })
-    const own = await within(card).findByRole('listitem', { name: 'Suleiman' })
-    // Connected says nothing a row does not: the header holds Add account instead.
-    expect(within(card).queryByText('Connected')).toBeNull()
-    expect(within(card.querySelector('header')!).getByRole('button', { name: 'Add account' })).toBeTruthy()
-    expect(own.textContent).toContain("login on Studio")
-    expect(own.textContent).toContain('22% this week')
-    expect(own.textContent).toContain('limited, free in 2 h 10 min')
-    expect(within(own).queryByRole('button', { name: /Remove/ })).toBeNull()
-    const dani = within(card).getByRole('listitem', { name: 'Dani' })
-    expect(dani.textContent).toContain(`added ${new Date('2026-10-22T09:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`)
-    expect(dani.textContent).toMatch(/20% this week · as of/)
-    expect(dani.textContent).toContain('in use')
-    fireEvent.click(within(dani).getByRole('button', { name: "Remove Dani's account" }))
-    await waitFor(() => expect(accounts.sendRemoveAgentAccount).toHaveBeenCalledWith('claude', 'Dani'))
-  })
-
-  test('a login whose usage cannot be read draws no bar: an empty one read as nothing used', async () => {
-    views({ now: NOW, accounts: [{ id: 'This computer', name: 'This computer', own: true, windows: [] }] })
-    render(<AccountsSettings />)
-    const card = screen.getByRole('region', { name: 'Claude Code' })
-    const own = await within(card).findByRole('listitem', { name: 'This computer' })
-    expect(own.textContent).toContain('login on Studio')
-    expect(own.querySelector('[aria-hidden].rounded-full')).toBeNull()
-  })
-
-  test('adding asks whose account it is, then says to say yes in the browser while the login is made; a refused name is said', async () => {
-    views(TWO)
-    accounts.sendAddAgentAccount.mockResolvedValueOnce({ ok: false, error: 'There is an account named Dani already.' })
-    render(<AccountsSettings />)
-    const card = screen.getByRole('region', { name: 'Claude Code' })
-    fireEvent.click(await within(card).findByRole('button', { name: 'Add account' }))
-    const name = within(card).getByRole('textbox', { name: 'Whose account' })
-    const login = within(card).getByRole('button', { name: 'Log in to Claude' }) as HTMLButtonElement
-    expect(login.disabled).toBe(true)
-    fireEvent.change(name, { target: { value: 'Dani' } })
-    fireEvent.click(login)
-    expect((await within(card).findByRole('alert')).textContent).toBe('There is an account named Dani already.')
-
-    accounts.sendAddAgentAccount.mockResolvedValueOnce({ ok: true })
-    views({ ...TWO, adding: { name: 'Rom' } })
-    fireEvent.change(name, { target: { value: 'Rom' } })
-    fireEvent.click(login)
-    await waitFor(() => expect(accounts.sendAddAgentAccount).toHaveBeenLastCalledWith('claude', 'Rom'))
-    expect((await within(card).findByRole('status')).textContent).toBe("Adding Rom's account: say yes in the page this computer's browser opened, signed in to Rom's Claude account.")
   })
 
   test('the usage card shows the added accounts under the person\'s own bar, and nothing with one account', async () => {
@@ -141,37 +91,15 @@ describe('Agent accounts', () => {
     expect(freeIn(NOW + 20 * 24 * HOUR, NOW)).toBe('20 days')
   })
 
-  test('a Codex card beside Claude Code\'s, the same: its accounts by how full their month is, adding by a name first, then the sign-in, with the link to copy into a private window', async () => {
-    views(TWO, {
-      now: NOW,
-      accounts: [
-        { id: 'This computer', name: 'Suleiman S', own: true, windows: [{ label: 'month', percent: 7 }], state: 'in-use' },
-        { id: 'Rom', name: 'Rom', own: false, added: '2026-10-22T09:00:00Z', windows: [{ label: '5 h', percent: 40 }, { label: 'week', percent: 12 }], state: 'next' },
-      ],
-      adding: { name: 'Dani', url: 'https://auth.example/sign-in' },
-    })
-    const writeText = vi.fn().mockResolvedValue(undefined)
-    Object.assign(navigator, { clipboard: { writeText } })
-    render(<AccountsSettings />)
-    const card = screen.getByRole('region', { name: 'Codex' })
-    expect((await within(card).findByRole('listitem', { name: 'Suleiman S' })).textContent).toContain('7% this month')
-    expect(within(card).getByRole('listitem', { name: 'Rom' }).textContent).toContain('12% this week')
-    const status = within(card).getByRole('status')
-    expect(status.textContent).toContain("Adding Dani's account: sign in to Dani's ChatGPT account in the page this computer's browser opened.")
-    fireEvent.click(within(status).getByRole('button', { name: 'Copy link for a private window' }))
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith('https://auth.example/sign-in'))
-    expect(await within(status).findByRole('button', { name: 'Copied' })).toBeTruthy()
-  })
-
-  test('a Codex that is not here is its state and the press that installs it, with no accounts to add', async () => {
+  test('a Codex that is not here is its state and the press that installs it', async () => {
     views(TWO)
     states({ driver: 'claude-code', ready: true }, { driver: 'codex', ready: false, problem: '`codex` not found', fix: { kind: 'install', command: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh' } })
     render(<AccountsSettings />)
-    const card = screen.getByRole('region', { name: 'Codex' })
+    const card = await screen.findByRole('region', { name: 'Codex' })
     expect(await within(card).findByText('Not installed')).toBeTruthy()
     expect(within(card).getByRole('button', { name: 'Install Codex' })).toBeTruthy()
-    expect(within(card).queryByRole('button', { name: 'Add account' })).toBeNull()
-    expect(within(card).queryByRole('listitem')).toBeNull()
+    // An agent that can run has nothing to set up: its accounts are the skill's card.
+    expect(screen.queryByRole('region', { name: 'Claude Code' })).toBeNull()
   })
 
   test("the agent picker offers no login the agent does not have, and names the one runs really take; alone it stays", async () => {
@@ -182,5 +110,24 @@ describe('Agent accounts', () => {
     expect(firstAccount(view)?.name).toBe('test')
     const alone = { computer: 'Mac', now: 0, accounts: [row('Claude login on VPS', true, { loggedOut: true })] }
     expect(runAccounts(alone).map(account => account.name)).toEqual(['Claude login on VPS'])
+  })
+
+  test("Settings draws the skill's own card, the Overview's; a skill that did not load says so", async () => {
+    views(TWO)
+    const nothing = { pages: [], cards: [], linkActions: [], panels: [], runSlots: [], settings: [], everyPage: [], loaded: true }
+    const card = { id: 'accounts', label: 'Accounts', package: '@openagt/skill-account-rotation', projects: [], computer: true, Card: () => <p>The skill's card</p> }
+    const { unmount } = render(
+      <ModulesContext.Provider value={{ ...nothing, cards: [card] }}>
+        <AccountsSettings />
+      </ModulesContext.Provider>,
+    )
+    expect(await screen.findByText("The skill's card")).toBeTruthy()
+    unmount()
+    render(
+      <ModulesContext.Provider value={nothing}>
+        <AccountsSettings />
+      </ModulesContext.Provider>,
+    )
+    expect(await screen.findByText('The accounts card did not load.')).toBeTruthy()
   })
 })

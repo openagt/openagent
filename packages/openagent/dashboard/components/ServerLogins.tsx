@@ -1,15 +1,14 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { Check, Loader2, Server as ServerIcon } from 'lucide-react'
+import { createContext, useContext, useEffect, useState, type ComponentType, type ReactNode } from 'react'
+import { GitBranch, Loader2, Server as ServerIcon } from 'lucide-react'
 import { onServerLogins, sendAllowLogins, sendSettleLogin, sendUseLoginsOn, type LoginThere, type ServerLogins, type ServerLoginsView } from '../rpc/server-logins.js'
 import type { CopiedKind } from '../../src/dashboard/copied-logins.js'
-import { usePolled, cn, Button } from '@openagt/skill-ui/module'
-import { Pill } from './Logins.js'
+import { Button, Card, CardContent, CardHeader, CardTitle, ClaudeLogo, CodexLogo, cn, usePolled } from '@openagt/skill-ui/module'
 import { CopyButton } from './ui/copy-button.js'
 
-// The servers of the person's that use this computer's logins, in Settings › Accounts: a bar for
-// each above the accounts, offering this computer's logins or saying how they stand there, with
-// the press that makes the server a login of its own in this computer's browser; under each
-// account's row, a row for each server saying whether it has it, with its press; and the person's answer when a server has an account of theirs
+// The servers of the person's that use this computer's logins, in Settings › Accounts: a card with
+// each server, offering this computer's logins or saying how they stand there with the press that
+// makes the server a login of its own in this computer's browser; a row for each login saying whether
+// the server has it, with its press; and the person's answer when a server has an account of theirs
 // that they left here. None on a server: it uses the logins of the person's computers.
 
 /** How often the servers are asked: often while a press is under way, the sign-in being the person's. */
@@ -40,31 +39,32 @@ export function ServersProvider({ children }: { children: ReactNode }) {
   return <ServersContext.Provider value={{ view: value, reload }}>{children}</ServersContext.Provider>
 }
 
-/** A bar for each server, above the accounts. */
-export function ServerBars() {
+/** The card of the servers that use this computer's logins: nothing where there are none. */
+export function ServersCard() {
   const { view, reload } = useServers()
+  const servers = view?.servers ?? []
+  if (servers.length === 0) return null
   return (
-    <>
-      {(view?.servers ?? []).map(server => (
-        <ServerBar key={server.machineId} server={server} computer={view!.computer} onChanged={reload} />
-      ))}
-    </>
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">
+          <span className="inline-flex items-center gap-2">
+            <ServerIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
+            On your servers
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {servers.map(server => (
+          <ServerLoginsThere key={server.machineId} server={server} computer={view!.computer} onChanged={reload} />
+        ))}
+      </CardContent>
+    </Card>
   )
 }
 
 /** How many of this computer's logins wait for the press there. */
 const waiting = (server: ServerLogins): LoginThere[] => server.logins.filter(login => login.state === 'allow' || login.state === 'switched')
-
-/** A server of the person's, above the accounts: offered this computer's logins, or how they stand there, and the press. */
-function ServerBar({ server, computer, onChanged }: { server: ServerLogins; computer: string; onChanged: () => Promise<void> }) {
-  const { tone, body } = useStanding(server, computer, onChanged)
-  if (body === null) return null
-  return (
-    <Bar label={server.label} tone={tone}>
-      {body}
-    </Bar>
-  )
-}
 
 /**
  * How this computer's logins stand on a server, in words, with the press that moves them on: the
@@ -136,22 +136,17 @@ function useStanding(server: ServerLogins, computer: string, onChanged: () => Pr
       tone: 'ask',
       body: (
         <>
-          <BarWords title={`${server.label} uses your logins: ${there} of ${server.logins.length} there`} words={missed.length > 0 ? `${missed.join(' and ')} did not get there: see ${missed.length === 1 ? 'its row' : 'their rows'} below. Tried again every minute.` : 'These did not get there. They are tried again every minute.'} />
+          <BarWords title={`${server.label} uses your logins: ${there} of ${server.logins.length} there`} words={missed.length > 0 ? `${missed.join(' and ')} did not get there: ${missed.length === 1 ? 'its row says' : 'their rows say'} why. Tried again every minute.` : 'These did not get there. They are tried again every minute.'} />
           <Failed error={failed} />
         </>
       ),
     }
   }
-  // All there: each account's row says where it is, so the bar says nothing more, unless something failed for the server.
-  if (failed === undefined) return { tone: 'quiet', body: null }
   return {
     tone: 'quiet',
     body: (
       <>
-        <p className="flex flex-1 items-center gap-1.5 text-sm">
-          <Check className="size-3.5 text-success" aria-hidden />
-          {`${server.label} uses your logins: all ${server.logins.length} there`}
-        </p>
+        <BarWords title={server.label} words={`Uses your logins: all ${server.logins.length} there`} />
         <Failed error={failed} />
       </>
     ),
@@ -189,12 +184,8 @@ function Standing({ server, computer, onChanged }: { server: ServerLogins; compu
   return <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-foreground">{useStanding(server, computer, onChanged).body}</div>
 }
 
-function Bar({ label, tone, children }: { label: string; tone: 'ask' | 'quiet'; children: ReactNode }) {
-  return (
-    <section aria-label={`Your logins on ${label}`} className={cn('flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-3 py-2.5', tone === 'ask' ? 'border-warning/40 bg-warning/10' : 'border-border')}>
-      {children}
-    </section>
-  )
+function Bar({ tone, children }: { tone: 'ask' | 'quiet'; children: ReactNode }) {
+  return <div className={cn('flex flex-wrap items-center gap-x-3 gap-y-2', tone === 'ask' && 'rounded-lg border border-warning/40 bg-warning/10 px-3 py-2.5')}>{children}</div>
 }
 
 function BarWords({ title, words }: { title: string; words: string }) {
@@ -216,153 +207,105 @@ function Failed({ error }: { error: string | undefined }) {
 }
 
 /** Which of this computer's accounts a row is. */
-export interface RowOf {
-  kind: CopiedKind
-  host?: string
-  source: string
+type RowOf = Pick<LoginThere, 'kind' | 'host' | 'source'>
+
+/** The mark of what a login is of. */
+const KIND_LOGOS: Record<CopiedKind, ComponentType<{ className?: string }>> = { claude: ClaudeLogo, codex: CodexLogo, git: GitBranch }
+
+/** A login's row on a server: its mark, its name, a line on how it stands, and its presses. */
+function LoginLine({ row, name, on, words, tone = 'text-muted-foreground', children }: { row: RowOf; name: string; on: string; words: string; tone?: string; children?: ReactNode }) {
+  const Logo = KIND_LOGOS[row.kind]
+  return (
+    <li aria-label={`${name} on ${on}`} className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 py-1">
+      <Logo className="size-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1 basis-40">
+        <p className="truncate text-sm font-medium">{name}</p>
+        <p className={cn('text-xs', tone)}>{words}</p>
+      </div>
+      {children !== undefined && <div className="ml-auto flex shrink-0 items-center gap-1">{children}</div>}
+    </li>
+  )
 }
 
-const sameRow = (login: RowOf, row: RowOf): boolean => login.kind === row.kind && (login.host ?? '') === (row.host ?? '') && login.source === row.source
-
-/** What a server's row under an account says of it there. */
-const THERE_PILL: Record<'there' | 'allow' | 'failed', { words: string; tone: string; dot: string }> = {
-  there: { words: 'Connected', tone: 'bg-success/10 text-success', dot: 'bg-success' },
-  allow: { words: 'Needs your yes', tone: 'bg-warning/10 text-warning', dot: 'bg-warning' },
-  failed: { words: 'Not connected', tone: 'bg-danger/10 text-danger', dot: 'bg-danger' },
+/** What a login's row says of how it stands, by its state. */
+function standingWords(login: LoginThere, computer: string): { words: string; tone: string } {
+  if (login.state === 'there') return { words: 'Connected', tone: 'text-success' }
+  if (login.state === 'allow') return { words: 'Needs your yes', tone: 'text-warning' }
+  if (login.state === 'switched') return { words: `Still runs on ${login.was}, the account you left on ${computer}. Runs go on until you pick.`, tone: 'text-warning' }
+  return { words: `Not connected: ${login.error ?? 'it did not get there'}`, tone: 'text-danger' }
 }
 
 /**
- * Under an account's name: a row for each server that uses this computer's logins, saying how the
- * account stands there, with its press: Allow where it waits for the person's yes, Take off where
- * it was made anew for the server. Why it did not get to a server is said under the rows, once for
- * every server it failed on alike.
+ * One server in the card: how this computer's logins stand there and the press that moves them on,
+ * then a row for each login with its own press: Allow where it waits for the person's yes, Take off
+ * where it was made anew for the server, the pick where the person left the account it has, and
+ * Keep or Take off for what this computer no longer has.
  */
-export function ServerNotes({ row }: { row: RowOf }) {
-  const { view, reload } = useServers()
-  // The press under way, on which server: its button says so until the answer.
-  const [pending, setPending] = useState<{ machineId: string; press: 'allow' | 'off' } | undefined>()
+function ServerLoginsThere({ server, computer, onChanged }: { server: ServerLogins; computer: string; onChanged: () => Promise<void> }) {
+  const { tone, body } = useStanding(server, computer, onChanged)
+  // The press under way, on which login: its button says so until the answer.
+  const [pending, setPending] = useState<{ source: string; press: 'allow' | 'off' | 'keep' } | undefined>()
   const [error, setError] = useState<string | undefined>()
-  const notes = (view?.servers ?? []).flatMap(server => {
-    const login = server.on && server.reachable ? server.logins.find(other => sameRow(other, row)) : undefined
-    return login && login.state !== 'switched' ? [{ server, login }] : []
-  })
-  if (notes.length === 0) return null
-  const failed = new Map<string, string[]>()
-  for (const { server, login } of notes) if (login.state === 'failed') failed.set(login.error ?? 'it did not get there', [...(failed.get(login.error ?? 'it did not get there') ?? []), server.label])
-  const pressable = notes.some(({ login }) => login.state === 'allow' || (login.state === 'there' && login.anew))
-  const act = async (machineId: string, press: 'allow' | 'off', go: () => Promise<{ ok: true } | { ok: false; error: string }>) => {
-    setPending({ machineId, press })
+  const act = async (source: string, press: 'allow' | 'off' | 'keep', go: () => Promise<{ ok: true } | { ok: false; error: string }>) => {
+    setPending({ source, press })
     setError(undefined)
     try {
       const done = await go()
       if (!done.ok) setError(done.error)
-      await reload()
+      await onChanged()
     } finally {
       setPending(undefined)
     }
   }
+  const logins = server.on && server.reachable ? server.logins : []
+  const settle = (row: RowOf, keep: boolean) => void act(row.source, keep ? 'keep' : 'off', () => sendSettleLogin(server.machineId, { kind: row.kind, ...(row.host !== undefined ? { host: row.host } : {}), source: row.source }, keep))
+  const allow = (source: string) => void act(source, 'allow', () => sendAllowLogins(server.machineId))
   return (
-    <div className="space-y-1">
-      <ul className="rounded-md bg-muted/50 py-1">
-        {notes.map(({ server, login }) => {
-          // The login being made for the server keeps its press busy until the browser's yes is in.
-          const allowing = (pending?.machineId === server.machineId && pending.press === 'allow') || server.allowing?.name === login.name
-          const takingOff = pending?.machineId === server.machineId && pending.press === 'off'
-          return (
-            <li key={server.machineId} aria-label={`${login.name} on ${server.label}`} className="flex min-h-9 flex-wrap items-center gap-x-2 gap-y-1 px-2.5 py-1 text-xs">
-              <ServerIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-              {/* The name stays whole: on a narrow page the state and the press go under it, to the right. */}
-              <span className="max-w-[calc(100%-1.5rem)] flex-[1_0_auto] truncate">{server.label}</span>
-              <div className="ml-auto flex items-center gap-2">
-                <Pill {...THERE_PILL[login.state as keyof typeof THERE_PILL]} />
-                {/* The pills line up whichever row has a press. */}
-                {pressable && (
-                  <div className="flex w-24 shrink-0 justify-end max-sm:w-auto">
-                    {login.state === 'allow' && (
-                      <Button size="xs" disabled={pending !== undefined || allowing} onClick={() => void act(server.machineId, 'allow', () => sendAllowLogins(server.machineId))}>
-                        {allowing && <Loader2 className="size-3 animate-spin" aria-hidden />}
-                        {allowing ? 'Allowing…' : 'Allow'}
-                      </Button>
-                    )}
-                    {/* One that goes as it is would be handed over again at once: only one made anew for the server is taken off. */}
-                    {login.state === 'there' && login.anew && (
-                      <Button size="xs" variant="ghost" className="text-muted-foreground" disabled={pending !== undefined} title={`${server.label} no longer has it; it waits for your yes again.`} onClick={() => void act(server.machineId, 'off', () => sendSettleLogin(server.machineId, row, false))}>
-                        {takingOff && <Loader2 className="size-3 animate-spin" aria-hidden />}
-                        {takingOff ? 'Taking off…' : 'Take off'}
-                      </Button>
-                    )}
-                  </div>
+    <section aria-label={`Your logins on ${server.label}`} className="space-y-1.5">
+      <Bar tone={tone}>{body}</Bar>
+      {(logins.length > 0 || server.left.length > 0) && (
+        <ul>
+          {logins.map(login => {
+            // The login being made for the server keeps its press busy until the browser's yes is in.
+            const allowing = (pending?.press === 'allow' && pending.source === login.source) || server.allowing?.name === login.name
+            const takingOff = pending?.press === 'off' && pending.source === login.source
+            return (
+              <LoginLine key={`${login.kind} ${login.host ?? ''} ${login.source}`} row={login} name={login.name} on={server.label} {...standingWords(login, computer)}>
+                {login.state === 'allow' && (
+                  <Button size="xs" disabled={pending !== undefined || allowing} onClick={() => allow(login.source)}>
+                    {allowing && <Loader2 className="size-3 animate-spin" aria-hidden />}
+                    {allowing ? 'Allowing…' : 'Allow'}
+                  </Button>
                 )}
-              </div>
-            </li>
-          )
-        })}
-      </ul>
-      {[...failed].map(([why, on]) => (
-        <p key={why} className="text-xs text-danger">{`Not on ${on.join(' · ')}: ${why}`}</p>
-      ))}
+                {/* One that goes as it is would be handed over again at once: only one made anew for the server is taken off. */}
+                {login.state === 'there' && login.anew && (
+                  <Button size="xs" variant="ghost" className="text-muted-foreground" disabled={pending !== undefined} title={`${server.label} no longer has it; it waits for your yes again.`} onClick={() => settle(login, false)}>
+                    {takingOff && <Loader2 className="size-3 animate-spin" aria-hidden />}
+                    {takingOff ? 'Taking off…' : 'Take off'}
+                  </Button>
+                )}
+                {login.state === 'switched' && !server.allowing && (
+                  <>
+                    <Button size="xs" disabled={pending !== undefined} title="Opens your browser once." onClick={() => allow(login.source)}>{`Use ${login.name} there`}</Button>
+                    <Button size="xs" variant="ghost" disabled={pending !== undefined} onClick={() => settle(login, true)}>{`Keep ${login.was}`}</Button>
+                  </>
+                )}
+              </LoginLine>
+            )
+          })}
+          {server.left.map(login => (
+            <LoginLine key={`left ${login.kind} ${login.host ?? ''} ${login.source}`} row={login} name={login.name} on={server.label} words={`No longer on ${computer}`}>
+              <Button size="xs" variant="ghost" disabled={pending !== undefined} onClick={() => settle(login, true)}>
+                Keep it there
+              </Button>
+              <Button size="xs" variant="ghost" className="text-muted-foreground" disabled={pending !== undefined} onClick={() => settle(login, false)}>
+                Take it off
+              </Button>
+            </LoginLine>
+          ))}
+        </ul>
+      )}
       {error !== undefined && <p role="alert" className="text-xs text-danger">{error}</p>}
-    </div>
-  )
-}
-
-/** Under an account's row: a server that has another account of this one's, which the person left here. Their answer: this one there, or the old one kept. */
-export function SwitchNotice({ row }: { row: RowOf }) {
-  const { view, reload } = useServers()
-  const [error, setError] = useState<string | undefined>()
-  const switched = (view?.servers ?? []).flatMap(server => {
-    const login = server.on && !server.allowing ? server.logins.find(other => sameRow(other, row) && other.state === 'switched') : undefined
-    return login ? [{ server, login }] : []
-  })
-  const act = async (go: () => Promise<{ ok: true } | { ok: false; error: string }>) => {
-    setError(undefined)
-    const done = await go()
-    if (!done.ok) setError(done.error)
-    await reload()
-  }
-  return (
-    <>
-      {switched.map(({ server, login }) => (
-        <div key={server.machineId} role="status" className="mx-3 mb-3 space-y-2 rounded-lg border border-warning/40 bg-warning/10 p-3">
-          <p className="text-sm">{`${server.label} still runs on ${login.was}, the account you left on ${view!.computer}.`}</p>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => void act(() => sendAllowLogins(server.machineId))}>{`Use ${login.name} there`}</Button>
-            <Button size="sm" variant="outline" onClick={() => void act(() => sendSettleLogin(server.machineId, row, true))}>{`Keep ${login.was}`}</Button>
-          </div>
-          <p className="text-xs text-muted-foreground">{`Use ${login.name} there opens your browser once. Runs go on until you pick.`}</p>
-          {error !== undefined && <p role="alert" className="text-xs text-danger">{error}</p>}
-        </div>
-      ))}
-    </>
-  )
-}
-
-/** At a card's foot: what a server has of this computer's of this kind that this computer no longer has. The person keeps it there or takes it off. */
-export function LeftNotices({ kind, host }: { kind: CopiedKind; host?: string }) {
-  const { view, reload } = useServers()
-  const [error, setError] = useState<string | undefined>()
-  const left = (view?.servers ?? []).flatMap(server => server.left.filter(login => login.kind === kind && (login.host ?? '') === (host ?? '')).map(login => ({ server, login })))
-  if (left.length === 0) return null
-  const act = async (machineId: string, { kind, host, source }: RowOf, keep: boolean) => {
-    setError(undefined)
-    const done = await sendSettleLogin(machineId, { kind, ...(host !== undefined ? { host } : {}), source }, keep)
-    if (!done.ok) setError(done.error)
-    await reload()
-  }
-  return (
-    <div className="space-y-2 border-t border-border px-3 py-2.5">
-      {left.map(({ server, login }) => (
-        <div key={`${server.machineId} ${login.source}`} role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <p className="min-w-0 flex-1 basis-60 text-sm">{`${server.label} still has ${login.name}, which is no longer on ${view!.computer}.`}</p>
-          <Button size="xs" variant="outline" onClick={() => void act(server.machineId, login, true)}>
-            Keep it there
-          </Button>
-          <Button size="xs" variant="ghost" onClick={() => void act(server.machineId, login, false)}>
-            Take it off
-          </Button>
-        </div>
-      ))}
-      {error !== undefined && <p role="alert" className="text-xs text-danger">{error}</p>}
-    </div>
+    </section>
   )
 }

@@ -4,7 +4,7 @@ import { forgetRemembered } from '@openagt/skill-ui/module'
 
 const onPerson = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/person.js', () => ({ onPerson }))
-const accounts = vi.hoisted(() => ({ onAgentAccounts: vi.fn(), sendUseAgentAccountFirst: vi.fn(), sendAddAgentAccount: vi.fn(), sendRemoveAgentAccount: vi.fn() }))
+const accounts = vi.hoisted(() => ({ onAgentAccounts: vi.fn(), sendUseAgentAccountFirst: vi.fn() }))
 vi.mock('../rpc/accounts.js', () => accounts)
 const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), sendGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
