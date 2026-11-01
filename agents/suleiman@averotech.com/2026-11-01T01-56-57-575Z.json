@@ -1,0 +1,15 @@
+{
+  "id": "2026-11-01T01-56-57-575Z",
+  "startedAt": "2026-11-01T01:56:59.035Z",
+  "status": "running",
+  "intent": "tell me hi, nothing else",
+  "driver": "claude-code",
+  "model": "opus",
+  "caller": {
+    "runner": {
+      "host": "OpenAgentVPS",
+      "pid": 2303722
+    },
+    "host": "OpenAgentVPS"
+  }
+}
