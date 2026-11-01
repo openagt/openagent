@@ -135,6 +135,39 @@ test("a machine's runs are followed with one call it holds: what changes a list 
   assert.equal(calls.length, 6)
 })
 
+test('a machine renamed while it is followed: its runs under the new name are taken, and it is asked again for all of them', async () => {
+  const calls: { since: string | undefined; answer: (said: unknown) => void }[] = []
+  const kept = new MachineRunsKept(
+    (_machine, _address, since) => new Promise(answer => calls.push({ since, answer })),
+    () => {},
+    () => 1_000,
+    async () => {},
+  )
+  const until = async (done: () => boolean): Promise<void> => {
+    for (let i = 0; i < 100 && !done(); i++) await new Promise(resolve => setImmediate(resolve))
+    assert.ok(done(), 'it never happened')
+  }
+  const run = { id: 'r1', status: 'running', startedAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-01T00:00:00.000Z', host: 'new-name', title: 'Named' }
+  const url = 'http://127.0.0.1:4310'
+  const first = kept.of([{ url, host: 'old-name' }], 'github.com/me/p')
+  await until(() => calls.length === 1)
+  // Under the name it was asked with, a run under the new name is another computer's.
+  calls[0]!.answer({ at: 'a.1', runs: [run], ids: ['r1'] })
+  assert.deepEqual((await first)[0]!.runs, [])
+  await until(() => calls.length === 2)
+  assert.equal(calls[1]!.since, 'a.1')
+  // The list asks with the new name while the machine holds the call: its answer counts, and the next ask starts over.
+  const [renamed] = await kept.of([{ url, host: 'new-name' }], 'github.com/me/p')
+  assert.equal(renamed!.host, 'new-name')
+  calls[1]!.answer({ at: 'a.2', runs: [run], ids: ['r1'] })
+  await until(() => calls.length === 3)
+  assert.equal(calls[2]!.since, undefined)
+  const [now] = await kept.of([{ url, host: 'new-name' }], 'github.com/me/p')
+  assert.deepEqual(now!.runs.map(r => r.title), ['Named'])
+  kept.stop()
+  calls[2]!.answer({ at: 'a.3', runs: [run], ids: ['r1'] })
+})
+
 test('a machine never asked yet is known by when it was last seen as kept with it', async () => {
   const kept = new MachineRunsKept(async () => {
     throw new Error('off')

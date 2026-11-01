@@ -256,7 +256,9 @@ export function withFollowed(followed: AgentMeta[], local: AgentMeta[], sent: (a
     const run = live.get(record.id)
     if (!run) return record
     const { remoteLabel, remoteKind } = run
-    return { ...record, status: run.status, updatedAt: run.updatedAt, target: 'remote' as const, ...(remoteLabel !== undefined ? { remoteLabel } : {}), ...(remoteKind !== undefined ? { remoteKind } : {}), ...(run.sessionId !== undefined ? { sessionId: run.sessionId } : {}) }
+    // Where it runs is known: this computer sent it there, whatever name the machine goes by now.
+    const { otherHost: _other, ...known } = record
+    return { ...known, status: run.status, updatedAt: run.updatedAt, target: 'remote' as const, ...(remoteLabel !== undefined ? { remoteLabel } : {}), ...(remoteKind !== undefined ? { remoteKind } : {}), ...(run.sessionId !== undefined ? { sessionId: run.sessionId } : {}) }
   })
   return [...followed.filter(run => !recorded.has(run.id) && sent(run.id)), ...rows]
 }

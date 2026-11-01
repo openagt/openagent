@@ -32,11 +32,13 @@ export interface Machine {
   owner?: string
   /** The person was told so, once. */
   told?: true
+  /** It said it is a server: reached by its line, it is still no computer someone sits at. */
+  server?: true
 }
 
 /** A saved machine as the browser is handed it. */
-function shown({ id, label, url, owner, told }: MachineRecord): Machine {
-  return { id, label, url, ...(owner !== undefined ? { owner } : {}), ...(told ? { told } : {}) }
+function shown({ id, label, url, owner, told, server }: MachineRecord): Machine {
+  return { id, label, url, ...(owner !== undefined ? { owner } : {}), ...(told ? { told } : {}), ...(server ? { server } : {}) }
 }
 
 export type AddMachineResult = { ok: true; machine: Machine } | { ok: false; error: string }
