@@ -2,7 +2,7 @@
 import type { ComponentProps } from 'react'
 import { Checkbox as CheckboxPrimitive } from '@base-ui/react/checkbox'
 import { Check } from 'lucide-react'
-import { cn } from '@openagt/skill-ui/module'
+import { cn } from '../../lib/utils.js'
 
 // A shadcn-style Checkbox on Base UI, matching the Tooltip and DropdownMenu already here (no Radix
 // pulled in). Replaces the bare `<input type="checkbox">` every panel used to hand-roll: those got

@@ -44,7 +44,7 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && tsc -p dashboard/tsconfig.module.json && cp ../skill-ui/module/theme.css dist/module.css && cp src/module-server.d.ts dist/module-server.d.ts && node scripts/copy-extension.mjs && cd dashboard && vite build",
+    "build": "tsc -p tsconfig.build.json && tsc -p dashboard/tsconfig.module.json && cp dashboard/module/theme.css dist/module.css && cp src/module-server.d.ts dist/module-server.d.ts && node scripts/copy-extension.mjs && cd dashboard && vite build",
     "prepack": "node -e \"if(!process.env.npm_config_user_agent?.startsWith('pnpm/')){console.error('Pack and publish with pnpm: it replaces workspace:* with the real version, npm does not');process.exit(1)}\"",
     "dev": "tsc -p tsconfig.build.json --watch",
     "dev:dashboard": "cd dashboard && vite",
@@ -110,8 +110,7 @@
     "tiptap-markdown": "^0.8.10",
     "uqr": "0.1.3",
     "yaml": "^2.5.0",
-    "@openagt/skill-account-rotation": "workspace:*",
-    "@openagt/skill-ui": "workspace:*"
+    "@openagt/skill-account-rotation": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",

@@ -2,7 +2,8 @@
 import { useState, type ReactNode } from 'react'
 import { AlertDialog } from '@base-ui/react/alert-dialog'
 import { useAction } from '../../lib/use-action.js'
-import { Button, cn } from '@openagt/skill-ui/module'
+import { Button } from './button.js'
+import { cn } from '../../lib/utils.js'
 
 // A confirm-before-you-act dialog on Base UI's AlertDialog (#1032): for the one action that cannot
 // be taken back. The trigger is whatever the caller renders; confirming runs `onConfirm` through

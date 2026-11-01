@@ -1,4 +1,6 @@
-import { Card, ClaudeLogo, CodexLogo, Skeleton, CardContent } from '@openagt/skill-ui/module'
+import { Card, CardContent } from './ui/card.js'
+import { ClaudeLogo, CodexLogo } from './driver-logos.js'
+import { Skeleton } from './ui/skeleton.js'
 import type { DriverName } from '../../src/client.js'
 import { useMountedModules } from '../lib/use-modules.js'
 import { useAgentAccounts } from './AgentAccounts.js'

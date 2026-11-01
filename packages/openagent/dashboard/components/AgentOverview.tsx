@@ -3,7 +3,7 @@ import { sessionInfo } from '../../src/client.js'
 import { AgentErrorCount, errorsToCount } from './AgentErrorCount.js'
 import { agentStatusPill } from '../lib/agent-status.js'
 import { describeSessionLink } from '../lib/session-link.js'
-import { cn } from '@openagt/skill-ui/module'
+import { cn } from '../lib/utils.js'
 
 // The agent overview (#431): the "moat" the wrapped agent's own chat cannot show, rebuilt
 // on the new dashboard. Each card is a pure projection of the event stream

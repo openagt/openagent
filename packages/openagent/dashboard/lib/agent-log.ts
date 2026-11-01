@@ -1,5 +1,5 @@
 import { onAgent } from '../rpc/reads.js'
-import { readAhead } from '@openagt/skill-ui/module'
+import { readAhead } from './use-async.js'
 
 // An ended agent's saved log, as the agent's page remembers it between visits.
 

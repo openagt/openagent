@@ -1,4 +1,4 @@
-import { useLoaded } from '@openagt/skill-ui/module'
+import { useLoaded } from './use-async.js'
 import { onEditors, type EditorInfo } from '../rpc/preferences.js'
 
 // The editors installed on the daemon's machine (#727), for the "Preferred editor" picker. Read

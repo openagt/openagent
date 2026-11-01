@@ -1,4 +1,4 @@
-import { cn } from './utils.js'
+import { cn } from '../../lib/utils.js'
 
 /** A small ring, filled as far as the share in use, the share inside it, its name under it; amber near full, red at it. With no share known it is empty, with a dash: no number it cannot back. */
 export function GaugeFace({ label, share }: { label: string; share: number | undefined }) {

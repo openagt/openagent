@@ -1,4 +1,4 @@
-import { cn } from './utils.js'
+import { cn } from '../../lib/utils.js'
 
 /** A bar as thin as a line, filled as far as the window is gone; amber near the end, red at it. */
 export function AccountBar({ percent, className }: { percent: number | undefined; className?: string }) {

@@ -3,8 +3,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 
 // The card's build: one browser module, `dist/dashboard/dashboard.js`, plus its stylesheet. React and
-// `@openagt/skill-ui/module` stay bare imports: the page's import map supplies its own running copies,
-// OpenAgent's dashboard or the page of `npx @openagt/skill-ui` alike.
+// `@openagt/dashboard/module` stay bare imports: the dashboard's import map supplies its own running copies.
 export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
   plugins: [tailwindcss()],
@@ -18,7 +17,7 @@ export default defineConfig({
       cssFileName: 'dashboard',
     },
     rollupOptions: {
-      external: ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', '@openagt/skill-ui/module'],
+      external: ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', '@openagt/dashboard/module'],
     },
   },
 })

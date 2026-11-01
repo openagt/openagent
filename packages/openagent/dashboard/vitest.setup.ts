@@ -1,7 +1,7 @@
 import { createElement, type ReactNode } from 'react'
 import { configure } from '@testing-library/react'
 import { beforeEach, vi } from 'vitest'
-import { forgetRemembered } from '@openagt/skill-ui/module'
+import { forgetRemembered } from './lib/use-async.js'
 
 // Testing Library's async queries (`findBy*`, `waitFor`) give up after 1s by default, which is
 // not enough on a loaded machine (#886). Several components here assert through a Base UI menu,

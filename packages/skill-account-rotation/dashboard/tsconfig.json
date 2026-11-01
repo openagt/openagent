@@ -13,7 +13,12 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "isolatedModules": true,
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "@openagt/dashboard/module": ["../../openagent/dashboard/module/index.ts"]
+    }
   },
   "include": ["**/*.ts", "**/*.tsx"]
 }

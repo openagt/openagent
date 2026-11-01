@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { onProjectSkills, sendChangeSkills, sendProjectSkills, type ProjectSkills, type ProjectSkill, type SendSkillsResult } from '../rpc/skills.js'
 import { useAction } from '../lib/use-action.js'
-import { usePolled, Button, buttonVariants } from '@openagt/skill-ui/module'
+import { usePolled } from '../lib/use-async.js'
+import { Button, buttonVariants } from './ui/button.js'
 import { Checkbox } from './ui/checkbox.js'
 import { Dialog } from './ui/dialog.js'
 

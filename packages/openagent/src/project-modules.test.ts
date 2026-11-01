@@ -4,8 +4,7 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { BUILT_IN_PACKAGES } from './built-in.js'
-import { commandReads, runModuleCommand, moduleFile } from '@openagt/skill-ui'
-import { findBroughtModule, readProjectModules, findProjectModule } from './project-modules.js'
+import { commandReads, findBroughtModule, findProjectModule, moduleFile, readProjectModules, runModuleCommand } from './project-modules.js'
 
 async function tempDir(prefix: string): Promise<string> {
   return realpath(await mkdtemp(join(tmpdir(), prefix)))

@@ -1,7 +1,6 @@
 // The skill's UI: the package's `./dashboard` export. One card, built only on the `account-rotation`
-// command and on `@openagt/skill-ui/module`, so it is the same on OpenAgent's Overview and on the page
-// of `npx @openagt/skill-ui`.
-import { defineModule } from '@openagt/skill-ui/module'
+// command, so it shows on the dashboard's Overview what an agent sees through the same command.
+import { defineModule } from '@openagt/dashboard/module'
 import { AccountsCard } from './AccountsCard.js'
 import './dashboard.css'
 

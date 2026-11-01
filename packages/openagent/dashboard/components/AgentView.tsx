@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentDoing, AgentMeta, AgentWorktree, OpenAgentEvent } from '../../src/index.js'
 import { onAgent, onAgentsDoing, onGitHostHome, onRetainedWorktrees } from '../rpc/reads.js'
-import { useLoaded, usePolled } from '@openagt/skill-ui/module'
+import { useLoaded, usePolled } from '../lib/use-async.js'
 import { handoffSays, useAgentHandoff } from '../lib/use-agent-handoff.js'
 import { useCheckoutStatus } from '../lib/use-checkout-status.js'
 import { isAgentActive, agentOutcome, cardOutcome } from '../lib/live-state.js'

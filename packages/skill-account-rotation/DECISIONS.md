@@ -17,9 +17,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   drivers calling this package, a circle of packages, and over the switching staying in
   the drivers, with only the list moved out.
 - Every run gets the skill: accounts are the computer's, so no project ticks it.
-- An Accounts card built only on the command and `@openagt/skill-ui`, the first skill that shows
-  the same on OpenAgent's Overview and on its own page. Picked over moving the whole Settings page
-  first; that it overlaps the Usage card is accepted, and Customize hides either.
+- An Accounts card built only on the command, the first skill whose card shows what its command
+  says. Picked over moving the whole Settings page first; that it overlaps the Usage card is
+  accepted, and Customize hides either.
 - The person's own login can be logged out from the card and Settings, their terminal with it.
   Picked over never offering it: an account on the list cannot be added a second time, so there
   has to be a way to take any row off.

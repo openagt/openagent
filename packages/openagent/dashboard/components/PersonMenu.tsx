@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { CircleAlert, Settings } from 'lucide-react'
 import { onPerson, type Person } from '../rpc/person.js'
-import { useLoaded } from '@openagt/skill-ui/module'
+import { useLoaded } from '../lib/use-async.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { ThemeSubmenu } from './ThemeSubmenu.js'
 import { NotificationsSubmenu } from './NotificationsSubmenu.js'

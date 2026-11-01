@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { BridgeBrowserStatus } from '../../src/bridge-browser.js'
 import { onBridgeBrowser } from '../rpc/reads.js'
 import { sendBridgeBrowser } from '../rpc/control.js'
-import { Button } from '@openagt/skill-ui/module'
+import { Button } from './ui/button.js'
 
 /**
  * The bridge browser's line in Settings › Claude web (#1332): where the daemon's own browser stands,

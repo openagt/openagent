@@ -1,7 +1,26 @@
-import { useContext, type ReactNode } from 'react'
+import { useContext, type HTMLAttributes, type ReactNode } from 'react'
 import { ArrowRight } from 'lucide-react'
-import { CardTitle, cn } from '@openagt/skill-ui/module'
+import { cn } from '../../lib/utils.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../../lib/host-services.js'
+
+// Minimal shadcn-style Card for the dashboard page (#471): a bordered surface with an
+// optional header. Just enough structure to keep the page's panels consistent.
+export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn('rounded-lg border border-border bg-card text-card-foreground', className)} {...props} />
+}
+
+export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn('flex flex-col gap-1 px-4 pt-4', className)} {...props} />
+}
+
+export function CardTitle({ className, ...props }: HTMLAttributes<HTMLHeadingElement>) {
+  return <h3 className={cn('text-sm font-semibold', className)} {...props} />
+}
+
+export function CardContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn('p-4', className)} {...props} />
+}
+
 
 /**
  * A card's title that opens the card's own page, named by its `segment`. A card on the Overview

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, Copy, KeyRound, MoreHorizontal } from 'lucide-react'
-import { Button, Card, CardContent, CardHeader, CardTitle, ClaudeLogo, CodexLogo, GaugeFace, Input, Skeleton, cn, usePolled, useSkillHost, type ModuleCardProps, type SkillHost } from '@openagt/skill-ui/module'
+import { Button, Card, CardContent, CardHeader, CardTitle, ClaudeLogo, CodexLogo, GaugeFace, Input, Skeleton, cn, useModuleHost, usePolled, type ModuleCardProps, type ModuleHost } from '@openagt/dashboard/module'
 
 // The accounts each coding agent's runs try, in order: how full each one is, whether it is at a
 // limit, adding one: the command's own sign-in, which goes on by itself while the card follows it.
@@ -82,7 +82,7 @@ interface AddingNow {
 /** What a command answered: its output for each agent, or why there is none. A browser keeps this between visits, so a new version reads what an old one kept. */
 type Read<T> = { ok: true; accounts: Record<AgentId, T[]> } | { ok: false; error: string }
 
-async function read<T>(host: SkillHost, word: string): Promise<Read<T>> {
+async function read<T>(host: ModuleHost, word: string): Promise<Read<T>> {
   const answer = await host.runComputerCommand([word])
   return answer.ok ? { ok: true, accounts: answer.output as Record<AgentId, T[]> } : answer
 }
@@ -127,7 +127,7 @@ const REFUSED_WORDS = "Claude didn't take that code. Copy it whole from its page
 
 /** A sign-in under way: this computer's browser, or on a computer with none, the person's own device: Codex's code typed at its page, or Claude's page opened and its code pasted back here. */
 function SigningIn({ agent, adding, noBrowser, onChanged }: { agent: (typeof AGENTS)[number]; adding: NonNullable<AddingNow['adding']>; noBrowser: boolean; onChanged: () => void }) {
-  const host = useSkillHost()
+  const host = useModuleHost()
   const [code, setCode] = useState('')
   const [error, setError] = useState<string>()
   const [copied, setCopied] = useState(false)
@@ -202,7 +202,7 @@ function SigningIn({ agent, adding, noBrowser, onChanged }: { agent: (typeof AGE
  * said first: signing in here is the longer way.
  */
 function AddAccount({ agent, now, from, naming, onNaming, onChanged }: { agent: (typeof AGENTS)[number]; now: AddingNow; from: string | undefined; naming: boolean; onNaming: (naming: boolean) => void; onChanged: () => void }) {
-  const host = useSkillHost()
+  const host = useModuleHost()
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
@@ -390,7 +390,7 @@ function AgentAccounts({ agent, accounts, usage, reading, adding, from, naming, 
 }
 
 export function AccountsCard(_props: ModuleCardProps) {
-  const host = useSkillHost()
+  const host = useModuleHost()
   const { value: list, loaded, reload } = usePolled<Read<Account> | undefined>(() => read<Account>(host, 'list'), undefined, LIST_EVERY_MS, [], { remember: 'account-rotation:list', stored: true })
   const { value: usage, reload: reloadUsage } = usePolled<Read<Usage> | undefined>(() => read<Usage>(host, 'usage'), undefined, USAGE_EVERY_MS, [], { remember: 'account-rotation:usage', stored: true })
   // Followed closely from a press until the sign-in has ended, which the person may take minutes over.

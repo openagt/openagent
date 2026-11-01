@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react'
-import { cn } from '@openagt/skill-ui/module'
+import { cn } from '../../lib/utils.js'
 
 // A trimmed shadcn Textarea, beside the Input: the same border, focus ring and disabled look, for
 // a text of several lines.

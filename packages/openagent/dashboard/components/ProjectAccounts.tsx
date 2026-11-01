@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { onProjectAccounts, sendProjectAccounts, type ProjectAccountsView, type ProjectAgentAccounts } from '../rpc/logins.js'
-import { readAhead, usePolled } from '@openagt/skill-ui/module'
+import { readAhead, usePolled } from '../lib/use-async.js'
 import { Checkbox } from './ui/checkbox.js'
 import { SettingsSection as Section, SettingsSelectRow as SelectRow } from './SettingsRows.js'
 

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { forgetRemembered } from '@openagt/skill-ui/module'
+import { forgetRemembered } from '../lib/use-async.js'
 
 const accounts = vi.hoisted(() => ({ onAgentAccounts: vi.fn() }))
 vi.mock('../rpc/accounts.js', () => accounts)

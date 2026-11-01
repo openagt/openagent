@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
-import { cn } from '@openagt/skill-ui/module'
+import { cn } from '../lib/utils.js'
 
 // Settings' building blocks (#958): an entry's settings, a row, a row picked from a list. The
 // dashboard's own entries are made of them, and so is an entry a module brings (`@openagt/dashboard/module`

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { SkillHostContext, forgetRemembered, type ModuleCommandResult, type SkillHost } from '@openagt/skill-ui/module'
+import { ModuleHostContext, forgetRemembered, type ModuleCommandResult, type ModuleHost } from '@openagt/dashboard/module'
 import { AccountsCard } from './AccountsCard.js'
 
 const HOUR = 3_600_000
@@ -9,11 +9,11 @@ type Agents = { claude: unknown[]; codex: unknown[] }
 
 function renderCard(list: (args: string[]) => ModuleCommandResult, usage: Agents | Promise<Agents> = { claude: [], codex: [] }) {
   const runComputerCommand = vi.fn(async (args: string[]): Promise<ModuleCommandResult> => (args[0] === 'usage' ? { ok: true, output: await usage } : list(args)))
-  const host: SkillHost = { package: '@openagt/skill-account-rotation', runCommand: async () => ({ ok: false, error: 'not in a project' }), runComputerCommand }
+  const host: Pick<ModuleHost, 'package' | 'runCommand' | 'runComputerCommand'> = { package: '@openagt/skill-account-rotation', runCommand: async () => ({ ok: false, error: 'not in a project' }), runComputerCommand }
   render(
-    <SkillHostContext.Provider value={host}>
+    <ModuleHostContext.Provider value={host as ModuleHost}>
       <AccountsCard projects={[]} />
-    </SkillHostContext.Provider>,
+    </ModuleHostContext.Provider>,
   )
   return runComputerCommand
 }
@@ -28,11 +28,11 @@ function renderAdding(addingNow: () => Record<string, unknown>, more: (args: str
     if (args[0] === 'adding') return { ok: true, output: addingNow() }
     return more(args, input)
   })
-  const host: SkillHost = { package: '@openagt/skill-account-rotation', runCommand: async () => ({ ok: false, error: 'not in a project' }), runComputerCommand }
+  const host: Pick<ModuleHost, 'package' | 'runCommand' | 'runComputerCommand'> = { package: '@openagt/skill-account-rotation', runCommand: async () => ({ ok: false, error: 'not in a project' }), runComputerCommand }
   render(
-    <SkillHostContext.Provider value={host}>
+    <ModuleHostContext.Provider value={host as ModuleHost}>
       <AccountsCard projects={[]} />
-    </SkillHostContext.Provider>,
+    </ModuleHostContext.Provider>,
   )
   return calls
 }

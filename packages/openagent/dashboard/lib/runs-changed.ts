@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { RunsChanged } from '../../src/dashboard-rpc/runs-changed.js'
-import type { Again } from '@openagt/skill-ui/module'
+import type { Again } from './use-async.js'
 
 // The daemon tells the page the moment the runs of a project change, here or on another computer
 // (`GET /_rpc/changes`), and the reads that list runs read again at once. While it tells, those

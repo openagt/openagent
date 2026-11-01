@@ -120,6 +120,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   Files pane is the first module that is no skill. Picked over keeping Files a folder
   inside OpenAgent, which gave it a boundary but taught the module contract nothing, and
   named module over widget.
+- A skill works alone through its commands; its UI is a dashboard module, with no page of its
+  own. Picked over a separate `skill-ui` package with a standalone page, and over a contract
+  package beside the dashboard.
 - What a module shows beside the chat is a pane, as on Claude Code on the web. Each pane
   has an icon at the end of the page's top bar, which opens and closes it. The open panes
   are cards in one column, in the order they were opened, the agent's browser among them.

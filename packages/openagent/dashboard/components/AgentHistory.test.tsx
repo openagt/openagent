@@ -32,7 +32,7 @@ const updatePreferences = vi.hoisted(() => vi.fn())
 vi.mock('../lib/preferences.js', async importOriginal => ({ ...(await importOriginal<object>()), usePreferences: () => preferences.current, updatePreferences }))
 
 const { AgentHistory } = await import('./AgentHistory.js')
-const { forgetRemembered } = await import('@openagt/skill-ui/module')
+const { forgetRemembered } = await import('../lib/use-async.js')
 
 afterEach(() => {
   cleanup()

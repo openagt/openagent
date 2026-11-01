@@ -1,5 +1,6 @@
 import { Menu } from 'lucide-react'
-import { cn, Button } from '@openagt/skill-ui/module'
+import { cn } from '../lib/utils.js'
+import { Button } from './ui/button.js'
 import { useSidebar } from './ui/sidebar.js'
 
 // On a phone the sidebar is closed (AgentHistory), and these two are how a person gets to it. The

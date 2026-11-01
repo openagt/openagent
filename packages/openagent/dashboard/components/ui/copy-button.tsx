@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, Copy } from 'lucide-react'
-import { cn } from '@openagt/skill-ui/module'
+import { cn } from '../../lib/utils.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './tooltip.js'
 
 // A small copy-to-clipboard affordance (#948) for the strings users take to a terminal:

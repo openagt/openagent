@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react'
 import { ScrollArea as ScrollAreaPrimitive } from '@base-ui/react/scroll-area'
-import { cn } from '@openagt/skill-ui/module'
+import { cn } from '../../lib/utils.js'
 
 // shadcn's Base UI `scroll-area`, ported (#913) the same way `message-scroller` was (#712): there is
 // no components.json here, so upstream's `cn-scroll-area-*` classes — a stylesheet of `@apply` in

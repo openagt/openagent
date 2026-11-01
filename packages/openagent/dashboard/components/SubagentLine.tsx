@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { CircleCheck, CircleHelp, CircleSlash, CircleX } from 'lucide-react'
 import type { AgentMeta } from '../../src/index.js'
-import { cn } from '@openagt/skill-ui/module'
+import { cn } from '../lib/utils.js'
 import { formatElapsed } from '../lib/format-date.js'
 import { STATUS_TONE } from '../lib/status-tone.js'
 import { anyModelName, useModels } from '../lib/models.js'

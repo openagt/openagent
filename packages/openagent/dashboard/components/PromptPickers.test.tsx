@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { Preferences } from '../../src/index.js'
-import { forgetRemembered } from '@openagt/skill-ui/module'
+import { forgetRemembered } from '../lib/use-async.js'
 
 // The pickers around the message box that say who and where a run is: the computer it goes to,
 // saved for the next opening; the coding agent's accounts, in the agent picker; the git host's

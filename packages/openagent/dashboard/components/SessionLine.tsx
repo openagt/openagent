@@ -3,7 +3,7 @@ import { ChevronRight, CircleCheck } from 'lucide-react'
 import type { AgentMeta } from '../../src/index.js'
 import { DRIVER_LABELS, driverFromImpl } from '../../src/client.js'
 import { modelName, useModels } from '../lib/models.js'
-import { cn } from '@openagt/skill-ui/module'
+import { cn } from '../lib/utils.js'
 import { Dots, Seconds } from './ToolCalls.js'
 
 /** What was set up for the agent before it read its prompt, as its card says it. */

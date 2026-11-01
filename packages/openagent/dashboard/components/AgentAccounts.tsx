@@ -1,7 +1,9 @@
 import { Check, Plus } from 'lucide-react'
 import { onMachineAgentAccounts, sendMachineAgentAccountFirst } from '../rpc/machines.js'
 import { onAgentAccounts, sendUseAgentAccountFirst, type AccountRow, type AccountWindow, type AccountsAgent, type AccountsView } from '../rpc/accounts.js'
-import { AccountBar, readAhead, usePolled, cn } from '@openagt/skill-ui/module'
+import { AccountBar } from './ui/account-bar.js'
+import { readAhead, usePolled } from '../lib/use-async.js'
+import { cn } from '../lib/utils.js'
 import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from './ui/dropdown-menu.js'
 
 // The accounts runs use, per coding agent, as the run's own places read them. Adding and removing

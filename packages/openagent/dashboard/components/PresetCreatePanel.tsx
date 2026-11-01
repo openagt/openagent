@@ -1,6 +1,7 @@
 import { useState, type KeyboardEvent } from 'react'
 import type { CustomPreset } from '../../src/index.js'
-import { Button, Input } from '@openagt/skill-ui/module'
+import { Button } from './ui/button.js'
+import { Input } from './ui/input.js'
 import { Textarea } from './ui/textarea.js'
 import { Dialog } from './ui/dialog.js'
 
