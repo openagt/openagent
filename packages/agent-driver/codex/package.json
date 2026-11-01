@@ -1,6 +1,6 @@
 {
   "name": "@openagt/agent-driver-codex",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "description": "Codex behind the agent-driver contract, on this machine.",
   "license": "MIT",
   "repository": {
