@@ -3,7 +3,7 @@ import { ArrowRight, CircleHelp, FilePen, GitBranch, GitPullRequest } from 'luci
 import type { Intervention } from '../../src/index.js'
 import { interventionKey } from '../../src/client.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { cn } from '@openagt/skill-ui/module'
+import { cn } from '../lib/utils.js'
 import { formatRelative } from '../lib/format-date.js'
 import { OnComputer } from './MachineMark.js'
 

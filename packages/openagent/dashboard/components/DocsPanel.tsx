@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { WorkspaceDoc } from '../../src/index.js'
-import { Button, cn } from '@openagt/skill-ui/module'
+import { Button } from './ui/button.js'
+import { cn } from '../lib/utils.js'
 import { Markdown } from './Markdown.js'
 import { ScrollArea } from './ui/scroll-area.js'
 

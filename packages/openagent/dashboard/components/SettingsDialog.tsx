@@ -22,7 +22,7 @@ import { Switch } from './ui/switch.js'
 import { RadioGroup, RadioGroupItem } from './ui/radio-group.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
-import { cn } from '@openagt/skill-ui/module'
+import { cn } from '../lib/utils.js'
 import { useProjectLabel } from '../lib/project-labels.js'
 import { SettingsRow as Row, SettingsSection as Section, SettingsSelectRow as SelectRow, type SettingsOption as SelectOption } from './SettingsRows.js'
 

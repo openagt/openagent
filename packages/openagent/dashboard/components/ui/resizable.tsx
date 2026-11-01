@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react'
 import { Group, Panel, Separator } from 'react-resizable-panels'
-import { cn } from '@openagt/skill-ui/module'
+import { cn } from '../../lib/utils.js'
 
 // shadcn's `resizable`, ported (no components.json here): the styled wrappers over
 // react-resizable-panels. A group lays its panels in a row or in a column, and the line between

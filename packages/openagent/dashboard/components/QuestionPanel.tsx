@@ -3,7 +3,7 @@ import { Check } from 'lucide-react'
 import type { ChoiceRequest } from '../../src/index.js'
 import { sendChoice, sendMessage } from '../rpc/control.js'
 import { useAction } from '../lib/use-action.js'
-import { cn } from '@openagt/skill-ui/module'
+import { cn } from '../lib/utils.js'
 import { answerPrompt, skipPrompt } from '../lib/answered-question.js'
 
 /** The pick that is no option: the person's own words, typed in the "Other" row. */

@@ -1,5 +1,5 @@
 import type { HTMLAttributes } from 'react'
-import { cn } from '@openagt/skill-ui/module'
+import { cn } from '../../lib/utils.js'
 
 // Minimal shadcn-style Badge for the event-kind / status pills.
 export function Badge({ className, ...props }: HTMLAttributes<HTMLSpanElement>) {

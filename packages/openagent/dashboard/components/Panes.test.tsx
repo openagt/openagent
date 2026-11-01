@@ -14,7 +14,7 @@ vi.mock('../rpc/reads.js', () => ({ onDocs }))
 vi.mock('./DocsPanel.js', () => ({ DocsPanel: ({ docs }: { docs: { name: string }[] }) => <div>docs: {docs.map(d => d.name).join(', ')}</div> }))
 
 const { PaneLayout, PaneMenu, PanesProvider, PaneToggles } = await import('./Panes.js')
-const { forgetRemembered } = await import('@openagt/skill-ui/module')
+const { forgetRemembered } = await import('../lib/use-async.js')
 const { forgetPanes, setPaneOpen } = await import('../lib/panes.js')
 const { forgetRevealedChanges, revealChange, revealScreen, revealSubagent } = await import('../lib/reveal-change.js')
 

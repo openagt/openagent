@@ -1,6 +1,6 @@
 import type { ActiveAgent, Overview } from '../../src/index.js'
 import { onOverview } from '../rpc/reads.js'
-import { usePolled } from '@openagt/skill-ui/module'
+import { usePolled } from './use-async.js'
 import { runsAgain, useRunsPace } from './runs-changed.js'
 
 // Is an agent working right now (#875)? Cross-project on purpose: the mark answers "is the AI

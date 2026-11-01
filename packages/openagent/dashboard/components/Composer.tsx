@@ -10,7 +10,10 @@ import {
   saveProjectPresetList,
   useActiveProjectId,
 } from '../lib/preferences.js'
-import { useLoaded, Button, cn, ClaudeLogo, CodexLogo } from '@openagt/skill-ui/module'
+import { useLoaded } from '../lib/use-async.js'
+import { Button } from './ui/button.js'
+import { cn } from '../lib/utils.js'
+import { ClaudeLogo, CodexLogo } from './driver-logos.js'
 import { onProjects } from '../rpc/projects.js'
 import { PromptEditor, type PromptEditorHandle } from './PromptEditor.js'
 import { PresetCreatePanel } from './PresetCreatePanel.js'

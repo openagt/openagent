@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { AgentWorktree } from '../../src/index.js'
 import { onAgentWorktree } from '../rpc/reads.js'
 import { PR_PENDING_MS, SETTLING_EVERY_MS, SETTLING_MS } from './use-agent-handoff.js'
-import { usePolled } from '@openagt/skill-ui/module'
+import { usePolled } from './use-async.js'
 
 /**
  * An agent's checkout, polled: its branch, its pull request, and its checkout while it has one.

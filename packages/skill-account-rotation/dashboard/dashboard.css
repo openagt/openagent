@@ -2,5 +2,5 @@
    them. The theme file gives the utilities the page's tokens, so the colours follow its theme. */
 @import 'tailwindcss/theme' layer(theme);
 @import 'tailwindcss/utilities' layer(utilities);
-@import '../../skill-ui/module/theme.css';
+@import '../../openagent/dashboard/module/theme.css';
 @source '.';

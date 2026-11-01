@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react'
-import { cn } from './utils.js'
+import { cn } from '../../lib/utils.js'
 
 // A trimmed shadcn input.
 export function Input({ className, type, ...props }: ComponentProps<'input'>) {

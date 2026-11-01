@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { Machine } from './machines.js'
-import { usePolled } from '@openagt/skill-ui/module'
+import { usePolled } from './use-async.js'
 import { onMachinesReachable } from '../rpc/machines.js'
 
 // The saved machines' online/offline status (#1072). The daemon holds each machine's key, so it

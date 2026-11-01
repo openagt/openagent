@@ -4,7 +4,7 @@ import { callsSummary, summaryWords, toolCall } from '../lib/tool-calls.js'
 import { usePreferences } from '../lib/preferences.js'
 import type { FileEdit } from '../lib/turn-changes.js'
 import { LinesPill } from './ChangedFiles.js'
-import { cn } from '@openagt/skill-ui/module'
+import { cn } from '../lib/utils.js'
 import { formatElapsed } from '../lib/format-date.js'
 import { Markdown } from './Markdown.js'
 

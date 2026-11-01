@@ -2,7 +2,7 @@ import { useContext } from 'react'
 import { moduleHost, type ModuleProject, type ModuleScheduledCommand } from '../module/index.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from './host-services.js'
 import { useMountedModules } from './use-modules.js'
-import { usePolled } from '@openagt/skill-ui/module'
+import { usePolled } from './use-async.js'
 
 // What starts by itself in the projects a page shows, for a page that is not the scheduling
 // module's own: a queue says whether anything takes from it. The page names no module: it asks

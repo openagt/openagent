@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, renderHook, waitFor } from '@testing-library/react'
-import { forgetRemembered } from '@openagt/skill-ui/module'
+import { forgetRemembered } from './use-async.js'
 
 const HERE = { 'claude-code': { models: [{ id: 'opus', name: 'Opus 5.5' }] }, codex: { models: [], error: '`codex` could not start: spawn codex ENOENT' } }
 const THERE = { 'claude-code': { models: [{ id: 'opus', name: 'Opus 5.5' }] }, codex: { models: [{ id: 'gpt-5.6', name: 'GPT-5.6' }] } }

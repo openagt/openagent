@@ -2,8 +2,13 @@ import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
 
+// Unit tests for the card: the JSX transform, a DOM, and `@openagt/dashboard/module` resolved to
+// OpenAgent's own source, since the tests render the card inside a fake host and never load the dashboard.
 export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
   plugins: [react()],
-  test: { environment: 'jsdom', globals: true, include: ['**/*.test.ts', '**/*.test.tsx'], testTimeout: 20_000 },
+  resolve: {
+    alias: { '@openagt/dashboard/module': fileURLToPath(new URL('../../openagent/dashboard/module/index.ts', import.meta.url)) },
+  },
+  test: { environment: 'jsdom', globals: true, include: ['**/*.test.ts', '**/*.test.tsx'], setupFiles: ['./vitest.setup.ts'], testTimeout: 20_000 },
 })

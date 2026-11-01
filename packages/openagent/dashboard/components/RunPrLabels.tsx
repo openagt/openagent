@@ -1,5 +1,5 @@
 import { GitPullRequest } from 'lucide-react'
-import { cn } from '@openagt/skill-ui/module'
+import { cn } from '../lib/utils.js'
 import { PR_MARKS, prStateOf } from '../lib/pr-marks.js'
 
 /**

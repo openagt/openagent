@@ -1,5 +1,5 @@
 import { onCommands, type ProjectLauncher } from '../rpc/projects.js'
-import { usePolled } from '@openagt/skill-ui/module'
+import { usePolled } from './use-async.js'
 import { usePreferences } from './preferences.js'
 
 /**

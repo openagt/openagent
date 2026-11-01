@@ -4,8 +4,7 @@ import { join } from 'node:path'
 import { fileTag, fileVersion, sendBody } from './compress.js'
 import { contentTypeFor } from './content-type.js'
 import { defaultProjectsProvider, type ProjectsProvider } from './projects.js'
-import { moduleFile, type ProjectModule } from '@openagt/skill-ui'
-import { findBroughtModule, findComputerModule, findProjectModule } from '../project-modules.js'
+import { findBroughtModule, findComputerModule, findProjectModule, moduleFile, type ProjectModule } from '../project-modules.js'
 
 /** Where module files are served: `/_modules/<project id>/<package>/<file>`, each segment encoded. */
 export const MODULES_PREFIX = '/_modules'

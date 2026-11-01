@@ -11,7 +11,8 @@ import {
   sendDeleteAgent,
   sendCreateRepository,
 } from '../rpc/control.js'
-import { useLoaded, buttonVariants } from '@openagt/skill-ui/module'
+import { useLoaded } from '../lib/use-async.js'
+import { buttonVariants } from './ui/button.js'
 import { useAction } from '../lib/use-action.js'
 import { isAgentActive } from '../lib/live-state.js'
 import { describeSessionLink } from '../lib/session-link.js'

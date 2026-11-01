@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
-import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@openagt/skill-ui/module'
+import { Button } from '../components/ui/button.js'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.js'
+import { Input } from '../components/ui/input.js'
 import { Badge } from '../components/ui/badge.js'
 import { CardTitleLink } from '../components/ui/card.js'
 import { Checkbox } from '../components/ui/checkbox.js'

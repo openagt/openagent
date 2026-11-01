@@ -1,6 +1,6 @@
 import { House, Laptop, Server, Users } from 'lucide-react'
 import type { MachineKind } from '../../src/client.js'
-import { cn } from '@openagt/skill-ui/module'
+import { cn } from '../lib/utils.js'
 
 /** The icon of a machine's kind: a computer, a server at home, another person's computer shared with you, or a server. */
 export const MACHINE_ICONS = { computer: Laptop, home: House, shared: Users, server: Server } as const

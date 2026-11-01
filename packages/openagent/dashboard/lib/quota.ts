@@ -1,6 +1,6 @@
 import type { QuotaView } from '../../src/index.js'
 import { onQuota } from '../rpc/quota.js'
-import { usePolled } from '@openagt/skill-ui/module'
+import { usePolled } from './use-async.js'
 
 // The usage panel's data (#535). The daemon polls the agent for us and caches the answer,
 // so this only has to ask the daemon for what it already knows — cheap, unlike the read

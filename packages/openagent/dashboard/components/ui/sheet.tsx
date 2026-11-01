@@ -1,7 +1,7 @@
 'use client'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import type { ComponentProps } from 'react'
-import { cn } from '@openagt/skill-ui/module'
+import { cn } from '../../lib/utils.js'
 
 // A shadcn "sheet" on Base UI's Dialog (no Radix): an edge-anchored drawer. The sidebar uses it as
 // its mobile presentation (off-canvas), the same job Radix's Sheet does upstream. Controlled by the

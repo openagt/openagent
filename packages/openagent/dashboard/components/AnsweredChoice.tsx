@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { ChoiceRequest } from '../../src/index.js'
 import { pickedIds } from '../../src/client.js'
-import { cn } from '@openagt/skill-ui/module'
+import { cn } from '../lib/utils.js'
 
 // An answered gate, collapsed to one line (#1455 bonus 2 / item 6): what was decided stays
 // visible and expandable instead of vanishing under the cursor, but takes no more of the page

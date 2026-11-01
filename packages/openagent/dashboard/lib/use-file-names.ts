@@ -3,7 +3,7 @@ import { moduleHost } from '../module/index.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from './host-services.js'
 import { dataLinkParts } from './data-link.js'
 import { useMountedModules } from './use-modules.js'
-import { usePolled } from '@openagt/skill-ui/module'
+import { usePolled } from './use-async.js'
 
 // What the paths into a project's files that a page shows are called. A queue entry may name
 // `tickets/2026-01-01_x.md`; the page that shows the entry knows nothing of tickets, and a file

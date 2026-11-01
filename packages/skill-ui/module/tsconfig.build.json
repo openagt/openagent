@@ -1,6 +1,0 @@
-{
-  "extends": "./tsconfig.json",
-  "compilerOptions": { "noEmit": false, "declaration": true, "types": [], "rootDir": ".", "outDir": "../dist/module" },
-  "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["**/*.test.ts", "**/*.test.tsx", "vitest.config.ts", "vitest.setup.ts"]
-}

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AgentHandoff } from '../../src/index.js'
 import { onAgentHandoff } from '../rpc/reads.js'
-import { forgetRemembered, usePolled } from '@openagt/skill-ui/module'
+import { forgetRemembered, usePolled } from './use-async.js'
 import { useAction } from './use-action.js'
 
 /** What the agent view knows about the session's branch, and how it acts on it. */

@@ -2,7 +2,8 @@ import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent 
 import { onCloneTarget, sendAddProject, sendAddProjectFromAddress, sendPickProjectDirectory } from '../rpc/projects.js'
 import { useAction } from '../lib/use-action.js'
 import { AddProjectEffects } from './AddProjectEffects.js'
-import { Button, Input } from '@openagt/skill-ui/module'
+import { Button } from './ui/button.js'
+import { Input } from './ui/input.js'
 import { RadioGroup, RadioGroupOption } from './ui/radio-group.js'
 
 // Add a project (#396/#1150): the OS's own folder picker instead of a typed path — the daemon

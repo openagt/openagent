@@ -48,8 +48,7 @@
   "dependencies": {
     "@openagt/agent-driver": "workspace:*",
     "@openagt/agent-driver-claude": "workspace:*",
-    "@openagt/agent-driver-codex": "workspace:*",
-    "@openagt/skill-ui": "workspace:*"
+    "@openagt/agent-driver-codex": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",

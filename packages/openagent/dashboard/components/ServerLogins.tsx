@@ -2,7 +2,11 @@ import { createContext, useContext, useEffect, useState, type ComponentType, typ
 import { GitBranch, Loader2, Server as ServerIcon } from 'lucide-react'
 import { onServerLogins, sendAllowLogins, sendSettleLogin, sendUseLoginsOn, type LoginThere, type ServerLogins, type ServerLoginsView } from '../rpc/server-logins.js'
 import type { CopiedKind } from '../../src/dashboard/copied-logins.js'
-import { Button, Card, CardContent, CardHeader, CardTitle, ClaudeLogo, CodexLogo, cn, usePolled } from '@openagt/skill-ui/module'
+import { Button } from './ui/button.js'
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
+import { ClaudeLogo, CodexLogo } from './driver-logos.js'
+import { cn } from '../lib/utils.js'
+import { usePolled } from '../lib/use-async.js'
 import { CopyButton } from './ui/copy-button.js'
 
 // The servers of the person's that use this computer's logins, in Settings › Accounts: a card with

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { forgetRemembered } from '@openagt/skill-ui/module'
+import { forgetRemembered } from '../lib/use-async.js'
 
 const onPerson = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/person.js', () => ({ onPerson }))

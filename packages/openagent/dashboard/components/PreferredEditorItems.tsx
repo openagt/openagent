@@ -1,7 +1,7 @@
 import type { EditorInfo } from '../rpc/preferences.js'
 import { usePreferences, updatePreferences } from '../lib/preferences.js'
 import { useDetectedEditors } from '../lib/editors.js'
-import { cn } from '@openagt/skill-ui/module'
+import { cn } from '../lib/utils.js'
 import { Check } from 'lucide-react'
 import { OptionLabel } from './ui/option-label.js'
 import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel } from './ui/dropdown-menu.js'
