@@ -1,15 +1,26 @@
 {
   "id": "2026-11-01T01-33-13-789Z",
   "startedAt": "2026-11-01T01:33:15.617Z",
-  "status": "running",
+  "endedAt": "2026-11-01T01:33:19.455Z",
+  "status": "done",
   "intent": "ask me some random question",
+  "title": "Random Question Prompt",
   "driver": "codex",
   "model": "gpt-6-luna",
+  "effort": "medium",
+  "branch": "agent-2026-11-01T01-33-13-789Z",
+  "contextTokens": 14203,
   "caller": {
     "runner": {
       "host": "OpenAgentVPS",
-      "pid": 2269624
+      "pid": 2269624,
+      "baseCommit": "5aad28eb3fc0f41e5595e40807ab0bfd93d11f91"
     },
-    "host": "OpenAgentVPS"
+    "pid": 2269624,
+    "host": "OpenAgentVPS",
+    "baseCommit": "5aad28eb3fc0f41e5595e40807ab0bfd93d11f91",
+    "kind": "prompt",
+    "workspace": "/home/openagent/projects/openagent/.branches/agent-2026-11-01T01-33-13-789Z",
+    "sessionId": "01a194bd-4e77-7eb2-8fa3-41a77b574461"
   }
 }
