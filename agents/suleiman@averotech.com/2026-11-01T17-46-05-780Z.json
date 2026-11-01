@@ -1,0 +1,15 @@
+{
+  "id": "2026-11-01T17-46-05-780Z",
+  "startedAt": "2026-11-01T17:46:07.395Z",
+  "status": "running",
+  "intent": "Write three short paragraphs about the sea, nothing else.",
+  "driver": "claude-code",
+  "model": "opus",
+  "caller": {
+    "runner": {
+      "host": "OpenAgentVPS",
+      "pid": 2640907
+    },
+    "host": "OpenAgentVPS"
+  }
+}
