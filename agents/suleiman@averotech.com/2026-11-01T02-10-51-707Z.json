@@ -1,16 +1,28 @@
 {
   "id": "2026-11-01T02-10-51-707Z",
   "startedAt": "2026-11-01T02:10:53.419Z",
-  "status": "running",
+  "endedAt": "2026-11-01T02:10:58.389Z",
+  "status": "done",
   "intent": "tell me hi, nothing else",
+  "title": "Greeting Exchange",
   "driver": "claude-code",
+  "model": "claude-opus-5-5",
+  "branch": "agent-2026-11-01T02-10-51-707Z",
+  "cost": 0.0453154,
+  "contextTokens": 17609,
   "caller": {
     "runner": {
       "host": "OpenAgentVPS",
       "pid": 2322044,
-      "publish": "commit"
+      "publish": "commit",
+      "baseCommit": "e2edcc3370e1c412bcd00427905167ca9a8dde5b"
     },
+    "pid": 2322044,
     "host": "OpenAgentVPS",
-    "publish": "commit"
+    "baseCommit": "e2edcc3370e1c412bcd00427905167ca9a8dde5b",
+    "publish": "commit",
+    "kind": "prompt",
+    "workspace": "/home/openagent/projects/openagent/.branches/agent-2026-11-01T02-10-51-707Z",
+    "sessionId": "79815969-ca99-4d0c-ac68-633c43fbaf25"
   }
 }
