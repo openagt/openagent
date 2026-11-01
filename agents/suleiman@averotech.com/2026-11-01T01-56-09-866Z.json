@@ -1,15 +1,26 @@
 {
   "id": "2026-11-01T01-56-09-866Z",
   "startedAt": "2026-11-01T01:56:11.540Z",
-  "status": "running",
+  "endedAt": "2026-11-01T01:56:15.140Z",
+  "status": "done",
   "intent": "tell me hi, nothing else",
+  "title": "Greeting Request",
   "driver": "codex",
   "model": "gpt-6-luna",
+  "effort": "medium",
+  "branch": "agent-2026-11-01T01-56-09-866Z",
+  "contextTokens": 14179,
   "caller": {
     "runner": {
       "host": "OpenAgentVPS",
-      "pid": 2301372
+      "pid": 2301372,
+      "baseCommit": "5aad28eb3fc0f41e5595e40807ab0bfd93d11f91"
     },
-    "host": "OpenAgentVPS"
+    "pid": 2301372,
+    "host": "OpenAgentVPS",
+    "baseCommit": "5aad28eb3fc0f41e5595e40807ab0bfd93d11f91",
+    "kind": "prompt",
+    "workspace": "/home/openagent/projects/openagent/.branches/agent-2026-11-01T01-56-09-866Z",
+    "sessionId": "01a194d2-4d7b-7581-b541-8c4294d3b1d3"
   }
 }
