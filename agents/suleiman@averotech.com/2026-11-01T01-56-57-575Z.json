@@ -7,7 +7,6 @@
   "title": "Greeting Exchange",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-11-01T01-56-57-575Z",
   "cost": 0.0451634,
   "contextTokens": 17588,
   "caller": {
