@@ -1,17 +1,13 @@
 import { computerName } from '../computer-name.js'
 import type { AgentAccount, DriverQuotaWindow, DriverRateWindow } from '@openagt/agent-driver'
-import { addingNow, beginAdding, bringCode, cancelAdding, comesBackFrom, handedOverBy, isLimited, logOut, loginWiring, nameOwnAccount, OWN_NAME, ownLoginThere, ownName, readAccounts, removeAdded, useFirst, type AccountsAgent, type LoginWiring } from '@openagt/skill-account-rotation'
+import { comesBackFrom, handedOverBy, isLimited, loginWiring, OWN_NAME, ownLoginThere, ownName, readAccounts, removeAdded, useFirst, type AccountsAgent, type LoginWiring } from '@openagt/skill-account-rotation'
 import { contextQuota } from './context.js'
 import { readCopied, type CopiedLogin } from '../dashboard/copied-logins.js'
 
 // The accounts runs use, per coding agent (`@openagt/skill-account-rotation`): the person's own
 // login, which the agent keeps, and the ones added beside it. A page sees each one's name, how full
-// it is and whether a limit keeps it out, never a login. Adding one is the skill's own: a name first,
-// then a sign-in that goes on by itself, in this computer's browser or on the person's own device.
-// Claude Code makes a login that lasts a year; Codex keeps the account's login in a folder of its
-// own, where it renews it. A server has no browser: there the person signs in on the device they
-// read its page on, from a link, and pastes back the code Claude's page shows, or types Codex's
-// code at its page. On a server, an account may also be a login of the person's own computer
+// it is and whether a limit keeps it out, never a login. Adding and logging out are the skill's own,
+// through its command. On a server, an account may also be a login of the person's own computer
 // (`copied-logins.ts`): its row says which computer, and how full the computer last read it.
 
 export type { AccountsAgent }
@@ -50,32 +46,12 @@ export interface AccountRow {
   state?: 'in-use' | 'next' | 'limited'
 }
 
-/** An account being added: the browser is open on the agent's page, or the login is being kept. */
-export interface AccountAdding {
-  name: string
-  /** The page to sign in at, when the agent gave one: what a person copies into a private window when the browser is signed in to another account, or opens on their device where this computer has no browser. */
-  url?: string
-  /** No browser here: the code Codex gave, which the person types at {@link url}. */
-  code?: string
-  /** No browser here: Claude's page shows a code once the person said yes, which they paste back. */
-  paste?: true
-  /** The code pasted back is with Claude. */
-  checking?: true
-  /** Claude did not take the code pasted back: it waits for another. */
-  refused?: true
-}
-
 export interface AccountsView {
   accounts: AccountRow[]
   /** This computer's own name: what its own login's row says it is on. */
   computer: string
   /** On a server: the computer of the person's whose logins it uses, by its name. */
   from?: string
-  adding?: AccountAdding
-  /** Why the last add did not go through. */
-  failed?: string
-  /** This computer has no browser, a server: the person signs in on their own device. */
-  noBrowser?: true
   /** The daemon's clock, so "free in 2 h" is counted from the same now. */
   now: number
 }
@@ -176,42 +152,16 @@ export async function onAgentAccounts(agent: AccountsAgent): Promise<AccountsVie
     if (free[0]) free[0].state = 'in-use'
     if (free[1]) free[1].state = 'next'
   }
-  const { adding: beingAdded, failed: lastFailed, noBrowser } = addingNow(agent, accountsWiring)
   const from = copied[0]?.from
   return {
     accounts: rows,
     computer: accountsWiring.computer(),
     ...(from !== undefined ? { from } : {}),
-    ...(beingAdded ? { adding: beingAdded } : {}),
-    ...(lastFailed !== undefined ? { failed: lastFailed } : {}),
-    ...(noBrowser ? { noBrowser } : {}),
     now,
   }
 }
 
 export type AccountResult = { ok: true } | { ok: false; error: string }
-
-/** Start adding an account: the skill's own sign-in, which goes on by itself and which {@link onAgentAccounts} follows. */
-export async function sendAddAgentAccount(agent: AccountsAgent, name: string): Promise<AccountResult> {
-  return beginAdding(agent, name, accountsWiring)
-}
-
-/** Hand the sign-in the code its page showed the person, on a computer with no browser of its own. */
-export async function sendAgentAccountCode(agent: AccountsAgent, code: string): Promise<AccountResult> {
-  return bringCode(agent, code, accountsWiring)
-}
-
-/** Stop adding an account. */
-export async function sendCancelAddingAccount(agent: AccountsAgent): Promise<AccountResult> {
-  cancelAdding(agent, accountsWiring)
-  return { ok: true }
-}
-
-/** Log the person's own login out (`logOut`): their terminal too. */
-export async function sendLogOutAgent(agent: AccountsAgent): Promise<AccountResult> {
-  const failed = await logOut(agent, accountsWiring)
-  return failed === undefined ? { ok: true } : { ok: false, error: failed }
-}
 
 /** Remove an added account (`removeAdded`). */
 export async function sendRemoveAgentAccount(agent: AccountsAgent, name: string): Promise<AccountResult> {
@@ -228,11 +178,6 @@ export async function sendRemoveAgentAccount(agent: AccountsAgent, name: string)
 /** Runs try `name` first from now on. */
 export async function sendUseAgentAccountFirst(agent: AccountsAgent, name: string): Promise<AccountResult> {
   return change(() => useFirst(name, accountsWiring.path(agent)))
-}
-
-/** The person's own login under the name they give it. */
-export async function sendNameOwnAgentAccount(agent: AccountsAgent, name: string): Promise<AccountResult> {
-  return change(() => nameOwnAccount(name, accountsWiring.path(agent)))
 }
 
 function change(act: () => unknown): AccountResult {

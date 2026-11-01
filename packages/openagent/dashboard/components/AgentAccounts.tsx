@@ -1,63 +1,21 @@
-import { useState } from 'react'
-import { Check, Copy, Plus } from 'lucide-react'
+import { Check, Plus } from 'lucide-react'
 import { onMachineAgentAccounts, sendMachineAgentAccountFirst } from '../rpc/machines.js'
-import { onAgentAccounts, sendAddAgentAccount, sendAgentAccountCode, sendCancelAddingAccount, sendLogOutAgent, sendRemoveAgentAccount, sendUseAgentAccountFirst, type AccountAdding, type AccountRow, type AccountWindow, type AccountsAgent, type AccountsView } from '../rpc/accounts.js'
-import type { DriverName } from '../../src/client.js'
-import { AccountBar, ClaudeLogo, CodexLogo, readAhead, usePolled, cn, Button, Input } from '@openagt/skill-ui/module'
-import { AgentFix, DeviceCode, StatePill, agentLoginState, agentWords, useAgentState } from './Logins.js'
-import { LeftNotices, ServerNotes, SwitchNotice } from './ServerLogins.js'
+import { onAgentAccounts, sendUseAgentAccountFirst, type AccountRow, type AccountWindow, type AccountsAgent, type AccountsView } from '../rpc/accounts.js'
+import { AccountBar, readAhead, usePolled, cn } from '@openagt/skill-ui/module'
 import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from './ui/dropdown-menu.js'
 
-// The accounts runs use, per coding agent, in the order they try them (`accounts.ts` in the driver
-// core): the person's own login and the ones added beside it. When one hits its limit, the next free
-// one takes the run over in the same conversation. Three places show them: Settings › Accounts
-// (a card per agent, where they are added and removed), the agent's part of the agent picker under
-// the message box (which one is first, on the computer the run goes to), and the Overview's usage
-// card (how full each added Claude one is). Every agent's card and row are the same, with the agent's own words. A row never
-// says "this computer", which reads as whichever computer the page is open on: it names the one.
+// The accounts runs use, per coding agent, as the run's own places read them. Adding and removing
+// them is the skill's (`@openagt/skill-account-rotation`, its card on the Overview and in Settings ›
+// Accounts). Here: the agent's part of the agent picker under the message box (which one is first,
+// on the computer the run goes to) and the Overview's usage card (how full each added Claude one is).
 
-/** How often a page that shows the accounts asks again: often while one is being added, the sign-in being the person's. */
-const OFTEN_MS = 2_000
+/** How often a page that shows the accounts asks again. */
 const SELDOM_MS = 30_000
 
-/** What each agent's card and row say of it. */
-const AGENTS: Record<AccountsAgent, { title: string; short: string; driver: DriverName; Logo: typeof ClaudeLogo; logIn: string; adding: (name: string) => string; help: string; helpNoBrowser: string; easiest: (computer: string) => string; remove: string }> = {
-  claude: {
-    title: 'Claude Code',
-    short: 'Claude',
-    driver: 'claude-code',
-    Logo: ClaudeLogo,
-    logIn: 'Log in to Claude',
-    adding: name => `Adding ${name}'s account: say yes in the page this computer's browser opened, signed in to ${name}'s Claude account.`,
-    help: "Opens this computer's browser, where you say yes once, signed in to that account. The login is kept on this computer alone and lasts a year.",
-    helpNoBrowser: "Gives you a page to open on your own device: press Authorize there, signed in to that account, and paste the code it shows back here. The login is kept on this server alone and lasts a year.",
-    easiest: computer => `Easiest: add it on ${computer}, and it comes here by itself.`,
-    remove: 'Runs no longer use it. Its login is not ended: take it back on claude.ai to end it.',
-  },
-  codex: {
-    title: 'Codex',
-    short: 'Codex',
-    driver: 'codex',
-    Logo: CodexLogo,
-    logIn: 'Log in to Codex',
-    adding: name => `Adding ${name}'s account: sign in to ${name}'s ChatGPT account in the page this computer's browser opened.`,
-    help: "Opens this computer's browser, where you sign in once to that account. If the browser is signed in to another account, copy the link into a private window. The login is kept on this computer alone, and Codex renews it.",
-    helpNoBrowser: "Gives you a code to type at ChatGPT's page on your own device, signed in to that account: in a private window if the browser is signed in to another. If it asks, first allow device code sign-in in ChatGPT's security settings. The login is kept on this server alone, and Codex renews it.",
-    easiest: computer => `Easiest: add it on ${computer} and press Allow there, and it comes here.`,
-    remove: 'Runs no longer use it, and its login is taken off this computer.',
-  },
-}
-
-/** An agent's accounts as the daemon has them, asked often while `often`, and kept for the page's life: a place that opens later (the person's menu) shows them from its first frame. */
-export function useAgentAccounts(
-  agent: AccountsAgent,
-  often = false,
-): {
-  view: AccountsView | undefined
-  reload: () => Promise<void>
-} {
-  const { value, reload } = usePolled<AccountsView | undefined>(() => onAgentAccounts(agent), undefined, often ? OFTEN_MS : SELDOM_MS, [agent, often], { remember: `agent-accounts:${agent}` })
-  return { view: value, reload }
+/** An agent's accounts as the daemon has them, kept for the page's life: a place that opens later (the person's menu) shows them from its first frame. */
+export function useAgentAccounts(agent: AccountsAgent): { view: AccountsView | undefined } {
+  const { value } = usePolled<AccountsView | undefined>(() => onAgentAccounts(agent), undefined, SELDOM_MS, [agent], { remember: `agent-accounts:${agent}` })
+  return { view: value }
 }
 
 /** How long until `until`: "2 h 10 min", "12 min", "20 days". */
@@ -77,13 +35,6 @@ function clock(at: number): string {
   })
 }
 
-/** What an account's row says of it beside its name: the computer it is a login of, or when it was added. */
-function source(account: AccountRow, computer: string): string {
-  if (account.own) return `login on ${computer}`
-  if (account.from !== undefined) return `from ${account.from}`
-  return account.added ? `added ${new Date(account.added).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : 'added'
-}
-
 /** The longest window an account says, the one its bar shows: the week, or Codex's month. */
 export function longest(account: AccountRow): AccountWindow | undefined {
   return account.windows[account.windows.length - 1]
@@ -94,259 +45,6 @@ export function usageWords(account: AccountRow): string | undefined {
   const window = longest(account)
   if (window === undefined) return account.own ? undefined : 'not used yet'
   return `${Math.round(window.percent)}% ${window.label === '5 h' ? 'of 5 h' : `this ${window.label}`}${account.asOf !== undefined ? ` · as of ${clock(account.asOf)}` : ''}`
-}
-
-function StateWords({ account, now }: { account: AccountRow; now: number }) {
-  if (account.state === 'limited' && account.limitedUntil !== undefined) return <span className="text-xs text-warning">limited, free in {freeIn(account.limitedUntil, now)}</span>
-  if (account.state === 'in-use') return <span className="text-xs font-medium text-success">in use</span>
-  if (account.state === 'next') return <span className="text-xs text-muted-foreground">next</span>
-  return null
-}
-
-/**
- * An account being added: in this computer's browser, or, on a computer with no browser, on the
- * person's own device: Codex's code typed at its page, or Claude's page opened and its code pasted back here.
- */
-function Adding({ agent, adding, words }: { agent: AccountsAgent; adding: AccountAdding; words: string }) {
-  const [code, setCode] = useState('')
-  const [error, setError] = useState<string | undefined>()
-  if (adding.code !== undefined && adding.url !== undefined)
-    return (
-      <div className="space-y-1.5">
-        <DeviceCode code={adding.code} url={adding.url} />
-        <p className="text-xs text-muted-foreground">If it asks, first allow device code sign-in in ChatGPT's security settings.</p>
-      </div>
-    )
-  if (adding.paste && adding.url !== undefined) {
-    const send = async () => {
-      setError(undefined)
-      const done = await sendAgentAccountCode(agent, code)
-      if (!done.ok) setError(done.error)
-    }
-    return (
-      <div role="status" className="space-y-2">
-        <a href={adding.url} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center rounded-md border border-border px-3 text-sm hover:bg-accent">
-          {`1. Open Claude and press Authorize ↗`}
-        </a>
-        <form
-          className="flex flex-wrap items-center gap-2"
-          onSubmit={event => {
-            event.preventDefault()
-            void send()
-          }}
-        >
-          <Input aria-label="Code from Claude" placeholder="2. Paste the code it shows" value={code} onChange={event => setCode(event.target.value)} className="h-9 min-w-0 flex-1 basis-48 text-base sm:text-sm" />
-          <Button size="sm" type="submit" disabled={code.trim() === '' || adding.checking === true}>
-            {adding.checking ? 'Checking…' : 'Done'}
-          </Button>
-        </form>
-        {(error !== undefined || adding.refused) && <p role="alert" className="text-xs text-danger">{error ?? "Claude didn't take that code. Copy it whole from its page, and paste it again."}</p>}
-      </div>
-    )
-  }
-  return (
-    <div role="status" className="flex flex-wrap items-center gap-x-2 gap-y-1">
-      <p className="text-xs text-muted-foreground">{words}</p>
-      {adding.url !== undefined && <CopyLink url={adding.url} />}
-    </div>
-  )
-}
-
-/** The page to sign in at, copied for a private window: the browser may be signed in to another account. */
-function CopyLink({ url }: { url: string }) {
-  const [copied, setCopied] = useState(false)
-  return (
-    <Button
-      size="xs"
-      variant="ghost"
-      onClick={() =>
-        void navigator.clipboard.writeText(url).then(
-          () => setCopied(true),
-          () => {},
-        )
-      }
-    >
-      {copied ? <Check className="size-3.5" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
-      {copied ? 'Copied' : 'Copy link for a private window'}
-    </Button>
-  )
-}
-
-/**
- * One agent's card: its state, its accounts in order, and adding one. One not installed shows only
- * its state and the press that installs it. The agent's own login has no row while it is logged in
- * to nothing and another account is there: a server mostly runs on the person's own computers' logins.
- */
-export function AccountsCard({ agent }: { agent: AccountsAgent }) {
-  const words = AGENTS[agent]
-  const [naming, setNaming] = useState(false)
-  const [name, setName] = useState('')
-  const [error, setError] = useState<string | undefined>()
-  const [busy, setBusy] = useState(false)
-  // On a server that uses a computer's logins, adding it there is said first: signing in here is the longer way.
-  const [here, setHere] = useState(false)
-  const [loggingOut, setLoggingOut] = useState(false)
-  const { view, reload } = useAgentAccounts(agent, true)
-  const { state, reload: reloadState } = useAgentState(words.driver)
-  const adding = view?.adding
-  const from = view?.from
-  const stopNaming = () => {
-    setNaming(false)
-    setHere(false)
-    setError(undefined)
-  }
-  const absent = agentLoginState(state) === 'not-installed' && (view?.accounts.length ?? 0) < 2
-  // Its own login is out: nothing of the agent's own to show, whether or not another account covers for it.
-  const ownOut = state?.ownLoggedOut === true || agentLoginState(state) === 'step'
-  const accounts = (view?.accounts ?? []).filter(account => !(account.own && (ownOut || account.loggedOut)))
-
-  const act = async (go: () => Promise<{ ok: true } | { ok: false; error: string }>): Promise<boolean> => {
-    setBusy(true)
-    setError(undefined)
-    try {
-      const done = await go()
-      if (!done.ok) setError(done.error)
-      await reload()
-      return done.ok
-    } finally {
-      setBusy(false)
-    }
-  }
-  const add = async () => {
-    if (await act(() => sendAddAgentAccount(agent, name))) {
-      stopNaming()
-      setName('')
-    }
-  }
-
-  return (
-    <section aria-label={words.title} className="rounded-lg border border-border">
-      <header className={cn('flex items-center gap-2 px-3 py-2.5', !absent && 'border-b border-border')}>
-        <words.Logo className="size-4 shrink-0" />
-        <h3 className="flex-1 text-sm font-medium">{words.title}</h3>
-        {state && <StatePill state={agentLoginState(state)!} />}
-        {!absent && accounts.length > 0 && !naming && !adding && (
-          <Button size="xs" variant="ghost" onClick={() => setNaming(true)}>
-            <Plus className="size-3.5" aria-hidden />
-            Add account
-          </Button>
-        )}
-      </header>
-      {state && !state.ready && (state.fix !== undefined || agentLoginState(state) === 'not-installed') && (
-        <div className={cn('space-y-2 px-3 py-2.5', !absent && 'border-b border-border', absent && 'pt-0')}>
-          <p className="text-xs text-muted-foreground">{agentWords(state)}</p>
-          <AgentFix state={state} onChanged={() => void reloadState()} />
-        </div>
-      )}
-      {!absent && (
-        <>
-          <ul className="divide-y divide-border">
-            {accounts.map(account => (
-              <li key={account.id} aria-label={account.name}>
-                <div className="space-y-2 px-3 py-2.5">
-                  <div>
-                    <div className="flex min-h-7 items-center gap-2">
-                      <p className="min-w-0 truncate text-sm">{account.name}</p>
-                      {view && <StateWords account={account} now={view.now} />}
-                      {account.own && !loggingOut && (
-                        <Button size="xs" variant="ghost" className="ml-auto text-muted-foreground" disabled={busy} aria-label={`Log out ${account.name}`} onClick={() => setLoggingOut(true)}>
-                          Log out
-                        </Button>
-                      )}
-                      {/* One a computer hands over as it is would be back within a minute: it is removed there. */}
-                      {!account.own && !account.comesBack && (
-                        <Button size="xs" variant="ghost" className="ml-auto text-muted-foreground" disabled={busy} aria-label={`Remove ${account.name}'s account`} title={account.from !== undefined ? `${words.remove} It stays off until you press Allow on ${account.from}.` : words.remove} onClick={() => void act(() => sendRemoveAgentAccount(agent, account.id))}>
-                          Remove
-                        </Button>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                      <p className="min-w-0 truncate text-xs text-muted-foreground">{source(account, view!.computer)}</p>
-                      {/* A login with no reading of its usage has no bar: an empty one read as nothing used. */}
-                      {usageWords(account) !== undefined && (
-                        <div className="ml-auto flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">{usageWords(account)}</span>
-                          <AccountBar percent={longest(account)?.percent} />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  {account.own && loggingOut && (
-                    <div role="group" aria-label={`Log out ${account.name}`} className="flex flex-wrap items-center gap-2">
-                      <p className="min-w-0 flex-1 basis-48 text-xs text-muted-foreground">{`Logs ${words.title} out on ${view!.computer}, your terminal too.`}</p>
-                      <Button size="xs" variant="destructive" disabled={busy} onClick={() => void act(() => sendLogOutAgent(agent)).then(() => setLoggingOut(false))}>
-                        Log out
-                      </Button>
-                      <Button size="xs" variant="ghost" disabled={busy} onClick={() => setLoggingOut(false)}>
-                        Cancel
-                      </Button>
-                    </div>
-                  )}
-                  <ServerNotes row={{ kind: agent, source: account.own ? 'own' : account.id }} />
-                </div>
-                <SwitchNotice row={{ kind: agent, source: account.own ? 'own' : account.id }} />
-              </li>
-            ))}
-          </ul>
-          <LeftNotices kind={agent} />
-          {/* The foot holds the account being added, or the first one's press: "Add account" is in the header once there is one. */}
-          {(accounts.length === 0 || naming || adding || (error ?? view?.failed) !== undefined) && (
-            <div className={cn('px-3 py-2.5', accounts.length > 0 && 'border-t border-border')}>
-              {adding ? (
-                <div className="space-y-2">
-                  <Adding agent={agent} adding={adding} words={view?.noBrowser ? `Adding ${adding.name}'s account: getting the page to sign in at…` : words.adding(adding.name)} />
-                  <Button size="xs" variant="ghost" className="text-muted-foreground" disabled={busy} onClick={() => void act(() => sendCancelAddingAccount(agent))}>
-                    Cancel
-                  </Button>
-                </div>
-              ) : naming && from !== undefined && !here ? (
-                <div className="space-y-2">
-                  <p className="text-sm">{words.easiest(from)}</p>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button size="sm" variant="outline" onClick={() => setHere(true)}>
-                      Sign in here instead
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={stopNaming}>
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              ) : naming ? (
-                <form
-                  className="flex flex-wrap items-center gap-2"
-                  onSubmit={event => {
-                    event.preventDefault()
-                    void add()
-                  }}
-                >
-                  <Input autoFocus aria-label="Whose account" placeholder="Whose account, e.g. Dani" value={name} onChange={event => setName(event.target.value)} className="h-8 w-56 max-sm:w-full" />
-                  <Button size="sm" type="submit" disabled={busy || name.trim() === ''}>
-                    {words.logIn}
-                  </Button>
-                  <Button size="sm" variant="ghost" type="button" onClick={stopNaming}>
-                    Cancel
-                  </Button>
-                </form>
-              ) : (
-                accounts.length === 0 && (
-                  <Button size="sm" onClick={() => setNaming(true)}>
-                    <Plus className="size-3.5" aria-hidden />
-                    {words.logIn}
-                  </Button>
-                )
-              )}
-              {naming && !adding && (from === undefined || here) && <p className="mt-1.5 text-xs text-muted-foreground">{view?.noBrowser ? words.helpNoBrowser : words.help}</p>}
-              {(error ?? view?.failed) !== undefined && (
-                <p role="alert" className="mt-1.5 whitespace-pre-line text-xs text-danger">
-                  {error ?? view?.failed}
-                </p>
-              )}
-            </div>
-          )}
-        </>
-      )}
-    </section>
-  )
 }
 
 /** Where a saved machine's accounts of an agent are remembered on the page: a switch back to it shows them at once. */
