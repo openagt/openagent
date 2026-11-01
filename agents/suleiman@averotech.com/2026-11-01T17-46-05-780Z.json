@@ -1,15 +1,26 @@
 {
   "id": "2026-11-01T17-46-05-780Z",
   "startedAt": "2026-11-01T17:46:07.395Z",
-  "status": "running",
+  "endedAt": "2026-11-01T17:46:19.506Z",
+  "status": "done",
   "intent": "Write three short paragraphs about the sea, nothing else.",
+  "title": "Writing about the sea",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "branch": "agent-2026-11-01T17-46-05-780Z",
+  "cost": 0.06579,
+  "contextTokens": 17600,
   "caller": {
     "runner": {
       "host": "OpenAgentVPS",
-      "pid": 2640907
+      "pid": 2640907,
+      "baseCommit": "4d584a76c7b06eee30ef3faa160b68c9316843c2"
     },
-    "host": "OpenAgentVPS"
+    "pid": 2640907,
+    "host": "OpenAgentVPS",
+    "baseCommit": "4d584a76c7b06eee30ef3faa160b68c9316843c2",
+    "kind": "prompt",
+    "workspace": "/home/openagent/projects/openagent/.branches/agent-2026-11-01T17-46-05-780Z",
+    "sessionId": "fe5bd246-3453-4bf2-98a6-10f2722354b9"
   }
 }
