@@ -19,7 +19,7 @@ import { screenInDiary } from './dashboard/screen.js'
 import { dispatchRelayRpc } from './dashboard-rpc/relay-dispatch.js'
 import { asRecorded, onMachine } from './dashboard-rpc/reads.js'
 import { tailAgentEvents } from './dashboard-rpc/events-tail.js'
-import { addProject, isHostName, listMachines, listProjects, nameMachine, noteProjects, noteSeen, projectId, readPreferences, removeProject, type MachineRecord, type Preferences } from './registry.js'
+import { addProject, isHostName, listMachines, listProjects, machineNamed, nameMachine, noteProjects, noteSeen, noteServer, projectId, readPreferences, removeProject, type MachineRecord, type Preferences } from './registry.js'
 import { projectNameOf, repositoryAddress } from './repository-address.js'
 import { writeHookLines } from './built-in.js'
 import { fileBranchRepo, installProject, writeSharing } from '@openagt/agent-data'
@@ -145,8 +145,10 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     (asking ??= Promise.all(
       unnamed.map(async machine => {
         asked.set(machine.url, Date.now())
-        const { host } = await remoteFacts(machine).catch((): { host?: string } => ({}))
-        if (host !== undefined) await nameMachine(machine, host, undefined, env).catch(() => false)
+        const { host, server } = await remoteFacts(machine).catch((): { host?: string; server?: true } => ({}))
+        if (host === undefined) return
+        await nameMachine(machine, host, undefined, env).catch(() => false)
+        await noteServer(machine, server === true, undefined, env).catch(() => {})
       }),
     ).then(
       () => void (asking = undefined),
@@ -158,10 +160,11 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     await read()
     for (const url of asked.keys()) if (!machines.some(machine => machine.url === url)) asked.delete(url)
     const now = Date.now()
-    const unnamed = machines.filter(machine => machine.host === undefined && now - (asked.get(machine.url) ?? 0) > HOST_ASKED_AGAIN_MS)
-    if (unnamed.length > 0) {
-      const first = unnamed.some(machine => !asked.has(machine.url))
-      const said = askNames(unnamed)
+    const due = machines.filter(machine => now - (asked.get(machine.url) ?? 0) > HOST_ASKED_AGAIN_MS)
+    if (due.length > 0) {
+      // A list waits only for a machine it knows no name of yet, and not long.
+      const first = due.some(machine => machine.host === undefined && !asked.has(machine.url))
+      const said = askNames(due)
       if (first) {
         await Promise.race([said, new Promise(resolvePromise => setTimeout(resolvePromise, HOST_WAIT_MS).unref())])
         await read()
@@ -169,14 +172,11 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     }
     return host => {
       const machine = machineOf(host)
-      return machine && { label: machine.label, url: machine.url }
+      return machine && { label: machine.label, url: machine.url, ...(machine.server ? { server: true } : {}) }
     }
   }
   // A name two saved machines say is no machine's: neither gets the other's runs by saying it.
-  const machineOf = (host: string): MachineRecord | undefined => {
-    const named = machines.filter(machine => machine.host === host)
-    return named.length === 1 ? named[0] : undefined
-  }
+  const machineOf = (host: string): MachineRecord | undefined => machineNamed(machines, host)
 
   // What each saved machine says of its own runs of a project (machine-runs.ts): asked over its
   // relay with this computer's key there, so a computer's runs read as they stand whether its

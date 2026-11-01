@@ -4,8 +4,10 @@ import { join } from 'node:path'
 import { computerName } from './computer-name.js'
 import {
   addMachine,
+  machineNamed,
   nameMachine,
   noteSeen,
+  noteServer,
   noteProjects,
   noteName,
   renameThisComputer,
@@ -722,7 +724,7 @@ test('the preferences the browser is handed never carry the saved machines', asy
   assert.equal(JSON.stringify(await readPreferences(fs, ENV)).includes('aaa'), false)
 })
 
-test('a machine\'s own computer name is kept as it first said it: a later name is not taken, a new link starts without one, and a name that is none is not kept', async () => {
+test("a machine's own computer name follows what it says, the old one kept for its earlier runs; a new link starts without one, and an answer to the old key does not name it", async () => {
   const fs = memFs()
   await addMachine({ url: STUDIO, key: 'aaa', door: DOOR, label: 'Studio' }, fs, ENV)
   const asked = { id: STUDIO, key: 'aaa' }
@@ -730,14 +732,49 @@ test('a machine\'s own computer name is kept as it first said it: a later name i
   assert.equal(await nameMachine({ id: 'http://nowhere.local:1', key: 'aaa' }, 'studio-box', fs, ENV), false)
   assert.equal(await nameMachine(asked, 'studio-box', fs, ENV), true)
   assert.equal((await listMachines(fs, ENV))[0]!.host, 'studio-box')
-  // A machine that says another name later does not get another computer's runs by it.
-  assert.equal(await nameMachine(asked, 'someone-elses-laptop', fs, ENV), false)
-  assert.equal((await listMachines(fs, ENV))[0]!.host, 'studio-box')
+  // Renamed: it goes by the new name, and the runs under its old one are still its. Back again, the name is not kept twice.
+  assert.equal(await nameMachine(asked, 'renamed-box', fs, ENV), true)
+  assert.deepEqual((await listMachines(fs, ENV)).map(m => [m.host, m.formerHosts]), [['renamed-box', ['studio-box']]])
+  assert.equal(machineNamed(await listMachines(fs, ENV), 'studio-box')?.id, STUDIO)
+  assert.equal(machineNamed(await listMachines(fs, ENV), 'renamed-box')?.id, STUDIO)
+  assert.equal(machineNamed(await listMachines(fs, ENV), 'nobody'), undefined)
+  assert.equal(await nameMachine(asked, 'renamed-box', fs, ENV), false)
+  assert.equal(await nameMachine(asked, 'studio-box', fs, ENV), true)
+  assert.deepEqual((await listMachines(fs, ENV)).map(m => [m.host, m.formerHosts]), [['studio-box', ['renamed-box']]])
   // Added again with a new link: it is asked its name anew, and an answer to the old key does not name it.
   await addMachine({ url: STUDIO, key: 'bbb', door: DOOR, label: 'Studio' }, fs, ENV)
   assert.equal((await listMachines(fs, ENV))[0]!.host, undefined)
   assert.equal(await nameMachine(asked, 'studio-box', fs, ENV), false)
   assert.equal(await nameMachine({ id: STUDIO, key: 'bbb' }, 'studio-box', fs, ENV), true)
+})
+
+test('a machine renamed does not get the runs of another saved machine, and another person\'s computer keeps the name it first said', async () => {
+  const fs = memFs()
+  const other = 'https://other.example'
+  await addMachine({ url: STUDIO, key: 'aaa', door: DOOR, label: 'Studio' }, fs, ENV)
+  await addMachine({ url: other, key: 'ccc', door: DOOR, label: 'Other' }, fs, ENV)
+  assert.equal(await nameMachine({ id: STUDIO, key: 'aaa' }, 'studio-box', fs, ENV), true)
+  assert.equal(await nameMachine({ id: other, key: 'ccc' }, 'other-box', fs, ENV), true)
+  assert.equal(await nameMachine({ id: STUDIO, key: 'aaa' }, 'other-box', fs, ENV), false)
+  assert.equal(await nameMachine({ id: other, key: 'ccc' }, 'other-new', fs, ENV), true)
+  // The name it left is still its runs': another does not take it.
+  assert.equal(await nameMachine({ id: STUDIO, key: 'aaa' }, 'other-box', fs, ENV), false)
+  const dani = 'https://dani.example'
+  await addMachine({ url: dani, key: 'ddd', door: DOOR, label: 'Dani', owner: 'Dani' }, fs, ENV)
+  assert.equal(await nameMachine({ id: dani, key: 'ddd' }, 'dani-box', fs, ENV), true)
+  assert.equal(await nameMachine({ id: dani, key: 'ddd' }, 'suleimans-mac', fs, ENV), false)
+  assert.equal((await listMachines(fs, ENV)).find(m => m.id === dani)!.host, 'dani-box')
+})
+
+test('whether a machine is a server is kept, and changes with what it says, only for the machine as it was asked', async () => {
+  const fs = memFs()
+  await addMachine({ url: STUDIO, key: 'aaa', door: DOOR, label: 'Studio' }, fs, ENV)
+  await noteServer({ id: STUDIO, key: 'old' }, true, fs, ENV)
+  assert.equal((await listMachines(fs, ENV))[0]!.server, undefined)
+  await noteServer({ id: STUDIO, key: 'aaa' }, true, fs, ENV)
+  assert.equal((await listMachines(fs, ENV))[0]!.server, true)
+  await noteServer({ id: STUDIO, key: 'aaa' }, false, fs, ENV)
+  assert.equal((await listMachines(fs, ENV))[0]!.server, undefined)
 })
 
 test('when a machine last answered is kept to the minute, for while it does not answer, and only for the machine as it was asked', async () => {

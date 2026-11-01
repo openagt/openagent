@@ -717,15 +717,26 @@ test('a run whose record names a saved machine\'s computer is that machine\'s, w
     assert.equal(runtime.remoteEventsSource(shop, MINE), undefined)
     assert.equal(runtime.remoteAgents.target(MINE, shop), undefined)
 
-    // The name was kept with the machine: a machine that later says another, or says none, is still this one.
-    said = 'rom-thinkpad-x280'
-    for (const res of open.splice(0)) res.end()
-    await runtime.dispose()
-    runtime = createProjectRuntime({ cwd: join(base, 'shop'), env })
+    // Renamed: it goes by the new name, the runs under its old one are still its, and they are asked of it. One that says none is still this one.
+    const again = async (name: string | undefined): Promise<void> => {
+      said = name
+      for (const res of open.splice(0)) res.end()
+      await runtime.dispose()
+      runtime = createProjectRuntime({ cwd: join(base, 'shop'), env })
+    }
+    await again('renamed-box')
+    assert.equal(await named(runtime.remoteAgents, 'renamed-box', 'Server'), 'Server')
     assert.equal((await runtime.remoteAgents.machineNames())('server-box')?.label, 'Server')
-    assert.equal((await runtime.remoteAgents.machineNames())('rom-thinkpad-x280'), undefined)
     assert.deepEqual(await runtime.remoteAgents.home(shop, ON_SERVER), atMachine)
-    assert.equal(asked.filter(line => line.endsWith('/_relay/ping')).length, 1, 'not asked again')
+    await again(undefined)
+    await new Promise(resolve => setTimeout(resolve, 100))
+    assert.equal((await runtime.remoteAgents.machineNames())('renamed-box')?.label, 'Server')
+    await again('server-box')
+    for (let i = 0; i < 100 && (await listMachines(undefined, env))[0]!.host !== 'server-box'; i++) {
+      await runtime.remoteAgents.machineNames()
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
+    assert.equal((await listMachines(undefined, env)).find(saved => saved.url === url)!.host, 'server-box')
 
     // A second machine that says the same name: the name is neither's, and the run is asked of no machine.
     const twin = await machineAt(() => 'server-box')

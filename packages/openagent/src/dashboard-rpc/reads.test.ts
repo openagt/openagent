@@ -110,6 +110,10 @@ test('a followed run that has a record keeps the record\'s row, in its place, an
   assert.deepEqual(withFollowed([], [mine, record], sent), [mine, record])
   // `b` was sent from here and has no record yet: first. `a` stays where its record is. `gone` was followed by a record that is deleted: not listed.
   assert.deepEqual(withFollowed(followed, [mine, record], sent), [followed[1], mine, { ...record, status: 'running', updatedAt: '2', sessionId: 's-2' }])
+  // A machine renamed since it was saved: its run's record reads as another computer's, but this computer sent it there.
+  const renamed = withFollowed(followed, [{ ...record, otherHost: true }], sent).find(run => run.id === record.id)!
+  assert.equal(renamed.otherHost, undefined)
+  assert.equal(renamed.target, 'remote')
   // What the machine is comes with the machine's name.
   assert.equal(withFollowed([{ ...followed[0]!, remoteKind: 'computer' }], [record], sent)[0]!.remoteKind, 'computer')
 })

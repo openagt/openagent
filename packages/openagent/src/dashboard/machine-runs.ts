@@ -204,11 +204,14 @@ export class MachineRunsKept {
         let found = this.kept.get(key)
         if (!found) {
           if (this.kept.size >= MAX_KEPT) this.kept.clear()
-          this.kept.set(key, (found = { runs: new Map(), answered: false, asked: false, wanted: 0 }))
+          this.kept.set(key, (found = { machine, runs: new Map(), answered: false, asked: false, wanted: 0 }))
         }
         const entry = found
+        // A machine renamed goes on being followed under its new name, and says again the runs it said under it so far.
+        if (entry.machine.host !== machine.host) delete entry.at
+        entry.machine = machine
         entry.wanted = this.now() + WANTED_MS
-        entry.following ??= this.follow(machine, address, entry).finally(() => (entry.following = undefined))
+        entry.following ??= this.follow(address, entry).finally(() => (entry.following = undefined))
         if (!entry.asked) await Promise.race([(entry.first ??= new Promise<void>(done => (entry.answer = done))), new Promise(done => setTimeout(done, FIRST_WAIT_MS).unref())])
         const seenAt = entry.seenAt ?? machine.seenAt
         return { host: machine.host, runs: [...entry.runs.values()], answered: entry.answered, ...(seenAt !== undefined ? { seenAt } : {}) }
@@ -233,10 +236,10 @@ export class MachineRunsKept {
     }
   }
 
-  private async follow(machine: AskedMachine, address: string, entry: Kept): Promise<void> {
-    while (entry.wanted > this.now() && this.kept.get(`${machine.url} ${address}`) === entry) {
+  private async follow(address: string, entry: Kept): Promise<void> {
+    while (entry.wanted > this.now() && this.kept.get(`${entry.machine.url} ${address}`) === entry) {
       const asked = this.now()
-      const said = await this.askAgain(machine, address, entry)
+      const said = await this.askAgain(address, entry)
       const took = this.now() - asked
       const gap = said === 'nothing' ? UNANSWERED_MS : said === 'kept' && took < ASK_GAP_MS ? HELD_NOT_MS : ASK_GAP_MS - took
       entry.asked = true
@@ -246,9 +249,12 @@ export class MachineRunsKept {
   }
 
   /** Ask once, and keep what the machine said: whether a change a list shows was told, nothing such changed, or it did not answer. */
-  private async askAgain(machine: AskedMachine, address: string, entry: Kept): Promise<'told' | 'kept' | 'nothing'> {
+  private async askAgain(address: string, entry: Kept): Promise<'told' | 'kept' | 'nothing'> {
+    const asked = entry.machine
     try {
-      const said = (await this.ask(machine, address, entry.at)) as Partial<OwnRuns> | undefined
+      const said = (await this.ask(asked, address, entry.at)) as Partial<OwnRuns> | undefined
+      // Read now: the machine may have been renamed while it held the call.
+      const machine = entry.machine
       if (!said || typeof said.at !== 'string' || !Array.isArray(said.runs) || !Array.isArray(said.ids)) throw new Error('the machine answered something else than its runs')
       // A change a list shows is told: a run's step, with its later time and higher cost, is only kept.
       let changed = !entry.answered
@@ -265,10 +271,10 @@ export class MachineRunsKept {
         entry.runs.delete(id)
         changed = true
       }
-      entry.at = said.at
+      if (machine.host === asked.host) entry.at = said.at
       entry.answered = true
       entry.seenAt = new Date(this.now()).toISOString()
-      this.seen(machine, entry.seenAt)
+      this.seen(entry.machine, entry.seenAt)
       if (!changed) return 'kept'
       this.tell(address)
       return 'told'
@@ -289,6 +295,8 @@ export class MachineRunsKept {
 
 /** What is kept of one machine's runs of one project. */
 interface Kept {
+  /** The machine as a page last asked for it: its name can change while it is followed. */
+  machine: AskedMachine
   runs: Map<string, AgentMeta>
   /** What the machine answered last, to ask with next time. */
   at?: string

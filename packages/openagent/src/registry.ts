@@ -45,11 +45,15 @@ export interface MachineRecord {
   /** What the machine's key is known by, when its link said: every call goes only to a machine that shows that key. */
   pin?: string
   /**
-   * The computer's own name, as the machine first said it: what the records of its runs carry,
-   * so a run in a project's shared records is known as this machine's. Kept as first said: a
-   * machine that later says another name does not get another computer's runs by it.
+   * The computer's own name, as the machine says it: what the records of its runs carry, so a
+   * run in a project's shared records is known as this machine's. A computer can be renamed, and
+   * its runs go on under the new name ({@link nameMachine}).
    */
   host?: string
+  /** The names it went by before: its earlier runs' records still carry them. */
+  formerHosts?: string[]
+  /** It said it is a server: reached by its line, it is still no computer someone sits at. */
+  server?: true
   /**
    * Whose computer it is, by the person's name, when it is another person's: a computer that
    * keeps a line to a server for everyone there. A run started on it uses this person's own logins
@@ -475,12 +479,12 @@ function sanitizeMachines(value: unknown): MachineRecord[] {
   for (const raw of value) {
     if (machines.length >= MACHINE_LIMITS.count) break
     if (typeof raw !== 'object' || raw === null) continue
-    const { label, url, key, door, pin, host, owner, told, logins, listed, seenAt, projects, added } = raw as Record<string, unknown>
+    const { label, url, key, door, pin, host, formerHosts, server, owner, told, logins, listed, seenAt, projects, added } = raw as Record<string, unknown>
     const ids = Array.isArray(listed) ? listed.filter((id): id is string => typeof id === 'string' && DEVICE_ID.test(id)).slice(0, MACHINE_LIMITS.count) : []
     if (typeof label !== 'string' || typeof url !== 'string' || typeof key !== 'string' || typeof door !== 'string') continue
     if (!url || !key || !door || seen.has(url)) continue
     seen.add(url)
-    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, key, door, ...(typeof pin === 'string' && pin ? { pin } : {}), ...(isHostName(host) ? { host } : {}), ...(isPersonName(owner) ? { owner } : {}), ...(told === true ? { told: true as const } : {}), ...(logins === true ? { logins: true as const } : {}), ...(ids.length ? { listed: ids } : {}), ...(typeof seenAt === 'string' && !Number.isNaN(Date.parse(seenAt)) ? { seenAt } : {}), ...(Array.isArray(projects) ? { projects: ownProjectsOf(projects) } : {}), ...(isTime(added) ? { added } : {}) })
+    machines.push({ id: url, label: label.trim().slice(0, MACHINE_LIMITS.label) || url, url, key, door, ...(typeof pin === 'string' && pin ? { pin } : {}), ...(isHostName(host) ? { host } : {}), ...(Array.isArray(formerHosts) && formerHosts.some(isHostName) ? { formerHosts: formerHosts.filter(isHostName).slice(-MACHINE_LIMITS.count) } : {}), ...(server === true ? { server: true as const } : {}), ...(isPersonName(owner) ? { owner } : {}), ...(told === true ? { told: true as const } : {}), ...(logins === true ? { logins: true as const } : {}), ...(ids.length ? { listed: ids } : {}), ...(typeof seenAt === 'string' && !Number.isNaN(Date.parse(seenAt)) ? { seenAt } : {}), ...(Array.isArray(projects) ? { projects: ownProjectsOf(projects) } : {}), ...(isTime(added) ? { added } : {}) })
   }
   return machines
 }
@@ -803,21 +807,49 @@ export async function addMachine(
 }
 
 /**
- * Keep the computer's own name a saved machine said, the first time it says one. A machine that
- * already has a name keeps it, and one saved again (a new link) starts without one: `key` is
- * the key the machine was asked with, and a machine saved anew since is not named by an answer
- * to the old one. Answers whether the name was written.
+ * Keep the computer's own name a saved machine says, and the one it went by before, whose runs are
+ * still known as its. One saved again (a new link) starts without one: `key` is the key the machine
+ * was asked with, and a machine saved anew since is not named by an answer to the old one. A name
+ * another saved machine goes by is not taken, nor does another person's computer change its name:
+ * it would be given runs that are not its. Answers whether the name was written.
  */
 export async function nameMachine(machine: { id: string; key: string }, host: string, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<boolean> {
   const { id, key } = machine
   if (!isHostName(host)) return false
   return serialize(async () => {
     const registry = await readRegistry(fs, env)
-    const saved = (registry.machines ?? []).find(candidate => candidate.id === id)
-    if (!saved || saved.key !== key || saved.host !== undefined) return false
-    await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(machine => (machine.id === id ? { ...machine, host } : machine)) }, fs, env)
+    const machines = registry.machines ?? []
+    const saved = machines.find(candidate => candidate.id === id)
+    if (!saved || saved.key !== key || saved.host === host) return false
+    if (saved.host !== undefined) {
+      if (saved.owner !== undefined) return false
+      if (machines.some(other => other !== saved && (other.host === host || other.formerHosts?.includes(host)))) return false
+    }
+    const formerHosts = [...(saved.formerHosts ?? []), ...(saved.host !== undefined ? [saved.host] : [])].filter(name => name !== host)
+    const { formerHosts: _before, ...rest } = saved
+    const named: MachineRecord = { ...rest, host, ...(formerHosts.length > 0 ? { formerHosts } : {}) }
+    await writeRegistry({ ...registry, machines: machines.map(candidate => (candidate === saved ? named : candidate)) }, fs, env)
     return true
   })
+}
+
+/** Keep whether a saved machine says it is a server, as it was asked. */
+export async function noteServer(machine: { id: string; key: string }, server: boolean, fs: RegistryFs = nodeRegistryFs(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  await serialize(async () => {
+    const registry = await readRegistry(fs, env)
+    const saved = (registry.machines ?? []).find(candidate => candidate.id === machine.id)
+    if (!saved || saved.key !== machine.key || (saved.server === true) === server) return
+    const { server: _before, ...rest } = saved
+    await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(candidate => (candidate === saved ? { ...rest, ...(server ? { server: true as const } : {}) } : candidate)) }, fs, env)
+  })
+}
+
+/** The one saved machine a run's recorded name belongs to: the one going by it now, else the one that went by it. A name two say is neither's. */
+export function machineNamed(machines: readonly MachineRecord[], host: string): MachineRecord | undefined {
+  const now = machines.filter(machine => machine.host === host)
+  if (now.length > 0) return now.length === 1 ? now[0] : undefined
+  const before = machines.filter(machine => machine.formerHosts?.includes(host))
+  return before.length === 1 ? before[0] : undefined
 }
 
 /**
@@ -835,6 +867,7 @@ export async function noteListed(machine: { id: string; key: string }, listed: s
     await writeRegistry({ ...registry, machines: (registry.machines ?? []).map(candidate => (candidate.id === machine.id ? kept : candidate)) }, fs, env)
   })
 }
+
 
 /**
  * Keep the name a saved machine says it has now, when it changed: a page shows a machine under its

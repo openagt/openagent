@@ -56,10 +56,10 @@ export type MachineKind = 'computer' | 'home' | 'shared' | 'server'
  * address that stands for it here. A computer is one reached by its line, or by an address on its
  * network; a server is one that speaks HTTPS; an address that is the machine's own name is said once.
  */
-export function machineKind(machine: { label: string; url: string; owner?: string | undefined }): { kind: MachineKind; place: string } {
+export function machineKind(machine: { label: string; url: string; owner?: string | undefined; server?: boolean | undefined }): { kind: MachineKind; place: string } {
   const through = reachedThrough(machine.url)
   if (machine.owner !== undefined) return { kind: 'shared', place: `@${machine.owner}'s server${through !== undefined ? `, through ${through}` : ''}` }
-  if (reachedByLine(machine.url)) return { kind: 'computer', place: 'Your computer' }
+  if (reachedByLine(machine.url)) return machine.server ? { kind: 'home', place: 'Server at home' } : { kind: 'computer', place: 'Your computer' }
   if (through !== undefined) return { kind: 'home', place: `Server at home, through ${through}` }
   let host = machine.url
   try {

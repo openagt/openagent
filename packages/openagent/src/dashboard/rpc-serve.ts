@@ -47,6 +47,7 @@ export type EventsSource = (projectId: string, agentId?: string) => AsyncIterabl
 export interface SavedMachine {
   label: string
   url: string
+  server?: boolean
 }
 
 /** Look up the machine a relayed agent (#1067) executes on, or undefined for an ordinary local agent. The
