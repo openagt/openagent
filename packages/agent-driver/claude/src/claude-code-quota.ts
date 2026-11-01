@@ -5,13 +5,11 @@ import type { DriverQuota, DriverQuotaWindow, SpawnLike } from '@openagt/agent-d
 const READ_TIMEOUT_MS = 20_000
 
 /**
- * Present in both subscription headers Claude Code can print (`"your
- * subscription"` and, mid-overage, `"your overages"`), and in neither
- * non-subscription case. Matching the shared tail rather than the word
- * "subscription" is deliberate: an account burning overage still has a quota to
- * report, and keying on "subscription" would read it as having none.
+ * What Claude Code prints for `/usage` when the login has no subscription, such as an API key: the
+ * session's cost, with no windows. Only this says so: any other answer without windows tells
+ * nothing about the account.
  */
-const SUBSCRIPTION_HEADER = /to power your Claude Code usage/
+const COST_READOUT = /^Total cost:/m
 
 /**
  * One `"<label>: <n>% used · resets <when>"` line.
@@ -58,10 +56,7 @@ export function parseQuotaReadout(text: string): DriverQuota {
   }
 
   if (windows.length > 0) return { available: true, windows }
-  // No windows and no subscription header: the account has no quota to report
-  // (API-key auth). With the header, it does have one and we simply failed to
-  // read it, which is a parser problem and must not masquerade as the former.
-  return { available: false, reason: SUBSCRIPTION_HEADER.test(text) ? 'unrecognized' : 'no-subscription' }
+  return { available: false, reason: COST_READOUT.test(text) ? 'no-subscription' : 'unrecognized' }
 }
 
 /** Options for {@link readClaudeQuota}. */

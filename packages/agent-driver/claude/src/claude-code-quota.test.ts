@@ -25,6 +25,12 @@ const REAL_READOUT = [
   '  Top subagents: Explore 1%',
 ].join('\n')
 
+const COST_READOUT = `Total cost:            $0.0000
+Total duration (API):  0s
+Total duration (wall): 0s
+Total code changes:    0 lines added, 0 lines removed
+Usage:                 0 input, 0 output, 0 cache read, 0 cache write`
+
 test('parseQuotaReadout reads each window off a real readout (#521)', () => {
   const quota = parseQuotaReadout(REAL_READOUT)
   assert.equal(quota.available, true)
@@ -77,8 +83,11 @@ test('parseQuotaReadout separates a reworded readout from an account with no quo
     available: false,
     reason: 'unrecognized',
   })
-  // No header at all: nothing to report, e.g. API-key auth.
-  assert.deepEqual(parseQuotaReadout('Some other answer entirely'), { available: false, reason: 'no-subscription' })
+  // What `/usage` really answers for an API key, measured on 2.1.316.
+  assert.deepEqual(parseQuotaReadout(COST_READOUT), { available: false, reason: 'no-subscription' })
+  // Anything else says nothing about the account: one odd answer must not read as "no subscription".
+  assert.deepEqual(parseQuotaReadout('Some other answer entirely'), { available: false, reason: 'unrecognized' })
+  assert.deepEqual(parseQuotaReadout(''), { available: false, reason: 'unrecognized' })
 })
 
 test('parseQuotaReadout never reports an empty reading as zero use (#521)', () => {

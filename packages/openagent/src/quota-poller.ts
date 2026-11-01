@@ -73,7 +73,7 @@ export class QuotaPoller {
     return this.currentIntervalMs
   }
 
-  /** Whether the poller has given up (an authoritative failure, or {@link stop}). */
+  /** Whether {@link stop} ended the polling. */
   get isStopped(): boolean {
     return this.stopped
   }
@@ -128,14 +128,10 @@ export class QuotaPoller {
 
   private onBad(reason: DriverQuotaUnavailableReason): void {
     this.envelope = { ...this.envelope, lastFailureAt: this.now() }
-    if (!isTransientQuotaReason(reason)) {
-      // Authoritative: no subscription, or no agent. Asking again changes
-      // nothing, and the retained reading would misrepresent the account.
-      this.envelope = { ...this.envelope, lastGood: undefined, lastGoodAt: undefined }
-      this.stop()
-      return
-    }
-    // Transient, so keep lastGood and ask again later — but later than last time.
+    // No subscription, or no agent: the kept reading would misrepresent the account now. Either can
+    // change while the daemon lives (a login, an update swapping the CLI), so it is asked again too.
+    if (!isTransientQuotaReason(reason)) this.envelope = { ...this.envelope, lastGood: undefined, lastGoodAt: undefined }
+    // Ask again later, later than last time.
     this.currentIntervalMs = Math.min(this.currentIntervalMs * 2, this.opts.maxIntervalMs ?? MAX_POLL_MS)
   }
 
