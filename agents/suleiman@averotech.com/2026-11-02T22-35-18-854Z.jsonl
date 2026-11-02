@@ -6,3 +6,10 @@
 {"kind":"result","text":"Hi","sessionId":"79bc77b6-5c8d-4fe7-99c2-8c5d7f6b0944","at":"2026-11-02T22:35:22.839Z"}
 {"kind":"cost","usd":0.04075380000000001,"at":"2026-11-02T22:35:22.839Z"}
 {"kind":"ended","status":"done","at":"2026-11-02T22:35:23.578Z"}
+{"kind":"start","prompt":"tell me hi, nothing else","at":"2026-11-02T22:38:20.475Z"}
+{"kind":"session","sessionId":"79bc77b6-5c8d-4fe7-99c2-8c5d7f6b0944","at":"2026-11-02T22:38:20.477Z"}
+{"kind":"said","text":"Hi","at":"2026-11-02T22:38:20.478Z"}
+{"kind":"rate-limit","limit":{"status":"allowed","window":"seven_day","resetsAt":1794024000000,"windows":[{"window":"seven_day","percentUsed":6,"resetsAt":1794024000000}]},"at":"2026-11-02T22:38:20.484Z"}
+{"kind":"result","text":"Hi","sessionId":"79bc77b6-5c8d-4fe7-99c2-8c5d7f6b0944","at":"2026-11-02T22:38:21.272Z"}
+{"kind":"cost","usd":0.07667500000000001,"at":"2026-11-02T22:38:21.272Z"}
+{"kind":"ended","status":"done","at":"2026-11-02T22:38:22.038Z"}
