@@ -46,6 +46,9 @@ export function readCommitLines(text: string): CommitLine[] {
 /** An address no person reads (a bot's, a tool's): its commits are no member's. */
 const NO_PERSON = /noreply|no-reply|\[bot\]/i
 
+/** GitHub's own address for a person's account, what a server's git signs with: it says no-reply, and is theirs. A bot's has `[bot]` in it. */
+const PERSONS_OWN_ADDRESS = /^[^[\]]+@users\.noreply\.github\.com$/i
+
 /** A reader of the records: the folders under a directory, and a file's text. */
 export interface RecordsReader {
   list(dir: string): Promise<string[]>
@@ -87,7 +90,7 @@ export async function peopleOf(reader: RecordsReader, dir: string, since: number
   }
   // The commits, newest first: a person's name is the one their newest commit carries.
   for (const commit of commits) {
-    if (NO_PERSON.test(commit.email)) continue
+    if (NO_PERSON.test(commit.email) && !PERSONS_OWN_ADDRESS.test(commit.email)) continue
     const known = byEmail.get(commit.email.toLowerCase())
     if (commit.at < since && !known) continue
     const person = known ?? entry(commit.email, commit.at)
@@ -137,12 +140,16 @@ export interface Member extends PersonActivity {
   projects: string[]
 }
 
-/** The same person's activity in several projects, as one. */
-export function membersOf(reads: { project: string; people: PersonActivity[] }[]): Member[] {
+/**
+ * The same person's activity in several projects, as one. `account` says the git host's account
+ * behind an email, when it knows one: a person's two emails on one account are one person too, as
+ * when a server signs with GitHub's own address and their laptop with their own.
+ */
+export function membersOf(reads: { project: string; people: PersonActivity[] }[], account: (person: string) => string | undefined = () => undefined): Member[] {
   const byPerson = new Map<string, Member>()
   for (const { project, people } of reads)
     for (const activity of people) {
-      const key = activity.person.toLowerCase()
+      const key = (account(activity.person) ?? activity.person).toLowerCase()
       const known = byPerson.get(key)
       if (!known) {
         byPerson.set(key, { ...activity, projects: [project] })
@@ -155,7 +162,7 @@ export function membersOf(reads: { project: string; people: PersonActivity[] }[]
       known.cost = Math.round((known.cost + activity.cost) * 100) / 100
       if (activity.lastAt > known.lastAt) known.lastAt = activity.lastAt
       if (activity.you) known.you = true
-      known.projects.push(project)
+      if (!known.projects.includes(project)) known.projects.push(project)
     }
   return [...byPerson.values()].sort((a, b) => Number(b.running > 0) - Number(a.running > 0) || b.runs + b.commits - (a.runs + a.commits) || b.lastAt.localeCompare(a.lastAt))
 }
