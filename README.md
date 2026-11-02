@@ -11,7 +11,7 @@ Stop babysitting your coding agents. Make the important decisions, let AI do the
 
 ## What is this?
 
-[openagent.build](https://openagent.build)
+> We're building an agent orchestration tool that is not only fully open source, but also fully modular which is the unique thing about what we're building: the orchestration is merely a set of skills you can choose and switch out individually. So basically replacing tools like Cursor/Conductor/Traycer with just a set of skills. Our hope is that the entire AI harness eventually becomes open source and modular.
 
 ## Quickstart
 
