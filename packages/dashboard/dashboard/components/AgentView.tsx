@@ -7,7 +7,7 @@ import { useCheckoutStatus } from '../lib/use-checkout-status.js'
 import { isAgentActive, agentOutcome, cardOutcome } from '../lib/live-state.js'
 import { AgentActionBar } from './AgentActionBar.js'
 import { SessionRow } from './SessionRow.js'
-import { startedFromBranch, startedFromMain } from '../lib/started-from.js'
+import { startedFromBranch, startedFromMain, type StartPicks } from '../lib/started-from.js'
 import { RunPrLabels } from './RunPrLabels.js'
 import type { ContextSet } from '../lib/use-context-set.js'
 import { AgentComposer } from './AgentComposer.js'
@@ -60,6 +60,7 @@ export function AgentView({
   events,
   live,
   card,
+  picks,
   label,
   projectName,
   target,
@@ -83,6 +84,8 @@ export function AgentView({
   live: boolean | null
   /** What the run's card says, off the runs poll: what the feed cannot carry (the details strip's facts, how the agent was set up, whether it is a subagent, whether its record is being saved). Absent until the card is listed. */
   card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'saving' | 'parent' | 'workspace' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'remoteKind'>) | undefined
+  /** What the launcher said about this run as it started it: shown until the run's record says it. */
+  picks?: StartPicks | undefined
   /** The session's own name — the same label the rail shows (#1030). It leads the action bar as
    * the stable identity, so the branch renaming itself near the end of an agent (#736) reads as a
    * detail changing rather than the whole view changing. */
@@ -169,14 +172,16 @@ export function AgentView({
   const elsewhere = (target !== undefined && target !== 'local') || remoteLabel !== undefined
   const setup = useMemo(() => ({ workspace, branch, base, driver, model, elsewhere }), [workspace, branch, base, driver, model, elsewhere])
   // The model by the name its coding agent gives it, for the row under the message box.
-  const picked = driverFromImpl(driver)
+  const picked = driverFromImpl(driver ?? picks?.driver)
   const models = useModels()
-  const modelLabel = model ? modelName(picked ? models?.[picked] : undefined, model) : undefined
+  const shownModel = model ?? picks?.model
+  const modelLabel = shownModel ? modelName(picked ? models?.[picked] : undefined, shownModel) : undefined
   // The model and how hard it was told to think, as Claude Code says them under its box: the two
   // words of the session's own setup, which it keeps for its whole life.
   // Two words with a space between them, as Claude Code sets them under its box ("Opus 5  High"):
   // they are one setting read together, and a dot between made them read as two separate facts.
-  const underBox = [modelLabel, card?.effort ? effortLabel(card.effort) : undefined].filter(Boolean).join('\u2002') || undefined
+  const effort = card?.effort ?? picks?.effort
+  const underBox = [modelLabel, effort ? effortLabel(effort) : undefined].filter(Boolean).join('\u2002') || undefined
   // How full this session's context is: the run's own last reading, against what the agent says
   // the model holds. Either missing, no circle.
   const window = modelContextWindow(models, picked, model)
@@ -187,7 +192,7 @@ export function AgentView({
   // default branch, the name that has on the computer the run is on. Read once: it never changes.
   const fromMain = startedFromMain(card)
   const mainBranch = useLoaded<string | null>(fromMain ? () => onAgentMainBranch(projectId, agentId) : null, null, [projectId, agentId, fromMain], { remember: `main-branch:${projectId}:${agentId}` })
-  const startedFrom = startedFromBranch(card, mainBranch)
+  const startedFrom = startedFromBranch(card, mainBranch) ?? picks?.branch
   const [open, setOpen] = useState(false)
   // What the installed modules add to this run's page: a summary in the bar above the message box.
   const { runSlots: mountedSlots, panels: mountedPanels } = useMountedModules()
@@ -393,7 +398,7 @@ export function AgentView({
   const prs = useMemo(() => [...(earlierPrs ?? []), ...(pr && !earlierPrs?.some(earlier => earlier.url === pr.url) ? [pr] : [])], [earlierPrs, pr])
   // Where the session started, right above the message box, as the "New agent" page has it. It is
   // there whatever stands in the box's place.
-  const row = <SessionRow runsOn={runsOn} target={target} remoteKind={card?.remoteKind} elsewhere={elsewhere || card?.otherHost === true} projectName={projectName} startedFrom={startedFrom} worksOn={barCheckout?.branch ?? branch} gitHost={gitHostHome} gitAccount={card?.gitAccount} />
+  const row = <SessionRow runsOn={runsOn} target={target} remoteKind={card?.remoteKind} elsewhere={elsewhere || card?.otherHost === true} projectName={projectName} startedFrom={startedFrom} worksOn={barCheckout?.branch ?? branch} gitHost={gitHostHome} gitAccount={card?.gitAccount ?? picks?.gitAccount} />
   const workState = [agentId, barCheckout?.branch ?? '', onBranch?.commits.length ?? 0, onBranch?.pendingFiles?.length ?? 0, onBranch?.insertions ?? 0, onBranch?.deletions ?? 0, onBranch?.pushed ?? false, pr?.number ?? '', pr?.state ?? ''].join('|')
 
   return (
@@ -482,8 +487,9 @@ export function AgentView({
             {...(window !== undefined ? { context: <ContextCircle used={card?.contextTokens ?? 0} size={window} /> } : {})}
             controls={<RunPrLabels prs={prs} />}
             contextSet={contextSet}
-            publish={card?.publish}
-            prBase={card?.prBase}
+            // A card with no level has none: a message may have taken it away.
+            publish={card ? card.publish : picks?.publish}
+            prBase={card?.prBase ?? picks?.prBase}
             row={row}
           />
           )}

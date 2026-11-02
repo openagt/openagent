@@ -104,10 +104,10 @@ export function AgentActionsMenu({
       copiedTimer.current = setTimeout(() => setCopied(false), 1500)
     })
   }
-  // Hold the last git host page while a new project's loads, so the item does not flicker.
+  // Remembered per project, under the key a session's page reads: a run started here finds it there at once.
   // Asked again after a repository is created: the project has a page on its git host from then on.
   const [created, setCreated] = useState(0)
-  const home = useLoaded<GitHostHome | null>(() => onGitHostHome(projectId), null, [projectId, created], 'previous')
+  const home = useLoaded<GitHostHome | null>(() => onGitHostHome(projectId), null, [projectId, created], { remember: `git-host-home:${projectId}` })
   // A project that lives on this machine only may be offered a repository on a host; the project's
   // menu offers it, a session's does not. Creating one puts the project's code on a server under
   // the person's account, so it is asked once more before it happens.

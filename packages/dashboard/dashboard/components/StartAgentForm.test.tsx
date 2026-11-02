@@ -32,6 +32,8 @@ vi.mock('../rpc/logins.js', () => logins)
 const onMachineStartCheck = vi.hoisted(() => vi.fn())
 const onMachineLogins = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/machines.js', () => ({ onMachineStartCheck, onMachineLogins }))
+const runsAccount = vi.hoisted(() => ({ login: undefined as string | undefined }))
+vi.mock('./GitHosts.js', () => ({ GitAccountMenu: () => null, useRunsAccount: () => runsAccount.login }))
 const serverLogins = vi.hoisted(() => ({ onServerLogins: vi.fn(), sendUseLoginsOn: vi.fn(), sendAllowLogins: vi.fn(), sendSettleLogin: vi.fn() }))
 vi.mock('../rpc/server-logins.js', () => serverLogins)
 const openSettings = vi.hoisted(() => vi.fn())
@@ -134,7 +136,7 @@ describe('StartAgentForm (#1774)', () => {
     const onAgentStarted = vi.fn()
     render(<StartAgentForm {...props} onAgentStarted={onAgentStarted} />)
     fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r1', undefined, undefined))
+    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r1', undefined, undefined, expect.anything()))
     expect(start).toHaveBeenCalledWith('p1', 'do the thing', { driver: 'codex', model: 'gpt-5' })
   })
 
@@ -327,6 +329,20 @@ describe('StartAgentForm (#1774)', () => {
     })
   })
 
+  test('what this page says goes with the Start, for the run\'s page until its record says it: the branch, the account, the level, the target, the model', async () => {
+    onCommands.mockResolvedValue({ ...WITH_BRANCHES, prBase: true })
+    runsAccount.login = 'octo'
+    prefs.current = { publish: 'pr', driver: 'codex', model: 'gpt-5', effort: 'high', startFrom: { p1: { kind: 'published', branch: 'feature-x' } } }
+    start.mockResolvedValue({ agentId: 'r1' })
+    const onAgentStarted = vi.fn()
+    render(<StartAgentForm {...props} projectName="gemstack" onAgentStarted={onAgentStarted} />)
+    await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Open PR → feature-x'))
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(onAgentStarted).toHaveBeenCalled())
+    expect(onAgentStarted.mock.lastCall![4]).toEqual({ branch: 'feature-x', gitAccount: 'octo', publish: 'pr', prBase: 'feature-x', driver: 'codex', model: 'gpt-5', effort: 'high' })
+    runsAccount.login = undefined
+  })
+
   test('no pick made: neither is sent, so the hook decides', async () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
     start.mockResolvedValue({ agentId: 'r1' })
@@ -361,7 +377,7 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(onCommands).toHaveBeenCalled())
     expect(screen.queryByRole('alert')).toBeNull()
     fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r2', 'box', undefined))
+    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r2', 'box', undefined, expect.anything()))
     expect(start).toHaveBeenCalledWith('p1', 'do the thing', { machine: 'd1' })
     expect(onStartCheck).not.toHaveBeenCalled()
   })
@@ -376,7 +392,7 @@ describe('StartAgentForm (#1774)', () => {
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalled())
     expect(start.mock.calls[0]![2]).not.toHaveProperty('machine')
-    expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r3', undefined, undefined)
+    expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r3', undefined, undefined, expect.anything())
   })
 
   test('what would stop the run is said before the Start, for the coding agent picked; a warning is said too, and neither turns Start off', async () => {
@@ -637,7 +653,7 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', {}))
     expect(onStartCheck).not.toHaveBeenCalled()
     // The run is in that copy, which the page goes to.
-    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r6', undefined, 'shop-here'))
+    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r6', undefined, 'shop-here', expect.anything()))
   })
 
   test("before another computer's project is cloned here, this computer says what its clone and the run would hit; a start that hit it says nothing more", async () => {

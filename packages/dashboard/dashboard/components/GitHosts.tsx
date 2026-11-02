@@ -176,6 +176,13 @@ export function useGitHostsOn(machineId: string | undefined): { view: GitHostsVi
   return { view: theirs.value ?? undefined, pick: (host, login) => sendMachineGitHostAccount(machineId, host, login).then(theirs.reload) }
 }
 
+/** The login a run started now would work as: the account of the project's host, on the computer it goes to. */
+export function useRunsAccount(address: string | undefined, machineId: string | undefined): string | undefined {
+  const { view } = useGitHostsOn(machineId)
+  const host = address?.split('/')[0]
+  return view?.hosts.find(one => one.host === host)?.provider?.accounts.find(account => account.runs)?.login
+}
+
 /**
  * The git host account a run pushes and opens its pull request with, at the end of the row above
  * the message box: the project's host, on the computer the run goes to. Its menu picks another of

@@ -6,6 +6,7 @@ import { ProjectSkillsLine } from './ProjectSkills.js'
 import { AgentOverview } from './AgentOverview.js'
 import { HumanQueueList } from './HumanQueueList.js'
 import { ScrollArea } from './ui/scroll-area.js'
+import type { StartPicks } from '../lib/started-from.js'
 
 // The project home / launcher: the "New agent" page. It is never consumed by an agent: starting
 // one appends an agent to the rail and adds that agent's own view (AgentView) alongside, and this
@@ -39,7 +40,7 @@ export function ProjectHome({
   waiting: Intervention[]
   events: OpenAgentEvent[]
   /** Carries the started agent's id through to the shell; dropping it is what #1169 was. */
-  onAgentStarted?: ((intent: string, agentId: string, runsOn?: string, startedIn?: string) => void) | undefined
+  onAgentStarted?: ((intent: string, agentId: string, runsOn?: string, startedIn?: string, picks?: StartPicks) => void) | undefined
   files: string[]
   /** The Context set and its edits, owned by the shell and shared with the file tree (#492). */
   context: Set<string>

@@ -9,6 +9,20 @@ type StartFacts = Pick<AgentMeta, 'base' | 'baseCommit'> | undefined
 // written down may have started anywhere. So does a clone with no default branch: its run started
 // from whatever was checked out. Nothing is said then, never a name that may be wrong.
 
+/**
+ * What the launcher said about a run it just started, for its page until the run's record says it:
+ * the record comes seconds later, and the row above the box would change under the person's eyes.
+ */
+export interface StartPicks {
+  branch?: string
+  gitAccount?: string
+  publish?: string
+  prBase?: string
+  driver?: string
+  model?: string
+  effort?: string
+}
+
 /** Whether what the run started from is origin's default branch, whose name has to be read. */
 export function startedFromMain(card: StartFacts): boolean {
   return card?.base === undefined && card?.baseCommit !== undefined
