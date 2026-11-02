@@ -159,22 +159,3 @@ export function membersOf(reads: { project: string; people: PersonActivity[] }[]
     }
   return [...byPerson.values()].sort((a, b) => Number(b.running > 0) - Number(a.running > 0) || b.runs + b.commits - (a.runs + a.commits) || b.lastAt.localeCompare(a.lastAt))
 }
-
-/** An email name that says nothing of whose it is: the domain names them instead. */
-const GENERIC = new Set(['git', 'me', 'mail', 'email', 'hello', 'hi', 'info', 'contact', 'dev', 'noreply', 'no-reply'])
-
-/** The name a person goes by here: the one git knows them by, else one drawn from their email ({@link emailName}). */
-export function nameOf(member: Pick<PersonActivity, 'person' | 'name'>): string {
-  return member.name?.trim() || emailName(member.person)
-}
-
-/**
- * A name drawn from an email: its name
- * (`suleiman@averotech.com` is suleiman), or the domain's when the name is a generic word
- * (`git@brillout.com` is brillout). The whole email is shown on hover.
- */
-export function emailName(person: string): string {
-  const [name = '', domain = ''] = person.split('@')
-  if (GENERIC.has(name.toLowerCase()) && domain) return domain.split('.')[0] || person
-  return name || person
-}

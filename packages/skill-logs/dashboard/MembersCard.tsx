@@ -1,7 +1,6 @@
-import { useState } from 'react'
 import { Users } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitleLink, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, useModuleHost, usePolled, type ModuleCardProps, type ModuleHostPerson } from '@openagt/dashboard/module'
-import { membersOf, nameOf, peopleWithRuns, type Member, type PersonActivity } from '../src/people.js'
+import { Card, CardContent, CardHeader, CardTitleLink, PersonMark, Tooltip, TooltipContent, TooltipTrigger, formatAge, formatDateTime, personName, personSaid, useModuleHost, usePolled, type ModuleCardProps, type ModuleHostPerson } from '@openagt/dashboard/module'
+import { membersOf, peopleWithRuns, type Member, type PersonActivity } from '../src/people.js'
 
 // The Overview's Members card: who worked in the projects shown in the last 30 days, from `logs
 // people --local` in each, the same person in several projects counted once: whoever started agents
@@ -19,13 +18,6 @@ const NONE: Shown[] = []
 
 /** How many days back the card looks. */
 const DAYS = 30
-
-/** Two letters for a person's mark, from their name: "Romuald Brillout" is RB, "suleiman" is SU. */
-function initials(member: Member): string {
-  const name = nameOf(member)
-  const parts = name.split(/[\s._-]+/).filter(Boolean)
-  return (parts.length > 1 ? parts[0]![0]! + parts.at(-1)![0]! : name.slice(0, 2)).toUpperCase()
-}
 
 /** What a person did in those days, in a few words: "63 runs · $13.70 · 416 commits", "5 commits". */
 function didWords(member: Member): string {
@@ -83,12 +75,12 @@ export function MembersCard({ projects }: ModuleCardProps) {
         ) : (
           <ul className="space-y-2.5">
             {members.map(member => (
-              <li key={member.person} aria-label={nameOf(member)} className="flex min-w-0 items-center gap-2.5">
-                <Avatar member={member} />
+              <li key={member.person} aria-label={personName(member.person, member.name)} className="flex min-w-0 items-center gap-2.5">
+                <PersonMark email={member.person} name={member.name} picture={member.account?.avatar} you={member.you} />
                 <div className="min-w-0 flex-1">
                   <p className="flex min-w-0 items-center gap-1.5 text-sm">
-                    <span className="min-w-0 truncate font-medium" title={member.account ? `${member.person} · ${member.account.login}` : member.person}>
-                      {nameOf(member)}
+                    <span className="min-w-0 truncate font-medium" title={personSaid(member.person, member.account)}>
+                      {personName(member.person, member.name)}
                     </span>
                     {member.you && <span className="shrink-0 text-xs text-muted-foreground">you</span>}
                   </p>
@@ -113,17 +105,5 @@ export function MembersCard({ projects }: ModuleCardProps) {
         )}
       </CardContent>
     </Card>
-  )
-}
-
-/** A member's picture from their git host, else two letters of their name; a picture that does not load gives way to the letters. */
-function Avatar({ member }: { member: Shown }) {
-  const [broken, setBroken] = useState(false)
-  const picture = member.account?.avatar
-  if (picture && !broken) return <img src={picture} alt="" onError={() => setBroken(true)} className={cn('size-7 shrink-0 rounded-full object-cover', member.you && 'ring-2 ring-primary/40')} />
-  return (
-    <span aria-hidden className={cn('flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold', member.you ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground')}>
-      {initials(member)}
-    </span>
   )
 }
