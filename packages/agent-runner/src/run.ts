@@ -7,7 +7,7 @@ import { agentBranchName, attachCheckout, createCheckout, reclaimWorktree, relin
 import { findRun, readDiary, type AnyDiaryLine, type LogsDeps, type RunCard, type RunStatus } from '@openagt/skill-logs'
 import { hideLiveDir, inboxPath, liveDir, readLiveCard, readLiveDiary } from './live-card.js'
 import { earlierPrs, forReaders, lasting, markerCard, publishChange, recordBranchGone, recordRun, runnerMark, startOf, writeMarker, type Publish, type RunnerMark } from './records.js'
-import { projectGitHost, type GitHost, type MergeOutcome } from './git-host.js'
+import { projectGitHost, type GitHost } from './git-host.js'
 import { basicSkills } from './basic-skills.js'
 import { acquireRunLock, isPidAlive, releaseRunLock } from './run-lock.js'
 import { runEndedLine } from './ended.js'
@@ -42,16 +42,8 @@ import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
  * One-shot: `agent-runner run <prompt>` runs on its own. A scheduler's tick spawns the same thing
  * with the marker already written and the id chosen.
  *
- * A run may name a follow-up (`run --then <prompt>`): once it ends done with a pull request, a
- * fresh agent, a run of its own with its own record, works on the same branch from the prompt,
- * the first run's id after it. The first agent is told, in a line after its prompt, to publish its
- * work without arming the pull request's merge, whatever level the run was given; the follow-up
- * is given no level, its prompt says what it publishes; the follow-up ending done is when this
- * process merges it, through the project's git host (`git-host.ts`). A follow-up that fails or is
- * stopped leaves the request open, for a person.
- *
- * The pull request a run's branch has is read back the same way, through the git host the project
- * declares; a project with no git host package records none.
+ * The pull request a run's branch has is read back through the git host the project declares
+ * (`git-host.ts`); a project with no git host package records none.
  *
  * A run may be started for another run, its parent (`run --parent <id>`), and from a branch other
  * than origin's default (`run --base <ref>`); both are on its record for its whole life. When it
@@ -59,7 +51,7 @@ import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
  *
  * A run that makes its own branch writes down the commit the branch was made at, on its record
  * for its whole life: the run's own work is what came after it, which is how it is still told
- * apart once it is merged. A run given a branch that exists (a follow-up's) writes none: that
+ * apart once it is merged. A run given a branch that exists (a person's pull request's) writes none: that
  * branch's work began with another run.
  */
 
@@ -80,22 +72,18 @@ export const PUBLISH_LINES: Readonly<Record<Publish, string>> = {
   merge: `${PUBLISH_OPENING} and open its pull request, set to merge on its own once its checks pass.`,
 }
 
-/** The sentence when a follow-up is coming: the agent publishes its work, this process merges the request later. */
-export const HOLD_MERGE_LINE = `${PUBLISH_OPENING} and open its pull request, but do not arm its merge: it is merged for you once a follow-up is done.`
-
 /**
  * The sentence a run adds after every prompt of its agent, the first and each message after it:
- * that of its publish level, the hold sentence instead when the run names a follow-up, none for a
- * run with neither. The session sends it after the prompt and writes it down apart from it, so a
- * reader shows the person's words as the person wrote them.
+ * that of its publish level, none for a run with none. The session sends it after the prompt and
+ * writes it down apart from it, so a reader shows the person's words as the person wrote them.
  */
-export function addedLine(publish: Publish | undefined, then: string | undefined): string | undefined {
-  return then !== undefined ? HOLD_MERGE_LINE : publish !== undefined ? PUBLISH_LINES[publish] : undefined
+export function addedLine(publish: Publish | undefined): string | undefined {
+  return publish !== undefined ? PUBLISH_LINES[publish] : undefined
 }
 
 /** The sentence as a session takes it: named, or left out. */
-function addedOf(publish: Publish | undefined, then: string | undefined): { added?: string } {
-  const added = addedLine(publish, then)
+function addedOf(publish: Publish | undefined): { added?: string } {
+  const added = addedLine(publish)
   return added !== undefined ? { added } : {}
 }
 
@@ -151,16 +139,10 @@ export interface RunOptions {
   driver: Driver
   /** The branch to work on, an existing one; a fresh `agent-<id>` when absent. */
   branch?: string
-  /** The pull request that branch already has: a follow-up's, so its end does not announce it as new. */
-  branchPr?: { number: number; url: string }
-  /** The follow-up's prompt: a fresh agent's once this run ends done with a pull request, this run's id after it. */
-  then?: string
   /** How far the agent publishes when it finishes; absent, only what the prompt itself asks. */
   publish?: Publish
   /** A text handed to the agent with the prompt, after it: the record keeps it apart from the prompt, which stays the run's name. */
   attached?: string
-  /** The coding agent a follow-up run is on, given its id; this run's own when absent. */
-  nextDriver?: (id: string) => Driver
   /** The run this one is started for: told when this one ends. */
   parent?: string
   /** The branch the run's fresh branch starts from; origin's default branch when absent. */
@@ -192,22 +174,9 @@ export interface RunOutcome {
   /** Whether the checkout went once the remote had its branch, or stayed and why. */
   checkout: { reclaimed: true } | { reclaimed: false; reason: string }
   detail?: string
-  /** The follow-up run, when one ran, and how the merge of this run's pull request went when it ended done. */
-  then?: RunOutcome & { merge?: MergeOutcome }
 }
 
 export async function runCommand(repo: string, opts: RunOptions): Promise<RunOutcome> {
-  const outcome = await runOnce(repo, opts)
-  return opts.then !== undefined && (await stillOwed(repo, outcome.id, opts.logs)) ? followUp(repo, outcome, opts.then, opts) : outcome
-}
-
-/** Whether the run's follow-up is still owed when it ends: a level a message gave it part way took the follow-up away. */
-async function stillOwed(repo: string, id: string, logs: LogsDeps = {}): Promise<boolean> {
-  const card = await findRun(repo, id, logs).catch(() => undefined)
-  return card !== undefined && runnerMark(card)?.then !== undefined
-}
-
-async function runOnce(repo: string, opts: RunOptions): Promise<RunOutcome> {
   const git = opts.git ?? nodeGitRunner()
   const now = opts.now ?? (() => new Date())
   const clock = () => now().toISOString()
@@ -288,11 +257,10 @@ async function runOnce(repo: string, opts: RunOptions): Promise<RunOutcome> {
       }),
       prompt: opts.prompt,
       ...(opts.attached !== undefined ? { attached: opts.attached } : {}),
-      ...addedOf(opts.publish, opts.then),
+      ...addedOf(opts.publish),
       driver: opts.driver,
       ...modelOf(opts.model),
       ...effortOf(opts.effort),
-      ...(opts.branchPr ? { prBefore: opts.branchPr } : {}),
       ...(named !== undefined ? { named: { title: named, stop: naming } } : {}),
       continued: false,
       marking,
@@ -320,8 +288,6 @@ export interface ResumeOptions {
   /** Who resumes the run, kept on its mark with the time: a scheduler's row, which counts the run as its own from then on. */
   by?: string
   driver: Driver
-  /** The coding agent a follow-up run is on, given its id, when the run's record names a follow-up; this run's own when absent. */
-  nextDriver?: (id: string) => Driver
   /** How an ended parent is continued, in its own process; absent, only a working parent is told. */
   resume?: ParentDeps['resume']
   model?: string
@@ -351,15 +317,9 @@ export interface ResumeOptions {
  * continuation of the question the run ended on with the given answer. The sentence of the publish
  * level the record keeps, or of the one the resume gives the run from here on, is said after it. A run whose work was landed, its branch gone
  * with that, is no longer recorded as landed once it is on a branch made again: what it does from
- * here is not. A follow-up the record names is still owed: the
- * agent is told again not to arm the merge, and the follow-up runs once this ends done.
+ * here is not.
  */
 export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunOutcome> {
-  const resumed = await resumeOnce(repo, opts)
-  return resumed.then !== undefined ? followUp(repo, resumed.outcome, resumed.then, { ...opts, ...(resumed.model !== undefined ? { model: resumed.model } : {}) }) : resumed.outcome
-}
-
-async function resumeOnce(repo: string, opts: ResumeOptions): Promise<{ outcome: RunOutcome; then?: string; model?: string }> {
   const git = opts.git ?? nodeGitRunner()
   const now = opts.now ?? (() => new Date())
   const clock = () => now().toISOString()
@@ -408,13 +368,10 @@ async function resumeOnce(repo: string, opts: ResumeOptions): Promise<{ outcome:
     const restarted = checkout.again ? await startCommit(checkout.path, git) : {}
 
     // The record is written running again over the ended one, so every reader sees the run in flight.
-    // The level its record names, or the one this resume gives it from here on. A level given
-    // takes the follow-up away: the person has said how far the run goes, and the follow-up was
-    // the merge's.
-    const { publish: recorded, then: owed, ...lasts } = lasting(previous)
+    // The level its record names, or the one this resume gives it from here on.
+    const { publish: recorded, ...lasts } = lasting(previous)
     const publish = opts.publish === undefined ? recorded : (opts.publish ?? undefined)
-    const then = opts.publish === undefined ? owed : undefined
-    const mark: RunnerMark = { host, pid, ...lasts, ...(publish !== undefined ? { publish } : {}), ...(then !== undefined ? { then } : {}), ...restarted, ...(opts.by !== undefined ? { resumed: { by: opts.by, at: clock() } } : {}) }
+    const mark: RunnerMark = { host, pid, ...lasts, ...(publish !== undefined ? { publish } : {}), ...restarted, ...(opts.by !== undefined ? { resumed: { by: opts.by, at: clock() } } : {}) }
     const runningCard: RunCard = { ...card, status: 'running', caller: { ...card.caller, runner: mark, pid, host, ...forReaders(mark), workspace: checkout.path } }
     delete runningCard.endedAt
     // A level taken away by this resume is no longer the run's, for its readers either.
@@ -427,13 +384,13 @@ async function resumeOnce(repo: string, opts: ResumeOptions): Promise<{ outcome:
 
     const model = opts.model ?? card.model
     const effort = opts.effort ?? card.effort
-    const outcome = await session(repo, {
+    return await session(repo, {
       id: opts.id,
       checkout,
       card: { ...runningCard },
       priorDiary: diary,
       prompt,
-      ...addedOf(mark.publish, mark.then),
+      ...addedOf(mark.publish),
       driver: opts.driver,
       ...modelOf(model),
       ...effortOf(effort),
@@ -446,40 +403,9 @@ async function resumeOnce(repo: string, opts: ResumeOptions): Promise<{ outcome:
       log,
       clock,
     })
-    return { outcome, ...(then !== undefined && (await stillOwed(repo, opts.id, logs)) ? { then } : {}), ...modelOf(model) }
   } finally {
     await releaseRunLock(repo, id, pid).catch(() => {})
   }
-}
-
-/**
- * The follow-up a run named, once the run ended done with a pull request: a fresh agent on the
- * run's branch, a run of its own, given the prompt and the first run's id. When it ends done the
- * first run's request is merged through the project's git host; otherwise the request stays open. A
- * run that did not end done, or opened no request, has nothing to follow up.
- */
-async function followUp(repo: string, first: RunOutcome, then: string, opts: FollowUpContext): Promise<RunOutcome> {
-  if (first.status !== 'done' || !first.pr || !first.branch) return first
-  const id = runIdFrom((opts.now ?? (() => new Date()))().toISOString())
-  const next = await runCommand(repo, {
-    prompt: `${then} ${first.id}`,
-    id,
-    branch: first.branch,
-    branchPr: first.pr,
-    driver: opts.nextDriver ? opts.nextDriver(id) : opts.driver,
-    ...pick(opts, ['model', 'host', 'pid', 'isAlive', 'now', 'git', 'gitHost', 'skills', 'logs', 'log']),
-  })
-  if (next.status !== 'done') return { ...first, then: next }
-  return { ...first, then: { ...next, merge: await (opts.gitHost ?? projectGitHost).mergeRequest(repo, first.pr.number) } }
-}
-
-/** What a follow-up run shares with the run before it: where it runs and how, never what it is for. */
-type FollowUpContext = Pick<RunOptions, 'driver' | 'nextDriver' | 'model' | 'host' | 'pid' | 'isAlive' | 'now' | 'git' | 'gitHost' | 'skills' | 'logs' | 'log'>
-
-function pick<T extends object, K extends keyof T>(from: T, keys: readonly K[]): Partial<Pick<T, K>> {
-  const picked: Partial<Pick<T, K>> = {}
-  for (const key of keys) if (from[key] !== undefined) picked[key] = from[key]
-  return picked
 }
 
 interface SessionRun {
@@ -497,10 +423,8 @@ interface SessionRun {
   model?: string
   /** How hard the model may think this session. */
   effort?: string
-  /** The pull request the run's branch had before this session: its end announces only a new one. */
-  prBefore?: { url: string }
   continued: boolean
-  /** The run's name, asked for as the run began (`runOnce`); stopped when the run is. */
+  /** The run's name, asked for as the run began (`runCommand`); stopped when the run is. */
   named?: { title: Promise<string | undefined>; stop: AbortController }
   /** The run's own marker being pushed, when it writes one: the record waits on it, so it lands after. */
   marking?: Promise<void>
@@ -579,7 +503,7 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
     detail = errorMessage(err)
   }
   // The run's short name, asked of a small model beside the first turn (`title.ts`), or as the run
-  // began, before its checkout was made, when it was a fresh one no other tool marked (`runOnce`): a run that is
+  // began, before its checkout was made, when it was a fresh one no other tool marked (`runCommand`): a run that is
   // being continued was named when it began, and one whose agent never started has nothing to name.
   // A subagent is not named: its row is its task, written by the agent that started it, and an
   // orchestration of a dozen of them would pay for a dozen namings for rows nobody looks for.
@@ -588,7 +512,7 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
   // A bare command is named later, from its agent's report (`title.ts`).
   const mayName = process.env.OPENAGENT_NAME_RUN !== '0' && driverSession !== undefined && !run.continued && run.card.title === undefined && runnerMark(run.card)?.parent === undefined
   let nameFromReport = mayName && isBareCommand(run.prompt)
-  // A fresh run's name was asked for as the run began (`runOnce`): it is dropped when the run will
+  // A fresh run's name was asked for as the run began (`runCommand`): it is dropped when the run will
   // not take it, and stopped with the run.
   const asked = run.named
   if (asked && (!mayName || stopped.aborted)) asked.stop.abort()
@@ -609,11 +533,9 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
   const takeLevel = async (word: string | undefined): Promise<void> => {
     const level = publishChange(word)
     if (level === undefined || !mark) return
-    // A level given part way takes the follow-up away too: the person has said how far the run
-    // goes, and the follow-up was the merge's.
-    const { publish: _was, then: _owed, ...rest } = mark
+    const { publish: _was, ...rest } = mark
     mark = { ...rest, ...(level !== null ? { publish: level } : {}) }
-    added = addedLine(mark.publish, undefined)
+    added = addedLine(mark.publish)
     await driverSession?.log?.patch({ caller: { runner: mark, publish: mark.publish } })
   }
   // A line the driver takes from the inbox is handed here first: a message may say how far the run
@@ -726,7 +648,7 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
   if (!recorded.ok && !recorded.committed) run.log(`[agent-runner] the run's record could not be written: ${recorded.error}`)
 
   // The person's line, when this end needs them: a question, or a pull request new to this session.
-  await runEndedLine(repo, { id: run.id, prompt: run.card.intent ?? '', status, ...(question !== undefined ? { question } : {}), ...(pr ? { pr } : {}), ...((run.prBefore ?? run.card.pr) ? { prBefore: run.prBefore ?? run.card.pr } : {}) }, { log: run.log })
+  await runEndedLine(repo, { id: run.id, prompt: run.card.intent ?? '', status, ...(question !== undefined ? { question } : {}), ...(pr ? { pr } : {}), ...(run.card.pr ? { prBefore: run.card.pr } : {}) }, { log: run.log })
 
   // The run's parent, when it has one, is told how it ended, once the branch it would be pointed
   // at is known to have stayed: an empty one goes with the checkout.

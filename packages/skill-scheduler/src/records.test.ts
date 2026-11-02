@@ -117,7 +117,7 @@ test("a run counts for the skill's command its prompt names with a slash, else f
   assert.equal(of('/triage'), 'triage')
   assert.equal(of('/triage other'), 'triage', 'a word no row has: the skill\'s own command')
   assert.equal(of('/work-queue now'), 'work-queue')
-  assert.equal(of('/post-merge-cleanup 2026-09-16T14-01-00-000Z'), 'post-merge-cleanup', 'a follow-up counts for its own command')
+  assert.equal(of('/post-merge-cleanup 2268'), 'post-merge-cleanup', 'what follows the command is the command\'s own')
   assert.equal(of('Read the docs'), undefined)
   assert.equal(of('work-queue'), undefined, 'no slash: no skill\'s command')
   assert.equal(of('work-queue is stuck, look at it'), undefined)

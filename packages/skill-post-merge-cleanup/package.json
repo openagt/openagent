@@ -1,7 +1,7 @@
 {
   "name": "@openagt/skill-post-merge-cleanup",
   "version": "0.1.0",
-  "description": "The post-merge-cleanup command for coding agents: bring the project's knowledge files up to date from merged pull requests in a pull request a person reviews, or from an agent run's pull request before it merges. A skill file only, no code.",
+  "description": "The post-merge-cleanup command for coding agents: bring the project's knowledge files up to date from merged pull requests in a pull request a person reviews. A skill file only, no code.",
   "license": "MIT",
   "repository": {
     "type": "git",

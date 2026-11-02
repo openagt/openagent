@@ -461,7 +461,6 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
       ...(options.driver !== undefined ? { driver: options.driver } : {}),
       ...(options.model !== undefined ? { model: options.model } : {}),
       ...(options.effort !== undefined ? { effort: options.effort } : {}),
-      ...(options.then !== undefined ? { then: options.then } : {}),
       ...(publish !== undefined ? { publish } : {}),
       ...(options.base !== undefined ? { base: options.base } : {}),
     })

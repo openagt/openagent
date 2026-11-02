@@ -8,8 +8,8 @@ import { usePreferences, usePreferencesLoaded, updatePreferences } from '../lib/
 import { DRIVER_LABELS, isDriverName, machineName, offeredPublishPicks, publishPickIn, reachedThrough } from '../../src/client.js'
 import { useMachines } from '../lib/machines.js'
 import { followProjectHome, runTarget, useSelectedMachineId } from '../lib/remote-target.js'
-import { cleanupPick, offersPostMergeCleanup, startPicks, useStartAgent } from '../lib/use-start-agent.js'
-import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.js'
+import { startPicks, useStartAgent } from '../lib/use-start-agent.js'
+import { useProjectLauncher } from '../lib/use-project-launcher.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
 import { Button } from './ui/button.js'
 import { openSettings } from '../lib/use-route.js'
@@ -63,9 +63,6 @@ const THEIR_LOGINS_MS = 8_000
 // picks, the button shows the pick the daemon will start the run at: Commit, which pushes
 // nothing. Saved, so the pick holds for every next run. A project with no git host package
 // is offered Off, Commit and Publish branch only, and one with no remote Off and Commit.
-// In it too, the "Post-merge cleanup" box, where the project has that command: ticked, the run is
-// followed by a fresh agent running the command on its branch before its pull request merges. The
-// box writes the same saved setting as Settings → Agent, so its state is every next run's default.
 export function StartAgentForm({
   projectId,
   projectName,
@@ -120,10 +117,6 @@ export function StartAgentForm({
   const foreign = machine !== undefined && !atHome
   const clonedHere = home !== undefined && machine === undefined
   const noStartHook = launcher !== null && !launcher.startHook && !foreign && !clonedHere
-  // A machine starts the run in its own project, whose commands this launcher does not read. A command
-  // whose skill has yet to reach the branch the agent starts from is not one the run can follow with.
-  const commands = foreign ? [] : readyCommands(launcher?.commands ?? [])
-  const offersCleanup = offersPostMergeCleanup(commands)
   // Whether a pull request can be opened here: unknown until the launcher is read, and a machine's
   // own project is not read at all, so both are offered every pick; the daemon that starts the run
   // holds a pull request pick to the branch where its project has no git host.
@@ -180,7 +173,6 @@ export function StartAgentForm({
     setSentTo(machine ? machineName(machine) : clonedHere ? hereName() : null)
     const result = await start(projectId, promptWithContext(text, context), {
       ...startPicks(preferences),
-      ...cleanupPick(preferences, commands),
       ...(startFrom ? startFromBase(startFromPick, startFrom.main, startFrom.local) : {}),
       ...(machine ? { machine: machine.id } : {}),
     })
@@ -234,8 +226,6 @@ export function StartAgentForm({
               publish={publishPick}
               picks={offeredPublishPicks(gitHost, remote)}
               onPublish={pick => updatePreferences({ publish: pick })}
-              cleanup={offersCleanup ? (preferences.postMergeCleanup ?? false) : undefined}
-              onCleanup={next => updatePreferences({ postMergeCleanup: next })}
               busy={busy}
             />
             <button type="button" onClick={() => openSettings(SKILLS_ENTRY, projectId)} className={rowButtonClass}>

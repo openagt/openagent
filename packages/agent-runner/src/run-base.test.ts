@@ -15,7 +15,7 @@ import { git, handDownBasicSkills, removeRepo, testRepo } from './test-repo.js'
 handDownBasicSkills()
 
 const NOW = new Date('2026-09-16T14:01:00.000Z')
-const noGitHost: GitHost = { requestOfBranch: async () => undefined, mergeRequest: async () => ({ outcome: 'failed', error: 'nothing to merge' }) }
+const noGitHost: GitHost = { requestOfBranch: async () => undefined }
 
 /** A fake agent that notes the commit its checkout is on. */
 function looking(seen: { head: string }): Driver {

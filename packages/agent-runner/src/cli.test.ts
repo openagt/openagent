@@ -48,9 +48,6 @@ test('usage errors exit 2 with the usage on stderr and nothing on stdout; outsid
     assert.match(relabelled.err, /--resume takes no --id/)
     const commanded = await run(repo, 'run', 'Read the docs', '--command', 'x')
     assert.equal(commanded.code, 2, 'a run names no command: a scheduler reads the command off the prompt')
-    const followed = await run(repo, 'run', '--detach', '--resume', '2026-09-17T20-00-00-000Z', 'go on', '--then', '/post-merge-cleanup')
-    assert.equal(followed.code, 2)
-    assert.match(followed.err, /--resume takes no --then/)
     const unknownLevel = await run(repo, 'run', 'Read the docs', '--publish', 'push')
     assert.equal(unknownLevel.code, 2)
     assert.match(unknownLevel.err, /unknown publish level "push"; the levels are commit, branch, pr, merge/)
@@ -111,15 +108,15 @@ test('usage errors exit 2 with the usage on stderr and nothing on stdout; outsid
 })
 
 test('a text may open with a dash: only one of the command\'s own flags is a flag, a flag that takes a text takes the next argument whole, and everything else is handed over as a text', async () => {
-  const options = { detach: { type: 'boolean' }, model: { type: 'string' }, then: { type: 'string' }, answer: { type: 'string' } } as const
+  const options = { detach: { type: 'boolean' }, model: { type: 'string' }, attach: { type: 'string' }, answer: { type: 'string' } } as const
   // The start line of a project's hook file, with a prompt typed as a list.
-  assert.deepEqual(withTextsApart(['--detach', '- fix the tests', '--model', 'opus', '--then', '- then tidy'], options), ['--detach', '--model=opus', '--then=- then tidy', '--', '- fix the tests'])
+  assert.deepEqual(withTextsApart(['--detach', '- fix the tests', '--model', 'opus', '--attach', '- then tidy'], options), ['--detach', '--model=opus', '--attach=- then tidy', '--', '- fix the tests'])
   // A text that opens like a flag and goes on, and a lone dash: texts. One word behind a dash that is no flag of the command stays where the reader refuses it.
   assert.deepEqual(withTextsApart(['--force push it', '-x y', '-', '--model=fast'], options), ['--model=fast', '--', '--force push it', '-x y', '-'])
   assert.deepEqual(withTextsApart(['do it', '--help', '-h', '--detatch', '--constructor'], options), ['--help', '-h', '--detatch', '--constructor', '--', 'do it'])
   // A flag that takes a text does not take another of the command's flags for it: a prompt that is a flag's name starts no run under another prompt.
   assert.deepEqual(withTextsApart(['fix it', '--model', '--detach'], options), ['--model', '--detach', '--', 'fix it'])
-  assert.deepEqual(withTextsApart(['--detach', '--then', '--model', 'opus'], options), ['--detach', '--then', '--model=opus', '--'])
+  assert.deepEqual(withTextsApart(['--detach', '--attach', '--model', 'opus'], options), ['--detach', '--attach', '--model=opus', '--'])
   // An answer and a text that both open with a dash stay what they are.
   assert.deepEqual(withTextsApart(['--detach', '--answer', '- yes', '-- and more'], options), ['--detach', '--answer=- yes', '--', '-- and more'])
   // After `--` nothing is a flag; a flag written with its value keeps a value that holds `=` and line ends.
@@ -135,7 +132,7 @@ test('a text may open with a dash: only one of the command\'s own flags is a fla
       assert.deepEqual([ran.code, ran.out], [1, { ok: false, reason: 'not-a-repo' }], argv.join(' '))
     }
     // What nobody's prompt is stays a usage error: a flag misspelled, alone or beside a prompt, `--help`, and a flag left with no text.
-    for (const argv of [['run', 'do it', '--modle', 'opus'], ['run', '--help'], ['run', '-h'], ['run', '--resume', 'r1', '--detatch'], ['run', 'fix it', '--model', '--detach'], ['run', '--detach', '--then', '--model', 'opus']]) {
+    for (const argv of [['run', 'do it', '--modle', 'opus'], ['run', '--help'], ['run', '-h'], ['run', '--resume', 'r1', '--detatch'], ['run', 'fix it', '--model', '--detach'], ['run', '--detach', '--attach', '--model', 'opus']]) {
       const refused = await run(elsewhere, ...argv)
       assert.deepEqual([refused.code, refused.out], [2, undefined], argv.join(' '))
     }

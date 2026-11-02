@@ -39,8 +39,6 @@ export interface RunnerMark {
   host: string
   /** The run's process on that machine, while it runs. */
   pid?: number
-  /** The prompt a fresh agent is given once the run ends done with a pull request, the run's id after it (`run --then`). */
-  then?: string
   /** How far the run takes its work when its agent finishes (`run --publish`): a commit, the branch, its pull request, or the request set to merge; absent, only what its prompt asks. */
   publish?: Publish
   /** The run this one was started for, told when this one ends (`run --parent`). */
@@ -59,10 +57,10 @@ export interface RunnerMark {
 export function runnerMark(card: RunCard): RunnerMark | undefined {
   const mark = card.caller?.['runner']
   if (!mark || typeof mark !== 'object') return undefined
-  const { host, pid, then, publish, parent, base, baseCommit, for: started, resumed } = mark as Record<string, unknown>
+  const { host, pid, publish, parent, base, baseCommit, for: started, resumed } = mark as Record<string, unknown>
   if (typeof host !== 'string') return undefined
   const by = resumed && typeof resumed === 'object' ? (resumed as Record<string, unknown>) : {}
-  return { host, ...(typeof pid === 'number' ? { pid } : {}), ...lasting({ then, publish, parent, base, baseCommit, for: started }), ...(typeof by['by'] === 'string' && typeof by['at'] === 'string' ? { resumed: { by: by['by'], at: by['at'] } } : {}) }
+  return { host, ...(typeof pid === 'number' ? { pid } : {}), ...lasting({ publish, parent, base, baseCommit, for: started }), ...(typeof by['by'] === 'string' && typeof by['at'] === 'string' ? { resumed: { by: by['by'], at: by['at'] } } : {}) }
 }
 
 /**
@@ -76,10 +74,9 @@ export function earlierPrs(card: RunCard): { number: number; url: string }[] {
   return prs.flatMap(pr => (pr && typeof pr === 'object' && typeof pr.number === 'number' && typeof pr.url === 'string' ? [{ number: pr.number as number, url: pr.url as string }] : []))
 }
 
-/** What a mark keeps for the run's whole life, a resume included: its follow-up, its publish level, its parent, where it started, what it was started for. */
-export function lasting(mark: { then?: unknown; publish?: unknown; parent?: unknown; base?: unknown; baseCommit?: unknown; for?: unknown }): Pick<RunnerMark, 'then' | 'publish' | 'parent' | 'base' | 'baseCommit' | 'for'> {
+/** What a mark keeps for the run's whole life, a resume included: its publish level, its parent, where it started, what it was started for. */
+export function lasting(mark: { publish?: unknown; parent?: unknown; base?: unknown; baseCommit?: unknown; for?: unknown }): Pick<RunnerMark, 'publish' | 'parent' | 'base' | 'baseCommit' | 'for'> {
   return {
-    ...(typeof mark.then === 'string' ? { then: mark.then } : {}),
     ...(isPublish(mark.publish) ? { publish: mark.publish } : {}),
     ...(typeof mark.parent === 'string' ? { parent: mark.parent } : {}),
     ...(typeof mark.base === 'string' ? { base: mark.base } : {}),

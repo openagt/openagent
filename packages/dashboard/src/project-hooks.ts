@@ -131,15 +131,13 @@ export async function runProjectHooks(cwd: string, kind: HookKind, opts: RunHook
   }
 }
 
-/** What a `start` line is given: the prompt, the coding agent, model, publish level and branch to start from when the person picked them, and the follow-up when there is one. */
+/** What a `start` line is given: the prompt, and the coding agent, model, publish level and branch to start from when the person picked them. */
 export interface StartHookInput {
   prompt: string
   driver?: string
   model?: string
   /** How hard the model may think, by the coding agent's own names. */
   effort?: string
-  /** A fresh agent's prompt once the run ends done with a pull request; the merge waits for it. */
-  then?: string
   /** How far the run takes its work when its agent finishes: `commit`, `branch`, `pr` or `merge`. */
   publish?: string
   /** The branch the run's own branch starts from; origin's default branch when absent. */
@@ -169,9 +167,8 @@ export type RunHookResult = { ok: true; id: string; driver?: string } | { ok: fa
 
 /**
  * Run the project's `start` line: the prompt in `PROMPT`, the picks in `DRIVER`, `MODEL`, `EFFORT`,
- * `PUBLISH` and `BASE` when made, the follow-up in `THEN` when there is one. The line answers one JSON
- * document on stdout whose `id` names the run it started, and whose `driver` may name the coding
- * agent that runs it.
+ * `PUBLISH` and `BASE` when made. The line answers one JSON document on stdout whose `id` names the
+ * run it started, and whose `driver` may name the coding agent that runs it.
  */
 export function runStartHook(cwd: string, input: StartHookInput, opts: Omit<RunHooksOptions, 'log'> = {}): Promise<RunHookResult> {
   return runRunHook(cwd, 'start', {
@@ -183,7 +180,6 @@ export function runStartHook(cwd: string, input: StartHookInput, opts: Omit<RunH
     ...(input.driver !== undefined ? { DRIVER: input.driver } : {}),
     ...(input.model !== undefined ? { MODEL: input.model } : {}),
     ...(input.effort !== undefined ? { EFFORT: input.effort } : {}),
-    ...(input.then !== undefined ? { THEN: input.then } : {}),
     ...(input.publish !== undefined ? { PUBLISH: input.publish } : {}),
     ...(input.base !== undefined ? { BASE: input.base } : {}),
   }, opts)
