@@ -34,6 +34,7 @@ vi.mock('./Composer.js', async () => {
       {/* The empty-box slot control (#1455), rendered so the Stop/Resume tests can press it. */}
       {props.idleControl}
       {props.controls}
+      {props.sessionRow}
     </div>
   ))
   return { Composer }
@@ -65,6 +66,13 @@ describe('AgentComposer column', () => {
     const box = container.firstElementChild!
     expect(box.className).toContain('mx-auto')
     expect(box.className).toContain('max-w-3xl')
+  })
+})
+
+describe('AgentComposer row', () => {
+  test('the row it is given goes to the composer, which draws it above the box', () => {
+    renderComposer({ row: <span>the session's row</span> })
+    expect(screen.getByText("the session's row")).toBeTruthy()
   })
 })
 

@@ -16,7 +16,7 @@ import type { StartAgentOptions } from '../dashboard/types.js'
 test('RELAY_RPC_NAMES is the run-scoped read/steer/handoff surface and a project\'s reads and start, and excludes delete (#1067 slice 2)', () => {
   for (const name of [
     'onProjectFiles', 'readModule',
-    'onGitStatus', 'onAgentWorktree', 'onAgentHandoff', 'onAgent', 'onOwnRuns', 'onStartCheck',
+    'onGitStatus', 'onAgentWorktree', 'onAgentMainBranch', 'onAgentHandoff', 'onAgent', 'onOwnRuns', 'onStartCheck',
     'onCommands', 'onDocs', 'onAgentsDoing', 'onRetainedWorktrees', 'onGitHostHome', 'onRepositoryOffer', 'onProjectSkills', 'onRecordsReach',
     'sendStop', 'sendChoice', 'sendMessage', 'sendOpenPullRequest', 'sendPush', 'sendMerge', 'sendMergeBranch', 'sendStart', 'runModuleCommand',
   ]) {
@@ -57,6 +57,7 @@ test('every relayed rpc is classed as a read or an act, by name: a computer that
     readModule: 'read',
     onGitStatus: 'read',
     onAgentWorktree: 'read',
+    onAgentMainBranch: 'read',
     onAgentHandoff: 'read',
     onAgent: 'read',
     onOwnRuns: 'read',

@@ -136,6 +136,17 @@ already made, and lists it in its pull request; for anything else it proposes an
   message: the Context as the line at its end, Auto as how far the run takes its work from that
   message on. Picked over a session bound for its whole life to the level it started at, where a
   person who liked the work had no way to have it published but a new run.
+- A session has the launcher's row above its box, in the same place, every item off: where it
+  runs, the project, the branch, the git host. The branch is the one it started from, with the
+  one it works on in its hover: the same meaning as on the launcher, and it does not flip as
+  the agent renames its own. Where the record cannot vouch for that branch the row leaves it
+  out. The git host is said by its logo and name with no account: a record keeps no account, and
+  the one the next run would use is not the one this run used. Picked over the row only where
+  an agent is started, over the branch the agent works on, and over a grey chip beside the
+  session's name saying where it runs and its project, which the row replaces.
+- A session's top bar has the project's ⋮ where the launcher's has it, and the session's own
+  actions stay under the ⌄ on its name. Picked over one menu per page, which left the project's
+  actions out of reach on a session's page.
 - The bar above a session's box goes once its pull request is merged or closed. Picked over the
   bar staying with the request as a label: the labels under the box already say it.
 - The foot of the sidebar is the person: their picture and first name, as one row that opens

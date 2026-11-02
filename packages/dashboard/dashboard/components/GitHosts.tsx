@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Check, ChevronDown, GitBranch, Loader2, MoreHorizontal, Plus } from 'lucide-react'
+import type { GitHostHome } from '../../src/index.js'
 import { sendForgetGitHostAccount, sendUseGitHostAccount, type GitHostRow, type GitHostsView } from '../rpc/logins.js'
 import { onMachineGitHosts, sendMachineGitHostAccount } from '../rpc/machines.js'
 import { readAhead, usePolled } from '../lib/use-async.js'
@@ -10,7 +11,7 @@ import { DeviceCode, HostFix, PackageLogo, StatePill, hostLoginState, hostWords,
 import { useServers } from './ServerLogins.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
-import { rowButtonClass } from './ui/row-item.js'
+import { RowOff, rowButtonClass } from './ui/row-item.js'
 
 // The git hosts of Settings › Accounts: one card with each host the projects' remotes are on, and the
 // host of the git host package OpenAgent brings, drawn from what the host's package answers (its
@@ -225,5 +226,26 @@ export function GitAccountMenu({ address, machineId, on, busy, onAdd }: { addres
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+/**
+ * The project's git host in a session's row above the message box, where the launcher's row has the
+ * account: its logo and name, and no account. A run's record keeps no account, and the one its
+ * project's runs use today need not be the one this run pushed as. Nothing for a project with no
+ * page on a git host, and until the logo is read, so it lands whole.
+ */
+export function GitHostOff({ home }: { home: GitHostHome | null }) {
+  const { view } = useGitHosts()
+  if (!home || !view) return null
+  const logo = view.hosts.find(row => row.host === home.url.split('/')[2])?.provider?.logo
+  return (
+    <RowOff tip={`This project is on ${home.name}`}>
+      <button type="button" disabled className={rowButtonClass}>
+        <PackageLogo svg={logo} className="size-3.5" />
+        <span className="max-w-32 truncate">{home.name}</span>
+        <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+      </button>
+    </RowOff>
   )
 }

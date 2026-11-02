@@ -447,6 +447,14 @@ export function App() {
     : undefined
   // The runs started for the selected one: rows in its chat.
   const subagents = useMemo(() => (agentId ? subagentsOf(agents, agentId) : []), [agents, agentId])
+  // The project is off the list: read the list again and leave its page for the Overview of every
+  // project, since the one it was picked as is gone.
+  const leaveRemovedProject = () => {
+    setProjectsKey(k => k + 1)
+    navigate({ projectId: null, agentId: null })
+  }
+  // Another computer's project is removed there, not here.
+  const removableHere = project?.machine === undefined ? leaveRemovedProject : undefined
   const renderMain = () => {
     if (pageSegment) {
       if (modulePage)
@@ -512,12 +520,7 @@ export function App() {
           toggleContext={toggleContext}
           onOpenAgent={selectAgentInProject}
           errors={project?.errors}
-          // The project is off the list: read the list again and leave its page for the Overview of
-          // every project, since the one it was picked as is gone.
-          onProjectRemoved={() => {
-            setProjectsKey(k => k + 1)
-            navigate({ projectId: null, agentId: null })
-          }}
+          onProjectRemoved={leaveRemovedProject}
           // A skill written or deleted gives or takes a page: read the projects and their modules again now.
           onSkillsChanged={() => setProjectsKey(k => k + 1)}
         />
@@ -528,7 +531,7 @@ export function App() {
       // list we have not read yet, where whether the agent runs is not known. Only a session that
       // is genuinely absent from a list we did read is gone.
       if (agentId === agentStart.id || !agentsLoaded)
-        return <AgentView projectId={projectId} agentId={agentId} events={events} live={agentId === agentStart.id ? true : null} label={agentStart.intent || undefined} projectName={projectName} remoteLabel={agentId === agentStart.id ? agentStart.runsOn : undefined} files={files} lost={lost} writing={writing} startedWith={agentId === agentStart.id ? agentStart.intent : undefined} onAgentStarted={onAgentStarted} contextSet={contextSet} />
+        return <AgentView projectId={projectId} agentId={agentId} events={events} live={agentId === agentStart.id ? true : null} label={agentStart.intent || undefined} projectName={projectName} remoteLabel={agentId === agentStart.id ? agentStart.runsOn : undefined} files={files} lost={lost} writing={writing} startedWith={agentId === agentStart.id ? agentStart.intent : undefined} onAgentStarted={onAgentStarted} contextSet={contextSet} onProjectRemoved={removableHere} />
       return (
         <NotFound
           title="This agent is gone"
@@ -565,6 +568,7 @@ export function App() {
           selectAgent(null)
           reload()
         }}
+        onProjectRemoved={removableHere}
       />
     )
   }

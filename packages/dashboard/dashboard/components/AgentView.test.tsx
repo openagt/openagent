@@ -14,12 +14,13 @@ const onBridgeEvents = vi.fn(async () => [] as unknown)
 const onBridgeAnswer = vi.fn(async () => null as unknown)
 const onAgentWorktree = vi.fn(async () => ({ branch: 'agent-x' }) as unknown)
 const onGitHostHome = vi.fn(async () => null as unknown)
+const onAgentMainBranch = vi.fn(async () => 'trunk' as string | null)
 // The models each agent lists, with what one of them holds: the daemon's read, stubbed here so the
 // context circle has a window to measure against.
 vi.mock('../rpc/models.js', () => ({
   onModels: () => Promise.resolve({ 'claude-code': { models: [{ id: 'opus', name: 'Opus 5.5', resolvedId: 'claude-opus-5-5', contextWindow: 200_000 }] }, codex: { models: [] } }),
 }))
-vi.mock('../rpc/reads.js', () => ({ onAgent, onRetainedWorktrees, onAgentHandoff, onAgentsDoing, onBridgeQuestion, onBridgeEvents, onBridgeAnswer, onAgentWorktree, onGitHostHome }))
+vi.mock('../rpc/reads.js', () => ({ onAgent, onRetainedWorktrees, onAgentHandoff, onAgentsDoing, onBridgeQuestion, onBridgeEvents, onBridgeAnswer, onAgentWorktree, onAgentMainBranch, onGitHostHome }))
 const sendMessage = vi.fn(async () => ({ ok: true }) as unknown)
 vi.mock('../rpc/control.js', () => ({
   sendMessage,
@@ -42,9 +43,10 @@ vi.mock('../lib/preferences.js', () => ({
 // The `actions` and `summary` slots of the bar above the message box ARE rendered, so the handoff
 // cluster and the modules' summaries stay reachable.
 vi.mock('./AgentActionBar.js', () => ({
-  AgentActionBar: ({ ready, checkout, onToggle, runsOn }: { ready?: boolean; checkout: unknown; onToggle?: () => void; runsOn?: string }) => (
+  AgentActionBar: ({ ready, checkout, onToggle, onProjectRemoved }: { ready?: boolean; checkout: unknown; onToggle?: () => void; onProjectRemoved?: () => void }) => (
     <>
-      <span data-testid="bar-runs-on">{runsOn}</span>
+      <span data-testid="bar-frame" />
+      <button type="button" onClick={onProjectRemoved}>project removed</button>
       <button type="button" onClick={onToggle}>details</button>
       <span data-testid="bar-ready">{String(ready)}</span>
       <span data-testid="bar-checkout">{JSON.stringify(checkout)}</span>
@@ -60,10 +62,23 @@ vi.mock('./AgentWorkBar.js', () => ({
     </div>
   ),
 }))
+// The row above the box has its own tests: here it says what the view told it.
+vi.mock('./SessionRow.js', () => ({
+  SessionRow: ({ runsOn, elsewhere, startedFrom, worksOn, projectName }: { runsOn: string; elsewhere: boolean; startedFrom?: string; worksOn?: string; projectName?: string | null }) => (
+    <div data-testid="row">
+      <span data-testid="row-runs-on">{runsOn}</span>
+      <span data-testid="row-elsewhere">{String(elsewhere)}</span>
+      <span data-testid="row-project">{projectName ?? ''}</span>
+      <span data-testid="row-started-from" data-value={startedFrom ?? ''} />
+      <span data-testid="row-works-on" data-value={worksOn ?? ''} />
+    </div>
+  ),
+}))
 // The composer shows only what the view tells it about the run going: the one fact of it under test here.
 vi.mock('./AgentComposer.js', () => ({
-  AgentComposer: ({ live, outcome, model, context, controls, onQueued }: { live: boolean; outcome?: unknown; model?: string; context?: ReactNode; controls?: ReactNode; onQueued?: (text: string) => void }) => (
+  AgentComposer: ({ live, outcome, model, context, controls, onQueued, row }: { live: boolean; outcome?: unknown; model?: string; context?: ReactNode; controls?: ReactNode; onQueued?: (text: string) => void; row?: ReactNode }) => (
     <>
+      {row}
       <span data-testid="composer-controls">{controls}</span>
       <button type="button" onClick={() => onQueued?.('and then this')}>queue-one</button>
       <span data-testid="composer-model">{model ?? ''}</span>
@@ -693,9 +708,9 @@ describe('an ended agent whose subagents still work', () => {
   })
 })
 
-describe('where the agent runs, for the chip beside its name', () => {
+describe('where the agent runs, for the row above the message box', () => {
   test('this machine by itself; another machine by the name it was given; the cloud and GitHub Actions by theirs', () => {
-    const runsOn = () => screen.getByTestId('bar-runs-on').textContent
+    const runsOn = () => screen.getByTestId('row-runs-on').textContent
     const { rerender } = render(view({ live: true }))
     expect(runsOn()).toBe('This machine')
     rerender(view({ live: true, target: 'local' }))
@@ -713,13 +728,17 @@ describe('where the agent runs, for the chip beside its name', () => {
   test('a run of a computer that is no saved machine is named by that computer: it did not run on this one', () => {
     const card = { status: 'done' as const, host: 'rom-thinkpad-x280', otherHost: true }
     render(view({ card }))
-    expect(screen.getByTestId('bar-runs-on').textContent).toBe('rom-thinkpad-x280')
+    expect(screen.getByTestId('row-runs-on').textContent).toBe('rom-thinkpad-x280')
   })
 
   test('a run of a computer that is no saved machine is only read: in place of the message box, a line says where to continue it', () => {
     const { rerender } = render(view({ card: { status: 'done' as const, host: 'rom-thinkpad-x280', otherHost: true } }))
     expect(screen.getByRole('note').textContent).toBe('This run is on rom-thinkpad-x280. Continue it there.')
     expect(screen.queryByTestId('composer-live')).toBeNull()
+    // Its row stays, above that line: with no box to sit on, the page still says where it started.
+    expect(within(screen.getByTestId('chat-bottom')).getByTestId('row-runs-on').textContent).toBe('rom-thinkpad-x280')
+    expect(screen.getByTestId('row').compareDocumentPosition(screen.getByRole('note')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByTestId('row-elsewhere').textContent).toBe('true')
     // This computer's own run, and one on a saved machine, keep their box.
     rerender(view({ card: { status: 'done' as const, host: 'this-mac' } }))
     expect(screen.getByTestId('composer-live')).toBeTruthy()
@@ -732,9 +751,9 @@ describe('where the agent runs, for the chip beside its name', () => {
     page.reconfigure({ url: 'https://165.245.244.10/' })
     try {
       const { rerender } = render(view({ live: true }))
-      expect(screen.getByTestId('bar-runs-on').textContent).toBe('165.245.244.10')
+      expect(screen.getByTestId('row-runs-on').textContent).toBe('165.245.244.10')
       rerender(view({ live: true, target: 'remote', remoteLabel: 'Studio' }))
-      expect(screen.getByTestId('bar-runs-on').textContent).toBe('Studio')
+      expect(screen.getByTestId('row-runs-on').textContent).toBe('Studio')
     } finally {
       page.reconfigure({ url: own })
     }
@@ -744,8 +763,8 @@ describe('where the agent runs, for the chip beside its name', () => {
 describe('the page\'s two bars', () => {
   test('the top bar and its notices are the page\'s first row; the message box and what sits on it lie over the chat\'s end', () => {
     render(view({ live: true }))
-    expect(within(screen.getByTestId('chat-top')).getByTestId('bar-runs-on')).toBeTruthy()
-    for (const part of ['work-bar', 'composer-live']) expect(within(screen.getByTestId('chat-bottom')).getByTestId(part)).toBeTruthy()
+    expect(within(screen.getByTestId('chat-top')).getByTestId('bar-frame')).toBeTruthy()
+    for (const part of ['work-bar', 'row', 'composer-live']) expect(within(screen.getByTestId('chat-bottom')).getByTestId(part)).toBeTruthy()
     expect(screen.getByTestId('chat-top').contains(screen.getByText(/the channel delivered this line/))).toBe(false)
   })
 
@@ -758,11 +777,61 @@ describe('the page\'s two bars', () => {
     expect(within(screen.getByTestId('chat-top')).getByRole('status')).toBeTruthy()
   })
 
-  test('an agent on another machine has no notice of it: the chip beside its name says where it runs', () => {
+  test('an agent on another machine has no notice of it: the row above the box says where it runs', () => {
     render(view({ live: true, target: 'remote', remoteLabel: 'MacBook' }))
-    expect(screen.getByTestId('bar-runs-on').textContent).toBe('MacBook')
+    expect(screen.getByTestId('row-runs-on').textContent).toBe('MacBook')
     expect(screen.queryByText(/Running on/)).toBeNull()
     expect(within(screen.getByTestId('chat-top')).queryByRole('status')).toBeNull()
+  })
+})
+
+describe('the branch the row says the session started from', () => {
+  beforeEach(() => onAgentMainBranch.mockClear())
+
+  test('a run that made its own branch and was told none: origin\'s default branch, by the name it has where the run is', async () => {
+    render(view({ card: { status: 'done' as const, baseCommit: 'abc123' } }))
+    await waitFor(() => expect(screen.getByTestId('row-started-from').dataset['value']).toBe('trunk'))
+    expect(onAgentMainBranch).toHaveBeenCalledWith('p1', 'run-1')
+    expect(onAgentMainBranch).toHaveBeenCalledTimes(1)
+  })
+
+  test('a run told a branch, and a subagent, whose branch is its main agent\'s: the card says it, and nothing is read', async () => {
+    render(view({ card: { status: 'done' as const, base: 'feature/x', baseCommit: 'abc123' } }))
+    expect(screen.getByTestId('row-started-from').dataset['value']).toBe('feature/x')
+    cleanup()
+    render(view({ card: { status: 'done' as const, parent: 'main-run', base: 'agent-main-work', baseCommit: 'abc123' } }))
+    expect(screen.getByTestId('row-started-from').dataset['value']).toBe('agent-main-work')
+    await act(async () => {})
+    expect(onAgentMainBranch).not.toHaveBeenCalled()
+  })
+
+  test('an old card, or a run given a branch that exists: no branch at all, and nothing is read', async () => {
+    render(view({ card: { status: 'done' as const, branch: 'agent-theirs' } }))
+    await act(async () => {})
+    expect(screen.getByTestId('row-started-from').dataset['value']).toBe('')
+    expect(onAgentMainBranch).not.toHaveBeenCalled()
+  })
+
+  test('a clone with no default branch to name: no branch', async () => {
+    onAgentMainBranch.mockImplementationOnce(async () => null)
+    render(view({ card: { status: 'done' as const, baseCommit: 'abc123' } }))
+    await waitFor(() => expect(onAgentMainBranch).toHaveBeenCalled())
+    await act(async () => {})
+    expect(screen.getByTestId('row-started-from').dataset['value']).toBe('')
+  })
+
+  test('its hover has the branch the agent works on: the checkout\'s, and without one the card\'s', async () => {
+    onAgentWorktree.mockImplementationOnce(async () => ({ branch: 'agent-renamed' }))
+    render(view({ card: { status: 'done' as const, branch: 'agent-first', base: 'feature/x' } }))
+    expect(screen.getByTestId('row-works-on').dataset['value']).toBe('agent-first')
+    await waitFor(() => expect(screen.getByTestId('row-works-on').dataset['value']).toBe('agent-renamed'))
+  })
+
+  test('the top bar is told what to do once the project is removed', () => {
+    const removed = vi.fn()
+    render(view({ card: { status: 'done' as const }, onProjectRemoved: removed }))
+    fireEvent.click(screen.getByRole('button', { name: 'project removed' }))
+    expect(removed).toHaveBeenCalledOnce()
   })
 })
 
