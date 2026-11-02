@@ -60,6 +60,44 @@ describe('AutoMenu', () => {
     expect(onPublish).toHaveBeenCalledWith('merge')
   })
 
+  test('a target: the button names it and the menu offers its branches at the levels that open a request, and a pick reports the branch', async () => {
+    const onPick = vi.fn()
+    const target = { into: 'login-page', picks: ['login-page', 'main'], onPick }
+    expect(label({ publish: 'pr', target })).toBe('Auto: Open PR → login-page')
+    expect(label({ publish: 'merge', target: { ...target, into: 'main' } })).toBe('Auto: Merge on green → main')
+    expect(label({ publish: 'commit', target })).toBe('Auto: Commit')
+    cleanup()
+    renderMenu({ publish: 'pr', target })
+    await openMenu(trigger())
+    expect(screen.getByText('The pull request goes into')).toBeTruthy()
+    const row = (name: string) => screen.getByRole('menuitem', { name })
+    expect(row('login-page').getAttribute('aria-current')).toBe('true')
+    expect(row('main').getAttribute('aria-current')).toBe('false')
+    fireEvent.click(row('main'))
+    expect(onPick).toHaveBeenCalledWith('main')
+  })
+
+  test('no section: at a level that opens no request, with no target, and on a session, whose button still names its target', async () => {
+    renderMenu({ publish: 'commit', target: { into: 'login-page', picks: ['login-page', 'main'] } })
+    await openMenu(trigger())
+    expect(screen.queryByText('The pull request goes into')).toBeNull()
+    cleanup()
+    renderMenu({ publish: 'pr' })
+    await openMenu(trigger())
+    expect(screen.queryByText('The pull request goes into')).toBeNull()
+    cleanup()
+    renderMenu({ publish: 'pr', target: { into: 'login-page' } })
+    expect(trigger().textContent).toBe('Auto: Open PR → login-page')
+    await openMenu(trigger())
+    expect(screen.queryByText('The pull request goes into')).toBeNull()
+  })
+
+  test('a name too long for the button is whole in the tooltip', async () => {
+    renderMenu({ publish: 'pr', target: { into: 'feature/a-long-name' } })
+    expect(trigger().className).toContain('max-w-[20rem]!')
+    expect((await hoverTooltip(trigger())).textContent).toBe('What the agent does by itself when it finishes. The pull request goes into feature/a-long-name.')
+  })
+
   test('the tooltip says what the menu is for, and the button is off while busy', async () => {
     renderMenu()
     expect((await hoverTooltip(trigger())).textContent).toBe('What the agent does by itself when it finishes.')

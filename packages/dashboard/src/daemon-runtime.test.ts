@@ -110,6 +110,7 @@ test('a Start hands the line the branch to start from, and refuses a word that i
     await rm(join(home, 'started.txt'))
     assert.deepEqual(await runtime.onStart('Fix it', { base: '--upload-pack=x' }), { ok: false, error: 'not a branch name: --upload-pack=x' })
     assert.deepEqual(await runtime.onStart('Fix it', { base: '' }), { ok: false, error: 'not a branch name: ' })
+    assert.deepEqual(await runtime.onStart('Fix it', { prBase: '--upload-pack=x' }), { ok: false, error: 'not a branch name: --upload-pack=x' })
     await assert.rejects(readFile(join(home, 'started.txt'), 'utf8'), 'the line did not run')
   } finally {
     await runtime.dispose()

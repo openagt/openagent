@@ -45,8 +45,9 @@ import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
  * The pull request a run's branch has is read back through the git host the project declares
  * (`git-host.ts`); a project with no git host package records none.
  *
- * A run may be started for another run, its parent (`run --parent <id>`), and from a branch other
- * than origin's default (`run --base <ref>`); both are on its record for its whole life. When it
+ * A run may be started for another run, its parent (`run --parent <id>`), from a branch other
+ * than origin's default (`run --base <ref>`), and with its pull request going into one
+ * (`run --pr-base <branch>`); all are on its record for its whole life. When it
  * ends, however it ends, its parent is told (`parent.ts`).
  *
  * A run that makes its own branch writes down the commit the branch was made at, on its record
@@ -72,18 +73,22 @@ export const PUBLISH_LINES: Readonly<Record<Publish, string>> = {
   merge: `${PUBLISH_OPENING} and open its pull request, set to merge on its own once its checks pass.`,
 }
 
+const OPENS_REQUEST = 'open its pull request'
+
 /**
  * The sentence a run adds after every prompt of its agent, the first and each message after it:
- * that of its publish level, none for a run with none. The session sends it after the prompt and
- * writes it down apart from it, so a reader shows the person's words as the person wrote them.
+ * that of its publish level, none for a run with none, naming the branch its pull request goes
+ * into at a level that opens one. The session sends it after the prompt and writes it down apart
+ * from it, so a reader shows the person's words as the person wrote them.
  */
-export function addedLine(publish: Publish | undefined): string | undefined {
-  return publish !== undefined ? PUBLISH_LINES[publish] : undefined
+export function addedLine(publish: Publish | undefined, prBase?: string): string | undefined {
+  if (publish === undefined) return undefined
+  return prBase !== undefined ? PUBLISH_LINES[publish].replace(OPENS_REQUEST, `${OPENS_REQUEST} into the branch ${prBase}`) : PUBLISH_LINES[publish]
 }
 
 /** The sentence as a session takes it: named, or left out. */
-function addedOf(publish: Publish | undefined): { added?: string } {
-  const added = addedLine(publish)
+function addedOf(publish: Publish | undefined, prBase: string | undefined): { added?: string } {
+  const added = addedLine(publish, prBase)
   return added !== undefined ? { added } : {}
 }
 
@@ -147,6 +152,8 @@ export interface RunOptions {
   parent?: string
   /** The branch the run's fresh branch starts from; origin's default branch when absent. */
   base?: string
+  /** The branch the run's pull request goes into; the repository's default branch when absent. */
+  prBase?: string
   /** What the run is started for (`run --for`), kept on its mark: a thread on the git host, by its address. */
   for?: string
   /** How an ended parent is continued, in its own process; absent, only a working parent is told. */
@@ -257,7 +264,7 @@ export async function runCommand(repo: string, opts: RunOptions): Promise<RunOut
       }),
       prompt: opts.prompt,
       ...(opts.attached !== undefined ? { attached: opts.attached } : {}),
-      ...addedOf(opts.publish),
+      ...addedOf(opts.publish, opts.prBase),
       driver: opts.driver,
       ...modelOf(opts.model),
       ...effortOf(opts.effort),
@@ -390,7 +397,7 @@ export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunO
       card: { ...runningCard },
       priorDiary: diary,
       prompt,
-      ...addedOf(mark.publish),
+      ...addedOf(mark.publish, mark.prBase),
       driver: opts.driver,
       ...modelOf(model),
       ...effortOf(effort),
@@ -535,7 +542,7 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
     if (level === undefined || !mark) return
     const { publish: _was, ...rest } = mark
     mark = { ...rest, ...(level !== null ? { publish: level } : {}) }
-    added = addedLine(mark.publish)
+    added = addedLine(mark.publish, mark.prBase)
     await driverSession?.log?.patch({ caller: { runner: mark, publish: mark.publish } })
   }
   // A line the driver takes from the inbox is handed here first: a message may say how far the run

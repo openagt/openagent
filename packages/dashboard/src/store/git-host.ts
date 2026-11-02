@@ -76,7 +76,7 @@ export interface GitHostSource {
   /** The project's pull requests, newest first: all, or one branch's, or by state, or since a time. */
   requests(opts?: { branch?: string; state?: 'open' | 'merged' | 'all'; since?: string }): Promise<RequestsOutcome>
   /** Open a branch's pull request, or answer the open one. */
-  open(branch: string, opts: { title: string; body?: string; draft?: boolean }): Promise<OpenOutcome>
+  open(branch: string, opts: { title: string; body?: string; base?: string; draft?: boolean }): Promise<OpenOutcome>
   /** Land a pull request. */
   merge(number: number): Promise<MergeOutcome>
   /** The project's page on the git host; `undefined` when the provider cannot tell (no remote there). */
@@ -137,7 +137,7 @@ function commandGitHost(root: string, command: ProvidedCommand): GitHostSource {
       return { ok: true, requests: parseRequests(result.output) }
     },
     async open(branch, opts) {
-      const args = ['open', '--branch', branch, '--title', opts.title, ...(opts.body !== undefined ? ['--body', opts.body] : []), ...(opts.draft ? ['--draft'] : [])]
+      const args = ['open', '--branch', branch, '--title', opts.title, ...(opts.body !== undefined ? ['--body', opts.body] : []), ...(opts.base !== undefined ? ['--base', opts.base] : []), ...(opts.draft ? ['--draft'] : [])]
       const result = await runPackageCommand(root, command, args)
       if (!result.ok) return { ok: false, error: result.error }
       const request = requestOf(result.output)

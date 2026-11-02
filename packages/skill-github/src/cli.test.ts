@@ -34,6 +34,7 @@ test('no command, an unknown command, a bad flag: the usage, exit 2', async () =
   assert.ok(bad.err.endsWith(USAGE))
   assert.equal((await run('/r', ['merge', 'seven'])).code, 2)
   assert.equal((await run('/r', ['open'])).code, 2, '--title is required')
+  assert.equal((await run('/r', ['open', '--title', 'x', '--base', ' '])).code, 2, '--base names a branch')
   assert.equal((await run('/r', ['requests', '--state', 'draft'])).code, 2)
 })
 

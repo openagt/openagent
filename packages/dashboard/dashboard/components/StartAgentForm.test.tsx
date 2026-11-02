@@ -262,6 +262,71 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', { publish: 'merge' }))
   })
 
+  describe('where the pull request goes', () => {
+    const TARGETS = { ...WITH_BRANCHES, prBase: true }
+    const FEATURE = { kind: 'published', branch: 'feature-x' } as const
+    const sent = async () => {
+      start.mockResolvedValue({ agentId: 'r1' })
+      fireEvent.click(screen.getByText('submit-typed'))
+      await waitFor(() => expect(start).toHaveBeenCalled())
+      return start.mock.lastCall![2] as { prBase?: string; base?: string }
+    }
+
+    test('a picked branch on origin at Open PR: the button names it, it goes with the Start, and picking main sends none and reads so', async () => {
+      onCommands.mockResolvedValue(TARGETS)
+      prefs.current = { publish: 'pr', startFrom: { p1: FEATURE } }
+      render(<StartAgentForm {...props} projectName="gemstack" />)
+      await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Open PR → feature-x'))
+      expect((await sent()).prBase).toBe('feature-x')
+      start.mockClear()
+      await openMenu(autoMenu())
+      fireEvent.click(screen.getByRole('menuitem', { name: 'main' }))
+      await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Open PR → main'))
+      expect((await sent()).prBase).toBeUndefined()
+    })
+
+    test('the main branch picked to start from: no target', async () => {
+      onCommands.mockResolvedValue(TARGETS)
+      prefs.current = { publish: 'merge' }
+      render(<StartAgentForm {...props} projectName="gemstack" />)
+      await waitFor(() => expect(startFromChip()).not.toBeNull())
+      expect(autoMenu().textContent).toBe('Auto: Merge on green')
+    })
+
+    test('a start line that does not pass it on: no target', async () => {
+      onCommands.mockResolvedValue({ ...WITH_BRANCHES, prBase: false })
+      prefs.current = { publish: 'pr', startFrom: { p1: FEATURE } }
+      render(<StartAgentForm {...props} projectName="gemstack" />)
+      await waitFor(() => expect(startFromChip()).not.toBeNull())
+      expect(autoMenu().textContent).toBe('Auto: Open PR')
+      expect((await sent()).prBase).toBeUndefined()
+    })
+
+    test('My local branch: a target once origin is read to have it; not on origin, none and the pull request goes to main', async () => {
+      onCommands.mockResolvedValue(TARGETS)
+      onStartBranches.mockResolvedValueOnce({ branches: ['my/work'] })
+      prefs.current = { publish: 'pr', startFrom: { p1: LOCAL } }
+      render(<StartAgentForm {...props} projectName="gemstack" />)
+      await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Open PR → my/work'))
+      cleanup()
+      onStartBranches.mockResolvedValueOnce({ branches: ['feature-x'] })
+      render(<StartAgentForm {...props} projectName="gemstack" />)
+      await waitFor(() => expect(onStartBranches).toHaveBeenCalledTimes(2))
+      await waitFor(() => expect(startFromChip()).not.toBeNull())
+      expect(autoMenu().textContent).toBe('Auto: Open PR')
+      expect((await sent()).prBase).toBeUndefined()
+    })
+
+    test('at Commit the section is not offered, and the branch still goes with the Start, for a later Open PR', async () => {
+      onCommands.mockResolvedValue(TARGETS)
+      prefs.current = { publish: 'commit', startFrom: { p1: FEATURE } }
+      render(<StartAgentForm {...props} projectName="gemstack" />)
+      await waitFor(() => expect(startFromChip()).not.toBeNull())
+      expect(autoMenu().textContent).toBe('Auto: Commit')
+      expect((await sent()).prBase).toBe('feature-x')
+    })
+  })
+
   test('no pick made: neither is sent, so the hook decides', async () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
     start.mockResolvedValue({ agentId: 'r1' })

@@ -32,6 +32,18 @@ export function startFromBase(pick: StartFromPick | undefined, main: string, loc
 }
 
 /**
+ * The branch a pull request of a run started from `pick` may go into beside the main branch: the
+ * picked one, when it is not the main branch and origin has it. A local branch origin may not have
+ * is asked of `onOrigin`; nothing while that is not known, so the main branch stays the target.
+ */
+export function prTargetBranch(pick: StartFromPick | undefined, main: string, local: string, onOrigin: readonly string[] | undefined): string | undefined {
+  if (pick === undefined) return undefined
+  const branch = pick.kind === 'local' ? local : pick.branch
+  if (branch === main) return undefined
+  return pick.kind === 'published' || onOrigin?.includes(branch) ? branch : undefined
+}
+
+/**
  * The branch row's button, by look alone: a word and an icon that say the branch, and the chevron
  * of a menu. Of a set width at most, important to hold on a phone too: a branch's name can run
  * past the row's, and would squeeze the words beside it to nothing.

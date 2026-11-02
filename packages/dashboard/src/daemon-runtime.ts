@@ -439,6 +439,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     // The branch to start from ends up on the line's command line: only a branch name goes there.
     // Refused, not dropped: a run started from the main branch instead would be a silent swap.
     if (options.base !== undefined && !isBranchName(options.base)) return { ok: false, error: `not a branch name: ${String(options.base)}` }
+    if (options.prBase !== undefined && !isBranchName(options.prBase)) return { ok: false, error: `not a branch name: ${String(options.prBase)}` }
     // A branch picked off origin's list may have gone since. Asked of origin here, so the person is
     // told above the box, rather than by a run that fails to make its checkout.
     const published = options.base !== undefined ? publishedBranch(options.base) : undefined
@@ -463,6 +464,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
       ...(options.effort !== undefined ? { effort: options.effort } : {}),
       ...(publish !== undefined ? { publish } : {}),
       ...(options.base !== undefined ? { base: options.base } : {}),
+      ...(options.prBase !== undefined ? { prBase: options.prBase } : {}),
     })
     // The line made a checkout (or is about to): the project's checkouts are read again on the
     // next look rather than a few seconds from now, so the new run's page finds its own.
@@ -477,7 +479,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
   // followed from here. `machine` is stripped so the other side does not relay onward, and `base`
   // because a branch of this machine names nothing there (it drops both too).
   const sendToMachine = async (prompt: string, options: StartAgentOptions, id: string, project: { id: string; name: string; address: string; cwd?: string }): Promise<StartAgentResult> => {
-    const { machine: _id, base: _thisMachines, ...forwarded } = options
+    const { machine: _id, base: _thisMachines, prBase: _thisMachinesToo, ...forwarded } = options
     const machine = (await listMachines(undefined, env)).find(saved => saved.id === id)
     if (!machine) return { ok: false, error: 'That machine is no longer saved. Pick another place to run.' }
     const target = { url: machine.url, key: machine.key, ...(machine.pin ? { pin: machine.pin } : {}), project: project.address }

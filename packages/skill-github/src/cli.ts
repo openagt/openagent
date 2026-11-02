@@ -40,8 +40,9 @@ export const USAGE = `usage: github <command>
   comment <number> --body <text>
                                post a comment on issue or pull request <number>: its id and url. It opens with the coding agent's logo, the model and the effort, as the agent's
                                run record says (found through AGENT_DIARY, which its runner sets), else the line 🤖 automated; a hidden mark after the text, so replies never counts it
-  open [--branch <b>] --title <t> [--body <text>] [--draft] [--merge]
-                               open the pull request of branch <b> (default: the current branch; it must be on the remote already); an open one is answered as it is; --merge lands it on green.
+  open [--branch <b>] --title <t> [--body <text>] [--base <b>] [--draft] [--merge]
+                               open the pull request of branch <b> (default: the current branch; it must be on the remote already); an open one is answered as it is; --base names the branch it
+                               goes into (default: the repository's default branch); --merge lands it on green.
                                An account that cannot write to the project pushes to its fork: git remote set-url --push origin <fork>; open and replies then take that fork's
                                pull requests as this machine's
   merge <number>               land pull request <number>: a draft is marked ready, then the merge is armed as --merge arms it
@@ -247,13 +248,15 @@ const COMMANDS: Record<string, Command> = {
   },
 
   async open(args, { cwd, gh, git, watch }) {
-    const { values } = parse(args, { branch: { type: 'string' }, title: { type: 'string' }, body: { type: 'string' }, merge: { type: 'boolean' }, draft: { type: 'boolean' } }, 0)
+    const { values } = parse(args, { branch: { type: 'string' }, title: { type: 'string' }, body: { type: 'string' }, base: { type: 'string' }, merge: { type: 'boolean' }, draft: { type: 'boolean' } }, 0)
     if (!values.title?.trim()) throw new Usage('--title is required: one line naming what the change does')
     if (values.branch !== undefined && !values.branch.trim()) throw new Usage('--branch names a branch')
+    if (values.base !== undefined && !values.base.trim()) throw new Usage('--base names a branch')
     const outcome = await openRequest(cwd, {
       ...(values.branch ? { branch: values.branch } : {}),
       title: values.title.trim(),
       ...(values.body !== undefined ? { body: values.body } : {}),
+      ...(values.base ? { base: values.base.trim() } : {}),
       ...(values.merge ? { merge: true } : {}),
       ...(values.draft ? { draft: true } : {}),
       gh,

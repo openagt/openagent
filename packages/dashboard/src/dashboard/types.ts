@@ -88,6 +88,12 @@ export interface StartAgentOptions {
    */
   base?: string
   /**
+   * The branch the run's pull request goes into, from the launcher's Auto menu, kept on the run's
+   * record for its agent and the Open PR press. Absent, the repository's default branch. A word
+   * that is no branch name refuses the Start. Not sent to a machine picked to run on, as {@link base}.
+   */
+  prBase?: string
+  /**
    * Run this session on a saved machine (#1067), named by its id: the local daemon relays the
    * start to that machine's daemon, which starts it in its own copy of the project, and streams
    * its events back into the local agent view. Absent = run on this machine. Stripped before the

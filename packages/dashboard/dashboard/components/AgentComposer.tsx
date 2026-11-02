@@ -47,6 +47,7 @@ export function AgentComposer({
   controls,
   contextSet,
   publish,
+  prBase,
   row,
 }: {
   projectId: string
@@ -74,6 +75,8 @@ export function AgentComposer({
   contextSet?: ContextSet | undefined
   /** How far the run takes its work, as its record says (`commit`, `branch`, `pr`, `merge`); absent, none. The "Auto" menu shows it and changes it from the next message on. */
   publish?: string | undefined
+  /** The branch the run's pull request goes into, as its record says; absent, the repository's default branch. */
+  prBase?: string | undefined
   /** The row above the box: where the session started. */
   row?: ReactNode
 }) {
@@ -218,6 +221,7 @@ export function AgentComposer({
               publish={picked ?? recorded}
               picks={offeredPublishPicks(launcher?.gitHost ?? true, launcher?.remote ?? true)}
               onPublish={pick => setPicked(pick === recorded ? null : pick)}
+              target={prBase !== undefined ? { into: prBase } : undefined}
               busy={busy}
             />
             {controls}

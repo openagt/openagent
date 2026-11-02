@@ -190,6 +190,12 @@ test('the Open PR button pushes the branch through the branches provider, then o
   assert.deepEqual((calls.at(-1) as unknown[])[2], { title: 'openagent/work', body, draft: true })
 })
 
+test('the Open PR button sends the pull request where the run was told to: the branch on its record', async () => {
+  const { branches, gitHost, calls } = fakeBranches({ 'openagent/work': state() })
+  await openAgentPullRequest('/repo', agent({ prBase: 'login-page' }), { branches, gitHost })
+  assert.equal(((calls.at(-1) as unknown[])[2] as { base?: string }).base, 'login-page')
+})
+
 test('a branch of one commit is that commit: its subject the title, the rest of its message the body, less its co-authors; what the run was asked is not said', async () => {
   const { branches, gitHost, calls } = fakeBranches({ 'openagent/work': state({ commits: [{ sha: 'abc1234567', subject: 'New automation: write the shell line' }] }) })
   const asked: string[][] = []

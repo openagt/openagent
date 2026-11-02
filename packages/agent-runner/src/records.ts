@@ -45,6 +45,8 @@ export interface RunnerMark {
   parent?: string
   /** What this run's own branch started from (`run --base`): a branch of this clone, or origin's copy of one (`publishedBase`); origin's default branch when absent. */
   base?: string
+  /** The branch the run's pull request goes into (`run --pr-base`); the repository's default branch when absent. */
+  prBase?: string
   /** The commit this run's own branch was made at: where the run's own work begins. Absent for a run given a branch that existed. */
   baseCommit?: string
   /** What the run was started for, as whoever started it names it (`run --for`): a thread on the git host, its address, so the next call there finds this run. */
@@ -57,10 +59,10 @@ export interface RunnerMark {
 export function runnerMark(card: RunCard): RunnerMark | undefined {
   const mark = card.caller?.['runner']
   if (!mark || typeof mark !== 'object') return undefined
-  const { host, pid, publish, parent, base, baseCommit, for: started, resumed } = mark as Record<string, unknown>
+  const { host, pid, publish, parent, base, prBase, baseCommit, for: started, resumed } = mark as Record<string, unknown>
   if (typeof host !== 'string') return undefined
   const by = resumed && typeof resumed === 'object' ? (resumed as Record<string, unknown>) : {}
-  return { host, ...(typeof pid === 'number' ? { pid } : {}), ...lasting({ publish, parent, base, baseCommit, for: started }), ...(typeof by['by'] === 'string' && typeof by['at'] === 'string' ? { resumed: { by: by['by'], at: by['at'] } } : {}) }
+  return { host, ...(typeof pid === 'number' ? { pid } : {}), ...lasting({ publish, parent, base, prBase, baseCommit, for: started }), ...(typeof by['by'] === 'string' && typeof by['at'] === 'string' ? { resumed: { by: by['by'], at: by['at'] } } : {}) }
 }
 
 /**
@@ -74,12 +76,13 @@ export function earlierPrs(card: RunCard): { number: number; url: string }[] {
   return prs.flatMap(pr => (pr && typeof pr === 'object' && typeof pr.number === 'number' && typeof pr.url === 'string' ? [{ number: pr.number as number, url: pr.url as string }] : []))
 }
 
-/** What a mark keeps for the run's whole life, a resume included: its publish level, its parent, where it started, what it was started for. */
-export function lasting(mark: { publish?: unknown; parent?: unknown; base?: unknown; baseCommit?: unknown; for?: unknown }): Pick<RunnerMark, 'publish' | 'parent' | 'base' | 'baseCommit' | 'for'> {
+/** What a mark keeps for the run's whole life, a resume included: its publish level, its parent, where it started, where its pull request goes, what it was started for. */
+export function lasting(mark: { publish?: unknown; parent?: unknown; base?: unknown; prBase?: unknown; baseCommit?: unknown; for?: unknown }): Pick<RunnerMark, 'publish' | 'parent' | 'base' | 'prBase' | 'baseCommit' | 'for'> {
   return {
     ...(isPublish(mark.publish) ? { publish: mark.publish } : {}),
     ...(typeof mark.parent === 'string' ? { parent: mark.parent } : {}),
     ...(typeof mark.base === 'string' ? { base: mark.base } : {}),
+    ...(typeof mark.prBase === 'string' ? { prBase: mark.prBase } : {}),
     ...(typeof mark.baseCommit === 'string' ? { baseCommit: mark.baseCommit } : {}),
     ...(typeof mark.for === 'string' ? { for: mark.for } : {}),
   }
@@ -101,14 +104,15 @@ export function markerCard(run: { id: string; startedAt: string; prompt: string;
 
 /**
  * What a reader of the card finds beside `host`, outside this tool's mark: the run's parent, the
- * name of the branch it was started from when it was told one, the commit its own work begins at, which its
+ * name of the branch it was started from when it was told one, the branch its pull request goes into, the commit its own work begins at, which its
  * changes are measured from, and how far it takes its work, which a dashboard shows and offers to
  * change, and what it was started for, which a git host's check reads to find the run a thread has.
  */
-export function forReaders(mark: Pick<RunnerMark, 'parent' | 'base' | 'baseCommit' | 'publish' | 'for'>): { parent?: string; base?: string; baseCommit?: string; publish?: Publish; for?: string } {
+export function forReaders(mark: Pick<RunnerMark, 'parent' | 'base' | 'prBase' | 'baseCommit' | 'publish' | 'for'>): { parent?: string; base?: string; prBase?: string; baseCommit?: string; publish?: Publish; for?: string } {
   return {
     ...(mark.parent !== undefined ? { parent: mark.parent } : {}),
     ...(mark.base !== undefined ? { base: publishedBranch(mark.base) ?? mark.base } : {}),
+    ...(mark.prBase !== undefined ? { prBase: mark.prBase } : {}),
     ...(mark.baseCommit !== undefined ? { baseCommit: mark.baseCommit } : {}),
     ...(mark.publish !== undefined ? { publish: mark.publish } : {}),
     ...(mark.for !== undefined ? { for: mark.for } : {}),

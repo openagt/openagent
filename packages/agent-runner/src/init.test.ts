@@ -42,6 +42,7 @@ test('the start line names the branch to start from only when it is handed one',
       return stdout.trimEnd().split('\n')
     }
     assert.deepEqual(await given({ BASE: 'my branch' }), ['run', '--detach', 'fix it', '--base', 'my branch'], 'one argument, whatever the name holds')
+    assert.deepEqual(await given({ PR_BASE: 'my branch' }), ['run', '--detach', 'fix it', '--pr-base', 'my branch'])
     assert.deepEqual(await given({}), ['run', '--detach', 'fix it'])
     assert.deepEqual(await given({ BASE: '' }), ['run', '--detach', 'fix it'], 'an empty one is none')
   } finally {

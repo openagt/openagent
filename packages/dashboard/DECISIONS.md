@@ -448,6 +448,12 @@ already made, and lists it in its pull request; for anything else it proposes an
   origin deleted it. An origin that cannot be read leaves the two rows that need no read, and
   says the rest could not be read. The branch that holds the runs' records is not listed: it
   is no code to start from. Agents' published branches are listed like any other.
+- A run started from a branch other than the main branch opens its pull request into that
+  branch, or into the main branch when the Auto menu says so; the button reads the target,
+  "Auto: Open PR → login-page", and the handoff's Open PR uses the same one. The section shows
+  only at Open PR and Merge on green, for a branch origin has, on a start line that passes it on.
+  A local branch origin does not have goes to the main branch. Picked over always the main
+  branch, whose pull request carried the start branch's commits with the agent's.
 - A published pick starts from origin's copy, fetched at the Start, even where a local branch
   of that name differs. A pick that has since gone from origin refuses the Start, and says so.
   Picked over starting from the main branch instead, which would be a silent swap, and over
