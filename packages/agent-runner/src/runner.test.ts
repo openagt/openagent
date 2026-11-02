@@ -254,17 +254,17 @@ test('ready to run, and the run: a project that names its own account at the git
     const asked: (string | undefined)[] = []
     const gitHostEnv = async (_repo: string, user?: string) => {
       asked.push(user)
-      return user === 'stranger' ? { ok: false as const, error: 'gh knows no account stranger' } : { ok: true as const, env: { GH_TOKEN: `tok-${user ?? 'computer'}` } }
+      return user === 'stranger' ? { ok: false as const, error: 'gh knows no account stranger' } : { ok: true as const, env: { GH_TOKEN: `tok-${user ?? 'computer'}` }, login: user ?? 'computer-login' }
     }
     assert.deepEqual(await readyToRun(repo, 'claude-code', { probe, isRoot: () => false, gitHostEnv }), { problems: [], warnings: [] })
     assert.deepEqual(asked, [], 'no account named: the git host is not asked')
     // No account named: the computer's.
     const env: NodeJS.ProcessEnv = {}
-    assert.deepEqual(await workAs(repo, () => {}, { gitHostEnv, env }), {})
+    assert.deepEqual(await workAs(repo, () => {}, { gitHostEnv, env }), { git: 'computer-login' })
     assert.equal(env['GH_TOKEN'], 'tok-computer')
 
     await writeProjectAccounts(repo, { gitHost: 'octo-agent', claude: ['Rom', 'Dani'], codex: ['Dani'] })
-    assert.deepEqual(await workAs(repo, () => {}, { gitHostEnv, env }), { claude: ['Rom', 'Dani'], codex: ['Dani'] })
+    assert.deepEqual(await workAs(repo, () => {}, { gitHostEnv, env }), { git: 'octo-agent', claude: ['Rom', 'Dani'], codex: ['Dani'] })
     assert.equal(env['GH_TOKEN'], 'tok-octo-agent')
 
     await writeProjectAccounts(repo, { gitHost: 'stranger' })

@@ -66,11 +66,12 @@ export async function workAs(repo: string, log: (line: string) => void, deps: { 
   const given = await (deps.gitHostEnv ?? gitHostEnv)(repo, accounts.gitHost)
   if (!given.ok) throw new Error(`This project's runs work as ${accounts.gitHost} at the git host, and it cannot be used here: ${given.error}`)
   Object.assign(deps.env ?? process.env, given.env)
-  return { ...(accounts.claude ? { claude: accounts.claude } : {}), ...(accounts.codex ? { codex: accounts.codex } : {}) }
+  return { ...(given.login !== undefined ? { git: given.login } : {}), ...(accounts.claude ? { claude: accounts.claude } : {}), ...(accounts.codex ? { codex: accounts.codex } : {}) }
 }
 
-/** The accounts a project's runs may use on each agent, by name, when it names its own few. */
+/** The account this run works as at the git host, when it can say; and the accounts a project's runs may use on each agent, by name, when it names its own few. */
 export interface AgentAccounts {
+  git?: string
   claude?: string[]
   codex?: string[]
 }
@@ -247,6 +248,7 @@ export async function runProject(repo: string, opts: { prompt: string; id?: stri
     ...(opts.model !== undefined ? { model: opts.model } : {}),
     ...(opts.effort !== undefined ? { effort: opts.effort } : {}),
     driver: driverFor(driver, id, setup, as),
+    ...(as.git !== undefined ? { gitAccount: as.git } : {}),
     ...(opts.publish !== undefined ? { publish: opts.publish } : {}),
     ...(opts.attached !== undefined ? { attached: opts.attached } : {}),
     ...(opts.parent !== undefined ? { parent: opts.parent } : {}),
@@ -288,6 +290,7 @@ export async function resumeProject(
     ...(opts.by !== undefined ? { by: opts.by } : {}),
     ...(opts.publish !== undefined ? { publish: publishChange(opts.publish) ?? null } : {}),
     driver: (deps.driverFor ?? driverFor)(recorded, opts.id, setup, as),
+    ...(as.git !== undefined ? { gitAccount: as.git } : {}),
     resume: resumeDetached(repo),
     ...(opts.log ? { log: opts.log } : {}),
   })

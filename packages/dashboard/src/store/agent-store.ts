@@ -72,6 +72,8 @@ export interface AgentMeta {
    * started it.
    */
   baseCommit?: string
+  /** The account the run worked as at the git host, written on the card by the tool that runs it; absent on a run recorded before it was kept, or whose git host cannot say. */
+  gitAccount?: string
   /** The branch the run's pull request goes into, written on the card by the tool that runs it; absent, the repository's default branch. */
   prBase?: string
   /**

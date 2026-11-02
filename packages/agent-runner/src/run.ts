@@ -154,6 +154,8 @@ export interface RunOptions {
   base?: string
   /** The branch the run's pull request goes into; the repository's default branch when absent. */
   prBase?: string
+  /** The account the run works as at the git host, kept on its record; none when the git host cannot say. */
+  gitAccount?: string
   /** What the run is started for (`run --for`), kept on its mark: a thread on the git host, by its address. */
   for?: string
   /** How an ended parent is continued, in its own process; absent, only a working parent is told. */
@@ -292,6 +294,8 @@ export interface ResumeOptions {
   answer?: string
   /** How far the run takes its work from here on: a level, or `null` for none; the level its record names when absent. */
   publish?: Publish | null
+  /** The account this leg works as at the git host, on the record from here on; the record's own when absent. */
+  gitAccount?: string
   /** Who resumes the run, kept on its mark with the time: a scheduler's row, which counts the run as its own from then on. */
   by?: string
   driver: Driver
@@ -378,7 +382,7 @@ export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunO
     // The level its record names, or the one this resume gives it from here on.
     const { publish: recorded, ...lasts } = lasting(previous)
     const publish = opts.publish === undefined ? recorded : (opts.publish ?? undefined)
-    const mark: RunnerMark = { host, pid, ...lasts, ...(publish !== undefined ? { publish } : {}), ...restarted, ...(opts.by !== undefined ? { resumed: { by: opts.by, at: clock() } } : {}) }
+    const mark: RunnerMark = { host, pid, ...lasts, ...(publish !== undefined ? { publish } : {}), ...(opts.gitAccount !== undefined ? { gitAccount: opts.gitAccount } : {}), ...restarted, ...(opts.by !== undefined ? { resumed: { by: opts.by, at: clock() } } : {}) }
     const runningCard: RunCard = { ...card, status: 'running', caller: { ...card.caller, runner: mark, pid, host, ...forReaders(mark), workspace: checkout.path } }
     delete runningCard.endedAt
     // A level taken away by this resume is no longer the run's, for its readers either.
