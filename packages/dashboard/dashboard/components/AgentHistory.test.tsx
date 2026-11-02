@@ -17,6 +17,9 @@ vi.mock('../rpc/projects.js', () => ({ onProjects, sendAddProject, sendPickProje
 // An ended agent's log, read as the pointer reaches its row.
 const onAgent = vi.hoisted(() => vi.fn((_projectId: string, _agentId: string) => Promise.resolve([])))
 vi.mock('../rpc/reads.js', () => ({ onAgent }))
+// The git host's accounts behind the people of the rows.
+const onGitHostPeople = vi.hoisted(() => vi.fn(async (_projectId: string, _emails: string[]) => [] as { email: string; login: string; avatar?: string }[]))
+vi.mock('../rpc/people.js', () => ({ onGitHostPeople }))
 
 // The rail also carries the person's menu at its foot (#772 follow-up). Its theme and notifications
 // rows pull the preferences into jsdom, which this suite deliberately avoids. It is about the agents
@@ -377,6 +380,94 @@ describe('AgentHistory rows', () => {
     expect(screen.getByRole('button', { name: /fix login · running · alpha/ })).toBeTruthy()
     fireEvent.click(screen.getByText('add tests'))
     expect(picked).toEqual(['proj-b', 'r-b'])
+  })
+})
+
+describe('whose run a row is', () => {
+  afterEach(() => {
+    forgetRemembered()
+    localStorage.clear()
+    onGitHostPeople.mockReset()
+    onGitHostPeople.mockResolvedValue([])
+  })
+
+  const ada = { email: 'ada@x.dev', login: 'ada', avatar: 'https://avatars.githubusercontent.com/u/1' }
+  const row = (name: RegExp) => screen.getByRole('button', { name })
+
+  test("two letters at first, the person's picture once the git host said, before the agent's logo; pointed at, it says who", async () => {
+    onGitHostPeople.mockResolvedValue([ada])
+    renderRail(
+      <AgentHistory
+        projectId="p1"
+        scope="p1"
+        agents={[agent({ id: 'r1', title: 'Hers', person: 'ada@x.dev', driver: 'codex' }), agent({ id: 'r2', title: 'His', person: 'rom@y.dev' })]}
+        selectedAgentId={null}
+        onSelect={() => {}}
+      />,
+    )
+    // The letters are there from the row's first frame: nothing moves when the picture lands.
+    expect(within(row(/^Hers/)).getByText('AD')).toBeTruthy()
+    await waitFor(() => expect(row(/^Hers/).querySelector('img')?.getAttribute('src')).toBe(ada.avatar))
+    const mark = within(row(/^Hers/)).getByRole('img', { name: 'ada@x.dev · ada' })
+    expect(mark.compareDocumentPosition(within(row(/^Hers/)).getByLabelText('Codex')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // The host knows nobody for this email: the letters stay, and the mark says the email.
+    expect(row(/^His/).querySelector('img')).toBeNull()
+    expect(within(row(/^His/)).getByRole('img', { name: 'rom@y.dev' }).textContent).toBe('RO')
+    // The row's own sentence says it too.
+    expect(row(/^Hers/).getAttribute('aria-label')).toContain('ada@x.dev · ada')
+  })
+
+  test('a run that names nobody has no mark', () => {
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ title: 'Very old' })]} selectedAgentId={null} onSelect={() => {}} />)
+    expect(row(/^Very old/).querySelector('[class*="rounded-full"][class*="size-4"]')).toBeNull()
+    expect(onGitHostPeople).not.toHaveBeenCalled()
+  })
+
+  test("the rail of every project asks each project of its own people, once, whatever is polled; a project's picture is not another's", async () => {
+    onGitHostPeople.mockImplementation(async projectId => (projectId === 'p1' ? [ada] : []))
+    const recent = (projectId: string, id: string, person: string) => ({ projectId, projectName: projectId, agent: agent({ id, title: `${projectId} ${id}`, person }) })
+    const rail = (recentAgents: ReturnType<typeof recent>[]) => <SidebarProvider><AgentHistory projectId={null} scope={null} agents={[]} recentAgents={recentAgents} selectedAgentId={null} onSelect={() => {}} /></SidebarProvider>
+    const { rerender } = render(rail([recent('p1', 'r1', 'ada@x.dev'), recent('p1', 'r2', 'ada@x.dev'), recent('p2', 'r3', 'ada@x.dev'), recent('p2', 'r4', 'rom@y.dev')]))
+    await waitFor(() => expect(row(/^p1 r1/).querySelector('img')).toBeTruthy())
+    expect(row(/^p1 r2/).querySelector('img')).toBeTruthy()
+    expect(row(/^p2 r3/).querySelector('img')).toBeNull()
+    expect(onGitHostPeople.mock.calls.map(([projectId, emails]) => [projectId, emails])).toEqual([
+      ['p1', ['ada@x.dev']],
+      ['p2', ['ada@x.dev', 'rom@y.dev']],
+    ])
+    // The list read again, with the same people, in a new order.
+    rerender(rail([recent('p2', 'r4', 'rom@y.dev'), recent('p2', 'r3', 'ada@x.dev'), recent('p1', 'r2', 'ada@x.dev'), recent('p1', 'r1', 'ada@x.dev')]))
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(onGitHostPeople).toHaveBeenCalledTimes(2)
+  })
+
+  test("a row of the picked project's list on a page of no project still asks that project", async () => {
+    onGitHostPeople.mockResolvedValue([ada])
+    renderRail(<AgentHistory projectId={null} scope="p1" agents={[agent({ title: 'Hers', person: 'ada@x.dev' })]} selectedAgentId={null} onSelect={() => {}} />)
+    await waitFor(() => expect(row(/^Hers/).querySelector('img')).toBeTruthy())
+    expect(onGitHostPeople).toHaveBeenCalledWith('p1', ['ada@x.dev'])
+  })
+
+  test('a subagent has no mark: its main agent says whose it is', async () => {
+    renderRail(
+      <AgentHistory
+        projectId="p1"
+        scope="p1"
+        agents={[agent({ id: 'main', title: 'Main', person: 'ada@x.dev' }), agent({ id: 'sub', title: 'Sub', person: 'ada@x.dev', parent: 'main' })]}
+        selectedAgentId={null}
+        onSelect={() => {}}
+      />,
+    )
+    expect(within(row(/^Main/)).getByRole('img', { name: 'ada@x.dev' })).toBeTruthy()
+    expect(within(row(/^Sub/)).queryByRole('img', { name: 'ada@x.dev' })).toBeNull()
+  })
+
+  test("the row of a run just started holds the mark's place, with no one in it yet", () => {
+    const rail = (startTick: number) => <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId="r1" onSelect={() => {}} startTick={startTick} startIntent="add dark mode" startId="r1" />
+    const { container, rerender } = render(<SidebarProvider>{rail(0)}</SidebarProvider>)
+    rerender(<SidebarProvider>{rail(1)}</SidebarProvider>)
+    const standIn = container.querySelector('[data-stand-in]')!
+    expect(standIn.querySelector('[aria-hidden="true"].size-4.rounded-full')).toBeTruthy()
   })
 })
 

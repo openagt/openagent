@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FilterChips, Page, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn, formatDateTime, formatDuration, useModuleHost, usePolled, type ModuleAgent, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
+import { FilterChips, Page, PersonMark, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn, formatDateTime, formatDuration, personSaid, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -13,6 +13,8 @@ export interface Row {
     status: RunCard['status'] | 'unknown'
     /** While it is unknown: which computer, and since when it was not seen. */
     offline?: string
+    /** Whose run it is, by the email its record is kept under; a very old card has none. */
+    person?: string
   }
 }
 
@@ -50,6 +52,7 @@ function cardOf(run: ModuleAgent): Omit<Row['card'], 'id' | 'startedAt'> {
     status: run.status,
     ...(run.endedAt ? { endedAt: run.endedAt } : {}),
     ...(run.title ? { title: run.title } : {}),
+    ...(run.person ? { person: run.person } : {}),
     ...(run.ask ? { intent: run.ask } : {}),
     ...(run.name ? { branch: run.name } : {}),
     ...(run.cost !== undefined ? { cost: run.cost } : {}),
@@ -162,6 +165,7 @@ export function LogsPage({ projects }: ModulePageProps) {
     [key],
   )
   const read = { ...recorded, rows: withLiveRuns(recorded.rows, live) }
+  const accountOf = useGitHostPeople(read.rows.map(({ project, card }) => ({ projectId: project.id, person: card.person })), host.gitHostPeople, 'skill-logs:people')
 
   // Which status the list shows: every one, until a chip picks one. One no run has any more goes back to all.
   const [picked, setPicked] = useState<string | null>(null)
@@ -214,14 +218,19 @@ export function LogsPage({ projects }: ModulePageProps) {
                     </TableCell>
                     {/* The run's short name, and what it was asked under it; a run with no name yet is its ask. */}
                     <TableCell className="max-w-md">
-                      <p className="truncate font-medium" title={card.title ?? card.intent}>
-                        {card.title?.trim() || card.intent?.trim() || card.id}
-                      </p>
-                      {card.title?.trim() && card.intent?.trim() && (
-                        <p className="truncate text-xs text-muted-foreground" title={card.intent}>
-                          {card.intent}
-                        </p>
-                      )}
+                      <div className="flex items-center gap-2.5">
+                        <RunPerson person={card.person} account={accountOf(project.id, card.person)} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium" title={card.title ?? card.intent}>
+                            {card.title?.trim() || card.intent?.trim() || card.id}
+                          </p>
+                          {card.title?.trim() && card.intent?.trim() && (
+                            <p className="truncate text-xs text-muted-foreground" title={card.intent}>
+                              {card.intent}
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </TableCell>
                     {many && <TableCell className="text-muted-foreground">{project.name}</TableCell>}
                     <TableCell className="max-w-56">
@@ -255,21 +264,24 @@ export function LogsPage({ projects }: ModulePageProps) {
             <DayHeading day={day} runs={rows.length} cost={cost} />
             <ul className="mt-1 text-sm">
               {rows.map(({ project, card }) => (
-                <li key={`${project.id}/${card.id}`} onClick={() => host.openAgent(project.id, card.id)} className="cursor-pointer border-b border-border py-2 hover:bg-accent">
-                  <p className="truncate font-medium" title={card.intent}>
-                    {card.title?.trim() || card.intent?.trim() || card.id}
-                  </p>
-                  <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
-                    <Status status={card.status} offline={card.offline} />
-                    {many && <span>{project.name}</span>}
-                    {card.pr && (
-                      <a href={card.pr.url} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()} className="text-info hover:underline">
-                        #{card.pr.number}
-                      </a>
-                    )}
-                    {card.cost !== undefined && <span className="tabular-nums">{dollars(card.cost)}</span>}
-                    <span className="tabular-nums">{clock(card.startedAt)}</span>
-                  </p>
+                <li key={`${project.id}/${card.id}`} onClick={() => host.openAgent(project.id, card.id)} className="flex cursor-pointer items-center gap-2.5 border-b border-border py-2 hover:bg-accent">
+                  <RunPerson person={card.person} account={accountOf(project.id, card.person)} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium" title={card.intent}>
+                      {card.title?.trim() || card.intent?.trim() || card.id}
+                    </p>
+                    <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+                      <Status status={card.status} offline={card.offline} />
+                      {many && <span>{project.name}</span>}
+                      {card.pr && (
+                        <a href={card.pr.url} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()} className="text-info hover:underline">
+                          #{card.pr.number}
+                        </a>
+                      )}
+                      {card.cost !== undefined && <span className="tabular-nums">{dollars(card.cost)}</span>}
+                      <span className="tabular-nums">{clock(card.startedAt)}</span>
+                    </p>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -278,6 +290,12 @@ export function LogsPage({ projects }: ModulePageProps) {
       </div>
     </Page>
   )
+}
+
+/** Whose run it is, before its name. A very old card names nobody: no mark, and its name stays in line with the others. */
+function RunPerson({ person, account }: { person: string | undefined; account: ModuleHostPerson | undefined }) {
+  if (!person) return <span aria-hidden className="size-6 shrink-0" />
+  return <PersonMark email={person} picture={account?.avatar} said={personSaid(person, account)} className="size-6 text-[9px]" />
 }
 
 /** A day's heading: the day, how many runs it had and what they cost together. */

@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { ModuleHostContext, type ModuleHost } from '@openagt/dashboard/module'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { ModuleHostContext, forgetRemembered, type ModuleHost } from '@openagt/dashboard/module'
 import { LogsPage, dayOf } from './LogsPage.js'
 
 // The Logs page: every run of the projects shown, newest first, in one table cut by day, each day
@@ -17,11 +17,16 @@ function hostWith(cards: unknown[], runs: unknown[] = []): ModuleHost {
     package: '@openagt/skill-logs',
     runCommand: vi.fn(async () => ({ ok: true as const, output: cards })),
     agents: vi.fn(async () => runs),
+    gitHostPeople: vi.fn(async () => []),
     openAgent: vi.fn(),
   } as unknown as ModuleHost
 }
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  forgetRemembered()
+  localStorage.clear()
+})
 
 test('a day is said as Today, Yesterday, else its weekday and date', () => {
   const today = new Date('2026-10-25T15:00:00')
@@ -80,4 +85,30 @@ test('each run as the dashboard says it stands: a record that still says running
   const frozen = screen.getAllByText('frozen in the records')[0]!.closest('tr')!
   expect(within(frozen).getByText('status unknown').closest('[title]')!.getAttribute('title')).toBe(`MacBook offline · last seen ${new Date(seenAt).toLocaleString()}`)
   expect(screen.queryAllByText('running')).toHaveLength(0)
+})
+
+test("each run says whose it is: their picture where the project's git host knows them, else two letters; a very old card has no mark, and its name stays in line", async () => {
+  const host = hostWith(
+    [
+      { id: 'r1', startedAt: at(now - 1000), status: 'done', title: 'Hers', person: 'ada@x.dev' },
+      { id: 'r2', startedAt: at(now - 2000), status: 'done', title: 'His', person: 'git@brillout.com' },
+      { id: 'r3', startedAt: at(now - 3000), status: 'done', title: 'Very old' },
+    ],
+    // A run with no record yet says whose it is too.
+    [{ id: 'r4', startedAt: at(now - 500), status: 'running', title: 'Going', person: 'ada@x.dev' }],
+  )
+  vi.mocked(host.gitHostPeople).mockImplementation(async () => [{ email: 'ada@x.dev', login: 'ada', avatar: 'https://avatars.githubusercontent.com/u/1' }])
+  render(
+    <ModuleHostContext.Provider value={host}>
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+    </ModuleHostContext.Provider>,
+  )
+  const row = (title: string) => screen.getAllByText(title)[0]!.closest('tr')!
+  await waitFor(() => expect(within(row('Hers')).getByRole('img', { name: 'ada@x.dev · ada' }).querySelector('img')?.getAttribute('src')).toBe('https://avatars.githubusercontent.com/u/1'))
+  expect(within(row('Going')).getByRole('img', { name: 'ada@x.dev · ada' })).toBeTruthy()
+  expect(within(row('His')).getByRole('img', { name: 'git@brillout.com' }).textContent).toBe('BR')
+  expect(within(row('Very old')).queryByRole('img')).toBeNull()
+  expect(row('Very old').querySelector('span.size-6')).toBeTruthy()
+  // Each person once, however many runs are theirs; and not again when the page reads its runs again.
+  expect(vi.mocked(host.gitHostPeople).mock.calls.at(-1)).toEqual(['p1', ['ada@x.dev', 'git@brillout.com']])
 })

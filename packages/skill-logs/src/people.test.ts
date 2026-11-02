@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { membersOf, nameOf, peopleOf, peopleWithRuns, readCommitLines, startOfId, type RecordsReader } from './people.js'
+import { membersOf, peopleOf, peopleWithRuns, readCommitLines, startOfId, type RecordsReader } from './people.js'
 
 const DAY = 86_400_000
 const NOW = Date.parse('2026-10-25T12:00:00.000Z')
@@ -59,14 +59,6 @@ test('the same person in several projects is one member, their runs added up; wh
     ['rom@y.dev', 1, 0.1, '2026-10-20T00:00:00.000Z', false, ['alpha']],
     ['ada@x.dev', 5, 0.75, '2026-10-25T00:00:00.000Z', true, ['alpha', 'beta']],
   ])
-})
-
-test("a person goes by the name git knows, else their email's name, or its domain where the name is a generic word", () => {
-  assert.equal(nameOf({ person: 'suleiman@averotech.com' }), 'suleiman')
-  assert.equal(nameOf({ person: 'git@brillout.com' }), 'brillout')
-  assert.equal(nameOf({ person: 'someone' }), 'someone')
-  // The name git knows them by comes first.
-  assert.equal(nameOf({ person: 'git@brillout.com', name: 'Romuald Brillout' }), 'Romuald Brillout')
 })
 
 test('whoever committed to the main branch is a member too, by the name of their newest commit; a bot is no one; commits before the days asked for give a name only', async () => {

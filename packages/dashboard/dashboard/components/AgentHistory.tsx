@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Plus, ChevronDown, Bot, ArrowDownUp, Check, Cloud, Laptop, LayoutDashboard, Blocks, FilePen, GitBranch } from 'lucide-react'
 import { MACHINE_ICONS } from './MachineMark.js'
+import { PersonMark } from './PersonMark.js'
 import type { ComponentType } from 'react'
 import type { AgentMeta, AgentStatus, RecentAgent, ProjectSummary } from '../../src/index.js'
+import type { ModuleHostPerson } from '../module/index.js'
 import { DRIVER_LABELS, driverFromImpl, cloudRunState, type CloudRunState, type MachineKind } from '../../src/client.js'
 import { Button, buttonVariants } from './ui/button.js'
 import { cn } from '../lib/utils.js'
@@ -41,6 +43,8 @@ import { PersonMenu } from './PersonMenu.js'
 import { SidebarResizer } from './SidebarResizer.js'
 import { HideSidebarButton } from './SidebarToggle.js'
 import { readAgentLogAhead } from '../lib/agent-log.js'
+import { onGitHostPeople } from '../rpc/people.js'
+import { personSaid, useGitHostPeople } from '../lib/use-git-host-people.js'
 
 // One rendered row of the rail, from either source (a project's own run, or a pooled cross-project
 // recent): the AgentMeta to show, an optional project label (only on the Overview, where the rail
@@ -241,6 +245,10 @@ export function AgentHistory({
 
   const hasRecents = rows.length > 0 || showOptimistic
 
+  // Each row's person, in its own project: a row of the picked project's list on a page of no project says none.
+  const projectOf = (row: Row): string | null => row.projectId ?? scope
+  const accountOf = useGitHostPeople(rows.map(row => ({ projectId: projectOf(row), person: row.agent.person })), onGitHostPeople, 'sidebar:people')
+
   const models = useModels()
   const renderRow = (row: Row, subagent: boolean, status: AgentStatus = row.agent.status, fold?: SubagentsFold) => (
     <AgentHistoryRow
@@ -254,6 +262,8 @@ export function AgentHistory({
       // swapping it for the name a moment later.
       naming={!subagent && awaitingName(row.agent, preferences.nameRuns !== false)}
       driver={row.agent.driver}
+      // A subagent is its main agent's, whose row says whose.
+      {...(row.agent.person && !subagent ? { person: row.agent.person, account: accountOf(projectOf(row), row.agent.person) } : {})}
       {...(row.agent.model ? { model: modelName(models?.[driverFromImpl(row.agent.driver) ?? 'claude-code'], row.agent.model) } : {})}
       // On the Overview the project is what tells the rows apart, so the row still names it; a
       // project's own rail already knows its project, and a subagent is in its main agent's.
@@ -596,6 +606,9 @@ function RecentsSortMenu({ order }: { order: RecentsSort }) {
   )
 }
 
+/** A person's mark on a row, beside its smaller marks. */
+const PERSON_MARK = 'size-4 text-[7px]'
+
 /** A main agent's list of subagents, as its row folds it: how many, how many work, and the fold. */
 type SubagentsFold = { count: number; working: number; open: boolean; onToggle: () => void }
 
@@ -668,6 +681,8 @@ function AgentHistoryRow({
   unpublished,
   uncommitted,
   gitHost = true,
+  person,
+  account,
 }: {
   status: AgentStatus
   /** The row's subagents, folded or open under it: a count at the row's end, so a row with subagents is no taller than one without. */
@@ -713,6 +728,10 @@ function AgentHistoryRow({
   uncommitted?: number | undefined
   /** Whether its project can open a pull request: commits never pushed need one, else a push. */
   gitHost?: boolean
+  /** Whose run it is, by the email its record is kept under. */
+  person?: string | undefined
+  /** Their account at the project's git host, when it said: their picture. */
+  account?: ModuleHostPerson | undefined
 }) {
   // A run that ended on its question waits on you (#785), and so does a web run whose cloud
   // session the bridge reports as parked (#1668).
@@ -773,6 +792,7 @@ function AgentHistoryRow({
     : unpublished
       ? { Icon: GitBranch, said: `${needsWord('unpushed', gitHost)} · ${unpublished} commit${unpublished === 1 ? '' : 's'}` }
       : undefined
+  const personWords = person ? personSaid(person, account) : undefined
   // Everything the two-line row used to print, in one sentence, for a reader that cannot see the
   // marks: the word, where the run is and when it started, which coding agent ran it, and the
   // machine or cloud it ran on.
@@ -780,6 +800,7 @@ function AgentHistoryRow({
     word,
     ...(project ? [project] : []),
     subtitle,
+    ...(personWords ? [personWords] : []),
     ...(picked ? [DRIVER_LABELS[picked]] : []),
     ...(startedOn ? [`started on ${startedOn}`] : []),
     ...(offline ? [offline] : remote ? [remoteLabel ? `runs on ${remoteLabel}` : 'runs on another machine'] : []),
@@ -845,8 +866,9 @@ function AgentHistoryRow({
       )}
       {/* Where the sessions of several projects are listed together, the project is what tells one
           row from the next, so it stays on the row: small, after the marks, and the first to give
-          up width. A project's own rail knows its project and shows none. */}
-      {project && <span className="min-w-0 shrink truncate text-xs text-muted-foreground">{project}</span>}
+          up width: a long name never takes the row's title. A project's own rail knows its project
+          and shows none. */}
+      {project && <span className="max-w-[35%] min-w-0 shrink truncate text-xs text-muted-foreground">{project}</span>}
       {/* The row's subagents: how many, and the fold of their list. A control, so it stays on the
           row rather than moving into the hover. Inside the row's own button, so it is a span that
           takes the click for itself. */}
@@ -885,6 +907,15 @@ function AgentHistoryRow({
         <RowMark said={left.said}>
           <left.Icon className="h-3 w-3 text-muted-foreground" />
         </RowMark>
+      )}
+      {/* Whose run it is, beside which coding agent ran it. The row of a run just started holds its
+          place with an empty circle, so its title has the same room when the run's own row lands. */}
+      {personWords ? (
+        <RowMark said={personWords}>
+          <PersonMark email={person} picture={account?.avatar} className={PERSON_MARK} />
+        </RowMark>
+      ) : (
+        standIn && <PersonMark className={PERSON_MARK} />
       )}
       {/* Which coding agent ran it, as its own mark at the very end of the row (his pick): a
           session is told from the next by its agent as much as by its words, and a logo reads
