@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-289 -326 578 651.9">
+  <defs>
+    <linearGradient id="hk-g0" gradientUnits="userSpaceOnUse" x1="160" y1="148.4" x2="36.5" y2="-121.5">
+      <stop offset="0" stop-color="#e69875"></stop>
+      <stop offset="1" stop-color="#e67e80"></stop>
+    </linearGradient>
+    <linearGradient id="hk-g1" gradientUnits="userSpaceOnUse" x1="-48.5" y1="212.8" x2="123.5" y2="-29.2">
+      <stop offset="0" stop-color="#dbbc7f"></stop>
+      <stop offset="1" stop-color="#e69875"></stop>
+    </linearGradient>
+    <linearGradient id="hk-g2" gradientUnits="userSpaceOnUse" x1="-208.5" y1="64.4" x2="87" y2="92.4">
+      <stop offset="0" stop-color="#a7c080"></stop>
+      <stop offset="1" stop-color="#dbbc7f"></stop>
+    </linearGradient>
+    <linearGradient id="hk-g3" gradientUnits="userSpaceOnUse" x1="-160" y1="-148.4" x2="-36.5" y2="121.5">
+      <stop offset="0" stop-color="#7fbbb3"></stop>
+      <stop offset="1" stop-color="#a7c080"></stop>
+    </linearGradient>
+    <linearGradient id="hk-g4" gradientUnits="userSpaceOnUse" x1="48.5" y1="-212.8" x2="-123.5" y2="29.2">
+      <stop offset="0" stop-color="#d699b6"></stop>
+      <stop offset="1" stop-color="#7fbbb3"></stop>
+    </linearGradient>
+    <linearGradient id="hk-g5" gradientUnits="userSpaceOnUse" x1="208.5" y1="-64.4" x2="-87" y2="-92.4">
+      <stop offset="0" stop-color="#e67e80"></stop>
+      <stop offset="1" stop-color="#d699b6"></stop>
+    </linearGradient>
+  </defs>
+  <path fill="url(#hk-g0)" d="M160 166.3 A10 10 0 0 0 175 174.9 L234 140.9 A10 10 0 0 0 239 132.2 L239 -34.1 A10 10 0 0 0 234 -42.7 L72 -136.3 A10 10 0 0 0 62 -136.3 L21 -112.6 A10 10 0 0 0 21 -95.3 L173 -7.5 A10 10 0 0 1 178 1.2 L178 97 A10 10 0 0 1 173 105.7 L165 110.3 A10 10 0 0 0 160 118.9 Z"></path>
+  <path fill="url(#hk-g1)" d="M-64 221.7 A10 10 0 0 0 -64 239 L-5 273.1 A10 10 0 0 0 5 273.1 L149 189.9 A10 10 0 0 0 154 181.3 L154 -5.8 A10 10 0 0 0 149 -14.4 L108 -38.1 A10 10 0 0 0 93 -29.4 L93 146.1 A10 10 0 0 1 88 154.7 L5 202.6 A10 10 0 0 1 -5 202.6 L-13 198 A10 10 0 0 0 -23 198 Z"></path>
+  <path fill="url(#hk-g2)" d="M-224 55.4 A10 10 0 0 0 -239 64.1 L-239 132.2 A10 10 0 0 0 -234 140.9 L-90 224 A10 10 0 0 0 -80 224 L82 130.5 A10 10 0 0 0 87 121.8 L87 74.5 A10 10 0 0 0 72 65.8 L-80 153.6 A10 10 0 0 1 -90 153.6 L-173 105.7 A10 10 0 0 1 -178 97 L-178 87.8 A10 10 0 0 0 -183 79.1 Z"></path>
+  <path fill="url(#hk-g3)" d="M-160 -166.3 A10 10 0 0 0 -175 -174.9 L-234 -140.9 A10 10 0 0 0 -239 -132.2 L-239 34.1 A10 10 0 0 0 -234 42.7 L-72 136.3 A10 10 0 0 0 -62 136.3 L-21 112.6 A10 10 0 0 0 -21 95.3 L-173 7.5 A10 10 0 0 1 -178 -1.2 L-178 -97 A10 10 0 0 1 -173 -105.7 L-165 -110.3 A10 10 0 0 0 -160 -118.9 Z"></path>
+  <path fill="url(#hk-g4)" d="M64 -221.7 A10 10 0 0 0 64 -239 L5 -273.1 A10 10 0 0 0 -5 -273.1 L-149 -189.9 A10 10 0 0 0 -154 -181.3 L-154 5.8 A10 10 0 0 0 -149 14.4 L-108 38.1 A10 10 0 0 0 -93 29.4 L-93 -146.1 A10 10 0 0 1 -88 -154.7 L-5 -202.6 A10 10 0 0 1 5 -202.6 L13 -198 A10 10 0 0 0 23 -198 Z"></path>
+  <path fill="url(#hk-g5)" d="M224 -55.4 A10 10 0 0 0 239 -64.1 L239 -132.2 A10 10 0 0 0 234 -140.9 L90 -224 A10 10 0 0 0 80 -224 L-82 -130.5 A10 10 0 0 0 -87 -121.8 L-87 -74.5 A10 10 0 0 0 -72 -65.8 L80 -153.6 A10 10 0 0 1 90 -153.6 L173 -105.7 A10 10 0 0 1 178 -97 L178 -87.8 A10 10 0 0 0 183 -79.1 Z"></path>
+</svg>
