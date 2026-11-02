@@ -12,7 +12,7 @@ import { ScrollArea } from './scroll-area.js'
 // Border + surface live on the Popup; the scroll (and its padding) move inside a ScrollArea so a
 // long menu shows our own thin overlay bar (#1046) instead of the OS one, whose grey track read as
 // a second layer beside the border. #710 stands: no native scrollbar comes back.
-const POPUP_CLASS =
+export const MENU_POPUP_CLASS =
   'min-w-[13rem] rounded-md border border-[var(--color-border)] bg-[var(--color-card)] text-[var(--color-card-foreground)] shadow-md outline-none'
 
 /** The scrolled body every popup shares: caps at the space the positioner allows, pads the items. */
@@ -23,7 +23,7 @@ function PopupBody({ children }: { children: ReactNode }) {
     </ScrollArea>
   )
 }
-const ITEM_CLASS =
+export const MENU_ITEM_CLASS =
   'relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-[var(--color-accent)] data-[highlighted]:text-[var(--color-accent-foreground)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
 
 export const DropdownMenu = Menu.Root
@@ -32,13 +32,13 @@ export const DropdownMenuSub = Menu.SubmenuRoot
 
 // Keep a trigger lit while its menu is open (#1046), matching the hover state Base UI marks it with.
 // One place so every menu button (Commands, agent/model, gear, notifications) behaves the same.
-const TRIGGER_OPEN_HIGHLIGHT =
+export const MENU_TRIGGER_OPEN_CLASS =
   'data-[popup-open]:bg-[var(--color-accent)] data-[popup-open]:text-[var(--color-accent-foreground)]'
 
 export function DropdownMenuTrigger({ className, ...props }: ComponentProps<typeof Menu.Trigger>) {
   return (
     <Menu.Trigger
-      className={typeof className === 'function' ? className : cn(TRIGGER_OPEN_HIGHLIGHT, className)}
+      className={typeof className === 'function' ? className : cn(MENU_TRIGGER_OPEN_CLASS, className)}
       {...props}
     />
   )
@@ -54,7 +54,7 @@ export function DropdownMenuContent({
   return (
     <Menu.Portal>
       <Menu.Positioner sideOffset={sideOffset} align={align} className="z-50 outline-none">
-        <Menu.Popup className={cn(POPUP_CLASS, className)} {...props}>
+        <Menu.Popup className={cn(MENU_POPUP_CLASS, className)} {...props}>
           <PopupBody>{children}</PopupBody>
         </Menu.Popup>
       </Menu.Positioner>
@@ -63,7 +63,7 @@ export function DropdownMenuContent({
 }
 
 export function DropdownMenuItem({ className, ...props }: ComponentProps<typeof Menu.Item>) {
-  return <Menu.Item className={cn(ITEM_CLASS, className)} {...props} />
+  return <Menu.Item className={cn(MENU_ITEM_CLASS, className)} {...props} />
 }
 
 export function DropdownMenuCheckboxItem({
@@ -74,7 +74,7 @@ export function DropdownMenuCheckboxItem({
   ...props
 }: ComponentProps<typeof Menu.CheckboxItem>) {
   return (
-    <Menu.CheckboxItem className={cn(ITEM_CLASS, className)} closeOnClick={closeOnClick} {...props}>
+    <Menu.CheckboxItem className={cn(MENU_ITEM_CLASS, className)} closeOnClick={closeOnClick} {...props}>
       <span className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center">
         <Menu.CheckboxItemIndicator>
           <Check className="h-3.5 w-3.5" />
@@ -92,7 +92,7 @@ export function DropdownMenuSubTrigger({ className, children, ...props }: Compon
     // centred between the icon and the chevron while every ordinary item sat left, and the only
     // way to sit straight was to remember a `flex-1` wrapper. Now both forms align the same.
     <Menu.SubmenuTrigger
-      className={cn(ITEM_CLASS, 'data-[popup-open]:bg-[var(--color-accent)]', className)}
+      className={cn(MENU_ITEM_CLASS, 'data-[popup-open]:bg-[var(--color-accent)]', className)}
       {...props}
     >
       {children}
@@ -105,7 +105,7 @@ export function DropdownMenuSubContent({ className, children, ...props }: Compon
   return (
     <Menu.Portal>
       <Menu.Positioner side="right" align="start" sideOffset={2} className="z-50 outline-none">
-        <Menu.Popup className={cn(POPUP_CLASS, className)} {...props}>
+        <Menu.Popup className={cn(MENU_POPUP_CLASS, className)} {...props}>
           <PopupBody>{children}</PopupBody>
         </Menu.Popup>
       </Menu.Positioner>

@@ -19,8 +19,6 @@ export interface ProjectCommand {
   description?: string
   /** The branch the skill has yet to reach, by name, when its text is in the folder but not on the branch agents start from: an agent started from that branch does not have the command. */
   waiting?: string
-  /** With `waiting`: whether the branch the folder is on has the skill, so an agent started from that branch does have the command. */
-  here?: true
 }
 
 /**

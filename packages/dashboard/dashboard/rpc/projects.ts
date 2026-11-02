@@ -20,5 +20,6 @@ export const sendShareRecords = rpc<typeof impl.sendShareRecords>('sendShareReco
 export const sendPickProjectDirectory = rpc<typeof impl.sendPickProjectDirectory>('sendPickProjectDirectory')
 export const onOnboarding = rpc<typeof impl.onOnboarding>('onOnboarding')
 export const onCommands = rpc<typeof impl.onCommands>('onCommands')
+export const onStartBranches = rpc<typeof impl.onStartBranches>('onStartBranches')
 export const onStartCheck = rpc<typeof impl.onStartCheck>('onStartCheck')
 export const onCloneCheck = rpc<typeof impl.onCloneCheck>('onCloneCheck')

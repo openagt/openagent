@@ -23,6 +23,8 @@ import { addProject, isHostName, listMachines, listProjects, machineNamed, nameM
 import { projectNameOf, repositoryAddress } from './repository-address.js'
 import { writeHookLines } from './built-in.js'
 import { fileBranchRepo, installProject, writeSharing } from '@openagt/agent-data'
+import { publishedBranch } from '@openagt/agent-data/names'
+import { branchesOnOrigin } from './dashboard/start-branch.js'
 import { removeProjectFiles } from './remove-files.js'
 import { runProjectHooks, runStartHook } from './project-hooks.js'
 import { publishLevelOf, publishPickIn } from './publish-levels.js'
@@ -437,6 +439,14 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     // The branch to start from ends up on the line's command line: only a branch name goes there.
     // Refused, not dropped: a run started from the main branch instead would be a silent swap.
     if (options.base !== undefined && !isBranchName(options.base)) return { ok: false, error: `not a branch name: ${String(options.base)}` }
+    // A branch picked off origin's list may have gone since. Asked of origin here, so the person is
+    // told above the box, rather than by a run that fails to make its checkout.
+    const published = options.base !== undefined ? publishedBranch(options.base) : undefined
+    if (published !== undefined) {
+      const onOrigin = await branchesOnOrigin(projectCwd)
+      if (!onOrigin) return { ok: false, error: `Could not read the branch ${published} from origin. Check the connection, or pick another branch to start from.` }
+      if (!onOrigin.includes(published)) return { ok: false, error: `The branch ${published} is no longer on origin. Pick another branch to start from.` }
+    }
     // The pick in force is decided here, so every Start goes the same way whichever page sent it:
     // with none saved the run commits and pushes nothing, and with one the project is not offered
     // it goes as far as the project does with no pull request: its branch pushed, or its work

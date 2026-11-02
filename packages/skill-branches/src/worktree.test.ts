@@ -22,6 +22,7 @@ import {
   FRESH_START_FETCH_MS,
 } from './worktree.js'
 import { agentBranchName } from './branch-names.js'
+import { publishedBase } from '@openagt/agent-data/names'
 
 const REPO = '/repo'
 
@@ -443,4 +444,52 @@ test('nameBranch: a rename lost to a sibling naming the same thing at the same m
     throw new Error('fatal: disk full')
   }
   await assert.rejects(() => nameBranch(wt, 'x', broken), /disk full/)
+})
+
+test('a new checkout started from a published base takes origin\'s copy, fetched then, whatever this clone holds of that branch; one gone from origin leaves no checkout and no branch', async () => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'worktree-')))
+  const repo = join(base, 'repo')
+  const origin = join(base, 'origin.git')
+  const elsewhere = join(base, 'elsewhere')
+  const git = nodeGitRunner()
+  const author = ['-c', 'user.name=t', '-c', 'user.email=t@example.com']
+  const commit = (cwd: string, message: string) => git([...author, 'commit', '-q', '--allow-empty', '-m', message], cwd)
+  const headOf = async (cwd: string) => (await git(['rev-parse', 'HEAD'], cwd)).trim()
+  try {
+    await git(['init', '-q', '--bare', '-b', 'main', origin], base)
+    await mkdir(repo)
+    await git(['init', '-q', '-b', 'main'], repo)
+    await commit(repo, 'first')
+    await git(['remote', 'add', 'origin', origin], repo)
+    await git(['push', '-q', 'origin', 'main'], repo)
+    await git(['clone', '-q', origin, elsewhere], base)
+
+    // A branch this clone has never seen.
+    await git(['checkout', '-q', '-b', 'feature/x'], elsewhere)
+    await commit(elsewhere, 'theirs')
+    await git(['push', '-q', 'origin', 'feature/x'], elsewhere)
+    assert.equal(await git(['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/feature/x'], repo).then(() => true, () => false), false, 'not fetched yet')
+    const first = await addWorktree(repo, { agentId: 'r1', branch: agentBranchName('r1'), base: publishedBase('feature/x') }, git)
+    assert.equal(await headOf(first.path), await headOf(elsewhere))
+
+    // Moved on at origin, and this clone holds a different branch by that name.
+    await commit(elsewhere, 'theirs again')
+    await git(['push', '-q', 'origin', 'feature/x'], elsewhere)
+    await git(['branch', 'feature/x', 'main'], repo)
+    const second = await addWorktree(repo, { agentId: 'r2', branch: agentBranchName('r2'), base: publishedBase('feature/x') }, git)
+    assert.equal(await headOf(second.path), await headOf(elsewhere), 'origin\'s copy as it is now, not the local branch, not the copy fetched a moment ago')
+
+    // The same name without the spelling is the local branch, as a subagent's base is.
+    const local = await addWorktree(repo, { agentId: 'r3', branch: agentBranchName('r3'), base: 'feature/x' }, git)
+    assert.equal(await headOf(local.path), (await git(['rev-parse', 'refs/heads/main'], repo)).trim())
+
+    // Gone from origin, with this clone's stale copy still there: refused, never started from that copy.
+    await git(['push', '-q', 'origin', '--delete', 'feature/x'], elsewhere)
+    assert.notEqual((await git(['rev-parse', '--verify', 'refs/remotes/origin/feature/x'], repo)).trim(), '')
+    await assert.rejects(() => addWorktree(repo, { agentId: 'r4', branch: agentBranchName('r4'), base: publishedBase('feature/x') }, git), /the branch feature\/x could not be fetched from origin/)
+    await assert.rejects(() => stat(worktreePath(repo, 'r4')))
+    assert.equal(await git(['rev-parse', '--verify', '--quiet', `refs/heads/${agentBranchName('r4')}`], repo).then(() => true, () => false), false)
+  } finally {
+    await rm(base, { recursive: true, force: true })
+  }
 })

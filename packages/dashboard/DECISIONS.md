@@ -425,14 +425,25 @@ already made, and lists it in its pull request; for anything else it proposes an
   became the thing to maintain.
 - Until a person picks in that menu, a run commits its work and pushes nothing. Picked over
   Publish branch until then, which put on the remote a branch nobody asked to publish.
-- The line also gets the branch to start from, when the person picked their own local branch
-  on the launcher's chip: the branch the project's folder is on, as this machine has it,
-  commits that are not pushed included. With no pick the agent starts from the project's main
-  branch, fetched first, as before. The pick is saved per project, and the agent's page says
-  it. Picked over a pick saved once for every project: a branch belongs to one project.
-- The chip is shown only where the pick is obeyed: the project's start line passes the branch
+- The line also gets the branch to start from, picked in the launcher's branch menu. The menu
+  lists the project's main branch first, the agent's default, fetched first; then "My local
+  branch", the branch the project's folder is on, as this machine has it, commits that are not
+  pushed included, the only way to start from those; then every other branch origin has, with
+  a search. The pick is saved per project, and the agent's page says it. Picked over a pick
+  saved once for every project: a branch belongs to one project. Picked over the two-branch
+  chip it replaces, which could not start from a teammate's branch.
+- The menu's list is read from origin itself each time it opens, and not polled. Picked over
+  this clone's own copies of origin's branches, which keep every branch it ever saw long after
+  origin deleted it. An origin that cannot be read leaves the two rows that need no read, and
+  says the rest could not be read. The branch that holds the runs' records is not listed: it
+  is no code to start from. Agents' published branches are listed like any other.
+- A published pick starts from origin's copy, fetched at the Start, even where a local branch
+  of that name differs. A pick that has since gone from origin refuses the Start, and says so.
+  Picked over starting from the main branch instead, which would be a silent swap, and over
+  this clone's last copy, which is not the branch as it stands.
+- The menu is shown only where the pick is obeyed: the project's start line passes the branch
   on, the repository has a remote, the folder is on a branch, and the run is on this machine.
-  Picked over a chip shown everywhere, which on a start line written before the pick existed
+  Picked over a menu shown everywhere, which on a start line written before the pick existed
   would be a pick that silently does nothing. Picked over rewriting a person's start line.
 - A branch name that could be read as an option on the line's command line refuses the Start.
   Picked over dropping it and starting from the main branch, which would be a silent swap.

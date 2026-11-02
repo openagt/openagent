@@ -7,7 +7,8 @@ import { hasRemote } from '../has-remote.js'
 import { openagentVersion } from '../version.js'
 import { repositoryAddress, repositorySpelling } from '../repository-address.js'
 import { currentBranch } from '../dashboard/git-status.js'
-import { waitingSkills } from '../dashboard/start-branch.js'
+import { branchesOnOrigin, waitingSkills } from '../dashboard/start-branch.js'
+import { startFromPick, type StartFromPick } from '../registry.js'
 import { homedir } from 'node:os'
 import { canRead, cloneProject, cloneTargetOf } from '../clone-project.js'
 import { isDriverName } from '../driver-names.js'
@@ -188,31 +189,53 @@ export interface ProjectLauncher {
   /** The address the project's repository was cloned from, the name another machine knows the project by; absent, the project cannot be sent to one. */
   address?: string
   /**
-   * The two branches an agent can start from here, for the launcher's "start from" chip: `main`,
-   * the name of origin's default branch, and `local`, the branch the project's folder is on now.
-   * Absent where the pick could not be obeyed or has nothing to pick between: the start line does
-   * not pass `BASE` on, the repository has no remote, or the folder is on no branch.
+   * What the launcher's branch menu always lists: `main`, the name of origin's default branch, and
+   * `local`, the branch the project's folder is on now. Absent where a pick could not be obeyed:
+   * the start line does not pass `BASE` on, the repository has no remote, or the folder is on no
+   * branch. The rest of the menu is {@link onStartBranches}.
    */
   startFrom?: { main: string; local: string }
 }
 
 /**
  * The project's commands (#1774), read off its skills folders, whether it has a start hook, whether
- * it has a git host, and the branches an agent can start from. `null` when the project is unknown here.
+ * it has a git host, and the branches an agent can start from. `from` is the person's pick of those
+ * branches: a command is waiting for the branch agents will start from. `null` when the project is
+ * unknown here.
  */
-export async function onCommands(projectId: string): Promise<ProjectLauncher | null> {
+export async function onCommands(projectId: string, from?: StartFromPick): Promise<ProjectLauncher | null> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return null
   const [commands, hooks, gitHost, remote, address, main, local] = await Promise.all([readProjectCommands(cwd), readProjectHooks(cwd), projectGitHost(cwd).catch(() => undefined), hasRemote(cwd), repositoryAddress(cwd), originDefaultBranch(cwd), currentBranch(cwd)])
   // Both read locally, never fetched. `HEAD` is a folder on no branch: there is no local branch to start from.
   const startFrom = hooks.start !== undefined && startLineTakesBase(hooks.start) && remote && main !== undefined && local !== undefined && local !== 'HEAD' ? { main: main.slice('origin/'.length), local } : undefined
   // A skill written into the folder reaches agents once it is on the branch they start from: until then its command is said to be waiting.
-  const { waiting } = await waitingSkills(cwd, commands.map(command => command.name))
+  const pick = startFrom ? startFromPick(from) : undefined
+  const { waiting } = await waitingSkills(cwd, commands.map(command => command.name), pick)
   const listed = commands.map(command => {
     const waits = waiting.get(command.name)
-    return waits ? { ...command, waiting: waits.branch, ...(waits.here ? { here: true as const } : {}) } : command
+    return waits ? { ...command, waiting: waits.branch } : command
   })
   return { commands: listed, startHook: hooks.start !== undefined, gitHost: gitHost !== undefined, remote, ...(address ? { address } : {}), ...(startFrom ? { startFrom } : {}) }
+}
+
+/** The other branches the launcher's menu lists; `branches` is absent where origin could not be read. */
+export interface StartBranches {
+  branches?: string[]
+}
+
+/**
+ * The branches an agent can start from besides the two `onCommands` names, read live from origin
+ * each time the launcher's menu opens: all of origin's but its main branch, which the menu lists
+ * first, and the branch that holds the runs' records, which is no code to start from. `null` when
+ * the project is unknown here.
+ */
+export async function onStartBranches(projectId: string): Promise<StartBranches | null> {
+  const cwd = await resolveProjectPath(projectId)
+  if (!cwd) return null
+  const [listed, main] = await Promise.all([branchesOnOrigin(cwd), originDefaultBranch(cwd)])
+  if (!listed) return {}
+  return { branches: listed.filter(branch => branch !== DATA_BRANCH && `origin/${branch}` !== main) }
 }
 
 /**

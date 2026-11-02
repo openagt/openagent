@@ -18,6 +18,23 @@ export const BRANCHES_DIR = '.branches'
  */
 export const DATA_BRANCH = 'agent-data'
 
+/** Where a clone keeps origin's copy of its branches. */
+const ON_ORIGIN = 'refs/remotes/origin/'
+
+/**
+ * How a run is told to start from a branch as origin has it, rather than as this clone does: the
+ * full name of origin's copy, the one spelling a branch of this clone cannot be taken for. What
+ * hands it to `git worktree add` fetches that copy first.
+ */
+export function publishedBase(branch: string): string {
+  return `${ON_ORIGIN}${branch}`
+}
+
+/** The branch's name a {@link publishedBase} is of, as a person reads it; nothing for a base that is a branch of this clone. */
+export function publishedBranch(base: string): string | undefined {
+  return base.startsWith(ON_ORIGIN) ? base.slice(ON_ORIGIN.length) : undefined
+}
+
 /**
  * The directory, under a project root, that holds OpenAgent's own files on this machine: the
  * hooks file, a run's live files. Hidden from git by an ignore file of its own, written when the
