@@ -126,8 +126,8 @@ export interface CustomPreset {
  * so a hand-edited or hostile registry can't bloat the home file. */
 const CUSTOM_PRESET_LIMITS = { count: 30, label: 80, prompt: 20_000 } as const
 
-/** The cap on the projects `startFrom` lists, for the same reason. */
-const START_FROM_LIMIT = 200
+/** The cap on the projects a per-project pick lists, for the same reason. */
+const PER_PROJECT_LIMIT = 200
 
 /**
  * Where agents started from the launcher start, when it is not the project's main branch: the
@@ -186,12 +186,12 @@ export interface Preferences {
    */
   runOn?: string
   /**
-   * Post-merge cleanup: a run started from the launcher, in a project that has the
-   * `post-merge-cleanup` command, is followed by a fresh agent running it on the run's branch
-   * before the run's pull request merges. The default of the launcher's box, which writes it
-   * too. **Absent = off.**
+   * The projects, by id, whose "Post-merge cleanup" box in the launcher's Auto menu is ticked.
+   * Ticked, a run started from the launcher, in a project that has the `post-merge-cleanup`
+   * command, is followed by a fresh agent running it on the run's branch before the run's pull
+   * request merges. **A project not listed is unticked**, so the default stores nothing.
    */
-  postMergeCleanup?: boolean
+  postMergeCleanupOn?: string[]
   /**
    * Name each run: a small model is asked for the two to five words a list of runs shows in place
    * of the first line of the prompt (`agent-runner`'s `title.ts`). It is one short turn of the
@@ -387,7 +387,6 @@ const BOOLEAN_PREFERENCES: Record<BooleanPreferenceKey, true> = {
   bridge: true,
   bridgeBrowser: true,
   onboardingDismissed: true,
-  postMergeCleanup: true,
   nameRuns: true,
   showThinking: true,
 }
@@ -427,6 +426,8 @@ function sanitizePreferences(value: unknown): Preferences {
   if (/^https?:\/\/\S+$/.test(runOn) && runOn.length <= 2048) preferences.runOn = runOn
   const startFrom = sanitizeStartFrom(input['startFrom'])
   if (Object.keys(startFrom).length) preferences.startFrom = startFrom
+  const postMergeCleanupOn = sanitizeProjectIds(input['postMergeCleanupOn'])
+  if (postMergeCleanupOn.length) preferences.postMergeCleanupOn = postMergeCleanupOn
   // `editor` (#727) is a free-form CLI name, trimmed and length-capped so junk / a huge string
   // never lands in the file. A blank string is "no choice" (fall back to env / `code`), so dropped.
   if (typeof input['editor'] === 'string' && input['editor'].trim())
@@ -447,7 +448,7 @@ function sanitizePreferences(value: unknown): Preferences {
 /**
  * Keep only the projects set to start from the local branch: a map from a project's id to the one
  * word `local`. Any other value is dropped (the main branch is the absent entry), and the map is
- * capped at {@link START_FROM_LIMIT} projects. An id is not checked against the project list: a
+ * capped at {@link PER_PROJECT_LIMIT} projects. An id is not checked against the project list: a
  * project removed and added again has the same id, and its pick with it.
  */
 function sanitizeStartFrom(value: unknown): Record<string, StartFromPick> {
@@ -456,7 +457,14 @@ function sanitizeStartFrom(value: unknown): Record<string, StartFromPick> {
     const pick = startFromPick(from)
     return id !== '' && pick ? [[id, pick] as const] : []
   })
-  return Object.fromEntries(picks.slice(0, START_FROM_LIMIT))
+  return Object.fromEntries(picks.slice(0, PER_PROJECT_LIMIT))
+}
+
+/** Keep only projects' ids from a list of them, each once, capped at {@link PER_PROJECT_LIMIT}. An id is not checked against the project list, as above. */
+function sanitizeProjectIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  const ids = value.filter((id): id is string => typeof id === 'string' && id !== '')
+  return [...new Set(ids)].slice(0, PER_PROJECT_LIMIT)
 }
 
 /**

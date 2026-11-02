@@ -458,6 +458,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   would be a pick that silently does nothing. Picked over rewriting a person's start line.
 - A branch name that could be read as an option on the line's command line refuses the Start.
   Picked over dropping it and starting from the main branch, which would be a silent swap.
+- The post-merge cleanup is a box in the launcher's Auto menu, only in a project that has the
+  command, unticked until it is ticked there. A tick is saved per project, on this computer.
+  Picked over one setting for every project, where ticking in one project changed all of them,
+  over a row in Settings too, and over ticked until unticked, which would spend a second agent
+  and hold the merge in every project that has the command.
 - A project with no `start` line cannot start a run from the dashboard, and the launcher
   says so and names the file. Picked over a built-in fallback: the hooks file is the one
   place that says what starts a run.

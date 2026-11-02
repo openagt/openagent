@@ -387,12 +387,6 @@ function useOwnEntries(): Entry[] {
             checked={preferences.showThinking ?? false}
             onChange={next => updatePreferences({ showThinking: next })}
           />
-          <ToggleRow
-            label="Post-merge cleanup"
-            description="The box in the launcher's Auto menu, ticked by default: once a run ends done with a pull request, a fresh agent runs /post-merge-cleanup on its branch before it merges. In projects with that command."
-            checked={preferences.postMergeCleanup ?? false}
-            onChange={next => updatePreferences({ postMergeCleanup: next })}
-          />
         </Section>
       ),
     },

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
 import { openMenu } from '../test-utils.js'
 
@@ -264,7 +264,7 @@ describe('StartAgentForm (#1774)', () => {
 
   test('a project with no remote but the cleanup command: the Auto menu holds the cleanup under its two picks', async () => {
     onCommands.mockResolvedValue({ commands: [{ name: 'post-merge-cleanup' }], startHook: true, gitHost: false, remote: false })
-    prefs.current = { publish: 'merge', postMergeCleanup: true }
+    prefs.current = { publish: 'merge', postMergeCleanupOn: ['p1'] }
     render(<StartAgentForm {...props} />)
     await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Commit · cleanup'))
     await openMenu(autoMenu())
@@ -272,9 +272,40 @@ describe('StartAgentForm (#1774)', () => {
     expect(screen.getByRole('menuitemcheckbox', { name: /^Post-merge cleanup/ })).toBeTruthy()
   })
 
-  test('a project with the post-merge-cleanup command has the box in the Auto menu; ticked, the start carries the command as the follow-up', async () => {
+  test('a project with the post-merge-cleanup command has the box in the Auto menu, unticked with nothing saved: the start carries no follow-up', async () => {
     onCommands.mockResolvedValue({ commands: [...COMMANDS, { name: 'post-merge-cleanup' }], startHook: true, gitHost: true })
-    prefs.current = { postMergeCleanup: true }
+    start.mockResolvedValue({ agentId: 'r1' })
+    render(<StartAgentForm {...props} />)
+    await openMenu(autoMenu())
+    const box = await screen.findByRole('menuitemcheckbox', { name: /^Post-merge cleanup/ })
+    expect(box.getAttribute('aria-checked')).toBe('false')
+    expect(autoMenu().textContent).toBe('Auto: Commit')
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', {}))
+  })
+
+  test('ticking saves this project beside the ones already ticked, and unticking takes only it out: the box is each project\'s own', async () => {
+    onCommands.mockResolvedValue({ commands: [{ name: 'post-merge-cleanup' }], startHook: true, gitHost: true })
+    prefs.current = { postMergeCleanupOn: ['other'] }
+    render(<StartAgentForm {...props} />)
+    await waitFor(() => expect(onCommands).toHaveBeenCalled())
+    await openMenu(autoMenu())
+    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: /^Post-merge cleanup/ }))
+    expect(updatePreferences).toHaveBeenCalledWith({ postMergeCleanupOn: ['other', 'p1'] })
+    cleanup()
+
+    updatePreferences.mockClear()
+    prefs.current = { postMergeCleanupOn: ['other', 'p1'] }
+    render(<StartAgentForm {...props} />)
+    await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Commit · cleanup'))
+    await openMenu(autoMenu())
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /^Post-merge cleanup/ }))
+    expect(updatePreferences).toHaveBeenCalledWith({ postMergeCleanupOn: ['other'] })
+  })
+
+  test('ticked in this project: the button says it, the box is on and the start carries the command as the follow-up; ticked in another, this one stays unticked', async () => {
+    onCommands.mockResolvedValue({ commands: [{ name: 'post-merge-cleanup' }], startHook: true, gitHost: true })
+    prefs.current = { postMergeCleanupOn: ['p1'] }
     start.mockResolvedValue({ agentId: 'r1' })
     render(<StartAgentForm {...props} />)
     await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Commit · cleanup'))
@@ -283,15 +314,21 @@ describe('StartAgentForm (#1774)', () => {
     expect(box.getAttribute('aria-checked')).toBe('true')
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', { then: '/post-merge-cleanup' }))
+    cleanup()
 
-    // The box writes the saved setting, the one Settings shows: every next run's default.
-    fireEvent.click(box)
-    expect(updatePreferences).toHaveBeenCalledWith({ postMergeCleanup: false })
+    start.mockClear()
+    prefs.current = { postMergeCleanupOn: ['other'] }
+    render(<StartAgentForm {...props} />)
+    await openMenu(autoMenu())
+    const other = await screen.findByRole('menuitemcheckbox', { name: /^Post-merge cleanup/ })
+    expect(other.getAttribute('aria-checked')).toBe('false')
+    expect(autoMenu().textContent).toBe('Auto: Commit')
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', {}))
   })
 
-  test('without the command there is no box, and a saved setting sends nothing; unticked, nothing either', async () => {
+  test('without the command there is no box and the start carries nothing', async () => {
     onCommands.mockResolvedValue({ commands: COMMANDS, startHook: true, gitHost: true })
-    prefs.current = { postMergeCleanup: true }
     start.mockResolvedValue({ agentId: 'r1' })
     render(<StartAgentForm {...props} />)
     await waitFor(() => expect(onCommands).toHaveBeenCalled())
@@ -300,18 +337,49 @@ describe('StartAgentForm (#1774)', () => {
     expect(screen.queryByRole('menuitemcheckbox')).toBeNull()
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', {}))
-    cleanup()
+  })
 
-    start.mockClear()
+  test('until the saved picks are read, which may tick it, the box is not offered and a Start follows with nothing', async () => {
     onCommands.mockResolvedValue({ commands: [{ name: 'post-merge-cleanup' }], startHook: true, gitHost: true })
-    prefs.current = {}
+    prefs.current = { postMergeCleanupOn: ['p1'] }
+    prefsLoaded.current = false
+    start.mockResolvedValue({ agentId: 'r1' })
     render(<StartAgentForm {...props} />)
-    await openMenu(autoMenu())
-    const box = await screen.findByRole('menuitemcheckbox', { name: /^Post-merge cleanup/ })
-    expect(box.getAttribute('aria-checked')).toBe('false')
+    await waitFor(() => expect(onCommands).toHaveBeenCalled())
+    // A beat for the launcher's read to land: the box would show by then.
+    await act(async () => {})
     expect(autoMenu().textContent).toBe('Auto: Commit')
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', {}))
+  })
+
+  test('with a machine picked, whose own commands are not read, there is no box and the start carries nothing', async () => {
+    onCommands.mockResolvedValue({ commands: [{ name: 'post-merge-cleanup' }], startHook: true, gitHost: true, address: 'github.com/acme/shop' })
+    prefs.current = { postMergeCleanupOn: ['p1'] }
+    machine.current = { id: 'd1', url: 'http://box:4200', label: 'box' }
+    start.mockResolvedValue({ agentId: 'r1' })
+    render(<StartAgentForm {...props} />)
+    await waitFor(() => expect(onCommands).toHaveBeenCalled())
+    await act(async () => {})
+    expect(autoMenu().textContent).toBe('Auto: Commit')
+    await openMenu(autoMenu())
+    expect(screen.queryByRole('menuitemcheckbox')).toBeNull()
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', { machine: 'd1' }))
+  })
+
+  test("on the computer a project only it has, the launcher is that computer's: the box is there, and a tick is saved here under the project's id", async () => {
+    onCommands.mockResolvedValue({ commands: [{ name: 'post-merge-cleanup' }], startHook: true, gitHost: true })
+    prefs.current = { postMergeCleanupOn: ['p1'] }
+    machine.current = { id: 'laptop', url: 'http://127.0.0.1:4210', label: 'MacBook' }
+    start.mockResolvedValue({ agentId: 'r1' })
+    render(<StartAgentForm {...props} home="laptop" />)
+    await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Commit · cleanup'))
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', { then: '/post-merge-cleanup', machine: 'laptop' }))
+    await openMenu(autoMenu())
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /^Post-merge cleanup/ }))
+    expect(updatePreferences).toHaveBeenCalledWith({ postMergeCleanupOn: [] })
   })
 
   test('no pick made: neither is sent, so the hook decides', async () => {

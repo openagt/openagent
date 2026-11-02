@@ -237,7 +237,6 @@ test('every boolean preference survives a save; the sanitizer cannot silently dr
     bridge: true,
     bridgeBrowser: true,
     onboardingDismissed: true,
-    postMergeCleanup: true,
     nameRuns: true,
     showThinking: true,
   }
@@ -283,6 +282,13 @@ test('sanitizePreferences reads only the current spellings', async () => {
   assert.deepEqual(await stored({ startFrom: 'local' }), {})
   const many = Object.fromEntries(Array.from({ length: 250 }, (_, i) => [`p-${i}`, local]))
   assert.equal(Object.keys((await stored({ startFrom: many })).startFrom ?? {}).length, 200, 'bounded, like the presets')
+  // The projects with the post-merge cleanup unticked, by id; ticked is the absent entry.
+  assert.deepEqual(await stored({ postMergeCleanupOn: ['app-1a2b', '', 42, 'web-3c4d', 'app-1a2b', null] }), { postMergeCleanupOn: ['app-1a2b', 'web-3c4d'] }, 'only ids, each once')
+  assert.deepEqual(await stored({ postMergeCleanupOn: [] }), {}, 'no project left: the key is left out')
+  assert.deepEqual(await stored({ postMergeCleanupOn: 'app-1a2b' }), {})
+  assert.deepEqual(await stored({ postMergeCleanupOn: { 'app-1a2b': true } }), {})
+  assert.equal((await stored({ postMergeCleanupOn: Array.from({ length: 250 }, (_, i) => `p-${i}`) })).postMergeCleanupOn?.length, 200, 'bounded, like the presets')
+  assert.deepEqual(await stored({ postMergeCleanup: true }), {}, 'the one setting for every project it replaced is gone')
   // Where a run goes: a saved machine by its id, its address; this machine is the absent entry.
   assert.deepEqual(await stored({ runOn: ' https://165.245.244.10 ' }), { runOn: 'https://165.245.244.10' })
   assert.deepEqual(await stored({ runOn: 'http://127.0.0.1:4300/_devices/via/c1' }), { runOn: 'http://127.0.0.1:4300/_devices/via/c1' })

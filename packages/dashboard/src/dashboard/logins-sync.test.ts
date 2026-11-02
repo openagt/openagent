@@ -226,7 +226,7 @@ test('this computer\'s logins: its own Claude login by who Claude Code says it i
 
 test('the person\'s settings follow to the server: all at first, then only what changed here, so one changed on the server\'s own page stays; this computer\'s own are never sent', () =>
   withRig(async rig => {
-    rig.prefs = { theme: 'dark', onboardingDismissed: true, model: 'opus', editor: 'cursor', bridge: true }
+    rig.prefs = { theme: 'dark', onboardingDismissed: true, model: 'opus', editor: 'cursor', bridge: true, postMergeCleanupOn: ['app-1a2b'] }
     await syncLogins()
     assert.deepEqual(rig.patched, [{ theme: 'dark', model: 'opus', onboardingDismissed: true }])
     await syncLogins()

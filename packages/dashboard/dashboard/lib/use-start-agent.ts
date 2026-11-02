@@ -29,11 +29,11 @@ export function offersPostMergeCleanup(commands: readonly { name: string }[]): b
 }
 
 /**
- * The follow-up a launcher start carries: the cleanup command, when the box is ticked and the
- * project has the command. The start hook gets it in `THEN`; the run's tool gives it the run's id.
+ * The follow-up a launcher start carries: the cleanup command, when the project's box is ticked.
+ * The start hook gets it in `THEN`; the run's tool gives it the run's id.
  */
-export function cleanupPick(preferences: Preferences, commands: readonly { name: string }[]): { then?: string } {
-  return preferences.postMergeCleanup && offersPostMergeCleanup(commands) ? { then: `/${POST_MERGE_CLEANUP}` } : {}
+export function cleanupPick(ticked: boolean | undefined): { then?: string } {
+  return ticked ? { then: `/${POST_MERGE_CLEANUP}` } : {}
 }
 
 // Starting a run, for every surface that does (the launcher, the tickets' and the queue's

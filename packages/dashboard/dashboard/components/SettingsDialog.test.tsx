@@ -184,23 +184,22 @@ describe('Settings on and off rows', () => {
   const row = (label: string) => screen.getByRole('switch', { name: label })
 
   test('each is a switch that shows what is saved, and switching it saves that one setting at once', async () => {
-    prefsRead.mockResolvedValueOnce({ postMergeCleanup: true, notifyNewActivity: false })
+    prefsRead.mockResolvedValueOnce({ showThinking: true, notifyNewActivity: false })
     refreshPreferences()
     open('agent')
-    await waitFor(() => expect(checked(row('Post-merge cleanup'))).toBe(true))
+    await waitFor(() => expect(checked(row('Show what the agent thought'))).toBe(true))
     // No box to tick anywhere among Settings' own rows: on and off is a switch.
     const switches = () => screen.getAllByRole('switch').map(each => [each.getAttribute('aria-label'), checked(each)])
     expect(switches()).toEqual([
       // Naming a run costs money for something only a person looks at, so it is a switch — on
       // until it is turned off, since a list of first lines is what it was put there to fix.
       ['Name each run', true],
-      ['Show what the agent thought', false],
-      ['Post-merge cleanup', true],
+      ['Show what the agent thought', true],
     ])
     fireEvent.click(row('Name each run'))
     expect(checked(row('Name each run'))).toBe(false)
-    fireEvent.click(row('Post-merge cleanup'))
-    expect(checked(row('Post-merge cleanup'))).toBe(false)
+    fireEvent.click(row('Show what the agent thought'))
+    expect(checked(row('Show what the agent thought'))).toBe(false)
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
     expect(switches()).toEqual([
       ['Browser', true],
@@ -214,7 +213,7 @@ describe('Settings on and off rows', () => {
     expect(checked(row('New activity'))).toBe(true)
     fireEvent.click(row('Human Queue'))
     fireEvent.click(row('Browser'))
-    expect(saves()).toEqual([{ nameRuns: false }, { postMergeCleanup: false }, { notifyNewActivity: true }, { notifyHumanIntervention: false }, { notifyBrowser: false }])
+    expect(saves()).toEqual([{ nameRuns: false }, { showThinking: false }, { notifyNewActivity: true }, { notifyHumanIntervention: false }, { notifyBrowser: false }])
     expect([checked(row('Human Queue')), checked(row('Browser'))]).toEqual([false, false])
   })
 

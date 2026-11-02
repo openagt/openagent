@@ -60,8 +60,8 @@ is refused and the whole file ignored.
 The launcher's **Post-merge cleanup** box, shown where the project has the
 `post-merge-cleanup` command, puts `/post-merge-cleanup` in `THEN`: once the agent ends done
 with a pull request, agent-runner starts a fresh agent on its branch with that command and the
-first agent's id, and holds the pull request's merge until that one is done. Its default is
-Settings → Agent → Post-merge cleanup, which the box writes too.
+first agent's id, and holds the pull request's merge until that one is done. The box is unticked
+until it is ticked in that project, and a tick is saved per project, on this computer.
 
 The launcher's branch menu above the box says which branch the agent starts from: the
 project's main branch, fetched first; **My local branch**, the branch the project's folder is

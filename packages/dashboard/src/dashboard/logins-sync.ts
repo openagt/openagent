@@ -252,9 +252,9 @@ async function syncServer(machine: MachineRecord, local: LocalLogin[], usage: Aw
 /**
  * The settings that are the person's wherever they open OpenAgent: how it looks, what it tells
  * them, what a run starts with. Never this computer's own: its editor, its browser bridge, where
- * its projects' runs start from.
+ * its projects' runs start from and which of them have the post-merge cleanup ticked.
  */
-const FOLLOWING = ['theme', 'notifyBrowser', 'notifyNewActivity', 'notifyHumanIntervention', 'driver', 'model', 'effort', 'publish', 'postMergeCleanup', 'nameRuns', 'showThinking', 'recentsSort', 'customPresets', 'onboardingDismissed', 'overviewLayouts'] as const satisfies readonly (keyof Preferences)[]
+const FOLLOWING = ['theme', 'notifyBrowser', 'notifyNewActivity', 'notifyHumanIntervention', 'driver', 'model', 'effort', 'publish', 'nameRuns', 'showThinking', 'recentsSort', 'customPresets', 'onboardingDismissed', 'overviewLayouts'] as const satisfies readonly (keyof Preferences)[]
 
 type Followed = Pick<Preferences, (typeof FOLLOWING)[number]>
 
