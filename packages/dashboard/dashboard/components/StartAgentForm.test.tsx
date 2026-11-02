@@ -427,6 +427,13 @@ describe('StartAgentForm (#1774)', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
+  test('"Skills" under the box opens Settings on this project\'s Skills page', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true, remote: true, address: 'github.com/acme/shop' })
+    render(<StartAgentForm {...props} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }))
+    expect(openSettings).toHaveBeenCalledWith('skills', 'p1')
+  })
+
   test('a machine that takes no logins of this computer\'s sends the person to Settings, Accounts', async () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true, remote: true, address: 'github.com/acme/shop' })
     machine.current = { id: 'd2', url: 'https://box/_devices/via/2', label: 'Dani\'s PC' }

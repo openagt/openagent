@@ -4,6 +4,7 @@ import { createElement } from 'react'
 import { phoneScreen } from './test-utils.js'
 import { useModuleHost, type ModuleCardProps, type ModuleDefinition, type ModulePageProps } from './module/index.js'
 import { forgetRemembered } from './lib/use-async.js'
+import { skillsSaved } from './lib/skills-saved.js'
 
 // The whole transport, stubbed at its one seam: every RPC stub is `rpc(name)`, so a map by name
 // answers every read the shell makes, and the live feed never emits.
@@ -100,6 +101,16 @@ describe('module pages in the shell (#1774)', () => {
     window.history.replaceState(null, '', '/nothing')
     render(<App />)
     expect(await screen.findByText('No such page')).toBeTruthy()
+  })
+
+  test('a skill saved in Settings gives or takes a page: the projects and their modules are read again at once', async () => {
+    answerShell([])
+    render(<App />)
+    const reads = (name: string) => calls.filter(call => call.name === name).length
+    await waitFor(() => expect(reads('onProjects') * reads('onModules')).toBeGreaterThan(0))
+    calls.length = 0
+    skillsSaved()
+    await waitFor(() => expect([reads('onProjects'), reads('onModules')]).toEqual([1, 1]))
   })
 
   test('the page talks to its own package\'s commands through the host', async () => {

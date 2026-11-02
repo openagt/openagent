@@ -13,8 +13,8 @@ import { resolveProjectPath } from './context.js'
 export type { SendSkillsResult } from '../dashboard/send-skills.js'
 
 /**
- * A project's skills, as the dashboard shows and changes them (#2023): the list with ticks of the
- * skills a project picks beyond the defaults. A project has a skill when the skill's text is in its folder; the
+ * A project's skills, as the dashboard shows and changes them (#2023): a card with a tick for each
+ * skill a project picks beyond the defaults. A project has a skill when the skill's text is in its folder; the
  * dashboard writes and deletes those files, and sends them where agents start from.
  */
 
@@ -103,7 +103,7 @@ export type ChangeSkillsResult =
 const names = (value: unknown): string[] | undefined => (value === undefined ? [] : Array.isArray(value) && value.every(name => typeof name === 'string' && isKnown(name)) ? [...new Set(value as string[])] : undefined)
 
 /**
- * Write and delete skills in a project's folder: what the "Add skills" screen saves. Only the names
+ * Write and delete skills in a project's folder: what the Skills page saves. Only the names
  * of the list are taken; anything else is refused whole. The scheduler's skill written switches the
  * scheduler on for this machine, and it starts at once, by its own line, as it would have at this
  * dashboard's opening.

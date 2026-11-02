@@ -1,7 +1,7 @@
 import { SCHEDULER, SKILL_NAMES } from './catalogue.js'
 import { removeSkill, setScheduler, writeSkill } from './apply.js'
 
-/** One change to a project's skills, from the dashboard's Skills list or its Update button. */
+/** One change to a project's skills, from the dashboard's Skills page or its Update button. */
 
 export interface Change {
   /** Skills to write: a new one, or one written again over what is there. */

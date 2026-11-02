@@ -1,19 +1,21 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CircleCheck, Puzzle } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { onProjectSkills, sendProjectSkills, type ProjectSkills } from '../rpc/skills.js'
 import { runModuleCommand } from '../rpc/modules.js'
+import { onSkillsSaved } from '../lib/skills-saved.js'
 import { usePolled } from '../lib/use-async.js'
+import { openSettings } from '../lib/use-route.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
 import { useAction } from '../lib/use-action.js'
-import { sendWord, skillsSay, updateSkills } from './ProjectSkills.js'
+import { SKILLS_ENTRY, sendWord, skillsSay, updateSkills } from './ProjectSkills.js'
 
 // The Overview's Skills card: for each project shown, how its skills stand, and the one press that
 // brings them where they should be. Said as the project's own page says it (`skillsSay`): a newer
 // version to take, skills not yet where agents start from, and a pull request or a branch they wait
-// on; else that they are up to date. A project's name opens its page, where "Skills" lists them all.
+// on; else that they are up to date. A project's name opens its page, where "Skills" opens them all in Settings.
 // Under the projects, which skills the agents used in the last 30 days, the most used first, from
 // the runs' records (`logs skills`, of the logs package, where a project has it), and the skills
 // the projects hold that no agent used. With updates in several projects, one press takes them all.
@@ -79,6 +81,8 @@ export function SkillsCard({ projects, onSelectProject }: { projects: ProjectSum
     // Kept for the next visit: the page opens with the last skills, faded until they are read again.
     { remember: `skills-card:${key}`, stored: true },
   )
+  // Saved on the Skills page, over this card: said here at once, not at the next read.
+  useEffect(() => onSkillsSaved(() => void reload()), [reload])
   const used = usedOver(reads)
   // The skills a project holds that no agent used: each once, over the projects shown.
   const usedNames = new Set(used.map(use => use.skill))
@@ -154,10 +158,10 @@ function Row({ read, reload, onOpen }: { read: Read; reload: () => Promise<void>
           {!skills || !says ? (
             <span className="text-xs text-danger">could not be read</span>
           ) : says.held === 0 ? (
-            // None yet: nothing is up to date, there is nothing. Its page lists them to pick.
+            // None yet: nothing is up to date, there is nothing. Add opens the Skills page to pick them.
             <>
               <span className="text-xs text-muted-foreground">no skills yet</span>
-              <Button variant="outline" size="xs" onClick={onOpen} title="Open the project, where Skills lists them to pick">
+              <Button variant="outline" size="xs" onClick={() => openSettings(SKILLS_ENTRY, project.id)} title="Open the project's Skills page">
                 Add
               </Button>
             </>

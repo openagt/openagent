@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import type { Intervention, OpenAgentEvent, ProjectError } from '../../src/index.js'
 import { StartAgentForm } from './StartAgentForm.js'
 import { ProjectActions } from './ProjectActions.js'
@@ -58,9 +57,6 @@ export function ProjectHome({
   /** The saved machine the project is on, when only another computer of the person's has it (elsewhere.ts): it is removed there, not here. */
   home?: string | undefined
 }) {
-  // The project's skills are opened from the row under the box; the list itself is the skills line's, which reads them.
-  // Held with the project it was opened for: the page stays mounted when another project is picked, and a list asked for here is not that project's.
-  const [skillsFor, setSkillsFor] = useState<string | null>(null)
   return (
     <>
       <ProjectActions projectId={projectId} onProjectRemoved={home === undefined ? onProjectRemoved : undefined} />
@@ -83,8 +79,8 @@ export function ProjectHome({
           )}
           {/* What the project's skills need from the person, when they need something (#2023): a card
               under the agents that wait, in the same column; with nothing to say there is no card,
-              and the list opens from "Skills" under the box. */}
-          <ProjectSkillsLine key={projectId} projectId={projectId} onChanged={onSkillsChanged} door={{ open: skillsFor === projectId, onClose: () => setSkillsFor(null) }} />
+              and "Skills" under the box opens the project's Skills page in Settings. */}
+          <ProjectSkillsLine key={projectId} projectId={projectId} onChanged={onSkillsChanged} />
         </div>
       </ScrollArea>
       <StartAgentForm
@@ -96,7 +92,6 @@ export function ProjectHome({
         addContext={addContext}
         removeContext={removeContext}
         toggleContext={toggleContext}
-        onOpenSkills={() => setSkillsFor(projectId)}
         home={home}
       />
     </>

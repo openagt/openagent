@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { skillsSaved } from '../lib/skills-saved.js'
 import type { ProjectSkills } from '../rpc/skills.js'
 
 // The Overview's Skills card: how each project's skills stand, said as the project's page says it
@@ -9,6 +10,8 @@ const skills = vi.hoisted(() => ({ onProjectSkills: vi.fn(), sendProjectSkills: 
 vi.mock('../rpc/skills.js', () => skills)
 const modules = vi.hoisted(() => ({ runModuleCommand: vi.fn() }))
 vi.mock('../rpc/modules.js', () => modules)
+const openSettings = vi.fn()
+vi.mock('../lib/use-route.js', async () => ({ ...(await vi.importActual<typeof import('../lib/use-route.js')>('../lib/use-route.js')), openSettings }))
 const { SkillsCard } = await import('./SkillsCard.js')
 
 const skill = (name: string, over: Record<string, unknown> = {}) => ({ name, description: '', standing: 'current', waiting: false, ...over })
@@ -44,12 +47,12 @@ test('each project: how many skills it holds, and a newer version to take, skill
   expect(within(screen.getByRole('listitem', { name: 'gamma' })).getByText('up to date')).toBeTruthy()
   expect(within(screen.getByRole('listitem', { name: 'delta' })).getByRole('link', { name: 'in #12' }).getAttribute('href')).toBe('https://github.com/o/r/pull/12')
   expect(within(screen.getByRole('listitem', { name: 'gone' })).getByText('could not be read')).toBeTruthy()
-  // A project with no skill is not "up to date": it has none, and Add opens its page to pick them.
+  // A project with no skill is not "up to date": it has none, and Add opens its Skills page to pick them.
   const empty = within(screen.getByRole('listitem', { name: 'empty' }))
   expect(empty.getByText('no skills yet')).toBeTruthy()
   expect(empty.queryByText('up to date')).toBeNull()
   fireEvent.click(empty.getByRole('button', { name: 'Add' }))
-  expect(onSelectProject).toHaveBeenCalledWith('empty')
+  expect(openSettings).toHaveBeenCalledWith('skills', 'empty')
   // Update takes the newer versions, then sends them.
   fireEvent.click(alpha.getByRole('button', { name: 'Update 2' }))
   await waitFor(() => expect(skills.sendProjectSkills).toHaveBeenCalledWith('alpha', ['queue', 'logs']))
@@ -88,4 +91,13 @@ test('which skills the agents used in the last 30 days over the projects shown, 
     ['alpha', { write: ['tickets'] }],
     ['beta', { write: ['tickets'] }],
   ])
+})
+
+test('a save on the Skills page, over the card, is read at once: the card says it before the next read', async () => {
+  skills.onProjectSkills.mockResolvedValueOnce(state([])).mockResolvedValue(state([skill('tickets')]))
+  modules.runModuleCommand.mockResolvedValue({ ok: false, error: 'no' })
+  render(<SkillsCard projects={['alpha'].map(project)} onSelectProject={() => {}} />)
+  await screen.findByText('no skills yet')
+  skillsSaved()
+  await screen.findByText('1 skill')
 })

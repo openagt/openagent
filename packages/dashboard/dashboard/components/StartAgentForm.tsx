@@ -21,6 +21,7 @@ import { RowItem, rowButtonClass } from './ui/row-item.js'
 import { Dots } from './ToolCalls.js'
 import { ACCOUNTS_ENTRY, AgentFix, agentWords, useAgentState } from './Logins.js'
 import { MachineLogins } from './ServerLogins.js'
+import { SKILLS_ENTRY } from './ProjectSkills.js'
 import { GitAccountMenu } from './GitHosts.js'
 
 /** The note while the start is asked for: what the chat's first line says next. */
@@ -72,7 +73,6 @@ export function StartAgentForm({
   addContext,
   removeContext,
   toggleContext,
-  onOpenSkills,
   home,
 }: {
   projectId: string
@@ -92,8 +92,6 @@ export function StartAgentForm({
   removeContext: (path: string) => void
   /** Toggle a path in the Context (a project's checkbox, a file's cross). */
   toggleContext: (path: string) => void
-  /** Open the list of the project's skills: given, the row under the box has "Skills" after "Auto". */
-  onOpenSkills?: (() => void) | undefined
 }) {
   const [note, setNote] = useState<string | null>(null)
   // The machine the last start was sent to, by its name: what the form says it is cloning on.
@@ -236,12 +234,10 @@ export function StartAgentForm({
               onCleanup={next => updatePreferences({ postMergeCleanup: next })}
               busy={busy}
             />
-            {onOpenSkills && (
-              <button type="button" onClick={onOpenSkills} className={rowButtonClass}>
-                <Puzzle className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                <span className="truncate">Skills</span>
-              </button>
-            )}
+            <button type="button" onClick={() => openSettings(SKILLS_ENTRY, projectId)} className={rowButtonClass}>
+              <Puzzle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span className="truncate">Skills</span>
+            </button>
           </>
         }
         onSubmit={submit}
