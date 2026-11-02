@@ -3,10 +3,10 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { ModuleHostContext, type ModuleCommandResult, type ModuleHost } from '@openagt/dashboard/module'
 import { SubagentsSettings } from './SubagentsSettings.js'
 import { runnerChoices, runnerOf, runnerValue } from './choices.js'
-import { choices, offered, pick, showing } from '../../openagent/dashboard/test-controls.js'
+import { choices, offered, pick, showing } from '../../dashboard/dashboard/test-controls.js'
 
 // The coding agents' own lists, as the dashboard asked them: Claude Code answered, Codex listed one.
-vi.mock('../../openagent/dashboard/rpc/models.js', () => ({
+vi.mock('../../dashboard/dashboard/rpc/models.js', () => ({
   onModels: vi.fn(async () => ({
     'claude-code': { models: [{ id: 'opus', name: 'Opus 5.5' }] },
     codex: { models: [{ id: 'gpt-5.6-luna', name: 'GPT-5.6-Luna' }] },

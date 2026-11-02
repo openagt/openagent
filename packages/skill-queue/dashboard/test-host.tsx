@@ -2,7 +2,7 @@ import { vi } from 'vitest'
 import { render as rtlRender, type RenderResult } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { ModuleHostContext, type ModuleCommandResult, type ModuleHost } from '@openagt/dashboard/module'
-import { ModulesContext, type MountedModules } from '../../openagent/dashboard/lib/use-modules.js'
+import { ModulesContext, type MountedModules } from '../../dashboard/dashboard/lib/use-modules.js'
 
 // The dashboard as the module's card sees it, faked: every service a spy, the module's commands
 // answered by a table of the queue command's outputs. `useModuleHost` hands a host that carries

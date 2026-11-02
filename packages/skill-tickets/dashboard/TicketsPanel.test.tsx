@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import type { ReactElement } from 'react'
-import { configureFirst } from '../../openagent/dashboard/test-utils.js'
+import { configureFirst } from '../../dashboard/dashboard/test-utils.js'
 import { planTicketPrompt, workOnTicketPrompt } from '../src/module.js'
 import type { WorkspaceTicket } from './lib/types.js'
 import { fakeHost, renderWithHost, type FakeHost } from './test-host.js'

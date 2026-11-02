@@ -17,7 +17,7 @@
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "paths": {
-      "@openagt/dashboard/module": ["../../openagent/dashboard/module/index.ts"]
+      "@openagt/dashboard/module": ["../../dashboard/dashboard/module/index.ts"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx"]

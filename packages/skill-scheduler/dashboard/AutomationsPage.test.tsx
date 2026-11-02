@@ -6,7 +6,7 @@ import { ANY_AGENT, ON_CLAUDE, STATUS, hostAnswering } from './fixtures.js'
 import { checked, choices, offered, openList, pick, queryRadio, radio, radioNames, showing } from './test-controls.js'
 
 // The coding agents' own lists, as the dashboard asked them: what a row's agent and model are picked from, and named by.
-vi.mock('../../openagent/dashboard/rpc/models.js', () => ({
+vi.mock('../../dashboard/dashboard/rpc/models.js', () => ({
   onModels: vi.fn(async () => ({
     'claude-code': { models: [{ id: 'opus', name: 'Opus 5.5' }, { id: 'haiku', name: 'Haiku 5.5' }] },
     codex: { models: [{ id: 'gpt-5.5', name: 'GPT-5.5' }] },
