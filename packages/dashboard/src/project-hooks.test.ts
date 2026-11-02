@@ -129,11 +129,11 @@ test('naming a run off reaches the run\'s own tool through the environment, with
 })
 
 test('the start line gets the prompt and the picks in its environment, and the id it answers on stdout comes back', async () => {
-  const cwd = await project(`start: 'printf "%s|%s|%s|%s|%s|%s\\n" "$PROMPT" "$DRIVER" "\${MODEL-unset}" "\${THEN-unset}" "\${PUBLISH-unset}" "\${BASE-unset}" >> started.txt; echo "{\\"ok\\":true,\\"id\\":\\"run-1\\"}"'\n`)
+  const cwd = await project(`start: 'printf "%s|%s|%s|%s|%s\\n" "$PROMPT" "$DRIVER" "\${MODEL-unset}" "\${PUBLISH-unset}" "\${BASE-unset}" >> started.txt; echo "{\\"ok\\":true,\\"id\\":\\"run-1\\"}"'\n`)
   try {
     assert.deepEqual(await runStartHook(cwd, { prompt: '/work-queue "now"', driver: 'codex' }), { ok: true, id: 'run-1' })
-    assert.deepEqual(await runStartHook(cwd, { prompt: 'Fix it', then: '/post-merge-cleanup', publish: 'merge', base: 'my-branch' }), { ok: true, id: 'run-1' })
-    assert.equal(await readFile(join(cwd, 'started.txt'), 'utf8'), '/work-queue "now"|codex|unset|unset|unset|unset\nFix it||unset|/post-merge-cleanup|merge|my-branch\n')
+    assert.deepEqual(await runStartHook(cwd, { prompt: 'Fix it', publish: 'merge', base: 'my-branch' }), { ok: true, id: 'run-1' })
+    assert.equal(await readFile(join(cwd, 'started.txt'), 'utf8'), '/work-queue "now"|codex|unset|unset|unset\nFix it||unset|merge|my-branch\n')
   } finally {
     await rm(cwd, { recursive: true, force: true })
   }

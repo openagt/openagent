@@ -20,22 +20,6 @@ export function startPicks(preferences: Preferences): { driver?: string; model?:
   }
 }
 
-/** The command the launcher's "Post-merge cleanup" box follows a run with, offered only where the project has it. */
-export const POST_MERGE_CLEANUP = 'post-merge-cleanup'
-
-/** Whether the project offers the post-merge cleanup: it has the command. */
-export function offersPostMergeCleanup(commands: readonly { name: string }[]): boolean {
-  return commands.some(command => command.name === POST_MERGE_CLEANUP)
-}
-
-/**
- * The follow-up a launcher start carries: the cleanup command, when the box is ticked and the
- * project has the command. The start hook gets it in `THEN`; the run's tool gives it the run's id.
- */
-export function cleanupPick(preferences: Preferences, commands: readonly { name: string }[]): { then?: string } {
-  return preferences.postMergeCleanup && offersPostMergeCleanup(commands) ? { then: `/${POST_MERGE_CLEANUP}` } : {}
-}
-
 // Starting a run, for every surface that does (the launcher, the tickets' and the queue's
 // buttons): the project's start hook answers the new run's id, or says in words why there is
 // none, and neither surface hand-rolls the busy/error/finally scaffold useAction owns.

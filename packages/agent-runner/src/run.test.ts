@@ -7,7 +7,7 @@ import { worktreePath } from '@openagt/skill-branches'
 import { findRun, patchRun, readDiary } from '@openagt/skill-logs'
 import { inboxPath, readLiveCard } from './live-card.js'
 import { acquireRunLock, lockHolder, releaseRunLock } from './run-lock.js'
-import { addedLine, AFRESH_NOTICE, earlierWorkLine, HOLD_MERGE_LINE, PUBLISH_LINES, resumeRun, runCommand, STOPPED_DETAIL } from './run.js'
+import { addedLine, AFRESH_NOTICE, earlierWorkLine, PUBLISH_LINES, resumeRun, runCommand, STOPPED_DETAIL } from './run.js'
 import { markerCard, recordRun, runnerMark, writeMarker } from './records.js'
 import type { GitHost } from './git-host.js'
 import { sweep } from './sweep.js'
@@ -23,11 +23,11 @@ handDownBasicSkills()
 const NOW = new Date('2026-09-16T14:01:00.000Z')
 
 /** A git host with no pull request for any branch: what a run whose agent opened none reads. */
-const noGitHost: GitHost = { requestOfBranch: async () => undefined, mergeRequest: async () => ({ outcome: 'failed', error: 'nothing to merge' }) }
+const noGitHost: GitHost = { requestOfBranch: async () => undefined }
 
 /**
  * A git host holding one pull request for one branch, once the agent has opened it (`open()`): read
- * back by the run, merged by the follow-up's end. Every call is kept.
+ * back by the run. Every call is kept.
  */
 function fakeGitHost(branch: string, hook?: () => Promise<void>): GitHost & { open(): void; calls: string[][] } {
   let opened = false
@@ -39,10 +39,6 @@ function fakeGitHost(branch: string, hook?: () => Promise<void>): GitHost & { op
       calls.push(['requests', asked])
       await hook?.()
       return opened && asked === branch ? { number: 12, url: 'https://example.com/x/y/pull/12' } : undefined
-    },
-    mergeRequest: async (_repo, number) => {
-      calls.push(['merge', String(number)])
-      return { outcome: 'auto-armed' }
     },
   }
 }
@@ -554,7 +550,7 @@ test('a run that opens another pull request keeps the one before among its earli
   try {
     // Whatever the run's branch, the request the git host has for it now.
     let request = { number: 12, url: 'https://example.com/x/y/pull/12' }
-    const gitHost: GitHost = { requestOfBranch: async () => request, mergeRequest: async () => ({ outcome: 'failed', error: 'nothing to merge' }) }
+    const gitHost: GitHost = { requestOfBranch: async () => request }
     const first = await runCommand(repo, { prompt: 'fix it', driver: committingDriver(), now: () => NOW, gitHost })
     assert.equal(first.status, 'done')
     assert.equal((await findRun(repo, first.id))?.caller?.['earlierPrs'], undefined, 'one request has no earlier one')
@@ -749,109 +745,23 @@ function publishingDriver(gitHost: ReturnType<typeof fakeGitHost>, seen: { promp
   }
 }
 
-test('a level a message gives a run with a follow-up takes the follow-up away: the agent is told the new level, and no fresh agent comes after it', async () => {
+test('a run given a branch that exists works on it, and writes down no start of its own: the work on that branch began elsewhere', async () => {
   const repo = await testRepo()
   try {
-    // The agent opens its pull request, so a follow-up would be owed but for the message.
-    const gitHost = fakeGitHost('agent-fix-it')
+    await git(['switch', '-q', '-c', 'dark-mode'], repo)
+    await git(['push', '-q', 'origin', 'dark-mode'], repo)
+    await git(['switch', '-q', 'main'], repo)
+    const seen: { branch?: string } = {}
     const driver: Driver = {
       id: 'fake',
-      start: async opts => {
-        const fake = await new FakeDriver({ turns: [{ text: 'Fixed it.' }, { text: 'Committed it.' }], sessionId: 's-1' }).start(opts)
-        return wrap(fake, async () => {
-          if (fake.prompts.length > 0) return
-          await git(['config', 'user.email', 'agent@example.com'], opts.cwd)
-          await git(['config', 'user.name', 'agent'], opts.cwd)
-          await git(['branch', '-m', 'agent-fix-it'], opts.cwd)
-          await writeFile(join(opts.cwd, 'fixed.txt'), 'fixed\n')
-          await git(['add', '-A'], opts.cwd)
-          await git(['commit', '-q', '-m', 'Fix it'], opts.cwd)
-          await git(['push', '-q', 'origin', 'HEAD'], opts.cwd)
-          gitHost.open()
-          await appendInbox(inboxPath(opts.cwd), { kind: 'message', text: 'just commit it', publish: 'commit' })
-        })
-      },
+      start: async opts => wrap(await new FakeDriver({ turns: [{ text: 'Replied.' }] }).start(opts), async () => {
+        seen.branch = (await git(['branch', '--show-current'], opts.cwd)).trim()
+      }),
     }
-    let followed = false
-    const outcome = await runCommand(repo, { prompt: '/work-queue', then: '/post-merge-cleanup', driver, nextDriver: () => ((followed = true), driver), now: ticking(), gitHost })
+    const outcome = await runCommand(repo, { prompt: '/reply', branch: 'dark-mode', driver, host: 'this-box', pid: 4242, now: ticking(), gitHost: noGitHost })
     assert.equal(outcome.status, 'done')
-    assert.deepEqual(outcome.pr, { number: 12, url: 'https://example.com/x/y/pull/12' })
-    const starts = (await readUntimedDiary(repo, outcome.id)).filter(l => l.kind === 'start')
-    assert.deepEqual(starts.map(l => l['added']), [HOLD_MERGE_LINE, PUBLISH_LINES.commit])
-    assert.equal(outcome.then, undefined)
-    assert.equal(followed, false)
-    assert.equal(runnerMark((await findRun(repo, outcome.id))!)?.then, undefined, 'the record no longer names it')
-  } finally {
-    await removeRepo(repo)
-  }
-})
-
-test('a run with a follow-up: its agent is told not to arm the merge, a fresh agent works its branch with the run\'s id, and the request is merged once that one ends done', async () => {
-  const repo = await testRepo()
-  try {
-    const out = join(repo, '..', 'ended.txt')
-    await mkdir(join(repo, '.agent-runner'), { recursive: true })
-    await writeFile(join(repo, '.agent-runner', 'config.yml'), `ended: printf '%s\\n' "$MESSAGE" >> '${out}'\n`)
-    const gitHost = fakeGitHost('agent-fix-it')
-    const { calls } = gitHost
-    const seen: { prompt?: string } = {}
-    const next: { prompt?: string; cwd?: string; branch?: string; mergedBefore?: boolean } = {}
-    const cleanup: Driver = {
-      id: 'fake',
-      start: async opts => {
-        const fake = await new FakeDriver({ turns: [{ text: 'Cleaned up.' }], sessionId: 's-2' }).start(opts)
-        return wrap(fake, async text => {
-          next.prompt = text
-          next.cwd = opts.cwd
-          next.branch = (await git(['branch', '--show-current'], opts.cwd)).trim()
-          next.mergedBefore = calls.some(c => c[0] === 'merge')
-          await git(['config', 'user.email', 'agent@example.com'], opts.cwd)
-          await git(['config', 'user.name', 'agent'], opts.cwd)
-          await writeFile(join(opts.cwd, 'FACTS.md'), 'a fact\n')
-          await git(['add', '-A'], opts.cwd)
-          await git(['commit', '-q', '-m', 'Knowledge'], opts.cwd)
-          await git(['push', '-q', 'origin', 'HEAD'], opts.cwd)
-        })
-      },
-    }
-    const nextIds: string[] = []
-    const outcome = await runCommand(repo, {
-      prompt: '/work-queue',
-      attached: 'Found:\n["one entry"]',
-      then: '/post-merge-cleanup',
-      driver: publishingDriver(gitHost, seen),
-      nextDriver: id => (nextIds.push(id), cleanup),
-      host: 'this-box',
-      pid: 4242,
-      now: ticking(),
-      gitHost,
-    })
-
-    assert.equal(seen.prompt, `/work-queue\n\nFound:\n["one entry"]\n\n${HOLD_MERGE_LINE}`, 'the first agent is handed what came with its prompt, and told not to arm the merge')
-    assert.equal(outcome.status, 'done')
-    assert.deepEqual(outcome.pr, { number: 12, url: 'https://example.com/x/y/pull/12' })
-    assert.equal((await findRun(repo, outcome.id))?.intent, '/work-queue', 'the record keeps the bare prompt')
-    assert.deepEqual((await findRun(repo, outcome.id))?.caller?.['runner'], { host: 'this-box', pid: 4242, then: '/post-merge-cleanup', baseCommit: (await git(['rev-parse', 'origin/main'], repo)).trim() })
-
-    const then = outcome.then!
-    assert.notEqual(then.id, outcome.id, 'a fresh agent: a run of its own')
-    assert.deepEqual(nextIds, [then.id], 'on the coding agent made for its own id')
-    assert.equal(next.prompt, `/post-merge-cleanup ${outcome.id}`, 'the follow-up gets its prompt as written: no publish level, and nothing of what the first run was handed')
-    assert.equal(next.cwd, worktreePath(repo, then.id))
-    assert.equal(next.branch, 'agent-fix-it', 'on the first run\'s branch')
-    assert.equal(next.prompt?.includes(HOLD_MERGE_LINE), false, 'the follow-up is the last: it is not told to hold')
-    assert.equal(next.mergedBefore, false, 'nothing merged while the follow-up worked')
-    assert.equal(then.status, 'done')
-    assert.deepEqual(then.merge, { outcome: 'auto-armed' })
-    assert.deepEqual(calls.filter(c => c[0] === 'merge'), [['merge', '12']], 'merged once, through the git host, after the follow-up')
-    assert.deepEqual(then.checkout, { reclaimed: true })
-
-    const recorded = await findRun(repo, then.id)
-    assert.equal(recorded?.status, 'done')
-    assert.equal(recorded?.intent, `/post-merge-cleanup ${outcome.id}`)
-    assert.deepEqual(recorded?.caller?.['runner'], { host: 'this-box', pid: 4242 }, 'on a branch another run made: it writes down no start of its own')
-    assert.equal((await git(['rev-parse', 'refs/remotes/origin/agent-fix-it'], repo)).trim(), (await git(['rev-parse', 'agent-fix-it'], repo)).trim(), 'the follow-up\'s commit is on the same branch, pushed')
-    assert.deepEqual((await readFile(out, 'utf8')).split('\n').filter(Boolean), ['repo: "/work-queue" opened a pull request: https://example.com/x/y/pull/12'], 'the pull request is announced once, by the run that opened it, not again by its follow-up')
+    assert.equal(seen.branch, 'dark-mode')
+    assert.deepEqual((await findRun(repo, outcome.id))?.caller?.['runner'], { host: 'this-box', pid: 4242 })
   } finally {
     await removeRepo(repo)
   }
@@ -871,14 +781,12 @@ test('a run given its start keeps it as its record\'s start, whatever its own cl
   }
 })
 
-test('the sentence a run adds after its prompts: none with no publish level, that of its level with one, the hold sentence whenever a follow-up is coming', () => {
-  assert.equal(addedLine(undefined, undefined), undefined, 'no level: the prompt as written')
-  assert.equal(addedLine('commit', undefined), 'When you finish, if you changed any file, commit your work.')
-  assert.equal(addedLine('branch', undefined), 'When you finish, if you changed any file, commit your work, push your branch and open no pull request.')
-  assert.equal(addedLine('pr', undefined), 'When you finish, if you changed any file, commit your work, push your branch and open its pull request.')
-  assert.equal(addedLine('merge', undefined), 'When you finish, if you changed any file, commit your work, push your branch and open its pull request, set to merge on its own once its checks pass.')
-  assert.equal(addedLine('merge', '/post-merge-cleanup'), HOLD_MERGE_LINE, 'a follow-up is coming: the merge is this tool\'s, whatever the level')
-  assert.equal(addedLine(undefined, '/post-merge-cleanup'), HOLD_MERGE_LINE)
+test('the sentence a run adds after its prompts: none with no publish level, that of its level with one', () => {
+  assert.equal(addedLine(undefined), undefined, 'no level: the prompt as written')
+  assert.equal(addedLine('commit'), 'When you finish, if you changed any file, commit your work.')
+  assert.equal(addedLine('branch'), 'When you finish, if you changed any file, commit your work, push your branch and open no pull request.')
+  assert.equal(addedLine('pr'), 'When you finish, if you changed any file, commit your work, push your branch and open its pull request.')
+  assert.equal(addedLine('merge'), 'When you finish, if you changed any file, commit your work, push your branch and open its pull request, set to merge on its own once its checks pass.')
 })
 
 test('a run with a publish level: its agent is told the sentence, the record keeps the level, and a resumed run is told again; a run with none is told nothing', async () => {
@@ -932,76 +840,6 @@ test('a run with an attached text: its agent is handed the text with the prompt,
     assert.equal(resumed.status, 'done')
     assert.equal(prompts[1], `Go on.\n\n${PUBLISH_LINES.commit}`, 'the text went with the first prompt alone')
     assert.deepEqual((await readDiary(repo, first.id))?.filter(line => line.kind === 'start').map(line => line['attached']), [found, undefined])
-  } finally {
-    await removeRepo(repo)
-  }
-})
-
-test('a follow-up that fails leaves the request open, nothing merged; a run that opened no request has no follow-up', async () => {
-  const repo = await testRepo()
-  try {
-    const gitHost = fakeGitHost('agent-fix-it')
-    const failing: Driver = { id: 'fake', start: async () => Promise.reject(new Error('the CLI is gone')) }
-    const outcome = await runCommand(repo, { prompt: '/work-queue', then: '/post-merge-cleanup', driver: publishingDriver(gitHost, {}), nextDriver: () => failing, now: ticking(), gitHost })
-    assert.equal(outcome.status, 'done')
-    assert.equal(outcome.then?.status, 'failed')
-    assert.equal(outcome.then?.merge, undefined)
-    assert.deepEqual(gitHost.calls.filter(c => c[0] === 'merge'), [], 'nothing merged')
-
-    let started = false
-    const quiet = await runCommand(repo, { prompt: '/work-queue', then: '/post-merge-cleanup', driver: new FakeDriver({ turns: [{ text: 'Nothing to do.' }] }), nextDriver: () => ((started = true), failing), now: ticking(), gitHost: noGitHost })
-    assert.equal(quiet.status, 'done')
-    assert.equal(quiet.then, undefined)
-    assert.equal(started, false)
-  } finally {
-    await removeRepo(repo)
-  }
-})
-
-test('a run with a follow-up that ends waiting: the answer resumes it, still told not to arm the merge, and the follow-up runs once it ends done', async () => {
-  const repo = await testRepo()
-  try {
-    const gitHost = fakeGitHost('agent-fix-it')
-    const askedWith: string[] = []
-    const asking: Driver = { id: 'fake', start: async opts => wrap(await new FakeDriver({ turns: [{ text: QUESTION }], sessionId: 's-ask' }).start(opts), async text => void askedWith.push(text)) }
-    const first = await runCommand(repo, { prompt: '/plan', then: '/post-merge-cleanup', driver: asking, now: ticking(), gitHost })
-    assert.equal(first.status, 'waiting')
-    assert.equal(first.then, undefined)
-    assert.deepEqual(askedWith, [`/plan\n\n${HOLD_MERGE_LINE}`], 'the agent is told not to arm the merge')
-
-    const prompts: string[] = []
-    const cleanup: Driver = { id: 'fake', start: async opts => wrap(await new FakeDriver({ turns: [{ text: 'Cleaned up.' }] }).start(opts), async text => void prompts.push(text)) }
-    const seen: { prompt?: string } = {}
-    const resumed = await resumeRun(repo, { id: first.id, answer: 'Approve', driver: publishingDriver(gitHost, seen), nextDriver: () => cleanup, now: ticking(), gitHost })
-    assert.ok(seen.prompt?.endsWith(`\n\n${HOLD_MERGE_LINE}`), 'the resumed run is still told not to arm the merge')
-    assert.equal(resumed.status, 'done')
-    assert.equal(resumed.then?.status, 'done')
-    assert.deepEqual(prompts, [`/post-merge-cleanup ${first.id}`])
-    assert.deepEqual(resumed.then?.merge, { outcome: 'auto-armed' })
-    assert.equal(gitHost.calls.filter(c => c[0] === 'merge').length, 1)
-  } finally {
-    await removeRepo(repo)
-  }
-})
-
-test('a run with a follow-up continued after its checkout went gets a new one, is told again not to arm the merge, and its follow-up runs once it ends done', async () => {
-  const repo = await testRepo()
-  try {
-    const gitHost = fakeGitHost('agent-fix-it')
-    const first = await runCommand(repo, { prompt: '/work-queue', then: '/post-merge-cleanup', driver: new FakeDriver({ turns: [{ text: 'Nothing to publish yet.' }], sessionId: 's-1' }), now: ticking(), gitHost })
-    assert.equal(first.status, 'done')
-    assert.equal(first.then, undefined, 'no pull request, no follow-up')
-    assert.deepEqual(first.checkout, { reclaimed: true })
-
-    const seen: { prompt?: string } = {}
-    const prompts: string[] = []
-    const cleanup: Driver = { id: 'fake', start: async opts => wrap(await new FakeDriver({ turns: [{ text: 'Cleaned up.' }] }).start(opts), async text => void prompts.push(text)) }
-    const continued = await resumeRun(repo, { id: first.id, text: 'Publish it now.', driver: publishingDriver(gitHost, seen), nextDriver: () => cleanup, now: ticking(), gitHost })
-    assert.equal(seen.prompt, `Publish it now.\n\n${HOLD_MERGE_LINE}`, 'the continued run is told not to arm the merge')
-    assert.equal(continued.status, 'done')
-    assert.deepEqual(prompts, [`/post-merge-cleanup ${first.id}`])
-    assert.deepEqual(continued.then?.merge, { outcome: 'auto-armed' })
-    assert.equal(gitHost.calls.filter(c => c[0] === 'merge').length, 1, 'merged once, after the follow-up')
   } finally {
     await removeRepo(repo)
   }
@@ -1269,11 +1107,10 @@ const { join } = require('node:path')
 const args = process.argv.slice(2)
 appendFileSync(join(__dirname, 'calls.log'), args.join(' ') + '\\n')
 if (args[0] === 'requests') process.stdout.write(JSON.stringify([{ number: 7, url: 'https://example.com/p/pull/7', state: 'open', title: 'Fix it', draft: false, branch: args[2], head: 'abc', createdAt: '2026-09-16T14:02:00.000Z' }]))
-else if (args[0] === 'merge') process.stdout.write(JSON.stringify({ ok: true, number: Number(args[1]), outcome: 'watching' }))
 else { process.stderr.write('unknown\\n'); process.exit(2) }
 `
 
-test('the git host is the package the project declares: a run reads its pull request through that command and merges through it after the follow-up', async () => {
+test('the git host is the package the project declares: a run reads its pull request through that command', async () => {
   const repo = await testRepo()
   try {
     const dir = join(repo, 'node_modules', 'git-host-fake')
@@ -1285,15 +1122,11 @@ test('the git host is the package the project declares: a run reads its pull req
     await git(['commit', '-q', '-m', 'the git host package'], repo)
     await git(['push', '-q', 'origin', 'main'], repo)
 
-    const prompts: string[] = []
-    const cleanup: Driver = { id: 'fake', start: async opts => wrap(await new FakeDriver({ turns: [{ text: 'Cleaned up.' }] }).start(opts), async text => void prompts.push(text)) }
-    const outcome = await runCommand(repo, { prompt: '/work-queue', then: '/post-merge-cleanup', driver: committingDriver(), nextDriver: () => cleanup, now: ticking() })
+    const outcome = await runCommand(repo, { prompt: '/work-queue', driver: committingDriver(), now: ticking() })
     assert.equal(outcome.status, 'done')
     assert.deepEqual(outcome.pr, { number: 7, url: 'https://example.com/p/pull/7' })
-    assert.deepEqual(prompts, [`/post-merge-cleanup ${outcome.id}`])
-    assert.deepEqual(outcome.then?.merge, { outcome: 'watching' })
     const calls = (await readFile(join(dir, 'calls.log'), 'utf8')).trim().split('\n')
-    assert.deepEqual(calls, ['requests --branch agent-fix-it', 'requests --branch agent-fix-it', 'merge 7'], 'each run reads its branch, then the merge once')
+    assert.deepEqual(calls, ['requests --branch agent-fix-it'])
   } finally {
     await removeRepo(repo)
   }

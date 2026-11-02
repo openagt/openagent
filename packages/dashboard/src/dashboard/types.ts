@@ -88,11 +88,6 @@ export interface StartAgentOptions {
    */
   base?: string
   /**
-   * The follow-up's prompt: once the run ends done with a pull request, a fresh agent works its
-   * branch from it before the request merges. The launcher's "Post-merge cleanup" box.
-   */
-  then?: string
-  /**
    * Run this session on a saved machine (#1067), named by its id: the local daemon relays the
    * start to that machine's daemon, which starts it in its own copy of the project, and streams
    * its events back into the local agent view. Absent = run on this machine. Stripped before the

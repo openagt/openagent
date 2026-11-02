@@ -22,3 +22,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   convention, a command is a skill.
 - A command is marked `disable-model-invocation`: a person or a runner fires it, the
   agent never picks it on its own.
+- The clean-up reaches merged work through its row on the Automations page: per project, off
+  until its switch is flipped, and it covers every merged pull request. Picked over a box in
+  the launcher's Auto menu that followed a run with a fresh agent and held its pull request's
+  merge, which covered only the runs started there and made the run's tool land the request.

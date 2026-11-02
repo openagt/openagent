@@ -64,18 +64,12 @@ already made, and lists it in its pull request; for anything else it proposes an
   level the prompt goes as written, and the agent commits and publishes only what the prompt
   itself asks. The record keeps the level, so a resumed run says it again. A message, or a
   resume, can give the run another level from there on, or take it away (`nothing`), and the
-  record names the new one: a person who liked the work has it published by saying so. A
-  level given part way also ends the run's follow-up, which was the merge's: the person has
-  said how far the run goes. The sentence follows
-  every message the agent is sent, a queued one too, and the diary keeps it apart from the
+  record names the new one: a person who liked the work has it published by saying so. The
+  sentence follows every message the agent is sent, a queued one too, and the diary keeps it apart from the
   message, so a reader shows a person's words as the person wrote them. Picked over gluing
   it into the prompt, where it read as the person's own words and a queued message got none. Picked over the
   skills naming a level, where whoever started the run had no say, and over the tool
   publishing after the agent, which would be the tool doing the agent's work.
-- A run with a follow-up tells its agent, in a line after the prompt, to publish its work
-  without arming the pull request's merge, and the tool merges it through the git host
-  once the follow-up ends done. Picked over a hold on the checkout that the agent's publish honoured, which put the
-  git host inside the branches package.
 - The live record is agent-driver's log, written in the run record's shape, and the run
   copies the two files onto the branch unchanged. Picked over the tool's own live log in
   the dashboard's shape, converted at the end: one shape, one file, no temporary label.

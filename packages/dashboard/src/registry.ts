@@ -186,13 +186,6 @@ export interface Preferences {
    */
   runOn?: string
   /**
-   * Post-merge cleanup: a run started from the launcher, in a project that has the
-   * `post-merge-cleanup` command, is followed by a fresh agent running it on the run's branch
-   * before the run's pull request merges. The default of the launcher's box, which writes it
-   * too. **Absent = off.**
-   */
-  postMergeCleanup?: boolean
-  /**
    * Name each run: a small model is asked for the two to five words a list of runs shows in place
    * of the first line of the prompt (`agent-runner`'s `title.ts`). It is one short turn of the
    * cheapest model with no tools, measured at a thirtieth of a cent a run, and it is the only
@@ -387,7 +380,6 @@ const BOOLEAN_PREFERENCES: Record<BooleanPreferenceKey, true> = {
   bridge: true,
   bridgeBrowser: true,
   onboardingDismissed: true,
-  postMergeCleanup: true,
   nameRuns: true,
   showThinking: true,
 }

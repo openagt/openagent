@@ -218,8 +218,6 @@ export function AgentComposer({
               publish={picked ?? recorded}
               picks={offeredPublishPicks(launcher?.gitHost ?? true, launcher?.remote ?? true)}
               onPublish={pick => setPicked(pick === recorded ? null : pick)}
-              cleanup={undefined}
-              onCleanup={() => {}}
               busy={busy}
             />
             {controls}

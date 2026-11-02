@@ -7,11 +7,9 @@ import { basicGitHosts, basicPackageNames } from './basic-skills.js'
  * command the way the dashboard runs any provided command. A package the project installed for it
  * comes first; else the git host among the basic skills every run gets, where it answers for the
  * project (`basic-skills.ts`), so a project with nothing installed has one too. Nothing here names
- * a git host or a package: a project with none has no pull requests to read back and nothing to
- * merge.
+ * a git host or a package: a project with none has no pull requests to read back.
  *
- * Two questions this tool asks of it: which pull request a branch has, for the run's record, and
- * the merge of one, once a follow-up is done (`run.ts`).
+ * The one question this tool asks of it: which pull request a branch has, for the run's record.
  */
 
 /** The pull request a branch has, as the record keeps it. */
@@ -20,15 +18,10 @@ export interface BranchRequest {
   url: string
 }
 
-/** How merging a pull request went: armed on green, merged at once, watched by the git host package, or not at all. */
-export type MergeOutcome = { outcome: 'auto-armed' | 'merged' | 'watching' } | { outcome: 'failed'; error: string }
-
 /** What a run asks of the git host; a test may hand in its own. */
 export interface GitHost {
   /** The newest pull request whose head is `branch`, open or closed; none when there is none, no git host, or the git host could not tell. */
   requestOfBranch(repo: string, branch: string): Promise<BranchRequest | undefined>
-  /** Land pull request `number`: armed to merge on green, or merged at once. */
-  mergeRequest(repo: string, number: number): Promise<MergeOutcome>
 }
 
 const NO_GIT_HOST = 'this project has no git host package'
@@ -47,15 +40,6 @@ export const projectGitHost: GitHost = {
     if (!result.ok || !Array.isArray(result.output)) return undefined
     const first = result.output[0] as { number?: unknown; url?: unknown } | undefined
     return first && typeof first.number === 'number' && typeof first.url === 'string' ? { number: first.number, url: first.url } : undefined
-  },
-
-  async mergeRequest(repo, number) {
-    const command = await gitHostCommand(repo)
-    if (!command) return { outcome: 'failed', error: NO_GIT_HOST }
-    const result = await runPackageCommand(repo, command, ['merge', String(number)])
-    if (!result.ok) return { outcome: 'failed', error: result.error }
-    const outcome = (result.output as { outcome?: unknown } | null)?.outcome
-    return outcome === 'auto-armed' || outcome === 'merged' || outcome === 'watching' ? { outcome } : { outcome: 'failed', error: `the git host answered no outcome for pull request ${number}` }
   },
 }
 

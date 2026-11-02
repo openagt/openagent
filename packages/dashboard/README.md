@@ -39,7 +39,7 @@ OpenAgent runs no coding agent and makes no model call. Starting an agent is run
 `.openagent/hooks.yml`:
 
 ```yaml
-start: agent-runner run --detach "$PROMPT" ${DRIVER:+--driver "$DRIVER"} ${MODEL:+--model "$MODEL"} ${EFFORT:+--effort "$EFFORT"} ${THEN:+--then "$THEN"} ${PUBLISH:+--publish "$PUBLISH"} ${BASE:+--base "$BASE"}
+start: agent-runner run --detach "$PROMPT" ${DRIVER:+--driver "$DRIVER"} ${MODEL:+--model "$MODEL"} ${EFFORT:+--effort "$EFFORT"} ${PUBLISH:+--publish "$PUBLISH"} ${BASE:+--base "$BASE"}
 resume: agent-runner run --detach --resume "$RUN_ID" ${TEXT:+"$TEXT"} ${ANSWER:+--answer "$ANSWER"} ${PUBLISH:+--publish "$PUBLISH"}
 check: agent-runner check ${DRIVER:+--driver "$DRIVER"}
 ```
@@ -56,12 +56,6 @@ the dashboard, and the dashboard says so. `npx @openagt/skill-scheduler@0.1 init
 the scheduler's `open` and `close` lines (they start it when the dashboard opens and stop it
 when it closes), keeping any line already there. The file's keys are `open`, `close`, `start`, `resume` and `check`; any other key
 is refused and the whole file ignored.
-
-The launcher's **Post-merge cleanup** box, shown where the project has the
-`post-merge-cleanup` command, puts `/post-merge-cleanup` in `THEN`: once the agent ends done
-with a pull request, agent-runner starts a fresh agent on its branch with that command and the
-first agent's id, and holds the pull request's merge until that one is done. Its default is
-Settings → Agent → Post-merge cleanup, which the box writes too.
 
 The launcher's branch menu above the box says which branch the agent starts from: the
 project's main branch, fetched first; **My local branch**, the branch the project's folder is

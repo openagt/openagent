@@ -69,9 +69,6 @@ test('run --detach on Codex: the spawned run names Codex, no model unless one is
     assert.deepEqual(spawned, [{ id: started.id, prompt: '/work-queue', mark: true, driver: 'codex' }])
     const named = await detachRun(repo, { prompt: '/work-queue', driver: 'codex', model: 'gpt-5', now: () => new Date(NOW.getTime() + 1000) }, { spawn: async () => {} })
     assert.equal(named.model, 'gpt-5', 'a model given by hand is passed on')
-    const followed: unknown[] = []
-    const withThen = await detachRun(repo, { prompt: '/work-queue', driver: 'codex', then: '/post-merge-cleanup', now: () => new Date(NOW.getTime() + 2000) }, { spawn: async (_repo, run) => { followed.push(run) } })
-    assert.deepEqual(followed, [{ id: withThen.id, prompt: '/work-queue', mark: true, driver: 'codex', then: '/post-merge-cleanup' }])
     const levelled: unknown[] = []
     const withLevel = await detachRun(repo, { prompt: 'Fix the typo', publish: 'merge', now: () => new Date(NOW.getTime() + 3000) }, { spawn: async (_repo, run) => { levelled.push(run) } })
     assert.deepEqual(levelled, [{ id: withLevel.id, prompt: 'Fix the typo', mark: true, driver: 'claude-code', publish: 'merge' }], 'the publish level a person picked reaches the run')
@@ -154,7 +151,7 @@ test('a resumed run continues on the tool its record names, and a Codex run with
         return new FakeDriver({ turns: [{ text: turn }], sessionId: 's-codex' }).start(opts)
       },
     })
-    const first = await runCommand(repo, { prompt: 'Read the docs', driver: codex('Read.'), host: 'this-box', pid: 4242, now: () => NOW, gitHost: { requestOfBranch: async () => undefined, mergeRequest: async () => ({ outcome: 'failed', error: 'none' }) } })
+    const first = await runCommand(repo, { prompt: 'Read the docs', driver: codex('Read.'), host: 'this-box', pid: 4242, now: () => NOW, gitHost: { requestOfBranch: async () => undefined } })
     assert.equal(first.status, 'done')
     const asked: string[] = []
     const second = await resumeProject(repo, { id: first.id, text: 'And the tests?' }, { driverFor: (name, _id, setup) => { asked.push(`${name} ${JSON.stringify(setup)}`); return codex('Read too.') } })
@@ -169,7 +166,6 @@ test('a resumed run continues on the tool its record names, and a Codex run with
 test('a spawned run is told its tool, and its model only when it has one', () => {
   assert.deepEqual(runArgs({ id: 'r1', prompt: '/work-queue', model: 'opus' }), ['run', '/work-queue', '--id', 'r1', '--model', 'opus'])
   assert.deepEqual(runArgs({ id: 'r1', prompt: '/work-queue', driver: 'codex' }), ['run', '/work-queue', '--id', 'r1', '--driver', 'codex'])
-  assert.deepEqual(runArgs({ id: 'r1', prompt: '/work-queue', then: '/post-merge-cleanup' }), ['run', '/work-queue', '--id', 'r1', '--then', '/post-merge-cleanup'])
   assert.deepEqual(runArgs({ id: 'r1', prompt: '/work-queue', publish: 'merge' }), ['run', '/work-queue', '--id', 'r1', '--publish', 'merge'])
   assert.deepEqual(runArgs({ id: 'r1', prompt: '/work-queue', mark: true }), ['run', '/work-queue', '--id', 'r1', '--mark'])
   assert.deepEqual(runArgs({ id: 'r1', prompt: '/work-queue', startedAt: '2026-10-09T10:00:00.000Z' }), ['run', '/work-queue', '--id', 'r1', '--started', '2026-10-09T10:00:00.000Z'])

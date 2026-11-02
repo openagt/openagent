@@ -11,8 +11,6 @@ import {
   DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuItem,
-  DropdownMenuCheckboxItem,
-  DropdownMenuSeparator,
 } from './ui/dropdown-menu.js'
 
 const PUBLISH_DESCRIPTIONS: Readonly<Record<PublishPick, string>> = {
@@ -23,16 +21,13 @@ const PUBLISH_DESCRIPTIONS: Readonly<Record<PublishPick, string>> = {
   merge: 'It commits, pushes its branch and opens a pull request set to merge once its checks pass.',
 }
 
-// The launcher's "Auto" menu, under the box: what the agent does by itself when it finishes. It
-// holds how far the agent publishes its work and, where the project has the command, the
-// "Post-merge cleanup" box. The trigger reads the picks themselves ("Auto: Open PR · cleanup"),
-// so what a Start will do is on screen with the menu shut.
+// The launcher's "Auto" menu, under the box: how far the agent publishes its work when it
+// finishes. The trigger reads the pick itself ("Auto: Open PR"), so what a Start will do is on
+// screen with the menu shut.
 export function AutoMenu({
   publish,
   picks,
   onPublish,
-  cleanup,
-  onCleanup,
   busy,
 }: {
   /** The publish pick in force. */
@@ -40,13 +35,8 @@ export function AutoMenu({
   /** The publish picks the project is offered. */
   picks: readonly PublishPick[]
   onPublish: (pick: PublishPick) => void
-  /** Whether "Post-merge cleanup" is ticked; undefined where the project does not have the command. */
-  cleanup: boolean | undefined
-  onCleanup: (next: boolean) => void
   busy: boolean
 }) {
-  const offersCleanup = cleanup !== undefined
-  const label = `Auto: ${PUBLISH_LABELS[publish]}${cleanup ? ' · cleanup' : ''}`
   return (
     <DropdownMenu>
       <Tooltip>
@@ -60,7 +50,7 @@ export function AutoMenu({
             />
           }
         >
-          <span className="truncate">{label}</span>
+          <span className="truncate">{`Auto: ${PUBLISH_LABELS[publish]}`}</span>
           <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
         </TooltipTrigger>
         <TooltipContent>What the agent does by itself when it finishes.</TooltipContent>
@@ -75,17 +65,6 @@ export function AutoMenu({
               <OptionLabel label={PUBLISH_LABELS[pick]} description={PUBLISH_DESCRIPTIONS[pick]} />
             </DropdownMenuItem>
           ))}
-          {offersCleanup && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuCheckboxItem className="items-start" checked={cleanup} onCheckedChange={onCleanup}>
-                <OptionLabel
-                  label="Post-merge cleanup"
-                  description="Once the agent ends done with a pull request, a fresh agent runs /post-merge-cleanup on its branch; the merge waits for it."
-                />
-              </DropdownMenuCheckboxItem>
-            </>
-          )}
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
