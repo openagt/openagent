@@ -214,13 +214,13 @@ already made, and lists it in its pull request; for anything else it proposes an
   a server is when it was just connected, with no way to let a phone in; and over a
   starter project made on every server, one nobody asked for.
 - "Add project" stays small: it writes no skill. The launcher's row under the box then has
-  "Skills", after Auto, which opens the list with ticks of the skills a project picks
-  beyond the defaults. Picked over "Add project" writing the skills itself, which put files
-  into every project a person adds. The button was picked over a line of its own on the
+  "Skills", after Auto, which opens that project's Skills page in Settings: a card with a
+  tick for each skill a project picks beyond the defaults. Picked over "Add project"
+  writing the skills itself, which put files into every project a person adds. The button was picked over a line of its own on the
   project's page ("This project has 4 of 25 skills", with an "Add skills" button), which
   stood there also when it had nothing to offer, and over an item in the project's ⋮ menu,
   where it was not seen.
-- OpenAgent has no command of its own to give a project skills: the Skills list in the
+- OpenAgent has no command of its own to give a project skills: the Skills page in the
   dashboard, or `npx skills add openagt/openagent` in a terminal, which writes the same
   texts for any agent. Picked over `npx @openagt/init`, a second list with ticks to keep in
   step with the dashboard's.
@@ -243,7 +243,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   and sent on as a save is. Picked over a count of skills that "have a newer text", which
   said neither which skill nor what a text is, over saying nothing until asked, and over
   writing every text again unasked.
-- A save of the skills list, and Update, take the change to where agents start from in the
+- A save of the Skills page, and Update, take the change to where agents start from in the
   same press: one commit of the skill files it wrote or deleted, those alone, then those
   files pushed to the remote's default branch, or, where that push is refused, to a branch
   of OpenAgent's own with a pull request opened for it, or that branch alone to merge by
@@ -281,6 +281,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   of every project's packages saving one value to all of them, and over a tab per project
   inside each entry, which crowds with many projects and asks for the project again in
   every entry.
+- A project's skills are a page of the "Project" group, one card per skill, and it follows
+  that group's select. Opened from a project's "Skills" button it opens on that project. With
+  every project picked it asks for one project, because one press could otherwise write
+  files into every repository. Picked over a list with ticks in a dialog of its own, a
+  page of settings apart from all the others.
 - A module may bring an entry of Settings, with its name and icon, where a project has its
   package. It reads and writes through the package's own command. Picked over OpenAgent's
   own sections knowing a package's file and a hook line per setting, which made every

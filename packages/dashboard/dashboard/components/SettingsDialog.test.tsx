@@ -31,6 +31,13 @@ vi.mock('../rpc/models.js', () => ({ onModels }))
 vi.mock('./Accounts.js', () => ({ AccountsSettings: () => <p>Claude accounts</p> }))
 const projectAccounts = vi.hoisted(() => ({ onProjectAccounts: vi.fn(async () => ({})), sendProjectAccounts: vi.fn() }))
 vi.mock('../rpc/logins.js', () => projectAccounts)
+// A project's skills, as a page of the Project group; each project answers with its own one skill.
+const projectSkills = vi.hoisted(() => ({
+  onProjectSkills: vi.fn(async (id: string) => ({ groups: [{ title: 'Tickets and queue', ticked: true, skills: [{ name: `skill-of-${id}`, description: 'What it does.', standing: 'current', waiting: false }] }], uncommitted: [], git: true, local: false })),
+  sendChangeSkills: vi.fn(),
+  sendProjectSkills: vi.fn(),
+}))
+vi.mock('../rpc/skills.js', () => projectSkills)
 vi.mock('../rpc/reads.js', async importOriginal => ({
   ...(await importOriginal<typeof import('../rpc/reads.js')>()),
   onBridgeToken: vi.fn(async () => null),
@@ -47,9 +54,9 @@ import type { ProjectSummary } from '../../src/index.js'
 const onClose = vi.fn()
 
 /** Settings as the shell holds it: the entry shown is the address's, and picking one changes it. */
-function Shown({ start, scope, projects }: { start: string; scope: string | null; projects: ProjectSummary[] }) {
+function Shown({ start, item, scope, projects }: { start: string; item?: string; scope: string | null; projects: ProjectSummary[] }) {
   const [entry, setEntry] = useState(start)
-  return <SettingsDialog entry={entry} onEntry={setEntry} onClose={onClose} scope={scope} projects={projects} />
+  return <SettingsDialog entry={entry} openItem={item} onEntry={setEntry} onClose={onClose} scope={scope} projects={projects} />
 }
 
 /** Settings opened on `entry` (its first one when `''`), with the sidebar's pick and the registered projects. */
@@ -310,10 +317,10 @@ describe('the Settings list', () => {
     { id: 'orchestration', title: 'Orchestration', icon: Network, Section: Given, package: '@openagt/skill-orchestration', projects: ['p1', 'p2', 'gone'], computer: false },
     { id: 'scheduler', title: 'Scheduler', icon: CalendarClock, Section: Broken, package: '@openagt/skill-scheduler', projects: ['p2'], computer: false },
   ])
-  const show = (entry: string, scope: string | null = null) =>
+  const show = (entry: string, scope: string | null = null, item?: string) =>
     render(
       <ModulesContext.Provider value={MODULES}>
-        <Shown start={entry} scope={scope} projects={PROJECTS as ProjectSummary[]} />
+        <Shown start={entry} {...(item !== undefined ? { item } : {})} scope={scope} projects={PROJECTS as ProjectSummary[]} />
       </ModulesContext.Provider>,
     )
   const entries = (group: string) => within(screen.getByRole('region', { name: group })).getAllByRole('button').map(b => b.textContent)
@@ -322,8 +329,8 @@ describe('the Settings list', () => {
   test("two groups: yours and this computer's, the computer's packages among them; then the picked project's packages", () => {
     show('', 'p1')
     expect(entries('You and this computer')).toEqual(['Appearance', 'Notifications', 'Agent', 'Accounts', 'Claude web', 'Devices'])
-    // gemstack has orchestration and no scheduler.
-    expect(entries('Project')).toEqual(['Orchestration'])
+    // gemstack has orchestration and no scheduler; every project has its skills.
+    expect(entries('Project')).toEqual(['Skills', 'Orchestration'])
     expect(showing(select('Project'))).toBe('gemstack')
     // Opened on nothing in particular: the first entry.
     expect(title()).toBe('SettingsAppearance')
@@ -333,9 +340,9 @@ describe('the Settings list', () => {
   test("a project's own accounts are an entry of that project's, first, when the computer has something to pick; never under All projects", async () => {
     projectAccounts.onProjectAccounts.mockResolvedValue({ gitHost: { host: 'github.com', name: 'GitHub', accounts: ['octo', 'octo-agent'], computer: 'octo' } } as never)
     show('', 'p1')
-    await waitFor(() => expect(entries('Project')).toEqual(['Accounts', 'Orchestration']))
+    await waitFor(() => expect(entries('Project')).toEqual(['Accounts', 'Skills', 'Orchestration']))
     await pick(select('Project'), 'All projects')
-    expect(entries('Project')).toEqual(['Orchestration', 'Scheduler'])
+    expect(entries('Project')).toEqual(['Skills', 'Orchestration', 'Scheduler'])
     projectAccounts.onProjectAccounts.mockResolvedValue({} as never)
   })
 
@@ -347,7 +354,7 @@ describe('the Settings list', () => {
     // Opened later, and the server slow to answer again.
     projectAccounts.onProjectAccounts.mockImplementation(() => new Promise(() => {}))
     show('', 'p1')
-    expect(entries('Project')).toEqual(['Accounts', 'Orchestration'])
+    expect(entries('Project')).toEqual(['Accounts', 'Skills', 'Orchestration'])
     projectAccounts.onProjectAccounts.mockReset()
     projectAccounts.onProjectAccounts.mockResolvedValue({} as never)
   })
@@ -365,7 +372,7 @@ describe('the Settings list', () => {
   test('the project select changes the project group, and All projects gives an entry every project that has its package, saying which', async () => {
     show('orchestration', 'p1')
     await pick(select('Project'), 'All projects')
-    expect(entries('Project')).toEqual(['Orchestration', 'Scheduler'])
+    expect(entries('Project')).toEqual(['Skills', 'Orchestration', 'Scheduler'])
     expect(title()).toBe('SettingsAll projectsOrchestration')
     expect(screen.getByText('for: gemstack, other')).toBeTruthy()
     expect(screen.getByText('Saved to 2 projects: gemstack, other.')).toBeTruthy()
@@ -374,7 +381,7 @@ describe('the Settings list', () => {
     expect(screen.getByText('The Scheduler settings failed: boom')).toBeTruthy()
     expect(screen.getByText('Saved to one project: other.')).toBeTruthy()
     await pick(select('Project'), 'plain')
-    expect(screen.getByText('Nothing to set for this project.')).toBeTruthy()
+    expect(entries('Project')).toEqual(['Skills'])
     // The entry it was on is not plain's: the first entry shows.
     expect(title()).toBe('SettingsAppearance')
   })
@@ -382,7 +389,46 @@ describe('the Settings list', () => {
   test('with no project picked in the sidebar, the project group opens on every project', () => {
     show('')
     expect(showing(select('Project'))).toBe('All projects')
-    expect(entries('Project')).toEqual(['Orchestration', 'Scheduler'])
+    expect(entries('Project')).toEqual(['Skills', 'Orchestration', 'Scheduler'])
+  })
+
+  test('Skills opened for a project is that project\'s, whatever the sidebar has picked; the select changes it', async () => {
+    show('skills', null, 'p2')
+    expect(showing(select('Project'))).toBe('other')
+    expect(title()).toBe('SettingsotherSkills')
+    expect(screen.getByRole('button', { name: 'Skills' }).getAttribute('aria-current')).toBe('page')
+    expect(await screen.findByRole('checkbox', { name: 'skill-of-p2' })).toBeTruthy()
+    await pick(select('Project'), 'gemstack')
+    expect(await screen.findByRole('checkbox', { name: 'skill-of-p1' })).toBeTruthy()
+    expect(screen.queryByRole('checkbox', { name: 'skill-of-p2' })).toBeNull()
+    expect(title()).toBe('SettingsgemstackSkills')
+  })
+
+  test('Skills with no project given follows the sidebar\'s pick', async () => {
+    show('skills', 'p3')
+    expect(showing(select('Project'))).toBe('plain')
+    expect(await screen.findByRole('checkbox', { name: 'skill-of-p3' })).toBeTruthy()
+  })
+
+  test('Skills with every project picked reads no project and writes none: it asks for one, and a press opens that one', async () => {
+    projectSkills.onProjectSkills.mockClear()
+    show('skills')
+    expect(title()).toBe('SettingsAll projectsSkills')
+    expect(screen.getByText(/one project at a time\. Pick a project\./)).toBeTruthy()
+    expect(screen.queryByRole('checkbox')).toBeNull()
+    expect(projectSkills.onProjectSkills).not.toHaveBeenCalled()
+    // No line says it saves to several.
+    expect(screen.queryByText(/^Saved to/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'other' }))
+    expect(await screen.findByRole('checkbox', { name: 'skill-of-p2' })).toBeTruthy()
+    expect(showing(select('Project'))).toBe('other')
+    expect(title()).toBe('SettingsotherSkills')
+  })
+
+  test('with no project at all there is no Skills page', () => {
+    open()
+    expect(screen.queryByRole('button', { name: 'Skills' })).toBeNull()
+    expect(screen.getByText('Nothing to set for your projects.')).toBeTruthy()
   })
 
   test('the ✕ and Escape close it', () => {

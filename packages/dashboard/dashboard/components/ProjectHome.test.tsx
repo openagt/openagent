@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import type { Intervention } from '../../src/index.js'
 
 // The project has a document, and the page must still show none: the documents are the side
@@ -10,17 +10,8 @@ vi.mock('../rpc/reads.js', () => ({ onDocs }))
 // The sections are tested on their own; here they are stand-ins.
 vi.mock('./ProjectActions.js', () => ({ ProjectActions: () => null }))
 vi.mock('./ProjectErrorBanner.js', () => ({ ProjectErrorBanner: () => null }))
-vi.mock('./ProjectSkills.js', () => ({
-  ProjectSkillsLine: ({ door }: { door?: { open: boolean; onClose: () => void } }) => (door?.open ? <button onClick={door.onClose}>close the skills list</button> : <div>skills line</div>),
-}))
-vi.mock('./StartAgentForm.js', () => ({
-  StartAgentForm: ({ onOpenSkills }: { onOpenSkills?: () => void }) => (
-    <div>
-      <div>start form</div>
-      <button onClick={onOpenSkills}>Skills</button>
-    </div>
-  ),
-}))
+vi.mock('./ProjectSkills.js', () => ({ ProjectSkillsLine: () => <div>skills line</div> }))
+vi.mock('./StartAgentForm.js', () => ({ StartAgentForm: () => <div>start form</div> }))
 vi.mock('./AgentOverview.js', () => ({ AgentOverview: () => <div>overview</div> }))
 vi.mock('./HumanQueueList.js', () => ({ HumanQueueList: ({ items }: { items: unknown[] }) => <div>{items.length} rows</div> }))
 
@@ -66,26 +57,6 @@ describe('ProjectHome', () => {
     expect(screen.queryByRole('heading', { name: 'Docs' })).toBeNull()
     expect(screen.queryByText('PLAN.md')).toBeNull()
     expect(onDocs).not.toHaveBeenCalled()
-  })
-
-  test('"Skills" under the box opens the skills list, and closing the list lets it be opened again', async () => {
-    render(<ProjectHome projectId="p1" waiting={[]} events={[]} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} />)
-    expect(screen.getByText('skills line')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }))
-    fireEvent.click(screen.getByRole('button', { name: 'close the skills list' }))
-    expect(screen.getByText('skills line')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }))
-    expect(screen.getByRole('button', { name: 'close the skills list' })).toBeTruthy()
-  })
-
-  test('a skills list asked for in one project does not open in the next project picked', async () => {
-    const home = (projectId: string) => <ProjectHome projectId={projectId} waiting={[]} events={[]} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} />
-    const { rerender } = render(home('p1'))
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }))
-    expect(screen.getByRole('button', { name: 'close the skills list' })).toBeTruthy()
-    rerender(home('p2'))
-    expect(screen.getByText('skills line')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'close the skills list' })).toBeNull()
   })
 
   test('nothing waits: no section, no heading', () => {

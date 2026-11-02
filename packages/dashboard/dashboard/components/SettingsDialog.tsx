@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { ArrowLeft, Bell, Bot, ChevronRight, Globe, KeyRound, Palette, Users, X } from 'lucide-react'
+import { ArrowLeft, Bell, Bot, ChevronRight, Globe, KeyRound, Palette, Puzzle, Users, X } from 'lucide-react'
 import { DRIVERS } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import { NO_MODEL_PINNED } from '../lib/agent-settings.js'
@@ -16,6 +16,7 @@ import { BridgeSettings } from './BridgeSettings.js'
 import { AccountsSettings } from './Accounts.js'
 import { ACCOUNTS_ENTRY } from './Logins.js'
 import { PROJECT_ACCOUNTS_ENTRY, ProjectAccountsSettings, readProjectAccountsAhead, useProjectAccounts } from './ProjectAccounts.js'
+import { SKILLS_ENTRY, SkillsPickProject, SkillsSettings } from './ProjectSkills.js'
 import { BridgeBrowserSettings } from './BridgeBrowserSettings.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
 import { Switch } from './ui/switch.js'
@@ -33,9 +34,10 @@ import { SettingsRow as Row, SettingsSection as Section, SettingsSelectRow as Se
 // The list has two groups, by whose the settings are. First, with no title: the dashboard's own
 // (how it looks, what it tells you, which agent runs) and the entries of the packages that are
 // the computer's (Devices, Machines), kept in the person's home folder. Then "Project": the entries
-// of the packages a project has, each saved in that project's own folder. That group shows the
-// project picked in the sidebar, and its own select changes it without leaving Settings; with
-// "All projects" an entry is every project's that has its package, and a change saves to each.
+// of the packages a project has, each saved in that project's own folder, and the project's Skills.
+// That group shows the project picked in the sidebar, and its own select changes it without leaving
+// Settings; with "All projects" an entry is every project's that has its package, and a change saves
+// to each. Skills are one project's at a time: with "All projects" that page asks for one.
 //
 // On a phone the dialog is the whole screen: the list first, then an entry over it, with a way back.
 
@@ -61,7 +63,7 @@ export function SettingsDialog({
 }: {
   /** The entry shown, by id; `''` shows the first one, and on a phone the list. */
   entry: string
-  /** A page inside that entry to open, by what the entry knows it as. */
+  /** A page inside that entry to open, by what the entry knows it as; for Skills, the project. */
   openItem?: string | undefined
   /** Show another entry, or with `''` the list on a phone. */
   onEntry: (id: string) => void
@@ -77,7 +79,8 @@ export function SettingsDialog({
   const listOnly = phone && entry === ''
   // Opened, the dialog itself has the focus, not its first entry: a ring there read as a second pick.
   const popup = useRef<HTMLDivElement>(null)
-  const [picked, setPicked] = useState(scope ?? ALL_PROJECTS)
+  // Skills opened from a project's page are that project's, whatever the sidebar has picked.
+  const [picked, setPicked] = useState((entry === SKILLS_ENTRY ? openItem : undefined) ?? scope ?? ALL_PROJECTS)
   // A project removed while the dialog is open is no longer one to show.
   const project = projects.find(p => p.id === picked) ?? null
   const label = useProjectLabel()
@@ -105,7 +108,10 @@ export function SettingsDialog({
   useEffect(() => {
     for (const p of projects) readProjectAccountsAhead(p.id)
   }, [projects])
-  const ownForProject: Entry[] = project && projectAccounts ? [{ id: PROJECT_ACCOUNTS_ENTRY, title: 'Accounts', icon: KeyRound, body: <ProjectAccountsSettings projectId={project.id} /> }] : []
+  const ownForProject: Entry[] = [
+    ...(project && projectAccounts ? [{ id: PROJECT_ACCOUNTS_ENTRY, title: 'Accounts', icon: KeyRound, body: <ProjectAccountsSettings projectId={project.id} /> }] : []),
+    ...(projects.length > 0 ? [{ id: SKILLS_ENTRY, title: 'Skills', icon: Puzzle, body: project ? <SkillsSettings projectId={project.id} /> : <SkillsPickProject projects={projects} onPick={setPicked} /> }] : []),
+  ]
   const projectEntries = [...ownForProject, ...forProject.map(section => moduleEntry(section, project ? [project] : projects))]
   const shown = [...yours, ...projectEntries].find(e => e.id === entry)
   const current = shown ?? yours[0]!
@@ -170,7 +176,7 @@ export function SettingsDialog({
                 {projectEntries.length > 0 ? (
                   <ul className="flex flex-col gap-1">{projectEntries.map(item)}</ul>
                 ) : (
-                  <p className="px-2 text-xs text-muted-foreground">{project ? 'Nothing to set for this project.' : 'Nothing to set for your projects.'}</p>
+                  <p className="px-2 text-xs text-muted-foreground">Nothing to set for your projects.</p>
                 )}
               </section>
             </nav>

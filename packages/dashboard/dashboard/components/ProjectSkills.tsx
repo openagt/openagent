@@ -1,17 +1,25 @@
 import { useEffect, useState } from 'react'
+import { ChevronRight, Folder } from 'lucide-react'
+import type { ProjectSummary } from '../../src/index.js'
 import { onProjectSkills, sendChangeSkills, sendProjectSkills, type ProjectSkills, type ProjectSkill, type SendSkillsResult } from '../rpc/skills.js'
 import { useAction } from '../lib/use-action.js'
-import { usePolled } from '../lib/use-async.js'
+import { useLoaded, usePolled } from '../lib/use-async.js'
+import { useProjectLabel } from '../lib/project-labels.js'
+import { onSkillsSaved, skillsSaved } from '../lib/skills-saved.js'
+import { cn } from '../lib/utils.js'
 import { Button, buttonVariants } from './ui/button.js'
 import { Checkbox } from './ui/checkbox.js'
-import { Dialog } from './ui/dialog.js'
+import { Skeleton } from './ui/skeleton.js'
 
-// A project's skills, on its own page (#2023). The door to them is "Skills", after "Auto" under the
-// launcher's box: it opens the list with ticks of the skills a
-// project picks beyond the ones every run gets by default. The card under the agents that wait on
-// the person shows only while it has something to say: a newer version to take, and skills that
-// have not reached the branch agents start from, with the one press that sends them. Once agents
-// have every skill there is no card.
+// A project's skills (#2023). "Skills", after "Auto" under the launcher's box, opens Settings on
+// the project's Skills page: a card with a tick for each skill a project picks beyond the ones
+// every run gets by default. The card on the project's own page, under the agents that wait on the
+// person, shows only while it has something to say: a newer version to take, and skills that have
+// not reached the branch agents start from, with the one press that sends them. Once agents have
+// every skill there is no card.
+
+/** The Settings entry, in the Project group. */
+export const SKILLS_ENTRY = 'skills'
 
 const held = (skill: ProjectSkill): boolean => skill.standing !== 'absent'
 const all = (skills: ProjectSkills): ProjectSkill[] => skills.groups.flatMap(group => group.skills)
@@ -40,7 +48,7 @@ function Subject({ names }: { names: readonly string[] }) {
 const is = (names: readonly string[]): string => (names.length === 1 ? 'is' : 'are')
 const it = (names: readonly string[]): string => (names.length === 1 ? 'it' : 'them')
 
-/** What stands beside a skill's name in the list when its text is not simply the one the dashboard carries. */
+/** What a skill's card says under its name when its text is not simply the one the dashboard carries. */
 const NOTES: Partial<Record<ProjectSkill['standing'], string>> = {
   newer: 'a newer version is there',
   changed: 'changed by hand',
@@ -50,35 +58,14 @@ const NOTES: Partial<Record<ProjectSkill['standing'], string>> = {
 /** The words of the one press that takes skills to agents: a send where there is a remote, a commit where there is none. */
 export const sendWord = (skills: ProjectSkills): string => (skills.remote ? `Send to ${skills.remote}` : 'Commit')
 
-export function ProjectSkillsLine({
-  projectId,
-  onChanged,
-  door,
-}: {
-  projectId: string
-  onChanged?: (() => void) | undefined
-  /** The list as its door opens it: `open` once "Skills" was pressed, `onClose` when the list is closed again. */
-  door?: { open: boolean; onClose: () => void } | undefined
-}) {
-  // A read that fails answers like a project unknown here: no skills to show. `loaded` then tells "not read yet" from "nothing to read".
-  const { value: skills, reload, loaded } = usePolled<ProjectSkills | null>(() => onProjectSkills(projectId).catch(() => null), null, 15_000, [projectId], 'previous')
-  // The list opens on the project as it stands at that moment: a later read must not change it under the person's ticks.
-  const [adding, setAdding] = useState<ProjectSkills | null>(null)
+export function ProjectSkillsLine({ projectId, onChanged }: { projectId: string; onChanged?: (() => void) | undefined }) {
+  // A read that fails answers like a project unknown here: no skills to show.
+  const { value: skills, reload } = usePolled<ProjectSkills | null>(() => onProjectSkills(projectId).catch(() => null), null, 15_000, [projectId], 'previous')
   const [pending, setPending] = useState<'update' | 'send' | null>(null)
   const { error, run } = useAction()
-  // "Skills" opens the list on the project as it stands then; picked before the skills were read, it opens once they are.
-  const asked = door?.open ?? false
-  useEffect(() => {
-    if (asked && skills) setAdding(current => current ?? skills)
-  }, [asked, skills])
-  if (!skills) {
-    // Asked for from the menu, and there is nothing to open: said, since a menu item that does nothing reads as broken.
-    return asked && loaded ? (
-      <p role="alert" className="m-3 rounded-lg border border-border px-3 py-2 text-sm text-danger">
-        This project&rsquo;s skills could not be read.
-      </p>
-    ) : null
-  }
+  // Saved on the Skills page, over this page: said here at once, not at the next read.
+  useEffect(() => onSkillsSaved(() => void reload()), [reload])
+  if (!skills) return null
 
   const changed = async (): Promise<void> => {
     await reload()
@@ -96,19 +83,8 @@ export function ProjectSkillsLine({
   const update = () => act('update', () => updateSkills(projectId, skills, run))
   const send = () => act('send', () => run(() => sendProjectSkills(projectId), 'Could not send the skills.'))
 
-  const list = adding && (
-    <AddSkillsDialog
-      projectId={projectId}
-      skills={adding}
-      onClose={() => {
-        setAdding(null)
-        door?.onClose()
-      }}
-      onSaved={() => void changed()}
-    />
-  )
-  // Nothing to say: the list alone, when the menu opened it.
-  if (newer.length === 0 && !sending && !inRequest && !onBranch && !error) return list || null
+  // Nothing to say: no card.
+  if (newer.length === 0 && !sending && !inRequest && !onBranch && !error) return null
 
   return (
     <div role="status" aria-label="This project's skills" className="m-3 flex flex-col gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">
@@ -149,7 +125,6 @@ export function ProjectSkillsLine({
         </span>
       )}
       {error && <span className="text-danger">{error}</span>}
-      {list}
     </div>
   )
 }
@@ -179,7 +154,7 @@ export async function updateSkills(projectId: string, skills: ProjectSkills, run
   return run(() => sendProjectSkills(projectId, newer), 'Could not send the skills.')
 }
 
-/** What is ticked when the list opens: what the project has; in a project with nothing yet, the default picks. */
+/** What is ticked when the page opens: what the project has; in a project with nothing yet, the default picks. */
 function firstTicks(skills: ProjectSkills): Set<string> {
   const has = all(skills).filter(held)
   if (has.length > 0) return new Set(has.map(skill => skill.name))
@@ -194,11 +169,57 @@ interface Saved {
   schedulerError?: string | undefined
 }
 
-export function AddSkillsDialog({ projectId, skills, onClose, onSaved }: { projectId: string; skills: ProjectSkills; onClose: () => void; onSaved: () => void }) {
+/** Settings › Project › Skills, for one project. */
+export function SkillsSettings({ projectId }: { projectId: string }) {
+  // Read once a visit, not polled: a later read must not change the page under the person's ticks. Done, after a save, is the next visit.
+  const [visit, setVisit] = useState(0)
+  // `undefined` is not read yet; a read that fails answers like a project unknown here.
+  const skills = useLoaded<ProjectSkills | null | undefined>(() => onProjectSkills(projectId).catch(() => null), undefined, [projectId, visit])
+  if (skills === undefined) {
+    return (
+      <div aria-label="Reading the skills" className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
+        {Array.from({ length: 6 }, (_, index) => (
+          <Skeleton key={index} className="h-20 rounded-lg" />
+        ))}
+      </div>
+    )
+  }
+  if (skills === null) {
+    return (
+      <p role="alert" className="rounded-lg border border-border px-3 py-2 text-sm text-danger">
+        This project&rsquo;s skills could not be read.
+      </p>
+    )
+  }
+  return <SkillCards key={visit} projectId={projectId} skills={skills} onDone={() => setVisit(next => next + 1)} />
+}
+
+/** The Skills page with every project picked: one press could write files into every repository, so it asks for one. */
+export function SkillsPickProject({ projects, onPick }: { projects: ProjectSummary[]; onPick: (id: string) => void }) {
+  const label = useProjectLabel()
+  return (
+    <div className="space-y-2">
+      <p className="text-sm text-muted-foreground">Skills are written into a project&rsquo;s own repository, one project at a time. Pick a project.</p>
+      <ul className="divide-y divide-border">
+        {projects.map(project => (
+          <li key={project.id}>
+            <button type="button" onClick={() => onPick(project.id)} className="flex w-full min-w-0 items-center gap-3 rounded py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
+              <Folder aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="min-w-0 flex-1 truncate text-sm">{label(project.id, project.name)}</span>
+              <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: ProjectSkills; onDone: () => void }) {
   const [ticked, setTicked] = useState(() => firstTicks(skills))
   const [saved, setSaved] = useState<Saved | null>(null)
   const [sent, setSent] = useState<SendSkillsResult | null>(null)
-  const { busy, error, run } = useAction()
+  const { busy, error, reset, run } = useAction()
 
   const tick = (name: string, on: boolean): void =>
     setTicked(current => {
@@ -216,112 +237,121 @@ export function AddSkillsDialog({ projectId, skills, onClose, onSaved }: { proje
     setSent(null)
     const outcome = await run(() => sendProjectSkills(projectId, names), 'Could not send the skills.')
     if (outcome.ok) setSent(outcome.value)
-    onSaved()
+    skillsSaved()
   }
   const save = async (): Promise<void> => {
     const outcome = await run(() => sendChangeSkills(projectId, { write, remove }), 'Could not change the skills.')
     if (!outcome.ok) return
     setSaved(outcome.value)
-    onSaved()
+    skillsSaved()
     const changed = [...outcome.value.written, ...outcome.value.removed]
     if (changed.length > 0 && skills.git) await send(changed)
   }
   const saveWord = nothing || !skills.git ? 'Save' : skills.remote ? `Save and send to ${skills.remote}` : 'Save and commit'
   const branch = skills.startBranch ?? 'the default branch'
+  const cancel = (): void => {
+    setTicked(firstTicks(skills))
+    reset()
+  }
+
+  if (saved) {
+    return (
+      <div className="space-y-2 text-sm text-muted-foreground">
+        {saved.written.length > 0 && (
+          <p>
+            Wrote {count(saved.written.length, 'skill', 'skills')} in <code className="rounded bg-muted px-1">.agents/skills</code>, linked in{' '}
+            <code className="rounded bg-muted px-1">.claude/skills</code>: <span className="text-foreground">{saved.written.join(', ')}</span>.
+          </p>
+        )}
+        {saved.removed.length > 0 && (
+          <p>
+            Deleted {count(saved.removed.length, 'skill', 'skills')}: <span className="text-foreground">{saved.removed.join(', ')}</span>.
+          </p>
+        )}
+        {saved.scheduler === 'on' && <p>The scheduler is on for this project, on this machine. Every automation starts switched off.</p>}
+        {saved.scheduler === 'off' && <p>The scheduler is off for this project on this machine, and stopped.</p>}
+        {saved.left.map(({ path, reason }) => (
+          <p key={path}>
+            Left as it is: <code className="rounded bg-muted px-1">{path}</code> ({reason}).
+          </p>
+        ))}
+        {saved.schedulerError && <p className="text-danger">The scheduler was not switched: {saved.schedulerError}</p>}
+        {saved.written.length + saved.removed.length > 0 && !skills.git && <p>This folder is not a git repository, so there is nothing to commit.</p>}
+        {sent?.ok && sent.sent === 'committed' && <p>Committed. Your agents get this change from their next start.</p>}
+        {sent?.ok && sent.sent === 'pushed' && (
+          <p>
+            Sent to {skills.remote}, on {sent.branch}. Your agents get this change from their next start.
+          </p>
+        )}
+        {sent?.ok && sent.sent === 'request' && (
+          <p>
+            {skills.remote} took no push to {branch}, so the change is in{' '}
+            <a href={sent.request.url} target="_blank" rel="noreferrer" className="text-foreground underline underline-offset-2">
+              pull request #{sent.request.number}
+            </a>
+            . Your agents get it once it is merged.
+          </p>
+        )}
+        {sent?.ok && sent.sent === 'branch' && (
+          <p>
+            {branch} took no push, so the change is on the branch <code className="rounded bg-muted px-1">{sent.branch}</code>. Merge it into {branch}, and your agents get it.
+          </p>
+        )}
+        {error && <p className="text-danger">{saved.written.length + saved.removed.length > 0 ? `Saved in the project's folder, not sent: ${error}` : error}</p>}
+        <div className="flex justify-end gap-2 pt-1">
+          {error && saved.written.length + saved.removed.length > 0 && skills.git && (
+            <Button type="button" size="sm" disabled={busy} onClick={() => void send([...saved.written, ...saved.removed])}>
+              {busy ? 'Sending…' : 'Send again'}
+            </Button>
+          )}
+          <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onDone}>
+            Done
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <Dialog open onOpenChange={open => { if (!open && !busy) onClose() }} title="Skills">
-      {saved ? (
-        <div className="space-y-2 text-xs leading-relaxed text-muted-foreground">
-          {saved.written.length > 0 && (
-            <p>
-              Wrote {count(saved.written.length, 'skill', 'skills')} in <code className="rounded bg-muted px-1">.agents/skills</code>, linked in{' '}
-              <code className="rounded bg-muted px-1">.claude/skills</code>: <span className="text-foreground">{saved.written.join(', ')}</span>.
-            </p>
-          )}
-          {saved.removed.length > 0 && (
-            <p>
-              Deleted {count(saved.removed.length, 'skill', 'skills')}: <span className="text-foreground">{saved.removed.join(', ')}</span>.
-            </p>
-          )}
-          {saved.scheduler === 'on' && <p>The scheduler is on for this project, on this machine. Every automation starts switched off.</p>}
-          {saved.scheduler === 'off' && <p>The scheduler is off for this project on this machine, and stopped.</p>}
-          {saved.left.map(({ path, reason }) => (
-            <p key={path}>
-              Left as it is: <code className="rounded bg-muted px-1">{path}</code> ({reason}).
-            </p>
-          ))}
-          {saved.schedulerError && <p className="text-danger">The scheduler was not switched: {saved.schedulerError}</p>}
-          {saved.written.length + saved.removed.length > 0 && !skills.git && <p>This folder is not a git repository, so there is nothing to commit.</p>}
-          {sent?.ok && sent.sent === 'committed' && <p>Committed. Your agents get this change from their next start.</p>}
-          {sent?.ok && sent.sent === 'pushed' && (
-            <p>
-              Sent to {skills.remote}, on {sent.branch}. Your agents get this change from their next start.
-            </p>
-          )}
-          {sent?.ok && sent.sent === 'request' && (
-            <p>
-              {skills.remote} took no push to {branch}, so the change is in{' '}
-              <a href={sent.request.url} target="_blank" rel="noreferrer" className="text-foreground underline underline-offset-2">
-                pull request #{sent.request.number}
-              </a>
-              . Your agents get it once it is merged.
-            </p>
-          )}
-          {sent?.ok && sent.sent === 'branch' && (
-            <p>
-              {branch} took no push, so the change is on the branch <code className="rounded bg-muted px-1">{sent.branch}</code>. Merge it into {branch}, and your agents get it.
-            </p>
-          )}
-          {error && <p className="text-danger">{saved.written.length + saved.removed.length > 0 ? `Saved in the project's folder, not sent: ${error}` : error}</p>}
-          <div className="flex justify-end gap-2 pt-1">
-            {error && saved.written.length + saved.removed.length > 0 && skills.git && (
-              <Button type="button" size="sm" disabled={busy} onClick={() => void send([...saved.written, ...saved.removed])}>
-                {busy ? 'Sending…' : 'Send again'}
-              </Button>
-            )}
-            <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onClose}>
-              Done
-            </Button>
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        A ticked skill is written into the project&rsquo;s folder and an unticked one is deleted{skills.remote ? `; Save sends the change to ${skills.remote}, where your agents start from` : skills.git ? '; Save commits the change' : ''}. The skills every agent gets by default come with every run and are not here.
+      </p>
+      {skills.groups.map(group => (
+        <fieldset key={group.title}>
+          <legend className="mb-2 text-sm font-medium">{group.title}</legend>
+          <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
+            {group.skills.map(skill => {
+              const notes = [NOTES[skill.standing], skill.waiting && skills.startBranch !== undefined ? `waiting to reach ${skills.startBranch}` : undefined].filter(Boolean)
+              return (
+                <label key={skill.name} className={cn('flex cursor-pointer items-start gap-2.5 rounded-lg border bg-card p-3 transition-colors', ticked.has(skill.name) ? 'border-primary/60' : 'border-border hover:border-muted-foreground/40')}>
+                  <Checkbox checked={ticked.has(skill.name)} onCheckedChange={checked => tick(skill.name, checked === true)} disabled={busy} className="mt-0.5" aria-label={skill.name} />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">{skill.name}</span>
+                    {notes.length > 0 && <span className="block text-xs text-warning">{notes.join(' · ')}</span>}
+                    <span className="mt-0.5 block text-xs text-muted-foreground">{skill.description}</span>
+                  </span>
+                </label>
+              )
+            })}
           </div>
+        </fieldset>
+      ))}
+      {/* In sight while the cards scroll under it: a tick at the top of the page has its Save at hand. */}
+      <div className="sticky bottom-0 -mx-4 -mb-6 border-t border-border bg-background px-4 py-3">
+        {error && <p role="alert" className="mb-2 text-xs text-danger">{error}</p>}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <span className="mr-auto text-xs text-muted-foreground">
+            {nothing ? 'Nothing to change.' : [write.length > 0 ? `${count(write.length, 'skill', 'skills')} to write` : '', remove.length > 0 ? `${count(remove.length, 'skill', 'skills')} to delete` : ''].filter(Boolean).join(', ') + '.'}
+          </span>
+          <Button type="button" variant="outline" size="sm" disabled={busy || nothing} onClick={cancel}>
+            Cancel
+          </Button>
+          <Button type="button" size="sm" disabled={busy || nothing} onClick={() => void save()}>
+            {busy ? 'Saving…' : saveWord}
+          </Button>
         </div>
-      ) : (
-        <div className="text-xs">
-          <p className="mb-2 leading-relaxed text-muted-foreground">
-            A ticked skill is written into the project&rsquo;s folder and an unticked one is deleted{skills.remote ? `; Save sends the change to ${skills.remote}, where your agents start from` : skills.git ? '; Save commits the change' : ''}. The skills every agent gets by default come with every run and are not here.
-          </p>
-          <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
-            {skills.groups.map(group => (
-              <fieldset key={group.title}>
-                <legend className="mb-1 font-medium text-foreground">{group.title}</legend>
-                {group.skills.map(skill => (
-                  <label key={skill.name} className="flex cursor-pointer items-start gap-2 py-0.5">
-                    <Checkbox checked={ticked.has(skill.name)} onCheckedChange={checked => tick(skill.name, checked === true)} disabled={busy} className="mt-0.5" aria-label={skill.name} />
-                    <span className="min-w-0">
-                      <span className="text-foreground">{skill.name}</span>
-                      {NOTES[skill.standing] && <span className="text-warning"> ({NOTES[skill.standing]})</span>}
-                      {skill.waiting && skills.startBranch !== undefined && <span className="text-warning"> (waiting to reach {skills.startBranch})</span>}
-                      <span className="block text-muted-foreground">{skill.description}</span>
-                    </span>
-                  </label>
-                ))}
-              </fieldset>
-            ))}
-          </div>
-          {error && <p className="mt-2 text-danger">{error}</p>}
-          <div className="mt-3 flex items-center justify-end gap-2">
-            <span className="mr-auto text-muted-foreground">
-              {nothing ? 'Nothing to change.' : [write.length > 0 ? `${count(write.length, 'skill', 'skills')} to write` : '', remove.length > 0 ? `${count(remove.length, 'skill', 'skills')} to delete` : ''].filter(Boolean).join(', ') + '.'}
-            </span>
-            <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="button" size="sm" disabled={busy || nothing} onClick={() => void save()}>
-              {busy ? 'Saving…' : saveWord}
-            </Button>
-          </div>
-        </div>
-      )}
-    </Dialog>
+      </div>
+    </div>
   )
 }

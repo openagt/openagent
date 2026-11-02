@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { useState } from 'react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { ProjectSummary } from '../../src/index.js'
+import { onSkillsSaved, skillsSaved } from '../lib/skills-saved.js'
 import type { ProjectSkills } from '../rpc/skills.js'
 
 const onProjectSkills = vi.hoisted(() => vi.fn())
@@ -8,7 +9,7 @@ const sendChangeSkills = vi.hoisted(() => vi.fn())
 const sendProjectSkills = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/skills.js', () => ({ onProjectSkills, sendChangeSkills, sendProjectSkills }))
 
-const { ProjectSkillsLine } = await import('./ProjectSkills.js')
+const { ProjectSkillsLine, SkillsPickProject, SkillsSettings } = await import('./ProjectSkills.js')
 
 afterEach(() => {
   cleanup()
@@ -37,17 +38,6 @@ function skills(over: Partial<ProjectSkills> = {}): ProjectSkills {
   }
 }
 
-/** The line with its door: a button here stands in for "Skills" under the launcher's box. */
-function WithDoor(props: { projectId: string; onChanged?: () => void }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <>
-      <button onClick={() => setOpen(true)}>Skills…</button>
-      <ProjectSkillsLine {...props} door={{ open, onClose: () => setOpen(false) }} />
-    </>
-  )
-}
-
 /** A project with no remote: `remote` is absent, as the daemon answers it. */
 function noRemote(over: Partial<ProjectSkills> = {}): ProjectSkills {
   const { remote: _none, ...rest } = skills(over)
@@ -58,7 +48,7 @@ const box = (name: string): HTMLElement => screen.getByRole('checkbox', { name }
 const isTicked = (name: string): boolean => box(name).getAttribute('aria-checked') === 'true'
 
 describe('ProjectSkillsLine', () => {
-  test('a project with its skills in order has no line: nothing to say, and the list opens from the project\'s menu', async () => {
+  test('a project with its skills in order has no line: nothing to say', async () => {
     onProjectSkills.mockResolvedValue(skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current'), skill('queue')] }] }))
     const { container } = render(<ProjectSkillsLine projectId="p1" />)
     await waitFor(() => expect(onProjectSkills).toHaveBeenCalledWith('p1'))
@@ -67,7 +57,7 @@ describe('ProjectSkillsLine', () => {
     expect(screen.queryByRole('status')).toBeNull()
   })
 
-  test('a project that picked no skill has no line either: every run gets the default skills, and the list opens from the project\'s menu', async () => {
+  test('a project that picked no skill has no line either: every run gets the default skills', async () => {
     onProjectSkills.mockResolvedValue(skills())
     const { container } = render(<ProjectSkillsLine projectId="p1" />)
     await waitFor(() => expect(onProjectSkills.mock.results[0]?.type).toBe('return'))
@@ -75,32 +65,22 @@ describe('ProjectSkillsLine', () => {
     expect(screen.queryByRole('button', { name: 'Add skills' })).toBeNull()
   })
 
-  test('"Skills…" in the project\'s menu opens the list, also when the line has nothing to say; closing the list tells the menu\'s side', async () => {
-    onProjectSkills.mockResolvedValue(skills())
-    render(<WithDoor projectId="p1" />)
-    expect(screen.queryByRole('dialog')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Skills…' }))
-    // Named as the menu names it: the list is where skills are added, updated and removed.
-    const dialog = await screen.findByRole('dialog', { name: 'Skills' })
-    expect(screen.queryByRole('status')).toBeNull()
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    // Closed for the menu's side too: the same pick opens it again.
-    fireEvent.click(screen.getByRole('button', { name: 'Skills…' }))
-    expect(await screen.findByRole('dialog')).toBeTruthy()
-  })
-
-  test('"Skills…" picked for a project whose skills cannot be read says so, in place of doing nothing; unasked, such a project shows no line', async () => {
+  test('a project whose skills cannot be read shows no line', async () => {
     onProjectSkills.mockRejectedValue(new Error('EACCES'))
     const { container } = render(<ProjectSkillsLine projectId="p1" />)
     await waitFor(() => expect(onProjectSkills).toHaveBeenCalled())
     await new Promise(resolve => setTimeout(resolve, 20))
     expect(container.textContent).toBe('')
-    cleanup()
-    render(<WithDoor projectId="p1" />)
-    fireEvent.click(screen.getByRole('button', { name: 'Skills…' }))
-    expect((await screen.findByRole('alert')).textContent).toBe('This project\u2019s skills could not be read.')
-    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  test('a save on the Skills page, over the line, is read at once: the card says it before the next read', async () => {
+    const tickets = { title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current', true)] }
+    onProjectSkills.mockResolvedValueOnce(skills()).mockResolvedValue(skills({ groups: [tickets], uncommitted: ['tickets'] }))
+    const { container } = render(<ProjectSkillsLine projectId="p1" />)
+    await waitFor(() => expect(onProjectSkills.mock.results[0]?.type).toBe('return'))
+    expect(container.textContent).toBe('')
+    skillsSaved()
+    await screen.findByRole('button', { name: 'Send to GitHub' })
   })
 
   test('a project that is unknown here shows no line', async () => {
@@ -188,29 +168,47 @@ describe('ProjectSkillsLine', () => {
   })
 })
 
-describe('Add skills', () => {
+describe('the Skills page', () => {
+  const card = (name: string): HTMLElement => box(name).closest('label')!
+
   test('in a project with no skills yet the default picks are ticked: every group but the one that needs a setup of its own, and the scheduler', async () => {
     onProjectSkills.mockResolvedValue(skills())
     sendChangeSkills.mockResolvedValue({ ok: true, written: ['tickets', 'queue', 'scheduler'], removed: [], left: [], scheduler: 'on' })
     sendProjectSkills.mockResolvedValue({ ok: true, sent: 'pushed', branch: 'main' })
-    const onChanged = vi.fn()
-    render(<WithDoor projectId="p1" onChanged={onChanged} />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Skills…' }))
-    const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText('Tickets and queue')).toBeTruthy()
-    expect(within(dialog).getByText('What tickets does.')).toBeTruthy()
+    const told = vi.fn()
+    const stop = onSkillsSaved(told)
+    render(<SkillsSettings projectId="p1" />)
+    expect(await screen.findByText('Tickets and queue')).toBeTruthy()
+    expect(screen.getByText('What tickets does.')).toBeTruthy()
     expect([isTicked('tickets'), isTicked('queue'), isTicked('browser'), isTicked('scheduler')]).toEqual([true, true, false, true])
-    expect(within(dialog).getByText('3 skills to write.')).toBeTruthy()
+    expect(screen.getByText('3 skills to write.')).toBeTruthy()
 
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Save and send to GitHub' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save and send to GitHub' }))
     await waitFor(() => expect(sendChangeSkills).toHaveBeenCalledWith('p1', { write: ['tickets', 'queue', 'scheduler'], remove: [] }))
-    expect(await within(dialog).findByText(/Wrote 3 skills in/)).toBeTruthy()
-    expect(dialog.textContent).toContain('tickets, queue, scheduler')
+    expect(await screen.findByText(/Wrote 3 skills in/)).toBeTruthy()
+    expect(document.body.textContent).toContain('tickets, queue, scheduler')
     // The same press sends what it wrote, and nothing else.
     await waitFor(() => expect(sendProjectSkills).toHaveBeenCalledWith('p1', ['tickets', 'queue', 'scheduler']))
-    expect(await within(dialog).findByText('Sent to GitHub, on main. Your agents get this change from their next start.')).toBeTruthy()
-    expect(dialog.textContent).toContain('The scheduler is on for this project, on this machine. Every automation starts switched off.')
-    await waitFor(() => expect(onChanged).toHaveBeenCalled())
+    expect(await screen.findByText('Sent to GitHub, on main. Your agents get this change from their next start.')).toBeTruthy()
+    expect(document.body.textContent).toContain('The scheduler is on for this project, on this machine. Every automation starts switched off.')
+    // What shows the same skills under Settings is told: of the write, and again of the send.
+    await waitFor(() => expect(told).toHaveBeenCalledTimes(2))
+    stop()
+  })
+
+  test('each skill is a card of its own: a press anywhere on it ticks it, and it says how its text stands', async () => {
+    onProjectSkills.mockResolvedValue(
+      skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'newer'), skill('queue', 'changed', true), skill('plan', 'own'), skill('triage')] }] }),
+    )
+    render(<SkillsSettings projectId="p1" />)
+    await screen.findByText('Tickets and queue')
+    expect(card('tickets').textContent).toBe('ticketsa newer version is thereWhat tickets does.')
+    expect(card('queue').textContent).toBe('queuechanged by hand · waiting to reach mainWhat queue does.')
+    expect(card('plan').textContent).toBe('planyour own textWhat plan does.')
+    expect(card('triage').textContent).toBe('triageWhat triage does.')
+    expect(isTicked('triage')).toBe(false)
+    fireEvent.click(screen.getByText('What triage does.'))
+    expect(isTicked('triage')).toBe(true)
   })
 
   test('opened again the ticks show what the project has; a tick removed deletes, a tick added writes', async () => {
@@ -219,107 +217,138 @@ describe('Add skills', () => {
     )
     sendChangeSkills.mockResolvedValue({ ok: true, written: ['browser'], removed: ['tickets'], left: [{ path: '.agents/skills/tickets', reason: 'it holds other files' }] })
     sendProjectSkills.mockResolvedValue({ ok: true, sent: 'pushed', branch: 'main' })
-    render(<WithDoor projectId="p1" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Skills…' }))
-    const dialog = await screen.findByRole('dialog')
+    render(<SkillsSettings projectId="p1" />)
+    await screen.findByText('Tickets and queue')
     expect([isTicked('tickets'), isTicked('queue'), isTicked('plan'), isTicked('browser')]).toEqual([true, true, false, false])
-    expect(dialog.textContent).toContain('queue (changed by hand)')
-    expect(within(dialog).getByText('Nothing to change.')).toBeTruthy()
-    expect((within(dialog).getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText('Nothing to change.')).toBeTruthy()
+    expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true)
 
     fireEvent.click(box('tickets'))
     fireEvent.click(box('browser'))
-    expect(within(dialog).getByText('1 skill to write, 1 skill to delete.')).toBeTruthy()
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Save and send to GitHub' }))
+    expect(screen.getByText('1 skill to write, 1 skill to delete.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Save and send to GitHub' }))
     await waitFor(() => expect(sendChangeSkills).toHaveBeenCalledWith('p1', { write: ['browser'], remove: ['tickets'] }))
     await waitFor(() => expect(sendProjectSkills).toHaveBeenCalledWith('p1', ['browser', 'tickets']))
-    expect(await within(dialog).findByText(/Deleted 1 skill/)).toBeTruthy()
-    expect(dialog.textContent).toContain('Left as it is: .agents/skills/tickets (it holds other files).')
+    expect(await screen.findByText(/Deleted 1 skill/)).toBeTruthy()
+    expect(document.body.textContent).toContain('Left as it is: .agents/skills/tickets (it holds other files).')
   })
 
-  test('a default branch that takes no push: the screen points to the pull request the change went to', async () => {
-    onProjectSkills.mockResolvedValue(skills())
+  test('a default branch that takes no push: the page points to the pull request the change went to; Done is the cards, read again', async () => {
+    onProjectSkills.mockResolvedValueOnce(skills()).mockResolvedValue(skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current', true), skill('queue', 'current', true)] }] }))
     sendChangeSkills.mockResolvedValue({ ok: true, written: ['tickets', 'queue'], removed: [], left: [] })
     sendProjectSkills.mockResolvedValue({ ok: true, sent: 'request', request: { number: 12, url: 'https://example.com/pull/12' } })
-    render(<WithDoor projectId="p1" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Skills…' }))
-    const dialog = await screen.findByRole('dialog')
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Save and send to GitHub' }))
-    const link = await within(dialog).findByRole('link', { name: 'pull request #12' })
+    render(<SkillsSettings projectId="p1" />)
+    await screen.findByText('Tickets and queue')
+    fireEvent.click(screen.getByRole('button', { name: 'Save and send to GitHub' }))
+    const link = await screen.findByRole('link', { name: 'pull request #12' })
     expect(link.getAttribute('href')).toBe('https://example.com/pull/12')
-    expect(dialog.textContent).toContain('GitHub took no push to main, so the change is in pull request #12. Your agents get it once it is merged.')
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }))
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(document.body.textContent).toContain('GitHub took no push to main, so the change is in pull request #12. Your agents get it once it is merged.')
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    await screen.findByText('Tickets and queue')
+    expect(onProjectSkills).toHaveBeenCalledTimes(2)
+    expect(card('tickets').textContent).toContain('waiting to reach main')
+    expect(screen.getByText('Nothing to change.')).toBeTruthy()
   })
 
   test('a send that is refused after the save says the files are saved, and offers to send again', async () => {
     onProjectSkills.mockResolvedValue(skills())
     sendChangeSkills.mockResolvedValue({ ok: true, written: ['tickets', 'queue'], removed: [], left: [] })
     sendProjectSkills.mockResolvedValueOnce({ ok: false, error: 'could not reach the remote: network down' }).mockResolvedValue({ ok: true, sent: 'pushed', branch: 'main' })
-    render(<WithDoor projectId="p1" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Skills…' }))
-    const dialog = await screen.findByRole('dialog')
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Save and send to GitHub' }))
-    expect(await within(dialog).findByText("Saved in the project's folder, not sent: could not reach the remote: network down")).toBeTruthy()
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Send again' }))
-    expect(await within(dialog).findByText(/Sent to GitHub, on main\./)).toBeTruthy()
+    render(<SkillsSettings projectId="p1" />)
+    await screen.findByText('Tickets and queue')
+    fireEvent.click(screen.getByRole('button', { name: 'Save and send to GitHub' }))
+    expect(await screen.findByText("Saved in the project's folder, not sent: could not reach the remote: network down")).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Send again' }))
+    expect(await screen.findByText(/Sent to GitHub, on main\./)).toBeTruthy()
     expect(sendProjectSkills).toHaveBeenLastCalledWith('p1', ['tickets', 'queue'])
-    expect(within(dialog).queryByRole('button', { name: 'Send again' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Send again' })).toBeNull()
   })
 
-  test('a save that is refused says why and keeps the list; Cancel writes nothing; a folder that is no repository is offered no commit', async () => {
+  test('a save that is refused says why and keeps the ticks; Cancel puts them back and writes nothing; a folder that is no repository is offered no commit', async () => {
     // A folder that is no repository: nothing to commit, and no branch agents start from.
-    const { startBranch: _none, ...noRepository } = skills({ git: false })
+    const { startBranch: _none, ...noRepository } = skills({ git: false, groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current'), skill('queue')] }] })
     onProjectSkills.mockResolvedValue(noRepository)
-    sendChangeSkills.mockResolvedValueOnce({ ok: false, error: 'EACCES: permission denied' }).mockResolvedValue({ ok: true, written: ['tickets', 'queue'], removed: [], left: [], schedulerError: 'hooks.yml: unreadable' })
-    render(<WithDoor projectId="p1" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Skills…' }))
-    let dialog = await screen.findByRole('dialog')
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
-    expect(await within(dialog).findByText('EACCES: permission denied')).toBeTruthy()
-    expect(box('tickets')).toBeTruthy()
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    sendChangeSkills.mockResolvedValueOnce({ ok: false, error: 'EACCES: permission denied' }).mockResolvedValue({ ok: true, written: ['queue'], removed: [], left: [], schedulerError: 'hooks.yml: unreadable' })
+    render(<SkillsSettings projectId="p1" />)
+    await screen.findByText('Tickets and queue')
+    const cancel = screen.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement
+    // Nothing to cancel yet.
+    expect(cancel.disabled).toBe(true)
+    fireEvent.click(box('queue'))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText('EACCES: permission denied')).toBeTruthy()
+    expect(isTicked('queue')).toBe(true)
+    fireEvent.click(cancel)
+    expect(isTicked('queue')).toBe(false)
+    expect(screen.queryByText('EACCES: permission denied')).toBeNull()
+    expect(screen.getByText('Nothing to change.')).toBeTruthy()
     expect(sendChangeSkills).toHaveBeenCalledTimes(1)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Skills…' }))
-    dialog = await screen.findByRole('dialog')
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
-    expect(await within(dialog).findByText('This folder is not a git repository, so there is nothing to commit.')).toBeTruthy()
-    expect(dialog.textContent).toContain('The scheduler was not switched: hooks.yml: unreadable')
+    fireEvent.click(box('queue'))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText('This folder is not a git repository, so there is nothing to commit.')).toBeTruthy()
+    expect(document.body.textContent).toContain('The scheduler was not switched: hooks.yml: unreadable')
     expect(sendProjectSkills).not.toHaveBeenCalled()
-    expect(within(dialog).queryByRole('button', { name: 'Send again' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Send again' })).toBeNull()
+  })
+
+  test('skills that cannot be read, or a project unknown here, are said in place of the cards', async () => {
+    onProjectSkills.mockRejectedValue(new Error('EACCES'))
+    render(<SkillsSettings projectId="p1" />)
+    expect((await screen.findByRole('alert')).textContent).toBe('This project’s skills could not be read.')
+    cleanup()
+    onProjectSkills.mockReset().mockResolvedValue(null)
+    render(<SkillsSettings projectId="gone" />)
+    expect((await screen.findByRole('alert')).textContent).toBe('This project’s skills could not be read.')
+  })
+
+  test('a project only another computer has: its skills are read by its id, and a save, which that computer does not take from here, says so and keeps the ticks', async () => {
+    onProjectSkills.mockResolvedValue(skills())
+    sendChangeSkills.mockResolvedValue({ ok: false, error: 'this project has no local path on this server' })
+    render(<SkillsSettings projectId="shop~m1" />)
+    await screen.findByText('Tickets and queue')
+    expect(onProjectSkills).toHaveBeenCalledWith('shop~m1')
+    fireEvent.click(screen.getByRole('button', { name: 'Save and send to GitHub' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('this project has no local path on this server')
+    expect(isTicked('tickets')).toBe(true)
+    expect(sendProjectSkills).not.toHaveBeenCalled()
+  })
+
+  test('with every project picked it asks for one, and a press picks it', () => {
+    const onPick = vi.fn()
+    const projects = [{ id: 'p1', name: 'shop' }, { id: 'p2', name: 'blog' }] as ProjectSummary[]
+    render(<SkillsPickProject projects={projects} onPick={onPick} />)
+    expect(document.body.textContent).toContain('one project at a time. Pick a project.')
+    fireEvent.click(screen.getByRole('button', { name: 'blog' }))
+    expect(onPick).toHaveBeenCalledWith('p2')
+    expect(onProjectSkills).not.toHaveBeenCalled()
   })
 })
 
-describe('the skills line, over time', () => {
-  test('the list a person has open keeps the project as it stood when it opened, whatever a later read says', async () => {
+describe('the Skills page, over time', () => {
+  test('the page a person has open keeps the project as it stood when it opened: no later read changes it', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
       onProjectSkills.mockResolvedValueOnce(skills()).mockResolvedValue(skills({ groups: [{ title: 'Tickets and queue', ticked: true, skills: [skill('tickets', 'current'), skill('queue')] }] }))
-      render(<WithDoor projectId="p1" />)
-      fireEvent.click(await screen.findByRole('button', { name: 'Skills…' }))
-      const dialog = await screen.findByRole('dialog')
-      expect(within(dialog).getByText('3 skills to write.')).toBeTruthy()
-      // The next read lands while the list is open: the project now holds tickets (written in a terminal, say).
-      await vi.advanceTimersByTimeAsync(16_000)
-      await waitFor(() => expect(onProjectSkills.mock.calls.length).toBeGreaterThanOrEqual(2))
-      expect(within(dialog).getByText('3 skills to write.')).toBeTruthy()
-      expect(within(dialog).queryByText(/to delete/)).toBeNull()
+      render(<SkillsSettings projectId="p1" />)
+      expect(await screen.findByText('3 skills to write.')).toBeTruthy()
+      // The project now holds tickets (written in a terminal, say), and a minute passes.
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(onProjectSkills).toHaveBeenCalledTimes(1)
+      expect(screen.getByText('3 skills to write.')).toBeTruthy()
+      expect(screen.queryByText(/to delete/)).toBeNull()
     } finally {
       vi.useRealTimers()
     }
   })
 
-  test('in a project with no remote a commit is all agents need, and the screen says so', async () => {
+  test('in a project with no remote a commit is all agents need, and the page says so', async () => {
     onProjectSkills.mockResolvedValue(noRemote())
     sendChangeSkills.mockResolvedValue({ ok: true, written: ['tickets', 'queue'], removed: [], left: [] })
     sendProjectSkills.mockResolvedValue({ ok: true, sent: 'committed' })
-    render(<WithDoor projectId="p1" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Skills…' }))
-    const dialog = await screen.findByRole('dialog')
-    expect(dialog.textContent).toContain('Save commits the change.')
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Save and commit' }))
-    expect(await within(dialog).findByText('Committed. Your agents get this change from their next start.')).toBeTruthy()
+    render(<SkillsSettings projectId="p1" />)
+    expect((await screen.findByText(/Save commits the change\./)).textContent).toContain('Save commits the change.')
+    fireEvent.click(screen.getByRole('button', { name: 'Save and commit' }))
+    expect(await screen.findByText('Committed. Your agents get this change from their next start.')).toBeTruthy()
   })
 })

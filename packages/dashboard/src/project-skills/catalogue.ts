@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 
 /**
- * The skills a project can pick in the dashboard's Skills list (#2023), in its groups, with what
+ * The skills a project can pick on the dashboard's Skills page (#2023), in its groups, with what
  * is ticked the first time. Every group is ticked except the skills that are useless until something of
  * their own is set up. The skills every run gets by default are not here (the branches skill,
  * and the ones its command names): they come with every run, with nothing written in the

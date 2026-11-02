@@ -21,6 +21,7 @@ import { PaneLayout, PanesProvider } from './components/Panes.js'
 import { SubagentPanel } from './components/SubagentPanel.js'
 import { MenuButton, PhoneBar } from './components/PhoneBar.js'
 import { cn } from './lib/utils.js'
+import { onSkillsSaved } from './lib/skills-saved.js'
 import { usePolled } from './lib/use-async.js'
 import { useIsMobile } from './lib/use-mobile.js'
 import { NotFound } from './components/NotFound.js'
@@ -101,6 +102,8 @@ export function App() {
   // follow it. Slow, and reloadable so adding a project from the sidebar's "New" reflects at once
   // (bump the key).
   const [projectsKey, setProjectsKey] = useState(0)
+  // A skill saved in Settings gives or takes a page too.
+  useEffect(() => onSkillsSaved(() => setProjectsKey(k => k + 1)), [])
   // Kept for the next visit too: the Overview's cards are drawn for the projects before they are read again.
   const { value: projects, loaded: projectsLoaded } = usePolled<ProjectSummary[]>(onProjects, EMPTY_PROJECTS, 30_000, [projectsKey], { remember: 'projects', stored: true })
   // Read again when a project is added from the sidebar or removed from its project home: which
