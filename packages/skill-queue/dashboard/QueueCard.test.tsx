@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { QueueCard } from './QueueCard.js'
-import { HostServicesContext, INERT_HOST_SERVICES } from '../../openagent/dashboard/lib/host-services.js'
-import type { MountedModules } from '../../openagent/dashboard/lib/use-modules.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../../dashboard/dashboard/lib/host-services.js'
+import type { MountedModules } from '../../dashboard/dashboard/lib/use-modules.js'
 import { NO_MODULES, fakeHost, renderWithHost, type FakeHost } from './test-host.js'
 import { workOnEntryPrompt } from '../src/module.js'
-import { configureFirst } from '../../openagent/dashboard/test-utils.js'
+import { configureFirst } from '../../dashboard/dashboard/test-utils.js'
 
 // The card on the Overview, rendered from nothing but this package: a host answering the queue
 // command, and no other module mounted. A queued ticket is a link into a repository the card has

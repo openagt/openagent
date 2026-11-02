@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import type { LinkAction } from '@openagt/dashboard/module'
-import type { MountedModules } from '../../openagent/dashboard/lib/use-modules.js'
+import type { MountedModules } from '../../dashboard/dashboard/lib/use-modules.js'
 import { HotTicketsCard } from './HotTicketsCard.js'
 import { fakeHost, renderWithHost, NO_MODULES, type Answers, type FakeHost } from './test-host.js'
 

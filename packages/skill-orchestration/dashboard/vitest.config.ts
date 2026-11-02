@@ -9,7 +9,7 @@ export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
   plugins: [react()],
   resolve: {
-    alias: { '@openagt/dashboard/module': fileURLToPath(new URL('../../openagent/dashboard/module/index.ts', import.meta.url)) },
+    alias: { '@openagt/dashboard/module': fileURLToPath(new URL('../../dashboard/dashboard/module/index.ts', import.meta.url)) },
   },
   test: {
     environment: 'jsdom',

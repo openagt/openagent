@@ -1,0 +1,135 @@
+{
+  "name": "@openagt/dashboard",
+  "version": "0.50.0",
+  "description": "OpenAgent: a local dashboard and daemon for coding agents. It starts an agent through the project's own start hook and shows every agent from the files it keeps; it runs no coding agent itself.",
+  "keywords": [
+    "ai",
+    "agent",
+    "claude-code",
+    "orchestration",
+    "openagent",
+    "codegen",
+    "cli",
+    "turnkey"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/openagt/openagent/tree/main/packages/dashboard#readme",
+  "bugs": {
+    "url": "https://github.com/openagt/openagent/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openagt/openagent.git",
+    "directory": "packages/dashboard"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./serve": {
+      "types": "./dist/serve.d.ts",
+      "default": "./dist/serve.js"
+    },
+    "./module": {
+      "types": "./dist/module-types/dashboard/module/index.d.ts"
+    },
+    "./module.css": "./dist/module.css",
+    "./module-server": {
+      "types": "./dist/module-server.d.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && tsc -p dashboard/tsconfig.module.json && cp dashboard/module/theme.css dist/module.css && cp src/module-server.d.ts dist/module-server.d.ts && node scripts/copy-extension.mjs && cd dashboard && vite build",
+    "prepack": "node -e \"if(!process.env.npm_config_user_agent?.startsWith('pnpm/')){console.error('Pack and publish with pnpm: it replaces workspace:* with the real version, npm does not');process.exit(1)}\"",
+    "dev": "tsc -p tsconfig.build.json --watch",
+    "dev:dashboard": "cd dashboard && vite",
+    "dev:daemon": "cd dashboard && OPENAGENT_DEV_DAEMON=1 vite",
+    "design:build": "tsx --tsconfig dashboard/tsconfig.json dashboard/design/build.mts",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p dashboard/tsconfig.json",
+    "test": "pnpm test:node && pnpm test:dashboard",
+    "test:node": "tsc -p tsconfig.test.json && node scripts/run-tests.mjs",
+    "test:dashboard": "cd dashboard && vitest run",
+    "clean": "rm -rf dist dist-test"
+  },
+  "dependencies": {
+    "@openagt/agent-driver-claude": "workspace:*",
+    "@openagt/agent-driver-codex": "workspace:*",
+    "@base-ui/react": "1.9.0",
+    "@openagt/agent-data": "workspace:*",
+    "@openagt/dashboard-changes": "workspace:*",
+    "@openagt/dashboard-devices": "workspace:*",
+    "@openagt/dashboard-files": "workspace:*",
+    "@openagt/skill-branches": "workspace:*",
+    "@openagt/skill-browser": "workspace:*",
+    "@openagt/skill-github": "workspace:*",
+    "@openagt/skill-logs": "workspace:*",
+    "@openagt/skill-orchestration": "workspace:*",
+    "@openagt/skill-queue": "workspace:*",
+    "@openagt/skill-tickets": "workspace:*",
+    "@openagt/skill-scheduler": "workspace:*",
+    "@openagt/skill-discord": "workspace:*",
+    "@openagt/skill-maintainability": "workspace:*",
+    "@openagt/skill-maintenance": "workspace:*",
+    "@openagt/skill-market-research": "workspace:*",
+    "@openagt/skill-plan": "workspace:*",
+    "@openagt/skill-plan-tickets": "workspace:*",
+    "@openagt/skill-post-merge-cleanup": "workspace:*",
+    "@openagt/skill-readability": "workspace:*",
+    "@openagt/skill-reply": "workspace:*",
+    "@openagt/skill-research": "workspace:*",
+    "@openagt/skill-security-audit": "workspace:*",
+    "@openagt/skill-suggest-new-features": "workspace:*",
+    "@openagt/skill-suggest-new-tickets": "workspace:*",
+    "@openagt/skill-suggest-tickets-to-work-on": "workspace:*",
+    "@openagt/skill-triage": "workspace:*",
+    "@openagt/skill-update-tickets": "workspace:*",
+    "@openagt/skill-ux": "workspace:*",
+    "@openagt/skill-work-queue": "workspace:*",
+    "@puppeteer/browsers": "3.2.1",
+    "@shadcn/react": "^0.2.1",
+    "@tiptap/core": "^2.10.0",
+    "@tiptap/pm": "^2.10.0",
+    "@tiptap/react": "^2.10.0",
+    "@tiptap/starter-kit": "^2.10.0",
+    "@tiptap/suggestion": "^2.10.0",
+    "@openagt/agent-driver": "workspace:*",
+    "@openagt/agent-runner": "workspace:*",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.469.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-resizable-panels": "^4.14.2",
+    "shiki": "4.5.0",
+    "tailwind-merge": "^2.6.0",
+    "tiptap-markdown": "^0.8.10",
+    "uqr": "0.1.3",
+    "yaml": "^2.5.0",
+    "@openagt/skill-account-rotation": "workspace:*"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^20.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.0.3",
+    "jsdom": "^29.1.1",
+    "material-icon-theme": "5.39.0",
+    "tailwindcss": "^4.0.0",
+    "tsx": "^4.22.4",
+    "typescript": "^7.0.2",
+    "vite": "^8.0.0",
+    "vitest": "^4.1.10"
+  },
+  "author": "Suleiman Shahbari",
+  "publishConfig": {
+    "access": "public"
+  }
+}

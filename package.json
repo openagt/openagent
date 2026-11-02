@@ -9,7 +9,7 @@
     "build": "pnpm -r --filter '!__private__website' run build",
     "// Serve the production build the way an install does: the daemon, not a static server": "",
     "preview": "pnpm build && node packages/start/dist/bin.js",
-    "dev": "pnpm build && pnpm -C packages/openagent dev",
+    "dev": "pnpm build && pnpm -C packages/dashboard dev",
     "typecheck": "pnpm -r run typecheck",
     "clean": "pnpm -r run clean",
     "// Try this checkout on a server before publishing: what Update does, with this build in place of npm's": "",
