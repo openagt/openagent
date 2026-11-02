@@ -1,8 +1,8 @@
 import { basename, dirname, join } from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
-import { nodeGitRunner, checkoutRoot, originDefaultBranch, type GitRunner, BRANCHES_DIR } from '@openagt/agent-data'
+import { nodeGitRunner, checkoutRoot, gitReason, originDefaultBranch, type GitRunner, BRANCHES_DIR } from '@openagt/agent-data'
 import { AGENT_BRANCH_PREFIX, isSafeAgentId, isAgentBranch, agentBranchName, agentIdFromWorktreeDir } from './branch-names.js'
-import { DATA_BRANCH } from '@openagt/agent-data/names'
+import { DATA_BRANCH, publishedBranch } from '@openagt/agent-data/names'
 
 /**
  * Git-worktree lifecycle for concurrent agents (#453/#735): give each agent its own
@@ -72,7 +72,7 @@ export interface AddWorktreeOptions {
   agentId: string
   /** The branch to create for the agent. */
   branch: string
-  /** Base ref to branch from; defaults to origin's default branch ({@link freshStart}). */
+  /** Base ref to branch from; defaults to origin's default branch ({@link freshStart}). A `publishedBase` is fetched first ({@link fetchedBase}). */
   base?: string
 }
 
@@ -110,6 +110,21 @@ async function freshStart(repo: string, git: GitRunner): Promise<string | undefi
 }
 
 /**
+ * A base the caller named. One that names origin's copy of a branch is fetched first, whatever
+ * this clone holds of it, by its full names, so a clone that follows only some of origin's
+ * branches gets it too. Unlike {@link freshStart} a fetch that fails rejects: the person picked this
+ * branch, and a copy from whenever this clone last saw it, or one gone from origin, is not it.
+ */
+async function fetchedBase(repo: string, base: string, git: GitRunner): Promise<string> {
+  const branch = publishedBranch(base)
+  if (branch === undefined) return base
+  await git(['fetch', '--quiet', '--no-write-fetch-head', 'origin', `+refs/heads/${branch}:${base}`], repo).catch((err: unknown) => {
+    throw new Error(`the branch ${branch} could not be fetched from origin: ${gitReason(err)}`)
+  })
+  return base
+}
+
+/**
  * Create a worktree for an agent on a fresh branch: `git worktree add --no-track -b <branch>
  * <path> <base>`, the base origin's default branch unless the caller names one. No upstream:
  * tracking writes the repository's shared `.git/config`, whose lock a running agent's own git
@@ -125,7 +140,7 @@ export async function addWorktree(
 ): Promise<AddedWorktree> {
   if (!isSafeAgentId(opts.agentId)) throw new Error(`unsafe agent id: ${opts.agentId}`)
   const path = worktreePath(repo, opts.agentId)
-  const base = opts.base ?? (await freshStart(repo, git))
+  const base = opts.base !== undefined ? await fetchedBase(repo, opts.base, git) : await freshStart(repo, git)
   await git(['worktree', 'add', '--no-track', '-b', opts.branch, path, ...(base ? [base] : [])], repo)
   return { path, branch: opts.branch }
 }

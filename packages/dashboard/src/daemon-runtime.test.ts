@@ -12,6 +12,7 @@ import { OPENAGENT_DIR } from './openagent-dir.js'
 import { addMachine, addProject, listMachines, listProjects, projectId, removeProject, tellMachine } from './registry.js'
 import type { OpenAgentEvent } from './events.js'
 import { nodeGitRunner } from '@openagt/agent-data'
+import { publishedBase } from '@openagt/agent-data/names'
 import { addWorktree, agentBranchName, worktreePath } from '@openagt/skill-branches'
 import { DATA_BRANCH, SHARE_SETTING, excludeFromGit, readSharing, withFileBranch, writeSharing } from '@openagt/agent-data'
 
@@ -113,6 +114,42 @@ test('a Start hands the line the branch to start from, and refuses a word that i
   } finally {
     await runtime.dispose()
     await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('a Start from a branch of origin\'s hands the line origin\'s copy; one gone from origin, or an origin that cannot be read, refuses in plain words before the line runs', async () => {
+  const BASE = `start: 'printf "%s" "\${BASE-unset}" > started.txt; echo "{\\"id\\":\\"run-9\\"}"'\n`
+  const home = await project(BASE)
+  const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
+  await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
+  const origin = await realpath(await mkdtemp(join(tmpdir(), 'openagent-origin-')))
+  const runtime = createProjectRuntime({ cwd: home, env })
+  const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd })
+  try {
+    git(origin, 'init', '-q', '--bare', '-b', 'main')
+    git(home, 'init', '-q', '-b', 'main')
+    git(home, 'commit', '-q', '--allow-empty', '-m', 'first')
+    git(home, 'remote', 'add', 'origin', origin)
+    git(home, 'push', '-q', 'origin', 'main', 'main:feature/x')
+    // This clone's copy outlives the branch, as it does in any clone: origin is what is asked.
+    git(home, 'fetch', '-q', 'origin')
+    assert.deepEqual(await runtime.onStart('Fix it', { base: publishedBase('feature/x') }), { ok: true, agentId: 'run-9' })
+    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), publishedBase('feature/x'))
+    await rm(join(home, 'started.txt'))
+
+    git(origin, 'update-ref', '-d', 'refs/heads/feature/x')
+    assert.deepEqual(await runtime.onStart('Fix it', { base: publishedBase('feature/x') }), { ok: false, error: 'The branch feature/x is no longer on origin. Pick another branch to start from.' })
+    git(home, 'remote', 'set-url', 'origin', join(origin, 'nowhere'))
+    assert.deepEqual(await runtime.onStart('Fix it', { base: publishedBase('main') }), { ok: false, error: 'Could not read the branch main from origin. Check the connection, or pick another branch to start from.' })
+    await assert.rejects(readFile(join(home, 'started.txt'), 'utf8'), 'the line did not run')
+
+    // The local pick asks nothing of origin: it starts where the origin cannot be read too.
+    assert.deepEqual(await runtime.onStart('Fix it', { base: 'main' }), { ok: true, agentId: 'run-9' })
+    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'main')
+  } finally {
+    await runtime.dispose()
+    await rm(home, { recursive: true, force: true })
+    await rm(origin, { recursive: true, force: true })
   }
 })
 

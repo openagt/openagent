@@ -16,6 +16,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   out, so an agent built on the user's unpushed work and its push published it. A
   repository with no remote still starts from the head: there is nothing else. A worktree,
   not a clone, so every checkout shares the repository's objects and refs.
+- A base named as origin's copy of a branch (`refs/remotes/origin/<branch>`) is fetched
+  first, and a fetch that fails fails the checkout. Picked over the default branch's five
+  seconds and its local copy: this branch was asked for by name, and an old copy of it, or
+  one origin has since deleted, is not what was asked for.
 - The repository's exclude file hides `.branches/` from the first checkout on: an
   untracked folder at the root would ride a sweeping `git add -A` onto a code branch, and
   `.gitignore` is tracked.

@@ -79,9 +79,12 @@ export interface StartAgentOptions {
   /** The person's saved pick of how far the run takes its work when the agent finishes. Absent, none is saved: the daemon starts the run at `commit`. A saved pick the project is not offered is held to the furthest the project goes with no pull request. */
   publish?: PublishPick
   /**
-   * The branch the agent's own branch starts from, as this machine has it, commits that are not
-   * pushed included: the launcher's "My local branch" pick. Absent, origin's default branch. A
-   * word that is no branch name refuses the Start. Not sent to another machine: its branches are its own.
+   * What the agent's own branch starts from, from the launcher's branch menu. A branch's name: that
+   * branch as this computer has it, commits that are not pushed included ("My local branch"). A
+   * `publishedBase`: that branch as origin has it, fetched at the Start; one origin no longer has,
+   * or an origin that cannot be read, refuses the Start. Absent, origin's default branch. A word
+   * that is no branch name refuses the Start. Not sent to a machine picked to run on: the launcher
+   * read this computer's branches, and that machine's copy is its own.
    */
   base?: string
   /**

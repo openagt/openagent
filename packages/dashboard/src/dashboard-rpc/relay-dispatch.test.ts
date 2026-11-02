@@ -53,6 +53,7 @@ test('every relayed rpc is classed as a read or an act, by name: a computer that
   // Pinned one by one: a function added to the whitelist fails here until its class is written down.
   const classes: Record<string, 'read' | 'act'> = {
     onProjectFiles: 'read',
+    onStartBranches: 'read',
     readModule: 'read',
     onGitStatus: 'read',
     onAgentWorktree: 'read',

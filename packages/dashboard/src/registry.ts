@@ -1,6 +1,7 @@
 import { sanitizeOverviewLayouts, type OverviewLayouts } from './overview-layout.js'
 import { basename, dirname, join, resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
+import { isBranchName } from './branch-name.js'
 import { isDriverName } from './driver-names.js'
 import { isPublishPick, type PublishPick } from './publish-levels.js'
 import { nodeFs } from './node-fs.js'
@@ -128,6 +129,20 @@ const CUSTOM_PRESET_LIMITS = { count: 30, label: 80, prompt: 20_000 } as const
 /** The cap on the projects `startFrom` lists, for the same reason. */
 const START_FROM_LIMIT = 200
 
+/**
+ * Where agents started from the launcher start, when it is not the project's main branch: the
+ * branch the project's folder is on, whatever that is by then, or one of origin's branches, by name.
+ */
+export type StartFromPick = { kind: 'local' } | { kind: 'published'; branch: string }
+
+/** A value read as a {@link StartFromPick}: nothing for anything else, a word that is no branch name included. */
+export function startFromPick(value: unknown): StartFromPick | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const { kind, branch } = value as { kind?: unknown; branch?: unknown }
+  if (kind === 'local') return { kind }
+  return kind === 'published' && isBranchName(branch) ? { kind, branch } : undefined
+}
+
 export interface Preferences {
   /** Fire a browser notification when a new item lands on the "needs you" queue (#627). Absent = on. */
   notifyBrowser?: boolean
@@ -159,12 +174,11 @@ export interface Preferences {
   /** How far a run started from the dashboard publishes its work: `nothing`, or the level handed to the project's start hook, `commit`, `branch`, `pr` or `merge`. The launcher's menu shows it and writes it. Absent = none saved: the daemon decides where a Start goes. */
   publish?: PublishPick
   /**
-   * Where an agent started from the launcher starts, per project: the projects, by id, whose
-   * launcher is set to "My local branch" (the branch the project's folder is on, as this machine
-   * has it). The launcher's "start from" chip shows it and writes it. **A project not listed
-   * starts from its main branch**, so the default stores nothing.
+   * Where an agent started from the launcher starts, per project, by its id: "My local branch",
+   * or a branch of origin's. The launcher's branch menu shows it and writes it. **A project not
+   * listed starts from its main branch**, so the default stores nothing.
    */
-  startFrom?: Record<string, 'local'>
+  startFrom?: Record<string, StartFromPick>
   /**
    * Where a run started from the launcher goes: a saved machine, by its id. The "Run on" pick
    * writes it, and the page picks it again at its next opening. **Absent = this machine.** A
@@ -436,10 +450,13 @@ function sanitizePreferences(value: unknown): Preferences {
  * capped at {@link START_FROM_LIMIT} projects. An id is not checked against the project list: a
  * project removed and added again has the same id, and its pick with it.
  */
-function sanitizeStartFrom(value: unknown): Record<string, 'local'> {
+function sanitizeStartFrom(value: unknown): Record<string, StartFromPick> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}
-  const ids = Object.entries(value).filter(([id, from]) => id !== '' && from === 'local').map(([id]) => id)
-  return Object.fromEntries(ids.slice(0, START_FROM_LIMIT).map(id => [id, 'local' as const]))
+  const picks = Object.entries(value).flatMap(([id, from]) => {
+    const pick = startFromPick(from)
+    return id !== '' && pick ? [[id, pick] as const] : []
+  })
+  return Object.fromEntries(picks.slice(0, START_FROM_LIMIT))
 }
 
 /**

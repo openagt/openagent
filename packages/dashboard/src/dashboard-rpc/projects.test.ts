@@ -9,7 +9,7 @@ import { PROJECT_HOOKS_FILE } from '../project-hooks.js'
 import { OPENAGENT_DIR } from '../openagent-dir.js'
 import { projectErrorStore } from '../project-errors.js'
 import { provideTestContext } from './test-context.js'
-import { onCloneCheck, onCommands, onOwnProjects, onProjects, onRecordsReach, sendAddProject, sendRemoveProject, sendShareRecords } from './projects.js'
+import { onCloneCheck, onCommands, onOwnProjects, onProjects, onRecordsReach, onStartBranches, sendAddProject, sendRemoveProject, sendShareRecords } from './projects.js'
 import { loginsWiring } from './logins.js'
 
 // Against the real registry, pointed at a temp $XDG_CONFIG_HOME so the user's own is never touched.
@@ -59,7 +59,86 @@ test('onProjects carries each project’s recorded errors, and nothing when ther
   }
 })
 
-// The launcher's "start from" chip is offered only where the pick would be obeyed: a real
+test('onStartBranches lists what origin has now, by asking origin: not the main branch, not the records\' branch, not this clone\'s old copies; and says so where origin cannot be read', async () => {
+  const { dir, restore } = await registered()
+  const origin = await realpath(await mkdtemp(join(tmpdir(), 'openagent-start-branches-')))
+  const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd, encoding: 'utf8' })
+  try {
+    provideTestContext()
+    const id = (await listProjects())[0]!.id
+    git(origin, 'init', '-q', '--bare', '-b', 'main')
+    git(dir, 'init', '-q', '-b', 'main')
+    git(dir, 'commit', '-q', '--allow-empty', '-m', 'first')
+    git(dir, 'remote', 'add', 'origin', origin)
+    git(dir, 'push', '-q', 'origin', 'main', 'main:agent-data', 'main:agent-fix-it', 'main:feature/x', 'main:old')
+    git(dir, 'fetch', '-q', 'origin')
+    git(dir, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+    git(origin, 'update-ref', '-d', 'refs/heads/old')
+    // A branch only this clone has is no published one.
+    git(dir, 'branch', 'mine')
+    assert.deepEqual(await onStartBranches(id), { branches: ['agent-fix-it', 'feature/x'] })
+
+    git(dir, 'remote', 'set-url', 'origin', join(origin, 'nowhere'))
+    assert.deepEqual(await onStartBranches(id), {})
+    assert.equal(await onStartBranches('no-such-project'), null)
+  } finally {
+    await restore()
+    await rm(origin, { recursive: true, force: true })
+  }
+})
+
+test('a command is waiting for the branch the launcher\'s pick starts agents from: the main branch, the folder\'s own, or a branch of origin\'s', async () => {
+  const { dir, restore } = await registered()
+  const origin = await realpath(await mkdtemp(join(tmpdir(), 'openagent-waiting-')))
+  const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd, encoding: 'utf8' })
+  const skill = async (name: string) => {
+    await mkdir(join(dir, '.agents', 'skills', name), { recursive: true })
+    await writeFile(join(dir, '.agents', 'skills', name, 'SKILL.md'), `---\nname: ${name}\ndescription: ${name}\ndisable-model-invocation: true\n---\nIt.\n`)
+  }
+  try {
+    provideTestContext()
+    const id = (await listProjects())[0]!.id
+    await mkdir(join(dir, OPENAGENT_DIR), { recursive: true })
+    await writeFile(join(dir, PROJECT_HOOKS_FILE), 'start: agent-runner run --detach "$PROMPT" ${BASE:+--base "$BASE"}\n')
+    git(origin, 'init', '-q', '--bare', '-b', 'main')
+    git(dir, 'init', '-q', '-b', 'main')
+    git(dir, 'commit', '-q', '--allow-empty', '-m', 'first')
+    git(dir, 'remote', 'add', 'origin', origin)
+    git(dir, 'push', '-q', 'origin', 'main')
+    git(dir, 'fetch', '-q', 'origin')
+    git(dir, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+    // On a branch of origin's only.
+    git(dir, 'checkout', '-q', '-b', 'feature-x')
+    await skill('on-feature')
+    git(dir, 'add', '.agents')
+    git(dir, 'commit', '-q', '-m', 'on-feature')
+    git(dir, 'push', '-q', 'origin', 'feature-x')
+    git(dir, 'checkout', '-q', 'main')
+    git(dir, 'branch', '-D', 'feature-x')
+    // Committed in the folder only, and written in the folder only.
+    git(dir, 'checkout', '-q', '-b', 'mine')
+    await skill('on-mine')
+    git(dir, 'add', '.agents')
+    git(dir, 'commit', '-q', '-m', 'on-mine')
+    await skill('uncommitted')
+    await skill('on-feature')
+    const waits = async (from?: { kind: 'local' } | { kind: 'published'; branch: string }) => Object.fromEntries(((await onCommands(id, from))?.commands ?? []).map(command => [command.name, command.waiting]))
+
+    assert.deepEqual(await waits(), { 'on-feature': 'main', 'on-mine': 'main', uncommitted: 'main' })
+    assert.deepEqual(await waits({ kind: 'local' }), { 'on-feature': 'mine', 'on-mine': undefined, uncommitted: 'mine' })
+    assert.deepEqual(await waits({ kind: 'published', branch: 'feature-x' }), { 'on-feature': undefined, 'on-mine': 'feature-x', uncommitted: 'feature-x' })
+    assert.deepEqual(await waits({ kind: 'published', branch: '--upload-pack=x' }), { 'on-feature': 'main', 'on-mine': 'main', uncommitted: 'main' }, 'a word that is no branch name is no pick')
+
+    // A pick the start line would not obey says nothing about where agents start.
+    await writeFile(join(dir, PROJECT_HOOKS_FILE), 'start: agent-runner run --detach "$PROMPT"\n')
+    assert.deepEqual(await waits({ kind: 'local' }), { 'on-feature': 'main', 'on-mine': 'main', uncommitted: 'main' })
+  } finally {
+    await restore()
+    await rm(origin, { recursive: true, force: true })
+  }
+})
+
+// The launcher's branch menu is offered only where the pick would be obeyed: a real
 // repository, its start line and its branches changed one step at a time.
 test('onCommands names the two branches an agent can start from only when the start line passes BASE on, the repository has a remote and the folder is on a branch', async () => {
   const { dir, restore } = await registered()

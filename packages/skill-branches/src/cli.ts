@@ -47,7 +47,7 @@ import { cleanup } from './cleanup.js'
 
 export const USAGE = `usage: branches <command>
 
-  create <id> [--base <ref>]   a checkout for agent <id>, on a fresh branch agent-<id>
+  create <id> [--base <ref>]   a checkout for agent <id>, on a fresh branch agent-<id>; a <ref> of refs/remotes/origin/<branch> is fetched first
   attach <id> <branch> [--base <ref>]
                                a checkout for agent <id>, on an existing branch; one that is gone starts again from <ref>
   name <name>                  rename this checkout's branch to agent-<name>; prints the name it got

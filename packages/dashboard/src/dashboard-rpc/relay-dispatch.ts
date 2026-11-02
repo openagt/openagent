@@ -4,7 +4,7 @@ import { commandReads, findProjectModule } from '../project-modules.js'
 import { resolveProjectPath } from './context.js'
 import { sendStop, sendChoice, sendMessage, sendOpenPullRequest, sendPush, sendMerge, sendMergeBranch, sendStart } from './control.js'
 import { asArrived } from './relay-agent.js'
-import { onCloneCheck, onCommands, onOwnProjects, onRecordsReach, onStartCheck } from './projects.js'
+import { onCloneCheck, onCommands, onOwnProjects, onRecordsReach, onStartBranches, onStartCheck } from './projects.js'
 import { onProjectSkills } from './skills.js'
 import type { StartAgentOptions } from '../dashboard/types.js'
 import { onCopiedLogins, sendCopiedLogin, sendCopiedUsage, sendForgetCopiedLogin, sendKeepCopiedLogin } from './copied-logins.js'
@@ -35,7 +35,7 @@ type RelayFn = (...args: unknown[]) => Promise<unknown>
 // this computer has (elsewhere.ts) is read here, and a run of it is started here, by the same
 // guarded start a run sent here gets: on this computer, never sent on. What destroys a run's
 // history or checkout, or changes how the project keeps its records, is still no other computer's to do.
-const RELAY_READS = { onProjectFiles, readModule, onGitStatus, onAgentWorktree, onAgentHandoff, onAgent, onOwnRuns, onStartCheck, onCommands, onDocs, onAgentsDoing, onRetainedWorktrees, onGitHostHome, onRepositoryOffer, onProjectSkills, onRecordsReach }
+const RELAY_READS = { onProjectFiles, readModule, onGitStatus, onAgentWorktree, onAgentHandoff, onAgent, onOwnRuns, onStartCheck, onCommands, onStartBranches, onDocs, onAgentsDoing, onRetainedWorktrees, onGitHostHome, onRepositoryOffer, onProjectSkills, onRecordsReach }
 const RELAY_ACTS = { sendStop, sendChoice, sendMessage, sendOpenPullRequest, sendPush, sendMerge, sendMergeBranch, sendStart: startHere, runModuleCommand }
 // Null-prototype, like RPC_HANDLERS (R1): the key is a request-controlled string, so a plain object
 // would answer `constructor`/`toString`/`valueOf` off Object.prototype and invoke them as handlers.

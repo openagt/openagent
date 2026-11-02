@@ -26,7 +26,7 @@ export const USAGE = `usage: agent-runner <command>
                                 open its pull request, or set the request to merge once its checks pass; without it the prompt goes as written, and nothing is committed or published unless the prompt asks;
                                 with --attach, the agent is handed <text> with the prompt, after it and before the --publish sentence, and with no later message; the run's record keeps it apart from the prompt, which alone names the run;
                                 with --parent, the run <id> is told when this one ends: which run, how it ended, its last words, as its next prompt;
-                                with --base, the run's branch starts from <ref> instead of origin's default branch;
+                                with --base, the run's branch starts from <ref> instead of origin's default branch; refs/remotes/origin/<branch> is that branch as origin has it, fetched first;
                                 with --branch, the run works on <name>, a branch that exists, such as a person's pull request's, instead of a fresh one;
                                 with --for, the run's record names what it was started for, a thread's address on the git host, so the next call there finds it
   run --detach <prompt>         the same run in its own process, answered at once with its id: what a dashboard's start hook runs

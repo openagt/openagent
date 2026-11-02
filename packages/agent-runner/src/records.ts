@@ -1,4 +1,5 @@
 import type { FileBranchWrite } from '@openagt/agent-data'
+import { publishedBranch } from '@openagt/agent-data/names'
 import { deleteRun, writeRun, type AnyDiaryLine, type LogsDeps, type RunCard } from '@openagt/skill-logs'
 
 /**
@@ -44,7 +45,7 @@ export interface RunnerMark {
   publish?: Publish
   /** The run this one was started for, told when this one ends (`run --parent`). */
   parent?: string
-  /** The branch this run's own branch started from (`run --base`); origin's default branch when absent. */
+  /** What this run's own branch started from (`run --base`): a branch of this clone, or origin's copy of one (`publishedBase`); origin's default branch when absent. */
   base?: string
   /** The commit this run's own branch was made at: where the run's own work begins. Absent for a run given a branch that existed. */
   baseCommit?: string
@@ -103,14 +104,14 @@ export function markerCard(run: { id: string; startedAt: string; prompt: string;
 
 /**
  * What a reader of the card finds beside `host`, outside this tool's mark: the run's parent, the
- * branch it was started from when it was told one, the commit its own work begins at, which its
+ * name of the branch it was started from when it was told one, the commit its own work begins at, which its
  * changes are measured from, and how far it takes its work, which a dashboard shows and offers to
  * change, and what it was started for, which a git host's check reads to find the run a thread has.
  */
 export function forReaders(mark: Pick<RunnerMark, 'parent' | 'base' | 'baseCommit' | 'publish' | 'for'>): { parent?: string; base?: string; baseCommit?: string; publish?: Publish; for?: string } {
   return {
     ...(mark.parent !== undefined ? { parent: mark.parent } : {}),
-    ...(mark.base !== undefined ? { base: mark.base } : {}),
+    ...(mark.base !== undefined ? { base: publishedBranch(mark.base) ?? mark.base } : {}),
     ...(mark.baseCommit !== undefined ? { baseCommit: mark.baseCommit } : {}),
     ...(mark.publish !== undefined ? { publish: mark.publish } : {}),
     ...(mark.for !== undefined ? { for: mark.for } : {}),

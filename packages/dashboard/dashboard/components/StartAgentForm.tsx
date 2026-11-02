@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { CircleAlert, Folder, Puzzle } from 'lucide-react'
+import type { StartFromPick } from '../../src/index.js'
 import { onCloneCheck, onStartCheck } from '../rpc/projects.js'
 import { thisMachineName } from '../lib/this-machine.js'
 import { onMachineLogins, onMachineStartCheck } from '../rpc/machines.js'
@@ -16,7 +17,7 @@ import { promptWithContext } from '../lib/use-context-set.js'
 import { AutoMenu } from './AutoMenu.js'
 import { ProjectContextMenu } from './ContextMenu.js'
 import { Composer, type ComposerHandle } from './Composer.js'
-import { StartFromMenu, type StartFrom } from './StartFromMenu.js'
+import { StartFromMenu, startFromBase } from './StartFromMenu.js'
 import { RowItem, rowButtonClass } from './ui/row-item.js'
 import { Dots } from './ToolCalls.js'
 import { ACCOUNTS_ENTRY, AgentFix, agentWords, useAgentState } from './Logins.js'
@@ -48,12 +49,13 @@ const THEIR_LOGINS_MS = 8_000
 // The row above the box says where the Start goes: the "Run on" pick, which the Composer draws
 // first, then the project's name, then the branch the agent starts from; at its other end, the git
 // host account the run pushes as, on the computer it goes to.
-// That branch is a menu: the project's main branch (origin's default branch, fetched fresh), or
-// "My local branch", the branch the project's folder is on, as committed on this machine. The pick
-// is saved per project. The local pick hands the start hook the branch's name as `BASE`; the main
-// branch hands it none. The pick is drawn only where it is obeyed: the daemon names the two
-// branches only when the project's start line passes `BASE` on, and a machine has its own branches,
-// so with a machine picked there is none and the Start names no branch.
+// That branch is a menu: the project's main branch (origin's default branch, fetched fresh), "My
+// local branch", the branch the project's folder is on, as committed on this machine, or another
+// of origin's branches, fetched fresh. The pick is saved per project. It reaches the start hook as
+// `BASE`: the local branch's name, or origin's copy of the branch by its full name; the main branch
+// hands it none. The pick is drawn only where it is obeyed: the daemon offers it only when the
+// project's start line passes `BASE` on, and a machine has its own branches, so with a machine
+// picked there is none and the Start names no branch.
 // The "Auto" menu, under the box at the left (the model menu is at the right): what the agent
 // does by itself when it finishes. Its button reads the picks, so nothing is hidden.
 // In it, how far the run takes its work: Off, Commit, Publish branch, Open PR, Merge on green.
@@ -129,15 +131,17 @@ export function StartAgentForm({
   // A project with no remote can publish nothing: its picks stop at the commit.
   const remote = foreign ? true : (launcher?.remote ?? true)
   const publishPick = publishPickIn(preferences.publish, gitHost, remote)
-  // The two branches the agent can start from, where the pick is offered at all.
+  // The branches every project's menu lists, where the pick is offered at all.
   const startFrom = foreign || clonedHere ? undefined : launcher?.startFrom
-  const startFromPick: StartFrom = preferences.startFrom?.[projectId] ?? 'main'
+  const startFromPick = preferences.startFrom?.[projectId]
   const preferencesLoaded = usePreferencesLoaded()
   // The whole map is written: a save names keys, and this is one key. The main branch is the
   // absent entry, so picking it takes the project out.
-  const pickStartFrom = (pick: StartFrom) => {
+  const pickStartFrom = (pick: StartFromPick | undefined) => {
     const { [projectId]: _was, ...others } = preferences.startFrom ?? {}
-    updatePreferences({ startFrom: pick === 'local' ? { ...others, [projectId]: 'local' } : others })
+    updatePreferences({ startFrom: pick ? { ...others, [projectId]: pick } : others })
+    // The red error may be about the branch just left behind.
+    if (error) reset()
   }
 
   // Re-read when the pick changes: `claude` being logged in says nothing about `codex`. A run on
@@ -177,7 +181,7 @@ export function StartAgentForm({
     const result = await start(projectId, promptWithContext(text, context), {
       ...startPicks(preferences),
       ...cleanupPick(preferences, commands),
-      ...(startFrom && startFromPick === 'local' ? { base: startFrom.local } : {}),
+      ...(startFrom ? startFromBase(startFromPick, startFrom.main, startFrom.local) : {}),
       ...(machine ? { machine: machine.id } : {}),
     })
     setNote(null)
@@ -215,7 +219,7 @@ export function StartAgentForm({
           projectName ? (
             <>
               <RowItem icon={<Folder className="h-3.5 w-3.5 shrink-0" aria-hidden />}>{projectName}</RowItem>
-              {startFrom && preferencesLoaded && <StartFromMenu main={startFrom.main} local={startFrom.local} pick={startFromPick} onPick={pickStartFrom} busy={busy} />}
+              {startFrom && preferencesLoaded && <StartFromMenu projectId={projectId} main={startFrom.main} local={startFrom.local} pick={startFromPick} onPick={pickStartFrom} busy={busy} />}
             </>
           ) : null
         }
