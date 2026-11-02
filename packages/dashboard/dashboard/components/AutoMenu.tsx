@@ -11,6 +11,7 @@ import {
   DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuItem,
+  DropdownMenuSeparator,
 } from './ui/dropdown-menu.js'
 
 const PUBLISH_DESCRIPTIONS: Readonly<Record<PublishPick, string>> = {
@@ -21,13 +22,22 @@ const PUBLISH_DESCRIPTIONS: Readonly<Record<PublishPick, string>> = {
   merge: 'It commits, pushes its branch and opens a pull request set to merge once its checks pass.',
 }
 
+/** Where a pull request goes: the branch now, and, on the launcher, the branches to pick from. */
+export interface PrTarget {
+  into: string
+  picks?: readonly string[]
+  onPick?: (branch: string) => void
+}
+
 // The launcher's "Auto" menu, under the box: how far the agent publishes its work when it
-// finishes. The trigger reads the pick itself ("Auto: Open PR"), so what a Start will do is on
-// screen with the menu shut.
+// finishes and, where a level opens a pull request and more than one branch can take it, which
+// branch it goes into. The trigger reads the picks themselves ("Auto: Open PR → login-page"), so
+// what a Start will do is on screen with the menu shut.
 export function AutoMenu({
   publish,
   picks,
   onPublish,
+  target,
   busy,
 }: {
   /** The publish pick in force. */
@@ -35,8 +45,13 @@ export function AutoMenu({
   /** The publish picks the project is offered. */
   picks: readonly PublishPick[]
   onPublish: (pick: PublishPick) => void
+  /** Absent where the pull request goes into the default branch with no say. */
+  target?: PrTarget | undefined
   busy: boolean
 }) {
+  // Only the levels that open a pull request have one to name.
+  const opensRequest = publish === 'pr' || publish === 'merge'
+  const into = opensRequest ? target : undefined
   return (
     <DropdownMenu>
       <Tooltip>
@@ -46,14 +61,15 @@ export function AutoMenu({
               type="button"
               disabled={busy}
               aria-label="Auto"
-              className={rowButtonClass}
+              // A branch's name can run long: of a set width at most, as the branch button is, phone too.
+              className={cn(rowButtonClass, 'max-w-[20rem]!')}
             />
           }
         >
-          <span className="truncate">{`Auto: ${PUBLISH_LABELS[publish]}`}</span>
+          <span className="truncate">{`Auto: ${PUBLISH_LABELS[publish]}${into ? ` → ${into.into}` : ''}`}</span>
           <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
         </TooltipTrigger>
-        <TooltipContent>What the agent does by itself when it finishes.</TooltipContent>
+        <TooltipContent>{`What the agent does by itself when it finishes.${into ? ` The pull request goes into ${into.into}.` : ''}`}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent className="min-w-[19rem] max-w-[22rem]">
         <DropdownMenuGroup>
@@ -66,6 +82,20 @@ export function AutoMenu({
             </DropdownMenuItem>
           ))}
         </DropdownMenuGroup>
+        {into?.picks && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="font-normal">The pull request goes into</DropdownMenuLabel>
+              {into.picks.map(branch => (
+                <DropdownMenuItem key={branch} aria-current={branch === into.into} onClick={() => into.onPick?.(branch)}>
+                  <Check className={cn('h-3.5 w-3.5 shrink-0', branch === into.into ? 'opacity-100' : 'opacity-0')} aria-hidden />
+                  <span className="truncate">{branch}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

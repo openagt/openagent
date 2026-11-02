@@ -63,6 +63,21 @@ test('open: the request is opened with the given words on the current branch, an
   }
 })
 
+test('open: a named base is the branch the request goes into; with none, gh is told none and the default branch takes it', async () => {
+  const dir = await repo()
+  try {
+    const into = fakeGh()
+    await openRequest(dir, { title: 'Fix it', base: 'login-page', gh: into.gh })
+    const create = into.calls.find(c => c[1] === 'create')!
+    assert.equal(create[create.indexOf('--base') + 1], 'login-page')
+    const plain = fakeGh()
+    await openRequest(dir, { title: 'Fix it', gh: plain.gh })
+    assert.equal(plain.calls.find(c => c[1] === 'create')!.includes('--base'), false)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test("a branch pushed to a fork, origin's push address, is opened from that fork", async () => {
   const dir = await repo()
   try {

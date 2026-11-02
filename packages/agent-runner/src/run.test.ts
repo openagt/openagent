@@ -789,6 +789,32 @@ test('the sentence a run adds after its prompts: none with no publish level, tha
   assert.equal(addedLine('merge'), 'When you finish, if you changed any file, commit your work, push your branch and open its pull request, set to merge on its own once its checks pass.')
 })
 
+test('a run with a pull request branch: the levels that open a request name it, the others say what they always say', () => {
+  assert.equal(addedLine('pr', 'login-page'), 'When you finish, if you changed any file, commit your work, push your branch and open its pull request into the branch login-page.')
+  assert.equal(addedLine('merge', 'login-page'), 'When you finish, if you changed any file, commit your work, push your branch and open its pull request into the branch login-page, set to merge on its own once its checks pass.')
+  assert.equal(addedLine('commit', 'login-page'), PUBLISH_LINES.commit)
+  assert.equal(addedLine('branch', 'login-page'), PUBLISH_LINES.branch)
+  assert.equal(addedLine(undefined, 'login-page'), undefined)
+})
+
+test('a pull request branch is on the record for the run\'s whole life: a resumed run, and one given the level only later, are told it', async () => {
+  const repo = await testRepo()
+  try {
+    const prompts: string[] = []
+    const listening = (text: string): Driver => ({ id: 'fake', start: async opts => wrap(await new FakeDriver({ turns: [{ text }], sessionId: 's-1' }).start(opts), async sent => void prompts.push(sent)) })
+    const first = await runCommand(repo, { prompt: 'Fix the typo', publish: 'commit', prBase: 'login-page', driver: listening(QUESTION), now: ticking(), gitHost: noGitHost })
+    assert.equal(prompts[0], `Fix the typo\n\n${PUBLISH_LINES.commit}`, 'nothing to say at a level that opens no request')
+    const card = await findRun(repo, first.id)
+    assert.equal(runnerMark(card!)?.prBase, 'login-page')
+    assert.equal(card!.caller?.['prBase'], 'login-page', 'what the dashboard reads')
+    await resumeRun(repo, { id: first.id, answer: 'Approve', publish: 'pr', driver: listening('Done.'), now: ticking(), gitHost: noGitHost })
+    assert.ok(prompts[1]?.endsWith(`${addedLine('pr', 'login-page')}`), prompts[1])
+    assert.equal(runnerMark((await findRun(repo, first.id))!)?.prBase, 'login-page')
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
 test('a run with a publish level: its agent is told the sentence, the record keeps the level, and a resumed run is told again; a run with none is told nothing', async () => {
   const repo = await testRepo()
   try {

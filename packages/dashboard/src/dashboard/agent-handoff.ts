@@ -397,19 +397,19 @@ export type HandoffResult = { ok: true; url?: string; number?: number } | { ok: 
 
 /**
  * Open a PR for a branch: the two providers composed (#1820). The branches provider pushes the
- * branch (`push --branch`), then the git host provider opens its request (`open --branch`); the
- * request's base is the git host's. A branch that already has an open request is answered as it is.
+ * branch (`push --branch`), then the git host provider opens its request (`open --branch`), into
+ * the run's own target when it has one, else the git host's default. A branch that already has an open request is answered as it is.
  * The branch has a PR now, so the cached "no PR" must go or the bar would keep offering to open
  * one for the next minute (#1028) — both caches: the single-PR view and the history.
  */
-async function publishBranch(cwd: string, branch: string, draft: { title: string; body: string; draft?: boolean }, branches: BranchesFor, gitHost: GitHostFor): Promise<HandoffResult> {
+async function publishBranch(cwd: string, branch: string, draft: { title: string; body: string; base?: string; draft?: boolean }, branches: BranchesFor, gitHost: GitHostFor): Promise<HandoffResult> {
   const source = await branches(cwd).catch(() => undefined)
   if (!source) return { ok: false, error: 'this project has no branches provider to push with' }
   const gitHostSource = await gitHost(cwd).catch(() => undefined)
   if (!gitHostSource) return { ok: false, error: 'this project has no git host package to open a pull request with' }
   const pushed = await source.push(branch)
   if (!pushed.ok) return { ok: false, error: pushed.error }
-  const opened = await gitHostSource.open(branch, { title: draft.title, body: draft.body, ...(draft.draft ? { draft: true } : {}) })
+  const opened = await gitHostSource.open(branch, { title: draft.title, body: draft.body, ...(draft.base !== undefined ? { base: draft.base } : {}), ...(draft.draft ? { draft: true } : {}) })
   if (!opened.ok) return { ok: false, error: opened.error }
   forgetPr(cwd, branch)
   forgetBranchPrs(cwd, branch)
@@ -527,7 +527,7 @@ export async function openAgentPullRequest(
   // Its commits are still counted once the default branch has them, from where its work began: nothing is left to open one for.
   if (handoff?.merged) return { ok: false, error: 'this session’s work is already merged' }
   const text = handoff ? await commitsPrText(cwd, agent, handoff.commits, handoff.name, options.git) : { title: agentPrTitle(agent), body: agentPrBody(agent) }
-  return publishBranch(cwd, branch, { ...text, ...(options.draft ? { draft: true } : {}) }, branches, gitHost)
+  return publishBranch(cwd, branch, { ...text, ...(agent.prBase !== undefined ? { base: agent.prBase } : {}), ...(options.draft ? { draft: true } : {}) }, branches, gitHost)
 }
 
 /**

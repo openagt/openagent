@@ -166,6 +166,7 @@ test('a resumed run continues on the tool its record names, and a Codex run with
 test('a spawned run is told its tool, and its model only when it has one', () => {
   assert.deepEqual(runArgs({ id: 'r1', prompt: '/work-queue', model: 'opus' }), ['run', '/work-queue', '--id', 'r1', '--model', 'opus'])
   assert.deepEqual(runArgs({ id: 'r1', prompt: '/work-queue', driver: 'codex' }), ['run', '/work-queue', '--id', 'r1', '--driver', 'codex'])
+  assert.deepEqual(runArgs({ id: 'r1', prompt: '/work-queue', prBase: 'login-page' }), ['run', '/work-queue', '--id', 'r1', '--pr-base', 'login-page'])
   assert.deepEqual(runArgs({ id: 'r1', prompt: '/work-queue', publish: 'merge' }), ['run', '/work-queue', '--id', 'r1', '--publish', 'merge'])
   assert.deepEqual(runArgs({ id: 'r1', prompt: '/work-queue', mark: true }), ['run', '/work-queue', '--id', 'r1', '--mark'])
   assert.deepEqual(runArgs({ id: 'r1', prompt: '/work-queue', startedAt: '2026-10-09T10:00:00.000Z' }), ['run', '/work-queue', '--id', 'r1', '--started', '2026-10-09T10:00:00.000Z'])

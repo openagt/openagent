@@ -131,7 +131,7 @@ export async function runProjectHooks(cwd: string, kind: HookKind, opts: RunHook
   }
 }
 
-/** What a `start` line is given: the prompt, and the coding agent, model, publish level and branch to start from when the person picked them. */
+/** What a `start` line is given: the prompt, and the coding agent, model, publish level branch to start from and pull request's branch when the person picked them. */
 export interface StartHookInput {
   prompt: string
   driver?: string
@@ -142,6 +142,8 @@ export interface StartHookInput {
   publish?: string
   /** The branch the run's own branch starts from; origin's default branch when absent. */
   base?: string
+  /** The branch the run's pull request goes into; the repository's default branch when absent. */
+  prBase?: string
   /**
    * Whether the run is given a short name by a small model (the person's setting). `false` reaches
    * the run's own tool through the environment rather than the line, so no project's `hooks.yml`
@@ -159,6 +161,11 @@ export function startLineTakesBase(line: string): boolean {
   return /\$\{?BASE\b/.test(line)
 }
 
+/** Whether a `start` line passes the branch a pull request goes into on, read as {@link startLineTakesBase} reads `BASE`. */
+export function startLineTakesPrBase(line: string): boolean {
+  return /\$\{?PR_BASE\b/.test(line)
+}
+
 /** What a `resume` line is given: the run, and the person's text or their answer to the question it ended on. */
 export type ResumeHookInput = { runId: string } & ({ text: string; publish?: string } | { answer: string })
 
@@ -167,7 +174,7 @@ export type RunHookResult = { ok: true; id: string; driver?: string } | { ok: fa
 
 /**
  * Run the project's `start` line: the prompt in `PROMPT`, the picks in `DRIVER`, `MODEL`, `EFFORT`,
- * `PUBLISH` and `BASE` when made. The line answers one JSON document on stdout whose `id` names the
+ * `PUBLISH`, `BASE` and `PR_BASE` when made. The line answers one JSON document on stdout whose `id` names the
  * run it started, and whose `driver` may name the coding agent that runs it.
  */
 export function runStartHook(cwd: string, input: StartHookInput, opts: Omit<RunHooksOptions, 'log'> = {}): Promise<RunHookResult> {
@@ -182,6 +189,7 @@ export function runStartHook(cwd: string, input: StartHookInput, opts: Omit<RunH
     ...(input.effort !== undefined ? { EFFORT: input.effort } : {}),
     ...(input.publish !== undefined ? { PUBLISH: input.publish } : {}),
     ...(input.base !== undefined ? { BASE: input.base } : {}),
+    ...(input.prBase !== undefined ? { PR_BASE: input.prBase } : {}),
   }, opts)
 }
 

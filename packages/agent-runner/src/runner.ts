@@ -75,7 +75,7 @@ export interface AgentAccounts {
   codex?: string[]
 }
 
-/** The command line of a spawned run: the model, the coding agent, the publish level, the attached text, the parent, the base, the branch and what it is for named only when the run has them, so the run's own defaults apply otherwise. */
+/** The command line of a spawned run: the model, the coding agent, the publish level, the attached text, the parent, the base, the pull request's base, the branch and what it is for named only when the run has them, so the run's own defaults apply otherwise. */
 export function runArgs(run: SpawnedRun): string[] {
   const args = ['run', run.prompt, '--id', run.id]
   if (run.startedAt !== undefined) args.push('--started', run.startedAt)
@@ -88,6 +88,7 @@ export function runArgs(run: SpawnedRun): string[] {
   if (run.attached !== undefined) args.push(`--attach=${run.attached}`)
   if (run.parent !== undefined) args.push('--parent', run.parent)
   if (run.base !== undefined) args.push('--base', run.base)
+  if (run.prBase !== undefined) args.push('--pr-base', run.prBase)
   if (run.branch !== undefined) args.push('--branch', run.branch)
   if (run.for !== undefined) args.push('--for', run.for)
   return args
@@ -113,6 +114,8 @@ export interface SpawnedRun {
   parent?: string
   /** The branch this run's branch starts from (`run --base`). */
   base?: string
+  /** The branch the run's pull request goes into (`run --pr-base`). */
+  prBase?: string
   /** The branch the run works on, one that exists (`run --branch`): a person's pull request's. */
   branch?: string
   /** What the run is started for (`run --for`): a thread on the git host, by its address. */
@@ -196,14 +199,14 @@ async function spawnDetached(repo: string, id: string, args: string[], account?:
  */
 export async function detachRun(
   repo: string,
-  opts: { prompt: string; model?: string; effort?: string; driver?: DriverName; publish?: Publish; attached?: string; parent?: string; base?: string; branch?: string; for?: string; now?: () => Date },
+  opts: { prompt: string; model?: string; effort?: string; driver?: DriverName; publish?: Publish; attached?: string; parent?: string; base?: string; prBase?: string; branch?: string; for?: string; now?: () => Date },
   deps: { spawn?: typeof spawnRun } = {},
 ): Promise<{ id: string; driver: DriverName; model?: string }> {
   const now = opts.now ?? (() => new Date())
   const id = runIdFrom(now().toISOString())
   const driver = opts.driver ?? 'claude-code'
   const model = opts.model
-  const named = { ...(opts.publish !== undefined ? { publish: opts.publish } : {}), ...(opts.attached !== undefined ? { attached: opts.attached } : {}), ...(opts.parent !== undefined ? { parent: opts.parent } : {}), ...(opts.base !== undefined ? { base: opts.base } : {}), ...(opts.branch !== undefined ? { branch: opts.branch } : {}), ...(opts.for !== undefined ? { for: opts.for } : {}) }
+  const named = { ...(opts.publish !== undefined ? { publish: opts.publish } : {}), ...(opts.attached !== undefined ? { attached: opts.attached } : {}), ...(opts.parent !== undefined ? { parent: opts.parent } : {}), ...(opts.base !== undefined ? { base: opts.base } : {}), ...(opts.prBase !== undefined ? { prBase: opts.prBase } : {}), ...(opts.branch !== undefined ? { branch: opts.branch } : {}), ...(opts.for !== undefined ? { for: opts.for } : {}) }
   await (deps.spawn ?? spawnRun)(repo, { id, prompt: opts.prompt, mark: true, driver, ...(model !== undefined ? { model } : {}), ...(opts.effort !== undefined ? { effort: opts.effort } : {}), ...named })
   return { id, driver, ...(model !== undefined ? { model } : {}) }
 }
@@ -230,7 +233,7 @@ export async function detachResume(
  * one given; none given, the coding agent starts on its own default. A parent it names that has
  * ended by the time this run ends is continued in a process of its own.
  */
-export async function runProject(repo: string, opts: { prompt: string; id?: string; startedAt?: string; mark?: boolean; model?: string; effort?: string; driver?: DriverName; publish?: Publish; attached?: string; parent?: string; base?: string; branch?: string; for?: string; log?: (line: string) => void }): Promise<RunOutcome> {
+export async function runProject(repo: string, opts: { prompt: string; id?: string; startedAt?: string; mark?: boolean; model?: string; effort?: string; driver?: DriverName; publish?: Publish; attached?: string; parent?: string; base?: string; prBase?: string; branch?: string; for?: string; log?: (line: string) => void }): Promise<RunOutcome> {
   const id = opts.id ?? runIdFrom(new Date().toISOString())
   const driver = opts.driver ?? 'claude-code'
   const setup = await readPersonal(repo, opts.log ?? (() => {}))
@@ -248,6 +251,7 @@ export async function runProject(repo: string, opts: { prompt: string; id?: stri
     ...(opts.attached !== undefined ? { attached: opts.attached } : {}),
     ...(opts.parent !== undefined ? { parent: opts.parent } : {}),
     ...(opts.base !== undefined ? { base: opts.base } : {}),
+    ...(opts.prBase !== undefined ? { prBase: opts.prBase } : {}),
     ...(opts.branch !== undefined ? { branch: opts.branch } : {}),
     ...(opts.for !== undefined ? { for: opts.for } : {}),
     resume: resumeDetached(repo),

@@ -1,7 +1,7 @@
 import { contextAddProject, contextProjectErrors, contextProjects, contextRemote, contextRemoveProject, contextStartedIn, resolveProjectPath } from './context.js'
 import { readProjectCommands, type ProjectCommand } from '../project-commands.js'
 import { DATA_BRANCH, branchReach, originDefaultBranch, pullFileBranch, readSharing, writeSharing, type BranchReach } from '@openagt/agent-data'
-import { readProjectHooks, runCheckHook, startLineTakesBase, type StartReadiness } from '../project-hooks.js'
+import { readProjectHooks, runCheckHook, startLineTakesBase, startLineTakesPrBase, type StartReadiness } from '../project-hooks.js'
 import { isPublishPick, publishPickIn, type PublishPick } from '../publish-levels.js'
 import { hasRemote } from '../has-remote.js'
 import { openagentVersion } from '../version.js'
@@ -195,6 +195,8 @@ export interface ProjectLauncher {
    * branch. The rest of the menu is {@link onStartBranches}.
    */
   startFrom?: { main: string; local: string }
+  /** Whether the start line passes `PR_BASE` on: without it the launcher offers no branch for the pull request to go into. */
+  prBase: boolean
 }
 
 /**
@@ -216,7 +218,7 @@ export async function onCommands(projectId: string, from?: StartFromPick): Promi
     const waits = waiting.get(command.name)
     return waits ? { ...command, waiting: waits.branch } : command
   })
-  return { commands: listed, startHook: hooks.start !== undefined, gitHost: gitHost !== undefined, remote, ...(address ? { address } : {}), ...(startFrom ? { startFrom } : {}) }
+  return { commands: listed, startHook: hooks.start !== undefined, gitHost: gitHost !== undefined, remote, prBase: hooks.start !== undefined && startLineTakesPrBase(hooks.start), ...(address ? { address } : {}), ...(startFrom ? { startFrom } : {}) }
 }
 
 /** The other branches the launcher's menu lists; `branches` is absent where origin could not be read. */

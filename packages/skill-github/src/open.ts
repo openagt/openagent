@@ -19,6 +19,8 @@ export interface OpenOptions {
   title: string
   /** What changed, and why. */
   body?: string
+  /** The branch the request goes into; the repository's default branch when absent. An open request keeps the one it has. */
+  base?: string
   /** Open as a draft. Not with `merge`: a draft cannot be merged. */
   draft?: boolean
   /** Arm the merge: the request lands on its own once its checks pass. */
@@ -66,6 +68,7 @@ export async function openRequest(cwd: string, opts: OpenOptions): Promise<OpenO
     try {
       const fork = await pushFork(cwd, git)
       const args = ['pr', 'create', '--head', fork !== undefined ? `${fork.split('/')[0]}:${branch}` : branch, '--title', opts.title, '--body', opts.body ?? '']
+      if (opts.base !== undefined) args.push('--base', opts.base)
       if (opts.draft && !opts.merge) args.push('--draft')
       const out = await gh(args, cwd)
       const url = out.trim().split('\n').filter(Boolean).at(-1)

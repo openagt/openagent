@@ -72,6 +72,8 @@ export interface AgentMeta {
    * started it.
    */
   baseCommit?: string
+  /** The branch the run's pull request goes into, written on the card by the tool that runs it; absent, the repository's default branch. */
+  prBase?: string
   /**
    * How far the run takes its work when its agent finishes: `commit`, `branch`, `pr` or `merge`,
    * the level it was started at or last given. Written on the card by the tool that runs it;

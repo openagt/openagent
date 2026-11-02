@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { CircleAlert, Folder, Puzzle } from 'lucide-react'
 import type { StartFromPick } from '../../src/index.js'
-import { onCloneCheck, onStartCheck } from '../rpc/projects.js'
+import { onCloneCheck, onStartBranches, onStartCheck } from '../rpc/projects.js'
 import { thisMachineName } from '../lib/this-machine.js'
 import { onMachineLogins, onMachineStartCheck } from '../rpc/machines.js'
 import { usePreferences, usePreferencesLoaded, updatePreferences } from '../lib/preferences.js'
@@ -17,7 +17,7 @@ import { promptWithContext } from '../lib/use-context-set.js'
 import { AutoMenu } from './AutoMenu.js'
 import { ProjectContextMenu } from './ContextMenu.js'
 import { Composer, type ComposerHandle } from './Composer.js'
-import { StartFromMenu, startFromBase } from './StartFromMenu.js'
+import { StartFromMenu, prTargetBranch, startFromBase } from './StartFromMenu.js'
 import { RowItem, rowButtonClass } from './ui/row-item.js'
 import { Dots } from './ToolCalls.js'
 import { ACCOUNTS_ENTRY, AgentFix, agentWords, useAgentState } from './Logins.js'
@@ -137,6 +137,15 @@ export function StartAgentForm({
     if (error) reset()
   }
 
+  // Where the pull request goes: the picked branch unless the person said main, for that branch; a
+  // new pick of the branch to start from starts over. Whether origin has "My local branch" is read
+  // from origin, as the branch menu's list is: this clone's copies keep branches origin deleted.
+  const [mainFor, setMainFor] = useState<string | null>(null)
+  const localOnOrigin = useLoaded<string[] | undefined>(launcher?.prBase && startFrom && startFromPick?.kind === 'local' ? () => onStartBranches(projectId).then(read => read?.branches, () => undefined) : null, undefined, [projectId, launcher?.prBase, startFrom !== undefined, startFromPick?.kind])
+  const prBranch = launcher?.prBase && startFrom ? prTargetBranch(startFromPick, startFrom.main, startFrom.local, localOnOrigin) : undefined
+  const prInto = prBranch !== undefined && mainFor !== prBranch ? prBranch : undefined
+  const prTarget = prBranch !== undefined && startFrom ? { into: prInto ?? startFrom.main, picks: [prBranch, startFrom.main], onPick: (branch: string) => setMainFor(branch === prBranch ? null : prBranch) } : undefined
+
   // Re-read when the pick changes: `claude` being logged in says nothing about `codex`. A run on
   // another machine uses that machine's CLIs, so this one's say nothing about it: the machine is asked.
   const driver = preferences.driver
@@ -174,6 +183,7 @@ export function StartAgentForm({
     const result = await start(projectId, promptWithContext(text, context), {
       ...startPicks(preferences),
       ...(startFrom ? startFromBase(startFromPick, startFrom.main, startFrom.local) : {}),
+      ...(prInto !== undefined ? { prBase: prInto } : {}),
       ...(machine ? { machine: machine.id } : {}),
     })
     setNote(null)
@@ -226,6 +236,7 @@ export function StartAgentForm({
               publish={publishPick}
               picks={offeredPublishPicks(gitHost, remote)}
               onPublish={pick => updatePreferences({ publish: pick })}
+              target={prTarget}
               busy={busy}
             />
             <button type="button" onClick={() => openSettings(SKILLS_ENTRY, projectId)} className={rowButtonClass}>

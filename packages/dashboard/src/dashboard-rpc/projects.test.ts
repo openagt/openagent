@@ -171,13 +171,18 @@ test('onCommands names the two branches an agent can start from only when the st
     await hooks('./start.sh "$PROMPT" "$BASELINE"')
     assert.equal(await startFrom(), undefined, 'another variable whose name begins the same is not BASE')
 
+    await hooks('./start.sh "$PROMPT" "$BASE"')
+    assert.equal((await onCommands(id))?.prBase, false, 'a line that does not pass it on is offered no target')
+    await hooks('./start.sh "$PROMPT" "$BASE" "$PR_BASE"')
+    assert.equal((await onCommands(id))?.prBase, true)
+
     await hooks(TAKES)
     git('checkout', '-q', '--detach')
     assert.equal(await startFrom(), undefined, 'the folder is on no branch')
 
     await rm(join(dir, PROJECT_HOOKS_FILE))
     git('checkout', '-q', 'main')
-    assert.deepEqual(await onCommands(id), { commands: [], startHook: false, gitHost: false, remote: true, address: 'example.com/x' })
+    assert.deepEqual(await onCommands(id), { commands: [], startHook: false, gitHost: false, remote: true, prBase: false, address: 'example.com/x' })
     assert.equal(await onCommands('no-such-project'), null)
   } finally {
     await restore()

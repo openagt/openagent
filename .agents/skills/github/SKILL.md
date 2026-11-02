@@ -19,7 +19,7 @@ Open a pull request only when your task or the person asks for one, or asks you 
 npx @openagt/skill-github@0.1 open --title "<one line naming what the change does>" --body "<what changed, and why>"
 ```
 
-It opens the pull request for the branch you are on and prints it in `request` (`number`, `url`). A branch that already has an open pull request gets no second one: that one is answered, with `existing` true. Add `--merge` when the work may land on its own: the pull request then merges once its checks pass, also where the repository does not allow auto-merge (`merge` in the answer says `auto-armed`, `merged` or `watching`). Add `--draft` instead for a pull request a person should look at first; with `--merge` too, `--draft` is dropped.
+It opens the pull request for the branch you are on and prints it in `request` (`number`, `url`). A branch that already has an open pull request gets no second one: that one is answered, with `existing` true. Add `--base <branch>` when you were told which branch the pull request goes into; without it, it goes into the project's default branch. Add `--merge` when the work may land on its own: the pull request then merges once its checks pass, also where the repository does not allow auto-merge (`merge` in the answer says `auto-armed`, `merged` or `watching`). Add `--draft` instead for a pull request a person should look at first; with `--merge` too, `--draft` is dropped.
 
 A pull request whose body has a line `Closes #<number>` closes that issue when it merges.
 

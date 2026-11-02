@@ -18,7 +18,7 @@ import { gitHostCommand } from './git-host.js'
 export const USAGE = `usage: agent-runner <command>
 
   run <prompt> [--model <id>] [--effort <level>] [--driver <claude-code|codex>] [--publish <commit|branch|pr|merge>] [--attach <text>] [--parent <id>] [--base <ref>]
-      [--branch <name>] [--for <thread>]
+      [--pr-base <branch>] [--branch <name>] [--for <thread>]
                                 one run of <prompt> in its own checkout, now, recorded; on Claude Code unless --driver says Codex,
                                 on the coding agent's own default model unless --model names one;
                                 with --publish, the agent is told, in one sentence after the prompt, how far to take its work when it finishes: commit it, and from there push its branch,
@@ -26,6 +26,7 @@ export const USAGE = `usage: agent-runner <command>
                                 with --attach, the agent is handed <text> with the prompt, after it and before the --publish sentence, and with no later message; the run's record keeps it apart from the prompt, which alone names the run;
                                 with --parent, the run <id> is told when this one ends: which run, how it ended, its last words, as its next prompt;
                                 with --base, the run's branch starts from <ref> instead of origin's default branch; refs/remotes/origin/<branch> is that branch as origin has it, fetched first;
+                                with --pr-base, the --publish sentence names <branch> as the branch its pull request goes into, instead of origin's default branch;
                                 with --branch, the run works on <name>, a branch that exists, such as a person's pull request's, instead of a fresh one;
                                 with --for, the run's record names what it was started for, a thread's address on the git host, so the next call there finds it
   run --detach <prompt>         the same run in its own process, answered at once with its id: what a dashboard's start hook runs
@@ -108,7 +109,7 @@ type Command = (args: string[], io: CliIo, git: GitRunner) => Promise<unknown>
 
 const COMMANDS: Record<string, Command> = {
   async run(args, io, git) {
-    const { positionals, values } = parse(args, { id: { type: 'string' }, model: { type: 'string' }, effort: { type: 'string' }, resume: { type: 'string' }, answer: { type: 'string' }, detach: { type: 'boolean' }, mark: { type: 'boolean' }, driver: { type: 'string' }, publish: { type: 'string' }, attach: { type: 'string' }, started: { type: 'string' }, parent: { type: 'string' }, base: { type: 'string' }, branch: { type: 'string' }, for: { type: 'string' }, by: { type: 'string' } }, 0, 1)
+    const { positionals, values } = parse(args, { id: { type: 'string' }, model: { type: 'string' }, effort: { type: 'string' }, resume: { type: 'string' }, answer: { type: 'string' }, detach: { type: 'boolean' }, mark: { type: 'boolean' }, driver: { type: 'string' }, publish: { type: 'string' }, attach: { type: 'string' }, started: { type: 'string' }, parent: { type: 'string' }, base: { type: 'string' }, 'pr-base': { type: 'string' }, branch: { type: 'string' }, for: { type: 'string' }, by: { type: 'string' } }, 0, 1)
     const repo = await project(io.cwd, git)
     const driver = values.driver
     if (driver !== undefined && !isDriverName(driver)) throw new Usage(`unknown driver "${driver}"; the drivers are ${DRIVER_NAMES.join(' and ')}`)
@@ -123,6 +124,7 @@ const COMMANDS: Record<string, Command> = {
       if (values.started !== undefined) throw new Usage('--resume takes no --started: a run continues from the start its record names')
       if (values.parent !== undefined) throw new Usage('--resume takes no --parent: a run continues for the parent its record names')
       if (values.base !== undefined) throw new Usage('--resume takes no --base: a run continues on its own branch')
+      if (values['pr-base'] !== undefined) throw new Usage('--resume takes no --pr-base: a run continues into the branch its record names')
       if (values.branch !== undefined) throw new Usage('--resume takes no --branch: a run continues on its own branch')
       if (values.for !== undefined) throw new Usage('--resume takes no --for: a run continues for what its record names')
       if (positionals[0] === undefined && values.answer === undefined) throw new Usage('a text or --answer is needed to resume a run')
@@ -130,6 +132,7 @@ const COMMANDS: Record<string, Command> = {
     if (values.by !== undefined && (values.resume === undefined || !values.by.trim())) throw new Usage('--by names who resumes a run, with --resume')
     if (values.branch !== undefined && values.base !== undefined) throw new Usage('--branch takes no --base: the run works on a branch that exists')
     if (values.branch !== undefined && !values.branch.trim()) throw new Usage('--branch needs a branch name')
+    if (values['pr-base'] !== undefined && !values['pr-base'].trim()) throw new Usage('--pr-base needs a branch name')
     if (values.for !== undefined && !values.for.trim()) throw new Usage('--for needs what the run is for')
     if (values.attach !== undefined && !values.attach.trim()) throw new Usage('--attach needs a text')
     if (values.started !== undefined && (values.id === undefined || Number.isNaN(Date.parse(values.started)))) throw new Usage('--started is the time a run spawned with --id was asked for, like 2026-10-09T10:00:00.000Z')
@@ -144,7 +147,7 @@ const COMMANDS: Record<string, Command> = {
       const ready = await readyToRun(repo, driver ?? 'claude-code')
       if (ready.problems.length > 0) throw new Refused({ ok: false, reason: 'not-ready', ...ready }, ready.problems.join(' '))
     }
-    const named = { ...(publish !== undefined ? { publish } : {}), ...(values.attach !== undefined ? { attached: values.attach } : {}), ...(values.parent !== undefined ? { parent: values.parent } : {}), ...(values.base !== undefined ? { base: values.base } : {}), ...(values.branch !== undefined ? { branch: values.branch.trim() } : {}), ...(values.for !== undefined ? { for: values.for.trim() } : {}) }
+    const named = { ...(publish !== undefined ? { publish } : {}), ...(values.attach !== undefined ? { attached: values.attach } : {}), ...(values.parent !== undefined ? { parent: values.parent } : {}), ...(values.base !== undefined ? { base: values.base } : {}), ...(values['pr-base'] !== undefined ? { prBase: values['pr-base'].trim() } : {}), ...(values.branch !== undefined ? { branch: values.branch.trim() } : {}), ...(values.for !== undefined ? { for: values.for.trim() } : {}) }
     if (values.detach && values.resume !== undefined) {
       const resumed = await detachResume(repo, {
         id: values.resume,
