@@ -6,7 +6,7 @@ const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: v
 vi.mock('../rpc/logins.js', () => logins)
 vi.mock('../rpc/server-logins.js', () => ({ onServerLogins: vi.fn(async () => ({ computer: 'Studio', servers: [] })), sendUseLoginsOn: vi.fn(), sendAllowLogins: vi.fn(), sendSettleLogin: vi.fn() }))
 
-const { GitHostsCard } = await import('./GitHosts.js')
+const { GitHostOff, GitHostsCard } = await import('./GitHosts.js')
 
 const provider = (over: Record<string, unknown> = {}) => ({
   name: 'GitHub',
@@ -33,6 +33,32 @@ afterEach(() => {
   cleanup()
   forgetRemembered()
   for (const fn of Object.values(logins)) fn.mockReset()
+})
+
+describe('the git host in a session\'s row', () => {
+  const home = { url: 'https://github.com/o/r', name: 'GitHub' }
+
+  test('its logo and name, off; no account, whichever is in use now: a run\'s record keeps none', async () => {
+    logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider() }] })
+    const { container } = render(<GitHostOff home={home} />)
+    const item = await screen.findByRole('button', { name: 'GitHub' })
+    expect((item as HTMLButtonElement).disabled).toBe(true)
+    expect(container.textContent).toBe('GitHub')
+    expect(container.textContent).not.toMatch(/@|octo/)
+    // The host's own logo, from its package.
+    expect(item.querySelector<HTMLElement>('[aria-hidden]')!.style.maskImage).toContain(encodeURIComponent('<svg'))
+  })
+
+  test('nothing for a project with no page on a git host, and nothing until the logo is read, so it lands whole', async () => {
+    let answer: (view: unknown) => void = () => {}
+    logins.onGitHosts.mockImplementation(() => new Promise(resolve => { answer = resolve }))
+    const { container, rerender } = render(<GitHostOff home={home} />)
+    expect(container.textContent).toBe('')
+    answer({ hosts: [{ host: 'github.com', projects: [], provider: provider() }] })
+    await screen.findByRole('button', { name: 'GitHub' })
+    rerender(<GitHostOff home={null} />)
+    expect(container.textContent).toBe('')
+  })
 })
 
 describe('Git hosts', () => {

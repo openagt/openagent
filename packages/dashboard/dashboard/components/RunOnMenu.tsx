@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Laptop, Plus } from 'lucide-react'
+import { Check, ChevronDown, Laptop, Plus, type LucideIcon } from 'lucide-react'
 import type { Machine } from '../lib/machines.js'
 import type { MachineStatus } from '../lib/use-machine-status.js'
 import { thisMachineName } from '../lib/this-machine.js'
@@ -52,6 +52,20 @@ function wordsOf(machine: Machine): string {
   return kind === 'shared' ? `${place}. Runs use your own logins.` : place
 }
 
+/** The target in words, as the row above the box draws it: its icon, with a dot when it is not this machine, and its name. */
+export function RunOnWords({ icon: Icon, elsewhere, label }: { icon: LucideIcon; elsewhere: boolean; label: string }) {
+  return (
+    <>
+      <span className="relative flex shrink-0">
+        <Icon className="h-3.5 w-3.5" aria-hidden />
+        {elsewhere && <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[var(--color-primary)]" />}
+      </span>
+      <span className="truncate">{label}</span>
+      <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+    </>
+  )
+}
+
 // One flat "Run on" list (#1067): this machine, then the saved machines and "Add a machine",
 // with a single checkmark.
 // Two looks for the one menu: an icon button for the compact single row, and the target in words,
@@ -85,14 +99,7 @@ export function RunOnMenu({ connection, busy, inRow = false }: { connection: Con
           }
         >
           {inRow ? (
-            <>
-              <span className="relative flex shrink-0">
-                <Icon className="h-3.5 w-3.5" aria-hidden />
-                {!onThisMachine && <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[var(--color-primary)]" />}
-              </span>
-              <span className="truncate">{summary}</span>
-              <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
-            </>
+            <RunOnWords icon={Icon} elsewhere={!onThisMachine} label={summary} />
           ) : (
             <>
               <Icon className="h-4 w-4" />

@@ -4,16 +4,16 @@ import { AgentActionsMenu } from './AgentActionsMenu.js'
 import { AgentErrorCount } from './AgentErrorCount.js'
 import { PaneMenu, PaneToggles } from './Panes.js'
 import { ShowSidebarButton } from './SidebarToggle.js'
-import { thisMachineName } from '../lib/this-machine.js'
+import { ProjectMenu } from './ProjectActions.js'
 
-// One agent's top bar, as Claude Code on the web lays it out: its name with a small ⌄, which is
-// the page's one menu (AgentActionsMenu); beside it a grey chip with where it runs and its
-// project; and at the end the count of what it could not get past and the icons of the page's
-// panes (Panes). It says nothing of
-// the agent's state or of its tree: the feed and the message box say whether the agent works and
-// how it ended, and its branch, what the branch holds and the next step are in the bar above the
-// message box (AgentWorkBar). One bar for the session whether running or finished (AgentView), so
-// the controls stay put when an agent reaches Done.
+// One agent's top bar: its name with a small ⌄, which is the session's menu (AgentActionsMenu); and
+// at the end the count of what it could not get past, the project's ⋮, and the icons of the page's
+// panes (Panes), the ⋮ and the icons where the "New agent" page has them. It says nothing of the
+// agent's state or of its tree: the feed and the message box say whether the agent works and how it
+// ended, where it runs and its project are in the row above the message box (SessionRow), and its
+// branch, what the branch holds and the next step in the bar above that (AgentWorkBar). One bar for
+// the session whether running or finished (AgentView), so the controls stay put when an agent
+// reaches Done.
 export function AgentActionBar({
   projectId,
   agentId: agentId,
@@ -21,9 +21,8 @@ export function AgentActionBar({
   retainedWorktree = false,
   onWorktreeRemoved,
   onDeleted,
+  onProjectRemoved,
   label,
-  projectName,
-  runsOn = thisMachineName(),
   expanded = false,
   onToggle,
   ready = true,
@@ -35,10 +34,6 @@ export function AgentActionBar({
   events: OpenAgentEvent[]
   /** The session's name: it leads the bar, and is the button of the session's menu. */
   label?: string | undefined
-  /** The session's project, said in the chip beside the name. */
-  projectName?: string | null | undefined
-  /** Where the session runs, in a few words: this machine, another machine by its name, the cloud. */
-  runsOn?: string
   /** True when this finished agent still has a worktree on disk, so it can be removed (#737). */
   retainedWorktree?: boolean
   /** Told after that worktree is removed, so the menu item goes. */
@@ -46,6 +41,8 @@ export function AgentActionBar({
   /** Told after this session is deleted, so the caller can leave it (#1032). Given only for a
    * finished run: absent, no delete is offered. */
   onDeleted?: (() => void) | undefined
+  /** Told once the project is off the list; given, the project's menu offers "Remove project". */
+  onProjectRemoved?: (() => void) | undefined
   /** Whether the details strip the caller renders under this bar is shown. */
   expanded?: boolean
   /** Given, the session's menu shows and hides that strip. */
@@ -67,15 +64,11 @@ export function AgentActionBar({
     // phone's over it: a module's stylesheet carries its own copy of the plain class, which comes
     // later and would win. The row is as tall as the "New agent" page's (ProjectActions) and as an
     // open pane's header, so the three stand level; unlike a pane's, it has no line under it.
-    <div className="@container flex h-11 shrink-0 items-center gap-2 overflow-hidden pr-2 md:pl-4 max-md:pl-11">
+    <div className="flex h-11 shrink-0 items-center gap-2 overflow-hidden pr-2 md:pl-4 max-md:pl-11">
       <ShowSidebarButton />
       <PaneMenu />
-      {/* Which session this is, as Claude Code on the web says it: its name, which is the button of
-          its menu, and a grey chip with where it runs and its project. The name is the one part
-          that gives up width; the chip is cut at a cap and drops out of a bar too narrow for it. It is
-          shown by default and hidden by the narrow bar's own rule, with no class that sets how it
-          is shown: a module's stylesheet carries its own copy of such classes (`hidden`), which
-          comes later and won over the rule that showed the chip again, so it never showed. */}
+      {/* Which session this is: its name, which is the button of its menu and the one part that
+          gives up width. */}
       <AgentActionsMenu
         projectId={projectId}
         agentId={agentId}
@@ -87,15 +80,13 @@ export function AgentActionBar({
         {...(onToggle ? { details: { open: expanded, onToggle } } : {})}
         size={size}
       />
-      <span data-testid="runs-on" className="max-w-64 shrink-0 truncate rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground @max-md:hidden" title={projectName ? `${runsOn} · ${projectName}` : runsOn}>
-        {projectName ? `${runsOn} · ${projectName}` : runsOn}
-      </span>
       {/* The spacer grows but never shrinks (#1030), so a tight row takes its width from the name. */}
       <div className="grow shrink-0" />
       {/* What the agent could not get past (#1500): the log scrolls, this row does not. It sits
           at the end rather than beside the name, which gives up width as the row fills: a
           count is only useful if it is whole. */}
       {ready && <AgentErrorCount events={events} />}
+      <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />
       <PaneToggles />
     </div>
   )

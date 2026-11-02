@@ -20,9 +20,9 @@ import { promptWithContext, type ContextSet } from '../lib/use-context-set.js'
 export const RESUME_MESSAGE =
   'This session was stopped before it finished, not because the work was done. Look at what you had already done, then carry on from there.'
 
-// One composer for a session, live or finished (#1026). Nothing is said above the box: how the
-// agent ended, that it works, a message that waits and subagents that still work are all said by
-// the chat, and a question by its panel.
+// One composer for a session, live or finished (#1026). Above the box is only where the session
+// started (SessionRow): how the agent ended, that it works, a message that waits and subagents that
+// still work are all said by the chat, and a question by its panel.
 //
 // A send is always the same call, `sendMessage`: the person's words, the next prompt of the same
 // conversation (#1774). What happens to them is the daemon's side of it: a run that is working
@@ -47,6 +47,7 @@ export function AgentComposer({
   controls,
   contextSet,
   publish,
+  row,
 }: {
   projectId: string
   /** Which run this addresses (#749). */
@@ -73,6 +74,8 @@ export function AgentComposer({
   contextSet?: ContextSet | undefined
   /** How far the run takes its work, as its record says (`commit`, `branch`, `pr`, `merge`); absent, none. The "Auto" menu shows it and changes it from the next message on. */
   publish?: string | undefined
+  /** The row above the box: where the session started. */
+  row?: ReactNode
 }) {
   const composerRef = useRef<ComposerHandle>(null)
   const { busy, error, run } = useAction()
@@ -204,6 +207,7 @@ export function AgentComposer({
         submitBusyLabel={live ? 'Sending…' : 'Resuming…'}
         showDriverModel={false}
         inAgent
+        sessionRow={row}
         sessionModel={model}
         sessionContext={context}
         {...(contextSet ? { addContext: contextSet.add, removeContext: contextSet.remove } : {})}

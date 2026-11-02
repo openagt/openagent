@@ -3,15 +3,15 @@ import type { AgentWorktree } from '../../src/index.js'
 import { X } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 
-// The bar right above the message box, as Claude Code on the web has one: where the agent's work
-// is (the project, the branch), what the branch holds (+N −N), its pull request, and, at the end,
+// The bar above the message box and its row, as Claude Code on the web has one: where the agent's
+// work is (the project, the branch), what the branch holds (+N −N), its pull request, and, at the end,
 // the next step as a button and an ✕ that puts the bar away. It is there while there is something
 // to say: the agent has changes, a pull request or a next step. An agent that changed nothing has
 // no bar.
 //
-// It is a filled grey strip sitting on the message box, not a bordered one floating above it:
-// Claude Code's is white at 5% with a 10px corner and no border, and bar and box read as one block
-// of controls under the conversation rather than as two boxes.
+// It is a filled grey strip, not a bordered one floating above the box: Claude Code's is white at 5%
+// with a 10px corner and no border, and bar and box read as one block of controls under the
+// conversation rather than as two boxes.
 export function AgentWorkBar({
   projectName,
   checkout,

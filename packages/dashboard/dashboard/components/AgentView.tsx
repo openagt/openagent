@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentDoing, AgentMeta, AgentWorktree, OpenAgentEvent } from '../../src/index.js'
-import { onAgent, onAgentsDoing, onGitHostHome, onRetainedWorktrees } from '../rpc/reads.js'
+import { onAgent, onAgentMainBranch, onAgentsDoing, onGitHostHome, onRetainedWorktrees } from '../rpc/reads.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
 import { handoffSays, useAgentHandoff } from '../lib/use-agent-handoff.js'
 import { useCheckoutStatus } from '../lib/use-checkout-status.js'
 import { isAgentActive, agentOutcome, cardOutcome } from '../lib/live-state.js'
 import { AgentActionBar } from './AgentActionBar.js'
+import { SessionRow } from './SessionRow.js'
+import { startedFromBranch, startedFromMain } from '../lib/started-from.js'
 import { RunPrLabels } from './RunPrLabels.js'
 import type { ContextSet } from '../lib/use-context-set.js'
 import { AgentComposer } from './AgentComposer.js'
@@ -69,6 +71,7 @@ export function AgentView({
   onAgentStarted,
   contextSet,
   onDeleted,
+  onProjectRemoved,
   subagents = NO_SUBAGENTS,
 }: {
   projectId: string
@@ -79,17 +82,17 @@ export function AgentView({
   /** Whether the agent is still running; `null` while the daemon's list of agents has not been read, so it is not known yet. */
   live: boolean | null
   /** What the run's card says, off the runs poll: what the feed cannot carry (the details strip's facts, how the agent was set up, whether it is a subagent, whether its record is being saved). Absent until the card is listed. */
-  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'saving' | 'parent' | 'workspace' | 'branch' | 'base' | 'host' | 'otherHost' | 'publish' | 'earlierPrs'>) | undefined
+  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'saving' | 'parent' | 'workspace' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'earlierPrs' | 'remoteKind'>) | undefined
   /** The session's own name — the same label the rail shows (#1030). It leads the action bar as
    * the stable identity, so the branch renaming itself near the end of an agent (#736) reads as a
    * detail changing rather than the whole view changing. */
   label?: string | undefined
-  /** The session's project, said in the chip beside the session's name in the top bar. */
+  /** The session's project, said in the row above the message box. */
   projectName?: string | null | undefined
   /** Where the agent executes (#1053/#610): `actions` swaps the live feed for a burst-mode affordance; `remote` is relayed to a machine (#1067); `web` is handed to a Claude Code cloud session. */
   target?: 'local' | 'actions' | 'remote' | 'web' | undefined
   /** The machine this agent executes on (#1067), when it is relayed to another one, by the name it
-   *  was given: the chip beside the session's name says it. */
+   *  was given: the row above the message box says it. */
   remoteLabel?: string | undefined
   files: string[]
   /** The live channel's health (#948) — surfaced as a banner under the top bar. */
@@ -104,6 +107,8 @@ export function AgentView({
   contextSet?: ContextSet | undefined
   /** Leave this session after it is deleted (#1032) — back to the project home. */
   onDeleted?: (() => void) | undefined
+  /** Told once the project is removed from the project's menu in the top bar, to leave its page; absent, no remove is offered. */
+  onProjectRemoved?: (() => void) | undefined
   /** The runs started for this run, oldest first: rows in its chat, and a line above the message box while any works. */
   subagents?: readonly AgentMeta[]
 }) {
@@ -175,9 +180,14 @@ export function AgentView({
   // How full this session's context is: the run's own last reading, against what the agent says
   // the model holds. Either missing, no circle.
   const window = modelContextWindow(models, picked, model)
-  // Where the agent runs, for the chip beside its name: a machine by the name it was given.
+  // Where the agent runs, for the row above the message box: a machine by the name it was given.
   // A run another computer started, which is no saved machine, is named by that computer: it did not run here.
   const runsOn = remoteLabel ?? (target === 'web' ? 'Cloud' : target === 'actions' ? 'GitHub Actions' : target === 'remote' ? 'Another machine' : card?.otherHost && card.host ? card.host : thisMachineName())
+  // The branch it started from, for that row: its card's, or, where the card says it was origin's
+  // default branch, the name that has on the computer the run is on. Read once: it never changes.
+  const fromMain = startedFromMain(card)
+  const mainBranch = useLoaded<string | null>(fromMain ? () => onAgentMainBranch(projectId, agentId) : null, null, [projectId, agentId, fromMain], { remember: `main-branch:${projectId}:${agentId}` })
+  const startedFrom = startedFromBranch(card, mainBranch)
   const [open, setOpen] = useState(false)
   // What the installed modules add to this run's page: a summary in the bar above the message box.
   const { runSlots: mountedSlots, panels: mountedPanels } = useMountedModules()
@@ -381,6 +391,9 @@ export function AgentView({
   // Every pull request the run opened, for the row under the message box: the ones before, then the one it is on.
   const earlierPrs = card?.earlierPrs
   const prs = useMemo(() => [...(earlierPrs ?? []), ...(pr && !earlierPrs?.some(earlier => earlier.url === pr.url) ? [pr] : [])], [earlierPrs, pr])
+  // Where the session started, right above the message box, as the "New agent" page has it. It is
+  // there whatever stands in the box's place.
+  const row = <SessionRow runsOn={runsOn} target={target} remoteKind={card?.remoteKind} elsewhere={elsewhere || card?.otherHost === true} projectName={projectName} startedFrom={startedFrom} worksOn={barCheckout?.branch ?? branch} gitHost={gitHostHome} />
   const workState = [agentId, barCheckout?.branch ?? '', onBranch?.commits.length ?? 0, onBranch?.pendingFiles?.length ?? 0, onBranch?.insertions ?? 0, onBranch?.deletions ?? 0, onBranch?.pushed ?? false, pr?.number ?? '', pr?.state ?? ''].join('|')
 
   return (
@@ -392,11 +405,10 @@ export function AgentView({
             agentId={agentId}
             events={shown}
             label={label}
-            projectName={projectName}
-            runsOn={runsOn}
             retainedWorktree={hasWorktree}
             onWorktreeRemoved={onWorktreeRemoved}
             onDeleted={onDeleted}
+            onProjectRemoved={onProjectRemoved}
             expanded={open}
             onToggle={toggle}
             ready={ready}
@@ -416,7 +428,7 @@ export function AgentView({
       }
       bottom={
         <>
-          {/* Where the work is and the next step, right above the message box. */}
+          {/* Where the work is and the next step, above the message box and its row. */}
           <AgentWorkBar
             projectName={projectName}
             checkout={barCheckout}
@@ -450,9 +462,12 @@ export function AgentView({
             // A run another computer started, which is no saved machine, is only read here: a
             // message would continue it on this computer, under its id, with this computer's
             // logins and none of its conversation.
-            <p role="note" className="rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground">
-              {`This run is on ${card.host}. Continue it there.`}
-            </p>
+            <div className="mx-auto w-full max-w-3xl p-2">
+              {row}
+              <p role="note" className="rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground">
+                {`This run is on ${card.host}. Continue it there.`}
+              </p>
+            </div>
           ) : (
           <AgentComposer
             projectId={projectId}
@@ -468,6 +483,7 @@ export function AgentView({
             controls={<RunPrLabels prs={prs} />}
             contextSet={contextSet}
             publish={card?.publish}
+            row={row}
           />
           )}
         </>

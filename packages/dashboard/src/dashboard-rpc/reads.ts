@@ -1,4 +1,5 @@
 import { stat } from 'node:fs/promises'
+import { originDefaultBranch } from '@openagt/agent-data'
 import { moduleAgents, type ModuleAgent, type ModuleAgentsWanted } from '../dashboard/module-agents.js'
 import { join } from 'node:path'
 import type { BridgeBrowserStatus } from '../bridge-browser.js'
@@ -530,6 +531,20 @@ let buildingDashboard: Promise<DashboardData> | undefined
  */
 export async function onProjectFiles(projectId: string, agentId?: string): Promise<string[]> {
   return relayOr(agentId, 'onProjectFiles', [projectId, agentId], () => withAgentPath(projectId, agentId, crawlRepoFiles, []), [])
+}
+
+/**
+ * The name of origin's default branch on the computer a run is on: what a run that made its own
+ * branch and was told no other started from, read by the rule the start itself goes by. Null for a
+ * clone with none: such a run started from whatever was checked out, which nobody wrote down.
+ */
+export async function onAgentMainBranch(projectId: string, agentId: string): Promise<string | null> {
+  return relayOr(agentId, 'onAgentMainBranch', [projectId, agentId], async () => {
+    const root = await resolveProjectPath(projectId)
+    if (!root) return null
+    const main = await originDefaultBranch(root).catch(() => undefined)
+    return main?.slice('origin/'.length) ?? null
+  }, null)
 }
 
 /** The project's page on its git host and the git host's name (#489, #1820), or null: no git host package, no remote there, or the relay. */

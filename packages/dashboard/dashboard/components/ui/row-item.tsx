@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import { cn } from '../../lib/utils.js'
+import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip.js'
 
 // The look of what stands in the rows above and under the message box, as in Claude Code's: plain
 // words with an icon, no border, every one the same height and size, a little smaller than the
@@ -15,6 +16,38 @@ export const rowButtonClass = cn(
   rowItemClass,
   'transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50',
 )
+
+/** A row of items above or under the box: one line of a fixed height, no wrap. */
+export const rowClass = 'flex h-8 items-center gap-2'
+/** Its left side, which gives way: each item cut short, and on a phone, where cut short they would say nothing, scrolled sideways under a faded edge. */
+export const rowLeftClass = 'flex min-w-0 flex-1 items-center gap-0.5 max-sm:overflow-x-auto max-sm:[scrollbar-width:none] max-sm:[mask-image:linear-gradient(to_right,#000_85%,transparent)]'
+
+/**
+ * The row above the box, on both pages: where the agent starts, or where it started. A fixed height
+ * and no wrap, so a name that lands late moves nothing; the later items give way first, each cut
+ * short, and on a phone the row scrolls sideways, its right edge faded to say so.
+ */
+export function RowAboveBox({ children, end }: { children: ReactNode; end?: ReactNode }) {
+  return (
+    <div className={cn('mb-1', rowClass)}>
+      <div className={rowLeftClass}>{children}</div>
+      {end && <div className="shrink-0">{end}</div>}
+    </div>
+  )
+}
+
+/**
+ * A disabled row button and what its hover says. A disabled button takes no pointer, so the hover
+ * is on what holds it, which gives way in the row as the button does.
+ */
+export function RowOff({ tip, children }: { tip: string; children: ReactElement }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="inline-flex min-w-0 max-w-full shrink max-sm:max-w-none max-sm:shrink-0" />}>{children}</TooltipTrigger>
+      <TooltipContent>{tip}</TooltipContent>
+    </Tooltip>
+  )
+}
 
 /** A plain row item: an icon and a few words that say one thing. Not a button. */
 export function RowItem({ icon, children }: { icon: ReactNode; children: ReactNode }) {

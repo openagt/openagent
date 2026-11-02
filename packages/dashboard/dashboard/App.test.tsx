@@ -29,6 +29,10 @@ vi.mock('./components/ProjectHome.js', () => ({
   ProjectHome: ({ projectName, onProjectRemoved }: { projectName?: string; onProjectRemoved?: () => void }) =>
     createElement('p', null, `the launcher of ${projectName}`, createElement('button', { onClick: onProjectRemoved }, 'remove the project')),
 }))
+vi.mock('./components/ProjectActions.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('./components/ProjectActions.js')>()),
+  ProjectMenu: ({ onProjectRemoved }: { onProjectRemoved?: () => void }) => (onProjectRemoved ? createElement('button', { onClick: onProjectRemoved }, 'remove the project from its menu') : null),
+}))
 
 const { App } = await import('./App.js')
 
@@ -558,6 +562,24 @@ describe('the project select (#1513)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'remove the project' }))
     await waitFor(() => expect(reads()).toBe(before + 1))
     expect(url()).toBe('/')
+  })
+
+  test('a project removed from a session\'s page leaves the page for the Overview, with the projects read again; another computer\'s project offers no removal here', async () => {
+    answerTwo()
+    window.history.replaceState(null, '', '/site/3-s')
+    render(<App />)
+    await screen.findByRole('button', { name: 'Logs' })
+    const reads = () => calls.filter(call => call.name === 'onModules').length
+    const before = reads()
+    fireEvent.click(await screen.findByRole('button', { name: 'remove the project from its menu' }))
+    await waitFor(() => expect(reads()).toBe(before + 1))
+    expect(url()).toBe('/')
+    cleanup()
+    answers.set('onProjects', () => [{ ...OTHER, machine: 'studio' }])
+    window.history.replaceState(null, '', '/site/3-s')
+    render(<App />)
+    await screen.findByRole('button', { name: 'Session actions' })
+    expect(screen.queryByRole('button', { name: 'remove the project from its menu' })).toBeNull()
   })
 
   test('a link to a project\'s page shows nothing, not "No such page", while the projects are still being read', async () => {

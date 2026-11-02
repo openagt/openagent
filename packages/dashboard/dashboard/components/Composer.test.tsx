@@ -228,6 +228,18 @@ describe('Composer (#721)', () => {
     expect(screen.queryByRole('button', { name: 'Send' })).toBeNull() // nothing seeded
   })
 
+  test('the row above the box: the launcher\'s, led by "Run on"; inside a session, the one it is given, in the same place, and no "Run on" of its own', () => {
+    renderComposer({ startsAt: <span>the launcher's place</span> })
+    const box = () => screen.getByRole('button', { name: 'Commands' }).closest('.rounded-xl')!
+    const followedByBox = (el: Element) => el.closest('.h-8')!.nextElementSibling === box()
+    expect(followedByBox(screen.getByText("the launcher's place"))).toBe(true)
+    expect(followedByBox(screen.getByRole('button', { name: 'Run on' }))).toBe(true)
+    cleanup()
+    renderComposer({ inAgent: true, sessionRow: <div className="h-8"><span>where it started</span></div> })
+    expect(followedByBox(screen.getByText('where it started'))).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Run on' })).toBeNull()
+  })
+
   // #1073: pressing Start on an offline "Run on" machine would silently attempt the ~15s relay, so
   // Start is blocked with a reason pointing back to the "Run on" pick. No auto-fallback: the target stays.
   test('the agents and models offered are those of the machine picked in "Run on"; inside a session, never', async () => {

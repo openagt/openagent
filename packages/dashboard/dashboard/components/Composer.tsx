@@ -32,6 +32,7 @@ import { AgentAccountItems, firstAccount, readMachineAccountsAhead, useAccountsO
 import { readMachineGitHostsAhead } from './GitHosts.js'
 import { ACCOUNTS_ENTRY } from './Logins.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
+import { RowAboveBox, rowClass, rowLeftClass } from './ui/row-item.js'
 
 // The driver + model tree (#650/#656/#658): each driver lists ONLY its own models, since the
 // model passes straight through to that coding agent. Picking a model in a driver's submenu sets both, so an
@@ -53,15 +54,11 @@ export interface ComposerHandle {
   focus: () => void
 }
 
-/** A row of items above or under the box: one line of a fixed height, no wrap. */
-const ROW = 'flex h-8 items-center gap-2'
-/** Its left side, which gives way: each item cut short, and on a phone, where cut short they would say nothing, scrolled sideways under a faded edge. */
-const ROW_LEFT = 'flex min-w-0 flex-1 items-center gap-0.5 max-sm:overflow-x-auto max-sm:[scrollbar-width:none] max-sm:[mask-image:linear-gradient(to_right,#000_85%,transparent)]'
-
 // The shared agent composer (#721), laid out as Claude Code's: a box one line tall when empty that
 // holds the commands menu (+), the text (the Tiptap editor, `/` `@` `#` triggers) and the submit at
-// its right; a row under it with the caller's controls at the left and the model at the right; and,
-// where an agent is started, a row above it saying where (led by the "Run on" pick).
+// its right; a row under it with the caller's controls at the left and the model at the right; and
+// a row above it saying where the agent starts (led by the "Run on" pick), or, inside a session,
+// where it started (`sessionRow`).
 // Factored out of the launcher (StartAgentForm) so the run-view chat (AgentComposer) gets the
 // same surface, wired to the same data (files, commands, saved prompts, prefs). The caller owns
 // what happens on submit: the launcher starts a run, the chat says the text to the run. The `@`
@@ -107,6 +104,8 @@ export const Composer = forwardRef<ComposerHandle, {
   /** Inside a session: the "Run on" pick is the launcher's, since a session already runs where it
    *  was started. */
   inAgent?: boolean | undefined
+  /** Inside a session: the row above the box, which says what the launcher's row picks. */
+  sessionRow?: ReactNode
   /** Off when nothing can be started here (the project has no start hook): the submit stays disabled. */
   canSubmit?: boolean | undefined
   /** Occupies the submit slot while the box is empty (#1455): the session page's Stop while the
@@ -117,7 +116,7 @@ export const Composer = forwardRef<ComposerHandle, {
   /** The saved machine the project is on, when only another computer of the person's has it (elsewhere.ts). */
   home?: string | undefined
 }>(function Composer(
-  { files, addContext, removeContext, startsAt, startsAtEnd, controls, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, compact = false, showDriverModel = true, inAgent = false, canSubmit = true, idleControl, home },
+  { files, addContext, removeContext, startsAt, startsAtEnd, controls, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, compact = false, showDriverModel = true, inAgent = false, sessionRow, canSubmit = true, idleControl, home },
   ref,
 ) {
   const [prompt, setPrompt] = useState('')
@@ -409,18 +408,15 @@ export const Composer = forwardRef<ComposerHandle, {
 
   return (
     <>
-      {/* Where the agent starts, above the box, where an agent is started (his pick): the machine,
-          the project and the branch, drawn as the row under the box draws its items. A fixed height
-          and no wrap, so a name that lands late moves nothing; the later items give way first, each
-          cut short, and on a phone the row scrolls sideways, its right edge faded to say so. */}
-      {!inAgent && (
-        <div className={cn('mb-1', ROW)}>
-          <div className={ROW_LEFT}>
-            {runOnEl}
-            {startsAt}
-          </div>
-          {startsAtEnd && <div className="shrink-0">{startsAtEnd}</div>}
-        </div>
+      {/* Where the agent starts, above the box (his pick): the machine, the project and the branch,
+          drawn as the row under the box draws its items. A session has its own words in the same place. */}
+      {inAgent ? (
+        sessionRow
+      ) : (
+        <RowAboveBox end={startsAtEnd}>
+          {runOnEl}
+          {startsAt}
+        </RowAboveBox>
       )}
 
       {loginsNote}
@@ -440,8 +436,8 @@ export const Composer = forwardRef<ComposerHandle, {
       {/* How it runs, under the box: the caller's controls at the left, the model at the right. The
           left side is the one that gives way: a longer label there never moves the model or the
           page below. */}
-      <div className={cn('mt-1', ROW)}>
-        <div className={ROW_LEFT}>{controls}</div>
+      <div className={cn('mt-1', rowClass)}>
+        <div className={rowLeftClass}>{controls}</div>
         <div className="shrink-0">
           {driverModelEl || (
             <span className="flex items-center">

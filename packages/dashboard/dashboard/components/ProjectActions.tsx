@@ -6,10 +6,15 @@ import { ShowSidebarButton } from './SidebarToggle.js'
 /** The menu is given no session, so no events: it acts on the project. Stable, so it does not churn on every render. */
 const NO_EVENTS: OpenAgentEvent[] = []
 
-// The bar at the top of the "New agent" page: the ⋮ menu of actions on the project and the icons
-// of the page's panes (Panes), at the end of the row. The row is laid out as an agent's top bar is
-// (AgentActionBar), so the icons are in the same place on both pages. It names no project and says
-// nothing of the project's checkout.
+/** The ⋮ of actions on the project, on the "New agent" page's bar and on a session's, before the panes' icons. */
+export function ProjectMenu({ projectId, onProjectRemoved }: { projectId: string; onProjectRemoved?: (() => void) | undefined }) {
+  return <AgentActionsMenu projectId={projectId} events={NO_EVENTS} onProjectRemoved={onProjectRemoved} />
+}
+
+// The bar at the top of the "New agent" page: the project's ⋮ menu and the icons of the page's
+// panes (Panes), at the end of the row. The row is laid out as an agent's top bar is
+// (AgentActionBar), so the ⋮ and the icons are in the same place on both pages. It names no project
+// and says nothing of the project's checkout.
 export function ProjectActions({
   projectId,
   onProjectRemoved,
@@ -23,7 +28,7 @@ export function ProjectActions({
       <ShowSidebarButton />
       <PaneMenu />
       <div className="grow shrink-0" />
-      <AgentActionsMenu projectId={projectId} events={NO_EVENTS} onProjectRemoved={onProjectRemoved} />
+      <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />
       <PaneToggles />
     </div>
   )

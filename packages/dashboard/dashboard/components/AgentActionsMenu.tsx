@@ -14,6 +14,7 @@ import {
 import { useLoaded } from '../lib/use-async.js'
 import { buttonVariants } from './ui/button.js'
 import { useAction } from '../lib/use-action.js'
+import { cn } from '../lib/utils.js'
 import { isAgentActive } from '../lib/live-state.js'
 import { describeSessionLink } from '../lib/session-link.js'
 import { buildResumeCommand } from '../lib/resume-command.js'
@@ -32,14 +33,15 @@ import {
   DropdownMenuSubContent,
 } from './ui/dropdown-menu.js'
 
-// The one menu of a page's top bar.
+// The menus of a page's top bar.
 //
-// On an agent's page (the menu is given the agent) the agent's name is its button: the name with a small ⌄, opening
-// to the session's details, its folder, its editor, the project's page on its git host, its
-// session link, the command that resumes it, and Stop, Remove worktree, Delete.
+// Given an agent, the agent's name is its button: the name with a small ⌄, opening to the session's
+// details, its folder, its editor, the project's page on its git host, its session link, the command
+// that resumes it, and Stop, Remove worktree, Delete.
 //
-// On the "New agent" page there is no session, and a ⋮ holds all of the project's: its git host
-// page, its skills, the offer of a repository, where the agents' records go, its folder, its editor.
+// Given none, a ⋮ holds all of the project's: its git host page, its skills, the offer of a
+// repository, where the agents' records go, its folder, its editor. It stands in the same place on
+// the "New agent" page and on an agent's page (ProjectMenu).
 //
 // The handoff's Push / Open PR are not here: they move the work forward, and sit in the bar above
 // the message box. The editor keeps its preferred-editor submenu; Delete opens its confirm dialog
@@ -182,7 +184,7 @@ export function AgentActionsMenu({
                 <DropdownMenuTrigger
                   type="button"
                   aria-label={title}
-                  className={buttonVariants({ variant: 'outline', size: 'icon-sm' })}
+                  className={cn(buttonVariants({ variant: 'outline', size: 'icon-sm' }), 'shrink-0')}
                 />
               }
             >
