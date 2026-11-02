@@ -15,7 +15,7 @@ import { readDiary, type AnyDiaryLine } from '@openagt/skill-logs'
 export const git = nodeGitRunner()
 
 /**
- * Hand this process the basic skills as `@openagt/start` hands them to OpenAgent: logs, question
+ * Hand this process the basic skills as `@openagt/dashboard` hands them to OpenAgent: logs, question
  * and github, from this package's own install.
  */
 export function handDownBasicSkills(): void {

@@ -74,6 +74,7 @@ test('root finds its programs in the system\'s own folders, holds the install al
   // The version is read off a file: OpenAgent itself is not started by root, and no package's script is.
   assert.doesNotMatch(text('openagent'), /bin\/openagent --version/)
   assert.match(text('openagent'), /npm install --global --ignore-scripts /)
+  assert.match(text('openagent'), /"@openagt\/dashboard@\$VERSION"/)
 })
 
 test('the server\'s user gets Claude Code and Codex by each one\'s own installer, asking nothing, only what it lacks, and an installer that brings none is said', async () => {

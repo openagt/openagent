@@ -7,6 +7,36 @@ belongs in the code and its tests, not here; a choice made while implementing is
 implementer's judgment, not a decision. An AI writes a bullet only for a pick a person
 already made, and lists it in its pull request; for anything else it proposes and asks.
 
+## The command
+- OpenAgent is run as this package, by the one command it brings, `openagent`. The skills
+  every run gets by default are named here, and only here, and the runner links the skills
+  it is handed. Picked over a package of its own for the command and that list
+  (`@openagt/start`), a second name in front of the dashboard; and over the list staying in
+  the runner.
+- A project's own skill takes a default's place by having its name: the project's
+  `.claude/skills/<name>` or `.agents/skills/<name>`, committed on the branch an agent
+  starts from. Picked over a skill saying which default it does in a line of its own, a
+  format nothing needs yet.
+- The defaults are what an agent needs in any project to work at all (logs, question,
+  and github on a GitHub project) and the skills the dashboard has pages for that need no
+  setup of their own (orchestration, tickets, queue), so a page never shows work an agent
+  cannot do. The rest are picked from init's list. Picked over the first three alone, which
+  left the tickets and the queue a list of ticks away from a new project, and over every
+  skill of the list, each one more description in every agent's context.
+- Typed inside a Git repository, the command adds that repository to the projects, by
+  its top folder, as "Add project" does, with the agents' records kept on this computer.
+  The server adds no folder by itself: the command names the one it was typed in.
+  Picked over the person adding the folder they had just typed the command in, a second
+  step before anything else; and over the server adding its own start folder, which
+  brought back at every start a project the person had removed.
+- Typed in a terminal, the command opens the dashboard in the browser, on the page of the
+  project it was typed in, picked in the sidebar too; outside a repository, on the
+  Overview. Picked over printing the address only, one more step for the person.
+- Typed while a dashboard already runs on the port, the command hands that dashboard the
+  repository it was typed in, opens the project's page and ends; it does not stop the
+  running one, even of another version, and says so when the versions differ (#2141).
+  Picked over failing because the port is taken, which made a second start look broken.
+
 ## The dashboard
 - A projection of files: it shows a project's runs by reading what the runs write, and it
   runs no agent of its own. Picked over the dashboard owning the agent it shows, which is
@@ -163,7 +193,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   project's remote is on that host: it was not chosen by the project, so it does not
   answer for a project on another host. Picked over each project installing them itself,
   which left a project with nothing installed unable to start an agent or to see one.
-- A project has a skill when every run gets it by default (`@openagt/start` names those), or
+- A project has a skill when every run gets it by default (the command names those), or
   when the skill's text is in the project, where the coding agents read it
   (`.claude/skills/<name>/SKILL.md`, `.agents/skills/<name>/SKILL.md`). OpenAgent brings the
   packages of the skills that have pages itself (tickets, queue, orchestration, browser,

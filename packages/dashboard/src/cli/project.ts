@@ -4,7 +4,7 @@ import { promisify } from 'node:util'
 const run = promisify(execFile)
 
 /**
- * The Git repository a folder is in, by its top folder: the project `npx @openagt/start` adds when
+ * The Git repository a folder is in, by its top folder: the project `npx @openagt/dashboard` adds when
  * it is typed in that folder. Undefined outside a repository, where there is nothing to add.
  */
 export async function repositoryOf(folder: string): Promise<string | undefined> {

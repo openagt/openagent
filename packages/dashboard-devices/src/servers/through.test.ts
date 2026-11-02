@@ -18,7 +18,7 @@ const run = promisify(execFile)
 const VPS = 'https://165.245.244.10'
 const BOX = { address: '192.168.1.20', user: 'rom' }
 const LINK = `${VPS}/_devices/enter#code.pin`
-const DOOR = '/opt/openagent/node/bin/node /opt/openagent/node/lib/node_modules/@openagt/start/node_modules/@openagt/dashboard-devices/bin/devices'
+const DOOR = '/opt/openagent/node/bin/node /opt/openagent/node/lib/node_modules/@openagt/dashboard/node_modules/@openagt/dashboard-devices/bin/devices'
 const FACTS: Facts = { address: BOX.address, version: '1.2.3', through: { url: VPS, owner: 'rom', who: 'me' }, desktop: 'rom' }
 
 /** Run a script with the door's command in place of a stand-in that writes down what it was asked, and what it read. */

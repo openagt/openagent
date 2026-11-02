@@ -1,9 +1,11 @@
 import { checkForUpdate, formatUpdateStatus, nodeVersionFetcher, type VersionFetcher } from './update-check.js'
-import { runDaemon, joinRunningDashboard, DEFAULT_DAEMON_PORT, type StartedProject } from '@openagt/dashboard/serve'
+import { runDaemon, DEFAULT_DAEMON_PORT } from '../daemon.js'
+import { joinRunningDashboard } from '../join-dashboard.js'
+import type { StartedProject } from '../dashboard/types.js'
 import { handDownSkills } from './skills.js'
 import { repositoryOf } from './project.js'
 import { openInBrowser } from './browser.js'
-import { openagentVersion } from './version.js'
+import { openagentVersion } from '../version.js'
 
 /** Where the CLI writes. Injectable so tests capture output. */
 export interface CliIO {
@@ -116,7 +118,6 @@ async function runForegroundDaemonCmd(args: CliArgs, io: CliIO): Promise<number>
     let url = ''
     await runDaemon(cwd, {
       port,
-      version: openagentVersion(),
       onListening: state => {
         url = state.url
         io.out(`◆ dashboard running: ${state.url}`)

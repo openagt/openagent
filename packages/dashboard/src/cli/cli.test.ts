@@ -6,7 +6,7 @@ import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseArgs, printStartupFooter, runCli, type CliIO } from './cli.js'
-import { openagentVersion } from './version.js'
+import { openagentVersion } from '../version.js'
 
 function capture(): { io: CliIO; out: string[]; err: string[] } {
   const out: string[] = []
@@ -28,7 +28,7 @@ test('parseArgs keeps three options and no verbs (D4)', () => {
 })
 
 test('openagentVersion reports the real package version, not the failed-read placeholder (#312)', async () => {
-  const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
+  const pkg = JSON.parse(await readFile(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string }
   assert.equal(openagentVersion(), pkg.version)
   // The guard this test exists for: a failed read must not look like a plausible version. The
   // sentinel is `unknown` rather than `0.0.0` because the packages are unreleased and genuinely
@@ -40,7 +40,7 @@ test('runCli --version prints the real version (#312)', async () => {
   const { io, out } = capture()
   const code = await runCli(['--version'], io)
   assert.equal(code, 0)
-  const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
+  const pkg = JSON.parse(await readFile(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string }
   assert.deepEqual(out, [pkg.version])
 })
 

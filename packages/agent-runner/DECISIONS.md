@@ -21,7 +21,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   never depends on OpenAgent; OpenAgent brings it, as one of its packages.
 - The runner reads no schedule: a run is the prompt it is given. It names no skill: the
   skills every run gets are handed to it by the package that started OpenAgent
-  (`@openagt/start`), and a git host's among them only where the project is on that host.
+  (`@openagt/dashboard`), and a git host's among them only where the project is on that host.
   Their texts are linked into each agent's checkout, hidden from git like the branches
   skill, each with its command when it has one, so an agent in any project can read
   earlier runs, ask the person a question and open a pull request with nothing committed.

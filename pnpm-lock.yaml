@@ -210,6 +210,9 @@ importers:
       '@openagt/skill-post-merge-cleanup':
         specifier: workspace:*
         version: link:../skill-post-merge-cleanup
+      '@openagt/skill-question':
+        specifier: workspace:*
+        version: link:../skill-question
       '@openagt/skill-queue':
         specifier: workspace:*
         version: link:../skill-queue
@@ -985,43 +988,6 @@ importers:
   packages/skill-ux: {}
 
   packages/skill-work-queue: {}
-
-  packages/start:
-    dependencies:
-      '@openagt/agent-data':
-        specifier: workspace:*
-        version: link:../agent-data
-      '@openagt/dashboard':
-        specifier: workspace:*
-        version: link:../dashboard
-      '@openagt/skill-account-rotation':
-        specifier: workspace:*
-        version: link:../skill-account-rotation
-      '@openagt/skill-github':
-        specifier: workspace:*
-        version: link:../skill-github
-      '@openagt/skill-logs':
-        specifier: workspace:*
-        version: link:../skill-logs
-      '@openagt/skill-orchestration':
-        specifier: workspace:*
-        version: link:../skill-orchestration
-      '@openagt/skill-question':
-        specifier: workspace:*
-        version: link:../skill-question
-      '@openagt/skill-queue':
-        specifier: workspace:*
-        version: link:../skill-queue
-      '@openagt/skill-tickets':
-        specifier: workspace:*
-        version: link:../skill-tickets
-    devDependencies:
-      '@types/node':
-        specifier: ^20.0.0
-        version: 20.19.43
-      typescript:
-        specifier: ^7.0.2
-        version: 7.0.2
 
 packages:
 

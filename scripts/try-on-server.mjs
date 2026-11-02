@@ -1,7 +1,7 @@
 // Try this checkout on a server before anything is published: `pnpm try-on-server <address>`.
 //
 // It does what the server's Update does, with this checkout's build in place of npm's: it packs
-// `@openagt/start` and every package of this repository it needs, as a publish would pack them,
+// `@openagt/dashboard` and every package of this repository it needs, as a publish would pack them,
 // copies them to the server, installs them there with npm taking OpenAgent's own packages from
 // these files (a version not on npm yet installs too), and starts OpenAgent again.
 //
@@ -48,7 +48,7 @@ for (const parent of ['packages', join('packages', 'agent-driver')]) {
   }
 }
 
-/** `@openagt/start` and every package of the repository it needs, however deep. */
+/** `@openagt/dashboard` and every package of the repository it needs, however deep. */
 const needed = new Set()
 const visit = name => {
   if (needed.has(name)) return
@@ -58,7 +58,7 @@ const visit = name => {
   const { dependencies = {}, optionalDependencies = {} } = packages.get(name).manifest
   for (const [dep, spec] of Object.entries({ ...dependencies, ...optionalDependencies })) if (String(spec).startsWith('workspace:')) visit(dep)
 }
-visit('@openagt/start')
+visit('@openagt/dashboard')
 
 const run = (cmd, args, opts = {}) => {
   const done = spawnSync(cmd, args, { stdio: 'inherit', ...opts })
@@ -86,13 +86,13 @@ for (const name of needed) {
   files[name] = file
 }
 
-// On the server: a folder of its own where npm installs start with OpenAgent's packages taken from
+// On the server: a folder of its own where npm installs the dashboard with OpenAgent's packages taken from
 // these files, then that whole tree takes the installed one's place, the old one kept until the new
 // one is in. Run as root with --ignore-scripts, as the install does: nothing a package brought runs as root.
 const ROOT = '/opt/openagent'
 const AWAY = '/tmp/openagent-try'
-const overrides = Object.fromEntries(Object.entries(files).filter(([name]) => name !== '@openagt/start').map(([name, file]) => [name, `file:${AWAY}/${file}`]))
-const manifest = { private: true, dependencies: { '@openagt/start': `file:${AWAY}/${files['@openagt/start']}` }, overrides }
+const overrides = Object.fromEntries(Object.entries(files).filter(([name]) => name !== '@openagt/dashboard').map(([name, file]) => [name, `file:${AWAY}/${file}`]))
+const manifest = { private: true, dependencies: { '@openagt/dashboard': `file:${AWAY}/${files['@openagt/dashboard']}` }, overrides }
 const remote = `set -eu
 ROOT=${ROOT}
 NM=$ROOT/node/lib/node_modules
@@ -103,9 +103,9 @@ ${JSON.stringify(manifest, null, 2)}
 MANIFEST
 cd "$STAGE"
 PATH=$ROOT/node/bin:$PATH npm install --ignore-scripts --no-fund --no-audit --loglevel=error --install-strategy=shallow
-NEW="$NM/@openagt/start.try"
+NEW="$NM/@openagt/dashboard.try"
 rm -rf "$NEW"
-cp -a "$STAGE/node_modules/@openagt/start" "$NEW"
+cp -a "$STAGE/node_modules/@openagt/dashboard" "$NEW"
 # Every version this build brought says it is a try: npm's own then never passes for it at the next Update.
 $ROOT/node/bin/node -e '
   const { readdirSync, readFileSync, writeFileSync, existsSync } = require("fs")
@@ -123,16 +123,18 @@ $ROOT/node/bin/node -e '
   }
   walk(process.argv[1])
 ' "$NEW"
-rm -rf "$NM/@openagt/start.old"
-mv "$NM/@openagt/start" "$NM/@openagt/start.old"
-mv "$NEW" "$NM/@openagt/start"
-rm -rf "$NM/@openagt/start.old" "$STAGE"
+rm -rf "$NM/@openagt/dashboard.old"
+[ ! -e "$NM/@openagt/dashboard" ] || mv "$NM/@openagt/dashboard" "$NM/@openagt/dashboard.old"
+mv "$NEW" "$NM/@openagt/dashboard"
+rm -rf "$NM/@openagt/dashboard.old" "$STAGE"
+# npm links the command at an install, and this is none: the tree came by copy.
+ln -sf ../lib/node_modules/@openagt/dashboard/dist/cli/bin.js $ROOT/node/bin/openagent
 ln -sf $ROOT/node/bin/openagent /usr/local/bin/openagent
 systemctl restart openagent
 for unit in $(systemctl list-units --type=service --state=active --plain --no-legend 'openagent-person@*' | awk '{print $1}'); do systemctl restart "$unit"; done
 for i in $(seq 1 30); do systemctl is-active --quiet openagent && break; sleep 1; done
 systemctl is-active --quiet openagent || { echo "OpenAgent did not start again: journalctl -u openagent says:"; journalctl -u openagent -n 30 --no-pager; exit 1; }
-echo "OpenAgent $($ROOT/node/bin/node -p "require('$NM/@openagt/start/package.json').version") runs on the server."
+echo "OpenAgent $($ROOT/node/bin/node -p "require('$NM/@openagt/dashboard/package.json').version") runs on the server."
 `
 
 console.log(`Copying them to ${login}…`)

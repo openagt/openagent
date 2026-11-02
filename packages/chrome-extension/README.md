@@ -21,7 +21,7 @@ The short way (#1332): turn the bridge on in OpenAgent's settings, then switch o
 browser** below it. The daemon downloads a Chrome for Testing (once, ~150 MB), installs this
 extension into it over CDP, hands it the token, and keeps the window minimized. Press *Show the
 window*, sign in to claude.ai in it once, hide it again — done, and web runs no longer need your
-own Chrome open. This works from a checkout and from `npx @openagt/start` alike: the package carries
+own Chrome open. This works from a checkout and from `npx @openagt/dashboard` alike: the package carries
 a copy of this extension. The steps below are the manual way, for running the extension in your own
 Chrome, from a checkout.
 

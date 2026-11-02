@@ -17,7 +17,7 @@ import { pretendServer, testHome } from './test-home.js'
 const run = promisify(execFile)
 const PC = { address: 'homepc.tail1234.ts.net', user: 'rom' }
 const FACTS: Facts = { address: PC.address, version: '1.2.3', tailscale: true, desktop: 'rom' }
-const DOOR = '/opt/openagent/node/bin/node /opt/openagent/node/lib/node_modules/@openagt/start/node_modules/@openagt/dashboard-devices/bin/devices'
+const DOOR = '/opt/openagent/node/bin/node /opt/openagent/node/lib/node_modules/@openagt/dashboard/node_modules/@openagt/dashboard-devices/bin/devices'
 
 /**
  * Run a step's script with stand-ins: `tailscale` and the door's command answer what the test

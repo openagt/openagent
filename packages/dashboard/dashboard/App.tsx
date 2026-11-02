@@ -120,7 +120,7 @@ export function App() {
   // A module's page (#1774): the route names it by its segment, with no project's own page open.
   const pageSegment = route.page ?? null
   // The address written as the route reads, once it can be read: a project named by its id, as
-  // `npx @openagt/start` opens it, shows its name, in place of the entry rather than as a new one.
+  // `npx @openagt/dashboard` opens it, shows its name, in place of the entry rather than as a new one.
   useEffect(() => {
     if (addressesRead) navigate(route, { replace: true, keepQuery: true })
     // The route is what the address says; only what names projects changes it here.
