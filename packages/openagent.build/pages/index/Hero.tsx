@@ -3,13 +3,13 @@ import { useCopy } from './copy'
 import { kickerStyle, mono } from './ui'
 
 export const PMS = {
-  npm: { try: 'npx @openagt/start', install: 'npm i -g @openagt/start' },
-  pnpm: { try: 'pnpm dlx @openagt/start', install: 'pnpm add -g @openagt/start' },
-  bun: { try: 'bunx @openagt/start', install: 'bun add -g @openagt/start' },
+  npm: { try: 'npx @openagt/dashboard', install: 'npm i -g @openagt/dashboard' },
+  pnpm: { try: 'pnpm dlx @openagt/dashboard', install: 'pnpm add -g @openagt/dashboard' },
+  bun: { try: 'bunx @openagt/dashboard', install: 'bun add -g @openagt/dashboard' },
   // `yarn dlx` is Yarn 2+ (Berry), which removed `yarn global add` — so the install line
   // falls back to npm, which every yarn user has, rather than pairing two commands no
   // single yarn generation can both run.
-  yarn: { try: 'yarn dlx @openagt/start', install: 'npm i -g @openagt/start' },
+  yarn: { try: 'yarn dlx @openagt/dashboard', install: 'npm i -g @openagt/dashboard' },
 } as const
 export type Pm = keyof typeof PMS
 

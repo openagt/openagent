@@ -29,11 +29,10 @@
   "files": [
     "dist"
   ],
+  "bin": {
+    "openagent": "dist/cli/bin.js"
+  },
   "exports": {
-    "./serve": {
-      "types": "./dist/serve.d.ts",
-      "default": "./dist/serve.js"
-    },
     "./module": {
       "types": "./dist/module-types/dashboard/module/index.d.ts"
     },
@@ -69,6 +68,7 @@
     "@openagt/skill-github": "workspace:*",
     "@openagt/skill-logs": "workspace:*",
     "@openagt/skill-orchestration": "workspace:*",
+    "@openagt/skill-question": "workspace:*",
     "@openagt/skill-queue": "workspace:*",
     "@openagt/skill-tickets": "workspace:*",
     "@openagt/skill-scheduler": "workspace:*",

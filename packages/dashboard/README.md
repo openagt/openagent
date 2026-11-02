@@ -8,15 +8,14 @@ checkout of the repo, does its work, and hands the result off as a pull request.
 checkout is never touched.
 
 ```bash
-npm i -g @openagt/start
+npm i -g @openagt/dashboard
 
 cd ~/code/my-repo
 openagent          # serves the dashboard at http://127.0.0.1:4200
 ```
 
-This package is the dashboard itself: the server and its pages, with no command of its own.
-OpenAgent is run as `@openagt/start`, which serves it and hands every run the skills it gets by
-default.
+This package is OpenAgent: the server, its pages and the command that serves them and hands
+every run the skills it gets by default.
 
 ## The command is three options and no verbs
 

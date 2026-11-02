@@ -83,7 +83,7 @@ const ROOT = '/opt/openagent'
 const NODE_LINE = 24
 
 /** The door's own command, inside the OpenAgent the install brought. */
-const DOOR = `${ROOT}/node/bin/node ${ROOT}/node/lib/node_modules/@openagt/start/node_modules/@openagt/dashboard-devices/bin/devices`
+const DOOR = `${ROOT}/node/bin/node ${ROOT}/node/lib/node_modules/@openagt/dashboard/node_modules/@openagt/dashboard-devices/bin/devices`
 
 /** `value` as one word of a shell script, whatever it holds. */
 export function quoted(value: string): string {
@@ -563,9 +563,9 @@ export const STEPS: readonly StepDef[] = [
         { VERSION: version },
         `
   # Read off its file, not asked of OpenAgent itself: nothing a package brought runs as root, neither here nor at the install.
-  have=$(${ROOT}/node/bin/node -p 'require("${ROOT}/node/lib/node_modules/@openagt/start/package.json").version' 2>/dev/null || true)
+  have=$(${ROOT}/node/bin/node -p 'require("${ROOT}/node/lib/node_modules/@openagt/dashboard/package.json").version' 2>/dev/null || true)
   if [ "$have" != "$VERSION" ]; then
-    ${ROOT}/node/bin/npm install --global --ignore-scripts --no-fund --no-audit --loglevel=error "@openagt/start@$VERSION"
+    ${ROOT}/node/bin/npm install --global --ignore-scripts --no-fund --no-audit --loglevel=error "@openagt/dashboard@$VERSION"
     touch ${ROOT}/restart
   fi
   ln -sf ${ROOT}/node/bin/openagent /usr/local/bin/openagent

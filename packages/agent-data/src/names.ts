@@ -27,8 +27,8 @@ export const OPENAGENT_DIR = '.openagent'
 
 /**
  * The environment variable that names the skills every run gets: the directories of their
- * packages, joined by the path delimiter. Set by the package that starts OpenAgent
- * (`@openagt/start`), which owns the list, and inherited by every process OpenAgent starts: a
+ * packages, joined by the path delimiter. Set by the command that starts OpenAgent
+ * (`@openagt/dashboard`), which owns the list, and inherited by every process OpenAgent starts: a
  * hook line, the runner, the scheduler, an agent and the runs its subagents start. Unset, a run
  * gets none of them.
  */

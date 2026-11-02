@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { repositoryOf } from './project.js'
 
 test('the project is the repository the folder is in, by its top folder; outside one there is none', async () => {
-  const outside = await realpath(await mkdtemp(join(tmpdir(), 'openagent-start-')))
+  const outside = await realpath(await mkdtemp(join(tmpdir(), 'openagent-cli-')))
   const repo = join(outside, 'app')
   try {
     await mkdir(join(repo, 'src'), { recursive: true })
