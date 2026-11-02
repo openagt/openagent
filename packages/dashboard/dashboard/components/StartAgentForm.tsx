@@ -8,6 +8,7 @@ import { usePreferences, usePreferencesLoaded, updatePreferences } from '../lib/
 import { DRIVER_LABELS, isDriverName, machineName, offeredPublishPicks, publishPickIn, reachedThrough } from '../../src/client.js'
 import { useMachines } from '../lib/machines.js'
 import { followProjectHome, runTarget, useSelectedMachineId } from '../lib/remote-target.js'
+import type { StartPicks } from '../lib/started-from.js'
 import { startPicks, useStartAgent } from '../lib/use-start-agent.js'
 import { useProjectLauncher } from '../lib/use-project-launcher.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
@@ -23,7 +24,7 @@ import { Dots } from './ToolCalls.js'
 import { ACCOUNTS_ENTRY, AgentFix, agentWords, useAgentState } from './Logins.js'
 import { MachineLogins } from './ServerLogins.js'
 import { SKILLS_ENTRY } from './ProjectSkills.js'
-import { GitAccountMenu } from './GitHosts.js'
+import { GitAccountMenu, useRunsAccount } from './GitHosts.js'
 
 /** The note while the start is asked for: what the chat's first line says next. */
 const STARTING = 'Starting session'
@@ -80,7 +81,7 @@ export function StartAgentForm({
   /** The project's name, for the row above the box; absent until the projects are read. */
   projectName?: string | null | undefined
   /** `runsOn` names the machine a remote agent executes on (#1067), for the "runs on <machine>" marker; `startedIn` the project the run started in, when it is not this one. */
-  onAgentStarted?: ((intent: string, agentId: string, runsOn?: string, startedIn?: string) => void) | undefined
+  onAgentStarted?: ((intent: string, agentId: string, runsOn?: string, startedIn?: string, picks?: StartPicks) => void) | undefined
   /** The project's files for the `#` picker (#504), owned by the shell. */
   files: string[]
   /** The Context set, shared with the Files pane's tree (#492), owned by the shell. */
@@ -176,6 +177,8 @@ export function StartAgentForm({
     wasReady.current = ready
   }, [fixable, agent?.ready])
 
+  const runsAccount = useRunsAccount(address, machine?.id)
+
   const submit = async (text: string) => {
     if (busy) return
     setNote(STARTING)
@@ -191,7 +194,17 @@ export function StartAgentForm({
       // Show the run in the Runs rail immediately (#405): its tool writes the run's card a beat
       // later, so seed an optimistic row with the typed prompt until the real one takes over.
       // A remote agent (#1067) carries the machine label so the view can mark where it executes.
-      onAgentStarted?.(text, result.agentId, machine?.label, result.projectId) // select the run we just started (#761)
+      // What this page says goes with it, for the run's page until the run's record says it.
+      const started = startFrom ? (startFromPick?.kind === 'local' ? startFrom.local : startFromPick?.kind === 'published' ? startFromPick.branch : startFrom.main) : undefined
+      onAgentStarted?.(text, result.agentId, machine?.label, result.projectId, {
+        ...(started !== undefined ? { branch: started } : {}),
+        ...(runsAccount !== undefined ? { gitAccount: runsAccount } : {}),
+        publish: publishPick,
+        ...(prInto !== undefined ? { prBase: prInto } : {}),
+        ...(preferences.driver ? { driver: preferences.driver } : {}),
+        ...(preferences.model ? { model: preferences.model } : {}),
+        ...(preferences.effort ? { effort: preferences.effort } : {}),
+      }) // select the run we just started (#761)
       composerRef.current?.clear()
     }
   }

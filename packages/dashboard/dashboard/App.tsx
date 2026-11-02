@@ -49,6 +49,7 @@ import { useFavicon } from './lib/favicon.js'
 import { useDaemonHealth } from './lib/use-daemon-health.js'
 import { useContextSet } from './lib/use-context-set.js'
 import { TriangleAlert } from 'lucide-react'
+import type { StartPicks } from './lib/started-from.js'
 
 /** Stable, so `files` keeps one identity while no project is selected. */
 const EMPTY_FILES: string[] = []
@@ -173,7 +174,7 @@ export function App() {
   // the main pane that a session missing from the list is starting, not gone.
   // `runsOn` names the machine a just-started remote agent executes on (#1067), so the live view can
   // mark where it runs and degrade the panels that are local-only. Undefined for a local agent.
-  const [agentStart, setAgentStart] = useState<{ tick: number; intent: string; id: string | null; projectId: string | null; at: number; runsOn?: string }>({ tick: 0, intent: '', id: null, projectId: null, at: 0 })
+  const [agentStart, setAgentStart] = useState<{ tick: number; intent: string; id: string | null; projectId: string | null; at: number; runsOn?: string; picks?: StartPicks }>({ tick: 0, intent: '', id: null, projectId: null, at: 0 })
   // The agents of the project on screen, for its pages, or of the picked project, for the sidebar:
   // the same project whenever both are set. Read once the address is: before, it names the project
   // by its address, not by its id.
@@ -268,12 +269,12 @@ export function App() {
 
   // An agent just started in `inProject`, which is not always the selected one: the onboarding
   // checklist starts one from the Overview, where nothing is selected (#1169).
-  const agentStarted = (inProject: string | null, intent: string, startedId: string, runsOn?: string) => {
+  const agentStarted = (inProject: string | null, intent: string, startedId: string, runsOn?: string, picks?: StartPicks) => {
     // Continuing the agent already on screen (#762) appends to its journal — nothing truncates, so
     // nothing would re-replay after a reset. Bumping the tick here is what blanked the transcript
     // the moment a message resumed an ended session; a continuation keeps the feed instead.
     const continued = startedId === agentId && inProject === projectId
-    setAgentStart(prev => ({ tick: continued ? prev.tick : prev.tick + 1, intent, id: startedId, projectId: inProject, at: Date.now(), ...(runsOn ? { runsOn } : {}) }))
+    setAgentStart(prev => ({ tick: continued ? prev.tick : prev.tick + 1, intent, id: startedId, projectId: inProject, at: Date.now(), ...(runsOn ? { runsOn } : {}), ...(picks ? { picks } : {}) }))
     // The picked Context went with that run; the next launch starts from a clean focus (#948).
     resetContext()
     // Go to the run we just started — a real history entry, so Back returns to where you launched
@@ -286,9 +287,9 @@ export function App() {
 
   /** The same, for the surfaces that start an agent inside the selected project. */
   // A run of another computer's project started on this one starts in the copy cloned here: a project the list has yet to read.
-  const onAgentStarted = (intent: string, startedId: string, runsOn?: string, startedIn?: string) => {
+  const onAgentStarted = (intent: string, startedId: string, runsOn?: string, startedIn?: string, picks?: StartPicks) => {
     if (startedIn !== undefined && startedIn !== projectId) setProjectsKey(k => k + 1)
-    agentStarted(startedIn ?? projectId, intent, startedId, runsOn)
+    agentStarted(startedIn ?? projectId, intent, startedId, runsOn, picks)
   }
 
   // Selecting a session (or the Live/Home row) is always an explicit choice, so it ends the
@@ -531,7 +532,7 @@ export function App() {
       // list we have not read yet, where whether the agent runs is not known. Only a session that
       // is genuinely absent from a list we did read is gone.
       if (agentId === agentStart.id || !agentsLoaded)
-        return <AgentView projectId={projectId} agentId={agentId} events={events} live={agentId === agentStart.id ? true : null} label={agentStart.intent || undefined} projectName={projectName} remoteLabel={agentId === agentStart.id ? agentStart.runsOn : undefined} files={files} lost={lost} writing={writing} startedWith={agentId === agentStart.id ? agentStart.intent : undefined} onAgentStarted={onAgentStarted} contextSet={contextSet} onProjectRemoved={removableHere} />
+        return <AgentView projectId={projectId} agentId={agentId} events={events} live={agentId === agentStart.id ? true : null} picks={agentId === agentStart.id ? agentStart.picks : undefined} label={agentStart.intent || undefined} projectName={projectName} remoteLabel={agentId === agentStart.id ? agentStart.runsOn : undefined} files={files} lost={lost} writing={writing} startedWith={agentId === agentStart.id ? agentStart.intent : undefined} onAgentStarted={onAgentStarted} contextSet={contextSet} onProjectRemoved={removableHere} />
       return (
         <NotFound
           title="This agent is gone"
@@ -557,6 +558,7 @@ export function App() {
         lost={lost}
         writing={writing}
         startedWith={agentId === agentStart.id ? agentStart.intent : undefined}
+        picks={agentId === agentStart.id ? agentStart.picks : undefined}
         target={selectedAgent.target}
         remoteLabel={selectedAgent.remoteLabel}
         subagents={subagents}

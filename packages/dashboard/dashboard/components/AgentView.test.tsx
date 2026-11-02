@@ -64,24 +64,26 @@ vi.mock('./AgentWorkBar.js', () => ({
 }))
 // The row above the box has its own tests: here it says what the view told it.
 vi.mock('./SessionRow.js', () => ({
-  SessionRow: ({ runsOn, elsewhere, startedFrom, worksOn, projectName }: { runsOn: string; elsewhere: boolean; startedFrom?: string; worksOn?: string; projectName?: string | null }) => (
+  SessionRow: ({ runsOn, elsewhere, startedFrom, worksOn, projectName, gitAccount }: { runsOn: string; elsewhere: boolean; startedFrom?: string; worksOn?: string; projectName?: string | null; gitAccount?: string }) => (
     <div data-testid="row">
       <span data-testid="row-runs-on">{runsOn}</span>
       <span data-testid="row-elsewhere">{String(elsewhere)}</span>
       <span data-testid="row-project">{projectName ?? ''}</span>
       <span data-testid="row-started-from" data-value={startedFrom ?? ''} />
       <span data-testid="row-works-on" data-value={worksOn ?? ''} />
+      <span data-testid="row-account" data-value={gitAccount ?? ''} />
     </div>
   ),
 }))
 // The composer shows only what the view tells it about the run going: the one fact of it under test here.
 vi.mock('./AgentComposer.js', () => ({
-  AgentComposer: ({ live, outcome, model, context, controls, onQueued, row }: { live: boolean; outcome?: unknown; model?: string; context?: ReactNode; controls?: ReactNode; onQueued?: (text: string) => void; row?: ReactNode }) => (
+  AgentComposer: ({ live, outcome, model, context, controls, onQueued, row, publish, prBase }: { publish?: string; prBase?: string; live: boolean; outcome?: unknown; model?: string; context?: ReactNode; controls?: ReactNode; onQueued?: (text: string) => void; row?: ReactNode }) => (
     <>
       {row}
       <span data-testid="composer-controls">{controls}</span>
       <button type="button" onClick={() => onQueued?.('and then this')}>queue-one</button>
       <span data-testid="composer-model">{model ?? ''}</span>
+      <span data-testid="composer-auto" data-publish={publish ?? ''} data-pr-base={prBase ?? ''} />
       <span data-testid="composer-context">{context}</span>
       <span data-testid="composer-live">{String(live)}</span>
       <span data-testid="composer-outcome">{JSON.stringify(outcome ?? null)}</span>
@@ -782,6 +784,28 @@ describe('the page\'s two bars', () => {
     expect(screen.getByTestId('row-runs-on').textContent).toBe('MacBook')
     expect(screen.queryByText(/Running on/)).toBeNull()
     expect(within(screen.getByTestId('chat-top')).queryByRole('status')).toBeNull()
+  })
+})
+
+describe('a run the launcher just started, before its record is there', () => {
+  const picks = { branch: 'gh-pages', gitAccount: 'octo', publish: 'pr', prBase: 'gh-pages', effort: 'high' }
+  const row = (id: string, name: string) => screen.getByTestId(id).dataset[name]
+
+  test('its page says what the launcher said at once; the record says it from then on', () => {
+    const { rerender } = render(view({ live: true, events: [], picks }))
+    expect(row('row-started-from', 'value')).toBe('gh-pages')
+    expect(row('row-account', 'value')).toBe('octo')
+    expect(row('composer-auto', 'publish')).toBe('pr')
+    expect(row('composer-auto', 'prBase')).toBe('gh-pages')
+    rerender(view({ live: true, events: [], picks, card: { status: 'running' as const, base: 'other', gitAccount: 'hubot', publish: 'commit' } }))
+    expect(row('row-started-from', 'value')).toBe('other')
+    expect(row('row-account', 'value')).toBe('hubot')
+    expect(row('composer-auto', 'publish')).toBe('commit')
+  })
+
+  test('a record with no level has none: a message took it away, and the launcher\'s does not come back', () => {
+    render(view({ live: true, events: [], picks, card: { status: 'running' as const } }))
+    expect(row('composer-auto', 'publish')).toBe('')
   })
 })
 
