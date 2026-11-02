@@ -29,6 +29,7 @@ export function SessionRow({
   startedFrom,
   worksOn,
   gitHost,
+  gitAccount,
 }: {
   /** Where the session runs, in a few words: this machine, another machine by its name, the cloud. */
   runsOn: string
@@ -43,10 +44,12 @@ export function SessionRow({
   worksOn?: string | undefined
   /** The project's page on its git host. */
   gitHost: GitHostHome | null
+  /** The account the run worked as there, as its record says. */
+  gitAccount?: string | undefined
 }) {
   const started = startedFrom && (worksOn && worksOn !== startedFrom ? `Started from ${startedFrom}, works on ${worksOn}` : `Started from ${startedFrom}`)
   return (
-    <RowAboveBox end={<GitHostOff home={gitHost} />}>
+    <RowAboveBox end={<GitHostOff home={gitHost} account={gitAccount} />}>
       <RowOff tip={`Runs on — ${runsOn}`}>
         <button type="button" disabled className={rowButtonClass}>
           <RunOnWords icon={runsOnIcon(target, remoteKind)} elsewhere={elsewhere} label={runsOn} />

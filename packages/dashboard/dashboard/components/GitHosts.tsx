@@ -231,19 +231,19 @@ export function GitAccountMenu({ address, machineId, on, busy, onAdd }: { addres
 
 /**
  * The project's git host in a session's row above the message box, where the launcher's row has the
- * account: its logo and name, and no account. A run's record keeps no account, and the one its
- * project's runs use today need not be the one this run pushed as. Nothing for a project with no
- * page on a git host, and until the logo is read, so it lands whole.
+ * account: the account this run worked as, which its record keeps. A run recorded before that was
+ * kept says the host's name: the one its project's runs use today need not be the one it pushed as.
+ * Nothing for a project with no page on a git host, and until the logo is read, so it lands whole.
  */
-export function GitHostOff({ home }: { home: GitHostHome | null }) {
+export function GitHostOff({ home, account }: { home: GitHostHome | null; account?: string | undefined }) {
   const { view } = useGitHosts()
   if (!home || !view) return null
   const logo = view.hosts.find(row => row.host === home.url.split('/')[2])?.provider?.logo
   return (
-    <RowOff tip={`This project is on ${home.name}`}>
+    <RowOff tip={account !== undefined ? `This run works as @${account} on ${home.name}` : `This project is on ${home.name}`}>
       <button type="button" disabled className={rowButtonClass}>
         <PackageLogo svg={logo} className="size-3.5" />
-        <span className="max-w-32 truncate">{home.name}</span>
+        <span className="max-w-32 truncate">{account !== undefined ? `@${account}` : home.name}</span>
         <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
       </button>
     </RowOff>

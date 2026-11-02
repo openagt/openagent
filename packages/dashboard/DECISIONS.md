@@ -140,8 +140,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   runs, the project, the branch, the git host. The branch is the one it started from, with the
   one it works on in its hover: the same meaning as on the launcher, and it does not flip as
   the agent renames its own. Where the record cannot vouch for that branch the row leaves it
-  out. The git host is said by its logo and name with no account: a record keeps no account, and
-  the one the next run would use is not the one this run used. Picked over the row only where
+  out. The git host is said by the account the run worked as, which its record keeps; a run
+  recorded before that says the host's name. Picked over the account the next run would use,
+  which is not the one this run used. Picked over the row only where
   an agent is started, over the branch the agent works on, and over a grey chip beside the
   session's name saying where it runs and its project, which the row replaces.
 - A session's top bar has the project's ⋮ where the launcher's has it, and the session's own

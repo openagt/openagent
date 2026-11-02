@@ -38,7 +38,16 @@ afterEach(() => {
 describe('the git host in a session\'s row', () => {
   const home = { url: 'https://github.com/o/r', name: 'GitHub' }
 
-  test('its logo and name, off; no account, whichever is in use now: a run\'s record keeps none', async () => {
+  test('the account its record keeps, off, with the host\'s logo, whichever account is in use now', async () => {
+    logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider() }] })
+    const { container } = render(<GitHostOff home={home} account="suleimansh" />)
+    const item = await screen.findByRole('button', { name: '@suleimansh' })
+    expect((item as HTMLButtonElement).disabled).toBe(true)
+    expect(container.textContent).toBe('@suleimansh')
+    expect(item.querySelector<HTMLElement>('[aria-hidden]')!.style.maskImage).toContain(encodeURIComponent('<svg'))
+  })
+
+  test('a record with no account: its logo and name, off; no account, whichever is in use now', async () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider() }] })
     const { container } = render(<GitHostOff home={home} />)
     const item = await screen.findByRole('button', { name: 'GitHub' })

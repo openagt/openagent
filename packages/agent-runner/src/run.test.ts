@@ -631,6 +631,22 @@ test('a message that says how far to take the work changes the run\'s level from
   }
 })
 
+test('the account a run works as at the git host is on its record, and a resume on another account says that one from then on', async () => {
+  const repo = await testRepo()
+  try {
+    const first = await runCommand(repo, { prompt: 'Fix the typo', gitAccount: 'octo-one', driver: new FakeDriver({ turns: [{ text: 'Done.' }], sessionId: 's-1' }), now: ticking(), gitHost: noGitHost })
+    const card = await findRun(repo, first.id)
+    assert.equal(runnerMark(card!)?.gitAccount, 'octo-one')
+    assert.equal(card!.caller?.['gitAccount'], 'octo-one', 'what the dashboard reads')
+    await resumeRun(repo, { id: first.id, text: 'Go on.', gitAccount: 'octo-two', driver: new FakeDriver({ turns: [{ text: 'Done.' }] }), now: ticking(), gitHost: noGitHost })
+    assert.equal((await findRun(repo, first.id))!.caller?.['gitAccount'], 'octo-two')
+    await resumeRun(repo, { id: first.id, text: 'And on.', driver: new FakeDriver({ turns: [{ text: 'Done.' }] }), now: ticking(), gitHost: noGitHost })
+    assert.equal((await findRun(repo, first.id))!.caller?.['gitAccount'], 'octo-two', 'a git host that cannot say leaves the last one it could')
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
 test('a resume can give the run a new level, or take its level away; its record says so, for its readers too', async () => {
   const repo = await testRepo()
   try {
