@@ -1,17 +1,29 @@
 {
   "id": "2026-11-03T00-28-15-272Z",
   "startedAt": "2026-11-03T00:28:16.328Z",
-  "status": "running",
+  "endedAt": "2026-11-03T00:28:21.262Z",
+  "status": "done",
   "intent": "tell me hello",
+  "title": "Greeting Exchange",
   "driver": "claude-code",
-  "model": "sonnet",
+  "model": "claude-sonnet-5-5",
+  "effort": "high",
+  "branch": "agent-2026-11-03T00-28-15-272Z",
+  "cost": 0.026492400000000003,
+  "contextTokens": 17709,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
       "pid": 54497,
-      "gitAccount": "suleimansh"
+      "gitAccount": "suleimansh",
+      "baseCommit": "9ee92ad829a24f9d8a3d292a9ebddfdd414ea261"
     },
+    "pid": 54497,
     "host": "Suleimans-MacBook-Pro.local",
-    "gitAccount": "suleimansh"
+    "gitAccount": "suleimansh",
+    "baseCommit": "9ee92ad829a24f9d8a3d292a9ebddfdd414ea261",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-11-03T00-28-15-272Z",
+    "sessionId": "e3d4f816-49fb-4bcf-bfd8-96be0622d54d"
   }
 }
