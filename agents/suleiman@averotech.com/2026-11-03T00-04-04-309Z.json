@@ -7,7 +7,6 @@
   "title": "Greeting Request Simple",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-11-03T00-04-04-309Z",
   "cost": 0.058786000000000005,
   "contextTokens": 17549,
   "caller": {
