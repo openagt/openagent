@@ -308,3 +308,65 @@ export function subagentReport(events: readonly OpenAgentEvent[], id: string): s
 export function endMessage(rest: string): string {
   return rest.replace(/^Its last words:\n/m, '').trim()
 }
+
+/**
+ * Whether the main agent is idle on its own subagents now, and when one last woke it: its live line
+ * shows no counter while it waits, and counts again from its wake, as Claude Code on the web's does.
+ *
+ * Claude Code on the web ends the main agent's turn while its subagents work and starts a new one
+ * when a subagent's message wakes it. Our coding agent's turn stays open instead, the main agent
+ * blocked on its subagent calls, so the wait is read off the events: it waits from a subagent's
+ * start, or from a message it finished while one works. The last subagent's end wakes it; with
+ * others still at work, its next step of its own (a thought, a call that starts no subagent, words)
+ * does, when one ended meanwhile. A main agent that goes on beside its subagents never waited, and
+ * its count goes on.
+ */
+export function subagentWait(events: readonly OpenAgentEvent[]): { waiting: boolean; wokeAt?: string } {
+  const open = new Set<string>()
+  // A subagent's id is the id of the call that started it (on Codex, the part before the colon):
+  // that call, and what it hands back, are known by it.
+  const subagents = new Set(events.flatMap(e => (e.kind === 'driver' && e.event.type === 'subagent' ? [e.event.id, e.event.id.split(':')[0]!] : [])))
+  let waiting = false
+  let endedMeanwhile = false
+  let wokeAt: string | undefined
+  for (const e of events) {
+    if (e.kind !== 'driver') continue
+    const event = e.event as { type: string; id?: string; status?: string; subagent?: string }
+    if (event.type === 'start') {
+      open.clear()
+      waiting = false
+      endedMeanwhile = false
+      wokeAt = undefined
+      continue
+    }
+    if (event.type === 'subagent' && event.id !== undefined) {
+      if (event.status === 'working') {
+        // A subagent just started; one already working only says how far it got.
+        if (!open.has(event.id)) {
+          if (open.size === 0) endedMeanwhile = false
+          open.add(event.id)
+          waiting = true
+        }
+      } else {
+        open.delete(event.id)
+        // The last one's end wakes it; with others still at work, its next step does.
+        if (waiting && open.size === 0) {
+          wokeAt = e.at
+          waiting = false
+          endedMeanwhile = false
+        } else if (waiting) endedMeanwhile = true
+      }
+      continue
+    }
+    if (event.subagent !== undefined) continue
+    // What starts a subagent, and what a subagent hands back, are no step of the main agent's own.
+    if ((event.type === 'action' || event.type === 'output') && event.id !== undefined && subagents.has(event.id)) continue
+    if (!['action', 'output', 'text', 'thought', 'thinking', 'partial'].includes(event.type)) continue
+    if (waiting && endedMeanwhile) wokeAt = e.at
+    waiting = false
+    endedMeanwhile = false
+    // Its message said and its subagents still at work: it waits on them.
+    if (event.type === 'text' && open.size > 0) waiting = true
+  }
+  return { waiting: waiting && open.size > 0, ...(wokeAt !== undefined ? { wokeAt } : {}) }
+}

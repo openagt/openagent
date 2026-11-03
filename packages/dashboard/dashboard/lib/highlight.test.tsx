@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
-import { languageOf, useHighlighted } from './highlight.js'
+import { languageOf, useHighlighted, useHighlightedIn, type Piece } from './highlight.js'
 
 test('a file’s language is read from its extension, or from its whole name', () => {
   expect(languageOf('src/app.ts')).toBe('typescript')
@@ -31,4 +31,36 @@ test('a file of no language listed, and one too long to colour at once, stay pla
   await waitFor(() => expect(colored.result.current).not.toBeNull(), { timeout: 5000 })
   expect(plain.result.current).toBeNull()
   expect(long.result.current).toBeNull()
+})
+
+/** Each piece's text, trimmed, with its colour in the dark theme and the light one. */
+const colours = (lines: Piece[][]) => new Map(lines.flat().filter(piece => piece.text.trim() !== '').map(piece => [piece.text.trim(), [piece.dark?.toLowerCase(), piece.light?.toLowerCase()]]))
+
+test('a code block in the chat is drawn in the chat\u2019s colours: commands blue, their arguments and strings green', async () => {
+  const shell = renderHook(() => useHighlightedIn('grep -rn "TODO" src/ | wc -l\nhead -n 5', 'shellscript', 'chat'))
+  await waitFor(() => expect(shell.result.current).not.toBeNull(), { timeout: 5000 })
+  const sh = colours(shell.result.current!)
+  expect(sh.get('grep')).toEqual(['#70b8ff', '#0051c2'])
+  expect(sh.get('wc')).toEqual(['#70b8ff', '#0051c2'])
+  expect(sh.get('-rn')).toEqual(['#9be963', '#008000'])
+  expect(sh.get('"TODO"')).toEqual(['#9be963', '#008000'])
+  expect(sh.get('|')).toEqual(['#eaecf0', '#14181f'])
+  expect(sh.get('5')).toEqual(['#5eeded', '#008080'])
+
+  const ts = renderHook(() => useHighlightedIn('// retry\nconst config = { retries: 3 }\nfunction canRetry(attempt: number): boolean | null {\n  return true\n}', 'typescript', 'chat'))
+  await waitFor(() => expect(ts.result.current).not.toBeNull(), { timeout: 5000 })
+  const t = colours(ts.result.current!)
+  expect(t.get('// retry')).toEqual(['#818898', '#6e7687'])
+  expect(t.get('const')).toEqual(['#cc7bf4', '#8100c2'])
+  expect(t.get('retries')).toEqual(['#f47b85', '#b80a18'])
+  expect(t.get('canRetry')).toEqual(['#70b8ff', '#0051c2'])
+  expect(t.get('attempt')).toEqual(['#f7ab5f', '#b84f05'])
+  expect(t.get('number')).toEqual(['#fbad60', '#b34a00'])
+  expect(t.get('true')).toEqual(['#5eeded', '#008080'])
+})
+
+test('a file keeps the editor\u2019s colours', async () => {
+  const { result } = renderHook(() => useHighlighted('grep -rn x', 'run.sh'))
+  await waitFor(() => expect(result.current).not.toBeNull(), { timeout: 5000 })
+  expect(colours(result.current!).get('grep')?.[0]).not.toBe('#70b8ff')
 })

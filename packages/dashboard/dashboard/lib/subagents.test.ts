@@ -1,6 +1,6 @@
 import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
 import { describe, expect, test } from 'vitest'
-import { callSubagents, holdsMainAgent, isOpenSubagent, nestRows, runRow, subagentEnd, subagentEvents, drivesSubagents, stepWords, subagentSteps, subagentStartedAt, subagentsOf, taskLabel, type SubagentStep, type SubagentRow } from './subagents.js'
+import { callSubagents, holdsMainAgent, subagentWait, isOpenSubagent, nestRows, runRow, subagentEnd, subagentEvents, drivesSubagents, stepWords, subagentSteps, subagentStartedAt, subagentsOf, taskLabel, type SubagentStep, type SubagentRow } from './subagents.js'
 
 function agent(id: string, over: Partial<AgentMeta> = {}): AgentMeta {
   return { status: 'done', id, startedAt: '2026-10-01T10:00:00.000Z', updatedAt: '2026-10-01T10:00:00.000Z', ...over }
@@ -207,4 +207,52 @@ test('a command that only drives the subagents, a look at git beside it, says no
   expect(drivesSubagents('npx @openagt/skill-orchestration@0.1 land x; pnpm test')).toBe(false)
   expect(drivesSubagents('git status')).toBe(false)
   expect(drivesSubagents(undefined)).toBe(false)
+})
+
+describe('subagentWait', () => {
+  const ev = (event: Extract<OpenAgentEvent, { kind: 'driver' }>['event'], at: string): OpenAgentEvent => ({ kind: 'driver', event, at: `2026-10-01T10:${at}.000Z` })
+  const prompt = ev({ type: 'start', prompt: 'two subagents, then a story' }, '00:00')
+  const said = ev({ type: 'text', text: 'I\'ll start both.' }, '00:02')
+  const callA = ev({ type: 'action', label: 'Agent', id: 'a' }, '00:03')
+  const startA = ev({ type: 'subagent', id: 'a', status: 'working', name: 'Summarize README' }, '00:03')
+  const callB = ev({ type: 'action', label: 'Agent', id: 'b' }, '00:04')
+  const startB = ev({ type: 'subagent', id: 'b', status: 'working', name: 'List markdown files' }, '00:04')
+  const progressA = ev({ type: 'subagent', id: 'a', status: 'working', name: 'Summarize README', toolUses: 1 }, '00:06')
+  const readByA = ev({ type: 'action', label: 'Read', id: 'r', subagent: 'a' }, '00:06')
+  const endA = ev({ type: 'subagent', id: 'a', status: 'ended' }, '00:10')
+  const backA = ev({ type: 'output', id: 'a', text: 'Two lines.' }, '00:10')
+  const endB = ev({ type: 'subagent', id: 'b', status: 'ended' }, '00:16')
+  const backB = ev({ type: 'output', id: 'b', text: 'Five files.' }, '00:16')
+  const thinks = ev({ type: 'thinking' }, '00:17')
+
+  test('blocked on its subagents\u2019 calls, the main agent waits: what they do and hand back is no step of its own', () => {
+    expect(subagentWait([prompt, said, callA, startA]).waiting).toBe(true)
+    expect(subagentWait([prompt, said, callA, startA, callB, startB, progressA, readByA, endA, backA]).waiting).toBe(true)
+  })
+
+  test('the last subagent\u2019s end wakes it: the count starts again there, and its next step does not restart it', () => {
+    expect(subagentWait([prompt, said, callA, startA, callB, startB, endA, backA, endB, backB])).toEqual({ waiting: false, wokeAt: '2026-10-01T10:00:16.000Z' })
+    expect(subagentWait([prompt, said, callA, startA, callB, startB, endA, backA, endB, backB, thinks])).toEqual({ waiting: false, wokeAt: '2026-10-01T10:00:16.000Z' })
+    // One of two ended: its next step wakes it.
+    expect(subagentWait([prompt, said, callA, startA, callB, startB, endA, backA, thinks])).toEqual({ waiting: false, wokeAt: '2026-10-01T10:00:17.000Z' })
+    // A new prompt is a new turn: no wake carried over.
+    expect(subagentWait([prompt, callA, startA, endA, backA, thinks, ev({ type: 'start', prompt: 'again' }, '00:30')])).toEqual({ waiting: false })
+  })
+
+  test('a main agent that goes on beside its subagents never waited, and a subagent\u2019s progress does not make it', () => {
+    const own = ev({ type: 'action', label: 'Bash', id: 'x' }, '00:05')
+    expect(subagentWait([prompt, callA, startA, own])).toEqual({ waiting: false })
+    expect(subagentWait([prompt, callA, startA, own, progressA]).waiting).toBe(false)
+    // Its message said while they work: it waits on them, and their end wakes it.
+    const done = ev({ type: 'text', text: 'Both started; waiting.' }, '00:07')
+    expect(subagentWait([prompt, callA, startA, own, done]).waiting).toBe(true)
+    expect(subagentWait([prompt, callA, startA, own, done, endA, backA, thinks])).toEqual({ waiting: false, wokeAt: '2026-10-01T10:00:10.000Z' })
+  })
+
+  test('on Codex the call that starts a subagent is the part of its id before the colon', () => {
+    const call = ev({ type: 'action', label: 'collabAgentToolCall', id: 'item_1' }, '00:03')
+    const start = ev({ type: 'subagent', id: 'item_1:t1', status: 'working' }, '00:03')
+    const back = ev({ type: 'output', id: 'item_1', text: 'done' }, '00:09')
+    expect(subagentWait([prompt, start, call, back]).waiting).toBe(true)
+  })
 })

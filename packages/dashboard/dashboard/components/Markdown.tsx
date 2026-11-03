@@ -70,14 +70,14 @@ function codeBlock(lines: string[], language: string, key: number): ReactNode {
 }
 
 /**
- * The card itself. A block of a language the dashboard knows is coloured, as Claude Code on the web
- * colours one, in the colours the Files pane's text has; until its grammar is loaded, and for a
+ * The card itself. A block of a language the dashboard knows is coloured in the chat's own colours
+ * (`highlight.tsx`), as Claude Code on the web colours one; until its grammar is loaded, and for a
  * language it does not know, the text is plain.
  */
 function CodeBlock({ lines, language }: { lines: string[]; language: string }) {
   const text = lines.join('\n')
   const known = language === 'diff' ? undefined : languageOfFence(language)
-  const coloured = useHighlightedIn(text, known)
+  const coloured = useHighlightedIn(text, known, 'chat')
   return (
     <div className="relative w-fit max-w-full min-w-40 rounded-lg border border-border bg-muted/50">
       <CopyButton text={text} label="Copy the code" className="absolute top-2.5 right-2.5" />

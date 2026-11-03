@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react'
-import type { HighlighterCore, LanguageRegistration } from 'shiki/core'
+import type { HighlighterCore, LanguageRegistration, ThemeRegistration } from 'shiki/core'
 
 // Colours by language for a file's lines, as an editor shows them: Shiki, with its Everforest light
 // and dark themes, the family the dashboard's own colours come from. Each line comes back as its
@@ -91,10 +91,45 @@ export function languageOf(path: string): string | undefined {
 let highlighter: Promise<HighlighterCore> | undefined
 const loading = new Map<string, Promise<void>>()
 
+/**
+ * The colours a code block in the chat is drawn in: one hue per kind of word, bright on dark and
+ * deep on light — commands and functions blue, strings and a command's arguments green, keywords
+ * purple, numbers and constants teal. A file's lines keep the editor's Everforest; only the chat's
+ * blocks read like this, as a reply's code does in the chats people compare ours with.
+ */
+function chatTheme(name: string, dark: boolean): ThemeRegistration {
+  const c = (onDark: string, onLight: string) => (dark ? onDark : onLight)
+  return {
+    name,
+    type: dark ? 'dark' : 'light',
+    colors: { 'editor.foreground': c('#eaecf0', '#14181f') },
+    tokenColors: [
+      { scope: ['comment', 'punctuation.definition.comment'], settings: { foreground: c('#818898', '#6e7687') } },
+      { scope: ['punctuation', 'meta.brace', 'keyword.operator.type.annotation', 'keyword.operator.optional'], settings: { foreground: c('#d3d7de', '#2b303b') } },
+      { scope: ['keyword', 'storage', 'storage.type', 'storage.modifier', 'keyword.control', 'keyword.operator.new', 'keyword.operator.expression', 'variable.language.this'], settings: { foreground: c('#cc7bf4', '#8100c2') } },
+      { scope: ['keyword.operator.assignment', 'keyword.operator.arithmetic', 'keyword.operator.comparison', 'keyword.operator.relational', 'keyword.operator.logical', 'keyword.operator.pipe', 'keyword.operator.bitwise', 'keyword.operator.type'], settings: { foreground: c('#eaecf0', '#14181f') } },
+      { scope: ['string', 'string.quoted', 'string.template', 'punctuation.definition.string', 'constant.other.option', 'string.unquoted.argument', 'markup.inline.raw'], settings: { foreground: c('#9be963', '#008000') } },
+      { scope: ['constant.numeric', 'constant.language', 'constant.character', 'support.constant'], settings: { foreground: c('#5eeded', '#008080') } },
+      { scope: ['entity.name.function', 'support.function', 'meta.function-call entity.name.function', 'entity.name.command', 'support.function.builtin', 'entity.name.tag'], settings: { foreground: c('#70b8ff', '#0051c2') } },
+      { scope: ['meta.object-literal.key', 'support.type.property-name', 'entity.other.attribute-name', 'variable.other.property.yaml', 'entity.name.tag.yaml'], settings: { foreground: c('#f47b85', '#b80a18') } },
+      { scope: ['variable.parameter'], settings: { foreground: c('#f7ab5f', '#b84f05') } },
+      { scope: ['entity.name.type', 'entity.name.class', 'support.type', 'support.class', 'support.type.primitive'], settings: { foreground: c('#fbad60', '#b34a00') } },
+    ],
+  }
+}
+
+/** Which colours a text is drawn in: an editor's, for a file's lines, or the chat's, for a reply's code block. */
+export type Palette = 'editor' | 'chat'
+
+const PALETTES: Record<Palette, { light: string; dark: string }> = {
+  editor: { light: 'everforest-light', dark: 'everforest-dark' },
+  chat: { light: 'chat-light', dark: 'chat-dark' },
+}
+
 function load(): Promise<HighlighterCore> {
   highlighter ??= Promise.all([import('shiki/core'), import('shiki/engine/javascript')]).then(([{ createHighlighterCore }, { createJavaScriptRegexEngine }]) =>
     createHighlighterCore({
-      themes: [import('shiki/themes/everforest-light.mjs'), import('shiki/themes/everforest-dark.mjs')],
+      themes: [import('shiki/themes/everforest-light.mjs'), import('shiki/themes/everforest-dark.mjs'), chatTheme('chat-light', false), chatTheme('chat-dark', true)],
       langs: [],
       engine: createJavaScriptRegexEngine(),
     }),
@@ -120,8 +155,8 @@ export function useHighlighted(text: string, path: string): Piece[][] | null {
   return useHighlightedIn(text, languageOf(path))
 }
 
-/** The same, for a language already known (a fenced block names its own). */
-export function useHighlightedIn(text: string, language: string | undefined): Piece[][] | null {
+/** The same, for a language already known (a fenced block names its own), in the colours of `palette`. */
+export function useHighlightedIn(text: string, language: string | undefined, palette: Palette = 'editor'): Piece[][] | null {
   const [shown, setShown] = useState<{ text: string; language: string; lines: Piece[][] } | null>(null)
   useEffect(() => {
     if (!language || text.length > MAX_CHARS) return
@@ -129,14 +164,14 @@ export function useHighlightedIn(text: string, language: string | undefined): Pi
     withLanguage(language)
       .then(shiki => {
         if (!current) return
-        const tokens = shiki.codeToTokensWithThemes(text, { lang: language, themes: { light: 'everforest-light', dark: 'everforest-dark' } })
+        const tokens = shiki.codeToTokensWithThemes(text, { lang: language, themes: PALETTES[palette] })
         setShown({ text, language, lines: tokens.map(line => line.map(token => ({ text: token.content, light: token.variants.light?.color, dark: token.variants.dark?.color }))) })
       })
       .catch(() => {})
     return () => {
       current = false
     }
-  }, [text, language])
+  }, [text, language, palette])
   return shown && shown.text === text && shown.language === language ? shown.lines : null
 }
 

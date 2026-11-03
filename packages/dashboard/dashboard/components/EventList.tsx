@@ -3,7 +3,7 @@ import { foldScreenRows, formatOpenAgentEvent } from '../../src/client.js'
 import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Check, ChevronRight, Copy } from 'lucide-react'
 import { pendingChoices } from '../lib/live-state.js'
-import { callRow, callSubagents, runRow, endMessage, subagentEnd, subagentEvents, subagentReport, subagentSteps, type SubagentEnd } from '../lib/subagents.js'
+import { callRow, callSubagents, runRow, endMessage, subagentEnd, subagentEvents, subagentReport, subagentSteps, subagentWait, type SubagentEnd } from '../lib/subagents.js'
 import { answeredQuestion } from '../lib/answered-question.js'
 import { rowWords, type RowWords } from '../lib/row-words.js'
 import { formatAge } from '../lib/format-date.js'
@@ -81,6 +81,12 @@ function rowGroup(e: OpenAgentEvent): string {
 }
 
 // A driver `start` opens a fresh prompt turn.
+/** The later of two times, either one absent. */
+function later(a: string | undefined, b: string | undefined): string | undefined {
+  if (a === undefined || b === undefined) return a ?? b
+  return Date.parse(a) >= Date.parse(b) ? a : b
+}
+
 function isTurnBoundary(e: OpenAgentEvent): boolean {
   return e.kind === 'driver' && e.event.type === 'start'
 }
@@ -665,8 +671,11 @@ export function EventList({
       wokeAt = undefined
     } else if (turnOverAt >= 0 && wokeAt === undefined && isAgentsOwn(e)) wokeAt = e.at
   })
-  const waitsOnItsOwn = turnOverAt >= 0 && wokeAt === undefined && turnOverAt > events.findIndex(isTurnBoundary) && !events.slice(turnOverAt + 1).some(isTurnBoundary)
-  const turnStart = wokeAt ?? [...unfolded].reverse().find(isTurnBoundary)?.at ?? unfolded[unfolded.length - 1]?.at
+  // Or the turn stays open with the main agent blocked on its subagents' calls, idle all the same:
+  // read off its own steps (`subagentWait`), with the same blank line and the same count from its wake.
+  const blocked = subagentWait(events)
+  const waitsOnItsOwn = (turnOverAt >= 0 && wokeAt === undefined && turnOverAt > events.findIndex(isTurnBoundary) && !events.slice(turnOverAt + 1).some(isTurnBoundary)) || blocked.waiting
+  const turnStart = later(wokeAt, blocked.wokeAt) ?? [...unfolded].reverse().find(isTurnBoundary)?.at ?? unfolded[unfolded.length - 1]?.at
   // The prompts that told this run one of its subagents ended: SUBAGENT rows, not the reader's own.
   const ends = new Map<OpenAgentEvent, SubagentEnd>()
   for (const e of shown) {
