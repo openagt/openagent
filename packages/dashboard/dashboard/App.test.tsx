@@ -317,7 +317,7 @@ describe('module cards on the Overview (#1818)', () => {
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'start' }))
     await waitFor(() => expect(window.location.pathname).toBe('/app/9-n'))
-    expect(calls.find(call => call.name === 'onStartedName')?.args).toEqual(['9-n'])
+    expect(calls.find(call => call.name === 'onStartedName')?.args).toEqual([PROJECT.id, '9-n'])
     // The header's title, revealed letter by letter, while the list still has no row for the run.
     await waitFor(() => expect(document.querySelector('[title="Fix flaky login test"]')).toBeTruthy())
     expect(screen.queryByTestId('title-placeholder')).toBeNull()

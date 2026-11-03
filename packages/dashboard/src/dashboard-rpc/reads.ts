@@ -94,12 +94,12 @@ export async function onAgents(projectId: string): Promise<AgentMeta[]> {
 }
 
 /**
- * The name asked for a run this computer just started, answered once it is in (`started-names.ts`):
- * the run's row is not in the list yet when it is, and the page shows it where the row will be.
- * Nothing for a run started elsewhere, or when no name came.
+ * The name asked for a run just started, answered once it is in (`started-names.ts`): the run's
+ * row is not in the list yet when it is, and the page shows it where the row will be. A run that
+ * runs on a saved machine was named there, so the machine is asked. Nothing when no name came.
  */
-export async function onStartedName(agentId: string): Promise<string | undefined> {
-  return startedName(agentId)
+export async function onStartedName(projectId: string, agentId: string): Promise<string | undefined> {
+  return relayOr(agentId, 'onStartedName', [projectId, agentId], () => startedName(agentId), undefined)
 }
 
 /** A project's runs as its list shows them: off its folder here (`cwd`), else as the computer it is on says them. */

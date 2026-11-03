@@ -285,8 +285,8 @@ export function App() {
     reloadRecent()
     // Its name, the moment the daemon has it: about a second on, before the run's row is in any
     // list (`started-names.ts`). Answered once, when it is in; nothing for a continued run.
-    if (!continued && preferences.nameRuns !== false)
-      void onStartedName(startedId).then(
+    if (!continued && preferences.nameRuns !== false && inProject !== null)
+      void onStartedName(inProject, startedId).then(
         title => {
           if (title !== undefined) setAgentStart(prev => (prev.id === startedId ? { ...prev, title } : prev))
         },
