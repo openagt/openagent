@@ -1,19 +1,30 @@
 {
   "id": "2026-11-03T00-44-55-709Z",
   "startedAt": "2026-11-03T00:44:57.267Z",
-  "status": "running",
+  "endedAt": "2026-11-03T00:45:03.556Z",
+  "status": "done",
   "intent": "Say hello in one short sentence. Change no files.",
+  "title": "Greeting session naming",
   "driver": "claude-code",
-  "model": "haiku",
+  "model": "claude-haiku-5-5",
+  "branch": "agent-2026-11-03T00-44-55-709Z",
+  "cost": 0.00165949,
+  "contextTokens": 18695,
   "caller": {
     "runner": {
       "host": "OpenAgentVPS",
       "pid": 3520464,
       "publish": "commit",
-      "gitAccount": "suleimansh"
+      "gitAccount": "suleimansh",
+      "baseCommit": "9ee92ad829a24f9d8a3d292a9ebddfdd414ea261"
     },
+    "pid": 3520464,
     "host": "OpenAgentVPS",
     "gitAccount": "suleimansh",
-    "publish": "commit"
+    "baseCommit": "9ee92ad829a24f9d8a3d292a9ebddfdd414ea261",
+    "publish": "commit",
+    "kind": "prompt",
+    "workspace": "/home/openagent/projects/openagent/.branches/agent-2026-11-03T00-44-55-709Z",
+    "sessionId": "a7c1bbe9-66ec-4423-9883-f938b159c070"
   }
 }
