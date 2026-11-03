@@ -8,7 +8,6 @@
   "driver": "claude-code",
   "model": "claude-sonnet-5-5",
   "effort": "high",
-  "branch": "agent-2026-11-03T00-28-15-272Z",
   "cost": 0.026492400000000003,
   "contextTokens": 17709,
   "caller": {
