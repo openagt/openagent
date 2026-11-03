@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { provideTestContext } from './test-context.js'
+import { forgetStartedNames, nameStarted } from '../started-names.js'
 import { dispatchMachineRpc, dispatchRelayRpc, ELSEWHERE_FORWARDED, isMachineRead, isRelayRead, isRelayReadCall, MACHINE_RPC_NAMES, RELAY_RPC_NAMES } from './relay-dispatch.js'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -16,7 +17,7 @@ import type { StartAgentOptions } from '../dashboard/types.js'
 test('RELAY_RPC_NAMES is the run-scoped read/steer/handoff surface and a project\'s reads and start, and excludes delete (#1067 slice 2)', () => {
   for (const name of [
     'onProjectFiles', 'readModule',
-    'onGitStatus', 'onAgentWorktree', 'onAgentMainBranch', 'onAgentHandoff', 'onAgent', 'onOwnRuns', 'onStartCheck',
+    'onGitStatus', 'onAgentWorktree', 'onAgentMainBranch', 'onAgentHandoff', 'onAgent', 'onStartedName', 'onOwnRuns', 'onStartCheck',
     'onCommands', 'onDocs', 'onAgentsDoing', 'onRetainedWorktrees', 'onGitHostHome', 'onRepositoryOffer', 'onProjectSkills', 'onRecordsReach',
     'sendStop', 'sendChoice', 'sendMessage', 'sendOpenPullRequest', 'sendPush', 'sendMerge', 'sendMergeBranch', 'sendStart', 'runModuleCommand',
   ]) {
@@ -60,6 +61,7 @@ test('every relayed rpc is classed as a read or an act, by name: a computer that
     onAgentMainBranch: 'read',
     onAgentHandoff: 'read',
     onAgent: 'read',
+    onStartedName: 'read',
     onOwnRuns: 'read',
     onStartCheck: 'read',
     onCommands: 'read',
@@ -158,5 +160,15 @@ test("a relayed module command is a read when this computer's own copy of the mo
     if (previous === undefined) delete process.env.XDG_CONFIG_HOME
     else process.env.XDG_CONFIG_HOME = previous
     await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('the name of a run started from another computer is asked here, where the run was named, and comes back as it is', async () => {
+  nameStarted('2026-11-04T00-00-00-000Z', Promise.resolve('Forest two-line poem'))
+  try {
+    assert.equal(isRelayRead('onStartedName'), true)
+    assert.equal(await dispatchRelayRpc('here', 'onStartedName', ['callers-project', '2026-11-04T00-00-00-000Z']), 'Forest two-line poem')
+  } finally {
+    forgetStartedNames()
   }
 })
