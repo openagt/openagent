@@ -10,7 +10,8 @@ import { Seconds } from './ToolCalls.js'
 
 // A main agent's subagents in its chat, as Claude Code on the web draws them, in the look of the
 // agent's other steps: one grey line that says what is going on and opens to one bordered panel. While
-// they work it names one of them and counts the seconds; once they ended it says what came of them
+// they work it names one of them, and the seconds are the chat's live line's, as Claude Code on the web
+// has one counter; once they ended it says what came of them
 // ("Ran 2 agents, received a message"). A row opens the subagent in the pane beside the chat, its
 // prompt and its transcript.
 
@@ -100,7 +101,6 @@ export function SubagentSteps({ steps, lead, onOpen }: { steps: readonly Subagen
     )
   }
   const current = working[turn % Math.max(working.length, 1)]
-  const since = working.reduce<string | undefined>((first, row) => (first === undefined || row.startedAt < first ? row.startedAt : first), undefined)
   const words = stepWords(steps)
   return (
     <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
@@ -111,7 +111,6 @@ export function SubagentSteps({ steps, lead, onOpen }: { steps: readonly Subagen
               <span key={current.key} className="morph-in min-w-0 truncate text-left text-shimmer">
                 {current.name}
               </span>
-              {since !== undefined && <Seconds since={since} />}
             </>
           ) : (
             <span key={words} className="morph-in min-w-0 truncate text-left group-hover/status:text-foreground/80 group-has-focus-visible/status:text-foreground/80">

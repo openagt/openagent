@@ -41,14 +41,6 @@ function retryDelay(attempt: number): number {
  */
 const SYNC_GRACE_MS = 1500
 
-/** The events that came on the live line after the log it opened with was read: what just happened, not what was there. */
-const cameLive = new WeakSet<OpenAgentEvent>()
-
-/** Whether an event came while the page was watching, after the log it opened with: a message that did comes in at the pace of one being written. */
-export function arrivedLive(e: OpenAgentEvent): boolean {
-  return cameLive.has(e)
-}
-
 export function useLiveEvents(projectId: string | null, agentId?: string | null, resetKey?: unknown): LiveEvents {
   const [events, setEvents] = useState<OpenAgentEvent[]>([])
   const [lost, setLost] = useState(false)
@@ -130,16 +122,12 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null,
         }
         if (reconnect) graceTimer = setTimeout(atGrace, SYNC_GRACE_MS)
         else setEvents([]) // fresh subscribe: start clean so the replay is not appended twice
-        // Whether the log this subscription opened with has been read: what comes after just happened.
-        let synced = false
         ch.listen(event => {
           if (event.kind === 'stream-sync') {
-            synced = true
             if (graceTimer) clearTimeout(graceTimer)
             swap()
             return
           }
-          if (synced && event.kind !== 'partial') cameLive.add(event)
           if (event.kind === 'partial') {
             const text = event.text === finished ? '' : event.text
             const before = lastPiece

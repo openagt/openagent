@@ -299,7 +299,7 @@ describe('EventList tool calls', () => {
     expect(screen.queryByRole('status')).toBeNull()
     const woke: OpenAgentEvent = { kind: 'driver', event: { type: 'thinking' }, at: new Date().toISOString() }
     rerender(<EventList events={[prompt, started, { kind: 'driver', event: { type: 'text', text: 'Both run.' }, at: '2026-10-01T10:00:19.000Z' }, over, woke]} working stick={false} />)
-    expect(screen.getByRole('status').textContent).toBe('0s·Thinking')
+    expect(screen.getByRole('status').textContent).toBe('·Thinking')
   })
 
   test('a call that only drove the subagents is no row of the run', () => {
@@ -382,6 +382,35 @@ describe('EventList question and answer', () => {
     expect(within(card).getByRole('button', { name: /Submit/ })).toBeTruthy()
     // The keys are the newest question's: the button promises one.
     expect(within(card).getByRole('button', { name: /Submit/ }).textContent).toMatch(/^Submit(⌘|Ctrl)↵$/)
+  })
+
+  test('the card waits for the words above it: not while they are being typed, nor while more are coming', async () => {
+    const long = 'Three tasks, each with its own files. '.repeat(10)
+    const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: long } }
+    const events = [asked[0]!, said, asked[2]!, asked[3]!]
+    const card = () => screen.queryByRole('region', { name: 'Which color do you prefer?' })
+    // The setup file asks for less motion; this reader did not.
+    const media = window.matchMedia
+    window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} }) as unknown as MediaQueryList
+    // The reply is written on the live line, then the whole message takes its place and goes on from there.
+    const { rerender } = render(<EventList events={[asked[0]!]} working writing={long} projectId="p1" agentId="r1" stick={false} />)
+    rerender(<EventList events={events} working projectId="p1" agentId="r1" stick={false} />)
+    expect(card()).toBeNull()
+    await waitFor(() => expect(card()).toBeTruthy(), { timeout: 4000 })
+    // More words still arriving hold it back too.
+    rerender(<EventList events={events} working writing="And more" projectId="p1" agentId="r1" stick={false} />)
+    expect(card()).toBeNull()
+    window.matchMedia = media
+  })
+
+  test('a message that came whole is shown whole, and its question card with it', () => {
+    const media = window.matchMedia
+    window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} }) as unknown as MediaQueryList
+    const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'A reply nobody saw being written.' }, at: new Date().toISOString() }
+    render(<EventList events={[asked[0]!, said, asked[2]!, asked[3]!]} working projectId="p1" agentId="r1" stick={false} />)
+    expect(screen.getByText('A reply nobody saw being written.')).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Which color do you prefer?' })).toBeTruthy()
+    window.matchMedia = media
   })
 
   test('the turn a question ended has its copy and time under the card, and none under what was said before it', () => {

@@ -39,7 +39,10 @@ export function Seconds({ since }: { since: string }) {
     const tick = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(tick)
   }, [])
-  return <span className="shrink-0 tabular-nums">{formatElapsed(now - Date.parse(since))}</span>
+  const ms = now - Date.parse(since)
+  // The first second says nothing, as Claude Code on the web's counter does: "0s", "1s" and then "2s" is a line that has just begun, said as a count.
+  if (ms < 2000) return null
+  return <span className="shrink-0 tabular-nums">{formatElapsed(ms)}</span>
 }
 
 // Three dots moving in a wave: the agent is at it.

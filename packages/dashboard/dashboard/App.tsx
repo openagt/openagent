@@ -532,7 +532,7 @@ export function App() {
       // list we have not read yet, where whether the agent runs is not known. Only a session that
       // is genuinely absent from a list we did read is gone.
       if (agentId === agentStart.id || !agentsLoaded)
-        return <AgentView projectId={projectId} agentId={agentId} events={events} live={agentId === agentStart.id ? true : null} picks={agentId === agentStart.id ? agentStart.picks : undefined} label={agentStart.intent || undefined} projectName={projectName} remoteLabel={agentId === agentStart.id ? agentStart.runsOn : undefined} files={files} lost={lost} writing={writing} startedWith={agentId === agentStart.id ? agentStart.intent : undefined} onAgentStarted={onAgentStarted} contextSet={contextSet} onProjectRemoved={removableHere} />
+        return <AgentView projectId={projectId} agentId={agentId} events={events} live={agentId === agentStart.id ? true : null} picks={agentId === agentStart.id ? agentStart.picks : undefined} label={preferences.nameRuns !== false ? undefined : agentStart.intent || undefined} naming={agentId === agentStart.id && preferences.nameRuns !== false} projectName={projectName} remoteLabel={agentId === agentStart.id ? agentStart.runsOn : undefined} files={files} lost={lost} writing={writing} startedWith={agentId === agentStart.id ? agentStart.intent : undefined} onAgentStarted={onAgentStarted} contextSet={contextSet} onProjectRemoved={removableHere} />
       return (
         <NotFound
           title="This agent is gone"
@@ -552,7 +552,8 @@ export function App() {
         live={selectedAgent.status === 'running'}
         card={selectedAgent}
         // A subagent's page is named as its rows are: by its task, not by its whole prompt.
-        label={selectedAgent.parent !== undefined ? taskLabel(selectedAgent) : agentLabel(selectedAgent)}
+        label={selectedAgent.parent !== undefined ? taskLabel(selectedAgent) : awaitingName(selectedAgent, preferences.nameRuns !== false) ? undefined : agentLabel(selectedAgent)}
+        naming={selectedAgent.parent === undefined && awaitingName(selectedAgent, preferences.nameRuns !== false)}
         projectName={projectName}
         files={files}
         lost={lost}

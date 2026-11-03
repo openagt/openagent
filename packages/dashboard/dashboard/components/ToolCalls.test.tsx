@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { LiveLine, ToolCalls, type ToolStep } from './ToolCalls.js'
+import { LiveLine, Seconds, ToolCalls, type ToolStep } from './ToolCalls.js'
 
 afterEach(() => {
   cleanup()
@@ -187,5 +187,19 @@ describe('ToolCalls, edits whose files are known', () => {
     render(<ToolCalls steps={[bash('a'), { type: 'action', label: 'Edit', detail: '/ws/a.ts', id: 'e1', output: { text: 'ok' } }]} />)
     const line = screen.getByRole('button', { name: 'Ran a command, edited a file' })
     expect(line.querySelector('.text-success')).toBeNull()
+  })
+})
+
+describe('the live line counter', () => {
+  test('the first two seconds say nothing, then it counts', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-03T10:00:01.000Z'))
+    const { container, rerender } = render(<Seconds since="2026-11-03T10:00:00.000Z" />)
+    expect(container.textContent).toBe('')
+    vi.setSystemTime(new Date('2026-11-03T10:00:02.500Z'))
+    act(() => void vi.advanceTimersByTime(1000))
+    rerender(<Seconds since="2026-11-03T10:00:00.000Z" />)
+    expect(container.textContent).toBe('3s')
+    vi.useRealTimers()
   })
 })

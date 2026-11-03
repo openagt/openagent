@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { GitHostHome, OpenAgentEvent, RepositoryOffer, RecordsReach } from '../../src/index.js'
 import { sessionInfo } from '../../src/client.js'
+import { RevealedTitle } from './RevealedTitle.js'
 import { MoreVertical, ChevronDown, FolderOpen, Code, Check, ExternalLink, Square, FolderX, Trash2, Copy, CloudUpload, CloudOff, Info } from 'lucide-react'
 import { onGitHostHome, onRepositoryOffer } from '../rpc/reads.js'
 import { onRecordsReach, sendShareRecords } from '../rpc/projects.js'
@@ -51,6 +52,7 @@ export function AgentActionsMenu({
   agentId: agentId,
   events,
   label,
+  naming = false,
   retainedWorktree = false,
   onWorktreeRemoved,
   onDeleted,
@@ -63,6 +65,8 @@ export function AgentActionsMenu({
   events: OpenAgentEvent[]
   /** The session's name: what the session's menu reads. Not known yet, a grey bar holds its place. */
   label?: string | undefined
+  /** The session's name is still coming (a run just started): when it arrives it comes in letter by letter. A name that was only slow to load comes in plain. */
+  naming?: boolean
   retainedWorktree?: boolean
   onWorktreeRemoved?: (() => void) | undefined
   onDeleted?: (() => void) | undefined
@@ -148,6 +152,11 @@ export function AgentActionsMenu({
     })
   }
 
+  // A name the run was being given comes in letter by letter, as the session's row in the list does.
+  // Per session: the next one opened has a name of its own, and was not waited for because this one's was.
+  const waited = useRef<{ agent: string | null | undefined; naming: boolean }>({ agent: agentId, naming: false })
+  if (waited.current.agent !== agentId) waited.current = { agent: agentId, naming: false }
+  if (naming) waited.current.naming = true
   const name = label?.trim() || agentId
   // What the button is called: the menu acts on one session, or, with none, on the project.
   const title = session ? 'Session actions' : 'Project actions'
@@ -174,7 +183,11 @@ export function AgentActionsMenu({
             title={label}
             className="flex min-w-0 items-center gap-1 rounded px-1 py-0.5 text-left text-xs hover:bg-muted data-[popup-open]:bg-muted"
           >
-            {label ? <span className="min-w-0 truncate font-medium text-foreground">{label}</span> : <span data-testid="title-placeholder" className="h-3 w-40 max-w-full rounded bg-muted" />}
+            {label ? (
+              <span className="min-w-0 truncate font-medium text-foreground">
+                <RevealedTitle key={label} text={label} start={waited.current.naming} />
+              </span>
+            ) : <span data-testid="title-placeholder" className="h-3 w-40 max-w-full rounded bg-muted" />}
             <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
           </DropdownMenuTrigger>
         ) : (
