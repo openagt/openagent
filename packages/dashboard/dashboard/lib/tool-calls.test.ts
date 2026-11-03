@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { callsSummary, summaryWords, toolCall, type ToolCall } from './tool-calls.js'
+import { callsSummary, doingOf, summaryWords, toolCall, type ToolCall } from './tool-calls.js'
 
 describe('toolCall', () => {
   test("Claude Code's tools read as a verb and what it was done to", () => {
@@ -85,5 +85,29 @@ describe('callsSummary', () => {
 
   test('an edit whose files its coding agent did not say is still said, with no size', () => {
     expect(callsSummary([bash, toolCall('Edit', '/repo/x.md')])).toEqual({ parts: [{ words: 'Ran a command' }, { words: 'edited a file' }] })
+  })
+})
+
+describe('doingOf', () => {
+  test('what the agent wrote about a call is said as going on', () => {
+    expect(doingOf('Find all markdown files excluding .git')).toBe('Finding all markdown files excluding .git')
+    expect(doingOf('Summarize README')).toBe('Summarizing README')
+    expect(doingOf('Run the test suite')).toBe('Running the test suite')
+    expect(doingOf('Debug the flaky login test')).toBe('Debugging the flaky login test')
+    expect(doingOf('Write the release notes')).toBe('Writing the release notes')
+    expect(doingOf('List files in current directory')).toBe('Listing files in current directory')
+    expect(doingOf('Try the build again')).toBe('Trying the build again')
+    expect(doingOf('use the cache')).toBe('using the cache')
+    expect(doingOf('Sleep for 4 seconds')).toBe('Sleeping for 4 seconds')
+    expect(doingOf('Show, then count')).toBe('Showing, then count')
+  })
+
+  test('words already going on stay; words that open with no verb it knows are left as written', () => {
+    expect(doingOf('Running tests')).toBe('Running tests')
+    expect(doingOf('Summarizing README')).toBe('Summarizing README')
+    expect(doingOf('README summary')).toBeUndefined()
+    expect(doingOf('npm install deps')).toBeUndefined()
+    expect(doingOf('Git status')).toBeUndefined()
+    expect(doingOf('')).toBeUndefined()
   })
 })

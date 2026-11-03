@@ -203,3 +203,29 @@ describe('the live line counter', () => {
     vi.useRealTimers()
   })
 })
+
+describe('the live line says what is being done', () => {
+  test('a command\u2019s description, as going on; once done the row keeps it as written', () => {
+    const command = { label: 'Bash', detail: 'find . -name "*.md"', summary: 'Find all markdown files', id: 'b1' }
+    render(<LiveLine call={command} since="2026-11-03T10:00:00.000Z" />)
+    expect(screen.getByRole('status').textContent).toContain('Finding all markdown files')
+    cleanup()
+    render(<ToolCalls steps={[{ type: 'action', ...command, output: { text: 'a.md' } }]} />)
+    expect(screen.queryByText('Finding all markdown files')).toBeNull()
+  })
+
+  test('a subagent\u2019s task, as going on, in place of "Starting agent"', () => {
+    render(<LiveLine call={{ label: 'Agent', detail: 'Summarize README', id: 'a1' }} since="2026-11-03T10:00:00.000Z" />)
+    expect(screen.getByRole('status').textContent).toContain('Summarizing README')
+    expect(screen.getByRole('status').textContent).not.toContain('Starting agent')
+  })
+
+  test('words that are no command to turn are shown as written, and a call with none keeps its own words', () => {
+    render(<LiveLine call={{ label: 'Bash', detail: 'git status', summary: 'Git status of the repo', id: 'b2' }} since="2026-11-03T10:00:00.000Z" />)
+    expect(screen.getByRole('status').textContent).toContain('Git status of the repo')
+    cleanup()
+    render(<LiveLine call={{ label: 'Read', detail: '/ws/README.md', id: 'r1' }} since="2026-11-03T10:00:00.000Z" />)
+    expect(screen.getByRole('status').textContent).toContain('Reading')
+    expect(screen.getByRole('status').textContent).toContain('README.md')
+  })
+})

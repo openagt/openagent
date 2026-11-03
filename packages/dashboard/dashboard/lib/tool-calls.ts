@@ -178,3 +178,41 @@ export function callsSummary(calls: readonly ToolCall[]): CallsSummary {
 export function summaryWords(summary: CallsSummary): string {
   return summary.parts.map(part => (part.target === undefined ? part.words : `${part.words} ${part.target}`)).join(', ')
 }
+
+/**
+ * What the agent wrote about a call, said as going on: "Find all markdown files" becomes "Finding
+ * all markdown files", "Summarize README" becomes "Summarizing README", as the live line of Claude
+ * Code on the web says what is being done. Only words that open with a verb this knows are turned:
+ * a description that opens with anything else ("README summary", "npm install") is not a command
+ * to turn, and `undefined` leaves it as it was written.
+ */
+export function doingOf(words: string): string | undefined {
+  const match = /^([A-Za-z][A-Za-z-]*)(.*)$/s.exec(words.trim())
+  if (!match) return undefined
+  const [, first, rest] = match as unknown as [string, string, string]
+  const verb = first.toLowerCase()
+  // Already going on: "Running tests".
+  if (verb.endsWith('ing') && (VERBS.has(verb.slice(0, -3)) || VERBS.has(`${verb.slice(0, -3)}e`) || VERBS.has(verb.slice(0, -4)))) return words.trim()
+  if (!VERBS.has(verb)) return undefined
+  const doing = DOUBLED.has(verb) ? verb + verb.at(-1) + 'ing' : verb.endsWith('ie') ? verb.slice(0, -2) + 'ying' : /[^aeioy]e$/.test(verb) ? verb.slice(0, -1) + 'ing' : verb + 'ing'
+  const said = first[0] === first[0]!.toUpperCase() ? doing.charAt(0).toUpperCase() + doing.slice(1) : doing
+  return said + rest
+}
+
+/** The verbs a description of a call opens with, by what the agents wrote: each turned by the rules of `doingOf`. */
+const VERBS = new Set(
+  (
+    'add analyze append apply archive audit build bump calculate call change check clean clear clone close collect commit compare compile compute ' +
+    'configure confirm convert copy count create cut debug decode delete deploy describe detect diff disable display download draft drop dump echo ' +
+    'edit enable encode ensure evaluate examine execute explore export extract fetch filter find fix format gather generate get grab grep identify ' +
+    'import inspect install investigate kill launch lint list load locate log look make map measure merge migrate move open outline parse patch pick ' +
+    'ping plan prepare preview print profile prune publish pull push query read rebase rebuild record refactor refresh reload remove rename render ' +
+    'replace report rerun research reset resolve restart restore retry review revert rewrite run save scan search serve set show shorten sort split ' +
+    'start stash stop study summarize survey sync tag test tidy trace translate trim try unzip update upgrade upload use validate verify view wait ' +
+    'watch write zip adjust type sleep tail peek answer approve ask assign cancel claim comment drive give hand hold join keep label land leave link mark name note pause poll post ' +
+    'probe queue reach recheck reply request reread re-read resume return send share stage switch take tell turn unstage walk wire'
+  ).split(' '),
+)
+
+/** The verbs whose last letter is doubled before "-ing": "run", "running". */
+const DOUBLED = new Set(['commit', 'cut', 'debug', 'drop', 'get', 'grab', 'log', 'map', 'plan', 'put', 'rerun', 'run', 'set', 'stop', 'tag', 'zip', 'scan', 'ship', 'skip', 'submit', 'trim'])
