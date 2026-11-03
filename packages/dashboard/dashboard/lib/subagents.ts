@@ -96,6 +96,9 @@ export function subagentStartedAt(agent: Pick<AgentMeta, 'id' | 'startedAt'>): s
  */
 export interface CallSubagent {
   id: string
+  /** How many tokens and tool calls it went through, as far as its coding agent says. */
+  tokens?: number
+  toolUses?: number
   status: 'working' | 'ended' | 'failed'
   name?: string
   role?: string
@@ -141,6 +144,13 @@ export function callSubagents(events: readonly OpenAgentEvent[]): CallSubagent[]
  */
 export function subagentEvents(events: readonly OpenAgentEvent[]): Set<OpenAgentEvent> {
   const ids = new Set<string>()
+  // A call that only drove the agent's subagents says nothing a subagent's row does not, unless it failed.
+  const failed = new Set(events.flatMap(e => (e.kind === 'driver' && e.event.type === 'output' && e.event.failed === true && e.event.id !== undefined ? [e.event.id] : [])))
+  const driving = new Set(
+    events.flatMap(e =>
+      e.kind === 'driver' && e.event.type === 'action' && e.event.subagent === undefined && e.event.id !== undefined && !failed.has(e.event.id) && drivesSubagents(e.event.whole ?? e.event.detail) ? [e.event.id] : [],
+    ),
+  )
   for (const e of events) if (e.kind === 'driver' && e.event.type === 'subagent') ids.add(e.event.id)
   const calls = new Set([...ids].flatMap(id => [id, id.split(':')[0]!]))
   const hidden = new Set<OpenAgentEvent>()
@@ -149,7 +159,7 @@ export function subagentEvents(events: readonly OpenAgentEvent[]): Set<OpenAgent
     const event = e.event
     if (event.type === 'subagent') hidden.add(e)
     else if ((event.type === 'action' || event.type === 'output' || event.type === 'text' || event.type === 'thought') && event.subagent !== undefined) hidden.add(e)
-    else if ((event.type === 'action' || event.type === 'output') && event.id !== undefined && calls.has(event.id)) hidden.add(e)
+    else if ((event.type === 'action' || event.type === 'output') && event.id !== undefined && (calls.has(event.id) || driving.has(event.id))) hidden.add(e)
   }
   return hidden
 }
@@ -179,6 +189,9 @@ export interface SubagentRow {
   /** What its last step was, on one line, while it works. */
   doing?: string
   cost?: number
+  /** How many tokens and tool calls it went through, as far as its coding agent says. */
+  tokens?: number
+  toolUses?: number
   prompt?: string
   agent?: AgentMeta
   call?: CallSubagent
@@ -222,46 +235,76 @@ export function callRow(call: CallSubagent, runWorking: boolean, fallbackAt: str
     ...(working && call.tool !== undefined ? { tool: call.tool } : {}),
     ...(working ? { calls: call.calls } : {}),
     ...(call.prompt !== undefined ? { prompt: call.prompt } : {}),
+    ...(call.tokens !== undefined ? { tokens: call.tokens } : {}),
+    ...(call.toolUses !== undefined ? { toolUses: call.toolUses } : {}),
     call,
   }
 }
 
-/**
- * Where each subagent's row goes in a log, by index into it: the subagents started in one turn are
- * one group, at the place of the first of them — before the first event written after it started,
- * or at the log's end — so a turn that started three reads as one block of three under one line
- * saying all of them. A turn begins at each event `isTurnStart` says begins one.
- */
-export function subagentGroups(events: readonly OpenAgentEvent[], rows: readonly SubagentRow[], isTurnStart: (e: OpenAgentEvent) => boolean): Map<number, SubagentRow[]> {
-  const turnAt: number[] = []
-  for (const e of events) turnAt.push((turnAt.at(-1) ?? 0) + (isTurnStart(e) ? 1 : 0))
-  const placed = rows
-    .map(row => {
-      const started = Date.parse(row.startedAt)
-      const at = events.findIndex(e => e.at !== undefined && Date.parse(e.at) > started)
-      const index = at === -1 ? events.length : at
-      // The turn it was started in: the one the event before it belongs to.
-      return { row, index, turn: index > 0 ? turnAt[index - 1]! : 0 }
-    })
-    .sort((a, b) => a.index - b.index || (a.row.startedAt < b.row.startedAt ? -1 : 1))
-  const groups = new Map<number, SubagentRow[]>()
-  const firstOfTurn = new Map<number, number>()
-  for (const { row, index, turn: of } of placed) {
-    const at = firstOfTurn.get(of) ?? index
-    firstOfTurn.set(of, at)
-    groups.set(at, [...(groups.get(at) ?? []), row])
-  }
-  return groups
-}
+/** One thing of a stretch of the chat: a subagent started, or a message one sent when it ended. */
+export type SubagentStep = { kind: 'agent'; row: SubagentRow } | { kind: 'message'; row: SubagentRow; text: string }
 
 /**
- * What a group of subagents comes to: how many, how long from the first start to the last end (or
- * now, while one works), and what they cost, summed over the ones whose cost is known — a subagent
- * of the coding agent's own has none of its own, its cost is the run's. No cost when none is known.
+ * Where a log's subagents go, by index into it: what was started and what ended with nothing between
+ * them is one stretch, at the place of the first of it — before the first event written after it, or
+ * at the log's end — so it reads as one line. What comes after the agent said something is a stretch
+ * of its own, after those words. `parts` says which events part what is before them from what is
+ * after. `reports` holds what each subagent sent when it ended, by its row's key.
  */
-export function rollUp(rows: readonly SubagentRow[], now: number): { count: number; ms: number; cost?: number } {
-  const start = Math.min(...rows.map(row => Date.parse(row.startedAt)))
-  const end = rows.some(row => row.working) ? now : Math.max(...rows.map(row => Date.parse(row.endedAt ?? row.startedAt)))
-  const costs = rows.flatMap(row => (row.cost !== undefined ? [row.cost] : []))
-  return { count: rows.length, ms: Math.max(0, end - start), ...(costs.length > 0 ? { cost: costs.reduce((a, b) => a + b, 0) } : {}) }
+export function subagentSteps(events: readonly OpenAgentEvent[], rows: readonly SubagentRow[], reports: ReadonlyMap<string, string>, parts: (e: OpenAgentEvent) => boolean): Map<number, SubagentStep[]> {
+  const stretchAt: number[] = []
+  for (const e of events) stretchAt.push((stretchAt.at(-1) ?? 0) + (parts(e) ? 1 : 0))
+  const place = (step: SubagentStep, time: string) => {
+    const when = Date.parse(time)
+    const at = events.findIndex(e => e.at !== undefined && Date.parse(e.at) > when)
+    const index = at === -1 ? events.length : at
+    // The stretch it belongs to: the one the event before it is in.
+    return { step, time, index, stretch: index > 0 ? stretchAt[index - 1]! : 0 }
+  }
+  const placed = rows
+    .flatMap(row => {
+      const report = reports.get(row.key)
+      return [place({ kind: 'agent', row }, row.startedAt), ...(report !== undefined && row.endedAt !== undefined ? [place({ kind: 'message', row, text: report }, row.endedAt)] : [])]
+    })
+    .sort((a, b) => a.index - b.index || (a.time < b.time ? -1 : 1))
+  const steps = new Map<number, SubagentStep[]>()
+  const firstOf = new Map<number, number>()
+  for (const { step, index, stretch } of placed) {
+    const at = firstOf.get(stretch) ?? index
+    firstOf.set(stretch, at)
+    steps.set(at, [...(steps.get(at) ?? []), step])
+  }
+  return steps
+}
+
+/** What a stretch came to, in words, in the order it happened: "Ran 2 agents, received a message". */
+export function stepWords(steps: readonly SubagentStep[]): string {
+  const agents = steps.filter(step => step.kind === 'agent')
+  const messages = steps.length - agents.length
+  const failed = agents.filter(step => step.row.status === 'failed').length
+  const ran = agents.length === 1 ? 'ran an agent' : `ran ${agents.length} agents`
+  const received = messages === 1 ? 'received a message' : `received ${messages} messages`
+  const parts = [...(agents.length > 0 ? [ran] : []), ...(messages > 0 ? [received] : [])]
+  if (steps[0]?.kind === 'message') parts.reverse()
+  const words = [...parts, ...(failed > 0 ? [`${failed} failed`] : [])].join(', ')
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
+/** A command that only starts or lands subagents or looks at them, a look at git beside it: `npx @openagt/skill-orchestration@0.1 land <id>; git status`. */
+export function drivesSubagents(command: string | undefined): boolean {
+  if (command === undefined) return false
+  const parts = command.split(/;|&&|\n/).map(part => part.trim()).filter(Boolean)
+  const orchestration = /^npx (?:-y )?@openagt\/skill-orchestration(?:@\S+)? (?:start|land|next|list|read)\b/
+  return parts.some(part => orchestration.test(part)) && parts.every(part => orchestration.test(part) || /^git (?:status|log|diff)\b/.test(part))
+}
+
+/** What a subagent of the coding agent's own sent when it ended: the last thing it said. */
+export function subagentReport(events: readonly OpenAgentEvent[], id: string): string | undefined {
+  const said = subagentTranscript(events, id).flatMap(e => (e.kind === 'driver' && e.event.type === 'text' ? [e.event.text] : []))
+  return said.at(-1)
+}
+
+/** What a run was told when its subagent ended, as a person reads it: where its work is, and what it said. */
+export function endMessage(rest: string): string {
+  return rest.replace(/^Its last words:\n/m, '').trim()
 }

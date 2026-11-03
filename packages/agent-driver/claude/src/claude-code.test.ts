@@ -177,13 +177,30 @@ test('StreamJsonParser gives a subagent its own events, its model off its first 
   assert.deepEqual(p.push(result('toolu_a', [{ type: 'tool_result', tool_use_id: 'toolu_b', content: 'hi' }])), [{ type: 'output', id: 'toolu_b', text: 'hi', subagent: 'toolu_a' }])
   // Its model is said once: a second message of the subagent's names it again and changes nothing.
   assert.deepEqual(p.push(assistant('toolu_a', [{ type: 'text', text: 'It printed hi.' }], { model: 'claude-haiku-5-5' })), [{ type: 'text', text: 'It printed hi.', subagent: 'toolu_a' }])
-  // What it is writing is not the agent's message being written.
+  // What it is writing is not the agent's message being written, nor is its thinking the agent's.
+  assert.deepEqual(p.push(within('toolu_a', { type: 'stream_event', event: { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } } })), [])
   assert.deepEqual(p.push(within('toolu_a', { type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'It pr' } } })), [])
 
+  // How far it got, as its task says: on its row.
+  assert.deepEqual(p.push(task('task_progress', { tool_use_id: 'toolu_a', usage: { total_tokens: 15379, tool_uses: 1 } })), [{ ...named, status: 'working', model: 'claude-haiku-5-5', tokens: 15379, toolUses: 1 }])
   // Its task is over: the row ends, with all it carried.
-  assert.deepEqual(p.push(task('task_notification', { task_id: 'a9c8', tool_use_id: 'toolu_a', status: 'completed' })), [{ ...named, status: 'ended', model: 'claude-haiku-5-5' }])
+  assert.deepEqual(p.push(task('task_notification', { task_id: 'a9c8', tool_use_id: 'toolu_a', status: 'completed' })), [{ ...named, status: 'ended', model: 'claude-haiku-5-5', tokens: 15379, toolUses: 1 }])
   // A task of a subagent that is no row of this turn ends nothing.
   assert.deepEqual(p.push(task('task_notification', { task_id: 'zz', tool_use_id: 'toolu_gone', status: 'completed' })), [])
+
+  // A report handed back is the subagent's text, when it said none of its own.
+  p.push(assistant(null, [{ type: 'tool_use', id: 'toolu_h', name: 'Agent', input: { description: 'Hand back' } }]))
+  p.push(task('task_started', { tool_use_id: 'toolu_h', is_backgrounded: true }))
+  assert.deepEqual(p.push(task('task_notification', { tool_use_id: 'toolu_h', status: 'completed', handback_report: { text: 'PINEAPPLE' } })), [{ type: 'text', text: 'PINEAPPLE', subagent: 'toolu_h' }, { type: 'subagent', id: 'toolu_h', name: 'Hand back', status: 'ended' }])
+  // And a subagent run in the foreground hands its report back in its call's answer.
+  p.push(assistant(null, [{ type: 'tool_use', id: 'toolu_f', name: 'Agent', input: { description: 'In front' } }]))
+  assert.deepEqual(p.push(result(null, [{ type: 'tool_result', tool_use_id: 'toolu_f', content: '[Subagent hand-back] The text below is it. The report follows:\n  29 files.\n  All listed.\nagentId: a1 (use SendMessage)\n<usage>x</usage>' }])).filter(e => e.type !== 'output'), [{ type: 'text', text: '29 files.\nAll listed.', subagent: 'toolu_f' }, { type: 'subagent', id: 'toolu_f', name: 'In front', status: 'ended' }])
+
+  // Its report may come in the call's answer after its task said it was over.
+  p.push(assistant(null, [{ type: 'tool_use', id: 'toolu_l', name: 'Agent', input: { description: 'Late' } }]))
+  p.push(task('task_started', { tool_use_id: 'toolu_l', is_backgrounded: true }))
+  p.push(task('task_notification', { tool_use_id: 'toolu_l', status: 'completed' }))
+  assert.deepEqual(p.push(result(null, [{ type: 'tool_result', tool_use_id: 'toolu_l', content: '[Subagent hand-back] Framed. The report follows:\n  28 files.\nagentId: a2' }])).filter(e => e.type !== 'output'), [{ type: 'text', text: '28 files.', subagent: 'toolu_l' }])
 
   // One in the background that did not finish failed.
   p.push(assistant(null, [{ type: 'tool_use', id: 'toolu_c', name: 'Agent', input: { description: 'Doomed' } }]))
@@ -206,7 +223,9 @@ test('StreamJsonParser passes the message being written as the text so far, each
   assert.deepEqual(p.push(piece({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } })), [])
   assert.deepEqual(p.push(piece(text('Rivers car'))), [{ type: 'partial', text: 'Rivers car' }])
   assert.deepEqual(p.push(piece(text('ve valleys.'))), [{ type: 'partial', text: 'Rivers carve valleys.' }])
-  // Thinking and tool input come in pieces too; they are said once whole, not as they come.
+  // Thinking and tool input come in pieces too; they are said once whole, not as they come. That
+  // the agent began to think is said as it begins.
+  assert.deepEqual(p.push(piece({ type: 'content_block_start', index: 1, content_block: { type: 'thinking', thinking: '' } })), [{ type: 'thinking' }])
   assert.deepEqual(p.push(piece({ type: 'content_block_delta', index: 1, delta: { type: 'thinking_delta', thinking: 'hm' } })), [])
   assert.deepEqual(p.push(piece({ type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '{"a' } })), [])
   assert.deepEqual(p.push(piece({ type: 'content_block_start', index: 2, content_block: { type: 'text', text: '' } })), [])

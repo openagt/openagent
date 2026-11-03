@@ -618,7 +618,7 @@ type SubagentsFold = { count: number; working: number; open: boolean; onToggle: 
 // to whole. Kept by the title's words, for as long as a reveal lasts.
 const REVEAL_STEP_MS = 30
 const REVEAL_LETTERS = 24
-const REVEAL_MS = REVEAL_STEP_MS * REVEAL_LETTERS + 300
+const REVEAL_MS = REVEAL_STEP_MS * REVEAL_LETTERS + 90
 const revealedSince = new Map<string, number>()
 
 function RevealedTitle({ text, start }: { text: string; start: boolean }) {
@@ -771,6 +771,9 @@ function AgentHistoryRow({
     }
   }, [intent, naming])
   const titleText = naming ? '' : intent || 'New agent'
+  // A name that comes to a row that waited for it comes in as a new session's does.
+  const waitedForName = useRef(false)
+  if (naming) waitedForName.current = true
   const titleClass = cn('rail-title min-w-0 flex-1 text-sm font-normal', overflowing && 'is-overflowing')
   // What the row says in a word, the one the status badge used to print: it names the circle, and
   // opens the sentence the row's hover says.
@@ -840,7 +843,7 @@ function AgentHistoryRow({
         <TooltipTrigger render={<span ref={titleRef} className={titleClass} />}>
           {/* Nothing yet, and something coming: a bar where the name goes, rather than a blank row or
               the prompt it is about to replace. */}
-          {naming ? <span aria-hidden className="block h-3.5 w-2/3 animate-pulse rounded bg-muted-foreground/20" /> : <RevealedTitle text={titleText} start={standIn} />}
+          {naming ? <span aria-hidden className="block h-3.5 w-2/3 animate-pulse rounded bg-muted-foreground/20" /> : <RevealedTitle text={titleText} start={standIn || waitedForName.current} />}
         </TooltipTrigger>
         <TooltipContent side="right" className="max-w-96 whitespace-pre-wrap break-words text-sm">
           {titleText}

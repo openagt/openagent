@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { callsSummary, summaryWords, toolCall } from '../lib/tool-calls.js'
 import { usePreferences } from '../lib/preferences.js'
@@ -149,7 +149,7 @@ function ThoughtLine({ text }: { text: string }) {
 // line is the dots and the seconds, as Claude Code on the web's is. A word standing in for the step
 // ("Working…") said no more than the dots already do, and read as a step that was not one.
 // `word` is for a line that is about something else: waiting on subagents.
-export function LiveLine({ call, word, since }: { call?: Call | undefined; word?: string | undefined; since?: string | undefined }) {
+export function LiveLine({ call, word, since, tokens, thinking = false }: { call?: Call | undefined; word?: string | undefined; since?: string | undefined; tokens?: number | undefined; thinking?: boolean }) {
   return (
     <div role="status" className="flex min-w-0 flex-1 items-center gap-2 font-sans text-sm text-muted-foreground">
       <Dots />
@@ -163,8 +163,53 @@ export function LiveLine({ call, word, since }: { call?: Call | undefined; word?
           </>
         )}
       </span>
+      {tokens !== undefined && <TokenCount tokens={tokens} />}
+      {thinking && (
+        <span className="morph-in flex shrink-0 items-center gap-2">
+          <span aria-hidden>·</span>
+          Thinking
+        </span>
+      )}
     </div>
   )
+}
+
+/** How long a token count takes to count up to its new value. */
+const COUNT_MS = 360
+
+/** A token count that counts up to a new value, fast and then slower, as Claude Code on the web's does. */
+function TokenCount({ tokens }: { tokens: number }) {
+  const [shown, setShown] = useState(() => (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches ? tokens : 0))
+  const from = useRef(shown)
+  useEffect(() => {
+    const start = Math.max(0, from.current)
+    if (start === tokens) return
+    let frame = 0
+    const began = performance.now()
+    const step = (now: number) => {
+      // A frame's time may be a moment before the count began.
+      const t = Math.min(1, Math.max(0, (now - began) / COUNT_MS))
+      const value = Math.round(start + (tokens - start) * (1 - (1 - t) ** 3))
+      from.current = value
+      setShown(value)
+      if (t < 1) frame = requestAnimationFrame(step)
+    }
+    frame = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(frame)
+  }, [tokens])
+  // Nothing to say until it has counted to something.
+  if (shown <= 0) return null
+  return (
+    <span className="flex shrink-0 items-center gap-2 tabular-nums">
+      <span aria-hidden>·</span>
+      {tokenWords(shown)} tokens
+    </span>
+  )
+}
+
+/** A count of tokens as it is said: "96.9k", "842". */
+export function tokenWords(tokens: number): string {
+  return tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : String(tokens)
 }
 
 // The agent's steps between two messages, as Claude Code on the web draws them: one grey line

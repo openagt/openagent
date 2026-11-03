@@ -137,7 +137,8 @@ function commandGitHost(root: string, command: ProvidedCommand): GitHostSource {
       return { ok: true, requests: parseRequests(result.output) }
     },
     async open(branch, opts) {
-      const args = ['open', '--branch', branch, '--title', opts.title, ...(opts.body !== undefined ? ['--body', opts.body] : []), ...(opts.base !== undefined ? ['--base', opts.base] : []), ...(opts.draft ? ['--draft'] : [])]
+      // Flag and text as one argument: a text that opens with a dash, as a list of commits does, would read as a flag of its own.
+      const args = ['open', '--branch', branch, `--title=${opts.title}`, ...(opts.body !== undefined ? [`--body=${opts.body}`] : []), ...(opts.base !== undefined ? ['--base', opts.base] : []), ...(opts.draft ? ['--draft'] : [])]
       const result = await runPackageCommand(root, command, args)
       if (!result.ok) return { ok: false, error: result.error }
       const request = requestOf(result.output)

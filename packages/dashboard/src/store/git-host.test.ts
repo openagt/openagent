@@ -18,7 +18,11 @@ const args = process.argv.slice(2)
 appendFileSync(join(__dirname, 'calls.log'), args.join(' ') + '\\n')
 const answer = name => process.stdout.write(readFileSync(join(__dirname, name), 'utf8'))
 if (args[0] === 'requests') { if (args.includes('--branch') && args[args.indexOf('--branch') + 1] === 'unreachable') { process.stderr.write('gh: could not resolve to a Repository\\n'); process.exit(1) } answer('requests.json') }
-else if (args[0] === 'open') answer(args.includes('--draft') ? 'open-existing.json' : 'open.json')
+else if (args[0] === 'open') {
+  // Read as the real command reads it: a value that opens with a dash and is not joined to its flag is refused.
+  require('node:util').parseArgs({ args: args.slice(1), options: { branch: { type: 'string' }, title: { type: 'string' }, body: { type: 'string' }, base: { type: 'string' }, draft: { type: 'boolean' } } })
+  answer(args.includes('--draft') ? 'open-existing.json' : 'open.json')
+}
 else if (args[0] === 'merge') { if (args[1] === '8') { process.stderr.write('pull request 8 is merged, not open\\n'); process.exit(1) } answer('merge.json') }
 else if (args[0] === 'home') answer('home.json')
 `
@@ -60,6 +64,7 @@ test('a project with no git host package has no git host; one with a provider is
     assert.deepEqual(await gitHost.requests({ branch: 'unreachable' }), { ok: false, error: 'gh: could not resolve to a Repository' }, '"could not tell" is not "none"')
     assert.deepEqual(await gitHost.open('agent-run-1', { title: 'T', body: 'B' }), { ok: true, request: { number: 9, url: 'https://x/pull/9' }, existing: false })
     assert.deepEqual(await gitHost.open('agent-run-1', { title: 'T', draft: true }), { ok: true, request: { number: 7, url: 'https://x/pull/7' }, existing: true })
+    assert.deepEqual(await gitHost.open('agent-run-1', { title: '- T', body: '- one commit' }), { ok: true, request: { number: 9, url: 'https://x/pull/9' }, existing: false }, 'a text that opens with a dash stays a text')
     assert.deepEqual(await gitHost.merge(7), { ok: true, outcome: 'auto-armed' })
     assert.deepEqual(await gitHost.merge(8), { ok: false, error: 'pull request 8 is merged, not open' }, "a refusal is the provider's own line")
     assert.deepEqual(await gitHost.home(), { url: 'https://github.com/o/r', name: 'GitHub' })
@@ -67,8 +72,9 @@ test('a project with no git host package has no git host; one with a provider is
       'requests',
       'requests --branch agent-run-1 --state open --since 2026-09-01T00:00:00Z',
       'requests --branch unreachable',
-      'open --branch agent-run-1 --title T --body B',
-      'open --branch agent-run-1 --title T --draft',
+      'open --branch agent-run-1 --title=T --body=B',
+      'open --branch agent-run-1 --title=T --draft',
+      'open --branch agent-run-1 --title=- T --body=- one commit',
       'merge 7',
       'merge 8',
       'home',

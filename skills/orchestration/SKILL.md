@@ -76,7 +76,7 @@ Commit first: a subagent's branch starts from your branch's last commit. Then `s
 
 ## Then end your reply
 
-After starting the subagents, end your reply: do not wait, sleep or poll `list`. Each time a subagent ends you get a message, sent by the program that ran it and not by the person, that begins `The run <id>, started for this run, ended <status>`. The status is `done`, `failed`, `stopped`, or `waiting`: it stopped on a question nobody can answer, so treat it as failed. The message gives the subagent's last reply and, when one is left, the branch its work is on. Go on from there: land the work with `land <id>`, start another subagent, or end your reply again while others still run.
+After starting the subagents, end your reply: do not wait, sleep or poll `list`. Each time a subagent ends you get a message, sent by the program that ran it and not by the person, that begins `The run <id>, started for this run, ended <status>`. The status is `done`, `failed`, `stopped`, or `waiting`: it stopped on a question nobody can answer, so treat it as failed. The message gives the subagent's last reply and, when one is left, the branch its work is on. Go on from there: land the work with `land <id>`, start another subagent, or end your reply again while others still run. Until the last one, say one short sentence of what is in and what comes next: the person sees each subagent's row and message, not your ids, commands or check lines.
 
 ## Land, and what it checks
 

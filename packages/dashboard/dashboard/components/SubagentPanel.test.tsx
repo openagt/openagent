@@ -42,7 +42,7 @@ const panel = (props: { events?: OpenAgentEvent[]; subagents?: AgentMeta[]; live
 )
 
 describe('the Subagent pane', () => {
-  test("a subagent of the coding agent's own: its model, that it has no branch, its whole prompt, then what it said and did, out of the main agent's log", () => {
+  test("a subagent of the coding agent's own: its whole prompt, its model, then what it said and did, out of the main agent's log", () => {
     const events: OpenAgentEvent[] = [
       { kind: 'driver', event: { type: 'action', label: 'Agent', detail: 'Map the pages', id: 'toolu_a' }, at: '2026-10-01T10:00:10.000Z' },
       { kind: 'driver', event: { type: 'subagent', id: 'toolu_a', status: 'working', name: 'Map the pages', role: 'Explore', model: 'claude-haiku-5-5', prompt: 'Read how the pages are served.\nStart at server.ts.' }, at: '2026-10-01T10:00:10.000Z' },
@@ -53,9 +53,7 @@ describe('the Subagent pane', () => {
     render(panel({ events }))
     act(() => revealSubagent('p1/main', 'call:toolu_a'))
     expect(screen.getByTestId('title').textContent).toBe('Map the pages')
-    expect(screen.getByText('claude-haiku-5-5')).toBeTruthy()
-    expect(screen.getByText('Explore')).toBeTruthy()
-    expect(screen.getByText('no branch: it works in this run’s checkout')).toBeTruthy()
+    expect(screen.getByText('Model claude-haiku-5-5')).toBeTruthy()
     expect(screen.getByRole('region', { name: 'Its prompt' }).textContent).toContain('Read how the pages are served.\nStart at server.ts.')
     expect(screen.getByText('The pages are served by server.ts.')).toBeTruthy()
     expect(screen.getByText('server.ts')).toBeTruthy()
@@ -83,12 +81,9 @@ describe('the Subagent pane', () => {
     render(panel({ subagents: [sub], onOpenAgent: id => opened.push(id) }))
     act(() => revealSubagent('p1/main', `run:${sub.id}`))
     expect(screen.getByTestId('title').textContent).toBe('Write the docs')
-    expect(screen.getByText('done')).toBeTruthy()
-    expect(screen.getByText('1m 7s')).toBeTruthy()
-    expect(screen.getByText('$0.36')).toBeTruthy()
-    expect(screen.getByText(`on ${sub.branch}`)).toBeTruthy()
     expect(screen.getByRole('region', { name: 'Its prompt' }).textContent).toContain('You are a subagent.')
     await waitFor(() => expect(screen.getByText('I wrote the docs.')).toBeTruthy())
+    expect(screen.getByText(`1m 7s · $0.36 · on ${sub.branch}`)).toBeTruthy()
     expect(onAgent).toHaveBeenCalledWith('p1', sub.id)
     fireEvent.click(screen.getByRole('button', { name: 'Open its page' }))
     expect(opened).toEqual([sub.id])

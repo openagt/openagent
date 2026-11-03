@@ -8,14 +8,13 @@ import { formatElapsed } from '../lib/format-date.js'
 import { anyModelName, useModels } from '../lib/models.js'
 import { STATUS_TONE } from '../lib/status-tone.js'
 import { usePolled } from '../lib/use-async.js'
-import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { EventList } from './EventList.js'
 import { PaneActions, PaneTitle } from './PaneHeader.js'
-import { Seconds } from './ToolCalls.js'
+import { Seconds, tokenWords } from './ToolCalls.js'
 
 // The pane beside a main agent's chat that shows one of its subagents, opened from the subagent's
-// row: what it runs on and how it stands, the whole prompt it was given, then what it said and did.
+// row, as Claude Code on the web's: the whole prompt it was given, what it runs on, what it said and did, and what that came to.
 // A subagent that is a run of its own is read from its own log, and its page is one click away; one
 // the coding agent started inside its session is read out of the main agent's log, where its events
 // are, and has no page and no branch of its own.
@@ -71,6 +70,7 @@ function Shown({ row, projectId, events, onOpenAgent }: { row: SubagentRow; proj
   // A call's transcript is the main agent's events that are its own, shown as plain steps here.
   const callId = row.call?.id
   const transcript = useMemo(() => (callId !== undefined ? subagentTranscript(events, callId).map(untagged) : withoutPrompt(ownLog, row.prompt)), [callId, events, ownLog, row.prompt])
+  const calls = transcript.filter(e => e.kind === 'driver' && e.event.type === 'action').length
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <PaneTitle>
@@ -83,45 +83,51 @@ function Shown({ row, projectId, events, onOpenAgent }: { row: SubagentRow; proj
           </Button>
         </PaneActions>
       )}
-      <div className="flex shrink-0 flex-col gap-2 border-b border-border px-3 pb-3 text-xs">
-        <Facts row={row} />
-        {row.prompt && (
-          <section aria-label="Its prompt">
-            <h3 className="mb-1 text-muted-foreground">Prompt</h3>
-            <div className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted px-2.5 py-1.5 font-mono text-foreground">{row.prompt}</div>
-          </section>
-        )}
-      </div>
       <div className="flex min-h-0 flex-1 flex-col">
-        {transcript.length > 0 ? (
-          <EventList events={transcript} working={row.working} stick={row.working} openAt="start" />
-        ) : runId && !loaded ? null : (
-          <p className="p-3 text-xs text-muted-foreground">{row.working ? 'Nothing said or done yet.' : 'It left nothing to show.'}</p>
-        )}
+        <EventList
+          events={transcript}
+          working={row.working}
+          stick={row.working}
+          openAt="start"
+          head={<PaneHead row={row} />}
+          tail={!row.working && transcript.length > 0 ? <PaneFoot row={row} calls={calls} /> : undefined}
+        />
+        {transcript.length === 0 && !(runId && !loaded) && <p className="px-3 text-sm text-muted-foreground">{row.working ? 'Nothing said or done yet.' : 'It left nothing to show.'}</p>}
       </div>
     </div>
   )
 }
 
-/** How the subagent stands, on a line: its model, its status, how long, what it cost, where its work is. */
-function Facts({ row }: { row: SubagentRow }) {
+/** What the subagent was told, as a message, and what it runs on. One that did not end well says how. */
+function PaneHead({ row }: { row: SubagentRow }) {
   const models = useModels()
-  const where = row.call ? 'no branch: it works in this run’s checkout' : row.agent?.branch ? `on ${row.agent.branch}` : row.agent?.landed ? 'landed' : undefined
-  const parts = [
-    row.model !== undefined ? anyModelName(models, row.model) : undefined,
-    row.call?.role,
-    row.cost !== undefined ? `$${row.cost.toFixed(2)}` : undefined,
-    where,
-  ].filter(Boolean)
   return (
-    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-muted-foreground">
-      <span className={cn(row.working ? 'text-foreground' : (STATUS_TONE[row.status] ?? 'text-muted-foreground'))}>{row.status}</span>
-      <span className="tabular-nums">{row.working ? <Seconds since={row.startedAt} /> : row.endedAt !== undefined ? formatElapsed(Date.parse(row.endedAt) - Date.parse(row.startedAt)) : null}</span>
-      {parts.map(part => (
-        <span key={part}>{part}</span>
-      ))}
+    <div className="flex flex-col gap-4 pb-3 font-sans text-sm">
+      {row.prompt && (
+        <section aria-label="Its prompt" className="max-h-64 overflow-auto rounded-xl bg-muted px-3.5 py-2.5 break-words whitespace-pre-wrap text-foreground">
+          {row.prompt}
+        </section>
+      )}
+      <div className="flex flex-wrap items-baseline gap-x-2 text-muted-foreground">
+        {row.model !== undefined && <span>Model {anyModelName(models, row.model)}</span>}
+        {!row.working && row.status !== 'done' && <span className={STATUS_TONE[row.status] ?? 'text-muted-foreground'}>{row.status}</span>}
+        {row.working && <Seconds since={row.startedAt} />}
+      </div>
     </div>
   )
+}
+
+/** What it came to, under what it said: "2 tool calls · 50.7k tokens · 4s", what it cost and where its work is when it has those. */
+function PaneFoot({ row, calls }: { row: SubagentRow; calls: number }) {
+  const tools = row.toolUses ?? calls
+  const parts = [
+    tools > 0 ? `${tools} tool ${tools === 1 ? 'call' : 'calls'}` : undefined,
+    row.tokens !== undefined ? `${tokenWords(row.tokens)} tokens` : undefined,
+    row.endedAt !== undefined ? formatElapsed(Date.parse(row.endedAt) - Date.parse(row.startedAt)) : undefined,
+    row.cost !== undefined ? `$${row.cost.toFixed(2)}` : undefined,
+    row.agent?.branch ? `on ${row.agent.branch}` : row.agent?.landed ? 'landed' : undefined,
+  ].filter(Boolean)
+  return <p className="py-1 font-sans text-sm text-muted-foreground">{parts.join(' · ')}</p>
 }
 
 /** A run's log without its first prompt when that is the prompt the pane already shows above it. */

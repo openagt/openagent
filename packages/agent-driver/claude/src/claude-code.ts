@@ -385,6 +385,12 @@ function callSummary(input: unknown): { summary?: string } {
   return { summary: summary.replace(/\s+/g, ' ').trim() }
 }
 
+/** The report in what an `Agent` call that ran in the foreground gave back: the CLI frames it and indents every line. */
+function handBack(result: string): string | undefined {
+  const report = /^\[Subagent hand-back\][^\n]*The report follows:\n([\s\S]*?)(?:\nagentId: |$)/.exec(result)?.[1]
+  return report?.replace(/^ {2}/gm, '')
+}
+
 /**
  * The subagent a stream line is from, by its `Agent` call's id: the CLI writes it on every line a
  * subagent's own conversation makes (`parent_tool_use_id`), and nothing on the agent's own.
@@ -442,6 +448,10 @@ export class StreamJsonParser {
    * the subagent began, and the CLI's `task_notification` says when it is over.
    */
   private readonly backgrounded = new Set<string>()
+  /** The tokens of each model call of the turn, by its message's id. */
+  private readonly callTokens = new Map<string, number>()
+  /** The subagents whose own messages were seen: what they said is their report. */
+  private readonly saidBy = new Set<string>()
   /** The agent's message is the CLI's own "You've hit your limit" (`error: "rate_limit"`): the account's limit stopped the turn. */
   stoppedByLimit = false
   /** A rate-limit line said `rejected`: a turn that failed after it failed on the account's limit. When it frees, where said. */
@@ -489,8 +499,13 @@ export class StreamJsonParser {
       this.backgrounded.add(obj['tool_use_id'])
       return announced
     }
+    if (type === 'system' && obj['subtype'] === 'task_progress' && typeof obj['tool_use_id'] === 'string') {
+      return [...announced, ...this.subagentUsage(obj['tool_use_id'], obj['usage'])]
+    }
     if (type === 'system' && obj['subtype'] === 'task_notification' && typeof obj['tool_use_id'] === 'string') {
-      return [...announced, ...this.endSubagent(obj['tool_use_id'], obj['status'] !== 'completed')]
+      const report = obj['handback_report']
+      this.subagentUsage(obj['tool_use_id'], obj['usage'])
+      return [...announced, ...this.reported(obj['tool_use_id'], typeof report === 'object' && report !== null ? (report as Record<string, unknown>)['text'] : undefined), ...this.endSubagent(obj['tool_use_id'], obj['status'] !== 'completed')]
     }
 
     if (type === 'assistant' && obj['error'] === 'rate_limit') {
@@ -526,7 +541,8 @@ export class StreamJsonParser {
     const e = event as Record<string, unknown>
     if (e['type'] === 'content_block_start') {
       this.partial = ''
-      return []
+      const block = e['content_block']
+      return typeof block === 'object' && block !== null && (block as Record<string, unknown>)['type'] === 'thinking' ? [{ type: 'thinking' }] : []
     }
     const delta = e['delta']
     if (e['type'] !== 'content_block_delta' || typeof delta !== 'object' || delta === null) return []
@@ -550,6 +566,7 @@ export class StreamJsonParser {
     const context = within === undefined ? contextOf((message as Record<string, unknown>)['usage']) : undefined
     if (context !== undefined) this.context = context
     const events: DriverEvent[] = within !== undefined ? this.subagentModel(within, (message as Record<string, unknown>)['model']) : []
+    events.push(...this.turnTokens(message as Record<string, unknown>))
     const content = (message as Record<string, unknown>)['content']
     if (!Array.isArray(content)) return events
     for (const item of content) {
@@ -557,6 +574,7 @@ export class StreamJsonParser {
       const block = item as Record<string, unknown>
       if (block['type'] === 'text' && typeof block['text'] === 'string') {
         if (within === undefined) this.assistantText += block['text']
+        else this.saidBy.add(within)
         events.push({ type: 'text', text: block['text'], ...tag })
       } else if (block['type'] === 'tool_use' && typeof block['name'] === 'string') {
         events.push({ type: 'action', label: block['name'], ...callArgument(toolArgument(block['input'])), ...callSummary(block['input']), ...(typeof block['id'] === 'string' ? { id: block['id'] } : {}), ...tag })
@@ -590,6 +608,35 @@ export class StreamJsonParser {
   }
 
   /** A subagent's row over, said again whole, so a reader replaces the row by its id without having to remember what the first one carried. */
+  /** What a subagent handed back when it ended, as its own text, when it said nothing that is its text: a handback is no message of its. */
+  private reported(id: string, text: unknown): DriverEvent[] {
+    if (typeof text !== 'string' || text.trim() === '' || this.saidBy.has(id)) return []
+    return [{ type: 'text', text: text.trim(), subagent: id }]
+  }
+
+  /** How many tokens the turn has gone through, once more with this message: each model call counted once, its blocks come as lines of their own. */
+  private turnTokens(message: Record<string, unknown>): DriverEvent[] {
+    const tokens = contextOf(message['usage'])
+    const id = message['id']
+    if (tokens === undefined || typeof id !== 'string' || this.callTokens.get(id) === tokens) return []
+    this.callTokens.set(id, tokens)
+    return [{ type: 'tokens', tokens: [...this.callTokens.values()].reduce((all, one) => all + one, 0) }]
+  }
+
+  /** What a task's line says of how far its subagent got, on its row. */
+  private subagentUsage(id: string, raw: unknown): DriverEvent[] {
+    const subagent = this.subagents.get(id)
+    if (subagent === undefined || typeof raw !== 'object' || raw === null) return []
+    const usage = raw as Record<string, unknown>
+    const named = {
+      ...subagent,
+      ...(typeof usage['total_tokens'] === 'number' ? { tokens: usage['total_tokens'] } : {}),
+      ...(typeof usage['tool_uses'] === 'number' ? { toolUses: usage['tool_uses'] } : {}),
+    }
+    this.subagents.set(id, named)
+    return [named]
+  }
+
   private endSubagent(id: string, failed: boolean): DriverEvent[] {
     const subagent = this.subagents.get(id)
     if (subagent === undefined) return []
@@ -625,6 +672,8 @@ export class StreamJsonParser {
       }
       // A subagent's call: its row is over, unless the CLI runs it in the background, when the call
       // answers that it began and the row ends with its task. One that failed to begin is over.
+      // A report in the call's answer, which may come after its task said it was over.
+      events.push(...this.reported(block['tool_use_id'], handBack(resultText(block['content']))))
       if (!this.backgrounded.has(block['tool_use_id']) || failed) events.push(...this.endSubagent(block['tool_use_id'], failed))
     }
     return events

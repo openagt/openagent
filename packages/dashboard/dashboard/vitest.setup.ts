@@ -22,6 +22,12 @@ beforeEach(() => {
   localStorage.clear()
 })
 
+// A message being written comes in word by word, over frames (`use-steady-text.ts`); a test reads
+// it whole, as a reader who asked for less motion sees it.
+const media = (query: string, matches: boolean) => ({ matches, media: query, addEventListener: () => {}, removeEventListener: () => {}, onchange: null, addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false }) as MediaQueryList
+const matchMedia = window.matchMedia?.bind(window)
+window.matchMedia = (query: string) => (query.includes('prefers-reduced-motion') ? media(query, true) : matchMedia ? matchMedia(query) : media(query, false))
+
 // jsdom lays nothing out, and the library behind the shell's resizable panes (`ui/resizable`)
 // measures its panels as they come to the page. In its place: plain elements that say what they
 // were given. A group keeps the callback it would call after a person dragged a line, as
