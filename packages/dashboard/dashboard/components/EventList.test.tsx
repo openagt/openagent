@@ -1180,6 +1180,21 @@ describe('EventList scroll anchor', () => {
     rerender(<EventList events={[...events, { kind: 'end', ok: true } as OpenAgentEvent]} stick={false} />)
     expect(screen.getByTestId('live-line').querySelector('[role="status"]')).toBeNull()
   })
+
+  test('a main agent blocked on its subagents has no live line; once one ended and it thinks again, the line is back', () => {
+    const ev = (event: Extract<OpenAgentEvent, { kind: 'driver' }>['event'], at: string): OpenAgentEvent => ({ kind: 'driver', event, at: `2026-10-01T10:${at}.000Z` })
+    const events = [
+      ev({ type: 'start', prompt: 'two subagents' }, '00:00'),
+      ev({ type: 'text', text: "I'll start both." }, '00:02'),
+      ev({ type: 'action', label: 'Agent', id: 'a' }, '00:03'),
+      ev({ type: 'subagent', id: 'a', status: 'working', name: 'Summarize README' }, '00:03'),
+    ]
+    const { rerender } = render(<EventList events={events} working stick={false} />)
+    expect(screen.getByTestId('live-line').querySelector('[role="status"]')).toBeNull()
+    const woke = [...events, ev({ type: 'subagent', id: 'a', status: 'ended' }, '00:10'), ev({ type: 'output', id: 'a', text: 'Two lines.' }, '00:10'), ev({ type: 'thinking' }, '00:11')]
+    rerender(<EventList events={woke} working stick={false} />)
+    expect(screen.getByTestId('live-line').querySelector('[role="status"]')).toBeTruthy()
+  })
 })
 
 // What the chat says in place of the line that was above the message box.
