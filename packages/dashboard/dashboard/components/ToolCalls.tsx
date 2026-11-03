@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { callsSummary, summaryWords, toolCall } from '../lib/tool-calls.js'
+import { callsSummary, doingOf, summaryWords, toolCall } from '../lib/tool-calls.js'
 import { usePreferences } from '../lib/preferences.js'
 import type { FileEdit } from '../lib/turn-changes.js'
 import { LinesPill } from './ChangedFiles.js'
@@ -71,11 +71,19 @@ const BOX = 'max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md px-
 // box (a command with "$" in front) and, under it, what the call printed, in a box that scrolls; a
 // call that failed says so, with its exit code when it has one. A call still going on (`live`)
 // reads in the present ("Running"), shimmers, and counts the seconds when it says since when.
+/** The calls that start a subagent: their detail is the task the agent wrote for it. */
+const SUBAGENT_CALLS = new Set(['Agent', 'Task'])
+
 function CallLine({ label, detail, whole, summary, output, live }: Call & { live?: { since: string | undefined } }) {
   const [open, setOpen] = useState(false)
   const call = toolCall(label, detail, output?.changed)
   const given = whole ?? call.detail
-  const said = call.kind === 'command' ? summary : undefined
+  // What the agent wrote about the call: a command's description, a subagent's task. While it goes
+  // on, said as going on ("Finding all markdown files", "Summarizing README"), as Claude Code on the
+  // web's live line says what is being done; a subagent's task the agent wrote only as a noun keeps
+  // the line's own words ("Starting agent …").
+  const written = call.kind === 'command' ? summary : SUBAGENT_CALLS.has(label) && live ? (detail !== undefined ? doingOf(detail) : undefined) : undefined
+  const said = written !== undefined && live ? (doingOf(written) ?? written) : written
   const words = (
     <>
       {said !== undefined ? (
