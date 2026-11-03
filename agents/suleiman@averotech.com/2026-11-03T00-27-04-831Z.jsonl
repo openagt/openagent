@@ -1,0 +1,6 @@
+{"kind":"start","prompt":"tell me hi, nothing else","at":"2026-11-03T00:27:07.223Z"}
+{"kind":"session","sessionId":"01a19ecd-7495-72d1-a587-92416d3d9140","at":"2026-11-03T00:27:07.439Z"}
+{"kind":"title","text":"Simple Greeting Request","at":"2026-11-03T00:27:09.128Z"}
+{"kind":"said","text":"hi","at":"2026-11-03T00:27:09.671Z"}
+{"kind":"result","text":"hi","sessionId":"01a19ecd-7495-72d1-a587-92416d3d9140","at":"2026-11-03T00:27:09.686Z"}
+{"kind":"ended","status":"done","at":"2026-11-03T00:27:10.341Z"}

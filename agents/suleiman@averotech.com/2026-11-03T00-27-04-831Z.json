@@ -1,17 +1,28 @@
 {
   "id": "2026-11-03T00-27-04-831Z",
   "startedAt": "2026-11-03T00:27:05.973Z",
-  "status": "running",
+  "endedAt": "2026-11-03T00:27:10.341Z",
+  "status": "done",
   "intent": "tell me hi, nothing else",
+  "title": "Simple Greeting Request",
   "driver": "codex",
   "model": "gpt-6-luna",
+  "effort": "high",
+  "branch": "agent-2026-11-03T00-27-04-831Z",
+  "contextTokens": 13750,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
       "pid": 17115,
-      "gitAccount": "suleimansh"
+      "gitAccount": "suleimansh",
+      "baseCommit": "9ee92ad829a24f9d8a3d292a9ebddfdd414ea261"
     },
+    "pid": 17115,
     "host": "Suleimans-MacBook-Pro.local",
-    "gitAccount": "suleimansh"
+    "gitAccount": "suleimansh",
+    "baseCommit": "9ee92ad829a24f9d8a3d292a9ebddfdd414ea261",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-11-03T00-27-04-831Z",
+    "sessionId": "01a19ecd-7495-72d1-a587-92416d3d9140"
   }
 }
