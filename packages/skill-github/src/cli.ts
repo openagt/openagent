@@ -50,7 +50,7 @@ export const USAGE = `usage: github <command>
   home                         the project's page on GitHub, from its origin remote
   me                           who is signed in to GitHub through gh: login, name, avatar (a picture's https address)
   people <email>...            the GitHub accounts behind the project's commit emails: [{ email, login, avatar }], one per email a commit of the
-                               repository's is signed with by an account (at most 20 asked at once); an email no account's commit carries is left out
+                               repository's is signed with by an account, or that is GitHub's own address for one (at most 20 asked at once); any other email is left out
   accounts [--host <host>]     the GitHub accounts this computer's gh knows and the one OpenAgent's runs use: { host, name, requestWord, logo, tool, installed,
                                install, accounts: [{ login, terminal, runs, ok }], loggingIn? }; a host other than github.com is refused (not-mine)
   use <login>                  OpenAgent's runs use <login> from now on, an account gh knows; the terminal's gh stays on its own

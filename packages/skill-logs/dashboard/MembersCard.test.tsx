@@ -60,6 +60,23 @@ test("each member by the name git knows, their picture where the git host knows 
   expect(within(me).getByText('SS')).toBeTruthy()
 })
 
+test('a person with two emails on one git host account is one row, with their name, their picture and everything they did', async () => {
+  const host = hostWith(
+    [person('42+rom@users.noreply.github.com', { runs: 1, cost: 0.24 }), person('git@brillout.com', { name: 'Romuald Brillout', runs: 1, commits: 2 })],
+    [
+      { email: '42+rom@users.noreply.github.com', login: 'rom', avatar: 'https://avatars.githubusercontent.com/u/42' },
+      { email: 'git@brillout.com', login: 'rom', avatar: 'https://avatars.githubusercontent.com/u/42?v=4' },
+    ],
+  )
+  show(host)
+  // The card opens on the members it remembers: this waits for its own read.
+  await screen.findByText('2 runs · $0.24 · 2 commits')
+  const [rom, ...others] = screen.getAllByRole('listitem')
+  expect(others).toHaveLength(0)
+  expect(rom!.getAttribute('aria-label')).toBe('Romuald Brillout')
+  expect(rom!.querySelector('img')).toBeTruthy()
+})
+
 test("a member's runs are counted as the dashboard lists them: a run its record still calls going is not working when the dashboard says it is not", async () => {
   // The records froze while the laptop's run went on: they say one run, going.
   const host = hostWith(

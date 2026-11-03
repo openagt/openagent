@@ -205,6 +205,14 @@ test("people: the GitHub account behind each commit email, by the newest commit 
   assert.equal((await run('/r', ['people'], { gh })).code, 2, 'no email: a usage error')
 })
 
+test("people: GitHub's own address for an account says the account, with no commit and no question", async () => {
+  const gh: GhRunner = async () => {
+    throw new Error('asked GitHub')
+  }
+  const people = await run('/r', ['people', '1005638+brillout@users.noreply.github.com'], { gh })
+  assert.deepEqual(people.out, [{ email: '1005638+brillout@users.noreply.github.com', login: 'brillout', avatar: 'https://avatars.githubusercontent.com/u/1005638' }])
+})
+
 test('comment: a new one on a pull request; GitHub answers its id and url; the usage errors and the refusal', async () => {
   const asked: string[][] = []
   const gh: GhRunner = async args => {

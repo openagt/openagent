@@ -61,12 +61,26 @@ test('the same person in several projects is one member, their runs added up; wh
   ])
 })
 
+test("a person's two emails on one account at the git host are one member, in one project too", () => {
+  const server = { person: '42+rom@users.noreply.github.com', runs: 1, running: 0, cost: 0.24, commits: 0, lastAt: '2026-10-29T00:00:00.000Z' }
+  const laptop = { person: 'git@y.dev', name: 'Rom B', runs: 1, running: 1, cost: 0, commits: 2, lastAt: '2026-10-30T00:00:00.000Z' }
+  const other = { person: 'ada@x.dev', runs: 1, running: 0, cost: 0, commits: 0, lastAt: '2026-10-28T00:00:00.000Z' }
+  const accounts: Record<string, string> = { '42+rom@users.noreply.github.com': 'rom', 'git@y.dev': 'ROM' }
+  const members = membersOf([{ project: 'alpha', people: [server, laptop, other] }], person => accounts[person])
+  assert.deepEqual(members, [
+    { ...server, name: 'Rom B', runs: 2, running: 1, commits: 2, lastAt: '2026-10-30T00:00:00.000Z', projects: ['alpha'] },
+    { ...other, projects: ['alpha'] },
+  ])
+})
+
 test('whoever committed to the main branch is a member too, by the name of their newest commit; a bot is no one; commits before the days asked for give a name only', async () => {
   const reader = records({ 'git@brillout.com': [{ at: NOW - 60 * DAY, status: 'done' }] })
   const commits = readCommitLines(
     [
       `git@brillout.com\tRomuald Brillout\t${(NOW - 2 * DAY) / 1000}`,
       `noreply@anthropic.com\tClaude\t${(NOW - 2 * DAY) / 1000}`,
+      `41898282+github-actions[bot]@users.noreply.github.com\tgithub-actions[bot]\t${(NOW - 2 * DAY) / 1000}`,
+      `42+rom@users.noreply.github.com\tRom\t${(NOW - 4 * DAY) / 1000}`,
       `new@z.dev\tNew Person\t${(NOW - 3 * DAY) / 1000}`,
       `git@brillout.com\tRom\t${(NOW - 5 * DAY) / 1000}`,
       `old@w.dev\tGone\t${(NOW - 90 * DAY) / 1000}`,
@@ -77,6 +91,8 @@ test('whoever committed to the main branch is a member too, by the name of their
   assert.deepEqual(people.map(person => [person.person, person.name, person.commits, person.lastAt]), [
     ['git@brillout.com', 'Romuald Brillout', 2, new Date(NOW - 2 * DAY).toISOString()],
     ['new@z.dev', 'New Person', 1, new Date(NOW - 3 * DAY).toISOString()],
+    // GitHub's own address for a person's account says no-reply, and is theirs.
+    ['42+rom@users.noreply.github.com', 'Rom', 1, new Date(NOW - 4 * DAY).toISOString()],
   ])
 })
 

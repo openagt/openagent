@@ -3,8 +3,8 @@ import { Card, CardContent, CardHeader, CardTitleLink, PersonMark, Tooltip, Tool
 import { membersOf, peopleWithRuns, type Member, type PersonActivity } from '../src/people.js'
 
 // The Overview's Members card: who worked in the projects shown in the last 30 days, from `logs
-// people --local` in each, the same person in several projects counted once: whoever started agents
-// or committed to the main branch. Each by the name git knows them by, with their runs and what
+// people --local` in each, the same person counted once, across projects and across the emails of
+// one account at the git host: whoever started agents or committed to the main branch. Each by the name git knows them by, with their runs and what
 // they cost (as the dashboard lists the runs, so another computer's are as it says them), their
 // commits, whether a run of theirs is going now, and when they last did either;
 // the person at this computer marked. Its title opens the Logs page, where each run is. Each with
@@ -47,7 +47,7 @@ export function MembersCard({ projects }: ModuleCardProps) {
         }),
       )
       const accounts = new Map(reads.flatMap(read => read.accounts).map(account => [account.email.toLowerCase(), account] as const))
-      return membersOf(reads).map(member => {
+      return membersOf(reads, person => accounts.get(person.toLowerCase())?.login).map(member => {
         const account = accounts.get(member.person.toLowerCase())
         return account ? { ...member, account } : member
       })

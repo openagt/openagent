@@ -607,7 +607,7 @@ function RecentsSortMenu({ order }: { order: RecentsSort }) {
 }
 
 /** A person's mark on a row, beside its smaller marks. */
-const PERSON_MARK = 'size-4 text-[7px]'
+const PERSON_MARK = 'size-3.5 text-[7px]'
 
 /** A main agent's list of subagents, as its row folds it: how many, how many work, and the fold. */
 type SubagentsFold = { count: number; working: number; open: boolean; onToggle: () => void }

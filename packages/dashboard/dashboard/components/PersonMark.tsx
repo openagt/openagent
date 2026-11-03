@@ -9,15 +9,18 @@ import { cn } from '../lib/utils.js'
 /** An email name that says nothing of whose it is: the domain names them instead. */
 const GENERIC = new Set(['git', 'me', 'mail', 'email', 'hello', 'hi', 'info', 'contact', 'dev', 'noreply', 'no-reply'])
 
+/** The number GitHub's own address for an account starts with: `1005638+brillout@users.noreply.github.com` is brillout. */
+const GITHUB_ID = /^\d+\+(?=[^@]+@users\.noreply\.github\.com$)/i
+
 /**
  * The name a person goes by here: the one git knows them by, else one drawn from their email
  * (`suleiman@averotech.com` is suleiman), or from its domain when its name is a generic word
- * (`git@brillout.com` is brillout).
+ * (`git@brillout.com` is brillout), or the login in GitHub's own address for an account.
  */
 export function personName(email: string, name?: string): string {
   const known = name?.trim()
   if (known) return known
-  const [own = '', domain = ''] = email.split('@')
+  const [own = '', domain = ''] = email.replace(GITHUB_ID, '').split('@')
   if (GENERIC.has(own.toLowerCase()) && domain) return domain.split('.')[0] || email
   return own || email
 }

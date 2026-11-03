@@ -419,7 +419,7 @@ describe('whose run a row is', () => {
 
   test('a run that names nobody has no mark', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ title: 'Very old' })]} selectedAgentId={null} onSelect={() => {}} />)
-    expect(row(/^Very old/).querySelector('[class*="rounded-full"][class*="size-4"]')).toBeNull()
+    expect(row(/^Very old/).querySelector('[class*="rounded-full"][class*="size-3.5"]')).toBeNull()
     expect(onGitHostPeople).not.toHaveBeenCalled()
   })
 
@@ -467,7 +467,7 @@ describe('whose run a row is', () => {
     const { container, rerender } = render(<SidebarProvider>{rail(0)}</SidebarProvider>)
     rerender(<SidebarProvider>{rail(1)}</SidebarProvider>)
     const standIn = container.querySelector('[data-stand-in]')!
-    expect(standIn.querySelector('[aria-hidden="true"].size-4.rounded-full')).toBeTruthy()
+    expect(standIn.querySelector('[aria-hidden="true"][class*="size-3.5"].rounded-full')).toBeTruthy()
   })
 })
 
