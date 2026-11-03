@@ -469,7 +469,11 @@ export type DriverEvent =
    * emitting unchanged: whoever renders this event renders one row for the subagent and skips
    * those two for the same call — the same `id`, or on Codex the part of it before the colon.
    */
-  | { type: 'subagent'; id: string; status: 'working' | 'ended' | 'failed'; name?: string; role?: string; model?: string; prompt?: string }
+  | { type: 'subagent'; id: string; status: 'working' | 'ended' | 'failed'; name?: string; role?: string; model?: string; prompt?: string; tokens?: number; toolUses?: number }
+  /** How many tokens the turn has gone through so far, its subagents' too, when its CLI says. */
+  | { type: 'tokens'; tokens: number }
+  /** The agent began to think: until what it thinks comes to a message or a call, it is thinking. */
+  | { type: 'thinking' }
   /** What the agent thought before it acted, as its CLI summarizes it. */
   | { type: 'thought'; text: string; subagent?: string }
   /**

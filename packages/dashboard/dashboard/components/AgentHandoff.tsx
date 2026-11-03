@@ -47,13 +47,13 @@ export function HandoffSummary({ handoff, subagent = false }: { handoff: AgentHa
   if (handoff.empty && handoff.pendingFiles?.length) return null
   if (handoff.empty) return <span className="text-muted-foreground">{handoff.merged ? 'merged' : 'no changes'}</span>
   const files = `${handoff.files.length} file${handoff.files.length === 1 ? '' : 's'}`
-  // What the branch holds, as Claude Code says it: the `+N −N` pair alone, in a chip. The counts
-  // behind it — how many commits, how many files, whether they are on the remote — are the same
-  // work in more words, so they are the chip's hover rather than three more things to read on a row
-  // that already carries the branch and the next step. The files themselves are a pane away.
+  // What the branch holds, as Claude Code says it: the `+N −N` pair alone. The counts behind it —
+  // how many commits, how many files, whether they are on the remote — are the same work in more
+  // words, so they are its hover rather than three more things to read on a row that already carries
+  // the branch and the next step. The files themselves are a pane away.
   const held = [commits, files, ...(!subagent && handoff.pushed && !handoff.pr ? ['pushed'] : [])].join(' · ')
   return (
-    <span className="flex shrink-0 items-center whitespace-nowrap rounded-md bg-background/60 px-1.5 py-0.5" title={held} aria-label={held}>
+    <span className="flex shrink-0 items-center whitespace-nowrap" title={held} aria-label={held}>
       <DiffStat added={handoff.insertions} removed={handoff.deletions} zeros className="text-[11px] font-medium" />
     </span>
   )
@@ -80,6 +80,9 @@ export function HandoffSummary({ handoff, subagent = false }: { handoff: AgentHa
  */
 /** What the Commit button says to the agent: it commits its own work, in its own words. */
 export const COMMIT_MESSAGE = 'Commit your work.'
+
+/** The next step's look: the one filled thing in the bar. */
+const NEXT_STEP = 'bg-background/60 hover:bg-background'
 
 /** The project's main branch by name, when the handoff was measured from it; a run measured from a commit only knows it as "the main branch". */
 function mainBranchName(base: string | undefined): string {
@@ -135,6 +138,7 @@ export function HandoffActions({
         <Button
           size="xs"
           variant="ghost"
+          className={NEXT_STEP}
           disabled={busy}
           onClick={() => {
             onAsked?.(COMMIT_MESSAGE)
@@ -174,7 +178,7 @@ export function HandoffActions({
       return (
         <>
           <Reason>not in the PR yet</Reason>
-          <Button size="xs" variant="ghost" disabled={busy} onClick={push}>
+          <Button size="xs" variant="ghost" className={NEXT_STEP} disabled={busy} onClick={push}>
             {pending === 'push' ? 'Updating PR…' : 'Update PR'}
           </Button>
         </>
@@ -184,6 +188,7 @@ export function HandoffActions({
       <Button
         size="xs"
         variant="ghost"
+        className={NEXT_STEP}
         disabled={busy}
         onClick={() => act('merge', () => sendMerge(projectId, agentId), 'Could not merge the pull request.')}
       >
@@ -213,6 +218,7 @@ export function HandoffActions({
         <Button
           size="xs"
           variant="ghost"
+          className={NEXT_STEP}
           disabled={busy}
           onClick={() => act('merge-branch', () => sendMergeBranch(projectId, agentId), 'Could not merge the branch.')}
         >
@@ -227,7 +233,7 @@ export function HandoffActions({
     if (handoff.pushed) return <Reason>Pushed — no git host package to open a pull request with.</Reason>
     return (
       <>
-        <Button size="xs" variant="ghost" disabled={busy} onClick={push}>
+        <Button size="xs" variant="ghost" className={NEXT_STEP} disabled={busy} onClick={push}>
           {pending === 'push' ? 'Publishing…' : 'Publish branch'}
         </Button>
       </>
@@ -244,7 +250,7 @@ export function HandoffActions({
         <Button
           size="xs"
           variant="ghost"
-          className="rounded-r-none pr-1.5"
+          className={cn(NEXT_STEP, 'rounded-r-none pr-1.5')}
           disabled={busy}
           onClick={() => openPr(false)}
         >
@@ -257,6 +263,7 @@ export function HandoffActions({
               disabled={busy}
               className={cn(
                 buttonVariants({ size: 'xs', variant: 'ghost' }),
+                NEXT_STEP,
                 'rounded-l-none px-1 text-muted-foreground data-[popup-open]:bg-[var(--color-accent)] data-[popup-open]:text-[var(--color-accent-foreground)]',
               )}
             >

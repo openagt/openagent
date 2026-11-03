@@ -262,7 +262,9 @@ export async function runPackageCommand(root: string, command: { name: string; b
       { cwd: root, timeout: COMMAND_TIMEOUT_MS, maxBuffer: COMMAND_MAX_OUTPUT, encoding: 'utf8', ...(more ? { env: { ...process.env, ...more } } : {}) },
       (error, stdout, stderr) => {
         if (!error) return resolvePromise({ stdout })
-        const said = stderr.trim().split('\n').at(-1)?.trim()
+        // A refusal's reason is its last line. A wrong command line (exit 2) says what was wrong first, then the usage.
+        const lines = stderr.trim().split('\n')
+        const said = ((error as { code?: unknown }).code === 2 ? lines[0] : lines.at(-1))?.trim()
         const failed =
           (error as NodeJS.ErrnoException).code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
             ? `${name} printed too much`

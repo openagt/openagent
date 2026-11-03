@@ -230,9 +230,19 @@ html[data-pinned] body {
 .bubble-in {
   animation: bubble-in 0.3s cubic-bezier(0.34, 1.4, 0.64, 1);
 }
-/* A just-started run's title in the list on the left (AgentHistory.tsx), letter by letter. */
+/* A just-started run's title in the list on the left (AgentHistory.tsx), letter by letter, as Claude
+   Code on the web's: each out of a blur in 90ms, 30ms after the one before. */
 .letter-in {
-  animation: letter-in 0.3s ease-out both;
+  animation: letter-in 0.09s linear both;
+}
+/* A message being written (Markdown.tsx), word by word, as Claude Code on the web's. */
+.word-in {
+  animation: word-in 0.5s ease-out both;
+}
+@keyframes word-in {
+  from {
+    opacity: 0;
+  }
 }
 @keyframes letter-in {
   from {
@@ -255,7 +265,8 @@ html[data-pinned] body {
   .dot-wave > span,
   .morph-in,
   .bubble-in,
-  .letter-in {
+  .letter-in,
+  .word-in {
     animation: none;
   }
 }

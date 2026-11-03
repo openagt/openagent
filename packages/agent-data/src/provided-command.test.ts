@@ -146,16 +146,18 @@ test('a skill text naming its package provides through it, fetched with npx and 
   }
 })
 
-test('a package command runs with Node in the project and answers its JSON, its last stderr line, or that it printed none', async () => {
+test('a package command runs with Node in the project and answers its JSON, its last stderr line, what a wrong command line was told first, or that it printed none', async () => {
   const root = await project({ tool: { bin: { tool: 'cmd.cjs' }, openagent: { thing: 'tool' } } })
   const dir = join(root, 'node_modules', 'tool')
   await writeFile(join(dir, 'fails.cjs'), `process.stderr.write('first\\nno such thing\\n'); process.exit(1)`)
+  await writeFile(join(dir, 'usage.cjs'), `process.stderr.write('no such option\\n\\nusage: tool\\nthe usage ends here\\n'); process.exit(2)`)
   await writeFile(join(dir, 'text.cjs'), `process.stdout.write('hello')`)
   await writeFile(join(dir, 'cwd.cjs'), `process.stdout.write(JSON.stringify(process.cwd()))`)
   try {
     const command = (await readProvidedCommand(root, 'thing'))!
     assert.deepEqual(await runPackageCommand(root, command, ['list', '--all']), { ok: true, output: ['list', '--all'] })
     assert.deepEqual(await runPackageCommand(root, { name: 'tool', bin: join(dir, 'fails.cjs') }, []), { ok: false, error: 'no such thing' })
+    assert.deepEqual(await runPackageCommand(root, { name: 'tool', bin: join(dir, 'usage.cjs') }, []), { ok: false, error: 'no such option' })
     assert.deepEqual(await runPackageCommand(root, { name: 'tool', bin: join(dir, 'text.cjs') }, []), { ok: false, error: 'tool printed no JSON' })
     assert.deepEqual(await runPackageCommand(root, { name: 'tool', bin: join(dir, 'cwd.cjs') }, []), { ok: true, output: await realpath(root) })
     // What a caller adds is what the command is started with, beside what this process has, and for that command alone.

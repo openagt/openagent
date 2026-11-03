@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { SessionLog } from './session-log.js'
+import { SessionLog, diaryLine } from './session-log.js'
 
 const kinds = async (log: SessionLog): Promise<string[]> =>
   (await readFile(log.diaryPath, 'utf8')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line).kind)
@@ -40,6 +40,11 @@ test('a run that ends mid-message leaves no live file', async () => {
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
+})
+
+test('what a subagent said stays its own in the diary: it is no part of the agent\'s reply', () => {
+  assert.deepEqual(diaryLine({ type: 'text', text: 'README summary', subagent: 'toolu_1' }), { kind: 'said', text: 'README summary', subagent: 'toolu_1' })
+  assert.deepEqual(diaryLine({ type: 'text', text: 'Both are running' }), { kind: 'said', text: 'Both are running' })
 })
 
 test('a subagent of the agent\'s own is a diary line of its own kind, with every field its driver filled', async () => {

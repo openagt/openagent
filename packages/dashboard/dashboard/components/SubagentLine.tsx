@@ -1,100 +1,136 @@
-import { useEffect, useState } from 'react'
-import { CircleCheck, CircleHelp, CircleSlash, CircleX } from 'lucide-react'
-import type { AgentMeta } from '../../src/index.js'
+import { useEffect, useState, type ReactNode } from 'react'
+import { ChevronRight } from 'lucide-react'
 import { cn } from '../lib/utils.js'
 import { formatElapsed } from '../lib/format-date.js'
 import { STATUS_TONE } from '../lib/status-tone.js'
 import { anyModelName, useModels } from '../lib/models.js'
-import { rollUp, runRow, type SubagentRow } from '../lib/subagents.js'
+import { stepWords, type SubagentRow, type SubagentStep } from '../lib/subagents.js'
+import { Markdown } from './Markdown.js'
 import { Seconds } from './ToolCalls.js'
 
-// A subagent on its main agent's page, on one line, whichever kind it is: a run of the project's
-// own on a branch of its own, or one the coding agent started inside its session, which has none
-// and says so. Its name, its model, then while it works the tool it is on and how many calls it
-// made, and how long it has worked, counted up live; once it ended, how it ended and how long it
-// took. A click opens it in the pane beside the chat, its prompt and its transcript.
-export function SubagentItem({ row, onOpen }: { row: SubagentRow; onOpen?: ((key: string) => void) | undefined }) {
+// A main agent's subagents in its chat, as Claude Code on the web draws them, in the look of the
+// agent's other steps: one grey line that says what is going on and opens to one bordered panel. While
+// they work it names one of them and counts the seconds; once they ended it says what came of them
+// ("Ran 2 agents, received a message"). A row opens the subagent in the pane beside the chat, its
+// prompt and its transcript.
+
+/** How long the moving line stays on one working subagent's name. */
+const NAME_EVERY_MS = 2500
+
+function toneOf(status: string): string {
+  return status === 'waiting' ? 'text-muted-foreground' : (STATUS_TONE[status] ?? 'text-muted-foreground')
+}
+
+/** A subagent's row: the verb in grey, its name in dark, its model; while it works the tool it is on; how long it took. */
+function AgentRow({ row, onOpen }: { row: SubagentRow; onOpen?: ((key: string) => void) | undefined }) {
   const models = useModels()
-  const tone = row.status === 'waiting' ? 'text-muted-foreground' : (STATUS_TONE[row.status] ?? 'text-muted-foreground')
   return (
-    <button
-      type="button"
-      onClick={() => onOpen?.(row.key)}
-      className="group/sub flex min-w-0 flex-1 items-baseline gap-2 text-left"
-      aria-label={`Open the subagent: ${row.name}`}
-    >
-      <span className="w-1.5 shrink-0 self-center" aria-hidden>
-        {row.working && <span className="block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />}
-      </span>
-      <span className="min-w-0 shrink truncate text-foreground group-hover/sub:underline">{row.name}</span>
+    <button type="button" onClick={() => onOpen?.(row.key)} className="group/sub flex w-full min-w-0 items-center gap-1.5 text-left hover:text-foreground" aria-label={`Open the subagent: ${row.name}`}>
+      <span className={cn('shrink-0', row.working && 'text-shimmer')}>{row.working ? 'Running agent' : 'Ran agent'}</span>
+      <span className={cn('min-w-0 truncate text-foreground group-hover/sub:underline', row.working && 'text-shimmer')}>{row.name}</span>
       {/* On a phone the name has the line: the model is in the subagent's pane. */}
-      {row.model && <span className="shrink-0 text-muted-foreground max-sm:hidden">{anyModelName(models, row.model)}</span>}
-      {row.call && <span className="shrink-0 rounded-sm border border-border px-1 text-[10px] leading-4 text-muted-foreground">no branch</span>}
-      {row.working ? (
-        // What it is on now and how many calls it made; its last step whole on a hover.
-        row.calls !== undefined && (
-          <span className="min-w-0 shrink-0 truncate text-muted-foreground" title={row.doing}>
-            {[row.tool, `${row.calls} ${row.calls === 1 ? 'call' : 'calls'}`].filter(Boolean).join(' · ')}
-          </span>
-        )
-      ) : (
-        <span className={cn('shrink-0', tone)}>{row.status}</span>
-      )}
-      <span className="ml-auto shrink-0 tabular-nums text-muted-foreground" title={`Started ${new Date(row.startedAt).toLocaleString()}`}>
+      {row.model && <span className="shrink-0 max-sm:hidden">{anyModelName(models, row.model)}</span>}
+      {row.working
+        ? row.calls !== undefined && (
+            // What it is on now and how many calls it made; its last step whole on a hover.
+            <span className="min-w-0 shrink-0 truncate" title={row.doing}>
+              {[row.tool, `${row.calls} ${row.calls === 1 ? 'call' : 'calls'}`].filter(Boolean).join(' · ')}
+            </span>
+          )
+        : row.status !== 'done' && <span className={cn('shrink-0', toneOf(row.status))}>{row.status}</span>}
+      <span className="ml-auto shrink-0 tabular-nums" title={`Started ${new Date(row.startedAt).toLocaleString()}`}>
         {row.working ? <Seconds since={row.startedAt} /> : row.endedAt !== undefined ? formatElapsed(Date.parse(row.endedAt) - Date.parse(row.startedAt)) : null}
+        {row.cost !== undefined && ` · $${row.cost.toFixed(2)}`}
       </span>
     </button>
   )
 }
 
-/** The time now, read again every second while `live`: what a count of a group still working needs. */
-function useNow(live: boolean): number {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    if (!live) return
-    const tick = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(tick)
-  }, [live])
-  return now
-}
-
-/** What a group of subagents comes to, on one line: `3 agents · 1m 7s · $0.61`. */
-export function rollUpText(rows: readonly SubagentRow[], now: number): string {
-  const { count, ms, cost } = rollUp(rows, now)
-  return [`${count} ${count === 1 ? 'agent' : 'agents'}`, formatElapsed(ms), ...(cost !== undefined ? [`$${cost.toFixed(2)}`] : [])].join(' · ')
-}
-
-// The subagents one turn started, together: a line saying what all of them come to, then one row
-// each. A turn that started one has its row alone, which already says all of that.
-export function SubagentGroup({ rows, onOpen }: { rows: readonly SubagentRow[]; onOpen?: ((key: string) => void) | undefined }) {
-  const now = useNow(rows.some(row => row.working))
+/**
+ * What a subagent sent its main agent, folded: "Message from subagent". Opened, whose it is and the
+ * message. One that did not end well says how, beside the words.
+ */
+export function SubagentMessage({ name, text, status, detail }: { name: string; text?: string | undefined; status?: string | undefined; detail?: string | undefined }) {
+  const [open, setOpen] = useState(false)
+  const body = text !== undefined && text !== ''
+  const words = (
+    <>
+      <span className="shrink-0">Message from</span>
+      <span className="shrink-0 text-foreground">subagent</span>
+      {status !== undefined && status !== 'done' && <span className={cn('shrink-0', toneOf(status))}>{status}</span>}
+    </>
+  )
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-      {rows.length > 1 && <div className="text-muted-foreground">{rollUpText(rows, now)}</div>}
-      {rows.map(row => (
-        <SubagentItem key={row.key} row={row} onOpen={onOpen} />
-      ))}
+    <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
+      {body || detail !== undefined ? (
+        <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label="Message from subagent" className="flex max-w-full min-w-0 items-center gap-1.5 py-0.5 text-left hover:text-foreground">
+          {words}
+          <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')} aria-hidden />
+        </button>
+      ) : (
+        <div className="flex min-w-0 items-center gap-1.5 py-0.5">{words}</div>
+      )}
+      {open && (
+        <div className="mt-1 flex flex-col gap-1">
+          <div>From: {name}{detail !== undefined && ` (${detail})`}</div>
+          {body && <div className="text-foreground"><Markdown text={text} /></div>}
+        </div>
+      )}
     </div>
   )
 }
 
-// The moment a subagent ended, as its main agent was told it: how it ended, by an icon in its
-// colour, and the subagent named as its row names it, in the chat's own type rather than the log's.
-// It never changes, unlike its row. A click opens it as its row does.
-export function SubagentLine({ agent, end, onOpen }: { agent: AgentMeta; end: { status: string; detail?: string }; onOpen?: ((key: string) => void) | undefined }) {
-  const row = runRow(agent, undefined)
-  const models = useModels()
-  const Icon = end.status === 'done' ? CircleCheck : end.status === 'failed' ? CircleX : end.status === 'waiting' ? CircleHelp : CircleSlash
-  const tone = end.status === 'waiting' ? 'text-muted-foreground' : (STATUS_TONE[end.status] ?? 'text-muted-foreground')
+/** The subagents and messages of one stretch of the chat, as one line. `lead` is a row the panel opens with: the session's set-up. */
+export function SubagentSteps({ steps, lead, onOpen }: { steps: readonly SubagentStep[]; lead?: ReactNode; onOpen?: ((key: string) => void) | undefined }) {
+  const [open, setOpen] = useState(false)
+  const working = steps.flatMap(step => (step.kind === 'agent' && step.row.working ? [step.row] : []))
+  const [turn, setTurn] = useState(0)
+  useEffect(() => {
+    if (working.length < 2) return
+    const next = setInterval(() => setTurn(at => at + 1), NAME_EVERY_MS)
+    return () => clearInterval(next)
+  }, [working.length])
+  const only = steps.length === 1 && !lead ? steps[0] : undefined
+  if (only?.kind === 'message') return <SubagentMessage name={only.row.name} text={only.text} />
+  if (only?.kind === 'agent') {
+    return (
+      <div className="min-w-0 flex-1 py-0.5 font-sans text-sm text-muted-foreground">
+        <AgentRow row={only.row} onOpen={onOpen} />
+      </div>
+    )
+  }
+  const current = working[turn % Math.max(working.length, 1)]
+  const since = working.reduce<string | undefined>((first, row) => (first === undefined || row.startedAt < first ? row.startedAt : first), undefined)
+  const words = stepWords(steps)
   return (
-    <button type="button" onClick={() => onOpen?.(row.key)} className="group/sub flex min-w-0 items-center gap-1.5 text-left font-sans text-sm" aria-label={`Open the subagent: ${row.name}`}>
-      <Icon className={cn('h-3.5 w-3.5 shrink-0', tone)} aria-hidden />
-      <span className="min-w-0 truncate font-medium text-foreground group-hover/sub:underline">{row.name}</span>
-      {row.model && <span className="shrink-0 text-muted-foreground max-sm:hidden">{anyModelName(models, row.model)}</span>}
-      <span className="min-w-0 shrink-0 truncate text-muted-foreground">
-        ended <span className={tone}>{end.status}</span>
-        {end.detail && `: ${end.detail}`}
-      </span>
-    </button>
+    <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
+      <div className="group/status flex">
+        <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={current ? `Working: ${current.name}` : words} className="flex min-w-0 items-center gap-1.5 py-0.5">
+          {current ? (
+            <>
+              <span key={current.key} className="morph-in min-w-0 truncate text-left text-shimmer">
+                {current.name}
+              </span>
+              {since !== undefined && <Seconds since={since} />}
+            </>
+          ) : (
+            <span key={words} className="morph-in min-w-0 truncate text-left group-hover/status:text-foreground/80 group-has-focus-visible/status:text-foreground/80">
+              {words}
+            </span>
+          )}
+          <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')} aria-hidden />
+        </button>
+      </div>
+      {open && (
+        <div className="mt-1.5 flex flex-col divide-y divide-border rounded-lg border border-border">
+          {lead && <div className="px-2 py-1.5">{lead}</div>}
+          {steps.map(step => (
+            <div key={`${step.kind}-${step.row.key}`} className="px-2 py-1.5">
+              {step.kind === 'agent' ? <AgentRow row={step.row} onOpen={onOpen} /> : <SubagentMessage name={step.row.name} text={step.text} />}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }

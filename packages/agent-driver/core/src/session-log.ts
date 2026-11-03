@@ -254,7 +254,7 @@ export class SessionLog {
 export function diaryLine(event: DriverEvent): { kind: string } & Record<string, unknown> {
   switch (event.type) {
     case 'text':
-      return { kind: 'said', text: event.text }
+      return { kind: 'said', text: event.text, ...(event.subagent !== undefined ? { subagent: event.subagent } : {}) }
     case 'result': {
       const { type: _type, usage: _usage, ...rest } = event
       return { kind: 'result', ...rest }

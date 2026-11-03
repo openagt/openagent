@@ -435,15 +435,11 @@ export function AgentView({
         <>
           {/* Where the work is and the next step, above the message box and its row. */}
           <AgentWorkBar
-            projectName={projectName}
             checkout={barCheckout}
             summary={
               ready &&
               (showHandoff ? (
-                <>
-                  <HandoffSummary handoff={handoff.handoff} subagent={subagent} />
-                  {handoff.error && <span className="text-danger">{handoff.error}</span>}
-                </>
+                <HandoffSummary handoff={handoff.handoff} subagent={subagent} />
               ) : (
                 runSlots.map(slots => {
                   const Summary = slots.summary
@@ -460,6 +456,7 @@ export function AgentView({
               // and a run whose subagents still work has not: it goes on as each of them ends.
               committing ? <Committing /> : ended ? <HandoffActions projectId={projectId} agentId={agentId} state={handoff} subagent={subagent} onAsked={onSending} /> : undefined
             }
+            error={ready && showHandoff ? handoff.error : undefined}
             show={say}
             state={workState}
           />

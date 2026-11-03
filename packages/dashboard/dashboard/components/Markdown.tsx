@@ -1,4 +1,5 @@
-import { createContext, Fragment, useContext, type ReactNode } from 'react'
+import { Children, cloneElement, createContext, Fragment, isValidElement, useContext, useRef, type ReactElement, type ReactNode } from 'react'
+import { wordShownAt } from '../lib/use-steady-text.js'
 import { cn } from '../lib/utils.js'
 import { CopyButton } from './ui/copy-button.js'
 
@@ -12,12 +13,39 @@ import { CopyButton } from './ui/copy-button.js'
 // `compact` shrinks everything a notch (text-xs, smaller headings) so a reply reads at the density
 // of the surrounding event log rather than a full document. Otherwise it is set as Claude Code on
 // the web sets an answer: lines 20px apart, paragraphs a little further.
-export function Markdown({ text, compact = false }: { text: string; compact?: boolean }) {
-  return (
-    <div className={compact ? 'space-y-1.5 text-xs leading-relaxed' : 'space-y-2.5 text-sm leading-5'}>
-      {renderBlocks(text.replace(/\r\n/g, '\n').split('\n'), compact)}
-    </div>
-  )
+//
+// `fade` is for the message being written: each word comes in out of nothing, once. A word drawn
+// again, in this box or in the one that takes its place, goes on from where its fade was: its time
+// is kept by its place among the message's words (`use-steady-text.ts`).
+export function Markdown({ text, compact = false, fade = false }: { text: string; compact?: boolean; fade?: boolean }) {
+  const drawnAt = useRef(performance.now()).current
+  const blocks = renderBlocks(text.replace(/\r\n/g, '\n').split('\n'), compact)
+  return <div className={compact ? 'space-y-1.5 text-xs leading-relaxed' : 'space-y-2.5 text-sm leading-5'}>{fade ? wordsIn(blocks, { at: 0 }, drawnAt, text) : blocks}</div>
+}
+
+/** How long a word takes to come in (`.word-in`). */
+const WORD_IN_MS = 500
+
+/** The text of what was rendered, a word to a span. Code stays as it is: it comes whole, and its lines are not words. */
+function wordsIn(node: ReactNode, count: { at: number }, drawnAt: number, message: string): ReactNode {
+  return Children.map(node, child => {
+    if (typeof child === 'string') {
+      return child.split(/(\s+)/).map((word, at) => {
+        if (word.trim() === '') return word
+        const since = drawnAt - wordShownAt(message, count.at++)
+        // Already in before this box was drawn: plain. Coming in: from where it was.
+        if (since >= WORD_IN_MS) return <span key={at}>{word}</span>
+        return (
+          <span key={at} className="word-in" style={since > 0 ? { animationDelay: `${-since}ms` } : undefined}>
+            {word}
+          </span>
+        )
+      })
+    }
+    if (!isValidElement(child) || child.type === 'pre' || child.type === 'code') return child
+    const element = child as ReactElement<{ children?: ReactNode }>
+    return element.props.children === undefined ? element : cloneElement(element, undefined, wordsIn(element.props.children, count, drawnAt, message))
+  })
 }
 
 /** The colour of one line of a `diff` block: what was added, what was removed, and where in the file. */

@@ -41,6 +41,14 @@ function retryDelay(attempt: number): number {
  */
 const SYNC_GRACE_MS = 1500
 
+/** The events that came on the live line after the log it opened with was read: what just happened, not what was there. */
+const cameLive = new WeakSet<OpenAgentEvent>()
+
+/** Whether an event came while the page was watching, after the log it opened with: a message that did comes in at the pace of one being written. */
+export function arrivedLive(e: OpenAgentEvent): boolean {
+  return cameLive.has(e)
+}
+
 export function useLiveEvents(projectId: string | null, agentId?: string | null, resetKey?: unknown): LiveEvents {
   const [events, setEvents] = useState<OpenAgentEvent[]>([])
   const [lost, setLost] = useState(false)
@@ -102,6 +110,11 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null,
         let buffer: OpenAgentEvent[] | undefined = reconnect ? [] : undefined
         // The whole message just arrived: its pieces, read a beat late, would show it twice.
         let finished = ''
+        // A message comes in blocks, each written from its start, and a block's whole line may come a
+        // beat after the next block's pieces: the block before stays shown until its line has come,
+        // so it does not go and come back. The next block's pieces wait for it.
+        let lastPiece = ''
+        let held = ''
         const swap = () => {
           if (cancelled || buffer === undefined) return
           const replay = buffer
@@ -117,19 +130,34 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null,
         }
         if (reconnect) graceTimer = setTimeout(atGrace, SYNC_GRACE_MS)
         else setEvents([]) // fresh subscribe: start clean so the replay is not appended twice
+        // Whether the log this subscription opened with has been read: what comes after just happened.
+        let synced = false
         ch.listen(event => {
           if (event.kind === 'stream-sync') {
+            synced = true
             if (graceTimer) clearTimeout(graceTimer)
             swap()
             return
           }
+          if (synced && event.kind !== 'partial') cameLive.add(event)
           if (event.kind === 'partial') {
-            setWriting(event.text === finished ? '' : event.text)
+            const text = event.text === finished ? '' : event.text
+            const before = lastPiece
+            lastPiece = text
+            if (held === '' && before !== '' && text !== '' && !text.startsWith(before.slice(0, 40)) && before !== finished) held = before
+            if (held === '') setWriting(text)
             return
           }
-          // A whole message replaces its pieces, and a run that ended writes nothing more.
-          if ((event.kind === 'driver' && event.event.type === 'text') || event.kind === 'end') {
+          // A whole message replaces its pieces, and a run that ended writes nothing more. The whole
+          // line of a block held on screen lets the next block's pieces show.
+          if (event.kind === 'driver' && event.event.type === 'text' && held !== '' && event.event.text.startsWith(held.slice(0, 40))) {
+            finished = event.event.text
+            held = ''
+            setWriting(lastPiece.startsWith(finished.slice(0, 40)) ? '' : lastPiece)
+          } else if ((event.kind === 'driver' && event.event.type === 'text') || event.kind === 'end') {
             finished = event.kind === 'driver' && event.event.type === 'text' ? event.event.text : ''
+            held = ''
+            lastPiece = ''
             setWriting('')
           }
           if (buffer) {
