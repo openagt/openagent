@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Driver } from '@openagt/agent-driver'
@@ -13,7 +13,9 @@ import type { Driver } from '@openagt/agent-driver'
 // user message truncated — the column of first lines again. So the name is asked of the
 // same coding agent the run is on, in one throwaway session with that agent's small, fast model and
 // no tools at all: it is never the run's own session (nothing is added to what the agent was
-// asked), and it runs beside the first turn, so nothing waits for it.
+// asked), and it runs beside the first turn, so nothing waits for it. Where a long-lived process
+// starts the run (the dashboard), that session was started before the run was, and the run is
+// handed the name it got (`ready-naming.ts`, {@link NAME_FILE_ENV}).
 //
 // What it costs, measured: a fifth of a cent a run as it was first written, a thirtieth of one with
 // the tools off — the tools and the servers behind them were twenty thousand of the twenty-three
@@ -133,7 +135,10 @@ export async function nameRun(
     empty = await mkdtemp(join(tmpdir(), 'openagent-naming-'))
     const session = await driver.start({ cwd: empty, model, system: TITLE_SYSTEM, noTools: true, signal: stop.signal })
     try {
-      const turn = await session.prompt(titlePrompt(opts.prompt, opts.from))
+      // Through a ready prompt where the driver has one: the same fresh turn, over at its answer
+      // rather than when the agent's process is gone (`DriverSession.ready`).
+      const ready = session.ready?.()
+      const turn = ready ? await ready.prompt(titlePrompt(opts.prompt, opts.from)) : await session.prompt(titlePrompt(opts.prompt, opts.from))
       return titleOf(turn.text)
     } finally {
       await session.dispose().catch(() => {})
@@ -145,4 +150,58 @@ export async function nameRun(
     clearTimeout(timer)
     opts.signal?.removeEventListener('abort', onAbort)
   }
+}
+
+/**
+ * Where a run finds the name its starter asked for it (`ready-naming.ts`): a file the starter
+ * writes once the name is in, `{"title": …}`, or `{}` when it could not get one and the run is to
+ * ask itself. Read from the environment the run's process is started in, and taken out of it, so
+ * the agent and anything it starts never wait on a file meant for this run.
+ */
+export const NAME_FILE_ENV = 'OPENAGENT_NAME_FILE'
+
+/** How long a run waits for the name its starter is asking for, as long as an ask of its own may take. */
+const GIVEN_NAME_WAIT_MS = 60_000
+
+/** How often a run looks for that name: the file is local, and the person is watching the row. */
+const GIVEN_NAME_EVERY_MS = 50
+
+/** A run's name, asked for: the name to come, and how to stop asking. */
+export interface AskedName {
+  title: Promise<string | undefined>
+  stop: AbortController
+}
+
+/**
+ * Ask for the run's name: the one its starter is getting it ({@link NAME_FILE_ENV}), or, without
+ * one or when the starter could not get one, of the coding agent here ({@link nameRun}).
+ */
+export function askName(driver: Driver, prompt: string): AskedName {
+  const stop = new AbortController()
+  const file = process.env[NAME_FILE_ENV]
+  delete process.env[NAME_FILE_ENV]
+  const asked = () => nameRun(driver, { prompt, signal: stop.signal })
+  const title = file === undefined ? asked() : givenName(file, stop.signal).then(given => (given === 'ask' ? asked() : given))
+  return { title, stop }
+}
+
+/** The name in the starter's file once it is written; `'ask'` when the starter got none. Nothing when it never comes, or the run stops first. */
+export async function givenName(file: string, signal?: AbortSignal, waitMs = GIVEN_NAME_WAIT_MS): Promise<string | undefined | 'ask'> {
+  const until = Date.now() + waitMs
+  while (Date.now() < until && !signal?.aborted) {
+    const text = await readFile(file, 'utf8').catch(() => undefined)
+    if (text !== undefined) {
+      await rm(file, { force: true }).catch(() => {})
+      let said: unknown
+      try {
+        said = JSON.parse(text)
+      } catch {
+        return 'ask'
+      }
+      const title = (said && typeof said === 'object' ? said : {}) as { title?: unknown }
+      return typeof title.title === 'string' && title.title !== '' ? title.title : 'ask'
+    }
+    await new Promise(resolve => setTimeout(resolve, GIVEN_NAME_EVERY_MS))
+  }
+  return undefined
 }

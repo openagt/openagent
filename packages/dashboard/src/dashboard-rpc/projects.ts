@@ -1,4 +1,4 @@
-import { contextAddProject, contextProjectErrors, contextProjects, contextRemote, contextRemoveProject, contextStartedIn, resolveProjectPath } from './context.js'
+import { contextAddProject, contextPrepareStart, contextProjectErrors, contextProjects, contextRemote, contextRemoveProject, contextStartedIn, resolveProjectPath } from './context.js'
 import { readProjectCommands, type ProjectCommand } from '../project-commands.js'
 import { DATA_BRANCH, branchReach, originDefaultBranch, pullFileBranch, readSharing, writeSharing, type BranchReach } from '@openagt/agent-data'
 import { readProjectHooks, runCheckHook, startLineTakesBase, startLineTakesPrBase, type StartReadiness } from '../project-hooks.js'
@@ -250,6 +250,8 @@ export async function onStartBranches(projectId: string): Promise<StartBranches 
 export async function onStartCheck(projectId: string, driver?: string): Promise<StartReadiness | null> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return null
+  // The launcher asks this as it opens and at each change of agent: a Start is near, on this agent.
+  contextPrepareStart()(projectId, typeof driver === 'string' ? driver : undefined)
   const checked = await runCheckHook(cwd, driver !== undefined ? { driver } : {})
   if (checked.ok) return { problems: checked.problems, warnings: checked.warnings, ...(checked.fix ? { fix: checked.fix } : {}) }
   return checked.noHook ? null : { problems: [], warnings: [checked.error] }

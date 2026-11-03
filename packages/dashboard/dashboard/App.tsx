@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import type { Intervention, Activity, ProjectionRead, ProjectSummary, RecentAgent } from '../src/index.js'
-import { onProjectFiles, onInterventions, onActivity, onRecentAgents } from './rpc/reads.js'
+import { onProjectFiles, onInterventions, onActivity, onRecentAgents, onStartedName } from './rpc/reads.js'
 import { sendStart } from './rpc/control.js'
 import { onProjects } from './rpc/projects.js'
 import { onComputersThrough, onMachineAgentAccounts, onMachinePerson, onMachineVersions, sendLetMachineIn, sendMachineCode, sendMachineRemoveAgentAccount, sendRemoveMachineDevice } from './rpc/machines.js'
@@ -174,7 +174,7 @@ export function App() {
   // the main pane that a session missing from the list is starting, not gone.
   // `runsOn` names the machine a just-started remote agent executes on (#1067), so the live view can
   // mark where it runs and degrade the panels that are local-only. Undefined for a local agent.
-  const [agentStart, setAgentStart] = useState<{ tick: number; intent: string; id: string | null; projectId: string | null; at: number; runsOn?: string; picks?: StartPicks }>({ tick: 0, intent: '', id: null, projectId: null, at: 0 })
+  const [agentStart, setAgentStart] = useState<{ tick: number; intent: string; id: string | null; projectId: string | null; at: number; runsOn?: string; picks?: StartPicks; title?: string }>({ tick: 0, intent: '', id: null, projectId: null, at: 0 })
   // The agents of the project on screen, for its pages, or of the picked project, for the sidebar:
   // the same project whenever both are set. Read once the address is: before, it names the project
   // by its address, not by its id.
@@ -283,6 +283,15 @@ export function App() {
     // The new agent just appends to the rail; reload so its real row shows up quickly.
     reload()
     reloadRecent()
+    // Its name, the moment the daemon has it: about a second on, before the run's row is in any
+    // list (`started-names.ts`). Answered once, when it is in; nothing for a continued run.
+    if (!continued && preferences.nameRuns !== false)
+      void onStartedName(startedId).then(
+        title => {
+          if (title !== undefined) setAgentStart(prev => (prev.id === startedId ? { ...prev, title } : prev))
+        },
+        () => {},
+      )
   }
 
   /** The same, for the surfaces that start an agent inside the selected project. */
@@ -527,12 +536,14 @@ export function App() {
         />
       )
     }
+    // The name the daemon had for the run just started, before the run's record has one.
+    const startedTitle = agentId === agentStart.id ? agentStart.title : undefined
     if (!selectedAgent) {
       // Not in the list: either the run we just started (its card lands a beat later) or a
       // list we have not read yet, where whether the agent runs is not known. Only a session that
       // is genuinely absent from a list we did read is gone.
       if (agentId === agentStart.id || !agentsLoaded)
-        return <AgentView projectId={projectId} agentId={agentId} events={events} live={agentId === agentStart.id ? true : null} picks={agentId === agentStart.id ? agentStart.picks : undefined} label={preferences.nameRuns !== false ? undefined : agentStart.intent || undefined} naming={agentId === agentStart.id && preferences.nameRuns !== false} projectName={projectName} remoteLabel={agentId === agentStart.id ? agentStart.runsOn : undefined} files={files} lost={lost} writing={writing} startedWith={agentId === agentStart.id ? agentStart.intent : undefined} onAgentStarted={onAgentStarted} contextSet={contextSet} onProjectRemoved={removableHere} />
+        return <AgentView projectId={projectId} agentId={agentId} events={events} live={agentId === agentStart.id ? true : null} picks={agentId === agentStart.id ? agentStart.picks : undefined} label={preferences.nameRuns !== false ? startedTitle : agentStart.intent || undefined} naming={agentId === agentStart.id && preferences.nameRuns !== false && startedTitle === undefined} projectName={projectName} remoteLabel={agentId === agentStart.id ? agentStart.runsOn : undefined} files={files} lost={lost} writing={writing} startedWith={agentId === agentStart.id ? agentStart.intent : undefined} onAgentStarted={onAgentStarted} contextSet={contextSet} onProjectRemoved={removableHere} />
       return (
         <NotFound
           title="This agent is gone"
@@ -552,8 +563,8 @@ export function App() {
         live={selectedAgent.status === 'running'}
         card={selectedAgent}
         // A subagent's page is named as its rows are: by its task, not by its whole prompt.
-        label={selectedAgent.parent !== undefined ? taskLabel(selectedAgent) : awaitingName(selectedAgent, preferences.nameRuns !== false) ? undefined : agentLabel(selectedAgent)}
-        naming={selectedAgent.parent === undefined && awaitingName(selectedAgent, preferences.nameRuns !== false)}
+        label={selectedAgent.parent !== undefined ? taskLabel(selectedAgent) : awaitingName(selectedAgent, preferences.nameRuns !== false) ? startedTitle : agentLabel(selectedAgent)}
+        naming={selectedAgent.parent === undefined && awaitingName(selectedAgent, preferences.nameRuns !== false) && startedTitle === undefined}
         projectName={projectName}
         files={files}
         lost={lost}
@@ -694,6 +705,7 @@ export function App() {
           }}
           startTick={agentStart.tick}
           startIntent={agentStart.intent}
+          startTitle={agentStart.title}
           startId={agentStart.id}
           startProjectName={agentStart.projectId !== null ? labels.get(agentStart.projectId) : undefined}
           working={working}

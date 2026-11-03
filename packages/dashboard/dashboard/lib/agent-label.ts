@@ -25,7 +25,8 @@ export function agentLabel(agent: Pick<AgentMeta, 'id' | 'title' | 'intent' | 'b
 /**
  * How long a row waits, empty, for the name a run was started with to arrive ({@link awaitingName}).
  *
- * A small model answers in three to six seconds, and the ask gives up after a minute; past that the
+ * A name comes about a second after Start (the daemon's naming session waits for it), a few
+ * seconds when the run asks on its own, and the ask gives up after a minute; past that the
  * row has waited long enough and shows what the person typed instead.
  */
 export const NAMING_WAIT_MS = 60_000

@@ -15,6 +15,7 @@ export type {
   DriverQuotaWindow,
   DriverQuotaUnavailableReason,
   PersonalSetup,
+  ReadyPrompt,
 } from './types.js'
 export { isTransientQuotaReason, PERSONAL_PARTS } from './types.js'
 export { parseQuestion, continuationPrompt, fencedBlocks, QUESTION_TAG, type Question, type QuestionOption } from './question.js'
@@ -26,6 +27,7 @@ export { FakeDriver, FakeDriverSession, type FakeTurn, type FakeDriverOptions } 
 // signals, and reading a file back (the log and the end of a turn are exported above).
 export { makeEmit, promptSent, startEvent, type PromptExtras, combineFraming, combineSignals, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, OUTPUT_MAX } from './session-support.js'
 export { ConversationGoneError, continuingTurn } from './gone.js'
+export { readyPrompt } from './ready-prompt.js'
 export type { AgentAccount, AccountTurn, AccountRotation, RotatedTurn } from './accounts.js'
 export {
   runCliSession,

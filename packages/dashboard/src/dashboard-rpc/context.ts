@@ -128,6 +128,10 @@ export function contextAddProject(): DashboardContext['addProject'] {
 }
 
 /** Find or add the project a second `openagent` was started in (#2141), which only the daemon can do. */
+export function contextPrepareStart(): DashboardContext['prepareStart'] {
+  return fromContext('prepareStart')
+}
+
 export function contextStartedIn(): DashboardContext['startedIn'] {
   return fromContext('startedIn')
 }

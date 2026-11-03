@@ -40,6 +40,8 @@ export interface DashboardOptions {
   onAddProject: (path: string, share: boolean) => Promise<AddProjectResult> | AddProjectResult
   /** Called when a second `openagent` finds this dashboard running: the `sendStartedAgain` RPC reaches this through the wired dashboard context. */
   onStartedIn: (folder: string) => Promise<StartedInResult> | StartedInResult
+  /** A Start is near in a project, on a coding agent (the RPC context's `prepareStart`). */
+  onPrepareStart: (projectId: string, driver?: string) => void
   /** Called when the browser removes a project: the `sendRemoveProject` RPC reaches this through the wired dashboard context. */
   onRemoveProject: (projectId: string, files: boolean) => Promise<RemoveProjectResult> | RemoveProjectResult
   /**
@@ -157,6 +159,7 @@ export function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
     addProject: opts.onAddProject,
     startedIn: opts.onStartedIn,
     removeProject: opts.onRemoveProject,
+    prepareStart: opts.onPrepareStart,
     eventsSource: opts.eventsSource,
     remote: opts.remote,
     preferences: opts.preferences,

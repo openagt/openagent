@@ -726,3 +726,35 @@ test('a Codex command that finished says what it printed and its exit code, for 
     { type: 'output', id: 'exec-2', text: '', failed: true, exitCode: 1 },
   ])
 })
+
+test('a ready prompt opens the conversation at once and starts the turn only when its words are sent', async () => {
+  const messages: Record<string, unknown>[][] = []
+  let seen: Seen | undefined
+  const spawn: SpawnLike = (command, args, opts) => {
+    const proc = fakeAppServer({}, s => (seen = s))(command, args, opts)
+    // What the server has read so far, looked at while the prompt still waits.
+    const stdin = proc.stdin!
+    const read: Record<string, unknown>[] = []
+    messages.push(read)
+    const write = stdin.write.bind(stdin)
+    stdin.write = ((chunk: string, ...rest: never[]) => {
+      for (const line of String(chunk).split('\n').filter(Boolean)) read.push(JSON.parse(line) as Record<string, unknown>)
+      return write(chunk, ...rest)
+    }) as typeof stdin.write
+    return proc
+  }
+  const session = await new CodexDriver({ spawn }).start({ cwd: '/empty', model: 'gpt-5.6-luna', system: 'You name coding sessions.', noTools: true })
+  const ready = session.ready!()
+  for (let i = 0; i < 20 && !messages[0]?.some(m => m['method'] === 'thread/start'); i++) await new Promise(resolve => setTimeout(resolve, 5))
+  await new Promise(resolve => setTimeout(resolve, 20))
+  assert.deepEqual(
+    messages[0]!.map(m => m['method']),
+    ['initialize', 'initialized', 'thread/start'],
+    'the conversation is open, and no turn is started without words',
+  )
+  assert.equal(ready.waiting, true)
+  const turn = await ready.prompt('Name this: fix the flaky login test')
+  assert.equal(turn.text, 'Created hello.txt')
+  assert.deepEqual(requests(seen!).at(-1), { method: 'turn/start', params: { threadId: 'thread-1', input: [{ type: 'text', text: 'Name this: fix the flaky login test', text_elements: [] }] } })
+  assert.deepEqual((requests(seen!).find(r => r.method === 'thread/start')!.params as { developerInstructions?: string }).developerInstructions, 'You name coding sessions.')
+})

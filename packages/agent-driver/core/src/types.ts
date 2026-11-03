@@ -165,8 +165,26 @@ export interface DriverSession {
   readCode?(path: string): Promise<string>
   /** The session's log, when {@link DriverStartOptions.log} asked for one. */
   readonly log?: SessionLog
+  /**
+   * One fresh prompt whose process starts now, before its words are known: the agent's own
+   * start-up is done while nothing waits on it, and the words, once given, go straight to the
+   * model. Measured with a small model and no tools: an answer in a second where a fresh process
+   * takes two (Claude Code), and in two where it takes four (Codex, whose conversation is opened
+   * ahead too). Optional: a driver without it is only ever prompted the usual way.
+   */
+  ready?(): ReadyPrompt
   /** Tear the session down (kill the process, free resources). Idempotent. */
   dispose(): Promise<void>
+}
+
+/** A prompt whose process was started before its words were known ({@link DriverSession.ready}). */
+export interface ReadyPrompt {
+  /** Send the words and wait for the turn. A process takes one prompt: a second, or one after it ended, is refused. */
+  prompt(text: string): Promise<DriverTurn>
+  /** Whether it is still waiting for its words: one whose process ended on its own takes none. */
+  readonly waiting: boolean
+  /** End the process without a prompt. Idempotent. */
+  cancel(): void
 }
 
 /** Per-prompt overrides. */

@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { readClaudeQuota } from './claude-code-quota.js'
 import { readClaudeModels } from './claude-code-models.js'
 import { accountEnv, CLAUDE_TOKEN_ENV } from './claude-accounts.js'
-import { type AccountRotation, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, cutOutput, callArgument, lineCount, patchSize, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, finishTurn, agentEnv, oneLine, attachLog, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverQuota, type DriverRateLimit, type DriverRateWindow, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
+import { type AccountRotation, type AgentCliParser, type ReadyPrompt, readyPrompt, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, cutOutput, callArgument, lineCount, patchSize, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, finishTurn, agentEnv, oneLine, attachLog, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverQuota, type DriverRateLimit, type DriverRateWindow, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
 
 /** Claude Code permission modes we pass through to the CLI. */
 export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan'
@@ -241,6 +241,55 @@ export class ClaudeCodeSession implements DriverSession {
     return finishTurn(this, turn, opts, emit)
   }
 
+  /**
+   * A fresh prompt whose `claude` process starts now: it reads its settings, its login and the rest
+   * of its start-up — about a second, measured — while it waits for the words on stdin. On the
+   * account a turn would take first; one at its limit fails the prompt rather than moving on, so a
+   * caller that cannot wait for a limit asks again the usual way.
+   *
+   * The turn is over at its `result` line, not when the process is gone: `claude` takes another
+   * three quarters of a second to exit after it answered (measured), which nothing here waits on.
+   * The process still exits on its own, and is reaped as every turn's is.
+   */
+  ready(): ReadyPrompt {
+    return readyPrompt((words, stop) => {
+      const env = this.config.env ?? process.env
+      const first = this.config.accounts?.first(env)
+      const parser = new StreamJsonParser()
+      let answer: (turn: DriverTurn) => void = () => {}
+      const answered = new Promise<DriverTurn>(resolve => {
+        answer = resolve
+      })
+      const conversing: AgentCliParser = {
+        push: line => {
+          const events = parser.push(line)
+          if (answeredAt(line)) answer(parser.result())
+          return events
+        },
+        result: () => parser.result(),
+        converse: io => {
+          void words.then(text => {
+            for (const line of stdinLines(text).trimEnd().split('\n')) io.write(line)
+            io.end()
+          })
+        },
+      }
+      const turn = runCliSession({
+        bin: this.config.bin ?? 'claude',
+        args: this.buildArgs(combineFraming(this.startOpts.system)),
+        cwd: this.cwd,
+        env: agentEnv(first ? accountEnv(first, env) : env, this.log),
+        prompt: '',
+        spawn: this.config.spawn ?? (nodeSpawn as unknown as SpawnLike),
+        emit: makeEmit(this.startOpts.onEvent, 'claude-code'),
+        signals: [...combineSignals(this.startOpts.signal), stop],
+        parser: conversing,
+        driver: 'claude-code',
+      })
+      return Promise.race([turn, answered])
+    })
+  }
+
   readCode(path: string): Promise<string> {
     return readWorkspaceFile(this.cwd, path)
   }
@@ -305,6 +354,17 @@ export class ClaudeCodeSession implements DriverSession {
  * the user's message. A plain `-p` run sends thinking blocks with their text empty; asked for
  * `summarized`, it fills them with its own short summary.
  */
+/** Whether a line of `claude`'s output is the `result` of a turn that answered: the turn's last word, before the process exits. */
+function answeredAt(line: string): boolean {
+  if (!line.includes('"result"')) return false
+  try {
+    const obj = JSON.parse(line) as Record<string, unknown>
+    return obj['type'] === 'result' && obj['subtype'] === 'success' && obj['is_error'] !== true
+  } catch {
+    return false
+  }
+}
+
 function stdinLines(text: string): string {
   const thinking = { type: 'control_request', request_id: 'thinking', request: { subtype: 'set_max_thinking_tokens', max_thinking_tokens: null, thinking_display: 'summarized' } }
   const message = { type: 'user', message: { role: 'user', content: text } }

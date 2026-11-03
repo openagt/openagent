@@ -1,3 +1,4 @@
+import { NAME_FILE_ENV } from '@openagt/agent-runner'
 import { spawn } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { basename, delimiter, join } from 'node:path'
@@ -150,6 +151,11 @@ export interface StartHookInput {
    * has to carry it; absent means named, which is what every run was before the setting existed.
    */
   nameRun?: boolean
+  /**
+   * Where the run finds the name this computer is asking for it as it starts it (`ReadyNaming`),
+   * so it does not ask again. In the environment too, read by the run's own tool.
+   */
+  nameFile?: string
 }
 
 /**
@@ -184,6 +190,7 @@ export function runStartHook(cwd: string, input: StartHookInput, opts: Omit<RunH
     // in, since it is the hook's own child. So turning naming off needs no `hooks.yml` of any
     // project changed, which a setting nobody can act on would not be a setting at all.
     ...(input.nameRun === false ? { OPENAGENT_NAME_RUN: '0' } : {}),
+    ...(input.nameFile !== undefined ? { [NAME_FILE_ENV]: input.nameFile } : {}),
     ...(input.driver !== undefined ? { DRIVER: input.driver } : {}),
     ...(input.model !== undefined ? { MODEL: input.model } : {}),
     ...(input.effort !== undefined ? { EFFORT: input.effort } : {}),

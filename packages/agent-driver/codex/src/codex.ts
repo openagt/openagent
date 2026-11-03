@@ -3,7 +3,7 @@ import { copyFile, lstat, mkdir, readlink, readdir, realpath, rename, rm, stat, 
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { accountFolder, accountHome, codexWindows } from './codex-accounts.js'
-import { type AccountRotation, type DriverRateWindow, runCliSession, continuingTurn, finishTurn, agentEnv, attachLog, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, checkCliReady, type AgentCliParser, type CliIo, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
+import { type AccountRotation, type DriverRateWindow, type ReadyPrompt, readyPrompt, runCliSession, continuingTurn, finishTurn, agentEnv, attachLog, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, checkCliReady, type AgentCliParser, type CliIo, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
 
 /**
  * Codex's sandbox policy for the shell commands the model writes.
@@ -330,13 +330,28 @@ export class CodexSession implements DriverSession {
     return finishTurn(this, turn, opts, emit)
   }
 
-  /** The reader of one turn: on the session's conversation for a `resume` prompt, else a fresh one with the framing. */
-  private parser(text: string, opts: DriverPromptOptions): CodexAppServerParser {
+  /**
+   * A fresh prompt whose `codex app-server` starts now and opens its conversation before the words
+   * are known: Codex's start-up and the conversation's are most of a small turn (measured: an
+   * answer in two seconds where a fresh process takes four). On the account a turn would take
+   * first; one at its limit fails the prompt rather than moving on.
+   */
+  ready(): ReadyPrompt {
+    return readyPrompt(async (words, stop) => {
+      const env = this.config.env ?? process.env
+      const first = this.config.accounts?.first(env)
+      const turnEnv = first?.login === undefined ? env : { ...env, CODEX_HOME: await accountHome(accountFolder(first, env), personalCodexHome(env), this.config.personal?.skills !== false) }
+      return this.turnOn('', { signal: stop }, this.parser(words, {}), turnEnv, makeEmit(this.startOpts.onEvent, 'codex'))
+    })
+  }
+
+  /** The reader of one turn: on the session's conversation for a `resume` prompt, else a fresh one with the framing. Words still to come are sent once the conversation is open. */
+  private parser(text: string | Promise<string>, opts: DriverPromptOptions): CodexAppServerParser {
     const resumeId = opts.resume ? this.lastSessionId : undefined
     // A resumed conversation already carries its framing; sending it again only repeats it.
     const framing = resumeId === undefined ? combineFraming(this.startOpts.system, opts.system) : ''
     return new CodexAppServerParser({
-      text: promptSent(text, opts),
+      text: typeof text === 'string' ? promptSent(text, opts) : text.then(words => promptSent(words, opts)),
       cwd: this.cwd,
       sandbox: this.config.sandbox ?? 'workspace-write',
       ...(framing ? { framing } : {}),
@@ -576,8 +591,8 @@ function codexFileChange(raw: unknown): FileChange[] {
 
 /** The one turn a {@link CodexAppServerParser} asks for. */
 export interface CodexTurnRequest {
-  /** The prompt. */
-  text: string
+  /** The prompt; one still to come is sent once the conversation is open ({@link CodexSession.ready}). */
+  text: string | Promise<string>
   /** The workspace. */
   cwd: string
   sandbox: CodexSandbox
@@ -725,7 +740,9 @@ export class CodexAppServerParser implements AgentCliParser {
     // Announced at once: a turn that is stopped or fails before its result must not take the id,
     // the handle a later resume needs, with it.
     this.sessionId = threadId
-    this.request('turn/start', { threadId, input: [{ type: 'text', text: this.turn.text, text_elements: [] }] }, started => this.onTurn(started['turn']))
+    const start = (text: string) => this.request('turn/start', { threadId, input: [{ type: 'text', text, text_elements: [] }] }, started => this.onTurn(started['turn']))
+    if (typeof this.turn.text === 'string') start(this.turn.text)
+    else void this.turn.text.then(start)
     const events: DriverEvent[] = [{ type: 'session', sessionId: threadId }]
     // The model the conversation runs on, by Codex's own id, even when none was picked, and how
     // hard it thinks when that was set: picked, or in the person's config; none for the model's own.

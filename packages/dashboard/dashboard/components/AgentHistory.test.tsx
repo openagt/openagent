@@ -154,6 +154,24 @@ describe('AgentHistory (#785)', () => {
     expect(standInRow.getAttribute('aria-label')).toBe('Naming this session · running · just now')
   })
 
+  test('the name, once the daemon has it, comes into the stand-in row letter by letter, before the run\u2019s own row is in', () => {
+    const { container, rerender } = renderRail(
+      <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId={null} onSelect={() => {}} startTick={0} startIntent="" />,
+    )
+    const started = (startTitle?: string) => (
+      <SidebarProvider>
+        <AgentHistory projectId="p1" scope="p1" agents={[]} selectedAgentId="run-5" onSelect={() => {}} startTick={1} startIntent="fix the flaky login test" startId="run-5" {...(startTitle !== undefined ? { startTitle } : {})} />
+      </SidebarProvider>
+    )
+    rerender(started())
+    const standIn = () => [...container.querySelectorAll('button')].find(row => row.hasAttribute('data-stand-in'))!
+    expect(standIn().querySelector('.rail-title .animate-pulse')).toBeTruthy()
+    rerender(started('Fix flaky login test'))
+    expect(standIn().querySelector('.rail-title .animate-pulse')).toBeNull()
+    expect(standIn().getAttribute('aria-label')).toBe('Fix flaky login test · running · just now')
+    expect(standIn().querySelectorAll('.letter-in').length).toBeGreaterThan(0)
+  })
+
   test('with naming turned off the stand-in row prints the prompt: no name is coming to replace it', () => {
     preferences.current = { nameRuns: false }
     const { container, rerender } = renderRail(
