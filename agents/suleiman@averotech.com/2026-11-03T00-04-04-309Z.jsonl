@@ -1,0 +1,8 @@
+{"kind":"start","prompt":"tell me hello, nothing lese","at":"2026-11-03T00:04:08.455Z"}
+{"kind":"title","text":"Greeting Request Simple","at":"2026-11-03T00:04:09.579Z"}
+{"kind":"session","sessionId":"21738c19-433d-4b2f-bcab-a34b802f8006","at":"2026-11-03T00:04:09.766Z"}
+{"kind":"said","text":"Hello","at":"2026-11-03T00:04:13.266Z"}
+{"kind":"rate-limit","limit":{"status":"allowed","window":"seven_day","resetsAt":1794024000000,"windows":[{"window":"seven_day","percentUsed":7,"resetsAt":1794024000000}]},"at":"2026-11-03T00:04:13.281Z"}
+{"kind":"result","text":"Hello","sessionId":"21738c19-433d-4b2f-bcab-a34b802f8006","at":"2026-11-03T00:04:13.947Z"}
+{"kind":"cost","usd":0.058786000000000005,"at":"2026-11-03T00:04:13.947Z"}
+{"kind":"ended","status":"done","at":"2026-11-03T00:04:14.808Z"}
