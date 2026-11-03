@@ -34,6 +34,7 @@ import { hostname } from 'node:os'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { RUNS_WAIT_MS, RunChanges, withMachineRuns, type MachineRuns, type OwnRuns } from '../dashboard/machine-runs.js'
 import { ownRunsWatch } from '../dashboard/runs-watch.js'
+import { startedName, withStartedNames } from '../started-names.js'
 import { isElsewhereId } from '../dashboard/elsewhere.js'
 
 // The read model behind the dashboard (#405): the agent history, an agent's replay, and the
@@ -92,6 +93,15 @@ export async function onAgents(projectId: string): Promise<AgentMeta[]> {
   return runRows(projectId, await resolveProjectPath(projectId))
 }
 
+/**
+ * The name asked for a run this computer just started, answered once it is in (`started-names.ts`):
+ * the run's row is not in the list yet when it is, and the page shows it where the row will be.
+ * Nothing for a run started elsewhere, or when no name came.
+ */
+export async function onStartedName(agentId: string): Promise<string | undefined> {
+  return startedName(agentId)
+}
+
 /** A project's runs as its list shows them: off its folder here (`cwd`), else as the computer it is on says them. */
 async function runRows(projectId: string, cwd: string | undefined): Promise<AgentMeta[]> {
   // The relayed-agent stubs (#1077). Read up front by habit rather than by necessity now: the
@@ -100,7 +110,7 @@ async function runRows(projectId: string, cwd: string | undefined): Promise<Agen
   // no longer costs anything — nothing here depends on this staying above one.
   const remote = contextRemote()?.list(projectId) ?? []
   const machineOf = await contextRemote().machineNames()
-  const local = cwd ? await withRowMarks(cwd, (await projectRuns(cwd)).map(agent => forDashboard(agent, machineOf))) : isElsewhereId(projectId) ? (await elsewhereRuns(projectId)).map(agent => forDashboard(agent, machineOf)) : []
+  const local = cwd ? withStartedNames(await withRowMarks(cwd, (await projectRuns(cwd)).map(agent => forDashboard(agent, machineOf)))) : isElsewhereId(projectId) ? (await elsewhereRuns(projectId)).map(agent => forDashboard(agent, machineOf)) : []
   return withFollowed(remote, local, agentId => contextRemote().sent(agentId))
 }
 

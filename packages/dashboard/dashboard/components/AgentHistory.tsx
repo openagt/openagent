@@ -85,6 +85,7 @@ export function AgentHistory({
   onProjectAdded,
   startTick = 0,
   startIntent = '',
+  startTitle,
   startId = null,
   startProjectName,
   working = false,
@@ -140,6 +141,8 @@ export function AgentHistory({
   onProjectAdded?: () => void
   startTick?: number
   startIntent?: string
+  /** The name the daemon had for that run before the run's own row is in: the stand-in shows it. */
+  startTitle?: string | undefined
   /** The id the start reported for its run: the row the stand-in waits for. */
   startId?: string | null
   /** The project that run was started in, by its label: the stand-in row names it as the run's own row will. */
@@ -371,7 +374,7 @@ export function AgentHistory({
                           printing the prompt and having it swapped a second later. */}
                       <AgentHistoryRow
                         status="running"
-                        {...(preferences.nameRuns === false ? { intent: optimistic?.intent ?? undefined } : { intent: undefined, naming: true })}
+                        {...(preferences.nameRuns === false ? { intent: optimistic?.intent ?? undefined } : startTitle !== undefined ? { intent: startTitle } : { intent: undefined, naming: true })}
                         {...(crossProject && startProjectName ? { project: startProjectName } : {})}
                         subtitle="just now"
                         driver={preferences.driver}

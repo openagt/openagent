@@ -165,6 +165,7 @@ export async function makeWorld(): Promise<StoryWorld> {
     addProject: runtime.onAddProject,
     startedIn: runtime.onStartedIn,
     removeProject: runtime.onRemoveProject,
+    prepareStart: runtime.onPrepareStart,
     eventsSource: runtime.remoteEventsSource,
     remote: runtime.remoteAgents,
     preferences: registryPreferencesStore(),

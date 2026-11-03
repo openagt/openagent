@@ -303,6 +303,25 @@ describe('module cards on the Overview (#1818)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'start and go' }))
     await waitFor(() => expect(window.location.pathname).toBe('/app/9-r'))
   })
+
+  test('a run just started shows its name, in the header too, as soon as the daemon has it: before its row is in the list', async () => {
+    const { useModuleHost } = await import('./module/index.js')
+    function Starter({ projects }: ModuleCardProps) {
+      const host = useModuleHost()
+      return createElement('button', { onClick: () => void host.startRun(projects[0]!.id, 'fix the flaky login test') }, 'start')
+    }
+    answerOverview([{ package: '@acme/queue', url: moduleModule('__namedStarterCard', { cards: [{ id: 'starter', label: 'starter', Card: Starter }] }), projects: [PROJECT.id] }])
+    answers.set('sendStart', () => ({ ok: true, agentId: '9-n' }))
+    answers.set('onStartedName', () => 'Fix flaky login test')
+    window.history.replaceState(null, '', '/')
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'start' }))
+    await waitFor(() => expect(window.location.pathname).toBe('/app/9-n'))
+    expect(calls.find(call => call.name === 'onStartedName')?.args).toEqual(['9-n'])
+    // The header's title, revealed letter by letter, while the list still has no row for the run.
+    await waitFor(() => expect(document.querySelector('[title="Fix flaky login test"]')).toBeTruthy())
+    expect(screen.queryByTestId('title-placeholder')).toBeNull()
+  })
 })
 
 describe('the project select (#1513)', () => {

@@ -6,9 +6,10 @@ import { probeCli, type CliProbe, type Driver, type DriverReadiness, type Person
 import { ClaudeCodeDriver, claudeCodeReady } from '@openagt/agent-driver-claude'
 import { CodexDriver, codexReady } from '@openagt/agent-driver-codex'
 import { findRun } from '@openagt/skill-logs'
-import { readPersonal, readProjectAccounts } from './config.js'
+import { readPersonal, readProjectAccounts, type ProjectAccounts } from './config.js'
 import { gitHostEnv } from './git-host.js'
-import { resumeRun, runCommand, runIdFrom, type RunOutcome } from './run.js'
+import { namedAtStart, resumeRun, runCommand, runIdFrom, type RunOutcome } from './run.js'
+import { askName } from './title.js'
 import { publishChange, type NO_PUBLISH, type Publish } from './records.js'
 import { acquireRunLock, handOverRunLock, isPidAlive, releaseRunLock, runStderrPath } from './run-lock.js'
 import { accountRotation, hasAddedAccount } from '@openagt/skill-account-rotation'
@@ -61,8 +62,8 @@ export async function readyToRun(repo: string, driver: DriverName, deps: { probe
  * every git push of the run go as that account, and nothing of the person's own settings changes;
  * and the Claude and Codex accounts the project names, if it names some.
  */
-export async function workAs(repo: string, log: (line: string) => void, deps: { gitHostEnv?: typeof gitHostEnv; env?: NodeJS.ProcessEnv } = {}): Promise<AgentAccounts> {
-  const accounts = await readProjectAccounts(repo, log)
+export async function workAs(repo: string, log: (line: string) => void, deps: { gitHostEnv?: typeof gitHostEnv; env?: NodeJS.ProcessEnv; accounts?: ProjectAccounts } = {}): Promise<AgentAccounts> {
+  const accounts = deps.accounts ?? (await readProjectAccounts(repo, log))
   const given = await (deps.gitHostEnv ?? gitHostEnv)(repo, accounts.gitHost)
   if (!given.ok) throw new Error(`This project's runs work as ${accounts.gitHost} at the git host, and it cannot be used here: ${given.error}`)
   Object.assign(deps.env ?? process.env, given.env)
@@ -238,13 +239,19 @@ export async function runProject(repo: string, opts: { prompt: string; id?: stri
   const id = opts.id ?? runIdFrom(new Date().toISOString())
   const driver = opts.driver ?? 'claude-code'
   const setup = await readPersonal(repo, opts.log ?? (() => {}))
-  const as = await workAs(repo, opts.log ?? (() => {}))
+  const accounts = await readProjectAccounts(repo, opts.log ?? (() => {}))
+  // The name is asked for before the git host's account is read, which takes a second or more
+  // (`gitHostEnv` runs the git host's command) and is nothing the small model naming the run needs.
+  const marked = opts.id !== undefined && opts.mark !== true
+  const naming = namedAtStart({ prompt: opts.prompt, marked, ...(opts.parent !== undefined ? { parent: opts.parent } : {}) }) ? askName(driverFor(driver, undefined, setup, accounts), opts.prompt) : undefined
+  const as = await workAs(repo, opts.log ?? (() => {}), { accounts })
   return runCommand(repo, {
     prompt: opts.prompt,
+    ...(naming !== undefined ? { naming } : {}),
     id,
     ...(opts.startedAt !== undefined ? { startedAt: opts.startedAt } : {}),
     // A run given its id was marked by whoever spawned it, unless it was told to mark itself.
-    marked: opts.id !== undefined && opts.mark !== true,
+    marked,
     ...(opts.model !== undefined ? { model: opts.model } : {}),
     ...(opts.effort !== undefined ? { effort: opts.effort } : {}),
     driver: driverFor(driver, id, setup, as),
@@ -309,8 +316,9 @@ export const ACCOUNT_ENV = 'OPENAGENT_ACCOUNT'
  * this machine's config turns off (`personal:` in `config.ts`). How a part is turned off is the
  * adapter's own business.
  */
-export function driverFor(name: DriverName, id: string, personal: PersonalSetup, as: AgentAccounts = {}): Driver {
-  const env: NodeJS.ProcessEnv = { ...process.env, [AGENT_ID_ENV]: id }
+export function driverFor(name: DriverName, id: string | undefined, personal: PersonalSetup, as: AgentAccounts = {}): Driver {
+  // Without an id, a driver for no run's agent: a session that only names one.
+  const env: NodeJS.ProcessEnv = { ...process.env, ...(id !== undefined ? { [AGENT_ID_ENV]: id } : {}) }
   // On the person's accounts of the agent, or the project's own few, the next free one taking over at a limit; the one to start on, when whoever started the run said.
   const prefer = env[ACCOUNT_ENV]?.trim()
   const accounts = (only: string[] | undefined) => ({ ...(prefer ? { prefer } : {}), ...(only ? { only } : {}) })

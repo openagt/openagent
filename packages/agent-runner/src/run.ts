@@ -11,7 +11,7 @@ import { projectGitHost, type GitHost } from './git-host.js'
 import { basicSkills } from './basic-skills.js'
 import { acquireRunLock, isPidAlive, releaseRunLock } from './run-lock.js'
 import { runEndedLine } from './ended.js'
-import { isBareCommand, nameRun } from './title.js'
+import { askName, isBareCommand, nameRun, type AskedName } from './title.js'
 import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
 
 /**
@@ -127,6 +127,11 @@ function carried(marked: RunCard | undefined, card: RunCard): RunCard {
 export interface RunOptions {
   /** What the agent is told, usually a slash command. */
   prompt: string
+  /**
+   * The run's name, already being asked for by whoever starts the run, from before it could make
+   * this run's driver ({@link namedAtStart}); asked for here as the run begins when absent.
+   */
+  naming?: AskedName
   /** The run's id; minted from the start time when absent. */
   id?: string
   /**
@@ -185,6 +190,15 @@ export interface RunOutcome {
   detail?: string
 }
 
+/**
+ * Whether a run is named the moment it starts: not a subagent, whose row is its task, not a run
+ * another tool marked, whose marker may carry its name, nor a bare command, named from its report
+ * (`title.ts`); and not when the person turned naming off (`OPENAGENT_NAME_RUN=0`).
+ */
+export function namedAtStart(opts: { prompt: string; marked?: boolean; parent?: string }): boolean {
+  return process.env.OPENAGENT_NAME_RUN !== '0' && !opts.marked && opts.parent === undefined && !isBareCommand(opts.prompt)
+}
+
 export async function runCommand(repo: string, opts: RunOptions): Promise<RunOutcome> {
   const git = opts.git ?? nodeGitRunner()
   const now = opts.now ?? (() => new Date())
@@ -216,14 +230,10 @@ export async function runCommand(repo: string, opts: RunOptions): Promise<RunOut
 
     // The run's short name is asked for first of all, beside the checkout and the agent's start
     // rather than after them: the name is the first thing a person watching the run waits on, and
-    // asking takes seconds of its own (`title.ts`). Only for a run that will want it the moment its
-    // agent starts (`sessionToEnd`): not a subagent, whose row is its task, not a run another tool
-    // marked, whose marker may carry its name, nor a bare command, named from its report.
-    const naming = new AbortController()
-    const named =
-      process.env.OPENAGENT_NAME_RUN !== '0' && !opts.marked && opts.parent === undefined && !isBareCommand(opts.prompt)
-        ? nameRun(opts.driver, { prompt: opts.prompt, signal: naming.signal })
-        : undefined
+    // asking takes seconds of its own (`title.ts`). Earlier still when whoever starts the run asked
+    // already (`runProject`, before the git host's account is read), and only for a run that is
+    // named at start ({@link namedAtStart}).
+    const naming = opts.naming ?? (namedAtStart(opts) ? askName(opts.driver, opts.prompt) : undefined)
 
     // The checkout: the branches package's one sequence, on a fresh branch or the one given.
     // Without one there is no run, and the record says so instead of a marker left running.
@@ -232,7 +242,7 @@ export async function runCommand(repo: string, opts: RunOptions): Promise<RunOut
       const skills = await (opts.skills ?? basicSkills)(repo).catch((): SkillLink[] => [])
       checkout = opts.branch !== undefined ? await attachCheckout(repo, { agentId: id, branch: opts.branch, skills }, git) : await createCheckout(repo, { agentId: id, skills, ...(opts.base !== undefined ? { base: opts.base } : {}) }, git)
     } catch (err) {
-      naming.abort()
+      naming?.stop.abort()
       const detail = `could not create a checkout: ${errorMessage(err)}`
       const endedAt = clock()
       await marking
@@ -270,7 +280,7 @@ export async function runCommand(repo: string, opts: RunOptions): Promise<RunOut
       driver: opts.driver,
       ...modelOf(opts.model),
       ...effortOf(opts.effort),
-      ...(named !== undefined ? { named: { title: named, stop: naming } } : {}),
+      ...(naming !== undefined ? { named: naming } : {}),
       continued: false,
       marking,
       telling,
@@ -436,7 +446,7 @@ interface SessionRun {
   effort?: string
   continued: boolean
   /** The run's name, asked for as the run began (`runCommand`); stopped when the run is. */
-  named?: { title: Promise<string | undefined>; stop: AbortController }
+  named?: AskedName
   /** The run's own marker being pushed, when it writes one: the record waits on it, so it lands after. */
   marking?: Promise<void>
   resumeSessionId?: string

@@ -7,6 +7,10 @@ import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createProjectRuntime } from './daemon-runtime.js'
+import { forgetStartedNames, nameStarted, startedName, withStartedNames } from './started-names.js'
+import type { AgentMeta } from './store/index.js'
+import { ReadyNaming } from '@openagt/agent-runner'
+import { readyPrompt, type Driver } from '@openagt/agent-driver'
 import { PROJECT_HOOKS_FILE } from './project-hooks.js'
 import { OPENAGENT_DIR } from './openagent-dir.js'
 import { addMachine, addProject, listMachines, listProjects, projectId, removeProject, tellMachine } from './registry.js'
@@ -903,4 +907,58 @@ test("a run a saved machine's Human Queue names, which no record here has, is th
     server.close()
     await rm(base, { recursive: true, force: true })
   }
+})
+
+/** A naming pool whose sessions answer `title` at once: no coding agent is started. */
+function readyNaming(title: string): ReadyNaming {
+  const driver: Driver = {
+    id: 'claude-code',
+    start: async opts => ({
+      id: 'naming',
+      cwd: opts.cwd,
+      prompt: () => Promise.reject(new Error('asked ready only')),
+      ready: () => readyPrompt(async words => ({ text: (await words) && title })),
+      dispose: () => Promise.resolve(),
+    }),
+  }
+  return new ReadyNaming({ setup: async () => ({ key: 'one', driver }) })
+}
+
+test('a Start is named here as the run starts: the page asks for the name, and the run is handed it in a file', async () => {
+  const home = await project(`start: 'printf "%s" "\${OPENAGENT_NAME_FILE-unset}" > name-file.txt; echo "{\\"id\\":\\"2026-11-03T18-00-00-000Z\\"}"'\n`)
+  const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
+  await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
+  const runtime = createProjectRuntime({ cwd: home, env, naming: readyNaming('Fix flaky login test') })
+  try {
+    assert.deepEqual(await runtime.onStart('fix the flaky login test', { driver: 'claude-code' }), { ok: true, agentId: '2026-11-03T18-00-00-000Z' })
+    assert.equal(await startedName('2026-11-03T18-00-00-000Z'), 'Fix flaky login test', 'what the page asks for')
+    const file = await readFile(join(home, 'name-file.txt'), 'utf8')
+    assert.notEqual(file, 'unset')
+    for (let i = 0; i < 50; i++) if (await readFile(file, 'utf8').catch(() => undefined)) break
+    else await new Promise(resolve => setTimeout(resolve, 10))
+    assert.deepEqual(JSON.parse(await readFile(file, 'utf8')), { title: 'Fix flaky login test' }, 'what the run takes')
+    await rm(file, { force: true })
+
+    // A bare command is named from its report, by the run: nothing is handed over.
+    await runtime.onStart('/work-queue', { driver: 'claude-code' })
+    assert.equal(await readFile(join(home, 'name-file.txt'), 'utf8'), 'unset')
+  } finally {
+    await runtime.dispose()
+    forgetStartedNames()
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('the list shows the name asked at Start on the run\'s row until its record has its own', async () => {
+  nameStarted('run-1', Promise.resolve('Fix flaky login test'))
+  await new Promise(resolve => setImmediate(resolve))
+  const rows = withStartedNames([
+    { id: 'run-1', status: 'running', startedAt: '2026-11-03T18:00:00.000Z', updatedAt: '2026-11-03T18:00:00.000Z' },
+    { id: 'run-2', status: 'running', startedAt: '2026-11-03T18:00:00.000Z', updatedAt: '2026-11-03T18:00:00.000Z' },
+  ] as AgentMeta[])
+  assert.deepEqual(rows.map(row => row.title), ['Fix flaky login test', undefined])
+  // The record's own name, once it has one, is the one shown.
+  assert.equal(withStartedNames([{ id: 'run-1', title: 'Its own', status: 'done', startedAt: '', updatedAt: '' } as AgentMeta])[0]!.title, 'Its own')
+  assert.equal(await startedName('run-unknown'), undefined, 'a run not started here has none')
+  forgetStartedNames()
 })

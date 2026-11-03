@@ -9,7 +9,7 @@ import { PROJECT_HOOKS_FILE } from '../project-hooks.js'
 import { OPENAGENT_DIR } from '../openagent-dir.js'
 import { projectErrorStore } from '../project-errors.js'
 import { provideTestContext } from './test-context.js'
-import { onCloneCheck, onCommands, onOwnProjects, onProjects, onRecordsReach, onStartBranches, sendAddProject, sendRemoveProject, sendShareRecords } from './projects.js'
+import { onCloneCheck, onCommands, onOwnProjects, onProjects, onRecordsReach, onStartBranches, onStartCheck, sendAddProject, sendRemoveProject, sendShareRecords } from './projects.js'
 import { loginsWiring } from './logins.js'
 
 // Against the real registry, pointed at a temp $XDG_CONFIG_HOME so the user's own is never touched.
@@ -295,6 +295,25 @@ test("this computer's projects, as another computer of the person's asks for the
     const [app] = await onOwnProjects()
     // The modules OpenAgent brings to every project, here those of a folder that holds nothing else.
     assert.deepEqual(app!.modules, ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs'])
+  } finally {
+    await restore()
+  }
+})
+
+test('the launcher\'s check is a Start drawing near: the run\'s naming session is started for its project and agent', async () => {
+  const { dir, restore } = await registered()
+  try {
+    const near: [string, string | undefined][] = []
+    provideTestContext({ prepareStart: (projectId, driver) => void near.push([projectId, driver]) })
+    const id = (await listProjects())[0]!.id
+    await mkdir(join(dir, OPENAGENT_DIR), { recursive: true })
+    await writeFile(join(dir, PROJECT_HOOKS_FILE), `check: 'echo "{\\"problems\\":[],\\"warnings\\":[]}"'\n`)
+    assert.deepEqual(await onStartCheck(id, 'codex'), { problems: [], warnings: [] })
+    await onStartCheck(id)
+    assert.deepEqual(near, [
+      [id, 'codex'],
+      [id, undefined],
+    ])
   } finally {
     await restore()
   }

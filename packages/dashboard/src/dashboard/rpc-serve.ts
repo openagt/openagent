@@ -111,6 +111,8 @@ export interface DashboardContext {
   addProject: AddProjectHandler
   startedIn: StartedInHandler
   removeProject: RemoveProjectHandler
+  /** A Start is near in a project, on a coding agent: have what the run will want first ready for it (its name). Never throws. */
+  prepareStart: (projectId: string, driver?: string) => void
   /** The in-memory event stream for an agent relayed from a saved machine (#1067), else undefined. */
   eventsSource: EventsSource
   /** The relayed-agent lookup (#1067 slice 2), so a run-scoped RPC can tell a local agent from one

@@ -1,6 +1,9 @@
 import { join, resolve, sep } from 'node:path'
-import { hostname } from 'node:os'
-import { stat } from 'node:fs/promises'
+import { hostname, tmpdir } from 'node:os'
+import { randomUUID } from 'node:crypto'
+import { rename, rm, stat, writeFile } from 'node:fs/promises'
+import { isDriverName, type ReadyNaming } from '@openagt/agent-runner'
+import { nameStarted } from './started-names.js'
 import { findAgent, findCheckout, fromDiaryLine, isPidAlive, isRunId, projectBranches, readLiveMetas, resolveAgentDiary, type AgentMeta, type AnyDiaryLine } from './store/index.js'
 import { OPENAGENT_DIR } from './openagent-dir.js'
 import type { OpenAgentEvent } from './events.js'
@@ -77,6 +80,23 @@ const MAX_KEPT = 32
 const MAX_REASON = 600
 
 /** Inputs to {@link createProjectRuntime}. */
+/** The coding agent a Start goes to when none was picked: the start hook's own default (agent-runner's). */
+const DEFAULT_DRIVER = 'claude-code'
+
+/** How long a name handed to a run waits for it: a start line of another tool never takes it. */
+const HANDED_NAME_KEPT_MS = 2 * 60_000
+
+/**
+ * Hand the run the name asked for it: written whole, then renamed into place, so the run never
+ * reads half of one. `{}` when none came: the run asks on its own then.
+ */
+async function handName(file: string, title: string | undefined): Promise<void> {
+  await writeFile(`${file}.part`, JSON.stringify(title !== undefined ? { title } : {}))
+    .then(() => rename(`${file}.part`, file))
+    .catch(() => {})
+  setTimeout(() => void rm(file, { force: true }).catch(() => {}), HANDED_NAME_KEPT_MS).unref()
+}
+
 export interface ProjectRuntimeOptions {
   /** The daemon's home workspace; a run with no project id targets it. */
   cwd: string
@@ -86,6 +106,8 @@ export interface ProjectRuntimeOptions {
   clone?: (address: string) => ReturnType<typeof cloneProject>
   /** The logins this OpenAgent copies to another person's computer; its user's `gh` and its own Claude login when unsaid. */
   logins?: (env: NodeJS.ProcessEnv) => Promise<OwnLogins>
+  /** The naming sessions kept waiting for runs started here; without, each run asks for its own name. */
+  naming?: ReadyNaming
 }
 
 /** The per-project surface the dashboard drives, plus its teardown. */
@@ -100,6 +122,8 @@ export interface ProjectRuntime {
    */
   onStartedIn: (folder: string) => Promise<StartedInResult>
   onRemoveProject: (projectId: string, files?: boolean) => Promise<RemoveProjectResult>
+  /** A Start is near in a project, on a coding agent: the run's naming session is started for it. */
+  onPrepareStart: (projectId: string, driver?: string) => void
   /** The live event stream for an agent this daemon is relaying from a machine (#1067), else undefined
    *  so `onEvents` falls back to tailing the on-disk log. Wired as the dashboard's events source. */
   remoteEventsSource: EventsSource
@@ -132,7 +156,7 @@ export interface ProjectRuntime {
  * The daemon's per-project runtime (#393). The home `cwd` is the default target: a request with
  * no project id (or the home id) resolves to it without a registry lookup.
  */
-export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = ownLogins }: ProjectRuntimeOptions): ProjectRuntime {
+export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = ownLogins, naming }: ProjectRuntimeOptions): ProjectRuntime {
   const homeId = projectId(resolve(cwd))
   // Runs this daemon is relaying to/from a saved machine (#1067): the local half of a remote agent.
   const relayedAgents = new RelayedAgents()
@@ -456,9 +480,18 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     // Named unless the person turned naming off: read here rather than sent from the page, so a
     // run a schedule starts is named exactly as one a person starts is.
     const nameRun = (await readPreferences(undefined, env).catch((): Preferences => ({}))).nameRuns !== false
+    // The run's name, asked as the run is started rather than once its process is up: of a naming
+    // session waiting for this project's runs, it is in about a second after Start. The run is
+    // handed a file to find it in, and the page asks for it here (`started-names.ts`).
+    const driver = options.driver ?? DEFAULT_DRIVER
+    const namedHere = naming !== undefined && nameRun && isDriverName(driver) && naming.names(prompt, driver)
+    const nameFile = namedHere ? join(tmpdir(), `openagent-name-${randomUUID()}.json`) : undefined
+    const stopNaming = new AbortController()
+    const name = namedHere && isDriverName(driver) ? naming.name(projectCwd, prompt, driver, stopNaming.signal) : undefined
     const started = await runStartHook(projectCwd, {
       prompt,
       ...(nameRun ? {} : { nameRun: false }),
+      ...(nameFile !== undefined ? { nameFile } : {}),
       ...(options.driver !== undefined ? { driver: options.driver } : {}),
       ...(options.model !== undefined ? { model: options.model } : {}),
       ...(options.effort !== undefined ? { effort: options.effort } : {}),
@@ -471,6 +504,12 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     if (started.ok) {
       projectBranches.changed(projectCwd)
       ownRunsWatch.poke(projectCwd)
+    }
+    if (name !== undefined && nameFile !== undefined) {
+      if (started.ok) {
+        nameStarted(started.id, name)
+        void name.then(title => handName(nameFile, title)).then(() => ownRunsWatch.poke(projectCwd))
+      } else stopNaming.abort()
     }
     return started.ok ? { ok: true, agentId: started.id, ...(started.driver !== undefined ? { driver: started.driver } : {}) } : { ok: false, error: started.error }
   }
@@ -704,10 +743,24 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     return checkout ? screenInDiary(join(checkout.path, OPENAGENT_DIR, `${agentId}.jsonl`)) : undefined
   }
 
+  // A Start is near: the launcher opened, or its agent changed. The naming session that run will
+  // take is started now, while the person types, unless one already waits.
+  const onPrepareStart = (targetProjectId: string, driver?: string): void => {
+    if (naming === undefined || isElsewhereId(targetProjectId)) return
+    const picked = driver ?? DEFAULT_DRIVER
+    if (!isDriverName(picked)) return
+    void (async () => {
+      if ((await readPreferences(undefined, env).catch((): Preferences => ({}))).nameRuns === false) return
+      const projectCwd = await resolveProject(targetProjectId)
+      if (projectCwd) await naming.prepare(projectCwd, picked)
+    })()
+  }
+
   const dispose = async (): Promise<void> => {
     relayedAgents.dispose()
     machineRunsKept.stop()
+    await naming?.close()
   }
 
-  return { onStart, onAddProject, onStartedIn, onRemoveProject, remoteEventsSource, projectAt, bringProject, tailRelayEvents, remoteAgents, onRelayRpc, screenOf, dispose }
+  return { onStart, onAddProject, onStartedIn, onRemoveProject, onPrepareStart, remoteEventsSource, projectAt, bringProject, tailRelayEvents, remoteAgents, onRelayRpc, screenOf, dispose }
 }

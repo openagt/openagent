@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentExitError, appendInbox, FakeDriver, promptSent, type Driver, type DriverSession, type DriverStartOptions, type FakeDriverSession } from '@openagt/agent-driver'
 import { worktreePath } from '@openagt/skill-branches'
@@ -11,6 +12,7 @@ import { addedLine, AFRESH_NOTICE, earlierWorkLine, PUBLISH_LINES, resumeRun, ru
 import { markerCard, recordRun, runnerMark, writeMarker } from './records.js'
 import type { GitHost } from './git-host.js'
 import { sweep } from './sweep.js'
+import { NAME_FILE_ENV } from './title.js'
 import { git, handDownBasicSkills, readUntimedDiary, removeRepo, testRepo } from './test-repo.js'
 
 // A run as OpenAgent starts it: with the basic skills handed down.
@@ -238,6 +240,45 @@ test('a fresh run is named while its checkout is made, not after its agent has s
     assert.equal(namedFirst, true)
     assert.equal((await findRun(repo, run.id))?.title, 'Readme condensing')
   } finally {
+    await removeRepo(repo)
+  }
+})
+
+test('a run handed the name its starter asked for keeps that one, and asks none of its own', async () => {
+  const repo = await testRepo()
+  const dir = await mkdtemp(join(tmpdir(), 'handed-name-'))
+  try {
+    const asked: string[] = []
+    const driver: Driver = {
+      id: 'claude-code',
+      start: opts =>
+        new FakeDriver({
+          respond: prompt => {
+            asked.push(prompt)
+            return prompt.includes('Name this coding session') ? 'Asked by the run' : 'Done.'
+          },
+        }).start(opts),
+    }
+    // The dashboard asked a naming session it kept waiting, and writes the name once it is in.
+    const file = join(dir, 'name.json')
+    await writeFile(file, JSON.stringify({ title: 'Readme condensing' }))
+    process.env[NAME_FILE_ENV] = file
+    const run = await runCommand(repo, { prompt: 'make readme.md shorter', driver, now: () => NOW, gitHost: noGitHost })
+    assert.equal((await findRun(repo, run.id))?.title, 'Readme condensing')
+    assert.ok(!asked.some(prompt => prompt.includes('Name this coding session')), 'no name asked twice')
+
+    // Asked before the run's driver could be made (`runProject`, before the git host's account): taken as it is.
+    const early = await runCommand(repo, {
+      prompt: 'make readme.md shorter again',
+      naming: { title: Promise.resolve('Started early'), stop: new AbortController() },
+      driver,
+      now: () => new Date(NOW.getTime() + 60_000),
+      gitHost: noGitHost,
+    })
+    assert.equal((await findRun(repo, early.id))?.title, 'Started early')
+  } finally {
+    delete process.env[NAME_FILE_ENV]
+    await rm(dir, { recursive: true, force: true })
     await removeRepo(repo)
   }
 })

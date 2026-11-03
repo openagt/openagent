@@ -1,3 +1,4 @@
+import { ReadyNaming } from '@openagt/agent-runner'
 import { withLocalBin } from './local-bin.js'
 import { startDashboard, type Dashboard } from './dashboard/index.js'
 import { createProjectRuntime } from './daemon-runtime.js'
@@ -107,7 +108,9 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   sayName(await thisComputerName(undefined, env).catch(() => undefined))
   // Everything the dashboard drives per project (a run's start, project install, the machine
   // relay) lives in the runtime, so this body stays about the daemon's own lifecycle.
-  const runtime = createProjectRuntime({ cwd, env })
+  // A run's name is asked of a naming session kept waiting for it (agent-runner's `ReadyNaming`), so
+  // the page has it about a second after Start.
+  const runtime = createProjectRuntime({ cwd, env, naming: new ReadyNaming() })
   // Known only once the dashboard listens; the bridge browser is told it (#1332).
   let daemonUrl: string | undefined
 
@@ -147,6 +150,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     onStart: runtime.onStart,
     onAddProject: runtime.onAddProject,
     onStartedIn: runtime.onStartedIn,
+    onPrepareStart: runtime.onPrepareStart,
     onRemoveProject: runtime.onRemoveProject,
     // Relay an agent to/from a saved machine (#1067): the events source streams an agent this daemon
     // is relaying, `remote` lets the read RPCs forward a remote agent's reads/steer/push to its machine

@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { Readable, Writable } from 'node:stream'
+import { PassThrough, Readable, Writable } from 'node:stream'
 import { existsSync, readFileSync } from 'node:fs'
 import { ClaudeCodeDriver, settingsEffort, StreamJsonParser, claudeCodeReady } from './claude-code.js'
 import { ConversationGoneError, runCliSession, type SpawnLike, type SpawnedProcess, type DriverEvent } from '@openagt/agent-driver'
@@ -779,4 +779,72 @@ test('ClaudeCodeDriver reads the quota with the personal setup\'s environment sw
   await new ClaudeCodeDriver({ spawn, env: {}, personal: { memory: false, connectors: false, skills: false } }).readQuota()
   assert.equal(env['CLAUDE_CODE_DISABLE_AUTO_MEMORY'], '1')
   assert.equal(env['ENABLE_CLAUDEAI_MCP_SERVERS'], 'false')
+})
+
+// A fake `claude` started before its words: it answers once the user's message reaches its stdin,
+// and does not exit after it, as the real one takes most of a second to.
+function waitingClaude(written: string[], spawned: { args: string[]; env: NodeJS.ProcessEnv }[]): SpawnLike {
+  return (_cmd, args, opts) => {
+    spawned.push({ args: [...args], env: opts.env })
+    const stdout = new PassThrough()
+    const stdin = new Writable({
+      write(chunk, _e, cb) {
+        for (const line of String(chunk).split('\n').filter(Boolean)) {
+          written.push(line)
+          if ((JSON.parse(line) as { type?: string }).type === 'user') {
+            stdout.write(JSON.stringify({ type: 'system', subtype: 'init', session_id: 'n1' }) + '\n')
+            stdout.write(JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: 'Fix flaky login test', session_id: 'n1' }) + '\n')
+          }
+        }
+        cb()
+      },
+    })
+    const proc: SpawnedProcess = {
+      stdout,
+      stderr: Readable.from([]),
+      stdin,
+      on(event, listener) {
+        if (event === 'close') stdout.on('end', () => (listener as (c: number | null) => void)(0))
+        return proc
+      },
+      kill: () => {
+        stdout.end()
+        return true
+      },
+    }
+    return proc
+  }
+}
+
+test('a ready prompt starts claude before its words, writes them when sent, and is over at its result line', async () => {
+  const written: string[] = []
+  const spawned: { args: string[]; env: NodeJS.ProcessEnv }[] = []
+  const driver = new ClaudeCodeDriver({ spawn: waitingClaude(written, spawned) })
+  const session = await driver.start({ cwd: '/empty', model: 'haiku', system: 'You name coding sessions.', noTools: true })
+  const ready = session.ready!()
+  assert.equal(spawned.length, 1, 'the process is started now')
+  await new Promise(resolve => setImmediate(resolve))
+  assert.ok(!written.some(line => line.includes('"type":"user"')), 'no words before they are sent')
+  assert.equal(ready.waiting, true)
+  // The process never exits on its own here: the turn is over at the answer all the same.
+  const turn = await ready.prompt('Name this: fix the flaky login test')
+  assert.equal(turn.text, 'Fix flaky login test')
+  const user = written.map(line => JSON.parse(line) as { type?: string; message?: { content?: string } }).find(line => line.type === 'user')
+  assert.equal(user?.message?.content, 'Name this: fix the flaky login test')
+  const args = spawned[0]!.args
+  assert.deepEqual(args.slice(args.indexOf('--model'), args.indexOf('--model') + 2), ['--model', 'haiku'])
+  assert.ok(args.includes('--append-system-prompt'))
+  assert.deepEqual(args.slice(args.indexOf('--tools'), args.indexOf('--tools') + 2), ['--tools', ''])
+  ready.cancel()
+})
+
+test('a ready prompt goes on the account a turn would take first', async () => {
+  const spawned: { args: string[]; env: NodeJS.ProcessEnv }[] = []
+  const accounts = { first: () => ({ name: 'work', login: 'token-of-work' }), turn: () => Promise.reject(new Error('not used')) }
+  const driver = new ClaudeCodeDriver({ spawn: waitingClaude([], spawned), env: {}, accounts })
+  const session = await driver.start({ cwd: '/empty', noTools: true })
+  const ready = session.ready!()
+  await ready.prompt('words')
+  assert.equal(spawned[0]!.env['CLAUDE_CODE_OAUTH_TOKEN'], 'token-of-work')
+  ready.cancel()
 })
