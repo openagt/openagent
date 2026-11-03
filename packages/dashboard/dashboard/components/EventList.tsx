@@ -14,8 +14,7 @@ import { SessionLine, sessionLineEmpty, type SessionSetup } from './SessionLine.
 import { ChangedFiles } from './ChangedFiles.js'
 import { turnChanges, type ChangedFile } from '../lib/turn-changes.js'
 import { SubagentMessage, SubagentSteps } from './SubagentLine.js'
-import { useSteadyText } from '../lib/use-steady-text.js'
-import { arrivedLive } from '../lib/use-live-events.js'
+import { useSteadyText, useStillWriting } from '../lib/use-steady-text.js'
 import { LiveLine, ToolCalls, type CallOutput, type ToolStep } from './ToolCalls.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import {
@@ -226,7 +225,7 @@ export function withoutQuestionBlock(text: string): string {
  * behind, so the whole message that takes its place at the end changes nothing to speak of.
  */
 function Writing({ text }: { text: string }) {
-  const { shown } = useSteadyText(text, true)
+  const { shown } = useSteadyText(text, true, false)
   return (
     <div className="min-w-0 flex-1 font-sans text-foreground">
       <Markdown text={shown} fade />
@@ -234,12 +233,9 @@ function Writing({ text }: { text: string }) {
   )
 }
 
-/** How long after it came a message read from the run's record is still one that just came. */
-const JUST_CAME_MS = 8_000
-
-/** A message whole; one being written a moment ago, or one that just came whole (`fresh`), comes in at the same pace until it is all there. */
-function Reply({ text, fresh = false }: { text: string; fresh?: boolean }) {
-  const { shown, done } = useSteadyText(text, fresh)
+/** A message whole; one that was being written goes on at the same pace until it is all there. One that came whole is shown whole, as Claude Code on the web shows one. */
+function Reply({ text }: { text: string }) {
+  const { shown, done } = useSteadyText(text, false)
   return (
     <div className="min-w-0 flex-1 font-sans text-foreground">
       <Markdown text={shown} fade={!done} />
@@ -630,11 +626,6 @@ export function EventList({
   const workspace = setup?.workspace
   const changes = useMemo(() => turnChanges(events, workspace), [events, workspace])
   const rowIds = useMemo(() => new Map(events.map((e, at) => [e, String(at)])), [events])
-  // A message that came while the page watched comes in at the pace a message being written does: one
-  // that came on the live line, or a moment ago while the agent works, read from the run's record,
-  // which may bring it a beat before the live line does. One read with the log the page opened on is
-  // there at once.
-  const cameNow = (e: OpenAgentEvent): boolean => arrivedLive(e) || (working && e.at !== undefined && Date.now() - Date.parse(e.at) < JUST_CAME_MS)
   const asked = useMemo(() => askedReplies(events), [events])
   // The coding agent's own subagents, and what of the log their rows say instead.
   const calls = useMemo(() => callSubagents(events), [events])
@@ -655,6 +646,8 @@ export function EventList({
   // A reply that was only its question's block is no row: the card under it is the question.
   // A run of the agent's steps is one row, its first.
   const written = withoutQuestionBlock(writing)
+  // The question's card comes after the words above it, not while they are still being typed.
+  const typing = useStillWriting() || written !== ''
   const unfolded = kept.filter(e => !passed.has(e) && textOf(e) !== '')
   const { rows: shown, steps, current } = foldSteps(unfolded, working && !written)
   // Nothing has come since the prompt, not even a thought that is no row: the agent is starting.
@@ -855,17 +848,17 @@ export function EventList({
                     // The agent's reply, shown whole, and the last of a finished turn with its footer.
                     footers.has(e) ? (
                       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                        <Reply text={message} fresh={cameNow(e)} />
+                        <Reply text={message} />
                         <ReplyFooter text={footers.get(e)!} at={at} />
                       </div>
                     ) : (
-                      <Reply text={message} fresh={cameNow(e)} />
+                      <Reply text={message} />
                     )
                   ) : steps.has(e) ? (
                     <ToolCalls steps={steps.get(e)!} lead={setupInSteps && i === setupAt ? setupLead : undefined} />
                   ) : choiceRow && choiceRow.pick === undefined && projectId !== undefined && agentId !== undefined ? (
                     // The question the agent waits on, answered here, under what it said.
-                    <div className="mt-1 flex min-w-0 flex-1 flex-col gap-1.5">
+                    typing ? null : <div className="mt-1 flex min-w-0 flex-1 flex-col gap-1.5">
                       <QuestionPanel key={`${agentId}:${choiceRow.choice.id}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} onSaid={onSaid} />
                       {footers.has(e) && <ReplyFooter text={footers.get(e)!} at={at} />}
                     </div>

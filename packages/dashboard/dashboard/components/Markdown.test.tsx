@@ -270,3 +270,20 @@ describe('Markdown issue and pull request numbers', () => {
     expect(screen.queryAllByRole('link').map(a => a.textContent)).toEqual(['https://x.dev/a#3'])
   })
 })
+
+describe('Markdown code blocks in colour', () => {
+  const colours = (container: HTMLElement) => [...container.querySelectorAll('pre code span')].filter(span => (span as HTMLElement).style.getPropertyValue('--dark') !== '')
+
+  test('a block of a language the dashboard knows comes in colour once its grammar is loaded, the text unchanged', async () => {
+    const { container } = render(<Markdown text={'```bash\ngit checkout -b feature/x\ngit add .\n```'} />)
+    expect(container.querySelector('pre code')?.textContent).toBe('git checkout -b feature/x\ngit add .')
+    await waitFor(() => expect(colours(container).length).toBeGreaterThan(1))
+    expect(container.querySelector('pre code')?.textContent).toBe('git checkout -b feature/x\ngit add .')
+  })
+
+  test('a block with no language, or one not known, stays plain, and a diff keeps its own colours', () => {
+    const { container } = render(<Markdown text={'```\nplain text\n```\n\n```klingon\nqapla\n```\n\n```diff\n+added\n```'} />)
+    expect(colours(container)).toHaveLength(0)
+    expect(container.querySelector('.text-success')?.textContent).toBe('+added')
+  })
+})

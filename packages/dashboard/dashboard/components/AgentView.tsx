@@ -62,6 +62,7 @@ export function AgentView({
   card,
   picks,
   label,
+  naming,
   projectName,
   target,
   remoteLabel,
@@ -90,6 +91,8 @@ export function AgentView({
    * the stable identity, so the branch renaming itself near the end of an agent (#736) reads as a
    * detail changing rather than the whole view changing. */
   label?: string | undefined
+  /** The name is still being made, so the bar holds its place and shows it letter by letter. */
+  naming?: boolean | undefined
   /** The session's project, said in the row above the message box. */
   projectName?: string | null | undefined
   /** Where the agent executes (#1053/#610): `actions` swaps the live feed for a burst-mode affordance; `remote` is relayed to a machine (#1067); `web` is handed to a Claude Code cloud session. */
@@ -410,6 +413,7 @@ export function AgentView({
             agentId={agentId}
             events={shown}
             label={label}
+            naming={naming}
             retainedWorktree={hasWorktree}
             onWorktreeRemoved={onWorktreeRemoved}
             onDeleted={onDeleted}

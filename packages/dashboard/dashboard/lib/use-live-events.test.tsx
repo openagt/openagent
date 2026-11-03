@@ -6,7 +6,7 @@ import type { OpenAgentEvent } from '../../src/index.js'
 const onEvents = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/events.js', () => ({ onEvents }))
 
-const { arrivedLive, useLiveEvents } = await import('./use-live-events.js')
+const { useLiveEvents } = await import('./use-live-events.js')
 
 afterEach(() => {
   cleanup()
@@ -108,24 +108,6 @@ describe('useLiveEvents run scoping', () => {
     return <span data-testid="feed">{events.map(e => (e.kind === 'log' ? e.message : e.kind)).join(',')}</span>
   }
   const feed = () => screen.getByTestId('feed').textContent
-
-  test('what comes after the log the page opened on was read came live; what the log held did not', async () => {
-    const ch = fakeChannel()
-    onEvents.mockResolvedValue(ch.channel)
-    let seen: OpenAgentEvent[] = []
-    function Probe() {
-      const { events } = useLiveEvents('p1', 'run-a')
-      seen = events
-      return <span data-testid="feed">{events.map(e => (e.kind === 'log' ? `${e.message}:${arrivedLive(e)}` : e.kind)).join(',')}</span>
-    }
-    render(<Probe />)
-    await waitFor(() => expect(onEvents).toHaveBeenCalledTimes(1))
-    ch.push(log('old'))
-    ch.push({ kind: 'stream-sync' })
-    ch.push(log('new'))
-    await waitFor(() => expect(feed()).toBe('old:false,new:true'))
-    expect(seen).toHaveLength(2)
-  })
 
   test("a run's own feed keeps the transcript from before a resume's session boundary", async () => {
     const ch = fakeChannel()

@@ -1,5 +1,6 @@
 import { Children, cloneElement, createContext, Fragment, isValidElement, useContext, useRef, type ReactElement, type ReactNode } from 'react'
 import { wordShownAt } from '../lib/use-steady-text.js'
+import { languageOfFence, Pieces, useHighlightedIn } from '../lib/highlight.js'
 import { cn } from '../lib/utils.js'
 import { CopyButton } from './ui/copy-button.js'
 
@@ -65,11 +66,22 @@ function diffLineClass(line: string): string | undefined {
 // is the one thing in an answer a reader takes somewhere else, and selecting it by hand is where
 // that went wrong.
 function codeBlock(lines: string[], language: string, key: number): ReactNode {
+  return <CodeBlock key={key} lines={lines} language={language} />
+}
+
+/**
+ * The card itself. A block of a language the dashboard knows is coloured, as Claude Code on the web
+ * colours one, in the colours the Files pane's text has; until its grammar is loaded, and for a
+ * language it does not know, the text is plain.
+ */
+function CodeBlock({ lines, language }: { lines: string[]; language: string }) {
   const text = lines.join('\n')
+  const known = language === 'diff' ? undefined : languageOfFence(language)
+  const coloured = useHighlightedIn(text, known)
   return (
-    <div key={key} className="relative rounded-lg border border-border bg-muted/50">
+    <div className="relative w-fit max-w-full min-w-40 rounded-lg border border-border bg-muted/50">
       <CopyButton text={text} label="Copy the code" className="absolute top-2.5 right-2.5" />
-      <pre className="px-4 py-3 pr-10 text-xs leading-[18px] break-words whitespace-pre-wrap">
+      <pre className="px-4 py-3 pr-12 text-xs leading-[18px] break-words whitespace-pre-wrap">
         <code>
           {language === 'diff'
             ? lines.map((line, i) => (
@@ -77,7 +89,14 @@ function codeBlock(lines: string[], language: string, key: number): ReactNode {
                   {i < lines.length - 1 ? `${line}\n` : line}
                 </span>
               ))
-            : text}
+            : coloured
+              ? coloured.map((pieces, i) => (
+                  <Fragment key={i}>
+                    <Pieces pieces={pieces} />
+                    {i < coloured.length - 1 ? '\n' : null}
+                  </Fragment>
+                ))
+              : text}
         </code>
       </pre>
     </div>
@@ -297,11 +316,11 @@ function renderBlocks(lines: string[], compact = false, depth = 0): ReactNode[] 
       const body = rows.slice(2).map(tableCells)
       blocks.push(
         <div key={key++} className="overflow-x-auto">
-          <table className="w-full border-collapse text-xs">
+          <table className={cn('w-full border-collapse [&_tbody_tr:last-child_td]:border-b-0', compact ? 'text-xs' : 'text-sm')}>
             <thead>
               <tr>
                 {header.map((cell, i) => (
-                  <th key={i} className="border-b border-border px-2 py-1 text-left font-semibold">
+                  <th key={i} className={cn('border-b border-border text-left font-medium', compact ? 'py-1 pr-3' : 'py-2.5 pr-6')}>
                     {inline(cell)}
                   </th>
                 ))}
@@ -311,7 +330,7 @@ function renderBlocks(lines: string[], compact = false, depth = 0): ReactNode[] 
               {body.map((cells, r) => (
                 <tr key={r}>
                   {header.map((_, c) => (
-                    <td key={c} className="border-b border-border/50 px-2 py-1 align-top">
+                    <td key={c} className={cn('border-b border-border/60 align-top', compact ? 'py-1 pr-3' : 'py-2.5 pr-6')}>
                       {inline(cells[c] ?? '')}
                     </td>
                   ))}

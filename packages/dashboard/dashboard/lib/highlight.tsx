@@ -74,6 +74,14 @@ const LANGUAGES: Record<string, string> = {
 /** What is coloured at once: past this a file stays plain, rather than holding the page while it is read. */
 const MAX_CHARS = 200_000
 
+/** The language a fenced code block names (```bash, ```ts, ```python), as an extension or as a grammar's own name. */
+export function languageOfFence(name: string): string | undefined {
+  const lower = name.trim().toLowerCase()
+  if (lower === '' || lower === 'text' || lower === 'plain') return undefined
+  if (lower === 'shell' || lower === 'console' || lower === 'terminal') return 'shellscript'
+  return LANGUAGES[lower] ?? (lower in GRAMMARS ? lower : undefined)
+}
+
 export function languageOf(path: string): string | undefined {
   const name = path.slice(path.lastIndexOf('/') + 1).toLowerCase()
   const dot = name.lastIndexOf('.')
@@ -109,7 +117,11 @@ export type Piece = { text: string; light: string | undefined; dark: string | un
  * for a file that stays plain.
  */
 export function useHighlighted(text: string, path: string): Piece[][] | null {
-  const language = languageOf(path)
+  return useHighlightedIn(text, languageOf(path))
+}
+
+/** The same, for a language already known (a fenced block names its own). */
+export function useHighlightedIn(text: string, language: string | undefined): Piece[][] | null {
   const [shown, setShown] = useState<{ text: string; language: string; lines: Piece[][] } | null>(null)
   useEffect(() => {
     if (!language || text.length > MAX_CHARS) return

@@ -347,6 +347,28 @@ describe('the menu of an agent\'s page', () => {
     await waitFor(() => expect(screen.getByText('Open project folder')).toBeTruthy())
   })
 
+  test('a name the run was being given comes in letter by letter, as the session\'s row in the list does; one that was only slow to load, or was there from the start, is plain', () => {
+    const { rerender } = render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} naming />)
+    rerender(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} label="Header comes in" />)
+    const button = screen.getByRole('button', { name: 'Session actions' })
+    expect(button.textContent).toBe('Header comes in')
+    expect(button.querySelectorAll('.letter-in').length).toBe('Header comes in'.length)
+    cleanup()
+    render(<AgentActionsMenu projectId="p1" agentId="run-2" events={[]} label="Plain from the start" />)
+    expect(screen.getByRole('button', { name: 'Session actions' }).querySelectorAll('.letter-in').length).toBe(0)
+    cleanup()
+    // The bar stays up when the next session is opened: its name was not waited for.
+    const next = render(<AgentActionsMenu projectId="p1" agentId="run-4" events={[]} naming />)
+    next.rerender(<AgentActionsMenu projectId="p1" agentId="run-4" events={[]} label="First name" />)
+    next.rerender(<AgentActionsMenu projectId="p1" agentId="run-5" events={[]} label="Another session" />)
+    expect(screen.getByRole('button', { name: 'Session actions' }).querySelectorAll('.letter-in').length).toBe(0)
+    cleanup()
+    // An old session opened: the bar waits for the page's reads, with no name coming.
+    const slow = render(<AgentActionsMenu projectId="p1" agentId="run-3" events={[]} />)
+    slow.rerender(<AgentActionsMenu projectId="p1" agentId="run-3" events={[]} label="Opened later" />)
+    expect(screen.getByRole('button', { name: 'Session actions' }).querySelectorAll('.letter-in').length).toBe(0)
+  })
+
   test('the session\'s menu shows and hides the details strip, when the page has one', async () => {
     const onToggle = vi.fn()
     const { rerender } = render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} label="x" details={{ open: false, onToggle }} />)

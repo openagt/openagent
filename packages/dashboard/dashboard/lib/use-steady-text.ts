@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 
 // A text that grows in chunks, shown growing at a steady pace, a word at a time, as Claude Code on
 // the web writes a message: about 300 characters a second, faster only when it falls far behind. How
@@ -39,12 +39,77 @@ export function wordShownAt(text: string, at: number): number {
   return (words[at] ??= performance.now())
 }
 
+/** Where the blocks that come in whole, a table and a fenced code block, begin and end in `text`; `closed` is false for one the text ends in the middle of. */
+function wholeBlocks(text: string): { start: number; end: number; closed: boolean }[] {
+  const blocks: { start: number; end: number; closed: boolean }[] = []
+  let at = 0
+  let table: { start: number; end: number } | undefined
+  let fence: { start: number } | undefined
+  for (const line of text.split('\n')) {
+    const next = at + line.length + 1
+    const last = at + line.length >= text.length
+    if (fence) {
+      if (/^\s*```/.test(line)) {
+        blocks.push({ start: fence.start, end: Math.min(next, text.length), closed: true })
+        fence = undefined
+      }
+    } else if (/^\s*```/.test(line)) {
+      if (table) blocks.push({ ...table, closed: true })
+      table = undefined
+      fence = { start: at }
+    } else if (line.trim().startsWith('|')) {
+      table = { start: table?.start ?? at, end: Math.min(next, text.length) }
+    } else if (table) {
+      blocks.push({ ...table, closed: true })
+      table = undefined
+    }
+    if (last && !fence && table) blocks.push({ ...table, closed: false })
+    at = next
+  }
+  if (fence) blocks.push({ start: fence.start, end: text.length, closed: false })
+  return blocks
+}
+
 /** How far to show `text`, given that `at` characters may: on to the end of the word that reaches. */
 export function toWordEnd(text: string, at: number): number {
   if (at <= 0) return 0
   if (at >= text.length) return text.length
   const space = text.slice(at).search(/\s/)
   return space === -1 ? text.length : at + space
+}
+
+/**
+ * Where the pace stands once the blocks that come in whole are counted, and how far the text may
+ * show. A table or a code block comes in whole, as on Claude Code on the web: a pace that reaches
+ * into one is moved to its end, and while the text has not finished one (`final` false) it stops at
+ * the block's start, with the words before it all there, and waits for it.
+ */
+export function pastWholeBlocks(text: string, at: number, final: boolean): { at: number; limit: number } {
+  const blocks = wholeBlocks(text)
+  const open = final ? undefined : blocks.find(b => !b.closed)
+  const limit = open ? open.start : text.length
+  if (at >= limit) return { at: limit, limit }
+  const inside = blocks.find(b => at >= b.start && at < b.end)
+  return { at: inside && inside.end <= limit ? inside.end : at, limit }
+}
+
+/** How many messages are being shown right now, and who wants to know when that changes. */
+let revealing = 0
+const watchers = new Set<() => void>()
+function reveal(change: 1 | -1): void {
+  revealing += change
+  for (const watch of watchers) watch()
+}
+
+/** Whether some message is still coming in word by word: what comes under it waits for it to be all there. */
+export function useStillWriting(): boolean {
+  return useSyncExternalStore(
+    watch => {
+      watchers.add(watch)
+      return () => void watchers.delete(watch)
+    },
+    () => revealing > 0,
+  )
 }
 
 /** Whether the reader asked for less motion. */
@@ -56,7 +121,7 @@ function still(): boolean {
  * How much of `text` to show now. `fresh`: a message being written, shown from its start; else a
  * message shown whole, unless it is the one being written a moment ago, which goes on from where it was.
  */
-export function useSteadyText(text: string, fresh: boolean): { shown: string; done: boolean } {
+export function useSteadyText(text: string, fresh: boolean, final = true): { shown: string; done: boolean } {
   const [length, setLength] = useState(() => {
     if (still()) return text.length
     const known = messageOf(text)
@@ -82,9 +147,11 @@ export function useSteadyText(text: string, fresh: boolean): { shown: string; do
     const step = (now: number) => {
       const behind = text.length - at.current
       // A frame's time may be a moment before the pace began: it never goes back.
-      at.current = Math.min(text.length, at.current + (Math.max(CHARS_PER_SECOND, behind / MOST_SECONDS) * Math.max(0, now - last)) / 1000)
+      const paced = Math.min(text.length, at.current + (Math.max(CHARS_PER_SECOND, behind / MOST_SECONDS) * Math.max(0, now - last)) / 1000)
       last = Math.max(last, now)
-      const shown = toWordEnd(text, Math.floor(at.current))
+      const whole = pastWholeBlocks(text, Math.floor(paced), final)
+      at.current = whole.at === Math.floor(paced) ? paced : whole.at
+      const shown = Math.min(toWordEnd(text, whole.at), whole.limit)
       const known = messageOf(text)
       if (known) Object.assign(known, { text, shown })
       setLength(shown)
@@ -93,5 +160,12 @@ export function useSteadyText(text: string, fresh: boolean): { shown: string; do
     frame = requestAnimationFrame(step)
     return () => cancelAnimationFrame(frame)
   }, [text])
-  return { shown: text.slice(0, length), done: length >= text.length }
+  const done = length >= text.length
+  // Before the first paint, so what waits for the words never shows a frame ahead of them.
+  useLayoutEffect(() => {
+    if (done) return
+    reveal(1)
+    return () => reveal(-1)
+  }, [done])
+  return { shown: text.slice(0, length), done }
 }

@@ -23,6 +23,7 @@ export function AgentActionBar({
   onDeleted,
   onProjectRemoved,
   label,
+  naming,
   expanded = false,
   onToggle,
   ready = true,
@@ -34,6 +35,8 @@ export function AgentActionBar({
   events: OpenAgentEvent[]
   /** The session's name: it leads the bar, and is the button of the session's menu. */
   label?: string | undefined
+  /** The name is still being made: see AgentActionsMenu. */
+  naming?: boolean | undefined
   /** True when this finished agent still has a worktree on disk, so it can be removed (#737). */
   retainedWorktree?: boolean
   /** Told after that worktree is removed, so the menu item goes. */
@@ -74,6 +77,7 @@ export function AgentActionBar({
         agentId={agentId}
         events={events}
         label={label}
+        {...(naming ? { naming } : {})}
         retainedWorktree={retainedWorktree}
         onWorktreeRemoved={onWorktreeRemoved}
         onDeleted={onDeleted}
