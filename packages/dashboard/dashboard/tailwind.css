@@ -36,7 +36,9 @@
   --muted: #f3f5f2;
   --muted-foreground: #66756c;
   --border: #e3e7e1;
-  --primary: #6f7f00;
+  /* The primary colour is Everforest's blue (his pick), darkened like the status colours below;
+     what is done stays Everforest's green (`--success`). */
+  --primary: #2b7ba5;
   --primary-foreground: #ffffff;
   /* The hover and active fill: a step below the sidebar too, so a row there still lights up. */
   --accent: #e9ede6;
@@ -78,7 +80,8 @@
   --muted: #262d31;
   --muted-foreground: #9da9a0;
   --border: #30383c;
-  --primary: #a7c080;
+  /* Everforest's blue; what is done stays its green (`--success`). */
+  --primary: #7fbbb3;
   --primary-foreground: #171b1d;
   --accent: #262d31;
   --accent-foreground: #d3c6aa;

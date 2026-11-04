@@ -122,7 +122,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   step darker than its dimmest background, as dark as Claude Code's: the page near-black,
   the sidebar and panes a step above it, fills and lines close to them. Light is near-white
   in the greens' cool grey: the sidebar a step below the page, the message box and the panes
-  in white above it. The text and the accents are Everforest's as on the landing page.
+  in white above it. The text and the accents are Everforest's as on the landing page. The
+  primary colour is Everforest's blue, while what is done stays its green. Picked over its green
+  as primary, a softer blue and Tailwind's.
   Picked over Everforest's own darkest steps and the landing page's exact values, which read
   light beside Claude Code's, and over one white for every surface in the light theme.
 - Settings › Appearance also picks the colours (OpenAgent's, or shadcn's neutral greys), the
