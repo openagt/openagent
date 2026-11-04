@@ -281,7 +281,7 @@ describe('Markdown issue and pull request numbers', () => {
 })
 
 describe('Markdown code blocks in colour', () => {
-  const colours = (container: HTMLElement) => [...container.querySelectorAll('pre code span')].filter(span => (span as HTMLElement).style.getPropertyValue('--dark') !== '')
+  const colours = (container: HTMLElement) => [...container.querySelectorAll('pre code span')].filter(span => (span as HTMLElement).style.color.startsWith('var(--code-'))
 
   test('a block of a language the dashboard knows comes in colour once its grammar is loaded, the text unchanged', async () => {
     const { container } = render(<Markdown text={'```bash\ngit checkout -b feature/x\ngit add .\n```'} />)

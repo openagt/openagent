@@ -55,6 +55,21 @@
   /* A merged pull request: Everforest's purple, darkened like the four above. */
   --merged: #a24f8c;
 
+  /* Code, a colour per kind of word (lib/highlight.tsx), in Claude Code on the web's way of
+     telling them apart and in Everforest's hues, darkened as the status colours are. */
+  --code-plain: #3a4248;
+  --code-comment: #7d8a7f;
+  --code-punctuation: #5c6a72;
+  --code-keyword: #a24f8c;
+  --code-operator: #3a4248;
+  --code-string: #6f7f00;
+  --code-number: #2d8a66;
+  --code-function: #2b7ba5;
+  --code-property: #d1403d;
+  --code-attribute: #c8423f;
+  --code-parameter: #c25f12;
+  --code-type: #9a6b00;
+
   /* The brand mark's six strands (#757), darkest first, exactly as the brand ships them.
      Kept as variables so the mark can be re-ramped for a dark canvas without touching the SVG. */
   --logo-1: #0a0a0a;
@@ -93,6 +108,20 @@
   --info: #7fbbb3;
   --merged: #d699b6;
 
+  /* Code, in Everforest's hues, a colour per kind of word as Claude Code on the web tells them apart. */
+  --code-plain: #d3c6aa;
+  --code-comment: #859289;
+  --code-punctuation: #9da9a0;
+  --code-keyword: #d699b6;
+  --code-operator: #d3c6aa;
+  --code-string: #a7c080;
+  --code-number: #83c092;
+  --code-function: #7fbbb3;
+  --code-property: #e67e80;
+  --code-attribute: #e3787a;
+  --code-parameter: #e69875;
+  --code-type: #dbbc7f;
+
   /* The ramp inverted for a dark canvas: the shipped one starts at near-black, which would sink
      the leading strands into the background. Same order (leading strand lightest against dark),
      so the knot's depth reads the same way round. */
@@ -125,6 +154,19 @@
   --danger: var(--color-red-600);
   --info: var(--color-blue-600);
   --merged: var(--color-violet-600);
+  /* Code in Claude Code on the web's own hues, read from its page. */
+  --code-plain: #14181f;
+  --code-comment: #6e7687;
+  --code-punctuation: #2b303b;
+  --code-keyword: #8100c2;
+  --code-operator: #14181f;
+  --code-string: #008000;
+  --code-number: #008080;
+  --code-function: #0051c2;
+  --code-property: #b80a18;
+  --code-attribute: #bd0f1e;
+  --code-parameter: #b84f05;
+  --code-type: #b34a00;
 }
 
 :root.dark[data-palette='neutral'] {
@@ -145,6 +187,19 @@
   --danger: var(--color-red-400);
   --info: var(--color-blue-400);
   --merged: var(--color-violet-400);
+  /* Code in Claude Code on the web's own hues, read from its page. */
+  --code-plain: #eaecf0;
+  --code-comment: #818898;
+  --code-punctuation: #d3d7de;
+  --code-keyword: #cc7bf4;
+  --code-operator: #eaecf0;
+  --code-string: #9be963;
+  --code-number: #5eeded;
+  --code-function: #70b8ff;
+  --code-property: #f47b85;
+  --code-attribute: #f0757f;
+  --code-parameter: #f7ab5f;
+  --code-type: #fbad60;
 }
 
 /* The primary colour (Settings › Appearance): buttons, links and what is picked, in one of the

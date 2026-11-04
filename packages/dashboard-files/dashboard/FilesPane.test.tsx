@@ -360,7 +360,7 @@ describe('opening files, as Claude Code on the web does', () => {
     await screen.findByText('src')
     fireEvent.click(folder('src'))
     fireEvent.click(await within(treeOf()).findByTitle('src/app.ts'))
-    await waitFor(() => expect(document.querySelector('[style*="--light"]')?.textContent).toBe('const'), { timeout: 5000 })
+    await waitFor(() => expect(document.querySelector('[style*="--code-keyword"]')?.textContent).toBe('const'), { timeout: 5000 })
   })
 
   test('nothing is read before a file is opened', async () => {
