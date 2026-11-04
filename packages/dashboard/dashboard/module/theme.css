@@ -12,10 +12,12 @@
 /* The page is squarer than the old UI, so the radius tightens to ~2px to match. */
 @theme {
   --radius: 0.125rem;
-  /* The landing page's typeface (#1118), loaded in pages/+Head.tsx. Overriding these two theme
-     keys retargets Tailwind's default body font and every `font-mono` to IBM Plex. */
-  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* The person's three fonts (Settings › Appearance), as the page sets them (`--font-app`,
+     `--font-code`, `--font-document`, tailwind.css and AppFrame): Tailwind's body font and every
+     `font-sans`, every `font-mono`, and `font-serif`, a Markdown file read as a page. */
+  --font-sans: var(--font-app);
+  --font-mono: var(--font-code);
+  --font-serif: var(--font-document);
 }
 
 @theme inline {

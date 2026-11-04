@@ -15,6 +15,12 @@
   /* Let the browser paint native theme-matched scrollbars + form controls (the shadcn way).
      `.dark` flips it below. */
   color-scheme: light;
+  /* The fonts with no pick in Settings › Appearance: Figtree, close to Claude Code's sans;
+     JetBrains Mono for code; Source Serif 4 for a Markdown file read as a page, as Claude Code
+     on the web reads one in a serif. AppFrame sets another pick here. */
+  --font-app: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+  --font-code: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-document: 'Source Serif 4', ui-serif, Georgia, serif;
   /* Everforest's greens on a white canvas (#1141). Everforest Light is paper-coloured (#fdf6e3),
      which reads as orange next to any other app; the identity people recognise is the green, not
      the paper, so the hues stay and the canvas goes near-white, in the greens' own cool grey. As
@@ -59,22 +65,22 @@
 
 .dark {
   color-scheme: dark;
-  /* Everforest Dark on its darker steps (his pick, after Claude Code's dark): the page on
-     Everforest's dimmest background, panes one step above it, fills and lines a step or two above
-     that, so the levels sit close together on a near-black. The hue, the text (#d3c6aa) and the
-     accents are Everforest's as on the landing page, whose surfaces are the medium ones. */
-  --background: #1e2326;
-  /* The sidebar a step above the page, as Claude Code's dark lays it: the panes' old step. */
-  --sidebar: #232a2e;
+  /* Everforest Dark's hue a step darker than its dimmest background (his pick: darker than
+     Everforest's own steps, as dark as Claude Code's dark): the page near-black, the sidebar and
+     panes a step above it, fills and lines a step or two above that. The text (#d3c6aa) and the
+     accents are Everforest's as on the landing page. */
+  --background: #171b1d;
+  /* The sidebar a step above the page, as Claude Code's dark lays it. */
+  --sidebar: #1c2124;
   --foreground: #d3c6aa;
-  --card: #232a2e;
+  --card: #1c2124;
   --card-foreground: #d3c6aa;
-  --muted: #2e383c;
+  --muted: #262d31;
   --muted-foreground: #9da9a0;
-  --border: #374145;
+  --border: #30383c;
   --primary: #a7c080;
-  --primary-foreground: #1e2326;
-  --accent: #2e383c;
+  --primary-foreground: #171b1d;
+  --accent: #262d31;
   --accent-foreground: #d3c6aa;
 
   /* Same four meanings on the Everforest Dark accents. */
@@ -95,7 +101,198 @@
   --logo-6: #737373;
 }
 
+/* The Neutral palette (Settings › Appearance): shadcn's neutral greys, light and dark, in place of
+   OpenAgent's greens. The four status colours and the logo keep the theme's own. */
+:root[data-palette='neutral']:not(.dark) {
+  --background: oklch(1 0 0);
+  --sidebar: oklch(0.985 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --border: oklch(0.922 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+}
 
+:root.dark[data-palette='neutral'] {
+  --background: oklch(0.145 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+}
+
+/* The primary colour (Settings › Appearance): buttons, links and what is picked in a colour of
+   Tailwind's palette, as shadcn's themes offer them: its 600 on light, its 400 on dark, each with
+   text that reads on it. None picked is the palette's own. */
+:root[data-accent='amber'] {
+  --primary: var(--color-amber-600);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root.dark[data-accent='amber'] {
+  --primary: var(--color-amber-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-accent='blue'] {
+  --primary: var(--color-blue-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-accent='blue'] {
+  --primary: var(--color-blue-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-accent='cyan'] {
+  --primary: var(--color-cyan-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-accent='cyan'] {
+  --primary: var(--color-cyan-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-accent='emerald'] {
+  --primary: var(--color-emerald-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-accent='emerald'] {
+  --primary: var(--color-emerald-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-accent='fuchsia'] {
+  --primary: var(--color-fuchsia-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-accent='fuchsia'] {
+  --primary: var(--color-fuchsia-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-accent='green'] {
+  --primary: var(--color-green-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-accent='green'] {
+  --primary: var(--color-green-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-accent='indigo'] {
+  --primary: var(--color-indigo-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-accent='indigo'] {
+  --primary: var(--color-indigo-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-accent='lime'] {
+  --primary: var(--color-lime-600);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root.dark[data-accent='lime'] {
+  --primary: var(--color-lime-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-accent='orange'] {
+  --primary: var(--color-orange-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-accent='orange'] {
+  --primary: var(--color-orange-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-accent='pink'] {
+  --primary: var(--color-pink-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-accent='pink'] {
+  --primary: var(--color-pink-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-accent='purple'] {
+  --primary: var(--color-purple-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-accent='purple'] {
+  --primary: var(--color-purple-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-accent='red'] {
+  --primary: var(--color-red-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-accent='red'] {
+  --primary: var(--color-red-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-accent='rose'] {
+  --primary: var(--color-rose-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-accent='rose'] {
+  --primary: var(--color-rose-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-accent='sky'] {
+  --primary: var(--color-sky-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-accent='sky'] {
+  --primary: var(--color-sky-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-accent='teal'] {
+  --primary: var(--color-teal-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-accent='teal'] {
+  --primary: var(--color-teal-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-accent='violet'] {
+  --primary: var(--color-violet-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-accent='violet'] {
+  --primary: var(--color-violet-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-accent='yellow'] {
+  --primary: var(--color-yellow-600);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root.dark[data-accent='yellow'] {
+  --primary: var(--color-yellow-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+
+
+/* A menu's surface (dropdowns, selects, the composer's suggestions), as shadcn create sets its
+   menus: near-black and see-through over a blur on light, a dark grey on dark, with light text,
+   whatever the palette. The tokens are set again inside it, so the items, their dim lines, the
+   lit row and the separators read on it without classes of their own. */
+.menu-surface {
+  --foreground: oklch(0.97 0 0);
+  --card-foreground: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --muted: oklch(1 0 0 / 8%);
+  --accent: oklch(0.439 0 0);
+  --accent-foreground: oklch(0.97 0 0);
+  --border: oklch(1 0 0 / 10%);
+  background-color: oklch(0.145 0 0 / 80%);
+  color: var(--foreground);
+}
+.dark .menu-surface {
+  --accent: oklch(0.371 0 0 / 80%);
+  background-color: oklch(0.269 0 0 / 90%);
+}
 
 body {
   background-color: var(--background);

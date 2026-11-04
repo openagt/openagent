@@ -407,6 +407,16 @@ test('writePreferences keeps a known theme and drops an unknown one (#725)', asy
   assert.deepEqual(await readPreferences(fs, ENV), {}) // dropped, falls back to system
 })
 
+test('writePreferences keeps a known look, stores the default look as nothing, and drops an unknown one', async () => {
+  const fs = memFs({ [FILE]: JSON.stringify({ projects: [APP_A], preferences: {} }) })
+  await writePreferences({ palette: 'neutral', accent: 'blue', font: 'inter', codeFont: 'geist-mono', documentFont: 'app' }, fs, ENV)
+  assert.deepEqual(await readPreferences(fs, ENV), { palette: 'neutral', accent: 'blue', font: 'inter', codeFont: 'geist-mono', documentFont: 'app' })
+  await writePreferences({ palette: 'openagent', font: 'figtree', codeFont: 'jetbrains-mono', documentFont: 'source-serif-4' }, fs, ENV)
+  assert.deepEqual(await readPreferences(fs, ENV), {})
+  await writePreferences({ palette: 'solarized', accent: 'beige', font: 'comic', codeFont: 'toString', documentFont: 'constructor' } as never, fs, ENV)
+  assert.deepEqual(await readPreferences(fs, ENV), {})
+})
+
 test('writePreferences keeps well-formed custom presets and drops malformed ones (#626)', async () => {
   const fs = memFs({ [FILE]: JSON.stringify({ projects: [APP_A], preferences: {} }) })
   await writePreferences(

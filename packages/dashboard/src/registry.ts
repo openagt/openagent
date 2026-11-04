@@ -1,3 +1,4 @@
+import { isAccent, isCodeFont, isDocumentFont, isFont, isPalette, type Accent, type CodeFont, type DocumentFont, type Font, type Palette } from './appearance.js'
 import { sanitizeOverviewLayouts, type OverviewLayouts } from './overview-layout.js'
 import { basename, dirname, join, resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
@@ -210,6 +211,16 @@ export interface Preferences {
   editor?: string
   /** Dashboard color theme (#725): `system` (follow the OS, the default), `light`, or `dark`. Absent = system. */
   theme?: 'system' | 'light' | 'dark'
+  /** The page's colours (`appearance.ts`). Absent = OpenAgent's own. */
+  palette?: Palette
+  /** The colour of buttons, links and what is picked. Absent = the palette's own. */
+  accent?: Accent
+  /** The font of the page and the chat. Absent = Figtree. */
+  font?: Font
+  /** The font of code. Absent = JetBrains Mono. */
+  codeFont?: CodeFont
+  /** The font a Markdown file is read in, in the Files pane. Absent = Source Serif 4. */
+  documentFont?: DocumentFont
   /**
    * The browser bridge (#1237): let an extension running in the user's own Claude session report
    * the question a Claude web agent is parked on, so it shows in the dashboard rather than only on
@@ -427,6 +438,12 @@ function sanitizePreferences(value: unknown): Preferences {
   // `system`, so it is simply dropped rather than persisted.
   if (typeof input['theme'] === 'string' && (KNOWN_THEMES as readonly string[]).includes(input['theme']))
     preferences.theme = input['theme'] as (typeof KNOWN_THEMES)[number]
+  // How the page looks beyond light or dark: each a pick from its list; the default is stored as nothing.
+  if (isPalette(input['palette']) && input['palette'] !== 'openagent') preferences.palette = input['palette']
+  if (isAccent(input['accent'])) preferences.accent = input['accent']
+  if (isFont(input['font']) && input['font'] !== 'figtree') preferences.font = input['font']
+  if (isCodeFont(input['codeFont']) && input['codeFont'] !== 'jetbrains-mono') preferences.codeFont = input['codeFont']
+  if (isDocumentFont(input['documentFont']) && input['documentFont'] !== 'source-serif-4') preferences.documentFont = input['documentFont']
   const customPresets = sanitizeCustomPresets(input['customPresets'])
   if (customPresets.length) preferences.customPresets = customPresets
   // `recentsSort` is constrained to the known set; the default, `created`, is stored as nothing.

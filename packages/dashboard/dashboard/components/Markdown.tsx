@@ -13,7 +13,7 @@ import { CopyButton } from './ui/copy-button.js'
 // reaches for one, and it rendered as raw pipes). Anything else falls through as a paragraph.
 // `compact` shrinks everything a notch (text-xs, smaller headings) so a reply reads at the density
 // of the surrounding event log rather than a full document. Otherwise it is set as Claude Code on
-// the web sets an answer: lines 20px apart, paragraphs a little further.
+// the web sets an answer: 15px text, lines 21px apart, paragraphs 8px further; code at 13px.
 //
 // `document` is for a file read as a page (the Files pane's Markdown, a workspace doc), set as
 // Claude Code on the web's file preview sets one: the lines of a paragraph wrapped in its source
@@ -28,7 +28,7 @@ export function Markdown({ text, compact = false, fade = false, document = false
   const drawnAt = useRef(performance.now()).current
   const blocks = renderBlocks(text.replace(/\r\n/g, '\n').split('\n'), { compact, document })
   return (
-    <div data-markdown className={compact ? 'space-y-1.5 text-xs leading-relaxed' : document ? 'space-y-2.5 text-[15px] leading-6' : 'space-y-2.5 text-sm leading-5'}>
+    <div data-markdown className={compact ? 'space-y-1.5 text-xs leading-relaxed' : document ? 'space-y-2.5 font-serif text-[15px] leading-6' : 'space-y-2 text-[15px] leading-[21px]'}>
       {fade ? wordsIn(blocks, { at: 0 }, drawnAt, text) : blocks}
     </div>
   )
@@ -109,7 +109,7 @@ function CodeBlock({ lines, language, document }: { lines: string[]; language: s
         {document && language !== '' && <span className="text-xs text-muted-foreground">{language}</span>}
         <CopyButton text={text} label="Copy the code" />
       </div>
-      <pre className={cn('py-3 pl-4 text-xs leading-[18px]', document ? 'overflow-x-auto pr-20 whitespace-pre' : 'pr-12 break-words whitespace-pre-wrap')}>
+      <pre className={cn('py-3 pl-4 text-[13px] leading-[19px]', document ? 'overflow-x-auto pr-20 whitespace-pre' : 'pr-12 break-words whitespace-pre-wrap')}>
         <code>
           {language === 'diff'
             ? lines.map((line, i) => (
@@ -497,7 +497,7 @@ function renderBlocks(lines: string[], look: Look, depth = 0): ReactNode[] {
       // the others its size, none heavier than medium, with room above them.
       const sizes = compact
         ? ['text-sm', 'text-sm', 'text-xs', 'text-xs', 'text-xs', 'text-xs']
-        : ['text-base', 'text-sm', 'text-sm', 'text-sm', 'text-sm', 'text-sm']
+        : ['text-[17px] leading-6', 'text-[15px]', 'text-[15px]', 'text-[15px]', 'text-[15px]', 'text-[15px]']
       blocks.push(
         <p key={key++} data-heading={slug(heading[2]!)} className={cn(sizes[level - 1], compact ? 'font-semibold' : 'font-medium [&:not(:first-child)]:pt-2')}>
           {inline(heading[2]!)}

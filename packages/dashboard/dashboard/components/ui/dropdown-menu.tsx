@@ -12,19 +12,21 @@ import { ScrollArea } from './scroll-area.js'
 // Border + surface live on the Popup; the scroll (and its padding) move inside a ScrollArea so a
 // long menu shows our own thin overlay bar (#1046) instead of the OS one, whose grey track read as
 // a second layer beside the border. #710 stands: no native scrollbar comes back.
-export const MENU_POPUP_CLASS =
-  'min-w-[13rem] rounded-md border border-[var(--color-border)] bg-[var(--color-card)] text-[var(--color-card-foreground)] shadow-md outline-none'
+// The surface is shadcn create's menu (`.menu-surface`, tailwind.css): rounded, see-through over a
+// blur, a faint ring for an edge.
+export const MENU_SURFACE_CLASS = 'menu-surface rounded-xl shadow-lg ring-1 ring-neutral-950/80 backdrop-blur-xl outline-none dark:ring-neutral-700/50'
+export const MENU_POPUP_CLASS = cn('min-w-[13rem]', MENU_SURFACE_CLASS)
 
 /** The scrolled body every popup shares: caps at the space the positioner allows, pads the items. */
 function PopupBody({ children }: { children: ReactNode }) {
   return (
     <ScrollArea viewportClassName="max-h-[var(--available-height)]">
-      <div className="p-1">{children}</div>
+      <div className="p-1.5">{children}</div>
     </ScrollArea>
   )
 }
 export const MENU_ITEM_CLASS =
-  'relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-[var(--color-accent)] data-[highlighted]:text-[var(--color-accent-foreground)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
+  'relative flex cursor-pointer select-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium outline-none data-[highlighted]:bg-[var(--color-accent)] data-[highlighted]:text-[var(--color-accent-foreground)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
 
 export const DropdownMenu = Menu.Root
 export const DropdownMenuGroup = Menu.Group
@@ -114,7 +116,7 @@ export function DropdownMenuSubContent({ className, children, ...props }: Compon
 }
 
 export function DropdownMenuSeparator({ className, ...props }: ComponentProps<typeof Menu.Separator>) {
-  return <Menu.Separator className={cn('-mx-1 my-1 h-px bg-[var(--color-border)]', className)} {...props} />
+  return <Menu.Separator className={cn('-mx-1.5 my-1.5 h-px bg-[var(--color-border)]', className)} {...props} />
 }
 
 export function DropdownMenuLabel({ className, ...props }: ComponentProps<typeof Menu.GroupLabel>) {

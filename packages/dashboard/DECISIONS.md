@@ -118,13 +118,22 @@ already made, and lists it in its pull request; for anything else it proposes an
 - Notifications are the browser's only: they alert in the open tab. Posting to a
   channel is a skill's, fired by the tool that runs the agent when a run ends. Picked over
   the dashboard's Discord watchers, which posted only while the dashboard was running.
-- The themes keep Claude Code's levels in Everforest's colors. Dark is Everforest on its
-  darker steps: the page on its dimmest background, the sidebar a step below it, panes a
-  step above, fills and lines close to them. Light is near-white in the greens' cool grey:
-  the sidebar a step below the page, the message box and the panes in white above it. The
-  text and the accents are Everforest's as on the landing page, whose surfaces stay the
-  medium ones. Picked over the landing page's exact values, which read light beside Claude
-  Code's, and over one white for every surface in the light theme.
+- The themes keep Claude Code's levels in Everforest's colors. Dark is Everforest's hue a
+  step darker than its dimmest background, as dark as Claude Code's: the page near-black,
+  the sidebar and panes a step above it, fills and lines close to them. Light is near-white
+  in the greens' cool grey: the sidebar a step below the page, the message box and the panes
+  in white above it. The text and the accents are Everforest's as on the landing page.
+  Picked over Everforest's own darkest steps and the landing page's exact values, which read
+  light beside Claude Code's, and over one white for every surface in the light theme.
+- Settings › Appearance also picks the colours (OpenAgent's, or shadcn's neutral greys), the
+  primary colour (none, or one of Tailwind's as shadcn offers them) and three fonts: the
+  page's (Figtree, close to Claude Code's sans), code's (JetBrains Mono) and a Markdown file's
+  in the Files pane (Source Serif 4, as Claude Code reads one in a serif). Fonts load from
+  Google Fonts. Picked over Satoshi, whose licence forbids shipping it in a public package,
+  and over IBM Plex, the landing page's.
+- The chat is set at Claude Code's sizes: text 15px on 21px lines, code 13px.
+- Every menu is shadcn create's: rounded, near-black and see-through over a blur on light, a
+  dark grey on dark, light text in either theme. Picked over menus on the page's own card.
 - The message box is laid out as Claude Code's: a filled box with rounder corners holding the
   "+" menu, the text and the send; a row under it with the Context and Auto menus, and the
   model at the right with its effort in a quieter tone, one menu for both. Where the agent

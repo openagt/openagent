@@ -94,7 +94,7 @@ describe('Settings dropdowns (#1172)', () => {
         expect(showing(select)).not.toBe('')
       }
     }
-    await usable(['Project', 'Theme', 'Editor'])
+    await usable(['Project', 'Theme', 'Colours', 'Primary colour', 'Font', 'Code font', 'File preview font', 'Editor'])
     fireEvent.click(screen.getByRole('button', { name: 'Agent' }))
     await usable(['Project', 'Agent', 'Model'])
   })
