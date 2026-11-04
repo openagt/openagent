@@ -1,4 +1,4 @@
-import { CODE_FONTS, DOCUMENT_FONTS, FONTS } from '../../src/client.js'
+import { accentOf, CODE_FONTS, DOCUMENT_FONTS, FONTS } from '../../src/client.js'
 import type { Preferences } from '../../src/index.js'
 
 /** The fields of the preferences that say how the page looks. */
@@ -28,9 +28,11 @@ export function fontsHref(families: readonly string[]): string {
 
 /** Put the person's look on the page's root element. */
 export function applyAppearance(root: HTMLElement, preferences: Look): void {
-  if (preferences.palette) root.dataset.palette = preferences.palette
+  // OpenAgent's own colours are the page with no palette named, as tailwind.css reads them.
+  if (preferences.palette && preferences.palette !== 'openagent') root.dataset.palette = preferences.palette
   else delete root.dataset.palette
-  if (preferences.accent) root.dataset.accent = preferences.accent
+  const accent = accentOf(preferences.palette, preferences.accent)
+  if (accent) root.dataset.accent = accent
   else delete root.dataset.accent
 
   const app: string | undefined = preferences.font ? FONTS[preferences.font] : undefined

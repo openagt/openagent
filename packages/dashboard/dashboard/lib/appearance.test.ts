@@ -22,6 +22,17 @@ test('the palette and the primary colour are attributes the tokens answer to', (
   expect(root.dataset.accent).toBeUndefined()
 })
 
+test('a primary colour is one of the palette’s own: Everforest’s on OpenAgent, which is the page with no palette named', () => {
+  applyAppearance(root, { palette: 'openagent', accent: 'aqua' })
+  expect(root.dataset.palette).toBeUndefined()
+  expect(root.dataset.accent).toBe('aqua')
+  // Tailwind's blue is Neutral's, not OpenAgent's.
+  applyAppearance(root, { accent: 'blue' })
+  expect(root.dataset.accent).toBeUndefined()
+  applyAppearance(root, { palette: 'neutral', accent: 'aqua' })
+  expect(root.dataset.accent).toBeUndefined()
+})
+
 test('a picked font is set and loaded; one the page already loads is only set; the file preview can follow the page font', () => {
   applyAppearance(root, { font: 'inter', codeFont: 'jetbrains-mono', documentFont: 'app' })
   expect(root.style.getPropertyValue('--font-app')).toBe("'Inter', ui-sans-serif, system-ui, sans-serif")

@@ -147,146 +147,182 @@
   --merged: var(--color-violet-400);
 }
 
-/* The primary colour (Settings › Appearance): buttons, links and what is picked in a colour of
-   Tailwind's palette, as shadcn's themes offer them: its 600 on light, its 400 on dark, each with
-   text that reads on it. None picked is the palette's own. */
-:root[data-accent='amber'] {
+/* The primary colour (Settings › Appearance): buttons, links and what is picked, in one of the
+   palette's own colours. On OpenAgent, Everforest's (its blue, the default, is set above), each
+   darkened on light as the status colours are; on Neutral, Tailwind's as shadcn's themes offer
+   them, its 600 on light and its 400 on dark. Each with text that reads on it. */
+:root:not([data-palette])[data-accent='green'] {
+  --primary: #6f7f00;
+}
+:root.dark:not([data-palette])[data-accent='green'] {
+  --primary: #a7c080;
+}
+:root:not([data-palette])[data-accent='aqua'] {
+  --primary: #2d8a66;
+}
+:root.dark:not([data-palette])[data-accent='aqua'] {
+  --primary: #83c092;
+}
+:root:not([data-palette])[data-accent='yellow'] {
+  --primary: #9a6b00;
+}
+:root.dark:not([data-palette])[data-accent='yellow'] {
+  --primary: #dbbc7f;
+}
+:root:not([data-palette])[data-accent='orange'] {
+  --primary: #c25f12;
+}
+:root.dark:not([data-palette])[data-accent='orange'] {
+  --primary: #e69875;
+}
+:root:not([data-palette])[data-accent='red'] {
+  --primary: #d1403d;
+}
+:root.dark:not([data-palette])[data-accent='red'] {
+  --primary: #e67e80;
+}
+:root:not([data-palette])[data-accent='purple'] {
+  --primary: #a24f8c;
+}
+:root.dark:not([data-palette])[data-accent='purple'] {
+  --primary: #d699b6;
+}
+:root[data-palette='neutral'][data-accent='amber'] {
   --primary: var(--color-amber-600);
   --primary-foreground: var(--color-neutral-950);
 }
-:root.dark[data-accent='amber'] {
+:root.dark[data-palette='neutral'][data-accent='amber'] {
   --primary: var(--color-amber-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-accent='blue'] {
+:root[data-palette='neutral'][data-accent='blue'] {
   --primary: var(--color-blue-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-accent='blue'] {
+:root.dark[data-palette='neutral'][data-accent='blue'] {
   --primary: var(--color-blue-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-accent='cyan'] {
+:root[data-palette='neutral'][data-accent='cyan'] {
   --primary: var(--color-cyan-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-accent='cyan'] {
+:root.dark[data-palette='neutral'][data-accent='cyan'] {
   --primary: var(--color-cyan-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-accent='emerald'] {
+:root[data-palette='neutral'][data-accent='emerald'] {
   --primary: var(--color-emerald-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-accent='emerald'] {
+:root.dark[data-palette='neutral'][data-accent='emerald'] {
   --primary: var(--color-emerald-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-accent='fuchsia'] {
+:root[data-palette='neutral'][data-accent='fuchsia'] {
   --primary: var(--color-fuchsia-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-accent='fuchsia'] {
+:root.dark[data-palette='neutral'][data-accent='fuchsia'] {
   --primary: var(--color-fuchsia-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-accent='green'] {
+:root[data-palette='neutral'][data-accent='green'] {
   --primary: var(--color-green-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-accent='green'] {
+:root.dark[data-palette='neutral'][data-accent='green'] {
   --primary: var(--color-green-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-accent='indigo'] {
+:root[data-palette='neutral'][data-accent='indigo'] {
   --primary: var(--color-indigo-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-accent='indigo'] {
+:root.dark[data-palette='neutral'][data-accent='indigo'] {
   --primary: var(--color-indigo-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-accent='lime'] {
+:root[data-palette='neutral'][data-accent='lime'] {
   --primary: var(--color-lime-600);
   --primary-foreground: var(--color-neutral-950);
 }
-:root.dark[data-accent='lime'] {
+:root.dark[data-palette='neutral'][data-accent='lime'] {
   --primary: var(--color-lime-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-accent='orange'] {
+:root[data-palette='neutral'][data-accent='orange'] {
   --primary: var(--color-orange-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-accent='orange'] {
+:root.dark[data-palette='neutral'][data-accent='orange'] {
   --primary: var(--color-orange-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-accent='pink'] {
+:root[data-palette='neutral'][data-accent='pink'] {
   --primary: var(--color-pink-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-accent='pink'] {
+:root.dark[data-palette='neutral'][data-accent='pink'] {
   --primary: var(--color-pink-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-accent='purple'] {
+:root[data-palette='neutral'][data-accent='purple'] {
   --primary: var(--color-purple-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-accent='purple'] {
+:root.dark[data-palette='neutral'][data-accent='purple'] {
   --primary: var(--color-purple-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-accent='red'] {
+:root[data-palette='neutral'][data-accent='red'] {
   --primary: var(--color-red-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-accent='red'] {
+:root.dark[data-palette='neutral'][data-accent='red'] {
   --primary: var(--color-red-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-accent='rose'] {
+:root[data-palette='neutral'][data-accent='rose'] {
   --primary: var(--color-rose-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-accent='rose'] {
+:root.dark[data-palette='neutral'][data-accent='rose'] {
   --primary: var(--color-rose-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-accent='sky'] {
+:root[data-palette='neutral'][data-accent='sky'] {
   --primary: var(--color-sky-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-accent='sky'] {
+:root.dark[data-palette='neutral'][data-accent='sky'] {
   --primary: var(--color-sky-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-accent='teal'] {
+:root[data-palette='neutral'][data-accent='teal'] {
   --primary: var(--color-teal-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-accent='teal'] {
+:root.dark[data-palette='neutral'][data-accent='teal'] {
   --primary: var(--color-teal-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-accent='violet'] {
+:root[data-palette='neutral'][data-accent='violet'] {
   --primary: var(--color-violet-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-accent='violet'] {
+:root.dark[data-palette='neutral'][data-accent='violet'] {
   --primary: var(--color-violet-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-accent='yellow'] {
+:root[data-palette='neutral'][data-accent='yellow'] {
   --primary: var(--color-yellow-600);
   --primary-foreground: var(--color-neutral-950);
 }
-:root.dark[data-accent='yellow'] {
+:root.dark[data-palette='neutral'][data-accent='yellow'] {
   --primary: var(--color-yellow-400);
   --primary-foreground: var(--color-neutral-950);
 }
-
 
 /* A menu's surface (dropdowns, selects, the composer's suggestions), as shadcn create sets its
    menus, in the theme's own colours: the theme's card on light and its fill on dark (on Neutral,

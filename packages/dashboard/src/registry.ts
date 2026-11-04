@@ -1,4 +1,4 @@
-import { isAccent, isCodeFont, isDocumentFont, isFont, isPalette, type Accent, type CodeFont, type DocumentFont, type Font, type Palette } from './appearance.js'
+import { accentOf, isCodeFont, isDocumentFont, isFont, isPalette, type Accent, type CodeFont, type DocumentFont, type Font, type Palette } from './appearance.js'
 import { sanitizeOverviewLayouts, type OverviewLayouts } from './overview-layout.js'
 import { basename, dirname, join, resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
@@ -213,7 +213,7 @@ export interface Preferences {
   theme?: 'system' | 'light' | 'dark'
   /** The page's colours (`appearance.ts`). Absent = OpenAgent's own. */
   palette?: Palette
-  /** The colour of buttons, links and what is picked. Absent = the palette's own. */
+  /** The colour of buttons, links and what is picked, one of the palette's. Absent = the palette's own. */
   accent?: Accent
   /** The font of the page and the chat. Absent = Figtree. */
   font?: Font
@@ -440,7 +440,8 @@ function sanitizePreferences(value: unknown): Preferences {
     preferences.theme = input['theme'] as (typeof KNOWN_THEMES)[number]
   // How the page looks beyond light or dark: each a pick from its list; the default is stored as nothing.
   if (isPalette(input['palette']) && input['palette'] !== 'openagent') preferences.palette = input['palette']
-  if (isAccent(input['accent'])) preferences.accent = input['accent']
+  const accent = accentOf(preferences.palette, input['accent'])
+  if (accent) preferences.accent = accent
   if (isFont(input['font']) && input['font'] !== 'figtree') preferences.font = input['font']
   if (isCodeFont(input['codeFont']) && input['codeFont'] !== 'jetbrains-mono') preferences.codeFont = input['codeFont']
   if (isDocumentFont(input['documentFont']) && input['documentFont'] !== 'source-serif-4') preferences.documentFont = input['documentFont']

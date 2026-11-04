@@ -414,7 +414,13 @@ test('writePreferences keeps a known look, stores the default look as nothing, a
   await writePreferences({ palette: 'openagent', font: 'figtree', codeFont: 'jetbrains-mono', documentFont: 'source-serif-4' }, fs, ENV)
   assert.deepEqual(await readPreferences(fs, ENV), {})
   await writePreferences({ palette: 'solarized', accent: 'beige', font: 'comic', codeFont: 'toString', documentFont: 'constructor' } as never, fs, ENV)
+  assert.deepEqual(await readPreferences(fs, ENV), {})  // A primary colour is kept only with the palette it belongs to.
+  await writePreferences({ accent: 'aqua' }, fs, ENV)
+  assert.deepEqual(await readPreferences(fs, ENV), { accent: 'aqua' })
+  await writePreferences({ accent: 'blue' }, fs, ENV)
   assert.deepEqual(await readPreferences(fs, ENV), {})
+  await writePreferences({ palette: 'neutral', accent: 'aqua' }, fs, ENV)
+  assert.deepEqual(await readPreferences(fs, ENV), { palette: 'neutral' })
 })
 
 test('writePreferences keeps well-formed custom presets and drops malformed ones (#626)', async () => {
