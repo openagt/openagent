@@ -236,6 +236,28 @@ describe('opening files, as Claude Code on the web does', () => {
     await waitFor(() => expect(screen.getByText('bold').tagName).toBe('STRONG'))
   })
 
+  test("a Markdown file's link to a file of the project opens it, by its place beside the Markdown file", async () => {
+    readTree.mockResolvedValue({ source: 'checkout', files: ['docs/guide.md', 'docs/setup.md', 'src/app.ts'] })
+    readContent.mockImplementation(async (_host: unknown, _projectId: string, path: string) => ({ path, text: path === 'docs/guide.md' ? 'See [setup](setup.md).' : `the text of ${path}`, truncated: false, binary: false }))
+    render(<FilesPane projectId="p1" agentId="run-1" context={context()} />)
+    fireEvent.click(await screen.findByText('docs'))
+    fireEvent.click(await screen.findByTitle('docs/guide.md'))
+    fireEvent.click(await screen.findByRole('button', { name: 'setup' }))
+    await waitFor(() => expect(tabs()).toEqual([['setup.md', 'true', 'preview']]))
+  })
+
+  test('a file asked for from the chat opens, found in the tree by the end of its whole path; each ask once', async () => {
+    readTree.mockResolvedValue({ source: 'checkout', files: ['index.html', 'src/index.html'] })
+    const { rerender } = render(<FilesPane projectId="p1" agentId="run-1" context={context()} show={{ path: '/home/user/project/src/index.html', at: 1 }} />)
+    await waitFor(() => expect(tabs()).toEqual([['index.html', 'true', 'preview']]))
+    expect(screen.getByRole('tab').querySelector('button')!.getAttribute('title')).toBe('src/index.html')
+    fireEvent.click(screen.getByRole('button', { name: 'Close index.html' }))
+    rerender(<FilesPane projectId="p1" agentId="run-1" context={context()} show={{ path: '/home/user/project/src/index.html', at: 1 }} />)
+    expect(tabs()).toEqual([])
+    rerender(<FilesPane projectId="p1" agentId="run-1" context={context()} show={{ path: '/elsewhere/README.md', at: 2 }} />)
+    expect(tabs()).toEqual([])
+  })
+
   test('a right click on a file attaches it to the Context, and a file in it is ticked', async () => {
     const toggle = vi.fn()
     const { rerender } = render(<FilesPane projectId="p1" context={context([], toggle)} />)

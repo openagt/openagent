@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { IssueLinks, Markdown } from './Markdown.js'
+import { FileLinks, IssueLinks, Markdown } from './Markdown.js'
 
 afterEach(cleanup)
 
@@ -285,5 +285,72 @@ describe('Markdown code blocks in colour', () => {
     const { container } = render(<Markdown text={'```\nplain text\n```\n\n```klingon\nqapla\n```\n\n```diff\n+added\n```'} />)
     expect(colours(container)).toHaveLength(0)
     expect(container.querySelector('.text-success')?.textContent).toBe('+added')
+  })
+})
+
+// A file read as a page, as the Files pane shows a Markdown file.
+describe('Markdown as a page', () => {
+  test('the lines of a paragraph wrapped in its source are one paragraph; in a reply, each line is its own', () => {
+    const text = 'A single static page. It shows a\n**centered\nheading**, and a line ending in two spaces  \nbreaks there.\n\nNext paragraph.'
+    const { container } = render(<Markdown text={text} document />)
+    const paragraphs = Array.from(container.querySelectorAll('p'))
+    expect(paragraphs.map(p => p.textContent)).toEqual(['A single static page. It shows a centered heading, and a line ending in two spacesbreaks there.', 'Next paragraph.'])
+    expect(paragraphs[0]!.querySelector('strong')!.textContent).toBe('centered heading')
+    expect(paragraphs[0]!.querySelectorAll('br')).toHaveLength(1)
+    cleanup()
+    const reply = render(<Markdown text={'one\ntwo'} />)
+    expect(Array.from(reply.container.querySelectorAll('p')).map(p => p.textContent)).toEqual(['one', 'two'])
+  })
+
+  test("a list item's wrapped line goes on with its words", () => {
+    const { container } = render(<Markdown text={'- first item that\n  wraps here\n- second'} document />)
+    expect(Array.from(container.querySelectorAll('li')).map(li => li.textContent)).toEqual(['first item that wraps here', 'second'])
+  })
+
+  test('headings are headings, and a link to one scrolls to it', () => {
+    const scrolled: string[] = []
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this.textContent ?? '')
+    }
+    render(<Markdown text={'# Hello\n\nSee [Deploy](#deploy).\n\n## Deploy Steps\n\n## Deploy'} document />)
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Hello')
+    expect(screen.getAllByRole('heading', { level: 2 }).map(h => h.textContent)).toEqual(['Deploy Steps', 'Deploy'])
+    fireEvent.click(screen.getByRole('link', { name: 'Deploy' }))
+    expect(scrolled).toEqual(['Deploy'])
+  })
+
+  test('a table is a card whose header row is shaded and whose first column stays on one line', () => {
+    const { container } = render(<Markdown text={'| Path | Purpose |\n| --- | --- |\n| `index.html` | The page |\n| `a.svg` | An icon |'} document />)
+    expect(container.querySelector('table')!.parentElement!.className).toContain('rounded-lg')
+    expect(container.querySelector('th')!.className).toContain('bg-muted')
+    const cells = container.querySelectorAll('tbody td')
+    expect(cells[0]!.className).toContain('whitespace-nowrap')
+    expect(cells[1]!.className).not.toContain('border-t')
+    expect(cells[2]!.className).toContain('border-t')
+  })
+
+  test('a code block names its language and keeps its lines whole; in a reply it does neither', () => {
+    const { container } = render(<Markdown text={'```sh\nopen index.html        # macOS\n```'} document />)
+    expect(screen.getByText('sh')).toBeTruthy()
+    expect(container.querySelector('pre')!.className).toMatch(/whitespace-pre(\s|$)/)
+    cleanup()
+    const reply = render(<Markdown text={'```sh\nopen index.html\n```'} />)
+    expect(screen.queryByText('sh')).toBeNull()
+    expect(reply.container.querySelector('pre')!.className).toContain('whitespace-pre-wrap')
+  })
+
+  test('a path of a file of the project opens it; a bare name, and a path to no file, are code', () => {
+    const opened: string[] = []
+    const files = new Set(['.github/workflows/deploy.yml', 'index.html', 'docs/a.md'])
+    render(
+      <FileLinks.Provider value={path => (files.has(path) ? () => opened.push(path) : undefined)}>
+        <Markdown text={'Driven by `.github/workflows/deploy.yml`, see `index.html`, `src/gone.ts` and [the notes](docs/a.md).'} document />
+      </FileLinks.Provider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '.github/workflows/deploy.yml' }))
+    fireEvent.click(screen.getByRole('button', { name: 'the notes' }))
+    expect(opened).toEqual(['.github/workflows/deploy.yml', 'docs/a.md'])
+    expect(screen.getByText('index.html').tagName).toBe('CODE')
+    expect(screen.getByText('src/gone.ts').tagName).toBe('CODE')
   })
 })

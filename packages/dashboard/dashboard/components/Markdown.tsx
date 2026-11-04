@@ -15,14 +15,37 @@ import { CopyButton } from './ui/copy-button.js'
 // of the surrounding event log rather than a full document. Otherwise it is set as Claude Code on
 // the web sets an answer: lines 20px apart, paragraphs a little further.
 //
+// `document` is for a file read as a page (the Files pane's Markdown, a workspace doc), set as
+// Claude Code on the web's file preview sets one: the lines of a paragraph wrapped in its source
+// are one paragraph, headings are larger with room above them, a table is a bordered card that
+// scrolls sideways, a code block names its language and scrolls rather than wraps. Without it,
+// each line is its own paragraph, as a reply in the chat means its lines.
+//
 // `fade` is for the message being written: each word comes in out of nothing, once. A word drawn
 // again, in this box or in the one that takes its place, goes on from where its fade was: its time
 // is kept by its place among the message's words (`use-steady-text.ts`).
-export function Markdown({ text, compact = false, fade = false }: { text: string; compact?: boolean; fade?: boolean }) {
+export function Markdown({ text, compact = false, fade = false, document = false }: { text: string; compact?: boolean; fade?: boolean; document?: boolean }) {
   const drawnAt = useRef(performance.now()).current
-  const blocks = renderBlocks(text.replace(/\r\n/g, '\n').split('\n'), compact)
-  return <div className={compact ? 'space-y-1.5 text-xs leading-relaxed' : 'space-y-2.5 text-sm leading-5'}>{fade ? wordsIn(blocks, { at: 0 }, drawnAt, text) : blocks}</div>
+  const blocks = renderBlocks(text.replace(/\r\n/g, '\n').split('\n'), { compact, document })
+  return (
+    <div data-markdown className={compact ? 'space-y-1.5 text-xs leading-relaxed' : document ? 'space-y-2.5 text-[15px] leading-6' : 'space-y-2.5 text-sm leading-5'}>
+      {fade ? wordsIn(blocks, { at: 0 }, drawnAt, text) : blocks}
+    </div>
+  )
 }
+
+/** How the text is set: a notch smaller (`compact`), or as a page (`document`). */
+interface Look {
+  compact: boolean
+  document: boolean
+}
+
+/**
+ * What a file named in the text opens, by the name as written (`.github/workflows/deploy.yml`):
+ * given where the text is a file of the project, as the Files pane's Markdown is; none for a name
+ * that is no file there, or where nothing opens files.
+ */
+export const FileLinks = createContext<((path: string) => (() => void) | undefined) | undefined>(undefined)
 
 /** How long a word takes to come in (`.word-in`). */
 const WORD_IN_MS = 500
@@ -65,8 +88,8 @@ function diffLineClass(line: string): string | undefined {
 // its lines wrapped to the box rather than cut at its edge, and no strip naming the language. Code
 // is the one thing in an answer a reader takes somewhere else, and selecting it by hand is where
 // that went wrong.
-function codeBlock(lines: string[], language: string, key: number): ReactNode {
-  return <CodeBlock key={key} lines={lines} language={language} />
+function codeBlock(lines: string[], language: string, key: number, look: Look): ReactNode {
+  return <CodeBlock key={key} lines={lines} language={language} document={look.document} />
 }
 
 /**
@@ -74,14 +97,19 @@ function codeBlock(lines: string[], language: string, key: number): ReactNode {
  * (`highlight.tsx`), as Claude Code on the web colours one; until its grammar is loaded, and for a
  * language it does not know, the text is plain.
  */
-function CodeBlock({ lines, language }: { lines: string[]; language: string }) {
+function CodeBlock({ lines, language, document }: { lines: string[]; language: string; document: boolean }) {
   const text = lines.join('\n')
   const known = language === 'diff' ? undefined : languageOfFence(language)
   const coloured = useHighlightedIn(text, known, 'chat')
+  // In a page, as Claude Code on the web's file preview sets one: as wide as the text, the language
+  // it was fenced as beside the copy button, and its lines kept whole, the box scrolling sideways.
   return (
-    <div className="relative w-fit max-w-full min-w-40 rounded-lg border border-border bg-muted/50">
-      <CopyButton text={text} label="Copy the code" className="absolute top-2.5 right-2.5" />
-      <pre className="px-4 py-3 pr-12 text-xs leading-[18px] break-words whitespace-pre-wrap">
+    <div className={cn('relative max-w-full rounded-lg border border-border bg-muted/50', document ? 'w-full' : 'w-fit min-w-40')}>
+      <div className="absolute top-2.5 right-2.5 flex items-center gap-2">
+        {document && language !== '' && <span className="text-xs text-muted-foreground">{language}</span>}
+        <CopyButton text={text} label="Copy the code" />
+      </div>
+      <pre className={cn('px-4 py-3 text-xs leading-[18px]', document ? 'overflow-x-auto pr-20 whitespace-pre' : 'pr-12 break-words whitespace-pre-wrap')}>
         <code>
           {language === 'diff'
             ? lines.map((line, i) => (
@@ -189,7 +217,8 @@ function listEnd(lines: string[], from: number): number {
 }
 
 /** One list's lines as its items; a change from bullets to numbers at the list's own level starts the next list. */
-function renderList(lines: string[], compact: boolean, depth: number, key: number): ReactNode[] {
+function renderList(lines: string[], look: Look, depth: number, key: number): ReactNode[] {
+  const { compact } = look
   const lists: ReactNode[] = []
   const first = listMarker(lines[0]!)!
   let ordered = first.ordered
@@ -222,23 +251,23 @@ function renderList(lines: string[], compact: boolean, depth: number, key: numbe
       for (let i = from; i <= to; i++) if (code(i) && under[i]!.trim()) least = Math.min(least, indentOf(under[i]!))
       for (let i = from; i <= to; i++) if (code(i)) cuts[i] = least
     }
-    const nested = under.length > 0 ? renderBlocks(under.map((l, i) => cutIndent(l, cuts[i]!)), compact, depth + 1) : null
+    const nested = under.length > 0 ? renderBlocks(under.map((l, i) => cutIndent(l, cuts[i]!)), look, depth + 1) : null
     items.push(
       task ? (
         <li key={items.length} className="list-none -ml-4 flex items-start gap-2">
           <input type="checkbox" checked={task[1]!.toLowerCase() === 'x'} readOnly className="mt-1" />
           {nested ? (
             <div className="min-w-0 space-y-1">
-              <span>{inline(task[2]!)}</span>
+              <span>{inlineLines(task[2]!)}</span>
               {nested}
             </div>
           ) : (
-            <span>{inline(task[2]!)}</span>
+            <span>{inlineLines(task[2]!)}</span>
           )}
         </li>
       ) : (
         <li key={items.length} className={nested ? 'space-y-1' : undefined}>
-          {inline(text)}
+          {inlineLines(text)}
           {nested}
         </li>
       ),
@@ -250,17 +279,17 @@ function renderList(lines: string[], compact: boolean, depth: number, key: numbe
   }
   // As Claude Code on the web sets a list: its words 35px in, 3px between two items, and, in a
   // message, twice the room under it before what follows.
-  const look = cn(compact ? 'ml-6 space-y-1 [&>li]:pl-1' : 'ml-7 space-y-[3px] [&>li]:pl-[7px]', !compact && depth === 0 && '[&:not(:last-child)]:mb-[21px]')
+  const set = cn(compact ? 'ml-6 space-y-1 [&>li]:pl-1' : 'ml-7 space-y-[3px] [&>li]:pl-[7px]', !compact && depth === 0 && '[&:not(:last-child)]:mb-[21px]')
   const closeList = () => {
     closeItem()
     if (items.length === 0) return
     lists.push(
       ordered ? (
-        <ol key={`${key}-${lists.length}`} start={start} className={cn('list-decimal', look)}>
+        <ol key={`${key}-${lists.length}`} start={start} className={cn('list-decimal', set)}>
           {items}
         </ol>
       ) : (
-        <ul key={`${key}-${lists.length}`} className={cn('list-disc', look)}>
+        <ul key={`${key}-${lists.length}`} className={cn('list-disc', set)}>
           {items}
         </ul>
       ),
@@ -268,7 +297,7 @@ function renderList(lines: string[], compact: boolean, depth: number, key: numbe
     items = []
   }
 
-  for (const line of lines) {
+  for (const [at, line] of lines.entries()) {
     if (fenced) {
       under.push(line)
       if (isFence(line)) closeFence()
@@ -283,6 +312,9 @@ function renderList(lines: string[], compact: boolean, depth: number, key: numbe
       }
       closeItem()
       text = marker.text
+    } else if (look.document && text !== null && under.length === 0 && line.trim() && !startsBlock(line)) {
+      // In a page, a line right under the item's own words goes on with them, as a paragraph's does.
+      text = `${text.trimEnd()}${lineBreak(lines[at - 1]!)}${line.trim()}`
     } else if (line.trim()) {
       under.push(line)
       margin = Math.min(margin, indentOf(line))
@@ -299,7 +331,86 @@ function renderList(lines: string[], compact: boolean, depth: number, key: numbe
   return lists
 }
 
-function renderBlocks(lines: string[], compact = false, depth = 0): ReactNode[] {
+/** A line that starts a block of its own rather than going on with the paragraph above it. */
+function startsBlock(line: string): boolean {
+  return isFence(line) || /^\s*\|.*\|\s*$/.test(line) || /^#{1,6}\s/.test(line) || isRule(line) || /^\s*>/.test(line) || listMarker(line) !== null
+}
+
+/**
+ * What joins a paragraph's line to the next: a space, or a new line where the line ended in two
+ * spaces or a backslash, as Markdown breaks a line.
+ */
+function lineBreak(line: string): string {
+  return / {2,}$|\\$/.test(line) ? '\n' : ' '
+}
+
+/** A paragraph's text, a line break where its lines were broken (`lineBreak`). */
+function inlineLines(text: string): ReactNode {
+  if (!text.includes('\n')) return inline(text)
+  return text.split('\n').map((line, at) => (
+    <Fragment key={at}>
+      {at > 0 && <br />}
+      {inline(line)}
+    </Fragment>
+  ))
+}
+
+/**
+ * A page's table, as Claude Code on the web's file preview sets one: a bordered card, its header
+ * row shaded, a line between two rows; its first column kept on one line and the others at least
+ * wide enough to read, the card scrolling sideways when the page is narrower than that.
+ */
+function PageTable({ header, body }: { header: string[]; body: string[][] }) {
+  return (
+    <div className="overflow-x-auto rounded-lg border border-border">
+      <table className="min-w-full border-separate border-spacing-0 text-sm">
+        <thead>
+          <tr>
+            {header.map((cell, i) => (
+              <th key={i} className="border-b border-border bg-muted/50 px-3 py-[7px] text-left font-semibold">
+                {inline(cell)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {body.map((cells, r) => (
+            <tr key={r}>
+              {header.map((_, c) => (
+                <td key={c} className={cn('px-3 py-[7px] align-top', r > 0 && 'border-t border-border', c === 0 ? 'whitespace-nowrap' : 'min-w-40')}>
+                  {inline(cells[c] ?? '')}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/** A heading as a link to it names it (`#deploy` for "Deploy"), as GitHub names one. */
+function slug(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s_-]/gu, '')
+    .replace(/\s/g, '-')
+}
+
+/** A page's heading: larger the higher it is, with room above it, as Claude Code on the web's file preview sets one. */
+function Heading({ level, text }: { level: number; text: string }) {
+  const Tag = `h${Math.min(level, 6)}` as 'h1'
+  const size = ['text-[26px] leading-[30px] font-medium', 'text-xl leading-[25px] font-medium', 'text-base font-semibold', 'font-semibold', 'font-semibold', 'font-semibold'][level - 1]
+  return (
+    <Tag data-heading={slug(text)} className={cn(size, level > 1 && 'pt-7 first:pt-0')}>
+      {inline(text)}
+    </Tag>
+  )
+}
+
+function renderBlocks(lines: string[], look: Look, depth = 0): ReactNode[] {
+  const { compact, document } = look
   const blocks: ReactNode[] = []
   let code: { lines: string[]; language: string } | null = null
   let table: string[] = []
@@ -314,7 +425,7 @@ function renderBlocks(lines: string[], compact = false, depth = 0): ReactNode[] 
     if (rows.length >= 2 && isTableSeparator(rows[1]!)) {
       const header = tableCells(rows[0]!)
       const body = rows.slice(2).map(tableCells)
-      blocks.push(
+      blocks.push(document ? <PageTable key={key++} header={header} body={body} /> : (
         <div key={key++} className="overflow-x-auto">
           <table className={cn('w-full border-collapse [&_tbody_tr:last-child_td]:border-b-0', compact ? 'text-xs' : 'text-sm')}>
             <thead>
@@ -338,8 +449,8 @@ function renderBlocks(lines: string[], compact = false, depth = 0): ReactNode[] 
               ))}
             </tbody>
           </table>
-        </div>,
-      )
+        </div>
+      ))
     } else {
       for (const row of rows) blocks.push(<p key={key++}>{inline(row)}</p>)
     }
@@ -353,7 +464,7 @@ function renderBlocks(lines: string[], compact = false, depth = 0): ReactNode[] 
         flushTable()
         code = { lines: [], language: fence[1]!.toLowerCase() }
       } else {
-        blocks.push(codeBlock(code.lines, code.language, key++))
+        blocks.push(codeBlock(code.lines, code.language, key++, look))
         code = null
       }
       continue
@@ -373,11 +484,15 @@ function renderBlocks(lines: string[], compact = false, depth = 0): ReactNode[] 
     const heading = /^(#{1,6})\s+(.*)$/.exec(line)
     if (heading) {
       const level = heading[1]!.length
+      if (document) {
+        blocks.push(<Heading key={key++} level={level} text={heading[2]!} />)
+        continue
+      }
       const sizes = compact
         ? ['text-sm', 'text-sm', 'text-xs', 'text-xs', 'text-xs', 'text-xs']
         : ['text-lg', 'text-base', 'text-sm', 'text-sm', 'text-sm', 'text-sm']
       blocks.push(
-        <p key={key++} className={`font-semibold ${sizes[level - 1]}`}>
+        <p key={key++} data-heading={slug(heading[2]!)} className={`font-semibold ${sizes[level - 1]}`}>
           {inline(heading[2]!)}
         </p>,
       )
@@ -396,7 +511,7 @@ function renderBlocks(lines: string[], compact = false, depth = 0): ReactNode[] 
       const quoted = lines.slice(i, end).map(l => l.replace(/^\s*>\s?/, ''))
       blocks.push(
         <blockquote key={key++} className="space-y-1.5 border-l-2 border-border pl-3 text-muted-foreground">
-          {renderBlocks(quoted, compact, depth + 1)}
+          {renderBlocks(quoted, look, depth + 1)}
         </blockquote>,
       )
       i = end - 1
@@ -405,15 +520,19 @@ function renderBlocks(lines: string[], compact = false, depth = 0): ReactNode[] 
 
     if (depth < MAX_DEPTH && listMarker(line)) {
       const end = listEnd(lines, i)
-      for (const list of renderList(lines.slice(i, end), compact, depth, key++)) blocks.push(list)
+      for (const list of renderList(lines.slice(i, end), look, depth, key++)) blocks.push(list)
       i = end - 1
       continue
     }
 
-    if (line.trim()) blocks.push(<p key={key++}>{inline(line)}</p>)
+    if (!line.trim()) continue
+    // In a page, the lines up to a blank one or the start of another block are one paragraph.
+    let paragraph = line.trim()
+    while (document && i + 1 < lines.length && lines[i + 1]!.trim() && !startsBlock(lines[i + 1]!)) paragraph = `${paragraph}${lineBreak(lines[i]!)}${lines[++i]!.trim()}`
+    blocks.push(<p key={key++}>{inlineLines(paragraph)}</p>)
   }
   flushTable()
-  if (code !== null) blocks.push(codeBlock(code.lines, code.language, key++))
+  if (code !== null) blocks.push(codeBlock(code.lines, code.language, key++, look))
   return blocks
 }
 
@@ -446,6 +565,54 @@ function IssueRef({ number }: { number: string }) {
   )
 }
 
+/**
+ * A name in backticks. One that is a path of a file the text's project has (`src/a.ts`, with a
+ * slash: a bare `index.html` is a name as often as a file) opens it, as Claude Code on the web's
+ * file preview links one; any other is code.
+ */
+function InlineCode({ text }: { text: string }) {
+  const opens = useContext(FileLinks)
+  const open = text.includes('/') ? opens?.(text) : undefined
+  if (open) return <FileButton label={text} path={text} open={open} />
+  return <code className={CODE_CLASS}>{text}</code>
+}
+
+/** A link to a file (`[a.md](docs/a.md)`): opens it where files open, else its name as code, its path on hover. */
+function FileLink({ label, path }: { label: string; path: string }) {
+  const open = useContext(FileLinks)?.(path)
+  if (open) return <FileButton label={label} path={path} open={open} />
+  return (
+    <code title={path} className={CODE_CLASS}>
+      {label}
+    </code>
+  )
+}
+
+function FileButton({ label, path, open }: { label: string; path: string; open: () => void }) {
+  return (
+    <button type="button" title={`Open ${path}`} onClick={open} className={cn(LINK_CLASS, 'text-left')}>
+      {label}
+    </button>
+  )
+}
+
+/** A link to a heading of the same text (`[Deploy](#deploy)`): scrolls to it. */
+function HeadingLink({ label, to }: { label: string; to: string }) {
+  return (
+    <a
+      href={`#${to}`}
+      onClick={event => {
+        event.preventDefault()
+        const heading = [...(event.currentTarget.closest('[data-markdown]')?.querySelectorAll<HTMLElement>('[data-heading]') ?? [])].find(found => found.dataset.heading === to.toLowerCase())
+        heading?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      }}
+      className={LINK_CLASS}
+    >
+      {label}
+    </a>
+  )
+}
+
 function link(href: string, label: string, key: number): ReactNode {
   return (
     <a key={key} href={href} target="_blank" rel="noreferrer" className={LINK_CLASS}>
@@ -463,17 +630,13 @@ function inline(text: string): ReactNode {
   while ((m = re.exec(text))) {
     if (m.index > last) parts.push(<Fragment key={key++}>{text.slice(last, m.index)}</Fragment>)
     const token = m[0]
-    if (token.startsWith('`')) parts.push(<code key={key++} className={CODE_CLASS}>{token.slice(1, -1)}</code>)
+    if (token.startsWith('`')) parts.push(<InlineCode key={key++} text={token.slice(1, -1)} />)
     else if (token.startsWith('[')) {
       const parsed = /^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/.exec(token)
       const file = /^\[([^\]]+)\]\(([^\s):]+)\)$/.exec(token)
       if (parsed) parts.push(link(parsed[2]!, parsed[1]!, key++))
-      else if (file)
-        parts.push(
-          <code key={key++} title={file[2]} className={CODE_CLASS}>
-            {file[1]}
-          </code>,
-        )
+      else if (file?.[2]!.startsWith('#')) parts.push(<HeadingLink key={key++} label={file[1]!} to={file[2]!.slice(1)} />)
+      else if (file) parts.push(<FileLink key={key++} label={file[1]!} path={file[2]!} />)
       else parts.push(<Fragment key={key++}>{token}</Fragment>)
     } else if (token.startsWith('**')) parts.push(<strong key={key++}>{inline(token.slice(2, -2))}</strong>)
     else if (token.startsWith('*')) parts.push(<em key={key++}>{inline(token.slice(1, -1))}</em>)

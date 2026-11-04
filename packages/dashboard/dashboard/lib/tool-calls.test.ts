@@ -4,7 +4,7 @@ import { callsSummary, doingOf, doneOf, summaryWords, toolCall, type ToolCall } 
 describe('toolCall', () => {
   test("Claude Code's tools read as a verb and what it was done to", () => {
     expect(toolCall('Bash', 'pnpm test')).toEqual({ verb: 'Ran', doing: 'Running', target: 'pnpm test', detail: 'pnpm test', kind: 'command' })
-    expect(toolCall('Read', '/repo/AGENTS.md')).toEqual({ verb: 'Read', doing: 'Reading', target: 'AGENTS.md', detail: '/repo/AGENTS.md', kind: 'read' })
+    expect(toolCall('Read', '/repo/AGENTS.md')).toEqual({ verb: 'Read', doing: 'Reading', target: 'AGENTS.md', detail: '/repo/AGENTS.md', path: '/repo/AGENTS.md', kind: 'read' })
     expect(toolCall('Edit', '/repo/src/app.ts').verb).toBe('Edited')
     expect(toolCall('Write', '/repo/src/new.ts')).toMatchObject({ verb: 'Wrote', target: 'new.ts', kind: 'edit' })
     // What a search looked for is in the verb's grey, as Claude Code on the web says it.
@@ -16,6 +16,7 @@ describe('toolCall', () => {
   test("Codex's item kinds read the same way", () => {
     expect(toolCall('commandExecution', 'pnpm test')).toEqual({ verb: 'Ran', doing: 'Running', target: 'pnpm test', detail: 'pnpm test', kind: 'command' })
     expect(toolCall('fileChange', '/repo/a.ts, /repo/src/b.ts')).toEqual({ verb: 'Edited', doing: 'Editing', target: 'a.ts, b.ts', detail: '/repo/a.ts, /repo/src/b.ts', kind: 'edit' })
+    expect(toolCall('fileChange', '/repo/a.ts').path).toBe('/repo/a.ts')
     expect(toolCall('mcpToolCall', 'github.search')).toMatchObject({ verb: 'Called', target: 'github.search' })
     expect(toolCall('webSearch', 'vitest docs')).toMatchObject({ verb: 'Searched the web', kind: 'web' })
   })

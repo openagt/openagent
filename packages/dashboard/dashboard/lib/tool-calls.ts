@@ -23,6 +23,8 @@ export interface ToolCall {
   plain?: true
   /** The detail as the driver gave it: the whole path, the command. */
   detail?: string
+  /** The one file a file's tool was given (Read, Edit, Write), as the driver gave it: what its name opens. */
+  path?: string
   kind: CallKind
   /** The files the call changed, when its coding agent said them: each once, its lines summed. */
   files?: ChangedFile[]
@@ -106,12 +108,15 @@ export function toolCall(label: string, detail?: string, changed?: readonly File
   if (detail !== undefined) {
     call.detail = detail
     call.target = known?.file ? fileNames(detail) : known?.slash ? `/${detail.replace(/^\//, '')}` : detail
+    if (known?.file && !detail.includes(', ')) call.path = detail
   }
   if (changed !== undefined && changed.length > 0) {
     const files = sumEdits(changed)
     call.kind = 'edit'
     call.verb = files.every(file => file.created) ? 'Created' : 'Updated'
     call.target = files.map(file => file.name).join(', ')
+    if (files.length === 1) call.path = files[0]!.path
+    else delete call.path
     call.files = files
     call.size = sizeOf(files)
   }
