@@ -165,19 +165,40 @@ html[data-pinned] body {
    come in out of a light blur instead of swapping at once. A message just sent slides in where it
    lands, a little past its place and back. Still, and plain grey, for a reader who asked for less
    motion. */
+/* The band is as Claude Code on the web's: slanted, near white at its middle and falling off like a
+   bell, so it reads as a narrow bright line; it crosses the words in 2.1s, slow, fast, then slow,
+   and rests 0.9s off them before the next pass. The background is four times the words' width, so
+   the band starts half their width before them and ends half their width after. */
 .text-shimmer {
-  background: linear-gradient(90deg, var(--muted-foreground) 35%, var(--foreground) 50%, var(--muted-foreground) 65%) 0 0 / 250% 100%;
+  --shimmer-ink: var(--muted-foreground);
+  --shimmer-peak: color-mix(in srgb, var(--shimmer-ink) 30%, white);
+  background: linear-gradient(
+      120deg,
+      var(--shimmer-ink) 37.5%,
+      color-mix(in srgb, var(--shimmer-peak) 16%, var(--shimmer-ink)) 41%,
+      color-mix(in srgb, var(--shimmer-peak) 46%, var(--shimmer-ink)) 44%,
+      color-mix(in srgb, var(--shimmer-peak) 83%, var(--shimmer-ink)) 47%,
+      var(--shimmer-peak) 50%,
+      color-mix(in srgb, var(--shimmer-peak) 83%, var(--shimmer-ink)) 53%,
+      color-mix(in srgb, var(--shimmer-peak) 46%, var(--shimmer-ink)) 56%,
+      color-mix(in srgb, var(--shimmer-peak) 16%, var(--shimmer-ink)) 59%,
+      var(--shimmer-ink) 62.5%
+    )
+    83.333% 0 / 400% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: text-shimmer 2s linear infinite;
+  animation: text-shimmer 3s linear infinite;
 }
 @keyframes text-shimmer {
-  from {
-    background-position: 100% 0;
+  0%,
+  15% {
+    background-position: 83.333% 0;
+    animation-timing-function: cubic-bezier(0.714, 0.121, 0.211, 0.888);
   }
-  to {
-    background-position: -66% 0;
+  85%,
+  100% {
+    background-position: 16.667% 0;
   }
 }
 .dot-wave {
@@ -210,6 +231,19 @@ html[data-pinned] body {
   30% {
     opacity: 1;
     transform: translateY(-1px);
+  }
+}
+/* Dots that go as their line stops (ToolCalls.tsx `LeavingDots`): their width and the gap after
+   them shrink to nothing with the words' cross-fade, so the words glide into their place. */
+.dots-leave {
+  overflow: hidden;
+  animation: dots-leave 0.16s cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+@keyframes dots-leave {
+  to {
+    width: 0;
+    margin-right: -0.5rem;
+    opacity: 0;
   }
 }
 .morph-in {
@@ -280,7 +314,8 @@ html[data-pinned] body {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cross-fade-out {
+  .cross-fade-out,
+  .dots-leave {
     display: none;
   }
   .text-shimmer {

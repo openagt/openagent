@@ -900,8 +900,9 @@ describe('a run just started', () => {
     const started = [{ kind: 'driver', event: { type: 'start', prompt: 'Say hi' } }, { kind: 'driver', event: { type: 'thought', text: 'hm' } }] as OpenAgentEvent[]
     rerender(view({ live: true, events: started, startedWith: 'Say hi' }))
     expect(screen.getAllByText('Say hi')).toHaveLength(1)
-    // The set-up line has given way to the moving line, which names no step while the agent thinks.
-    expect(screen.queryByText('Starting session')).toBeNull()
+    // The set-up line has given way to the moving line, which names no step while the agent thinks;
+    // its words are only the ones fading out.
+    expect(screen.queryByText('Starting session')?.closest('.cross-fade-out') ?? null).not.toBeNull()
     expect(screen.getByRole('status')).toBeTruthy()
   })
 

@@ -6,7 +6,9 @@ import { LinesPill } from './ChangedFiles.js'
 import { cn } from '../lib/utils.js'
 import { formatElapsed } from '../lib/format-date.js'
 import { Markdown } from './Markdown.js'
-import { CrossFade } from './CrossFade.js'
+import { CROSS_FADE_MS, CrossFade } from './CrossFade.js'
+import { CopyButton } from './ui/copy-button.js'
+import { Pieces, useHighlightedIn } from '../lib/highlight.js'
 
 /** What a tool call gave back: what it printed, cut by the driver, whether it failed, and the files it changed. */
 export interface CallOutput {
@@ -62,8 +64,9 @@ function firstWords(text: string): string {
   return line.length > 90 ? `${line.slice(0, 90).trimEnd()}…` : line
 }
 
-// A box of an opened call: the page's code font, and it scrolls once it is taller than its limit.
-const BOX = 'max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md px-2.5 py-1.5 font-mono text-xs text-foreground'
+// What an opened call shows, in the page's code font: what it was given scrolls, as does what it
+// printed, once taller than their limit.
+const CODE = 'max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-xs leading-[18px]'
 
 // One tool call: the verb in grey, what it was done to in dark, on one line. A command the coding
 // agent said in a few words of its own reads as those words ("List project files"), the command
@@ -118,20 +121,38 @@ function callWords({ label, detail, whole, summary, output }: Call, live: boolea
   return { words, label: said ?? [live ? call.doing : call.verb, call.target].filter(Boolean).join(' '), opens: (whole ?? call.detail) !== undefined || output !== undefined }
 }
 
-/** What a call was given and what it gave back, opened under its line. */
+/**
+ * What a call was given and what it gave back, opened under its line, as Claude Code on the web
+ * opens one: a card naming the tool ("Bash"), what it was given in a box of its own (a command
+ * with "$" in front, in the chat's code colours, with a button to copy it), and under it what the
+ * call printed, grey and with no box; a call that failed says so, with its exit code when it has one.
+ */
 function CallDetail({ label, detail, whole, output }: Call) {
   const call = toolCall(label, detail, output?.changed)
   const given = whole ?? call.detail
+  const command = call.kind === 'command' && given !== undefined
+  const coloured = useHighlightedIn(command ? given : '', command ? 'shellscript' : undefined, 'chat')
   return (
-    <div className="mt-1 flex flex-col gap-1">
+    <div className="mt-1.5 flex flex-col gap-1.5 rounded-xl border border-border px-3 py-3">
+      <div className="text-sm text-muted-foreground">{label}</div>
       {given !== undefined && (
-        <pre aria-label={call.kind === 'command' ? 'Command' : 'Detail'} className={cn(BOX, 'bg-muted')}>
-          {call.kind === 'command' && <span className="select-none text-muted-foreground">$ </span>}
-          {given}
-        </pre>
+        <div className="relative rounded-lg border border-border">
+          <pre aria-label={command ? 'Command' : 'Detail'} className={cn(CODE, 'py-1.5 pl-3 pr-10 text-foreground')}>
+            {command && <span className="select-none text-muted-foreground">$ </span>}
+            {coloured
+              ? coloured.map((pieces, i) => (
+                  <Fragment key={i}>
+                    <Pieces pieces={pieces} />
+                    {i < coloured.length - 1 ? '\n' : null}
+                  </Fragment>
+                ))
+              : given}
+          </pre>
+          <CopyButton text={given} label={command ? 'Copy the command' : 'Copy'} className="absolute top-[7px] right-2" />
+        </div>
       )}
       {output !== undefined && output.text !== '' && (
-        <pre aria-label="Output" className={cn(BOX, 'border border-border')}>
+        <pre aria-label="Output" className={cn(CODE, 'mt-1.5 text-muted-foreground')}>
           {output.text}
         </pre>
       )}
@@ -143,7 +164,7 @@ function CallDetail({ label, detail, whole, output }: Call) {
 /** The small filled arrow at the end of a line that opens, turned down when it is open, as Claude Code on the web's. */
 export function Caret({ open = false }: { open?: boolean }) {
   return (
-    <svg viewBox="0 0 6 8" aria-hidden className={cn('h-2 w-1.5 shrink-0 fill-current opacity-70 transition-transform', open && 'rotate-90')}>
+    <svg viewBox="0 0 6 8" aria-hidden className={cn('h-1.5 w-[4.5px] shrink-0 fill-current opacity-70 transition-transform', open && 'rotate-90')}>
       <path d="M0 0L6 4L0 8Z" />
     </svg>
   )
@@ -155,12 +176,33 @@ export function Caret({ open = false }: { open?: boolean }) {
  * small letters, a pixel and a half under the middle of the line (measured on the page's 14px
  * font), not with the line's middle, which reads as above the words.
  */
-export function LiveDots() {
+export function LiveDots({ leaving = false }: { leaving?: boolean }) {
   return (
-    <span className="relative top-[1.5px] flex shrink-0 items-center">
+    <span className={cn('relative top-[1.5px] flex w-[18px] shrink-0 items-center', leaving && 'dots-leave')}>
       <Dots />
     </span>
   )
+}
+
+/**
+ * The dots of a line that stops going on (`live` turning false) on the same row: they shrink away
+ * while its words cross-fade, so the words glide left into the dots' place rather than jump there,
+ * as Claude Code on the web's do (measured: about 30px in 0.2s, with the fade).
+ */
+export function LeavingDots({ live }: { live: boolean }) {
+  const [was, setWas] = useState(live)
+  const [leaving, setLeaving] = useState(false)
+  if (was !== live) {
+    setWas(live)
+    setLeaving(!live)
+  }
+  useEffect(() => {
+    if (!leaving) return
+    const timer = setTimeout(() => setLeaving(false), CROSS_FADE_MS + 40)
+    return () => clearTimeout(timer)
+  }, [leaving])
+  if (!live && !leaving) return null
+  return <LiveDots leaving={leaving} />
 }
 
 // What the agent thought between two calls: no row of the chat, one line inside an opened group.
@@ -287,7 +329,7 @@ export function ToolCalls({ steps, lead, live }: { steps: readonly ToolStep[]; l
       {/* The pointer anywhere on the line, as wide as the chat, lights its words a step: the
           grey ones to the file's dimmed white, the file to full white, as Claude Code's do. */}
       <div className="group/status relative flex items-center gap-2" {...(live ? { role: 'status' } : {})}>
-        {live && <LiveDots />}
+        <LeavingDots live={live !== undefined} />
         {opens ? (
           <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={words} className="flex min-w-0 items-center gap-1.5 py-0.5 text-left hover:text-foreground">
             {head}

@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useState, type KeyboardEvent } from 'react'
 import { CircleCheck } from 'lucide-react'
 import type { AgentMeta } from '../../src/index.js'
 import { DRIVER_LABELS, driverFromImpl } from '../../src/client.js'
 import { modelName, useModels } from '../lib/models.js'
 import { cn } from '../lib/utils.js'
-import { Caret, LiveDots, Seconds } from './ToolCalls.js'
+import { Caret, LeavingDots, Seconds } from './ToolCalls.js'
 import { CrossFade } from './CrossFade.js'
 
 /** What was set up for the agent before it read its prompt, as its card says it. */
@@ -79,6 +79,7 @@ export function SessionLine({
   const said = setup.workspace !== undefined || setup.branch !== undefined || agent !== undefined
   // An agent that runs elsewhere may never say any of them.
   if (!live && !said && sessionLineEmpty(setup, working)) return null
+  const opens = step === undefined && said
   const words = (
     <CrossFade id={step ?? 'done'}>
       <span className={cn(step !== undefined && 'text-shimmer')}>{step ?? 'Initialized session'}</span>
@@ -86,20 +87,33 @@ export function SessionLine({
   )
   return (
     <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
-      {step !== undefined ? (
-        <div role="status" className="relative flex min-w-0 items-center gap-2">
-          <LiveDots />
+      {/* One row from start to end, the words in the same place, so that as the set-up ends they
+          cross-fade to "Initialized session" and glide into the dots' place as the dots go. */}
+      <div {...(step !== undefined ? { role: 'status' } : {})} className="relative flex min-w-0 items-center gap-2">
+        <LeavingDots live={step !== undefined} />
+        {/* A button only once there is something to open; the same element all along, so the
+            words in it are the same words changing, not new ones put in. */}
+        <div
+          {...(opens
+            ? {
+                role: 'button',
+                tabIndex: 0,
+                'aria-expanded': open,
+                onClick: () => setOpen(o => !o),
+                onKeyDown: (event: KeyboardEvent) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return
+                  event.preventDefault()
+                  setOpen(o => !o)
+                },
+              }
+            : {})}
+          className={cn('flex min-w-0 items-center gap-1.5 py-0.5', opens && 'cursor-pointer hover:text-foreground')}
+        >
           {words}
-          {live?.since !== undefined && <Seconds since={live.since} />}
+          {step !== undefined && live?.since !== undefined && <Seconds since={live.since} />}
+          {opens && <Caret open={open} />}
         </div>
-      ) : !said ? (
-        <div className="flex items-center py-0.5">{words}</div>
-      ) : (
-        <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} className="flex items-center gap-1.5 py-0.5 hover:text-foreground">
-          {words}
-          <Caret open={open} />
-        </button>
-      )}
+      </div>
       {open && (
         <div className={cn('mt-1.5 flex flex-col gap-1.5', !nested && 'rounded-lg border border-border px-3 py-2')}>
           {setup.workspace !== undefined && <Step label="Made the checkout" value={setup.workspace} />}

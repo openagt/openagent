@@ -118,6 +118,22 @@ describe('ToolCalls', () => {
   })
 })
 
+describe('an opened call', () => {
+  test('is one card: the tool named, the command in a box of its own with a copy button, and what it printed under it in grey', () => {
+    render(<ToolCalls steps={[{ type: 'action', label: 'Bash', detail: 'sleep 1 && ls', summary: 'List files', output: { text: 'README.md' } }]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'List files' }))
+    const command = screen.getByLabelText('Command')
+    expect(command.textContent).toBe('$ sleep 1 && ls')
+    const card = command.closest('.rounded-xl')!
+    expect(card.firstElementChild?.textContent).toBe('Bash')
+    expect(screen.getByRole('button', { name: 'Copy the command' })).toBeTruthy()
+    const output = screen.getByLabelText('Output')
+    expect(output.textContent).toBe('README.md')
+    expect(output.className).toContain('text-muted-foreground')
+    expect(output.className).not.toContain('border')
+  })
+})
+
 describe('a steps row with its call going on', () => {
   const live = (call: { label: string; detail?: string; summary?: string; id?: string }, since?: string) => <ToolCalls steps={[]} live={{ call, ...(since !== undefined ? { since } : {}) }} />
 
@@ -162,6 +178,22 @@ describe('a steps row with its call going on', () => {
     const leaving = container.querySelector('.cross-fade-out')
     expect(leaving?.textContent).toContain('Showing the last commits')
     expect(container.querySelector('.cross-fade-in')?.textContent).toContain('Ran 2 commands')
+  })
+
+  test('as the call ends its dots shrink away with the fade, so the words glide into their place, and then they are gone', () => {
+    vi.useFakeTimers()
+    const call = { label: 'Bash', detail: 'git log -3', id: 'c1' }
+    const { rerender, container } = render(<ToolCalls steps={[]} live={{ call }} />)
+    expect(container.querySelector('.dot-wave')?.parentElement?.className).not.toContain('dots-leave')
+    rerender(<ToolCalls steps={[{ type: 'action', ...call }]} />)
+    expect(container.querySelector('.dot-wave')?.parentElement?.className).toContain('dots-leave')
+    act(() => void vi.advanceTimersByTime(250))
+    expect(container.querySelector('.dot-wave')).toBeNull()
+  })
+
+  test('a row drawn done has no dots at all', () => {
+    const { container } = render(<ToolCalls steps={[bash('ls')]} />)
+    expect(container.querySelector('.dot-wave')).toBeNull()
   })
 })
 
