@@ -132,8 +132,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   Google Fonts. Picked over Satoshi, whose licence forbids shipping it in a public package,
   and over IBM Plex, the landing page's.
 - The chat is set at Claude Code's sizes: text 15px on 21px lines, code 13px.
-- Every menu is shadcn create's: rounded, near-black and see-through over a blur on light, a
-  dark grey on dark, light text in either theme. Picked over menus on the page's own card.
+- Every menu is shadcn create's in the theme's colours: rounded, a little see-through over a
+  blur, the theme's card on light and its fill on dark. Picked over shadcn's own near-black
+  and grey, which did not match the page, and over opaque menus on the page's card.
 - The message box is laid out as Claude Code's: a filled box with rounder corners holding the
   "+" menu, the text and the send; a row under it with the Context and Auto menus, and the
   model at the right with its effort in a quieter tone, one menu for both. Where the agent

@@ -275,23 +275,22 @@
 
 
 /* A menu's surface (dropdowns, selects, the composer's suggestions), as shadcn create sets its
-   menus: near-black and see-through over a blur on light, a dark grey on dark, with light text,
-   whatever the palette. The tokens are set again inside it, so the items, their dim lines, the
-   lit row and the separators read on it without classes of their own. */
-.menu-surface {
-  --foreground: oklch(0.97 0 0);
-  --card-foreground: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --muted: oklch(1 0 0 / 8%);
-  --accent: oklch(0.439 0 0);
-  --accent-foreground: oklch(0.97 0 0);
-  --border: oklch(1 0 0 / 10%);
-  background-color: oklch(0.145 0 0 / 80%);
-  color: var(--foreground);
+   menus, in the theme's own colours: the theme's card on light and its fill on dark (on Neutral,
+   shadcn's very grey), a little see-through over a blur, a faint ring for an edge. `--menu` is
+   read where the theme's tokens are, on the page's root, so each palette gets its own. Inside,
+   the lit row and the separators are the text's colour, faint, so they show on any of them. */
+:root {
+  --menu: color-mix(in oklab, var(--card) 85%, transparent);
 }
-.dark .menu-surface {
-  --accent: oklch(0.371 0 0 / 80%);
-  background-color: oklch(0.269 0 0 / 90%);
+:root.dark {
+  --menu: color-mix(in oklab, var(--muted) 85%, transparent);
+}
+.menu-surface {
+  --accent: color-mix(in oklab, var(--foreground) 10%, transparent);
+  --accent-foreground: var(--foreground);
+  --border: color-mix(in oklab, var(--foreground) 10%, transparent);
+  background-color: var(--menu);
+  color: var(--foreground);
 }
 
 body {
