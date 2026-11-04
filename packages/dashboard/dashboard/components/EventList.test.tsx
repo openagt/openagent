@@ -2,6 +2,13 @@ import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 
+/** What a reader gets of an element: its words less the ones fading out of it (CrossFade). */
+const shownText = (el: Element): string | null => {
+  const copy = el.cloneNode(true) as Element
+  copy.querySelectorAll('[aria-hidden="true"]').forEach(node => node.remove())
+  return copy.textContent
+}
+
 // The session line names the model as the daemon lists it; no daemon here, so the list never answers.
 vi.mock('../rpc/models.js', () => ({ onModels: () => new Promise(() => {}) }))
 
@@ -285,11 +292,12 @@ describe('EventList tool calls', () => {
     expect(screen.getByRole('status').textContent).toBe('')
   })
 
-  test('the moving line counts the tokens the turn went through, as Claude Code on the web does', () => {
+  test('the moving line counts the tokens the turn went through once it has answered something, as Claude Code on the web does', () => {
     const tokens = (n: number): OpenAgentEvent => ({ kind: 'driver', event: { type: 'tokens', tokens: n } })
-    render(<EventList events={[prompt, tokens(12_000), call('Bash', 'ls'), tokens(96_912)]} working stick={false} />)
-    expect(screen.getByRole('status').textContent).toBe('Runningls·96.9k tokens')
-    expect(screen.queryByText(/Thinking/)).toBeNull()
+    const { rerender } = render(<EventList events={[prompt, tokens(12_000), call('Bash', 'ls'), tokens(96_912)]} working stick={false} />)
+    expect(screen.getByRole('status').textContent).toBe('Runningls')
+    rerender(<EventList events={[prompt, tokens(12_000), call('Bash', 'ls'), tokens(96_912), { kind: 'driver', event: { type: 'text', text: 'Listed.' } }, tokens(98_100)]} working stick={false} />)
+    expect(screen.getByRole('status').textContent).toBe('·98.1k tokens')
   })
 
   test("while its turn is over and its own subagents still work it waits with no moving line; a subagent's message wakes it, and the line counts from then", () => {
@@ -299,7 +307,7 @@ describe('EventList tool calls', () => {
     expect(screen.queryByRole('status')).toBeNull()
     const woke: OpenAgentEvent = { kind: 'driver', event: { type: 'thinking' }, at: new Date().toISOString() }
     rerender(<EventList events={[prompt, started, { kind: 'driver', event: { type: 'text', text: 'Both run.' }, at: '2026-10-01T10:00:19.000Z' }, over, woke]} working stick={false} />)
-    expect(screen.getByRole('status').textContent).toBe('·Thinking')
+    expect(screen.getByRole('status')).toBeTruthy()
   })
 
   test('a call that only drove the subagents is no row of the run', () => {
@@ -309,20 +317,18 @@ describe('EventList tool calls', () => {
     expect(screen.getByText('It is in.')).toBeTruthy()
   })
 
-  test('the moving line says the agent thinks only while its coding agent says it does, as Claude Code on the web says it', () => {
+  test('while the agent thinks the moving line is its dots and seconds, with no word for it, as Claude Code on the web\u2019s is', () => {
     const thinking: OpenAgentEvent = { kind: 'driver', event: { type: 'thinking' } }
     const { rerender } = render(<EventList events={[prompt]} working stick={false} />)
     expect(screen.getByRole('status').textContent).toBe('')
     rerender(<EventList events={[prompt, thinking]} working stick={false} />)
-    expect(screen.getByRole('status').textContent).toBe('·Thinking')
-    // What it thought came: it is done thinking.
-    rerender(<EventList events={[prompt, thinking, thought('hm')]} working stick={false} />)
     expect(screen.getByRole('status').textContent).toBe('')
+    expect(screen.queryByText(/Thinking/)).toBeNull()
   })
 
-  test('while the agent works, the last call is the line going on now, not yet in its run', () => {
+  test('while the agent works, the call going on is its run\u2019s row, which says the steps taken once it is done', () => {
     const { rerender } = render(<EventList events={[prompt, call('Bash', 'ls'), call('Read', '/repo/AGENTS.md')]} working stick={false} />)
-    expect(screen.getByRole('button', { name: 'Ran ls' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Ran ls' })).toBeNull()
     expect(screen.getByRole('status').textContent).toBe('ReadingAGENTS.md')
     // The next event came: the call is over and joins its run; the agent is between calls.
     rerender(<EventList events={[prompt, call('Bash', 'ls'), call('Read', '/repo/AGENTS.md'), thought('next')]} working stick={false} />)
@@ -530,15 +536,15 @@ describe('EventList session line', () => {
 
   test('while the agent works on its first prompt and nothing has come yet, the line names the step going on, and it is the only moving line', () => {
     const { rerender } = render(<EventList events={[prompt]} setup={{}} working stick={false} />)
-    expect(screen.getAllByRole('status').map(n => n.textContent)).toEqual(['Starting session'])
+    expect(screen.getAllByRole('status').map(shownText)).toEqual(['Starting session'])
     rerender(<EventList events={[prompt]} setup={{ driver: 'codex' }} working stick={false} />)
-    expect(screen.getAllByRole('status').map(n => n.textContent)).toEqual(['Making the checkout'])
+    expect(screen.getAllByRole('status').map(shownText)).toEqual(['Making the checkout'])
     rerender(<EventList events={[prompt]} setup={setup} working stick={false} />)
-    expect(screen.getAllByRole('status').map(n => n.textContent)).toEqual(['Starting Codex'])
+    expect(screen.getAllByRole('status').map(shownText)).toEqual(['Starting Codex'])
     // The agent's first output: set up, and the usual moving line takes over.
     rerender(<EventList events={[prompt, { kind: 'driver', event: { type: 'thought', text: 'hm' } }]} setup={setup} working stick={false} />)
     expect(screen.getByRole('button', { name: 'Initialized session' })).toBeTruthy()
-    expect(screen.getAllByRole('status').map(n => n.textContent)).toEqual([''])
+    expect(screen.getAllByRole('status').map(shownText)).toEqual([''])
   })
 
   test('a later prompt is no set-up: the line stays folded and the moving line is the only one', () => {

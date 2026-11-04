@@ -256,7 +256,31 @@ html[data-pinned] body {
     translate: 0 8px;
   }
 }
+/* Words that change in place on the line under the chat (CrossFade.tsx), as Claude Code on the
+   web's change: the old ones fade out rising, the new ones fade in from below, over the same spot,
+   quick at first and slow at the end; what follows the words glides to their new end. */
+.cross-fade-out {
+  animation: cross-fade-out 0.16s cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+@keyframes cross-fade-out {
+  to {
+    opacity: 0;
+    translate: 0 -3px;
+  }
+}
+.cross-fade-in {
+  animation: cross-fade-in 0.16s cubic-bezier(0.2, 0, 0, 1);
+}
+@keyframes cross-fade-in {
+  from {
+    opacity: 0;
+    translate: 0 3px;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
+  .cross-fade-out {
+    display: none;
+  }
   .text-shimmer {
     animation: none;
     background: none;
@@ -266,7 +290,8 @@ html[data-pinned] body {
   .morph-in,
   .bubble-in,
   .letter-in,
-  .word-in {
+  .word-in,
+  .cross-fade-in {
     animation: none;
   }
 }

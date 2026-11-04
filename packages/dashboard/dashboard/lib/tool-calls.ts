@@ -194,9 +194,18 @@ export function doingOf(words: string): string | undefined {
   // Already going on: "Running tests".
   if (verb.endsWith('ing') && (VERBS.has(verb.slice(0, -3)) || VERBS.has(`${verb.slice(0, -3)}e`) || VERBS.has(verb.slice(0, -4)))) return words.trim()
   if (!VERBS.has(verb)) return undefined
+  // A second thing done, after "and" or "then", goes on too: "Waiting 10 seconds then listing
+  // files", "Adding a footer and renaming the heading". After a comma it is a list of things, and
+  // Claude Code on the web leaves those as they were written ("Showing status, count files").
+  const more = rest.replace(/\b(and|then)(\s+)([A-Za-z][A-Za-z-]*)/g, (whole, joint: string, space: string, next: string) => (VERBS.has(next.toLowerCase()) ? `${joint}${space}${ingOf(next)}` : whole))
+  return ingOf(first) + more
+}
+
+/** A verb this knows, in its "-ing" form, its first letter as it was written. */
+function ingOf(word: string): string {
+  const verb = word.toLowerCase()
   const doing = DOUBLED.has(verb) ? verb + verb.at(-1) + 'ing' : verb.endsWith('ie') ? verb.slice(0, -2) + 'ying' : /[^aeioy]e$/.test(verb) ? verb.slice(0, -1) + 'ing' : verb + 'ing'
-  const said = first[0] === first[0]!.toUpperCase() ? doing.charAt(0).toUpperCase() + doing.slice(1) : doing
-  return said + rest
+  return word[0] === word[0]!.toUpperCase() ? doing.charAt(0).toUpperCase() + doing.slice(1) : doing
 }
 
 /** The verbs a description of a call opens with, by what the agents wrote: each turned by the rules of `doingOf`. */

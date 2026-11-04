@@ -698,14 +698,20 @@ export function EventList({
   events.forEach((e, at) => {
     if (isTurnBoundary(e)) lastTurnAt = at
   })
-  const turnTokens = events.slice(lastTurnAt + 1).flatMap(e => (e.kind === 'driver' && e.event.type === 'tokens' ? [e.event.tokens] : [])).at(-1)
+  // The tokens the turn went through, said once it has answered something, as Claude Code on the
+  // web says them: before that, the line is the dots and the seconds.
+  const turnSaid = events.slice(lastTurnAt + 1).some(e => e.kind === 'driver' && e.event.type === 'text' && (e.event as { subagent?: string }).subagent === undefined)
+  const turnTokens = turnSaid ? events.slice(lastTurnAt + 1).flatMap(e => (e.kind === 'driver' && e.event.type === 'tokens' ? [e.event.tokens] : [])).at(-1) : undefined
   // Once the coding agent said its session began, it is set up: what goes on is its own thinking.
   const begun = events.some(e => e.kind === 'session-update')
-  // It thinks from when its coding agent says it began to, until what it thought comes to a step or
-  // a message, as Claude Code on the web says it: only while a model thinks, never as a stand-in for
-  // "nothing to show".
-  const lastSaid = [...events].reverse().find(e => e.kind === 'driver' && ['thinking', 'thought', 'action', 'output', 'text', 'start', 'subagent'].includes(e.event.type))
-  const lastIsThought = lastSaid?.kind === 'driver' && lastSaid.event.type === 'thinking'
+  // The call going on now is its steps row's, as Claude Code on the web's is: the row it continues,
+  // or a row of its own when it starts one. The row stays the same row once the call is done, so
+  // its words change in place to the steps it took.
+  const currentEvent = current !== undefined ? unfolded[unfolded.length - 1] : undefined
+  const lastRow = shown[shown.length - 1]
+  const liveHead = currentEvent === undefined ? undefined : lastRow !== undefined && steps.has(lastRow) ? lastRow : currentEvent
+  const listed = currentEvent !== undefined && liveHead === currentEvent ? [...shown, currentEvent] : shown
+  if (currentEvent !== undefined && liveHead === currentEvent) steps.set(currentEvent, [])
   const started = subagentSteps(shown, rows, reports, e => isTurnBoundary(e) || (e.kind === 'driver' && e.event.type === 'text'))
   const startedRows = (at: number): ReactNode => {
     const steps = started.get(at)
@@ -808,7 +814,7 @@ export function EventList({
                 {head}
               </MessageScrollerItem>
             )}
-            {shown.map((e, i, rows) => {
+            {listed.map((e, i, rows) => {
               const message = textOf(e)
               const choiceRow = choiceRows?.rows.get(e)
               const prev = i > 0 ? rows[i - 1] : undefined
@@ -864,7 +870,7 @@ export function EventList({
                       <Reply text={message} />
                     )
                   ) : steps.has(e) ? (
-                    <ToolCalls steps={steps.get(e)!} lead={setupInSteps && i === setupAt ? setupLead : undefined} />
+                    <ToolCalls steps={steps.get(e)!} lead={setupInSteps && i === setupAt ? setupLead : undefined} live={e === liveHead && current !== undefined ? { call: current, since: turnStart } : undefined} />
                   ) : choiceRow && choiceRow.pick === undefined && projectId !== undefined && agentId !== undefined ? (
                     // The question the agent waits on, answered here, under what it said.
                     typing ? null : <div className="mt-1 flex min-w-0 flex-1 flex-col gap-1.5">
@@ -900,8 +906,8 @@ export function EventList({
                 </Fragment>
               )
             })}
-            {shown.length === setupAt && setupRow}
-            {startedRows(shown.length)}
+            {listed.length === setupAt && setupRow}
+            {startedRows(listed.length)}
             {written && (
               <MessageScrollerItem messageId="writing" className="-mx-1.5 flex items-start gap-2 rounded-sm px-1.5">
                 <Writing text={written} />
@@ -921,7 +927,7 @@ export function EventList({
                 {/* Under the reply as it streams, too: the agent is still at it, and Claude Code on
                     the web keeps its dots and its count there. The line said a word before, which
                     under a streaming reply read as a second thing going on. */}
-                {working && !settingUp && !waitsOnItsOwn && <LiveLine {...(written ? {} : { call: current })} since={turnStart} tokens={turnTokens} thinking={!written && !current && lastIsThought} />}
+                {working && !settingUp && !waitsOnItsOwn && current === undefined && <LiveLine since={turnStart} tokens={turnTokens} />}
               </div>
             )}
             {!working && waitingOn > 0 && (

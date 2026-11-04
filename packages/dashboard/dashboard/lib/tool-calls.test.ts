@@ -99,7 +99,11 @@ describe('doingOf', () => {
     expect(doingOf('Try the build again')).toBe('Trying the build again')
     expect(doingOf('use the cache')).toBe('using the cache')
     expect(doingOf('Sleep for 4 seconds')).toBe('Sleeping for 4 seconds')
-    expect(doingOf('Show, then count')).toBe('Showing, then count')
+    expect(doingOf('Show, then count')).toBe('Showing, then counting')
+    expect(doingOf('Wait 10 seconds then list files')).toBe('Waiting 10 seconds then listing files')
+    expect(doingOf('Add footer and rename README heading, show diff')).toBe('Adding footer and renaming README heading, show diff')
+    expect(doingOf('Show status, count markdown files, print README')).toBe('Showing status, count markdown files, print README')
+    expect(doingOf('Check the branch and its upstream')).toBe('Checking the branch and its upstream')
   })
 
   test('words already going on stay; words that open with no verb it knows are left as written', () => {
