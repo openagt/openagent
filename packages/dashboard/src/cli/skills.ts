@@ -13,7 +13,7 @@ import { SKILLS_ENV } from '@openagt/agent-data'
  * hidden from git, and a project's own skill of the same name takes its place (see the runner's
  * `basic-skills.ts`).
  */
-export const DEFAULT_SKILLS: readonly string[] = ['@openagt/skill-logs', '@openagt/skill-question', '@openagt/skill-github', '@openagt/skill-orchestration', '@openagt/skill-tickets', '@openagt/skill-queue', '@openagt/skill-account-rotation']
+export const DEFAULT_SKILLS: readonly string[] = ['@openagt/skill-logs', '@openagt/skill-ask', '@openagt/skill-github', '@openagt/skill-orchestration', '@openagt/skill-tickets', '@openagt/skill-queue', '@openagt/skill-account-rotation']
 
 /**
  * Put the default skills in `env` under {@link SKILLS_ENV}: their packages' directories, resolved

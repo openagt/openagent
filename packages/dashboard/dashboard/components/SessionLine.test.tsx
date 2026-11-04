@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
+/** What a reader gets of an element: its words less the ones fading out of it (CrossFade). */
+const shownText = (el: Element): string | null => {
+  const copy = el.cloneNode(true) as Element
+  copy.querySelectorAll('[aria-hidden="true"]').forEach(node => node.remove())
+  return copy.textContent
+}
+
 vi.mock('../lib/models.js', () => ({
   useModels: () => ({ 'claude-code': { models: [{ id: 'opus', name: 'Opus 5.5', resolvedId: 'claude-opus-5-5' }] } }),
   modelName: (models: { models: { id: string; name: string; resolvedId?: string }[] } | undefined, id: string) =>
@@ -89,17 +96,17 @@ describe('SessionLine', () => {
     const since = new Date(Date.now() - 3_000).toISOString()
     const { rerender } = render(<SessionLine setup={{}} live={{ since }} />)
     // No card yet.
-    expect(screen.getByRole('status').textContent).toBe('Starting session3s')
+    expect(shownText(screen.getByRole('status'))).toBe('Starting session3s')
     expect(screen.queryByRole('button')).toBeNull()
     // The card is there and names the coding agent: its checkout is being made.
     rerender(<SessionLine setup={{ driver: 'claude-code' }} live={{ since }} />)
-    expect(screen.getByRole('status').textContent).toBe('Making the checkout3s')
+    expect(shownText(screen.getByRole('status'))).toBe('Making the checkout3s')
     // An agent that runs elsewhere has no checkout made here.
     rerender(<SessionLine setup={{ driver: 'claude-code', elsewhere: true }} live={{ since }} />)
-    expect(screen.getByRole('status').textContent).toBe('Starting session3s')
+    expect(shownText(screen.getByRole('status'))).toBe('Starting session3s')
     // The card names the branch: the checkout is made, the coding agent is being started.
     rerender(<SessionLine setup={{ driver: 'claude-code', branch: 'agent-1' }} live={{ since }} />)
-    expect(screen.getByRole('status').textContent).toBe('Starting Claude Code3s')
+    expect(shownText(screen.getByRole('status'))).toBe('Starting Claude Code3s')
     // Set up: the folded line.
     rerender(<SessionLine setup={{ driver: 'claude-code', branch: 'agent-1' }} />)
     expect(screen.queryByRole('status')).toBeNull()

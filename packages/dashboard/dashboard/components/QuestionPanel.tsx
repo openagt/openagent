@@ -146,11 +146,11 @@ export function QuestionPanel({
   }, [otherPicked])
 
   // Rows are parted by a line, as Claude Code on the web parts them; none is filled.
-  const row = 'flex w-full items-start gap-3 p-3 text-left disabled:opacity-60'
+  const row = 'flex w-full items-start gap-3 p-4 text-left disabled:opacity-60'
   if (sent) return null
   return (
-    <section role="region" aria-label={choice.title} className="flex w-full max-w-[480px] flex-col overflow-clip rounded-[10px] font-sans text-sm ring-1 ring-border">
-      <h2 className="bg-foreground/5 px-3 py-2 font-normal">{choice.title}</h2>
+    <section role="region" aria-label={choice.title} className="flex w-full max-w-[480px] flex-col overflow-clip rounded-xl font-sans text-sm ring-1 ring-border">
+      <h2 className="bg-foreground/5 px-4 py-3 font-normal">{choice.title}</h2>
       <ul className="flex flex-col">
         {choice.options.map(o => {
           const on = choice.multi ? checked.has(o.id) : picked === o.id
@@ -158,7 +158,7 @@ export function QuestionPanel({
             <li key={o.id} className="border-t border-border first:border-t-0">
               <button type="button" role={choice.multi ? 'checkbox' : 'radio'} aria-checked={on} disabled={busy} onClick={() => pick(o.id)} className={row}>
                 <Mark on={on} multi={choice.multi} />
-                <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+                <span className="flex min-w-0 flex-1 flex-col gap-2">
                   <span>
                     {o.label}
                     {o.id === choice.recommended && <span className="ml-2 text-muted-foreground">Recommended</span>}
@@ -186,13 +186,13 @@ export function QuestionPanel({
                 }}
                 placeholder="Type your own answer here"
                 aria-label="Other"
-                className="mx-3 mb-1 ml-10 rounded-md border border-border bg-transparent px-2.5 py-1.5 outline-none placeholder:text-muted-foreground focus:border-primary"
+                className="mx-4 mb-2 ml-11 rounded-md border border-border bg-transparent px-2.5 py-1.5 outline-none placeholder:text-muted-foreground focus:border-primary"
               />
             )}
           </li>
         )}
       </ul>
-      <div className="flex items-center gap-2 px-3 pt-2 pb-3">
+      <div className="flex items-center gap-2 px-4 pt-2 pb-4">
         {/* One line in every state, so the buttons never move: what went wrong, or that it is on its way. */}
         <span role={error ? 'alert' : busy ? 'status' : undefined} className={cn('min-w-0 flex-1 truncate text-xs', error ? 'text-danger' : 'text-muted-foreground')}>
           {error ?? (busy ? 'Sending your answer…' : '')}

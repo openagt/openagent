@@ -94,11 +94,12 @@ function eventOf(line: AnyDiaryLine): OpenAgentEvent | undefined {
       if (typeof line['sessionId'] === 'string' && line['driver'] === undefined) return { kind: 'session-update', sessionId: line['sessionId'] }
       return line as unknown as OpenAgentEvent
     case 'question': {
-      const { kind: _kind, title, options, recommended, multi, file } = line
+      const { kind: _kind, title, header, options, recommended, multi, file } = line
       return {
         kind: 'choice',
         id: 'await-choices',
         title: String(title ?? 'Which option?'),
+        ...(typeof header === 'string' ? { header } : {}),
         options: Array.isArray(options) ? (options as ChoiceOption[]) : [],
         ...(typeof recommended === 'string' ? { recommended } : {}),
         ...(multi === true ? { multi: true } : {}),

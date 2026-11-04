@@ -1,12 +1,14 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
-import { ChevronRight } from 'lucide-react'
-import { callsSummary, doingOf, summaryWords, toolCall } from '../lib/tool-calls.js'
+import { callsSummary, doingOf, doneOf, summaryWords, toolCall } from '../lib/tool-calls.js'
 import { usePreferences } from '../lib/preferences.js'
 import type { FileEdit } from '../lib/turn-changes.js'
 import { LinesPill } from './ChangedFiles.js'
 import { cn } from '../lib/utils.js'
 import { formatElapsed } from '../lib/format-date.js'
 import { Markdown } from './Markdown.js'
+import { CROSS_FADE_MS, CrossFade } from './CrossFade.js'
+import { CopyButton } from './ui/copy-button.js'
+import { Pieces, useHighlightedIn } from '../lib/highlight.js'
 
 /** What a tool call gave back: what it printed, cut by the driver, whether it failed, and the files it changed. */
 export interface CallOutput {
@@ -62,8 +64,9 @@ function firstWords(text: string): string {
   return line.length > 90 ? `${line.slice(0, 90).trimEnd()}…` : line
 }
 
-// A box of an opened call: the page's code font, and it scrolls once it is taller than its limit.
-const BOX = 'max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md px-2.5 py-1.5 font-mono text-xs text-foreground'
+// What an opened call shows, in the page's code font: what it was given scrolls, as does what it
+// printed, once taller than their limit.
+const CODE = 'max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-xs leading-[18px]'
 
 // One tool call: the verb in grey, what it was done to in dark, on one line. A command the coding
 // agent said in a few words of its own reads as those words ("List project files"), the command
@@ -74,16 +77,35 @@ const BOX = 'max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md px-
 /** The calls that start a subagent: their detail is the task the agent wrote for it. */
 const SUBAGENT_CALLS = new Set(['Agent', 'Task'])
 
-function CallLine({ label, detail, whole, summary, output, live }: Call & { live?: { since: string | undefined } }) {
+function CallLine(call: Call) {
   const [open, setOpen] = useState(false)
+  const { words, label, opens } = callWords(call, false)
+  if (!opens) return <div className="flex min-w-0 items-center gap-1.5">{words}</div>
+  return (
+    <div className="min-w-0">
+      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={label} className="flex max-w-full min-w-0 items-center gap-1.5 text-left hover:text-foreground">
+        {words}
+        <Caret open={open} />
+      </button>
+      {open && <CallDetail {...call} />}
+    </div>
+  )
+}
+
+/**
+ * A call's words on its line: what the agent wrote about it, else the verb and what it was done to,
+ * with the lines its edits changed; going on (`live`) in the present ("Running", "Finding all
+ * markdown files"), and shimmering, else in the past. `opens` when there is more to see on a click.
+ */
+function callWords({ label, detail, whole, summary, output }: Call, live: boolean): { words: ReactNode; label: string; opens: boolean } {
   const call = toolCall(label, detail, output?.changed)
-  const given = whole ?? call.detail
   // What the agent wrote about the call: a command's description, a subagent's task. While it goes
   // on, said as going on ("Finding all markdown files", "Summarizing README"), as Claude Code on the
   // web's live line says what is being done; a subagent's task the agent wrote only as a noun keeps
-  // the line's own words ("Starting agent …").
+  // the line's own words ("Starting agent …"). Once done, said as done ("Waited 10 seconds then
+  // listed files"), as Claude Code on the web's row says it.
   const written = call.kind === 'command' ? summary : SUBAGENT_CALLS.has(label) && live ? (detail !== undefined ? doingOf(detail) : undefined) : undefined
-  const said = written !== undefined && live ? (doingOf(written) ?? written) : written
+  const said = written === undefined ? undefined : live ? (doingOf(written) ?? written) : (doneOf(written) ?? written)
   const words = (
     <>
       {said !== undefined ? (
@@ -95,40 +117,94 @@ function CallLine({ label, detail, whole, summary, output, live }: Call & { live
         </>
       )}
       {call.size !== undefined && <LinesPill {...call.size} />}
-      {live?.since !== undefined && <Seconds since={live.since} />}
     </>
   )
-  if (given === undefined && output === undefined) return <div className="flex min-w-0 items-center gap-1.5">{words}</div>
+  return { words, label: said ?? [live ? call.doing : call.verb, call.target].filter(Boolean).join(' '), opens: (whole ?? call.detail) !== undefined || output !== undefined }
+}
+
+/**
+ * What a call was given and what it gave back, opened under its line, as Claude Code on the web
+ * opens one: on a line of its own, a card naming the tool ("Bash"); in a box of steps, which is
+ * the card already, no second one. What it was given is in a box of its own (a command
+ * with "$" in front, in the chat's code colours, with a button to copy it), and under it what the
+ * call printed, grey and with no box; a call that failed says so, with its exit code when it has one.
+ */
+function CallDetail({ label, detail, whole, output, card = false }: Call & { card?: boolean }) {
+  const call = toolCall(label, detail, output?.changed)
+  const given = whole ?? call.detail
+  const command = call.kind === 'command' && given !== undefined
+  const coloured = useHighlightedIn(command ? given : '', command ? 'shellscript' : undefined, 'chat')
   return (
-    <div className="min-w-0">
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        aria-expanded={open}
-        aria-label={said ?? [live ? call.doing : call.verb, call.target].filter(Boolean).join(' ')}
-        className="flex max-w-full min-w-0 items-center gap-1.5 text-left hover:text-foreground"
-      >
-        {words}
-        <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')} aria-hidden />
-      </button>
-      {open && (
-        <div className="mt-1 flex flex-col gap-1">
-          {given !== undefined && (
-            <pre aria-label={call.kind === 'command' ? 'Command' : 'Detail'} className={cn(BOX, 'bg-muted')}>
-              {call.kind === 'command' && <span className="select-none text-muted-foreground">$ </span>}
-              {given}
-            </pre>
-          )}
-          {output !== undefined && output.text !== '' && (
-            <pre aria-label="Output" className={cn(BOX, 'border border-border')}>
-              {output.text}
-            </pre>
-          )}
-          {output?.failed && <div className="text-xs text-danger">{output.exitCode !== undefined ? `Failed: exit code ${output.exitCode}` : 'Failed'}</div>}
+    <div className={cn('mt-1.5 flex flex-col gap-1.5', card && 'rounded-xl border border-border px-3 py-3')}>
+      {card && <div className="text-sm text-muted-foreground">{label}</div>}
+      {given !== undefined && (
+        <div className="relative rounded-lg border border-border">
+          <pre aria-label={command ? 'Command' : 'Detail'} className={cn(CODE, 'py-1.5 pl-3 pr-10 text-foreground')}>
+            {command && <span className="select-none text-muted-foreground">$ </span>}
+            {coloured
+              ? coloured.map((pieces, i) => (
+                  <Fragment key={i}>
+                    <Pieces pieces={pieces} />
+                    {i < coloured.length - 1 ? '\n' : null}
+                  </Fragment>
+                ))
+              : given}
+          </pre>
+          <CopyButton text={given} label={command ? 'Copy the command' : 'Copy'} className="absolute top-[7px] right-2" />
         </div>
       )}
+      {output !== undefined && output.text !== '' && (
+        <pre aria-label="Output" className={cn(CODE, 'mt-1.5 text-muted-foreground')}>
+          {output.text}
+        </pre>
+      )}
+      {output?.failed && <div className="text-xs text-danger">{output.exitCode !== undefined ? `Failed: exit code ${output.exitCode}` : 'Failed'}</div>}
     </div>
   )
+}
+
+/** The small filled arrow at the end of a line that opens, turned down when it is open, as Claude Code on the web's. */
+export function Caret({ open = false }: { open?: boolean }) {
+  return (
+    <svg viewBox="0 0 6 8" aria-hidden className={cn('h-1.5 w-[4.5px] shrink-0 fill-current opacity-70 transition-transform', open && 'rotate-90')}>
+      <path d="M0 0L6 4L0 8Z" />
+    </svg>
+  )
+}
+
+/**
+ * The moving dots in front of what is going on now, at the start of the words' own column, where
+ * the line's words start, with the words after them. They are level with the middle of the words'
+ * small letters, a pixel and a half under the middle of the line (measured on the page's 14px
+ * font), not with the line's middle, which reads as above the words.
+ */
+export function LiveDots({ leaving = false }: { leaving?: boolean }) {
+  return (
+    <span className={cn('relative top-[1.5px] flex w-[18px] shrink-0 items-center', leaving && 'dots-leave')}>
+      <Dots />
+    </span>
+  )
+}
+
+/**
+ * The dots of a line that stops going on (`live` turning false) on the same row: they shrink away
+ * while its words cross-fade, so the words glide left into the dots' place rather than jump there,
+ * as Claude Code on the web's do (measured: about 30px in 0.2s, with the fade).
+ */
+export function LeavingDots({ live }: { live: boolean }) {
+  const [was, setWas] = useState(live)
+  const [leaving, setLeaving] = useState(false)
+  if (was !== live) {
+    setWas(live)
+    setLeaving(!live)
+  }
+  useEffect(() => {
+    if (!leaving) return
+    const timer = setTimeout(() => setLeaving(false), CROSS_FADE_MS + 40)
+    return () => clearTimeout(timer)
+  }, [leaving])
+  if (!live && !leaving) return null
+  return <LiveDots leaving={leaving} />
 }
 
 // What the agent thought between two calls: no row of the chat, one line inside an opened group.
@@ -140,7 +216,7 @@ function ThoughtLine({ text }: { text: string }) {
     <div className="min-w-0">
       <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label="Thought" className="flex min-w-0 max-w-full items-center gap-1.5 hover:text-foreground">
         <span className="truncate italic">{firstWords(text)}</span>
-        <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')} aria-hidden />
+        <Caret open={open} />
       </button>
       {open && (
         <div className="mt-1 italic">
@@ -151,36 +227,20 @@ function ThoughtLine({ text }: { text: string }) {
   )
 }
 
-// The last line of the chat while the agent works, in place of a spinner: the call going on now
-// ("Running pnpm test 9s"). Moving dots in front, the text shimmering, the seconds counting from
-// the start of the turn (`since`), so the count goes on from one step to the next. When the line
-// names a new step, its words come in out of a light blur instead of swapping at once.
-//
-// Between two calls — while it thinks, while its reply streams — there is no step to name, and the
-// line is the dots and the seconds, as Claude Code on the web's is. A word standing in for the step
-// ("Working…") said no more than the dots already do, and read as a step that was not one.
+// The last line of the chat while the agent works and no step of it is going on: while it thinks,
+// while its reply streams, while it starts. Moving dots, and the seconds counting from the start of
+// the turn (`since`), so the count goes on from one step to the next. No word stands for what the
+// agent does then, as Claude Code on the web has none ("Thinking" said no more than the dots do);
+// a step going on is said on its own steps row instead (`ToolCalls`), with the seconds after it.
+// The tokens come once the turn has answered something (`tokens`, the caller's to give or not).
 // `word` is for a line that is about something else: waiting on subagents.
-export function LiveLine({ call, word, since, tokens, thinking = false }: { call?: Call | undefined; word?: string | undefined; since?: string | undefined; tokens?: number | undefined; thinking?: boolean }) {
+export function LiveLine({ word, since, tokens }: { word?: string | undefined; since?: string | undefined; tokens?: number | undefined }) {
   return (
-    <div role="status" className="flex min-w-0 flex-1 items-center gap-2 font-sans text-sm text-muted-foreground">
-      <Dots />
-      <span key={call ? (call.id ?? `${call.label} ${call.detail ?? ''}`) : word} className="morph-in flex min-w-0 items-center gap-2">
-        {call ? (
-          <CallLine {...call} live={{ since }} />
-        ) : (
-          <>
-            {word !== undefined && <span className="text-shimmer">{word}</span>}
-            {since !== undefined && <Seconds since={since} />}
-          </>
-        )}
-      </span>
+    <div role="status" className="relative flex min-w-0 flex-1 items-center gap-2 font-sans text-sm text-muted-foreground">
+      <LiveDots />
+      {word !== undefined && <span className="text-shimmer">{word}</span>}
+      {since !== undefined && <Seconds since={since} />}
       {tokens !== undefined && <TokenCount tokens={tokens} />}
-      {thinking && (
-        <span className="morph-in flex shrink-0 items-center gap-2">
-          <span aria-hidden>·</span>
-          Thinking
-        </span>
-      )}
     </div>
   )
 }
@@ -229,55 +289,81 @@ export function tokenWords(tokens: number): string {
 // two rows, each row opening further. `lead` is a row the panel opens with: the session's
 // set-up, before the first turn's steps. A lone call with nothing to lead it is its own line
 // ("Read AGENTS.md"). A run with no call in it draws nothing.
-export function ToolCalls({ steps, lead }: { steps: readonly ToolStep[]; lead?: ReactNode }) {
+export function ToolCalls({ steps, lead, live }: { steps: readonly ToolStep[]; lead?: ReactNode; live?: { call: Call; since?: string | undefined } | undefined }) {
   const [open, setOpen] = useState(false)
   // What the agent thought between two calls is not a step it took, and Claude Code on the web's
   // panel has none of it. Shown only to a person who asked for it in Settings.
   const thinking = usePreferences().showThinking === true
   const shown = thinking ? steps : steps.filter(step => step.type === 'action')
   const calls = steps.filter(step => step.type === 'action')
-  if (calls.length === 0) return null
+  if (calls.length === 0 && !live) return null
   const summary = callsSummary(calls.map(call => toolCall(call.label, call.detail, call.output?.changed)))
-  const words = summaryWords(summary)
-  const only = shown.length === 1 ? shown[0] : undefined
-  if (only?.type === 'action' && !lead) {
-    return (
-      <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
-        <CallLine {...only} />
-      </div>
-    )
-  }
+  const only = !live && !lead && shown.length === 1 && shown[0]!.type === 'action' ? shown[0] : undefined
+  // The row's words: the call going on now, as going on; once it is done, as Claude Code on the
+  // web's row does, the same row says the steps it took ("Ran 2 commands"), the old words fading
+  // out as the new come in. A row of one call says that call.
+  const going = live ? callWords(live.call, true) : undefined
+  const one = only ? callWords(only, false) : undefined
+  const words = going?.label ?? one?.label ?? summaryWords(summary)
+  const head = going ? (
+    <CrossFade id={`live:${live!.call.id ?? `${live!.call.label} ${live!.call.detail ?? ''}`}`}>{going.words}</CrossFade>
+  ) : one ? (
+    <CrossFade id="one">{one.words}</CrossFade>
+  ) : (
+    <CrossFade id="steps">
+      <span className="min-w-0 truncate text-left">
+        {summary.parts.map((part, at) => (
+          <Fragment key={at}>
+            <span className="group-hover/status:text-foreground/80 group-has-focus-visible/status:text-foreground/80">
+              {at > 0 && ', '}
+              {part.words}
+            </span>
+            {part.target !== undefined && <span className="text-foreground/80 group-hover/status:text-foreground group-has-focus-visible/status:text-foreground"> {part.target}</span>}
+          </Fragment>
+        ))}
+      </span>
+      {summary.size !== undefined && <LinesPill {...summary.size} />}
+    </CrossFade>
+  )
+  const opens = one ? one.opens : true
   return (
     <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
       {/* The pointer anywhere on the line, as wide as the chat, lights its words a step: the
           grey ones to the file's dimmed white, the file to full white, as Claude Code's do. */}
-      <div className="group/status flex">
-        <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={words} className="flex min-w-0 items-center gap-1.5 py-0.5">
-          <span className="min-w-0 truncate text-left">
-            {summary.parts.map((part, at) => (
-              <Fragment key={at}>
-                <span className="group-hover/status:text-foreground/80 group-has-focus-visible/status:text-foreground/80">
-                  {at > 0 && ', '}
-                  {part.words}
-                </span>
-                {part.target !== undefined && <span className="text-foreground/80 group-hover/status:text-foreground group-has-focus-visible/status:text-foreground"> {part.target}</span>}
-              </Fragment>
-            ))}
-          </span>
-          {summary.size !== undefined && <LinesPill {...summary.size} />}
-          <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')} aria-hidden />
-        </button>
+      <div className="group/status relative flex items-center gap-2" {...(live ? { role: 'status' } : {})}>
+        <LeavingDots live={live !== undefined} />
+        {opens ? (
+          <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={words} className="flex min-w-0 items-center gap-1.5 py-0.5 text-left hover:text-foreground">
+            {head}
+            {live?.since !== undefined && <Seconds since={live.since} />}
+            <Caret open={open} />
+          </button>
+        ) : (
+          <div className="flex min-w-0 items-center gap-1.5 py-0.5">
+            {head}
+            {live?.since !== undefined && <Seconds since={live.since} />}
+          </div>
+        )}
       </div>
-      {open && (
-        <div className="mt-1.5 flex flex-col divide-y divide-border rounded-lg border border-border">
-          {lead && <div className="px-2 py-1.5">{lead}</div>}
-          {shown.map((step, at) => (
-            <div key={at} className="px-2 py-1.5">
-              {step.type === 'action' ? <CallLine {...step} /> : <ThoughtLine text={step.text} />}
-            </div>
-          ))}
-        </div>
-      )}
+      {open &&
+        (one && only?.type === 'action' ? (
+          <CallDetail {...only} card />
+        ) : (
+          <div className="mt-1.5 flex flex-col divide-y divide-border rounded-lg border border-border">
+            {lead && <div className="px-2 py-1.5">{lead}</div>}
+            {shown.map((step, at) => (
+              <div key={at} className="px-2 py-1.5">
+                {step.type === 'action' ? <CallLine {...step} /> : <ThoughtLine text={step.text} />}
+              </div>
+            ))}
+            {live && (
+              <div className="px-2 py-1.5">
+                <div className="flex min-w-0 items-center gap-1.5">{going!.words}</div>
+                <CallDetail {...live.call} />
+              </div>
+            )}
+          </div>
+        ))}
     </div>
   )
 }

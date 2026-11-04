@@ -1,7 +1,8 @@
 import type { AgentDoing, AgentMeta, ChoiceRequest, OpenAgentEvent } from '../../src/index.js'
 import { foldScreenRows, formatOpenAgentEvent } from '../../src/client.js'
-import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { Check, ChevronRight, Copy } from 'lucide-react'
+import { parseQuestion, QUESTION_TAG } from '@openagt/agent-driver/question'
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { Check, ChevronRight, CircleDot, Copy } from 'lucide-react'
 import { pendingChoices } from '../lib/live-state.js'
 import { callRow, callSubagents, runRow, endMessage, subagentEnd, subagentEvents, subagentReport, subagentSteps, subagentWait, type SubagentEnd } from '../lib/subagents.js'
 import { answeredQuestion } from '../lib/answered-question.js'
@@ -15,7 +16,7 @@ import { ChangedFiles } from './ChangedFiles.js'
 import { turnChanges, type ChangedFile } from '../lib/turn-changes.js'
 import { SubagentMessage, SubagentSteps } from './SubagentLine.js'
 import { useSteadyText, useStillWriting } from '../lib/use-steady-text.js'
-import { LiveLine, ToolCalls, type CallOutput, type ToolStep } from './ToolCalls.js'
+import { Caret, LiveLine, ToolCalls, type CallOutput, type ToolStep } from './ToolCalls.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import {
   MessageScroller,
@@ -141,8 +142,42 @@ function formatTime(at: string): string {
   return new Date(at).toLocaleTimeString()
 }
 
-/** A question's row: answered through its gate (`pick`), or still waiting for its answer. */
-type ChoiceRow = { choice: ChoiceRequest; pick?: string | readonly string[] }
+/** The line under a question the run waits on: a mark, and "Needs your input" in a pill of its colour. */
+function NeedsInput() {
+  return (
+    <div role="status" className="flex items-center gap-2 font-sans text-warning">
+      <CircleDot className="size-3.5 shrink-0" aria-hidden />
+      <span className="rounded-full bg-warning/10 px-[7px] py-[3.5px] text-xs leading-[15px] font-medium">Needs your input</span>
+    </div>
+  )
+}
+
+/**
+ * A question the person did not answer in its card but wrote a message instead of: one grey line,
+ * as Claude Code on the web folds it, `Asked "Background"  Replied in chat`, opening to the question.
+ * Named by its header, else by the question itself.
+ */
+function PassedChoice({ choice, footer }: { choice: ChoiceRequest; footer?: ReactNode }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
+      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} className="flex max-w-full min-w-0 items-center gap-1.5 py-0.5 text-left hover:text-foreground">
+        <span className="truncate">Asked “{choice.header ?? choice.title}”</span>
+        <span className="shrink-0">Replied in chat</span>
+        <Caret open={open} />
+      </button>
+      {open && (
+        <div className="mt-1.5 flex flex-col gap-1.5">
+          <div>{choice.title}</div>
+          {footer}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** A question's row: answered through its gate (`pick`), passed by with a message instead (`passed`), or still waiting for its answer. */
+type ChoiceRow = { choice: ChoiceRequest; pick?: string | readonly string[]; passed?: true }
 
 /**
  * Fold the log's choice traffic: which gates are a ✓ card, and which lines are no row.
@@ -183,9 +218,35 @@ function foldChoiceRows(events: OpenAgentEvent[]): {
       // re-fired and then closed by `end` must not wear a pick it never received.
       rows.set(firing.e, { choice, pick: resolved.e.picked })
       hidden.add(resolved.e)
+    } else if (events.slice(firing.at + 1).some(isTurnBoundary)) {
+      // Not answered in its card: the person wrote a message instead.
+      rows.set(firing.e, { choice, passed: true })
     }
   }
   return { rows, hidden }
+}
+
+/**
+ * The question a turn ends on, the moment its message is written. The run says it only when the
+ * agent's process is done, about a second later, and until then the message would show its block
+ * as raw JSON. Read with the run's own parser, so it is the same question under the same id, and
+ * the run's own line of it takes its place without a change. Only a turn's last message, with
+ * nothing after it: a block the agent went on from is not what the run will ask.
+ */
+export function withEarlyQuestion(events: OpenAgentEvent[]): OpenAgentEvent[] {
+  for (let at = events.length - 1; at >= 0; at--) {
+    const e = events[at]!
+    if (e.kind === 'choice' || e.kind === 'end' || isTurnBoundary(e)) return events
+    if (e.kind !== 'driver' || ('subagent' in e.event && e.event.subagent !== undefined)) continue
+    if (e.event.type === 'action') return events
+    // A message with no words (Codex ends some turns with one) is not the turn's last word.
+    if (e.event.type !== 'text' || e.event.text.trim() === '') continue
+    const question = parseQuestion(e.event.text)
+    if (question === undefined) return events
+    const asked: OpenAgentEvent = { kind: 'choice', id: QUESTION_TAG, ...question }
+    return [...events.slice(0, at + 1), asked, ...events.slice(at + 1)]
+  }
+  return events
 }
 
 /**
@@ -249,9 +310,11 @@ function Reply({ text }: { text: string }) {
   )
 }
 
-/** A button that copies a message, as Claude Code on the web has one under each message. */
+/** A button that copies a message, as Claude Code on the web has one under each message: a check for a beat once copied, then the copy icon again. */
 function CopyMessage({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => () => clearTimeout(timer.current), [])
   return (
     <button
       type="button"
@@ -259,7 +322,11 @@ function CopyMessage({ text }: { text: string }) {
       title={copied ? 'Copied' : 'Copy this message'}
       onClick={() => {
         void navigator.clipboard?.writeText(text).then(
-          () => setCopied(true),
+          () => {
+            setCopied(true)
+            clearTimeout(timer.current)
+            timer.current = setTimeout(() => setCopied(false), 1500)
+          },
           () => undefined,
         )
       }}
@@ -557,7 +624,7 @@ function FollowSent({ sent }: { sent: number }) {
 }
 
 export function EventList({
-  events,
+  events: given,
   writing = '',
   sending,
   working = false,
@@ -625,6 +692,7 @@ export function EventList({
    *  row is a line of text. */
   onOpenScreen?: (() => void) | undefined
 }) {
+  const events = useMemo(() => withEarlyQuestion(given), [given])
   const choiceRows = useMemo(() => (projectId ? foldChoiceRows(events) : undefined), [projectId, events])
   const screenRows = useMemo(() => foldScreenRows(events), [events])
   const passed = useMemo(() => quietEnds(events), [events])
@@ -643,7 +711,15 @@ export function EventList({
   // It is no message at the end, which came and then went back up.
   const sentAnswer = sending !== undefined ? answeredQuestion(sending) : undefined
   const answeredInPlace = sentAnswer && choiceRows ? [...choiceRows.rows].find(([, row]) => row.pick === undefined && row.choice.title === sentAnswer.question)?.[0] : undefined
-  const kept: OpenAgentEvent[] = sending === undefined || answeredInPlace ? logged : [...logged, { kind: 'driver', event: { type: 'start', prompt: sending } }]
+  // The message just sent, as the prompt line its run is about to write: dated when it was sent, so
+  // the live line comes and counts from then, as Claude Code on the web's does the moment a message
+  // is sent, not seconds later when the run writes its first line.
+  const sentAt = useMemo(() => (sending !== undefined ? new Date().toISOString() : undefined), [sending])
+  // Its row holds no time, as one being sent shows none.
+  const sent: OpenAgentEvent | undefined = sending !== undefined ? { kind: 'driver', event: { type: 'start', prompt: sending } } : undefined
+  const kept: OpenAgentEvent[] = sent === undefined || answeredInPlace ? logged : [...logged, sent]
+  // Every event and the message just sent: what the turn going on is read off.
+  const told = sent === undefined ? events : [...events, sent]
   // The text of a row's message: the reply a question follows, without the question's block.
   const textOf = (e: OpenAgentEvent): string | null => {
     const text = messageText(e)
@@ -664,18 +740,28 @@ export function EventList({
   // the line counts again from then.
   let turnOverAt = -1
   let wokeAt: string | undefined
-  events.forEach((e, at) => {
+  told.forEach((e, at) => {
     if (e.kind !== 'driver') return
     if (e.event.type === 'result') {
       turnOverAt = at
+      wokeAt = undefined
+    } else if (isTurnBoundary(e)) {
+      // A new prompt starts a turn of its own, counted from that prompt.
+      turnOverAt = -1
       wokeAt = undefined
     } else if (turnOverAt >= 0 && wokeAt === undefined && isAgentsOwn(e)) wokeAt = e.at
   })
   // Or the turn stays open with the main agent blocked on its subagents' calls, idle all the same:
   // read off its own steps (`subagentWait`), with the same blank line and the same count from its wake.
   const blocked = subagentWait(events)
-  const waitsOnItsOwn = (turnOverAt >= 0 && wokeAt === undefined && turnOverAt > events.findIndex(isTurnBoundary) && !events.slice(turnOverAt + 1).some(isTurnBoundary)) || blocked.waiting
-  const turnStart = later(wokeAt, blocked.wokeAt) ?? [...unfolded].reverse().find(isTurnBoundary)?.at ?? unfolded[unfolded.length - 1]?.at
+  const waitsOnItsOwn = (turnOverAt >= 0 && wokeAt === undefined && turnOverAt > told.findIndex(isTurnBoundary) && !told.slice(turnOverAt + 1).some(isTurnBoundary)) || blocked.waiting
+  // A turn the person began by sending a message counts from the send, not from its prompt line,
+  // which its run writes seconds later: the count would go back to nothing when that line came.
+  const lastSent = useRef<string | undefined>(undefined)
+  if (sentAt !== undefined) lastSent.current = sentAt
+  const turnBoundary = [...unfolded].reverse().find(isTurnBoundary)
+  const sentTurn = lastSent.current !== undefined && turnBoundary !== undefined && turnBoundary !== sent && told.find(e => isTurnBoundary(e) && e !== sent && e.at !== undefined && e.at > lastSent.current!) === turnBoundary
+  const turnStart = later(wokeAt, blocked.wokeAt) ?? (sentTurn || (sent !== undefined && turnBoundary === sent) ? lastSent.current : turnBoundary?.at) ?? unfolded[unfolded.length - 1]?.at
   // The prompts that told this run one of its subagents ended: SUBAGENT rows, not the reader's own.
   const ends = new Map<OpenAgentEvent, SubagentEnd>()
   for (const e of shown) {
@@ -695,17 +781,23 @@ export function EventList({
   }))
   // How far the turn going on has got: what the live line says beside its seconds.
   let lastTurnAt = -1
-  events.forEach((e, at) => {
+  told.forEach((e, at) => {
     if (isTurnBoundary(e)) lastTurnAt = at
   })
-  const turnTokens = events.slice(lastTurnAt + 1).flatMap(e => (e.kind === 'driver' && e.event.type === 'tokens' ? [e.event.tokens] : [])).at(-1)
+  // The tokens the turn went through, said once it has answered something, as Claude Code on the
+  // web says them: before that, the line is the dots and the seconds.
+  const turnSaid = told.slice(lastTurnAt + 1).some(e => e.kind === 'driver' && e.event.type === 'text' && (e.event as { subagent?: string }).subagent === undefined)
+  const turnTokens = turnSaid ? told.slice(lastTurnAt + 1).flatMap(e => (e.kind === 'driver' && e.event.type === 'tokens' ? [e.event.tokens] : [])).at(-1) : undefined
   // Once the coding agent said its session began, it is set up: what goes on is its own thinking.
   const begun = events.some(e => e.kind === 'session-update')
-  // It thinks from when its coding agent says it began to, until what it thought comes to a step or
-  // a message, as Claude Code on the web says it: only while a model thinks, never as a stand-in for
-  // "nothing to show".
-  const lastSaid = [...events].reverse().find(e => e.kind === 'driver' && ['thinking', 'thought', 'action', 'output', 'text', 'start', 'subagent'].includes(e.event.type))
-  const lastIsThought = lastSaid?.kind === 'driver' && lastSaid.event.type === 'thinking'
+  // The call going on now is its steps row's, as Claude Code on the web's is: the row it continues,
+  // or a row of its own when it starts one. The row stays the same row once the call is done, so
+  // its words change in place to the steps it took.
+  const currentEvent = current !== undefined ? unfolded[unfolded.length - 1] : undefined
+  const lastRow = shown[shown.length - 1]
+  const liveHead = currentEvent === undefined ? undefined : lastRow !== undefined && steps.has(lastRow) ? lastRow : currentEvent
+  const listed = currentEvent !== undefined && liveHead === currentEvent ? [...shown, currentEvent] : shown
+  if (currentEvent !== undefined && liveHead === currentEvent) steps.set(currentEvent, [])
   const started = subagentSteps(shown, rows, reports, e => isTurnBoundary(e) || (e.kind === 'driver' && e.event.type === 'text'))
   const startedRows = (at: number): ReactNode => {
     const steps = started.get(at)
@@ -790,7 +882,7 @@ export function EventList({
     else footers.set(last.row, last.text)
   }
   // The open question the keys answer: the newest.
-  const asking = [...shown].reverse().find(e => choiceRows?.rows.has(e) && choiceRows.rows.get(e)?.pick === undefined)
+  const asking = [...shown].reverse().find(e => choiceRows?.rows.has(e) && choiceRows.rows.get(e)?.pick === undefined && !choiceRows.rows.get(e)?.passed)
 
   return (
     <MessageScrollerProvider autoScroll={stick} defaultScrollPosition={openAt ?? (stick ? 'end' : 'start')}>
@@ -808,7 +900,7 @@ export function EventList({
                 {head}
               </MessageScrollerItem>
             )}
-            {shown.map((e, i, rows) => {
+            {listed.map((e, i, rows) => {
               const message = textOf(e)
               const choiceRow = choiceRows?.rows.get(e)
               const prev = i > 0 ? rows[i - 1] : undefined
@@ -864,12 +956,14 @@ export function EventList({
                       <Reply text={message} />
                     )
                   ) : steps.has(e) ? (
-                    <ToolCalls steps={steps.get(e)!} lead={setupInSteps && i === setupAt ? setupLead : undefined} />
+                    <ToolCalls steps={steps.get(e)!} lead={setupInSteps && i === setupAt ? setupLead : undefined} live={e === liveHead && current !== undefined ? { call: current, since: turnStart } : undefined} />
+                  ) : choiceRow?.passed ? (
+                    <PassedChoice choice={choiceRow.choice} footer={footers.has(e) ? <ReplyFooter text={footers.get(e)!} at={at} /> : undefined} />
                   ) : choiceRow && choiceRow.pick === undefined && projectId !== undefined && agentId !== undefined ? (
                     // The question the agent waits on, answered here, under what it said.
                     typing ? null : <div className="mt-1 flex min-w-0 flex-1 flex-col gap-1.5">
+                      {/* No copy and time under it, as Claude Code on the web has none under a question. */}
                       <QuestionPanel key={`${agentId}:${choiceRow.choice.id}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} onSaid={onSaid} />
-                      {footers.has(e) && <ReplyFooter text={footers.get(e)!} at={at} />}
                     </div>
                   ) : choiceRow?.pick !== undefined ? (
                     // What was asked and what was picked. font-sans: a card, not log text.
@@ -900,8 +994,8 @@ export function EventList({
                 </Fragment>
               )
             })}
-            {shown.length === setupAt && setupRow}
-            {startedRows(shown.length)}
+            {listed.length === setupAt && setupRow}
+            {startedRows(listed.length)}
             {written && (
               <MessageScrollerItem messageId="writing" className="-mx-1.5 flex items-start gap-2 rounded-sm px-1.5">
                 <Writing text={written} />
@@ -921,7 +1015,10 @@ export function EventList({
                 {/* Under the reply as it streams, too: the agent is still at it, and Claude Code on
                     the web keeps its dots and its count there. The line said a word before, which
                     under a streaming reply read as a second thing going on. */}
-                {working && !settingUp && !waitsOnItsOwn && <LiveLine {...(written ? {} : { call: current })} since={turnStart} tokens={turnTokens} thinking={!written && !current && lastIsThought} />}
+                {working && !settingUp && !waitsOnItsOwn && current === undefined && <LiveLine since={turnStart} tokens={turnTokens} />}
+                {/* The run waits on the question the chat ends with: said where the moving line was,
+                    as Claude Code on the web says it. */}
+                {!working && sending === undefined && asking !== undefined && shown[shown.length - 1] === asking && !typing && <NeedsInput />}
               </div>
             )}
             {!working && waitingOn > 0 && (

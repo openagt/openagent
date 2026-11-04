@@ -1,11 +1,18 @@
 import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+
+/** What a reader gets of an element: its words less the ones fading out of it (CrossFade). */
+const shownText = (el: Element): string | null => {
+  const copy = el.cloneNode(true) as Element
+  copy.querySelectorAll('[aria-hidden="true"]').forEach(node => node.remove())
+  return copy.textContent
+}
 
 // The session line names the model as the daemon lists it; no daemon here, so the list never answers.
 vi.mock('../rpc/models.js', () => ({ onModels: () => new Promise(() => {}) }))
 
-const { EventList, askedReplies, quietEnds, withoutQuestionBlock } = await import('./EventList.js')
+const { EventList, askedReplies, quietEnds, withEarlyQuestion, withoutQuestionBlock } = await import('./EventList.js')
 
 afterEach(cleanup)
 
@@ -247,6 +254,8 @@ describe('EventList tool calls', () => {
     fireEvent.click(copy)
     await waitFor(() => expect(screen.getByRole('button', { name: 'Copied' })).toBeTruthy())
     expect(writeText).toHaveBeenCalledWith('All done.')
+    // The check is there for a beat, then the copy icon again.
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Copy this message' })).toHaveLength(2), { timeout: 2500 })
     // While the agent works there is no footer: it has not finished saying it.
     rerender(<EventList events={[prompt, { ...said('All done.'), at }]} working stick={false} />)
     expect(screen.getAllByRole('button', { name: /Copy this message|Copied/ })).toHaveLength(1)
@@ -285,11 +294,12 @@ describe('EventList tool calls', () => {
     expect(screen.getByRole('status').textContent).toBe('')
   })
 
-  test('the moving line counts the tokens the turn went through, as Claude Code on the web does', () => {
+  test('the moving line counts the tokens the turn went through once it has answered something, as Claude Code on the web does', () => {
     const tokens = (n: number): OpenAgentEvent => ({ kind: 'driver', event: { type: 'tokens', tokens: n } })
-    render(<EventList events={[prompt, tokens(12_000), call('Bash', 'ls'), tokens(96_912)]} working stick={false} />)
-    expect(screen.getByRole('status').textContent).toBe('Runningls·96.9k tokens')
-    expect(screen.queryByText(/Thinking/)).toBeNull()
+    const { rerender } = render(<EventList events={[prompt, tokens(12_000), call('Bash', 'ls'), tokens(96_912)]} working stick={false} />)
+    expect(screen.getByRole('status').textContent).toBe('Runningls')
+    rerender(<EventList events={[prompt, tokens(12_000), call('Bash', 'ls'), tokens(96_912), { kind: 'driver', event: { type: 'text', text: 'Listed.' } }, tokens(98_100)]} working stick={false} />)
+    expect(screen.getByRole('status').textContent).toBe('·98.1k tokens')
   })
 
   test("while its turn is over and its own subagents still work it waits with no moving line; a subagent's message wakes it, and the line counts from then", () => {
@@ -299,7 +309,7 @@ describe('EventList tool calls', () => {
     expect(screen.queryByRole('status')).toBeNull()
     const woke: OpenAgentEvent = { kind: 'driver', event: { type: 'thinking' }, at: new Date().toISOString() }
     rerender(<EventList events={[prompt, started, { kind: 'driver', event: { type: 'text', text: 'Both run.' }, at: '2026-10-01T10:00:19.000Z' }, over, woke]} working stick={false} />)
-    expect(screen.getByRole('status').textContent).toBe('·Thinking')
+    expect(screen.getByRole('status')).toBeTruthy()
   })
 
   test('a call that only drove the subagents is no row of the run', () => {
@@ -309,20 +319,18 @@ describe('EventList tool calls', () => {
     expect(screen.getByText('It is in.')).toBeTruthy()
   })
 
-  test('the moving line says the agent thinks only while its coding agent says it does, as Claude Code on the web says it', () => {
+  test('while the agent thinks the moving line is its dots and seconds, with no word for it, as Claude Code on the web\u2019s is', () => {
     const thinking: OpenAgentEvent = { kind: 'driver', event: { type: 'thinking' } }
     const { rerender } = render(<EventList events={[prompt]} working stick={false} />)
     expect(screen.getByRole('status').textContent).toBe('')
     rerender(<EventList events={[prompt, thinking]} working stick={false} />)
-    expect(screen.getByRole('status').textContent).toBe('·Thinking')
-    // What it thought came: it is done thinking.
-    rerender(<EventList events={[prompt, thinking, thought('hm')]} working stick={false} />)
     expect(screen.getByRole('status').textContent).toBe('')
+    expect(screen.queryByText(/Thinking/)).toBeNull()
   })
 
-  test('while the agent works, the last call is the line going on now, not yet in its run', () => {
+  test('while the agent works, the call going on is its run\u2019s row, which says the steps taken once it is done', () => {
     const { rerender } = render(<EventList events={[prompt, call('Bash', 'ls'), call('Read', '/repo/AGENTS.md')]} working stick={false} />)
-    expect(screen.getByRole('button', { name: 'Ran ls' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Ran ls' })).toBeNull()
     expect(screen.getByRole('status').textContent).toBe('ReadingAGENTS.md')
     // The next event came: the call is over and joins its run; the agent is between calls.
     rerender(<EventList events={[prompt, call('Bash', 'ls'), call('Read', '/repo/AGENTS.md'), thought('next')]} working stick={false} />)
@@ -384,6 +392,30 @@ describe('EventList question and answer', () => {
     expect(within(card).getByRole('button', { name: /Submit/ }).textContent).toMatch(/^Submit(⌘|Ctrl)↵$/)
   })
 
+  test('under a question the run waits on, the live line says it needs your input; answered, it says nothing', () => {
+    const { rerender } = render(<EventList events={asked} projectId="p1" agentId="r1" stick={false} />)
+    expect(within(screen.getByTestId('live-line')).getByRole('status').textContent).toBe('Needs your input')
+    rerender(<EventList events={resumed('Red')} projectId="p1" agentId="r1" stick={false} />)
+    expect(screen.getByTestId('live-line').textContent).toBe('')
+  })
+
+  test('a question passed by with a message instead is one grey line, named by its header, opening to the question', () => {
+    const header = asked.map(e => (e.kind === 'choice' ? { ...e, header: 'Colour' } : e))
+    render(<EventList events={[...header, { kind: 'driver', event: { type: 'start', prompt: 'run ls first' } }, { kind: 'driver', event: { type: 'text', text: 'Done.' } }] as OpenAgentEvent[]} projectId="p1" agentId="r1" stick={false} />)
+    expect(screen.queryByRole('region', { name: 'Which color do you prefer?' })).toBeNull()
+    const line = screen.getByRole('button', { name: /Asked “Colour”\s*Replied in chat/ })
+    expect(screen.queryByText('Which color do you prefer?', { selector: 'div' })).toBeNull()
+    fireEvent.click(line)
+    expect(screen.getByText('Which color do you prefer?', { selector: 'div' })).toBeTruthy()
+    // Nothing waits on it any longer.
+    expect(screen.getByTestId('live-line').textContent).not.toContain('Needs your input')
+  })
+
+  test('with no header, the passed question is named by the question itself', () => {
+    render(<EventList events={[...asked, { kind: 'driver', event: { type: 'start', prompt: 'run ls first' } }] as OpenAgentEvent[]} projectId="p1" agentId="r1" stick={false} />)
+    expect(screen.getByRole('button', { name: /Asked “Which color do you prefer\?”/ })).toBeTruthy()
+  })
+
   test('the card waits for the words above it: not while they are being typed, nor while more are coming', async () => {
     const long = 'Three tasks, each with its own files. '.repeat(10)
     const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: long } }
@@ -413,13 +445,13 @@ describe('EventList question and answer', () => {
     window.matchMedia = media
   })
 
-  test('the turn a question ended has its copy and time under the card, and none under what was said before it', () => {
+  test('the turn a question ended has no copy and time, under the card or under what was said before it', () => {
     const at = '2026-09-25T10:04:05.000Z'
     const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Here is the plan.' }, at }
     render(<EventList events={[asked[0]!, said, { ...asked[2]!, at }, asked[3]!]} projectId="p1" agentId="r1" stick={false} />)
     const row = screen.getByRole('region', { name: 'Which color do you prefer?' }).closest('[data-message-id]') as HTMLElement
-    expect(within(row).getByRole('button', { name: 'Copy this message' })).toBeTruthy()
-    expect(row.querySelector('time')?.getAttribute('datetime')).toBe(at)
+    expect(within(row).queryByRole('button', { name: 'Copy this message' })).toBeNull()
+    expect(row.querySelector('time')).toBeNull()
     const before = screen.getByText('Here is the plan.').closest('[data-message-id]') as HTMLElement
     expect(within(before).queryByRole('button', { name: 'Copy this message' })).toBeNull()
   })
@@ -530,15 +562,15 @@ describe('EventList session line', () => {
 
   test('while the agent works on its first prompt and nothing has come yet, the line names the step going on, and it is the only moving line', () => {
     const { rerender } = render(<EventList events={[prompt]} setup={{}} working stick={false} />)
-    expect(screen.getAllByRole('status').map(n => n.textContent)).toEqual(['Starting session'])
+    expect(screen.getAllByRole('status').map(shownText)).toEqual(['Starting session'])
     rerender(<EventList events={[prompt]} setup={{ driver: 'codex' }} working stick={false} />)
-    expect(screen.getAllByRole('status').map(n => n.textContent)).toEqual(['Making the checkout'])
+    expect(screen.getAllByRole('status').map(shownText)).toEqual(['Making the checkout'])
     rerender(<EventList events={[prompt]} setup={setup} working stick={false} />)
-    expect(screen.getAllByRole('status').map(n => n.textContent)).toEqual(['Starting Codex'])
+    expect(screen.getAllByRole('status').map(shownText)).toEqual(['Starting Codex'])
     // The agent's first output: set up, and the usual moving line takes over.
     rerender(<EventList events={[prompt, { kind: 'driver', event: { type: 'thought', text: 'hm' } }]} setup={setup} working stick={false} />)
     expect(screen.getByRole('button', { name: 'Initialized session' })).toBeTruthy()
-    expect(screen.getAllByRole('status').map(n => n.textContent)).toEqual([''])
+    expect(screen.getAllByRole('status').map(shownText)).toEqual([''])
   })
 
   test('a later prompt is no set-up: the line stays folded and the moving line is the only one', () => {
@@ -1129,8 +1161,35 @@ describe('EventList hides the block a question is written in', () => {
   })
 
   test('a block no question came of stays as written: it is how the reader sees it did not parse', () => {
-    render(<EventList events={[prompt, reply(`Pick one.\n\n${block}`)]} stick={false} />)
+    const broken = '```await-choices\n{ "title": "Which color?", "options": [ }\n```'
+    render(<EventList events={[prompt, reply(`Pick one.\n\n${broken}`)]} stick={false} />)
     expect(screen.getByText(/"title"/)).toBeTruthy()
+  })
+
+  test('a last message that is a question is one the moment it is written, before the run says it', () => {
+    const asking = reply(`Pick one.\n\n${block}`)
+    const early = withEarlyQuestion([prompt, asking])
+    // The question the run will say, under the id it will say it with.
+    expect(early).toEqual([prompt, asking, { kind: 'choice', id: 'await-choices', title: 'Which color?', options: [{ id: 'opt:0', label: 'Blue' }] }])
+    render(<EventList events={[prompt, asking]} stick={false} />)
+    expect(screen.getByText('Pick one.')).toBeTruthy()
+    expect(screen.queryByText(/"title"/)).toBeNull()
+    // Once the run said it, it is said once.
+    expect(withEarlyQuestion([prompt, asking, choice])).toEqual([prompt, asking, choice])
+    // Things that only count or time the turn do not hide it; an empty message after it neither.
+    const usage = { kind: 'usage', costUsd: 0.1 } as OpenAgentEvent
+    expect(withEarlyQuestion([prompt, asking, usage, reply(' ')])).toHaveLength(5)
+  })
+
+  test('a block the agent went on from, or a turn that ended without asking, is no question', () => {
+    const asking = reply(block)
+    const step: OpenAgentEvent = { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'ls' } }
+    expect(withEarlyQuestion([prompt, asking, step])).toHaveLength(3)
+    expect(withEarlyQuestion([prompt, asking, { kind: 'end', ok: true } as OpenAgentEvent])).toHaveLength(3)
+    // A subagent's message is not the agent's last word.
+    expect(withEarlyQuestion([prompt, { kind: 'driver', event: { type: 'text', text: block, subagent: 'toolu_1' } }])).toHaveLength(2)
+    // Nor a question of a turn before.
+    expect(withEarlyQuestion([prompt, asking, choice, { kind: 'driver', event: { type: 'start', prompt: 'Blue' } } as OpenAgentEvent])).toHaveLength(4)
   })
 
   test('the message being written never shows the block, closed or not, and the words before it stay', () => {
@@ -1314,5 +1373,37 @@ describe('EventList changed files', () => {
     expect(onOpenChange.mock.calls).toEqual([['docs/A.md']])
     rerender(<EventList events={events} setup={{ workspace: WS }} stick={false} />)
     expect(screen.queryByRole('button', { name: 'Show the change to A.md' })).toBeNull()
+  })
+})
+
+// A message sent after a turn ended: the run writes its prompt line seconds later, and Claude Code
+// on the web shows its moving line the moment the message is sent.
+describe('EventList a message just sent', () => {
+  const done: OpenAgentEvent[] = [
+    { kind: 'driver', event: { type: 'start', prompt: 'go' }, at: '2026-11-04T10:00:00.000Z' },
+    { kind: 'driver', event: { type: 'text', text: 'did it' }, at: '2026-11-04T10:00:05.000Z' },
+    { kind: 'driver', event: { type: 'result', text: '' }, at: '2026-11-04T10:00:06.000Z' },
+  ]
+
+  test('shows the moving line at once, with no tokens of the turn before', () => {
+    render(<EventList events={done} working sending="and again" stick={false} />)
+    const line = screen.getByTestId('live-line')
+    expect(line.querySelector('.dot-wave')).not.toBeNull()
+    expect(line.textContent).not.toMatch(/tokens/)
+  })
+
+  test('counts from the send, and goes on counting when the run writes its prompt line and its first thought', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-04T10:01:00.000Z'))
+    const { rerender } = render(<EventList events={done} working sending="and again" stick={false} />)
+    vi.setSystemTime(new Date('2026-11-04T10:01:07.000Z'))
+    const again: OpenAgentEvent[] = [
+      { kind: 'driver', event: { type: 'start', prompt: 'and again' }, at: '2026-11-04T10:01:06.000Z' },
+      { kind: 'driver', event: { type: 'thought', text: 'hm' }, at: '2026-11-04T10:01:06.500Z' },
+    ]
+    rerender(<EventList events={[...done, ...again]} working stick={false} />)
+    act(() => void vi.advanceTimersByTime(1000))
+    // 8 seconds from the send; from the prompt line it would be 2.
+    expect(screen.getByTestId('live-line').textContent).toContain('8s')
   })
 })

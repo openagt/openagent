@@ -1,10 +1,11 @@
-import { useState } from 'react'
-import { ChevronRight, CircleCheck } from 'lucide-react'
+import { useState, type KeyboardEvent } from 'react'
+import { CircleCheck } from 'lucide-react'
 import type { AgentMeta } from '../../src/index.js'
 import { DRIVER_LABELS, driverFromImpl } from '../../src/client.js'
 import { modelName, useModels } from '../lib/models.js'
 import { cn } from '../lib/utils.js'
-import { Dots, Seconds } from './ToolCalls.js'
+import { Caret, LeavingDots, Seconds } from './ToolCalls.js'
+import { CrossFade } from './CrossFade.js'
 
 /** What was set up for the agent before it read its prompt, as its card says it. */
 export type SessionSetup = { [K in 'workspace' | 'branch' | 'base' | 'driver' | 'model']?: AgentMeta[K] | undefined } & {
@@ -71,29 +72,48 @@ export function SessionLine({
   const models = useModels()
   const agent = picked ? DRIVER_LABELS[picked] : setup.driver
   const model = setup.model && modelName(picked ? models?.[picked] : undefined, setup.model)
-  if (live) {
-    const step = setup.branch !== undefined || setup.workspace !== undefined ? `Starting ${agent ?? 'the coding agent'}` : agent !== undefined && !setup.elsewhere ? 'Making the checkout' : 'Starting session'
-    return (
-      <div role="status" className="flex min-w-0 flex-1 items-center gap-2 font-sans text-sm text-muted-foreground">
-        <Dots />
-        <span key={step} className="morph-in">
-          <span className="text-shimmer">{step}</span>
-        </span>
-        {live.since !== undefined && <Seconds since={live.since} />}
-      </div>
-    )
-  }
-  if (setup.workspace === undefined && setup.branch === undefined && agent === undefined) {
-    // An agent that runs elsewhere may never say any of them.
-    if (sessionLineEmpty(setup, working)) return null
-    return <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">Initialized session</div>
-  }
+  // One row from the session's start to its end: its steps as they go, behind the moving dots and
+  // with the seconds, then "Initialized session", the step's words fading out as those come in, as
+  // Claude Code on the web's row changes.
+  const step = live ? (setup.branch !== undefined || setup.workspace !== undefined ? `Starting ${agent ?? 'the coding agent'}` : agent !== undefined && !setup.elsewhere ? 'Making the checkout' : 'Starting session') : undefined
+  const said = setup.workspace !== undefined || setup.branch !== undefined || agent !== undefined
+  // An agent that runs elsewhere may never say any of them.
+  if (!live && !said && sessionLineEmpty(setup, working)) return null
+  const opens = step === undefined && said
+  const words = (
+    <CrossFade id={step ?? 'done'}>
+      <span className={cn(step !== undefined && 'text-shimmer')}>{step ?? 'Initialized session'}</span>
+    </CrossFade>
+  )
   return (
     <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
-      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} className="flex items-center gap-1.5 py-0.5 hover:text-foreground">
-        <span>Initialized session</span>
-        <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')} aria-hidden />
-      </button>
+      {/* One row from start to end, the words in the same place, so that as the set-up ends they
+          cross-fade to "Initialized session" and glide into the dots' place as the dots go. */}
+      <div {...(step !== undefined ? { role: 'status' } : {})} className="relative flex min-w-0 items-center gap-2">
+        <LeavingDots live={step !== undefined} />
+        {/* A button only once there is something to open; the same element all along, so the
+            words in it are the same words changing, not new ones put in. */}
+        <div
+          {...(opens
+            ? {
+                role: 'button',
+                tabIndex: 0,
+                'aria-expanded': open,
+                onClick: () => setOpen(o => !o),
+                onKeyDown: (event: KeyboardEvent) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return
+                  event.preventDefault()
+                  setOpen(o => !o)
+                },
+              }
+            : {})}
+          className={cn('flex min-w-0 items-center gap-1.5 py-0.5', opens && 'cursor-pointer hover:text-foreground')}
+        >
+          {words}
+          {step !== undefined && live?.since !== undefined && <Seconds since={live.since} />}
+          {opens && <Caret open={open} />}
+        </div>
+      </div>
       {open && (
         <div className={cn('mt-1.5 flex flex-col gap-1.5', !nested && 'rounded-lg border border-border px-3 py-2')}>
           {setup.workspace !== undefined && <Step label="Made the checkout" value={setup.workspace} />}

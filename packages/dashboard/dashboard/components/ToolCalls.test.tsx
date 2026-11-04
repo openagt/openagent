@@ -118,27 +118,53 @@ describe('ToolCalls', () => {
   })
 })
 
-describe('LiveLine', () => {
+describe('an opened call', () => {
+  test('is one card: the tool named, the command in a box of its own with a copy button, and what it printed under it in grey', () => {
+    render(<ToolCalls steps={[{ type: 'action', label: 'Bash', detail: 'sleep 1 && ls', summary: 'List files', output: { text: 'README.md' } }]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Listed files' }))
+    const command = screen.getByLabelText('Command')
+    expect(command.textContent).toBe('$ sleep 1 && ls')
+    const card = command.closest('.rounded-xl')!
+    expect(card.firstElementChild?.textContent).toBe('Bash')
+    expect(screen.getByRole('button', { name: 'Copy the command' })).toBeTruthy()
+    const output = screen.getByLabelText('Output')
+    expect(output.textContent).toBe('README.md')
+    expect(output.className).toContain('text-muted-foreground')
+    expect(output.className).not.toContain('border')
+  })
+
+  test('opened inside a box of steps it has no card of its own and does not name the tool', () => {
+    render(<ToolCalls steps={[bash('ls'), { type: 'action', label: 'Bash', detail: 'pwd', summary: 'Print the folder', output: { text: '/repo' } }]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Ran 2 commands' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Printed the folder' }))
+    const command = screen.getByLabelText('Command')
+    expect(command.closest('.rounded-xl')).toBeNull()
+    expect(screen.queryByText('Bash')).toBeNull()
+  })
+})
+
+describe('a steps row with its call going on', () => {
+  const live = (call: { label: string; detail?: string; summary?: string; id?: string }, since?: string) => <ToolCalls steps={[]} live={{ call, ...(since !== undefined ? { since } : {}) }} />
+
   test('the call going on now reads in the present, shimmering, behind moving dots', () => {
-    const { container } = render(<LiveLine call={{ label: 'Read', detail: '/repo/AGENTS.md' }} word="Working…" />)
+    const { container } = render(live({ label: 'Read', detail: '/repo/AGENTS.md' }))
     const status = screen.getByRole('status')
     expect(status.textContent).toBe('ReadingAGENTS.md')
     expect(screen.getByText('Reading').className).toContain('text-shimmer')
     expect(screen.getByText('AGENTS.md').className).toContain('text-shimmer')
     expect(container.querySelectorAll('.dot-wave > span')).toHaveLength(3)
-    expect(screen.queryByText('Working…')).toBeNull()
   })
 
   test('it opens to its detail like any call', () => {
-    render(<LiveLine call={{ label: 'Bash', detail: 'pnpm test' }} word="Working…" />)
+    render(live({ label: 'Bash', detail: 'pnpm test' }))
     fireEvent.click(screen.getByRole('button', { name: 'Running pnpm test' }))
     expect(screen.getByText('pnpm test', { selector: 'pre' })).toBeTruthy()
   })
 
-  test('the seconds since the call began count up, and turn to minutes', () => {
+  test('the seconds since the turn began count up after its words, and turn to minutes', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-10-04T10:00:09.500Z'))
-    render(<LiveLine call={{ label: 'Bash', detail: 'pnpm test' }} word="Working…" since="2026-10-04T10:00:00.000Z" />)
+    render(live({ label: 'Bash', detail: 'pnpm test' }, '2026-10-04T10:00:00.000Z'))
     expect(screen.getByText('9s')).toBeTruthy()
     act(() => void vi.advanceTimersByTime(1000))
     expect(screen.getByText('10s')).toBeTruthy()
@@ -147,10 +173,40 @@ describe('LiveLine', () => {
   })
 
   test('a call that does not say when it began counts nothing', () => {
-    render(<LiveLine call={{ label: 'Bash', detail: 'pnpm test' }} word="Working…" />)
+    render(live({ label: 'Bash', detail: 'pnpm test' }))
     expect(screen.queryByText(/^\d+s$/)).toBeNull()
   })
 
+  test('once the call is done the same row says the steps it took, the call\u2019s words fading out as those come in', () => {
+    const call = { label: 'Bash', detail: 'git log -3', summary: 'Show the last commits', id: 'c1' }
+    const { rerender, container } = render(<ToolCalls steps={[bash('ls')]} live={{ call }} />)
+    expect(screen.getByRole('status').textContent).toContain('Showing the last commits')
+    rerender(<ToolCalls steps={[bash('ls'), { type: 'action', ...call, output: { text: 'abc' } }]} />)
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Ran 2 commands' })).toBeTruthy()
+    const leaving = container.querySelector('.cross-fade-out')
+    expect(leaving?.textContent).toContain('Showing the last commits')
+    expect(container.querySelector('.cross-fade-in')?.textContent).toContain('Ran 2 commands')
+  })
+
+  test('as the call ends its dots shrink away with the fade, so the words glide into their place, and then they are gone', () => {
+    vi.useFakeTimers()
+    const call = { label: 'Bash', detail: 'git log -3', id: 'c1' }
+    const { rerender, container } = render(<ToolCalls steps={[]} live={{ call }} />)
+    expect(container.querySelector('.dot-wave')?.parentElement?.className).not.toContain('dots-leave')
+    rerender(<ToolCalls steps={[{ type: 'action', ...call }]} />)
+    expect(container.querySelector('.dot-wave')?.parentElement?.className).toContain('dots-leave')
+    act(() => void vi.advanceTimersByTime(250))
+    expect(container.querySelector('.dot-wave')).toBeNull()
+  })
+
+  test('a row drawn done has no dots at all', () => {
+    const { container } = render(<ToolCalls steps={[bash('ls')]} />)
+    expect(container.querySelector('.dot-wave')).toBeNull()
+  })
+})
+
+describe('LiveLine', () => {
   test('with no call going on, the line is the word, shimmering, with its seconds', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-10-04T10:00:03.000Z'))
@@ -207,7 +263,7 @@ describe('the live line counter', () => {
 describe('the live line says what is being done', () => {
   test('a command\u2019s description, as going on; once done the row keeps it as written', () => {
     const command = { label: 'Bash', detail: 'find . -name "*.md"', summary: 'Find all markdown files', id: 'b1' }
-    render(<LiveLine call={command} since="2026-11-03T10:00:00.000Z" />)
+    render(<ToolCalls steps={[]} live={{ call: command, since: '2026-11-03T10:00:00.000Z' }} />)
     expect(screen.getByRole('status').textContent).toContain('Finding all markdown files')
     cleanup()
     render(<ToolCalls steps={[{ type: 'action', ...command, output: { text: 'a.md' } }]} />)
@@ -215,16 +271,16 @@ describe('the live line says what is being done', () => {
   })
 
   test('a subagent\u2019s task, as going on, in place of "Starting agent"', () => {
-    render(<LiveLine call={{ label: 'Agent', detail: 'Summarize README', id: 'a1' }} since="2026-11-03T10:00:00.000Z" />)
+    render(<ToolCalls steps={[]} live={{ call: { label: 'Agent', detail: 'Summarize README', id: 'a1' }, since: '2026-11-03T10:00:00.000Z' }} />)
     expect(screen.getByRole('status').textContent).toContain('Summarizing README')
     expect(screen.getByRole('status').textContent).not.toContain('Starting agent')
   })
 
   test('words that are no command to turn are shown as written, and a call with none keeps its own words', () => {
-    render(<LiveLine call={{ label: 'Bash', detail: 'git status', summary: 'Git status of the repo', id: 'b2' }} since="2026-11-03T10:00:00.000Z" />)
+    render(<ToolCalls steps={[]} live={{ call: { label: 'Bash', detail: 'git status', summary: 'Git status of the repo', id: 'b2' }, since: '2026-11-03T10:00:00.000Z' }} />)
     expect(screen.getByRole('status').textContent).toContain('Git status of the repo')
     cleanup()
-    render(<LiveLine call={{ label: 'Read', detail: '/ws/README.md', id: 'r1' }} since="2026-11-03T10:00:00.000Z" />)
+    render(<ToolCalls steps={[]} live={{ call: { label: 'Read', detail: '/ws/README.md', id: 'r1' }, since: '2026-11-03T10:00:00.000Z' }} />)
     expect(screen.getByRole('status').textContent).toContain('Reading')
     expect(screen.getByRole('status').textContent).toContain('README.md')
   })

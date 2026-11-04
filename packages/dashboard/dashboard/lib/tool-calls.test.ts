@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { callsSummary, doingOf, summaryWords, toolCall, type ToolCall } from './tool-calls.js'
+import { callsSummary, doingOf, doneOf, summaryWords, toolCall, type ToolCall } from './tool-calls.js'
 
 describe('toolCall', () => {
   test("Claude Code's tools read as a verb and what it was done to", () => {
@@ -63,7 +63,7 @@ describe('callsSummary', () => {
     expect(words([toolCall('Read', '/repo/README.md'), toolCall('Read', '/repo/index.html'), toolCall('Grep', 'favicon'), toolCall('Glob', '**/*.md')])).toBe('Read 2 files, searched code, found files')
     // A file read twice is one file; two searches are still "searched code".
     expect(words([toolCall('Read', '/repo/a.ts'), toolCall('Read', '/repo/a.ts'), toolCall('Grep', 'a'), toolCall('Grep', 'b')])).toBe('Read a file, searched code')
-    expect(words([bash, toolCall('Skill', 'question'), toolCall('mcp__github__get_me'), toolCall('ToolSearch')])).toBe('Ran a command, used 3 tools')
+    expect(words([bash, toolCall('Skill', 'ask'), toolCall('mcp__github__get_me'), toolCall('ToolSearch')])).toBe('Ran a command, used 3 tools')
   })
 
   test('an edit is said by its file with how much it changed, and is no command', () => {
@@ -99,7 +99,11 @@ describe('doingOf', () => {
     expect(doingOf('Try the build again')).toBe('Trying the build again')
     expect(doingOf('use the cache')).toBe('using the cache')
     expect(doingOf('Sleep for 4 seconds')).toBe('Sleeping for 4 seconds')
-    expect(doingOf('Show, then count')).toBe('Showing, then count')
+    expect(doingOf('Show, then count')).toBe('Showing, then counting')
+    expect(doingOf('Wait 10 seconds then list files')).toBe('Waiting 10 seconds then listing files')
+    expect(doingOf('Add footer and rename README heading, show diff')).toBe('Adding footer and renaming README heading, show diff')
+    expect(doingOf('Show status, count markdown files, print README')).toBe('Showing status, count markdown files, print README')
+    expect(doingOf('Check the branch and its upstream')).toBe('Checking the branch and its upstream')
   })
 
   test('words already going on stay; words that open with no verb it knows are left as written', () => {
@@ -109,5 +113,33 @@ describe('doingOf', () => {
     expect(doingOf('npm install deps')).toBeUndefined()
     expect(doingOf('Git status')).toBeUndefined()
     expect(doingOf('')).toBeUndefined()
+  })
+})
+
+describe('doneOf', () => {
+  test('says what the agent wrote as done, the verbs after "and" and "then" too, as Claude Code on the web does', () => {
+    expect(doneOf('Wait 10 seconds then list files')).toBe('Waited 10 seconds then listed files')
+    expect(doneOf('Show the last 5 commits')).toBe('Showed the last 5 commits')
+    expect(doneOf('Run the test suite')).toBe('Ran the test suite')
+    expect(doneOf('Find all markdown files')).toBe('Found all markdown files')
+    expect(doneOf('Copy the build and verify it')).toBe('Copied the build and verified it')
+    expect(doneOf('Commit the change')).toBe('Committed the change')
+    expect(doneOf('Create a branch')).toBe('Created a branch')
+    expect(doneOf('Survey the repo')).toBe('Surveyed the repo')
+    expect(doneOf('Print the date')).toBe('Printed the date')
+    expect(doneOf('Sleep 5 then grep the log')).toBe('Slept 5 then grepped the log')
+    expect(doingOf('Format and unzip it')).toBe('Formatting and unzipping it')
+  })
+
+  test('words already said as going on are said as done', () => {
+    expect(doneOf('Running tests')).toBe('Ran tests')
+    expect(doneOf('Listing files and checking status')).toBe('Listed files and checked status')
+    expect(doneOf('Making the checkout')).toBe('Made the checkout')
+  })
+
+  test('words that open with no verb it knows are not turned, nor what follows a comma', () => {
+    expect(doneOf('npm install')).toBeUndefined()
+    expect(doneOf('README summary')).toBeUndefined()
+    expect(doneOf('Show status, count files')).toBe('Showed status, count files')
   })
 })

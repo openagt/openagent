@@ -89,8 +89,8 @@ test('a run whose last turn asked ends waiting and keeps its checkout; the answe
     assert.equal(await stat(inboxPath(worktreePath(repo, first.id))).then(() => true, () => false), false)
 
     // The agent's own run got the basic skills; a checkout that stayed from an older version lacks them.
-    const question = join(worktreePath(repo, first.id), '.claude', 'skills', 'question')
-    assert.match(await readFile(join(question, 'SKILL.md'), 'utf8'), /^name: question$/m, 'a run\'s checkout carries the basic skills')
+    const question = join(worktreePath(repo, first.id), '.claude', 'skills', 'ask')
+    assert.match(await readFile(join(question, 'SKILL.md'), 'utf8'), /^name: ask$/m, 'a run\'s checkout carries the basic skills')
     await unlink(question)
 
     let resumedWith: string | undefined
@@ -99,14 +99,14 @@ test('a run whose last turn asked ends waiting and keeps its checkout; the answe
       id: 'fake',
       start: async opts => {
         resumedWith = opts.resumeSessionId
-        questionAtResume = await readFile(join(opts.cwd, '.claude', 'skills', 'question', 'SKILL.md'), 'utf8').catch(() => '')
+        questionAtResume = await readFile(join(opts.cwd, '.claude', 'skills', 'ask', 'SKILL.md'), 'utf8').catch(() => '')
         return new FakeDriver({ turns: [{ text: 'Shipped.' }], sessionId: 's-ask' }).start(opts)
       },
     }
     const second = await resumeRun(repo, { id: first.id, answer: 'Approve', driver: finishing, host: 'this-box', pid: 4243, now: () => new Date(NOW.getTime() + 3_600_000), gitHost: noGitHost })
     assert.equal(resumedWith, 's-ask', 'the session resumes by the id the record carries')
     assert.equal(second.id, first.id, 'the same run')
-    assert.match(questionAtResume, /^name: question$/m, 'a kept checkout is given the links a new one gets before the agent goes on')
+    assert.match(questionAtResume, /^name: ask$/m, 'a kept checkout is given the links a new one gets before the agent goes on')
     assert.equal(second.status, 'done')
     assert.deepEqual(second.checkout, { reclaimed: true })
     const done = await findRun(repo, first.id)

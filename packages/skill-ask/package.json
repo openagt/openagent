@@ -1,12 +1,12 @@
 {
-  "name": "@openagt/skill-question",
+  "name": "@openagt/skill-ask",
   "version": "0.1.0",
   "description": "How a coding agent asks the person to decide: end the reply with one await-choices block and wait for the answer. A skill file only, no code.",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/openagt/openagent.git",
-    "directory": "packages/skill-question"
+    "directory": "packages/skill-ask"
   },
   "publishConfig": {
     "access": "public"
@@ -15,8 +15,8 @@
     "SKILL.md"
   ],
   "scripts": {
-    "build": "cp ../../skills/question/SKILL.md SKILL.md",
-    "prepack": "cp ../../skills/question/SKILL.md SKILL.md",
+    "build": "cp ../../skills/ask/SKILL.md SKILL.md",
+    "prepack": "cp ../../skills/ask/SKILL.md SKILL.md",
     "clean": "rm -f SKILL.md"
   }
 }
