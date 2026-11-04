@@ -254,6 +254,8 @@ describe('EventList tool calls', () => {
     fireEvent.click(copy)
     await waitFor(() => expect(screen.getByRole('button', { name: 'Copied' })).toBeTruthy())
     expect(writeText).toHaveBeenCalledWith('All done.')
+    // The check is there for a beat, then the copy icon again.
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Copy this message' })).toHaveLength(2), { timeout: 2500 })
     // While the agent works there is no footer: it has not finished saying it.
     rerender(<EventList events={[prompt, { ...said('All done.'), at }]} working stick={false} />)
     expect(screen.getAllByRole('button', { name: /Copy this message|Copied/ })).toHaveLength(1)
@@ -426,13 +428,13 @@ describe('EventList question and answer', () => {
     window.matchMedia = media
   })
 
-  test('the turn a question ended has its copy and time under the card, and none under what was said before it', () => {
+  test('the turn a question ended has no copy and time, under the card or under what was said before it', () => {
     const at = '2026-09-25T10:04:05.000Z'
     const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Here is the plan.' }, at }
     render(<EventList events={[asked[0]!, said, { ...asked[2]!, at }, asked[3]!]} projectId="p1" agentId="r1" stick={false} />)
     const row = screen.getByRole('region', { name: 'Which color do you prefer?' }).closest('[data-message-id]') as HTMLElement
-    expect(within(row).getByRole('button', { name: 'Copy this message' })).toBeTruthy()
-    expect(row.querySelector('time')?.getAttribute('datetime')).toBe(at)
+    expect(within(row).queryByRole('button', { name: 'Copy this message' })).toBeNull()
+    expect(row.querySelector('time')).toBeNull()
     const before = screen.getByText('Here is the plan.').closest('[data-message-id]') as HTMLElement
     expect(within(before).queryByRole('button', { name: 'Copy this message' })).toBeNull()
   })

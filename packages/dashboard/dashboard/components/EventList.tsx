@@ -1,6 +1,6 @@
 import type { AgentDoing, AgentMeta, ChoiceRequest, OpenAgentEvent } from '../../src/index.js'
 import { foldScreenRows, formatOpenAgentEvent } from '../../src/client.js'
-import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Check, ChevronRight, CircleDot, Copy } from 'lucide-react'
 import { pendingChoices } from '../lib/live-state.js'
 import { callRow, callSubagents, runRow, endMessage, subagentEnd, subagentEvents, subagentReport, subagentSteps, subagentWait, type SubagentEnd } from '../lib/subagents.js'
@@ -259,9 +259,11 @@ function Reply({ text }: { text: string }) {
   )
 }
 
-/** A button that copies a message, as Claude Code on the web has one under each message. */
+/** A button that copies a message, as Claude Code on the web has one under each message: a check for a beat once copied, then the copy icon again. */
 function CopyMessage({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => () => clearTimeout(timer.current), [])
   return (
     <button
       type="button"
@@ -269,7 +271,11 @@ function CopyMessage({ text }: { text: string }) {
       title={copied ? 'Copied' : 'Copy this message'}
       onClick={() => {
         void navigator.clipboard?.writeText(text).then(
-          () => setCopied(true),
+          () => {
+            setCopied(true)
+            clearTimeout(timer.current)
+            timer.current = setTimeout(() => setCopied(false), 1500)
+          },
           () => undefined,
         )
       }}
@@ -902,8 +908,8 @@ export function EventList({
                   ) : choiceRow && choiceRow.pick === undefined && projectId !== undefined && agentId !== undefined ? (
                     // The question the agent waits on, answered here, under what it said.
                     typing ? null : <div className="mt-1 flex min-w-0 flex-1 flex-col gap-1.5">
+                      {/* No copy and time under it, as Claude Code on the web has none under a question. */}
                       <QuestionPanel key={`${agentId}:${choiceRow.choice.id}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} onSaid={onSaid} />
-                      {footers.has(e) && <ReplyFooter text={footers.get(e)!} at={at} />}
                     </div>
                   ) : choiceRow?.pick !== undefined ? (
                     // What was asked and what was picked. font-sans: a card, not log text.

@@ -124,18 +124,19 @@ function callWords({ label, detail, whole, summary, output }: Call, live: boolea
 
 /**
  * What a call was given and what it gave back, opened under its line, as Claude Code on the web
- * opens one: a card naming the tool ("Bash"), what it was given in a box of its own (a command
+ * opens one: on a line of its own, a card naming the tool ("Bash"); in a box of steps, which is
+ * the card already, no second one. What it was given is in a box of its own (a command
  * with "$" in front, in the chat's code colours, with a button to copy it), and under it what the
  * call printed, grey and with no box; a call that failed says so, with its exit code when it has one.
  */
-function CallDetail({ label, detail, whole, output }: Call) {
+function CallDetail({ label, detail, whole, output, card = false }: Call & { card?: boolean }) {
   const call = toolCall(label, detail, output?.changed)
   const given = whole ?? call.detail
   const command = call.kind === 'command' && given !== undefined
   const coloured = useHighlightedIn(command ? given : '', command ? 'shellscript' : undefined, 'chat')
   return (
-    <div className="mt-1.5 flex flex-col gap-1.5 rounded-xl border border-border px-3 py-3">
-      <div className="text-sm text-muted-foreground">{label}</div>
+    <div className={cn('mt-1.5 flex flex-col gap-1.5', card && 'rounded-xl border border-border px-3 py-3')}>
+      {card && <div className="text-sm text-muted-foreground">{label}</div>}
       {given !== undefined && (
         <div className="relative rounded-lg border border-border">
           <pre aria-label={command ? 'Command' : 'Detail'} className={cn(CODE, 'py-1.5 pl-3 pr-10 text-foreground')}>
@@ -346,7 +347,7 @@ export function ToolCalls({ steps, lead, live }: { steps: readonly ToolStep[]; l
       </div>
       {open &&
         (one && only?.type === 'action' ? (
-          <CallDetail {...only} />
+          <CallDetail {...only} card />
         ) : (
           <div className="mt-1.5 flex flex-col divide-y divide-border rounded-lg border border-border">
             {lead && <div className="px-2 py-1.5">{lead}</div>}

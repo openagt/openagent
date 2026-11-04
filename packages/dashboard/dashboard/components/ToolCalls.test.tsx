@@ -132,6 +132,15 @@ describe('an opened call', () => {
     expect(output.className).toContain('text-muted-foreground')
     expect(output.className).not.toContain('border')
   })
+
+  test('opened inside a box of steps it has no card of its own and does not name the tool', () => {
+    render(<ToolCalls steps={[bash('ls'), { type: 'action', label: 'Bash', detail: 'pwd', summary: 'Print the folder', output: { text: '/repo' } }]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Ran 2 commands' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Printed the folder' }))
+    const command = screen.getByLabelText('Command')
+    expect(command.closest('.rounded-xl')).toBeNull()
+    expect(screen.queryByText('Bash')).toBeNull()
+  })
 })
 
 describe('a steps row with its call going on', () => {
