@@ -152,11 +152,13 @@ export function Caret({ open = false }: { open?: boolean }) {
 /**
  * The moving dots in front of what is going on now. From a width where the chat has room on its
  * left they hang there, in front of the words' column, so the words stand where the line's words
- * will stand once it is done; on a phone they come first on the line.
+ * will stand once it is done; on a phone they come first on the line. They are level with the
+ * middle of the words' small letters, a pixel and a half under the middle of the line (measured on
+ * the page's 14px font), not with the line's middle, which reads as above the words.
  */
 export function LiveDots() {
   return (
-    <span className="flex shrink-0 items-center sm:absolute sm:top-1/2 sm:right-full sm:mr-2 sm:-translate-y-1/2">
+    <span className="flex shrink-0 items-center max-sm:relative max-sm:top-[1.5px] sm:absolute sm:top-[calc(50%+1.5px)] sm:right-full sm:mr-2 sm:-translate-y-1/2">
       <Dots />
     </span>
   )
