@@ -100,7 +100,7 @@ function codeBlock(lines: string[], language: string, key: number, look: Look): 
 function CodeBlock({ lines, language, document }: { lines: string[]; language: string; document: boolean }) {
   const text = lines.join('\n')
   const known = language === 'diff' ? undefined : languageOfFence(language)
-  const coloured = useHighlightedIn(text, known, 'chat')
+  const coloured = useHighlightedIn(text, known)
   // In a page, as Claude Code on the web's file preview sets one: as wide as the text, the language
   // it was fenced as beside the copy button, and its lines kept whole, the box scrolling sideways.
   return (
@@ -109,7 +109,7 @@ function CodeBlock({ lines, language, document }: { lines: string[]; language: s
         {document && language !== '' && <span className="text-xs text-muted-foreground">{language}</span>}
         <CopyButton text={text} label="Copy the code" />
       </div>
-      <pre className={cn('px-4 py-3 text-xs leading-[18px]', document ? 'overflow-x-auto pr-20 whitespace-pre' : 'pr-12 break-words whitespace-pre-wrap')}>
+      <pre className={cn('py-3 pl-4 text-xs leading-[18px]', document ? 'overflow-x-auto pr-20 whitespace-pre' : 'pr-12 break-words whitespace-pre-wrap')}>
         <code>
           {language === 'diff'
             ? lines.map((line, i) => (
@@ -258,11 +258,11 @@ function renderList(lines: string[], look: Look, depth: number, key: number): Re
           <input type="checkbox" checked={task[1]!.toLowerCase() === 'x'} readOnly className="mt-1" />
           {nested ? (
             <div className="min-w-0 space-y-1">
-              <span>{inlineLines(task[2]!)}</span>
+              <TaskWords done={task[1]!.toLowerCase() === 'x'} text={task[2]!} />
               {nested}
             </div>
           ) : (
-            <span>{inlineLines(task[2]!)}</span>
+            <TaskWords done={task[1]!.toLowerCase() === 'x'} text={task[2]!} />
           )}
         </li>
       ) : (
@@ -289,7 +289,7 @@ function renderList(lines: string[], look: Look, depth: number, key: number): Re
           {items}
         </ol>
       ) : (
-        <ul key={`${key}-${lists.length}`} className={cn('list-disc', set)}>
+        <ul key={`${key}-${lists.length}`} className={cn(depth > 0 ? 'list-[circle]' : 'list-disc', set)}>
           {items}
         </ul>
       ),
@@ -342,6 +342,11 @@ function startsBlock(line: string): boolean {
  */
 function lineBreak(line: string): string {
   return / {2,}$|\\$/.test(line) ? '\n' : ' '
+}
+
+/** A task's words: struck through and dimmed once done, as Claude Code on the web sets them. */
+function TaskWords({ done, text }: { done: boolean; text: string }) {
+  return <span className={done ? 'text-muted-foreground line-through' : undefined}>{inlineLines(text)}</span>
 }
 
 /** A paragraph's text, a line break where its lines were broken (`lineBreak`). */
@@ -488,11 +493,13 @@ function renderBlocks(lines: string[], look: Look, depth = 0): ReactNode[] {
         blocks.push(<Heading key={key++} level={level} text={heading[2]!} />)
         continue
       }
+      // As Claude Code on the web sets a reply's headings: the first a little larger than the text,
+      // the others its size, none heavier than medium, with room above them.
       const sizes = compact
         ? ['text-sm', 'text-sm', 'text-xs', 'text-xs', 'text-xs', 'text-xs']
-        : ['text-lg', 'text-base', 'text-sm', 'text-sm', 'text-sm', 'text-sm']
+        : ['text-base', 'text-sm', 'text-sm', 'text-sm', 'text-sm', 'text-sm']
       blocks.push(
-        <p key={key++} data-heading={slug(heading[2]!)} className={`font-semibold ${sizes[level - 1]}`}>
+        <p key={key++} data-heading={slug(heading[2]!)} className={cn(sizes[level - 1], compact ? 'font-semibold' : 'font-medium [&:not(:first-child)]:pt-2')}>
           {inline(heading[2]!)}
         </p>,
       )
@@ -500,7 +507,7 @@ function renderBlocks(lines: string[], look: Look, depth = 0): ReactNode[] {
     }
 
     if (isRule(line)) {
-      blocks.push(<hr key={key++} className="border-border" />)
+      blocks.push(<hr key={key++} className={cn('border-border', !compact && 'my-3')} />)
       continue
     }
 
@@ -510,7 +517,7 @@ function renderBlocks(lines: string[], look: Look, depth = 0): ReactNode[] {
       while (end < lines.length && /^\s*>/.test(lines[end]!)) end++
       const quoted = lines.slice(i, end).map(l => l.replace(/^\s*>\s?/, ''))
       blocks.push(
-        <blockquote key={key++} className="space-y-1.5 border-l-2 border-border pl-3 text-muted-foreground">
+        <blockquote key={key++} className={cn('space-y-1.5 border-l-4 border-border pl-4 text-muted-foreground', !compact && 'my-3 ml-2')}>
           {renderBlocks(quoted, look, depth + 1)}
         </blockquote>,
       )
@@ -543,9 +550,9 @@ function renderBlocks(lines: string[], look: Look, depth = 0): ReactNode[] {
 // is the file's name as inline code with the path on hover: the browser cannot open a file, and
 // the raw `[a.md](/repo/a.md)` read as noise. Anything else stays plain text.
 const LINK_CLASS = 'text-primary underline underline-offset-2 break-all'
-// A name in the text (a file, a branch, a command) is framed and coloured, so it stands out from
-// the sentence around it, as Claude Code on the web sets one.
-const CODE_CLASS = 'rounded-[5px] border-[0.5px] border-foreground/10 bg-foreground/5 px-[3px] py-px text-[0.9em] text-(--code-foreground)'
+// A name in the text (a file, a branch, a command) is on a faint fill, so it stands out from the
+// sentence around it, as Claude Code on the web sets one.
+const CODE_CLASS = 'rounded-[4px] bg-foreground/[0.075] px-1 py-px text-[0.9em]'
 // `#12` as a link: the issue or pull request of that number, on the project's GitHub page.
 const ISSUE_CLASS = 'whitespace-nowrap rounded bg-primary/10 px-1.5 text-primary hover:bg-primary/15'
 

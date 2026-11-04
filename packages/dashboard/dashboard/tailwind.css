@@ -30,8 +30,6 @@
   --muted: #f3f5f2;
   --muted-foreground: #66756c;
   --border: #e3e7e1;
-  /* A code word in an answer (Markdown.tsx): a dark red, as Claude Code on the web sets them. */
-  --code-foreground: #a63a36;
   --primary: #6f7f00;
   --primary-foreground: #ffffff;
   /* The hover and active fill: a step below the sidebar too, so a row there still lights up. */
@@ -69,7 +67,6 @@
   /* The sidebar a step above the page, as Claude Code's dark lays it: the panes' old step. */
   --sidebar: #232a2e;
   --foreground: #d3c6aa;
-  --code-foreground: #e67e80;
   --card: #232a2e;
   --card-foreground: #d3c6aa;
   --muted: #2e383c;

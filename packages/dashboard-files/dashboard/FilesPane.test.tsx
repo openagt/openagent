@@ -315,6 +315,25 @@ describe('opening files, as Claude Code on the web does', () => {
     expect(screen.queryByText('hello world')).toBeNull()
   })
 
+  test('closing the last tab shows the tree, on a narrow pane and on a wide one with the tree hidden', async () => {
+    readContent.mockResolvedValue({ path: 'README.md', text: 'hello world', truncated: false, binary: false })
+    narrowPanes()
+    render(<FilesPane projectId="p1" context={context()} />)
+    fireEvent.click(await screen.findByTitle('README.md'))
+    await screen.findByText('hello world')
+    expect(screen.queryByLabelText('Filter files')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Close README.md' }))
+    expect(screen.getByLabelText('Filter files')).toBeTruthy()
+    cleanup()
+    vi.unstubAllGlobals()
+    render(<FilesPane projectId="p1" context={context()} />)
+    fireEvent.click(await screen.findByTitle('README.md'))
+    fireEvent.click(screen.getByLabelText('Hide the file tree'))
+    await waitFor(() => expect(screen.queryByLabelText('Filter files')).toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: 'Close README.md' }))
+    expect(screen.getByLabelText('Filter files')).toBeTruthy()
+  })
+
   test('with previews off in the ⋮ menu, one click keeps the file', async () => {
     render(<FilesPane projectId="p1" context={context()} />)
     await screen.findByText('README.md')

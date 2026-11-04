@@ -213,7 +213,7 @@ export function fileLines(text: string): FileLines | undefined {
  */
 function ReadDetail({ path, read }: { path: string; read: FileLines }) {
   const openFile = useContext(OpenFile)
-  const coloured = useHighlightedIn(read.lines.map(line => line.text).join('\n'), languageOf(path), 'chat')
+  const coloured = useHighlightedIn(read.lines.map(line => line.text).join('\n'), languageOf(path))
   // The widest number, and the room after it.
   const width = `${String(read.lines.at(-1)!.number).length}ch`
   return (
@@ -225,10 +225,10 @@ function ReadDetail({ path, read }: { path: string; read: FileLines }) {
       ) : (
         <div className="min-w-0 truncate text-[13px] text-foreground">{path}</div>
       )}
-      <div aria-label="File" className="max-h-[400px] overflow-auto rounded-lg border border-border py-1.5 font-mono text-xs leading-[18px]">
+      <div aria-label="File" className="max-h-[400px] overflow-auto rounded-lg border border-border bg-muted/50 py-1.5 font-mono text-xs leading-[18px]">
         {read.lines.map((line, i) => (
           <div key={line.number} className="flex w-max min-w-full whitespace-pre text-foreground">
-            <span className="sticky left-0 shrink-0 select-none bg-background pr-4 pl-3 text-right tabular-nums text-muted-foreground/60" style={{ width: `calc(${width} + 1.75rem)` }}>
+            <span className="shrink-0 select-none pr-4 pl-3 text-right tabular-nums text-muted-foreground/60" style={{ width: `calc(${width} + 1.75rem)` }}>
               {line.number}
             </span>
             <span className="pr-3">{coloured?.[i] ? <ColouredLine pieces={coloured[i]} /> : line.text || ' '}</span>
@@ -248,12 +248,12 @@ function ColouredLine({ pieces }: { pieces: Piece[] }) {
 function GivenDetail({ label, call, whole, output, card }: { label: string; call: ToolCall; whole: string | undefined; output: CallOutput | undefined; card: boolean }) {
   const given = whole ?? call.detail
   const command = call.kind === 'command' && given !== undefined
-  const coloured = useHighlightedIn(command ? given : '', command ? 'shellscript' : undefined, 'chat')
+  const coloured = useHighlightedIn(command ? given : '', command ? 'shellscript' : undefined)
   return (
     <div className={cn('mt-1.5 flex flex-col gap-1.5', card && 'rounded-xl border border-border px-3 py-3')}>
       {card && <div className="text-sm text-muted-foreground">{label}</div>}
       {given !== undefined && (
-        <div className="relative rounded-lg border border-border">
+        <div className="relative rounded-lg border border-border bg-muted/50">
           <pre aria-label={command ? 'Command' : 'Detail'} className={cn(CODE, 'py-1.5 pl-3 pr-10 text-foreground')}>
             {command && <span className="select-none text-muted-foreground">$ </span>}
             {coloured

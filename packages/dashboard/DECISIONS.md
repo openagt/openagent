@@ -193,8 +193,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   file is picked from it. Picked over the tree or the list squeezed above the file.
 - The search button of the Files pane shows the tree and puts the cursor in its "Filter
   files…". Picked over a search box of its own.
-- Files and Changes colour code by its language, with Shiki's Everforest themes, the family
-  the dashboard's colours come from. Picked over plain text.
+- Code is coloured by its language in the hues Claude Code on the web uses, the same in the
+  chat and in the Files and Changes panes. Picked over plain text, and over Everforest's
+  themes in the panes.
 - A file's icon is Material Icon Theme's. Picked over vscode-icons, Catppuccin's outlines, and
   a small two-tone set of our own.
 - The packages every project wants are built in: OpenAgent depends on them and uses them

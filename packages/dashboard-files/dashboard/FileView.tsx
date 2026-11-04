@@ -14,13 +14,13 @@ import { showSource } from './open-files.js'
 
 const isMarkdown = (path: string) => /\.(md|mdx|markdown)$/i.test(path)
 
-/** What stands on the right while no file is open. */
-export function NoFileOpen({ tree }: { tree: boolean }) {
+/** What stands beside the tree while no file is open. */
+export function NoFileOpen() {
   return (
     <div className="flex flex-auto flex-col items-center justify-center gap-1 p-6 text-center">
       <FolderIcon aria-hidden className="mb-2 size-6 text-muted-foreground" />
       <p className="text-sm">Open files appear here</p>
-      <p className="text-xs text-muted-foreground">{tree ? 'Pick a file in the tree.' : 'Show the file tree to pick a file.'}</p>
+      <p className="text-xs text-muted-foreground">Pick a file in the tree.</p>
     </div>
   )
 }

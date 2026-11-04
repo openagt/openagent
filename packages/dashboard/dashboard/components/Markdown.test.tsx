@@ -74,7 +74,16 @@ describe('Markdown compact', () => {
     expect(screen.getByText('Section').className).toContain('text-sm')
     unmount()
     render(<Markdown text={'# Section'} />)
-    expect(screen.getByText('Section').className).toContain('text-lg')
+    expect(screen.getByText('Section').className).toContain('text-base')
+  })
+
+  test("in a reply, headings are medium, not bold, and a nested bullet list is circles; a done task is struck through", () => {
+    const { container } = render(<Markdown text={'# Title\n\n## Part\n\n- one\n  - inner\n\n- [x] done\n- [ ] todo'} />)
+    expect(screen.getByText('Title').className).toContain('font-medium')
+    expect(screen.getByText('Part').className).not.toContain('font-semibold')
+    expect(container.querySelector('ul ul')!.className).toContain('list-[circle]')
+    expect(screen.getByText('done').className).toContain('line-through')
+    expect(screen.getByText('todo').className ?? '').not.toContain('line-through')
   })
 })
 

@@ -90,11 +90,12 @@ export function FilesPane({ projectId, agentId, activity, show, context }: Modul
   const settings = useFilesSettings()
   const [body, setBody] = useState<HTMLElement | null>(null)
   const narrow = useNarrow(body, NARROW)
-  // On a narrow pane the tree is shown in the file's place: from the start when no file is open, as
-  // Claude Code's narrow pane opens on its files, else on a press of its button; a file opened from
-  // it hides it again. The setting is what a wide pane does.
-  const [peek, setPeek] = useState(active === undefined)
-  const tree = narrow ? peek : settings.tree
+  // With no file open the tree is shown, in the file's place where there is room for one only, as
+  // Claude Code's pane shows its files when it opens and when its last tab is closed. On a narrow
+  // pane with a file open, the tree takes the file's place on a press of its button; a file opened
+  // from it hides it again. The setting is what a wide pane does.
+  const [peek, setPeek] = useState(false)
+  const tree = active === undefined || (narrow ? peek : settings.tree)
   const showTree = (shown: boolean) => (narrow ? setPeek(shown) : setFilesSetting('tree', shown))
   const open = (path: string, keep: boolean) => {
     openFile(page, path, keep)
@@ -256,7 +257,7 @@ export function FilesPane({ projectId, agentId, activity, show, context }: Modul
         {narrow && tree ? null : active !== undefined ? (
           <FileView key={active} page={page} projectId={projectId} agentId={agentId} path={active} wrap={settings.wrap} source={source?.has(active) ?? false} files={files} onOpen={open} />
         ) : (
-          <NoFileOpen tree={tree} />
+          <NoFileOpen />
         )}
       </div>
     </>
