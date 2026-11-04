@@ -1,6 +1,6 @@
 ---
 name: question
-description: When you need the person to decide something before you can go on, how to ask them and wait for the answer.
+description: Use whenever you are about to ask the person a question or let them choose, a follow-up too: how to ask so they see it as a question they can answer, and how to wait for the answer.
 ---
 
 # Question

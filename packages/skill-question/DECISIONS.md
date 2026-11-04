@@ -12,6 +12,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   picks by itself when a choice is the person's. Picked over the runner adding a line to
   every prompt (prompt text of the runner's own) and over a system prompt through the
   driver (Codex has none, and a hidden prompt comes back).
+- The skill's description says when to use it, every time the agent is about to ask, not
+  what it teaches: Sonnet took a description of how to ask for one it did not need and
+  asked in plain words. Picked over a line about asking in the agent's prompt.
 - An agent that has a tool of its own for asking the person uses it; the block is for an
   agent with none, as one a runner starts without a terminal. Picked over a mark the
   runner puts in the agent's environment: runner code, and a skill naming a runner.
