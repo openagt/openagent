@@ -79,7 +79,7 @@ export async function finishTurn(
   opts: DriverPromptOptions,
   emit: (event: { type: 'question'; question: NonNullable<ReturnType<typeof parseQuestion>> }) => void,
 ): Promise<DriverTurn> {
-  const question = parseQuestion(turn.text)
+  const question = turn.question ?? parseQuestion(turn.text)
   if (question) emit({ type: 'question', question })
   if (!opts.inbox) return turn
   let last = turn

@@ -22,6 +22,8 @@ interface BasicSkill {
   pkg: ProjectPackage
   /** The package's git host command, when it declares one: asked before its skill is linked. */
   gitHost?: ProvidedCommand
+  /** The skill teaches an agent how to ask the person (`"openagent": { "asking": true }`): none for an agent with a tool of its own for that. */
+  asking: boolean
 }
 
 /** The list as last read, by the value it was read off: the environment is read on each ask. */
@@ -44,7 +46,8 @@ async function resolveBasic(from: string): Promise<BasicSkill[]> {
     if (!dir || !manifest || !name || !skill) continue
     const bins = packageBins(name, manifest.bin, dir)
     const gitHost = declaring([{ name, dir, manifest }], 'git-host')[0]
-    skills.push({ link: { name: skill, dir, ...(Object.keys(bins).length > 0 ? { package: { name, dir, bins } } : {}) }, pkg: { name, dir, manifest }, ...(gitHost ? { gitHost } : {}) })
+    const asking = typeof manifest.openagent === 'object' && manifest.openagent !== null && (manifest.openagent as Record<string, unknown>)['asking'] === true
+    skills.push({ link: { name: skill, dir, ...(Object.keys(bins).length > 0 ? { package: { name, dir, bins } } : {}) }, pkg: { name, dir, manifest }, ...(gitHost ? { gitHost } : {}), asking })
   }
   return skills
 }
@@ -61,10 +64,14 @@ export async function everyBasicSkill(): Promise<SkillLink[]> {
   return (await basic()).map(skill => skill.link)
 }
 
-/** The basic skills of the project at `repo`: all of them, a git host's only where it answers for the project. */
-export async function basicSkills(repo: string): Promise<SkillLink[]> {
+/**
+ * The basic skills of the project at `repo`: all of them, a git host's only where it answers for
+ * the project, and one that teaches asking only for an agent with no question tool of its own.
+ */
+export async function basicSkills(repo: string, agent: { ownQuestionTool?: boolean } = {}): Promise<SkillLink[]> {
   const skills: SkillLink[] = []
-  for (const { link, gitHost } of await basic()) {
+  for (const { link, gitHost, asking } of await basic()) {
+    if (asking && agent.ownQuestionTool === true) continue
     if (gitHost && !(await runPackageCommand(repo, gitHost, ['home'])).ok) continue
     skills.push(link)
   }

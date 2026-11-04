@@ -392,9 +392,9 @@ describe('EventList question and answer', () => {
     expect(within(card).getByRole('button', { name: /Submit/ }).textContent).toMatch(/^Submit(⌘|Ctrl)↵$/)
   })
 
-  test('under a question the run waits on, the live line says it needs your input; answered, it says nothing', () => {
+  test('under a question the run waits on, the live line says nothing: the card is what waits', () => {
     const { rerender } = render(<EventList events={asked} projectId="p1" agentId="r1" stick={false} />)
-    expect(within(screen.getByTestId('live-line')).getByRole('status').textContent).toBe('Needs your input')
+    expect(screen.getByTestId('live-line').textContent).toBe('')
     rerender(<EventList events={resumed('Red')} projectId="p1" agentId="r1" stick={false} />)
     expect(screen.getByTestId('live-line').textContent).toBe('')
   })
@@ -407,8 +407,6 @@ describe('EventList question and answer', () => {
     expect(screen.queryByText('Which color do you prefer?', { selector: 'div' })).toBeNull()
     fireEvent.click(line)
     expect(screen.getByText('Which color do you prefer?', { selector: 'div' })).toBeTruthy()
-    // Nothing waits on it any longer.
-    expect(screen.getByTestId('live-line').textContent).not.toContain('Needs your input')
   })
 
   test('with no header, the passed question is named by the question itself', () => {

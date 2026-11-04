@@ -1,7 +1,7 @@
 import { hostname } from 'node:os'
 import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { AgentExitError, ConversationGoneError, continuationPrompt, logDiaryFile, parseQuestion, promptOf, takeInbox, type Driver, type DriverPromptOptions, type DriverSession, type DriverTurn, type InboxLine, type LogEndStatus } from '@openagt/agent-driver'
+import { AgentExitError, ConversationGoneError, continuationPrompt, logDiaryFile, parseQuestion, promptOf, takeInbox, type Driver, type DriverPromptOptions, type DriverSession, type DriverTurn, type InboxLine, type LogEndStatus, type Question } from '@openagt/agent-driver'
 import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 import { agentBranchName, attachCheckout, createCheckout, reclaimWorktree, relinkCheckout, worktreeBranch, worktreePath, type SkillLink } from '@openagt/skill-branches'
 import { findRun, readDiary, type AnyDiaryLine, type LogsDeps, type RunCard, type RunStatus } from '@openagt/skill-logs'
@@ -173,8 +173,8 @@ export interface RunOptions {
   git?: GitRunner
   /** The project's git host; the one the project declares when absent. */
   gitHost?: GitHost
-  /** The skills linked into the checkout beside the branches skill; the basic ones (`basic-skills.ts`) when absent. */
-  skills?: (repo: string) => Promise<readonly SkillLink[]>
+  /** The skills linked into the checkout beside the branches skill, for the run's agent; the basic ones (`basic-skills.ts`) when absent. */
+  skills?: (repo: string, agent: { ownQuestionTool?: boolean }) => Promise<readonly SkillLink[]>
   logs?: LogsDeps
   log?: (line: string) => void
 }
@@ -239,7 +239,7 @@ export async function runCommand(repo: string, opts: RunOptions): Promise<RunOut
     // Without one there is no run, and the record says so instead of a marker left running.
     let checkout: { path: string; branch: string }
     try {
-      const skills = await (opts.skills ?? basicSkills)(repo).catch((): SkillLink[] => [])
+      const skills = await (opts.skills ?? basicSkills)(repo, opts.driver).catch((): SkillLink[] => [])
       checkout = opts.branch !== undefined ? await attachCheckout(repo, { agentId: id, branch: opts.branch, skills }, git) : await createCheckout(repo, { agentId: id, skills, ...(opts.base !== undefined ? { base: opts.base } : {}) }, git)
     } catch (err) {
       naming?.stop.abort()
@@ -322,8 +322,8 @@ export interface ResumeOptions {
   git?: GitRunner
   /** The project's git host; the one the project declares when absent. */
   gitHost?: GitHost
-  /** The skills linked into the checkout beside the branches skill; the basic ones (`basic-skills.ts`) when absent. */
-  skills?: (repo: string) => Promise<readonly SkillLink[]>
+  /** The skills linked into the checkout beside the branches skill, for the run's agent; the basic ones (`basic-skills.ts`) when absent. */
+  skills?: (repo: string, agent: { ownQuestionTool?: boolean }) => Promise<readonly SkillLink[]>
   logs?: LogsDeps
   log?: (line: string) => void
 }
@@ -380,7 +380,7 @@ export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunO
     const branch = card.branch ?? agentBranchName(opts.id)
     const path = worktreePath(repo, opts.id)
     const kept = await stat(path).then(s => s.isDirectory(), () => false)
-    const skills = await (opts.skills ?? basicSkills)(repo).catch((): SkillLink[] => [])
+    const skills = await (opts.skills ?? basicSkills)(repo, opts.driver).catch((): SkillLink[] => [])
     const checkout: { path: string; branch: string; again?: true } = kept ? { path, branch } : await attachCheckout(repo, { agentId: opts.id, branch, skills, ...(previous.base !== undefined ? { base: previous.base } : {}) }, git)
     // A checkout that stayed was made by whatever version ran then: its links are brought to what a new one gets.
     if (kept) await relinkCheckout(repo, path, { skills }, git)
@@ -583,6 +583,7 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
       question = undefined
       let failure: unknown
       let lastText = ''
+      let asked: Question | undefined
       try {
         for (const [i, { prompt, publish }] of queue.entries()) {
           await takeLevel(publish)
@@ -600,6 +601,7 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
               })
           fresh = false
           lastText = turn.text
+          asked = turn.question
           lastWords = turn.text
           resume = true
         }
@@ -614,7 +616,7 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
       } else if (status === 'done') {
         // The last turn asked and nothing waited in the inbox: the run ends here, waiting, and
         // keeps its checkout for the answer to resume it.
-        question = parseQuestion(lastText)?.title
+        question = (asked ?? parseQuestion(lastText))?.title
         if (question !== undefined) status = 'waiting'
       }
       // Named from its first report once its status is settled, before it is said ended, so the

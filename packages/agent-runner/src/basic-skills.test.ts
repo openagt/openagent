@@ -37,7 +37,7 @@ handDownBasicSkills()
 const exists = (path: string): Promise<boolean> => lstat(path).then(() => true, () => false)
 const excludeOf = (repo: string): Promise<string> => readFile(join(repo, '.git', 'info', 'exclude'), 'utf8').catch(() => '')
 
-test('every project gets logs and question; the git host\'s skill only where the project is on that host', async () => {
+test('every project gets logs and ask; the git host\'s skill only where the project is on that host; an agent with a question tool of its own gets no ask', async () => {
   const repo = await testRepo()
   try {
     // The test project's remote is a folder on this machine: no git host answers for it.
@@ -53,6 +53,8 @@ test('every project gets logs and question; the git host\'s skill only where the
     assert.deepEqual(Object.keys(byName['logs']!.package!.bins), ['logs'])
     assert.equal(byName['github']!.package?.name, '@openagt/skill-github')
     assert.equal(byName['ask']!.package, undefined)
+    // Claude Code asks with its own AskUserQuestion: given the skill as well, it asks the skill's way.
+    assert.deepEqual((await basicSkills(repo, { ownQuestionTool: true })).map(skill => skill.name), ['logs', 'github'])
   } finally {
     await removeRepo(repo)
   }
