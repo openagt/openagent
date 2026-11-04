@@ -16,12 +16,12 @@ vi.mock('./DocsPanel.js', () => ({ DocsPanel: ({ docs }: { docs: { name: string 
 const { PaneLayout, PaneMenu, PanesProvider, PaneToggles } = await import('./Panes.js')
 const { forgetRemembered } = await import('../lib/use-async.js')
 const { forgetPanes, setPaneOpen } = await import('../lib/panes.js')
-const { forgetRevealedChanges, revealChange, revealScreen, revealSubagent } = await import('../lib/reveal-change.js')
+const { forgetRevealedChanges, revealChange, revealFile, revealScreen, revealSubagent } = await import('../lib/reveal-change.js')
 
 const Icon = () => <svg aria-hidden />
 // The installed modules' panes, as the Files module and the browser skill bring them: each shows what it was given.
 const shown = vi.fn()
-const FILES: MountedPanel = { id: 'files', label: 'Files', icon: Icon, Panel: (props: ModulePanelProps) => (shown(props), <div>the files</div>), package: '@openagt/dashboard-files', projects: ['p1'] }
+const FILES: MountedPanel = { id: 'files', label: 'Files', icon: Icon, files: true, Panel: (props: ModulePanelProps) => (shown(props), <div>the files</div>), package: '@openagt/dashboard-files', projects: ['p1'] }
 const CHANGES: MountedPanel = { id: 'changes', label: 'Changes', icon: Icon, changes: true, Panel: (props: ModulePanelProps) => <div>changes: {props.reveal?.path ?? 'none asked'}</div>, package: '@openagt/dashboard-changes', projects: ['p1'] }
 const BROWSER: MountedPanel = { id: 'browser', label: 'Browser', icon: Icon, screen: true, Panel: () => <div>the browser</div>, package: '@openagt/skill-browser', projects: ['p1'] }
 const mounted = (panels: MountedPanel[]): MountedModules => ({ pages: [], cards: [], linkActions: [], panels, runSlots: [], settings: [], everyPage: [], loaded: true })
@@ -389,6 +389,28 @@ describe('a changed file asked for from the chat', () => {
   test('with no pane that lists changes, nothing opens', () => {
     render(<Page />, [FILES])
     act(() => revealChange('p1/r1', 'src/app.ts'))
+    expect(cards()).toEqual([])
+  })
+})
+
+// A file a step names in the chat asks for the file (`lib/reveal-change.ts`).
+describe('a file asked for from the chat', () => {
+  test('opens the pane that shows files and hands it the file as the agent named it; the other panes are handed nothing', () => {
+    render(<Page />)
+    fireEvent.click(icon('Changes'))
+    act(() => revealFile('p1/r1', '/home/user/project/index.html'))
+    expect(cards()).toEqual(['Changes', 'Files'])
+    expect((shown.mock.lastCall![0] as ModulePanelProps).show).toMatchObject({ path: '/home/user/project/index.html' })
+    expect(within(card('Changes')).getByText('changes: none asked')).toBeTruthy()
+  })
+
+  test("another page's ask opens nothing here, and with no pane that shows files nothing opens", () => {
+    render(<Page />)
+    act(() => revealFile('p1/other', 'index.html'))
+    expect(cards()).toEqual([])
+    cleanup()
+    render(<Page />, [CHANGES])
+    act(() => revealFile('p1/r1', 'index.html'))
     expect(cards()).toEqual([])
   })
 })

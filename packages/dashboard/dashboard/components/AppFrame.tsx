@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react'
 import { usePreferences, themePreference, resolvedDark } from '../lib/preferences.js'
+import { applyAppearance } from '../lib/appearance.js'
 import { ErrorBoundary } from './ErrorBoundary.js'
 import { TooltipProvider } from './ui/tooltip.js'
 
@@ -7,7 +8,13 @@ import { TooltipProvider } from './ui/tooltip.js'
 // client-only, so toggling the `.dark` class in an effect is fine. Until the preferences arrive
 // from the daemon the choice is `system`, so a dark-OS user still gets dark first paint.
 export function AppFrame({ children }: { children: ReactNode }) {
-  const theme = themePreference(usePreferences())
+  const preferences = usePreferences()
+  const theme = themePreference(preferences)
+  // The rest of the look (Settings › Appearance): the palette, the primary colour, the fonts.
+  const { palette, accent, font, codeFont, documentFont } = preferences
+  useEffect(() => {
+    applyAppearance(document.documentElement, { palette, accent, font, codeFont, documentFont })
+  }, [palette, accent, font, codeFont, documentFont])
   useEffect(() => {
     const root = document.documentElement
     const mql = window.matchMedia('(prefers-color-scheme: dark)')

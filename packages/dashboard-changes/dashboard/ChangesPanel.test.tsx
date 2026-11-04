@@ -345,10 +345,10 @@ describe('ChangesPanel, as Claude Code on the web draws it', () => {
     await waitFor(() => expect(readDiff).toHaveBeenCalledWith(expect.anything(), 'p1', 'src/app.ts', 'run-1', undefined, true))
   })
 
-  test('a diff’s text is coloured by its file’s language, in the light theme and the dark one', async () => {
+  test('a diff’s text is coloured by its file’s language, in the theme’s own hues', async () => {
     render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
     const diff = await screen.findByRole('region', { name: 'src/app.ts' })
-    await waitFor(() => expect(diff.querySelector('[style*="--light"][style*="--dark"]')?.textContent).toBe('const'), { timeout: 5000 })
+    await waitFor(() => expect(diff.querySelector('[style*="--code-keyword"]')?.textContent).toBe('const'), { timeout: 5000 })
   })
 
   test('a file’s header folds its diff away; the ⋮ menu folds them all and shows them all again', async () => {

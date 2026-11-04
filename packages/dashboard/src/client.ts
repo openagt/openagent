@@ -5,6 +5,7 @@
 export { DRIVERS, DRIVER_LABELS, isDriverName, driverFromImpl, type DriverName } from './driver-names.js'
 export { PUBLISH_LABELS, isPublishPick, offeredPublishPicks, publishPickIn, type PublishPick } from './publish-levels.js'
 export { formatOpenAgentEvent } from './terminal.js'
+export { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, FONTS, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette } from './appearance.js'
 // What every list calls a run, so the same run never goes by two names.
 export { runName } from './run-name.js'
 export { foldScreenRows } from './screens.js'

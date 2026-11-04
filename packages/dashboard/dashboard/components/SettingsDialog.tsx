@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import { ArrowLeft, Bell, Bot, ChevronRight, Globe, KeyRound, Palette, Puzzle, Users, X } from 'lucide-react'
-import { DRIVERS } from '../../src/client.js'
+import { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, DRIVERS, FONTS, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette as ColourPalette } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import { NO_MODEL_PINNED } from '../lib/agent-settings.js'
 import type { DriverOption } from './DriverModelMenu.js'
@@ -284,6 +284,8 @@ function useOwnEntries(): Entry[] {
   const permission = useNotificationPermission()
   const browserBlocked = permission === 'denied'
 
+  const palette = preferences.palette ?? 'openagent'
+
   return [
     {
       id: 'appearance',
@@ -301,6 +303,43 @@ function useOwnEntries(): Entry[] {
               { value: 'dark', label: 'Dark' },
             ]}
             onChange={value => updatePreferences({ theme: value as ThemePreference })}
+          />
+          <SelectRow
+            label="Colours"
+            description="OpenAgent’s own Everforest colours, or neutral greys."
+            value={palette}
+            options={PALETTES.map(p => ({ value: p, label: PALETTE_LABELS[p] }))}
+            // A primary colour is one of the palette's own: the new palette starts on its default.
+            onChange={value => updatePreferences({ palette: value as ColourPalette, accent: '' as Accent })}
+          />
+          <SelectRow
+            label="Primary colour"
+            description="Buttons, links and what is picked, in the colours’ own hues."
+            value={accentOf(palette, preferences.accent) ?? ''}
+            options={[{ value: '', label: DEFAULT_ACCENT_LABELS[palette] }, ...ACCENTS[palette].map(accent => ({ value: accent, label: accent.charAt(0).toUpperCase() + accent.slice(1) }))]}
+            // None picked is stored as nothing: the daemon keeps only a colour of the palette's list.
+            onChange={value => updatePreferences({ accent: value as Accent })}
+          />
+          <SelectRow
+            label="Font"
+            description="The font of the page and the chat."
+            value={preferences.font ?? 'figtree'}
+            options={Object.entries(FONTS).map(([value, label]) => ({ value, label }))}
+            onChange={value => updatePreferences({ font: value as Font })}
+          />
+          <SelectRow
+            label="Code font"
+            description="Code blocks, the files an agent read, the Files pane."
+            value={preferences.codeFont ?? 'jetbrains-mono'}
+            options={Object.entries(CODE_FONTS).map(([value, label]) => ({ value, label }))}
+            onChange={value => updatePreferences({ codeFont: value as CodeFont })}
+          />
+          <SelectRow
+            label="File preview font"
+            description="A Markdown file read in the Files pane."
+            value={preferences.documentFont ?? 'source-serif-4'}
+            options={Object.entries(DOCUMENT_FONTS).map(([value, label]) => ({ value, label }))}
+            onChange={value => updatePreferences({ documentFont: value as DocumentFont })}
           />
           <SelectRow
             label="Editor"

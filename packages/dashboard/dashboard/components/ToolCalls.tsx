@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
-import { callsSummary, doingOf, doneOf, summaryWords, toolCall } from '../lib/tool-calls.js'
+import { createContext, Fragment, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { callsSummary, doingOf, doneOf, summaryWords, toolCall, type ToolCall } from '../lib/tool-calls.js'
 import { usePreferences } from '../lib/preferences.js'
 import type { FileEdit } from '../lib/turn-changes.js'
 import { LinesPill } from './ChangedFiles.js'
@@ -8,7 +8,13 @@ import { formatElapsed } from '../lib/format-date.js'
 import { Markdown } from './Markdown.js'
 import { CROSS_FADE_MS, CrossFade } from './CrossFade.js'
 import { CopyButton } from './ui/copy-button.js'
-import { Pieces, useHighlightedIn } from '../lib/highlight.js'
+import { languageOf, Pieces, useHighlightedIn, type Piece } from '../lib/highlight.js'
+
+/**
+ * What a file named in a step does on a click: opens the pane that shows the run's files, on it.
+ * Given by the agent's page when a module of its project has such a pane; without it the name is text.
+ */
+export const OpenFile = createContext<((path: string) => void) | undefined>(undefined)
 
 /** What a tool call gave back: what it printed, cut by the driver, whether it failed, and the files it changed. */
 export interface CallOutput {
@@ -66,7 +72,7 @@ function firstWords(text: string): string {
 
 // What an opened call shows, in the page's code font: what it was given scrolls, as does what it
 // printed, once taller than their limit.
-const CODE = 'max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-xs leading-[18px]'
+const CODE = 'max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-[13px] leading-[19px]'
 
 // One tool call: the verb in grey, what it was done to in dark, on one line. A command the coding
 // agent said in a few words of its own reads as those words ("List project files"), the command
@@ -79,16 +85,49 @@ const SUBAGENT_CALLS = new Set(['Agent', 'Task'])
 
 function CallLine(call: Call) {
   const [open, setOpen] = useState(false)
-  const { words, label, opens } = callWords(call, false)
+  const openFile = useContext(OpenFile)
+  const { words, label, opens } = callWords(call, false, openFile)
   if (!opens) return <div className="flex min-w-0 items-center gap-1.5">{words}</div>
   return (
     <div className="min-w-0">
-      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={label} className="flex max-w-full min-w-0 items-center gap-1.5 text-left hover:text-foreground">
+      <Opens open={open} label={label} onToggle={() => setOpen(o => !o)} className="max-w-full gap-1.5 hover:text-foreground">
         {words}
-        <Caret open={open} />
-      </button>
+      </Opens>
       {open && <CallDetail {...call} />}
     </div>
+  )
+}
+
+/**
+ * A line that opens on a click anywhere on it, its caret the button a keyboard opens it with, so
+ * a button inside its words, a file's name, is a button of its own: a name opens the file, the
+ * rest of the line opens the step, as Claude Code on the web's rows do.
+ */
+function Opens({ open, label, onToggle, className, children }: { open: boolean; label: string; onToggle: () => void; className?: string; children: ReactNode }) {
+  return (
+    <div onClick={onToggle} className={cn('flex min-w-0 cursor-pointer items-center text-left select-none', className)}>
+      {children}
+      <button type="button" aria-expanded={open} aria-label={label} className="flex shrink-0 items-center self-stretch rounded-sm">
+        <Caret open={open} />
+      </button>
+    </div>
+  )
+}
+
+/** A file's name in a step's words: a click opens the file in the pane beside the chat, and opens nothing else. */
+function FileName({ name, path, openFile }: { name: string; path: string; openFile: (path: string) => void }) {
+  return (
+    <button
+      type="button"
+      title={`Open ${path}`}
+      onClick={event => {
+        event.stopPropagation()
+        openFile(path)
+      }}
+      className="min-w-0 truncate rounded-sm text-foreground hover:underline hover:underline-offset-2"
+    >
+      {name}
+    </button>
   )
 }
 
@@ -97,7 +136,7 @@ function CallLine(call: Call) {
  * with the lines its edits changed; going on (`live`) in the present ("Running", "Finding all
  * markdown files"), and shimmering, else in the past. `opens` when there is more to see on a click.
  */
-function callWords({ label, detail, whole, summary, output }: Call, live: boolean): { words: ReactNode; label: string; opens: boolean } {
+function callWords({ label, detail, whole, summary, output }: Call, live: boolean, openFile?: (path: string) => void): { words: ReactNode; label: string; opens: boolean } {
   const call = toolCall(label, detail, output?.changed)
   // What the agent wrote about the call: a command's description, a subagent's task. While it goes
   // on, said as going on ("Finding all markdown files", "Summarizing README"), as Claude Code on the
@@ -113,13 +152,21 @@ function callWords({ label, detail, whole, summary, output }: Call, live: boolea
       ) : (
         <>
           <span className={cn('shrink-0', live && 'text-shimmer')}>{live ? call.doing : call.verb}</span>
-          {call.target !== undefined && <span className={cn('truncate', live ? 'text-shimmer' : !call.plain && 'text-foreground')}>{call.target}</span>}
+          {call.target !== undefined &&
+            (call.path !== undefined && openFile && !live ? (
+              <FileName name={call.target} path={call.path} openFile={openFile} />
+            ) : (
+              <span className={cn('truncate', live ? 'text-shimmer' : !call.plain && 'text-foreground')}>{call.target}</span>
+            ))}
         </>
       )}
       {call.size !== undefined && <LinesPill {...call.size} />}
+      {/* A call that failed says so on its row, in red, as Claude Code on the web's does. */}
+      {output?.failed && !live && <span className="shrink-0 text-danger">Failed</span>}
     </>
   )
-  return { words, label: said ?? [live ? call.doing : call.verb, call.target].filter(Boolean).join(' '), opens: (whole ?? call.detail) !== undefined || output !== undefined }
+  const named = said ?? [live ? call.doing : call.verb, call.target].filter(Boolean).join(' ')
+  return { words, label: output?.failed && !live ? `${named}, failed` : named, opens: (whole ?? call.detail) !== undefined || output !== undefined }
 }
 
 /**
@@ -127,13 +174,84 @@ function callWords({ label, detail, whole, summary, output }: Call, live: boolea
  * opens one: on a line of its own, a card naming the tool ("Bash"); in a box of steps, which is
  * the card already, no second one. What it was given is in a box of its own (a command
  * with "$" in front, in the chat's code colours, with a button to copy it), and under it what the
- * call printed, grey and with no box; a call that failed says so, with its exit code when it has one.
+ * call printed, grey and with no box; a call that failed says its exit code when it has one.
  */
 function CallDetail({ label, detail, whole, output, card = false }: Call & { card?: boolean }) {
   const call = toolCall(label, detail, output?.changed)
+  const read = call.kind === 'read' && call.path !== undefined && output !== undefined ? fileLines(output.text) : undefined
+  if (read) return <ReadDetail path={call.path!} read={read} />
+  return <GivenDetail label={label} call={call} whole={whole} output={output} card={card} />
+}
+
+/** A file's lines as a read gave them back, each after its number ("12\t…"), and what came after them. */
+interface FileLines {
+  lines: { number: number; text: string }[]
+  rest: string
+}
+
+/**
+ * The numbered lines a read gave back, from the first: Claude Code's Read says each as its number,
+ * a tab and the line ("1\t<!DOCTYPE html>"), an empty line as its number alone. A text that does
+ * not open with them is no file's lines.
+ */
+export function fileLines(text: string): FileLines | undefined {
+  const all = text.split('\n')
+  const lines: FileLines['lines'] = []
+  let at = 0
+  for (; at < all.length; at++) {
+    const line = /^\s*(\d+)(?:\t|→|$)(.*)$/.exec(all[at]!)
+    if (!line || (lines.length > 0 && Number(line[1]) !== lines.at(-1)!.number + 1)) break
+    lines.push({ number: Number(line[1]), text: line[2]! })
+  }
+  if (lines.length === 0) return undefined
+  // The empty line after a file's last newline is no line of it.
+  if (lines.length > 1 && lines.at(-1)!.text === '' && at === all.length) lines.pop()
+  return { lines, rest: all.slice(at).join('\n').trim() }
+}
+
+/**
+ * A read, opened as Claude Code on the web opens one: the file's path on a line of its own (a
+ * click opens the file beside the chat), and under it the lines it read, numbered and in the
+ * chat's code colours, in a box that scrolls once taller than 400px.
+ */
+function ReadDetail({ path, read }: { path: string; read: FileLines }) {
+  const openFile = useContext(OpenFile)
+  const coloured = useHighlightedIn(read.lines.map(line => line.text).join('\n'), languageOf(path))
+  // The widest number, and the room after it.
+  const width = `${String(read.lines.at(-1)!.number).length}ch`
+  return (
+    <div className="mt-1.5 flex flex-col gap-2.5">
+      {openFile ? (
+        <button type="button" title={`Open ${path}`} onClick={() => openFile(path)} className="min-w-0 truncate text-left text-[13px] text-foreground hover:underline hover:underline-offset-2">
+          {path}
+        </button>
+      ) : (
+        <div className="min-w-0 truncate text-[13px] text-foreground">{path}</div>
+      )}
+      <div aria-label="File" className="max-h-[400px] overflow-auto rounded-lg border border-border py-1.5 font-mono text-[13px] leading-[19px]">
+        {read.lines.map((line, i) => (
+          <div key={line.number} className="flex w-max min-w-full whitespace-pre text-foreground">
+            <span className="shrink-0 select-none pr-4 pl-3 text-right tabular-nums text-muted-foreground/60" style={{ width: `calc(${width} + 1.75rem)` }}>
+              {line.number}
+            </span>
+            <span className="pr-3">{coloured?.[i] ? <ColouredLine pieces={coloured[i]} /> : line.text || ' '}</span>
+          </div>
+        ))}
+      </div>
+      {read.rest !== '' && <pre className={cn(CODE, 'text-muted-foreground')}>{read.rest}</pre>}
+    </div>
+  )
+}
+
+function ColouredLine({ pieces }: { pieces: Piece[] }) {
+  return pieces.length === 0 ? ' ' : <Pieces pieces={pieces} />
+}
+
+/** What any other call was given, and what it printed. */
+function GivenDetail({ label, call, whole, output, card }: { label: string; call: ToolCall; whole: string | undefined; output: CallOutput | undefined; card: boolean }) {
   const given = whole ?? call.detail
   const command = call.kind === 'command' && given !== undefined
-  const coloured = useHighlightedIn(command ? given : '', command ? 'shellscript' : undefined, 'chat')
+  const coloured = useHighlightedIn(command ? given : '', command ? 'shellscript' : undefined)
   return (
     <div className={cn('mt-1.5 flex flex-col gap-1.5', card && 'rounded-xl border border-border px-3 py-3')}>
       {card && <div className="text-sm text-muted-foreground">{label}</div>}
@@ -158,7 +276,8 @@ function CallDetail({ label, detail, whole, output, card = false }: Call & { car
           {output.text}
         </pre>
       )}
-      {output?.failed && <div className="text-xs text-danger">{output.exitCode !== undefined ? `Failed: exit code ${output.exitCode}` : 'Failed'}</div>}
+      {/* That it failed is on its row; here, the exit code when it has one. */}
+      {output?.failed && output.exitCode !== undefined && <div className="text-xs text-danger">Exit code {output.exitCode}</div>}
     </div>
   )
 }
@@ -291,19 +410,20 @@ export function tokenWords(tokens: number): string {
 // ("Read AGENTS.md"). A run with no call in it draws nothing.
 export function ToolCalls({ steps, lead, live }: { steps: readonly ToolStep[]; lead?: ReactNode; live?: { call: Call; since?: string | undefined } | undefined }) {
   const [open, setOpen] = useState(false)
+  const openFile = useContext(OpenFile)
   // What the agent thought between two calls is not a step it took, and Claude Code on the web's
   // panel has none of it. Shown only to a person who asked for it in Settings.
   const thinking = usePreferences().showThinking === true
   const shown = thinking ? steps : steps.filter(step => step.type === 'action')
   const calls = steps.filter(step => step.type === 'action')
   if (calls.length === 0 && !live) return null
-  const summary = callsSummary(calls.map(call => toolCall(call.label, call.detail, call.output?.changed)))
+  const summary = callsSummary(calls.map(call => ({ ...toolCall(call.label, call.detail, call.output?.changed), ...(call.output?.failed ? { failed: true as const } : {}) })))
   const only = !live && !lead && shown.length === 1 && shown[0]!.type === 'action' ? shown[0] : undefined
   // The row's words: the call going on now, as going on; once it is done, as Claude Code on the
   // web's row does, the same row says the steps it took ("Ran 2 commands"), the old words fading
   // out as the new come in. A row of one call says that call.
   const going = live ? callWords(live.call, true) : undefined
-  const one = only ? callWords(only, false) : undefined
+  const one = only ? callWords(only, false, openFile) : undefined
   const words = going?.label ?? one?.label ?? summaryWords(summary)
   const head = going ? (
     <CrossFade id={`live:${live!.call.id ?? `${live!.call.label} ${live!.call.detail ?? ''}`}`}>{going.words}</CrossFade>
@@ -333,11 +453,10 @@ export function ToolCalls({ steps, lead, live }: { steps: readonly ToolStep[]; l
       <div className="group/status relative flex items-center gap-2" {...(live ? { role: 'status' } : {})}>
         <LeavingDots live={live !== undefined} />
         {opens ? (
-          <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={words} className="flex min-w-0 items-center gap-1.5 py-0.5 text-left hover:text-foreground">
+          <Opens open={open} label={words} onToggle={() => setOpen(o => !o)} className="gap-1.5 py-0.5 hover:text-foreground">
             {head}
             {live?.since !== undefined && <Seconds since={live.since} />}
-            <Caret open={open} />
-          </button>
+          </Opens>
         ) : (
           <div className="flex min-w-0 items-center gap-1.5 py-0.5">
             {head}

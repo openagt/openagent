@@ -3,6 +3,7 @@ import type { ComponentProps } from 'react'
 import { Select as SelectPrimitive } from '@base-ui/react/select'
 import { Check, ChevronDown } from 'lucide-react'
 import { cn } from '../../lib/utils.js'
+import { MENU_SURFACE_CLASS } from './dropdown-menu.js'
 
 // A shadcn-style Select on Base UI, matching the DropdownMenu already here (no Radix pulled in).
 // Replaces the bare `<select>` the forms and the Settings rows drew by hand: its list was the
@@ -54,7 +55,8 @@ export function SelectContent({
         <SelectPrimitive.Popup
           data-slot="select-content"
           className={cn(
-            'max-h-[min(var(--available-height),20rem)] min-w-[var(--anchor-width)] max-w-[var(--available-width)] overflow-y-auto rounded-md border border-border bg-card p-1 text-card-foreground shadow-md outline-none',
+            'max-h-[min(var(--available-height),20rem)] min-w-[var(--anchor-width)] max-w-[var(--available-width)] overflow-y-auto p-1.5',
+            MENU_SURFACE_CLASS,
             typeof className === 'string' ? className : undefined,
           )}
           {...props}
@@ -71,7 +73,7 @@ export function SelectItem({ className, children, ...props }: ComponentProps<typ
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        'relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none',
+        'relative flex cursor-pointer select-none items-center rounded-lg py-1.5 pl-2 pr-8 text-sm font-medium outline-none',
         'data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         typeof className === 'string' ? className : undefined,
       )}

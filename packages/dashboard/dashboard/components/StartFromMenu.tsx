@@ -110,14 +110,14 @@ export function StartFromMenu({ projectId, main, local, pick, onPick, busy }: { 
       <Combobox.Portal>
         <Combobox.Positioner sideOffset={6} align="start" className="z-50 outline-none">
           <Combobox.Popup aria-label="The agent starts from" className={cn(MENU_POPUP_CLASS, 'w-[22rem] max-w-[var(--available-width)]')}>
-            <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-3">
+            <div className="flex items-center gap-2 border-b border-border px-3">
               <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
               <Combobox.Input aria-label="Search branches" placeholder="Search branches" className="h-9 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
             </div>
             {/* The menu opens upward from the box's row: a list of a set height keeps the search and the first rows where they are as the answer lands, and as the search narrows it. */}
             <ScrollArea viewportClassName="h-[min(20rem,calc(var(--available-height)-2.5rem))]">
               <div className="p-1">
-                <p className="px-2 py-1.5 text-xs font-normal text-[var(--color-muted-foreground)]">The agent starts from</p>
+                <p className="px-2 py-1.5 text-xs font-normal text-muted-foreground">The agent starts from</p>
                 <Combobox.Empty className="px-2 py-1.5 text-xs text-muted-foreground empty:hidden">No branch by that name.</Combobox.Empty>
                 <Combobox.List>
                   {(row: Row) => (

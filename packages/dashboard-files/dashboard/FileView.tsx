@@ -1,5 +1,6 @@
+import { useMemo } from 'react'
 import { Code, Eye, FolderIcon } from 'lucide-react'
-import { Button, Markdown, Tooltip, TooltipContent, TooltipTrigger, useModuleHost, usePolled, Waiting } from '@openagt/dashboard/module'
+import { Button, FileLinks, Markdown, Tooltip, TooltipContent, TooltipTrigger, useModuleHost, usePolled, Waiting } from '@openagt/dashboard/module'
 import type { FileContent } from '../src/read.js'
 import { readContent } from './reads.js'
 import { contentKey } from './keys.js'
@@ -13,18 +14,37 @@ import { showSource } from './open-files.js'
 
 const isMarkdown = (path: string) => /\.(md|mdx|markdown)$/i.test(path)
 
-/** What stands on the right while no file is open. */
-export function NoFileOpen({ tree }: { tree: boolean }) {
+/** What stands beside the tree while no file is open. */
+export function NoFileOpen() {
   return (
     <div className="flex flex-auto flex-col items-center justify-center gap-1 p-6 text-center">
       <FolderIcon aria-hidden className="mb-2 size-6 text-muted-foreground" />
       <p className="text-sm">Open files appear here</p>
-      <p className="text-xs text-muted-foreground">{tree ? 'Pick a file in the tree.' : 'Show the file tree to pick a file.'}</p>
+      <p className="text-xs text-muted-foreground">Pick a file in the tree.</p>
     </div>
   )
 }
 
-export function FileView({ page, projectId, agentId, path, wrap, source }: {
+/**
+ * The file of the tree a Markdown file's link names: by its place beside the Markdown file, else
+ * from the project's root; none for a link to no file of it.
+ */
+export function linkedFile(files: readonly string[], from: string, name: string): string | undefined {
+  const clean = name.replace(/[#?].*$/, '')
+  if (clean === '') return undefined
+  const folder = from.includes('/') ? from.slice(0, from.lastIndexOf('/') + 1) : ''
+  const parts: string[] = []
+  for (const part of `${clean.startsWith('/') ? '' : folder}${clean}`.split('/')) {
+    if (part === '..') parts.pop()
+    else if (part !== '.' && part !== '') parts.push(part)
+  }
+  const beside = parts.join('/')
+  if (files.includes(beside)) return beside
+  const fromRoot = clean.replace(/^\.?\//, '')
+  return files.includes(fromRoot) ? fromRoot : undefined
+}
+
+export function FileView({ page, projectId, agentId, path, wrap, source, files, onOpen }: {
   /** The page whose open files these are (`open-files.ts`). */
   page: string
   projectId: string
@@ -33,12 +53,22 @@ export function FileView({ page, projectId, agentId, path, wrap, source }: {
   wrap: boolean
   /** A Markdown file is shown as its source rather than rendered. */
   source: boolean
+  /** The tree's files: what a rendered Markdown file's links to files open. */
+  files: readonly string[]
+  onOpen: (path: string, keep: boolean) => void
 }) {
   const host = useModuleHost()
   const { value, loaded } = usePolled<FileContent | null>(() => readContent(host, projectId, path, agentId), null, 5_000, [projectId, agentId, path], { remember: contentKey(projectId, agentId, path) })
   const markdown = isMarkdown(path)
   const rendered = markdown && !source
   const parts = path.split('/')
+  const opens = useMemo(
+    () => (name: string) => {
+      const file = linkedFile(files, path, name)
+      return file === undefined ? undefined : () => onOpen(file, false)
+    },
+    [files, path, onOpen],
+  )
 
   return (
     <div className="flex min-h-0 min-w-0 flex-auto flex-col">
@@ -77,7 +107,9 @@ export function FileView({ page, projectId, agentId, path, wrap, source }: {
           <p className="p-3 text-xs text-muted-foreground">This file is not here: it was deleted or moved, or it cannot be read.</p>
         ) : rendered && !value.binary && value.text ? (
           <div className="px-5 py-4">
-            <Markdown text={value.text} />
+            <FileLinks.Provider value={opens}>
+              <Markdown text={value.text} document />
+            </FileLinks.Provider>
             {value.truncated && <Cut />}
           </div>
         ) : (

@@ -15,7 +15,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from './ui/resiz
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { onDocs } from '../rpc/reads.js'
 import { closePanes, paneSizes, paneSizesOwner, panesPage, setExpandedPane, setPaneOpen, setPaneSizes, useExpandedPane, useOpenPanes } from '../lib/panes.js'
-import { useRevealedChange, useRevealedScreen, useRevealedSubagent, type RevealedChange } from '../lib/reveal-change.js'
+import { useRevealedChange, useRevealedFile, useRevealedScreen, useRevealedSubagent, type RevealedChange, type RevealedFile } from '../lib/reveal-change.js'
 import { isMobileScreen, useIsMobile } from '../lib/use-mobile.js'
 
 // The panes beside the chat, as Claude Code on the web has them: what the installed modules add
@@ -71,13 +71,14 @@ interface PanesValue {
   expanded: string | undefined
   panelProps: ModulePanelProps | undefined
   reveal: RevealedChange | undefined
+  show: RevealedFile | undefined
   docs: WorkspaceDoc[]
   docsLoaded: boolean
   /** What the Subagent pane shows. */
   subagent: ReactNode
 }
 
-const NO_PANES: PanesValue = { page: '', enabled: false, panes: [], open: [], expanded: undefined, panelProps: undefined, reveal: undefined, docs: [], docsLoaded: false, subagent: null }
+const NO_PANES: PanesValue = { page: '', enabled: false, panes: [], open: [], expanded: undefined, panelProps: undefined, reveal: undefined, show: undefined, docs: [], docsLoaded: false, subagent: null }
 const PanesContext = createContext<PanesValue>(NO_PANES)
 
 /** The last ask from the chat the panes moved for. */
@@ -168,6 +169,15 @@ export function PanesProvider({
     revealShown = revealedAt
     setPaneOpen(page, changesPane, true)
   }, [revealedAt, changesPane, page])
+  // A file asked for from the chat: the pane that shows the run's files is opened, and takes the file.
+  const show = useRevealedFile(page)
+  const filesPane = panes.find(pane => pane.panel?.files)?.id
+  const shownAt = show?.at
+  useEffect(() => {
+    if (shownAt === undefined || filesPane === undefined || shownAt <= revealShown) return
+    revealShown = shownAt
+    setPaneOpen(page, filesPane, true)
+  }, [shownAt, filesPane, page])
   // A live screen asked for from the chat: the pane that shows it is opened.
   const screenAsked = useRevealedScreen(page)
   const screenPane = panes.find(pane => pane.panel?.screen)?.id
@@ -195,8 +205,8 @@ export function PanesProvider({
   )
 
   const value = useMemo<PanesValue>(
-    () => ({ page, enabled: shown !== null, panes, open, expanded: open.some(pane => pane.id === expanded) ? expanded : undefined, panelProps, reveal, docs, docsLoaded, subagent: subagent ?? null }),
-    [page, shown, panes, open, expanded, panelProps, reveal, docs, docsLoaded, subagent],
+    () => ({ page, enabled: shown !== null, panes, open, expanded: open.some(pane => pane.id === expanded) ? expanded : undefined, panelProps, reveal, show, docs, docsLoaded, subagent: subagent ?? null }),
+    [page, shown, panes, open, expanded, panelProps, reveal, show, docs, docsLoaded, subagent],
   )
   return <PanesContext.Provider value={value}>{children}</PanesContext.Provider>
 }
@@ -267,7 +277,7 @@ export function PaneMenu() {
  * in place of its name and before those buttons (`PaneTitle`, `PaneActions`).
  */
 function PaneCard({ pane }: { pane: Pane }) {
-  const { page, expanded, panelProps, reveal, docs, docsLoaded, subagent } = useContext(PanesContext)
+  const { page, expanded, panelProps, reveal, show, docs, docsLoaded, subagent } = useContext(PanesContext)
   const fills = expanded === pane.id
   const [title, setTitle] = useState<HTMLElement | null>(null)
   const [actions, setActions] = useState<HTMLElement | null>(null)
@@ -314,7 +324,7 @@ function PaneCard({ pane }: { pane: Pane }) {
           ) : pane.panel && panelProps ? (
             <ModuleSlot package={pane.panel.package} label={`${pane.label} pane`}>
               <PaneHeaderContext.Provider value={slots}>
-                <pane.panel.Panel {...(pane.panel.changes && reveal ? { ...panelProps, reveal } : panelProps)} />
+                <pane.panel.Panel {...panelProps} {...(pane.panel.changes && reveal ? { reveal } : {})} {...(pane.panel.files && show ? { show } : {})} />
               </PaneHeaderContext.Provider>
             </ModuleSlot>
           ) : (

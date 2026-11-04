@@ -1354,10 +1354,10 @@ describe('EventList changed files', () => {
   test("the folded line of the turn's calls counts the commands and names the edited file; inside, the edit has its size", () => {
     const events = [prompt('go'), { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'ls', id: 'b1' } } as OpenAgentEvent, ...edit('c1', `${WS}/A.md`, 2, 1), said]
     render(<EventList events={events} setup={{ workspace: WS }} stick={false} />)
-    const line = screen.getByRole('button', { name: 'Ran a command, edited A.md' })
+    const line = screen.getByRole('button', { name: 'Ran a command, edited A.md' }).parentElement!
     expect(line.textContent).toBe('Ran a command, edited A.md+2−12 added, 1 removed')
     fireEvent.click(line)
-    expect(screen.getByRole('button', { name: 'Updated A.md' }).textContent).toBe('UpdatedA.md+2−12 added, 1 removed')
+    expect(screen.getByRole('button', { name: 'Updated A.md' }).parentElement!.textContent).toBe('UpdatedA.md+2−12 added, 1 removed')
   })
 
   test('a turn that edited no file has no such row', () => {

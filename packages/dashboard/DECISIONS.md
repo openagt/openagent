@@ -118,13 +118,29 @@ already made, and lists it in its pull request; for anything else it proposes an
 - Notifications are the browser's only: they alert in the open tab. Posting to a
   channel is a skill's, fired by the tool that runs the agent when a run ends. Picked over
   the dashboard's Discord watchers, which posted only while the dashboard was running.
-- The themes keep Claude Code's levels in Everforest's colors. Dark is Everforest on its
-  darker steps: the page on its dimmest background, the sidebar a step below it, panes a
-  step above, fills and lines close to them. Light is near-white in the greens' cool grey:
-  the sidebar a step below the page, the message box and the panes in white above it. The
-  text and the accents are Everforest's as on the landing page, whose surfaces stay the
-  medium ones. Picked over the landing page's exact values, which read light beside Claude
-  Code's, and over one white for every surface in the light theme.
+- The themes keep Claude Code's levels in Everforest's colors. Dark is Everforest's hue a
+  step darker than its dimmest background, as dark as Claude Code's: the page near-black,
+  the sidebar and panes a step above it, fills and lines close to them. Light is near-white
+  in the greens' cool grey: the sidebar a step below the page, the message box and the panes
+  in white above it. The text and the accents are Everforest's as on the landing page. The
+  primary colour is Everforest's blue, while what is done stays its green. Picked over its green
+  as primary, a softer blue and Tailwind's.
+  Picked over Everforest's own darkest steps and the landing page's exact values, which read
+  light beside Claude Code's, and over one white for every surface in the light theme.
+- Settings › Appearance also picks the colours (OpenAgent's, or shadcn's neutral greys), the
+  primary colour (one of the colours' own: Everforest's on OpenAgent, Tailwind's on Neutral as
+  shadcn offers them; a switch of colours starts on the new one's default; the usage bar under
+  pace is in it) and three fonts: the
+  page's (Figtree, close to Claude Code's sans), code's (JetBrains Mono) and a Markdown file's
+  in the Files pane (Source Serif 4, as Claude Code reads one in a serif). Fonts load from
+  Google Fonts. Picked over Satoshi, whose licence forbids shipping it in a public package,
+  and over IBM Plex, the landing page's. The wordmark is Source Serif 4 at its regular weight.
+- The chat is set at Claude Code's sizes: text 15px on 21px lines, code 13px.
+- On Neutral the status colours are Tailwind's, as shadcn's themes take them: its 600s on
+  light, its 400s on dark. Picked over OpenAgent's greens on grey and over its 500s.
+- Every menu is shadcn create's in the theme's colours: rounded, a little see-through over a
+  blur, the theme's card on light and its fill on dark. Picked over shadcn's own near-black
+  and grey, which did not match the page, and over opaque menus on the page's card.
 - The message box is laid out as Claude Code's: a filled box with rounder corners holding the
   "+" menu, the text and the send; a row under it with the Context and Auto menus, and the
   model at the right with its effort in a quieter tone, one menu for both. Where the agent
@@ -193,8 +209,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   file is picked from it. Picked over the tree or the list squeezed above the file.
 - The search button of the Files pane shows the tree and puts the cursor in its "Filter
   files…". Picked over a search box of its own.
-- Files and Changes colour code by its language, with Shiki's Everforest themes, the family
-  the dashboard's colours come from. Picked over plain text.
+- Code is coloured by its language, the same in the chat and in the Files and Changes panes,
+  each kind of word told apart as Claude Code on the web tells them, in the colours' own hues:
+  Everforest's on OpenAgent, Claude Code's on Neutral. Picked over plain text, over Shiki's
+  Everforest themes, which told the kinds apart less, and over Claude Code's hues everywhere.
 - A file's icon is Material Icon Theme's. Picked over vscode-icons, Catppuccin's outlines, and
   a small two-tone set of our own.
 - The packages every project wants are built in: OpenAgent depends on them and uses them

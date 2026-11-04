@@ -15,6 +15,12 @@
   /* Let the browser paint native theme-matched scrollbars + form controls (the shadcn way).
      `.dark` flips it below. */
   color-scheme: light;
+  /* The fonts with no pick in Settings › Appearance: Figtree, close to Claude Code's sans;
+     JetBrains Mono for code; Source Serif 4 for a Markdown file read as a page, as Claude Code
+     on the web reads one in a serif. AppFrame sets another pick here. */
+  --font-app: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+  --font-code: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-document: 'Source Serif 4', ui-serif, Georgia, serif;
   /* Everforest's greens on a white canvas (#1141). Everforest Light is paper-coloured (#fdf6e3),
      which reads as orange next to any other app; the identity people recognise is the green, not
      the paper, so the hues stay and the canvas goes near-white, in the greens' own cool grey. As
@@ -30,9 +36,9 @@
   --muted: #f3f5f2;
   --muted-foreground: #66756c;
   --border: #e3e7e1;
-  /* A code word in an answer (Markdown.tsx): a dark red, as Claude Code on the web sets them. */
-  --code-foreground: #a63a36;
-  --primary: #6f7f00;
+  /* The primary colour is Everforest's blue (his pick), darkened like the status colours below;
+     what is done stays Everforest's green (`--success`). */
+  --primary: #2b7ba5;
   --primary-foreground: #ffffff;
   /* The hover and active fill: a step below the sidebar too, so a row there still lights up. */
   --accent: #e9ede6;
@@ -49,6 +55,21 @@
   /* A merged pull request: Everforest's purple, darkened like the four above. */
   --merged: #a24f8c;
 
+  /* Code, a colour per kind of word (lib/highlight.tsx), in Claude Code on the web's way of
+     telling them apart and in Everforest's hues, darkened as the status colours are. */
+  --code-plain: #3a4248;
+  --code-comment: #7d8a7f;
+  --code-punctuation: #5c6a72;
+  --code-keyword: #a24f8c;
+  --code-operator: #3a4248;
+  --code-string: #6f7f00;
+  --code-number: #2d8a66;
+  --code-function: #2b7ba5;
+  --code-property: #d1403d;
+  --code-attribute: #c8423f;
+  --code-parameter: #c25f12;
+  --code-type: #9a6b00;
+
   /* The brand mark's six strands (#757), darkest first, exactly as the brand ships them.
      Kept as variables so the mark can be re-ramped for a dark canvas without touching the SVG. */
   --logo-1: #0a0a0a;
@@ -61,23 +82,23 @@
 
 .dark {
   color-scheme: dark;
-  /* Everforest Dark on its darker steps (his pick, after Claude Code's dark): the page on
-     Everforest's dimmest background, panes one step above it, fills and lines a step or two above
-     that, so the levels sit close together on a near-black. The hue, the text (#d3c6aa) and the
-     accents are Everforest's as on the landing page, whose surfaces are the medium ones. */
-  --background: #1e2326;
-  /* The sidebar a step above the page, as Claude Code's dark lays it: the panes' old step. */
-  --sidebar: #232a2e;
+  /* Everforest Dark's hue a step darker than its dimmest background (his pick: darker than
+     Everforest's own steps, as dark as Claude Code's dark): the page near-black, the sidebar and
+     panes a step above it, fills and lines a step or two above that. The text (#d3c6aa) and the
+     accents are Everforest's as on the landing page. */
+  --background: #171b1d;
+  /* The sidebar a step above the page, as Claude Code's dark lays it. */
+  --sidebar: #1c2124;
   --foreground: #d3c6aa;
-  --code-foreground: #e67e80;
-  --card: #232a2e;
+  --card: #1c2124;
   --card-foreground: #d3c6aa;
-  --muted: #2e383c;
+  --muted: #262d31;
   --muted-foreground: #9da9a0;
-  --border: #374145;
-  --primary: #a7c080;
-  --primary-foreground: #1e2326;
-  --accent: #2e383c;
+  --border: #30383c;
+  /* Everforest's blue; what is done stays its green (`--success`). */
+  --primary: #7fbbb3;
+  --primary-foreground: #171b1d;
+  --accent: #262d31;
   --accent-foreground: #d3c6aa;
 
   /* Same four meanings on the Everforest Dark accents. */
@@ -86,6 +107,20 @@
   --danger: #e67e80;
   --info: #7fbbb3;
   --merged: #d699b6;
+
+  /* Code, in Everforest's hues, a colour per kind of word as Claude Code on the web tells them apart. */
+  --code-plain: #d3c6aa;
+  --code-comment: #859289;
+  --code-punctuation: #9da9a0;
+  --code-keyword: #d699b6;
+  --code-operator: #d3c6aa;
+  --code-string: #a7c080;
+  --code-number: #83c092;
+  --code-function: #7fbbb3;
+  --code-property: #e67e80;
+  --code-attribute: #e3787a;
+  --code-parameter: #e69875;
+  --code-type: #dbbc7f;
 
   /* The ramp inverted for a dark canvas: the shipped one starts at near-black, which would sink
      the leading strands into the background. Same order (leading strand lightest against dark),
@@ -98,7 +133,270 @@
   --logo-6: #737373;
 }
 
+/* The Neutral palette (Settings › Appearance): shadcn's neutral greys, light and dark, in place of
+   OpenAgent's greens, and the status colours from Tailwind's palette, as shadcn's themes take
+   them: its 600s on light, its 400s on dark. The logo keeps the theme's own. */
+:root[data-palette='neutral']:not(.dark) {
+  --background: oklch(1 0 0);
+  --sidebar: oklch(0.985 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --border: oklch(0.922 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --success: var(--color-green-600);
+  --warning: var(--color-amber-600);
+  --danger: var(--color-red-600);
+  --info: var(--color-blue-600);
+  --merged: var(--color-violet-600);
+  /* Code in Claude Code on the web's own hues, read from its page. */
+  --code-plain: #14181f;
+  --code-comment: #6e7687;
+  --code-punctuation: #2b303b;
+  --code-keyword: #8100c2;
+  --code-operator: #14181f;
+  --code-string: #008000;
+  --code-number: #008080;
+  --code-function: #0051c2;
+  --code-property: #b80a18;
+  --code-attribute: #bd0f1e;
+  --code-parameter: #b84f05;
+  --code-type: #b34a00;
+}
 
+:root.dark[data-palette='neutral'] {
+  --background: oklch(0.145 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --success: var(--color-green-400);
+  --warning: var(--color-amber-400);
+  --danger: var(--color-red-400);
+  --info: var(--color-blue-400);
+  --merged: var(--color-violet-400);
+  /* Code in Claude Code on the web's own hues, read from its page. */
+  --code-plain: #eaecf0;
+  --code-comment: #818898;
+  --code-punctuation: #d3d7de;
+  --code-keyword: #cc7bf4;
+  --code-operator: #eaecf0;
+  --code-string: #9be963;
+  --code-number: #5eeded;
+  --code-function: #70b8ff;
+  --code-property: #f47b85;
+  --code-attribute: #f0757f;
+  --code-parameter: #f7ab5f;
+  --code-type: #fbad60;
+}
+
+/* The primary colour (Settings › Appearance): buttons, links and what is picked, in one of the
+   palette's own colours. On OpenAgent, Everforest's (its blue, the default, is set above), each
+   darkened on light as the status colours are; on Neutral, Tailwind's as shadcn's themes offer
+   them, its 600 on light and its 400 on dark. Each with text that reads on it. */
+:root:not([data-palette])[data-accent='green'] {
+  --primary: #6f7f00;
+}
+:root.dark:not([data-palette])[data-accent='green'] {
+  --primary: #a7c080;
+}
+:root:not([data-palette])[data-accent='aqua'] {
+  --primary: #2d8a66;
+}
+:root.dark:not([data-palette])[data-accent='aqua'] {
+  --primary: #83c092;
+}
+:root:not([data-palette])[data-accent='yellow'] {
+  --primary: #9a6b00;
+}
+:root.dark:not([data-palette])[data-accent='yellow'] {
+  --primary: #dbbc7f;
+}
+:root:not([data-palette])[data-accent='orange'] {
+  --primary: #c25f12;
+}
+:root.dark:not([data-palette])[data-accent='orange'] {
+  --primary: #e69875;
+}
+:root:not([data-palette])[data-accent='red'] {
+  --primary: #d1403d;
+}
+:root.dark:not([data-palette])[data-accent='red'] {
+  --primary: #e67e80;
+}
+:root:not([data-palette])[data-accent='purple'] {
+  --primary: #a24f8c;
+}
+:root.dark:not([data-palette])[data-accent='purple'] {
+  --primary: #d699b6;
+}
+:root[data-palette='neutral'][data-accent='amber'] {
+  --primary: var(--color-amber-600);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root.dark[data-palette='neutral'][data-accent='amber'] {
+  --primary: var(--color-amber-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-palette='neutral'][data-accent='blue'] {
+  --primary: var(--color-blue-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-palette='neutral'][data-accent='blue'] {
+  --primary: var(--color-blue-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-palette='neutral'][data-accent='cyan'] {
+  --primary: var(--color-cyan-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-palette='neutral'][data-accent='cyan'] {
+  --primary: var(--color-cyan-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-palette='neutral'][data-accent='emerald'] {
+  --primary: var(--color-emerald-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-palette='neutral'][data-accent='emerald'] {
+  --primary: var(--color-emerald-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-palette='neutral'][data-accent='fuchsia'] {
+  --primary: var(--color-fuchsia-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-palette='neutral'][data-accent='fuchsia'] {
+  --primary: var(--color-fuchsia-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-palette='neutral'][data-accent='green'] {
+  --primary: var(--color-green-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-palette='neutral'][data-accent='green'] {
+  --primary: var(--color-green-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-palette='neutral'][data-accent='indigo'] {
+  --primary: var(--color-indigo-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-palette='neutral'][data-accent='indigo'] {
+  --primary: var(--color-indigo-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-palette='neutral'][data-accent='lime'] {
+  --primary: var(--color-lime-600);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root.dark[data-palette='neutral'][data-accent='lime'] {
+  --primary: var(--color-lime-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-palette='neutral'][data-accent='orange'] {
+  --primary: var(--color-orange-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-palette='neutral'][data-accent='orange'] {
+  --primary: var(--color-orange-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-palette='neutral'][data-accent='pink'] {
+  --primary: var(--color-pink-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-palette='neutral'][data-accent='pink'] {
+  --primary: var(--color-pink-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-palette='neutral'][data-accent='purple'] {
+  --primary: var(--color-purple-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-palette='neutral'][data-accent='purple'] {
+  --primary: var(--color-purple-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-palette='neutral'][data-accent='red'] {
+  --primary: var(--color-red-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-palette='neutral'][data-accent='red'] {
+  --primary: var(--color-red-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-palette='neutral'][data-accent='rose'] {
+  --primary: var(--color-rose-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-palette='neutral'][data-accent='rose'] {
+  --primary: var(--color-rose-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-palette='neutral'][data-accent='sky'] {
+  --primary: var(--color-sky-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-palette='neutral'][data-accent='sky'] {
+  --primary: var(--color-sky-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-palette='neutral'][data-accent='teal'] {
+  --primary: var(--color-teal-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-palette='neutral'][data-accent='teal'] {
+  --primary: var(--color-teal-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-palette='neutral'][data-accent='violet'] {
+  --primary: var(--color-violet-600);
+  --primary-foreground: #ffffff;
+}
+:root.dark[data-palette='neutral'][data-accent='violet'] {
+  --primary: var(--color-violet-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root[data-palette='neutral'][data-accent='yellow'] {
+  --primary: var(--color-yellow-600);
+  --primary-foreground: var(--color-neutral-950);
+}
+:root.dark[data-palette='neutral'][data-accent='yellow'] {
+  --primary: var(--color-yellow-400);
+  --primary-foreground: var(--color-neutral-950);
+}
+
+/* A menu's surface (dropdowns, selects, the composer's suggestions), as shadcn create sets its
+   menus, in the theme's own colours: the theme's card on light and its fill on dark (on Neutral,
+   shadcn's very grey), a little see-through over a blur, a faint ring for an edge. `--menu` is
+   read where the theme's tokens are, on the page's root, so each palette gets its own. Inside,
+   the lit row and the separators are the text's colour, faint, so they show on any of them. */
+:root {
+  --menu: color-mix(in oklab, var(--card) 85%, transparent);
+}
+:root.dark {
+  --menu: color-mix(in oklab, var(--muted) 85%, transparent);
+}
+.menu-surface {
+  --accent: color-mix(in oklab, var(--foreground) 10%, transparent);
+  --accent-foreground: var(--foreground);
+  --border: color-mix(in oklab, var(--foreground) 10%, transparent);
+  background-color: var(--menu);
+  color: var(--foreground);
+}
 
 body {
   background-color: var(--background);

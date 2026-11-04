@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
 import { cn } from '../../lib/utils.js'
+import { MENU_SURFACE_CLASS } from '../ui/dropdown-menu.js'
 
 // The floating command/reference menu (#470) the `/` and `@` triggers open. A shadcn-style
 // popover surface driven imperatively by @tiptap/suggestion (which owns positioning), so it
@@ -73,14 +74,14 @@ export const SuggestionList = forwardRef<SuggestionListRef, SuggestionListProps>
     // Only rendered when the trigger has an emptyNote and nothing was typed yet (suggestion.ts
     // hides the portal otherwise), so a mistyped query still just closes the menu.
     return (
-      <div role="status" className="w-64 rounded-md border border-border bg-card p-2 text-sm text-muted-foreground shadow-md">
+      <div role="status" className={cn("w-64 p-2 text-sm text-muted-foreground", MENU_SURFACE_CLASS)}>
         {emptyNote ?? 'No matches'}
       </div>
     )
   }
 
   return (
-    <div role="listbox" aria-label="Suggestions" className="max-h-72 w-64 overflow-y-auto rounded-md border border-border bg-card p-1 text-sm shadow-md">
+    <div role="listbox" aria-label="Suggestions" className={cn("max-h-72 w-64 overflow-y-auto p-1.5 text-sm", MENU_SURFACE_CLASS)}>
       {items.map((item, i) => (
         <div key={item.id}>
           {item.group && (i === 0 || items[i - 1]?.group !== item.group) && (

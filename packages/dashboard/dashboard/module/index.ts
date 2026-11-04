@@ -239,6 +239,12 @@ export interface ModulePanelProps {
    * file is asked for.
    */
   reveal?: { path?: string; at: number }
+  /**
+   * On a pane that shows a run's files (`files`): the file a click in the chat asked to see, by
+   * its path as the agent named it, whole (on whichever computer the run is on) or in the run's
+   * checkout. `at` tells one ask from the next for the same file. Absent until a file is asked for.
+   */
+  show?: { path: string; at: number }
   context: ModuleContext
 }
 
@@ -260,6 +266,11 @@ export interface ModulePanel {
    * hands it the file as `reveal`. Without such a pane, those rows open nothing.
    */
   changes?: true
+  /**
+   * This pane shows a run's files. A file named in the chat (a step's "Read index.html") then
+   * opens it, and hands it the file as `show`. Without such a pane, those names are text.
+   */
+  files?: true
   /**
    * This pane shows a run's live screen ({@link ModuleHost.watchScreen}). The chat's row of a live
    * screen then opens it. Without such a pane, that row is a line of text.
@@ -606,7 +617,7 @@ export { Page } from '../components/Page.js'
 export { StatTile } from '../components/StatTile.js'
 export { FilterChips, type FilterChip } from '../components/FilterChips.js'
 export { FileIcon } from '../components/FileIcon.js'
-export { Markdown } from '../components/Markdown.js'
+export { Markdown, FileLinks } from '../components/Markdown.js'
 export { StartAgentButton } from '../components/StartAgentButton.js'
 export { LinkActions, type ProjectLinks, type LinkTargets } from '../components/LinkActions.js'
 export { MachineMark } from '../components/MachineMark.js'

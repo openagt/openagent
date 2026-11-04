@@ -236,6 +236,28 @@ describe('opening files, as Claude Code on the web does', () => {
     await waitFor(() => expect(screen.getByText('bold').tagName).toBe('STRONG'))
   })
 
+  test("a Markdown file's link to a file of the project opens it, by its place beside the Markdown file", async () => {
+    readTree.mockResolvedValue({ source: 'checkout', files: ['docs/guide.md', 'docs/setup.md', 'src/app.ts'] })
+    readContent.mockImplementation(async (_host: unknown, _projectId: string, path: string) => ({ path, text: path === 'docs/guide.md' ? 'See [setup](setup.md).' : `the text of ${path}`, truncated: false, binary: false }))
+    render(<FilesPane projectId="p1" agentId="run-1" context={context()} />)
+    fireEvent.click(await screen.findByText('docs'))
+    fireEvent.click(await screen.findByTitle('docs/guide.md'))
+    fireEvent.click(await screen.findByRole('button', { name: 'setup' }))
+    await waitFor(() => expect(tabs()).toEqual([['setup.md', 'true', 'preview']]))
+  })
+
+  test('a file asked for from the chat opens, found in the tree by the end of its whole path; each ask once', async () => {
+    readTree.mockResolvedValue({ source: 'checkout', files: ['index.html', 'src/index.html'] })
+    const { rerender } = render(<FilesPane projectId="p1" agentId="run-1" context={context()} show={{ path: '/home/user/project/src/index.html', at: 1 }} />)
+    await waitFor(() => expect(tabs()).toEqual([['index.html', 'true', 'preview']]))
+    expect(screen.getByRole('tab').querySelector('button')!.getAttribute('title')).toBe('src/index.html')
+    fireEvent.click(screen.getByRole('button', { name: 'Close index.html' }))
+    rerender(<FilesPane projectId="p1" agentId="run-1" context={context()} show={{ path: '/home/user/project/src/index.html', at: 1 }} />)
+    expect(tabs()).toEqual([])
+    rerender(<FilesPane projectId="p1" agentId="run-1" context={context()} show={{ path: '/elsewhere/README.md', at: 2 }} />)
+    expect(tabs()).toEqual([])
+  })
+
   test('a right click on a file attaches it to the Context, and a file in it is ticked', async () => {
     const toggle = vi.fn()
     const { rerender } = render(<FilesPane projectId="p1" context={context([], toggle)} />)
@@ -293,6 +315,25 @@ describe('opening files, as Claude Code on the web does', () => {
     expect(screen.queryByText('hello world')).toBeNull()
   })
 
+  test('closing the last tab shows the tree, on a narrow pane and on a wide one with the tree hidden', async () => {
+    readContent.mockResolvedValue({ path: 'README.md', text: 'hello world', truncated: false, binary: false })
+    narrowPanes()
+    render(<FilesPane projectId="p1" context={context()} />)
+    fireEvent.click(await screen.findByTitle('README.md'))
+    await screen.findByText('hello world')
+    expect(screen.queryByLabelText('Filter files')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Close README.md' }))
+    expect(screen.getByLabelText('Filter files')).toBeTruthy()
+    cleanup()
+    vi.unstubAllGlobals()
+    render(<FilesPane projectId="p1" context={context()} />)
+    fireEvent.click(await screen.findByTitle('README.md'))
+    fireEvent.click(screen.getByLabelText('Hide the file tree'))
+    await waitFor(() => expect(screen.queryByLabelText('Filter files')).toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: 'Close README.md' }))
+    expect(screen.getByLabelText('Filter files')).toBeTruthy()
+  })
+
   test('with previews off in the ⋮ menu, one click keeps the file', async () => {
     render(<FilesPane projectId="p1" context={context()} />)
     await screen.findByText('README.md')
@@ -319,7 +360,7 @@ describe('opening files, as Claude Code on the web does', () => {
     await screen.findByText('src')
     fireEvent.click(folder('src'))
     fireEvent.click(await within(treeOf()).findByTitle('src/app.ts'))
-    await waitFor(() => expect(document.querySelector('[style*="--light"]')?.textContent).toBe('const'), { timeout: 5000 })
+    await waitFor(() => expect(document.querySelector('[style*="--code-keyword"]')?.textContent).toBe('const'), { timeout: 5000 })
   })
 
   test('nothing is read before a file is opened', async () => {

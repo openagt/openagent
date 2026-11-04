@@ -1,9 +1,10 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useState } from 'react'
 import type { HighlighterCore, LanguageRegistration, ThemeRegistration } from 'shiki/core'
 
-// Colours by language for a file's lines, as an editor shows them: Shiki, with its Everforest light
-// and dark themes, the family the dashboard's own colours come from. Each line comes back as its
-// coloured pieces, so a pane keeps drawing its own rows (numbers, a diff's signs) and colours only
+// Colours by language for code, in the chat and in the panes: Shiki reads which kind of word each
+// piece is (a keyword, a string, a comment…), and the page colours each kind with its theme's own
+// hue (`--code-*`, tailwind.css), so the colours follow the theme, light or dark, OpenAgent's or
+// Neutral, with nothing coloured again. Each line comes back as its pieces, so a pane keeps drawing its own rows (numbers, a diff's signs) and colours only
 // the text. A language's grammar is loaded the first time a file of it is shown; the page loads
 // none until then. A file of a language not listed, or too long to colour at once, stays plain.
 
@@ -92,44 +93,45 @@ let highlighter: Promise<HighlighterCore> | undefined
 const loading = new Map<string, Promise<void>>()
 
 /**
- * The colours a code block in the chat is drawn in: one hue per kind of word, bright on dark and
- * deep on light — commands and functions blue, strings and a command's arguments green, keywords
- * purple, numbers and constants teal. A file's lines keep the editor's Everforest; only the chat's
- * blocks read like this, as a reply's code does in the chats people compare ours with.
+ * The kinds of word code is coloured by, in Claude Code on the web's way of telling them apart:
+ * commands and functions, strings and a command's arguments, keywords, numbers with their units
+ * and colours, a markup tag's name with a property's, an attribute's name, a parameter, a type.
+ * Each is drawn in `--code-<kind>`.
  */
-function chatTheme(name: string, dark: boolean): ThemeRegistration {
-  const c = (onDark: string, onLight: string) => (dark ? onDark : onLight)
-  return {
-    name,
-    type: dark ? 'dark' : 'light',
-    colors: { 'editor.foreground': c('#eaecf0', '#14181f') },
-    tokenColors: [
-      { scope: ['comment', 'punctuation.definition.comment'], settings: { foreground: c('#818898', '#6e7687') } },
-      { scope: ['punctuation', 'meta.brace', 'keyword.operator.type.annotation', 'keyword.operator.optional'], settings: { foreground: c('#d3d7de', '#2b303b') } },
-      { scope: ['keyword', 'storage', 'storage.type', 'storage.modifier', 'keyword.control', 'keyword.operator.new', 'keyword.operator.expression', 'variable.language.this'], settings: { foreground: c('#cc7bf4', '#8100c2') } },
-      { scope: ['keyword.operator.assignment', 'keyword.operator.arithmetic', 'keyword.operator.comparison', 'keyword.operator.relational', 'keyword.operator.logical', 'keyword.operator.pipe', 'keyword.operator.bitwise', 'keyword.operator.type'], settings: { foreground: c('#eaecf0', '#14181f') } },
-      { scope: ['string', 'string.quoted', 'string.template', 'punctuation.definition.string', 'constant.other.option', 'string.unquoted.argument', 'markup.inline.raw'], settings: { foreground: c('#9be963', '#008000') } },
-      { scope: ['constant.numeric', 'constant.language', 'constant.character', 'support.constant'], settings: { foreground: c('#5eeded', '#008080') } },
-      { scope: ['entity.name.function', 'support.function', 'meta.function-call entity.name.function', 'entity.name.command', 'support.function.builtin', 'entity.name.tag'], settings: { foreground: c('#70b8ff', '#0051c2') } },
-      { scope: ['meta.object-literal.key', 'support.type.property-name', 'entity.other.attribute-name', 'variable.other.property.yaml', 'entity.name.tag.yaml'], settings: { foreground: c('#f47b85', '#b80a18') } },
-      { scope: ['variable.parameter'], settings: { foreground: c('#f7ab5f', '#b84f05') } },
-      { scope: ['entity.name.type', 'entity.name.class', 'support.type', 'support.class', 'support.type.primitive'], settings: { foreground: c('#fbad60', '#b34a00') } },
-    ],
-  }
+export const KINDS = ['plain', 'comment', 'punctuation', 'keyword', 'operator', 'string', 'number', 'function', 'property', 'attribute', 'parameter', 'type'] as const
+export type Kind = (typeof KINDS)[number]
+
+/** Which words are of which kind, by their TextMate scopes. */
+const SCOPES: Record<Exclude<Kind, 'plain'>, string[]> = {
+  comment: ['comment', 'punctuation.definition.comment'],
+  punctuation: ['punctuation', 'meta.brace', 'keyword.operator.type.annotation', 'keyword.operator.optional'],
+  keyword: ['keyword', 'storage', 'storage.type', 'storage.modifier', 'keyword.control', 'keyword.operator.new', 'keyword.operator.expression', 'variable.language.this'],
+  operator: ['keyword.operator.assignment', 'keyword.operator.arithmetic', 'keyword.operator.comparison', 'keyword.operator.relational', 'keyword.operator.logical', 'keyword.operator.pipe', 'keyword.operator.bitwise', 'keyword.operator.type'],
+  string: ['string', 'string.quoted', 'string.template', 'punctuation.definition.string', 'constant.other.option', 'string.unquoted.argument', 'markup.inline.raw'],
+  number: ['constant.numeric', 'constant.language', 'constant.character', 'support.constant', 'keyword.other.unit', 'constant.other.color', 'punctuation.definition.constant'],
+  function: ['entity.name.function', 'support.function', 'meta.function-call entity.name.function', 'entity.name.command', 'support.function.builtin'],
+  property: ['meta.object-literal.key', 'support.type.property-name', 'punctuation.support.type.property-name', 'entity.name.tag', 'variable.other.property.yaml', 'entity.name.tag.yaml'],
+  attribute: ['entity.other.attribute-name'],
+  parameter: ['variable.parameter'],
+  type: ['entity.name.type', 'entity.name.class', 'support.type', 'support.class', 'support.type.primitive'],
 }
 
-/** Which colours a text is drawn in: an editor's, for a file's lines, or the chat's, for a reply's code block. */
-export type Palette = 'editor' | 'chat'
+/** A kind as the stand-in colour the theme gives it, which Shiki hands back on each piece: its place in the list. */
+const stand = (kind: Kind) => `#0000${KINDS.indexOf(kind).toString(16).padStart(2, '0')}`
+const KIND_OF = new Map(KINDS.map(kind => [stand(kind), kind]))
 
-const PALETTES: Record<Palette, { light: string; dark: string }> = {
-  editor: { light: 'everforest-light', dark: 'everforest-dark' },
-  chat: { light: 'chat-light', dark: 'chat-dark' },
+/** The theme Shiki colours with: a kind per scope, said as its stand-in colour. */
+const CODE_THEME: ThemeRegistration = {
+  name: 'code-kinds',
+  type: 'dark',
+  colors: { 'editor.foreground': stand('plain') },
+  tokenColors: Object.entries(SCOPES).map(([kind, scope]) => ({ scope, settings: { foreground: stand(kind as Kind) } })),
 }
 
 function load(): Promise<HighlighterCore> {
   highlighter ??= Promise.all([import('shiki/core'), import('shiki/engine/javascript')]).then(([{ createHighlighterCore }, { createJavaScriptRegexEngine }]) =>
     createHighlighterCore({
-      themes: [import('shiki/themes/everforest-light.mjs'), import('shiki/themes/everforest-dark.mjs'), chatTheme('chat-light', false), chatTheme('chat-dark', true)],
+      themes: [CODE_THEME],
       langs: [],
       engine: createJavaScriptRegexEngine(),
     }),
@@ -144,8 +146,8 @@ async function withLanguage(language: string): Promise<HighlighterCore> {
   return shiki
 }
 
-/** One line's coloured pieces: the text, and its colour in the light theme and in the dark one. */
-export type Piece = { text: string; light: string | undefined; dark: string | undefined }
+/** One line's coloured pieces: the text, and the kind of word it is. */
+export type Piece = { text: string; kind: Kind }
 
 /**
  * The lines of `text` in colour, by the language `path` names: null while its grammar loads, and
@@ -155,8 +157,8 @@ export function useHighlighted(text: string, path: string): Piece[][] | null {
   return useHighlightedIn(text, languageOf(path))
 }
 
-/** The same, for a language already known (a fenced block names its own), in the colours of `palette`. */
-export function useHighlightedIn(text: string, language: string | undefined, palette: Palette = 'editor'): Piece[][] | null {
+/** The same, for a language already known (a fenced block names its own). */
+export function useHighlightedIn(text: string, language: string | undefined): Piece[][] | null {
   const [shown, setShown] = useState<{ text: string; language: string; lines: Piece[][] } | null>(null)
   useEffect(() => {
     if (!language || text.length > MAX_CHARS) return
@@ -164,21 +166,21 @@ export function useHighlightedIn(text: string, language: string | undefined, pal
     withLanguage(language)
       .then(shiki => {
         if (!current) return
-        const tokens = shiki.codeToTokensWithThemes(text, { lang: language, themes: PALETTES[palette] })
-        setShown({ text, language, lines: tokens.map(line => line.map(token => ({ text: token.content, light: token.variants.light?.color, dark: token.variants.dark?.color }))) })
+        const tokens = shiki.codeToTokens(text, { lang: language, theme: CODE_THEME.name! }).tokens
+        setShown({ text, language, lines: tokens.map(line => line.map(token => ({ text: token.content, kind: KIND_OF.get(token.color?.toLowerCase() ?? '') ?? 'plain' }))) })
       })
       .catch(() => {})
     return () => {
       current = false
     }
-  }, [text, language, palette])
+  }, [text, language])
   return shown && shown.text === text && shown.language === language ? shown.lines : null
 }
 
-/** One line's pieces, each in its colour for the page's theme. */
+/** One line's pieces, each in its kind's colour for the page's theme. */
 export function Pieces({ pieces }: { pieces: Piece[] }) {
   return pieces.map((piece, i) => (
-    <span key={i} style={{ '--light': piece.light, '--dark': piece.dark } as CSSProperties} className="text-(color:--light) dark:text-(color:--dark)">
+    <span key={i} style={{ color: `var(--code-${piece.kind})` }}>
       {piece.text}
     </span>
   ))

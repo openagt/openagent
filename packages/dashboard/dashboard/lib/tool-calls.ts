@@ -23,11 +23,15 @@ export interface ToolCall {
   plain?: true
   /** The detail as the driver gave it: the whole path, the command. */
   detail?: string
+  /** The one file a file's tool was given (Read, Edit, Write), as the driver gave it: what its name opens. */
+  path?: string
   kind: CallKind
   /** The files the call changed, when its coding agent said them: each once, its lines summed. */
   files?: ChangedFile[]
   /** The lines the call added and removed over all its files. */
   size?: LineCount
+  /** The call failed, as what it gave back said (set by the caller, who has its output). */
+  failed?: true
 }
 
 /** Lines added and removed. */
@@ -106,12 +110,15 @@ export function toolCall(label: string, detail?: string, changed?: readonly File
   if (detail !== undefined) {
     call.detail = detail
     call.target = known?.file ? fileNames(detail) : known?.slash ? `/${detail.replace(/^\//, '')}` : detail
+    if (known?.file && !detail.includes(', ')) call.path = detail
   }
   if (changed !== undefined && changed.length > 0) {
     const files = sumEdits(changed)
     call.kind = 'edit'
     call.verb = files.every(file => file.created) ? 'Created' : 'Updated'
     call.target = files.map(file => file.name).join(', ')
+    if (files.length === 1) call.path = files[0]!.path
+    else delete call.path
     call.files = files
     call.size = sizeOf(files)
   }
@@ -145,17 +152,22 @@ const count = (n: number, one: string, many: string): string => (n === 1 ? one :
  */
 export function callsSummary(calls: readonly ToolCall[]): CallsSummary {
   const of = (kind: CallKind) => calls.filter(call => call.kind === kind)
+  // How many calls of a kind failed, said after its words: "read 2 files (1 failed)".
+  const failed = (kind: CallKind) => {
+    const n = of(kind).filter(call => call.failed).length
+    return n > 0 ? ` (${n} failed)` : ''
+  }
   const edits = of('edit')
   // A file read twice is one file read.
   const read = new Set(of('read').map((call, at) => call.detail ?? at)).size
   const parts: SummaryPart[] = []
   const summary: CallsSummary = { parts }
   const commands = of('command').length
-  if (commands > 0) parts.push({ words: `ran ${count(commands, 'a command', 'commands')}` })
-  if (read > 0) parts.push({ words: `read ${count(read, 'a file', 'files')}` })
-  if (of('search').length > 0) parts.push({ words: 'searched code' })
-  if (of('find').length > 0) parts.push({ words: 'found files' })
-  if (of('web').length > 0) parts.push({ words: 'searched the web' })
+  if (commands > 0) parts.push({ words: `ran ${count(commands, 'a command', 'commands')}${failed('command')}` })
+  if (read > 0) parts.push({ words: `read ${count(read, 'a file', 'files')}${failed('read')}` })
+  if (of('search').length > 0) parts.push({ words: `searched code${failed('search')}` })
+  if (of('find').length > 0) parts.push({ words: `found files${failed('find')}` })
+  if (of('web').length > 0) parts.push({ words: `searched the web${failed('web')}` })
   if (edits.length > 0) {
     // A file a later call edited again is the same file: summed as a turn's are.
     const files = sumEdits(edits.flatMap(call => (call.files ?? []).map(file => ({ path: file.path, added: file.added, removed: file.removed, ...(file.created ? { created: true as const } : {}) }))))
@@ -169,7 +181,8 @@ export function callsSummary(calls: readonly ToolCall[]): CallsSummary {
     if (files.length > 0) summary.size = sizeOf(files)
   }
   const tools = of('skill').length + of('other').length
-  if (tools > 0) parts.push({ words: `used ${count(tools, 'a tool', 'tools')}` })
+  const toolsFailed = [...of('skill'), ...of('other')].filter(call => call.failed).length
+  if (tools > 0) parts.push({ words: `used ${count(tools, 'a tool', 'tools')}${toolsFailed > 0 ? ` (${toolsFailed} failed)` : ''}` })
   if (parts[0]) parts[0].words = parts[0].words.charAt(0).toUpperCase() + parts[0].words.slice(1)
   return summary
 }

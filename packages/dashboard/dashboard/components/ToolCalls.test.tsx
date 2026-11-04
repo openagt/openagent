@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { LiveLine, Seconds, ToolCalls, type ToolStep } from './ToolCalls.js'
+import { LiveLine, OpenFile, Seconds, ToolCalls, type ToolStep } from './ToolCalls.js'
 
 afterEach(() => {
   cleanup()
@@ -40,22 +40,69 @@ describe('ToolCalls', () => {
     expect(screen.queryByText(/Failed/)).toBeNull()
   })
 
-  test('a file that was read has no "$", and shows what the call gave back', () => {
-    render(<ToolCalls steps={[{ type: 'action', label: 'Read', detail: '/repo/AGENTS.md', id: 't1', output: { text: '1→hello' } }]} />)
+  test('a file that was read opens to its path and its lines, numbered, as Claude Code on the web opens one', () => {
+    render(<ToolCalls steps={[{ type: 'action', label: 'Read', detail: '/repo/AGENTS.md', id: 't1', output: { text: '1\t# Agents\n2\n3\tRead the docs.\n4' } }]} />)
     fireEvent.click(screen.getByRole('button', { name: 'Read AGENTS.md' }))
-    expect(screen.getByLabelText('Detail').textContent).toBe('/repo/AGENTS.md')
-    expect(screen.getByLabelText('Output').textContent).toBe('1→hello')
+    expect(screen.getByText('/repo/AGENTS.md')).toBeTruthy()
+    expect(screen.queryByText('$')).toBeNull()
+    const file = screen.getByLabelText('File')
+    // The empty line after the file's last newline is none of its lines.
+    expect(Array.from(file.children).map(line => [line.firstElementChild!.textContent, line.lastElementChild!.textContent])).toEqual([
+      ['1', '# Agents'],
+      ['2', ' '],
+      ['3', 'Read the docs.'],
+    ])
+    expect(screen.queryByLabelText('Output')).toBeNull()
   })
 
-  test('a call that failed says so: with its exit code when it has one, and with no empty output box', () => {
+  test("a read's text that is no file's lines shows as what the call gave back", () => {
+    render(<ToolCalls steps={[{ type: 'action', label: 'Read', detail: '/repo/gone.md', id: 't1', output: { text: 'File does not exist.', failed: true } }]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Read gone.md, failed' }))
+    expect(screen.getByLabelText('Detail').textContent).toBe('/repo/gone.md')
+    expect(screen.getByLabelText('Output').textContent).toBe('File does not exist.')
+  })
+
+  test('a failed call says so: on its row in red, and in the line that counts the steps', () => {
+    render(<ToolCalls steps={[{ type: 'action', label: 'Read', detail: '/repo/README.md', id: 'r1', output: { text: '1\t# Hi' } }, { type: 'action', label: 'Read', detail: '/repo/index.html', id: 'r2', output: { text: 'File does not exist.', failed: true } }]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Read 2 files (1 failed)' }))
+    const row = screen.getByRole('button', { name: 'Read index.html, failed' }).parentElement!
+    expect(row.textContent).toBe('Readindex.htmlFailed')
+    expect(row.querySelector('.text-danger')!.textContent).toBe('Failed')
+    expect(screen.getByRole('button', { name: 'Read README.md' }).parentElement!.querySelector('.text-danger')).toBeNull()
+  })
+
+  test("a step's file name opens the file beside the chat, by the path the agent named it by, and opens nothing else", () => {
+    const opened: string[] = []
+    render(
+      <OpenFile.Provider value={path => opened.push(path)}>
+        <ToolCalls steps={[bash('ls'), { type: 'action', label: 'Read', detail: '/repo/src/app.ts', id: 'r1', output: { text: '1\tlet a = 1' } }]} />
+      </OpenFile.Provider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Ran a command, read a file' }))
+    fireEvent.click(screen.getByRole('button', { name: 'app.ts' }))
+    expect(opened).toEqual(['/repo/src/app.ts'])
+    expect(screen.getByRole('button', { name: 'Read app.ts' }).getAttribute('aria-expanded')).toBe('false')
+    // The rest of the line opens the step; its path opens the file too.
+    fireEvent.click(screen.getByRole('button', { name: 'Read app.ts' }).parentElement!.firstElementChild!)
+    expect(screen.getByRole('button', { name: 'Read app.ts' }).getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: '/repo/src/app.ts' }))
+    expect(opened).toEqual(['/repo/src/app.ts', '/repo/src/app.ts'])
+  })
+
+  test('without a pane that shows files, a file name is text', () => {
+    render(<ToolCalls steps={[{ type: 'action', label: 'Read', detail: '/repo/src/app.ts', id: 'r1', output: { text: '1\tlet a = 1' } }]} />)
+    expect(screen.queryByRole('button', { name: 'app.ts' })).toBeNull()
+  })
+
+  test('a call that failed says so on its row, and opened, its exit code when it has one, with no empty output box', () => {
     render(<ToolCalls steps={[{ type: 'action', label: 'commandExecution', detail: 'exit 3', output: { text: '', failed: true, exitCode: 3 } }]} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Ran exit 3' }))
-    expect(screen.getByText('Failed: exit code 3')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Ran exit 3, failed' }))
+    expect(screen.getByText('Exit code 3')).toBeTruthy()
     expect(screen.queryByLabelText('Output')).toBeNull()
     cleanup()
     render(<ToolCalls steps={[{ type: 'action', label: 'Bash', detail: 'pnpm lint', output: { text: 'boom', failed: true } }]} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Ran pnpm lint' }))
-    expect(screen.getByText('Failed')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Ran pnpm lint, failed' }))
+    expect(screen.getAllByText('Failed')).toHaveLength(1)
     expect(screen.getByLabelText('Output').textContent).toBe('boom')
   })
 
@@ -82,7 +129,7 @@ describe('ToolCalls', () => {
     const { container } = render(<ToolCalls steps={[bash('pnpm build'), { type: 'action', label: 'Edit', detail: '/repo/src/app.ts' }]} />)
     fireEvent.click(screen.getByRole('button', { name: 'Ran a command, edited a file' }))
     const box = container.querySelector('.border')!
-    expect(Array.from(box.querySelectorAll('button')).map(b => b.textContent)).toEqual(['Ranpnpm build', 'Editedapp.ts'])
+    expect(Array.from(box.querySelectorAll('[aria-expanded]')).map(b => b.parentElement!.textContent)).toEqual(['Ranpnpm build', 'Editedapp.ts'])
     fireEvent.click(screen.getByRole('button', { name: 'Edited app.ts' }))
     expect(screen.getByText('/repo/src/app.ts')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Ran a command, edited a file' }))
@@ -102,7 +149,7 @@ describe('ToolCalls', () => {
     // Thinking is no step, and Claude Code on the web's panel has none of it. A person who wants to
     // read it turns it on in Settings, which is what `showThinking` does.
     fireEvent.click(screen.getByRole('button', { name: 'Ran 2 commands' }))
-    expect(Array.from(container.querySelectorAll('.border button')).map(b => b.textContent)).toEqual(['Ranls', 'Ranpwd'])
+    expect(Array.from(container.querySelectorAll('.border [aria-expanded]')).map(b => b.parentElement!.textContent)).toEqual(['Ranls', 'Ranpwd'])
     expect(screen.queryByText(/look at the docs/)).toBeNull()
   })
 
@@ -224,18 +271,18 @@ describe('ToolCalls, edits whose files are known', () => {
 
   test("the folded line counts the commands and names the file the edits changed, with its size in a pill, as Claude Code's does; the edit's own row has the pill too", () => {
     render(<ToolCalls steps={[bash('a'), bash('b'), bash('c'), write]} />)
-    const line = screen.getByRole('button', { name: 'Ran 3 commands, created DESCRIPTION.md' })
+    const line = screen.getByRole('button', { name: 'Ran 3 commands, created DESCRIPTION.md' }).parentElement!
     expect(line.textContent).toBe('Ran 3 commands, created DESCRIPTION.md+11−011 added, 0 removed')
     expect(line.querySelector('.text-success')!.textContent).toBe('+11')
     expect(line.querySelector('.text-success')!.className).toContain('bg-success/20')
     fireEvent.click(line)
-    const inside = screen.getByRole('button', { name: 'Created DESCRIPTION.md' })
+    const inside = screen.getByRole('button', { name: 'Created DESCRIPTION.md' }).parentElement!
     expect(inside.querySelector('.text-success')!.className).toContain('bg-success/20')
   })
 
   test('a lone edit is its own line: "Created", the file\'s name, its size', () => {
     render(<ToolCalls steps={[write]} />)
-    const line = screen.getByRole('button', { name: 'Created DESCRIPTION.md' })
+    const line = screen.getByRole('button', { name: 'Created DESCRIPTION.md' }).parentElement!
     expect(line.textContent).toBe('CreatedDESCRIPTION.md+11−011 added, 0 removed')
   })
 

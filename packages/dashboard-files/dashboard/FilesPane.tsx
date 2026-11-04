@@ -53,6 +53,18 @@ function sourceCaption(tree: AgentTree): string | undefined {
 
 const nameOf = (path: string) => path.slice(path.lastIndexOf('/') + 1)
 
+/**
+ * The file of the tree a path names: the path itself, or the longest file it ends with, for a
+ * path whole on the computer the run is on ("/home/user/test-project/index.html").
+ */
+export function fileAt(files: readonly string[], path: string): string | undefined {
+  const asked = path.replace(/^\.\//, '')
+  if (files.includes(asked)) return asked
+  let found: string | undefined
+  for (const file of files) if (asked.endsWith(`/${file}`) && (found === undefined || file.length > found.length)) found = file
+  return found
+}
+
 /** One opened file's tab: a click shows it, a double click keeps a preview, the cross closes it. */
 function Tab({ tab, shown, onShow, onKeep, onClose }: { tab: OpenTab; shown: boolean; onShow: () => void; onKeep: () => void; onClose: () => void }) {
   return (
@@ -71,18 +83,19 @@ function Tab({ tab, shown, onShow, onKeep, onClose }: { tab: OpenTab; shown: boo
 /** Narrower than this, the pane has room for the tree or the file, not both. */
 const NARROW = 520
 
-export function FilesPane({ projectId, agentId, activity, context }: ModulePanelProps) {
+export function FilesPane({ projectId, agentId, activity, show, context }: ModulePanelProps) {
   const host = useModuleHost()
   const page = `${projectId}/${agentId ?? ''}`
   const { tabs, active, source } = useOpenFiles(page)
   const settings = useFilesSettings()
   const [body, setBody] = useState<HTMLElement | null>(null)
   const narrow = useNarrow(body, NARROW)
-  // On a narrow pane the tree is shown in the file's place: from the start when no file is open, as
-  // Claude Code's narrow pane opens on its files, else on a press of its button; a file opened from
-  // it hides it again. The setting is what a wide pane does.
-  const [peek, setPeek] = useState(active === undefined)
-  const tree = narrow ? peek : settings.tree
+  // With no file open the tree is shown, in the file's place where there is room for one only, as
+  // Claude Code's pane shows its files when it opens and when its last tab is closed. On a narrow
+  // pane with a file open, the tree takes the file's place on a press of its button; a file opened
+  // from it hides it again. The setting is what a wide pane does.
+  const [peek, setPeek] = useState(false)
+  const tree = active === undefined || (narrow ? peek : settings.tree)
   const showTree = (shown: boolean) => (narrow ? setPeek(shown) : setFilesSetting('tree', shown))
   const open = (path: string, keep: boolean) => {
     openFile(page, path, keep)
@@ -126,6 +139,16 @@ export function FilesPane({ projectId, agentId, activity, context }: ModulePanel
     return () => clearInterval(timer)
   }, [pending, reloadTree])
   const files = agentId ? (runTree && 'files' in runTree ? runTree.files : EMPTY_FILES) : projectFiles
+  // A file asked for from the chat, by the path its agent named it by: whole, on whichever computer
+  // the run is on, so it is found in the tree by its end. Opened as a click in the tree opens one,
+  // once the tree has it; each ask once.
+  const shownAsk = useRef(0)
+  useEffect(() => {
+    if (show === undefined || show.at <= shownAsk.current || files.length === 0) return
+    shownAsk.current = show.at
+    const path = fileAt(files, show.path)
+    if (path !== undefined) open(path, false)
+  }, [show, files])
   // The tab shown is in view, though the header has room for fewer tabs than are open.
   const tablist = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -232,9 +255,9 @@ export function FilesPane({ projectId, agentId, activity, context }: ModulePanel
           </div>
         )}
         {narrow && tree ? null : active !== undefined ? (
-          <FileView key={active} page={page} projectId={projectId} agentId={agentId} path={active} wrap={settings.wrap} source={source?.has(active) ?? false} />
+          <FileView key={active} page={page} projectId={projectId} agentId={agentId} path={active} wrap={settings.wrap} source={source?.has(active) ?? false} files={files} onOpen={open} />
         ) : (
-          <NoFileOpen tree={tree} />
+          <NoFileOpen />
         )}
       </div>
     </>

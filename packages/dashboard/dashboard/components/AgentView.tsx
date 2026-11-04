@@ -14,6 +14,7 @@ import { AgentComposer } from './AgentComposer.js'
 import { AgentWorkBar } from './AgentWorkBar.js'
 import { AgentFeed } from './AgentFeed.js'
 import { IssueLinks } from './Markdown.js'
+import { OpenFile } from './ToolCalls.js'
 import { ChatNote, ChatPane } from './ChatPane.js'
 import { ActionsRunNotice } from './ActionsRunNotice.js'
 import { LostStreamNotice } from './LostStreamNotice.js'
@@ -24,7 +25,7 @@ import { Committing, HandoffActions, HandoffSummary, isCommitAsk } from './Agent
 import { AgentDetails, type AgentDetailsCard } from './AgentDetails.js'
 import { holdsMainAgent } from '../lib/subagents.js'
 import { agentLogKey } from '../lib/agent-log.js'
-import { revealChange, revealScreen, revealSubagent } from '../lib/reveal-change.js'
+import { revealChange, revealFile, revealScreen, revealSubagent } from '../lib/reveal-change.js'
 import { panesPage } from '../lib/panes.js'
 import { modelContextWindow, modelName, useModels } from '../lib/models.js'
 import { ContextCircle } from './ContextCircle.js'
@@ -203,6 +204,10 @@ export function AgentView({
   // project has one.
   const listsChanges = mountedPanels.some(panel => panel.changes && panel.projects.includes(projectId))
   const onOpenChange = useMemo(() => (listsChanges ? (path?: string) => revealChange(panesPage(projectId, agentId), path) : undefined), [listsChanges, projectId, agentId])
+  // A file a step names ("Read index.html") opens the pane that shows the run's files, on it, when
+  // a module of this project has one.
+  const showsFiles = mountedPanels.some(panel => panel.files && panel.projects.includes(projectId))
+  const onOpenFile = useMemo(() => (showsFiles ? (path: string) => revealFile(panesPage(projectId, agentId), path) : undefined), [showsFiles, projectId, agentId])
   // A live screen's row in the chat opens the pane that shows it, the same way.
   const showsScreen = mountedPanels.some(panel => panel.screen && panel.projects.includes(projectId))
   const onOpenScreen = useMemo(() => (showsScreen ? () => revealScreen(panesPage(projectId, agentId)) : undefined), [showsScreen, projectId, agentId])
@@ -513,6 +518,7 @@ export function AgentView({
         // "Initialized session" line, a run of its steps) is not open in the next one's, and each chat
         // opens at its own place, not where the one before was left.
         <IssueLinks.Provider value={issueLinks}>
+        <OpenFile.Provider value={onOpenFile}>
         <AgentFeed
           key={agentId}
           events={shown}
@@ -538,6 +544,7 @@ export function AgentView({
           onOpenChange={onOpenChange}
           onOpenScreen={onOpenScreen}
         />
+        </OpenFile.Provider>
         </IssueLinks.Provider>
       )}
     </ChatPane>

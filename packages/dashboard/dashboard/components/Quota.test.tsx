@@ -452,7 +452,7 @@ describe('Quota (#960)', () => {
     const duration = trigger.querySelector('span')!
     expect(duration.textContent).toBe('2d')
     expect(duration.className).toMatch(/font-medium/)
-    expect(duration.className).toMatch(/text-success/)
+    expect(duration.className).toMatch(/text-primary/)
   })
 
   test('reads over-consuming (zero duration) exactly on the boundary\'s own pace', async () => {
@@ -489,7 +489,7 @@ describe('Quota (#960)', () => {
     const share = [...screen.getByText(/^Resets /).closest('p')!.querySelectorAll('span')].find(s =>
       /^\d+%$/.test(s.textContent ?? ''),
     )!
-    expect(share.className).toMatch(/text-success/)
+    expect(share.className).toMatch(/text-primary/)
   })
 
   test('no pace share at the very start of the week, rather than an infinite one (#1367)', async () => {
