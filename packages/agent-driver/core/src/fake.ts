@@ -3,6 +3,7 @@ import { makeEmit, promptSent, startEvent } from './session-support.js'
 import { finishTurn } from './inbox.js'
 import { attachLog, type SessionLog } from './session-log.js'
 import { ConversationGoneError } from './gone.js'
+import type { Question } from './question.js'
 
 /** One scripted turn the {@link FakeDriver} replays. */
 export interface FakeTurn {
@@ -12,6 +13,8 @@ export interface FakeTurn {
   actions?: string[]
   /** Token + cost accounting to report for this turn (#322). Omitted = no usage. */
   usage?: DriverUsage
+  /** A question asked with the agent's own tool, which the turn stops on, as Claude Code's AskUserQuestion. */
+  question?: Question
 }
 
 /** Options for {@link FakeDriver}. */
@@ -92,7 +95,7 @@ export class FakeDriverSession implements DriverSession {
     if (turn.text) this.emit({ type: 'text', text: turn.text })
     this.emit({ type: 'result', text: turn.text, sessionId: this.id, ...(turn.usage ? { usage: turn.usage } : {}) })
 
-    return finishTurn(this, { text: turn.text, sessionId: this.id, ...(turn.usage ? { usage: turn.usage } : {}) }, opts, e => this.emit(e))
+    return finishTurn(this, { text: turn.text, sessionId: this.id, ...(turn.usage ? { usage: turn.usage } : {}), ...(turn.question ? { question: turn.question } : {}) }, opts, e => this.emit(e))
   }
 
   readCode(path: string): Promise<string> {

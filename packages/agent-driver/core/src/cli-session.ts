@@ -208,7 +208,9 @@ export function runCliSession(opts: RunCliSessionOptions): Promise<DriverTurn> {
       // first: the loop gates on the outcome, so a crash mid-build must not pass
       // as a result; so is a clean exit after output that says the turn failed.
       // Surface the failure the agent reported, else stderr, else (for a crash) the partial text, as context.
-      if (code !== 0 || failure !== undefined) {
+      // A turn the driver stopped on the agent's own question asked it and is over: the CLI says
+      // its stopped turn failed, and exits so, but nothing went wrong.
+      if ((code !== 0 || failure !== undefined) && turn.question === undefined) {
         const detail = failure || Buffer.concat(stderrChunks).toString('utf8').trim() || (code === 0 ? 'the turn did not finish' : turn.text.trim() || `exit code ${code ?? 'null'}`)
         opts.emit({ type: 'error', message: detail })
         finish(() => rejectPromise(new AgentExitError(agent, code, detail)))

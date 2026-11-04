@@ -238,6 +238,11 @@ export interface DriverTurn {
   sessionId?: string
   /** Token + cost accounting for this turn, when the agent reports it (#322). */
   usage?: DriverUsage
+  /**
+   * The question the agent asked with a tool of its own, as Claude Code's AskUserQuestion: the
+   * driver ended the turn on it, so the person answers it the same way as one written in the text.
+   */
+  question?: Question
 }
 
 /**

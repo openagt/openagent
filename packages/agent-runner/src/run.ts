@@ -1,7 +1,7 @@
 import { hostname } from 'node:os'
 import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { AgentExitError, ConversationGoneError, continuationPrompt, logDiaryFile, parseQuestion, promptOf, takeInbox, type Driver, type DriverPromptOptions, type DriverSession, type DriverTurn, type InboxLine, type LogEndStatus } from '@openagt/agent-driver'
+import { AgentExitError, ConversationGoneError, continuationPrompt, logDiaryFile, parseQuestion, promptOf, takeInbox, type Driver, type DriverPromptOptions, type DriverSession, type DriverTurn, type InboxLine, type LogEndStatus, type Question } from '@openagt/agent-driver'
 import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 import { agentBranchName, attachCheckout, createCheckout, reclaimWorktree, relinkCheckout, worktreeBranch, worktreePath, type SkillLink } from '@openagt/skill-branches'
 import { findRun, readDiary, type AnyDiaryLine, type LogsDeps, type RunCard, type RunStatus } from '@openagt/skill-logs'
@@ -583,6 +583,7 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
       question = undefined
       let failure: unknown
       let lastText = ''
+      let asked: Question | undefined
       try {
         for (const [i, { prompt, publish }] of queue.entries()) {
           await takeLevel(publish)
@@ -600,6 +601,7 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
               })
           fresh = false
           lastText = turn.text
+          asked = turn.question
           lastWords = turn.text
           resume = true
         }
@@ -614,7 +616,7 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
       } else if (status === 'done') {
         // The last turn asked and nothing waited in the inbox: the run ends here, waiting, and
         // keeps its checkout for the answer to resume it.
-        question = parseQuestion(lastText)?.title
+        question = (asked ?? parseQuestion(lastText))?.title
         if (question !== undefined) status = 'waiting'
       }
       // Named from its first report once its status is settled, before it is said ended, so the

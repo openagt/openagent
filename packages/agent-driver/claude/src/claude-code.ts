@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { readClaudeQuota } from './claude-code-quota.js'
 import { readClaudeModels } from './claude-code-models.js'
 import { accountEnv, CLAUDE_TOKEN_ENV } from './claude-accounts.js'
-import { type AccountRotation, type AgentCliParser, type ReadyPrompt, readyPrompt, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, cutOutput, callArgument, lineCount, patchSize, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, finishTurn, agentEnv, oneLine, attachLog, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverQuota, type DriverRateLimit, type DriverRateWindow, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
+import { type AccountRotation, type AgentCliParser, type CliIo, type Question, type QuestionOption, type ReadyPrompt, readyPrompt, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, cutOutput, callArgument, lineCount, patchSize, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, finishTurn, agentEnv, oneLine, attachLog, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverQuota, type DriverRateLimit, type DriverRateWindow, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
 
 /** Claude Code permission modes we pass through to the CLI. */
 export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan'
@@ -192,11 +192,10 @@ export class ClaudeCodeSession implements DriverSession {
           prompt: said,
           ...(sent.added !== undefined ? { added: sent.added } : {}),
           ...(sent.attached !== undefined ? { attached: sent.attached } : {}),
-          stdin: stdinLines(promptSent(said, sent)),
           spawn: this.config.spawn ?? (nodeSpawn as unknown as SpawnLike),
           emit: emitFn,
           signals,
-          parser,
+          parser: talking(parser, promptSent(said, sent)),
           driver: 'claude-code',
         })
       // The id we captured may outlive what the CLI will resume (#778): its retention, a cleared
@@ -260,18 +259,13 @@ export class ClaudeCodeSession implements DriverSession {
       const answered = new Promise<DriverTurn>(resolve => {
         answer = resolve
       })
+      const talk = talking(parser, words)
       const conversing: AgentCliParser = {
+        ...talk,
         push: line => {
-          const events = parser.push(line)
-          if (answeredAt(line)) answer(parser.result())
+          const events = talk.push(line)
+          if (parser.answered) answer(parser.result())
           return events
-        },
-        result: () => parser.result(),
-        converse: io => {
-          void words.then(text => {
-            for (const line of stdinLines(text).trimEnd().split('\n')) io.write(line)
-            io.end()
-          })
         },
       }
       const turn = runCliSession({
@@ -325,6 +319,9 @@ export class ClaudeCodeSession implements DriverSession {
     // servers it would otherwise load are most of what such a turn sends, and a model with no tool
     // cannot go looking for the files the words it is naming happen to mention.
     if (this.startOpts.noTools) args.push('--tools', '', '--strict-mcp-config')
+    // Claude Code asks its questions over stdin, which gives the agent its AskUserQuestion tool. The
+    // same switch gives it plan mode's two tools, which no run here has: its plan is its reply.
+    else args.push('--permission-prompt-tool', 'stdio', '--disallowedTools', 'EnterPlanMode', 'ExitPlanMode')
     const mcpConfig = this.startOpts.noTools ? undefined : this.mcpConfigFile()
     if (mcpConfig) args.push('--mcp-config', mcpConfig)
     if (this.config.extraArgs) args.push(...this.config.extraArgs)
@@ -350,21 +347,30 @@ export class ClaudeCodeSession implements DriverSession {
 }
 
 /**
+ * `claude` talked to over stdin rather than handed its prompt: the words go once they are known,
+ * and stdin stays open for the answers to what the CLI asks during the turn, until its `result`.
+ */
+function talking(parser: StreamJsonParser, words: string | Promise<string>): AgentCliParser {
+  const send = (io: CliIo, text: string): void => {
+    for (const line of stdinLines(text).trimEnd().split('\n')) io.write(line)
+  }
+  return {
+    push: line => parser.push(line),
+    result: () => parser.result(),
+    converse: io => {
+      parser.talk(io)
+      // Words already known go at once, before any line of the CLI's is read.
+      if (typeof words === 'string') send(io, words)
+      else void words.then(text => send(io, text))
+    },
+  }
+}
+
+/**
  * The prompt as the CLI's stream-json input: first the request that turns thinking text on, then
  * the user's message. A plain `-p` run sends thinking blocks with their text empty; asked for
  * `summarized`, it fills them with its own short summary.
  */
-/** Whether a line of `claude`'s output is the `result` of a turn that answered: the turn's last word, before the process exits. */
-function answeredAt(line: string): boolean {
-  if (!line.includes('"result"')) return false
-  try {
-    const obj = JSON.parse(line) as Record<string, unknown>
-    return obj['type'] === 'result' && obj['subtype'] === 'success' && obj['is_error'] !== true
-  } catch {
-    return false
-  }
-}
-
 function stdinLines(text: string): string {
   const thinking = { type: 'control_request', request_id: 'thinking', request: { subtype: 'set_max_thinking_tokens', max_thinking_tokens: null, thinking_display: 'summarized' } }
   const message = { type: 'user', message: { role: 'user', content: text } }
@@ -518,6 +524,19 @@ export class StreamJsonParser {
   rejected: { resetsAt?: number } | undefined
   /** The account's windows as this turn's last rate-limit line said them. */
   windows: DriverRateWindow[] | undefined
+  /** The turn is over and answered: its `result` said so, or the turn was stopped on the agent's question. */
+  answered = false
+  /** The CLI's stdin, while the turn is talked to: where its permission requests are answered. */
+  private io: CliIo | undefined
+  /** The question the agent asked with AskUserQuestion, which the turn was stopped on. */
+  private asked: Question | undefined
+  /** The ids of the agent's AskUserQuestion calls: the question is the card, not a step. */
+  private readonly askCalls = new Set<string>()
+
+  /** Answer the CLI's requests on `io` from now on, and close it when the turn is over. */
+  talk(io: CliIo): void {
+    this.io = io
+  }
 
   /** The agent's session id, once a line said it. */
   get session(): string | undefined {
@@ -568,6 +587,8 @@ export class StreamJsonParser {
       return [...announced, ...this.reported(obj['tool_use_id'], typeof report === 'object' && report !== null ? (report as Record<string, unknown>)['text'] : undefined), ...this.endSubagent(obj['tool_use_id'], obj['status'] !== 'completed')]
     }
 
+    if (type === 'control_request') return [...announced, ...this.handleRequest(obj)]
+
     if (type === 'assistant' && obj['error'] === 'rate_limit') {
       this.stoppedByLimit = true
       this.rejected = { ...this.rejected, ...limitFrees(obj) }
@@ -583,6 +604,9 @@ export class StreamJsonParser {
       return limit ? [...announced, { type: 'rate-limit', limit }] : announced
     }
     if (type === 'result') {
+      // The turn's last line: nothing more is coming to answer, so the CLI may exit.
+      this.io?.end()
+      this.answered = this.asked !== undefined || (obj['subtype'] === 'success' && obj['is_error'] !== true)
       const result = obj['result']
       if (typeof result === 'string') this.finalText = result
       const usage = parseUsage(obj)
@@ -636,6 +660,8 @@ export class StreamJsonParser {
         if (within === undefined) this.assistantText += block['text']
         else this.saidBy.add(within)
         events.push({ type: 'text', text: block['text'], ...tag })
+      } else if (block['type'] === 'tool_use' && block['name'] === ASK_TOOL && within === undefined) {
+        if (typeof block['id'] === 'string') this.askCalls.add(block['id'])
       } else if (block['type'] === 'tool_use' && typeof block['name'] === 'string') {
         events.push({ type: 'action', label: block['name'], ...callArgument(toolArgument(block['input'])), ...callSummary(block['input']), ...(typeof block['id'] === 'string' ? { id: block['id'] } : {}), ...tag })
         // An `Agent` call is a subagent of its own: said beside its row, never instead of it. The
@@ -725,6 +751,7 @@ export class StreamJsonParser {
       if (typeof item !== 'object' || item === null) continue
       const block = item as Record<string, unknown>
       if (block['type'] !== 'tool_result' || typeof block['tool_use_id'] !== 'string') continue
+      if (this.askCalls.has(block['tool_use_id'])) continue
       const text = cutOutput(resultText(block['content']))
       const failed = block['is_error'] === true
       if (text !== '' || failed || change) {
@@ -746,8 +773,82 @@ export class StreamJsonParser {
       text,
       ...(this.sessionId ? { sessionId: this.sessionId } : {}),
       ...(this.usage ? { usage: this.usage } : {}),
+      ...(this.asked ? { question: this.asked } : {}),
     }
   }
+
+  /**
+   * What the CLI asks before a tool call runs (`can_use_tool`), answered on stdin. The agent's
+   * question is shown to the person, who answers it in the chat, and the turn is stopped on it
+   * as Esc stops Claude Code's: a denied question is asked once more in plain words, a stopped
+   * one is not. A run in this mode has no other call to ask about; one that comes is refused,
+   * as `claude -p` refuses what nobody can approve.
+   */
+  private handleRequest(obj: Record<string, unknown>): DriverEvent[] {
+    const request = obj['request']
+    const id = obj['request_id']
+    if (typeof request !== 'object' || request === null || typeof id !== 'string') return []
+    const asks = request as Record<string, unknown>
+    // A request this version does not know is answered still, as failed: unanswered, the CLI would wait for it for ever.
+    if (asks['subtype'] !== 'can_use_tool') {
+      this.io?.write(JSON.stringify({ type: 'control_response', response: { subtype: 'error', request_id: id, error: `OpenAgent does not answer ${String(asks['subtype'])} requests` } }))
+      return []
+    }
+    const tool = typeof asks['tool_name'] === 'string' ? asks['tool_name'] : 'the tool'
+    if (tool === ASK_TOOL) {
+      if (this.asked !== undefined) return []
+      const question = askedQuestion(asks['input'])
+      if (question !== undefined) {
+        this.asked = question
+        this.io?.write(JSON.stringify({ type: 'control_request', request_id: `stop-${id}`, request: { subtype: 'interrupt' } }))
+        return []
+      }
+      this.deny(id, 'This question could not be shown. Ask it in your reply instead.')
+      return [{ type: 'notice', message: `Claude Code asked a question in a shape this version of OpenAgent cannot read, so the agent was told to ask it in words.` }]
+    }
+    this.deny(id, `${tool} needs a person's approval, and nobody here can give it.`)
+    return []
+  }
+
+  private deny(id: string, message: string): void {
+    this.io?.write(JSON.stringify({ type: 'control_response', response: { subtype: 'success', request_id: id, response: { behavior: 'deny', message } } }))
+  }
+}
+
+/** Claude Code's own tool for asking the person, given to an agent whose CLI is asked over stdin. */
+const ASK_TOOL = 'AskUserQuestion'
+
+/** How Claude Code marks the option it recommends: at the end of the option's label. */
+const RECOMMENDED = /\s*\(Recommended\)$/i
+
+/**
+ * The question an AskUserQuestion call asks, from its input: `{questions: [{question, header,
+ * options: [{label, description}], multiSelect}]}`. The call may ask up to four at once; the card
+ * shows one, the first, and the agent asks the rest after its answer. Claude Code marks its
+ * recommended option by ending the label with "(Recommended)", which the card says its own way.
+ */
+export function askedQuestion(input: unknown): Question | undefined {
+  const questions = typeof input === 'object' && input !== null ? (input as Record<string, unknown>)['questions'] : undefined
+  const first: unknown = Array.isArray(questions) ? questions[0] : undefined
+  if (typeof first !== 'object' || first === null) return undefined
+  const asked = first as Record<string, unknown>
+  const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '')
+  let recommended: string | undefined
+  const options: QuestionOption[] = []
+  for (const [at, raw] of (Array.isArray(asked['options']) ? (asked['options'] as unknown[]) : []).entries()) {
+    const option = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
+    const named = text(option['label'])
+    const label = named.replace(RECOMMENDED, '')
+    if (label === '') continue
+    const id = `opt:${at}`
+    if (recommended === undefined && label !== named) recommended = id
+    const detail = text(option['description'])
+    options.push({ id, label, ...(detail !== '' ? { detail } : {}) })
+  }
+  const title = text(asked['question'])
+  if (title === '' || options.length === 0) return undefined
+  const header = text(asked['header'])
+  return { title, ...(header !== '' ? { header } : {}), options, ...(recommended !== undefined ? { recommended } : {}), ...(asked['multiSelect'] === true ? { multi: true } : {}) }
 }
 
 /**

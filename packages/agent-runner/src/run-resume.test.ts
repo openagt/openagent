@@ -122,6 +122,28 @@ test('a run whose last turn asked ends waiting and keeps its checkout; the answe
   }
 })
 
+test('a question asked with the agent’s own tool ends the run waiting as a written one does, and its answer resumes it', async () => {
+  const repo = await testRepo()
+  try {
+    // As Claude Code's AskUserQuestion: the agent said a sentence, and the driver stopped the turn on its question.
+    const question = { title: 'Which colour?', header: 'Colour', options: [{ id: 'opt:0', label: 'Blue' }, { id: 'opt:1', label: 'Green', detail: 'Light green' }], recommended: 'opt:0' }
+    const asking = new FakeDriver({ turns: [{ text: 'One thing first.', question }], sessionId: 's-tool' })
+    const first = await runCommand(repo, { prompt: 'Make the background light', driver: asking, now: () => NOW, gitHost: noGitHost })
+    assert.equal(first.status, 'waiting')
+    const diary = await readUntimedDiary(repo, first.id)
+    assert.deepEqual(diary.find(l => l.kind === 'question'), { kind: 'question', ...question })
+    assert.deepEqual(diary.at(-1), { kind: 'ended', status: 'waiting' })
+
+    const finishing = new FakeDriver({ turns: [{ text: 'Made it green.' }], sessionId: 's-tool' })
+    const second = await resumeRun(repo, { id: first.id, answer: 'Green', driver: finishing, now: () => NOW, gitHost: noGitHost })
+    assert.equal(second.status, 'done')
+    const resumed = (await readUntimedDiary(repo, first.id)).filter(l => l.kind === 'start').at(-1)
+    assert.equal(resumed?.['prompt'], 'You paused to ask: "Which colour?". The user chose: Green. Continue with that decision.')
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
 test('a resumed run whose conversation its coding agent no longer has goes on in a fresh one: the same run, its record saying where, its agent pointed at its record and pull request first', async () => {
   const repo = await testRepo()
   try {
