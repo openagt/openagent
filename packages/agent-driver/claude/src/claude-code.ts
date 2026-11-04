@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { readClaudeQuota } from './claude-code-quota.js'
 import { readClaudeModels } from './claude-code-models.js'
 import { accountEnv, CLAUDE_TOKEN_ENV } from './claude-accounts.js'
-import { type AccountRotation, type AgentCliParser, type CliIo, type Question, type QuestionOption, type ReadyPrompt, readyPrompt, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, cutOutput, callArgument, lineCount, patchSize, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, finishTurn, agentEnv, oneLine, attachLog, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverQuota, type DriverRateLimit, type DriverRateWindow, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
+import { type AccountRotation, type AgentCliParser, type CliIo, type Question, toolQuestion, type ReadyPrompt, readyPrompt, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, cutOutput, callArgument, lineCount, patchSize, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, finishTurn, agentEnv, oneLine, attachLog, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverQuota, type DriverRateLimit, type DriverRateWindow, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
 
 /** Claude Code permission modes we pass through to the CLI. */
 export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan'
@@ -820,37 +820,14 @@ export class StreamJsonParser {
 /** Claude Code's own tool for asking the person, given to an agent whose CLI is asked over stdin. */
 const ASK_TOOL = 'AskUserQuestion'
 
-/** How Claude Code marks the option it recommends: at the end of the option's label. */
-const RECOMMENDED = /\s*\(Recommended\)$/i
-
 /**
  * The question an AskUserQuestion call asks, from its input: `{questions: [{question, header,
  * options: [{label, description}], multiSelect}]}`. The call may ask up to four at once; the card
- * shows one, the first, and the agent asks the rest after its answer. Claude Code marks its
- * recommended option by ending the label with "(Recommended)", which the card says its own way.
+ * shows one, the first, and the agent asks the rest after its answer.
  */
 export function askedQuestion(input: unknown): Question | undefined {
   const questions = typeof input === 'object' && input !== null ? (input as Record<string, unknown>)['questions'] : undefined
-  const first: unknown = Array.isArray(questions) ? questions[0] : undefined
-  if (typeof first !== 'object' || first === null) return undefined
-  const asked = first as Record<string, unknown>
-  const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '')
-  let recommended: string | undefined
-  const options: QuestionOption[] = []
-  for (const [at, raw] of (Array.isArray(asked['options']) ? (asked['options'] as unknown[]) : []).entries()) {
-    const option = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
-    const named = text(option['label'])
-    const label = named.replace(RECOMMENDED, '')
-    if (label === '') continue
-    const id = `opt:${at}`
-    if (recommended === undefined && label !== named) recommended = id
-    const detail = text(option['description'])
-    options.push({ id, label, ...(detail !== '' ? { detail } : {}) })
-  }
-  const title = text(asked['question'])
-  if (title === '' || options.length === 0) return undefined
-  const header = text(asked['header'])
-  return { title, ...(header !== '' ? { header } : {}), options, ...(recommended !== undefined ? { recommended } : {}), ...(asked['multiSelect'] === true ? { multi: true } : {}) }
+  return Array.isArray(questions) ? toolQuestion(questions[0]) : undefined
 }
 
 /**

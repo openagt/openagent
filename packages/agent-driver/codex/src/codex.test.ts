@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { test } from 'node:test'
 import { PassThrough, Readable } from 'node:stream'
-import { CodexDriver, codexReady, defaultCodexHome, parseCodexModels, parseCodexUsage } from './codex.js'
+import { CodexAppServerParser, CodexDriver, codexQuestion, codexReady, defaultCodexHome, parseCodexModels, parseCodexUsage } from './codex.js'
 import { AgentExitError, ConversationGoneError, type SpawnLike, type SpawnedProcess, type Driver, type DriverEvent } from '@openagt/agent-driver'
 
 type Message = { method: string; params: Record<string, unknown> }
@@ -42,7 +42,9 @@ const REAL_TURN: Message[] = [
 /** How a {@link fakeAppServer} behaves. */
 interface FakeServer {
   /** What it sends once the turn has started. Default {@link REAL_TURN}. */
-  turn?: Message[]
+  turn?: unknown[]
+  /** What it sends when asked to interrupt the turn, after answering. */
+  interrupted?: unknown[]
   /** What it sends right after answering `thread/resume`. */
   afterResume?: Message[]
   /** The method it refuses, with the message. */
@@ -90,6 +92,11 @@ function fakeAppServer(server: FakeServer = {}, seen?: (s: Seen) => void): Spawn
         const threadId = msg.method === 'thread/resume' ? msg.params?.['threadId'] : 'thread-1'
         send({ id: msg.id, result: { thread: { id: threadId }, model: 'gpt-5.6-terra', ...(server.reasoningEffort !== undefined ? { reasoningEffort: server.reasoningEffort } : { reasoningEffort: null }) } })
         if (msg.method === 'thread/resume') for (const m of server.afterResume ?? []) send(m)
+        return
+      }
+      if (msg.method === 'turn/interrupt') {
+        send({ id: msg.id, result: {} })
+        for (const m of server.interrupted ?? []) send(m)
         return
       }
       if (msg.method === 'turn/start') {
@@ -229,8 +236,8 @@ test('a Codex turn ignores noise that is not a message (#539)', async () => {
 
 test('a Codex turn asks the app server for a sandboxed conversation in the workspace, never asking approval', async () => {
   const seen = await spawnedWith({}, { cwd: '/ws' })
-  // Only the app server: no bypass of the sandbox, and no prompt as an argument.
-  assert.deepEqual([...seen.args], ['app-server'])
+  // Only the app server, with the agent's own question tool on: no bypass of the sandbox, and no prompt as an argument.
+  assert.deepEqual([...seen.args], ['app-server', '-c', 'features.default_mode_request_user_input=true'])
   assert.deepEqual(requests(seen), [
     { method: 'initialize', params: { clientInfo: { name: 'agent-driver', version: '1' } } },
     { method: 'initialized', params: undefined },
@@ -249,14 +256,15 @@ test('a session with nothing to do in its folder is started without what it woul
   assert.ok(off.includes('apps') && off.includes('plugins') && off.includes('browser_use'), 'and what it would reach out with')
   assert.equal(off.length, 13)
   assert.equal([...bare.args].filter(arg => arg === '-c').length, off.length, 'each one its own override')
-  // Every other session is started as it always was.
+  assert.ok(!bare.args.includes('features.default_mode_request_user_input=true'), 'nor its question tool, for nothing to ask about')
+  // Every other session is started as it always was, its question tool on.
   const usual = await spawnedWith({}, { cwd: '/ws' })
-  assert.ok(![...usual.args].some(arg => arg.startsWith('features.')), 'nothing turned off for a session with work to do')
+  assert.deepEqual([...usual.args].filter(arg => arg.startsWith('features.')), ['features.default_mode_request_user_input=true'], 'nothing turned off for a session with work to do')
 })
 
 test('CodexDriver tells Codex how hard to think when the caller asked, and says nothing when it did not', async () => {
   const asked = await spawnedWith({}, { cwd: '/ws', effort: 'xhigh' })
-  assert.deepEqual([...asked.args], ['app-server', '-c', 'model_reasoning_effort="xhigh"'])
+  assert.deepEqual([...asked.args], ['app-server', '-c', 'model_reasoning_effort="xhigh"', '-c', 'features.default_mode_request_user_input=true'])
   const plain = await spawnedWith({}, { cwd: '/ws' })
   assert.ok(![...plain.args].some(arg => arg.includes('model_reasoning_effort')), 'Codex thinks as it does by default')
 })
@@ -267,7 +275,7 @@ test('CodexDriver makes the git dir writable, so a plain checkout can commit (#1
     execFileSync('git', ['init', '-q'], { cwd: dir })
     const seen = await spawnedWith({}, { cwd: dir })
     // `workspace-write` keeps a root `.git/` read-only; without this the commit fails on `.git/index.lock`.
-    assert.deepEqual([...seen.args], ['app-server', '-c', `sandbox_workspace_write.writable_roots=["${join(dir, '.git')}"]`])
+    assert.deepEqual([...seen.args], ['app-server', '-c', `sandbox_workspace_write.writable_roots=["${join(dir, '.git')}"]`, '-c', 'features.default_mode_request_user_input=true'])
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -278,7 +286,7 @@ test('CodexDriver widens no read-only sandbox, even in a repository (#1747)', as
   try {
     execFileSync('git', ['init', '-q'], { cwd: dir })
     const seen = await spawnedWith({ sandbox: 'read-only' }, { cwd: dir })
-    assert.deepEqual([...seen.args], ['app-server'])
+    assert.deepEqual([...seen.args], ['app-server', '-c', 'features.default_mode_request_user_input=true'])
     assert.equal(requests(seen)[2]!.params && (requests(seen)[2]!.params as Record<string, unknown>)['sandbox'], 'read-only')
   } finally {
     await rm(dir, { recursive: true, force: true })
@@ -398,13 +406,13 @@ test('a Codex turn that fails keeps its session id on the log: a later resume co
 
 test('CodexDriver given no setup parts runs Codex as it is, in the person\'s own home', async () => {
   const { args, env } = await spawnedWith({ env: { PATH: '/bin' } })
-  assert.ok(!args.some(arg => arg.startsWith('features.')))
+  assert.ok(!args.some(arg => arg.startsWith('features.') && arg.endsWith('=false')), 'no part of it turned off')
   assert.equal(env['CODEX_HOME'], undefined)
 })
 
 test('CodexDriver turns memory and connectors off with Codex\'s own feature switches, each alone', async () => {
   const both = await spawnedWith({ env: {}, personal: { memory: false, connectors: false, skills: true } })
-  assert.deepEqual(both.args.filter((_, i, all) => all[i - 1] === '-c' && all[i]!.startsWith('features.')), ['features.memories=false', 'features.apps=false', 'features.plugins=false'])
+  assert.deepEqual(both.args.filter((_, i, all) => all[i - 1] === '-c' && all[i]!.startsWith('features.') && all[i]!.endsWith('=false')), ['features.memories=false', 'features.apps=false', 'features.plugins=false'])
   assert.equal(both.env['CODEX_HOME'], undefined, 'skills on: the person\'s own home')
   const memoryOn = await spawnedWith({ env: {}, personal: { memory: true, connectors: false, skills: true } })
   assert.ok(!memoryOn.args.includes('features.memories=false'))
@@ -757,4 +765,88 @@ test('a ready prompt opens the conversation at once and starts the turn only whe
   assert.equal(turn.text, 'Created hello.txt')
   assert.deepEqual(requests(seen!).at(-1), { method: 'turn/start', params: { threadId: 'thread-1', input: [{ type: 'text', text: 'Name this: fix the flaky login test', text_elements: [] }] } })
   assert.deepEqual((requests(seen!).find(r => r.method === 'thread/start')!.params as { developerInstructions?: string }).developerInstructions, 'You name coding sessions.')
+})
+
+// The request codex-cli 0.166.0 sends when its agent calls request_user_input
+// (`features.default_mode_request_user_input`), as read off a real turn on gpt-6-sol.
+const ASKED = {
+  threadId: 'thread-1',
+  turnId: 'turn-1',
+  itemId: 'call_d298',
+  questions: [
+    {
+      id: 'background_colour',
+      header: 'Background',
+      question: 'Which light colour would you like for the background of index.html?',
+      isOther: true,
+      isSecret: false,
+      options: [
+        { label: 'Light cream (Recommended)', description: 'A warm, pale cream background.' },
+        { label: 'Light blue', description: 'A soft, pale blue background.' },
+      ],
+    },
+  ],
+  isBlocking: false,
+  autoResolutionMs: null,
+}
+const QUESTION = {
+  title: 'Which light colour would you like for the background of index.html?',
+  header: 'Background',
+  options: [
+    { id: 'opt:0', label: 'Light cream', detail: 'A warm, pale cream background.' },
+    { id: 'opt:1', label: 'Light blue', detail: 'A soft, pale blue background.' },
+  ],
+  recommended: 'opt:0',
+}
+
+test('the agent’s request_user_input is the turn’s question: the turn is stopped on it, over and not failed, the question said once', async () => {
+  let seen: Seen | undefined
+  const events: DriverEvent[] = []
+  const turn: unknown[] = [
+    note('turn/started', { threadId: 'thread-1', turn: { id: 'turn-1', items: [], status: 'inProgress' } }),
+    item(false, { type: 'agentMessage', id: 'msg_1', text: 'I’ll ask which colour you want first.', phase: 'commentary' }),
+    { method: 'item/tool/requestUserInput', id: 0, params: ASKED },
+  ]
+  const session = await new CodexDriver({ spawn: fakeAppServer({ turn, interrupted: [completed('interrupted')] }, s => (seen = s)) }).start({ cwd: '/ws', onEvent: e => events.push(e) })
+  const result = await session.prompt('Make the background light; ask me the colour first.')
+  assert.deepEqual(result.question, QUESTION)
+  assert.equal(result.text, 'I’ll ask which colour you want first.')
+  assert.deepEqual(events.filter(e => e.type === 'question'), [{ type: 'question', question: QUESTION }])
+  assert.ok(!events.some(e => e.type === 'error'))
+  // Stopped as the person would stop it, and the request itself left for the stop to settle.
+  assert.deepEqual(requests(seen!).at(-1), { method: 'turn/interrupt', params: { threadId: 'thread-1', turnId: 'turn-1' } })
+  assert.ok(!seen!.messages.some(m => m['id'] === 0), 'the question is not answered: the person answers it in the chat')
+})
+
+test('a question no card can ask, a secret or one with nothing to pick, is refused as every other request is, and the turn goes on', async () => {
+  for (const question of [{ ...ASKED.questions[0], isSecret: true }, { ...ASKED.questions[0], options: null }]) {
+    let seen: Seen | undefined
+    const turn: unknown[] = [{ method: 'item/tool/requestUserInput', id: 7, params: { ...ASKED, questions: [question] } }, ...REAL_TURN]
+    const session = await new CodexDriver({ spawn: fakeAppServer({ turn }, s => (seen = s)) }).start({ cwd: '/ws' })
+    const result = await session.prompt('go')
+    assert.equal(result.question, undefined)
+    assert.equal(result.text, 'Created hello.txt')
+    assert.deepEqual(seen!.messages.find(m => m['id'] === 7), { id: 7, error: { code: -32601, message: 'agent-driver answers no requests' } })
+  }
+})
+
+test('a turn interrupted with no question of the agent’s still fails', async () => {
+  const session = await new CodexDriver({ spawn: fakeAppServer({ turn: [completed('interrupted')] }) }).start({ cwd: '/ws' })
+  await assert.rejects(session.prompt('go'), /interrupted/)
+})
+
+test('a question is read off request_user_input’s params: the first one, its descriptions the details', () => {
+  assert.deepEqual(codexQuestion(ASKED), QUESTION)
+  assert.equal(codexQuestion({ ...ASKED, questions: [] }), undefined)
+  assert.equal(codexQuestion(undefined), undefined)
+})
+
+test('the parser itself says a turn stopped on the agent’s question did not fail', () => {
+  const parser = new CodexAppServerParser({ text: 'go', cwd: '/ws', sandbox: 'workspace-write' })
+  const written: string[] = []
+  parser.converse({ write: line => void written.push(line), end: () => {} })
+  parser.push(JSON.stringify({ method: 'item/tool/requestUserInput', id: 0, params: ASKED }))
+  parser.push(JSON.stringify(completed('interrupted')))
+  assert.equal(parser.failure(), undefined)
+  assert.deepEqual(parser.result().question, QUESTION)
 })
