@@ -1,6 +1,6 @@
 import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 
 /** What a reader gets of an element: its words less the ones fading out of it (CrossFade). */
 const shownText = (el: Element): string | null => {
@@ -1320,5 +1320,37 @@ describe('EventList changed files', () => {
     expect(onOpenChange.mock.calls).toEqual([['docs/A.md']])
     rerender(<EventList events={events} setup={{ workspace: WS }} stick={false} />)
     expect(screen.queryByRole('button', { name: 'Show the change to A.md' })).toBeNull()
+  })
+})
+
+// A message sent after a turn ended: the run writes its prompt line seconds later, and Claude Code
+// on the web shows its moving line the moment the message is sent.
+describe('EventList a message just sent', () => {
+  const done: OpenAgentEvent[] = [
+    { kind: 'driver', event: { type: 'start', prompt: 'go' }, at: '2026-11-04T10:00:00.000Z' },
+    { kind: 'driver', event: { type: 'text', text: 'did it' }, at: '2026-11-04T10:00:05.000Z' },
+    { kind: 'driver', event: { type: 'result', text: '' }, at: '2026-11-04T10:00:06.000Z' },
+  ]
+
+  test('shows the moving line at once, with no tokens of the turn before', () => {
+    render(<EventList events={done} working sending="and again" stick={false} />)
+    const line = screen.getByTestId('live-line')
+    expect(line.querySelector('.dot-wave')).not.toBeNull()
+    expect(line.textContent).not.toMatch(/tokens/)
+  })
+
+  test('counts from the send, and goes on counting when the run writes its prompt line and its first thought', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-04T10:01:00.000Z'))
+    const { rerender } = render(<EventList events={done} working sending="and again" stick={false} />)
+    vi.setSystemTime(new Date('2026-11-04T10:01:07.000Z'))
+    const again: OpenAgentEvent[] = [
+      { kind: 'driver', event: { type: 'start', prompt: 'and again' }, at: '2026-11-04T10:01:06.000Z' },
+      { kind: 'driver', event: { type: 'thought', text: 'hm' }, at: '2026-11-04T10:01:06.500Z' },
+    ]
+    rerender(<EventList events={[...done, ...again]} working stick={false} />)
+    act(() => void vi.advanceTimersByTime(1000))
+    // 8 seconds from the send; from the prompt line it would be 2.
+    expect(screen.getByTestId('live-line').textContent).toContain('8s')
   })
 })

@@ -643,7 +643,15 @@ export function EventList({
   // It is no message at the end, which came and then went back up.
   const sentAnswer = sending !== undefined ? answeredQuestion(sending) : undefined
   const answeredInPlace = sentAnswer && choiceRows ? [...choiceRows.rows].find(([, row]) => row.pick === undefined && row.choice.title === sentAnswer.question)?.[0] : undefined
-  const kept: OpenAgentEvent[] = sending === undefined || answeredInPlace ? logged : [...logged, { kind: 'driver', event: { type: 'start', prompt: sending } }]
+  // The message just sent, as the prompt line its run is about to write: dated when it was sent, so
+  // the live line comes and counts from then, as Claude Code on the web's does the moment a message
+  // is sent, not seconds later when the run writes its first line.
+  const sentAt = useMemo(() => (sending !== undefined ? new Date().toISOString() : undefined), [sending])
+  // Its row holds no time, as one being sent shows none.
+  const sent: OpenAgentEvent | undefined = sending !== undefined ? { kind: 'driver', event: { type: 'start', prompt: sending } } : undefined
+  const kept: OpenAgentEvent[] = sent === undefined || answeredInPlace ? logged : [...logged, sent]
+  // Every event and the message just sent: what the turn going on is read off.
+  const told = sent === undefined ? events : [...events, sent]
   // The text of a row's message: the reply a question follows, without the question's block.
   const textOf = (e: OpenAgentEvent): string | null => {
     const text = messageText(e)
@@ -664,18 +672,28 @@ export function EventList({
   // the line counts again from then.
   let turnOverAt = -1
   let wokeAt: string | undefined
-  events.forEach((e, at) => {
+  told.forEach((e, at) => {
     if (e.kind !== 'driver') return
     if (e.event.type === 'result') {
       turnOverAt = at
+      wokeAt = undefined
+    } else if (isTurnBoundary(e)) {
+      // A new prompt starts a turn of its own, counted from that prompt.
+      turnOverAt = -1
       wokeAt = undefined
     } else if (turnOverAt >= 0 && wokeAt === undefined && isAgentsOwn(e)) wokeAt = e.at
   })
   // Or the turn stays open with the main agent blocked on its subagents' calls, idle all the same:
   // read off its own steps (`subagentWait`), with the same blank line and the same count from its wake.
   const blocked = subagentWait(events)
-  const waitsOnItsOwn = (turnOverAt >= 0 && wokeAt === undefined && turnOverAt > events.findIndex(isTurnBoundary) && !events.slice(turnOverAt + 1).some(isTurnBoundary)) || blocked.waiting
-  const turnStart = later(wokeAt, blocked.wokeAt) ?? [...unfolded].reverse().find(isTurnBoundary)?.at ?? unfolded[unfolded.length - 1]?.at
+  const waitsOnItsOwn = (turnOverAt >= 0 && wokeAt === undefined && turnOverAt > told.findIndex(isTurnBoundary) && !told.slice(turnOverAt + 1).some(isTurnBoundary)) || blocked.waiting
+  // A turn the person began by sending a message counts from the send, not from its prompt line,
+  // which its run writes seconds later: the count would go back to nothing when that line came.
+  const lastSent = useRef<string | undefined>(undefined)
+  if (sentAt !== undefined) lastSent.current = sentAt
+  const turnBoundary = [...unfolded].reverse().find(isTurnBoundary)
+  const sentTurn = lastSent.current !== undefined && turnBoundary !== undefined && turnBoundary !== sent && told.find(e => isTurnBoundary(e) && e !== sent && e.at !== undefined && e.at > lastSent.current!) === turnBoundary
+  const turnStart = later(wokeAt, blocked.wokeAt) ?? (sentTurn || (sent !== undefined && turnBoundary === sent) ? lastSent.current : turnBoundary?.at) ?? unfolded[unfolded.length - 1]?.at
   // The prompts that told this run one of its subagents ended: SUBAGENT rows, not the reader's own.
   const ends = new Map<OpenAgentEvent, SubagentEnd>()
   for (const e of shown) {
@@ -695,13 +713,13 @@ export function EventList({
   }))
   // How far the turn going on has got: what the live line says beside its seconds.
   let lastTurnAt = -1
-  events.forEach((e, at) => {
+  told.forEach((e, at) => {
     if (isTurnBoundary(e)) lastTurnAt = at
   })
   // The tokens the turn went through, said once it has answered something, as Claude Code on the
   // web says them: before that, the line is the dots and the seconds.
-  const turnSaid = events.slice(lastTurnAt + 1).some(e => e.kind === 'driver' && e.event.type === 'text' && (e.event as { subagent?: string }).subagent === undefined)
-  const turnTokens = turnSaid ? events.slice(lastTurnAt + 1).flatMap(e => (e.kind === 'driver' && e.event.type === 'tokens' ? [e.event.tokens] : [])).at(-1) : undefined
+  const turnSaid = told.slice(lastTurnAt + 1).some(e => e.kind === 'driver' && e.event.type === 'text' && (e.event as { subagent?: string }).subagent === undefined)
+  const turnTokens = turnSaid ? told.slice(lastTurnAt + 1).flatMap(e => (e.kind === 'driver' && e.event.type === 'tokens' ? [e.event.tokens] : [])).at(-1) : undefined
   // Once the coding agent said its session began, it is set up: what goes on is its own thinking.
   const begun = events.some(e => e.kind === 'session-update')
   // The call going on now is its steps row's, as Claude Code on the web's is: the row it continues,
