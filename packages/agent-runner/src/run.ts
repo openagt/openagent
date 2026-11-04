@@ -173,8 +173,8 @@ export interface RunOptions {
   git?: GitRunner
   /** The project's git host; the one the project declares when absent. */
   gitHost?: GitHost
-  /** The skills linked into the checkout beside the branches skill; the basic ones (`basic-skills.ts`) when absent. */
-  skills?: (repo: string) => Promise<readonly SkillLink[]>
+  /** The skills linked into the checkout beside the branches skill, for the run's agent; the basic ones (`basic-skills.ts`) when absent. */
+  skills?: (repo: string, agent: { ownQuestionTool?: boolean }) => Promise<readonly SkillLink[]>
   logs?: LogsDeps
   log?: (line: string) => void
 }
@@ -239,7 +239,7 @@ export async function runCommand(repo: string, opts: RunOptions): Promise<RunOut
     // Without one there is no run, and the record says so instead of a marker left running.
     let checkout: { path: string; branch: string }
     try {
-      const skills = await (opts.skills ?? basicSkills)(repo).catch((): SkillLink[] => [])
+      const skills = await (opts.skills ?? basicSkills)(repo, opts.driver).catch((): SkillLink[] => [])
       checkout = opts.branch !== undefined ? await attachCheckout(repo, { agentId: id, branch: opts.branch, skills }, git) : await createCheckout(repo, { agentId: id, skills, ...(opts.base !== undefined ? { base: opts.base } : {}) }, git)
     } catch (err) {
       naming?.stop.abort()
@@ -322,8 +322,8 @@ export interface ResumeOptions {
   git?: GitRunner
   /** The project's git host; the one the project declares when absent. */
   gitHost?: GitHost
-  /** The skills linked into the checkout beside the branches skill; the basic ones (`basic-skills.ts`) when absent. */
-  skills?: (repo: string) => Promise<readonly SkillLink[]>
+  /** The skills linked into the checkout beside the branches skill, for the run's agent; the basic ones (`basic-skills.ts`) when absent. */
+  skills?: (repo: string, agent: { ownQuestionTool?: boolean }) => Promise<readonly SkillLink[]>
   logs?: LogsDeps
   log?: (line: string) => void
 }
@@ -380,7 +380,7 @@ export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunO
     const branch = card.branch ?? agentBranchName(opts.id)
     const path = worktreePath(repo, opts.id)
     const kept = await stat(path).then(s => s.isDirectory(), () => false)
-    const skills = await (opts.skills ?? basicSkills)(repo).catch((): SkillLink[] => [])
+    const skills = await (opts.skills ?? basicSkills)(repo, opts.driver).catch((): SkillLink[] => [])
     const checkout: { path: string; branch: string; again?: true } = kept ? { path, branch } : await attachCheckout(repo, { agentId: opts.id, branch, skills, ...(previous.base !== undefined ? { base: previous.base } : {}) }, git)
     // A checkout that stayed was made by whatever version ran then: its links are brought to what a new one gets.
     if (kept) await relinkCheckout(repo, path, { skills }, git)

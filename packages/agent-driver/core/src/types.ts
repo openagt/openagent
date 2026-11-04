@@ -36,6 +36,12 @@ export interface Driver {
    * the caller maps it back to the choice.
    */
   readonly id: DriverImplId
+  /**
+   * The agent asks the person with a tool of its own, as Claude Code's AskUserQuestion, and a turn
+   * that asked ends on it with {@link DriverTurn.question}. Such an agent is given no skill that
+   * teaches another way to ask: it would ask that way instead.
+   */
+  readonly ownQuestionTool?: boolean
   /** Boot a session bound to a workspace directory. */
   start(opts: DriverStartOptions): Promise<DriverSession>
   /**
