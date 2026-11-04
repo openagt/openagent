@@ -18,6 +18,9 @@ already made, and lists it in its pull request; for anything else it proposes an
 - Nothing is written before the block, not the question again: the card is the question,
   and what the person needs to know to decide is in an option's detail, as every option
   has one. Picked over a few lines above the block, which repeated the card.
+- The block has a `header`, the question in a word or two ("Background"): a question the
+  person passed by with a message is one line named by it, `Asked "Background"  Replied in
+  chat`. Picked over naming it by the whole question, or by the same words every time.
 - An agent that has a tool of its own for asking the person uses it; the block is for an
   agent with none, as one a runner starts without a terminal. Picked over a mark the
   runner puts in the agent's environment: runner code, and a skill naming a runner.

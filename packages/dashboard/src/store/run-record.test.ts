@@ -73,6 +73,13 @@ test('a diary agent-driver\'s own log wrote reads back as OpenAgent\'s events: d
     options: [{ id: 'opt:0', label: 'Approve' }, { id: 'opt:1', label: 'Decline', stop: true }],
     recommended: 'opt:0',
   })
+  assert.deepEqual(fromDiaryLine({ kind: 'question', title: 'Which colour?', header: 'Background', options: [{ id: 'opt:0', label: 'Blue' }] }), {
+    kind: 'choice',
+    id: 'await-choices',
+    title: 'Which colour?',
+    header: 'Background',
+    options: [{ id: 'opt:0', label: 'Blue' }],
+  })
   assert.deepEqual(fromDiaryLine({ kind: 'ended', status: 'waiting' }), { kind: 'end', ok: false, waiting: true })
   assert.deepEqual(fromDiaryLine({ kind: 'ended', status: 'stopped', detail: 'by hand' }), { kind: 'end', ok: false, stopped: true, detail: 'by hand' })
 })

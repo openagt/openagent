@@ -15,7 +15,7 @@ import { ChangedFiles } from './ChangedFiles.js'
 import { turnChanges, type ChangedFile } from '../lib/turn-changes.js'
 import { SubagentMessage, SubagentSteps } from './SubagentLine.js'
 import { useSteadyText, useStillWriting } from '../lib/use-steady-text.js'
-import { LiveLine, ToolCalls, type CallOutput, type ToolStep } from './ToolCalls.js'
+import { Caret, LiveLine, ToolCalls, type CallOutput, type ToolStep } from './ToolCalls.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import {
   MessageScroller,
@@ -151,8 +151,32 @@ function NeedsInput() {
   )
 }
 
-/** A question's row: answered through its gate (`pick`), or still waiting for its answer. */
-type ChoiceRow = { choice: ChoiceRequest; pick?: string | readonly string[] }
+/**
+ * A question the person did not answer in its card but wrote a message instead of: one grey line,
+ * as Claude Code on the web folds it, `Asked "Background"  Replied in chat`, opening to the question.
+ * Named by its header, else by the question itself.
+ */
+function PassedChoice({ choice, footer }: { choice: ChoiceRequest; footer?: ReactNode }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
+      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} className="flex max-w-full min-w-0 items-center gap-1.5 py-0.5 text-left hover:text-foreground">
+        <span className="truncate">Asked “{choice.header ?? choice.title}”</span>
+        <span className="shrink-0">Replied in chat</span>
+        <Caret open={open} />
+      </button>
+      {open && (
+        <div className="mt-1.5 flex flex-col gap-1.5">
+          <div>{choice.title}</div>
+          {footer}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** A question's row: answered through its gate (`pick`), passed by with a message instead (`passed`), or still waiting for its answer. */
+type ChoiceRow = { choice: ChoiceRequest; pick?: string | readonly string[]; passed?: true }
 
 /**
  * Fold the log's choice traffic: which gates are a ✓ card, and which lines are no row.
@@ -193,6 +217,9 @@ function foldChoiceRows(events: OpenAgentEvent[]): {
       // re-fired and then closed by `end` must not wear a pick it never received.
       rows.set(firing.e, { choice, pick: resolved.e.picked })
       hidden.add(resolved.e)
+    } else if (events.slice(firing.at + 1).some(isTurnBoundary)) {
+      // Not answered in its card: the person wrote a message instead.
+      rows.set(firing.e, { choice, passed: true })
     }
   }
   return { rows, hidden }
@@ -830,7 +857,7 @@ export function EventList({
     else footers.set(last.row, last.text)
   }
   // The open question the keys answer: the newest.
-  const asking = [...shown].reverse().find(e => choiceRows?.rows.has(e) && choiceRows.rows.get(e)?.pick === undefined)
+  const asking = [...shown].reverse().find(e => choiceRows?.rows.has(e) && choiceRows.rows.get(e)?.pick === undefined && !choiceRows.rows.get(e)?.passed)
 
   return (
     <MessageScrollerProvider autoScroll={stick} defaultScrollPosition={openAt ?? (stick ? 'end' : 'start')}>
@@ -905,6 +932,8 @@ export function EventList({
                     )
                   ) : steps.has(e) ? (
                     <ToolCalls steps={steps.get(e)!} lead={setupInSteps && i === setupAt ? setupLead : undefined} live={e === liveHead && current !== undefined ? { call: current, since: turnStart } : undefined} />
+                  ) : choiceRow?.passed ? (
+                    <PassedChoice choice={choiceRow.choice} footer={footers.has(e) ? <ReplyFooter text={footers.get(e)!} at={at} /> : undefined} />
                   ) : choiceRow && choiceRow.pick === undefined && projectId !== undefined && agentId !== undefined ? (
                     // The question the agent waits on, answered here, under what it said.
                     typing ? null : <div className="mt-1 flex min-w-0 flex-1 flex-col gap-1.5">

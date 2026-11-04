@@ -22,6 +22,8 @@ export interface ChoiceRequest {
   id: string
   /** The question shown above the options (e.g. "Approve this plan?"). */
   title: string
+  /** A word or two naming the question ("Background"), when the agent gave one: what the chat calls it once it was passed by. */
+  header?: string
   /** The options to choose between (at least one). */
   options: readonly ChoiceOption[]
   /**

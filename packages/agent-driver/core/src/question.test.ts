@@ -42,6 +42,11 @@ test('the last usable block wins, falling back past a malformed one', () => {
   assert.equal(parseQuestion(text)?.title, 'Second')
 })
 
+test('a header names the question in a word or two; a blank one is left out', () => {
+  assert.equal(parseQuestion(block('{ "title": "Which colour?", "header": " Background ", "options": [{ "label": "Blue" }] }'))?.header, 'Background')
+  assert.equal(parseQuestion(block('{ "title": "Which colour?", "header": "", "options": [{ "label": "Blue" }] }'))?.header, undefined)
+})
+
 test('the continuation prompt names the question and the answer', () => {
   assert.equal(continuationPrompt('Ship it?', 'Approve'), 'You paused to ask: "Ship it?". The user chose: Approve. Continue with that decision.')
 })

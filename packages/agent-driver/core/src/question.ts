@@ -7,7 +7,7 @@
  * The block, fenced and tagged `await-choices`, is JSON:
  *
  * ```await-choices
- * { "title": "<the question>", "options": [{ "label": "<option>", "detail": "<one-liner>" }], "recommended": "<label>" }
+ * { "title": "<the question>", "header": "<a word or two>", "options": [{ "label": "<option>", "detail": "<one-liner>" }], "recommended": "<label>" }
  * ```
  *
  * `stop: true` on an option marks an answer that ends the session instead of resuming the agent;
@@ -37,6 +37,8 @@ export interface QuestionOption {
 export interface Question {
   /** The question shown above the options. */
   title: string
+  /** A word or two naming the question ("Background"): what it is called once it is passed by. */
+  header?: string
   /** The options to pick between: at least one, or the block is not a question. */
   options: QuestionOption[]
   /** The option to default to when nobody is there to answer, when the agent named one. */
@@ -101,8 +103,10 @@ function parseBody(body: string): Question | undefined {
   const named = str(record['recommended'])
   const recommended = named ? (options.find(o => o.id === named) ?? options.find(o => o.label === named))?.id : undefined
   const file = str(record['file'])
+  const header = str(record['header'])
   return {
     title: str(record['title']) || 'Which option?',
+    ...(header ? { header } : {}),
     options,
     ...(recommended ? { recommended } : {}),
     ...(record['multi'] === true ? { multi: true } : {}),

@@ -399,6 +399,23 @@ describe('EventList question and answer', () => {
     expect(screen.getByTestId('live-line').textContent).toBe('')
   })
 
+  test('a question passed by with a message instead is one grey line, named by its header, opening to the question', () => {
+    const header = asked.map(e => (e.kind === 'choice' ? { ...e, header: 'Colour' } : e))
+    render(<EventList events={[...header, { kind: 'driver', event: { type: 'start', prompt: 'run ls first' } }, { kind: 'driver', event: { type: 'text', text: 'Done.' } }] as OpenAgentEvent[]} projectId="p1" agentId="r1" stick={false} />)
+    expect(screen.queryByRole('region', { name: 'Which color do you prefer?' })).toBeNull()
+    const line = screen.getByRole('button', { name: /Asked “Colour”\s*Replied in chat/ })
+    expect(screen.queryByText('Which color do you prefer?', { selector: 'div' })).toBeNull()
+    fireEvent.click(line)
+    expect(screen.getByText('Which color do you prefer?', { selector: 'div' })).toBeTruthy()
+    // Nothing waits on it any longer.
+    expect(screen.getByTestId('live-line').textContent).not.toContain('Needs your input')
+  })
+
+  test('with no header, the passed question is named by the question itself', () => {
+    render(<EventList events={[...asked, { kind: 'driver', event: { type: 'start', prompt: 'run ls first' } }] as OpenAgentEvent[]} projectId="p1" agentId="r1" stick={false} />)
+    expect(screen.getByRole('button', { name: /Asked “Which color do you prefer\?”/ })).toBeTruthy()
+  })
+
   test('the card waits for the words above it: not while they are being typed, nor while more are coming', async () => {
     const long = 'Three tasks, each with its own files. '.repeat(10)
     const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: long } }
