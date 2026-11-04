@@ -150,15 +150,14 @@ export function Caret({ open = false }: { open?: boolean }) {
 }
 
 /**
- * The moving dots in front of what is going on now. From a width where the chat has room on its
- * left they hang there, in front of the words' column, so the words stand where the line's words
- * will stand once it is done; on a phone they come first on the line. They are level with the
- * middle of the words' small letters, a pixel and a half under the middle of the line (measured on
- * the page's 14px font), not with the line's middle, which reads as above the words.
+ * The moving dots in front of what is going on now, at the start of the words' own column, where
+ * the line's words start, with the words after them. They are level with the middle of the words'
+ * small letters, a pixel and a half under the middle of the line (measured on the page's 14px
+ * font), not with the line's middle, which reads as above the words.
  */
 export function LiveDots() {
   return (
-    <span className="flex shrink-0 items-center max-sm:relative max-sm:top-[1.5px] sm:absolute sm:top-[calc(50%+1.5px)] sm:right-full sm:mr-2 sm:-translate-y-1/2">
+    <span className="relative top-[1.5px] flex shrink-0 items-center">
       <Dots />
     </span>
   )
@@ -287,7 +286,7 @@ export function ToolCalls({ steps, lead, live }: { steps: readonly ToolStep[]; l
     <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
       {/* The pointer anywhere on the line, as wide as the chat, lights its words a step: the
           grey ones to the file's dimmed white, the file to full white, as Claude Code's do. */}
-      <div className="group/status relative flex" {...(live ? { role: 'status' } : {})}>
+      <div className="group/status relative flex items-center gap-2" {...(live ? { role: 'status' } : {})}>
         {live && <LiveDots />}
         {opens ? (
           <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={words} className="flex min-w-0 items-center gap-1.5 py-0.5 text-left hover:text-foreground">
