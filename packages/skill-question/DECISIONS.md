@@ -15,6 +15,9 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The skill's description says when to use it, every time the agent is about to ask, not
   what it teaches: Sonnet took a description of how to ask for one it did not need and
   asked in plain words. Picked over a line about asking in the agent's prompt.
+- Nothing is written before the block, not the question again: the card is the question,
+  and what the person needs to know to decide is in an option's detail, as every option
+  has one. Picked over a few lines above the block, which repeated the card.
 - An agent that has a tool of its own for asking the person uses it; the block is for an
   agent with none, as one a runner starts without a terminal. Picked over a mark the
   runner puts in the agent's environment: runner code, and a skill naming a runner.
