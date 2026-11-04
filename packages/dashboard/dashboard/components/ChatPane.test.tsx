@@ -136,6 +136,10 @@ describe('the chat\'s rows and the message box over their end', () => {
     const button = document.querySelector<HTMLElement>('[data-slot="message-scroller-button"]')!.className.split(' ')
     expect(button).toContain('data-[direction=end]:bottom-[calc(var(--chat-bottom,0px)+1.25rem)]')
     expect(button).not.toContain('data-[direction=end]:bottom-3')
+    // A round button with an arrow and no words, as Claude Code on the web's.
+    const jump = screen.getByRole('button', { name: 'Jump to latest', hidden: true })
+    expect(jump.className.split(' ')).toEqual(expect.arrayContaining(['size-9', 'rounded-full']))
+    expect(jump.textContent).toBe('')
     expect(document.querySelector('[data-slot="message-scroller"]')!.className.split(' ')).toContain('isolate')
   })
 

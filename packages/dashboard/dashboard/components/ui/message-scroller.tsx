@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react'
-import { ArrowDown } from 'lucide-react'
+import { ArrowDown, ArrowUp } from 'lucide-react'
 import {
   MessageScroller as MessageScrollerPrimitive,
   useMessageScroller,
@@ -72,28 +72,26 @@ export function MessageScrollerItem({ className, scrollAnchor = false, ...props 
   )
 }
 
+/**
+ * The way back to the chat's end, as Claude Code on the web's: a round button with an arrow, over a
+ * blur of what is under it, coming and going by fading.
+ */
 export function MessageScrollerButton({ direction = 'end', className, children, ...props }: ComponentProps<typeof MessageScrollerPrimitive.Button>) {
   return (
     <MessageScrollerPrimitive.Button
       data-slot="message-scroller-button"
       data-direction={direction}
       direction={direction}
+      aria-label={direction === 'end' ? 'Jump to latest' : 'Jump to start'}
       className={cn(
-        'absolute left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full border border-border bg-background/90 px-3 py-1 text-xs text-foreground shadow-sm backdrop-blur transition-[translate,scale,opacity] duration-200 hover:bg-accent',
-        'data-[active=false]:pointer-events-none data-[active=false]:scale-95 data-[active=false]:opacity-0',
-        'data-[active=true]:translate-y-0 data-[active=true]:scale-100 data-[active=true]:opacity-100',
-        'data-[direction=end]:bottom-3 data-[direction=end]:data-[active=false]:translate-y-full',
-        'data-[direction=start]:top-3 data-[direction=start]:data-[active=false]:-translate-y-full',
+        'absolute left-1/2 z-10 flex size-9 -translate-x-1/2 items-center justify-center rounded-full border border-border/60 bg-muted/80 text-foreground shadow-[0_2px_4px_rgb(0_0_0/0.07),0_6px_16px_rgb(0_0_0/0.24)] backdrop-blur-sm transition-opacity duration-200 hover:bg-accent',
+        'data-[active=false]:pointer-events-none data-[active=false]:opacity-0 data-[active=true]:opacity-100',
+        'data-[direction=end]:bottom-3 data-[direction=start]:top-3',
         className,
       )}
       {...props}
     >
-      {children ?? (
-        <>
-          Jump to latest
-          <ArrowDown className="size-3.5" aria-hidden />
-        </>
-      )}
+      {children ?? (direction === 'end' ? <ArrowDown className="size-5" strokeWidth={1.5} aria-hidden /> : <ArrowUp className="size-5" strokeWidth={1.5} aria-hidden />)}
     </MessageScrollerPrimitive.Button>
   )
 }
