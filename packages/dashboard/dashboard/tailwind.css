@@ -198,16 +198,18 @@ html[data-pinned] body {
 .dot-wave > span:nth-child(3) {
   animation-delay: 0.3s;
 }
+/* The wave stays on the middle of the words beside it: a dot lit goes a pixel up from it and a dot
+   dimmed a pixel down, so the line of dots reads level with the words, not above them. */
 @keyframes dot-wave {
   0%,
   60%,
   100% {
     opacity: 0.35;
-    transform: translateY(0);
+    transform: translateY(1px);
   }
   30% {
     opacity: 1;
-    transform: translateY(-3px);
+    transform: translateY(-1px);
   }
 }
 .morph-in {
