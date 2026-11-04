@@ -63,7 +63,7 @@ describe('callsSummary', () => {
     expect(words([toolCall('Read', '/repo/README.md'), toolCall('Read', '/repo/index.html'), toolCall('Grep', 'favicon'), toolCall('Glob', '**/*.md')])).toBe('Read 2 files, searched code, found files')
     // A file read twice is one file; two searches are still "searched code".
     expect(words([toolCall('Read', '/repo/a.ts'), toolCall('Read', '/repo/a.ts'), toolCall('Grep', 'a'), toolCall('Grep', 'b')])).toBe('Read a file, searched code')
-    expect(words([bash, toolCall('Skill', 'question'), toolCall('mcp__github__get_me'), toolCall('ToolSearch')])).toBe('Ran a command, used 3 tools')
+    expect(words([bash, toolCall('Skill', 'ask'), toolCall('mcp__github__get_me'), toolCall('ToolSearch')])).toBe('Ran a command, used 3 tools')
   })
 
   test('an edit is said by its file with how much it changed, and is no command', () => {

@@ -41,18 +41,18 @@ test('every project gets logs and question; the git host\'s skill only where the
   const repo = await testRepo()
   try {
     // The test project's remote is a folder on this machine: no git host answers for it.
-    assert.deepEqual((await basicSkills(repo)).map(skill => skill.name), ['logs', 'question'])
+    assert.deepEqual((await basicSkills(repo)).map(skill => skill.name), ['logs', 'ask'])
     await git(['remote', 'set-url', 'origin', 'https://gitlab.com/someone/project.git'], repo)
-    assert.deepEqual((await basicSkills(repo)).map(skill => skill.name), ['logs', 'question'])
+    assert.deepEqual((await basicSkills(repo)).map(skill => skill.name), ['logs', 'ask'])
     await git(['remote', 'set-url', 'origin', 'git@github.com:someone/project.git'], repo)
-    assert.deepEqual((await basicSkills(repo)).map(skill => skill.name), ['logs', 'question', 'github'])
-    assert.deepEqual((await everyBasicSkill()).map(skill => skill.name), ['logs', 'question', 'github'], 'a cleanup knows all of them, whatever the remote')
+    assert.deepEqual((await basicSkills(repo)).map(skill => skill.name), ['logs', 'ask', 'github'])
+    assert.deepEqual((await everyBasicSkill()).map(skill => skill.name), ['logs', 'ask', 'github'], 'a cleanup knows all of them, whatever the remote')
     // A skill with a command brings its package; one that is only a text brings none.
     const byName = Object.fromEntries((await everyBasicSkill()).map(skill => [skill.name, skill]))
     assert.equal(byName['logs']!.package?.name, '@openagt/skill-logs')
     assert.deepEqual(Object.keys(byName['logs']!.package!.bins), ['logs'])
     assert.equal(byName['github']!.package?.name, '@openagt/skill-github')
-    assert.equal(byName['question']!.package, undefined)
+    assert.equal(byName['ask']!.package, undefined)
   } finally {
     await removeRepo(repo)
   }
@@ -100,19 +100,19 @@ test('a project that tracks its own copy of a basic skill keeps it in the checko
   const repo = await testRepo()
   try {
     const { mkdir, writeFile } = await import('node:fs/promises')
-    await mkdir(join(repo, '.claude', 'skills', 'question'), { recursive: true })
-    await writeFile(join(repo, '.claude', 'skills', 'question', 'SKILL.md'), '---\nname: question\n---\nThe project\'s own way to ask.\n')
+    await mkdir(join(repo, '.claude', 'skills', 'ask'), { recursive: true })
+    await writeFile(join(repo, '.claude', 'skills', 'ask', 'SKILL.md'), '---\nname: ask\n---\nThe project\'s own way to ask.\n')
     await git(['add', '-A'], repo)
     await git(['commit', '-q', '-m', 'our question skill'], repo)
     await git(['push', '-q', 'origin', 'main'], repo)
     const { path } = await createCheckout(repo, { agentId: 'a2', skills: await basicSkills(repo) })
-    assert.match(await readFile(join(path, '.claude', 'skills', 'question', 'SKILL.md'), 'utf8'), /The project's own way to ask/)
+    assert.match(await readFile(join(path, '.claude', 'skills', 'ask', 'SKILL.md'), 'utf8'), /The project's own way to ask/)
     assert.equal((await git(['status', '--porcelain'], path)).trim(), '')
     // Nothing hides the project's own folder: a file a person adds beside its text shows in git.
-    assert.ok(!(await readFile(join(path, '.claude', 'skills', '.gitignore'), 'utf8')).split('\n').includes('/question'), 'the tracked copy is not hidden')
-    assert.ok((await readFile(join(path, '.agents', 'skills', '.gitignore'), 'utf8')).split('\n').includes('/question'), 'the folder the project has no copy in is linked and hidden')
-    await writeFile(join(path, '.claude', 'skills', 'question', 'notes.md'), 'more\n')
-    assert.equal((await git(['status', '--porcelain'], path)).trim(), '?? .claude/skills/question/notes.md')
+    assert.ok(!(await readFile(join(path, '.claude', 'skills', '.gitignore'), 'utf8')).split('\n').includes('/ask'), 'the tracked copy is not hidden')
+    assert.ok((await readFile(join(path, '.agents', 'skills', '.gitignore'), 'utf8')).split('\n').includes('/ask'), 'the folder the project has no copy in is linked and hidden')
+    await writeFile(join(path, '.claude', 'skills', 'ask', 'notes.md'), 'more\n')
+    assert.equal((await git(['status', '--porcelain'], path)).trim(), '?? .claude/skills/ask/notes.md')
   } finally {
     await removeRepo(repo)
   }

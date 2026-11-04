@@ -8,7 +8,7 @@ test('the list holds 20 skills in six groups, everything ticked but the two that
   assert.equal(new Set(SKILL_NAMES).size, 20, 'no skill twice')
   assert.equal(GROUPS.length, 6)
   assert.deepEqual(GROUPS.filter(group => !group.ticked).flatMap(group => group.skills), ['browser', 'discord'])
-  for (const basic of ['branches', 'logs', 'question', 'github', 'orchestration', 'tickets', 'queue']) assert.ok(!SKILL_NAMES.includes(basic), `${basic} comes with every run`)
+  for (const basic of ['branches', 'logs', 'ask', 'github', 'orchestration', 'tickets', 'queue']) assert.ok(!SKILL_NAMES.includes(basic), `${basic} comes with every run`)
 })
 
 test('every skill is carried with its own package\'s text: its name, a description, a version, and its command by full name only', async () => {

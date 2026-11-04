@@ -68,7 +68,7 @@
     "@openagt/skill-github": "workspace:*",
     "@openagt/skill-logs": "workspace:*",
     "@openagt/skill-orchestration": "workspace:*",
-    "@openagt/skill-question": "workspace:*",
+    "@openagt/skill-ask": "workspace:*",
     "@openagt/skill-queue": "workspace:*",
     "@openagt/skill-tickets": "workspace:*",
     "@openagt/skill-scheduler": "workspace:*",

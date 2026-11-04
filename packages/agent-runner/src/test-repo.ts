@@ -20,7 +20,7 @@ export const git = nodeGitRunner()
  */
 export function handDownBasicSkills(): void {
   const require = createRequire(import.meta.url)
-  process.env[SKILLS_ENV] = ['@openagt/skill-logs', '@openagt/skill-question', '@openagt/skill-github'].map(name => dirname(require.resolve(`${name}/package.json`))).join(delimiter)
+  process.env[SKILLS_ENV] = ['@openagt/skill-logs', '@openagt/skill-ask', '@openagt/skill-github'].map(name => dirname(require.resolve(`${name}/package.json`))).join(delimiter)
 }
 
 export const RETRIED_RM = { recursive: true, force: true, maxRetries: 10 } as const
