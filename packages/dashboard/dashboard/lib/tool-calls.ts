@@ -201,6 +201,54 @@ export function doingOf(words: string): string | undefined {
   return ingOf(first) + more
 }
 
+/**
+ * What the agent wrote about a call, said as done: "Wait 10 seconds then list files" becomes
+ * "Waited 10 seconds then listed files", as Claude Code on the web's row says a call once it is
+ * over. By the same rules as `doingOf`; words it does not know to turn are `undefined`.
+ */
+export function doneOf(words: string): string | undefined {
+  const match = /^([A-Za-z][A-Za-z-]*)(.*)$/s.exec(words.trim())
+  if (!match) return undefined
+  const [, first, rest] = match as unknown as [string, string, string]
+  const verb = stemOf(first.toLowerCase())
+  if (verb === undefined) return undefined
+  const more = rest.replace(/\b(and|then)(\s+)([A-Za-z][A-Za-z-]*)/g, (whole, joint: string, space: string, next: string) => {
+    const stem = stemOf(next.toLowerCase())
+    return stem !== undefined ? `${joint}${space}${asWritten(next, pastOf(stem))}` : whole
+  })
+  return asWritten(first, pastOf(verb)) + more
+}
+
+/** The verb a word is, as this knows it: "list", or "listing" said as going on. */
+function stemOf(word: string): string | undefined {
+  if (VERBS.has(word)) return word
+  if (!word.endsWith('ing')) return undefined
+  const stem = word.slice(0, -3)
+  return [stem, `${stem}e`, stem.slice(0, -1), stem.endsWith('y') ? `${stem.slice(0, -1)}ie` : undefined].find(verb => verb !== undefined && VERBS.has(verb))
+}
+
+/** A verb this knows, in its past form. */
+function pastOf(verb: string): string {
+  const irregular = IRREGULAR[verb]
+  if (irregular !== undefined) return irregular
+  if (DOUBLED.has(verb)) return `${verb}${verb.at(-1)}ed`
+  if (verb.endsWith('e')) return `${verb}d`
+  if (/[^aeiou]y$/.test(verb)) return `${verb.slice(0, -1)}ied`
+  return `${verb}ed`
+}
+
+/** The verbs whose past is a word of its own: "run", "ran". */
+const IRREGULAR: Record<string, string> = {
+  build: 'built', cut: 'cut', drive: 'drove', find: 'found', get: 'got', give: 'gave', hold: 'held', keep: 'kept', leave: 'left', make: 'made', put: 'put',
+  read: 'read', rebuild: 'rebuilt', reread: 'reread', 're-read': 're-read', rerun: 'reran', reset: 'reset', rewrite: 'rewrote', run: 'ran',
+  send: 'sent', set: 'set', sleep: 'slept', split: 'split', take: 'took', tell: 'told', write: 'wrote',
+}
+
+/** A word turned, its first letter as it was written. */
+function asWritten(word: string, turned: string): string {
+  return word[0] === word[0]!.toUpperCase() ? turned.charAt(0).toUpperCase() + turned.slice(1) : turned
+}
+
 /** A verb this knows, in its "-ing" form, its first letter as it was written. */
 function ingOf(word: string): string {
   const verb = word.toLowerCase()
@@ -223,5 +271,5 @@ const VERBS = new Set(
   ).split(' '),
 )
 
-/** The verbs whose last letter is doubled before "-ing": "run", "running". */
-const DOUBLED = new Set(['commit', 'cut', 'debug', 'drop', 'get', 'grab', 'log', 'map', 'plan', 'put', 'rerun', 'run', 'set', 'stop', 'tag', 'zip', 'scan', 'ship', 'skip', 'submit', 'trim'])
+/** The verbs whose last letter is doubled before "-ing" and "-ed": "run", "running", "grep", "grepped". */
+const DOUBLED = new Set(['commit', 'cut', 'debug', 'drop', 'format', 'get', 'grab', 'grep', 'log', 'map', 'plan', 'put', 'rerun', 'run', 'set', 'stop', 'tag', 'unzip', 'zip', 'scan', 'ship', 'skip', 'submit', 'trim'])

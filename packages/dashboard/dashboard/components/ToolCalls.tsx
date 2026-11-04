@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
-import { callsSummary, doingOf, summaryWords, toolCall } from '../lib/tool-calls.js'
+import { callsSummary, doingOf, doneOf, summaryWords, toolCall } from '../lib/tool-calls.js'
 import { usePreferences } from '../lib/preferences.js'
 import type { FileEdit } from '../lib/turn-changes.js'
 import { LinesPill } from './ChangedFiles.js'
@@ -102,9 +102,10 @@ function callWords({ label, detail, whole, summary, output }: Call, live: boolea
   // What the agent wrote about the call: a command's description, a subagent's task. While it goes
   // on, said as going on ("Finding all markdown files", "Summarizing README"), as Claude Code on the
   // web's live line says what is being done; a subagent's task the agent wrote only as a noun keeps
-  // the line's own words ("Starting agent …").
+  // the line's own words ("Starting agent …"). Once done, said as done ("Waited 10 seconds then
+  // listed files"), as Claude Code on the web's row says it.
   const written = call.kind === 'command' ? summary : SUBAGENT_CALLS.has(label) && live ? (detail !== undefined ? doingOf(detail) : undefined) : undefined
-  const said = written !== undefined && live ? (doingOf(written) ?? written) : written
+  const said = written === undefined ? undefined : live ? (doingOf(written) ?? written) : (doneOf(written) ?? written)
   const words = (
     <>
       {said !== undefined ? (

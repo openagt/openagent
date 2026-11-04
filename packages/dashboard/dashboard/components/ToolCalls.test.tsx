@@ -121,7 +121,7 @@ describe('ToolCalls', () => {
 describe('an opened call', () => {
   test('is one card: the tool named, the command in a box of its own with a copy button, and what it printed under it in grey', () => {
     render(<ToolCalls steps={[{ type: 'action', label: 'Bash', detail: 'sleep 1 && ls', summary: 'List files', output: { text: 'README.md' } }]} />)
-    fireEvent.click(screen.getByRole('button', { name: 'List files' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Listed files' }))
     const command = screen.getByLabelText('Command')
     expect(command.textContent).toBe('$ sleep 1 && ls')
     const card = command.closest('.rounded-xl')!
