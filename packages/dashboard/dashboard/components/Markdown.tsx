@@ -2,6 +2,7 @@ import { Children, cloneElement, createContext, Fragment, isValidElement, useCon
 import { wordShownAt } from '../lib/use-steady-text.js'
 import { languageOfFence, Pieces, useHighlightedIn } from '../lib/highlight.js'
 import { cn } from '../lib/utils.js'
+import { ImageIcon } from 'lucide-react'
 import { CopyButton } from './ui/copy-button.js'
 import { Checkbox } from './ui/checkbox.js'
 
@@ -333,9 +334,14 @@ function renderList(lines: string[], look: Look, depth: number, key: number): Re
   return lists
 }
 
+/** A tag alone on its line that only lays out what follows: an opening or closing `<p>`, `<div>`, `<picture>`…, or a `<br>`. */
+function isLayoutTag(line: string): boolean {
+  return /^\s*<\/?(?:p|div|center|picture|source|span|details|summary)\b[^>]*>\s*$/i.test(line) || /^\s*<br\b[^>]*>\s*$/i.test(line)
+}
+
 /** A line that starts a block of its own rather than going on with the paragraph above it. */
 function startsBlock(line: string): boolean {
-  return isFence(line) || /^\s*\|.*\|\s*$/.test(line) || /^#{1,6}\s/.test(line) || isRule(line) || /^\s*>/.test(line) || listMarker(line) !== null
+  return isLayoutTag(line) || /^\s*<h[1-6]\b/i.test(line) || isFence(line) || /^\s*\|.*\|\s*$/.test(line) || /^#{1,6}\s/.test(line) || isRule(line) || /^\s*>/.test(line) || listMarker(line) !== null
 }
 
 /**
@@ -408,7 +414,7 @@ function slug(text: string): string {
 /** A page's heading: larger the higher it is, with room above it, as Claude Code on the web's file preview sets one. */
 function Heading({ level, text }: { level: number; text: string }) {
   const Tag = `h${Math.min(level, 6)}` as 'h1'
-  const size = ['text-[26px] leading-[30px] font-medium', 'text-xl leading-[25px] font-medium', 'text-base font-semibold', 'font-semibold', 'font-semibold', 'font-semibold'][level - 1]
+  const size = ['text-[26px] leading-[30px] font-medium', 'text-xl leading-[25px] font-medium', 'text-lg font-semibold', 'font-semibold', 'font-semibold', 'font-semibold'][level - 1]
   return (
     <Tag data-heading={slug(text)} className={cn(size, level > 1 && 'pt-7 first:pt-0')}>
       {inline(text)}
@@ -488,7 +494,11 @@ function renderBlocks(lines: string[], look: Look, depth = 0): ReactNode[] {
     }
     flushTable()
 
-    const heading = /^(#{1,6})\s+(.*)$/.exec(line)
+    // HTML a README lays itself out with: a tag alone on its line that only places what follows
+    // (`<p align="center">`, `</div>`, `<br clear="left" />`) is no text; a heading in HTML is a heading.
+    if (isLayoutTag(line)) continue
+    const htmlHeading = /^\s*<h([1-6])\b[^>]*>(.*?)<\/h\1>\s*$/i.exec(line)
+    const heading = htmlHeading ? ([line, '#'.repeat(Number(htmlHeading[1])), htmlHeading[2]!] as const) : /^(#{1,6})\s+(.*)$/.exec(line)
     if (heading) {
       const level = heading[1]!.length
       if (document) {
@@ -519,7 +529,8 @@ function renderBlocks(lines: string[], look: Look, depth = 0): ReactNode[] {
       while (end < lines.length && /^\s*>/.test(lines[end]!)) end++
       const quoted = lines.slice(i, end).map(l => l.replace(/^\s*>\s?/, ''))
       blocks.push(
-        <blockquote key={key++} className={cn('space-y-1.5 border-l-4 border-border pl-4 text-muted-foreground', !compact && 'my-3 ml-2')}>
+        // In a page the quote keeps the text's colour, as Claude Code on the web's file preview sets one; in a reply it is dimmed.
+        <blockquote key={key++} className={cn('space-y-1.5 border-l-4 border-border pl-4', document ? 'text-foreground' : 'text-muted-foreground', !compact && 'my-3 ml-2')}>
           {renderBlocks(quoted, look, depth + 1)}
         </blockquote>,
       )
@@ -622,6 +633,41 @@ function HeadingLink({ label, to }: { label: string; to: string }) {
   )
 }
 
+/** An attribute of an HTML tag as the text wrote it: `alt="OpenAgent"`. */
+function attribute(tag: string, name: string): string | undefined {
+  return new RegExp(`\\b${name}\\s*=\\s*"([^"]*)"`, 'i').exec(tag)?.[1] ?? new RegExp(`\\b${name}\\s*=\\s*'([^']*)'`, 'i').exec(tag)?.[1]
+}
+
+/**
+ * An image in the text (a badge, a logo), as Claude Code on the web shows one: not loaded, which
+ * would reach whatever server the text names, but a chip with an image's mark and the image's own
+ * words. One that is a link's label is that link.
+ */
+function ImageChip({ alt, href }: { alt: string; href?: string }) {
+  const opens = useContext(FileLinks)
+  const chip = (
+    <span className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-0.5 align-middle text-[0.9em] text-foreground">
+      <ImageIcon aria-hidden className="size-3.5 shrink-0" />
+      {alt || 'Image'}
+    </span>
+  )
+  if (href === undefined) return chip
+  if (/^https?:\/\//.test(href))
+    return (
+      <a href={href} target="_blank" rel="noreferrer" className="hover:opacity-80">
+        {chip}
+      </a>
+    )
+  const open = opens?.(href)
+  return open ? (
+    <button type="button" title={`Open ${href}`} onClick={open} className="hover:opacity-80">
+      {chip}
+    </button>
+  ) : (
+    chip
+  )
+}
+
 function link(href: string, label: string, key: number): ReactNode {
   return (
     <a key={key} href={href} target="_blank" rel="noreferrer" className={LINK_CLASS}>
@@ -632,7 +678,7 @@ function link(href: string, label: string, key: number): ReactNode {
 
 function inline(text: string): ReactNode {
   const parts: ReactNode[] = []
-  const re = /(`[^`]+`|\[[^\]]+\]\((?:https?:\/\/)?[^\s):]+\)|\*\*[^*]+\*\*|\*[^*]+\*|https?:\/\/[^\s<>)\]]+|(?<![\w/&#])#\d+\b)/g
+  const re = /(`[^`]+`|\[!\[[^\]]*\]\([^\s)]+\)\]\([^\s)]+\)|!\[[^\]]*\]\([^\s)]+\)|<img\b[^>]*>|<a\s[^>]*>[^<]*<\/a>|<br\s*\/?>|\[[^\]]+\]\((?:https?:\/\/)?[^\s):]+\)|\*\*[^*]+\*\*|\*[^*]+\*|https?:\/\/[^\s<>)\]]+|(?<![\w/&#])#\d+\b)/g
   let last = 0
   let m: RegExpExecArray | null
   let key = 0
@@ -640,6 +686,16 @@ function inline(text: string): ReactNode {
     if (m.index > last) parts.push(<Fragment key={key++}>{text.slice(last, m.index)}</Fragment>)
     const token = m[0]
     if (token.startsWith('`')) parts.push(<InlineCode key={key++} text={token.slice(1, -1)} />)
+    else if (token.startsWith('[![') || token.startsWith('![')) {
+      // An image, alone or as a link's whole label: `![npm](…badge.svg)`, `[![npm](…)](…/package)`.
+      const image = /!\[([^\]]*)\]\(([^\s)]+)\)(?:\]\(([^\s)]+)\))?/.exec(token)!
+      parts.push(<ImageChip key={key++} alt={image[1]!} {...(image[3] !== undefined ? { href: image[3] } : {})} />)
+    } else if (/^<img\b/i.test(token)) parts.push(<ImageChip key={key++} alt={attribute(token, 'alt') ?? ''} />)
+    else if (/^<a\s/i.test(token)) {
+      const href = attribute(token, 'href')
+      const label = token.replace(/^<a\s[^>]*>|<\/a>$/gi, '')
+      parts.push(href && /^https?:\/\//.test(href) ? link(href, label, key++) : href ? <FileLink key={key++} label={label} path={href} /> : <Fragment key={key++}>{label}</Fragment>)
+    } else if (/^<br/i.test(token)) parts.push(<br key={key++} />)
     else if (token.startsWith('[')) {
       const parsed = /^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/.exec(token)
       const file = /^\[([^\]]+)\]\(([^\s):]+)\)$/.exec(token)

@@ -57,9 +57,18 @@ describe('ToolCalls', () => {
 
   test("a read's text that is no file's lines shows as what the call gave back", () => {
     render(<ToolCalls steps={[{ type: 'action', label: 'Read', detail: '/repo/gone.md', id: 't1', output: { text: 'File does not exist.', failed: true } }]} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Read gone.md' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Read gone.md, failed' }))
     expect(screen.getByLabelText('Detail').textContent).toBe('/repo/gone.md')
     expect(screen.getByLabelText('Output').textContent).toBe('File does not exist.')
+  })
+
+  test('a failed call says so: on its row in red, and in the line that counts the steps', () => {
+    render(<ToolCalls steps={[{ type: 'action', label: 'Read', detail: '/repo/README.md', id: 'r1', output: { text: '1\t# Hi' } }, { type: 'action', label: 'Read', detail: '/repo/index.html', id: 'r2', output: { text: 'File does not exist.', failed: true } }]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Read 2 files (1 failed)' }))
+    const row = screen.getByRole('button', { name: 'Read index.html, failed' }).parentElement!
+    expect(row.textContent).toBe('Readindex.htmlFailed')
+    expect(row.querySelector('.text-danger')!.textContent).toBe('Failed')
+    expect(screen.getByRole('button', { name: 'Read README.md' }).parentElement!.querySelector('.text-danger')).toBeNull()
   })
 
   test("a step's file name opens the file beside the chat, by the path the agent named it by, and opens nothing else", () => {
@@ -85,15 +94,15 @@ describe('ToolCalls', () => {
     expect(screen.queryByRole('button', { name: 'app.ts' })).toBeNull()
   })
 
-  test('a call that failed says so: with its exit code when it has one, and with no empty output box', () => {
+  test('a call that failed says so on its row, and opened, its exit code when it has one, with no empty output box', () => {
     render(<ToolCalls steps={[{ type: 'action', label: 'commandExecution', detail: 'exit 3', output: { text: '', failed: true, exitCode: 3 } }]} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Ran exit 3' }))
-    expect(screen.getByText('Failed: exit code 3')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Ran exit 3, failed' }))
+    expect(screen.getByText('Exit code 3')).toBeTruthy()
     expect(screen.queryByLabelText('Output')).toBeNull()
     cleanup()
     render(<ToolCalls steps={[{ type: 'action', label: 'Bash', detail: 'pnpm lint', output: { text: 'boom', failed: true } }]} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Ran pnpm lint' }))
-    expect(screen.getByText('Failed')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Ran pnpm lint, failed' }))
+    expect(screen.getAllByText('Failed')).toHaveLength(1)
     expect(screen.getByLabelText('Output').textContent).toBe('boom')
   })
 

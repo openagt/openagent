@@ -161,9 +161,12 @@ function callWords({ label, detail, whole, summary, output }: Call, live: boolea
         </>
       )}
       {call.size !== undefined && <LinesPill {...call.size} />}
+      {/* A call that failed says so on its row, in red, as Claude Code on the web's does. */}
+      {output?.failed && !live && <span className="shrink-0 text-danger">Failed</span>}
     </>
   )
-  return { words, label: said ?? [live ? call.doing : call.verb, call.target].filter(Boolean).join(' '), opens: (whole ?? call.detail) !== undefined || output !== undefined }
+  const named = said ?? [live ? call.doing : call.verb, call.target].filter(Boolean).join(' ')
+  return { words, label: output?.failed && !live ? `${named}, failed` : named, opens: (whole ?? call.detail) !== undefined || output !== undefined }
 }
 
 /**
@@ -171,7 +174,7 @@ function callWords({ label, detail, whole, summary, output }: Call, live: boolea
  * opens one: on a line of its own, a card naming the tool ("Bash"); in a box of steps, which is
  * the card already, no second one. What it was given is in a box of its own (a command
  * with "$" in front, in the chat's code colours, with a button to copy it), and under it what the
- * call printed, grey and with no box; a call that failed says so, with its exit code when it has one.
+ * call printed, grey and with no box; a call that failed says its exit code when it has one.
  */
 function CallDetail({ label, detail, whole, output, card = false }: Call & { card?: boolean }) {
   const call = toolCall(label, detail, output?.changed)
@@ -273,7 +276,8 @@ function GivenDetail({ label, call, whole, output, card }: { label: string; call
           {output.text}
         </pre>
       )}
-      {output?.failed && <div className="text-xs text-danger">{output.exitCode !== undefined ? `Failed: exit code ${output.exitCode}` : 'Failed'}</div>}
+      {/* That it failed is on its row; here, the exit code when it has one. */}
+      {output?.failed && output.exitCode !== undefined && <div className="text-xs text-danger">Exit code {output.exitCode}</div>}
     </div>
   )
 }
@@ -413,7 +417,7 @@ export function ToolCalls({ steps, lead, live }: { steps: readonly ToolStep[]; l
   const shown = thinking ? steps : steps.filter(step => step.type === 'action')
   const calls = steps.filter(step => step.type === 'action')
   if (calls.length === 0 && !live) return null
-  const summary = callsSummary(calls.map(call => toolCall(call.label, call.detail, call.output?.changed)))
+  const summary = callsSummary(calls.map(call => ({ ...toolCall(call.label, call.detail, call.output?.changed), ...(call.output?.failed ? { failed: true as const } : {}) })))
   const only = !live && !lead && shown.length === 1 && shown[0]!.type === 'action' ? shown[0] : undefined
   // The row's words: the call going on now, as going on; once it is done, as Claude Code on the
   // web's row does, the same row says the steps it took ("Ran 2 commands"), the old words fading

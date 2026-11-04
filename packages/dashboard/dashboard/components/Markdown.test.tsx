@@ -363,3 +363,37 @@ describe('Markdown as a page', () => {
     expect(screen.getByText('src/gone.ts').tagName).toBe('CODE')
   })
 })
+
+// A README's own layout: HTML tags and images, as Claude Code on the web's file preview shows them.
+describe('Markdown images and a README’s HTML', () => {
+  const readme = [
+    '<img src="./logo.svg?v=2" alt="OpenAgent" align="left" width="170" />',
+    '',
+    '### OpenAgent',
+    '',
+    '[![npm](https://img.shields.io/npm/v/x)](https://www.npmjs.com/package/x) [![License: MIT](https://img.shields.io/badge/MIT.svg)](./LICENSE) ![Logo](./logo.svg)',
+    '',
+    '<br clear="left" />',
+    '<p align="center">',
+    '<h2 align="center">Get started</h2>',
+    '</p>',
+    'Read <a href="https://example.test/docs">the docs</a>.',
+  ].join('\n')
+
+  test('images are chips with their words, linked when a link holds them; nothing is loaded', () => {
+    const { container } = render(<Markdown text={readme} document />)
+    expect(container.querySelector('img')).toBeNull()
+    expect(screen.getByText('OpenAgent', { selector: 'span' })).toBeTruthy()
+    expect(screen.getByText('npm').closest('a')!.getAttribute('href')).toBe('https://www.npmjs.com/package/x')
+    expect(screen.getByText('License: MIT').closest('a')).toBeNull()
+    expect(screen.getByText('Logo').closest('a')).toBeNull()
+  })
+
+  test('a tag that only lays out is no text, a heading in HTML is a heading, and a link in HTML a link', () => {
+    const { container } = render(<Markdown text={readme} document />)
+    expect(container.textContent).not.toMatch(/<br|<p|<\/p|<img|align=/)
+    expect(screen.getByRole('heading', { level: 3 }).textContent).toBe('OpenAgent')
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('Get started')
+    expect(screen.getByRole('link', { name: 'the docs' }).getAttribute('href')).toBe('https://example.test/docs')
+  })
+})
