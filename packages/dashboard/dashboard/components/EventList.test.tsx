@@ -12,7 +12,7 @@ const shownText = (el: Element): string | null => {
 // The session line names the model as the daemon lists it; no daemon here, so the list never answers.
 vi.mock('../rpc/models.js', () => ({ onModels: () => new Promise(() => {}) }))
 
-const { EventList, askedReplies, quietEnds, withoutQuestionBlock } = await import('./EventList.js')
+const { EventList, askedReplies, quietEnds, withEarlyQuestion, withoutQuestionBlock } = await import('./EventList.js')
 
 afterEach(cleanup)
 
@@ -1161,8 +1161,35 @@ describe('EventList hides the block a question is written in', () => {
   })
 
   test('a block no question came of stays as written: it is how the reader sees it did not parse', () => {
-    render(<EventList events={[prompt, reply(`Pick one.\n\n${block}`)]} stick={false} />)
+    const broken = '```await-choices\n{ "title": "Which color?", "options": [ }\n```'
+    render(<EventList events={[prompt, reply(`Pick one.\n\n${broken}`)]} stick={false} />)
     expect(screen.getByText(/"title"/)).toBeTruthy()
+  })
+
+  test('a last message that is a question is one the moment it is written, before the run says it', () => {
+    const asking = reply(`Pick one.\n\n${block}`)
+    const early = withEarlyQuestion([prompt, asking])
+    // The question the run will say, under the id it will say it with.
+    expect(early).toEqual([prompt, asking, { kind: 'choice', id: 'await-choices', title: 'Which color?', options: [{ id: 'opt:0', label: 'Blue' }] }])
+    render(<EventList events={[prompt, asking]} stick={false} />)
+    expect(screen.getByText('Pick one.')).toBeTruthy()
+    expect(screen.queryByText(/"title"/)).toBeNull()
+    // Once the run said it, it is said once.
+    expect(withEarlyQuestion([prompt, asking, choice])).toEqual([prompt, asking, choice])
+    // Things that only count or time the turn do not hide it; an empty message after it neither.
+    const usage = { kind: 'usage', costUsd: 0.1 } as OpenAgentEvent
+    expect(withEarlyQuestion([prompt, asking, usage, reply(' ')])).toHaveLength(5)
+  })
+
+  test('a block the agent went on from, or a turn that ended without asking, is no question', () => {
+    const asking = reply(block)
+    const step: OpenAgentEvent = { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'ls' } }
+    expect(withEarlyQuestion([prompt, asking, step])).toHaveLength(3)
+    expect(withEarlyQuestion([prompt, asking, { kind: 'end', ok: true } as OpenAgentEvent])).toHaveLength(3)
+    // A subagent's message is not the agent's last word.
+    expect(withEarlyQuestion([prompt, { kind: 'driver', event: { type: 'text', text: block, subagent: 'toolu_1' } }])).toHaveLength(2)
+    // Nor a question of a turn before.
+    expect(withEarlyQuestion([prompt, asking, choice, { kind: 'driver', event: { type: 'start', prompt: 'Blue' } } as OpenAgentEvent])).toHaveLength(4)
   })
 
   test('the message being written never shows the block, closed or not, and the words before it stay', () => {

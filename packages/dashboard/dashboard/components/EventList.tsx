@@ -1,5 +1,6 @@
 import type { AgentDoing, AgentMeta, ChoiceRequest, OpenAgentEvent } from '../../src/index.js'
 import { foldScreenRows, formatOpenAgentEvent } from '../../src/client.js'
+import { parseQuestion, QUESTION_TAG } from '@openagt/agent-driver/question'
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Check, ChevronRight, CircleDot, Copy } from 'lucide-react'
 import { pendingChoices } from '../lib/live-state.js'
@@ -223,6 +224,29 @@ function foldChoiceRows(events: OpenAgentEvent[]): {
     }
   }
   return { rows, hidden }
+}
+
+/**
+ * The question a turn ends on, the moment its message is written. The run says it only when the
+ * agent's process is done, about a second later, and until then the message would show its block
+ * as raw JSON. Read with the run's own parser, so it is the same question under the same id, and
+ * the run's own line of it takes its place without a change. Only a turn's last message, with
+ * nothing after it: a block the agent went on from is not what the run will ask.
+ */
+export function withEarlyQuestion(events: OpenAgentEvent[]): OpenAgentEvent[] {
+  for (let at = events.length - 1; at >= 0; at--) {
+    const e = events[at]!
+    if (e.kind === 'choice' || e.kind === 'end' || isTurnBoundary(e)) return events
+    if (e.kind !== 'driver' || ('subagent' in e.event && e.event.subagent !== undefined)) continue
+    if (e.event.type === 'action') return events
+    // A message with no words (Codex ends some turns with one) is not the turn's last word.
+    if (e.event.type !== 'text' || e.event.text.trim() === '') continue
+    const question = parseQuestion(e.event.text)
+    if (question === undefined) return events
+    const asked: OpenAgentEvent = { kind: 'choice', id: QUESTION_TAG, ...question }
+    return [...events.slice(0, at + 1), asked, ...events.slice(at + 1)]
+  }
+  return events
 }
 
 /**
@@ -600,7 +624,7 @@ function FollowSent({ sent }: { sent: number }) {
 }
 
 export function EventList({
-  events,
+  events: given,
   writing = '',
   sending,
   working = false,
@@ -668,6 +692,7 @@ export function EventList({
    *  row is a line of text. */
   onOpenScreen?: (() => void) | undefined
 }) {
+  const events = useMemo(() => withEarlyQuestion(given), [given])
   const choiceRows = useMemo(() => (projectId ? foldChoiceRows(events) : undefined), [projectId, events])
   const screenRows = useMemo(() => foldScreenRows(events), [events])
   const passed = useMemo(() => quietEnds(events), [events])
