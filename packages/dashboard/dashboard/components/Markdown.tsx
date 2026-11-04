@@ -3,6 +3,7 @@ import { wordShownAt } from '../lib/use-steady-text.js'
 import { languageOfFence, Pieces, useHighlightedIn } from '../lib/highlight.js'
 import { cn } from '../lib/utils.js'
 import { CopyButton } from './ui/copy-button.js'
+import { Checkbox } from './ui/checkbox.js'
 
 // A tiny, dependency-free Markdown renderer for an agent's replies, the surfaced PLAN/TODO docs
 // and the agent's pushed views (#441). Builds React nodes (never injects HTML), so agent-written
@@ -255,7 +256,8 @@ function renderList(lines: string[], look: Look, depth: number, key: number): Re
     items.push(
       task ? (
         <li key={items.length} className="list-none -ml-4 flex items-start gap-2">
-          <input type="checkbox" checked={task[1]!.toLowerCase() === 'x'} readOnly className="mt-1" />
+          {/* The page's own checkbox, in the theme's primary colour, never the browser's. */}
+          <Checkbox checked={task[1]!.toLowerCase() === 'x'} readOnly aria-label={task[1]!.toLowerCase() === 'x' ? 'Done' : 'To do'} className="mt-[3px]" />
           {nested ? (
             <div className="min-w-0 space-y-1">
               <TaskWords done={task[1]!.toLowerCase() === 'x'} text={task[2]!} />

@@ -192,7 +192,7 @@ describe('Markdown lists', () => {
 
   test('a task list keeps its checkboxes', () => {
     render(<Markdown text={'- [x] done\n- [ ] left'} />)
-    expect(screen.getAllByRole('checkbox').map(box => (box as HTMLInputElement).checked)).toEqual([true, false])
+    expect(screen.getAllByRole('checkbox').map(box => box.getAttribute('aria-checked'))).toEqual(['true', 'false'])
   })
 
   test('the text after a list is not part of it', () => {
