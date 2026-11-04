@@ -390,6 +390,13 @@ describe('EventList question and answer', () => {
     expect(within(card).getByRole('button', { name: /Submit/ }).textContent).toMatch(/^Submit(⌘|Ctrl)↵$/)
   })
 
+  test('under a question the run waits on, the live line says it needs your input; answered, it says nothing', () => {
+    const { rerender } = render(<EventList events={asked} projectId="p1" agentId="r1" stick={false} />)
+    expect(within(screen.getByTestId('live-line')).getByRole('status').textContent).toBe('Needs your input')
+    rerender(<EventList events={resumed('Red')} projectId="p1" agentId="r1" stick={false} />)
+    expect(screen.getByTestId('live-line').textContent).toBe('')
+  })
+
   test('the card waits for the words above it: not while they are being typed, nor while more are coming', async () => {
     const long = 'Three tasks, each with its own files. '.repeat(10)
     const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: long } }

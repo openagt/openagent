@@ -1,7 +1,7 @@
 import type { AgentDoing, AgentMeta, ChoiceRequest, OpenAgentEvent } from '../../src/index.js'
 import { foldScreenRows, formatOpenAgentEvent } from '../../src/client.js'
 import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { Check, ChevronRight, Copy } from 'lucide-react'
+import { Check, ChevronRight, CircleDot, Copy } from 'lucide-react'
 import { pendingChoices } from '../lib/live-state.js'
 import { callRow, callSubagents, runRow, endMessage, subagentEnd, subagentEvents, subagentReport, subagentSteps, subagentWait, type SubagentEnd } from '../lib/subagents.js'
 import { answeredQuestion } from '../lib/answered-question.js'
@@ -139,6 +139,16 @@ function promptFirst(events: OpenAgentEvent[]): OpenAgentEvent[] {
 /** HH:MM:SS in the reader's locale, for the column that says when each line was written. */
 function formatTime(at: string): string {
   return new Date(at).toLocaleTimeString()
+}
+
+/** The line under a question the run waits on: a mark, and "Needs your input" in a pill of its colour. */
+function NeedsInput() {
+  return (
+    <div role="status" className="flex items-center gap-2 font-sans text-warning">
+      <CircleDot className="size-3.5 shrink-0" aria-hidden />
+      <span className="rounded-full bg-warning/10 px-[7px] py-[3.5px] text-xs leading-[15px] font-medium">Needs your input</span>
+    </div>
+  )
 }
 
 /** A question's row: answered through its gate (`pick`), or still waiting for its answer. */
@@ -946,6 +956,9 @@ export function EventList({
                     the web keeps its dots and its count there. The line said a word before, which
                     under a streaming reply read as a second thing going on. */}
                 {working && !settingUp && !waitsOnItsOwn && current === undefined && <LiveLine since={turnStart} tokens={turnTokens} />}
+                {/* The run waits on the question the chat ends with: said where the moving line was,
+                    as Claude Code on the web says it. */}
+                {!working && sending === undefined && asking !== undefined && shown[shown.length - 1] === asking && !typing && <NeedsInput />}
               </div>
             )}
             {!working && waitingOn > 0 && (
