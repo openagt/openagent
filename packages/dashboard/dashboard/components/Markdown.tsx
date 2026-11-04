@@ -104,7 +104,7 @@ function CodeBlock({ lines, language, document }: { lines: string[]; language: s
   // In a page, as Claude Code on the web's file preview sets one: as wide as the text, the language
   // it was fenced as beside the copy button, and its lines kept whole, the box scrolling sideways.
   return (
-    <div className={cn('relative max-w-full rounded-lg border border-border bg-muted/50', document ? 'w-full' : 'w-fit min-w-40')}>
+    <div className={cn('relative max-w-full rounded-lg border border-border', document ? 'w-full' : 'w-fit min-w-40')}>
       <div className="absolute top-2.5 right-2.5 flex items-center gap-2">
         {document && language !== '' && <span className="text-xs text-muted-foreground">{language}</span>}
         <CopyButton text={text} label="Copy the code" />

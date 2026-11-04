@@ -225,7 +225,7 @@ function ReadDetail({ path, read }: { path: string; read: FileLines }) {
       ) : (
         <div className="min-w-0 truncate text-[13px] text-foreground">{path}</div>
       )}
-      <div aria-label="File" className="max-h-[400px] overflow-auto rounded-lg border border-border bg-muted/50 py-1.5 font-mono text-[13px] leading-[19px]">
+      <div aria-label="File" className="max-h-[400px] overflow-auto rounded-lg border border-border py-1.5 font-mono text-[13px] leading-[19px]">
         {read.lines.map((line, i) => (
           <div key={line.number} className="flex w-max min-w-full whitespace-pre text-foreground">
             <span className="shrink-0 select-none pr-4 pl-3 text-right tabular-nums text-muted-foreground/60" style={{ width: `calc(${width} + 1.75rem)` }}>
@@ -253,7 +253,7 @@ function GivenDetail({ label, call, whole, output, card }: { label: string; call
     <div className={cn('mt-1.5 flex flex-col gap-1.5', card && 'rounded-xl border border-border px-3 py-3')}>
       {card && <div className="text-sm text-muted-foreground">{label}</div>}
       {given !== undefined && (
-        <div className="relative rounded-lg border border-border bg-muted/50">
+        <div className="relative rounded-lg border border-border">
           <pre aria-label={command ? 'Command' : 'Detail'} className={cn(CODE, 'py-1.5 pl-3 pr-10 text-foreground')}>
             {command && <span className="select-none text-muted-foreground">$ </span>}
             {coloured
