@@ -5,9 +5,10 @@ import { cn } from '../../lib/utils.js'
 import { ScrollArea } from './scroll-area.js'
 
 // The shadcn "base" dropdown menu (built on Base UI, not Radix) — trimmed to what the Start
-// form's Commands + agent/model menus need (#649/#650). Themed with the dashboard's CSS-var tokens
-// (there is no --color-popover, so the card surface stands in). Item highlight state is
-// `data-highlighted`; an open submenu trigger is `data-popup-open`.
+// form's Commands + agent/model menus need (#649/#650). On the menu surface, which sets the theme's
+// tokens again for what is inside it (`.menu-surface`), so the items read them with the plain
+// utilities (`bg-accent`), never `var(--color-*)`, which holds the page's value. Item highlight
+// state is `data-highlighted`; an open submenu trigger is `data-popup-open`.
 
 // Border + surface live on the Popup; the scroll (and its padding) move inside a ScrollArea so a
 // long menu shows our own thin overlay bar (#1046) instead of the OS one, whose grey track read as
@@ -26,7 +27,7 @@ function PopupBody({ children }: { children: ReactNode }) {
   )
 }
 export const MENU_ITEM_CLASS =
-  'relative flex cursor-pointer select-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium outline-none data-[highlighted]:bg-[var(--color-accent)] data-[highlighted]:text-[var(--color-accent-foreground)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
+  'relative flex cursor-pointer select-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium outline-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
 
 export const DropdownMenu = Menu.Root
 export const DropdownMenuGroup = Menu.Group
@@ -94,7 +95,7 @@ export function DropdownMenuSubTrigger({ className, children, ...props }: Compon
     // centred between the icon and the chevron while every ordinary item sat left, and the only
     // way to sit straight was to remember a `flex-1` wrapper. Now both forms align the same.
     <Menu.SubmenuTrigger
-      className={cn(MENU_ITEM_CLASS, 'data-[popup-open]:bg-[var(--color-accent)]', className)}
+      className={cn(MENU_ITEM_CLASS, 'data-[popup-open]:bg-accent', className)}
       {...props}
     >
       {children}
@@ -116,13 +117,13 @@ export function DropdownMenuSubContent({ className, children, ...props }: Compon
 }
 
 export function DropdownMenuSeparator({ className, ...props }: ComponentProps<typeof Menu.Separator>) {
-  return <Menu.Separator className={cn('-mx-1.5 my-1.5 h-px bg-[var(--color-border)]', className)} {...props} />
+  return <Menu.Separator className={cn('-mx-1.5 my-1.5 h-px bg-border', className)} {...props} />
 }
 
 export function DropdownMenuLabel({ className, ...props }: ComponentProps<typeof Menu.GroupLabel>) {
   return (
     <Menu.GroupLabel
-      className={cn('px-2 py-1.5 text-xs font-semibold text-[var(--color-muted-foreground)]', className)}
+      className={cn('px-2 py-1.5 text-xs font-semibold text-muted-foreground', className)}
       {...props}
     />
   )

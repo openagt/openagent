@@ -38,9 +38,12 @@ import { AddedAccountsUsage, useAgentAccounts } from './AgentAccounts.js'
 // dimmed, and a handle that moves it; the module reads the offset and saves the one a drag picked.
 // With no such module the bar shows the account only.
 
-/** The bar's colour per tone. Fill and marker share a scale so the comparison reads at a glance. */
+/**
+ * The bar's colour per tone. Fill and marker share a scale so the comparison reads at a glance.
+ * Under pace, the usual case, is the primary colour, so the bar follows the one a person picked.
+ */
 const TONE_FILL: Record<QuotaTone, string> = {
-  under: 'bg-success',
+  under: 'bg-primary',
   near: 'bg-info',
   over: 'bg-warning',
   full: 'bg-danger',
@@ -48,7 +51,7 @@ const TONE_FILL: Record<QuotaTone, string> = {
 
 /** Same scale, as text — the pace-deviation duration is coloured to match the bar it is about. */
 const TONE_TEXT: Record<QuotaTone, string> = {
-  under: 'text-success',
+  under: 'text-primary',
   near: 'text-info',
   over: 'text-warning',
   full: 'text-danger',
@@ -335,7 +338,7 @@ function WeekBar({
           {limited && <Tooltip>
             {/* What the handle allows, said as a sentence, with how far it goes; how to change it after, in grey. */}
             <TooltipTrigger render={<span className={cn('inline-flex cursor-default items-center gap-1.5 text-xs', enabled ? 'text-foreground' : 'text-warning')} />}>
-              <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', enabled ? 'bg-success' : 'bg-warning')} />
+              <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', enabled ? 'bg-primary' : 'bg-warning')} />
               {enabled ? (
                 <>
                   Agents may start work on their own up to <strong className="tabular-nums">{Math.round(limit)}%</strong> of the week

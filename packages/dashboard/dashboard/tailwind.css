@@ -102,7 +102,8 @@
 }
 
 /* The Neutral palette (Settings › Appearance): shadcn's neutral greys, light and dark, in place of
-   OpenAgent's greens. The four status colours and the logo keep the theme's own. */
+   OpenAgent's greens, and the status colours from Tailwind's palette, as shadcn's themes take
+   them: its 600s on light, its 400s on dark. The logo keeps the theme's own. */
 :root[data-palette='neutral']:not(.dark) {
   --background: oklch(1 0 0);
   --sidebar: oklch(0.985 0 0);
@@ -116,6 +117,11 @@
   --primary-foreground: oklch(0.985 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
+  --success: var(--color-green-600);
+  --warning: var(--color-amber-600);
+  --danger: var(--color-red-600);
+  --info: var(--color-blue-600);
+  --merged: var(--color-violet-600);
 }
 
 :root.dark[data-palette='neutral'] {
@@ -131,6 +137,11 @@
   --primary-foreground: oklch(0.205 0 0);
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
+  --success: var(--color-green-400);
+  --warning: var(--color-amber-400);
+  --danger: var(--color-red-400);
+  --info: var(--color-blue-400);
+  --merged: var(--color-violet-400);
 }
 
 /* The primary colour (Settings › Appearance): buttons, links and what is picked in a colour of
