@@ -15,7 +15,8 @@ export function BrandLink({ working, href = '/', onNavigate }: { working: boolea
         event.preventDefault()
         onNavigate()
       }}
-      className="flex shrink-0 items-center gap-3 rounded-md transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+      // Named for the switch to the website's landing page (#1919), which has the same logo at the same place: it stays still.
+      className="flex shrink-0 items-center gap-3 rounded-md [view-transition-name:oa-brand] transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
     >
       <Logo className="h-6 w-auto shrink-0" working={working} />
       {/* Below sm the wordmark folds away so the nav fits a narrow viewport (#980); the mark stays,

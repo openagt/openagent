@@ -112,7 +112,11 @@ test('on the secure address, / is the dashboard until the toggle picks the landi
   const dash = await startDashboard(testDashboardOptions({ clientBundleDir: bundle, websiteDir: website, secure: { name: NAME, key, cert, port: 0 } }))
   try {
     const port = Number(new URL(dash.secureUrl!).port)
-    assert.equal((await get(port, '/', cert)).body, 'the dashboard')
+    const first = await get(port, '/', cert)
+    assert.equal(first.body, 'the dashboard')
+    // A first visit is given the dashboard as its pick: how the dashboard's page knows to draw the toggle.
+    assert.match(String(first.headers['set-cookie']), /^openagent-view=dashboard;/)
+    assert.equal((await get(port, '/', cert, { cookie: 'openagent-view=dashboard' })).headers['set-cookie'], undefined)
     // How a page tells the dashboard's copy of the website from the public one.
     assert.equal((await get(port, '/_view', cert, { method: 'HEAD' })).status, 204)
 

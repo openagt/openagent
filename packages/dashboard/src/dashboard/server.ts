@@ -9,7 +9,7 @@ import type { ProjectErrorsReader } from '../project-errors.js'
 import type { BridgeBrowserOwner } from '../bridge-browser.js'
 import { serveClientBundle } from './static.js'
 import { makeRpcMount, RPC_PREFIX, isSameOriginRequest, isExpectedHost, isJsonRequest, isSecureAddressRequest } from './rpc-serve.js'
-import { handleViewRequest, serveWebsite, VIEW_PREFIX } from './website.js'
+import { handleViewRequest, keepView, serveWebsite, VIEW_PREFIX } from './website.js'
 import { requestPathname } from '../request-path.js'
 import { BROUGHT_MODULES_PREFIX, COMPUTER_MODULES_PREFIX, MODULES_PREFIX, serveBroughtModuleFile, serveComputerModuleFile, serveModuleFile } from './module-serve.js'
 import type { AddProjectResult, RemoveProjectResult, StartAgentOptions, StartAgentResult, StartedInResult } from './types.js'
@@ -300,6 +300,7 @@ export async function startDashboard(opts: DashboardOptions): Promise<Dashboard>
         handleViewRequest(res, pathname)
         return
       }
+      keepView(req, res)
       void serveWebsite(req, res, websiteDir, pathname)
         .then(served => (served ? undefined : serveClientBundle(req, res, clientBundleDir)))
         .catch(() => {

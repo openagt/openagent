@@ -142,6 +142,26 @@ function openagentHostModules(): Plugin {
   }
 }
 
+/**
+ * Rendering waits for the app (#1919): its first frame is the app with its sidebar, which is what
+ * the switch from the website's landing page animates to, not an empty page. Said on the built
+ * entry script, since Vite writes that tag anew without the attributes it does not know.
+ */
+function openagentRenderBlocking(): Plugin {
+  return {
+    name: 'openagent:render-blocking',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html) {
+        const entry = /<script type="module" crossorigin src="\/assets\/main-/
+        if (!entry.test(html)) throw new Error('the built page has no main entry script to make render-blocking')
+        return html.replace(entry, match => match.replace('<script ', '<script blocking="render" '))
+      },
+    },
+  }
+}
+
 // Dashboard (#405): a plain Vite SPA — React + Tailwind v4 + shadcn, talking to the daemon over
 // plain HTTP (`POST /_rpc/<name>`, plus an SSE stream for the live feed). `index.html` beside this
 // file is the whole entry; the daemon serves the built output as static files with an SPA fallback.
@@ -150,7 +170,7 @@ export default defineConfig({
   // (A7), so `root` is pinned to this file's directory instead of inherited from the cwd — the
   // scripts that run it live one level up.
   root: fileURLToPath(new URL('.', import.meta.url)),
-  plugins: [openagentDevDaemon(), openagentHostModules(), react(), tailwindcss()],
+  plugins: [openagentDevDaemon(), openagentHostModules(), openagentRenderBlocking(), react(), tailwindcss()],
   build: {
     // Straight into the package's own dist, where the daemon serves it from. There used to be a
     // copy step between the two — a whole turbo task — because the bundle was built in a

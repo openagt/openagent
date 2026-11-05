@@ -27,32 +27,54 @@ function dashboardHere(): Promise<boolean> {
   return asked
 }
 
+/** The dashboard's font for the toggle, so the two toggles are one. */
+const pillFont = "Figtree, ui-sans-serif, system-ui, sans-serif"
+
 const pillStyle: CSSProperties = {
-  borderRadius: 7,
-  padding: '4px 14px',
-  fontSize: 13,
+  position: 'relative',
+  height: 24,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderRadius: 6,
+  fontFamily: pillFont,
+  fontSize: 12,
+  lineHeight: '16px',
   fontWeight: 500,
   whiteSpace: 'nowrap',
 }
 
-/** "Landing page | Dashboard", under the logo: the website is the landing page, so that side is the one lit. */
-export function ViewToggle() {
+/**
+ * "Landing page | Dashboard", under the logo: the website is the landing page, so that side is
+ * lit. The dashboard draws the same toggle at the same place and size (its `ViewToggle`): the
+ * pills' widths are fixed so the two never differ, and the lit side is a thumb of its own, which
+ * the page switch slides from one side to the other (`view-transition-name`, styles.css).
+ */
+export function ViewToggle({ style }: { style?: CSSProperties }) {
   const dashboardHref = useDashboardHref()
   return (
     <div
       style={{
+        // The thumb is placed in it: in place, or where the caller puts it.
+        position: 'relative',
+        ...style,
         display: 'inline-flex',
         gap: 2,
-        padding: 3,
+        padding: 2,
         border: '1px solid #4f585e',
-        borderRadius: 10,
+        borderRadius: 8,
         background: '#232a2e',
+        viewTransitionName: 'oa-toggle',
       }}
     >
-      <span aria-current="page" style={{ ...pillStyle, background: '#a7c080', color: '#232a2e' }}>
+      <span
+        aria-hidden
+        style={{ position: 'absolute', top: 2, left: 2, width: 96, height: 24, borderRadius: 6, background: '#a7c080', viewTransitionName: 'oa-toggle-thumb' }}
+      />
+      <span aria-current="page" style={{ ...pillStyle, width: 96, color: '#232a2e' }}>
         Landing page
       </span>
-      <a href={dashboardHref} className="view-toggle-off" style={{ ...pillStyle, color: '#d3c6aa' }}>
+      <a href={dashboardHref} className="view-toggle-off" style={{ ...pillStyle, width: 84, color: '#d3c6aa' }}>
         Dashboard
       </a>
     </div>

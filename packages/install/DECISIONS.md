@@ -30,3 +30,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   (`dash.openagent.build`), a second address to know; the price is that an installed
   computer shows the website of its installed version, and nothing when the dashboard is
   down.
+- The toggle is under the logo at the same place and size on both pages, the top of the
+  dashboard's sidebar, so a switch moves neither; the switch slides the lit side over and
+  fades the rest (the browser's page transitions; a browser without them just switches).
+  Picked over each page placing the toggle in its own layout, where the whole top of the
+  page jumped at each switch.

@@ -43,7 +43,23 @@ section[id] {
   border-color: #859289 !important;
 }
 .view-toggle-off:hover {
-  background: #2d353b;
+  color: #fdf6e3 !important;
+}
+
+/*
+ * The switch between this page and the dashboard (#1919), two pages of one address on a computer
+ * with OpenAgent installed: the logo and the toggle stay where they are (both pages draw them at
+ * the same place), the toggle's lit side slides over, and the rest fades. The dashboard's
+ * stylesheet says the same: a page switch animates only when both pages ask for it.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+  }
+  ::view-transition-group(oa-toggle-thumb) {
+    animation-duration: 0.25s;
+    animation-timing-function: ease-in-out;
+  }
 }
 .dashboard-cta:hover {
   background: #b5cc92 !important;
