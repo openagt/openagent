@@ -306,7 +306,7 @@ export function AgentHistory({
     // width for a column: there it is a sheet over the page, closed until asked for.
     <>
       {pinned && <div aria-hidden className="w-(--sidebar-width) shrink-0" />}
-      <Sidebar collapsible={isMobile ? 'offcanvas' : 'none'} className={cn('relative w-(--sidebar-width) border-r border-sidebar-border', pinned && 'fixed inset-y-0 left-0 z-20 h-dvh')}>
+      <Sidebar collapsible={isMobile ? 'offcanvas' : 'none'} className={cn('relative w-(--sidebar-width) border-r border-sidebar-border', pinned && 'fixed top-(--top-banner,0px) left-0 z-20 h-[calc(100dvh-var(--top-banner,0px))]')}>
         {/* The brand and the project select (#1513): the project picked here is the one every page
             under it shows. No rule under it: the room around it sets it apart. */}
         <SidebarHeader className="gap-4 pb-2">

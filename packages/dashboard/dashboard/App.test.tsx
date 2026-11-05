@@ -237,11 +237,12 @@ describe('module cards on the Overview (#1818)', () => {
     }
     cleanup()
     // The Overview, on a wide screen: the page scrolls, and bounces, as the browser's own; the
-    // sidebar is fixed to the window, so the bounce does not carry it.
+    // sidebar is fixed to the window, so the bounce does not carry it, and starts under the
+    // daemon's banner while that shows.
     window.history.replaceState(null, '', '/')
     render(<App />)
     await waitFor(() => expect(document.documentElement.dataset['pinned']).toBeUndefined())
-    expect(document.querySelector('[data-slot=sidebar]')!.className.split(' ')).toEqual(expect.arrayContaining(['fixed', 'h-dvh']))
+    expect(document.querySelector('[data-slot=sidebar]')!.className.split(' ')).toEqual(expect.arrayContaining(['fixed', 'top-(--top-banner,0px)', 'h-[calc(100dvh-var(--top-banner,0px))]']))
     cleanup()
     // And on a phone.
     const wide = phoneScreen()
