@@ -8,12 +8,14 @@ import { agentUpdates } from './dashboard/agent-updates.js'
 import { startBackgroundServices } from './daemon-services.js'
 import { projectErrorStore } from './project-errors.js'
 import { resolveDashboardBundle } from './dashboard/bundle.js'
+import { resolveWebsite } from './dashboard/website.js'
 import { ensureBridgeToken, ensureComputerId, listProjects, nodeRegistryFs, readPreferences, registryPreferencesStore, thisComputerName, type Preferences } from './registry.js'
 import { sayComputer, sayName } from './dashboard/machine-call.js'
 import { bridgeSessionsFrom } from './dashboard/bridge-sessions.js'
 import { bridgeQuestions } from './dashboard/bridge-store.js'
 import { bridgeBrowserDir, bridgeBrowserOwner, startBridgeBrowser, type BridgeBrowser, type BridgeBrowserOptions } from './bridge-browser.js'
 import { runProjectHooks } from './project-hooks.js'
+import { readSecureAddress, SECURE_PORT, type SecureAddress } from './secure-address.js'
 import { builtInServices } from './built-in.js'
 import { COMPUTER_ENV, sayOwnUrl, startPackageServices, type PackageServices, type PackageServicesOptions } from './package-services.js'
 import { readAllAgents } from './store/index.js'
@@ -47,7 +49,7 @@ export interface DaemonState {
   pid: number
   /** The port the dashboard is bound to. */
   port: number
-  /** The URL to open. */
+  /** The URL to open: the secure address's when it is answered, else the plain one. */
   url: string
   /** ISO timestamp the daemon started. */
   startedAt: string
@@ -142,6 +144,12 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   }, console.log)
   // Which models each coding agent offers: asked on the menu's first read, then kept.
   const models = defaultModelsSource()
+  const websiteDir = await resolveWebsite()
+  // A secure address that cannot be read is said, and the dashboard comes up on its plain one.
+  const secure = await readSecureAddress(env).catch((err: unknown): SecureAddress | undefined => {
+    console.log(`the secure address could not be read (${err instanceof Error ? err.message : String(err)})`)
+    return undefined
+  })
   const dashboard: Dashboard = await startDashboard({
     port,
     quota,
@@ -171,6 +179,8 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     projectErrors: projectErrors.read,
     bridgeBrowser,
     ...(clientBundleDir ? { clientBundleDir } : {}),
+    ...(secure ? { secure: { ...secure, port: SECURE_PORT } } : {}),
+    ...(websiteDir ? { websiteDir } : {}),
   }).catch(async (err: unknown) => {
     // The port is taken (another dashboard runs there, say): what was set up for it stops, or
     // its timers keep the process alive.
@@ -183,7 +193,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   sayOwnUrl(dashboard.url)
   try {
     const actualPort = Number(new URL(dashboard.url).port) || port
-    opts.onListening?.({ pid: process.pid, port: actualPort, url: dashboard.url, startedAt: new Date().toISOString() })
+    opts.onListening?.({ pid: process.pid, port: actualPort, url: dashboard.secureUrl ?? dashboard.url, startedAt: new Date().toISOString() })
   } catch (err) {
     // Startup failed after the port was bound. Tear the server down, or it keeps the event loop
     // alive: a zombie process squatting the port.

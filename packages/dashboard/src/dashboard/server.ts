@@ -1,4 +1,5 @@
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http'
+import { createServer as createSecureServer } from 'node:https'
 import type { AddressInfo } from 'node:net'
 import type { PreferencesStore } from '../registry.js'
 import type { QuotaSource } from './quota.js'
@@ -7,7 +8,8 @@ import type { AgentUpdates } from './agent-updates.js'
 import type { ProjectErrorsReader } from '../project-errors.js'
 import type { BridgeBrowserOwner } from '../bridge-browser.js'
 import { serveClientBundle } from './static.js'
-import { makeRpcMount, RPC_PREFIX, isSameOriginRequest, isExpectedHost, isJsonRequest } from './rpc-serve.js'
+import { makeRpcMount, RPC_PREFIX, isSameOriginRequest, isExpectedHost, isJsonRequest, isSecureAddressRequest } from './rpc-serve.js'
+import { handleViewRequest, serveWebsite, VIEW_PREFIX } from './website.js'
 import { requestPathname } from '../request-path.js'
 import { BROUGHT_MODULES_PREFIX, COMPUTER_MODULES_PREFIX, MODULES_PREFIX, serveBroughtModuleFile, serveComputerModuleFile, serveModuleFile } from './module-serve.js'
 import type { AddProjectResult, RemoveProjectResult, StartAgentOptions, StartAgentResult, StartedInResult } from './types.js'
@@ -19,6 +21,7 @@ import { BRIDGE_PREFIX, EXPECTED_EXTENSION_VERSION, handleBridgeRequest, type Br
 import { bridgeQuestions } from './bridge-store.js'
 import { bridgeStarts } from './bridge-starts.js'
 import { WEB_START_PREFIX, handleWebStartRequest, type WebStartHandlers } from './web-start-endpoints.js'
+import { SECURE_PORT, type SecureAddress } from '../secure-address.js'
 
 /** Options for {@link startDashboard}. */
 export interface DashboardOptions {
@@ -118,12 +121,24 @@ export interface DashboardOptions {
    * wires one, since it is the process that can see every project's runs.
    */
   bridgeSessions?: () => Promise<import('./bridge-endpoints.js').BridgeSession[]>
+  /**
+   * The secure address (#1919): also answer over HTTPS on `port`, with the certificate made on
+   * this computer for `name`. Absent serves plain HTTP only.
+   */
+  secure?: SecureAddress & { port: number }
+  /**
+   * The website's copy (#1919), served on the secure address beside the dashboard: its landing
+   * page at `/` when the person picks it, and its other pages at their own paths.
+   */
+  websiteDir?: string
 }
 
 /** A running localhost dashboard: the built SPA + its RPC mount. */
 export interface Dashboard {
-  /** The URL to open. */
+  /** The URL this computer's own programs call it on. */
   readonly url: string
+  /** The secure address's URL, the one to open in a browser, when it is answered. */
+  readonly secureUrl?: string
   /** Stop the server. Idempotent. */
   close(): Promise<void>
 }
@@ -136,7 +151,7 @@ export interface Dashboard {
  * daemon's own process, so `sendStart` / `sendAddProject` call the daemon's own closures via
  * {@link DashboardOptions.onStart} / {@link DashboardOptions.onAddProject}.
  */
-export function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
+export async function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
   const port = opts.port ?? 4200
   const clientBundleDir = opts.clientBundleDir
 
@@ -218,7 +233,7 @@ export function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
       }
     : undefined
 
-  const server = createServer((req, res) => {
+  const handle = (req: IncomingMessage, res: ServerResponse): void => {
     const pathname = requestPathname(req)
     if (pathname === undefined) {
       res.writeHead(400, { 'content-type': 'text/plain' }).end('bad request')
@@ -279,30 +294,67 @@ export function startDashboard(opts: DashboardOptions): Promise<Dashboard> {
       })
       return
     }
+    const websiteDir = opts.websiteDir
+    if (websiteDir && isSecureAddressRequest(req)) {
+      if (pathname === VIEW_PREFIX || pathname.startsWith(`${VIEW_PREFIX}/`)) {
+        handleViewRequest(res, pathname)
+        return
+      }
+      void serveWebsite(req, res, websiteDir, pathname)
+        .then(served => (served ? undefined : serveClientBundle(req, res, clientBundleDir)))
+        .catch(() => {
+          if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain' }).end('page unreadable')
+        })
+      return
+    }
     void serveClientBundle(req, res, clientBundleDir)
-  })
-  return listenDashboard(server, port, async () => {
+  }
+  const server = createServer(handle)
+  const secureServer = opts.secure ? createSecureServer({ key: opts.secure.key, cert: opts.secure.cert }, handle) : undefined
+  const close = async () => {
     // Stop polling with the server: the poller outlives every agent by design,
     // so nothing else would ever end it.
     quota.stop()
-    await closeServer(server)
-  })
+    await Promise.all([closeServer(server), secureServer ? closeServer(secureServer) : undefined])
+  }
+  const dashboard = await listenDashboard(server, port, close)
+  if (!opts.secure || !secureServer) return dashboard
+  try {
+    return { ...dashboard, secureUrl: secureUrlOf(opts.secure.name, await listen(secureServer, opts.secure.port)) }
+  } catch (err) {
+    // A secure address that cannot start leaves the dashboard on its plain address, as without one.
+    console.log(`the secure address ${opts.secure.name} could not start (${err instanceof Error ? err.message : String(err)}): the dashboard answers on ${dashboard.url} only`)
+    return dashboard
+  }
 }
 
 /**
- * The one address the dashboard listens on: this computer's own. Whatever opens OpenAgent to a
- * network is a package of its own, which listens there and passes what it lets in on to here.
+ * The secure address's URL. On {@link SECURE_PORT} it has no port: the install sends the name's
+ * port 443 there. Any other port (a test's own) is said.
+ */
+function secureUrlOf(name: string, port: number): string {
+  return port === SECURE_PORT ? `https://${name}` : `https://${name}:${port}`
+}
+
+/**
+ * The one address the dashboard listens on, its secure address too: this computer's own. Whatever
+ * opens OpenAgent to a network is a package of its own, which listens there and passes what it
+ * lets in on to here.
  */
 const DASHBOARD_HOST = '127.0.0.1'
 
 /** Bind the server and resolve a {@link Dashboard} handle; rejects if the port is already taken. */
-function listenDashboard(server: Server, port: number, close: () => Promise<void>): Promise<Dashboard> {
-  return new Promise<Dashboard>((resolvePromise, rejectPromise) => {
+async function listenDashboard(server: Server, port: number, close: () => Promise<void>): Promise<Dashboard> {
+  return { url: `http://${DASHBOARD_HOST}:${await listen(server, port)}`, close }
+}
+
+/** Bind the server on this computer's own address; resolves the port bound, rejects if it is taken. */
+function listen(server: Server, port: number): Promise<number> {
+  return new Promise<number>((resolvePromise, rejectPromise) => {
     server.once('error', rejectPromise)
     server.listen(port, DASHBOARD_HOST, () => {
       server.removeListener('error', rejectPromise)
-      const address = server.address() as AddressInfo
-      resolvePromise({ url: `http://${DASHBOARD_HOST}:${address.port}`, close })
+      resolvePromise((server.address() as AddressInfo).port)
     })
   })
 }

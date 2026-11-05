@@ -1,0 +1,38 @@
+{
+  "name": "@openagt/uninstall",
+  "version": "0.1.0",
+  "description": "Take OpenAgent off this computer again: everything `npx @openagt/install` put on it.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openagt/openagent.git",
+    "directory": "packages/uninstall"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist"
+  ],
+  "bin": {
+    "openagent-uninstall": "dist/bin.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "node -e \"if(!process.env.npm_config_user_agent?.startsWith('pnpm/')){console.error('Pack and publish with pnpm: it replaces workspace:* with the real version, npm does not');process.exit(1)}\"",
+    "typecheck": "tsc --noEmit",
+    "test": "echo 'no tests: the command is the install package'\"'\"'s uninstall'",
+    "clean": "rm -rf dist dist-test"
+  },
+  "dependencies": {
+    "@openagt/install": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^7.0.2"
+  }
+}

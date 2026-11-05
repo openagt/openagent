@@ -40,10 +40,14 @@
     "./module-server": {
       "types": "./dist/module-server.d.ts"
     },
+    "./secure-address": {
+      "types": "./dist/secure-address.d.ts",
+      "default": "./dist/secure-address.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && tsc -p dashboard/tsconfig.module.json && cp dashboard/module/theme.css dist/module.css && cp src/module-server.d.ts dist/module-server.d.ts && node scripts/copy-extension.mjs && cd dashboard && vite build",
+    "build": "tsc -p tsconfig.build.json && tsc -p dashboard/tsconfig.module.json && cp dashboard/module/theme.css dist/module.css && cp src/module-server.d.ts dist/module-server.d.ts && node scripts/copy-extension.mjs && node scripts/copy-website.mjs && cd dashboard && vite build",
     "prepack": "node -e \"if(!process.env.npm_config_user_agent?.startsWith('pnpm/')){console.error('Pack and publish with pnpm: it replaces workspace:* with the real version, npm does not');process.exit(1)}\"",
     "dev": "tsc -p tsconfig.build.json --watch",
     "dev:dashboard": "cd dashboard && vite",

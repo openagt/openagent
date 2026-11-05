@@ -1,6 +1,7 @@
 import type { CSSProperties, MouseEvent } from 'react'
 import { DiscordIcon, GitHubIcon } from './icons'
 import { DISCORD_URL, GITHUB_URL } from './ui'
+import { ViewToggle } from './ViewToggle'
 
 const navBtnStyle: CSSProperties = {
   display: 'inline-flex',
@@ -35,27 +36,31 @@ export function TopNav() {
         rowGap: 14,
       }}
     >
-      {/* Right-clicking the logo opens the press page (logo downloads etc.). */}
-      <a
-        href="/"
-        onClick={goHome}
-        onContextMenu={(e) => {
-          e.preventDefault()
-          window.location.href = '/press'
-        }}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 11,
-          color: '#d3c6aa',
-          fontWeight: 600,
-          fontSize: 17,
-          whiteSpace: 'nowrap',
-        }}
-      >
-        <img src="/assets/logo.svg" alt="OpenAgent logo" style={{ width: 30, height: 34, display: 'block' }} />
-        OpenAgent
-      </a>
+      {/* The logo, and under it the toggle to the dashboard (#1919). */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
+        {/* Right-clicking the logo opens the press page (logo downloads etc.). */}
+        <a
+          href="/"
+          onClick={goHome}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            window.location.href = '/press'
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 11,
+            color: '#d3c6aa',
+            fontWeight: 600,
+            fontSize: 17,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <img src="/assets/logo.svg" alt="OpenAgent logo" style={{ width: 30, height: 34, display: 'block' }} />
+          OpenAgent
+        </a>
+        <ViewToggle />
+      </div>
       <div
         style={{
           display: 'flex',
@@ -66,8 +71,6 @@ export function TopNav() {
           fontSize: 14.5,
         }}
       >
-        {/* No Dashboard button until opening it from here actually works (#1137): the dashboard is
-            a local daemon, and a public page cannot reach or detect one (#1135). */}
         <a href={DISCORD_URL} className="nav-btn" style={navBtnStyle}>
           <DiscordIcon width={16} height={13} />
           <span>Discord</span>

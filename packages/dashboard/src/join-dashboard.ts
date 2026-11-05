@@ -1,4 +1,5 @@
 import type { StartedInResult } from './dashboard/types.js'
+import { readSecureAddress } from './secure-address.js'
 
 /**
  * A second `openagent` on a port a dashboard already listens on (#2141): it asks that port whether
@@ -9,13 +10,17 @@ import type { StartedInResult } from './dashboard/types.js'
  * by, as they let any program on this computer call `sendAddProject`.
  */
 
-/** What the port answered: OpenAgent's dashboard, its version and the folder's project; or something else. */
+/**
+ * What the port answered: OpenAgent's dashboard, the URL to open it at, its version and the
+ * folder's project; or something else. The URL is the secure address's when this computer has
+ * one (#1919), since every dashboard started here answers it.
+ */
 export type JoinedDashboard =
   | { joined: true; url: string; version: string; project?: StartedInResult }
   | { joined: false }
 
 /** Hand `folder` (undefined outside a repository) to the dashboard on `port` of this computer. */
-export async function joinRunningDashboard(port: number, folder: string | undefined): Promise<JoinedDashboard> {
+export async function joinRunningDashboard(port: number, folder: string | undefined, env: NodeJS.ProcessEnv = process.env): Promise<JoinedDashboard> {
   const url = `http://127.0.0.1:${port}`
   try {
     const res = await fetch(`${url}/_rpc/sendStartedAgain`, {
@@ -26,7 +31,8 @@ export async function joinRunningDashboard(port: number, folder: string | undefi
     if (!res.ok) return { joined: false }
     const { ret } = (await res.json()) as { ret?: { version?: unknown; project?: StartedInResult } }
     if (typeof ret?.version !== 'string') return { joined: false }
-    return { joined: true, url, version: ret.version, ...(ret.project ? { project: ret.project } : {}) }
+    const secure = await readSecureAddress(env).catch(() => undefined)
+    return { joined: true, url: secure ? `https://${secure.name}` : url, version: ret.version, ...(ret.project ? { project: ret.project } : {}) }
   } catch {
     // Refused, or not JSON: no OpenAgent dashboard answers there.
     return { joined: false }

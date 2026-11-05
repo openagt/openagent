@@ -1,15 +1,14 @@
 import type { CSSProperties } from 'react'
 import { useCopy } from './copy'
 import { kickerStyle, mono } from './ui'
+import { useDashboardHref } from './ViewToggle'
 
+// Trying runs the dashboard once; installing starts it at every login, at openagent.build (#1919).
 export const PMS = {
-  npm: { try: 'npx @openagt/dashboard', install: 'npm i -g @openagt/dashboard' },
-  pnpm: { try: 'pnpm dlx @openagt/dashboard', install: 'pnpm add -g @openagt/dashboard' },
-  bun: { try: 'bunx @openagt/dashboard', install: 'bun add -g @openagt/dashboard' },
-  // `yarn dlx` is Yarn 2+ (Berry), which removed `yarn global add` — so the install line
-  // falls back to npm, which every yarn user has, rather than pairing two commands no
-  // single yarn generation can both run.
-  yarn: { try: 'yarn dlx @openagt/dashboard', install: 'npm i -g @openagt/dashboard' },
+  npm: { try: 'npx @openagt/dashboard', install: 'npx @openagt/install' },
+  pnpm: { try: 'pnpm dlx @openagt/dashboard', install: 'pnpm dlx @openagt/install' },
+  bun: { try: 'bunx @openagt/dashboard', install: 'bunx @openagt/install' },
+  yarn: { try: 'yarn dlx @openagt/dashboard', install: 'yarn dlx @openagt/install' },
 } as const
 export type Pm = keyof typeof PMS
 
@@ -60,6 +59,7 @@ export const pickPm = (name: Pm) => {
 export function Hero() {
   const tryCopy = useCopy()
   const installCopy = useCopy()
+  const dashboardHref = useDashboardHref()
 
   return (
     <header
@@ -147,6 +147,24 @@ export function Hero() {
       >
         Make the important decisions, let AI do the rest.
       </p>
+      <a
+        href={dashboardHref}
+        className="dashboard-cta"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 10,
+          marginTop: 6,
+          background: '#a7c080',
+          color: '#232a2e',
+          borderRadius: 12,
+          padding: '14px 30px',
+          fontSize: 19,
+          fontWeight: 600,
+        }}
+      >
+        Dashboard <span aria-hidden>→</span>
+      </a>
 
       <div
         style={{
@@ -239,7 +257,7 @@ export function Hero() {
           Or install:
           <span
             className="install-chip"
-            onClick={(e) => installCopy.copy(`${PMS[currentPm()].install} && openagent`, e)}
+            onClick={(e) => installCopy.copy(PMS[currentPm()].install, e)}
             style={{
               position: 'relative',
               cursor: 'pointer',

@@ -42,6 +42,12 @@ section[id] {
 .nav-btn:hover {
   border-color: #859289 !important;
 }
+.view-toggle-off:hover {
+  background: #2d353b;
+}
+.dashboard-cta:hover {
+  background: #b5cc92 !important;
+}
 .nav-btn-primary:hover {
   background: rgba(167, 192, 128, 0.08) !important;
   border-color: #b5cc92 !important;

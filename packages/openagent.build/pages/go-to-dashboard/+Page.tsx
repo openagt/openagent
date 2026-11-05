@@ -128,14 +128,12 @@ export default function Page() {
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <h1 style={h2Style}>Go to dashboard</h1>
-          <p style={pStyle}>The dashboard runs 100% locally — you open it from your terminal.</p>
+          <p style={pStyle}>The dashboard runs 100% locally, on your computer.</p>
         </div>
-        <Step kicker="Run">
-          <p style={pStyle}>If OpenAgent is installed, run it:</p>
-          <Cmd body="openagent" resolve={() => 'openagent'} />
-        </Step>
         <Step kicker="Install">
-          <p style={pStyle}>Not installed yet? Install it globally:</p>
+          <p style={pStyle}>
+            Install it, and from then on openagent.build opens your dashboard on this computer. It starts when you log in. macOS for now:
+          </p>
           <PmSnippet get={(pm) => PMS[pm].install} />
         </Step>
         <Step kicker="One-time run">
