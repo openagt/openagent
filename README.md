@@ -15,7 +15,15 @@ Stop babysitting your coding agents. Make the important decisions, let AI do the
 
 ## Quickstart
 
-In your project's folder:
+Install OpenAgent, on macOS or Linux:
+
+```bash
+npx @openagt/install
+```
+
+From then on, https://openagent.build opens your dashboard, on this computer. It starts when you log in. `npx @openagt/uninstall` takes it off again.
+
+Or try it once, with nothing installed, in your project's folder:
 
 ```bash
 npx @openagt/dashboard
@@ -33,11 +41,4 @@ Or add one by its name:
 
 ```bash
 npx skills add openagt/openagent@github
-```
-
-Or install OpenAgent:
-
-```bash
-npm i -g @openagt/dashboard
-openagent
 ```
