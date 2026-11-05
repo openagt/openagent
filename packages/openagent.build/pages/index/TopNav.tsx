@@ -57,13 +57,13 @@ export function TopNav() {
         </span>
       </a>
       <ViewToggle style={{ position: 'absolute', left: 8, top: 56 }} />
+      {/* At the page's right edge, as the logo is at its left, and level with it. */}
       <div
         style={{
-          maxWidth: 1120,
-          margin: '0 auto',
-          padding: '16px clamp(14px, 4vw, 24px)',
+          position: 'absolute',
+          right: 12,
+          top: 8,
           display: 'flex',
-          justifyContent: 'flex-end',
           gap: 'clamp(10px, 2.5vw, 20px)',
           fontSize: 14.5,
         }}

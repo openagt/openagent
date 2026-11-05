@@ -35,6 +35,6 @@ already made, and lists it in its pull request; for anything else it proposes an
   fades the rest (the browser's page transitions; a browser without them just switches).
   Picked over each page placing the toggle in its own layout, where the whole top of the
   page jumped at each switch.
-- The toggle shows only on a computer with OpenAgent installed; the public website has the
-  logo alone, and its big Dashboard button leads to installing. Picked over the toggle on
-  every page, which offered a dashboard to switch to where there is none.
+- The toggle and the big Dashboard button show only on a computer with OpenAgent installed;
+  the public website has the logo alone, and its install commands. Picked over both on every
+  page, which offered a dashboard where there is none.
