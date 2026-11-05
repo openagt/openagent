@@ -15,18 +15,19 @@ OpenAgent keeps agent data (logs, tickets, queue, plans, schedules) and skills i
 
 ## Why it matters
 
-Today every write goes through `withFileBranch(repo, 'agent-data')` in `@openagt/agent-data`: a branch of the project's own repo, pushed only when `agent-data.share` is on, and the logs, queue and tickets skill texts name the branch `agent-data`. Adding a project therefore changes its repo, and data can't be shared per team or kept across machines independently of the project.
+Before this work every write went through `withFileBranch(repo, 'agent-data')` in `@openagt/agent-data`: a branch of the project's own repo, and the skill texts named the branch `agent-data`. Adding a project therefore changed its repo, and data couldn't be shared per team or kept across machines independently of the project.
 
-## Plan from the issue (one PR each)
+## Done
 
-1. **Personal folder.** `~/.openagent`; `agent-data` knows "the folder a project writes to" instead of "the project's branch". Logs, tickets, queue, plans and schedules go through it.
-2. **Skill texts stop naming the branch.** They say "use the command"; the command knows the folder.
-3. **Folders in Settings.** The list, add a folder, give a folder a remote, "this project writes to…". Each run, ticket and skill shows which folder it comes from.
-4. **Skills from every folder** are linked into the run.
-5. **A ticked skill goes to the personal folder** (linked into runs like the default ones), not committed into the project's repo. Putting it in the project for everyone is a separate choice.
+- #2296: a project's agent data goes to `~/.openagent` by default. A shared project keeps its own `agent-data` branch (this settles the earlier open question).
+- #2297: the skill texts stop naming the branch.
+- #2298: Settings › Agent data: `~/.openagent` can sync with a private repo, so each computer has the same data.
+- #2299: Settings › Project › Agent data: where the project's data is (the Share switch moved here), and what is kept.
+
+## Left (one PR each)
+
+1. **A project's data in a team repo** (e.g. `vikejs/vike-agent`), and the dashboard reading every folder, each run, ticket and skill saying which folder it comes from.
+2. **Skills from every folder** are linked into the run.
+3. **A ticked skill goes to the personal folder** (linked into runs like the default ones), not committed into the project's repo. Putting it in the project for everyone is a separate choice.
 
 Later: machine settings kept in the personal repo, so a new machine is a clone (logins stay per machine: a copied Claude login logs the other machine out, and Codex refresh tokens work once; maybe Claude's `setup-token`, encrypted); messages to an agent on another machine through the data repo, shaped like the reply skill (a scheduler `when` command checks for new messages and wakes the run).
-
-## Open
-
-Projects that already have an `agent-data` branch: keep writing there, or move to `~/.openagent`.
