@@ -25,8 +25,11 @@ vi.mock('./Composer.js', async () => {
   const { forwardRef } = await import('react')
   const Composer = forwardRef((props: any, _ref: any) => (
     <div>
-      <button type="button" disabled={props.busy} onClick={() => props.onSubmit('hello')}>
+      <button type="button" disabled={props.busy} onClick={() => props.onSubmit('hello', { later: false })}>
         submit
+      </button>
+      <button type="button" disabled={props.busy} onClick={() => props.onSubmit('hello', { later: true })}>
+        submit later
       </button>
       <span data-testid="composer-props">
         {JSON.stringify({ showDriverModel: props.showDriverModel, inAgent: props.inAgent, busyLabel: props.submitBusyLabel, placeholder: props.placeholder, sessionModel: props.sessionModel })}
@@ -40,7 +43,7 @@ vi.mock('./Composer.js', async () => {
   return { Composer }
 })
 
-const { AgentComposer, RESUME_MESSAGE } = await import('./AgentComposer.js')
+const { AgentComposer } = await import('./AgentComposer.js')
 
 function renderComposer(over: Partial<Parameters<typeof AgentComposer>[0]> = {}) {
   const onAgentStarted = vi.fn()
@@ -57,8 +60,8 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-// One slot, three states (#1455): the empty box's submit slot holds Stop while the agent is live,
-// Resume once it was stopped, and nothing (the launcher collapse) otherwise.
+// The empty box's submit slot holds Stop while the agent is live, and nothing (the launcher
+// collapse) once it ended, however it ended: a message continues it.
 // The box sits in the chat's column: centered, at the transcript's width.
 describe('AgentComposer column', () => {
   test('the box is centered at the transcript\'s column width', () => {
@@ -87,8 +90,8 @@ describe('AgentComposer box', () => {
 
   test('the box says what sending does, live or ended, in one short line', () => {
     renderComposer()
-    // A working agent reads what is sent when its turn ends: the one thing worth saying there.
-    expect(props().placeholder).toBe('Send now, and the agent reads it when its turn ends')
+    // A working agent: the keys, as Claude Code's box says them.
+    expect(props().placeholder).toBe('⏎ to send, ⌘⏎ to queue for later')
     cleanup()
     renderComposer({ live: false })
     expect(props().placeholder).toBe('Message the agent to continue it…')
@@ -107,8 +110,8 @@ describe('AgentComposer slot control (#1455)', () => {
     await waitFor(() => expect((screen.getByRole('button', { name: 'Stop agent' }) as HTMLButtonElement).disabled).toBe(true))
   })
 
-  test('the Stopping… latch releases when the stop lands, so a resumed run gets a working Stop again', async () => {
-    // A Resume continues the SAME agent (#762) — same id — so a latch keyed to the agent id alone
+  test('the Stopping… latch releases when the stop lands, so a continued run gets a working Stop again', async () => {
+    // A message continues the SAME agent (#762) — same id — so a latch keyed to the agent id alone
     // re-engaged on the resumed session and froze its Stop as a disabled spinner.
     sendStop.mockResolvedValue(undefined)
     const ui = (live: boolean) => <AgentComposer projectId="p1" agentId="run-1" live={live} files={[]} />
@@ -120,48 +123,40 @@ describe('AgentComposer slot control (#1455)', () => {
     expect((screen.getByRole('button', { name: 'Stop agent' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
-  test('a stopped session offers Resume, which says the stock continuation to this same run (#1391)', async () => {
-    sendMessage.mockResolvedValue({ ok: true })
-    const { onAgentStarted } = renderComposer({ live: false, outcome: { ok: false, stopped: true } })
-    fireEvent.click(screen.getByRole('button', { name: 'Resume' }))
-    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', RESUME_MESSAGE, 'run-1'))
-    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith(RESUME_MESSAGE, 'run-1'))
-  })
-
-  test('a refused Resume shows the daemon\'s own words instead of pretending to resume (#1391)', async () => {
-    sendMessage.mockResolvedValue({ ok: false, error: 'this project has no resume hook' })
-    const { onAgentStarted } = renderComposer({ live: false, outcome: { ok: false, stopped: true } })
-    fireEvent.click(screen.getByRole('button', { name: 'Resume' }))
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('this project has no resume hook'))
-    expect(onAgentStarted).not.toHaveBeenCalled()
-    // Not latched as resuming: the offer is still there to press again.
-    expect((screen.getByRole('button', { name: 'Resume' }) as HTMLButtonElement).disabled).toBe(false)
-  })
-
-  test('a run that finished on its own, or waits on its question, offers neither', () => {
-    renderComposer({ live: false, outcome: { ok: true, stopped: false } })
+  test('an ended session offers nothing in the slot, a stopped one too: a message continues it', () => {
+    renderComposer({ live: false })
     expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Stop agent' })).toBeNull()
-    cleanup()
-    renderComposer({ live: false, outcome: { ok: false, stopped: false, waiting: true } })
-    expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull()
   })
 
-  test('after a pressed Resume the slot holds a busy Resume until the run reads live — no flicker (#1460)', async () => {
-    sendMessage.mockResolvedValue({ ok: true })
-    const base = { projectId: 'p1', agentId: 'run-1', files: [] }
-    const { rerender } = render(<AgentComposer {...base} live={false} outcome={{ ok: false, stopped: true }} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Resume' }))
-    await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1))
-    // The resumed leg's first events momentarily stop `outcome` reading `stopped` while the agents
-    // poll still says not-live: the slot used to flicker Resume → collapsed → Stop through here.
-    rerender(<AgentComposer {...base} live={false} outcome={undefined} />)
-    const held = await screen.findByRole('button', { name: 'Resume' })
-    await waitFor(() => expect((held as HTMLButtonElement).disabled).toBe(true))
-    // The agent reads live: the latch releases and the slot hands over to Stop.
-    rerender(<AgentComposer {...base} live outcome={undefined} />)
-    expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Stop agent' })).toBeTruthy()
+  test('Esc stops a live session, as in Claude Code, unless a dialog or menu took it', async () => {
+    sendStop.mockResolvedValue(undefined)
+    renderComposer()
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    document.body.appendChild(dialog)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(sendStop).not.toHaveBeenCalled()
+    dialog.remove()
+    // The box's own suggestions are open: the key closes them, and stops nothing.
+    const box = document.createElement('div')
+    box.className = 'ProseMirror'
+    box.setAttribute('aria-expanded', 'true')
+    document.body.appendChild(box)
+    fireEvent.keyDown(box, { key: 'Escape' })
+    expect(sendStop).not.toHaveBeenCalled()
+    // Closed, Esc in the box stops the agent, even when the box takes the key.
+    box.setAttribute('aria-expanded', 'false')
+    box.addEventListener('keydown', event => event.preventDefault())
+    fireEvent.keyDown(box, { key: 'Escape' })
+    await waitFor(() => expect(sendStop).toHaveBeenCalledWith('p1', 'run-1'))
+    box.remove()
+    sendStop.mockClear()
+    cleanup()
+    sendStop.mockReset()
+    renderComposer({ live: false })
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(sendStop).not.toHaveBeenCalled()
   })
 })
 
@@ -169,10 +164,7 @@ describe('AgentComposer, live (#714)', () => {
   test('nothing is said above the box, whatever the agent\'s state: the chat says it', () => {
     const states: Partial<Parameters<typeof AgentComposer>[0]>[] = [
       {},
-      { live: false, outcome: { ok: true, stopped: false } },
-      { live: false, outcome: { ok: false, stopped: false } },
-      { live: false, outcome: { ok: false, stopped: true } },
-      { live: false, outcome: { ok: false, stopped: false, waiting: true } },
+      { live: false },
     ]
     for (const state of states) {
       const { container } = render(<AgentComposer projectId="p1" agentId="run-1" live files={[]} {...state} />)
@@ -182,15 +174,25 @@ describe('AgentComposer, live (#714)', () => {
     }
   })
 
-  test('a submit goes to the run as a message, and the page is told it waits for the turn to end', async () => {
+  test('a submit goes to the run as a message named by an id, and the page is told it waits to be read', async () => {
     sendMessage.mockResolvedValue({ ok: true })
     const onQueued = vi.fn()
     const { onAgentStarted } = renderComposer({ onQueued })
     fireEvent.click(screen.getByText('submit'))
-    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', 'hello', 'run-1'))
-    await waitFor(() => expect(onQueued).toHaveBeenCalledWith('hello'))
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', 'hello', 'run-1', null, { id: expect.any(String) }))
+    const id = (sendMessage.mock.calls[0]![4] as { id: string }).id
+    await waitFor(() => expect(onQueued).toHaveBeenCalledWith({ id, text: 'hello', later: false }))
     // The run was live already: nothing was started, so the shell is told nothing.
     expect(onAgentStarted).not.toHaveBeenCalled()
+  })
+
+  test('⌘Enter sends it for after the turn', async () => {
+    sendMessage.mockResolvedValue({ ok: true })
+    const onQueued = vi.fn()
+    renderComposer({ onQueued })
+    fireEvent.click(screen.getByText('submit later'))
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', 'hello', 'run-1', null, { id: expect.any(String), later: true }))
+    await waitFor(() => expect(onQueued).toHaveBeenCalledWith(expect.objectContaining({ text: 'hello', later: true })))
   })
 
   test('a refused message shows why, and is not reported as queued', async () => {
@@ -205,15 +207,15 @@ describe('AgentComposer, live (#714)', () => {
 
 describe('AgentComposer, ended (#720, #1774)', () => {
   test('the box\'s own words say the session can be continued, rather than leaving it a dead end', () => {
-    renderComposer({ live: false, outcome: { ok: true, stopped: false } })
+    renderComposer({ live: false })
     expect(props().placeholder).toMatch(/continue it/)
-    expect(props().busyLabel).toBe('Resuming…')
+    expect(props().busyLabel).toBe('Continuing…')
   })
 
   test('a message sent to an ended run is not queued: it continues the run', async () => {
     sendMessage.mockResolvedValue({ ok: true })
     const onQueued = vi.fn()
-    const { onAgentStarted } = renderComposer({ live: false, outcome: { ok: true, stopped: false }, onQueued })
+    const { onAgentStarted } = renderComposer({ live: false, onQueued })
     fireEvent.click(screen.getByText('submit'))
     await waitFor(() => expect(onAgentStarted).toHaveBeenCalled())
     expect(onQueued).not.toHaveBeenCalled()
@@ -221,7 +223,7 @@ describe('AgentComposer, ended (#720, #1774)', () => {
 
   test('a send is the same message call: the daemon resumes the run, and the shell follows the same run', async () => {
     sendMessage.mockResolvedValue({ ok: true })
-    const { onAgentStarted } = renderComposer({ live: false, outcome: { ok: true, stopped: false } })
+    const { onAgentStarted } = renderComposer({ live: false })
     fireEvent.click(screen.getByText('submit'))
     await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', 'hello', 'run-1'))
     await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('hello', 'run-1'))
@@ -229,7 +231,7 @@ describe('AgentComposer, ended (#720, #1774)', () => {
 
   test('a refused resume shows why and moves nowhere', async () => {
     sendMessage.mockResolvedValue({ ok: false, error: 'the resume hook: no run run-1 in this project' })
-    const { onAgentStarted } = renderComposer({ live: false, outcome: { ok: false, stopped: false } })
+    const { onAgentStarted } = renderComposer({ live: false })
     fireEvent.click(screen.getByText('submit'))
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('the resume hook: no run run-1 in this project'))
     expect(onAgentStarted).not.toHaveBeenCalled()
@@ -281,7 +283,7 @@ describe('AgentComposer sending to an ended run', () => {
     expect(screen.getByText('Context · src/app.ts')).toBeTruthy()
     fireEvent.click(screen.getByText('submit'))
     await waitFor(() => expect(reset).toHaveBeenCalled())
-    expect(sendMessage).toHaveBeenCalledWith('p1', 'hello\n\nContext: src/app.ts', 'run-1')
+    expect(sendMessage).toHaveBeenCalledWith('p1', 'hello\n\nContext: src/app.ts', 'run-1', null, { id: expect.any(String) })
   })
 
   test('a refused message keeps the Context picked', async () => {
@@ -298,17 +300,17 @@ describe('AgentComposer sending to an ended run', () => {
     render(<AgentComposer projectId="p1" agentId="run-1" live files={[]} publish="commit" />)
     expect(screen.getByText(/Auto: commit/)).toBeTruthy()
     fireEvent.click(screen.getByText('submit'))
-    // No pick: the words alone.
-    await waitFor(() => expect(sendMessage).toHaveBeenLastCalledWith('p1', 'hello', 'run-1'))
+    // No pick: no level.
+    await waitFor(() => expect(sendMessage).toHaveBeenLastCalledWith('p1', 'hello', 'run-1', null, { id: expect.any(String) }))
     fireEvent.click(screen.getByText('pick Open PR'))
     expect(screen.getByText(/Auto: pr/)).toBeTruthy()
     fireEvent.click(screen.getByText('submit'))
-    await waitFor(() => expect(sendMessage).toHaveBeenLastCalledWith('p1', 'hello', 'run-1', 'pr'))
+    await waitFor(() => expect(sendMessage).toHaveBeenLastCalledWith('p1', 'hello', 'run-1', 'pr', { id: expect.any(String) }))
     expect(screen.getByText(/Auto: pr/), 'still shown while the run has not taken it').toBeTruthy()
     // Picked back to what the record says: nothing to send.
     fireEvent.click(screen.getByText('pick Commit'))
     fireEvent.click(screen.getByText('submit'))
-    await waitFor(() => expect(sendMessage).toHaveBeenLastCalledWith('p1', 'hello', 'run-1'))
+    await waitFor(() => expect(sendMessage).toHaveBeenLastCalledWith('p1', 'hello', 'run-1', null, { id: expect.any(String) }))
   })
 
   test('sent to an ended run, the menu goes back to what the record says: a resume line that cannot take the level must not read as changed', async () => {

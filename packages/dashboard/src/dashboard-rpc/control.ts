@@ -41,7 +41,8 @@ export function agentLockKey(cwd: string, agentId: string): string {
 
 /**
  * Stop a live agent (the Stop button): SIGINT to the process the run's own card names, when it is
- * this machine's and alive. The card is the file the dashboard shows the run from, and its pid is
+ * this machine's and alive. The run's tool asks its agent to end the turn where it is, as Esc does
+ * in Claude Code; a message continues it. The card is the file the dashboard shows the run from, and its pid is
  * whoever runs the agent; OpenAgent names no tool. Nothing else: a run without a live pid
  * here has nothing to stop.
  */
@@ -117,19 +118,53 @@ export async function sendBridgeAnswerCancel(sessionId: string): Promise<void> {
 
 /**
  * Say something to a run (#714, #1774): the person's own words, the next prompt of the same
- * conversation. A run that is working takes them when its turn ends; an ended run is resumed
- * with them. Empty messages are dropped. `publish`, when the person changed the session's "Auto"
- * pick, is how far the run takes its work from these words on, `nothing` for no level; the run's
- * tool reads it, from the inbox line or the resume line's `PUBLISH`.
+ * conversation. A run that is working reads them at its next step, as Claude Code's chat does,
+ * or, sent `later`, when its turn ends; an ended run is resumed with them. Empty messages are
+ * dropped. `publish`, when the person changed the session's "Auto" pick, is how far the run takes
+ * its work from these words on, `nothing` for no level; the run's tool reads it, from the inbox
+ * line or the resume line's `PUBLISH`. `id` names the message for {@link withdrawMessage} and for
+ * the run's word that it landed.
  */
-export async function sendMessage(projectId: string, text: string, agentId?: string, publish?: PublishPick): Promise<SteerResult> {
+export async function sendMessage(projectId: string, text: string, agentId?: string, publish?: PublishPick | null, sent?: { id?: string; later?: boolean }): Promise<SteerResult> {
   const message = text.trim()
   if (!message) return { ok: true }
-  if (publish !== undefined && !isPublishPick(publish)) return { ok: false, error: 'unknown publish level' }
-  return relayOr(agentId, 'sendMessage', [projectId, text, agentId, ...(publish !== undefined ? [publish] : [])], async (): Promise<SteerResult> => {
+  // A call that names how it is sent and no level passes the level as nothing.
+  const level = publish ?? undefined
+  if (level !== undefined && !isPublishPick(level)) return { ok: false, error: 'unknown publish level' }
+  const id = typeof sent?.id === 'string' && sent.id !== '' ? sent.id : undefined
+  const later = sent?.later === true
+  const how = id !== undefined || later ? { ...(id !== undefined ? { id } : {}), ...(later ? { later } : {}) } : undefined
+  // Passed on as it came: a level only when one was picked or something follows it.
+  const passed = [projectId, text, agentId, ...(level !== undefined || how ? [level ?? null] : []), ...(how ? [how] : [])]
+  return relayOr(agentId, 'sendMessage', passed, async (): Promise<SteerResult> => {
     const cwd = await resolveProjectPath(projectId)
     if (!cwd || !agentId || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
-    return (await startedElsewhere(cwd, agentId)) ?? sayToRun(cwd, agentId, { kind: 'message', text: message, ...(publish !== undefined ? { publish } : {}) })
+    return (await startedElsewhere(cwd, agentId)) ?? sayToRun(cwd, agentId, { kind: 'message', text: message, ...(level !== undefined ? { publish: level } : {}), ...(id !== undefined ? { id } : {}), ...(later ? { later: true as const } : {}) })
+  }, { ok: false, error: 'could not reach the machine' })
+}
+
+/**
+ * Take back a message sent to a working run that the agent has not read yet (Cancel and edit):
+ * the person edits it instead. One the agent already read stays read.
+ */
+export async function withdrawMessage(projectId: string, agentId: string, id: string): Promise<SteerResult> {
+  if (typeof id !== 'string' || id === '') return { ok: false, error: 'unknown message' }
+  return relayOr(agentId, 'withdrawMessage', [projectId, agentId, id], async (): Promise<SteerResult> => {
+    const cwd = await resolveProjectPath(projectId)
+    if (!cwd || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
+    return sayToRun(cwd, agentId, { kind: 'cancel', id })
+  }, { ok: false, error: 'could not reach the machine' })
+}
+
+/**
+ * Send now: the messages a working run has not read yet reach its agent at once, what it is running
+ * going on in the background, as Claude Code's Send now does.
+ */
+export async function sendNow(projectId: string, agentId: string): Promise<SteerResult> {
+  return relayOr(agentId, 'sendNow', [projectId, agentId], async (): Promise<SteerResult> => {
+    const cwd = await resolveProjectPath(projectId)
+    if (!cwd || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
+    return sayToRun(cwd, agentId, { kind: 'now' })
   }, { ok: false, error: 'could not reach the machine' })
 }
 

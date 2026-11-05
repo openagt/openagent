@@ -52,6 +52,8 @@ const DRIVER_UI: Record<DriverName, { icon: DriverOption['icon'] }> = {
 export interface ComposerHandle {
   clear: () => void
   focus: () => void
+  /** Put `text` in the box to edit, in place of what is there, and focus it. */
+  edit: (text: string) => void
 }
 
 // The shared agent composer (#721), laid out as Claude Code's: a box one line tall when empty that
@@ -83,8 +85,8 @@ export const Composer = forwardRef<ComposerHandle, {
   sessionModel?: string | undefined
   /** Inside a session: how full its context is, beside the model. */
   sessionContext?: ReactNode
-  /** Run the composed text. */
-  onSubmit: (text: string) => void | Promise<void>
+  /** Run the composed text; `later` when it was sent with Cmd/Ctrl+Enter, which a working agent reads after its turn. */
+  onSubmit: (text: string, sent: { later: boolean }) => void | Promise<void>
   /** Mirror the live prompt out, so the launcher can drive its note. */
   onPromptChange?: ((prompt: string) => void) | undefined
   /** A command or a saved prompt was loaded (so the launcher can flag it in its note);
@@ -198,6 +200,11 @@ export const Composer = forwardRef<ComposerHandle, {
       setPrompt('')
     },
     focus: () => editorRef.current?.focus(),
+    edit: text => {
+      editorRef.current?.loadTemplate(text)
+      setPrompt(text)
+      editorRef.current?.focus()
+    },
   }))
 
   // Rehydrate a draft carried in from the click that navigated here (#1139), launcher-only.
@@ -217,13 +224,13 @@ export const Composer = forwardRef<ComposerHandle, {
   // `busy === false` (React state lags), fired two starts, and the second surfaced a spurious
   // "already active" error. The ref flips before any await.
   const submittingRef = useRef(false)
-  const submit = (e?: FormEvent) => {
+  const submit = (e?: FormEvent, later = false) => {
     e?.preventDefault()
     const text = prompt.trim()
     // #1073: a keyboard submit must be blocked too when the target machine is offline.
     if (!text || busy || submittingRef.current || targetOffline || untold || !canSubmit) return
     submittingRef.current = true
-    void Promise.resolve(onSubmit(text)).finally(() => {
+    void Promise.resolve(onSubmit(text, { later })).finally(() => {
       submittingRef.current = false
     })
   }
@@ -245,7 +252,7 @@ export const Composer = forwardRef<ComposerHandle, {
       ref={editorRef}
       compact={compact}
       onChange={onPromptEdit}
-      onSubmit={submit}
+      onSubmit={later => submit(undefined, later)}
       {...(onPreset ? { onPreset } : {})}
       {...(addContext ? { onMentionProject: addContext, onMentionFile: addContext } : {})}
       {...(removeContext ? { onMentionRemoved: removeContext } : {})}

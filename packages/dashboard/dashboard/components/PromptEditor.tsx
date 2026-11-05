@@ -29,8 +29,8 @@ export interface PromptEditorHandle {
 
 interface PromptEditorProps {
   onChange: (markdown: string) => void
-  /** Enter (and Cmd/Ctrl+Enter); Shift+Enter stays a line break (#1510). */
-  onSubmit: () => void
+  /** Enter, and Cmd/Ctrl+Enter with `later` set (Claude Code's "queue for later"); Shift+Enter stays a line break (#1510). */
+  onSubmit: (later?: boolean) => void
   /** A command or a saved prompt picked from the `/` menu. `replaced` says whether a typed draft
    *  was overwritten — undo brings it back, and the form's note says so. */
   onPreset?: (label: string, replaced: boolean) => void
@@ -286,7 +286,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
       handleKeyDown: (view, event) => {
         if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
           event.preventDefault()
-          onSubmitRef.current()
+          onSubmitRef.current(true)
           return true
         }
         // Enter sends, Shift+Enter breaks the line (#1510) — Claude Code web's bindings. This

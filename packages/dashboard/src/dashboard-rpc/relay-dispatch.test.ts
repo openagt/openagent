@@ -19,7 +19,7 @@ test('RELAY_RPC_NAMES is the run-scoped read/steer/handoff surface and a project
     'onProjectFiles', 'readModule',
     'onGitStatus', 'onAgentWorktree', 'onAgentMainBranch', 'onAgentHandoff', 'onAgent', 'onStartedName', 'onOwnRuns', 'onStartCheck',
     'onCommands', 'onDocs', 'onAgentsDoing', 'onRetainedWorktrees', 'onGitHostHome', 'onRepositoryOffer', 'onProjectSkills', 'onRecordsReach',
-    'sendStop', 'sendChoice', 'sendMessage', 'sendOpenPullRequest', 'sendPush', 'sendMerge', 'sendMergeBranch', 'sendStart', 'runModuleCommand',
+    'sendStop', 'sendChoice', 'sendMessage', 'withdrawMessage', 'sendNow', 'sendOpenPullRequest', 'sendPush', 'sendMerge', 'sendMergeBranch', 'sendStart', 'runModuleCommand',
   ]) {
     assert.ok(RELAY_RPC_NAMES.includes(name), `expected ${name} on the relay whitelist`)
   }
@@ -75,6 +75,8 @@ test('every relayed rpc is classed as a read or an act, by name: a computer that
     sendStop: 'act',
     sendChoice: 'act',
     sendMessage: 'act',
+    withdrawMessage: 'act',
+    sendNow: 'act',
     sendOpenPullRequest: 'act',
     sendPush: 'act',
     sendMerge: 'act',

@@ -91,10 +91,12 @@ Everything the dashboard shows — live, and months later — it reads from thos
 Steering goes back the same way, never over a channel:
 
 - **What you say to a working agent** becomes a line in its `inbox.jsonl`, which the agent's
-  tool reads when a turn ends.
+  tool reads while the agent works: the agent reads it at its next step, or, sent with ⌘Enter,
+  when its turn ends.
 - **What you say to an agent that has ended** — your words, or your answer to the question it
   stopped on — runs the project's `resume` hook, which continues that same agent.
-- **Stop** is a signal to the process the agent's card names.
+- **Stop** is a signal to the process the agent's card names: the agent ends its turn where it is,
+  and a message continues it.
 
 So a working agent and a finished one render identically, and an agent on another machine
 needs only its lines carried home.

@@ -3,10 +3,11 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { readClaudeQuota } from './claude-code-quota.js'
 import { readClaudeModels } from './claude-code-models.js'
 import { accountEnv, CLAUDE_TOKEN_ENV } from './claude-accounts.js'
-import { type AccountRotation, type AgentCliParser, type CliIo, type Question, toolQuestion, type ReadyPrompt, readyPrompt, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, cutOutput, callArgument, lineCount, patchSize, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, finishTurn, agentEnv, oneLine, attachLog, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverQuota, type DriverRateLimit, type DriverRateWindow, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage } from '@openagt/agent-driver'
+import { type AccountRotation, type AgentCliParser, type CliIo, type Question, toolQuestion, type ReadyPrompt, readyPrompt, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, cutOutput, callArgument, lineCount, patchSize, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, finishTurn, agentEnv, oneLine, attachLog, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type FileChange, type DriverModel, type DriverPromptOptions, type DriverQuota, type DriverRateLimit, type DriverRateWindow, type DriverSession, type DriverStartOptions, type DriverTurn, type DriverUsage, steeredWords } from '@openagt/agent-driver'
 
 /** Claude Code permission modes we pass through to the CLI. */
 export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan'
@@ -199,6 +200,8 @@ export class ClaudeCodeSession implements DriverSession {
           signals,
           parser: talking(parser, promptSent(said, sent)),
           driver: 'claude-code',
+          ...(this.startOpts.stop ? { stop: this.startOpts.stop } : {}),
+          ...(sent.inbox !== undefined ? { inbox: sent.inbox, steered: line => steeredWords(line, sent) } : {}),
         })
       // The id we captured may outlive what the CLI will resume (#778): its retention, a cleared
       // history, another machine. There is no way to ask first, so the turn tries, and a gone
@@ -213,7 +216,7 @@ export class ClaudeCodeSession implements DriverSession {
           text,
           opts,
           emit,
-          stopped: () => this.startOpts.signal?.aborted === true || opts.signal?.aborted === true,
+          stopped: () => this.startOpts.signal?.aborted === true || this.startOpts.stop?.aborted === true || opts.signal?.aborted === true,
           continueFrom: id => {
             this.lastSessionId = id
           },
@@ -307,7 +310,8 @@ export class ClaudeCodeSession implements DriverSession {
 
   private buildArgs(system: string, resumeId?: string): string[] {
     // `--include-partial-messages`: the reply also comes in pieces as it is written, before the whole message.
-    const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages']
+    // `--replay-user-messages`: a message handed over while the turn runs is repeated once the agent read it.
+    const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--replay-user-messages']
     if (this.config.dangerouslySkipPermissions) args.push('--dangerously-skip-permissions')
     else args.push('--permission-mode', this.config.permissionMode ?? 'acceptEdits')
     // Resume the same conversation for a chat turn (#714). Skip the system append then:
@@ -359,6 +363,10 @@ function talking(parser: StreamJsonParser, words: string | Promise<string>): Age
   return {
     push: line => parser.push(line),
     result: () => parser.result(),
+    steer: message => parser.steer(message),
+    withdraw: id => parser.withdraw(id),
+    hurry: () => parser.hurry(),
+    stop: () => parser.stop(),
     converse: io => {
       parser.talk(io)
       // Words already known go at once, before any line of the CLI's is read.
@@ -534,10 +542,78 @@ export class StreamJsonParser {
   private asked: Question | undefined
   /** The ids of the agent's AskUserQuestion calls: the question is the card, not a step. */
   private readonly askCalls = new Set<string>()
+  /** The person asked for the turn to end ({@link stop}): an end that is not a success is that stop. */
+  private stopping = false
+  /** The turn's `result` said it succeeded. */
+  private succeeded = false
+  /** The messages handed over while the turn runs and not read yet, by the uuid each went with. */
+  private readonly steering = new Map<string, { id: string; text: string }>()
+  /** The tasks the agent waits on now, by their id: what Send now puts in the background. */
+  private readonly foreground = new Set<string>()
+  /** Send now came before any call the agent waits on: the next one goes in the background. */
+  private hurrying = false
+  /** How many tasks the CLI runs in the background now, as its last `background_tasks_changed` said. */
+  private background = 0
 
   /** Answer the CLI's requests on `io` from now on, and close it when the turn is over. */
   talk(io: CliIo): void {
     this.io = io
+  }
+
+  /**
+   * Hand the agent a message while its turn runs: Claude Code queues it and reads it at its next
+   * step, then says so by repeating it (`--replay-user-messages`) under the uuid it was sent with.
+   */
+  steer(message: { id: string; text: string; words: string }): boolean {
+    if (!this.io || this.answered || this.stopping) return false
+    const uuid = randomUUID()
+    this.steering.set(uuid, { id: message.id, text: message.text })
+    this.io.write(JSON.stringify({ type: 'user', message: { role: 'user', content: message.words }, parent_tool_use_id: null, uuid }))
+    return true
+  }
+
+  /** Take back a message the agent has not read: Claude Code drops it from its queue. */
+  withdraw(id: string): void {
+    for (const [uuid, message] of this.steering) {
+      if (message.id !== id) continue
+      this.steering.delete(uuid)
+      this.control(`withdraw-${uuid}`, { subtype: 'cancel_async_message', message_uuid: uuid })
+    }
+  }
+
+  /**
+   * Send now: what the agent waits on goes on in the background, as Ctrl+B does in Claude Code, so
+   * its call answers at once and the agent reads the messages waiting. Asked before any call has
+   * begun, the request would do nothing: the next call to begin goes in the background instead.
+   */
+  hurry(): void {
+    if (this.steering.size === 0) return
+    if (this.foreground.size > 0) this.control(`hurry-${randomUUID()}`, { subtype: 'background_tasks' })
+    else this.hurrying = true
+  }
+
+  /** The person's Stop, as Esc in Claude Code: the turn is interrupted where it is, and is over. */
+  stop(): boolean {
+    if (!this.io || this.answered) return false
+    this.stopping = true
+    this.control(`stop-${randomUUID()}`, { subtype: 'interrupt' })
+    return true
+  }
+
+  private foregroundTask(subtype: unknown, task: string, obj: Record<string, unknown>): void {
+    const patch = typeof obj['patch'] === 'object' && obj['patch'] !== null ? (obj['patch'] as Record<string, unknown>) : {}
+    if (subtype === 'task_started' && obj['is_backgrounded'] !== true) {
+      this.foreground.add(task)
+      if (!this.hurrying || this.steering.size === 0) return
+      this.hurrying = false
+      this.control(`hurry-${randomUUID()}`, { subtype: 'background_tasks' })
+    } else if (subtype === 'task_notification' || (subtype === 'task_updated' && (patch['is_backgrounded'] === true || patch['status'] !== undefined))) {
+      this.foreground.delete(task)
+    }
+  }
+
+  private control(id: string, request: Record<string, unknown>): void {
+    this.io?.write(JSON.stringify({ type: 'control_request', request_id: id, request }))
   }
 
   /** The agent's session id, once a line said it. */
@@ -576,6 +652,9 @@ export class StreamJsonParser {
 
     // A subagent's task, as the CLI reports it beside the subagent's own messages: one run in the
     // background is over when its task is, and its call's answer only said it began.
+    // The calls the agent waits on, for Send now, by their task: one begins in the foreground, and
+    // is over when its task is or when it goes on in the background.
+    if (type === 'system' && typeof obj['task_id'] === 'string') this.foregroundTask(obj['subtype'], obj['task_id'], obj)
     if (type === 'system' && obj['subtype'] === 'task_started' && obj['is_backgrounded'] === true && typeof obj['tool_use_id'] === 'string') {
       this.backgrounded.add(obj['tool_use_id'])
       return announced
@@ -596,6 +675,15 @@ export class StreamJsonParser {
       this.rejected = { ...this.rejected, ...limitFrees(obj) }
     }
     if (type === 'assistant') return [...announced, ...this.handleAssistant(obj)]
+    // A user line the CLI repeats is one it read: a message handed over while the turn ran landed
+    // here. The CLI repeats its own lines too (the prompt, a background task's note): not the person's.
+    if (type === 'user' && obj['isReplay'] === true) {
+      const uuid = obj['uuid']
+      const landed = typeof uuid === 'string' ? this.steering.get(uuid) : undefined
+      if (landed === undefined) return announced
+      this.steering.delete(uuid as string)
+      return [...announced, { type: 'steered', text: landed.text, id: landed.id }]
+    }
     if (type === 'user') return [...announced, ...this.handleResults(obj)]
     // A subagent's message being written is not the agent's: only its whole message is shown, as the subagent's.
     if (type === 'stream_event') return withinSubagent(obj) !== undefined ? announced : [...announced, ...this.handlePiece(obj['event'])]
@@ -605,14 +693,21 @@ export class StreamJsonParser {
       if (limit?.status === 'rejected') this.rejected = { resetsAt: limit.resetsAt }
       return limit ? [...announced, { type: 'rate-limit', limit }] : announced
     }
+    // The work the CLI runs in the background, as a level: every change says the whole set.
+    if (type === 'system' && obj['subtype'] === 'background_tasks_changed' && Array.isArray(obj['tasks'])) this.background = obj['tasks'].length
     if (type === 'result') {
-      // The turn's last line: nothing more is coming to answer, so the CLI may exit.
-      this.io?.end()
-      this.answered = this.asked !== undefined || (obj['subtype'] === 'success' && obj['is_error'] !== true)
+      this.succeeded = obj['subtype'] === 'success' && obj['is_error'] !== true
       const result = obj['result']
       if (typeof result === 'string') this.finalText = result
       const usage = parseUsage(obj)
       if (usage) this.usage = { ...usage, ...(this.context !== undefined ? { contextTokens: this.context } : {}) }
+      // The agent waits on work it runs in the background: the CLI says a result each time the
+      // agent is idle, and the work's end wakes it for another. The turn goes on, and a message
+      // sent meanwhile still reaches it.
+      if (this.background > 0 && this.asked === undefined && !this.stopping) return announced
+      // The turn's last line: nothing more is coming to answer, so the CLI may exit.
+      this.io?.end()
+      this.answered = this.asked !== undefined || this.stopping || this.succeeded
       return announced // The `result` event is emitted by the runner after `close`.
     }
     return announced
@@ -776,6 +871,7 @@ export class StreamJsonParser {
       ...(this.sessionId ? { sessionId: this.sessionId } : {}),
       ...(this.usage ? { usage: this.usage } : {}),
       ...(this.asked ? { question: this.asked } : {}),
+      ...(this.stopping && !this.succeeded && this.asked === undefined ? { stopped: true as const } : {}),
     }
   }
 

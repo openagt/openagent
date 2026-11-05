@@ -1,6 +1,6 @@
 import type { Question } from './question.js'
 import type { SessionLog, SessionLogOptions } from './session-log.js'
-import type { InboxLine } from './inbox.js'
+import type { InboxLine, PromptLine } from './inbox.js'
 
 /**
  * The **driver** seam: the one abstraction a coding-agent CLI is wrapped behind.
@@ -130,6 +130,13 @@ export interface DriverStartOptions {
   /** Abort the whole session; disposing kills the underlying process. */
   signal?: AbortSignal
   /**
+   * End the turn that runs when it fires, as the person's Stop does in Claude Code: the agent is
+   * asked to stop where it is, its conversation keeps everything up to there, and the turn resolves
+   * with {@link DriverTurn.stopped} rather than failing. A driver that cannot ask its agent ends the
+   * process instead, as {@link signal} does.
+   */
+  stop?: AbortSignal
+  /**
    * Resume a prior agent session id (#720): seed the session so its very first
    * prompt (with `resume`) continues that conversation instead of starting fresh.
    * This is how a finished agent is revived from a UI — its captured session
@@ -221,7 +228,7 @@ export interface DriverPromptOptions {
    * answers the ones it goes with instead (the sentence after it, say, when the line gives the run
    * a new level). Absent, every line goes with this prompt's options.
    */
-  onInboxLine?: (line: InboxLine, sent: DriverPromptOptions) => Promise<DriverPromptOptions>
+  onInboxLine?: (line: PromptLine, sent: DriverPromptOptions) => Promise<DriverPromptOptions>
   /**
    * A sentence the caller adds after the prompt, and after every inbox line this prompt goes on
    * to send: the agent reads the two as one message, the sentence after an empty line. The `start`
@@ -249,6 +256,13 @@ export interface DriverTurn {
    * driver ended the turn on it, so the person answers it the same way as one written in the text.
    */
   question?: Question
+  /** The turn was ended on purpose ({@link DriverStartOptions.stop}): over, not failed. */
+  stopped?: true
+  /**
+   * Lines the turn took from the inbox while it ran but could not hand the agent then: a message
+   * sent for after the turn, or one the turn ended before it took. The next prompts, in order.
+   */
+  held?: InboxLine[]
 }
 
 /**
@@ -423,6 +437,12 @@ export interface FileChange {
  * which tool the agent reached for.
  */
 export type DriverEvent =
+  /**
+   * A message the person sent while the agent worked reached it now, between two of its steps:
+   * `id` is the one its inbox line carried. The agent read it with what it was doing, in the same
+   * turn, so a reader shows it here, where it landed.
+   */
+  | { type: 'steered'; text: string; id?: string }
   /** A prompt was sent; the agent's loop is starting. `attached` is the text the caller handed over with it ({@link DriverPromptOptions.attached}) and `added` the sentence the caller put after it ({@link DriverPromptOptions.added}): the agent got all of it. */
   | { type: 'start'; prompt: string; attached?: string; added?: string }
   /**

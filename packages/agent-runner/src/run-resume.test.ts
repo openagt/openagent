@@ -21,41 +21,44 @@ handDownBasicSkills()
 // a level changed on the way, and the lock that keeps two processes of one run apart. The run's
 // start is in `run.test.ts`.
 
-test('a signal to the run\'s process stops it: the session aborted, the run recorded `stopped`, the checkout reclaimed', async () => {
+/** An agent that works until it is stopped: `on` names the signal it ends on, the stop or the kill. */
+function patientDriver(on: 'stop' | 'signal', prompted: () => void): Driver {
+  return {
+    id: 'fake',
+    start: async (opts: DriverStartOptions): Promise<DriverSession> => {
+      const fake = await new FakeDriver({ turns: [{ text: 'Working…' }] }).start(opts)
+      return {
+        id: fake.id,
+        cwd: fake.cwd,
+        ...(fake.log ? { log: fake.log } : {}),
+        prompt: async (text, promptOpts) => {
+          const turn = await fake.prompt(text, promptOpts)
+          prompted()
+          // A bound wait: nothing else holds the event loop open while the signal is in flight.
+          return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error('no signal within 5s')), 5000)
+            // Asked to stop, the agent ends its turn as stopped, as agent-driver's drivers do.
+            if (on === 'stop') opts.stop!.addEventListener('abort', () => (clearTimeout(timer), resolve({ ...turn, stopped: true })), { once: true })
+            opts.signal!.addEventListener('abort', () => (clearTimeout(timer), reject(new Error('fake prompt aborted'))), { once: true })
+          })
+        },
+        dispose: () => fake.dispose(),
+      }
+    },
+  }
+}
+
+test('a signal to the run\'s process stops it: the agent asked to end its turn, the run recorded `stopped`, the checkout reclaimed', async () => {
   const repo = await testRepo()
   try {
     let prompted!: () => void
     const started = new Promise<void>(resolve => (prompted = resolve))
-    // An agent that works until told to stop, the way agent-driver ends a session on its signal.
-    const patient: Driver = {
-      id: 'fake',
-      start: async (opts: DriverStartOptions): Promise<DriverSession> => {
-        const fake = await new FakeDriver({ turns: [{ text: 'Working…' }] }).start(opts)
-        return {
-          id: fake.id,
-          cwd: fake.cwd,
-          ...(fake.log ? { log: fake.log } : {}),
-          prompt: async (text, promptOpts) => {
-            const turn = await fake.prompt(text, promptOpts)
-            prompted()
-            // A bound wait: nothing else holds the event loop open while the signal is in flight.
-            await new Promise<void>((_, reject) => {
-              const timer = setTimeout(() => reject(new Error('no signal within 5s')), 5000)
-              opts.signal!.addEventListener('abort', () => {
-                clearTimeout(timer)
-                reject(new Error('fake prompt aborted'))
-              }, { once: true })
-            })
-            return turn
-          },
-          dispose: () => fake.dispose(),
-        }
-      },
-    }
-    const running = runCommand(repo, { prompt: '/work-queue', model: 'opus', driver: patient, now: () => NOW, gitHost: noGitHost })
+    const running = runCommand(repo, { prompt: '/work-queue', model: 'opus', driver: patientDriver('stop', () => prompted()), now: () => NOW, gitHost: noGitHost })
     await started
+    const pressed = Date.now()
     process.kill(process.pid, 'SIGINT') // what a dashboard's Stop sends; this test's own process has the run's handler
     const outcome = await running
+    assert.ok(Date.now() - pressed < 4000, 'stopped by the agent, not by a timeout')
     assert.equal(outcome.status, 'stopped')
     assert.equal(outcome.detail, STOPPED_DETAIL)
     assert.deepEqual(outcome.checkout, { reclaimed: true })
@@ -64,6 +67,25 @@ test('a signal to the run\'s process stops it: the session aborted, the run reco
     const diary = await readUntimedDiary(repo, outcome.id)
     assert.deepEqual(diary.find(l => l.kind === 'said'), { kind: 'said', text: 'Working…' })
     assert.deepEqual(diary.at(-1), { kind: 'ended', status: 'stopped', detail: STOPPED_DETAIL })
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
+test('a second signal ends an agent that does not stop: the session killed, the run still recorded `stopped`', async () => {
+  const repo = await testRepo()
+  try {
+    let prompted!: () => void
+    const started = new Promise<void>(resolve => (prompted = resolve))
+    const running = runCommand(repo, { prompt: '/work-queue', model: 'opus', driver: patientDriver('signal', () => prompted()), now: () => NOW, gitHost: noGitHost })
+    await started
+    const pressed = Date.now()
+    process.kill(process.pid, 'SIGINT')
+    await new Promise(resolve => setTimeout(resolve, 100))
+    process.kill(process.pid, 'SIGINT')
+    const outcome = await running
+    assert.ok(Date.now() - pressed < 4000, 'killed by the second signal, not by a timeout')
+    assert.equal(outcome.status, 'stopped')
   } finally {
     await removeRepo(repo)
   }

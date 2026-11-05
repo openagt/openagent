@@ -850,3 +850,48 @@ test('the parser itself says a turn stopped on the agent’s question did not fa
   assert.equal(parser.failure(), undefined)
   assert.deepEqual(parser.result().question, QUESTION)
 })
+
+/** A parser talked to as Codex's app-server would: what it wrote, and a way to answer it. */
+function talkedParser() {
+  const parser = new CodexAppServerParser({ text: 'go', cwd: '/ws', sandbox: 'workspace-write' })
+  const written: Record<string, unknown>[] = []
+  parser.converse({ write: line => void written.push(JSON.parse(line) as Record<string, unknown>), end: () => {} })
+  const answer = (result: Record<string, unknown>) => parser.push(JSON.stringify({ id: written.at(-1)!['id'], result }))
+  answer({})
+  answer({ thread: { id: 'thread-1' } })
+  answer({ turn: { id: 'turn-1' } })
+  return { parser, written, answer }
+}
+
+test('a message handed over mid-turn is turn/steer on the turn under way, and has landed once Codex took it', () => {
+  const { parser, written, answer } = talkedParser()
+  assert.equal(parser.steer({ id: 'm1', text: 'Also the README.', words: 'Also the README.\n\nCommit your work.' }), true)
+  assert.deepEqual(written.at(-1), { id: written.at(-1)!['id'], method: 'turn/steer', params: { threadId: 'thread-1', expectedTurnId: 'turn-1', input: [{ type: 'text', text: 'Also the README.\n\nCommit your work.', text_elements: [] }] } })
+  assert.deepEqual(answer({}), [{ type: 'steered', text: 'Also the README.', id: 'm1' }])
+})
+
+test('a steer Codex refuses (its turn ended meanwhile) is not the turn’s failure: the message waits for the turn’s end', () => {
+  const { parser, written } = talkedParser()
+  parser.steer({ id: 'm1', text: 'x', words: 'x' })
+  assert.deepEqual(parser.push(JSON.stringify({ id: written.at(-1)!['id'], error: { message: 'no active turn' } })), [])
+  parser.push(JSON.stringify({ method: 'turn/completed', params: { turn: { status: 'completed' } } }))
+  assert.equal(parser.failure(), undefined)
+  // Over, it takes no message and no stop.
+  assert.equal(parser.steer({ id: 'm2', text: 'y', words: 'y' }), false)
+  assert.equal(parser.stop(), false)
+})
+
+test('the person’s Stop is turn/interrupt, and the interrupted turn is stopped, not failed', () => {
+  const { parser, written } = talkedParser()
+  assert.equal(parser.stop(), true)
+  assert.deepEqual(written.at(-1), { id: written.at(-1)!['id'], method: 'turn/interrupt', params: { threadId: 'thread-1', turnId: 'turn-1' } })
+  parser.push(JSON.stringify({ method: 'turn/completed', params: { turn: { status: 'interrupted' } } }))
+  assert.equal(parser.failure(), undefined)
+  assert.equal(parser.result().stopped, true)
+})
+
+test('a Stop before Codex said its turn cannot be asked: the process is ended instead', () => {
+  const parser = new CodexAppServerParser({ text: 'go', cwd: '/ws', sandbox: 'workspace-write' })
+  parser.converse({ write: () => {}, end: () => {} })
+  assert.equal(parser.stop(), false)
+})

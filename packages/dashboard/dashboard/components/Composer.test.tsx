@@ -71,6 +71,9 @@ vi.mock('./PromptEditor.js', async () => {
         <button type="button" onClick={() => props.onSubmit()}>
           editor-submit
         </button>
+        <button type="button" onClick={() => props.onSubmit(true)}>
+          editor-submit-later
+        </button>
       </div>
     )
   })
@@ -138,7 +141,7 @@ describe('Composer (#721)', () => {
     // The editor + submit still work (so `/` `@` `#` triggers remain live in the editor).
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'quick run' } })
     fireEvent.click(screen.getByRole('button', { name: 'Start' }))
-    expect(onSubmit).toHaveBeenCalledWith('quick run')
+    expect(onSubmit).toHaveBeenCalledWith('quick run', { later: false })
   })
 
   test('showDriverModel={false} (#831) drops the agent/model select, keeping the rest of the row', () => {
@@ -149,7 +152,7 @@ describe('Composer (#721)', () => {
     expect(screen.getByRole('button', { name: 'Commands' })).toBeTruthy()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'follow-up' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
-    expect(onSubmit).toHaveBeenCalledWith('follow-up')
+    expect(onSubmit).toHaveBeenCalledWith('follow-up', { later: false })
   })
 
   test('the submit button is hidden until the editor has text, then appears and fires onSubmit', () => {
@@ -160,14 +163,18 @@ describe('Composer (#721)', () => {
     const submit = screen.getByRole('button', { name: 'Send' })
     expect(submit.hasAttribute('disabled')).toBe(false)
     fireEvent.click(submit)
-    expect(onSubmit).toHaveBeenCalledWith('ship it')
+    expect(onSubmit).toHaveBeenCalledWith('ship it', { later: false })
   })
 
-  test('the editor shortcut (Cmd/Ctrl+Enter) submits too', () => {
+  test('the editor\'s Enter submits, and its Cmd/Ctrl+Enter submits for later', async () => {
     const { onSubmit } = renderComposer()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'go' } })
     fireEvent.click(screen.getByText('editor-submit'))
-    expect(onSubmit).toHaveBeenCalledWith('go')
+    expect(onSubmit).toHaveBeenCalledWith('go', { later: false })
+    // The latch against a double press holds until the first submit settled.
+    await new Promise(resolve => setTimeout(resolve, 0))
+    fireEvent.click(screen.getByText('editor-submit-later'))
+    expect(onSubmit).toHaveBeenLastCalledWith('go', { later: true })
   })
 
   test('mirrors prompt changes out via onPromptChange', () => {
@@ -187,7 +194,7 @@ describe('Composer (#721)', () => {
     expect(onPreset).toHaveBeenCalledWith('/work-queue', false)
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: '/work-queue now' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
-    expect(onSubmit).toHaveBeenCalledWith('/work-queue now')
+    expect(onSubmit).toHaveBeenCalledWith('/work-queue now', { later: false })
   })
 
   test('canSubmit={false} keeps the submit off, by click and by shortcut', () => {
@@ -206,7 +213,7 @@ describe('Composer (#721)', () => {
     sessionStorage.setItem('oa.pending-draft', 'carried from a ticket')
     const { onSubmit } = renderComposer({ submitLabel: 'Start session' })
     fireEvent.click(screen.getByRole('button', { name: /Start session/ }))
-    expect(onSubmit).toHaveBeenCalledWith('carried from a ticket')
+    expect(onSubmit).toHaveBeenCalledWith('carried from a ticket', { later: false })
     expect(sessionStorage.getItem('oa.pending-draft')).toBeNull() // taken once
   })
 
@@ -319,7 +326,7 @@ describe('Composer (#721)', () => {
     const submit = screen.getByRole('button', { name: 'Send' })
     expect(submit.hasAttribute('disabled')).toBe(false)
     fireEvent.click(submit)
-    expect(onSubmit).toHaveBeenCalledWith('ship it')
+    expect(onSubmit).toHaveBeenCalledWith('ship it', { later: false })
   })
 })
 
@@ -428,7 +435,7 @@ describe('the rows around the box', () => {
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'ship it' } })
     expect(screen.queryByText(/is offline/)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
-    expect(onSubmit).toHaveBeenCalledWith('ship it')
+    expect(onSubmit).toHaveBeenCalledWith('ship it', { later: false })
   })
 
   test('an offline picked machine still reads its label, with the note under the box', async () => {

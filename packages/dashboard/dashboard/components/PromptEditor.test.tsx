@@ -44,11 +44,13 @@ describe('Enter sends the prompt (#1510)', () => {
     expect(onSubmit).toHaveBeenCalledTimes(1)
   })
 
-  test('Cmd/Ctrl+Enter still submits', async () => {
+  test('Cmd/Ctrl+Enter submits for later, as Claude Code\'s "queue for later"; Enter does not', async () => {
     const { box, onSubmit } = await renderEditor()
     fireEvent.keyDown(box, { key: 'Enter', metaKey: true })
     fireEvent.keyDown(box, { key: 'Enter', ctrlKey: true })
-    expect(onSubmit).toHaveBeenCalledTimes(2)
+    expect(onSubmit.mock.calls).toEqual([[true], [true]])
+    fireEvent.keyDown(box, { key: 'Enter' })
+    expect(onSubmit.mock.calls[2]).toEqual([])
   })
 
   test('Enter is left to an open suggestion menu (aria-expanded), which uses it to pick', async () => {

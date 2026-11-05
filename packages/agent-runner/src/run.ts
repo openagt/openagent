@@ -1,7 +1,7 @@
 import { hostname } from 'node:os'
 import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { AgentExitError, ConversationGoneError, continuationPrompt, logDiaryFile, parseQuestion, promptOf, takeInbox, type Driver, type DriverPromptOptions, type DriverSession, type DriverTurn, type InboxLine, type LogEndStatus, type Question } from '@openagt/agent-driver'
+import { AgentExitError, ConversationGoneError, continuationPrompt, logDiaryFile, parseQuestion, promptLines, promptOf, takeInbox, type Driver, type DriverPromptOptions, type DriverSession, type DriverTurn, type PromptLine, type LogEndStatus, type Question } from '@openagt/agent-driver'
 import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 import { agentBranchName, attachCheckout, createCheckout, reclaimWorktree, relinkCheckout, worktreeBranch, worktreePath, type SkillLink } from '@openagt/skill-branches'
 import { findRun, readDiary, type AnyDiaryLine, type LogsDeps, type RunCard, type RunStatus } from '@openagt/skill-logs'
@@ -30,14 +30,16 @@ import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
  * The session keeps the run's live record itself, the card and the diary under `.openagent/`
  * in the checkout, in the run record's shape; this process adds its mark, the pid and the host,
  * and copies the two files onto the branch unchanged when the run ends. What reaches the agent
- * from outside comes through the session's inbox: a line waiting when a turn ends becomes the
- * next turn; when the last turn ended on a question and nothing waited, the run ends `waiting`,
- * keeps its checkout, and the answer resumes it (`resumeRun`): the same run, the same record,
- * continued.
+ * from outside comes through the session's inbox: a message written while a turn runs reaches the
+ * agent at its next step, and a line still waiting when a turn ends becomes the next turn; when the
+ * last turn ended on a question and nothing waited, the run ends `waiting`, keeps its checkout, and
+ * the answer resumes it (`resumeRun`): the same run, the same record, continued.
  *
- * SIGINT or SIGTERM to this process stops the run: the agent's whole process tree is ended
- * through the driver, the run is recorded `stopped`, the checkout reclaimed. That is what a
- * dashboard's Stop sends, the pid being on the live card; nothing else steers a run.
+ * SIGINT or SIGTERM to this process stops the run: the agent is asked to end its turn where it is,
+ * its conversation keeps everything up to there, the run is recorded `stopped`, and the checkout is
+ * reclaimed when its branch holds all of it. A second signal ends the agent's process tree at once.
+ * That is what a dashboard's Stop sends, the pid being on the live card. A message to a stopped run
+ * continues it, as one to any ended run does.
  *
  * One-shot: `agent-runner run <prompt>` runs on its own. A scheduler's tick spawns the same thing
  * with the marker already written and the id chosen.
@@ -466,7 +468,7 @@ interface Queued {
 }
 
 /** An inbox line as the prompt it becomes, with the level its message carries. */
-function queued(line: InboxLine): Queued {
+function queued(line: PromptLine): Queued {
   return { prompt: promptOf(line), ...(line.kind === 'message' && line.publish !== undefined ? { publish: line.publish } : {}) }
 }
 
@@ -481,22 +483,24 @@ async function session(repo: string, run: SessionRun): Promise<RunOutcome> {
   // A checkout with an untracked directory in it is a dirty tree, which the branches rule never reclaims.
   await hideLiveDir(run.checkout.path).catch(() => {})
 
-  // A signal stops the run: the first aborts the session, which ends the agent's process tree.
-  // The handlers stay until this process is done, so a second signal, or one that comes while the
-  // run records and reclaims, is ignored instead of killing the process halfway through a write.
+  // A signal stops the run: the first asks the agent to end its turn where it is, as Esc does in
+  // Claude Code, and the driver ends its process tree only when it cannot ask or the agent does not
+  // stop; a second one ends the tree at once. The handlers stay until this process is done, so a
+  // signal that comes while the run records and reclaims never kills it halfway through a write.
   const stop = new AbortController()
-  const onSignal = (): void => stop.abort()
+  const kill = new AbortController()
+  const onSignal = (): void => (stop.signal.aborted ? kill : stop).abort()
   process.on('SIGINT', onSignal)
   process.on('SIGTERM', onSignal)
   try {
-    return await sessionToEnd(repo, run, dir, inbox, stop.signal)
+    return await sessionToEnd(repo, run, dir, inbox, stop.signal, kill.signal)
   } finally {
     process.off('SIGINT', onSignal)
     process.off('SIGTERM', onSignal)
   }
 }
 
-async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: string, stopped: AbortSignal): Promise<RunOutcome> {
+async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: string, stopped: AbortSignal, killed: AbortSignal): Promise<RunOutcome> {
   const { id: _id, status: _status, endedAt: _endedAt, ...startCard } = run.card
   let status: LogEndStatus = 'done'
   let detail: string | undefined
@@ -515,7 +519,8 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
       cwd: run.checkout.path,
       ...(run.model !== undefined ? { model: run.model } : {}),
       ...(run.effort !== undefined ? { effort: run.effort } : {}),
-      signal: stopped,
+      signal: killed,
+      stop: stopped,
       ...(run.resumeSessionId !== undefined ? { resumeSessionId: run.resumeSessionId } : {}),
       log: { dir, card: { id: run.id, ...startCard }, continue: run.continued },
     })
@@ -562,7 +567,7 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
   // A line the driver takes from the inbox is handed here first: a message may say how far the run
   // takes its work from it on, and every line goes with the sentence in force now, which a line
   // handed over in a later turn may have changed.
-  const onInboxLine = async (line: InboxLine, sent: DriverPromptOptions): Promise<DriverPromptOptions> => {
+  const onInboxLine = async (line: PromptLine, sent: DriverPromptOptions): Promise<DriverPromptOptions> => {
     if (line.kind === 'message') await takeLevel(line.publish)
     const { added: _was, ...rest } = sent
     return added !== undefined ? { ...rest, added } : rest
@@ -586,6 +591,8 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
       let asked: Question | undefined
       try {
         for (const [i, { prompt, publish }] of queue.entries()) {
+          // Stopped between two prompts: the rest are not sent.
+          if (stopped.aborted) break
           await takeLevel(publish)
           // Only the last one drains the inbox: a line written meanwhile comes after these.
           const last = i === queue.length - 1
@@ -651,7 +658,7 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, inbox: s
       // hook, which waits for this process. What is in the inbox was written before: this
       // process's to send. A stopped run was stopped on purpose; what reached it is dropped.
       if (status === 'stopped' || stopped.aborted) break
-      queue = (await takeInbox(inbox)).map(queued)
+      queue = promptLines(await takeInbox(inbox)).map(queued)
       if (queue.length === 0) break
       await live.reopen()
     }
