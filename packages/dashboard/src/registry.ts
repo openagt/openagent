@@ -215,7 +215,7 @@ export interface Preferences {
   palette?: Palette
   /** The colour of buttons, links and what is picked, one of the palette's. Absent = the palette's own. */
   accent?: Accent
-  /** The font of the page and the chat. Absent = Figtree. */
+  /** The font of the page and the chat. Absent = IBM Plex Sans. */
   font?: Font
   /** The font of code. Absent = JetBrains Mono. */
   codeFont?: CodeFont
@@ -442,7 +442,7 @@ function sanitizePreferences(value: unknown): Preferences {
   if (isPalette(input['palette']) && input['palette'] !== 'openagent') preferences.palette = input['palette']
   const accent = accentOf(preferences.palette, input['accent'])
   if (accent) preferences.accent = accent
-  if (isFont(input['font']) && input['font'] !== 'figtree') preferences.font = input['font']
+  if (isFont(input['font']) && input['font'] !== 'ibm-plex-sans') preferences.font = input['font']
   if (isCodeFont(input['codeFont']) && input['codeFont'] !== 'jetbrains-mono') preferences.codeFont = input['codeFont']
   if (isDocumentFont(input['documentFont']) && input['documentFont'] !== 'source-serif-4') preferences.documentFont = input['documentFont']
   const customPresets = sanitizeCustomPresets(input['customPresets'])

@@ -30,10 +30,10 @@ export function accentOf(palette: Palette | undefined, accent: unknown): Accent 
 
 /** The font of the page and the chat, by its family's name. */
 export const FONTS = {
+  'ibm-plex-sans': 'IBM Plex Sans',
   figtree: 'Figtree',
   inter: 'Inter',
   geist: 'Geist',
-  'ibm-plex-sans': 'IBM Plex Sans',
   'plus-jakarta-sans': 'Plus Jakarta Sans',
   manrope: 'Manrope',
 } as const

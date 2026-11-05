@@ -1,3 +1,4 @@
+import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
 import './tailwind.css'
 import { AppFrame } from './components/AppFrame.js'
@@ -17,8 +18,13 @@ import { App } from './App.js'
 const root = document.getElementById('root')
 if (!root) throw new Error('no #root in index.html')
 
-createRoot(root).render(
-  <AppFrame>
-    <App />
-  </AppFrame>,
+// Rendered at once, while the page's rendering waits for this script (index.html): its first frame
+// has the sidebar, so the switch from the website's landing page has the logo and toggle to keep still.
+const reactRoot = createRoot(root)
+flushSync(() =>
+  reactRoot.render(
+    <AppFrame>
+      <App />
+    </AppFrame>,
+  ),
 )

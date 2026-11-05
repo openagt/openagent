@@ -26,10 +26,29 @@ export async function resolveWebsite(): Promise<string | undefined> {
   return (await stat(join(dir, 'index.html')).then(s => s.isFile()).catch(() => false)) ? dir : undefined
 }
 
+/** The view this browser picked, if it picked one. */
+function pickedView(req: IncomingMessage): View | undefined {
+  const cookies = (req.headers.cookie ?? '').split(';').map(part => part.trim())
+  if (cookies.includes(`${VIEW_COOKIE}=landing`)) return 'landing'
+  return cookies.includes(`${VIEW_COOKIE}=dashboard`) ? 'dashboard' : undefined
+}
+
 /** What `/` shows this browser: the dashboard, unless it picked the landing page. */
 export function viewOf(req: IncomingMessage): View {
-  const cookies = (req.headers.cookie ?? '').split(';').map(part => part.trim())
-  return cookies.includes(`${VIEW_COOKIE}=landing`) ? 'landing' : 'dashboard'
+  return pickedView(req) ?? 'dashboard'
+}
+
+/** The cookie that keeps `view`. Readable by the page: it is how the dashboard knows to draw the toggle. */
+function viewCookie(view: View): string {
+  return `${VIEW_COOKIE}=${view}; Path=/; Max-Age=31536000; Secure; SameSite=Lax`
+}
+
+/**
+ * A browser on the secure address that picked nothing yet is given the dashboard as its pick, so
+ * the dashboard's page knows from its first frame that the toggle is there (its `ViewToggle`).
+ */
+export function keepView(req: IncomingMessage, res: ServerResponse): void {
+  if (pickedView(req) === undefined) res.setHeader('set-cookie', viewCookie('dashboard'))
 }
 
 /**
@@ -49,7 +68,7 @@ export function handleViewRequest(res: ServerResponse, pathname: string): void {
   res
     .writeHead(303, {
       location: '/',
-      'set-cookie': `${VIEW_COOKIE}=${view}; Path=/; Max-Age=31536000; Secure; SameSite=Lax`,
+      'set-cookie': viewCookie(view),
       'cache-control': 'no-store',
     })
     .end()

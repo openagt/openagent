@@ -15,10 +15,10 @@
   /* Let the browser paint native theme-matched scrollbars + form controls (the shadcn way).
      `.dark` flips it below. */
   color-scheme: light;
-  /* The fonts with no pick in Settings › Appearance: Figtree, close to Claude Code's sans;
+  /* The fonts with no pick in Settings › Appearance: IBM Plex Sans, the website's own;
      JetBrains Mono for code; Source Serif 4 for a Markdown file read as a page, as Claude Code
      on the web reads one in a serif. AppFrame sets another pick here. */
-  --font-app: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+  --font-app: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
   --font-code: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-document: 'Source Serif 4', ui-serif, Georgia, serif;
   /* Everforest's greens on a white canvas (#1141). Everforest Light is paper-coloured (#fdf6e3),
@@ -401,6 +401,10 @@
 body {
   background-color: var(--background);
   color: var(--foreground);
+  /* Text drawn thin on a Mac, as the website draws it (#1919): otherwise the same font at the same
+     weight reads bolder here, and a switch between the two pages thickens every word. */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* A page whose columns scroll by themselves (a chat) is pinned in place: the page never scrolls
@@ -727,4 +731,20 @@ html[data-pinned] body {
 /* Reserve the bar's width always, so arriving output does not shift the text sideways. */
 @utility scrollbar-gutter-stable {
   scrollbar-gutter: stable;
+}
+
+/*
+ * The switch between the dashboard and the website's landing page (#1919), two pages of one
+ * address: the logo and the toggle stay where they are (both pages draw them at the same place),
+ * the toggle's lit side slides over, and the rest fades. The website's stylesheet says the same:
+ * a page switch animates only when both pages ask for it. A browser without it just switches.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+  }
+  ::view-transition-group(oa-toggle-thumb) {
+    animation-duration: 0.25s;
+    animation-timing-function: ease-in-out;
+  }
 }

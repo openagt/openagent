@@ -22,52 +22,49 @@ function goHome(e: MouseEvent) {
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
+/*
+ * The logo, the wordmark and the toggle are drawn here at the very place and size the dashboard
+ * draws them, the top of its sidebar, so switching between the two pages moves neither (#1919).
+ */
+
 export function TopNav() {
   return (
-    <nav
-      style={{
-        maxWidth: 1120,
-        margin: '0 auto',
-        padding: '16px clamp(14px, 4vw, 24px)',
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        gap: 'clamp(14px, 3vw, 28px)',
-        rowGap: 14,
-      }}
-    >
-      {/* The logo, and under it the toggle to the dashboard (#1919). */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
-        {/* Right-clicking the logo opens the press page (logo downloads etc.). */}
-        <a
-          href="/"
-          onClick={goHome}
-          onContextMenu={(e) => {
-            e.preventDefault()
-            window.location.href = '/press'
-          }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 11,
-            color: '#d3c6aa',
-            fontWeight: 600,
-            fontSize: 17,
-            whiteSpace: 'nowrap',
-          }}
-        >
-          <img src="/assets/logo.svg" alt="OpenAgent logo" style={{ width: 30, height: 34, display: 'block' }} />
+    <nav style={{ position: 'relative', minHeight: 94 }}>
+      {/* Right-clicking the logo opens the press page (logo downloads etc.). */}
+      <a
+        href="/"
+        onClick={goHome}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          window.location.href = '/press'
+        }}
+        style={{
+          position: 'absolute',
+          left: 12,
+          top: 14,
+          height: 24,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          color: '#d3c6aa',
+          whiteSpace: 'nowrap',
+          viewTransitionName: 'oa-brand',
+        }}
+      >
+        <img src="/assets/logo.svg" alt="OpenAgent logo" style={{ width: 21, height: 24, display: 'block' }} />
+        <span style={{ fontSize: 17, lineHeight: '24px', fontWeight: 500 }}>
           OpenAgent
-        </a>
-        <ViewToggle />
-      </div>
+        </span>
+      </a>
+      <ViewToggle style={{ position: 'absolute', left: 8, top: 56 }} />
       <div
         style={{
+          maxWidth: 1120,
+          margin: '0 auto',
+          padding: '16px clamp(14px, 4vw, 24px)',
           display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
+          justifyContent: 'flex-end',
           gap: 'clamp(10px, 2.5vw, 20px)',
-          marginLeft: 'auto',
           fontSize: 14.5,
         }}
       >

@@ -349,7 +349,7 @@ function useOwnEntries(): Entry[] {
           <SelectRow
             label="Font"
             description="The font of the page and the chat."
-            value={preferences.font ?? 'figtree'}
+            value={preferences.font ?? 'ibm-plex-sans'}
             options={Object.entries(FONTS).map(([value, label]) => ({ value, label }))}
             onChange={value => updatePreferences({ font: value as Font })}
           />

@@ -15,14 +15,15 @@ export function BrandLink({ working, href = '/', onNavigate }: { working: boolea
         event.preventDefault()
         onNavigate()
       }}
-      className="flex shrink-0 items-center gap-3 rounded-md transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+      // Named for the switch to the website's landing page (#1919), which has the same logo at the same place: it stays still.
+      className="flex shrink-0 items-center gap-3 rounded-md [view-transition-name:oa-brand] transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
     >
       <Logo className="h-6 w-auto shrink-0" working={working} />
       {/* Below sm the wordmark folds away so the nav fits a narrow viewport (#980); the mark stays,
           and it is still the link home (#909). Said with a screen-size class alone, never a bare
           `hidden` undone at a width: a tool page's stylesheet is loaded after the page's and has
           its own `.hidden`, which then won and hid the word at every width. */}
-      <span className="shrink-0 font-['Source_Serif_4',ui-serif,serif] text-[19px] leading-6 font-normal tracking-[-0.01em] max-sm:hidden">OpenAgent</span>
+      <span className="shrink-0 font-['IBM_Plex_Sans',ui-sans-serif,sans-serif] text-[17px] leading-6 font-medium max-sm:hidden">OpenAgent</span>
     </a>
   )
 }
