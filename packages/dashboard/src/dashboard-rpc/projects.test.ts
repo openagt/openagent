@@ -9,7 +9,8 @@ import { PROJECT_HOOKS_FILE } from '../project-hooks.js'
 import { OPENAGENT_DIR } from '../openagent-dir.js'
 import { projectErrorStore } from '../project-errors.js'
 import { provideTestContext } from './test-context.js'
-import { onCloneCheck, onCommands, onOwnProjects, onProjects, onRecordsReach, onStartBranches, onStartCheck, sendAddProject, sendRemoveProject, sendShareRecords } from './projects.js'
+import { onCloneCheck, onCommands, onOwnProjects, onProjects, onStartBranches, onStartCheck, sendAddProject, sendRemoveProject, sendShareRecords } from './projects.js'
+import { onProjectAgentData } from './project-agent-data.js'
 import { loginsWiring } from './logins.js'
 
 // Against the real registry, pointed at a temp $XDG_CONFIG_HOME so the user's own is never touched.
@@ -189,11 +190,15 @@ test('onCommands names the two branches an agent can start from only when the st
   }
 })
 
-test('the records switch: kept on this machine until turned on, and a remote that refuses turns it back off', async () => {
+test('the records switch: in your folder until turned on, and a remote that refuses turns it back off', async () => {
   const { dir, restore } = await registered()
   const git = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env: { ...process.env, GIT_AUTHOR_NAME: 'T', GIT_AUTHOR_EMAIL: 't@example.com', GIT_COMMITTER_NAME: 'T', GIT_COMMITTER_EMAIL: 't@example.com' } })
   const remote = await realpath(await mkdtemp(join(tmpdir(), 'openagent-records-remote-')))
   const branchesOn = (bare: string) => git(bare, 'for-each-ref', '--format=%(refname)', 'refs/heads').trim()
+  const where = async (id: string) => {
+    const data = await onProjectAgentData(id)
+    return data && `${data.place}${data.canShare ? '' : ', no remote'}`
+  }
   try {
     provideTestContext()
     const id = (await listProjects())[0]!.id
@@ -201,31 +206,31 @@ test('the records switch: kept on this machine until turned on, and a remote tha
     git(dir, 'config', 'user.email', 't@example.com')
     git(dir, 'config', 'user.name', 'T')
     git(dir, 'commit', '-q', '--allow-empty', '-m', 'first')
-    assert.equal(await onRecordsReach(id), 'no-remote')
-    assert.equal(await onRecordsReach('no-such-project'), null)
+    assert.equal(await where(id), 'personal, no remote')
+    assert.equal(await onProjectAgentData('no-such-project'), null)
     // Nothing to share with: refused, and the setting is not left on for a remote made later.
     assert.deepEqual(await sendShareRecords(id, true), { ok: false, error: 'this project has no remote to share with' })
     assert.equal(execFileSync('git', ['config', '--local', '--default', 'unset', '--get', 'agent-data.share'], { cwd: dir, encoding: 'utf8' }).trim(), 'unset')
 
     git(remote, 'init', '-q', '--bare')
     git(dir, 'remote', 'add', 'origin', remote)
-    assert.equal(await onRecordsReach(id), 'kept', 'a remote alone shares nothing')
+    assert.equal(await where(id), 'personal', 'a remote alone shares nothing')
 
     // Turned on: what is there goes out at once.
     assert.deepEqual(await sendShareRecords(id, true), { ok: true })
-    assert.equal(await onRecordsReach(id), 'origin')
+    assert.equal(await where(id), 'repository')
     assert.equal(branchesOn(remote), 'refs/heads/agent-data')
 
-    // Turned off: kept again.
+    // Turned off: in your folder again.
     assert.deepEqual(await sendShareRecords(id, false), { ok: true })
-    assert.equal(await onRecordsReach(id), 'kept')
+    assert.equal(await where(id), 'personal')
 
     // A remote that refuses the push: said in its words, and the switch is back to off.
     git(dir, 'remote', 'set-url', 'origin', join(remote, 'gone'))
     git(join(dir, '.branches', 'agent-data'), 'commit', '-q', '--allow-empty', '-m', 'kept here')
     const refused = await sendShareRecords(id, true)
     assert.ok(!refused.ok && /could not be pushed/.test(refused.error))
-    assert.equal(await onRecordsReach(id), 'kept')
+    assert.equal(await where(id), 'personal')
 
     assert.deepEqual(await sendShareRecords('no-such-project', true), { ok: false, error: 'this project has no local path on this server' })
   } finally {

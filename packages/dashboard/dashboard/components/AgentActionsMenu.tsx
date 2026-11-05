@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import type { GitHostHome, OpenAgentEvent, RepositoryOffer, RecordsReach } from '../../src/index.js'
+import type { GitHostHome, OpenAgentEvent, RepositoryOffer } from '../../src/index.js'
 import { sessionInfo } from '../../src/client.js'
 import { RevealedTitle } from './RevealedTitle.js'
-import { MoreVertical, ChevronDown, FolderOpen, Code, Check, ExternalLink, Square, FolderX, Trash2, Copy, CloudUpload, CloudOff, Info } from 'lucide-react'
+import { MoreVertical, ChevronDown, FolderOpen, Code, Check, ExternalLink, Square, FolderX, Trash2, Copy, CloudUpload, Database, Info } from 'lucide-react'
 import { onGitHostHome, onRepositoryOffer } from '../rpc/reads.js'
-import { onRecordsReach, sendShareRecords } from '../rpc/projects.js'
+import { openSettings } from '../lib/use-route.js'
+import { PROJECT_AGENT_DATA_ENTRY } from './ProjectAgentDataSettings.js'
 import {
   sendOpenInApp,
   sendStop,
@@ -117,19 +118,9 @@ export function AgentActionsMenu({
   // the person's account, so it is asked once more before it happens.
   const offer = useLoaded<RepositoryOffer | null>(session ? null : () => onRepositoryOffer(projectId), null, [projectId, session, created])
   const [confirmCreate, setConfirmCreate] = useState(false)
-  // Where the agents' records go: kept on this machine until the person shares them with the
-  // project's remote. The project's menu says which and switches it; sharing pushes a branch, so it
-  // is asked once more before it happens. A project with no remote has nothing to switch.
-  const [switched, setSwitched] = useState(0)
-  const reach = useLoaded<RecordsReach | null>(session ? null : () => onRecordsReach(projectId), null, [projectId, session, created, switched], 'previous')
-  const [confirmShare, setConfirmShare] = useState(false)
   // Removing a project takes it off the dashboard's list and deletes nothing in its folder; it is
   // asked once more, and the question says what stays.
   const [confirmRemove, setConfirmRemove] = useState(false)
-  const stopSharing = () =>
-    void run(() => sendShareRecords(projectId, false), 'Could not stop sharing.').then(outcome => {
-      if (outcome.ok) setSwitched(n => n + 1)
-    })
 
   const { busy, error, run } = useAction()
 
@@ -218,14 +209,9 @@ export function AgentActionsMenu({
               <CloudUpload className="h-3.5 w-3.5 shrink-0" /> Create a repository on {offer.name}…
             </DropdownMenuItem>
           )}
-          {reach === 'kept' && (
-            <DropdownMenuItem onClick={() => setConfirmShare(true)}>
-              <CloudUpload className="h-3.5 w-3.5 shrink-0" /> Share the agents&rsquo; records to the remote…
-            </DropdownMenuItem>
-          )}
-          {reach === 'origin' && (
-            <DropdownMenuItem disabled={busy} onClick={stopSharing}>
-              <CloudOff className="h-3.5 w-3.5 shrink-0" /> Stop sharing the agents&rsquo; records
+          {!session && (
+            <DropdownMenuItem onClick={() => openSettings(PROJECT_AGENT_DATA_ENTRY, projectId)}>
+              <Database className="h-3.5 w-3.5 shrink-0" /> Agent data…
             </DropdownMenuItem>
           )}
           {/* Named for what it actually opens (#1195): once a session's worktree is gone this
@@ -329,26 +315,6 @@ export function AgentActionsMenu({
           destructive={false}
           onConfirm={() => sendCreateRepository(projectId)}
           onSuccess={() => setCreated(n => n + 1)}
-        />
-      )}
-      {reach === 'kept' && (
-        <ConfirmDialog
-          open={confirmShare}
-          onOpenChange={setConfirmShare}
-          title="Share the agents&rsquo; records to the remote?"
-          body={
-            <>
-              This pushes a branch <span className="font-medium text-foreground">agent-data</span> to this project&rsquo;s remote, and keeps
-              pushing as agents work. It holds what you asked each agent and what it answered, under your git email. Everyone
-              who can read the remote can read it.
-            </>
-          }
-          confirmLabel="Share"
-          confirmBusyLabel="Sharing…"
-          fallbackError="Could not share the records."
-          destructive={false}
-          onConfirm={() => sendShareRecords(projectId, true)}
-          onSuccess={() => setSwitched(n => n + 1)}
         />
       )}
       {onProjectRemoved && !session && (

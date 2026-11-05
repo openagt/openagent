@@ -1,6 +1,6 @@
 import { contextAddProject, contextPrepareStart, contextProjectErrors, contextProjects, contextRemote, contextRemoveProject, contextStartedIn, resolveProjectPath } from './context.js'
 import { readProjectCommands, type ProjectCommand } from '../project-commands.js'
-import { DATA_BRANCH, branchReach, originDefaultBranch, readSharing, repositoryAddress, repositorySpelling, shareProjectData, type BranchReach } from '@openagt/agent-data'
+import { DATA_BRANCH, originDefaultBranch, readSharing, repositoryAddress, repositorySpelling, shareProjectData } from '@openagt/agent-data'
 import { readProjectHooks, runCheckHook, startLineTakesBase, startLineTakesPrBase, type StartReadiness } from '../project-hooks.js'
 import { isPublishPick, publishPickIn, type PublishPick } from '../publish-levels.js'
 import { hasRemote } from '../has-remote.js'
@@ -129,12 +129,6 @@ export async function sendRemoveProject(projectId: string, files: boolean): Prom
   const removeProject = contextRemoveProject()
   if (typeof projectId !== 'string' || !projectId) return { ok: false, error: 'a project id is required' }
   return removeProject(projectId, files === true)
-}
-
-/** How far the project's records reach right now, read off its repository; `null` when the project is unknown here. */
-export async function onRecordsReach(projectId: string): Promise<BranchReach | null> {
-  const cwd = await resolveProjectPath(projectId)
-  return cwd ? branchReach(cwd) : null
 }
 
 /**

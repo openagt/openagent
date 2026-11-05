@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { ArrowLeft, Bell, Bot, ChevronRight, FolderGit2, Globe, KeyRound, Palette, Puzzle, Users, X } from 'lucide-react'
+import { ArrowLeft, Bell, Bot, ChevronRight, Database, FolderGit2, Globe, KeyRound, Palette, Puzzle, Users, X } from 'lucide-react'
 import { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, DRIVERS, FONTS, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette as ColourPalette } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import { NO_MODEL_PINNED } from '../lib/agent-settings.js'
@@ -17,7 +17,9 @@ import { AccountsSettings } from './Accounts.js'
 import { AGENT_DATA_ENTRY, AgentDataSettings } from './AgentDataSettings.js'
 import { ACCOUNTS_ENTRY } from './Logins.js'
 import { PROJECT_ACCOUNTS_ENTRY, ProjectAccountsSettings, readProjectAccountsAhead, useProjectAccounts } from './ProjectAccounts.js'
-import { SKILLS_ENTRY, SkillsPickProject, SkillsSettings } from './ProjectSkills.js'
+import { SKILLS_ENTRY, SkillsSettings } from './ProjectSkills.js'
+import { PickProject } from './PickProject.js'
+import { PROJECT_AGENT_DATA_ENTRY, ProjectAgentDataSettings } from './ProjectAgentDataSettings.js'
 import { BridgeBrowserSettings } from './BridgeBrowserSettings.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
 import { Switch } from './ui/switch.js'
@@ -81,7 +83,7 @@ export function SettingsDialog({
   // Opened, the dialog itself has the focus, not its first entry: a ring there read as a second pick.
   const popup = useRef<HTMLDivElement>(null)
   // Skills opened from a project's page are that project's, whatever the sidebar has picked.
-  const [picked, setPicked] = useState((entry === SKILLS_ENTRY ? openItem : undefined) ?? scope ?? ALL_PROJECTS)
+  const [picked, setPicked] = useState((entry === SKILLS_ENTRY || entry === PROJECT_AGENT_DATA_ENTRY ? openItem : undefined) ?? scope ?? ALL_PROJECTS)
   // A project removed while the dialog is open is no longer one to show.
   const project = projects.find(p => p.id === picked) ?? null
   const label = useProjectLabel()
@@ -111,7 +113,30 @@ export function SettingsDialog({
   }, [projects])
   const ownForProject: Entry[] = [
     ...(project && projectAccounts ? [{ id: PROJECT_ACCOUNTS_ENTRY, title: 'Accounts', icon: KeyRound, body: <ProjectAccountsSettings projectId={project.id} /> }] : []),
-    ...(projects.length > 0 ? [{ id: SKILLS_ENTRY, title: 'Skills', icon: Puzzle, body: project ? <SkillsSettings projectId={project.id} /> : <SkillsPickProject projects={projects} onPick={setPicked} /> }] : []),
+    ...(projects.length > 0
+      ? [
+          {
+            id: SKILLS_ENTRY,
+            title: 'Skills',
+            icon: Puzzle,
+            body: project ? (
+              <SkillsSettings projectId={project.id} />
+            ) : (
+              <PickProject words="Skills are written into a project’s own repository, one project at a time. Pick a project." projects={projects} onPick={setPicked} />
+            ),
+          },
+          {
+            id: PROJECT_AGENT_DATA_ENTRY,
+            title: 'Agent data',
+            icon: Database,
+            body: project ? (
+              <ProjectAgentDataSettings projectId={project.id} />
+            ) : (
+              <PickProject words="Each project keeps its agent data in one place, your folder or its own repository. Pick a project." projects={projects} onPick={setPicked} />
+            ),
+          },
+        ]
+      : []),
   ]
   const projectEntries = [...ownForProject, ...forProject.map(section => moduleEntry(section, project ? [project] : projects))]
   const shown = [...yours, ...projectEntries].find(e => e.id === entry)
