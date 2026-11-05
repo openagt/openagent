@@ -1,16 +1,30 @@
 {
   "id": "2026-11-05T00-29-41-381Z",
   "startedAt": "2026-11-05T00:29:27.149Z",
-  "status": "running",
+  "endedAt": "2026-11-05T00:30:34.137Z",
+  "status": "done",
   "intent": "/update-tickets",
+  "title": "Ticket import and issue #2293 sync",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "branch": "agent-2026-11-05T00-29-41-381Z",
+  "cost": 0.21684580000000003,
+  "contextTokens": 29736,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
-      "publish": "commit"
+      "pid": 18867,
+      "publish": "commit",
+      "gitAccount": "suleimansh",
+      "baseCommit": "5a7348d8783236ee2687cda53c473b4865d93917"
     },
+    "pid": 18867,
     "host": "Suleimans-MacBook-Pro.local",
-    "publish": "commit"
+    "gitAccount": "suleimansh",
+    "baseCommit": "5a7348d8783236ee2687cda53c473b4865d93917",
+    "publish": "commit",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-11-05T00-29-41-381Z",
+    "sessionId": "d4a2d2d7-3228-45f0-a59c-bf7a08f3ee01"
   }
 }
