@@ -59,6 +59,19 @@ function taken(port: number): Promise<boolean> {
 }
 
 /**
+ * Whether `port` is free within `ms`: a dashboard told to stop closes its runs' views first, for
+ * up to ten seconds, and holds its port until it has.
+ */
+export async function freed(port: number, ms: number): Promise<boolean> {
+  const until = Date.now() + ms
+  while (await taken(port)) {
+    if (Date.now() >= until) return false
+    await new Promise(resolvePromise => setTimeout(resolvePromise, 250))
+  }
+  return true
+}
+
+/**
  * The dashboard the launch agent runs. Run from a checkout, or from a folder of its own, it is
  * the one this command came with. Run by `npx`, that one is in npm's cache, which npm empties
  * when it likes: the same version is installed to a folder of OpenAgent's own.
@@ -129,9 +142,12 @@ export async function install(io: InstallIO = defaultIO, env: NodeJS.ProcessEnv 
   }
   const place = places(env)
   const uid = process.getuid?.() ?? 0
-  // One installed already stops first, so what holds the port below is someone else's.
-  await run('launchctl', ['bootout', `gui/${uid}/${DASHBOARD_LABEL}`]).catch(() => {})
-  if (await taken(DASHBOARD_PORT)) {
+  // One installed already stops first, and is waited for, so what holds the port below is someone else's.
+  const stopped = await run('launchctl', ['bootout', `gui/${uid}/${DASHBOARD_LABEL}`]).then(
+    () => true,
+    () => false,
+  )
+  if (!(await freed(DASHBOARD_PORT, stopped ? 15_000 : 0))) {
     io.err(`A dashboard runs on port ${DASHBOARD_PORT} already. Stop it (Ctrl+C in its terminal), then run this again.`)
     return 1
   }
