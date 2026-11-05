@@ -7,7 +7,6 @@
   "title": "Issue #1919 dashboard URL",
   "driver": "claude-code",
   "model": "claude-opus-5-5",
-  "branch": "agent-2026-11-05T08-04-23-367Z",
   "cost": 0.2273022,
   "contextTokens": 31946,
   "caller": {
