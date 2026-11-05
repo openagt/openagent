@@ -77,7 +77,7 @@ export function SettingsSelectRow({
   onChange,
 }: {
   label: string
-  description: string
+  description: ReactNode
   value: string
   options: SettingsOption[]
   onChange: (next: string) => void

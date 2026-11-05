@@ -13,9 +13,9 @@ export const AGENT_DATA_ENTRY = 'agent-data'
 const EVERY_MS = 10_000
 
 /**
- * Settings › Agent data: where everything the agents keep is. The person's own folder, which may sync
- * with a repository of theirs so each of their computers has the same records, and the projects
- * shared on their own repository's branch instead.
+ * Settings › Agent data: the person's own folder, where the agents keep everything of the projects
+ * not shared on their own repository, which may sync with a repository of theirs so each of their
+ * computers has the same data. Where one project's data is, is that project's page.
  */
 export function AgentDataSettings() {
   const { value: view, reload } = usePolled<PersonalFolderView | null>(onPersonalFolder, null, EVERY_MS, [])
@@ -23,7 +23,7 @@ export function AgentDataSettings() {
   const [address, setAddress] = useState('')
   const { busy, error, reset, run } = useAction()
   if (!view) return null
-  const { personal, shared } = view
+  const personal = view
 
   const sync = () =>
     void run(() => sendSyncPersonalFolder(address), 'Could not sync with that repository.').then(async outcome => {
@@ -125,13 +125,6 @@ export function AgentDataSettings() {
         )}
         {error && <p className="mt-2 text-xs text-danger">{error}</p>}
       </div>
-      {shared.length > 0 && (
-        <SettingsRow
-          label="Shared on their own repository"
-          description={`${shared.join(', ')} · on the branch agent-data. Change it in the project's menu.`}
-          control={null}
-        />
-      )}
     </SettingsSection>
   )
 }

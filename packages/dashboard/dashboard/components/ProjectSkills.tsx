@@ -1,10 +1,7 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, Folder } from 'lucide-react'
-import type { ProjectSummary } from '../../src/index.js'
 import { onProjectSkills, sendChangeSkills, sendProjectSkills, type ProjectSkills, type ProjectSkill, type SendSkillsResult } from '../rpc/skills.js'
 import { useAction } from '../lib/use-action.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
-import { useProjectLabel } from '../lib/project-labels.js'
 import { onSkillsSaved, skillsSaved } from '../lib/skills-saved.js'
 import { cn } from '../lib/utils.js'
 import { Button, buttonVariants } from './ui/button.js'
@@ -192,27 +189,6 @@ export function SkillsSettings({ projectId }: { projectId: string }) {
     )
   }
   return <SkillCards key={visit} projectId={projectId} skills={skills} onDone={() => setVisit(next => next + 1)} />
-}
-
-/** The Skills page with every project picked: one press could write files into every repository, so it asks for one. */
-export function SkillsPickProject({ projects, onPick }: { projects: ProjectSummary[]; onPick: (id: string) => void }) {
-  const label = useProjectLabel()
-  return (
-    <div className="space-y-2">
-      <p className="text-sm text-muted-foreground">Skills are written into a project&rsquo;s own repository, one project at a time. Pick a project.</p>
-      <ul className="divide-y divide-border">
-        {projects.map(project => (
-          <li key={project.id}>
-            <button type="button" onClick={() => onPick(project.id)} className="flex w-full min-w-0 items-center gap-3 rounded py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
-              <Folder aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate text-sm">{label(project.id, project.name)}</span>
-              <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
 }
 
 function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: ProjectSkills; onDone: () => void }) {

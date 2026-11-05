@@ -10,11 +10,11 @@ const sendOpenInApp = vi.fn(async () => ({ ok: true as const }))
 const sendStop = vi.fn(async () => {})
 const sendRemoveWorktree = vi.fn(async () => ({ ok: true as const }))
 const sendDeleteAgent = vi.fn(async () => ({ ok: true as const }))
-const onRecordsReach = vi.fn(async () => null as 'origin' | 'no-remote' | 'kept' | null)
-const sendShareRecords = vi.fn(async () => ({ ok: true }) as unknown)
 const sendRemoveProject = vi.fn(async (_projectId: string, _files: boolean) => ({ ok: true }) as unknown)
 vi.mock('../rpc/reads.js', () => ({ onGitHostHome, onRepositoryOffer }))
-vi.mock('../rpc/projects.js', () => ({ onRecordsReach, sendShareRecords, sendRemoveProject }))
+vi.mock('../rpc/projects.js', () => ({ sendShareRecords: vi.fn(), sendRemoveProject }))
+const openSettings = vi.hoisted(() => vi.fn())
+vi.mock('../lib/use-route.js', async importOriginal => ({ ...(await importOriginal<object>()), openSettings }))
 vi.mock('../rpc/control.js', () => ({
   sendOpenInApp,
   sendStop,
@@ -41,10 +41,6 @@ beforeEach(() => {
   sendCreateRepository.mockResolvedValue({ ok: true, url: 'https://github.com/me/shop' })
   onRepositoryOffer.mockClear()
   onRepositoryOffer.mockResolvedValue(null)
-  onRecordsReach.mockClear()
-  onRecordsReach.mockResolvedValue(null)
-  sendShareRecords.mockClear()
-  sendShareRecords.mockResolvedValue({ ok: true })
   updatePreferences.mockClear()
   prefs = {}
   detectedEditors = []
@@ -59,9 +55,8 @@ describe('AgentActionsMenu (#toolbar-menu)', () => {
     await waitFor(() => expect(screen.getByText('Open on GitHub')).toBeTruthy())
     expect(screen.getAllByRole('menuitem').map(item => item.textContent!.trim())).toEqual(['Open project folder', 'Open in editor', 'Open on GitHub', 'Delete session'])
     expect(screen.getByText('Open on GitHub').closest('a')!.getAttribute('href')).toBe('https://github.com/o/r')
-    // The offer of a repository and where the records go are the project's own page's.
+    // The offer of a repository is the project's own page's.
     expect(onRepositoryOffer).not.toHaveBeenCalled()
-    expect(onRecordsReach).not.toHaveBeenCalled()
   })
 
   test('a project with no page on a git host adds no item to the session\'s menu', async () => {
@@ -231,57 +226,18 @@ describe('the editor picker in the menu (#727)', () => {
   })
 })
 
-describe('Where the agents\u2019 records go, in the project\u2019s menu', () => {
-  const openProjectMenu = () => fireEvent.click(screen.getByRole('button', { name: 'Project actions' }))
-
-  test('records kept on this machine: the menu offers to share them, says what that pushes, and asks before it does', async () => {
-    onRecordsReach.mockResolvedValue('kept')
+describe('Where the agent data is, in the project\u2019s menu', () => {
+  test('the project\u2019s menu opens the project\u2019s Agent data page; a session\u2019s menu has no such item', async () => {
     render(<AgentActionsMenu projectId="p1" events={[]} />)
-    openProjectMenu()
-    fireEvent.click(await screen.findByText('Share the agents\u2019 records to the remote\u2026'))
-    await waitFor(() => expect(screen.getByText('Share the agents\u2019 records to the remote?')).toBeTruthy())
-    expect(screen.getByText(/Everyone\s+who can read the remote can read it/)).toBeTruthy()
-    expect(sendShareRecords).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Share' }))
-    await waitFor(() => expect(sendShareRecords).toHaveBeenCalledWith('p1', true))
-    // The project is asked again: the menu now offers the way back.
-    await waitFor(() => expect(onRecordsReach.mock.calls.length).toBeGreaterThan(1))
-  })
-
-  test('a remote that refuses is said in the dialog; shared records offer to stop; no remote, or a session\u2019s menu, offers neither', async () => {
-    onRecordsReach.mockResolvedValue('kept')
-    sendShareRecords.mockResolvedValue({ ok: false, error: 'the agent-data branch could not be pushed: permission denied' })
-    render(<AgentActionsMenu projectId="p1" events={[]} />)
-    openProjectMenu()
-    fireEvent.click(await screen.findByText('Share the agents\u2019 records to the remote\u2026'))
-    fireEvent.click(await screen.findByRole('button', { name: 'Share' }))
-    await waitFor(() => expect(screen.getByText(/permission denied/)).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: 'Project actions' }))
+    fireEvent.click(await screen.findByText('Agent data\u2026'))
+    expect(openSettings).toHaveBeenCalledWith('project-agent-data', 'p1')
     cleanup()
 
-    onRecordsReach.mockResolvedValue('origin')
-    sendShareRecords.mockClear()
-    sendShareRecords.mockResolvedValue({ ok: true })
-    render(<AgentActionsMenu projectId="p1" events={[]} />)
-    openProjectMenu()
-    fireEvent.click(await screen.findByText('Stop sharing the agents\u2019 records'))
-    await waitFor(() => expect(sendShareRecords).toHaveBeenCalledWith('p1', false))
-    expect(screen.queryByText(/Share the agents\u2019 records to the remote/)).toBeNull()
-    cleanup()
-
-    onRecordsReach.mockResolvedValue('no-remote')
-    render(<AgentActionsMenu projectId="p1" events={[]} />)
-    openProjectMenu()
-    await waitFor(() => expect(screen.getByText('Open folder')).toBeTruthy())
-    expect(screen.queryByText(/the agents\u2019 records/)).toBeNull()
-    cleanup()
-
-    onRecordsReach.mockClear()
-    onRecordsReach.mockResolvedValue('kept')
     render(<AgentActionsMenu projectId="p1" agentId="run-1" events={[]} />)
     fireEvent.click(screen.getByRole('button', { name: /session actions/i }))
     await waitFor(() => expect(screen.getByText('Open project folder')).toBeTruthy())
-    expect(screen.queryByText(/the agents\u2019 records/)).toBeNull()
-    expect(onRecordsReach).not.toHaveBeenCalled()
+    expect(screen.queryByText('Agent data\u2026')).toBeNull()
   })
 })
 
@@ -396,7 +352,6 @@ describe('Remove project, in the project’s menu', () => {
   const openProjectMenu = () => fireEvent.click(screen.getByRole('button', { name: 'Project actions' }))
 
   test('it asks first, says nothing in the folder is deleted and what stays, then removes the project and tells the page', async () => {
-    onRecordsReach.mockResolvedValue(null)
     sendRemoveProject.mockClear()
     sendRemoveProject.mockResolvedValue({ ok: true })
     const onProjectRemoved = vi.fn()
@@ -419,7 +374,6 @@ describe('Remove project, in the project’s menu', () => {
   })
 
   test('with the box ticked it says what goes and what never does, removes with the files, and shows what went and what stayed before the page is told', async () => {
-    onRecordsReach.mockResolvedValue(null)
     sendRemoveProject.mockClear()
     sendRemoveProject.mockResolvedValue({
       ok: true,
@@ -461,7 +415,6 @@ describe('Remove project, in the project’s menu', () => {
   })
 
   test('a box ticked and then cancelled is unticked the next time the dialog opens', async () => {
-    onRecordsReach.mockResolvedValue(null)
     sendRemoveProject.mockClear()
     render(<AgentActionsMenu projectId="p1" events={[]} onProjectRemoved={vi.fn()} />)
     openProjectMenu()
@@ -479,7 +432,6 @@ describe('Remove project, in the project’s menu', () => {
   })
 
   test('a refusal is said in the dialog and the page is not told; with nobody to tell, or in a session’s menu, it is not offered', async () => {
-    onRecordsReach.mockResolvedValue(null)
     sendRemoveProject.mockClear()
     sendRemoveProject.mockResolvedValue({ ok: false, error: 'An agent is working in this project. Stop it, then remove the project.' })
     const onProjectRemoved = vi.fn()

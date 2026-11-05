@@ -9,7 +9,7 @@ const sendChangeSkills = vi.hoisted(() => vi.fn())
 const sendProjectSkills = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/skills.js', () => ({ onProjectSkills, sendChangeSkills, sendProjectSkills }))
 
-const { ProjectSkillsLine, SkillsPickProject, SkillsSettings } = await import('./ProjectSkills.js')
+const { ProjectSkillsLine, SkillsSettings } = await import('./ProjectSkills.js')
 
 afterEach(() => {
   cleanup()
@@ -312,16 +312,6 @@ describe('the Skills page', () => {
     expect((await screen.findByRole('alert')).textContent).toBe('this project has no local path on this server')
     expect(isTicked('tickets')).toBe(true)
     expect(sendProjectSkills).not.toHaveBeenCalled()
-  })
-
-  test('with every project picked it asks for one, and a press picks it', () => {
-    const onPick = vi.fn()
-    const projects = [{ id: 'p1', name: 'shop' }, { id: 'p2', name: 'blog' }] as ProjectSummary[]
-    render(<SkillsPickProject projects={projects} onPick={onPick} />)
-    expect(document.body.textContent).toContain('one project at a time. Pick a project.')
-    fireEvent.click(screen.getByRole('button', { name: 'blog' }))
-    expect(onPick).toHaveBeenCalledWith('p2')
-    expect(onProjectSkills).not.toHaveBeenCalled()
   })
 })
 

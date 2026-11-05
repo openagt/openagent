@@ -11,7 +11,7 @@ vi.mock('../rpc/personal-folder.js', () => ({ onPersonalFolder, sendSyncPersonal
 const { AgentDataSettings } = await import('./AgentDataSettings.js')
 
 beforeEach(() => {
-  view = { personal: { path: '~/.openagent', unsent: 0, projects: ['test-project', 'oa-newuser'] }, shared: ['openagent'] }
+  view = { path: '~/.openagent', unsent: 0, projects: ['test-project', 'oa-newuser'] }
   onPersonalFolder.mockClear()
   sendSyncPersonalFolder.mockClear()
   sendStopSyncingPersonalFolder.mockClear()
@@ -19,10 +19,9 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('Settings › Agent data', () => {
-  test('says where the records are: the folder on this computer only, the projects in it, and the shared ones on their own branch', async () => {
+  test('says where the folder is, the projects that keep their data in it, and that it is on this computer only', async () => {
     render(<AgentDataSettings />)
     expect(await screen.findByText('~/.openagent · test-project, oa-newuser. Only on this computer.')).toBeTruthy()
-    expect(screen.getByText("openagent · on the branch agent-data. Change it in the project's menu.")).toBeTruthy()
   })
 
   test('syncing asks for the repository, sends what was typed, and then says what it syncs with', async () => {
@@ -32,7 +31,7 @@ describe('Settings › Agent data', () => {
     const sync = screen.getByRole('button', { name: 'Sync' })
     expect((sync as HTMLButtonElement).disabled).toBe(true)
     fireEvent.change(screen.getByLabelText('Repository address'), { target: { value: 'github.com/me/agent' } })
-    view = { ...view, personal: { ...view.personal, remote: 'github.com/me/agent', remoteUrl: 'https://github.com/me/agent', unsent: 2 } }
+    view = { ...view, remote: 'github.com/me/agent', remoteUrl: 'https://github.com/me/agent', unsent: 2 }
     fireEvent.click(sync)
     await waitFor(() => expect(sendSyncPersonalFolder).toHaveBeenCalledWith('github.com/me/agent'))
     // The address is a link inside the line, so the line is read whole.
@@ -53,9 +52,9 @@ describe('Settings › Agent data', () => {
   })
 
   test('a synced folder can stop syncing', async () => {
-    view = { ...view, personal: { ...view.personal, remote: 'github.com/me/agent' } }
+    view = { ...view, remote: 'github.com/me/agent' }
     render(<AgentDataSettings />)
-    view = { ...view, personal: { path: view.personal.path, unsent: 0, projects: view.personal.projects } }
+    view = { path: view.path, unsent: 0, projects: view.projects }
     fireEvent.click(await screen.findByRole('button', { name: 'Stop syncing' }))
     await waitFor(() => expect(sendStopSyncingPersonalFolder).toHaveBeenCalled())
     expect(await screen.findByRole('button', { name: 'Sync with a repository' })).toBeTruthy()

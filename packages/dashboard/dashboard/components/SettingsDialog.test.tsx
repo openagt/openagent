@@ -30,6 +30,7 @@ vi.mock('../rpc/models.js', () => ({ onModels }))
 // Its own suite reads the accounts; here the entry is its name.
 vi.mock('./Accounts.js', () => ({ AccountsSettings: () => <p>Claude accounts</p> }))
 vi.mock('./AgentDataSettings.js', () => ({ AGENT_DATA_ENTRY: 'agent-data', AgentDataSettings: () => <p>Where the agent data is</p> }))
+vi.mock('./ProjectAgentDataSettings.js', () => ({ PROJECT_AGENT_DATA_ENTRY: 'project-agent-data', ProjectAgentDataSettings: () => <p>Where this project's agent data is</p> }))
 const projectAccounts = vi.hoisted(() => ({ onProjectAccounts: vi.fn(async () => ({})), sendProjectAccounts: vi.fn() }))
 vi.mock('../rpc/logins.js', () => projectAccounts)
 // A project's skills, as a page of the Project group; each project answers with its own one skill.
@@ -330,7 +331,7 @@ describe('the Settings list', () => {
     show('', 'p1')
     expect(entries('You and this computer')).toEqual(['Appearance', 'Notifications', 'Agent', 'Accounts', 'Agent data', 'Claude web', 'Devices'])
     // gemstack has orchestration and no scheduler; every project has its skills.
-    expect(entries('Project')).toEqual(['Skills', 'Orchestration'])
+    expect(entries('Project')).toEqual(['Skills', 'Agent data', 'Orchestration'])
     expect(showing(select('Project'))).toBe('gemstack')
     // Opened on nothing in particular: the first entry.
     expect(title()).toBe('SettingsAppearance')
@@ -340,9 +341,9 @@ describe('the Settings list', () => {
   test("a project's own accounts are an entry of that project's, first, when the computer has something to pick; never under All projects", async () => {
     projectAccounts.onProjectAccounts.mockResolvedValue({ gitHost: { host: 'github.com', name: 'GitHub', accounts: ['octo', 'octo-agent'], computer: 'octo' } } as never)
     show('', 'p1')
-    await waitFor(() => expect(entries('Project')).toEqual(['Accounts', 'Skills', 'Orchestration']))
+    await waitFor(() => expect(entries('Project')).toEqual(['Accounts', 'Skills', 'Agent data', 'Orchestration']))
     await pick(select('Project'), 'All projects')
-    expect(entries('Project')).toEqual(['Skills', 'Orchestration', 'Scheduler'])
+    expect(entries('Project')).toEqual(['Skills', 'Agent data', 'Orchestration', 'Scheduler'])
     projectAccounts.onProjectAccounts.mockResolvedValue({} as never)
   })
 
@@ -354,7 +355,7 @@ describe('the Settings list', () => {
     // Opened later, and the server slow to answer again.
     projectAccounts.onProjectAccounts.mockImplementation(() => new Promise(() => {}))
     show('', 'p1')
-    expect(entries('Project')).toEqual(['Accounts', 'Skills', 'Orchestration'])
+    expect(entries('Project')).toEqual(['Accounts', 'Skills', 'Agent data', 'Orchestration'])
     projectAccounts.onProjectAccounts.mockReset()
     projectAccounts.onProjectAccounts.mockResolvedValue({} as never)
   })
@@ -372,7 +373,7 @@ describe('the Settings list', () => {
   test('the project select changes the project group, and All projects gives an entry every project that has its package, saying which', async () => {
     show('orchestration', 'p1')
     await pick(select('Project'), 'All projects')
-    expect(entries('Project')).toEqual(['Skills', 'Orchestration', 'Scheduler'])
+    expect(entries('Project')).toEqual(['Skills', 'Agent data', 'Orchestration', 'Scheduler'])
     expect(title()).toBe('SettingsAll projectsOrchestration')
     expect(screen.getByText('for: gemstack, other')).toBeTruthy()
     expect(screen.getByText('Saved to 2 projects: gemstack, other.')).toBeTruthy()
@@ -381,7 +382,7 @@ describe('the Settings list', () => {
     expect(screen.getByText('The Scheduler settings failed: boom')).toBeTruthy()
     expect(screen.getByText('Saved to one project: other.')).toBeTruthy()
     await pick(select('Project'), 'plain')
-    expect(entries('Project')).toEqual(['Skills'])
+    expect(entries('Project')).toEqual(['Skills', 'Agent data'])
     // The entry it was on is not plain's: the first entry shows.
     expect(title()).toBe('SettingsAppearance')
   })
@@ -389,7 +390,7 @@ describe('the Settings list', () => {
   test('with no project picked in the sidebar, the project group opens on every project', () => {
     show('')
     expect(showing(select('Project'))).toBe('All projects')
-    expect(entries('Project')).toEqual(['Skills', 'Orchestration', 'Scheduler'])
+    expect(entries('Project')).toEqual(['Skills', 'Agent data', 'Orchestration', 'Scheduler'])
   })
 
   test('Skills opened for a project is that project\'s, whatever the sidebar has picked; the select changes it', async () => {
